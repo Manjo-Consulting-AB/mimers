@@ -1,0 +1,47 @@
+# ADR-0011 Autentisering
+
+**Status:** Antagen 2026-08-03 · Ändrad av [[ADR-0020 Plattformsidentitet och frontendgräns]] på punkten om vilka domäner cookie-läget gäller · [[ADR-index]]
+
+## Kontext
+
+Flera frontends ska prata med samma API — en sajt om båtar, en om husvagnar, en om hus — plus B2B-kunder som vill nå API:et direkt och möjliga mobilappar senare.
+
+Produkten har ett ovanligt användningsmönster: man loggar in kanske en gång i månaden, med en kraftig topp i april. Folk kommer ha glömt sina lösenord varje gång.
+
+## Beslut
+
+**Laravel Sanctum i två lägen:**
+
+- **Cookie-läge** för egna webbfrontends. HttpOnly, CSRF-skydd, inga tokens i JavaScript. Frontends ligger på egna varumärkesdomäner och når API:et genom en tunn proxy på sin egen origin, så att cookien är förstaparts — se [[ADR-0020 Plattformsidentitet och frontendgräns]].
+- **Personal access tokens** för B2B-integrationer och framtida mobilappar.
+
+**Lösenord som primär inloggning, magic link som alternativ.** TOTP-tvåfaktor tillgängligt.
+
+OAuth2 införs först den dag en tredjepart bygger mot API:et.
+
+## Motivering
+
+Cookie-läget är säkrare för förstapartsklienter — en token i `localStorage` är en token som kan stjälas via XSS. Bearer-tokens behövs ändå för det som inte är en webbläsare på egen domän.
+
+Magic links passar användningsmönstret ovanligt bra, men gör e-postleveransen inloggningskritisk. Att ha båda vägarna in betyder att ett leveransproblem hos Postmark inte låser ute alla kunder samtidigt.
+
+TOTP är särskilt viktigt för B2B: ett varv sitter på hundra kunders dokumentation.
+
+Social inloggning valdes bort tills vidare — den sänker registreringströskeln men lägger till beroenden och krånglar till organisationskontona.
+
+## Konsekvenser
+
+- `password_hash` får vara NULL för användare som bara använder magic link.
+- E-postverifiering krävs innan en användare kan ta emot delning. Alla som läser något i systemet ska vara identifierade. Se [[ADR-0003 Åtkomstmodell]].
+- Magic link-tokens lagras som hash, är engångs, kortlivade och bundna till e-postadressen.
+- `last_active_at` uppdateras av **API-anrop från vilken frontend som helst**, inte bara inloggning — annars raderar livscykeln i [[ADR-0009 Kvoter och livscykel]] aktiva användare.
+- Inloggningsförsök och magic link-utskick måste rate-limitas per adress och per IP.
+- B2B-personalkonton loggar in som vanliga användare kopplade till organisationskontot via `account_user`. SSO ligger långt fram och behövs inte för ett varv.
+
+## Alternativ
+
+**Enbart magic links.** Bäst UX för ett sällananvänt system. Valdes bort — gör e-postleveransen till enda vägen in.
+
+**Enbart lösenord.** Enklast. Valdes bort — säsongsmönstret garanterar många glömda lösenord.
+
+**Google- och Apple-inloggning.** Uppskjutet, inte avfärdat.

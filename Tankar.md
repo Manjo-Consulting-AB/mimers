@@ -1,0 +1,7 @@
+- Kategorier ska kunna ha underkategorier
+- Ska ett item kunna tillhöra flera kategorier?
+- Taggar har inte några child tags
+- När ett item har lånats ut så ska det gå att markera det som utlånat med information om vem det lånats ut till. Att kunna lägga till en epost adress till den som lånat prylen och låta systemet påminna om att det är dags att lämna tillbaks och fråga fråga ägaren om det har lämnats tillbaks.
+- När en fil laddas upp till systemet verifieras filens hash för att verifiera om den redan är sparad av en annan användare. Om så är fallet skapas endast en länk till den befintliga filen i systemet. När den sista länken till en fil raderas, raderas även filen på så vis säkerställer vi att det inte finns mer än en fil av samma sort sparad i systemet.
+- **Vad ska kärndomänen heta?** [[ADR-0020 Plattformsidentitet och frontendgräns]] slår fast att plattformen ska ha en neutral identitet skild från varumärkena — yachting.earth mot båtfolk, caravans.earth mot husvagn — men inte vilket namn den får. Namnet bakas in i fil-URL:er och byggt e-postrykte, så det behöver kunna hållas i tio år. Bör avgöras före issue 0, eftersom miljöuppsättningen refererar till det.
+- 
