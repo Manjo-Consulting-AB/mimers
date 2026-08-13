@@ -22,7 +22,7 @@ Storage-abstraktionen gör ett framtida byte till objektlagring till en konfigur
 
 Tre säkerhetskrav som följer av att filerna serveras från egen infrastruktur:
 
-1. **Egen origin för användarfiler**, t.ex. `files.yachting.earth`. En uppladdad SVG eller HTML-fil kör annars skript i appens domän.
+1. **Egen origin för användarfiler**, `files.<domän>`. En uppladdad SVG eller HTML-fil kör annars skript i appens domän.
 2. **`Content-Disposition: attachment`** som standard.
 3. Åtkomstkontroll före varje leverans, ingen gissningsbar sökväg.
 

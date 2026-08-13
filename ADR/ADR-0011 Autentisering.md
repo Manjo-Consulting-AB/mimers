@@ -4,7 +4,7 @@
 
 ## Kontext
 
-Flera frontends ska prata med samma API — en sajt om båtar, en om husvagnar, en om hus — plus B2B-kunder som vill nå API:et direkt och möjliga mobilappar senare.
+En webbfrontend ligger på samma origin som API:et, plus B2B-kunder som vill nå API:et direkt och mobilappar i förlängningen. Klienterna är alltså av två slag: en webbläsare på produktens egen domän, och allt annat.
 
 Produkten har ett ovanligt användningsmönster: man loggar in kanske en gång i månaden, med en kraftig topp i april. Folk kommer ha glömt sina lösenord varje gång.
 
@@ -12,7 +12,7 @@ Produkten har ett ovanligt användningsmönster: man loggar in kanske en gång i
 
 **Laravel Sanctum i två lägen:**
 
-- **Cookie-läge** för egna webbfrontends. HttpOnly, CSRF-skydd, inga tokens i JavaScript. Frontends ligger på egna varumärkesdomäner och når API:et genom en tunn proxy på sin egen origin, så att cookien är förstaparts — se [[ADR-0020 Plattformsidentitet och frontendgräns]].
+- **Cookie-läge** för den egna webbfrontenden. HttpOnly, CSRF-skydd, inga tokens i JavaScript. Frontenden ligger på samma origin som API:et, så cookien är förstaparts utan konstruktioner — se [[ADR-0020 Plattformsidentitet och frontendgräns]].
 - **Personal access tokens** för B2B-integrationer och framtida mobilappar.
 
 **Lösenord som primär inloggning, magic link som alternativ.** TOTP-tvåfaktor tillgängligt.
@@ -21,7 +21,7 @@ OAuth2 införs först den dag en tredjepart bygger mot API:et.
 
 ## Motivering
 
-Cookie-läget är säkrare för förstapartsklienter — en token i `localStorage` är en token som kan stjälas via XSS. Bearer-tokens behövs ändå för det som inte är en webbläsare på egen domän.
+Cookie-läget är säkrare för webbfrontenden — en token i `localStorage` är en token som kan stjälas via XSS. Bearer-tokens behövs ändå för det som inte är en webbläsare på egen domän, och det är dem mobilapparna kommer att använda.
 
 Magic links passar användningsmönstret ovanligt bra, men gör e-postleveransen inloggningskritisk. Att ha båda vägarna in betyder att ett leveransproblem hos Postmark inte låser ute alla kunder samtidigt.
 
@@ -34,7 +34,7 @@ Social inloggning valdes bort tills vidare — den sänker registreringströskel
 - `password_hash` får vara NULL för användare som bara använder magic link.
 - E-postverifiering krävs innan en användare kan ta emot delning. Alla som läser något i systemet ska vara identifierade. Se [[ADR-0003 Åtkomstmodell]].
 - Magic link-tokens lagras som hash, är engångs, kortlivade och bundna till e-postadressen.
-- `last_active_at` uppdateras av **API-anrop från vilken frontend som helst**, inte bara inloggning — annars raderar livscykeln i [[ADR-0009 Kvoter och livscykel]] aktiva användare.
+- `last_active_at` uppdateras av **API-anrop från vilken klient som helst**, inte bara inloggning — annars raderar livscykeln i [[ADR-0009 Kvoter och livscykel]] aktiva användare.
 - Inloggningsförsök och magic link-utskick måste rate-limitas per adress och per IP.
 - B2B-personalkonton loggar in som vanliga användare kopplade till organisationskontot via `account_user`. SSO ligger långt fram och behövs inte för ett varv.
 

@@ -16,11 +16,11 @@ Telegram byggs inte som förstapartsintegration.
 
 ## Motivering
 
-**E-post** är obligatorisk men leveransen är underskattad. Transaktionsmejl från delad hosting hamnar i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös. Därför Postmark med SPF, DKIM och DMARC på yachting.earth — några timmars arbete som avgör om produkten fungerar.
+**E-post** är obligatorisk men leveransen är underskattad. Transaktionsmejl från delad hosting hamnar i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös. Därför Postmark med SPF, DKIM och DMARC på produktdomänen — några timmars arbete som avgör om produkten fungerar.
 
 **ICS-feeden** är den underskattade vinnaren. En hemlig prenumerationslänk som Apple Calendar eller Google Calendar hämtar själv. En läsendpoint som genererar en textfil: nästan gratis att bygga, ingen leveransproblematik, inget spamfilter, fungerar på varje enhet. För en produkt som i grunden handlar om underhållsschema ger den mer verkligt värde än push.
 
-**Webhooks** gör resten överflödigt. Systemet är API-först med flera frontends, och B2B-kunderna vill ha händelserna i sina egna system. Dessutom löser en signerad POST både Telegram, Slack, Discord och Home Assistant utan att en enda integration behöver underhållas — den som vill kopplar själv via n8n eller Zapier.
+**Webhooks** gör resten överflödigt. Systemet är API-först, och B2B-kunderna vill ha händelserna i sina egna system. Dessutom löser en signerad POST både Telegram, Slack, Discord och Home Assistant utan att en enda integration behöver underhållas — den som vill kopplar själv via n8n eller Zapier.
 
 **Telegram** valdes bort medvetet. Bot-API:et är trivialt, vilket gör det frestande, men målgruppen är båtägare med låg Telegram-penetration i Norden. Det är en funktion man bygger för att det är roligt, inte för att någon efterfrågar den.
 

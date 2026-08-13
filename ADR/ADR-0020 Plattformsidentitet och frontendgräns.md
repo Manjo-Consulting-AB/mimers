@@ -1,68 +1,61 @@
 # ADR-0020 Plattformsidentitet och frontendgräns
 
-**Status:** Antagen 2026-08-05 · [[ADR-index]]
+**Status:** Antagen 2026-08-05 · Omskriven 2026-08-13 sedan multi-frontend-strategin övergavs · [[ADR-index]]
 
 Ändrar [[ADR-0011 Autentisering]] på punkten om vilka domäner cookie-läget gäller. Resten av ADR-0011 står oförändrad.
 
 ## Kontext
 
-Att flera frontends ska prata med samma backend har varit ett antagande sedan planeringsfasen. [[ADR-0004 Fria taggar och kategorier]] lägger färdiga kategoriuppsättningar i frontend just för att API:et aldrig ska veta vad orden betyder, [[ADR-0013 Språk och i18n]] motiverar separata sajter med skräddarsydd SEO per marknad, och [[ADR-0011 Autentisering]] utgår från att de sajterna når API:et.
+Att flera frontends ska prata med samma backend var ett antagande sedan planeringsfasen. Tanken var ett varumärkeslöst API som flera separata sajter når över nätverket — en mot båtfolk, en mot husvagn, en mot hus — vilket skulle ge skräddarsydd SEO och egna säljargument per marknad utan att backend dupliceras.
 
-Antagandet var däremot aldrig preciserat. ADR-0011 skriver "subdomäner till yachting.earth", vilket i tysthet gör yachting.earth till både varumärke för båtfolk **och** plattformens hemvist. De två rollerna går isär så snart det finns en andra vertikal: en husvagnssajt kan inte rimligen bo under en domän som betyder segling.
+**Det antagandet är övergivet.** Produkten är en produkt, inte en plattform med vertikaler, och den är fristående — den hör inte till någon befintlig sajt eller något befintligt varumärke. Skälet till multi-vertikal var marknadsföring; kostnaden var en serversideproxy per sajt, en site per domän hos leverantören, en plattformsidentitet utan varumärkesvärde vid sidan av varumärkena, och en inloggningsväg som passerar två system. Med en produkt bär inte den kostnaden.
 
-Tre saker är samtidigt fastställda och begränsar lösningsrummet:
+Det API som behövs i förlängningen är ett annat: **mobilappar**. De är klienter utanför webbläsaren, på en helt annan sorts avstånd från servern än en webbsajt på samma domän.
 
-- **Ett konto ger tillgång till allt.** Registrerar någon sig på båtsajten kan hen lägga upp en husvagn. Var registreringen skedde är utan betydelse för behörigheter.
-- **Notiser är varumärkesneutrala.** Samma innehåll och samma avsändare oavsett ingång.
-- **Varumärkessajterna är egna registrerbara domäner**, inte subdomäner — yachting.earth mot båtfolk, caravans.earth mot husvagn och husbil.
-
-Den sista punkten är den som spräcker ADR-0011. Cookies kan inte delas mellan två registrerbara domäner. En frontend på yachting.earth som anropar ett API på en annan domän gör ett cross-site-anrop, vilket kräver `SameSite=None` och därmed tredjepartscookies — som Safari blockerar utan undantag. Cookie-läget faller alltså i praktiken, inte bara i teorin.
+Den tidigare versionen av den här ADR:n löste ett problem som därmed inte finns kvar. Cookies kan inte delas mellan två registrerbara domäner, så en frontend på en varumärkesdomän som anropar ett API på en annan domän gör ett cross-site-anrop — vilket kräver `SameSite=None` och därmed tredjepartscookies, som Safari blockerar utan undantag. Med frontend och API på samma origin uppstår situationen aldrig.
 
 ## Beslut
 
-**Plattformen får en egen, varumärkesneutral identitet, skild från alla varumärkessajter.** API, applikation och användarfiler bor där. Domännamnet är ännu inte valt; se öppen fråga nedan.
+**Produkten bor på en egen domän med frontend och API på samma origin.** Ingen proxy, inga varumärkessajter, ingen separat kärndomän vid sidan av produkten, ingen plattformstillhörighet. Domännamnet är ännu inte valt; se öppna frågor nedan.
 
-**Varje varumärkessajt är en egen origin med en tunn serversideproxy för API-anropen.** Webbläsaren pratar bara med yachting.earth respektive caravans.earth. Proxyn vidarebefordrar till kärnan. Sessionscookien blir därmed förstaparts på varje varumärkesdomän och cookie-läget i [[ADR-0011 Autentisering]] gäller oförändrat.
+**Sessionscookien är förstaparts utan konstruktioner.** Cookie-läget i [[ADR-0011 Autentisering]] gäller därmed rakt av — samma origin är det enklaste fall det läget är byggt för.
 
-**Proxyn är tunn.** Den vidarebefordrar sessionscookie och CSRF-token orörda och håller ingen egen session. Kärnan förblir enda auth-auktoritet. En frontend innehåller ingen inloggningslogik utöver formulären.
+**API:et förblir en klientneutral kontrakt-yta.** Det är den mobilapparna kopplar på när de byggs. Personal access tokens enligt [[ADR-0011 Autentisering]] är deras väg in, och regeln i [[ADR-0013 Språk och i18n]] om maskinläsbara felkoder gäller hela API:et.
 
-**Kontot är gemensamt och varumärkeslöst.** Ingen kolumn registrerar vilken sajt en användare kom in genom. Behövs den siffran för marknadsföring hämtas den ur webbanalys, inte ur domänmodellen.
+**Kontot är gemensamt och varumärkeslöst.** Ingen kolumn registrerar var en användare kom in. Behövs den siffran för marknadsföring hämtas den ur webbanalys, inte ur domänmodellen.
 
-**Avsändaren för notiser och origin för användarfiler ligger på kärndomänen**, inte under något varumärke.
+**Avsändaren för notiser ligger på produktdomänen.** Användarfiler har fortfarande en egen origin, av säkerhetsskäl som inte har med den här ADR:n att göra.
 
 ## Motivering
 
-Alternativet att låta webbläsaren tala direkt med kärnans API kräver tredjepartscookies och är dött i Safari. Att i stället byta till bearer-tokens för förstapartsfrontends river upp den säkerhetsavvägning ADR-0011 gjorde med öppna ögon: en token i `localStorage` är en token som kan stjälas via XSS.
+Cross-site-problemet upphör att existera när frontend och API delar origin. Den enklaste lösningen blev tillgänglig i samma stund som kravet som uteslöt den — flera registrerbara varumärkesdomäner — togs bort. Ingen proxy behöver byggas, granskas eller hållas tunn, och ingen inloggningsväg passerar två system.
 
-Proxyn löser det utan att något beslut behöver omprövas. Den kostar en serverdel per frontend — sajterna kan inte längre ligga på GitHub Pages — men det är en känd uppsättning hos inleed, samma mönster som filsubdomänen i [[ADR-0019 Filleverans]].
+Att API:et ändå hålls fritt från användarvänd text är inte längre ett multi-frontend-argument utan ett mobilapp-argument. En app kan inte ärva serverns språkval: den har sin egen lokalisering, sin egen utgivningstakt och en installerad bas som ligger flera versioner efter servern. Returnerar API:et färdiga meningar blir appen låst vid backendens språk, och den regeln måste finnas innan appen byggs — inte skruvas in efteråt när endpointsen redan har konsumenter.
 
-Att besökaren aldrig lämnar varumärkesdomänen är dessutom ett produktargument och inte bara ett tekniskt. Hade inloggningen legat på kärndomänen skulle användaren kastas till ett främmande namn i exakt det ögonblick förtroendet är som tunnast, mellan "det här verkar bra" och registrering. Hela poängen med separata sajter per vertikal går förlorad där.
-
-Att proxyn hålls tunn är det som gör expansionen billig. En ny vertikal blir en ny sajt med samma proxy framför samma API — inget backend-ingrepp, ingen ny inloggningsväg att underhålla, ingen risk att två frontends hanterar sessioner olika.
+Att hålla API:et som en egen yta även när webbfrontenden ligger bredvid det kostar dessutom nästan ingenting nu, och är det som gör mobilappen till ett klientarbete i stället för ett backendprojekt.
 
 ## Konsekvenser
 
-- **Kärnans lista över betrodda origins får en post per varumärkesdomän.** Sanctums `stateful`-konfiguration och CORS-inställningarna räknar upp proxyarnas värdar. Det är konfiguration, inte kod — en ny vertikal ändrar en miljövariabel.
-- **Laravel måste konfigureras för att köras bakom proxy.** `TrustProxies` och `X-Forwarded-*` sätts från början. Utan det genererar ramverket absoluta URL:er och omdirigeringar utifrån proxyns värdnamn, vilket ger trasiga länkar i mejl och omdirigeringsloopar vid inloggning. Detta är den vanligaste konkreta fällan i uppsättningen.
-- **Absoluta URL:er i utgående e-post genereras från kärnans konfiguration**, inte från inkommande `Host`. En magic link måste peka tillbaka till den frontend användaren faktiskt använder, vilket betyder att anropet till kärnan behöver bära med sig vilken frontend det kom ifrån. Det är en parameter i anropet, inte en kolumn på kontot.
-- **Proxyn får bara nå kärnans API-prefix.** Vitlista sökvägen. En vidareförmedlare som accepterar godtycklig destination är en öppen relä och en SSRF-vektor; hör ihop med [[ADR-0017 Missbruksvektorer]].
-- **Proxyn skriver inte om `Set-Cookie` annat än domänattributet** och buffrar inte svarskroppar. Filnedladdningar går utanför proxyn, direkt mot filoriginet, enligt [[ADR-0019 Filleverans]].
-- **Frontends flyttar från GitHub Pages till egna siter hos inleed.** Lagt till bland miljöfrågorna i [[ADR-0018 Utvecklingsprocess och deploy]].
-- **Filoriginet byter domän.** `files.yachting.earth` i [[ADR-0019 Filleverans]] och [[Filer och lagring]] ska läsas som platshållare tills kärndomänen är vald. Fil-URL:er är långlivade — byte i efterhand betyder omdirigeringar för all framtid.
-- **Postmark sätts upp på kärndomänen.** SPF, DKIM och DMARC på det nya namnet, inte på yachting.earth. Sändarryktet börjar om från noll och behöver mogna före lansering, så uppsättningen bör göras tidigt även om utskicken kommer sent. Se [[ADR-0010 Notisarkitektur]].
-- **Acceptanskriteriet för issue 4 i [[Backlog]] är omformulerat** — inloggning sker från en egen origin bakom proxy, inte från en subdomän.
-- **B2B-integrationer och framtida mobilappar berörs inte.** De använder personal access tokens och talar direkt med kärnan.
+- **Sanctums `stateful`-konfiguration och CORS blir triviala.** En origin. Ingen uppräkning av betrodda värdar, ingen miljövariabel som växer med antalet sajter.
+- **`TrustProxies` och `X-Forwarded-*` sätts ändå från början**, eftersom LiteSpeed står framför PHP hos inleed. Det är normal Laravel-uppsättning här, inte den proxyfleet-fälla den tidigare versionen av den här ADR:n varnade för.
+- **Absoluta URL:er i utgående e-post genereras från appens egen konfiguration.** En magic link pekar tillbaka till samma domän användaren står på. Den parameter som skulle bära "vilken frontend anropet kom ifrån" utgår helt.
+- **Användarfiler har fortfarande en egen origin**, `files.<domän>`. Kravet kommer från [[ADR-0019 Filleverans]] och [[ADR-0007 Fillagring hos inleed]] — en uppladdad SVG eller HTML-fil ska inte kunna köra skript i appens domän — och påverkas inte av att app och API samlas på ett namn.
+- **Postmark sätts upp på produktdomänen.** SPF, DKIM och DMARC på ett nytt namn, vilket betyder att sändarryktet börjar om från noll och behöver mogna före lansering. Uppsättningen bör göras tidigt även om utskicken kommer sent. Se [[ADR-0010 Notisarkitektur]].
+- **Antalet siter hos inleed blir tre:** staging, produktion och filoriginet. Se miljöfrågorna i [[ADR-0018 Utvecklingsprocess och deploy]].
+- **Frontenden kan ligga i samma Laravel-app eller vara en separat SPA på samma origin.** Båda uppfyller beslutet. GitHub Pages är ute i båda fallen, eftersom origin ska delas med API:et.
+- **Acceptanskriteriet för issue 4 i [[Backlog]] är omformulerat** — inloggning sker från samma origin, utan proxy.
+- **B2B-integrationer och mobilappar talar direkt med API:et** med personal access tokens, precis som tidigare.
 
-## Öppen fråga
+## Öppna frågor
 
-**Kärndomänens namn är inte valt.** Beslutet här är att identiteten ska vara neutral och skild från varumärkena — inte vilket namn den får. Namnet bakas in i fil-URL:er och byggt e-postrykte och behöver därför kunna hållas i tio år. Bör avgöras före issue 0, eftersom miljöuppsättningen refererar till det. Se [[Tankar]].
+**Produktens namn och domän är inte valda.** Beslutet här är att produkten är fristående och bor på ett eget namn — inte vilket namn det blir. Namnet bakas in i fil-URL:er, deploy-sökvägar och byggt e-postrykte och behöver därför kunna hållas i tio år. Bör avgöras före issue 0, eftersom miljöuppsättningen refererar till det. Se [[Tankar]].
+
+**Frontendtekniken är inte bestämd.** SPA på samma origin eller serverrenderad Laravel. Valet avgör om felkodsregeln i [[ADR-0013 Språk och i18n]] gäller hela webben eller bara mobil-API:et, och om webbsessionen alls behöver Sanctums cookie-läge. Se [[Tankar]].
 
 ## Alternativ
 
-**Allt under yachting.earth som subdomäner.** Det ADR-0011 förutsatte. Enklast tekniskt — cookie-läget fungerar utan proxy. Valdes bort: gör plattformens identitet till ett båtvarumärke, vilket omöjliggör caravans.earth som jämbördig ingång och binder e-postrykte och fil-URL:er till fel namn permanent.
+**Flera varumärkessajter med en tunn proxy var.** Det den tidigare versionen av den här ADR:n beslutade. Varje vertikal fick en egen registrerbar domän med en serversideproxy framför API-anropen, så att sessionscookien blev förstaparts på varje domän medan kärnan förblev enda auth-auktoritet. Det löste cookie-problemet utan att röra säkerhetsavvägningen i [[ADR-0011 Autentisering]], och gav skräddarsydd SEO per marknad. Valdes bort — inte för att konstruktionen var fel, utan för att strategin den bar upp övergavs. Utan flera vertikaler betalar man en proxy, en extra site och en varumärkeslös kärndomän för ingenting.
 
-**Bearer-tokens för alla frontends.** Undviker proxyn helt och fungerar cross-site. Valdes bort — återinför exakt den XSS-exponering ADR-0011 avvisade, och gör det för de klienter som har minst behov av den.
+**Bearer-tokens för webbfrontenden.** Undviker cookies helt och fungerar oavsett origin. Valdes bort — återinför exakt den XSS-exponering [[ADR-0011 Autentisering]] avvisade, och gör det för den klient som har minst behov av den. En token i `localStorage` är en token som kan stjälas.
 
-**Delad inloggning på kärndomänen.** Användaren skickas till plattformens egen sajt för att registrera sig och arbeta, varumärkessajterna blir rena marknadsföringssidor. Tekniskt oproblematiskt. Valdes bort — bryter varumärket vid registreringen och reducerar vertikalsajterna till landningssidor, vilket tar bort det mesta av värdet i [[ADR-0013 Språk och i18n]].
-
-**Full BFF med egen session per frontend.** Varje sajt håller sin egen användarsession och talar med kärnan via maskintoken. Vanligt mönster i större organisationer. Valdes bort — flyttar inloggningslogik ut i varje frontend, vilket är precis det som gör en ny vertikal dyr, och skapar två ställen där sessioner kan gå isär.
+**Frontend på en domän, API på en annan.** Skulle hålla API:et synligt som egen produkt. Valdes bort — det är cross-site-anropet igen, med tredjepartscookies och Safari-problemet, och köper ingenting när det bara finns en webbklient.

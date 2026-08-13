@@ -72,7 +72,7 @@ Den tekniska uppsättningen — workflow-filer, deploy-skript, kataloglayout —
 - kan domänens document root peka på `current/public`, eller måste den ligga i `public_html`?
 - går det att köra två separata siter med varsin databas inom kontot, för staging och produktion?
 - kan cron köras per site?
-- hur många siter ryms inom kontot? Utöver staging, produktion och filoriginet behövs en per varumärkesdomän, eftersom frontends enligt [[ADR-0020 Plattformsidentitet och frontendgräns]] kör en serversideproxy och inte längre kan ligga på GitHub Pages.
+- hur många siter ryms inom kontot? Tre behövs: staging, produktion och filoriginet. Frontenden delar origin med API:et enligt [[ADR-0020 Plattformsidentitet och frontendgräns]] och kräver därför ingen egen site.
 
 ## Alternativ
 
