@@ -6,8 +6,6 @@
 
 En webbfrontend ligger på samma origin som API:et, plus B2B-kunder som vill nå API:et direkt och mobilappar i förlängningen. Klienterna är alltså av två slag: en webbläsare på produktens egen domän, och allt annat.
 
-Produkten har ett ovanligt användningsmönster: man loggar in kanske en gång i månaden, med en kraftig topp i april. Folk kommer ha glömt sina lösenord varje gång.
-
 ## Beslut
 
 **Laravel Sanctum i två lägen:**
