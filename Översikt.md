@@ -26,7 +26,7 @@ Priser och gränser: [[Planer och kvoter]] och [[ADR-0014 Prismodell]].
 
 PHP 8.3 + Laravel på inleed.net. MariaDB 10.6, cron varje minut, filer på inleeds lagring i Sverige och Frankrike. Se [[ADR-0001 Stack]] och [[ADR-0007 Fillagring hos inleed]].
 
-API:et är produkten. Flera frontends ska kunna prata med samma backend — en sajt om båtar, en om husvagnar, en om hus — vilket ger skräddarsydd SEO utan att backend dupliceras. Därför får API:et aldrig innehålla användarvänd text, bara maskinläsbara felkoder. Se [[ADR-0013 Språk och i18n]].
+API:et är produkten. Frontenden ligger på samma domän, och samma API är det mobilapparna kopplar på när de byggs — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Därför får API:et aldrig innehålla användarvänd text, bara maskinläsbara felkoder. Se [[ADR-0013 Språk och i18n]].
 
 ## Avgränsning
 

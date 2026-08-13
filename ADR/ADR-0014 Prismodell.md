@@ -30,7 +30,7 @@ Betalning via **merchant of record** — Paddle eller Lemon Squeezy.
 
 **Priset höjdes från 10 €.** Marginalen på 10 € är god — särskilt med dedup, där femhundra användare med samma manual kostar en manual — men priset måste bära supporten. Mejl från 5 % av kunderna en gång om året äter upp årsavgiften.
 
-**"Billigare än Evernote" är fel utgångspunkt.** Kunden väljer inte mellan Evernote och Båtpärmen, utan mellan en skokartong med kvitton och ett system byggt för ändamålet. Nischade produkter prissätts nästan alltid över de generella verktyg de ersätter, eftersom passformen är värdet. Evernote är dessutom ett dåligt ankare: deras gratisnivå är en demo, och de är illa omtyckta för sina prishöjningar. Relevantare jämförelser är Navionics på 25–60 €/år eller en impellerservice som blev av för sent. Men 79 € är ett verkligt tak i marknaden, och 39–49 € ligger tryggt under.
+**"Billigare än Evernote" är fel utgångspunkt.** Kunden väljer inte mellan Evernote och den här produkten, utan mellan en skokartong med kvitton och ett system byggt för ändamålet. Nischade produkter prissätts nästan alltid över de generella verktyg de ersätter, eftersom passformen är värdet. Evernote är dessutom ett dåligt ankare: deras gratisnivå är en demo, och de är illa omtyckta för sina prishöjningar. Relevantare jämförelser är Navionics på 25–60 €/år eller en impellerservice som blev av för sent. Men 79 € är ett verkligt tak i marknaden, och 39–49 € ligger tryggt under.
 
 **Tolv månader Pro till mottagaren** gör båtaffären till kundanskaffningskanal. Säljaren betalar redan, köparen ärver en välfylld pärm hon inte vill förlora, och efter ett år har hon egen historik i den. Kostnaden är en PDF och lite lagring.
 

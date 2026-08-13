@@ -35,7 +35,7 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | totp_confirmed_at | TIMESTAMP NULL | |
 | locale, timezone | | Åsidosätter kontots värden för den här personen |
 | quiet_hours_start, quiet_hours_end | TIME NULL | Se [[Notiser]] |
-| last_active_at | TIMESTAMP | **Uppdateras av API-anrop från vilken frontend som helst**, inte bara inloggning. Driver livscykeln i [[Planer och kvoter]] |
+| last_active_at | TIMESTAMP | **Uppdateras av API-anrop från vilken klient som helst**, inte bara inloggning. Driver livscykeln i [[Planer och kvoter]] |
 | created_at, updated_at | | |
 
 ### account_user

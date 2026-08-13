@@ -6,7 +6,7 @@ Beslut bakom detta: [[ADR-0014 Prismodell]], [[ADR-0009 Kvoter och livscykel]].
 
 ## Varför det här byggs i MVP fast betalning inte gör det
 
-Begränsningarna måste sitta i API:et, aldrig i klienten — flera frontends pratar med samma backend, och den som skriver en egen klient ska inte kunna kringgå kvoten. Att retroaktivt införa kvoter i ett system som aldrig räknat förbrukning är dessutom obehagligt: du vet inte vad som redan finns.
+Begränsningarna måste sitta i API:et, aldrig i klienten — webbfrontenden, B2B-integrationer och kommande mobilappar delar samma backend, och den som skriver en egen klient ska inte kunna kringgå kvoten. Att retroaktivt införa kvoter i ett system som aldrig räknat förbrukning är dessutom obehagligt: du vet inte vad som redan finns.
 
 Rättighetslagret byggs alltså nu. Betalflödet kopplas på när det finns någon att fakturera.
 
@@ -85,7 +85,7 @@ Rättigheter kontrolleras server-side vid: skapande av container, uppladdning av
 
 Kostnadsrapporten är den enda kontrollpunkten som inte rör en gräns utan en funktion: att *registrera* kostnader är fritt, att få dem summerade kräver Pro. Kontrollen måste därför sitta på rapportendpointen, inte på skrivningen. Se [[ADR-0016 Kostnadsregistrering]].
 
-Vid nekande returneras en maskinläsbar felkod med vilken gräns som slog i — frontenden formulerar meddelandet. Se [[ADR-0013 Språk och i18n]].
+Vid nekande returneras en maskinläsbar felkod med vilken gräns som slog i — klienten formulerar meddelandet. Se [[ADR-0013 Språk och i18n]].
 
 ## Nedgradering
 
@@ -117,7 +117,7 @@ Tre villkor som **måste** kontrolleras innan något raderas:
 
 **Aktiv prenumeration undantar alltid.** Hur sällan någon än loggar in.
 
-**Aktivitet räknas som API-anrop från vilken frontend som helst**, inte bara inloggning.
+**Aktivitet räknas som API-anrop från vilken klient som helst**, inte bara inloggning.
 
 Skicka fler än en varning. Radering av flera års dokumentation efter ett enda mejl som fastnade i skräpposten blir en riktigt dålig historia.
 

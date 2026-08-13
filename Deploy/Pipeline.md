@@ -4,6 +4,8 @@ Teknisk uppsättning för CI och deploy. **Varför** det ser ut så här står i
 
 Det här dokumentet är underlaget för **issue 0** i [[Backlog]]. Filerna nedan är utgångspunkter, inte facit: sökvägar, domännamn och PHP-version ska anpassas efter hur kontot faktiskt ser ut hos inleed.
 
+`<app>` och `<domän>` är platshållare. Produktens namn och domän är inte valda — se [[Tankar]] — och ska fyllas i här när de är det.
+
 Tillbaka till [[00 Index]].
 
 ## Överblick
@@ -30,7 +32,7 @@ gren "issue-11"
 Identisk på staging och produktion, bara olika konto eller sökväg.
 
 ```
-~/batparmen/
+~/<app>/
   incoming/                     inkommande paket, töms efter uppackning
   releases/
     2026-08-04-a3f19c/
@@ -46,19 +48,19 @@ Identisk på staging och produktion, bara olika konto eller sökväg.
 ### Engångsuppsättning
 
 ```bash
-mkdir -p ~/batparmen/{incoming,releases}
-mkdir -p ~/batparmen/shared/storage/{app/public,logs}
-mkdir -p ~/batparmen/shared/storage/framework/{cache/data,sessions,views}
+mkdir -p ~/<app>/{incoming,releases}
+mkdir -p ~/<app>/shared/storage/{app/public,logs}
+mkdir -p ~/<app>/shared/storage/framework/{cache/data,sessions,views}
 
 # .env skapas här och bara här
-nano ~/batparmen/shared/.env
+nano ~/<app>/shared/.env
 
 # document root pekas om till releasen
-ln -sfn ~/batparmen/current/public ~/domains/batparmen.se/public_html
+ln -sfn ~/<app>/current/public ~/domains/<domän>/public_html
 
 # schemaläggaren
 crontab -e
-* * * * * cd ~/batparmen/current && php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd ~/<app>/current && php artisan schedule:run >> /dev/null 2>&1
 ```
 
 Går det inte att peka om document root får `public_html` istället vara symlänken. Fungerar inte heller det — se frågorna till inleed i [[ADR-0018 Utvecklingsprocess och deploy]].
@@ -74,7 +76,7 @@ Lägg upp två *Environments* i repots inställningar: `staging` och `production
 | `DEPLOY_USER` | kontonamn hos inleed |
 | `DEPLOY_KEY` | privat nyckel, **egen nyckel per miljö** |
 | `DEPLOY_KNOWN_HOSTS` | utdata från `ssh-keyscan -p PORT HOST` |
-| `DEPLOY_PATH` | t.ex. `/home/tony/batparmen` |
+| `DEPLOY_PATH` | t.ex. `/home/tony/<app>` |
 
 `production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör.
 
@@ -250,7 +252,7 @@ Körs på servern. Ligger i repot så att den versioneras med koden.
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP="$1"          # t.ex. /home/tony/batparmen
+APP="$1"          # t.ex. /home/tony/<app>
 RELEASE="$2"      # katalognamn för den nya releasen
 KEEP=5
 
@@ -297,9 +299,9 @@ Ordningen är medveten:
 ## Rollback
 
 ```bash
-ls -1dt ~/batparmen/releases/       # hitta den förra
-ln -sfn ~/batparmen/releases/2026-08-04-a3f19c ~/batparmen/current
-php ~/batparmen/current/artisan up
+ls -1dt ~/<app>/releases/       # hitta den förra
+ln -sfn ~/<app>/releases/2026-08-04-a3f19c ~/<app>/current
+php ~/<app>/current/artisan up
 ```
 
 Tio sekunder. **Databasen rullas inte tillbaka** — se expand/contract i [[ADR-0018 Utvecklingsprocess och deploy]].
@@ -321,7 +323,7 @@ En tom Laravel, utan en rad domänkod, som:
 
 1. får en PR att bli grön i `ci.yml`
 2. hamnar på staging automatiskt vid merge
-3. svarar på `https://staging.batparmen.se`
+3. svarar på `https://staging.<domän>`
 4. skeppas till produktion via en release `v0.0.1` med Tonys godkännande
 5. kan rullas tillbaka med ett symlänkbyte
 6. har en fungerande minutcron på båda miljöerna

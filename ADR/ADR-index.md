@@ -25,7 +25,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0017 Missbruksvektorer]] | Detektera och prissätt, spärra inte i förväg | [[Planer och kvoter]], Drift |
 | [[ADR-0018 Utvecklingsprocess och deploy]] | Gren per issue, tagg till produktion, bygg en gång | [[Backlog]], Drift |
 | [[ADR-0019 Filleverans]] | Intern omdirigering under webbroten, engångslänk som fallback | [[Filer och lagring]] |
-| [[ADR-0020 Plattformsidentitet och frontendgräns]] | Neutral kärndomän, varumärkessajter med tunn proxy | [[Konton och åtkomst]], Drift |
+| [[ADR-0020 Plattformsidentitet och frontendgräns]] | Egen domän, frontend och API på samma origin, API för mobilappar | [[Konton och åtkomst]], Drift |
 
 ## Om att ändra ett beslut
 

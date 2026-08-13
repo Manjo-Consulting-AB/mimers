@@ -23,9 +23,9 @@ Se [Internal Redirect](https://docs.litespeedtech.com/lsws/redirect/) i LiteSpee
 **Bytena ligger under filsubdomänens document root, i en katalog som nekas vid direkt anrop och levereras via intern omdirigering.**
 
 ```
-~/batparmen/shared/storage/files/                      bytena, delade mellan releaser
-~/domains/files.yachting.earth/public_html/
-  _protected/  ->  ~/batparmen/shared/storage/files/   symlänk, sätts av deploy.sh
+~/<app>/shared/storage/files/                      bytena, delade mellan releaser
+~/domains/files.<domän>/public_html/
+  _protected/  ->  ~/<app>/shared/storage/files/   symlänk, sätts av deploy.sh
     .htaccess                                          nekar direkt åtkomst
 ```
 

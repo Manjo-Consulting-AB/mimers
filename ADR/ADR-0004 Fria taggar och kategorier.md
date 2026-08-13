@@ -4,7 +4,7 @@
 
 ## Kontext
 
-Ett item behöver kunna placeras i båten. Tre alternativ övervägdes i [[High level overview]]: taggar och kategorier som motsvarar utrymmen, markering på två 2D-kartor som ger en 3D-position, eller kategorier kopplade till kartpunkter.
+Ett item behöver kunna placeras i objektet. Tre alternativ övervägdes: taggar och kategorier som motsvarar utrymmen, markering på två 2D-kartor som ger en 3D-position, eller kategorier kopplade till kartpunkter.
 
 ## Beslut
 
@@ -23,7 +23,7 @@ Kartan är den enskilt dyraste delen att bygga och fyller funktionellt samma rol
 ## Konsekvenser
 
 - **Sök och filtrering blir produkten.** När strukturen är helt fri finns ingen annan väg till innehållet. Indexet på `item_tag` är inte valfritt. Se [[Items och organisation]].
-- En tom pärm vid registrering är avskräckande. Färdiga kategoriuppsättningar — "segelbåt", "husvagn" — hör hemma i respektive **frontend**, inte i backend. Då slipper API:et någonsin veta vad orden betyder eller på vilket språk.
+- En tom pärm vid registrering är avskräckande. Färdiga kategoriuppsättningar — "segelbåt", "husvagn" — hör hemma i **frontenden**, inte i backend. Då slipper API:et någonsin veta vad orden betyder eller på vilket språk.
 - Kategorihierarkin kräver djupbegränsning och cykelkontroll i applikationslagret.
 
 ## Alternativ

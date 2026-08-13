@@ -1,4 +1,4 @@
-# Båtpärmen — index
+# Projektindex
 
 Startpunkt för hela projektet. **Läs inte allt.** Varje issue i [[Backlog]] pekar ut exakt vilka dokument som behövs för just den uppgiften — läs dem, inget mer.
 
@@ -6,7 +6,7 @@ Startpunkt för hela projektet. **Läs inte allt.** Varje issue i [[Backlog]] pe
 
 API-först system där ägaren av en båt, husvagn, stuga eller bil samlar all dokumentation om objektet: prylar, manualer, kvitton, serienummer, servicehistorik och återkommande underhåll. En blandning av Evernote och OmniFocus, byggd för en nisch.
 
-Del av plattformen **yachting.earth**. Se [[High level overview]] och [[Arkitektur]] för den ursprungliga produktbeskrivningen.
+Produkten är fristående och står på egna ben — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Namn och domän är ännu inte valda; se [[Tankar]].
 
 ## Var hittar jag vad
 

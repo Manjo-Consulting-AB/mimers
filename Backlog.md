@@ -36,9 +36,9 @@ Tabellerna `account`, `user`, `account_user`. Locale, timezone, unit_system på 
 **Beror på:** 2
 
 ### 4. Autentisering med lösenord
-Sanctum i cookie-läge för förstapartsfrontends, personal access tokens för övriga. Registrering, inloggning, utloggning, e-postverifiering.
+Sanctum i cookie-läge för webbfrontenden, personal access tokens för mobilappar och B2B. Registrering, inloggning, utloggning, e-postverifiering.
 **Läs:** [[ADR-0011 Autentisering]], [[ADR-0020 Plattformsidentitet och frontendgräns]], [[Konton och åtkomst]]
-**Klart när:** en frontend på egen varumärkesdomän kan logga in via cookie med CSRF-skydd genom sin proxy, och en token-klient kan nå samma endpoints direkt. Kärnan kör bakom `TrustProxies` och genererar korrekta absoluta URL:er trots proxyn.
+**Klart när:** en frontend på samma origin kan logga in via cookie med CSRF-skydd, och en token-klient kan nå samma endpoints direkt. Appen genererar korrekta absoluta URL:er bakom LiteSpeed, med `TrustProxies` konfigurerat.
 **Beror på:** 3
 
 ### 5. Magic link
@@ -216,7 +216,7 @@ Femstegsförloppet: read_only, användarens urval sorterat på storlek, tre mån
 **Beror på:** 30
 
 ### 32. E-post via Postmark
-Mallar på svenska och engelska, valda från mottagarens locale. SPF, DKIM, DMARC på yachting.earth. Avregistreringslänk och inställningssida.
+Mallar på svenska och engelska, valda från mottagarens locale. SPF, DKIM, DMARC på produktdomänen. Avregistreringslänk och inställningssida.
 **Läs:** [[Notiser]] § E-post, [[ADR-0013 Språk och i18n]]
 **Beror på:** 31
 

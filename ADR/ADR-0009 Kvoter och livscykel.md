@@ -22,7 +22,7 @@ Samma logik gäller konton som slutar användas helt.
 
 12 månader utan aktivitet → påminnelse. 15 månader → kontot stängs. 18 månader → kontot raderas.
 
-Tre undantag som måste kontrolleras: radering går **via containern**, och har den aktiva medlemmar erbjuds ägarskapet dem först. Aktiv prenumeration undantar alltid. Aktivitet räknas som API-anrop från vilken frontend som helst, inte bara inloggning.
+Tre undantag som måste kontrolleras: radering går **via containern**, och har den aktiva medlemmar erbjuds ägarskapet dem först. Aktiv prenumeration undantar alltid. Aktivitet räknas som API-anrop från vilken klient som helst, inte bara inloggning.
 
 ## Motivering
 
@@ -35,7 +35,7 @@ Att radering går via containern skyddar mot att en inaktiv ägares konto tar me
 ## Konsekvenser
 
 - Förbrukning måste räknas **transaktionellt** vid varje uppladdning och radering, med ett nattligt avstämningsjobb. Räknare driver alltid isär till slut.
-- Rättighetskontrollerna måste sitta i API:et, aldrig i klienten — flera frontends pratar med samma backend. Se [[Planer och kvoter]].
+- Rättighetskontrollerna måste sitta i API:et, aldrig i klienten — webbfrontenden, B2B-integrationer och kommande mobilappar delar samma backend. Se [[Planer och kvoter]].
 - Varningar krävs vid steg 1, en månad före och en vecka före steg 4, samt flera gånger i livscykeln. Ett enda mejl som fastnar i skräpposten får inte kunna kosta någon flera års dokumentation.
 - Rättighetslagret byggs i MVP även om betalflödet inte gör det. Att retroaktivt införa kvoter i ett system som aldrig räknat är obehagligt.
 

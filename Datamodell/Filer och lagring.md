@@ -87,7 +87,7 @@ Båda talen behövs. Fakturera på det första, kapacitetsplanera på det andra.
 
 Tre krav som inte är förhandlingsbara:
 
-**Användarfiler serveras från en annan origin än applikationen.** En uppladdad SVG eller HTML-fil kör annars skript i appens domän och kommer åt sessionen. Egen subdomän, t.ex. `files.yachting.earth`.
+**Användarfiler serveras från en annan origin än applikationen.** En uppladdad SVG eller HTML-fil kör annars skript i appens domän och kommer åt sessionen. Egen subdomän, `files.<domän>`.
 
 **`Content-Disposition: attachment` som standard**, undantag endast för bilder som ska visas inline.
 
