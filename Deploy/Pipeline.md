@@ -69,6 +69,19 @@ crontab -e
 
 Går det inte att peka om document root får `public_html` istället vara symlänken. Fungerar inte heller det — se frågorna till inleed i [[ADR-0018 Utvecklingsprocess och deploy]].
 
+## Repo och organisation
+
+Koden bor i **`Manjo-Consulting-AB/mimers`**. Orgen bär bolagsnamnet och får ett repo per app; produktidentiteten sitter i domänen, inte i org-sluggen. En egen org per app hade inte gett någon ytterligare avskärmning — secrets, environments och branch protection är per repo — men hade dubblat det som faktiskt administreras på org-nivå: 2FA-policy, medlemmar, rulesets och app-installationer.
+
+Dokumentationen låg först i `yachting-earth/storage` och förs över med `Transfer ownership`, inte som en kopia: ADR-historiken och PR-diskussionerna är en del av värdet och följer inte med en filkopiering.
+
+**Det som inte följer med en flytt eller ett nytt repo** och alltså måste läggas upp igen:
+
+- branch protection på `main`, inklusive **inkludera administratörer**
+- de två miljöerna och deras `DEPLOY_*`-secrets
+- required reviewer på `production`
+- installationen av GitHub-appen på orgen, med åtkomst till repot
+
 ## Miljöer och secrets i GitHub
 
 Lägg upp två *Environments* i repots inställningar: `staging` och `production`. Varje miljö får egna secrets med samma namn, så att workflow-filerna kan se likadana ut.
