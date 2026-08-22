@@ -1,6 +1,6 @@
 # ADR-0020 Plattformsidentitet och frontendgräns
 
-**Status:** Antagen 2026-08-05 · Omskriven 2026-08-13 sedan multi-frontend-strategin övergavs · [[ADR-index]]
+**Status:** Antagen 2026-08-05 · Omskriven 2026-08-13 sedan multi-frontend-strategin övergavs · Namn och domän fastställda 2026-08-22 · [[ADR-index]]
 
 Ändrar [[ADR-0011 Autentisering]] på punkten om vilka domäner cookie-läget gäller. Resten av ADR-0011 står oförändrad.
 
@@ -16,7 +16,9 @@ Den tidigare versionen av den här ADR:n löste ett problem som därmed inte fin
 
 ## Beslut
 
-**Produkten bor på en egen domän med frontend och API på samma origin.** Ingen proxy, inga varumärkessajter, ingen separat kärndomän vid sidan av produkten, ingen plattformstillhörighet. Domännamnet är ännu inte valt; se öppna frågor nedan.
+**Produkten bor på en egen domän med frontend och API på samma origin.** Ingen proxy, inga varumärkessajter, ingen separat kärndomän vid sidan av produkten, ingen plattformstillhörighet.
+
+**Systemet heter Mimers och domänen är `mimers.app`.** Registrerad hos inleed 2026-08-22. Namnet syftar på Mimer (Mímir) i nordisk mytologi, som vaktar brunnen där visdom och kunskap finns — vilket är vad produkten är för båten, huset eller bilen: den brunn där all historik, kunskap och allt underhåll samlas. Namnet bär ingen koppling till någon befintlig sajt eller något befintligt varumärke, och är inte bundet till någon vertikal, vilket är ett krav i och med att samma produkt ska tjäna båt, husvagn, stuga och bil. Applikationen ligger på `mimers.app`, staging på `staging.mimers.app` och användarfiler på `files.mimers.app`. I deploy-sökvägar heter appen `mimers`.
 
 **Sessionscookien är förstaparts utan konstruktioner.** Cookie-läget i [[ADR-0011 Autentisering]] gäller därmed rakt av — samma origin är det enklaste fall det läget är byggt för.
 
@@ -39,16 +41,15 @@ Att hålla API:et som en egen yta även när webbfrontenden ligger bredvid det k
 - **Sanctums `stateful`-konfiguration och CORS blir triviala.** En origin. Ingen uppräkning av betrodda värdar, ingen miljövariabel som växer med antalet sajter.
 - **`TrustProxies` och `X-Forwarded-*` sätts ändå från början**, eftersom LiteSpeed står framför PHP hos inleed. Det är normal Laravel-uppsättning här, inte den proxyfleet-fälla den tidigare versionen av den här ADR:n varnade för.
 - **Absoluta URL:er i utgående e-post genereras från appens egen konfiguration.** En magic link pekar tillbaka till samma domän användaren står på. Den parameter som skulle bära "vilken frontend anropet kom ifrån" utgår helt.
-- **Användarfiler har fortfarande en egen origin**, `files.<domän>`. Kravet kommer från [[ADR-0019 Filleverans]] och [[ADR-0007 Fillagring hos inleed]] — en uppladdad SVG eller HTML-fil ska inte kunna köra skript i appens domän — och påverkas inte av att app och API samlas på ett namn.
-- **Postmark sätts upp på produktdomänen.** SPF, DKIM och DMARC på ett nytt namn, vilket betyder att sändarryktet börjar om från noll och behöver mogna före lansering. Uppsättningen bör göras tidigt även om utskicken kommer sent. Se [[ADR-0010 Notisarkitektur]].
-- **Antalet siter hos inleed blir tre:** staging, produktion och filoriginet. Se miljöfrågorna i [[ADR-0018 Utvecklingsprocess och deploy]].
+- **`.app` är HSTS-preloadad i webbläsarna.** Hela toppdomänen ligger i preload-listan, så varje anrop till `mimers.app` och dess subdomäner måste gå över HTTPS — ingen klartextfallback finns att luta sig mot under uppsättningen. Certifikat måste alltså finnas på plats för app, staging och filoriginet innan något av dem svarar över huvud taget. Se miljöfrågorna i [[ADR-0018 Utvecklingsprocess och deploy]].
+- **Användarfiler har fortfarande en egen origin**, `files.mimers.app`. Kravet kommer från [[ADR-0019 Filleverans]] och [[ADR-0007 Fillagring hos inleed]] — en uppladdad SVG eller HTML-fil ska inte kunna köra skript i appens domän — och påverkas inte av att app och API samlas på ett namn.
+- **Postmark sätts upp på `mimers.app`.** SPF, DKIM och DMARC på ett nytt namn, vilket betyder att sändarryktet börjar om från noll och behöver mogna före lansering. Uppsättningen bör göras tidigt även om utskicken kommer sent. Se [[ADR-0010 Notisarkitektur]].
+- **Antalet siter hos inleed blir tre:** `mimers.app`, `staging.mimers.app` och `files.mimers.app`. Se miljöfrågorna i [[ADR-0018 Utvecklingsprocess och deploy]].
 - **Frontenden kan ligga i samma Laravel-app eller vara en separat SPA på samma origin.** Båda uppfyller beslutet. GitHub Pages är ute i båda fallen, eftersom origin ska delas med API:et.
 - **Acceptanskriteriet för issue 4 i [[Backlog]] är omformulerat** — inloggning sker från samma origin, utan proxy.
 - **B2B-integrationer och mobilappar talar direkt med API:et** med personal access tokens, precis som tidigare.
 
 ## Öppna frågor
-
-**Produktens namn och domän är inte valda.** Beslutet här är att produkten är fristående och bor på ett eget namn — inte vilket namn det blir. Namnet bakas in i fil-URL:er, deploy-sökvägar och byggt e-postrykte och behöver därför kunna hållas i tio år. Bör avgöras före issue 0, eftersom miljöuppsättningen refererar till det. Se [[Tankar]].
 
 **Frontendtekniken är inte bestämd.** SPA på samma origin eller serverrenderad Laravel. Valet avgör om felkodsregeln i [[ADR-0013 Språk och i18n]] gäller hela webben eller bara mobil-API:et, och om webbsessionen alls behöver Sanctums cookie-läge. Se [[Tankar]].
 

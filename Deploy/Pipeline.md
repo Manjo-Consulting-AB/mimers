@@ -4,7 +4,9 @@ Teknisk uppsättning för CI och deploy. **Varför** det ser ut så här står i
 
 Det här dokumentet är underlaget för **issue 0** i [[Backlog]]. Filerna nedan är utgångspunkter, inte facit: sökvägar, domännamn och PHP-version ska anpassas efter hur kontot faktiskt ser ut hos inleed.
 
-`<app>` och `<domän>` är platshållare. Produktens namn och domän är inte valda — se [[Tankar]] — och ska fyllas i här när de är det.
+Produkten heter Mimers och domänen är `mimers.app` — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Sökvägarna nedan utgår från appkatalogen `~/mimers` och produktionsdomänen `mimers.app`; staging ligger på `staging.mimers.app` och användarfilerna på `files.mimers.app`. Ligger staging på samma konto som produktion behöver den en egen appkatalog — sätt den i miljöns `DEPLOY_PATH` istället för att dela `~/mimers`.
+
+Eftersom `.app` är HSTS-preloadad måste alla tre värdnamnen ha certifikat innan de svarar alls; det finns ingen HTTP-fallback att felsöka mot.
 
 Tillbaka till [[00 Index]].
 
@@ -32,7 +34,7 @@ gren "issue-11"
 Identisk på staging och produktion, bara olika konto eller sökväg.
 
 ```
-~/<app>/
+~/mimers/
   incoming/                     inkommande paket, töms efter uppackning
   releases/
     2026-08-04-a3f19c/
@@ -48,19 +50,19 @@ Identisk på staging och produktion, bara olika konto eller sökväg.
 ### Engångsuppsättning
 
 ```bash
-mkdir -p ~/<app>/{incoming,releases}
-mkdir -p ~/<app>/shared/storage/{app/public,logs}
-mkdir -p ~/<app>/shared/storage/framework/{cache/data,sessions,views}
+mkdir -p ~/mimers/{incoming,releases}
+mkdir -p ~/mimers/shared/storage/{app/public,logs}
+mkdir -p ~/mimers/shared/storage/framework/{cache/data,sessions,views}
 
 # .env skapas här och bara här
-nano ~/<app>/shared/.env
+nano ~/mimers/shared/.env
 
 # document root pekas om till releasen
-ln -sfn ~/<app>/current/public ~/domains/<domän>/public_html
+ln -sfn ~/mimers/current/public ~/domains/mimers.app/public_html
 
 # schemaläggaren
 crontab -e
-* * * * * cd ~/<app>/current && php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd ~/mimers/current && php artisan schedule:run >> /dev/null 2>&1
 ```
 
 Går det inte att peka om document root får `public_html` istället vara symlänken. Fungerar inte heller det — se frågorna till inleed i [[ADR-0018 Utvecklingsprocess och deploy]].
@@ -76,7 +78,7 @@ Lägg upp två *Environments* i repots inställningar: `staging` och `production
 | `DEPLOY_USER` | kontonamn hos inleed |
 | `DEPLOY_KEY` | privat nyckel, **egen nyckel per miljö** |
 | `DEPLOY_KNOWN_HOSTS` | utdata från `ssh-keyscan -p PORT HOST` |
-| `DEPLOY_PATH` | t.ex. `/home/tony/<app>` |
+| `DEPLOY_PATH` | t.ex. `/home/tony/mimers` |
 
 `production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör.
 
@@ -252,7 +254,7 @@ Körs på servern. Ligger i repot så att den versioneras med koden.
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP="$1"          # t.ex. /home/tony/<app>
+APP="$1"          # t.ex. /home/tony/mimers
 RELEASE="$2"      # katalognamn för den nya releasen
 KEEP=5
 
@@ -299,9 +301,9 @@ Ordningen är medveten:
 ## Rollback
 
 ```bash
-ls -1dt ~/<app>/releases/       # hitta den förra
-ln -sfn ~/<app>/releases/2026-08-04-a3f19c ~/<app>/current
-php ~/<app>/current/artisan up
+ls -1dt ~/mimers/releases/       # hitta den förra
+ln -sfn ~/mimers/releases/2026-08-04-a3f19c ~/mimers/current
+php ~/mimers/current/artisan up
 ```
 
 Tio sekunder. **Databasen rullas inte tillbaka** — se expand/contract i [[ADR-0018 Utvecklingsprocess och deploy]].
@@ -323,7 +325,7 @@ En tom Laravel, utan en rad domänkod, som:
 
 1. får en PR att bli grön i `ci.yml`
 2. hamnar på staging automatiskt vid merge
-3. svarar på `https://staging.<domän>`
+3. svarar på `https://staging.mimers.app`
 4. skeppas till produktion via en release `v0.0.1` med Tonys godkännande
 5. kan rullas tillbaka med ett symlänkbyte
 6. har en fungerande minutcron på båda miljöerna

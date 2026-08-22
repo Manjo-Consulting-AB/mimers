@@ -73,7 +73,7 @@ Seglare befinner sig ofta inte i sin hemtidszon. Tidszonen hör därför på anv
 
 ## E-post
 
-Levereras via **Postmark**. SPF, DKIM och DMARC måste sättas upp på produktdomänen — transaktionsmejl från delad hosting hamnar annars i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös.
+Levereras via **Postmark**. SPF, DKIM och DMARC måste sättas upp på `mimers.app` — transaktionsmejl från delad hosting hamnar annars i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös.
 
 Mallar finns på svenska och engelska, valda utifrån mottagarens `locale`. Se [[ADR-0013 Språk och i18n]].
 
