@@ -252,8 +252,9 @@ Hemlig prenumerationslänk per container och användare, återkallbar. Visar bar
 ## M6 · Resten av MVP
 
 ### 38. Utlåning
-`loan` med låntagare, förfallodatum och återlämning. Påminnelser via notiskärnan, till både låntagare och ägare.
-**Läs:** [[Items och organisation]] § loan
+`loan` med låntagare, förfallodatum och återlämning. Påminnelser via notiskärnan **till den som lånat ut, aldrig till låntagaren** — `borrower_email` är en kontaktuppgift i vyn, inte en mottagaradress.
+**Läs:** [[Items och organisation]] § loan, [[ADR-0017 Missbruksvektorer]] § 7
+**Klart när:** ett test visar att en förfallen utlåning genererar en notis till utlånaren och noll utskick till `borrower_email`.
 **Beror på:** 13, 34
 
 ### 39. Ägarbyte
@@ -352,7 +353,7 @@ Tillagd 2026-08-22. Se [[ADR-0021 Frontendteknik]] — Inertia med Vue 3 och Tai
 Gemensamt för alla issues i milstolpen: text formuleras på servern ur `lang/`, aldrig i JavaScript. Behörighetskontroller görs i policies, aldrig genom att dölja en knapp.
 
 ### 51. Frontendskal
-Inertia-rotvy, layoutkomponent, navigation, Tailwind-uppsättning, felhanterings- och flashmeddelandemönster. Delade props: inloggad användare, kontots plan, aktiv container. Ett dokumenterat mönster för formulär med validering från FormRequests, så att alla efterföljande issues använder samma.
+Inertia-rotvy, layoutkomponent, navigation, Tailwind-uppsättning, felhanterings- och flashmeddelandemönster. Delade props: inloggad användare, kontots plan, aktiv container. Ett dokumenterat mönster för formulär med validering från FormRequests, och för att rendera props **ur samma API Resource-klasser som `/api`** — båda mönstren används av alla efterföljande issues.
 **Läs:** [[ADR-0021 Frontendteknik]]
 **Klart när:** en skyddad exempelvy renderar, ett formulär visar valideringsfel från servern, och `php artisan view:cache` fungerar med Inertias rotvy.
 **Beror på:** 1

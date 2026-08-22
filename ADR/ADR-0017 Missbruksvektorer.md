@@ -1,6 +1,6 @@
 # ADR-0017 Missbruksvektorer
 
-**Status:** Antagen 2026-08-04 · [[ADR-index]]
+**Status:** Antagen 2026-08-04 · Punkt 7 om utlåningspåminnelser tillagd 2026-08-22 · [[ADR-index]]
 
 ## Kontext
 
@@ -58,6 +58,14 @@ Båda skickar mejl till godtyckliga adresser.
 
 Export är fritt medan kostnadsrapporten är Pro; någon kan exportera och summera i kalkylark. Redan avgjort i [[ADR-0016 Kostnadsregistrering]] — den som gör det är en trolig framtida kund, inte ett läckage att täppa till. Ingen åtgärd.
 
+### 7. Utlåningspåminnelser som utskicksverktyg
+
+Tillagd 2026-08-22. En utlåning bär en fritt inskriven `borrower_email` som ingen har verifierat, och påminnelser mot `due_at` är **återkommande**. Skulle de gå till låntagaren vore utlåning den enda funktionen i systemet som mejlar en okänd adress upprepade gånger — värre än inbjudningar i punkt 5, eftersom en inbjudan skickas en gång och en påminnelse fortsätter tills någon bockar av den.
+
+**Motmedel:** systemet mejlar aldrig låntagaren. Påminnelsen går till den som lånat ut, med adressen synlig i vyn så att hen själv tar kontakt. Se [[Items och organisation]] § loan.
+
+Det kostar en aning bekvämlighet och tar bort hela vektorn — ingen avanmälningslänk, inga studsar från adresser vi inte äger relationen till, ingen påverkan på leveransryktet hos Postmark. Ska automatiska påminnelser till låntagaren någon gång byggas kräver de verifiering av adressen först, och då är det ett eget beslut.
+
 ### Mätningen
 
 En **nattlig rapport, inte realtidsspärrar.** Fyra tal räcker som utgångsläge: nya gratiskonton per vecka, andel som aldrig laddar upp något, lagring per gratiskonto, utskickade mejl per konto. Ingenting av det kräver ny data — allt finns i tabeller som redan skrivs.
@@ -80,6 +88,7 @@ En **nattlig rapport, inte realtidsspärrar.** Fyra tal räcker som utgångsläg
 - `ownership_transfer` behöver en kontroll av att mottagande konto inte redan konsumerat bonusen. Issue 49 i [[Backlog]].
 - Tak för `pending`-inbjudningar per konto läggs till som en liten uppgift i MVP. Issue 48 i [[Backlog]].
 - Rapporten är issue 50 i [[Backlog]] och ligger utanför MVP.
+- **Utlåningspåminnelser går aldrig till låntagaren.** Regeln bor i [[Items och organisation]] § loan och verifieras av issue 38. Den är det enda motmedlet i den här ADR:n som stänger en vektor helt i stället för att mäta den — möjligt eftersom kostnaden är en aning bekvämlighet, inte en funktion.
 - Mätvärdena är personuppgiftsnära — registrerings-IP och e-postdomän. De ska ha en gallringsfrist och stå i registerförteckningen; det räcker inte att de är "bara statistik".
 
 ## Alternativ
