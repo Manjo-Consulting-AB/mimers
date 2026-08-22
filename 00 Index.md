@@ -33,7 +33,7 @@ Uppdelad per domän så att en ändring bara kräver en fil.
 
 ## Beslut
 
-[[ADR-index]] — sexton beslut med kontext och konsekvenser. Slå upp när du undrar varför, inte innan du börjar.
+[[ADR-index]] — tjugoen beslut med kontext och konsekvenser. Slå upp när du undrar varför, inte innan du börjar.
 
 ## Arbete
 

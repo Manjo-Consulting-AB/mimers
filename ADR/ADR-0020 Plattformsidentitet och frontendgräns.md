@@ -1,6 +1,6 @@
 # ADR-0020 Plattformsidentitet och frontendgräns
 
-**Status:** Antagen 2026-08-05 · Omskriven 2026-08-13 sedan multi-frontend-strategin övergavs · Namn och domän fastställda 2026-08-22 · [[ADR-index]]
+**Status:** Antagen 2026-08-05 · Omskriven 2026-08-13 sedan multi-frontend-strategin övergavs · Namn och domän fastställda 2026-08-22 · Frontendtekniken avgjord av [[ADR-0021 Frontendteknik]] 2026-08-22 · [[ADR-index]]
 
 Ändrar [[ADR-0011 Autentisering]] på punkten om vilka domäner cookie-läget gäller. Resten av ADR-0011 står oförändrad.
 
@@ -20,7 +20,7 @@ Den tidigare versionen av den här ADR:n löste ett problem som därmed inte fin
 
 **Systemet heter Mimers och domänen är `mimers.app`.** Registrerad hos inleed 2026-08-22. Namnet syftar på Mimer (Mímir) i nordisk mytologi, som vaktar brunnen där visdom och kunskap finns — vilket är vad produkten är för båten, huset eller bilen: den brunn där all historik, kunskap och allt underhåll samlas. Namnet bär ingen koppling till någon befintlig sajt eller något befintligt varumärke, och är inte bundet till någon vertikal, vilket är ett krav i och med att samma produkt ska tjäna båt, husvagn, stuga och bil. Applikationen ligger på `mimers.app`, staging på `staging.mimers.app` och användarfiler på `files.mimers.app`. I deploy-sökvägar heter appen `mimers`.
 
-**Sessionscookien är förstaparts utan konstruktioner.** Cookie-läget i [[ADR-0011 Autentisering]] gäller därmed rakt av — samma origin är det enklaste fall det läget är byggt för.
+**Sessionscookien är förstaparts utan konstruktioner.** Cookie-läget i [[ADR-0011 Autentisering]] gäller därmed rakt av — samma origin är det enklaste fall det läget är byggt för. *Ändrat av [[ADR-0021 Frontendteknik]]:* med Inertia anropar webbläsaren inte `/api`, så webben kör på Laravels sessionsguard och Sanctums cookie-läge behöver inte sättas upp alls. Slutsatsen — förstaparts sessionscookie utan konstruktioner — är densamma.
 
 **API:et förblir en klientneutral kontrakt-yta.** Det är den mobilapparna kopplar på när de byggs. Personal access tokens enligt [[ADR-0011 Autentisering]] är deras väg in, och regeln i [[ADR-0013 Språk och i18n]] om maskinläsbara felkoder gäller hela API:et.
 
@@ -45,13 +45,13 @@ Att hålla API:et som en egen yta även när webbfrontenden ligger bredvid det k
 - **Användarfiler har fortfarande en egen origin**, `files.mimers.app`. Kravet kommer från [[ADR-0019 Filleverans]] och [[ADR-0007 Fillagring hos inleed]] — en uppladdad SVG eller HTML-fil ska inte kunna köra skript i appens domän — och påverkas inte av att app och API samlas på ett namn.
 - **Postmark sätts upp på `mimers.app`.** SPF, DKIM och DMARC på ett nytt namn, vilket betyder att sändarryktet börjar om från noll och behöver mogna före lansering. Uppsättningen bör göras tidigt även om utskicken kommer sent. Se [[ADR-0010 Notisarkitektur]].
 - **Antalet siter hos inleed blir tre:** `mimers.app`, `staging.mimers.app` och `files.mimers.app`. Se miljöfrågorna i [[ADR-0018 Utvecklingsprocess och deploy]].
-- **Frontenden kan ligga i samma Laravel-app eller vara en separat SPA på samma origin.** Båda uppfyller beslutet. GitHub Pages är ute i båda fallen, eftersom origin ska delas med API:et.
+- **Frontenden ligger i samma Laravel-app**, med Inertia och Vue enligt [[ADR-0021 Frontendteknik]]. En separat SPA på samma origin hade också uppfyllt det här beslutet. GitHub Pages är ute i båda fallen, eftersom origin ska delas med API:et.
 - **Acceptanskriteriet för issue 4 i [[Backlog]] är omformulerat** — inloggning sker från samma origin, utan proxy.
 - **B2B-integrationer och mobilappar talar direkt med API:et** med personal access tokens, precis som tidigare.
 
 ## Öppna frågor
 
-**Frontendtekniken är inte bestämd.** SPA på samma origin eller serverrenderad Laravel. Valet avgör om felkodsregeln i [[ADR-0013 Språk och i18n]] gäller hela webben eller bara mobil-API:et, och om webbsessionen alls behöver Sanctums cookie-läge. Se [[Tankar]].
+Inga kvar. Frontendtekniken avgjordes 2026-08-22 i [[ADR-0021 Frontendteknik]]: Inertia med Vue i samma Laravel-app. Felkodsregeln i [[ADR-0013 Språk och i18n]] gäller därmed `/api`, inte webbsidorna, och webbsessionen kör på Laravels sessionsguard i stället för Sanctums cookie-läge.
 
 ## Alternativ
 
