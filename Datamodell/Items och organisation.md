@@ -86,14 +86,14 @@ Cykelkontroll krävs för `parent`/`child`. Se motsvarande resonemang i [[Schema
 
 ## loan
 
-Utlåning. Från [[Tankar]]: kunna markera en pryl som utlånad, påminna låntagaren, och fråga ägaren om den kommit tillbaka.
+Utlåning. Markera en pryl som utlånad, hålla reda på vem som har den, och bli påmind när den skulle ha kommit tillbaka.
 
 | Kolumn | Typ | Not |
 |---|---|---|
 | id, ulid | | |
 | item_id | FK | |
 | borrower_name | VARCHAR(255) | |
-| borrower_email | VARCHAR(255) NULL | |
+| borrower_email | VARCHAR(255) NULL | Kontaktuppgift, **aldrig mottagare för utskick**. Se nedan. |
 | lent_at | DATE | |
 | due_at | DATE NULL | |
 | returned_at | DATE NULL | |
@@ -101,7 +101,7 @@ Utlåning. Från [[Tankar]]: kunna markera en pryl som utlånad, påminna lånta
 
 Index: `(item_id, returned_at)`.
 
-Öppen utlåning = `returned_at IS NULL`. Påminnelser genereras mot `due_at` och går till både låntagaren, om e-post finns, och ägaren. Notiserna skapas som vanliga rader i [[Notiser]] — utlåning har ingen egen leveransväg.
+Öppen utlåning = `returned_at IS NULL`. Påminnelser genereras mot `due_at` och går **enbart till den som lånat ut** — systemet mejlar aldrig låntagaren. `borrower_email` finns för att utlånaren ska ha adressen framme när hen själv tar kontakt. Varför det är en regel och inte en detalj: [[ADR-0017 Missbruksvektorer]] § 7. Notiserna skapas som vanliga rader i [[Notiser]] — utlåning har ingen egen leveransväg.
 
 ## cost_entry
 

@@ -30,6 +30,8 @@ Laravel-controllers returnerar Inertia-svar i stället för Blade-vyer. Vue-komp
 
 **Ingen affärslogik i Inertia-controllers.** Web och API delar FormRequests, Policies och servicelager. Skiljer sig validering eller behörighet mellan de två ytorna är det en bugg, inte en designfråga.
 
+**Inertia-props renderas ur samma API Resource-klasser som `/api`.** Ett fält som läggs till för en webbvy finns därmed i API:et samma dag, utan att någon behöver komma ihåg det. Behöver en vy något API:et inte ska exponera läggs det till som ett uttryckligt tillägg i controllern, inte genom att kringgå resursen.
+
 **Assets byggs i CI, aldrig på servern.** `npm ci && npm run build` i GitHub Actions, `public/build` följer med i release-artefakten. Servern behöver fortfarande varken git, composer eller node — se [[ADR-0018 Utvecklingsprocess och deploy]].
 
 ## Motivering
@@ -44,7 +46,8 @@ Att sessionsguarden räcker för webben är en förenkling värd att skriva ned.
 
 ## Konsekvenser
 
-- **Webben motionerar inte REST-API:et.** Det är priset. Motmedlet är det delade FormRequest-, Policy- och servicelagret plus att varje API-issue i [[Backlog]] har egna test — inte att hoppas på att någon råkar upptäcka driften.
+- **Webben motionerar inte REST-API:et.** Det är priset. Motmedlet är det delade lagret — FormRequests och Policies för indata och behörighet, API Resources för utdata — plus att varje API-issue i [[Backlog]] har egna test. Inte att hoppas på att någon råkar upptäcka driften.
+- **Utdatadriften är den som annars smyger sig på.** Validering märks direkt när den saknas; ett fält som bara finns i en Inertia-prop märks först den dag mobilappen ska visa samma sak. Därför delas resursklasserna, inte bara reglerna.
 - **`staging.yml` får ett Node-steg** före paketeringen, och `public/build` ingår i tarbollen. `node_modules` är redan exkluderad. `deploy.sh` och servern rörs inte. Se [[Pipeline]].
 - **CI kör även frontendbygget** på varje PR. Ett trasigt Vue-bygge ska stoppa merge, inte upptäckas vid utrullning.
 - **`php artisan view:cache` cachar fortfarande rotvyn.** Inertias enda Blade-vy är app-skalet.
