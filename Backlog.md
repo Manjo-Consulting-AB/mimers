@@ -216,7 +216,7 @@ Femstegsförloppet: read_only, användarens urval sorterat på storlek, tre mån
 **Beror på:** 30
 
 ### 32. E-post via Postmark
-Mallar på svenska och engelska, valda från mottagarens locale. SPF, DKIM, DMARC på produktdomänen. Avregistreringslänk och inställningssida.
+Mallar på svenska och engelska, valda från mottagarens locale. SPF, DKIM, DMARC på `mimers.app`. Avregistreringslänk och inställningssida.
 **Läs:** [[Notiser]] § E-post, [[ADR-0013 Språk och i18n]]
 **Beror på:** 31
 

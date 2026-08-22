@@ -16,7 +16,7 @@ Telegram byggs inte som förstapartsintegration.
 
 ## Motivering
 
-**E-post** är obligatorisk men leveransen är underskattad. Transaktionsmejl från delad hosting hamnar i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös. Därför Postmark med SPF, DKIM och DMARC på produktdomänen — några timmars arbete som avgör om produkten fungerar.
+**E-post** är obligatorisk men leveransen är underskattad. Transaktionsmejl från delad hosting hamnar i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös. Därför Postmark med SPF, DKIM och DMARC på `mimers.app` — några timmars arbete som avgör om produkten fungerar.
 
 **ICS-feeden** är den underskattade vinnaren. En hemlig prenumerationslänk som Apple Calendar eller Google Calendar hämtar själv. En läsendpoint som genererar en textfil: nästan gratis att bygga, ingen leveransproblematik, inget spamfilter, fungerar på varje enhet. För en produkt som i grunden handlar om underhållsschema ger den mer verkligt värde än push.
 
