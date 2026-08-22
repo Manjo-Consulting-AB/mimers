@@ -28,6 +28,8 @@ PHP 8.3 + Laravel på inleed.net. MariaDB 10.6, cron varje minut, filer på inle
 
 API:et är produkten. Frontenden ligger på samma origin, `mimers.app`, och samma API är det mobilapparna kopplar på när de byggs — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Därför får API:et aldrig innehålla användarvänd text, bara maskinläsbara felkoder. Se [[ADR-0013 Språk och i18n]].
 
+Webben byggs med Inertia och Vue i samma Laravel-app och konsumerar alltså inte `/api` — regeln ovan gäller API-ytan, inte webbsidorna. Se [[ADR-0021 Frontendteknik]].
+
 ## Avgränsning
 
 ### Ingår i MVP

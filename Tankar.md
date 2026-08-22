@@ -3,6 +3,5 @@
 - Taggar har inte några child tags
 - När ett item har lånats ut så ska det gå att markera det som utlånat med information om vem det lånats ut till. Att kunna lägga till en epost adress till den som lånat prylen och låta systemet påminna om att det är dags att lämna tillbaks och fråga fråga ägaren om det har lämnats tillbaks.
 - När en fil laddas upp till systemet verifieras filens hash för att verifiera om den redan är sparad av en annan användare. Om så är fallet skapas endast en länk till den befintliga filen i systemet. När den sista länken till en fil raderas, raderas även filen på så vis säkerställer vi att det inte finns mer än en fil av samma sort sparad i systemet.
-- **Vilken frontendteknik?** SPA på samma origin som API:et, eller serverrenderad Laravel. Valet avgör om felkodsregeln i [[ADR-0013 Språk och i18n]] gäller hela webben eller bara mobil-API:et, och om webbsessionen alls behöver Sanctums cookie-läge.
 - **GitHub-organisationen heter fortfarande `yachting-earth`.** Produkten heter Mimers och bor på `mimers.app` sedan 2026-08-22 — se [[ADR-0020 Plattformsidentitet och frontendgräns]] — men org- och reponamnet bär kvar den gamla identiteten. Hanteras separat från dokumentationen. Byter orgen namn ändras remote-URL:er och `DEPLOY_*`-secrets ligger kvar i repot, så det är ett eget litet arbete, inte en omdöpning i förbifarten.
 - 

@@ -1,6 +1,6 @@
 # ADR-index
 
-Tjugo beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Tjugoen beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -26,6 +26,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0018 Utvecklingsprocess och deploy]] | Gren per issue, tagg till produktion, bygg en gång | [[Backlog]], Drift |
 | [[ADR-0019 Filleverans]] | Intern omdirigering under webbroten, engångslänk som fallback | [[Filer och lagring]] |
 | [[ADR-0020 Plattformsidentitet och frontendgräns]] | Mimers på `mimers.app`, frontend och API på samma origin, API för mobilappar | [[Konton och åtkomst]], Drift |
+| [[ADR-0021 Frontendteknik]] | Inertia med Vue i Laravel-appen, sessionsguard för webben | [[Backlog]], [[Pipeline]] |
 
 ## Om att ändra ett beslut
 

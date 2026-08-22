@@ -8,6 +8,8 @@ Produkten heter Mimers och domänen är `mimers.app` — se [[ADR-0020 Plattform
 
 Eftersom `.app` är HSTS-preloadad måste alla tre värdnamnen ha certifikat innan de svarar alls; det finns ingen HTTP-fallback att felsöka mot.
 
+Webbfrontenden bor i samma Laravel-app enligt [[ADR-0021 Frontendteknik]], så pipelinen bygger både PHP-beroenden och frontend-assets i CI och skeppar dem i samma artefakt.
+
 Tillbaka till [[00 Index]].
 
 ## Överblick
@@ -106,8 +108,18 @@ jobs:
           php-version: '8.3'
           coverage: none
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
       - name: Installera beroenden
-        run: composer install --prefer-dist --no-interaction --no-progress
+        run: |
+          composer install --prefer-dist --no-interaction --no-progress
+          npm ci
+
+      - name: Bygg frontend
+        run: npm run build
 
       - name: Kodstandard
         run: vendor/bin/pint --test
@@ -145,8 +157,18 @@ jobs:
         with:
           php-version: '8.3'
 
-      - name: Bygg
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Bygg backend
         run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
+
+      - name: Bygg frontend
+        run: |
+          npm ci
+          npm run build
 
       - name: Paketera
         run: |
@@ -192,6 +214,8 @@ jobs:
           scp -P "$PORT" release.tar.gz "$USER@$HOST:$PATH_REMOTE/incoming/$RELEASE.tar.gz"
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh
 ```
+
+Frontendbygget körs **här**, inte på servern. `public/build` ligger i arbetskatalogen när `tar` körs och följer därför med i artefakten, medan `node_modules` exkluderas. Servern behöver fortfarande varken git, composer eller node — se [[ADR-0018 Utvecklingsprocess och deploy]] och [[ADR-0021 Frontendteknik]]. Bygger CI inte frontenden på varje PR upptäcks ett trasigt Vue-bygge först vid utrullning, vilket är därför samma steg finns i `ci.yml`.
 
 `retention-days: 90` är inte kosmetik. Går artefakten ut går det inte längre att skeppa den commiten till produktion utan att bygga om, och då är bygg-en-gång-principen bruten.
 
