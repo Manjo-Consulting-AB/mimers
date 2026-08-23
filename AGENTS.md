@@ -2,11 +2,13 @@
 
 Regler för dig som implementerar en issue i det här repot. Läs den här filen helt — den är kort med flit.
 
+**Vad** du ska läsa står i `CLAUDE.md`, kartan över dokumentationen. Den här filen handlar om **hur** du ska arbeta. De överlappar inte.
+
 Motiveringen bakom processen står i [ADR-0018](docs/ADR/ADR-0018%20Utvecklingsprocess%20och%20deploy.md). Läs den bara om du undrar över en avvägning.
 
 ## Innan du börjar
 
-1. Läs din issue i [Backlog](docs/Backlog.md).
+1. Slå upp ditt issuenummer i [Backlog](docs/Backlog.md) och öppna **bara** din milstolpes fil under `docs/Backlog/`. Läs din issue där.
 2. Läs de dokument som står under **Läs** i issuen. **Inget mer.** Dokumentationen är uppdelad just för att du inte ska behöva gå igenom allt för att ändra en detalj.
 3. Hittar du inte svaret i din läslista — **gissa inte, fråga.** Ett felaktigt antagande som blir kod är dyrare än en fråga i PR:en.
 

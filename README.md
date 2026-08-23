@@ -15,6 +15,7 @@ Namnet syftar på Mimer i nordisk mytologi, som vaktar brunnen där visdomen fin
 | veta *varför* något är som det är | [ADR-index](docs/ADR/ADR-index.md) |
 | ta nästa arbetsuppgift | [Backlog](docs/Backlog.md) |
 | sätta upp eller ändra CI och deploy | [Pipeline](docs/Deploy/Pipeline.md) |
+| veta vad jag ska läsa för en uppgift | **[CLAUDE.md](CLAUDE.md)** |
 | implementera en issue | **[AGENTS.md](AGENTS.md)** |
 
 ## Teknik
