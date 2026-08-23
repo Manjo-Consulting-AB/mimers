@@ -390,7 +390,7 @@ Tio sekunder. **Databasen rullas inte tillbaka** — se expand/contract i [[ADR-
 
 ## Branch protection
 
-**Går inte att slå på i dag** — kontoplanen tillåter det inte, se § Kontoplanen tar bort tre av spärrarna. Listan står kvar som specifikation för den dag den går att verkställa, och som beskrivning av vad som gäller på hedersord tills dess.
+**Medvetet uppskjuten 2026-08-23** — kontoplanen tillåter det inte, och Tony valde att inte uppgradera för det. Se § Kontoplanen tar bort tre av spärrarna och [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Listan står kvar som specifikation för den dag den går att verkställa, och som beskrivning av vad som gäller på disciplin tills dess.
 
 Under repots *Rules* eller *Branch protection* för `main`:
 
@@ -435,7 +435,7 @@ Avstämt 2026-08-23. Allt som går att förbereda innan det finns kod är gjort.
 
 **Saknas**
 
-- **branch protection och required reviewer.** Går inte att slå på — se § Kontoplanen tar bort tre av spärrarna. Det är ett öppet beslut, inte en punkt att bocka av.
+- **branch protection och required reviewer.** Uppskjutet, inte bortglömt — se § Kontoplanen tar bort tre av spärrarna. Ska inte bockas av; ska tas upp igen om fler än agenten börjar pusha.
 - **själva genomlöpet.** Kedjan är obeprövad tills en tom Laravel gått hela vägen; se § Vad issue 0 ska bevisa.
 - städa bort `~/domains/mimers.app/public_html.orig-placeholder`, `~/domains/staging.mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` när första riktiga utrullningen har gått igenom
 

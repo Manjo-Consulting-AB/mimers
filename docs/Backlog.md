@@ -19,7 +19,7 @@ Repot är `Manjo-Consulting-AB/mimers`. Branch protection på `main`, `AGENTS.md
 
 **Gjort senare samma dag:** miljöerna `staging` och `production` i GitHub med samtliga sex `DEPLOY_*`-secrets och egen deploynyckel per miljö. På servern: `shared/.env` per miljö, en verifierad databas per miljö satt till `utf8mb4_unicode_ci`, webbrot ompekad även för staging, och sajter för `files.mimers.app` och `files.staging.mimers.app`.
 
-**Återstår:** själva genomlöpet med en tom Laravel — det är det som avgör "Klart när" nedan. Branch protection och required reviewer **går inte att slå på** på nuvarande kontoplan, se [[Pipeline]] § Kontoplanen tar bort tre av spärrarna. Det är ett öppet beslut, inte en punkt att bocka av.
+**Återstår:** själva genomlöpet med en tom Laravel — det är det som avgör "Klart när" nedan. Branch protection och required reviewer är **medvetet uppskjutna** — kontoplanen tillåter dem inte, och med två deltagare där bara agenten pushar köper en uppgradering ingenting. Se [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Räkna inte den som en punkt att bocka av i den här issuen.
 **Läs:** [[Pipeline]], [[ADR-0018 Utvecklingsprocess och deploy]]
 **Klart när:** en tom Laravel har gått hela vägen — grön PR, automatisk deploy till staging, release `v0.0.1` till produktion efter godkännande — och en rollback har provats genom att flippa symlänken tillbaka.
 
