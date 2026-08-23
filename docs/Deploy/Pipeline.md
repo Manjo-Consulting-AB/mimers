@@ -228,12 +228,13 @@ jobs:
 
       - name: Paketera
         run: |
-          tar -czf release.tar.gz \
-            --exclude='./.git' \
-            --exclude='./tests' \
-            --exclude='./node_modules' \
-            --exclude='./release.tar.gz' \
-            .
+          # Arkivet skrivs utanför trädet och flyttas in efteråt. Skrivs det
+          # direkt i katalogen det läser ändras "." medan tar läser den, och
+          # GNU tar avslutar med kod 1 och "file changed as we read it". Det
+          # slår till sporadiskt, beroende på tajmning, så felet ser ut som en
+          # flakighet i CI i stället för det det är. Se Pipeline.md § Paketering.
+          tar -czf ../release.tar.gz --exclude='./.git' --exclude='./tests' --exclude='./node_modules' .
+          mv ../release.tar.gz release.tar.gz
 
       - name: Spara artefakten
         uses: actions/upload-artifact@v4
@@ -271,6 +272,16 @@ jobs:
 ```
 
 Frontendbygget körs **här**, inte på servern. `public/build` ligger i arbetskatalogen när `tar` körs och följer därför med i artefakten, medan `node_modules` exkluderas. Servern behöver fortfarande varken git, composer eller node — se [[ADR-0018 Utvecklingsprocess och deploy]] och [[ADR-0021 Frontendteknik]]. Bygger CI inte frontenden på varje PR upptäcks ett trasigt Vue-bygge först vid utrullning, vilket är därför samma steg finns i `ci.yml`.
+
+## Paketering
+
+`tar` skriver arkivet i katalogen ovanför och flyttar in det efteråt. Skrivs det direkt i arbetskatalogen ändras `.` medan tar läser den, och GNU tar avslutar med kod 1:
+
+```
+tar: .: file changed as we read it
+```
+
+`--exclude='./release.tar.gz'` räcker inte, vilket är hela poängen med att skriva ned det här — det är katalogens mtime som ändras, inte filen som råkar komma med. Det slår till beroende på tajmning: samma steg gick igenom i körningen före den som föll. Ett fel som kommer och går ser ut som en flakighet i CI, och den gissningen kostar mer än raden gör.
 
 ## Vägen in på servern
 
