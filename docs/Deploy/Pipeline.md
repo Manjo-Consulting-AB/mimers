@@ -473,6 +473,8 @@ Under repots *Rules* eller *Branch protection* för `main`:
 
 ## Vad issue 0 ska bevisa
 
+**Avklarat 2026-08-23.** Alla sex punkterna nedan är bevisade; `v0.0.1` ligger i produktion och `https://mimers.app` svarar. Listan står kvar som beskrivning av vad kedjan gör, inte som en checklista att beta av igen.
+
 En tom Laravel, utan en rad domänkod, som:
 
 1. får en PR att bli grön i `ci.yml`
@@ -482,7 +484,7 @@ En tom Laravel, utan en rad domänkod, som:
 5. kan rullas tillbaka med ett symlänkbyte
 6. har en fungerande minutcron på båda miljöerna
 
-Först när alla sex punkterna stämmer börjar issue 1.
+Kedjan tog fem försök att få igenom första gången. Alla fem felen var av samma sort — sådana som bara syns skarpt — och de står dokumenterade i § Vägen in på servern och § Paketering, eftersom nästa person annars kommer att gissa på flakighet.
 
 ## Läget på GitHub och hos inleed
 
@@ -506,8 +508,6 @@ Avstämt 2026-08-23. Allt som går att förbereda innan det finns kod är gjort.
 **Saknas**
 
 - **branch protection och required reviewer.** Uppskjutet, inte bortglömt — se § Kontoplanen tar bort tre av spärrarna. Ska inte bockas av; ska tas upp igen om fler än agenten börjar pusha.
-- **produktionsbenet av genomlöpet.** Punkt 1–3 och 6 i § Vad issue 0 ska bevisa är avklarade 2026-08-23: grön PR, automatisk deploy vid merge, `https://staging.mimers.app` svarar 200 med rätt Inertia-payload, minutcronen kör. Punkt 5, rollbacken, är provad på staging samma dag — se § Rollback. Kvar är bara release `v0.0.1` till produktion.
-- städa bort `~/domains/mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp`. Båda väntar på `v0.0.1`. Notera att produktionens minutcron pekar in i attrappen tills dess och alltså inte gör något nyttigt ännu. Staging-motsvarigheten är redan borttagen.
 
 ### En röjd nyckel, och vad den lärde oss om `authorized_keys`
 
