@@ -139,6 +139,13 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -148,6 +155,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
+          extensions: fileinfo, mbstring, pdo_sqlite, sqlite3, zip
           coverage: none
 
       - uses: actions/setup-node@v4
@@ -160,23 +168,29 @@ jobs:
           composer install --prefer-dist --no-interaction --no-progress
           npm ci
 
+      # Bygget körs före testerna: en av dem läser public/build/manifest.json
+      # och bevisar därmed att artefakten faktiskt produceras.
       - name: Bygg frontend
         run: npm run build
 
       - name: Kodstandard
-        run: vendor/bin/pint --test
+        run: composer lint
 
       - name: Statisk analys
-        run: vendor/bin/phpstan analyse --no-progress
+        run: composer analyse
 
       - name: Tester
         run: |
           cp .env.example .env
           php artisan key:generate
-          php artisan test
+          composer test
 ```
 
-Testerna kör mot SQLite in-memory eller en MariaDB-service. Skiljer sig databasen för mycket från produktion får en `services:`-block med `mariadb:10.6` läggas till — men börja enkelt.
+Stegen anropar composer-skript i stället för binärerna direkt. `composer lint` är `pint --test`, `composer analyse` är `phpstan analyse --no-progress` och `composer test` är `artisan test` — samma kommandon som [[AGENTS.md]] listar, men med ett namn som går att köra likadant lokalt. `composer fix` kör Pint utan `--test` och rättar i stället för att larma.
+
+Extensionlistan i `setup-php` är inte kosmetik. `ext-fileinfo` är ett hårt krav från Flysystem, och testsviten kör SQLite in-memory — utan `pdo_sqlite` och `sqlite3` faller allt, och felmeddelandet pekar inte på orsaken.
+
+Testerna kör mot SQLite in-memory, konfigurerat i `phpunit.xml`. Skiljer sig databasen för mycket från produktion får en `services:`-block med `mariadb:10.6` läggas till — men börja enkelt.
 
 ## `.github/workflows/staging.yml`
 

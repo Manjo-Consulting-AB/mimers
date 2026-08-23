@@ -1,7 +1,7 @@
 # Obsidian-valvet pekar in i docs/ men dess lokala inställningar hör inte hemma i repot
 .obsidian/
 
-# Laravel — mappar och filer skapas i issue 1, ignoreras redan nu
+# Laravel — byggt och installerat, aldrig incheckat
 /vendor/
 /node_modules/
 /public/build/
@@ -19,6 +19,17 @@ Homestead.yaml
 auth.json
 npm-debug.log
 yarn-error.log
+
+# Editorer och verktyg — Laravel-skelettets lista, vi lägger inte till egna
+*.log
+.phpactor.json
+_ide_helper.php
+/.codex
+/.cursor/
+/.idea
+/.nova
+/.vscode
+/.zed
 
 # Deploy-artefakter
 release.tar.gz
