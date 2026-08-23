@@ -439,4 +439,11 @@ Avstämt 2026-08-23. Allt som går att förbereda innan det finns kod är gjort.
 - **själva genomlöpet.** Kedjan är obeprövad tills en tom Laravel gått hela vägen; se § Vad issue 0 ska bevisa.
 - städa bort `~/domains/mimers.app/public_html.orig-placeholder`, `~/domains/staging.mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` när första riktiga utrullningen har gått igenom
 
-**En sak att ta ställning till.** En privat nyckel, `claude_rsa`, låg kvar i serverns `~/.ssh/`. Dess publika halva står i `authorized_keys` och ger alltså inloggning till kontot. Nyckeln är hämtad hem till Tonys maskin och borttagen från servern, men den ska betraktas som **röjd** så länge raden står kvar: en privat nyckel som legat på maskinen den låser upp har inte längre något bevisvärde. Raden bör bytas mot ett nytt nyckelpar. Den tas inte bort på egen hand, eftersom den kan vara den enda vägen in från någon annan maskin.
+### En röjd nyckel, och vad den lärde oss om `authorized_keys`
+
+En privat nyckel, `claude_rsa`, låg kvar i serverns egen `~/.ssh/`, och dess publika halva stod i `authorized_keys` — den låste alltså upp maskinen den låg på. Den hämtades hem, togs bort från servern, och raden ersattes 2026-08-23 av ett nytt nyckelpar. Verifierat: den nya nyckeln loggar in, den röjda raden är borta.
+
+Två saker att ta med sig:
+
+- **`authorized_keys` innehåller numera driftkritiska rader.** `github-actions-staging` och `github-actions-production` är deploykedjans enda väg in. Faller de bort slutar utrullningen fungera — och det märks först vid nästa release, inte när misstaget görs.
+- **Redigera därför aldrig filen genom DirectAdmins SSH Keys-sida.** Den skriver om `authorized_keys` i sin helhet. Vid nyckelbytet ovan överlevde deployraderna, men ordningen i filen ändrades, vilket visar att hela filen skrevs om. Lägg till och ta bort additivt över shell, med en backup före.
