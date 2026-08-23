@@ -1,0 +1,17 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+
+    paths:
+        - app
+        - bootstrap
+        - config
+        - database
+        - routes
+        - tests
+
+    # Nivån är medvetet 5 och inte högre. Se ADR-0022 Testramverk och statisk
+    # analys — den fångar riktiga fel utan att kräva docblock-ceremoni i all
+    # modellkod, och är avsedd att höjas när konventionerna från issue 2 satt sig.

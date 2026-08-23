@@ -2,7 +2,7 @@
 
 Karta över dokumentationen. **Vad du ska läsa** står här; **hur du ska arbeta** står i `AGENTS.md`. De två överlappar inte med flit — hittar du samma regel på båda ställena är det ett fel, säg till.
 
-Repot är i dag ett dokumentationsvalv. Laravel-appen tillkommer i issue 1.
+Repot innehåller Laravel-appen och dokumentationsvalvet under `docs/`. Appen sattes upp i issue 1; domänmodellen börjar i issue 2.
 
 ## Läsprotokollet
 
