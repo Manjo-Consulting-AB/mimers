@@ -500,8 +500,8 @@ Avstämt 2026-08-23. Allt som går att förbereda innan det finns kod är gjort.
 **Saknas**
 
 - **branch protection och required reviewer.** Uppskjutet, inte bortglömt — se § Kontoplanen tar bort tre av spärrarna. Ska inte bockas av; ska tas upp igen om fler än agenten börjar pusha.
-- **själva genomlöpet.** Kedjan är obeprövad tills en tom Laravel gått hela vägen; se § Vad issue 0 ska bevisa.
-- städa bort `~/domains/mimers.app/public_html.orig-placeholder`, `~/domains/staging.mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` när första riktiga utrullningen har gått igenom
+- **produktionsbenet av genomlöpet.** Punkt 1–3 och 6 i § Vad issue 0 ska bevisa är avklarade 2026-08-23: grön PR, automatisk deploy vid merge, `https://staging.mimers.app` svarar 200 med rätt Inertia-payload, minutcronen kör. Kvar är release `v0.0.1` till produktion och en provad rollback. Rollbacken kan provas på staging så snart det finns två releaser där — vid nästa merge — och behöver alltså inte vänta på produktion.
+- städa bort `~/domains/staging.mimers.app/public_html.orig-placeholder` — staging har fått sin första riktiga utrullning, så den kan gå nu. `~/domains/mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` väntar på `v0.0.1`. Notera att produktionens minutcron pekar in i attrappen tills dess och alltså inte gör något nyttigt ännu.
 
 ### En röjd nyckel, och vad den lärde oss om `authorized_keys`
 
