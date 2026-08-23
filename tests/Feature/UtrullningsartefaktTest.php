@@ -67,3 +67,14 @@ it('skickar releasepaketet genom ett skal, inte över SFTP', function (string $w
         "{$workflow} använder scp igen. Sökvägen kan vara relativ, och scp expanderar inte ~."
     );
 })->with(['staging.yml', 'production.yml']);
+
+/*
+ * Regressionsskydd. tar avslutar med kod 1 om arkivet skrivs i katalogen den
+ * läser — "file changed as we read it" — och det slår till beroende på
+ * tajmning. Se Pipeline.md § Paketering.
+ */
+it('bygger arkivet utanför trädet det läser', function () {
+    $yaml = file_get_contents(base_path('.github/workflows/staging.yml'));
+
+    expect($yaml)->toContain('tar -czf ../release.tar.gz');
+});

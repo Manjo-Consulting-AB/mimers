@@ -36,12 +36,13 @@ jobs:
 
       - name: Paketera
         run: |
-          tar -czf release.tar.gz \
-            --exclude='./.git' \
-            --exclude='./tests' \
-            --exclude='./node_modules' \
-            --exclude='./release.tar.gz' \
-            .
+          # Arkivet skrivs utanför trädet och flyttas in efteråt. Skrivs det
+          # direkt i katalogen det läser ändras "." medan tar läser den, och
+          # GNU tar avslutar med kod 1 och "file changed as we read it". Det
+          # slår till sporadiskt, beroende på tajmning, så felet ser ut som en
+          # flakighet i CI i stället för det det är. Se Pipeline.md § Paketering.
+          tar -czf ../release.tar.gz --exclude='./.git' --exclude='./tests' --exclude='./node_modules' .
+          mv ../release.tar.gz release.tar.gz
 
       - name: Spara artefakten
         uses: actions/upload-artifact@v4
