@@ -267,6 +267,11 @@ jobs:
           echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
 
           RELEASE=$(date +%Y-%m-%d)-$(echo "${{ github.sha }}" | cut -c1-7)
+          case "$PATH_REMOTE" in
+            /*) ;;
+            *) echo "DEPLOY_PATH är inte en absolut sökväg. Sätt secreten från PowerShell eller GitHubs webbgränssnitt, inte från Git Bash."; exit 1 ;;
+          esac
+
           ssh -p "$PORT" "$USER@$HOST" "mkdir -p $PATH_REMOTE/incoming && cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz" < release.tar.gz
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh
 ```
@@ -285,17 +290,34 @@ tar: .: file changed as we read it
 
 ## Vägen in på servern
 
-Paketet skickas med `ssh` och `cat`, inte med `scp`. Skälet är konkret: `DEPLOY_PATH` innehåller `~`, och sedan OpenSSH 9 kör `scp` över SFTP i stället för det gamla protokollet. SFTP har inget skal bakom sig och expanderar därför inte tilde — den gör bokstavligen `/home/s174280/~/mimers-staging` av sökvägen. Första riktiga utrullningen föll på precis det:
+`DEPLOY_PATH` var i tre utrullningar i rad fel, på ett sätt som ingen kunde se. Secreten hade satts från Git Bash, och MSYS skriver om en absolut POSIX-sökväg till en Windows-sökväg med Git-installationen som rot. `/home/s174280/mimers-staging` blev alltså:
 
 ```
-scp: dest open "***/incoming/2026-08-23-cf22e0e.tar.gz": No such file or directory
+C:/Users/tony/AppData/Local/Programs/Git/home/s174280/mimers-staging
 ```
 
-Felet är svårläst eftersom GitHub maskerar sökvägen, så det ser ut som en saknad katalog. `incoming/` fanns hela tiden.
+En GitHub-secret går inte att läsa tillbaka, och sökvägen maskeras till `***` i loggen. Felet visade sig därför tre gånger i tre olika förklädnader: först som `scp: dest open "***/...": No such file or directory`, sedan — när ett `mkdir -p` lagts till — som en katalog vid namn `C:` i hemkatalogen, och till sist som
 
-`ssh ... "cat > fil" < release.tar.gz` går genom ett skal på servern och beter sig alltså likadant som `bash -s`-raden efteråt. Den fungerar oavsett om secreten är relativ eller absolut, vilket spelar roll: en GitHub-secret går inte att läsa tillbaka, så ingen kan kontrollera vilken form den har. `mkdir -p` i samma kommando gör steget självläkande om katalogträdet någon gång saknas.
+```
+tar (child): Cannot connect to C: resolve failed
+```
 
-**Skriv aldrig om det här till `scp` igen** utan att antingen sätta `-O` eller garantera att sökvägen är absolut. Det är en bugg som bara syns vid skarp utrullning.
+eftersom `tar` tolkar `C:` som ett fjärrvärdnamn.
+
+**Sätt aldrig en secret som innehåller en sökväg från Git Bash.** Använd PowerShell eller GitHubs webbgränssnitt. Det gäller alla `DEPLOY_*`-secrets, inte bara den här.
+
+Steget vägrar därför tidigt om `PATH_REMOTE` inte börjar med `/`:
+
+```bash
+case "$PATH_REMOTE" in
+  /*) ;;
+  *) echo "DEPLOY_PATH är inte en absolut sökväg. Sätt secreten från PowerShell eller GitHubs webbgränssnitt, inte från Git Bash."; exit 1 ;;
+esac
+```
+
+Poängen är att felet ska ha ett namn. Ett `mkdir -p` utan den kontrollen gör saken sämre, inte bättre: det förvandlar ett tydligt "sökvägen finns inte" till en tyst felaktig katalog som utrullningen sedan skriver 5 MB skräp i.
+
+Paketet skickas med `ssh` och `cat` i stället för `scp`, av ett besläktat skäl: `scp` går sedan OpenSSH 9 över SFTP, som inte har något skal bakom sig och därför varken expanderar `~` eller beter sig som raden efter. `ssh ... "cat > fil" < release.tar.gz` går genom samma skal som `bash -s`-raden. **Skriv inte tillbaka det till `scp`** utan att sätta `-O`.
 
 ## Uppladdningsgränser
 
@@ -357,6 +379,11 @@ jobs:
           echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
 
           RELEASE=${{ github.event.release.tag_name }}-$(date +%Y%m%d%H%M)
+          case "$PATH_REMOTE" in
+            /*) ;;
+            *) echo "DEPLOY_PATH är inte en absolut sökväg. Sätt secreten från PowerShell eller GitHubs webbgränssnitt, inte från Git Bash."; exit 1 ;;
+          esac
+
           ssh -p "$PORT" "$USER@$HOST" "mkdir -p $PATH_REMOTE/incoming && cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz" < release.tar.gz
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh
 ```

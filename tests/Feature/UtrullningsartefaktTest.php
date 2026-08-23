@@ -60,6 +60,10 @@ it('skickar releasepaketet genom ett skal, inte över SFTP', function (string $w
 
     expect($yaml)->toContain('cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz');
 
+    // Vägrar en sökväg som Git Bash skrivit om till C:/... Utan den blir
+    // felet en tyst felaktig katalog i stället för ett stopp.
+    expect($yaml)->toContain('case "$PATH_REMOTE" in');
+
     // Radbörjan, så att kommentarernas omnämnanden av scp inte räknas.
     $använderScp = preg_match('/^\s*scp\s/m', $yaml) === 1;
 
