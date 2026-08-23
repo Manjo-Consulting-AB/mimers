@@ -13,7 +13,7 @@ Repot är `Manjo-Consulting-AB/mimers`. Branch protection på `main`, `AGENTS.md
 
 **Rollbacken är provad på staging 2026-08-23** genom att flippa symlänken till föregående release och tillbaka; se [[Pipeline]] § Rollback.
 
-**Återstår:** release `v0.0.1` till produktion. Branch protection och required reviewer är **medvetet uppskjutna** — kontoplanen tillåter dem inte, och med två deltagare där bara agenten pushar köper en uppgradering ingenting. Se [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Räkna inte den som en punkt att bocka av i den här issuen.
+**Klar 2026-08-23.** `v0.0.1` ligger i produktion, `https://mimers.app` svarar 200 med rätt Inertia-payload, migrationerna kördes mot produktionsdatabasen och minutcronen kör mot en riktig release. Attrappreleasen och båda placeholder-katalogerna är borttagna från servern. Branch protection är fortfarande medvetet uppskjuten och ska inte bockas av — se [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Branch protection och required reviewer är **medvetet uppskjutna** — kontoplanen tillåter dem inte, och med två deltagare där bara agenten pushar köper en uppgradering ingenting. Se [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Räkna inte den som en punkt att bocka av i den här issuen.
 **Läs:** [[Pipeline]], [[ADR-0018 Utvecklingsprocess och deploy]]
 **Klart när:** en tom Laravel har gått hela vägen — grön PR, automatisk deploy till staging, release `v0.0.1` till produktion efter godkännande — och en rollback har provats genom att flippa symlänken tillbaka.
 
