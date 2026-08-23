@@ -20,6 +20,8 @@ Testerna ligger under `tests/Feature` bundna till Laravels `TestCase`, och under
 
 **Använd Pests globala hjälpfunktioner — `get()`, `post()`, `actingAs()`, `assertDatabaseHas()` — inte `$this->`.** PHPStan kan inte härleda vad `$this` är bundet till inne i en Pest-closure och rapporterar `method.notFound` på varje anrop. Funktionerna har riktiga returtyper. Det är därför `tests/` kan ligga kvar bland de analyserade sökvägarna utan en enda undertryckning, och den regeln är hela skälet till att skriva ned den här punkten.
 
+**`->not` går inte att kedja under analysen.** PHPStan ser `Expectation::$not` som en odefinierad property. Skriv den positiva formen i stället — `expect(count($x))->toBeGreaterThan(0)` i stället för `->not->toBeEmpty()`. Samma skäl som ovan: regeln finns för att slippa undertryckningar, inte för att analysen har rätt i sak.
+
 **Nivå 5, inte högre.** Den fångar riktiga fel utan att kräva docblock-ceremoni i all modellkod. Avsikten är att höja när modellkonventionerna från issue 2 satt sig — men det ska då vara ett eget beslut med en egen städning, inte något som smyger sig på.
 
 **Ingen baseline-fil, inga `@phpstan-ignore`.** En analys man vant sig vid att kringgå är ingen analys.

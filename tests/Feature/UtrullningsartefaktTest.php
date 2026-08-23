@@ -29,3 +29,22 @@ it('har ett byggt frontendmanifest med båda ingångarna', function () {
         ->toHaveKey('resources/css/app.css')
         ->toHaveKey('resources/js/app.js');
 });
+
+/*
+ * Utvecklingsmaskinen är Windows och skiljer inte på stora och små bokstäver;
+ * CI och servern gör det. En felstavad katalog passerar alltså lokalt och
+ * faller i CI — vilket den gjorde. Testet läser katalognamnet ordagrant.
+ */
+it('har sidkatalogen med exakt den skiftlägesform Inertia letar efter', function () {
+    $sökvägar = config('inertia.pages.paths');
+
+    expect($sökvägar)->toBeArray();
+    expect(count($sökvägar))->toBeGreaterThan(0);
+
+    foreach ($sökvägar as $sökväg) {
+        $namn = basename($sökväg);
+        $syskon = scandir(dirname($sökväg));
+
+        expect($syskon)->toContain($namn);
+    }
+});
