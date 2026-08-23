@@ -9,7 +9,9 @@ Repot är `Manjo-Consulting-AB/mimers`. Branch protection på `main`, `AGENTS.md
 
 **Gjort senare samma dag:** miljöerna `staging` och `production` i GitHub med samtliga sex `DEPLOY_*`-secrets och egen deploynyckel per miljö. På servern: `shared/.env` per miljö, en verifierad databas per miljö satt till `utf8mb4_unicode_ci`, webbrot ompekad även för staging, och sajter för `files.mimers.app` och `files.staging.mimers.app`.
 
-**Återstår:** själva genomlöpet med en tom Laravel — det är det som avgör "Klart när" nedan. Branch protection och required reviewer är **medvetet uppskjutna** — kontoplanen tillåter dem inte, och med två deltagare där bara agenten pushar köper en uppgradering ingenting. Se [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Räkna inte den som en punkt att bocka av i den här issuen.
+**Genomlöpet, halva vägen 2026-08-23:** en tom Laravel gick grön PR → automatisk deploy → `https://staging.mimers.app` svarar 200 med rätt Inertia-payload, migrationerna kördes mot staging-databasen, och minutcronen kör `schedule:run` på båda miljöerna. Kedjan tog fyra försök; felen och vad de lärde oss står i [[Pipeline]] § Vägen in på servern och § Paketering.
+
+**Återstår:** release `v0.0.1` till produktion, och en provad rollback. Branch protection och required reviewer är **medvetet uppskjutna** — kontoplanen tillåter dem inte, och med två deltagare där bara agenten pushar köper en uppgradering ingenting. Se [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Räkna inte den som en punkt att bocka av i den här issuen.
 **Läs:** [[Pipeline]], [[ADR-0018 Utvecklingsprocess och deploy]]
 **Klart när:** en tom Laravel har gått hela vägen — grön PR, automatisk deploy till staging, release `v0.0.1` till produktion efter godkännande — och en rollback har provats genom att flippa symlänken tillbaka.
 
@@ -20,6 +22,8 @@ Laravel på PHP 8.4, MariaDB 10.6. Kodstandard (Pint), statisk analys (PHPStan),
 **Läs:** [[ADR-0001 Stack]], [[ADR-0021 Frontendteknik]]
 **Klart när:** `composer test` och `composer lint` går grönt i CI på en tom kodbas, och `npm run build` producerar `public/build` som CI också kör.
 **Beror på:** 0
+
+**Gjort 2026-08-23:** Laravel 13 på PHP 8.4 med Inertia, Vue 3, Tailwind 4 och Vite. Pint, Larastan nivå 5 och Pest 5 som `composer lint` / `analyse` / `test`, alla tre i CI tillsammans med `npm run build`. Valet mellan Pest och PHPUnit avgörs i [[ADR-0022 Testramverk och statisk analys]]. Uppladdningsgränserna ligger i `public/.htaccess` och testas som fil.
 
 ### 2. Gemensamma modellkonventioner
 Trait för ULID-generering, bastraits för soft delete, migrations-mall. Hjälpare för att alltid filtrera bort raderade rader i listningar.
