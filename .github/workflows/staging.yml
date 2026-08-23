@@ -76,10 +76,18 @@ jobs:
 
           RELEASE=$(date +%Y-%m-%d)-$(echo "${{ github.sha }}" | cut -c1-7)
 
-          # Paketet skickas med ssh och cat, inte scp. DEPLOY_PATH innehåller ~,
-          # och scp går sedan OpenSSH 9 över SFTP — som inte expanderar tilde utan
-          # gör "/home/USER/~/mimers-staging" av den. Här tolkas sökvägen av ett
-          # skal på servern, precis som i raden nedan, och fungerar oavsett om
-          # secreten är relativ eller absolut. Se Pipeline.md § Vägen in på servern.
+          # DEPLOY_PATH måste vara en absolut sökväg på servern. Git Bash skriver
+          # om /home/... till en Windows-sökväg när en secret sätts därifrån, och
+          # värdet går inte att läsa tillbaka för att upptäcka det. Vägra tidigt
+          # i stället för att skapa katalogen och råka lyckas.
+          # Se Pipeline.md § Vägen in på servern.
+          case "$PATH_REMOTE" in
+            /*) ;;
+            *) echo "DEPLOY_PATH är inte en absolut sökväg. Sätt secreten från PowerShell eller GitHubs webbgränssnitt, inte från Git Bash."; exit 1 ;;
+          esac
+
+          # Paketet skickas med ssh och cat, inte scp: scp går sedan OpenSSH 9
+          # över SFTP, som inte har något skal bakom sig. Här tolkas sökvägen av
+          # ett skal på servern, precis som i raden nedan.
           ssh -p "$PORT" "$USER@$HOST" "mkdir -p $PATH_REMOTE/incoming && cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz" < release.tar.gz
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh
