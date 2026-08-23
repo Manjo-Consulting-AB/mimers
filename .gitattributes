@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+# Skript och workflows körs på Linux. CRLF här gör dem ovägerligt trasiga:
+# bash tolkar \r som en del av kommandot.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

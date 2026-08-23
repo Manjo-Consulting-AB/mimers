@@ -1,0 +1,57 @@
+## Issue
+
+<!-- Vilken issue i docs/Backlog.md? T.ex. "Issue 4 · Autentisering med lösenord" -->
+
+Stänger #
+
+## Vad ändringen gör
+
+<!-- Två–tre meningar. Vad gör koden nu som den inte gjorde förut? -->
+
+## Läslista
+
+<!--
+Lista de dokument du faktiskt läst för att lösa uppgiften — inte de som stod i issuen,
+utan de du öppnade. Läste du något utanför läslistan, skriv varför.
+Se AGENTS.md.
+-->
+
+- [ ]
+- [ ]
+
+## Acceptanskriterier
+
+<!--
+Kopiera varje "Klart när"-punkt från issuen och peka ut testet som bevisar den.
+En PR utan test per kriterium mergas inte.
+-->
+
+| Klart när | Test |
+|---|---|
+|  |  |
+
+## Kontroller
+
+- [ ] `vendor/bin/pint --test` grön
+- [ ] `vendor/bin/phpstan analyse` grön
+- [ ] `php artisan test` grön
+- [ ] `npm run build` går igenom
+- [ ] Inga nya composer- eller npm-paket — eller: godkända av Tony, se nedan
+- [ ] Migrationer är additiva (expand/contract), inga destruktiva steg i samma release
+- [ ] Nya tabeller följer konventionerna i AGENTS.md (ULID, soft delete, UTC, utf8mb4, inga ENUM)
+- [ ] Nya felsvar använder maskinläsbara koder, ingen färdig mening i API:et
+
+## Nya beroenden
+
+<!-- Lämna tomt om inga. Annars: paket, varför, och vad alternativet var. Kräver Tonys godkännande. -->
+
+Inga.
+
+## Frågor och antaganden
+
+<!--
+Hittade du inte svaret i läslistan? Skriv frågan här istället för att gissa i koden.
+Antaganden du ändå tvingats göra listas explicit så att de går att granska.
+-->
+
+Inga.

@@ -17,6 +17,7 @@ Systemet heter **Mimers** och bor på `mimers.app`. Namnet syftar på Mimer i no
 | bygga eller ändra en tabell | rätt fil under **Datamodell/** |
 | veta *varför* något är som det är | rätt ADR under **ADR/** |
 | ta nästa arbetsuppgift | [[Backlog]] |
+| implementera en issue | `AGENTS.md` i repo-roten |
 | sätta upp eller ändra CI och deploy | [[Pipeline]] |
 
 ## Datamodell
