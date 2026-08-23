@@ -11,7 +11,9 @@ Repot är `Manjo-Consulting-AB/mimers`. Branch protection på `main`, `AGENTS.md
 
 **Genomlöpet, halva vägen 2026-08-23:** en tom Laravel gick grön PR → automatisk deploy → `https://staging.mimers.app` svarar 200 med rätt Inertia-payload, migrationerna kördes mot staging-databasen, och minutcronen kör `schedule:run` på båda miljöerna. Kedjan tog fyra försök; felen och vad de lärde oss står i [[Pipeline]] § Vägen in på servern och § Paketering.
 
-**Återstår:** release `v0.0.1` till produktion, och en provad rollback. Branch protection och required reviewer är **medvetet uppskjutna** — kontoplanen tillåter dem inte, och med två deltagare där bara agenten pushar köper en uppgradering ingenting. Se [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Räkna inte den som en punkt att bocka av i den här issuen.
+**Rollbacken är provad på staging 2026-08-23** genom att flippa symlänken till föregående release och tillbaka; se [[Pipeline]] § Rollback.
+
+**Återstår:** release `v0.0.1` till produktion. Branch protection och required reviewer är **medvetet uppskjutna** — kontoplanen tillåter dem inte, och med två deltagare där bara agenten pushar köper en uppgradering ingenting. Se [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Räkna inte den som en punkt att bocka av i den här issuen.
 **Läs:** [[Pipeline]], [[ADR-0018 Utvecklingsprocess och deploy]]
 **Klart när:** en tom Laravel har gått hela vägen — grön PR, automatisk deploy till staging, release `v0.0.1` till produktion efter godkännande — och en rollback har provats genom att flippa symlänken tillbaka.
 

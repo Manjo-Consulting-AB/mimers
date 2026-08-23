@@ -452,6 +452,12 @@ php ~/mimers/current/artisan up
 
 Tio sekunder. **Databasen rullas inte tillbaka** — se expand/contract i [[ADR-0018 Utvecklingsprocess och deploy]].
 
+**Provad på staging 2026-08-23**, med två releaser av samma kod. `current` flippades till föregående release, sajten kontrollerades, och `current` flippades tillbaka. Sajten svarade 200 i alla tre lägena.
+
+Att mäta att flippen faktiskt togs är knepigare än det låter: två releaser av samma kod ger identiska asset-hashar och identisk Inertia-`version`, så utifrån ser de likadana ut. Provet gjordes därför med en fil som bara fanns i den gamla releasens `public/` — den gav 404 före flippen, 200 efter, och 404 igen efter återställningen.
+
+**LiteSpeed följer den omflippade symlänken direkt**, utan omstart och utan cache-rensning. Det var den tysta risken: cachar webbservern den upplösta sökvägen ser en rollback ut att lyckas utan att ha bytt något.
+
 ## Branch protection
 
 **Medvetet uppskjuten 2026-08-23** — kontoplanen tillåter det inte, och Tony valde att inte uppgradera för det. Se § Kontoplanen tar bort tre av spärrarna och [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Listan står kvar som specifikation för den dag den går att verkställa, och som beskrivning av vad som gäller på disciplin tills dess.
@@ -500,8 +506,8 @@ Avstämt 2026-08-23. Allt som går att förbereda innan det finns kod är gjort.
 **Saknas**
 
 - **branch protection och required reviewer.** Uppskjutet, inte bortglömt — se § Kontoplanen tar bort tre av spärrarna. Ska inte bockas av; ska tas upp igen om fler än agenten börjar pusha.
-- **produktionsbenet av genomlöpet.** Punkt 1–3 och 6 i § Vad issue 0 ska bevisa är avklarade 2026-08-23: grön PR, automatisk deploy vid merge, `https://staging.mimers.app` svarar 200 med rätt Inertia-payload, minutcronen kör. Kvar är release `v0.0.1` till produktion och en provad rollback. Rollbacken kan provas på staging så snart det finns två releaser där — vid nästa merge — och behöver alltså inte vänta på produktion.
-- städa bort `~/domains/staging.mimers.app/public_html.orig-placeholder` — staging har fått sin första riktiga utrullning, så den kan gå nu. `~/domains/mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` väntar på `v0.0.1`. Notera att produktionens minutcron pekar in i attrappen tills dess och alltså inte gör något nyttigt ännu.
+- **produktionsbenet av genomlöpet.** Punkt 1–3 och 6 i § Vad issue 0 ska bevisa är avklarade 2026-08-23: grön PR, automatisk deploy vid merge, `https://staging.mimers.app` svarar 200 med rätt Inertia-payload, minutcronen kör. Punkt 5, rollbacken, är provad på staging samma dag — se § Rollback. Kvar är bara release `v0.0.1` till produktion.
+- städa bort `~/domains/mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp`. Båda väntar på `v0.0.1`. Notera att produktionens minutcron pekar in i attrappen tills dess och alltså inte gör något nyttigt ännu. Staging-motsvarigheten är redan borttagen.
 
 ### En röjd nyckel, och vad den lärde oss om `authorized_keys`
 
