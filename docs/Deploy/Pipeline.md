@@ -266,12 +266,25 @@ jobs:
           echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
 
           RELEASE=$(date +%Y-%m-%d)-$(echo "${{ github.sha }}" | cut -c1-7)
-
-          scp -P "$PORT" release.tar.gz "$USER@$HOST:$PATH_REMOTE/incoming/$RELEASE.tar.gz"
+          ssh -p "$PORT" "$USER@$HOST" "mkdir -p $PATH_REMOTE/incoming && cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz" < release.tar.gz
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh
 ```
 
 Frontendbygget körs **här**, inte på servern. `public/build` ligger i arbetskatalogen när `tar` körs och följer därför med i artefakten, medan `node_modules` exkluderas. Servern behöver fortfarande varken git, composer eller node — se [[ADR-0018 Utvecklingsprocess och deploy]] och [[ADR-0021 Frontendteknik]]. Bygger CI inte frontenden på varje PR upptäcks ett trasigt Vue-bygge först vid utrullning, vilket är därför samma steg finns i `ci.yml`.
+
+## Vägen in på servern
+
+Paketet skickas med `ssh` och `cat`, inte med `scp`. Skälet är konkret: `DEPLOY_PATH` innehåller `~`, och sedan OpenSSH 9 kör `scp` över SFTP i stället för det gamla protokollet. SFTP har inget skal bakom sig och expanderar därför inte tilde — den gör bokstavligen `/home/s174280/~/mimers-staging` av sökvägen. Första riktiga utrullningen föll på precis det:
+
+```
+scp: dest open "***/incoming/2026-08-23-cf22e0e.tar.gz": No such file or directory
+```
+
+Felet är svårläst eftersom GitHub maskerar sökvägen, så det ser ut som en saknad katalog. `incoming/` fanns hela tiden.
+
+`ssh ... "cat > fil" < release.tar.gz` går genom ett skal på servern och beter sig alltså likadant som `bash -s`-raden efteråt. Den fungerar oavsett om secreten är relativ eller absolut, vilket spelar roll: en GitHub-secret går inte att läsa tillbaka, så ingen kan kontrollera vilken form den har. `mkdir -p` i samma kommando gör steget självläkande om katalogträdet någon gång saknas.
+
+**Skriv aldrig om det här till `scp` igen** utan att antingen sätta `-O` eller garantera att sökvägen är absolut. Det är en bugg som bara syns vid skarp utrullning.
 
 ## Uppladdningsgränser
 
@@ -333,8 +346,7 @@ jobs:
           echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
 
           RELEASE=${{ github.event.release.tag_name }}-$(date +%Y%m%d%H%M)
-
-          scp -P "$PORT" release.tar.gz "$USER@$HOST:$PATH_REMOTE/incoming/$RELEASE.tar.gz"
+          ssh -p "$PORT" "$USER@$HOST" "mkdir -p $PATH_REMOTE/incoming && cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz" < release.tar.gz
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh
 ```
 

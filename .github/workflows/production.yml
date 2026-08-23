@@ -46,5 +46,10 @@ jobs:
 
           RELEASE=${{ github.event.release.tag_name }}-$(date +%Y%m%d%H%M)
 
-          scp -P "$PORT" release.tar.gz "$USER@$HOST:$PATH_REMOTE/incoming/$RELEASE.tar.gz"
+          # Paketet skickas med ssh och cat, inte scp. DEPLOY_PATH innehåller ~,
+          # och scp går sedan OpenSSH 9 över SFTP — som inte expanderar tilde utan
+          # gör "/home/USER/~/mimers-staging" av den. Här tolkas sökvägen av ett
+          # skal på servern, precis som i raden nedan, och fungerar oavsett om
+          # secreten är relativ eller absolut. Se Pipeline.md § Vägen in på servern.
+          ssh -p "$PORT" "$USER@$HOST" "mkdir -p $PATH_REMOTE/incoming && cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz" < release.tar.gz
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh

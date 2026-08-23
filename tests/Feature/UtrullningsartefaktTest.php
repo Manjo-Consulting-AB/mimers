@@ -48,3 +48,22 @@ it('har sidkatalogen med exakt den skiftlägesform Inertia letar efter', functio
         expect($syskon)->toContain($namn);
     }
 });
+
+/*
+ * Regressionsskydd. Första skarpa utrullningen föll på att scp går över SFTP
+ * sedan OpenSSH 9 och därför inte expanderar ~ i DEPLOY_PATH. Felet syns bara
+ * vid riktig utrullning, och sökvägen maskeras i loggen — så det ska inte
+ * behöva upptäckas en gång till. Se Pipeline.md § Vägen in på servern.
+ */
+it('skickar releasepaketet genom ett skal, inte över SFTP', function (string $workflow) {
+    $yaml = file_get_contents(base_path(".github/workflows/{$workflow}"));
+
+    expect($yaml)->toContain('cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz');
+
+    // Radbörjan, så att kommentarernas omnämnanden av scp inte räknas.
+    $använderScp = preg_match('/^\s*scp\s/m', $yaml) === 1;
+
+    expect($använderScp)->toBeFalse(
+        "{$workflow} använder scp igen. Sökvägen kan vara relativ, och scp expanderar inte ~."
+    );
+})->with(['staging.yml', 'production.yml']);
