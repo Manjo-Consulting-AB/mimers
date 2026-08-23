@@ -15,9 +15,11 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 ### 0. Repo, miljöer och deploy-kedja
 Repot är `Manjo-Consulting-AB/mimers`. Branch protection på `main`, `AGENTS.md` med konventionerna, PR-mall med läslista, och dokumentationen inflyttad under `docs/`. Två miljöer hos inleed med varsin databas och varsin minutcron. Workflow-filerna och deploy-skriptet enligt [[Pipeline]].
 
-**Gjort 2026-08-23:** dokumentationen ligger under `docs/`, `AGENTS.md`, PR-mallen, de tre workflow-filerna och `deploy/deploy.sh` finns i repot. På servern: katalogträden `~/mimers` och `~/mimers-staging`, document root ompåkad via symlänk, minutcron per miljö. Frågelistan i [[ADR-0018 Utvecklingsprocess och deploy]] § Verifierat hos inleed är alltså avklarad.
+**Gjort 2026-08-23:** dokumentationen ligger under `docs/`, `AGENTS.md`, PR-mallen, de tre workflow-filerna och `deploy/deploy.sh` finns i repot. På servern: katalogträden `~/mimers` och `~/mimers-staging`, document root ompekad via symlänk, minutcron per miljö. Frågelistan i [[ADR-0018 Utvecklingsprocess och deploy]] § Verifierat hos inleed är alltså avklarad.
 
-**Återstår:** branch protection, GitHub Environments med `DEPLOY_*`-secrets och required reviewer, `shared/.env` per miljö, DNS och sites för `staging.mimers.app` och `files.mimers.app`, samt själva genomlöpet med en tom Laravel.
+**Gjort senare samma dag:** miljöerna `staging` och `production` i GitHub med fem av sex `DEPLOY_*`-secrets, `shared/.env` per miljö på servern, och en verifierad databas per miljö. DNS och sites för `staging.mimers.app` och `files.mimers.app` finns.
+
+**Återstår:** `DEPLOY_KEY` per miljö, symlänk för `staging.mimers.app/public_html`, en filsubdomän för staging, och själva genomlöpet med en tom Laravel. Branch protection och required reviewer **går inte att slå på** — kontoplanen tillåter det inte, se [[Pipeline]] § Kontoplanen tar bort tre av spärrarna. Det är ett öppet beslut, inte en punkt att bocka av.
 **Läs:** [[Pipeline]], [[ADR-0018 Utvecklingsprocess och deploy]]
 **Klart när:** en tom Laravel har gått hela vägen — grön PR, automatisk deploy till staging, release `v0.0.1` till produktion efter godkännande — och en rollback har provats genom att flippa symlänken tillbaka.
 
@@ -135,7 +137,9 @@ Genereras vid uppladdning, inte vid visning. Räknas **inte** mot användarens k
 ### 19. Säker filleverans
 Leveransmetoden är beslutad i [[ADR-0019 Filleverans]]: intern omdirigering med `X-LiteSpeed-Location` mot en katalog under filsubdomänens webbrot, skyddad av en `.htaccess`-regel på `%{ORG_REQ_URI}`.
 
-**Kontrollera först att LiteSpeed följer symlänkar** från webbroten in i `shared/storage`. Gör den inte det gäller beslutet fortfarande, men lagringslayouten måste ses över — stanna och flagga istället för att hitta på en egen lösning.
+Mekanismen är **redan verifierad på servern** 2026-08-23 med attrappkod: LiteSpeed följer symlänkar från webbroten, direkt anrop mot `/_protected/` ger 403, och `X-LiteSpeed-Location` levererar filen med 200. Du behöver alltså inte utreda om den fungerar — du ska bygga den.
+
+**Två fällor som verifieringen avslöjade.** LiteSpeed sätter inte `Content-Type` efter filens innehåll vid intern omdirigering; PHP:s standard följer med hela vägen ut. Sätt typen explicit i samma svar som headern. Och staging saknar ännu en egen filsubdomän — den måste finnas innan testen nedan går att köra mot en utrullad miljö.
 
 Därefter: egen origin för användarfiler, `Content-Disposition: attachment` som standard, behörighetskontroll före leverans. Symlänken och `.htaccess` läggs på plats av `deploy.sh`, inte för hand.
 **Läs:** [[ADR-0019 Filleverans]], [[Filer och lagring]] § Säkerhet vid leverans, [[ADR-0007 Fillagring hos inleed]]

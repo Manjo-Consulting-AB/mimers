@@ -97,18 +97,36 @@ Dokumentationen låg först i `yachting-earth/storage` och förs över med `Tran
 
 Lägg upp två *Environments* i repots inställningar: `staging` och `production`. Varje miljö får egna secrets med samma namn, så att workflow-filerna kan se likadana ut.
 
-| Secret | Innehåll |
-|---|---|
-| `DEPLOY_HOST` | serverns värdnamn |
-| `DEPLOY_PORT` | SSH-port |
-| `DEPLOY_USER` | kontonamn hos inleed |
-| `DEPLOY_KEY` | privat nyckel, **egen nyckel per miljö** |
-| `DEPLOY_KNOWN_HOSTS` | utdata från `ssh-keyscan -p PORT HOST` |
-| `DEPLOY_PATH` | t.ex. `/home/tony/mimers` |
+| Secret | Innehåll | Värde |
+|---|---|---|
+| `DEPLOY_HOST` | serverns värdnamn | `prime5.inleed.net` |
+| `DEPLOY_PORT` | SSH-port | `2020` |
+| `DEPLOY_USER` | kontonamn hos inleed | `s174280` |
+| `DEPLOY_KEY` | privat nyckel, **egen nyckel per miljö** | sätts inte i förväg |
+| `DEPLOY_KNOWN_HOSTS` | utdata från `ssh-keyscan -p 2020 prime5.inleed.net` | tre rader: ed25519, rsa, ecdsa |
+| `DEPLOY_PATH` | appkatalogen för miljön | `/home/s174280/mimers` respektive `/home/s174280/mimers-staging` |
 
-`production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör.
+`production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör — se begränsningen nedan.
 
-`DEPLOY_KNOWN_HOSTS` läggs som secret istället för att köra `ssh-keyscan` i workflowen. Att keyscanna vid varje körning är att lita på vem som helst som svarar på adressen.
+`DEPLOY_KNOWN_HOSTS` läggs som secret istället för att köra `ssh-keyscan` i workflowen. Att keyscanna vid varje körning är att lita på vem som helst som svarar på adressen. Keyscanna en gång, och **jämför fingeravtrycken mot en uppkoppling du redan litar på** innan du klistrar in dem — annars har du bara flyttat samma godtrogenhet från körningen till uppsättningen.
+
+### Kontoplanen tar bort tre av spärrarna
+
+Repot är privat och orgen ligger på GitHubs **Free**-plan. Där finns tre av mekanismerna i [[ADR-0018 Utvecklingsprocess och deploy]] helt enkelt inte — API:et svarar `Upgrade to GitHub Pro or make this repository public`:
+
+- **branch protection på `main`** — 403
+- **repository rulesets** — 403, alltså inte heller vägen runt
+- **required reviewer på en environment** — 422
+
+*Environments* och *environment secrets* fungerar däremot, och `environment: production` ger fortfarande en spårbar deployhistorik. Men den stannar inte och frågar.
+
+Konsekvensen är att **"ingen pushar direkt till `main`" och "produktion kräver ett godkännande" är överenskommelser, inte spärrar.** Tre vägar ur det:
+
+1. **Uppgradera orgen till GitHub Team.** Ger tillbaka alla tre, och är det minsta ingreppet i processen som redan är beslutad.
+2. **Flytta godkännandet in i workflowen.** Produktionsjobbet körs bara via `workflow_dispatch` med en bekräftelseinput. Svagare, eftersom den som startar körningen också är den som godkänner.
+3. **Låt det stå som en överenskommelse** tills det finns fler än en person med skrivrättigheter.
+
+Vilket det än blir ska det vara ett val. Skillnaden mot [[ADR-0018 Utvecklingsprocess och deploy]] får inte bli något man upptäcker den dag någon pushar fel.
 
 ## `.github/workflows/ci.yml`
 
@@ -372,6 +390,8 @@ Tio sekunder. **Databasen rullas inte tillbaka** — se expand/contract i [[ADR-
 
 ## Branch protection
 
+**Går inte att slå på i dag** — kontoplanen tillåter det inte, se § Kontoplanen tar bort tre av spärrarna. Listan står kvar som specifikation för den dag den går att verkställa, och som beskrivning av vad som gäller på hedersord tills dess.
+
 Under repots *Rules* eller *Branch protection* för `main`:
 
 - kräv pull request före merge
@@ -388,25 +408,37 @@ En tom Laravel, utan en rad domänkod, som:
 1. får en PR att bli grön i `ci.yml`
 2. hamnar på staging automatiskt vid merge
 3. svarar på `https://staging.mimers.app`
-4. skeppas till produktion via en release `v0.0.1` med Tonys godkännande
+4. skeppas till produktion via en release `v0.0.1` med Tonys godkännande — som i dag är en handpåläggning, inte en spärr
 5. kan rullas tillbaka med ett symlänkbyte
 6. har en fungerande minutcron på båda miljöerna
 
 Först när alla sex punkterna stämmer börjar issue 1.
 
-## Återstår på GitHub och hos inleed
+## Läget på GitHub och hos inleed
 
-Serverupplägget är gjort. Det här är vad som saknas innan genomlöpet ovan kan köras, och inget av det går att lägga i en PR:
+Serverupplägget är gjort. Statusen nedan är avstämd 2026-08-23.
 
-**I repots inställningar**
+**Klart i repots inställningar**
 
-- branch protection på `main` enligt avsnittet ovan, inklusive **inkludera administratörer**. Required status check `CI / test` slås på först när issue 1 är inne — dessförinnan är CI nödvändigtvis röd, eftersom det inte finns någon `composer.json` att installera.
-- de två miljöerna med sina `DEPLOY_*`-secrets, egen nyckel per miljö
-- required reviewer på `production`
+- miljöerna `staging` och `production` finns
+- fem av sex secrets satta i båda: `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER`, `DEPLOY_PATH`, `DEPLOY_KNOWN_HOSTS`. Värdnyckelns tre fingeravtryck stämde mot dem som redan låg betrodda sedan tidigare uppkopplingar.
 
-**Hos inleed**
+**Saknas i repots inställningar**
 
-- `staging.mimers.app` och `files.mimers.app` som sites, med DNS. Ingen av dem finns ännu; `.app` är HSTS-preloadad, så de måste ha certifikat innan de svarar alls.
-- `shared/.env` per miljö, skapad för hand på servern och ingen annanstans
-- en databas per miljö. Kontots databastak går inte att läsa över SSH — kontrollera i DirectAdmin-panelen att två till ryms.
+- `DEPLOY_KEY` i båda miljöerna. Kräver ett nyckelpar per miljö vars publika halva läggs i `~/.ssh/authorized_keys` hos inleed.
+- branch protection och required reviewer, som kontoplanen inte tillåter — se avsnittet ovan.
+- required status check `CI / test` slås på först när issue 1 är inne, om branch protection blir möjlig. Dessförinnan är CI nödvändigtvis röd, eftersom det inte finns någon `composer.json` att installera.
+
+**Klart hos inleed**
+
+- `staging.mimers.app` och `files.mimers.app` finns som sites med DNS
+- `shared/.env` i båda miljöerna, `chmod 600`, med egen genererad `APP_KEY`. De skapades på servern och finns ingen annanstans.
+- en databas per miljö — `s174280_mimers` och `s174280_mimers-staging` — båda verifierade med PDO från servern: MariaDB 10.6.27, tomma, med rättigheter att skapa och ta bort tabeller. Kontot hade inget databastak i vägen.
+
+**Saknas hos inleed**
+
+- **`staging.mimers.app/public_html` är fortfarande en riktig katalog.** Den ska bytas mot en symlänk till `~/mimers-staging/current/public`, precis som produktionen redan har. Utan det rullar staging ut utan att synas.
+- **Filsubdomän för staging.** `files.mimers.app` pekar mot produktionen. Issue 19 ska testas mot en **utrullad** staging, och det kräver en egen origin för användarfiler där.
+- **Databasernas standardteckenuppsättning är `latin1_swedish_ci`**, inte `utf8mb4`. Laravel sätter teckenuppsättning per anslutning och per tabell, så migrationerna blir rätt ändå — men en `ALTER DATABASE ... CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` på varje bas tar bort risken att något senare skapas utan explicit uppsättning. Båda baserna är tomma, så det kostar ingenting nu och är obehagligt senare.
+- **`~/.ssh/claude_rsa` ligger kvar på servern.** En privat nyckel hör inte hemma på maskinen den ger åtkomst till.
 - städa bort `~/domains/mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` när första riktiga utrullningen har gått igenom

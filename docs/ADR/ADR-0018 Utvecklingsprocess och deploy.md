@@ -55,7 +55,7 @@ Den tekniska uppsättningen — workflow-filer, deploy-skript, kataloglayout —
 
 ## Konsekvenser
 
-- **Ingen kan pusha direkt till `main`**, inte heller Tony. Branch protection kräver grön CI och en godkänd review.
+- **Ingen kan pusha direkt till `main`**, inte heller Tony. Branch protection kräver grön CI och en godkänd review. Spärren går inte att slå på på nuvarande kontoplan; se avsnittet nedan.
 - **PHPStan sätts på hög nivå från första commiten.** Att höja nivån i efterhand över 47 issues blir en egen milstolpe.
 - **En PR mergas inte om "Klart när" saknar motsvarande test.** Det är den enda mekanism som skalar när granskaren inte hinner läsa allt.
 - **`AGENTS.md` i repo-roten** upprepar konventionerna från [[Datamodell – översikt]] och felformatet från issue 7, plus regeln: hittar du inte svaret i din läslista — gissa inte, fråga.
@@ -88,6 +88,14 @@ Det tyngsta fyndet stod inte på frågelistan. `disable_functions` hos inleed t�
 Laravels scheduler kör `->command(...)`-uppgifter genom Symfony Process, som bygger på `proc_open`. **Sådana uppgifter kan inte köras här alls.** `->call(...)` och `->job(...)` blir däremot `CallbackEvent` och körs i schemaläggarens egen process, vilket fungerar. Samma skiljelinje gäller köerna: `queue:work` är en process som hämtar jobb och fungerar, medan `queue:listen` startar subprocesser och gör det inte.
 
 Det är en verklig inskränkning på outboxen i [[ADR-0010 Notisarkitektur]], inte en formalitet, och den kan inte kringgås på delad hosting. Utrullningen är däremot opåverkad: `config:cache`, `route:cache`, `view:cache`, `migrate`, `down` och `up` rör aldrig proc_open, så `deploy.sh` i [[Pipeline]] fungerar som skrivet.
+
+### Kontoplanen bär inte spärrarna
+
+Beslutet ovan vilar på tre GitHub-mekanismer: branch protection på `main`, required status check, och required reviewer på `production`. Vid uppsättningen 2026-08-23 visade det sig att **inga av dem går att aktivera** på ett privat repo i en org på Free-planen. Branch protection och rulesets svarar 403, environment-reviewern 422, alla tre med `Upgrade to GitHub Pro or make this repository public`.
+
+Environments och deras secrets fungerar, så deploykedjan i [[Pipeline]] är opåverkad. Det som saknas är tvånget. `main` går att pusha till, och produktionsdeployen kör utan att fråga.
+
+Beslutet står kvar oförändrat — det här är en fråga om verkställighet, inte om vad som är rätt. Men skillnaden mellan vad dokumentet säger och vad servern hindrar ska vara skriven någonstans, annars är den bara en felaktig trygghet. Alternativen står i [[Pipeline]] § Kontoplanen tar bort tre av spärrarna.
 
 ## Alternativ
 
