@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Installera beroenden
+        run: |
+          composer install --prefer-dist --no-interaction --no-progress
+          npm ci
+
+      - name: Bygg frontend
+        run: npm run build
+
+      - name: Kodstandard
+        run: vendor/bin/pint --test
+
+      - name: Statisk analys
+        run: vendor/bin/phpstan analyse --no-progress
+
+      - name: Tester
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan test

@@ -1,1 +1,28 @@
+# Obsidian-valvet pekar in i docs/ men dess lokala inställningar hör inte hemma i repot
 .obsidian/
+
+# Laravel — mappar och filer skapas i issue 1, ignoreras redan nu
+/vendor/
+/node_modules/
+/public/build/
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+.env
+.env.backup
+.env.production
+.phpunit.result.cache
+.phpunit.cache/
+Homestead.json
+Homestead.yaml
+auth.json
+npm-debug.log
+yarn-error.log
+
+# Deploy-artefakter
+release.tar.gz
+
+# OS
+.DS_Store
+Thumbs.db

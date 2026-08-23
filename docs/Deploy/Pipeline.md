@@ -2,9 +2,9 @@
 
 Teknisk uppsättning för CI och deploy. **Varför** det ser ut så här står i [[ADR-0018 Utvecklingsprocess och deploy]] — läs den först om du undrar över en avvägning.
 
-Det här dokumentet är underlaget för **issue 0** i [[Backlog]]. Filerna nedan är utgångspunkter, inte facit: sökvägar, domännamn och PHP-version ska anpassas efter hur kontot faktiskt ser ut hos inleed.
+Det här dokumentet är underlaget för **issue 0** i [[Backlog]]. Sökvägar och versioner nedan är **verifierade på servern 2026-08-23**, inte gissningar — se [[ADR-0018 Utvecklingsprocess och deploy]] § Verifierat hos inleed för vad som testades och hur.
 
-Produkten heter Mimers och domänen är `mimers.app` — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Sökvägarna nedan utgår från appkatalogen `~/mimers` och produktionsdomänen `mimers.app`; staging ligger på `staging.mimers.app` och användarfilerna på `files.mimers.app`. Ligger staging på samma konto som produktion behöver den en egen appkatalog — sätt den i miljöns `DEPLOY_PATH` istället för att dela `~/mimers`.
+Produkten heter Mimers och domänen är `mimers.app` — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Kontot är `s174280` på `prime5.inleed.net`, SSH-port **2020**. Produktionen bor i `~/mimers` och svarar på `mimers.app`; staging bor i `~/mimers-staging` och ska svara på `staging.mimers.app`. Användarfilerna på `files.mimers.app`. Båda miljöerna ligger alltså på samma konto och hålls isär av `DEPLOY_PATH`, aldrig av att dela katalog.
 
 Eftersom `.app` är HSTS-preloadad måste alla tre värdnamnen ha certifikat innan de svarar alls; det finns ingen HTTP-fallback att felsöka mot.
 
@@ -51,23 +51,34 @@ Identisk på staging och produktion, bara olika konto eller sökväg.
 
 ### Engångsuppsättning
 
+Gjord för båda miljöerna 2026-08-23. Står här för att kunna göras om på en ny server.
+
 ```bash
-mkdir -p ~/mimers/{incoming,releases}
-mkdir -p ~/mimers/shared/storage/{app/public,logs}
-mkdir -p ~/mimers/shared/storage/framework/{cache/data,sessions,views}
+for APP in ~/mimers ~/mimers-staging; do
+  mkdir -p "$APP"/{incoming,releases}
+  mkdir -p "$APP"/shared/storage/{app/public,logs}
+  mkdir -p "$APP"/shared/storage/framework/{cache/data,sessions,views}
+done
 
-# .env skapas här och bara här
+# .env skapas här och bara här, en per miljö. Återstår.
 nano ~/mimers/shared/.env
+nano ~/mimers-staging/shared/.env
 
-# document root pekas om till releasen
-ln -sfn ~/mimers/current/public ~/domains/mimers.app/public_html
+# document root: public_html ersätts av en symlänk in i releasen
+mv ~/domains/mimers.app/public_html ~/domains/mimers.app/public_html.orig-placeholder
+ln -s /home/s174280/mimers/current/public ~/domains/mimers.app/public_html
 
-# schemaläggaren
+# schemaläggaren, en rad per miljö
 crontab -e
-* * * * * cd ~/mimers/current && php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /home/s174280/mimers/current && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /home/s174280/mimers-staging/current && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Går det inte att peka om document root får `public_html` istället vara symlänken. Fungerar inte heller det — se frågorna till inleed i [[ADR-0018 Utvecklingsprocess och deploy]].
+**Symlänken fungerar** — LiteSpeed följer den genom `current` hela vägen till releasen. Testat med en attrapprelease på `mimers.app`, som just nu svarar 503 från den i väntan på första riktiga utrullningen.
+
+**Cron är per konto, inte per site.** Det är en enda crontab och den delas med övriga domäner på kontot. Använd absolut sökväg till PHP: crontabens egen `PATH` börjar med `/usr/local/php81/bin`, så ett naket `php` blir fel version. `/usr/local/bin/php` är 8.4.
+
+**Uppgifter som schemaläggs måste vara `->call()` eller `->job()`.** `proc_open` är avstängt, så `->command(...)` fungerar inte. Se [[ADR-0018 Utvecklingsprocess och deploy]].
 
 ## Repo och organisation
 
@@ -86,18 +97,36 @@ Dokumentationen låg först i `yachting-earth/storage` och förs över med `Tran
 
 Lägg upp två *Environments* i repots inställningar: `staging` och `production`. Varje miljö får egna secrets med samma namn, så att workflow-filerna kan se likadana ut.
 
-| Secret | Innehåll |
-|---|---|
-| `DEPLOY_HOST` | serverns värdnamn |
-| `DEPLOY_PORT` | SSH-port |
-| `DEPLOY_USER` | kontonamn hos inleed |
-| `DEPLOY_KEY` | privat nyckel, **egen nyckel per miljö** |
-| `DEPLOY_KNOWN_HOSTS` | utdata från `ssh-keyscan -p PORT HOST` |
-| `DEPLOY_PATH` | t.ex. `/home/tony/mimers` |
+| Secret | Innehåll | Värde |
+|---|---|---|
+| `DEPLOY_HOST` | serverns värdnamn | `prime5.inleed.net` |
+| `DEPLOY_PORT` | SSH-port | `2020` |
+| `DEPLOY_USER` | kontonamn hos inleed | `s174280` |
+| `DEPLOY_KEY` | privat nyckel, **egen nyckel per miljö** | sätts inte i förväg |
+| `DEPLOY_KNOWN_HOSTS` | utdata från `ssh-keyscan -p 2020 prime5.inleed.net` | tre rader: ed25519, rsa, ecdsa |
+| `DEPLOY_PATH` | appkatalogen för miljön | `/home/s174280/mimers` respektive `/home/s174280/mimers-staging` |
 
-`production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör.
+`production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör — se begränsningen nedan.
 
-`DEPLOY_KNOWN_HOSTS` läggs som secret istället för att köra `ssh-keyscan` i workflowen. Att keyscanna vid varje körning är att lita på vem som helst som svarar på adressen.
+`DEPLOY_KNOWN_HOSTS` läggs som secret istället för att köra `ssh-keyscan` i workflowen. Att keyscanna vid varje körning är att lita på vem som helst som svarar på adressen. Keyscanna en gång, och **jämför fingeravtrycken mot en uppkoppling du redan litar på** innan du klistrar in dem — annars har du bara flyttat samma godtrogenhet från körningen till uppsättningen.
+
+### Kontoplanen tar bort tre av spärrarna
+
+Repot är privat och orgen ligger på GitHubs **Free**-plan. Där finns tre av mekanismerna i [[ADR-0018 Utvecklingsprocess och deploy]] helt enkelt inte — API:et svarar `Upgrade to GitHub Pro or make this repository public`:
+
+- **branch protection på `main`** — 403
+- **repository rulesets** — 403, alltså inte heller vägen runt
+- **required reviewer på en environment** — 422
+
+*Environments* och *environment secrets* fungerar däremot, och `environment: production` ger fortfarande en spårbar deployhistorik. Men den stannar inte och frågar.
+
+Konsekvensen är att **"ingen pushar direkt till `main`" och "produktion kräver ett godkännande" är överenskommelser, inte spärrar.** Tre vägar ur det:
+
+1. **Uppgradera orgen till GitHub Team.** Ger tillbaka alla tre, och är det minsta ingreppet i processen som redan är beslutad.
+2. **Flytta godkännandet in i workflowen.** Produktionsjobbet körs bara via `workflow_dispatch` med en bekräftelseinput. Svagare, eftersom den som startar körningen också är den som godkänner.
+3. **Låt det stå som en överenskommelse** tills det finns fler än en person med skrivrättigheter.
+
+Vilket det än blir ska det vara ett val. Skillnaden mot [[ADR-0018 Utvecklingsprocess och deploy]] får inte bli något man upptäcker den dag någon pushar fel.
 
 ## `.github/workflows/ci.yml`
 
@@ -118,7 +147,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           coverage: none
 
       - uses: actions/setup-node@v4
@@ -168,7 +197,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
 
       - uses: actions/setup-node@v4
         with:
@@ -229,6 +258,20 @@ jobs:
 ```
 
 Frontendbygget körs **här**, inte på servern. `public/build` ligger i arbetskatalogen när `tar` körs och följer därför med i artefakten, medan `node_modules` exkluderas. Servern behöver fortfarande varken git, composer eller node — se [[ADR-0018 Utvecklingsprocess och deploy]] och [[ADR-0021 Frontendteknik]]. Bygger CI inte frontenden på varje PR upptäcks ett trasigt Vue-bygge först vid utrullning, vilket är därför samma steg finns i `ci.yml`.
+
+## Uppladdningsgränser
+
+Serverns standard är `upload_max_filesize = 2M` och `post_max_size = 8M`, vilket är meningslöst för en produkt som samlar manualer och kvitton. `php_value` i `.htaccess` slår igenom hos inleed — verifierat 2026-08-23 — och `public/.htaccess` följer med i artefakten. Gränserna bor därför **i repot**, inte som handpåläggning på servern:
+
+```apache
+php_value upload_max_filesize 64M
+php_value post_max_size 72M
+php_value memory_limit 256M
+```
+
+`.user.ini` fungerar också i princip, men slog inte igenom inom `user_ini.cache_ttl` på 300 sekunder vid testet. `.htaccess` gäller direkt och är därför valet.
+
+Behöver gränsen höjas över vad `.htaccess` tillåter finns CloudLinuxs PHP Selector i DirectAdmin-panelen som andra väg.
 
 `retention-days: 90` är inte kosmetik. Går artefakten ut går det inte längre att skeppa den commiten till produktion utan att bygga om, och då är bygg-en-gång-principen bruten.
 
@@ -347,6 +390,8 @@ Tio sekunder. **Databasen rullas inte tillbaka** — se expand/contract i [[ADR-
 
 ## Branch protection
 
+**Medvetet uppskjuten 2026-08-23** — kontoplanen tillåter det inte, och Tony valde att inte uppgradera för det. Se § Kontoplanen tar bort tre av spärrarna och [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Listan står kvar som specifikation för den dag den går att verkställa, och som beskrivning av vad som gäller på disciplin tills dess.
+
 Under repots *Rules* eller *Branch protection* för `main`:
 
 - kräv pull request före merge
@@ -363,8 +408,42 @@ En tom Laravel, utan en rad domänkod, som:
 1. får en PR att bli grön i `ci.yml`
 2. hamnar på staging automatiskt vid merge
 3. svarar på `https://staging.mimers.app`
-4. skeppas till produktion via en release `v0.0.1` med Tonys godkännande
+4. skeppas till produktion via en release `v0.0.1` med Tonys godkännande — som i dag är en handpåläggning, inte en spärr
 5. kan rullas tillbaka med ett symlänkbyte
 6. har en fungerande minutcron på båda miljöerna
 
 Först när alla sex punkterna stämmer börjar issue 1.
+
+## Läget på GitHub och hos inleed
+
+Avstämt 2026-08-23. Allt som går att förbereda innan det finns kod är gjort.
+
+**Klart i repots inställningar**
+
+- miljöerna `staging` och `production` finns, med alla sex `DEPLOY_*`-secrets i båda
+- egen deploynyckel per miljö, ed25519, utan lösenfras. Båda verifierade genom en faktisk inloggning innan de sattes som secret. Privatnycklarna finns bara som GitHub-secrets — de går inte att läsa tillbaka, och behövs en ny genereras den om.
+- `DEPLOY_KNOWN_HOSTS` innehåller serverns tre värdnycklar, med fingeravtrycken jämförda mot en uppkoppling som redan var betrodd
+
+**Klart hos inleed**
+
+- sajter och DNS för alla tre värdnamn: `staging.mimers.app`, `files.mimers.app` och `files.staging.mimers.app`. Filsubdomänen per miljö behövs för att [[ADR-0019 Filleverans]] ska gå att testa mot en utrullad staging och inte mot produktionens filer.
+- webbroten för både `mimers.app` och `staging.mimers.app` är symlänkar till respektive `current/public`. Filsubdomänerna behåller sina riktiga kataloger — de pekas aldrig om, de får bara `_protected`-symlänken.
+- `shared/.env` i båda miljöerna, `chmod 600`, med egen genererad `APP_KEY`. De finns bara på servern.
+- en databas per miljö — `s174280_mimers` och `s174280_mimers-staging` — verifierade från servern: MariaDB 10.6.27, tomma, med rättigheter att skapa och ta bort tabeller. Kontot hade inget databastak i vägen.
+- båda baserna ändrade från `latin1_swedish_ci` till `utf8mb4` / `utf8mb4_unicode_ci`, medan de var tomma. Laravel sätter teckenuppsättning per anslutning och per tabell ändå, men nu kan ingenting ärva fel standard.
+- minutcron per miljö, med absolut sökväg till `/usr/local/bin/php`
+
+**Saknas**
+
+- **branch protection och required reviewer.** Uppskjutet, inte bortglömt — se § Kontoplanen tar bort tre av spärrarna. Ska inte bockas av; ska tas upp igen om fler än agenten börjar pusha.
+- **själva genomlöpet.** Kedjan är obeprövad tills en tom Laravel gått hela vägen; se § Vad issue 0 ska bevisa.
+- städa bort `~/domains/mimers.app/public_html.orig-placeholder`, `~/domains/staging.mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` när första riktiga utrullningen har gått igenom
+
+### En röjd nyckel, och vad den lärde oss om `authorized_keys`
+
+En privat nyckel, `claude_rsa`, låg kvar i serverns egen `~/.ssh/`, och dess publika halva stod i `authorized_keys` — den låste alltså upp maskinen den låg på. Den hämtades hem, togs bort från servern, och raden ersattes 2026-08-23 av ett nytt nyckelpar. Verifierat: den nya nyckeln loggar in, den röjda raden är borta.
+
+Två saker att ta med sig:
+
+- **`authorized_keys` innehåller numera driftkritiska rader.** `github-actions-staging` och `github-actions-production` är deploykedjans enda väg in. Faller de bort slutar utrullningen fungera — och det märks först vid nästa release, inte när misstaget görs.
+- **Redigera därför aldrig filen genom DirectAdmins SSH Keys-sida.** Den skriver om `authorized_keys` i sin helhet. Vid nyckelbytet ovan överlevde deployraderna, men ordningen i filen ändrades, vilket visar att hela filen skrevs om. Lägg till och ta bort additivt över shell, med en backup före.

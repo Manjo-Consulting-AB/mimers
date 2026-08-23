@@ -17,6 +17,8 @@ Systemet heter **Mimers** och bor på `mimers.app`. Namnet syftar på Mimer i no
 | bygga eller ändra en tabell | rätt fil under **Datamodell/** |
 | veta *varför* något är som det är | rätt ADR under **ADR/** |
 | ta nästa arbetsuppgift | [[Backlog]] |
+| implementera en issue | `AGENTS.md` i repo-roten |
+| veta vilka dokument en uppgift kräver | `CLAUDE.md` i repo-roten |
 | sätta upp eller ändra CI och deploy | [[Pipeline]] |
 
 ## Datamodell
@@ -37,7 +39,7 @@ Uppdelad per domän så att en ändring bara kräver en fil.
 
 ## Arbete
 
-[[Backlog]] — issues i beroendeordning, grupperade i milstolpar. Varje issue har acceptanskriterier och en läslista.
+[[Backlog]] — indextabell som pekar ut vilken milstolpefil under `docs/Backlog/` som innehåller ett givet issuenummer. Issuerna ligger i milstolpefilerna, en fil per milstolpe, så att ingen behöver läsa alla 69 för att hitta sin. Varje issue har acceptanskriterier och en läslista.
 
 [[Pipeline]] — CI, miljöer och utrullning i konkret form. Motiveringen bor i [[ADR-0018 Utvecklingsprocess och deploy]].
 

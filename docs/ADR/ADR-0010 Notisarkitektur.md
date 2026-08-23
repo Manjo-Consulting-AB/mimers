@@ -37,6 +37,8 @@ Notisens `payload` innehåller data, aldrig färdig text — den renderas per ka
 
 Utgående webhook-URL:er måste valideras mot SSRF vid både registrering och leverans, eftersom DNS kan ändras däremellan.
 
+**Leveransen körs in-process, inte som subprocesser.** `proc_open` är avstängt hos inleed, verifierat 2026-08-23 — se [[ADR-0018 Utvecklingsprocess och deploy]]. Det betyder att schemaläggaren måste uttrycka outboxens arbete som `->call(...)` eller `->job(...)`, aldrig `->command(...)`, och att kön dras med `queue:work` och inte `queue:listen`. Minutcronen räcker fortfarande, men allt arbete sker i den enda process cronraden startar. En långsam leverans blockerar alltså de övriga under samma minut — ett skäl till att ge varje utgående anrop en snäv timeout och låta outboxen försöka igen nästa minut, hellre än att vänta ut en död mottagare.
+
 Web push ligger efter MVP.
 
 ## Alternativ

@@ -53,7 +53,7 @@ audit_log
 
 **Soft delete.** `deleted_at TIMESTAMP NULL` på allt användarskapat innehåll — container, item, attachment, category, tag, schedule. Detta är det enskilt viktigaste dataskyddet i systemet; se [[ADR-0008 Soft delete och papperskorg]]. Alla index som används för listning måste inkludera `deleted_at`.
 
-**Teckenuppsättning.** `utf8mb4` med `utf8mb4_unicode_ci` genomgående. Emoji i itemnamn ska fungera.
+**Teckenuppsättning.** `utf8mb4` med `utf8mb4_unicode_ci` genomgående. Emoji i itemnamn ska fungera. Databaserna hos inleed skapas med `latin1_swedish_ci` som standard, så teckenuppsättningen måste sättas explicit och inte ärvas — se [[Pipeline]] § Läget på GitHub och hos inleed.
 
 **Främmande nycklar.** Alltid deklarerade. `ON DELETE RESTRICT` som standard — hård radering ska vara ett medvetet beslut, inte en kaskad. Undantag anges explicit i respektive fil.
 

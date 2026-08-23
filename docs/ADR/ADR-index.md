@@ -6,7 +6,7 @@ Tillbaka till [[00 Index]].
 
 | # | Beslut | Rör |
 |---|---|---|
-| [[ADR-0001 Stack]] | PHP 8.3 + Laravel på inleed | Allt |
+| [[ADR-0001 Stack]] | PHP 8.4 + Laravel på inleed | Allt |
 | [[ADR-0002 Konto äger container]] | Konto som ägarenhet, container som ägd enhet | [[Konton och åtkomst]] |
 | [[ADR-0003 Åtkomstmodell]] | Fyra åtkomstformer, varvet äger inte kundens pärm | [[Konton och åtkomst]] |
 | [[ADR-0004 Fria taggar och kategorier]] | Blankt papper, systemet vet inget om båtar | [[Items och organisation]] |

@@ -1,0 +1,50 @@
+name: Produktion
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hämta artefakten som testades på staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          RUN=$(gh run list --commit "$SHA" --workflow staging.yml \
+                  --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          if [ -z "$RUN" ]; then
+            echo "Ingen grön staging-körning för $SHA. Taggen pekar på en commit som aldrig rullats ut på staging."
+            exit 1
+          fi
+          gh run download "$RUN" -n "release-$SHA"
+
+      - name: Rulla ut
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          PATH_REMOTE: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+          RELEASE=${{ github.event.release.tag_name }}-$(date +%Y%m%d%H%M)
+
+          scp -P "$PORT" release.tar.gz "$USER@$HOST:$PATH_REMOTE/incoming/$RELEASE.tar.gz"
+          ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh
