@@ -2,9 +2,9 @@
 
 Teknisk uppsättning för CI och deploy. **Varför** det ser ut så här står i [[ADR-0018 Utvecklingsprocess och deploy]] — läs den först om du undrar över en avvägning.
 
-Det här dokumentet är underlaget för **issue 0** i [[Backlog]]. Filerna nedan är utgångspunkter, inte facit: sökvägar, domännamn och PHP-version ska anpassas efter hur kontot faktiskt ser ut hos inleed.
+Det här dokumentet är underlaget för **issue 0** i [[Backlog]]. Sökvägar och versioner nedan är **verifierade på servern 2026-08-23**, inte gissningar — se [[ADR-0018 Utvecklingsprocess och deploy]] § Verifierat hos inleed för vad som testades och hur.
 
-Produkten heter Mimers och domänen är `mimers.app` — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Sökvägarna nedan utgår från appkatalogen `~/mimers` och produktionsdomänen `mimers.app`; staging ligger på `staging.mimers.app` och användarfilerna på `files.mimers.app`. Ligger staging på samma konto som produktion behöver den en egen appkatalog — sätt den i miljöns `DEPLOY_PATH` istället för att dela `~/mimers`.
+Produkten heter Mimers och domänen är `mimers.app` — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Kontot är `s174280` på `prime5.inleed.net`, SSH-port **2020**. Produktionen bor i `~/mimers` och svarar på `mimers.app`; staging bor i `~/mimers-staging` och ska svara på `staging.mimers.app`. Användarfilerna på `files.mimers.app`. Båda miljöerna ligger alltså på samma konto och hålls isär av `DEPLOY_PATH`, aldrig av att dela katalog.
 
 Eftersom `.app` är HSTS-preloadad måste alla tre värdnamnen ha certifikat innan de svarar alls; det finns ingen HTTP-fallback att felsöka mot.
 
@@ -51,23 +51,34 @@ Identisk på staging och produktion, bara olika konto eller sökväg.
 
 ### Engångsuppsättning
 
+Gjord för båda miljöerna 2026-08-23. Står här för att kunna göras om på en ny server.
+
 ```bash
-mkdir -p ~/mimers/{incoming,releases}
-mkdir -p ~/mimers/shared/storage/{app/public,logs}
-mkdir -p ~/mimers/shared/storage/framework/{cache/data,sessions,views}
+for APP in ~/mimers ~/mimers-staging; do
+  mkdir -p "$APP"/{incoming,releases}
+  mkdir -p "$APP"/shared/storage/{app/public,logs}
+  mkdir -p "$APP"/shared/storage/framework/{cache/data,sessions,views}
+done
 
-# .env skapas här och bara här
+# .env skapas här och bara här, en per miljö. Återstår.
 nano ~/mimers/shared/.env
+nano ~/mimers-staging/shared/.env
 
-# document root pekas om till releasen
-ln -sfn ~/mimers/current/public ~/domains/mimers.app/public_html
+# document root: public_html ersätts av en symlänk in i releasen
+mv ~/domains/mimers.app/public_html ~/domains/mimers.app/public_html.orig-placeholder
+ln -s /home/s174280/mimers/current/public ~/domains/mimers.app/public_html
 
-# schemaläggaren
+# schemaläggaren, en rad per miljö
 crontab -e
-* * * * * cd ~/mimers/current && php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /home/s174280/mimers/current && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
+* * * * * cd /home/s174280/mimers-staging/current && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
 ```
 
-Går det inte att peka om document root får `public_html` istället vara symlänken. Fungerar inte heller det — se frågorna till inleed i [[ADR-0018 Utvecklingsprocess och deploy]].
+**Symlänken fungerar** — LiteSpeed följer den genom `current` hela vägen till releasen. Testat med en attrapprelease på `mimers.app`, som just nu svarar 503 från den i väntan på första riktiga utrullningen.
+
+**Cron är per konto, inte per site.** Det är en enda crontab och den delas med övriga domäner på kontot. Använd absolut sökväg till PHP: crontabens egen `PATH` börjar med `/usr/local/php81/bin`, så ett naket `php` blir fel version. `/usr/local/bin/php` är 8.4.
+
+**Uppgifter som schemaläggs måste vara `->call()` eller `->job()`.** `proc_open` är avstängt, så `->command(...)` fungerar inte. Se [[ADR-0018 Utvecklingsprocess och deploy]].
 
 ## Repo och organisation
 
@@ -118,7 +129,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           coverage: none
 
       - uses: actions/setup-node@v4
@@ -168,7 +179,7 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
 
       - uses: actions/setup-node@v4
         with:
@@ -229,6 +240,20 @@ jobs:
 ```
 
 Frontendbygget körs **här**, inte på servern. `public/build` ligger i arbetskatalogen när `tar` körs och följer därför med i artefakten, medan `node_modules` exkluderas. Servern behöver fortfarande varken git, composer eller node — se [[ADR-0018 Utvecklingsprocess och deploy]] och [[ADR-0021 Frontendteknik]]. Bygger CI inte frontenden på varje PR upptäcks ett trasigt Vue-bygge först vid utrullning, vilket är därför samma steg finns i `ci.yml`.
+
+## Uppladdningsgränser
+
+Serverns standard är `upload_max_filesize = 2M` och `post_max_size = 8M`, vilket är meningslöst för en produkt som samlar manualer och kvitton. `php_value` i `.htaccess` slår igenom hos inleed — verifierat 2026-08-23 — och `public/.htaccess` följer med i artefakten. Gränserna bor därför **i repot**, inte som handpåläggning på servern:
+
+```apache
+php_value upload_max_filesize 64M
+php_value post_max_size 72M
+php_value memory_limit 256M
+```
+
+`.user.ini` fungerar också i princip, men slog inte igenom inom `user_ini.cache_ttl` på 300 sekunder vid testet. `.htaccess` gäller direkt och är därför valet.
+
+Behöver gränsen höjas över vad `.htaccess` tillåter finns CloudLinuxs PHP Selector i DirectAdmin-panelen som andra väg.
 
 `retention-days: 90` är inte kosmetik. Går artefakten ut går det inte längre att skeppa den commiten till produktion utan att bygga om, och då är bygg-en-gång-principen bruten.
 
@@ -368,3 +393,20 @@ En tom Laravel, utan en rad domänkod, som:
 6. har en fungerande minutcron på båda miljöerna
 
 Först när alla sex punkterna stämmer börjar issue 1.
+
+## Återstår på GitHub och hos inleed
+
+Serverupplägget är gjort. Det här är vad som saknas innan genomlöpet ovan kan köras, och inget av det går att lägga i en PR:
+
+**I repots inställningar**
+
+- branch protection på `main` enligt avsnittet ovan, inklusive **inkludera administratörer**. Required status check `CI / test` slås på först när issue 1 är inne — dessförinnan är CI nödvändigtvis röd, eftersom det inte finns någon `composer.json` att installera.
+- de två miljöerna med sina `DEPLOY_*`-secrets, egen nyckel per miljö
+- required reviewer på `production`
+
+**Hos inleed**
+
+- `staging.mimers.app` och `files.mimers.app` som sites, med DNS. Ingen av dem finns ännu; `.app` är HSTS-preloadad, så de måste ha certifikat innan de svarar alls.
+- `shared/.env` per miljö, skapad för hand på servern och ingen annanstans
+- en databas per miljö. Kontots databastak går inte att läsa över SSH — kontrollera i DirectAdmin-panelen att två till ryms.
+- städa bort `~/domains/mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` när första riktiga utrullningen har gått igenom

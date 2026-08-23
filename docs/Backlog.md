@@ -14,11 +14,17 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 
 ### 0. Repo, miljöer och deploy-kedja
 Repot är `Manjo-Consulting-AB/mimers`. Branch protection på `main`, `AGENTS.md` med konventionerna, PR-mall med läslista, och dokumentationen inflyttad under `docs/`. Två miljöer hos inleed med varsin databas och varsin minutcron. Workflow-filerna och deploy-skriptet enligt [[Pipeline]].
+
+**Gjort 2026-08-23:** dokumentationen ligger under `docs/`, `AGENTS.md`, PR-mallen, de tre workflow-filerna och `deploy/deploy.sh` finns i repot. På servern: katalogträden `~/mimers` och `~/mimers-staging`, document root ompåkad via symlänk, minutcron per miljö. Frågelistan i [[ADR-0018 Utvecklingsprocess och deploy]] § Verifierat hos inleed är alltså avklarad.
+
+**Återstår:** branch protection, GitHub Environments med `DEPLOY_*`-secrets och required reviewer, `shared/.env` per miljö, DNS och sites för `staging.mimers.app` och `files.mimers.app`, samt själva genomlöpet med en tom Laravel.
 **Läs:** [[Pipeline]], [[ADR-0018 Utvecklingsprocess och deploy]]
 **Klart när:** en tom Laravel har gått hela vägen — grön PR, automatisk deploy till staging, release `v0.0.1` till produktion efter godkännande — och en rollback har provats genom att flippa symlänken tillbaka.
 
 ### 1. Sätt upp Laravel-projektet
-Laravel på PHP 8.3, MariaDB 10.6. Kodstandard (Pint), statisk analys (PHPStan), testuppsättning (Pest eller PHPUnit). CI som kör lint, analys och tester på varje PR. Inertia, Vue 3, Tailwind och Vite installeras i samma steg — frontenden bor i den här appen, inte i ett eget projekt.
+Laravel på PHP 8.4, MariaDB 10.6. Kodstandard (Pint), statisk analys (PHPStan), testuppsättning (Pest eller PHPUnit). CI som kör lint, analys och tester på varje PR. Inertia, Vue 3, Tailwind och Vite installeras i samma steg — frontenden bor i den här appen, inte i ett eget projekt.
+
+`public/.htaccess` ska innehålla `php_value`-raderna för uppladdningsgränser ur [[Pipeline]] § Uppladdningsgränser. Serverns standard är 2 MB och räcker inte för en enda manual.
 **Läs:** [[ADR-0001 Stack]], [[ADR-0021 Frontendteknik]]
 **Klart när:** `composer test` och `composer lint` går grönt i CI på en tom kodbas, och `npm run build` producerar `public/build` som CI också kör.
 **Beror på:** 0

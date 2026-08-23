@@ -65,15 +65,29 @@ Den tekniska uppsättningen — workflow-filer, deploy-skript, kataloglayout —
 - **Kort underhållsfönster vid deploy.** Några sekunders 503. Nolltid kräver att PHP:s opcache och realpath-cache töms efter symlänkbytet, vilket inte är tillförlitligt på delad hosting. Får vänta till VPS, precis som Meilisearch i [[ADR-0012 Sök]].
 - **`.env` och `storage/` bor utanför release-katalogerna** och symlänkas in. Produktionens hemligheter finns bara på servern och syns aldrig för Actions eller för implementatörerna.
 - **Staging behöver egen databas och egen minutcron.** Utan cron kan varken kön eller outboxen i [[ADR-0010 Notisarkitektur]] testas.
+- **Schemalagda uppgifter uttrycks som `->call()` eller `->job()`, aldrig `->command()`.** `proc_open` är avstängt hos inleed; se avsnittet nedan.
 - **Issue 0 byggs före all funktionalitet.** En tom Laravel ska gå hela vägen till både staging och produktion innan första raden domänkod skrivs. Går något sönder senare ska felet aldrig kunna vara röret.
 
-**Kvar att verifiera hos inleed**, utöver S3-frågan i [[ADR-0007 Fillagring hos inleed]]:
+**Verifierat hos inleed 2026-08-23.** Frågorna nedan låg öppna tills någon loggade in och tittade. Det gjordes inför issue 0, och svaren står här eftersom de bär flera av besluten ovan.
 
-- kan domänens document root peka på `current/public`, eller måste den ligga i `public_html`?
-- går det att köra två separata siter med varsin databas inom kontot, för staging och produktion?
-- kan cron köras per site?
-- hur många siter ryms inom kontot? Tre behövs: `mimers.app`, `staging.mimers.app` och `files.mimers.app`. Frontenden delar origin med API:et enligt [[ADR-0020 Plattformsidentitet och frontendgräns]] och kräver därför ingen egen site.
-- utfärdas certifikat automatiskt för alla tre värdnamnen? `.app` är HSTS-preloadad, så ingen av dem går att nå över HTTP ens tillfälligt under uppsättningen.
+| Fråga | Svar |
+|---|---|
+| Kan document root peka på `current/public`? | **Ja.** `public_html` byttes mot en symlänk till `/home/s174280/mimers/current/public` och LiteSpeed följde den hela vägen genom `current` till releasen. Det är alltså symlänkbytet i [[Pipeline]] som utgör utrullningen, precis som beslutet förutsätter. |
+| Två siter med varsin databas inom kontot? | **Siter ja** — tretton domäner ligger redan uppe, och subdomäner läggs upp som egna kataloger direkt under `~/domains/`. **Databastaket är okänt**: kontot är cagefs-jailat, så DirectAdmins konfiguration går inte att läsa över SSH. Står i panelen. |
+| Cron per site? | **Nej, per konto.** En enda crontab. Det räcker — miljöerna får varsin rad med olika sökväg. |
+| Hur många siter ryms? | Minst tretton, eftersom så många redan är uppe. `mimers.app` är en av dem. Exakt tak står i panelen. |
+| Certifikat för alla tre värdnamnen? | **Utfärdas automatiskt.** `mimers.app` svarade över HTTPS direkt. `staging.mimers.app` och `files.mimers.app` finns ännu inte i DNS och måste läggas upp innan de kan svara alls — `.app` är HSTS-preloadad, så det finns ingen HTTP-fallback att felsöka mot. |
+| S3 hos inleed? | Besvarat redan 2026-08-04, se [[ADR-0007 Fillagring hos inleed]]. Ren disk. Bekräftat på plats: inga spår av objektlagring. |
+
+Uppsättningen på servern är gjord: `~/mimers` och `~/mimers-staging` med `incoming/`, `releases/` och `shared/storage/`, samt en minutcron per miljö. Kvar står `shared/.env` för varje miljö, som skapas för hand och bara på servern.
+
+### proc_open är avstängt, och det begränsar schemaläggaren
+
+Det tyngsta fyndet stod inte på frågelistan. `disable_functions` hos inleed täcker `exec`, `system`, `passthru`, `shell_exec`, `proc_open`, `proc_close` och `popen` — i både webb-SAPI och CLI, på samtliga PHP-versioner.
+
+Laravels scheduler kör `->command(...)`-uppgifter genom Symfony Process, som bygger på `proc_open`. **Sådana uppgifter kan inte köras här alls.** `->call(...)` och `->job(...)` blir däremot `CallbackEvent` och körs i schemaläggarens egen process, vilket fungerar. Samma skiljelinje gäller köerna: `queue:work` är en process som hämtar jobb och fungerar, medan `queue:listen` startar subprocesser och gör det inte.
+
+Det är en verklig inskränkning på outboxen i [[ADR-0010 Notisarkitektur]], inte en formalitet, och den kan inte kringgås på delad hosting. Utrullningen är däremot opåverkad: `config:cache`, `route:cache`, `view:cache`, `migrate`, `down` och `up` rör aldrig proc_open, så `deploy.sh` i [[Pipeline]] fungerar som skrivet.
 
 ## Alternativ
 

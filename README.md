@@ -19,7 +19,7 @@ Namnet syftar på Mimer i nordisk mytologi, som vaktar brunnen där visdomen fin
 
 ## Teknik
 
-PHP 8.3 + Laravel på delad hosting hos inleed, MariaDB 10.6, minutcron. Webbfrontenden byggs med Inertia och Vue i samma Laravel-app. API:et är produkten och innehåller aldrig användarvänd text, bara maskinläsbara felkoder.
+PHP 8.4 + Laravel på delad hosting hos inleed, MariaDB 10.6, minutcron. Webbfrontenden byggs med Inertia och Vue i samma Laravel-app. API:et är produkten och innehåller aldrig användarvänd text, bara maskinläsbara felkoder.
 
 Se [ADR-0001 Stack](docs/ADR/ADR-0001%20Stack.md), [ADR-0021 Frontendteknik](docs/ADR/ADR-0021%20Frontendteknik.md) och [ADR-0013 Språk och i18n](docs/ADR/ADR-0013%20Spr%C3%A5k%20och%20i18n.md).
 

@@ -66,17 +66,26 @@ Direkt anrop mot `/_protected/ab/cd/…` ger 403, eftersom `ORG_REQ_URI` då **�
 - **De tre kraven i [[Filer och lagring]] § Säkerhet vid leverans står kvar** — egen origin, `Content-Disposition: attachment`, behörighetskontroll före leverans. Dokumentationen visar att headern kan sättas i samma svar som omdirigeringen, så de krockar inte.
 - **Byte till S3 senare gör hela konstruktionen onödig.** Presignerade URL:er löser detta ur lådan. Ännu ett skäl att hålla Storage-abstraktionen ren, se [[ADR-0007 Fillagring hos inleed]].
 
-## Kvar att verifiera
+## Verifierat på servern
 
-**Följer LiteSpeed symlänkar från webbroten?** Kräver `Options +FollowSymLinks`, eller `SymLinksIfOwnerMatch` med rätt ägarskap. Testas på staging så snart miljön finns — lägg en känd fil i `shared/storage/files/` och begär den via en route som sätter headern.
+**Följer LiteSpeed symlänkar från webbroten?** **Ja.** Testat 2026-08-23 mot `mimers.app` med en attrapprelease: en symlänk under webbroten ut i `~/mimers/shared/storage/files/` levererade filen med 200. Ingen `Options +FollowSymLinks` behövde sättas. `shared/`-layouten i [[Pipeline]] och rsync-mönstret i [[ADR-0015 Backup]] står därmed fast, och fallbacken nedan behövs inte.
 
-Blir svaret nej måste bytena bo direkt under `public_html`. Beslutet ovan gäller fortfarande, men `shared/`-layouten i [[Pipeline]] och rsync-mönstret i [[ADR-0015 Backup]] behöver då ses över, och den här ADR:en ersättas av en ny.
+**Håller `ORG_REQ_URI`-regeln?** **Ja.** Samma test:
+
+- direkt anrop mot `/_protected/ab/cd/testfil.txt` gav **403**
+- anrop mot en route som satte `X-LiteSpeed-Location: /_protected/ab/cd/testfil.txt` gav **200** med filens innehåll, `Content-Disposition` bevarad från PHP-svaret och `Content-Length` satt av LiteSpeed
+
+Hela mekanismen fungerar alltså end-to-end, med attrappkod och utan hjälp från leverantören. Testrestarna är borttagna; det som står kvar på servern är katalogträden och cronraderna.
+
+**En detalj som kostar en bugg om den glöms:** LiteSpeed sätter **inte** `Content-Type` efter filens innehåll vid intern omdirigering. I testet följde PHP:s standard `text/html; charset=UTF-8` med hela vägen ut, trots att filen var ren text. Appen måste därför sätta `Content-Type` explicit i samma svar som headern. `Content-Disposition: attachment` gör att felet inte blir en säkerhetsbrist, men utan explicit typ får varje nedladdad fil fel typ.
+
+Kvar att verifiera står bara det som kräver en riktig miljö: att `deploy.sh` faktiskt sätter symlänken och `.htaccess` på filsubdomänen vid utrullning. Testet i issue 19 måste därför köras mot en utrullad miljö, inte mot en handbyggd katalog.
 
 ## Alternativ
 
 **Hashen som sökväg utan rewrite-skydd.** LiteSpeeds egen förstahandsrekommendation. Valdes bort — hashen är härledbar och åtkomstkontrollen hade varit verkningslös.
 
-**Engångslänk: slumpat namn under webbroten, 302 dit, cron som städar.** I praktiken en presignerad URL byggd av det som finns. Fungerar, men kräver en katalog med löpande skräp, ett cronjobb till, och ett fönster där länken är giltig för den som fått den. Valdes bort eftersom `ORG_REQ_URI` löser samma problem utan rörliga delar. **Kvarstår som fallback** om symlänkar visar sig omöjliga och bytena inte kan ligga i webbroten.
+**Engångslänk: slumpat namn under webbroten, 302 dit, cron som städar.** I praktiken en presignerad URL byggd av det som finns. Fungerar, men kräver en katalog med löpande skräp, ett cronjobb till, och ett fönster där länken är giltig för den som fått den. Valdes bort eftersom `ORG_REQ_URI` löser samma problem utan rörliga delar. Står kvar här som spår, men behövs inte: symlänkarna verifierades 2026-08-23, se ovan.
 
 **Strömmande PHP-respons.** En process per pågående nedladdning, ur en pool som delas med all annan trafik. Sista utväg, och då med en låg storleksgräns per fil.
 

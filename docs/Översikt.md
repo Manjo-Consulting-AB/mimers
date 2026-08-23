@@ -24,7 +24,7 @@ Priser och gränser: [[Planer och kvoter]] och [[ADR-0014 Prismodell]].
 
 ## Teknik
 
-PHP 8.3 + Laravel på inleed.net. MariaDB 10.6, cron varje minut, filer på inleeds lagring i Sverige och Frankrike. Se [[ADR-0001 Stack]] och [[ADR-0007 Fillagring hos inleed]].
+PHP 8.4 + Laravel på inleed.net. MariaDB 10.6, cron varje minut, filer på inleeds lagring i Sverige och Frankrike. Se [[ADR-0001 Stack]] och [[ADR-0007 Fillagring hos inleed]].
 
 API:et är produkten. Frontenden ligger på samma origin, `mimers.app`, och samma API är det mobilapparna kopplar på när de byggs — se [[ADR-0020 Plattformsidentitet och frontendgräns]]. Därför får API:et aldrig innehålla användarvänd text, bara maskinläsbara felkoder. Se [[ADR-0013 Språk och i18n]].
 
@@ -57,6 +57,5 @@ Webben byggs med Inertia och Vue i samma Laravel-app och konsumerar alltså inte
 
 ## Öppna frågor
 
-- Erbjuder inleed S3-kompatibel objektlagring, eller är det ren disk? Avgör om presignerade URL:er är möjliga. Se [[ADR-0007 Fillagring hos inleed]].
 - Exakt prispunkt inom 39–49 €/år.
 - B2B-priser är resonerade uppskattningar, inte marknadsdata.
