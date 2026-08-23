@@ -17,9 +17,9 @@ Repot är `Manjo-Consulting-AB/mimers`. Branch protection på `main`, `AGENTS.md
 
 **Gjort 2026-08-23:** dokumentationen ligger under `docs/`, `AGENTS.md`, PR-mallen, de tre workflow-filerna och `deploy/deploy.sh` finns i repot. På servern: katalogträden `~/mimers` och `~/mimers-staging`, document root ompekad via symlänk, minutcron per miljö. Frågelistan i [[ADR-0018 Utvecklingsprocess och deploy]] § Verifierat hos inleed är alltså avklarad.
 
-**Gjort senare samma dag:** miljöerna `staging` och `production` i GitHub med fem av sex `DEPLOY_*`-secrets, `shared/.env` per miljö på servern, och en verifierad databas per miljö. DNS och sites för `staging.mimers.app` och `files.mimers.app` finns.
+**Gjort senare samma dag:** miljöerna `staging` och `production` i GitHub med samtliga sex `DEPLOY_*`-secrets och egen deploynyckel per miljö. På servern: `shared/.env` per miljö, en verifierad databas per miljö satt till `utf8mb4_unicode_ci`, webbrot ompekad även för staging, och sajter för `files.mimers.app` och `files.staging.mimers.app`.
 
-**Återstår:** `DEPLOY_KEY` per miljö, symlänk för `staging.mimers.app/public_html`, en filsubdomän för staging, och själva genomlöpet med en tom Laravel. Branch protection och required reviewer **går inte att slå på** — kontoplanen tillåter det inte, se [[Pipeline]] § Kontoplanen tar bort tre av spärrarna. Det är ett öppet beslut, inte en punkt att bocka av.
+**Återstår:** själva genomlöpet med en tom Laravel — det är det som avgör "Klart när" nedan. Branch protection och required reviewer **går inte att slå på** på nuvarande kontoplan, se [[Pipeline]] § Kontoplanen tar bort tre av spärrarna. Det är ett öppet beslut, inte en punkt att bocka av.
 **Läs:** [[Pipeline]], [[ADR-0018 Utvecklingsprocess och deploy]]
 **Klart när:** en tom Laravel har gått hela vägen — grön PR, automatisk deploy till staging, release `v0.0.1` till produktion efter godkännande — och en rollback har provats genom att flippa symlänken tillbaka.
 
@@ -139,7 +139,7 @@ Leveransmetoden är beslutad i [[ADR-0019 Filleverans]]: intern omdirigering med
 
 Mekanismen är **redan verifierad på servern** 2026-08-23 med attrappkod: LiteSpeed följer symlänkar från webbroten, direkt anrop mot `/_protected/` ger 403, och `X-LiteSpeed-Location` levererar filen med 200. Du behöver alltså inte utreda om den fungerar — du ska bygga den.
 
-**Två fällor som verifieringen avslöjade.** LiteSpeed sätter inte `Content-Type` efter filens innehåll vid intern omdirigering; PHP:s standard följer med hela vägen ut. Sätt typen explicit i samma svar som headern. Och staging saknar ännu en egen filsubdomän — den måste finnas innan testen nedan går att köra mot en utrullad miljö.
+**Två fällor som verifieringen avslöjade.** LiteSpeed sätter inte `Content-Type` efter filens innehåll vid intern omdirigering; PHP:s standard följer med hela vägen ut. Sätt typen explicit i samma svar som headern. Och `deploy.sh` känner ännu inte till filsubdomänens webbrot — den måste få den som indata, en per miljö: `~/domains/files.mimers.app/public_html` i produktion, `~/domains/files.staging.mimers.app/public_html` på staging. Båda sajterna finns.
 
 Därefter: egen origin för användarfiler, `Content-Disposition: attachment` som standard, behörighetskontroll före leverans. Symlänken och `.htaccess` läggs på plats av `deploy.sh`, inte för hand.
 **Läs:** [[ADR-0019 Filleverans]], [[Filer och lagring]] § Säkerhet vid leverans, [[ADR-0007 Fillagring hos inleed]]

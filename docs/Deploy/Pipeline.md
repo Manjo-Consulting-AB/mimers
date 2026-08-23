@@ -416,29 +416,27 @@ Först när alla sex punkterna stämmer börjar issue 1.
 
 ## Läget på GitHub och hos inleed
 
-Serverupplägget är gjort. Statusen nedan är avstämd 2026-08-23.
+Avstämt 2026-08-23. Allt som går att förbereda innan det finns kod är gjort.
 
 **Klart i repots inställningar**
 
-- miljöerna `staging` och `production` finns
-- fem av sex secrets satta i båda: `DEPLOY_HOST`, `DEPLOY_PORT`, `DEPLOY_USER`, `DEPLOY_PATH`, `DEPLOY_KNOWN_HOSTS`. Värdnyckelns tre fingeravtryck stämde mot dem som redan låg betrodda sedan tidigare uppkopplingar.
-
-**Saknas i repots inställningar**
-
-- `DEPLOY_KEY` i båda miljöerna. Kräver ett nyckelpar per miljö vars publika halva läggs i `~/.ssh/authorized_keys` hos inleed.
-- branch protection och required reviewer, som kontoplanen inte tillåter — se avsnittet ovan.
-- required status check `CI / test` slås på först när issue 1 är inne, om branch protection blir möjlig. Dessförinnan är CI nödvändigtvis röd, eftersom det inte finns någon `composer.json` att installera.
+- miljöerna `staging` och `production` finns, med alla sex `DEPLOY_*`-secrets i båda
+- egen deploynyckel per miljö, ed25519, utan lösenfras. Båda verifierade genom en faktisk inloggning innan de sattes som secret. Privatnycklarna finns bara som GitHub-secrets — de går inte att läsa tillbaka, och behövs en ny genereras den om.
+- `DEPLOY_KNOWN_HOSTS` innehåller serverns tre värdnycklar, med fingeravtrycken jämförda mot en uppkoppling som redan var betrodd
 
 **Klart hos inleed**
 
-- `staging.mimers.app` och `files.mimers.app` finns som sites med DNS
-- `shared/.env` i båda miljöerna, `chmod 600`, med egen genererad `APP_KEY`. De skapades på servern och finns ingen annanstans.
-- en databas per miljö — `s174280_mimers` och `s174280_mimers-staging` — båda verifierade med PDO från servern: MariaDB 10.6.27, tomma, med rättigheter att skapa och ta bort tabeller. Kontot hade inget databastak i vägen.
+- sajter och DNS för alla tre värdnamn: `staging.mimers.app`, `files.mimers.app` och `files.staging.mimers.app`. Filsubdomänen per miljö behövs för att [[ADR-0019 Filleverans]] ska gå att testa mot en utrullad staging och inte mot produktionens filer.
+- webbroten för både `mimers.app` och `staging.mimers.app` är symlänkar till respektive `current/public`. Filsubdomänerna behåller sina riktiga kataloger — de pekas aldrig om, de får bara `_protected`-symlänken.
+- `shared/.env` i båda miljöerna, `chmod 600`, med egen genererad `APP_KEY`. De finns bara på servern.
+- en databas per miljö — `s174280_mimers` och `s174280_mimers-staging` — verifierade från servern: MariaDB 10.6.27, tomma, med rättigheter att skapa och ta bort tabeller. Kontot hade inget databastak i vägen.
+- båda baserna ändrade från `latin1_swedish_ci` till `utf8mb4` / `utf8mb4_unicode_ci`, medan de var tomma. Laravel sätter teckenuppsättning per anslutning och per tabell ändå, men nu kan ingenting ärva fel standard.
+- minutcron per miljö, med absolut sökväg till `/usr/local/bin/php`
 
-**Saknas hos inleed**
+**Saknas**
 
-- **`staging.mimers.app/public_html` är fortfarande en riktig katalog.** Den ska bytas mot en symlänk till `~/mimers-staging/current/public`, precis som produktionen redan har. Utan det rullar staging ut utan att synas.
-- **Filsubdomän för staging.** `files.mimers.app` pekar mot produktionen. Issue 19 ska testas mot en **utrullad** staging, och det kräver en egen origin för användarfiler där.
-- **Databasernas standardteckenuppsättning är `latin1_swedish_ci`**, inte `utf8mb4`. Laravel sätter teckenuppsättning per anslutning och per tabell, så migrationerna blir rätt ändå — men en `ALTER DATABASE ... CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` på varje bas tar bort risken att något senare skapas utan explicit uppsättning. Båda baserna är tomma, så det kostar ingenting nu och är obehagligt senare.
-- **`~/.ssh/claude_rsa` ligger kvar på servern.** En privat nyckel hör inte hemma på maskinen den ger åtkomst till.
-- städa bort `~/domains/mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` när första riktiga utrullningen har gått igenom
+- **branch protection och required reviewer.** Går inte att slå på — se § Kontoplanen tar bort tre av spärrarna. Det är ett öppet beslut, inte en punkt att bocka av.
+- **själva genomlöpet.** Kedjan är obeprövad tills en tom Laravel gått hela vägen; se § Vad issue 0 ska bevisa.
+- städa bort `~/domains/mimers.app/public_html.orig-placeholder`, `~/domains/staging.mimers.app/public_html.orig-placeholder` och attrappreleasen `~/mimers/releases/0000-00-00-attrapp` när första riktiga utrullningen har gått igenom
+
+**En sak att ta ställning till.** En privat nyckel, `claude_rsa`, låg kvar i serverns `~/.ssh/`. Dess publika halva står i `authorized_keys` och ger alltså inloggning till kontot. Nyckeln är hämtad hem till Tonys maskin och borttagen från servern, men den ska betraktas som **röjd** så länge raden står kvar: en privat nyckel som legat på maskinen den låser upp har inte längre något bevisvärde. Raden bör bytas mot ett nytt nyckelpar. Den tas inte bort på egen hand, eftersom den kan vara den enda vägen in från någon annan maskin.

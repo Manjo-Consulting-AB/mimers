@@ -59,7 +59,7 @@ Direkt anrop mot `/_protected/ab/cd/…` ger 403, eftersom `ORG_REQ_URI` då **�
 
 ## Konsekvenser
 
-- **Filsubdomänen behöver en egen site hos inleed** med egen document root. Läggs till miljöfrågorna i [[ADR-0018 Utvecklingsprocess och deploy]].
+- **Filsubdomänen behöver en egen site hos inleed** med egen document root — och **en per miljö**, annars testas staging mot produktionens filer. `files.mimers.app` och `files.staging.mimers.app` finns sedan 2026-08-23. Till skillnad från applikationens webbrot pekas de inte om till releasekatalogen: de behåller en riktig `public_html` och får bara `_protected`-symlänken.
 - **`deploy.sh` sätter symlänken och lägger `.htaccess` på plats** som en del av utrullningen. Görs det för hand slutar skyddet fungera vid nästa deploy — och det märks inte, eftersom filerna fortfarande levereras. Testet i issue 19 måste därför köras mot en utrullad miljö, inte mot en handbyggd katalog.
 - **Regeln har en tyst felmod.** Försvinner `.htaccess` fungerar nedladdningarna precis som förut, men katalogen är öppen. Lägg ett test som anropar `/_protected/` direkt och kräver 403.
 - **Miniatyrerna omfattas av samma skydd.** De visar innehållet och läcker lika mycket som originalet.
