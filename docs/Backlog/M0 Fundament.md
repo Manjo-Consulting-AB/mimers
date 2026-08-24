@@ -59,7 +59,7 @@ Engångstoken, kortlivad, lagrad som hash, bunden till e-postadressen. `password
 
 Delad i tre 2026-08-24. Aktivering, inloggningskravet och återställningskoderna är tre skilda funktioner med varsin tabell- eller kolumnyta och varsina tester; buntade blir de en issue i samma storleksklass som issue 4, som visade sig vara för stor. Ingenting utanför 6 beror på 6, så delningen bryter inga beroenden.
 
-**Ett TOTP-bibliotek krävs och är inte godkänt än.** Laravel har ingen inbyggd TOTP-implementation. Beslutet hör hemma i en ADR och tas av Tony innan 6a börjar — se AGENTS.md § Nya beroenden.
+**TOTP-biblioteket är valt:** `pragmarx/google2fa`, se [[ADR-0023 TOTP-bibliotek]]. Ingen QR-generering på servern — applikationen exponerar en `otpauth://`-URI och klienten renderar koden.
 
 #### 6a. TOTP-hemlighet: aktivering och verifiering
 Generera hemlighet, lagra krypterad i `user.totp_secret`, exponera `otpauth://`-URI för app-inläsning, bekräfta med en kod från appen som sätter `totp_confirmed_at`, och stäng av igen. Kolumnerna finns sedan issue 3.

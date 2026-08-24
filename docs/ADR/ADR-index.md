@@ -1,6 +1,6 @@
 # ADR-index
 
-Tjugotvå beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Tjugotre beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -28,6 +28,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0020 Plattformsidentitet och frontendgräns]] | Mimers på `mimers.app`, frontend och API på samma origin, API för mobilappar | [[Konton och åtkomst]], Drift |
 | [[ADR-0021 Frontendteknik]] | Inertia med Vue i Laravel-appen, sessionsguard för webben | [[Backlog]], [[Pipeline]] |
 | [[ADR-0022 Testramverk och statisk analys]] | Pest 5 och Larastan nivå 5, globala hjälpfunktioner i test | [[Backlog]], [[Pipeline]] |
+| [[ADR-0023 TOTP-bibliotek]] | `pragmarx/google2fa`, inte Fortify, ingen QR på servern | [[Konton och åtkomst]] |
 
 ## Om att ändra ett beslut
 
