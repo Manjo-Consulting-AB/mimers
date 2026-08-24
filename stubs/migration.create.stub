@@ -1,0 +1,47 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('{{ table }}', function (Blueprint $table) {
+            // Löpnummer som primärnyckel. Läcker aldrig ut i API:et.
+            $table->id();
+
+            // Identifieraren utåt. Sätts av App\Models\Concerns\HasUlid,
+            // inte av migrationen. Ta bort raden om tabellen aldrig syns i API:et.
+            $table->char('ulid', 26)->unique();
+
+            $table->timestamps();
+
+            // Soft delete på allt användarskapat innehåll — se ADR-0008.
+            // Ta bort raden (och ur indexet nedan) om tabellen inte är det.
+            $table->softDeletes();
+
+            // Alla index som används för listning måste inkludera deleted_at.
+            // Byt ut kolumnen mot den som listningen faktiskt filtrerar/sorterar på.
+            $table->index(['deleted_at', 'created_at']);
+
+            // Övriga konventioner (se AGENTS.md § Databaskonventioner):
+            // - Främmande nycklar: alltid deklarerade, ->onDelete('restrict') som standard.
+            // - Pengar: $table->bigInteger(...) i minsta valutaenhet + $table->char('currency', 3).
+            // - Byte: $table->unsignedBigInteger(...), aldrig ->integer().
+            // - Uppräkningar: $table->string(...) + CHECK-villkor, aldrig ->enum(...).
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('{{ table }}');
+    }
+};
