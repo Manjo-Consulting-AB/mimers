@@ -77,7 +77,26 @@ Varje felsvar har en stabil kod plus tillräckligt med data för att klienten sk
 }
 ```
 
-Formatet fastställs i sin slutliga form i issue 7 och gäller därefter hela API-ytan. Uppfinn inte ett eget under tiden.
+**Formatet är fastställt i issue 7 och gäller hela API-ytan.** Det som står nedan är kontraktet — bygg inte något eget bredvid det.
+
+- **`code` är alltid en punktseparerad, stabil sträng.** Domän först, sedan vad som hände: `auth.invalid_credentials`, `quota.storage_exceeded`. Inte `error.login_failed_try_again`.
+- **`data` finns alltid**, även tom — och tom `data` serialiseras som `{}`, aldrig `[]`, så klienten slipper hantera två typer.
+- **Ingen `message`-nyckel.** Inte ens som bekvämlighet: finns den börjar klienter läsa den, och då är i18n tillbaka i fel lager.
+- **Statuskoderna är de vanliga.** 422 validering, 401 oautentiserad, 403 nekad, 404 saknas, 405 fel metod, 429 för många försök. Höljet ändrar kroppen, inte statusen.
+- **Översätt inte.** Ingen `__()` i felsvar, ingen `lang/`-fil för dem.
+
+**Valideringsfel bär en kod per fält**, med regelparametrarna i fältets egen `data` — annars kan klienten inte markera rätt fält eller formulera meningen:
+
+```json
+{ "error": { "code": "validation.failed", "data": { "fields": {
+  "email": [{ "code": "validation.email", "data": {} }],
+  "password": [{ "code": "validation.min", "data": { "min": 8 } }]
+} } } }
+```
+
+**Höljet gäller `/api`, inte webbsidorna.** Webben kör Inertia och behåller Laravels vanliga valideringsfel — Inertia-adapterns formulärhantering bygger på dem. Se [ADR-0020](docs/ADR/ADR-0020%20Plattformsidentitet%20och%20frontendgr%C3%A4ns.md) § Konsekvenser.
+
+Implementationen ligger i `bootstrap/app.php` (`withExceptions`), `App\Support\Api\ApiError` och `App\Support\Api\ValidationErrorMapper`. Ett oväntat undantag ger `server.error` utan undantagstext i produktion, men renderar Laravels vanliga felsida när `app.debug` är på — annars går varje API-bugg inte att felsöka.
 
 Serverrenderat innehåll — mejl, ICS, PDF — väljer språk från mottagarens `locale`, inte från requestens `Accept-Language`.
 
