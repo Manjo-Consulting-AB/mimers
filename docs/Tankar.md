@@ -6,7 +6,7 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 ## Öppet
 
-Inget just nu. Nya frågor läggs till här.
+- **Testsviten kör mot sqlite i minnet, produktionen mot MariaDB 10.6.** Grön CI bevisar därför inte att schemat fungerar på servern. Skillnaderna som kan bita: `CHAR(26)` med längdkontroll, CHECK-villkor för uppräkningar, främmande nycklar med `RESTRICT` (sqlite kräver att de slås på per anslutning), och `utf8mb4_unicode_ci` som sqlite inte har någon motsvarighet till. Frågan är om CI ska köra sviten mot en MariaDB-tjänst istället för, eller vid sidan av, sqlite — och vad det kostar i körtid per PR. Restes i issue 2 när de första migrationerna kom in.
 
 ## Avgjort och flyttat
 
