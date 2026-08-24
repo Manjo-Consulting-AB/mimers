@@ -25,17 +25,19 @@ return Application::configure(basePath: dirname(__DIR__))
             UpdateLastActiveAt::class,
         ]);
 
-        // Issue 4: appen körs bakom LiteSpeed hos inleed, så absoluta
-        // URL:er (verifieringslänkar, magic links senare) blir bara
-        // korrekta om Laravel litar på X-Forwarded-*-headrarna från
-        // proxyn framför den, se [[ADR-0020 Plattformsidentitet och
-        // frontendgräns]] § Konsekvenser. `at: '*'` litar på proxyn
-        // oavsett IP — den exakta adressen står inte i läslistan (se
-        // PR:ens "Frågor och antaganden"), och eftersom LiteSpeed sitter
-        // lokalt framför PHP på samma server, inte bakom ett publikt
-        // proxyfleet, är det den konservativa tolkningen av "sätt upp
-        // TrustProxies" snarare än att gissa en specifik IP.
-        $middleware->trustProxies(at: '*');
+        // Issue 4: appen körs bakom LiteSpeed hos inleed, se
+        // [[ADR-0020 Plattformsidentitet och frontendgräns]] §
+        // Konsekvenser. LiteSpeed sitter lokalt på samma maskin som PHP,
+        // så en betrodd proxy kommer alltid från loopbacken — REMOTE_ADDR
+        // för ett inkommande anrop är annars den riktiga klienten, inte
+        // proxyn. Omfånget hålls därför snävt till loopbacken:
+        // `at: '*'` skulle låta VILKEN klient som helst sätta
+        // X-Forwarded-Host/-Proto och styra vilka absoluta URL:er appen
+        // genererar — inklusive signerade länkar (verifiering här,
+        // magic link i issue 5) vars token och signatur då pekar mot en
+        // domän klienten själv valde. Se tests/Feature/Auth/TrustProxiesTest.php,
+        // som bevisar att en obetrodd avsändares X-Forwarded-* ignoreras.
+        $middleware->trustProxies(at: ['127.0.0.1', '::1']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

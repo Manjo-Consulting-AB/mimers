@@ -5,7 +5,6 @@ namespace App\Actions\Auth;
 use App\Models\Account;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 /**
  * Registrering skapar alltid ett konto, inte bara en användare — se
@@ -34,13 +33,16 @@ class CreatesUserWithPersonalAccount
             ]);
 
             // account.name, locale, timezone och unit_system samlas inte in vid
-            // registrering (formuläret tar bara e-post och lösenord). Vilka
-            // defaultvärden ett nyskapat personkonto ska få står inte i
-            // läslistan — se PR:ens "Frågor och antaganden" för det
-            // antagande som görs här.
+            // registrering (formuläret tar bara e-post och lösenord).
+            // `name` sätts till hela e-postadressen — den är entydig och
+            // låtsas inte vara ett valt namn, till skillnad från att hitta
+            // på ett genom att klippa av delen före '@'. Användaren döper
+            // om kontot när kontovyerna byggs i M10. locale/timezone/
+            // unit_system är dokumenterade defaultvärden för ett
+            // nyregistrerat personkonto, se granskningen av #17.
             $account = Account::query()->create([
                 'type' => 'personal',
-                'name' => Str::before($email, '@'),
+                'name' => $email,
                 'locale' => 'sv_SE',
                 'timezone' => 'Europe/Stockholm',
                 'unit_system' => 'metric',

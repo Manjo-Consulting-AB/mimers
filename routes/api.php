@@ -3,12 +3,7 @@
 use App\Http\Controllers\Api\Auth\AuthenticatedTokenController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
-
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
 
 /*
  * Issue 4 · Autentisering med lösenord. Personal access tokens för

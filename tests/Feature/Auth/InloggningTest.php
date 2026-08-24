@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use function Pest\Laravel\assertAuthenticatedAs;
@@ -67,7 +68,14 @@ it('avvisar webbinloggning mot en användare utan lösenord — 422, ingen krasc
     assertGuest();
 });
 
-it('utfärdar en personal access token vid API-inloggning med rätt uppgifter', function () {
+it('utfärdar en personal access token vid API-inloggning med rätt uppgifter, och token autentiserar mot auth:sanctum', function () {
+    // Ingen egen "vem är jag"-endpoint hör till den här issuen (se
+    // granskningen av #17 — install:api:s scaffold-rutt GET /api/user är
+    // borttagen). Testrutten här bevisar bara att den utfärdade token
+    // faktiskt autentiserar mot auth:sanctum, samma mönster som
+    // SenasteAktivitetTest.php använder för api-gruppen.
+    Route::middleware('auth:sanctum')->get('/_test/vem-ar-jag', fn (Request $request) => $request->user());
+
     $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
 
     $response = postJson('/api/login', [
@@ -80,7 +88,7 @@ it('utfärdar en personal access token vid API-inloggning med rätt uppgifter', 
 
     $token = $response->json('token');
 
-    getJson('/api/user', ['Authorization' => "Bearer {$token}"])
+    getJson('/_test/vem-ar-jag', ['Authorization' => "Bearer {$token}"])
         ->assertOk()
         ->assertJsonFragment(['email' => $user->email]);
 });

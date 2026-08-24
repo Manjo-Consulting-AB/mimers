@@ -37,6 +37,10 @@ it('skapar en användare med ett eget personkonto som ägare vid webbregistrerin
 
     $account = $user->accounts()->firstOrFail();
     expect($account->type)->toBe('personal');
+    // Kontonamnet är hela e-postadressen, inte en gissad del av den — se
+    // granskningen av #17. Entydigt, ljuger inte om att vara ett valt
+    // namn; användaren döper om kontot när kontovyerna byggs i M10.
+    expect($account->name)->toBe('ny@example.com');
 
     $roll = DB::table('account_user')
         ->where('account_id', $account->id)
