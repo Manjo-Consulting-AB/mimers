@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\MagicLinkLoginController;
 use App\Http\Controllers\Auth\MagicLinkRequestController;
+use App\Http\Controllers\Auth\RecoveryCodeController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
@@ -79,4 +80,13 @@ Route::middleware('auth')->group(function () {
 
     Route::delete('/totp', [TotpController::class, 'destroy'])
         ->name('totp.destroy');
+
+    /*
+     * Issue 6c · Återställningskoder. Se
+     * App\Http\Controllers\Auth\RecoveryCodeController och
+     * App\Support\Auth\RecoveryCodeBroker. Ingen egen bekräftelsekod krävs
+     * — se RecoveryCodeBroker § Beslut 4.
+     */
+    Route::post('/totp/recovery-codes', [RecoveryCodeController::class, 'store'])
+        ->name('totp.recovery-codes.store');
 });
