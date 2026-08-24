@@ -21,6 +21,8 @@ Beslut bakom detta: [[ADR-0002 Konto äger container]], [[ADR-0003 Åtkomstmodel
 | read_only_reason | VARCHAR(40) NULL | `payment_failed`, `over_quota`, `inactivity` |
 | created_at, updated_at | | |
 
+**Vid registrering** skapas kontot av den som registrerar sig: `type` blir `personal`, `status` blir `active`, och `name` sätts till användarens e-postadress — hela adressen, inte en gissad namndel. Kontot döps om i kontovyerna. Registreringsformuläret samlar bara in e-post och lösenord, så resten får defaultvärden: `locale` `sv_SE`, `timezone` `Europe/Stockholm`, `unit_system` `metric`. Kontot får samtidigt en `account_user`-rad med `role` `owner` — utan den äger den nya användaren ingenting, se [[ADR-0002 Konto äger container]].
+
 ## user
 
 En person. Tillhör ett konto via `account_user` — modellerat som många-till-många eftersom en varvsanställd i förlängningen kan finnas i flera organisationer.
