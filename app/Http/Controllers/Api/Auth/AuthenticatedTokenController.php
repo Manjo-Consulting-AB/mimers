@@ -6,6 +6,8 @@ use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Support\Auth\LoginRateLimiter;
+use App\Support\Auth\TotpInvalidException;
+use App\Support\Auth\TotpRequiredException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -17,6 +19,15 @@ use Illuminate\Validation\ValidationException;
  * sessionsinloggning, se App\Http\Controllers\Auth\AuthenticatedSessionController
  * — samma ogiltiga indata avvisas likadant på båda ytorna, se
  * tests/Feature/Auth/DeladValideringTest.php.
+ *
+ * Issue 6b · TOTP vid inloggning, § Beslut som redan är fattade punkt 5:
+ * `auth.totp_required` (kod saknas) och `auth.totp_invalid` (fel kod
+ * eller en redan förbrukad tidslucka) är egna, toppnivåkodade
+ * felkategorier — precis som `auth.invalid_credentials` nedan, och av
+ * samma skäl: LoginRequest::authenticate() kastar egna undantag
+ * (App\Support\Auth\TotpRequiredException, TotpInvalidException) i
+ * stället för ValidationException just för att de INTE ska falla igenom
+ * till bootstrap/app.php:s generella `validation.failed`-mappning.
  */
 class AuthenticatedTokenController extends Controller
 {
@@ -37,6 +48,10 @@ class AuthenticatedTokenController extends Controller
             $user = $request->authenticate();
         } catch (ValidationException) {
             throw ApiException::make('auth.invalid_credentials');
+        } catch (TotpRequiredException) {
+            throw ApiException::make('auth.totp_required');
+        } catch (TotpInvalidException) {
+            throw ApiException::make('auth.totp_invalid');
         }
 
         // Uppföljning till issue 7: en lyckad inloggning rensar

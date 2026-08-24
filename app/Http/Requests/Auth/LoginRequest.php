@@ -3,6 +3,9 @@
 namespace App\Http\Requests\Auth;
 
 use App\Models\User;
+use App\Support\Auth\TotpBroker;
+use App\Support\Auth\TotpInvalidException;
+use App\Support\Auth\TotpRequiredException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -13,6 +16,9 @@ use Illuminate\Validation\ValidationException;
  * samma `authenticate()`-metod används av båda ytorna, så att ogiltig
  * e-post/lösenord, saknade fält och fel uppgifter avvisas likadant oavsett
  * yta.
+ *
+ * Issue 6b · TOTP vid inloggning lade till det valfria fältet `code` och
+ * TOTP-kontrollen i `authenticate()` nedan — se den metodens docblock.
  */
 class LoginRequest extends FormRequest
 {
@@ -29,6 +35,12 @@ class LoginRequest extends FormRequest
         return [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            // Issue 6b: `code` är bara obligatoriskt för konton med
+            // bekräftad TOTP, vilket inte går att uttrycka statiskt här
+            // (kräver ett DB-uppslag på e-posten) — se authenticate()
+            // nedan, som gör den kontrollen efter att lösenordet redan
+            // är verifierat.
+            'code' => ['sometimes', 'string'],
         ];
     }
 
@@ -44,7 +56,25 @@ class LoginRequest extends FormRequest
      * [[Konton och åtkomst]] § user) avvisas här som fel uppgifter —
      * Hash::check() mot NULL returnerar false i stället för att krascha.
      *
+     * Issue 6b · TOTP vid inloggning, Beslut som redan är fattade punkt 1
+     * och 2: EFTER att lösenordet är kontrollerat (aldrig före — fel
+     * lösenord ska aldrig avslöja om kontot har tvåfaktor påslagen)
+     * kontrolleras om kontot har en BEKRÄFTAD TOTP (`totp_confirmed_at`
+     * satt). En hemlighet utan bekräftelse (halvfärdig aktivering, se
+     * App\Support\Auth\TotpBroker::generate()) kräver ingen kod — annars
+     * skulle en avbruten aktivering låsa ute användaren. Saknas koden
+     * kastas TotpRequiredException; är den fel eller en redan förbrukad
+     * tidslucka kastas TotpInvalidException från
+     * App\Support\Auth\TotpBroker::verifyLoginCode() — se den metodens
+     * docblock för repris-skyddet. Båda ytornas kontroller
+     * (App\Http\Controllers\Auth\AuthenticatedSessionController,
+     * App\Http\Controllers\Api\Auth\AuthenticatedTokenController) fångar
+     * de här två undantagen och översätter dem till sitt eget format,
+     * samma mönster som ValidationException nedan redan följer.
+     *
      * @throws ValidationException
+     * @throws TotpRequiredException
+     * @throws TotpInvalidException
      */
     public function authenticate(): User
     {
@@ -57,6 +87,20 @@ class LoginRequest extends FormRequest
         // validate() ovan bevisade redan att kontot finns och lösenordet
         // stämmer — frågan här hämtar bara modellinstansen, den upprepar
         // ingen behörighetskontroll.
-        return User::query()->where('email', $this->string('email'))->firstOrFail();
+        $user = User::query()->where('email', $this->string('email'))->firstOrFail();
+
+        if ($user->totp_confirmed_at !== null) {
+            $code = $this->string('code')->toString();
+
+            if ($code === '') {
+                throw new TotpRequiredException;
+            }
+
+            // Kastar TotpInvalidException vid fel kod ELLER en redan
+            // förbrukad tidslucka.
+            TotpBroker::verifyLoginCode($user, $code);
+        }
+
+        return $user;
     }
 }
