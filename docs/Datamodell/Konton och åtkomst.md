@@ -33,7 +33,7 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | email | VARCHAR(255) UNIQUE | |
 | email_verified_at | TIMESTAMP NULL | Krävs innan användaren kan ta emot delning |
 | password_hash | VARCHAR(255) NULL | NULL om användaren bara använder magic link |
-| totp_secret | VARBINARY(255) NULL | Krypterad |
+| totp_secret | VARBINARY(512) NULL | Krypterad. Bredden är inte godtycklig: Laravels `encrypted`-cast lägger IV, MAC, JSON och base64 runt klartexten, så en hemlighet på 32 tecken blir 256 byte. 255 räckte inte. Se [[ADR-0023 TOTP-bibliotek]] |
 | totp_confirmed_at | TIMESTAMP NULL | |
 | locale, timezone, unit_system | | Åsidosätter kontots värden för den här personen |
 | quiet_hours_start, quiet_hours_end | TIME NULL | Se [[Notiser]] |
