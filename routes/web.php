@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\MagicLinkLoginController;
 use App\Http\Controllers\Auth\MagicLinkRequestController;
 use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -63,4 +64,19 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/email/verification-notification', EmailVerificationNotificationController::class)
         ->name('verification.send');
+
+    /*
+     * Issue #19 · TOTP-hemlighet: aktivering och verifiering. Se
+     * App\Http\Controllers\Auth\TotpController och
+     * App\Support\Auth\TotpBroker. Inloggningskravet (en bekräftad TOTP
+     * måste anges vid inloggning) är issue 6b (#31) och rörs inte här.
+     */
+    Route::post('/totp', [TotpController::class, 'store'])
+        ->name('totp.setup');
+
+    Route::post('/totp/confirm', [TotpController::class, 'confirm'])
+        ->name('totp.confirm');
+
+    Route::delete('/totp', [TotpController::class, 'destroy'])
+        ->name('totp.destroy');
 });
