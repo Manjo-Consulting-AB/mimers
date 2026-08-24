@@ -26,6 +26,24 @@ Startpunkten för dokumentationen är [00 Index](docs/00%20Index.md).
 
 Ingen pushar direkt till `main`, inte heller Tony.
 
+## Omfång och modellval
+
+Varje issue bär två saker utöver sin beskrivning: en **omfångsruta** och **tre axlar**. Båda sätts av den som skriver issuen, inte av dig.
+
+**Omfångsrutan** listar `In scope` — filerna och katalogerna du får ändra — och `Out of scope` — det du inte får röra även om det ser trasigt ut. `Out of scope` är bindande. Behöver arbetet en ändring utanför rutan är det inte en lov att ta den: **stanna och fråga i PR:en.** Det gäller också sådant ett `install`-kommando skapar åt dig; ställning som ramverket genererar men issuen inte bett om ska bort.
+
+**De tre axlarna** avgör vilken modell som får uppgiften:
+
+| Axel | Värden |
+|---|---|
+| `ambiguity` | `low` om svaret står i läslistan, `high` om något måste tolkas |
+| `blast_radius` | `contained` om ändringen bor i egna filer, `cross-module` om den rör kod andra issues bygger på |
+| `risk_class` | `none` för vanlig funktionalitet, `elevated` för autentisering, behörighet, pengar, kvoter, radering och filleverans |
+
+Är alla tre låga går uppgiften till en billigare modell. Är någon förhöjd går den till en dyrare.
+
+**Upptäcker du att en axel är fel satt — stanna och säg till.** Visar det sig att ändringen måste ut i kod andra issues bygger på, eller att svaret inte står i läslistan, så är det den viktigaste informationen du kan lämna ifrån dig. Att ploga vidare på en uppgift som är större än den utgav sig för att vara är dyrare än att avbryta, för både dig och den som ska granska.
+
 ## Vad som krävs för att en PR ska mergas
 
 - **Varje "Klart när"-punkt i issuen motsvaras av ett test.** En PR utan det mergas inte. Det är den enda mekanism som skalar när granskaren inte hinner läsa varje rad.
