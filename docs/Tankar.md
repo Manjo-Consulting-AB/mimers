@@ -8,6 +8,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Testsviten kör mot sqlite i minnet, produktionen mot MariaDB 10.6.** Grön CI bevisar därför inte att schemat fungerar på servern. Skillnaderna som kan bita: `CHAR(26)` med längdkontroll, CHECK-villkor för uppräkningar, främmande nycklar med `RESTRICT` (sqlite kräver att de slås på per anslutning), och `utf8mb4_unicode_ci` som sqlite inte har någon motsvarighet till. Frågan är om CI ska köra sviten mot en MariaDB-tjänst istället för, eller vid sidan av, sqlite — och vad det kostar i körtid per PR. Restes i issue 2 när de första migrationerna kom in.
 
+- **`last_active_at` skrivs vid varje autentiserat API-anrop.** Middlewaren från issue 3 gör en UPDATE per request. Kolumnen driver kontolivscykeln i [[Planer och kvoter]], där dygnsupplösning räcker gott — en skrivning per anrop är alltså långt mer än vad någon konsument behöver. Frågan är om den ska strypas till högst en skrivning per användare och tidsfönster, och var det i så fall hör hemma: i middlewaren, eller som en köad uppdatering. Restes i granskningen av issue 3.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
