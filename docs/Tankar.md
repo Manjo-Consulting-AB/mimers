@@ -10,6 +10,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **`last_active_at` skrivs vid varje autentiserat API-anrop.** Middlewaren från issue 3 gör en UPDATE per request. Kolumnen driver kontolivscykeln i [[Planer och kvoter]], där dygnsupplösning räcker gott — en skrivning per anrop är alltså långt mer än vad någon konsument behöver. Frågan är om den ska strypas till högst en skrivning per användare och tidsfönster, och var det i så fall hör hemma: i middlewaren, eller som en köad uppdatering. Restes i granskningen av issue 3.
 
+- **En användare i flera konton har inget härlett språk.** `User::preferredLocale()` från issue 5 returnerar användarens eget `locale` när det är satt, annars kontots — men bara när personen hör till exakt ett konto. Med flera konton returneras `NULL`, vilket Laravel tolkar som "rör inte den aktiva inställningen". Det är medvetet konservativt: att välja `owner`-kontot eller det äldsta vore en gissning som ingen dokumentation stöder. Konsekvensen är att en varvsanställd som också har ett privatkonto får standardspråket i mejl tills någon sätter `locale` på användaren. Frågan är om det räcker, eller om flerkontofallet behöver en uttalad regel — den blir synlig först när mejlen blir många i [[Notiser]]. Restes i granskningen av issue 5.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
