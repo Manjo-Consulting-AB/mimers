@@ -33,17 +33,21 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | password_hash | VARCHAR(255) NULL | NULL om användaren bara använder magic link |
 | totp_secret | VARBINARY(255) NULL | Krypterad |
 | totp_confirmed_at | TIMESTAMP NULL | |
-| locale, timezone | | Åsidosätter kontots värden för den här personen |
+| locale, timezone, unit_system | | Åsidosätter kontots värden för den här personen |
 | quiet_hours_start, quiet_hours_end | TIME NULL | Se [[Notiser]] |
 | last_active_at | TIMESTAMP | **Uppdateras av API-anrop från vilken klient som helst**, inte bara inloggning. Driver livscykeln i [[Planer och kvoter]] |
 | created_at, updated_at | | |
 
 ### account_user
 
+Ingen `ulid` — medlemskapet exponeras aldrig som egen resurs i API:et, det nås via kontot eller användaren.
+
 | Kolumn | Typ | Not |
 |---|---|---|
+| id | BIGINT UNSIGNED PK | |
 | account_id, user_id | FK | UNIQUE tillsammans |
 | role | VARCHAR(20) | `owner` \| `admin` \| `member` |
+| created_at, updated_at | | Medlem sedan, och när rollen senast ändrades |
 
 ## container
 
