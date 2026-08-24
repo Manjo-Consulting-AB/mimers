@@ -37,3 +37,8 @@ release.tar.gz
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code: agenternas worktrees och lokala inställningar.
+# Worktrees innehåller hela kopior av repot med vendor/ och node_modules/.
+.claude/worktrees/
+.claude/settings.local.json
