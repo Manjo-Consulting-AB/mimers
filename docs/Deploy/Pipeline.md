@@ -504,6 +504,7 @@ Avstämt 2026-08-23. Allt som går att förbereda innan det finns kod är gjort.
 - en databas per miljö — `s174280_mimers` och `s174280_mimers-staging` — verifierade från servern: MariaDB 10.6.27, tomma, med rättigheter att skapa och ta bort tabeller. Kontot hade inget databastak i vägen.
 - båda baserna ändrade från `latin1_swedish_ci` till `utf8mb4` / `utf8mb4_unicode_ci`, medan de var tomma. Laravel sätter teckenuppsättning per anslutning och per tabell ändå, men nu kan ingenting ärva fel standard.
 - minutcron per miljö, med absolut sökväg till `/usr/local/bin/php`
+- **LiteSpeed står framför PHP på samma maskin.** Det finns ingen proxy framför den och ingen lastbalanserare. `REMOTE_ADDR` för ett inkommande anrop är därför den riktiga klienten, inte en proxy, och LSAPI sätter schemat självt — `https://mimers.app` levererade korrekta absoluta URL:er redan i `v0.0.1`, innan `TrustProxies` fanns i kodbasen. Betrodd proxy är alltså loopbacken och ingenting annat: `trustProxies(at: ['127.0.0.1', '::1'])` i `bootstrap/app.php`. Litar appen på fler adresser än så kan vilken klient som helst sätta `X-Forwarded-Host` och styra vilken domän signerade länkar pekar på, och `X-Forwarded-For` och därmed vilken IP rate limiting räknar på. Fastställt i issue 4.
 
 **Saknas**
 
