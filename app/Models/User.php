@@ -35,6 +35,12 @@ use Laravel\Sanctum\HasApiTokens;
  * requestens, och användarens `locale` åsidosätter kontots. Laravel
  * plockar upp kontraktet självt vid rendering av notifikationer — se
  * `preferredLocale()`.
+ *
+ * `totp_secret` castas `encrypted` sedan issue #19 (TOTP-hemlighet:
+ * aktivering och verifiering) — se [[Konton och åtkomst]] § user:
+ * "Krypterad", och App\Support\Auth\TotpBroker § Beslut 1, som sätter och
+ * läser kolumnen men inte vet något om krypteringen själv. Redan dold i
+ * serialisering sedan issue 3 (`#[Hidden]` nedan) — det ändras inte här.
  */
 #[Fillable(['email', 'password_hash', 'locale', 'timezone', 'unit_system', 'quiet_hours_start', 'quiet_hours_end'])]
 #[Hidden(['password_hash', 'totp_secret'])]
@@ -69,6 +75,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     {
         return [
             'email_verified_at' => 'datetime',
+            'totp_secret' => 'encrypted',
             'totp_confirmed_at' => 'datetime',
             'last_active_at' => 'datetime',
             'password_hash' => 'hashed',

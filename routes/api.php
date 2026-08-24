@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Auth\AuthenticatedTokenController;
 use App\Http\Controllers\Api\Auth\MagicLinkLoginController;
 use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
+use App\Http\Controllers\Api\Auth\TotpController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -38,4 +39,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Samma kontroller som webbens verification.send, se
     // App\Http\Controllers\Auth\EmailVerificationNotificationController.
     Route::post('/email/verification-notification', EmailVerificationNotificationController::class);
+
+    // Issue #19 · TOTP-hemlighet: aktivering och verifiering. Se
+    // App\Http\Controllers\Api\Auth\TotpController och
+    // App\Support\Auth\TotpBroker. Inloggningskravet är issue 6b (#31).
+    Route::post('/totp', [TotpController::class, 'store']);
+    Route::post('/totp/confirm', [TotpController::class, 'confirm']);
+    Route::delete('/totp', [TotpController::class, 'destroy']);
 });
