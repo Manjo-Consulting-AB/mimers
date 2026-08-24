@@ -63,3 +63,18 @@ it('ett privatkonto är bara ett konto med en enda medlem, samma tabell som en o
     expect($organisation->type)->toBe('organisation');
     expect($privat->getTable())->toBe($organisation->getTable());
 });
+
+it('sätter created_at på medlemskapsraden när en användare kopplas till kontot', function () {
+    $account = Account::factory()->create();
+    $user = User::factory()->create();
+
+    $account->users()->attach($user, ['role' => 'member']);
+
+    $medlemskap = DB::table('account_user')
+        ->where('account_id', $account->id)
+        ->where('user_id', $user->id)
+        ->first();
+
+    expect($medlemskap->created_at)->not->toBeNull();
+    expect($medlemskap->updated_at)->not->toBeNull();
+});

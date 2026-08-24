@@ -40,6 +40,7 @@ class Account extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'account_user')
-            ->withPivot('role');
+            ->withPivot('role')
+            ->withTimestamps();
     }
 }

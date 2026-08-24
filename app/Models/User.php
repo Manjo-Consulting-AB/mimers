@@ -69,6 +69,7 @@ class User extends Authenticatable
     public function accounts(): BelongsToMany
     {
         return $this->belongsToMany(Account::class, 'account_user')
-            ->withPivot('role');
+            ->withPivot('role')
+            ->withTimestamps();
     }
 }
