@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Auth\AuthenticatedTokenController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
+use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -16,7 +17,7 @@ Route::post('/register', [RegisteredUserController::class, 'store']);
 // throttle:login · issue 7 · Rate limiting och felkodsformat. Se
 // App\Providers\AppServiceProvider::configureLoginRateLimiting().
 Route::post('/login', [AuthenticatedTokenController::class, 'store'])
-    ->middleware('throttle:login');
+    ->middleware('throttle:'.LoginRateLimiter::NAME);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthenticatedTokenController::class, 'destroy']);

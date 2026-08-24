@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Auth;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -37,6 +38,12 @@ class AuthenticatedTokenController extends Controller
         } catch (ValidationException) {
             throw ApiException::make('auth.invalid_credentials');
         }
+
+        // Uppföljning till issue 7: en lyckad inloggning rensar
+        // begränsaren (e-post och IP), annars äter användarens egna
+        // lyckade inloggningar av samma budget som ska stoppa
+        // gissningsförsök — se App\Support\Auth\LoginRateLimiter.
+        LoginRateLimiter::clear($request, $request->string('email')->toString());
 
         $token = $user->createToken('api')->plainTextToken;
 

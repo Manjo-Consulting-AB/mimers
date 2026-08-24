@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -29,7 +30,7 @@ Route::middleware('guest')->group(function () {
     // throttle:login · issue 7 · Rate limiting och felkodsformat. Se
     // App\Providers\AppServiceProvider::configureLoginRateLimiting().
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])
-        ->middleware('throttle:login')
+        ->middleware('throttle:'.LoginRateLimiter::NAME)
         ->name('login');
 });
 

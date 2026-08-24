@@ -87,7 +87,20 @@ it('ger resource.not_found för en /api-rutt som inte finns — 404', function (
     expect($response->json('error.code'))->toBe('resource.not_found');
 });
 
-it('läcker aldrig undantagstext för ett oväntat fel på /api — bara server.error, 500', function () {
+it('ger resource.method_not_allowed — 405 — inte server.error, för fel HTTP-metod mot en giltig rutt', function () {
+    // /api/register finns bara som POST, se routes/api.php.
+    $response = getJson('/api/register');
+
+    $response->assertStatus(405);
+    expect($response->json('error.code'))->toBe('resource.method_not_allowed');
+});
+
+it('läcker aldrig undantagstext för ett oväntat fel på /api i produktion — bara server.error, 500', function () {
+    // phpunit.xml sätter inget APP_DEBUG, så testsviten ärver APP_DEBUG=true
+    // från .env (se nästa test) — den här sätter uttryckligen av det för
+    // att bevisa produktionsvägen, där config('app.debug') är false.
+    config(['app.debug' => false]);
+
     Route::get('/api/_test/krasch', function () {
         throw new RuntimeException('hemlig intern detalj som aldrig får nå klienten');
     });
@@ -97,6 +110,24 @@ it('läcker aldrig undantagstext för ett oväntat fel på /api — bara server.
     $response->assertStatus(500);
     expect($response->json('error.code'))->toBe('server.error');
     expect($response->getContent())->not->toContain('hemlig intern detalj');
+});
+
+it('låter Laravels vanliga felsida med undantagstext rendera lokalt, när app.debug är på', function () {
+    // Motsatsen till testet ovan: den generella server.error-fångaren i
+    // bootstrap/app.php ska INTE tysta ett oväntat fel när debug är på —
+    // annars felsöks varje framtida API-issue mot en ogenomskinlig kod i
+    // stället för en riktig stacktrace, se PR-uppföljningen till issue 7.
+    config(['app.debug' => true]);
+
+    Route::get('/api/_test/krasch-med-debug', function () {
+        throw new RuntimeException('synlig-i-debuglaget-detalj');
+    });
+
+    $response = getJson('/api/_test/krasch-med-debug');
+
+    $response->assertStatus(500);
+    expect($response->json('error'))->toBeNull();
+    expect($response->getContent())->toContain('synlig-i-debuglaget-detalj');
 });
 
 it('rör inte webbens felrendering — en krasch på en webbrutt får fortfarande Laravels vanliga form', function () {

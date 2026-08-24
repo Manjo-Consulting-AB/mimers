@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -113,6 +114,18 @@ return Application::configure(basePath: dirname(__DIR__))
             return ApiError::response('resource.not_found', [], 404);
         });
 
+        // Egen kod i stället för att falla igenom till den generella
+        // server.error-fångaren nedan — fel HTTP-metod mot en giltig
+        // rutt är inte ett oväntat fel, och en klient som får 405 ska
+        // inte tro att servern kraschade.
+        $exceptions->render(function (MethodNotAllowedHttpException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiError::response('resource.method_not_allowed', [], 405);
+        });
+
         $exceptions->render(function (ThrottleRequestsException $e, Request $request) {
             if (! $request->is('api/*')) {
                 return null;
@@ -136,6 +149,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // status) — bara meddelandet byts ut mot en stabil kod.
         $exceptions->render(function (Throwable $e, Request $request) {
             if (! $request->is('api/*')) {
+                return null;
+            }
+
+            // Läcker aldrig i produktion (config('app.debug') är false där),
+            // men lokalt och i testsviten (phpunit.xml sätter inget
+            // APP_DEBUG, den ärver true från .env) ska Laravels vanliga
+            // felsida med stacktrace få rendera — annars felsöks varje
+            // framtida API-issue i M1 och framåt mot en ogenomskinlig kod
+            // i stället för en riktig stacktrace. De specifika
+            // undantagstyperna ovanför den här closuren läcker ingenting
+            // och är en del av kontraktet oavsett debug-läge.
+            if (config('app.debug')) {
                 return null;
             }
 

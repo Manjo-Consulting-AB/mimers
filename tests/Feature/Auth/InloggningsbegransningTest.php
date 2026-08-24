@@ -86,6 +86,86 @@ it('räknar e-postadressen oberoende av bokstavsläge', function () {
     ])->assertStatus(429);
 });
 
+/*
+ * Uppföljning till issue 7: en lyckad inloggning rensar begränsaren
+ * (App\Support\Auth\LoginRateLimiter::clear()), annars äter en användares
+ * egna lyckade inloggningar (flera enheter, omlogg efter en utgången
+ * token) av samma budget som är till för att stoppa gissningsförsök.
+ * Laravels eget mönster — Fortifys AttemptToAuthenticate gör exakt så.
+ */
+
+it('låter en användare logga in upprepade gånger i rad, från flera "enheter", utan att träffa 429', function () {
+    // Gränsen är 5/minut per e-postadress. Utan rensning vid lyckad
+    // inloggning skulle det sjätte försöket (oavsett om det är korrekt)
+    // blockeras — count() hade stått i 5 sedan de fem föregående lyckade
+    // inloggningarna. Med rensningen nollställs den vid varje lyckad
+    // inloggning, så antalet i rad spelar ingen roll.
+    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
+
+    for ($i = 0; $i < 8; $i++) {
+        postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'ratt-losenord',
+        ])->assertOk();
+    }
+});
+
+it('rensar e-postbegränsningen på API:et vid en lyckad inloggning, så nästa misslyckade försök inte redan är blockerat', function () {
+    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
+
+    // Fyra misslyckade försök — under gränsen på 5/minut, så alla fyra
+    // släpps igenom till autentiseringslogiken (och avvisas där).
+    for ($i = 0; $i < 4; $i++) {
+        postJson('/api/login', [
+            'email' => $user->email,
+            'password' => 'fel-losenord',
+        ])->assertStatus(422);
+    }
+
+    // Femte försöket, med rätt lösenord: fortfarande under gränsen (count
+    // är 4 innan detta anrop), så det släpps igenom och lyckas — och
+    // rensar då begränsaren. Utan rensningen hade count stått i 5 efter
+    // det här anropet, och nästa försök (oavsett utfall) hade blockerats
+    // av begränsaren själv, inte av fel lösenord.
+    postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'ratt-losenord',
+    ])->assertOk();
+
+    // Ett nytt misslyckat försök omedelbart efter — 422 (fel lösenord),
+    // inte 429 (begränsaren). Beviset på att rensningen faktiskt skedde.
+    postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'fel-losenord',
+    ])->assertStatus(422);
+});
+
+it('rensar e-postbegränsningen på webben vid en lyckad inloggning, så nästa misslyckade försök inte redan är blockerat', function () {
+    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
+
+    for ($i = 0; $i < 4; $i++) {
+        postJson('/login', [
+            'email' => $user->email,
+            'password' => 'fel-losenord',
+        ])->assertStatus(422);
+    }
+
+    postJson('/login', [
+        'email' => $user->email,
+        'password' => 'ratt-losenord',
+    ])->assertRedirect(route('welcome'));
+
+    // Webbens /login sitter bakom `guest`-middleware (routes/web.php) —
+    // måste loggas ut igen innan nästa /login-anrop, annars omdirigeras
+    // det bort utan att någonsin nå LoginRequest-valideringen.
+    postJson('/logout');
+
+    postJson('/login', [
+        'email' => $user->email,
+        'password' => 'fel-losenord',
+    ])->assertStatus(422);
+});
+
 it('begränsar webbens inloggning på samma sätt, men utan höljet — Laravels vanliga svar', function () {
     $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
 
