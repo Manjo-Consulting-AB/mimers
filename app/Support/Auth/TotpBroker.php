@@ -20,27 +20,22 @@ use PragmaRX\Google2FA\Google2FA;
  * `encrypted`-cast, `APP_KEY` finns per miljö) — den här klassen vet
  * inget om kryptering, den sätter bara `$user->totp_secret` och sparar.
  *
- * **Hemlighetslängd — 16 tecken, inte bibliotekets standard 32.** Se
- * [[Konton och åtkomst]] § user: kolumnen är `VARBINARY(255)`
- * (`binary('totp_secret', 255)` i create_user_table-migrationen, issue 3
- * — rörs inte här, se issue #19 § Omfång "Inga nya migrationer").
- * Laravels `encrypted`-cast lägger på IV, MAC och en JSON-kuvert innan
- * base64: uppmätt med `Crypt::encryptString()` ger en 32-tecken hemlighet
- * (bibliotekets standardlängd) ett 256 bytes chiffertext — **en byte för
- * mycket** för kolumnen, medan alla längder upp till 31 tecken ryms
- * bekvämt (228 bytes). SQLite (testsviten, phpunit.xml) tvingar inga
- * kolumnlängder alls, så det här är inget test i den här PR:en skulle
- * fånga av sig själv — MySQL i produktion (strict mode) skulle avvisa
- * eller trunkera en 32-tecken hemlighet.
- *
- * Biblioteket kräver dessutom (`Base32::checkGoogleAuthenticatorCompatibility()`,
- * påslagen som standard) att hemlighetens teckenlängd är en tvåpotens,
- * så det enda alternativet under 32 är 16 — vilket också är bibliotekets
- * egen lägstanivå (`Base32::checkIsBigEnough()`, 128 bitar). Se PR:ens
- * "Frågor och antaganden": det här är min lösning på en kolumn som är
- * för smal för bibliotekets standardlängd, inte ett dokumenterat beslut
- * — flaggat för Tony, med en framtida migration (bredare kolumn) som
- * alternativ om 32 tecken önskas.
+ * **Hemlighetslängd — 32 tecken, bibliotekets egen standard.**
+ * `Google2FA::generateSecretKey()`s default: 160 bitar, den nivå RFC 4226
+ * § 4 R6 rekommenderar (minimikravet är 128). Se [[Konton och åtkomst]]
+ * § user: kolumnen är `VARBINARY(512)` sedan
+ * 2026_08_24_140000_widen_user_totp_secret_column.php (uppföljning efter
+ * granskning av PR #36) — vidgad just för att rymma den här längden med
+ * marginal. `create_user_table`-migrationens ursprungliga `VARBINARY(255)`
+ * (issue 3) räckte inte: Laravels `encrypted`-cast lägger på IV, MAC och
+ * ett JSON-kuvert innan base64, och en 32-tecken hemlighet krypterar
+ * uppmätt (`Crypt::encryptString()`) till 256 bytes — en byte för mycket
+ * för den gamla kolumnen. Se widen-migrationens docblock för hela
+ * uträkningen och varför den nya bredden är 512, inte den minsta siffra
+ * som räcker i dag. Sänk inte den här konstanten för att undvika en
+ * migration — se tests/Feature/Auth/TotpAktiveringTest.php, som numera
+ * bevisar båda hållen: att en genererad hemlighet är 32 tecken, och att
+ * chiffertexten ändå ryms bekvämt.
  *
  * **Beslut 2 — läcker aldrig ut igen.** `generate()` returnerar
  * `otpauth://`-URI:n en gång, som anropet svarar med — den sparas
@@ -80,11 +75,10 @@ use PragmaRX\Google2FA\Google2FA;
 final class TotpBroker
 {
     /**
-     * Se klassdokumentationen ovan — 16, inte Google2FA::generateSecretKey()s
-     * egen standard 32, för att chiffertexten ska rymmas i den befintliga
-     * VARBINARY(255)-kolumnen.
+     * Google2FA::generateSecretKey()s egen standard — se
+     * klassdokumentationen ovan för varför den inte sänks.
      */
-    private const SECRET_LENGTH = 16;
+    private const SECRET_LENGTH = 32;
 
     /**
      * Klockdriftfönster, se klassdokumentationen ovan.

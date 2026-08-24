@@ -184,14 +184,23 @@ it('hemligheten ligger krypterad i databasen — kolumnen läst rått innehålle
     expect($raw)->not->toBe($plaintextSecret);
     expect($raw)->not->toContain($plaintextSecret);
 
-    // Regression: Laravels `encrypted`-cast lägger på ett kuvert (IV, MAC,
-    // base64) ovanpå klartexten — se App\Support\Auth\TotpBroker §
-    // "Hemlighetslängd". Kolumnen är VARBINARY(255)
-    // (create_user_table-migrationen, issue 3); SQLite (testsviten)
+    // App\Support\Auth\TotpBroker genererar hemligheten på
+    // Google2FA::generateSecretKey()s egen standardlängd, 32 tecken (160
+    // bitar) — RFC 4226 § 4 R6:s rekommenderade nivå, inte bara
+    // minimikravet (128). Sänk den INTE för att en kolumn känns snäv —
+    // se widen-migrationen (2026_08_24_140000_widen_user_totp_secret_column.php)
+    // och TotpBroker § "Hemlighetslängd" om du är frestad: kolumnen
+    // breddas i stället, hemligheten hålls stark.
+    expect(strlen((string) $plaintextSecret))->toBe(32);
+
+    // Regression, andra hållet: Laravels `encrypted`-cast lägger på ett
+    // kuvert (IV, MAC, JSON, base64) ovanpå klartexten — en 32-tecken
+    // hemlighet krypterar till 256 bytes. Kolumnen är VARBINARY(512)
+    // sedan widen-migrationen ovan, med god marginal. SQLite (testsviten)
     // tvingar ingen kolumnlängd alls, så det här testet är den enda
-    // spärren mot att någon råkar vidga hemligheten igen och tyst
-    // trunkeras eller kraschar mot MySQL i produktion.
-    expect(strlen((string) $raw))->toBeLessThanOrEqual(255);
+    // spärren mot att kolumnen och hemlighetslängden glider isär igen
+    // och tyst trunkeras eller kraschar mot MySQL i produktion.
+    expect(strlen((string) $raw))->toBeLessThanOrEqual(512);
 });
 
 it('avstängning kräver en giltig kod — fel kod stänger inte av TOTP', function () {
