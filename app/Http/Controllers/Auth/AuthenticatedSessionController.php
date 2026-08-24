@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -19,6 +20,12 @@ class AuthenticatedSessionController extends Controller
     public function store(LoginRequest $request): RedirectResponse
     {
         $user = $request->authenticate();
+
+        // Uppföljning till issue 7: en lyckad inloggning rensar
+        // begränsaren (e-post och IP), annars äter användarens egna
+        // lyckade inloggningar av samma budget som ska stoppa
+        // gissningsförsök — se App\Support\Auth\LoginRateLimiter.
+        LoginRateLimiter::clear($request, $request->string('email')->toString());
 
         Auth::guard('web')->login($user);
 

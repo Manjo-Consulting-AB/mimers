@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Support\Auth\LoginRateLimiter;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +23,43 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        $this->configureLoginRateLimiting();
+    }
+
+    /**
+     * Issue 7 · Rate limiting och felkodsformat. Begränsar inloggning per
+     * e-postadress OCH per IP samtidigt — vilken gräns som helst räcker
+     * för att blockera, se issue 7 § Beslut som redan är fattade punkt 5.
+     * `$request->ip()` går att lita på: TrustProxies skärptes i issue 4
+     * till att bara betro loopbacken (LiteSpeed sitter lokalt hos inleed),
+     * se bootstrap/app.php och tests/Feature/Auth/TrustProxiesTest.php —
+     * ingen egen headerhantering byggs här, se punkt 6.
+     *
+     * Namnet App\Support\Auth\LoginRateLimiter::NAME används av
+     * `throttle:login`-middleware på både webbens och API:ets
+     * inloggningsrutt (routes/web.php, routes/api.php) så att samma två
+     * gränser gäller oavsett yta. Magic link (issue 5) kan återanvända
+     * samma middleware rakt av på sin egen inloggningsrutt, så länge den
+     * routen också har ett `email`-fält i requesten.
+     *
+     * Nyckelkonstruktionen delas med App\Support\Auth\LoginRateLimiter,
+     * som webbens och API:ets inloggningskontroller använder för att rensa
+     * båda gränserna efter en lyckad inloggning — se den klassens
+     * docblock för varför nycklarna måste byggas exakt likadant på båda
+     * ställena.
+     *
+     * Exakta trösklar (5/minut per e-post, 10/minut per IP) är inte
+     * specificerade i dokumentationen — se PR:ens "Frågor och antaganden".
+     */
+    private function configureLoginRateLimiting(): void
+    {
+        RateLimiter::for(LoginRateLimiter::NAME, function (Request $request) {
+            $email = $request->string('email')->toString();
+
+            return [
+                Limit::perMinute(5)->by(LoginRateLimiter::emailKey($email)),
+                Limit::perMinute(10)->by(LoginRateLimiter::ipKey($request)),
+            ];
+        });
     }
 }

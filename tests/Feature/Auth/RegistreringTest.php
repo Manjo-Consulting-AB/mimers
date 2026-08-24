@@ -90,13 +90,17 @@ it('avvisar webbregistrering med redan upptagen e-post — 422, ingen krasch', f
     ])->assertJsonValidationErrors(['email']);
 });
 
-it('avvisar API-registrering med redan upptagen e-post likadant som webben', function () {
+it('avvisar API-registrering med redan upptagen e-post — validation.failed med validation.unique på email', function () {
     User::factory()->create(['email' => 'upptagen-api@example.com']);
 
-    postJson('/api/register', [
+    $response = postJson('/api/register', [
         'email' => 'upptagen-api@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertJsonValidationErrors(['email']);
+    ]);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('validation.failed');
+    expect($response->json('error.data.fields.email.0.code'))->toBe('validation.unique');
 });
 
 it('rör inte accounts-tabellen om registreringen misslyckas', function () {
