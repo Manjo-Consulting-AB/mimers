@@ -3,6 +3,7 @@
 namespace App\Support\Auth;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use PragmaRX\Google2FA\Google2FA;
 
 /**
@@ -86,6 +87,16 @@ final class TotpBroker
     private const WINDOW = 1;
 
     /**
+     * TTL för repris-spärrens cachepost — issue 6b · TOTP vid inloggning.
+     * Se verifyLoginCode() nedan för varför cachen används i stället för
+     * en ny kolumn. WINDOW (ovan) släpper igenom koder i totalt ~90
+     * sekunder (nuvarande tidslucka plus en på var sida, 30 sekunder
+     * styck); fem minuter ger marginal mot klockdrift utan att posten
+     * ligger kvar på obestämd tid.
+     */
+    private const REPLAY_TTL_SECONDS = 300;
+
+    /**
      * Genererar en ny hemlighet, sparar den (krypterad via `User`s cast)
      * och returnerar en `otpauth://`-URI för klienten att rendera som
      * QR-kod — se [[ADR-0023 TOTP-bibliotek]] § Beslut: "Ingen
@@ -151,6 +162,88 @@ final class TotpBroker
         $user->totp_secret = null;
         $user->totp_confirmed_at = null;
         $user->save();
+    }
+
+    /**
+     * Verifierar en kod vid inloggning — issue 6b · TOTP vid inloggning.
+     * Till skillnad från `confirm()`/`disable()` ändrar den här metoden
+     * inget lagrat tillstånd på kontot; den kontrollerar bara koden.
+     * Anropas bara när kontot redan har en bekräftad TOTP — se
+     * App\Http\Requests\Auth\LoginRequest::authenticate(), som är den
+     * enda anroparen och som redan kontrollerat `totp_confirmed_at` innan
+     * den här metoden nås.
+     *
+     * **Repris-skydd — applikationens ansvar, inte bibliotekets.** Se
+     * [[ADR-0023 TOTP-bibliotek]] § Konsekvenser: "en förbrukad tidslucka
+     * får inte gå att spela upp igen ... är applikationens ansvar, inte
+     * bibliotekets", och issue 6b § Beslut som redan är fattade punkt 3.
+     *
+     * `Google2FA::verifyKeyNewer()` är byggd exakt för det här ("Useful
+     * if you need to ensure that a single key cannot be used twice", se
+     * vendor/pragmarx/google2fa/src/Google2FA.php) — given en tidigare
+     * godkänd tidslucka (en heltalsräknare: unix-tid delat med 30, se
+     * Google2FA::getTimestamp()) accepterar den bara en NYARE tidslucka.
+     * Är den skickade koden samma tidslucka som senast, eller äldre,
+     * avvisas den även om koden i sig är korrekt.
+     *
+     * **Lagring: cachen (databasdrivrutinen), ingen ny kolumn.** Issue
+     * 6b:s omfångsruta utesluter uttryckligen nya migrationer. Samma
+     * `cache`-tabell och -butik som App\Support\Auth\LoginRateLimiter
+     * redan förlitar sig på för inloggningsbegränsningen (`CACHE_STORE`,
+     * se .env) återanvänds här för att spara senast godkända tidslucka
+     * per användare — en enda rad per konto, inte en serie. TTL:en
+     * (`REPLAY_TTL_SECONDS`) är satt till fem minuter: godkännandefönstret
+     * (`WINDOW`, se klassdokumentationen) släpper igenom koder i totalt
+     * ~90 sekunder (nuvarande tidslucka plus en på var sida), så fem
+     * minuter ger gott om marginal mot klockdrift utan att cachen växer
+     * obegränsat för konton som bara loggar in TOTP en gång.
+     *
+     * **Fallgropen som motiverar `?? 0` nedan, inte `Cache::get()`s eget
+     * null-default:** `Google2FA::findValidOTP()` returnerar den
+     * matchade tidsluckan som `int` bara när `$oldTimestamp`-argumentet
+     * INTE är `null` — är det `null` (Cache-nyckeln saknas, dvs. första
+     * inloggningen) returnerar biblioteket i stället `true` (bool). Hade
+     * den raden nedan skickat `Cache::get($key)`s null rakt in i
+     * `verifyKeyNewer()`, hade den FÖRSTA lyckade verifieringen sparat
+     * `true` — inte den verkliga tidsluckan — i cachen. Nästa
+     * verifiering hade då jämfört mot `true` (kastas till `1` av PHP:s
+     * `+`-operator), en tidslucka så långt tillbaka i tiden att den
+     * aldrig utesluter något verkligt förfluten tidslucka, och samma kod
+     * hade gått att spela upp igen direkt efter den allra första
+     * inloggningen. `0` i stället för `null` håller `$oldTimestamp`
+     * icke-null även första gången, så biblioteket alltid returnerar den
+     * verkliga tidsluckan — se testet som bevisar just det här fallet,
+     * inte bara den allmänna repris-spärren.
+     *
+     * @throws TotpInvalidException Ingen aktiv hemlighet, fel kod, eller
+     *                              en tidslucka som redan är förbrukad.
+     */
+    public static function verifyLoginCode(User $user, string $code): void
+    {
+        $secret = $user->totp_secret;
+
+        if (! is_string($secret) || $secret === '') {
+            throw new TotpInvalidException;
+        }
+
+        $cacheKey = self::replayCacheKey($user);
+        $lastAcceptedTimestamp = (int) (Cache::get($cacheKey) ?? 0);
+
+        // hash_equals() i grunden, se verifyOrFail() ovan. $window skickas
+        // uttryckligen (samma som self::engine() redan satte) för att
+        // matcha verifyOrFail()s explicita anrop.
+        $matchedTimestamp = self::engine()->verifyKeyNewer($secret, $code, $lastAcceptedTimestamp, self::WINDOW);
+
+        if ($matchedTimestamp === false) {
+            throw new TotpInvalidException;
+        }
+
+        Cache::put($cacheKey, $matchedTimestamp, self::REPLAY_TTL_SECONDS);
+    }
+
+    private static function replayCacheKey(User $user): string
+    {
+        return 'totp-last-accepted-timeslot:'.$user->id;
     }
 
     /**
