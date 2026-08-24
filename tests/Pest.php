@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /*
@@ -11,9 +12,10 @@ use Tests\TestCase;
 | applikationen tillgänglig. Test under "Unit" kör mot ren PHPUnit utan
 | ramverket — lägg bara sådant där som inte behöver boota appen.
 |
-| RefreshDatabase läggs på när det finns tabeller att uppdatera, alltså
-| tidigast i issue 2.
+| RefreshDatabase migrerar sqlite-minnesdatabasen (se phpunit.xml) inför
+| varje test som behöver den. Tillagd i issue 2, då de första tabellerna
+| kom in.
 |
 */
 
-pest()->extend(TestCase::class)->in('Feature');
+pest()->extend(TestCase::class)->use(RefreshDatabase::class)->in('Feature');
