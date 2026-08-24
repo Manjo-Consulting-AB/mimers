@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUlid;
 use Database\Factories\UserFactory;
 use Illuminate\Auth\MustVerifyEmail as MustVerifyEmailTrait;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -27,11 +28,18 @@ use Laravel\Sanctum\HasApiTokens;
  * användare kan ta emot delning, se [[ADR-0011 Autentisering]] §
  * Konsekvenser. `HasApiTokens` (Sanctum) ger personal access tokens för
  * B2B och mobilappar, se [[ADR-0011 Autentisering]].
+ *
+ * `HasLocalePreference` tillagt i issue 5 (uppföljning efter granskning av
+ * PR #34) — se [[ADR-0013 Språk och i18n]] § Konsekvenser: serverrenderat
+ * innehåll (mejl, ICS, PDF) väljer språk från mottagarens `locale`, inte
+ * requestens, och användarens `locale` åsidosätter kontots. Laravel
+ * plockar upp kontraktet självt vid rendering av notifikationer — se
+ * `preferredLocale()`.
  */
 #[Fillable(['email', 'password_hash', 'locale', 'timezone', 'unit_system', 'quiet_hours_start', 'quiet_hours_end'])]
 #[Hidden(['password_hash', 'totp_secret'])]
 #[RouteKey('ulid')]
-class User extends Authenticatable implements MustVerifyEmail
+class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, HasUlid, MustVerifyEmailTrait, Notifiable;
@@ -89,5 +97,32 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Account::class, 'account_user')
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    /**
+     * Se [[ADR-0013 Språk och i18n]] § Konsekvenser: "användarens locale
+     * åsidosätter kontots." Är `locale` satt på användaren används den
+     * rakt av.
+     *
+     * Är den NULL faller vi tillbaka på kontots — men bara när personen är
+     * medlem i exakt ETT konto. Fler än ett konto (en B2B-personal som
+     * hör till flera organisationer) är ett gränsfall dokumentationen inte
+     * tar upp, se PR #34-uppföljningen "Frågor och antaganden": det finns
+     * inget entydigt "kontot" att falla tillbaka på då, och att gissa ett
+     * (t.ex. först skapade, eller det med rollen `owner`) vore att hitta på
+     * en regel ingen bett om. Returnerar i stället NULL, vilket Laravels
+     * `Illuminate\Support\Traits\Localizable::withLocale()` tolkar som "rör
+     * inte den aktiva locale-inställningen" — appens vanliga default
+     * gäller (`config('app.locale')`), i stället för en gissning.
+     */
+    public function preferredLocale(): ?string
+    {
+        if ($this->locale !== null) {
+            return $this->locale;
+        }
+
+        $accounts = $this->accounts;
+
+        return $accounts->count() === 1 ? $accounts->first()->locale : null;
     }
 }

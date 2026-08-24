@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
+use App\Http\Controllers\Auth\MagicLinkLoginController;
+use App\Http\Controllers\Auth\MagicLinkRequestController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Support\Auth\LoginRateLimiter;
@@ -32,6 +34,22 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])
         ->middleware('throttle:'.LoginRateLimiter::NAME)
         ->name('login');
+
+    /*
+     * Issue 5 · Magic link. throttle:login återanvänds rakt av på
+     * begäranrutten — se AppServiceProvider::configureLoginRateLimiting(),
+     * som uttryckligen namnger magic link som en tilltänkt återanvändare,
+     * och issue #18 § Beslut som redan är fattade punkt 4. Konsumtionsrutten
+     * (mejllänken, App\Support\Auth\MagicLinkBroker::url()) begränsas inte
+     * separat — se App\Support\Auth\MagicLinkBroker § Beslut 4 för
+     * resonemanget om entropi i stället för en gräns.
+     */
+    Route::post('/login/magic-link', [MagicLinkRequestController::class, 'store'])
+        ->middleware('throttle:'.LoginRateLimiter::NAME)
+        ->name('magic-link.request');
+
+    Route::get('/login/magic-link/consume', MagicLinkLoginController::class)
+        ->name('magic-link.consume');
 });
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
