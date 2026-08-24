@@ -33,11 +33,15 @@ Trait för ULID-generering, bastraits för soft delete, migrations-mall. Hjälpa
 **Klart när:** en exempelmodell har ULID, soft delete och tidsstämplar, och test visar att raderade rader inte kommer med i listning.
 **Beror på:** 1
 
+**Gjort 2026-08-24:** `App\Models\Concerns\HasUlid` fyller `ulid` vid `creating`, exempelmodellen `Example` kombinerar den med Laravels `SoftDeletes` och tidsstämplar, och `stubs/migration.create.stub` förifyller konventionerna för nya tabeller. Ingen egen soft-delete-trait — [[ADR-0008 Soft delete och papperskorg]] säger att man inte ska avvika från Laravels, och den globala scopen gör listningsfiltreringen automatiskt. `RefreshDatabase` är påslaget för Feature-sviten. Tabellen `examples` är en attrapp och ska bort i issue 3, se nedan.
+
 ### 3. Konto och användare
 Tabellerna `account`, `user`, `account_user`. Locale, timezone, unit_system på båda. `last_active_at` uppdateras av en middleware på **alla** autentiserade API-anrop.
 **Läs:** [[Konton och åtkomst]], [[ADR-0002 Konto äger container]]
-**Klart när:** ett konto kan skapas med en medlem; `last_active_at` uppdateras av ett godtyckligt API-anrop, inte bara inloggning.
+**Klart när:** ett konto kan skapas med en medlem; `last_active_at` uppdateras av ett godtyckligt API-anrop, inte bara inloggning. Dessutom: `examples`, `Example` och testet som bevisade konventionerna är borta, och `account`/`user` bevisar samma sak i deras ställe.
 **Beror på:** 2
+
+**Attrappen från issue 2 städas här.** `examples` kom in för att bevisa ULID, soft delete och tidsstämplar innan det fanns en riktig tabell. `account` och `user` bevisar samma konventioner, så attrappen är redundant så fort de finns. Droppa den med en egen migration i den här issuen — det är contract-steget i expand/contract, och det är tillåtet eftersom ingen kod längre använder tabellen. Se [[ADR-0018 Utvecklingsprocess och deploy]]. Behåll `stubs/migration.create.stub` och `HasUlid`, de är inte attrapper.
 
 ### 4. Autentisering med lösenord
 Två vägar in: **Laravels sessionsguard med CSRF** för webben, personal access tokens för mobilappar och B2B. Registrering, inloggning, utloggning, e-postverifiering. Sanctums cookie-läge (`EnsureFrontendRequestsAreStateful`) sätts **inte** upp — webben anropar inte `/api` från webbläsaren. Se [[ADR-0021 Frontendteknik]].
