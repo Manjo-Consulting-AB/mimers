@@ -2,10 +2,18 @@
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\UpdateLastActiveAt;
+use App\Support\Api\ApiError;
+use App\Support\Api\ValidationErrorMapper;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -43,4 +51,96 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        /*
+         * Issue 7 · Rate limiting och felkodsformat. Höljet
+         * `{ "error": { "code", "data" } }` gäller bara `/api`, aldrig
+         * webbsidorna — se AGENTS.md § Felformat i API:et och
+         * [[ADR-0020 Plattformsidentitet och frontendgräns]] § Konsekvenser:
+         * "Felkodsregeln ... gäller därmed /api, inte webbsidorna." Webben
+         * kör Inertia och ska behålla Laravels vanliga valideringsfel.
+         *
+         * Varje closure nedan returnerar null för ett webbanrop, så
+         * Laravels vanliga felrendering tar över helt oförändrad —
+         * `Handler::renderViaCallbacks()` fortsätter till nästa
+         * registrerade closure (och sist till default-rendering) när en
+         * closure returnerar null, se
+         * vendor/laravel/framework/.../Foundation/Exceptions/Handler.php.
+         * Ordningen nedan spelar roll av samma skäl: mer specifika
+         * undantagstyper registreras före den generella
+         * Throwable-fångaren sist, som annars skulle vinna över dem.
+         *
+         * App\Exceptions\Api\ApiException behöver ingen egen closure här —
+         * den implementerar Responsable och renderar sig själv innan
+         * Laravel ens når fram till renderViaCallbacks(). Den kastas bara
+         * från kod som redan vet att den körs på /api, t.ex.
+         * App\Http\Controllers\Api\Auth\AuthenticatedTokenController.
+         */
+        $exceptions->render(function (ValidationException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiError::response('validation.failed', [
+                'fields' => ValidationErrorMapper::fields($e),
+            ], $e->status);
+        });
+
+        $exceptions->render(function (AuthenticationException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiError::response('auth.unauthenticated', [], 401);
+        });
+
+        // En vanlig AuthorizationException utan egen status (t.ex. en nekad
+        // policy) mappas av Laravel till AccessDeniedHttpException innan
+        // den når hit — se Handler::prepareException().
+        $exceptions->render(function (AccessDeniedHttpException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiError::response('auth.forbidden', [], 403);
+        });
+
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            return ApiError::response('resource.not_found', [], 404);
+        });
+
+        $exceptions->render(function (ThrottleRequestsException $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            // ThrottleRequests-middlewaret (Illuminate\Routing\Middleware\ThrottleRequests)
+            // sätter Retry-After i undantagets headers, inte som ett eget
+            // konstruktorargument — se issue 7 § Beslut som redan är
+            // fattade punkt 5. Retry-After-headern behålls också, utöver
+            // retry_after_seconds i kroppen.
+            $retryAfterSeconds = (int) ($e->getHeaders()['Retry-After'] ?? 0);
+
+            return ApiError::response('auth.too_many_attempts', [
+                'retry_after_seconds' => $retryAfterSeconds,
+            ], 429)->withHeaders($e->getHeaders());
+        });
+
+        // Sista utväg: ett oväntat fel ska aldrig läcka undantagstext på
+        // /api, se issue 7 § Att se upp med. Statuskoden bevaras när
+        // undantaget känner till en (t.ex. en HttpException med en ovanlig
+        // status) — bara meddelandet byts ut mot en stabil kod.
+        $exceptions->render(function (Throwable $e, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            $status = $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
+
+            return ApiError::response('server.error', [], $status);
+        });
     })->create();

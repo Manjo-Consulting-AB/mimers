@@ -93,13 +93,21 @@ it('utfärdar en personal access token vid API-inloggning med rätt uppgifter, o
         ->assertJsonFragment(['email' => $user->email]);
 });
 
+// Issue 7 · Rate limiting och felkodsformat: fel inloggningsuppgifter är
+// på API:et en toppnivåkod, `auth.invalid_credentials`, inte ett
+// fältvalideringsfel — se tests/Feature/Auth/DeladValideringTest.php och
+// App\Http\Controllers\Api\Auth\AuthenticatedTokenController.
+
 it('avvisar API-inloggning med fel lösenord — 422, ingen token', function () {
     $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
 
-    postJson('/api/login', [
+    $response = postJson('/api/login', [
         'email' => $user->email,
         'password' => 'fel-losenord',
-    ])->assertJsonValidationErrors(['email']);
+    ]);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('auth.invalid_credentials');
 
     expect($user->tokens()->count())->toBe(0);
 });
@@ -107,8 +115,11 @@ it('avvisar API-inloggning med fel lösenord — 422, ingen token', function () 
 it('avvisar API-inloggning mot en användare utan lösenord — 422, ingen krasch', function () {
     $user = User::factory()->create(['password_hash' => null]);
 
-    postJson('/api/login', [
+    $response = postJson('/api/login', [
         'email' => $user->email,
         'password' => 'vad-som-helst',
-    ])->assertJsonValidationErrors(['email']);
+    ]);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('auth.invalid_credentials');
 });

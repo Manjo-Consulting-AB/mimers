@@ -26,7 +26,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [RegisteredUserController::class, 'store'])
         ->name('register');
 
+    // throttle:login · issue 7 · Rate limiting och felkodsformat. Se
+    // App\Providers\AppServiceProvider::configureLoginRateLimiting().
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])
+        ->middleware('throttle:login')
         ->name('login');
 });
 

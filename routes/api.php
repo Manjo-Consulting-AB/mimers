@@ -12,7 +12,11 @@ use Illuminate\Support\Facades\Route;
  * routes/web.php — samma ogiltiga indata avvisas likadant på båda ytorna.
  */
 Route::post('/register', [RegisteredUserController::class, 'store']);
-Route::post('/login', [AuthenticatedTokenController::class, 'store']);
+
+// throttle:login · issue 7 · Rate limiting och felkodsformat. Se
+// App\Providers\AppServiceProvider::configureLoginRateLimiting().
+Route::post('/login', [AuthenticatedTokenController::class, 'store'])
+    ->middleware('throttle:login');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthenticatedTokenController::class, 'destroy']);
