@@ -29,4 +29,4 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M10 Webbfrontend]] | **51–68** | frontendskal, språk i frontenden, inloggnings- och kontovyer, containervyer, delning och inbjudningar, kategorier och taggar, … |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 
-Totalt 69 issues under `docs/Backlog/`.
+Totalt 71 issues under `docs/Backlog/`. Issue 6 är delad i 6a, 6b och 6c.

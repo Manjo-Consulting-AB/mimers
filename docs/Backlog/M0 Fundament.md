@@ -56,9 +56,28 @@ Engångstoken, kortlivad, lagrad som hash, bunden till e-postadressen. `password
 **Beror på:** 4
 
 ### 6. TOTP-tvåfaktor
-Aktivering, verifiering, återställningskoder. Hemligheten krypterad i databasen.
-**Läs:** [[ADR-0011 Autentisering]]
+
+Delad i tre 2026-08-24. Aktivering, inloggningskravet och återställningskoderna är tre skilda funktioner med varsin tabell- eller kolumnyta och varsina tester; buntade blir de en issue i samma storleksklass som issue 4, som visade sig vara för stor. Ingenting utanför 6 beror på 6, så delningen bryter inga beroenden.
+
+**Ett TOTP-bibliotek krävs och är inte godkänt än.** Laravel har ingen inbyggd TOTP-implementation. Beslutet hör hemma i en ADR och tas av Tony innan 6a börjar — se AGENTS.md § Nya beroenden.
+
+#### 6a. TOTP-hemlighet: aktivering och verifiering
+Generera hemlighet, lagra krypterad i `user.totp_secret`, exponera `otpauth://`-URI för app-inläsning, bekräfta med en kod från appen som sätter `totp_confirmed_at`, och stäng av igen. Kolumnerna finns sedan issue 3.
+**Läs:** [[ADR-0011 Autentisering]], [[Konton och åtkomst]] § user
+**Klart när:** en hemlighet kan aktiveras bara med en giltig kod från appen, hemligheten går inte att läsa ut i klartext via API:et, och avstängning kräver samma bekräftelse som aktivering.
 **Beror på:** 4
+
+#### 6b. TOTP vid inloggning
+En användare med bekräftad TOTP måste lämna en giltig kod för att logga in — på både webbens sessionsguard och API:ets tokenväg. Felkoderna följer formatet från issue 7. Begränsningen från issue 7 gäller kodförsöken också.
+**Läs:** [[ADR-0011 Autentisering]], `AGENTS.md` § Felformat i API:et
+**Klart när:** en användare med bekräftad TOTP kan inte logga in utan kod på någondera ytan, en förbrukad tidslucka går inte att spela upp igen, och kodförsök begränsas per användare.
+**Beror på:** 6a, 7
+
+#### 6c. Återställningskoder
+Engångskoder som ersätter TOTP-koden när appen är borta. Lagras hashade, förbrukas en gång, går att generera om.
+**Läs:** [[ADR-0011 Autentisering]]
+**Klart när:** en kod fungerar exakt en gång, koderna ligger aldrig i klartext i databasen, och en omgenerering ogiltigförklarar de gamla.
+**Beror på:** 6b
 
 ### 7. Rate limiting och felkodsformat
 Begränsa inloggning och magic link per adress och per IP. Etablera det **maskinläsbara felformatet** som hela API:et ska använda.
