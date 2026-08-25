@@ -40,7 +40,7 @@ Varje issue bär två saker utöver sin beskrivning: en **omfångsruta** och **t
 | `blast_radius` | `contained` om ändringen bor i egna filer, `cross-module` om den rör kod andra issues bygger på |
 | `risk_class` | `none` för vanlig funktionalitet, `elevated` för autentisering, behörighet, pengar, kvoter, radering och filleverans |
 
-Är alla tre låga går uppgiften till en billigare modell. Är någon förhöjd går den till en dyrare.
+Stegen är Haiku och Sonnet. Alla tre axlarna låga → Haiku. Någon axel förhöjd → Sonnet. Opus skriver issuen och granskar PR:en, men får aldrig en implementationsuppgift — en välskriven issue är det som ska bära arbetet, inte modellens storlek.
 
 **Upptäcker du att en axel är fel satt — stanna och säg till.** Visar det sig att ändringen måste ut i kod andra issues bygger på, eller att svaret inte står i läslistan, så är det den viktigaste informationen du kan lämna ifrån dig. Att ploga vidare på en uppgift som är större än den utgav sig för att vara är dyrare än att avbryta, för både dig och den som ska granska.
 
