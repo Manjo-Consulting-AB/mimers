@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
 use App\Http\Controllers\Api\Auth\RecoveryCodeController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\Auth\TotpController;
+use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -52,4 +53,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // App\Http\Controllers\Api\Auth\RecoveryCodeController och
     // App\Support\Auth\RecoveryCodeBroker.
     Route::post('/totp/recovery-codes', [RecoveryCodeController::class, 'store']);
+
+    // Issue 8 · Container — CRUD-ytan, se App\Http\Controllers\Api\ContainerController
+    // och App\Policies\ContainerPolicy. Behörighet avgörs helt i policyn,
+    // se issue 8 § Beslut 2. Webbens containervyer är issue 54, se
+    // issue 8 § Beslut 1 — inga rutter här läggs i routes/web.php.
+    Route::get('/containers', [ContainerController::class, 'index']);
+    Route::post('/containers', [ContainerController::class, 'store']);
+    Route::get('/containers/{container}', [ContainerController::class, 'show']);
+    Route::patch('/containers/{container}', [ContainerController::class, 'update']);
+    Route::delete('/containers/{container}', [ContainerController::class, 'destroy']);
 });
