@@ -181,3 +181,55 @@ it('ett ogiltigt kind avvisas med validation.failed', function () {
     expect($response->json('error.code'))->toBe('validation.failed');
     expect($response->json('error.data.fields.kind'))->not->toBeNull();
 });
+
+/*
+ * Uppföljning på granskningen av PR #43: ContainerResource::toArray()
+ * läser $this->account->ulid för varje rad — utan eager loading blir
+ * listningen N+1. Se App\Http\Controllers\Api\ContainerController::index()
+ * § with('account').
+ *
+ * Låser fast INTE ett fast frågeantal (skört mot ovidkommande ändringar,
+ * t.ex. en extra fråga i whereHas-villkoret) utan att antalet frågor är
+ * DETSAMMA oavsett hur många containers listan innehåller — kör samma
+ * anrop två gånger, med fler containers andra gången, på minst två olika
+ * konton båda gångerna, och jämför.
+ */
+it('listningen laddar ägarkontot i förväg', function () {
+    [$kontoA, $user, $headers] = kontoMedMedlem();
+    $kontoB = Account::factory()->create();
+    $kontoB->users()->attach($user, ['role' => 'member']);
+
+    Container::factory()->for($kontoA, 'account')->count(2)->create();
+    Container::factory()->for($kontoB, 'account')->create();
+
+    // "Värm" Sanctum-guarden med ett omätt anrop innan mätningen börjar.
+    // Illuminate\Auth\RequestGuard::user() cachar den autentiserade
+    // användaren efter FÖRSTA gången den slås upp (samma mekanism som
+    // ContainerBehorighetTest dokumenterar) — utan den här värmningen
+    // skulle det första mätta anropet bära en extra tokenuppslagsfråga
+    // som det andra inte har, och skeva jämförelsen nedan helt oberoende
+    // av eager loading.
+    getJson('/api/containers', $headers)->assertOk();
+
+    DB::enableQueryLog();
+    $förstaSvaret = getJson('/api/containers', $headers);
+    $frågorMedTreContainers = count(DB::getQueryLog());
+    DB::flushQueryLog();
+
+    $förstaSvaret->assertOk();
+    expect($förstaSvaret->json('data'))->toHaveCount(3);
+
+    // Fler containers, på samma två konton — frågeantalet ska INTE växa.
+    Container::factory()->for($kontoA, 'account')->count(3)->create();
+    Container::factory()->for($kontoB, 'account')->count(2)->create();
+    DB::flushQueryLog(); // rensa bort factoryns egna INSERT-frågor innan mätningen
+
+    $andraSvaret = getJson('/api/containers', $headers);
+    $frågorMedÅttaContainers = count(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    $andraSvaret->assertOk();
+    expect($andraSvaret->json('data'))->toHaveCount(8);
+
+    expect($frågorMedÅttaContainers)->toBe($frågorMedTreContainers);
+});

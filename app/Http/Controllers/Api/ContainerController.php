@@ -44,6 +44,12 @@ class ContainerController extends Controller
             ->whereHas('account.users', function ($query) use ($request) {
                 $query->whereKey($request->user()->id);
             })
+            // Uppföljning på granskningen av PR #43: ContainerResource::toArray()
+            // läser $this->account->ulid för varje rad. Utan eager loading
+            // gör en lista med N containers N+1 frågor — en extra fråga
+            // per rad för ägarkontot. Låst av
+            // ContainerCrudTest::it('listningen laddar ägarkontot i förväg').
+            ->with('account')
             ->orderBy('name')
             ->get();
 
@@ -76,6 +82,12 @@ class ContainerController extends Controller
         $container->account_id = $account->id;
         $container->save();
 
+        // $account är redan hämtad ovan (för Gate::authorize()) — sätt
+        // relationen direkt i stället för att låta ContainerResource
+        // trigga en ny fråga för samma rad, se index()-kommentaren om
+        // N+1 (PR #43-uppföljningen).
+        $container->setRelation('account', $account);
+
         return (new ContainerResource($container))
             ->response()
             ->setStatusCode(201);
@@ -93,6 +105,11 @@ class ContainerController extends Controller
     {
         Gate::authorize('view', $container);
 
+        // En enda rad — inte N+1, men laddar ägarkontot uttryckligen ändå
+        // så ContainerResource aldrig kör en oplanerad lazy-load-fråga,
+        // samma resonemang som index() (PR #43-uppföljningen).
+        $container->loadMissing('account');
+
         return new ContainerResource($container);
     }
 
@@ -108,6 +125,9 @@ class ContainerController extends Controller
 
         $container->fill($request->validated());
         $container->save();
+
+        // Se show() ovan — samma resonemang, en enda rad.
+        $container->loadMissing('account');
 
         return new ContainerResource($container);
     }

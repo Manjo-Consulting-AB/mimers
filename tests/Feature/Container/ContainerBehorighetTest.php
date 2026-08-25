@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\Account;
 use App\Models\Container;
+use Illuminate\Support\Str;
 
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
@@ -25,6 +27,15 @@ use function Pest\Laravel\postJson;
  * - alla tre rollerna i ägarkontot har full behörighet
  * - en användare utan medlemskap i ägarkontot nekas med 403 auth.forbidden
  * - ett read_only-konto nekas allt skrivande men får läsa
+ *
+ * Utöver "Klart när": uppföljning på granskningen av PR #43. Issue 8 §
+ * Beslut 8 har två uttryckligt fattade grenar som inte fick egna namn
+ * under "Klart när" men som är beslut, inte biverkningar, och därför ska
+ * bevisas precis som resten:
+ * - ett account-ULID som inte finns alls → 422 validation.failed
+ *   (App\Http\Requests\Container\StoreContainerRequest, `exists`-regeln)
+ * - ett konto som finns men där användaren saknar medlemskap → 403
+ *   auth.forbidden (App\Policies\ContainerPolicy::create())
  */
 
 it('en oautentiserad begäran ger 401 auth.unauthenticated', function () {
@@ -84,6 +95,47 @@ it('en användare utan medlemskap i ägarkontot nekas med 403 auth.forbidden', f
     $destroy = deleteJson("/api/containers/{$container->ulid}", [], $headers);
     $destroy->assertStatus(403);
     expect($destroy->json('error.code'))->toBe('auth.forbidden');
+});
+
+/*
+ * Issue 8 § Beslut 8, första grenen: "Ett account-ULID som inte finns är
+ * ett valideringsfel." ULID:en är välformad (samma format som en riktig,
+ * Str::ulid()) men saknar rad i account — StoreContainerRequests
+ * exists-regel ska fånga den INNAN kontrollern ens når
+ * ContainerPolicy::create().
+ */
+it('ett account-ULID som inte finns ger 422 validation.failed', function () {
+    [, , $headers] = kontoMedMedlem();
+
+    $response = postJson('/api/containers', [
+        'name' => 'Vindil',
+        'kind' => 'boat',
+        'account' => (string) Str::ulid(),
+    ], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('validation.failed');
+    expect($response->json('error.data.fields.account'))->not->toBeNull();
+});
+
+/*
+ * Issue 8 § Beslut 8, andra grenen: "ett konto som finns men som
+ * användaren inte är medlem i är ett behörighetsfel." Skiljer sig från
+ * testet ovan — kontot existerar, så valideringen släpper igenom, och det
+ * är App\Policies\ContainerPolicy::create() som nekar.
+ */
+it('ett konto användaren inte är medlem i ger 403 auth.forbidden', function () {
+    [, , $headers] = kontoMedMedlem();
+    $frammandeKonto = Account::factory()->create();
+
+    $response = postJson('/api/containers', [
+        'name' => 'Vindil',
+        'kind' => 'boat',
+        'account' => $frammandeKonto->ulid,
+    ], $headers);
+
+    $response->assertStatus(403);
+    expect($response->json('error.code'))->toBe('auth.forbidden');
 });
 
 it('ett read_only-konto nekas allt skrivande men får läsa', function () {
