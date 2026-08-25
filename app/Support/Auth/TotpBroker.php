@@ -4,6 +4,7 @@ namespace App\Support\Auth;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use PragmaRX\Google2FA\Google2FA;
 
 /**
@@ -152,6 +153,14 @@ final class TotpBroker
      * Stänger av TOTP — kräver samma bevis (en giltig kod) som
      * aktivering, se klassdokumentationen, beslut 4.
      *
+     * Raderar samtidigt kontots återställningskoder
+     * (App\Support\Auth\RecoveryCodeBroker::purge(), issue 6c) — se den
+     * klassens beslut 5 för varför de inte får ligga kvar: de vore annars
+     * bara vilande, inte döda, och skulle leva upp igen vid en
+     * ominskrivning. Båda skrivningarna i en transaktion, så en
+     * avstängning aldrig kan lämna kontot utan TOTP men med kodarket kvar
+     * i tabellen.
+     *
      * @throws TotpInvalidException Ingen aktiv hemlighet, eller koden
      *                              stämmer inte.
      */
@@ -159,9 +168,13 @@ final class TotpBroker
     {
         self::verifyOrFail($user, $code);
 
-        $user->totp_secret = null;
-        $user->totp_confirmed_at = null;
-        $user->save();
+        DB::transaction(function () use ($user): void {
+            $user->totp_secret = null;
+            $user->totp_confirmed_at = null;
+            $user->save();
+
+            RecoveryCodeBroker::purge($user);
+        });
     }
 
     /**

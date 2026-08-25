@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Hash;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\assertAuthenticatedAs;
+use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\postJson;
 
 /*
@@ -228,4 +229,64 @@ it('en omgenerering ogiltigförklarar alla gamla koder omedelbart', function () 
         'code' => $nyaKoder[0],
     ]);
     $medNyKod->assertOk();
+});
+
+/*
+ * Uppföljning på granskningen av PR #40: en avstängd TOTP måste ta
+ * återställningskoderna med sig. Se App\Support\Auth\RecoveryCodeBroker
+ * § Beslut 5 och App\Support\Auth\TotpBroker::disable().
+ */
+it('avstängning av TOTP raderar kontots återställningskoder', function () {
+    [$user, $secret] = användareMedÅterställningskoder();
+    actingAs($user);
+
+    expect(TotpRecoveryCode::query()->where('user_id', $user->id)->count())->toBe(10);
+
+    deleteJson('/totp', ['code' => totpKodFör($secret)])->assertRedirect();
+
+    expect($user->fresh()->totp_confirmed_at)->toBeNull();
+    expect(TotpRecoveryCode::query()->where('user_id', $user->id)->count())->toBe(0);
+});
+
+it('avstängning via API:et raderar kontots återställningskoder', function () {
+    [$user, $secret] = användareMedÅterställningskoder();
+    $token = $user->createToken('api');
+
+    deleteJson('/api/totp', ['code' => totpKodFör($secret)], [
+        'Authorization' => "Bearer {$token->plainTextToken}",
+    ])->assertNoContent();
+
+    expect(TotpRecoveryCode::query()->where('user_id', $user->id)->count())->toBe(0);
+});
+
+/*
+ * Kärnan i fyndet: utan purge() i disable() vore koderna bara VILANDE.
+ * `consume()` nås aldrig medan totp_confirmed_at är NULL, så en avstängd
+ * TOTP döljer problemet — men skriver användaren in TOTP på nytt lever de
+ * gamla raderna upp igen och godkänns mot den NYA hemligheten.
+ */
+it('en gammal återställningskod fungerar inte efter att TOTP skrivits in på nytt', function () {
+    [$user, $secret, $gamlaKoder] = användareMedÅterställningskoder();
+    $gammalKod = $gamlaKoder[0];
+    actingAs($user);
+
+    // Stäng av …
+    deleteJson('/totp', ['code' => totpKodFör($secret)])->assertRedirect();
+
+    // … och skriv in TOTP på nytt, med en helt ny hemlighet.
+    postJson('/totp')->assertRedirect();
+    $nyHemlighet = $user->fresh()->totp_secret;
+    expect($nyHemlighet)->not->toBe($secret);
+    postJson('/totp/confirm', ['code' => totpKodFör($nyHemlighet)])->assertRedirect();
+    expect($user->fresh()->totp_confirmed_at)->not->toBeNull();
+
+    // Den gamla koden hörde till den gamla inskrivningen och är död.
+    $svar = postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'ratt-losenord',
+        'code' => $gammalKod,
+    ]);
+
+    $svar->assertStatus(422);
+    expect($svar->json('error.code'))->toBe('auth.totp_invalid');
 });

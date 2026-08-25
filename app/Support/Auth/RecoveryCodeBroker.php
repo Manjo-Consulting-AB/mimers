@@ -52,6 +52,17 @@ use Illuminate\Support\Str;
  * koder som finns till just för fallet "appen är borta" vore
  * självmotsägande.
  *
+ * **Beslut 5 — en avstängd TOTP tar koderna med sig.** Koderna hör till
+ * den TOTP-inskrivning de utfärdades under, inte till kontot i största
+ * allmänhet. App\Support\Auth\TotpBroker::disable() anropar därför
+ * `purge()`. Utan det vore koderna bara vilande, inte döda: `consume()`
+ * nås aldrig medan `user.totp_confirmed_at` är NULL (se
+ * App\Http\Requests\Auth\LoginRequest::authenticate()), men skriver
+ * användaren in TOTP på nytt — ny hemlighet, ny bekräftelse — så skulle de
+ * gamla raderna leva upp igen och godkännas mot den nya inskrivningen. Ett
+ * kodark som slängdes när TOTP stängdes av vore alltså en väg in efter
+ * ominskrivningen. Uppföljning på granskningen av PR #40.
+ *
  * **Ingen egen begränsare.** `consume()` anropas bara från
  * App\Http\Requests\Auth\LoginRequest::authenticate(), som körs bakom
  * samma `throttle:login`-middleware (routes/web.php, routes/api.php) som
@@ -97,7 +108,7 @@ final class RecoveryCodeBroker
         $codes = [];
 
         DB::transaction(function () use ($user, &$codes): void {
-            TotpRecoveryCode::query()->where('user_id', $user->id)->delete();
+            self::purge($user);
 
             for ($i = 0; $i < self::CODE_COUNT; $i++) {
                 $code = Str::random(self::CODE_LENGTH);
@@ -111,6 +122,16 @@ final class RecoveryCodeBroker
         });
 
         return $codes;
+    }
+
+    /**
+     * Raderar hela kontots uppsättning återställningskoder, förbrukade som
+     * oförbrukade. Anropas dels av `generate()` (Beslut 3, omgenerering),
+     * dels av App\Support\Auth\TotpBroker::disable() — se Beslut 5.
+     */
+    public static function purge(User $user): void
+    {
+        TotpRecoveryCode::query()->where('user_id', $user->id)->delete();
     }
 
     /**
