@@ -1,6 +1,6 @@
 # ADR-index
 
-Tjugotre beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Tjugofyra beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -29,6 +29,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0021 Frontendteknik]] | Inertia med Vue i Laravel-appen, sessionsguard för webben | [[Backlog]], [[Pipeline]] |
 | [[ADR-0022 Testramverk och statisk analys]] | Pest 5 och Larastan nivå 5, globala hjälpfunktioner i test | [[Backlog]], [[Pipeline]] |
 | [[ADR-0023 TOTP-bibliotek]] | `pragmarx/google2fa`, inte Fortify, ingen QR på servern | [[Konton och åtkomst]] |
+| [[ADR-0024 Tunna controllers och actions]] | Tunn controller, `Gate::authorize()`, Action när regeln är värd ett test | [[Backlog]] |
 
 ## Om att ändra ett beslut
 
