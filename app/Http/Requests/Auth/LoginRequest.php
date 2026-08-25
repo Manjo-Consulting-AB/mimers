@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Models\User;
+use App\Support\Auth\RecoveryCodeBroker;
 use App\Support\Auth\TotpBroker;
 use App\Support\Auth\TotpInvalidException;
 use App\Support\Auth\TotpRequiredException;
@@ -72,6 +73,16 @@ class LoginRequest extends FormRequest
      * de här två undantagen och översätter dem till sitt eget format,
      * samma mönster som ValidationException nedan redan följer.
      *
+     * Issue 6c · Återställningskoder: en TOTP-kod som inte verifierar
+     * provas INTE direkt som ett fel — `$code` kan lika gärna vara en
+     * återställningskod (appen är borta, se
+     * App\Support\Auth\RecoveryCodeBroker). Bara om
+     * App\Support\Auth\RecoveryCodeBroker::consume() också misslyckas
+     * (ingen sådan kod, redan förbrukad) kastas den ursprungliga
+     * TotpInvalidException vidare — samma svar oavsett vilket av de två
+     * som var fel, ingen sidokanal avslöjar vilketdera användaren
+     * försökte.
+     *
      * @throws ValidationException
      * @throws TotpRequiredException
      * @throws TotpInvalidException
@@ -96,9 +107,18 @@ class LoginRequest extends FormRequest
                 throw new TotpRequiredException;
             }
 
-            // Kastar TotpInvalidException vid fel kod ELLER en redan
-            // förbrukad tidslucka.
-            TotpBroker::verifyLoginCode($user, $code);
+            try {
+                // Kastar TotpInvalidException vid fel kod ELLER en redan
+                // förbrukad tidslucka.
+                TotpBroker::verifyLoginCode($user, $code);
+            } catch (TotpInvalidException $exception) {
+                // Issue 6c: provar samma inskickade värde som en
+                // återställningskod innan felet ges vidare — se den här
+                // metodens docblock.
+                if (! RecoveryCodeBroker::consume($user, $code)) {
+                    throw $exception;
+                }
+            }
         }
 
         return $user;

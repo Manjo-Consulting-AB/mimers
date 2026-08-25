@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Auth\AuthenticatedTokenController;
 use App\Http\Controllers\Api\Auth\MagicLinkLoginController;
 use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
+use App\Http\Controllers\Api\Auth\RecoveryCodeController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\Auth\TotpController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
@@ -46,4 +47,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/totp', [TotpController::class, 'store']);
     Route::post('/totp/confirm', [TotpController::class, 'confirm']);
     Route::delete('/totp', [TotpController::class, 'destroy']);
+
+    // Issue 6c · Återställningskoder. Se
+    // App\Http\Controllers\Api\Auth\RecoveryCodeController och
+    // App\Support\Auth\RecoveryCodeBroker.
+    Route::post('/totp/recovery-codes', [RecoveryCodeController::class, 'store']);
 });
