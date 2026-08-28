@@ -44,6 +44,19 @@ Stegen är Haiku och Sonnet. Alla tre axlarna låga → Haiku. Någon axel förh
 
 **Upptäcker du att en axel är fel satt — stanna och säg till.** Visar det sig att ändringen måste ut i kod andra issues bygger på, eller att svaret inte står i läslistan, så är det den viktigaste informationen du kan lämna ifrån dig. Att ploga vidare på en uppgift som är större än den utgav sig för att vara är dyrare än att avbryta, för både dig och den som ska granska.
 
+## Håll sessionen kort
+
+Varje turn skickar om hela konversationen. Det du läser i början bärs med genom resten av sessionen, så onödig läsning och upprepad utdata kostar långt mer än det ser ut att göra.
+
+- **Läs aldrig om en fil du redan läst.** Behöver du en detalj du sett, gå tillbaka i ditt eget resonemang i stället för att öppna filen igen.
+- **Kör riktade tester under iterationen** — `php artisan test --filter=DittTest`. Hela sviten körs **en** gång, precis före PR, inte efter varje rättning.
+- **Tysta installationerna:** `composer install --no-progress -q` och `npm install --silent`. Deras utdata säger dig ingenting och ligger kvar i kontextet resten av sessionen.
+- **PHPStan behöver mer minne i en worktree:** `vendor/bin/phpstan analyse --memory-limit=512M`. Ändra inte konfigurationen för att komma runt det.
+
+Bär din issue flera **delmoment** — en migration *och* en API-yta, till exempel, alltså två skilda läs–skriv–testa-slingor med olika förlagor och olika testfiler — kan den vara upplagd för två sessioner på samma gren: den första gör sitt delmoment, kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Står det så i issuen, följ det.
+
+Står det inte där, och du märker att sessionen växer okontrollerat — du läser om filer, tappar tråden, eller kontexten komprimeras — **stanna och säg till.** Det är samma sorts information som en felsatt axel, och lika värdefull.
+
 ## Vad som krävs för att en PR ska mergas
 
 - **Varje "Klart när"-punkt i issuen motsvaras av ett test.** En PR utan det mergas inte. Det är den enda mekanism som skalar när granskaren inte hinner läsa varje rad.
