@@ -1,0 +1,152 @@
+name: Agentuppgift
+description: En issue som en agent ska implementera. Fälten är bindande - de läses av implementeraren, granskaren och retron.
+title: "Issue NN: "
+labels: ["agentuppgift"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fyll i allt. Ett tomt fält blir antingen en fråga i PR:en eller en gissning som blir kod.
+
+  - type: input
+    id: milstolpe
+    attributes:
+      label: Milstolpe
+      description: Vilken fil under docs/Backlog/ hör issuen till?
+      placeholder: M1 Kärnmodell
+    validations:
+      required: true
+
+  - type: textarea
+    id: mal
+    attributes:
+      label: Mål
+      description: En till tre meningar. Vad ska finnas efteråt som inte finns nu?
+    validations:
+      required: true
+
+  - type: textarea
+    id: las
+    attributes:
+      label: Läs
+      description: >
+        Dokumenten som innehåller svaren, ett per rad. Peka ut avsnitt när dokumentet är stort.
+        Implementeraren läser dessa och inget annat.
+      placeholder: |
+        [[Konton och åtkomst]] § Behörighetsregler
+        [[ADR-0003 Åtkomstmodell]]
+    validations:
+      required: true
+
+  - type: textarea
+    id: in_scope
+    attributes:
+      label: In scope
+      description: >
+        Globbar, en per rad. Detta är de enda filer som får ändras.
+        Formatet läses maskinellt vid granskning och retro - skriv globbar, inte prosa.
+      placeholder: |
+        app/Models/ContainerAccess.php
+        app/Policies/**
+        database/migrations/**
+        tests/Feature/Atkomst/**
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: >
+        Globbar, en per rad. Bindande även om det ser trasigt ut.
+        Skriv särskilt ut det som frestar - det är den halvan som gör nytta.
+      placeholder: |
+        app/Http/Controllers/**
+        config/**
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ambiguity
+    attributes:
+      label: ambiguity
+      description: >
+        low betyder att VARJE fråga implementeraren kommer att ställa har ett svar i läslistan.
+        Inte "nästan varje".
+      options:
+        - low
+        - high
+    validations:
+      required: true
+
+  - type: dropdown
+    id: blast_radius
+    attributes:
+      label: blast_radius
+      description: cross-module så fort ändringen rör kod en annan issue bygger på - även om den är två rader.
+      options:
+        - contained
+        - cross-module
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk_class
+    attributes:
+      label: risk_class
+      description: >
+        elevated för autentisering, behörighet, pengar, kvoter, radering och filleverans.
+        Vid tvekan: elevated. Det som kostar är inte den dyrare modellen, det är felet.
+      options:
+        - none
+        - elevated
+    validations:
+      required: true
+
+  - type: dropdown
+    id: modell
+    attributes:
+      label: Modell
+      description: >
+        Alla tre axlarna låga ger Haiku. Någon axel förhöjd ger Sonnet.
+        Stämmer inte valet med axlarna är någondera fel satt.
+      options:
+        - Haiku (alla axlar låga)
+        - Sonnet (någon axel förhöjd)
+    validations:
+      required: true
+
+  - type: textarea
+    id: klart_nar
+    attributes:
+      label: Klart när
+      description: >
+        Testbara påståenden, ett per rad som kryssruta. Varje punkt ska motsvaras av ett test i PR:en.
+        Kan ett test inte bevisa punkten är den inte färdigtänkt.
+      value: |
+        - [ ] 
+        - [ ] 
+    validations:
+      required: true
+
+  - type: input
+    id: beror_pa
+    attributes:
+      label: Beror på
+      description: Issuenummer, kommaseparerade. Skriv "-" om inga.
+      placeholder: "8, 9"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: delmoment
+    attributes:
+      label: Delmoment
+      description: >
+        Kryssa om issuen bär två skilda läs-skriv-testa-slingor med olika förlagor och testfiler.
+        Då körs den som två sessioner på samma gren: den första pushar utan att öppna PR.
+      options:
+        - label: Denna issue är upplagd för två sessioner på samma gren
+          required: false

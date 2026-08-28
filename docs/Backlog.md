@@ -4,7 +4,7 @@ Issues i beroendeordning. Tillbaka till [[00 Index]].
 
 **Till dig som ska implementera:** läs din issue, läs de dokument som står under **Läs**, och inget mer. Dokumentationen är uppdelad just för att du inte ska behöva gå igenom allt för att ändra en detalj.
 
-**Till den som skapar issues i GitHub:** en rubrik per issue nedan, beskrivningen som brödtext, acceptanskriterierna som checklista. Beroenden anges med issue-nummer.
+**Till den som skapar issues i GitHub:** använd mallen `Agentuppgift` (`.github/ISSUE_TEMPLATE/agent_task.yml`). En rubrik per issue nedan, beskrivningen som brödtext, acceptanskriterierna som checklista, beroenden med issue-nummer. Mallens övriga fält — omfångsrutan och de tre axlarna — står inte i backlogfilerna och måste fyllas i här: det är det enda ställe implementeraren ser dem.
 
 Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID utåt, soft delete, UTC, utf8mb4, inga ENUM, inga flyttal för pengar.
 

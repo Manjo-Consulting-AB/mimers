@@ -8,11 +8,7 @@ Motiveringen bakom processen står i [ADR-0018](docs/ADR/ADR-0018%20Utvecklingsp
 
 ## Innan du börjar
 
-1. Slå upp ditt issuenummer i [Backlog](docs/Backlog.md) och öppna **bara** din milstolpes fil under `docs/Backlog/`. Läs din issue där.
-2. Läs de dokument som står under **Läs** i issuen. **Inget mer.** Dokumentationen är uppdelad just för att du inte ska behöva gå igenom allt för att ändra en detalj.
-3. Hittar du inte svaret i din läslista — **gissa inte, fråga.** Ett felaktigt antagande som blir kod är dyrare än en fråga i PR:en.
-
-Startpunkten för dokumentationen är [00 Index](docs/00%20Index.md).
+Slå upp ditt issuenummer i [Backlog](docs/Backlog.md) och öppna **bara** din milstolpes fil under `docs/Backlog/`. Läs din issue där, och läs sedan GitHub-issuen — det är där omfångsrutan och axlarna står. Startpunkten för dokumentationen är [00 Index](docs/00%20Index.md).
 
 ## Arbetsgång
 
@@ -26,13 +22,15 @@ Startpunkten för dokumentationen är [00 Index](docs/00%20Index.md).
 
 Ingen pushar direkt till `main`, inte heller Tony.
 
-## Omfång och modellval
+<!-- ai-standards:begin agent-core -->
 
-Varje issue bär två saker utöver sin beskrivning: en **omfångsruta** och **tre axlar**. Båda sätts av den som skriver issuen, inte av dig.
+Regler för dig som implementerar en issue. De gäller i alla Manjo-repon och underhålls i [ai-standards](https://github.com/Manjo-Consulting-AB/ai-standards). Repospecifika regler står utanför det här blocket — de går före när de säger emot, men de ska inte upprepa det som står här.
 
-**Omfångsrutan** listar `In scope` — filerna och katalogerna du får ändra — och `Out of scope` — det du inte får röra även om det ser trasigt ut. `Out of scope` är bindande. Behöver arbetet en ändring utanför rutan är det inte en lov att ta den: **stanna och fråga i PR:en.** Det gäller också sådant ett `install`-kommando skapar åt dig; ställning som ramverket genererar men issuen inte bett om ska bort.
+**Innan du börjar.** Läs din issue och de dokument som står under **Läs**. Inget mer. Dokumentationen är uppdelad just för att du inte ska behöva gå igenom allt för att ändra en detalj. Hittar du inte svaret i din läslista — **gissa inte, fråga.** Ett felaktigt antagande som blir kod är dyrare än en fråga i PR:en.
 
-**De tre axlarna** avgör vilken modell som får uppgiften:
+**Omfångsrutan är bindande.** Issuen listar `In scope` — filerna och katalogerna du får ändra — och `Out of scope` — det du inte får röra även om det ser trasigt ut. Behöver arbetet en ändring utanför rutan är det inte en lov att ta den: **stanna och fråga i PR:en.** Det gäller också sådant ett `install`-kommando skapar åt dig; ställning som ramverket genererar men issuen inte bett om ska bort.
+
+**De tre axlarna** sätts av den som skriver issuen, inte av dig:
 
 | Axel | Värden |
 |---|---|
@@ -40,28 +38,37 @@ Varje issue bär två saker utöver sin beskrivning: en **omfångsruta** och **t
 | `blast_radius` | `contained` om ändringen bor i egna filer, `cross-module` om den rör kod andra issues bygger på |
 | `risk_class` | `none` för vanlig funktionalitet, `elevated` för autentisering, behörighet, pengar, kvoter, radering och filleverans |
 
-Stegen är Haiku och Sonnet. Alla tre axlarna låga → Haiku. Någon axel förhöjd → Sonnet. Opus skriver issuen och granskar PR:en, men får aldrig en implementationsuppgift — en välskriven issue är det som ska bära arbetet, inte modellens storlek.
-
 **Upptäcker du att en axel är fel satt — stanna och säg till.** Visar det sig att ändringen måste ut i kod andra issues bygger på, eller att svaret inte står i läslistan, så är det den viktigaste informationen du kan lämna ifrån dig. Att ploga vidare på en uppgift som är större än den utgav sig för att vara är dyrare än att avbryta, för både dig och den som ska granska.
 
-## Håll sessionen kort
-
-Varje turn skickar om hela konversationen. Det du läser i början bärs med genom resten av sessionen, så onödig läsning och upprepad utdata kostar långt mer än det ser ut att göra.
+**Håll sessionen kort.** Varje turn skickar om hela konversationen. Det du läser i början bärs med genom resten av sessionen, så onödig läsning och upprepad utdata kostar långt mer än det ser ut att göra.
 
 - **Läs aldrig om en fil du redan läst.** Behöver du en detalj du sett, gå tillbaka i ditt eget resonemang i stället för att öppna filen igen.
-- **Kör riktade tester under iterationen** — `php artisan test --filter=DittTest`. Hela sviten körs **en** gång, precis före PR, inte efter varje rättning.
-- **Tysta installationerna:** `composer install --no-progress -q` och `npm install --silent`. Deras utdata säger dig ingenting och ligger kvar i kontextet resten av sessionen.
+- **Kör riktade tester under iterationen.** Hela sviten körs **en** gång, precis före PR, inte efter varje rättning.
+- **Tysta installationerna.** Deras utdata säger dig ingenting och ligger kvar i kontextet resten av sessionen.
+
+Märker du att sessionen växer okontrollerat — du läser om filer, tappar tråden, eller kontexten komprimeras — **stanna och säg till.** Det är samma sorts information som en felsatt axel, och lika värdefull.
+
+**Processnoteringen i PR:en är inte en formalitet.** En rad om vad som kostade mer än det borde är det enda som överlever sessionen. Den läses vid milstolpsretro och är det som gör att samma misstag inte upprepas i nästa issue. "Inget" är ett giltigt och vanligt svar — men skriv det aktivt, hoppa inte över fältet.
+
+<!-- ai-standards:end agent-core -->
+
+## Sessionshygien i det här repot
+
+Reglerna står i blocket ovan. Kommandona är de här:
+
+- **Riktade tester:** `php artisan test --filter=DittTest`. Hela sviten körs en gång, precis före PR.
+- **Tysta installationer:** `composer install --no-progress -q` och `npm install --silent`.
 - **PHPStan behöver mer minne i en worktree:** `vendor/bin/phpstan analyse --memory-limit=512M`. Ändra inte konfigurationen för att komma runt det.
 
 Bär din issue flera **delmoment** — en migration *och* en API-yta, till exempel, alltså två skilda läs–skriv–testa-slingor med olika förlagor och olika testfiler — kan den vara upplagd för två sessioner på samma gren: den första gör sitt delmoment, kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Står det så i issuen, följ det.
 
-Står det inte där, och du märker att sessionen växer okontrollerat — du läser om filer, tappar tråden, eller kontexten komprimeras — **stanna och säg till.** Det är samma sorts information som en felsatt axel, och lika värdefull.
+Vilken modell som får vilken axelprofil står i [model-routing](https://github.com/Manjo-Consulting-AB/ai-standards/blob/main/model-routing.md). Du väljer den inte själv — men stämmer inte uppgiften med den modell som fick den, är det värt att säga till.
 
 ## Vad som krävs för att en PR ska mergas
 
 - **Varje "Klart när"-punkt i issuen motsvaras av ett test.** En PR utan det mergas inte. Det är den enda mekanism som skalar när granskaren inte hinner läsa varje rad.
 - CI är grön: `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`, `php artisan test`, `npm run build`.
-- PR-mallen är ifylld, inklusive vilka dokument du läst.
+- PR-mallen är ifylld, inklusive vilka dokument du läst och processnoteringen.
 
 ## Nya beroenden
 
