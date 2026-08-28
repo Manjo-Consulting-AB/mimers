@@ -54,11 +54,16 @@ Märker du att sessionen växer okontrollerat — du läser om filer, tappar tr�
 
 ## Sessionshygien i det här repot
 
-Reglerna står i blocket ovan. Kommandona är de här:
+Reglerna står i blocket ovan. Här står bara kommandona de motsvarar.
 
-- **Riktade tester:** `php artisan test --filter=DittTest`. Hela sviten körs en gång, precis före PR.
-- **Tysta installationer:** `composer install --no-progress -q` och `npm install --silent`.
-- **PHPStan behöver mer minne i en worktree:** `vendor/bin/phpstan analyse --memory-limit=512M`. Ändra inte konfigurationen för att komma runt det.
+| Vad | Kommando |
+|---|---|
+| Riktat test | `php artisan test --filter=DittTest` |
+| Hela sviten, en gång före PR | `composer test` |
+| Installation | `composer install --no-progress -q`, `npm install --silent` |
+| Statisk analys | `vendor/bin/phpstan analyse --memory-limit=512M` |
+
+Minnesflaggan behövs i en worktree. Ändra inte `phpstan.neon` för att komma runt det.
 
 Bär din issue flera **delmoment** — en migration *och* en API-yta, till exempel, alltså två skilda läs–skriv–testa-slingor med olika förlagor och olika testfiler — kan den vara upplagd för två sessioner på samma gren: den första gör sitt delmoment, kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Står det så i issuen, följ det.
 
