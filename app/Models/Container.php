@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -57,5 +58,19 @@ class Container extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    /**
+     * Delegerade åtkomster till containern, utöver ägarskapet — se
+     * [[Konton och åtkomst]] § container_access och issue 9a. Bara
+     * relationen läggs till här; policyn som använder den bor i
+     * App\Policies\ContainerPolicy och API-ytan för att bevilja, lista och
+     * återkalla är issue 9b.
+     *
+     * @return HasMany<ContainerAccess, $this>
+     */
+    public function accesses(): HasMany
+    {
+        return $this->hasMany(ContainerAccess::class);
     }
 }
