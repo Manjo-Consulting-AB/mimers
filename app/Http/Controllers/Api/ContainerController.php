@@ -8,6 +8,8 @@ use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\ContainerAccess;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -54,7 +56,8 @@ class ContainerController extends Controller
             ->where(function ($query) use ($request, $accountIds) {
                 $query->whereHas('account.users', function ($query) use ($request) {
                     $query->whereKey($request->user()->id);
-                })->orWhereHas('accesses', function ($query) use ($request, $accountIds) {
+                })->orWhereHas('accesses', function (Builder $query) use ($request, $accountIds) {
+                    /** @var Builder<ContainerAccess> $query */
                     $query->validFor($request->user(), $accountIds);
                 });
             })
