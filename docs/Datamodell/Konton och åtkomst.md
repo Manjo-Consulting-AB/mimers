@@ -21,7 +21,7 @@ Beslut bakom detta: [[ADR-0002 Konto äger container]], [[ADR-0003 Åtkomstmodel
 | read_only_reason | VARCHAR(40) NULL | `payment_failed`, `over_quota`, `inactivity` |
 | created_at, updated_at | | |
 
-**Vid registrering** skapas kontot av den som registrerar sig: `type` blir `personal`, `status` blir `active`, och `name` sätts till användarens e-postadress — hela adressen, inte en gissad namndel. Kontot döps om i kontovyerna. Registreringsformuläret samlar bara in e-post och lösenord, så resten får defaultvärden: `locale` `sv_SE`, `timezone` `Europe/Stockholm`, `unit_system` `metric`. Kontot får samtidigt en `account_user`-rad med `role` `owner` — utan den äger den nya användaren ingenting, se [[ADR-0002 Konto äger container]].
+**Vid registrering** skapas kontot av den som registrerar sig: `type` blir `personal`, `status` blir `active`, och `name` sätts till **användarens namn**, som formuläret frågar efter tillsammans med e-post och lösenord. Ett personkonto är den personen, och kontonamnet syns för andra i deltagarlistan — där vore en e-postadress en läcka snarare än en identitet. Kontot döps om i kontovyerna. Övriga fält får defaultvärden: `locale` `sv_SE`, `timezone` `Europe/Stockholm`, `unit_system` `metric`. Kontot får samtidigt en `account_user`-rad med `role` `owner` — utan den äger den nya användaren ingenting, se [[ADR-0002 Konto äger container]].
 
 ## user
 
@@ -30,6 +30,7 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | Kolumn | Typ | Not |
 |---|---|---|
 | id, ulid | | |
+| name | VARCHAR(255) | Personens namn, som hon skrev det. Obligatoriskt, precis som `email` — en användare utan läsbar identitet är inget systemet har användning för. Det här är vad andra ser: deltagarlistan (§ Behörighetsregler), notiser, revisionsloggen. |
 | email | VARCHAR(255) UNIQUE | |
 | email_verified_at | TIMESTAMP NULL | Krävs innan användaren kan ta emot delning |
 | password_hash | VARCHAR(255) NULL | NULL om användaren bara använder magic link |
@@ -97,9 +98,11 @@ Delning med någon som inte har konto.
 | email | VARCHAR(255) | |
 | level | VARCHAR(20) | |
 | token_hash | CHAR(64) | SHA-256 av token. Klartexten skickas i mejlet och lagras aldrig. |
-| status | VARCHAR(20) | `pending` \| `accepted` \| `rejected` \| `expired` |
+| status | VARCHAR(20) | `pending` \| `accepted` \| `rejected` \| `expired` \| `revoked` |
 | expires_at | TIMESTAMP | |
 | invited_by_user_id | FK | |
+
+`revoked` är avsändarens ånger — inbjudan drogs tillbaka innan den besvarades, typiskt för att den skickades till fel adress. Raden raderas aldrig; utestående och tillbakadragna inbjudningar är underlaget för [[ADR-0017 Missbruksvektorer]] och M9.
 
 Mottagaren måste skapa konto och verifiera sin e-post för att acceptera. Det är avsiktligt: alla som läser något i systemet ska vara identifierade.
 
@@ -143,5 +146,9 @@ Sammanfattat, att implementera som en policy och inte utspritt i controllers:
 1. Ägarkontots medlemmar har full behörighet till containern.
 2. Övriga får behörighet via `container_access` där `revoked_at IS NULL` och `expires_at` inte passerats.
 3. `read` får läsa. `write` får skapa och ändra items, filer, scheman — men **aldrig** radera containern, hantera åtkomster eller initiera ägarbyte.
-4. Är kontot `read_only` nekas allt skrivande oavsett behörighet.
+4. Är kontot `read_only` nekas allt skrivande oavsett behörighet — **utom att återkalla en åtkomst**. Det minskar exponeringen i stället för att öka den, och ett fruset konto ska inte vara utlåst från att klippa en relation det inte längre vill ha. Att bevilja eller bjuda in är däremot fortfarande spärrat.
 5. Uppladdningar räknas mot **den uppladdande användarens konto**, inte ägarkontot.
+
+**Att hantera åtkomster och att se dem är två olika saker.** Regel 3 spärrar det första: bara ägarkontots medlemmar beviljar, bjuder in och återkallar, och de är också de enda som ser åtkomsternas förvaltningsvy — nivåer, utgångsdatum, vem som beviljade, historiken av återkallade rader och de inbjudningar som ännu inte besvarats.
+
+Det andra är **deltagarlistan**: vilka som har åtkomst till containern *just nu*. Den läser varje deltagare, inte bara ägaren. Den som bjudits in med `write` och överväger att lägga in något känsligt ska kunna se att hon inte är ensam — utan att för den skull få veta vem som beviljade vad, vem som haft åtkomst tidigare, eller vilka adresser som har en obesvarad inbjudan ute. Listan visar deltagarna som de är modellerade: ägarkontot som en post, och en post per giltig `container_access`-rad — en organisation räknas som **en** deltagare, aldrig som sina anställda. Identiteten är `user.name` respektive `account.name`, **aldrig en e-postadress**: deltagare ska känna igen varandra, inte kunna kontakta varandra utanför systemet.
