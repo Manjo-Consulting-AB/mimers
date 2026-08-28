@@ -29,6 +29,7 @@ use function Pest\Laravel\postJson;
 
 it('ger validation.failed med en kod per fält och regelparametrar i data — 422', function () {
     $response = postJson('/api/register', [
+        'name' => 'Giltigt Namn',
         'email' => 'inte-en-e-postadress',
         'password' => '',
     ]);

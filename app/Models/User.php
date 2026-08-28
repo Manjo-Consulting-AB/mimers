@@ -18,8 +18,9 @@ use Laravel\Sanctum\HasApiTokens;
 
 /**
  * En person, se [[Konton och åtkomst]] § user. Tillhör ett eller flera
- * konton via `account_user` (många-till-många). Ingen `name`-kolumn och
- * inget soft delete — dokumentet har varken.
+ * konton via `account_user` (många-till-många). `name` tillagt i issue 3b
+ * (#51) — obligatoriskt, precis som `email`. Inget soft delete —
+ * dokumentet har inget.
  *
  * `locale`, `timezone` och `unit_system` åsidosätter kontots värden för den
  * här personen när de är satta.
@@ -42,7 +43,7 @@ use Laravel\Sanctum\HasApiTokens;
  * läser kolumnen men inte vet något om krypteringen själv. Redan dold i
  * serialisering sedan issue 3 (`#[Hidden]` nedan) — det ändras inte här.
  */
-#[Fillable(['email', 'password_hash', 'locale', 'timezone', 'unit_system', 'quiet_hours_start', 'quiet_hours_end'])]
+#[Fillable(['name', 'email', 'password_hash', 'locale', 'timezone', 'unit_system', 'quiet_hours_start', 'quiet_hours_end'])]
 #[Hidden(['password_hash', 'totp_secret'])]
 #[RouteKey('ulid')]
 class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail

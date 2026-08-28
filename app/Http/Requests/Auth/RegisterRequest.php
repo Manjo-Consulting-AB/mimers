@@ -11,8 +11,10 @@ use Illuminate\Validation\Rules\Password;
  * Web och API delar FormRequests, Policies och servicelager." Samma
  * ogiltiga indata ska alltså avvisas likadant på båda ytorna.
  *
- * Registrering tar bara e-post och lösenord — `user` har ingen
- * `name`-kolumn, se issue #17 § Att se upp med.
+ * `name` tillagt i issue 3b (#51) — obligatoriskt, precis som `email` och
+ * `password`. Trimmas av Laravels `TrimStrings`-middleware (redan på);
+ * inga egna regler om form, versaler eller minsta längd bortom `required`
+ * — ett namn ser ut hur som helst.
  */
 class RegisterRequest extends FormRequest
 {
@@ -27,6 +29,7 @@ class RegisterRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:user,email'],
             'password' => ['required', 'string', Password::defaults()],
         ];
