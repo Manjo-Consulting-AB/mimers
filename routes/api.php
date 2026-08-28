@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
 use App\Http\Controllers\Api\Auth\RecoveryCodeController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\Auth\TotpController;
+use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
@@ -35,7 +36,11 @@ Route::post('/login/magic-link', [MagicLinkRequestController::class, 'store'])
 
 Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store']);
 
-Route::middleware('auth:sanctum')->group(function () {
+// scopeBindings(): issue 9b § Beslut 1 — {access} nedan måste slås upp
+// INOM {container}, annars går det att återkalla en åtkomst i fel
+// container via en ULID från en annan (behörighetshål). Ingen effekt på
+// övriga rutter i gruppen, som bara har ett rutt-parametrar var.
+Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/logout', [AuthenticatedTokenController::class, 'destroy']);
 
     // Samma kontroller som webbens verification.send, se
@@ -63,4 +68,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/containers/{container}', [ContainerController::class, 'show']);
     Route::patch('/containers/{container}', [ContainerController::class, 'update']);
     Route::delete('/containers/{container}', [ContainerController::class, 'destroy']);
+
+    // Issue 9b · Åtkomstytan — bevilja, lista och återkalla delegerade
+    // åtkomster till en container, se
+    // App\Http\Controllers\Api\ContainerAccessController och
+    // App\Policies\ContainerPolicy::viewAccesses()/manageAccess()/revokeAccess().
+    // Deltagarlistan (vem som HAR åtkomst just nu, sedd av alla deltagare)
+    // är en annan yta, issue 9c — läggs inte här.
+    Route::get('/containers/{container}/accesses', [ContainerAccessController::class, 'index']);
+    Route::post('/containers/{container}/accesses', [ContainerAccessController::class, 'store']);
+    Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy']);
 });

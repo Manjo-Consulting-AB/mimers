@@ -97,6 +97,48 @@ class ContainerPolicy
     }
 
     /**
+     * Får användaren SE containerns delegerade åtkomster (issue 9b)? Bara
+     * regel 1 — INGEN regel 4-kontroll. [[Konton och åtkomst]] §
+     * Behörighetsregler regel 4 gäller skrivande, och issue 9a § Beslut 9
+     * säger uttryckligen att "läsning påverkas aldrig av regel 4": ett
+     * fruset konto måste kunna se vem som har åtkomst till dess containers.
+     *
+     * Skiljs medvetet från revokeAccess() nedan trots identisk kropp i dag —
+     * se den metodens docblock.
+     */
+    public function viewAccesses(User $user, Container $container): bool
+    {
+        return $this->isMemberOfOwnerAccount($user, $container->account);
+    }
+
+    /**
+     * Får användaren BEVILJA en ny åtkomst (issue 9b, POST)? Regel 1 + regel
+     * 4, exakt som delete() ovan — att bevilja ÖKAR exponeringen, så ett
+     * `read_only`-ägarkonto nekas.
+     */
+    public function manageAccess(User $user, Container $container): bool
+    {
+        return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isReadOnly($container->account);
+    }
+
+    /**
+     * Får användaren ÅTERKALLA en åtkomst (issue 9b, DELETE)? Bara regel 1 —
+     * INGEN regel 4-kontroll. Att återkalla är en skrivning, men regel 4
+     * undantar den uttryckligen: den MINSKAR exponeringen i stället för att
+     * öka den, och ett konto som frysts (t.ex. ett kort som gick ut) ska
+     * inte vara utlåst från att klippa en relation det inte längre vill ha.
+     * Se [[Konton och åtkomst]] § Behörighetsregler regel 4.
+     *
+     * Identisk kropp med viewAccesses() i dag — ändå TVÅ metoder, för de
+     * betyder olika saker och kan komma att ändras oberoende av varandra.
+     * Slå inte ihop dem.
+     */
+    public function revokeAccess(User $user, Container $container): bool
+    {
+        return $this->isMemberOfOwnerAccount($user, $container->account);
+    }
+
+    /**
      * Regel 1: är användaren medlem (någon roll) i kontot som äger
      * containern?
      */
