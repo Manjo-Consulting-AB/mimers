@@ -25,6 +25,7 @@ use function Pest\Laravel\postJson;
 
 it('avvisar samma ogiltiga registreringsdata på båda ytorna — webben med Laravels vanliga form, API:et med höljet', function () {
     $ogiltigIndata = [
+        'name' => 'Giltigt Namn',
         'email' => 'inte-en-e-postadress',
         'password' => '',
     ];
@@ -51,16 +52,34 @@ it('avvisar samma ogiltiga registreringsdata på båda ytorna — webben med Lar
         ->toBe(array_keys($api->json('error.data.fields')));
 });
 
-it('avvisar saknad e-post och saknat lösenord likadant vid registrering', function () {
+it('avvisar saknad e-post, saknat lösenord och saknat namn likadant vid registrering', function () {
     $webb = postJson('/register', []);
     $api = postJson('/api/register', []);
 
-    $webb->assertJsonValidationErrors(['email', 'password']);
+    $webb->assertJsonValidationErrors(['name', 'email', 'password']);
 
     $api->assertStatus(422);
     expect($api->json('error.code'))->toBe('validation.failed');
+    expect($api->json('error.data.fields.name.0.code'))->toBe('validation.required');
     expect($api->json('error.data.fields.email.0.code'))->toBe('validation.required');
     expect($api->json('error.data.fields.password.0.code'))->toBe('validation.required');
+});
+
+it('webb och api avvisar ett saknat namn likadant', function () {
+    $utanNamn = [
+        'email' => 'utan-namn@example.com',
+        'password' => 'giltigt-losenord',
+    ];
+
+    $webb = postJson('/register', $utanNamn);
+    $api = postJson('/api/register', $utanNamn);
+
+    $webb->assertStatus(422);
+    $webb->assertJsonValidationErrors(['name']);
+
+    $api->assertStatus(422);
+    expect($api->json('error.code'))->toBe('validation.failed');
+    expect($api->json('error.data.fields.name.0.code'))->toBe('validation.required');
 });
 
 it('avvisar samma ogiltiga inloggningsdata på båda ytorna — webben med Laravels vanliga form, API:et med auth.invalid_credentials', function () {

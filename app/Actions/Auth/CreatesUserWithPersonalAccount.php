@@ -19,30 +19,35 @@ use Illuminate\Support\Facades\DB;
 class CreatesUserWithPersonalAccount
 {
     /**
+     * @param  string  $name  Personens namn, som hon skrev det — sätts på
+     *                        både `user.name` och `account.name`, se issue
+     *                        3b (#51) § Beslut 4.
      * @param  string  $password  Klartext — får INTE hashas här. `password_hash`
      *                            har redan en `hashed`-cast på modellen (se
      *                            App\Models\User), en andra Hash::make() skulle
      *                            dubbelhasha lösenordet.
      */
-    public function handle(string $email, string $password): User
+    public function handle(string $name, string $email, string $password): User
     {
-        return DB::transaction(function () use ($email, $password): User {
+        return DB::transaction(function () use ($name, $email, $password): User {
             $user = User::query()->create([
+                'name' => $name,
                 'email' => $email,
                 'password_hash' => $password,
             ]);
 
-            // account.name, locale, timezone och unit_system samlas inte in vid
-            // registrering (formuläret tar bara e-post och lösenord).
-            // `name` sätts till hela e-postadressen — den är entydig och
-            // låtsas inte vara ett valt namn, till skillnad från att hitta
-            // på ett genom att klippa av delen före '@'. Användaren döper
-            // om kontot när kontovyerna byggs i M10. locale/timezone/
-            // unit_system är dokumenterade defaultvärden för ett
-            // nyregistrerat personkonto, se granskningen av #17.
+            // account.locale, timezone och unit_system samlas inte in vid
+            // registrering (formuläret tar bara namn, e-post och lösenord).
+            // `name` sätts till användarens namn, inte e-postadressen — ett
+            // personkonto ÄR den personen, se issue 3b (#51) § Beslut 4.
+            // Befintliga konton döps INTE om här; det sker i kontovyerna
+            // (M10), eftersom vi inte kan skilja en outnyttjad default från
+            // ett namn ägaren redan valt. locale/timezone/unit_system är
+            // dokumenterade defaultvärden för ett nyregistrerat
+            // personkonto, se granskningen av #17.
             $account = Account::query()->create([
                 'type' => 'personal',
-                'name' => $email,
+                'name' => $name,
                 'locale' => 'sv_SE',
                 'timezone' => 'Europe/Stockholm',
                 'unit_system' => 'metric',

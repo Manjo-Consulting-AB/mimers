@@ -23,6 +23,7 @@ class RegisteredUserController extends Controller
     public function store(RegisterRequest $request): JsonResponse
     {
         $user = $this->creator->handle(
+            $request->string('name')->toString(),
             $request->string('email')->toString(),
             $request->string('password')->toString(),
         );
