@@ -37,12 +37,26 @@ class ContainerController extends Controller
      * GET /api/containers — containers från ALLA konton den inloggade
      * användaren är medlem i, sorterade på `name` stigande. Ingen
      * paginering i den här issuen, se issue 8 § Beslut 6.
+     *
+     * Sedan issue 9a § Beslut 8 tas ÄVEN containers med en giltig
+     * delegerad `container_access` med — en FRÅGA om vilka containers som
+     * finns, inte en behörighetsfråga, så den hör hemma här (eller i ett
+     * scope på modellen) och aldrig i App\Policies\ContainerPolicy. Samma
+     * villkor (ContainerAccess::scopeValidFor()) som policyns
+     * hasContainerAccess() prövar för view(), så de två frågorna aldrig
+     * kan glida isär.
      */
     public function index(Request $request): JsonResponse
     {
+        $accountIds = $request->user()->accounts->pluck('id')->values()->all();
+
         $containers = Container::query()
-            ->whereHas('account.users', function ($query) use ($request) {
-                $query->whereKey($request->user()->id);
+            ->where(function ($query) use ($request, $accountIds) {
+                $query->whereHas('account.users', function ($query) use ($request) {
+                    $query->whereKey($request->user()->id);
+                })->orWhereHas('accesses', function ($query) use ($request, $accountIds) {
+                    $query->validFor($request->user(), $accountIds);
+                });
             })
             // Uppföljning på granskningen av PR #43: ContainerResource::toArray()
             // läser $this->account->ulid för varje rad. Utan eager loading

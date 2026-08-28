@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\User;
 
 /**
@@ -13,19 +14,24 @@ use App\Models\User;
  * `App\Models\Container` → `App\Policies\ContainerPolicy`, ingen
  * registrering behövs.
  *
- * Implementerar bara regel 1 och 4 här:
+ * Fem regler, fyra av dem här:
  *
  * 1. Ägarkontots medlemmar (`owner`, `admin`, `member` — alla tre lika,
  *    se issue 8 § Beslut 3, ingen rollgradering är beslutad) har full
  *    behörighet.
- * 4. Är ägarkontot `read_only` nekas allt skrivande oavsett behörighet.
- *    Läsning är alltid tillåten.
+ * 2. Övriga får behörighet via `container_access` där `revoked_at IS NULL`
+ *    och `expires_at` inte passerats — se issue 9a § Beslut 5,
+ *    hasContainerAccess() nedan.
+ * 3. `level` avgör, `kind` avgör aldrig: `read` läser, `write` läser och
+ *    ändrar men får ALDRIG radera containern eller hantera åtkomster
+ *    (issue 9b) — se issue 9a § Beslut 6.
+ * 4. Är kontot `read_only` nekas allt skrivande oavsett behörighet.
+ *    Läsning är alltid tillåten. Sedan issue 9a gäller det här ÄVEN det
+ *    mottagande kontot på en `managed`-rad, se issue 9a § Beslut 9 —
+ *    hasContainerAccess()s `$excludeReadOnlyGranteeAccounts`.
  *
- * Regel 2 och 3 (`container_access`, nivåerna `read`/`write` för andra än
- * ägarkontots medlemmar) hör till issue 9 och läggs till i den HÄR
- * policyn, inte en ny — se kommentaren vid varje metod nedan för var den
- * hakar i. Regel 5 (uppladdningar räknas mot den uppladdande användarens
- * konto) är inte en behörighetsfråga och hör inte hemma här.
+ * Regel 5 (uppladdningar räknas mot den uppladdande användarens konto) är
+ * inte en behörighetsfråga och hör inte hemma här.
  *
  * Ingen behörighetslogik får bo i App\Http\Controllers\Api\ContainerController
  * — den anropar bara Gate::authorize() och litar på svaret härifrån.
@@ -33,17 +39,14 @@ use App\Models\User;
 class ContainerPolicy
 {
     /**
-     * Får användaren se containern? Regel 1: ägarkontots medlemmar. Regel
-     * 4 gäller INTE här — läsning är alltid tillåten oavsett
-     * `account.status`.
-     *
-     * Issue 9 hakar i här: en användare som har `container_access` (read
-     * eller write, ej återkallad, ej utgången) för containern eller för
-     * hela ägarkontots organisation ska ORAS in i det här villkoret.
+     * Får användaren se containern? Regel 1 ELLER regel 2 (en giltig
+     * `read`- eller `write`-access). Regel 4 gäller INTE här — läsning är
+     * alltid tillåten oavsett `account.status`, för ingendera vägen in.
      */
     public function view(User $user, Container $container): bool
     {
-        return $this->isMemberOfOwnerAccount($user, $container->account);
+        return $this->isMemberOfOwnerAccount($user, $container->account)
+            || $this->hasContainerAccess($user, $container, ['read', 'write']);
     }
 
     /**
@@ -61,22 +64,32 @@ class ContainerPolicy
     }
 
     /**
-     * Får användaren ändra namn/kind på containern? Regel 1 + regel 4.
-     *
-     * Issue 9 hakar i här: en `write`-nivå via `container_access` ska också
-     * ge true (förutsatt att regel 4 fortfarande nekar om kontot är
-     * `read_only` — den kontrollen ska gälla oavsett väg in).
+     * Får användaren ändra namn/kind på containern? Regel 1 ELLER regel 2
+     * (en giltig `write`-access), plus regel 4 — som nu gäller på TVÅ
+     * nivåer: ägarkontot fryser containern för alla oavsett väg in (kollas
+     * först, innan någon väg prövas), och en `managed`-access dessutom
+     * nekas om DET MOTTAGANDE kontot är `read_only` (hanteras inuti
+     * hasContainerAccess()). En `member`/`guest`-access (mottagaren är en
+     * användare, inte ett konto) får ingen extra kontokontroll, se issue 9a
+     * § Beslut 9.
      */
     public function update(User $user, Container $container): bool
     {
-        return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isReadOnly($container->account);
+        if ($this->isReadOnly($container->account)) {
+            return false;
+        }
+
+        return $this->isMemberOfOwnerAccount($user, $container->account)
+            || $this->hasContainerAccess($user, $container, ['write'], excludeReadOnlyGranteeAccounts: true);
     }
 
     /**
      * Får användaren radera containern? Regel 1 + regel 4. Till skillnad
-     * från update() ska den HÄR metoden INTE utökas av issue 9 — regel 3
+     * från update() utökas INTE den HÄR metoden av issue 9a — regel 3
      * säger uttryckligen att `write`-nivå aldrig får radera containern,
-     * bara ägarkontots egna medlemmar.
+     * bara ägarkontots egna medlemmar. `manageAccess()` (att bevilja/
+     * återkalla åtkomster) hör av samma skäl till issue 9b, med en
+     * konsument där, inte här.
      */
     public function delete(User $user, Container $container): bool
     {
@@ -100,5 +113,41 @@ class ContainerPolicy
     private function isReadOnly(Account $account): bool
     {
         return $account->status === 'read_only';
+    }
+
+    /**
+     * Regel 2 (giltig access) + regel 3 (bara `level` avgör, `kind` aldrig)
+     * i en enda `exists()`-fråga, se issue 9a § Att se upp med
+     * ("uppslagningen får inte bli N+1 — policyn anropas per container i
+     * vissa flöden").
+     *
+     * Träffar $user på de två vägar issue 9a § Beslut 5 beskriver: hens
+     * egen `member`/`guest`-rad, eller en `managed`-rad på ett konto hon är
+     * medlem i — se ContainerAccess::scopeValidFor().
+     *
+     * $excludeReadOnlyGranteeAccounts implementerar regel 4:s andra gren
+     * (§ Beslut 9): en `managed`-rad ska INTE ge skrivbehörighet om det
+     * MOTTAGANDE kontot är `read_only`, även om ägarkontot är friskt. Sätts
+     * bara av update() — läsning (regel 4: "påverkas aldrig") skickar in
+     * hela kontolistan ofiltrerad. En `member`/`guest`-rad (mottagaren är
+     * en användare) berörs aldrig av det här filtret, se § Beslut 9: "en
+     * användares eget konto styr inte vad hon får göra i någon annans
+     * container."
+     *
+     * @param  list<'read'|'write'>  $levels
+     */
+    private function hasContainerAccess(User $user, Container $container, array $levels, bool $excludeReadOnlyGranteeAccounts = false): bool
+    {
+        $accounts = $user->accounts;
+
+        if ($excludeReadOnlyGranteeAccounts) {
+            $accounts = $accounts->reject(fn (Account $account) => $this->isReadOnly($account));
+        }
+
+        return ContainerAccess::query()
+            ->where('container_id', $container->id)
+            ->whereIn('level', $levels)
+            ->validFor($user, $accounts->pluck('id')->values()->all())
+            ->exists();
     }
 }
