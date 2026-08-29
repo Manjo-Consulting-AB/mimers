@@ -9,10 +9,12 @@ use App\Http\Resources\InvitationResource;
 use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\User;
+use App\Notifications\InvitationNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
 /**
@@ -27,10 +29,10 @@ use Illuminate\Support\Str;
  * en `create()` med en duplikatspärr framför, och regeln värd ett eget
  * test kommer först i 10b vid accept.
  *
- * **Den här kontrollern skickar inget mejl.** Länken i mejlet måste peka
- * på accept-flödet, och det bor i 10b tillsammans med notifikationen — se
- * issue 10a § Omfång. Klartexttokenet genereras därför här men används
- * inte; det är avsiktligt och 10b fyller luckan från samma metod.
+ * `store()` skickar sedan 10b App\Notifications\InvitationNotification med
+ * det klartexttoken som genereras där — den enda ändring 10b gör i den här
+ * filen, se issue 10b § Beslut 2. Mottagarsidan (acceptera, avvisa) bor i
+ * App\Http\Controllers\Api\InvitationResponseController.
  *
  * `routes/api.php` nästlar {invitation} under {container} med
  * `->scopeBindings()` — en ULID från en annan container löser aldrig upp
@@ -119,8 +121,8 @@ class ContainerInvitationController extends Controller
             throw ApiException::make('invitation.already_pending', ['invitation' => $existing->ulid], 422);
         }
 
-        // Klartexten är mejlets enda konsument, och mejlet är 10b. Här tas
-        // den emot och används inte — se klassens docblock.
+        // Klartexten är mejlets enda konsument — den skickas i länken
+        // nedan och lagras aldrig, se klassens docblock.
         $rawToken = Str::random(self::TOKEN_LENGTH);
 
         $invitation = new Invitation([
@@ -133,6 +135,19 @@ class ContainerInvitationController extends Controller
         $invitation->expires_at = now()->addDays(Invitation::TTL_DAYS);
         $invitation->invited_by_user_id = $request->user()->id;
         $invitation->save();
+
+        // Issue 10b § Beslut 2 och 3: mejlet skickas härifrån, direkt efter
+        // att raden skapats, med den klartext-token som genererades ovan.
+        // Mottagaren har inget konto och därmed ingen `User` att notifiera
+        // — on-demand-notifikation. Länken pekar på frontendens
+        // landningssida (issue 55, M10); URL:en byggs ur `config('app.url')`
+        // och inte med `URL::route()`, för accept kräver en inloggad,
+        // verifierad användare och en sida som kan be henne registrera sig
+        // först. Sökvägen `/invitations/{token}` är kontraktet issue 55 ska
+        // implementera.
+        $url = rtrim((string) config('app.url'), '/').'/invitations/'.$rawToken;
+
+        Notification::route('mail', $invitation->email)->notify(new InvitationNotification($url, $container));
 
         $invitation->setAttribute('invited_by_ulid', $request->user()->ulid);
 
