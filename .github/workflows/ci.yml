@@ -49,3 +49,30 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           composer test
+
+  # Nollsummeregeln är verkningslös om ingen håller den. En regelfil som växer
+  # med en punkt per retro slutar bli läst, och då styr den ingenting.
+  # Deterministiskt villkor, alltså ett skript - inte en modell.
+  process:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ordbudget för AGENTS.md
+        run: |
+          BUDGET=1800
+          ORD=$(wc -w < AGENTS.md)
+          echo "AGENTS.md: $ORD ord (budget $BUDGET)"
+          if [ "$ORD" -gt "$BUDGET" ]; then
+            echo "::error file=AGENTS.md::$ORD ord överstiger budgeten $BUDGET. Lägger ändringen till en regel ska den peka ut vilken som blev överflödig - se docs/Process/Lärdomar.md."
+            exit 1
+          fi
+
+      - name: Markörerna för det synkade blocket är hela
+        run: |
+          BEGIN=$(grep -c 'ai-standards:begin agent-core' AGENTS.md || true)
+          END=$(grep -c 'ai-standards:end agent-core' AGENTS.md || true)
+          if [ "$BEGIN" != "1" ] || [ "$END" != "1" ]; then
+            echo "::error file=AGENTS.md::förväntade exakt en begin- och en end-markör, hittade $BEGIN respektive $END. Synken hoppar över filen utan dem."
+            exit 1
+          fi

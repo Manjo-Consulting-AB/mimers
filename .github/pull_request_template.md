@@ -30,6 +30,14 @@ En PR utan test per kriterium mergas inte.
 |---|---|
 |  |  |
 
+## Omfångsrutan
+
+- [ ] Alla ändrade filer ligger inom issuens `In scope`
+- [ ] Inget under `Out of scope` är rört
+- [ ] Ställning som ett `install`-kommando genererade men issuen inte bad om är borttagen
+
+<!-- Ligger en fil utanför rutan: skriv vilken och varför, och vänta på svar. -->
+
 ## Kontroller
 
 - [ ] `vendor/bin/pint --test` grön
@@ -55,3 +63,15 @@ Antaganden du ändå tvingats göra listas explicit så att de går att granska.
 -->
 
 Inga.
+
+## Processnotering
+
+<!--
+En rad: vad kostade mer än det borde? Fel axel, för tunn läslista, otydlig
+omfångsruta, session som svällde, test som var svårt att skriva.
+"Inget" är ett giltigt och vanligt svar - men skriv det aktivt, hoppa inte
+över fältet. Det här är det enda som överlever sessionen; det läses vid
+milstolpsretro och landar i docs/Process/Lärdomar.md.
+-->
+
+Inget.
