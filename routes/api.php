@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Auth\TotpController;
 use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerInvitationController;
+use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -89,8 +90,24 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // scopeBindings() på gruppen ovan gäller även {invitation} — utan det
     // går en inbjudan i container B att dra tillbaka via container A:s
     // rutt. Mottagarsidan (mejlet, acceptera, avvisa) är issue 10b och
-    // lägger sina rutter här senare.
+    // ligger nedan.
     Route::get('/containers/{container}/invitations', [ContainerInvitationController::class, 'index']);
     Route::post('/containers/{container}/invitations', [ContainerInvitationController::class, 'store']);
     Route::delete('/containers/{container}/invitations/{invitation}', [ContainerInvitationController::class, 'destroy']);
+
+    // Issue 10b · Inbjudningar — mottagarsidan: acceptera eller avvisa en
+    // inbjudan man fått i ett mejl. Se
+    // App\Http\Controllers\Api\InvitationResponseController.
+    //
+    // Tokenet ligger i KROPPEN och inte i sökvägen (issue 10b § Beslut 1),
+    // av samma skäl som /login/magic-link/consume ovan: ett token i en URL
+    // hamnar i åtkomstloggar, i `Referer` och i webbläsarhistoriken.
+    // Därför inga rutt-parametrar här, och `scopeBindings()` på gruppen
+    // saknar betydelse för de här två.
+    //
+    // Inget `verified`-middleware: verifieringskravet gäller bara accept
+    // och kollas i kod, så klienten får veta VARFÖR den nekades och kan
+    // skicka användaren till "verifiera din e-post" (§ Beslut 6 och 7).
+    Route::post('/invitations/accept', [InvitationResponseController::class, 'accept']);
+    Route::post('/invitations/reject', [InvitationResponseController::class, 'reject']);
 });
