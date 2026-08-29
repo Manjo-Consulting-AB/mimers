@@ -73,4 +73,22 @@ class Container extends Model
     {
         return $this->hasMany(ContainerAccess::class);
     }
+
+    /**
+     * Inbjudningar att dela containern med någon som ännu inte har konto —
+     * se [[Konton och åtkomst]] § invitation och issue 10a. Bara
+     * relationen läggs till här; avsändarytan bor i
+     * App\Http\Controllers\Api\ContainerInvitationController och
+     * mottagarsidan (accept, avvisning, mejlet) är issue 10b.
+     *
+     * ALLA rader, oavsett `status` — listningen visar även tillbakadragna
+     * och utgångna (issue 10a § Beslut 14), och duplikatspärren filtrerar
+     * själv på `pending`.
+     *
+     * @return HasMany<Invitation, $this>
+     */
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(Invitation::class);
+    }
 }

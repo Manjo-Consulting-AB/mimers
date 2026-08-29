@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\Auth\TotpController;
 use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
+use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -78,4 +79,18 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/accesses', [ContainerAccessController::class, 'index']);
     Route::post('/containers/{container}/accesses', [ContainerAccessController::class, 'store']);
     Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy']);
+
+    // Issue 10a · Inbjudningar — avsändarytan: bjud in en e-postadress som
+    // ännu inte har konto, lista containerns inbjudningar, dra tillbaka en
+    // som skickats fel. Se
+    // App\Http\Controllers\Api\ContainerInvitationController och
+    // App\Policies\ContainerPolicy::viewAccesses()/manageAccess(), som
+    // används oförändrade sedan 9b (issue 10a § Beslut 10).
+    // scopeBindings() på gruppen ovan gäller även {invitation} — utan det
+    // går en inbjudan i container B att dra tillbaka via container A:s
+    // rutt. Mottagarsidan (mejlet, acceptera, avvisa) är issue 10b och
+    // lägger sina rutter här senare.
+    Route::get('/containers/{container}/invitations', [ContainerInvitationController::class, 'index']);
+    Route::post('/containers/{container}/invitations', [ContainerInvitationController::class, 'store']);
+    Route::delete('/containers/{container}/invitations/{invitation}', [ContainerInvitationController::class, 'destroy']);
 });

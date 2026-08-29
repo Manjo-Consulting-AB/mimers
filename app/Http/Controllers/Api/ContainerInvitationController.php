@@ -1,0 +1,199 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Exceptions\Api\ApiException;
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Invitation\StoreInvitationRequest;
+use App\Http\Resources\InvitationResource;
+use App\Models\Container;
+use App\Models\Invitation;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
+
+/**
+ * API-ytan för att bjuda in, lista och dra tillbaka inbjudningar till en
+ * container — avsändarsidan, issue 10a. INGEN behörighetslogik bor här:
+ * varje metod anropar bara `Gate::authorize()` och litar på svaret från
+ * App\Policies\ContainerPolicy::viewAccesses()/manageAccess(), oförändrade
+ * sedan 9b (issue 10a § Beslut 10) — se ADR-0024.
+ *
+ * Ingen Action, se issue 10a § Beslut 16 och
+ * [[ADR-0024 Tunna controllers och actions]] § Konsekvenser: skapandet är
+ * en `create()` med en duplikatspärr framför, och regeln värd ett eget
+ * test kommer först i 10b vid accept.
+ *
+ * **Den här kontrollern skickar inget mejl.** Länken i mejlet måste peka
+ * på accept-flödet, och det bor i 10b tillsammans med notifikationen — se
+ * issue 10a § Omfång. Klartexttokenet genereras därför här men används
+ * inte; det är avsiktligt och 10b fyller luckan från samma metod.
+ *
+ * `routes/api.php` nästlar {invitation} under {container} med
+ * `->scopeBindings()` — en ULID från en annan container löser aldrig upp
+ * här, av exakt samma skäl som 9b § Beslut 1 (utan det går en inbjudan i
+ * container B att dra tillbaka via container A:s rutt).
+ */
+class ContainerInvitationController extends Controller
+{
+    /**
+     * Längden på den slump som ska skickas i mejlets länk (tecken, inte
+     * bytes), samma som App\Support\Auth\MagicLinkBroker::TOKEN_LENGTH.
+     * `Str::random()` hämtar sin entropi från `random_bytes()`.
+     */
+    private const TOKEN_LENGTH = 64;
+
+    /**
+     * GET /api/containers/{container}/invitations — 200. Visar ALLA rader,
+     * även tillbakadragna och utgångna (issue 10a § Beslut 14), sorterat
+     * `created_at` fallande. Resursen redovisar en utgången `pending`-rad
+     * som `expired` utan att kolumnen ändras, se
+     * App\Http\Resources\InvitationResource.
+     *
+     * `viewAccesses()` är bara regel 1 (medlemskap) — ett `read_only`
+     * ägarkonto får alltså fortfarande se sina inbjudningar, se
+     * App\Policies\ContainerPolicy.
+     */
+    public function index(Container $container): JsonResponse
+    {
+        Gate::authorize('viewAccesses', $container);
+
+        $invitations = $container->invitations()
+            ->orderByDesc('created_at')
+            ->get();
+
+        $this->hydrateInviterUlids($invitations);
+
+        return InvitationResource::collection($invitations)->response();
+    }
+
+    /**
+     * POST /api/containers/{container}/invitations — 201.
+     * `StoreInvitationRequest` har redan bevisat att `email` är en adress
+     * och att `level` är `read` eller `write`.
+     *
+     * `manageAccess()` avgör behörighet (regel 1 + regel 4). Att bjuda in
+     * ÄR att hantera åtkomster: regel 3 säger att `write` aldrig får det,
+     * och en inbjudan är en åtkomst med fördröjning — issue 10a § Beslut
+     * 10. Ingen ny policymetod har lagts till.
+     *
+     * Adressen normaliseras med `mb_strtolower()` INNAN duplikatspärren
+     * frågar (§ Beslut 6 och § Att se upp med), exakt som
+     * App\Support\Auth\MagicLinkBroker::normalise() — annars slinker
+     * `Alice@x.se` förbi bredvid `alice@x.se` och 10b:s adressjämförelse
+     * hittar två rader.
+     *
+     * § Beslut 12: bara EN pending inbjudan per adress och container. En
+     * utgången, avvisad, accepterad eller tillbakadragen rad blockerar
+     * inget — att bjuda in igen efter ett nej ska gå. Utgång läses ur
+     * `expires_at` och inte ur `status`, för kolumnen flippas aldrig
+     * (§ Beslut 7). Hittas en spärrande rad: `ApiException`
+     * (`invitation.already_pending`, 422) med den befintliga radens ULID i
+     * `data.invitation` — ett tillståndsfel i domänen, inte ett fältfel,
+     * se issue 7 § Beslut 2 och samma mönster i
+     * ContainerAccessController::store().
+     *
+     * § Beslut 5: token genereras, hashas och kastas. Klartexten lagras
+     * aldrig, returneras aldrig och loggas aldrig.
+     *
+     * `container_id`, `token_hash`, `status` och `invited_by_user_id`
+     * sätts explicit på modellinstansen, aldrig via massildelning — se
+     * App\Models\Invitation och § Beslut 15.
+     */
+    public function store(StoreInvitationRequest $request, Container $container): JsonResponse
+    {
+        Gate::authorize('manageAccess', $container);
+
+        $email = mb_strtolower($request->validated('email'));
+
+        $existing = $container->invitations()
+            ->where('email', $email)
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if ($existing instanceof Invitation) {
+            throw ApiException::make('invitation.already_pending', ['invitation' => $existing->ulid], 422);
+        }
+
+        // Klartexten är mejlets enda konsument, och mejlet är 10b. Här tas
+        // den emot och används inte — se klassens docblock.
+        $rawToken = Str::random(self::TOKEN_LENGTH);
+
+        $invitation = new Invitation([
+            'email' => $email,
+            'level' => $request->validated('level'),
+        ]);
+        $invitation->container_id = $container->id;
+        $invitation->token_hash = hash('sha256', $rawToken);
+        $invitation->status = 'pending';
+        $invitation->expires_at = now()->addDays(Invitation::TTL_DAYS);
+        $invitation->invited_by_user_id = $request->user()->id;
+        $invitation->save();
+
+        $invitation->setAttribute('invited_by_ulid', $request->user()->ulid);
+
+        return (new InvitationResource($invitation))
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    /**
+     * DELETE /api/containers/{container}/invitations/{invitation} — 204,
+     * ingen kropp. Sätter `status = 'revoked'`; raden raderas aldrig
+     * (issue 10a § Beslut 13 och [[Konton och åtkomst]] § invitation).
+     *
+     * Bara en `pending`-rad kan dras tillbaka. Är den redan `accepted`,
+     * `rejected` eller `revoked` svarar rutten 422
+     * `invitation.not_pending` — en accepterad inbjudan går inte att ångra
+     * härifrån, det gör man genom att återkalla åtkomsten (9b).
+     *
+     * En utgången `pending`-rad går däremot att dra tillbaka: kolumnen är
+     * fortfarande `pending` (§ Beslut 7) och att städa bort en glömd
+     * inbjudan ur listan är precis vad avsändaren vill kunna göra.
+     *
+     * `manageAccess()` auktoriserar, inte `revokeAccess()`: 9b:s
+     * återkallningsgrind är regel 4:s undantag för att KLIPPA en befintlig
+     * relation, medan en pending inbjudan aldrig blivit en relation — den
+     * hör till samma yta som att bjuda in, se issue 10a § Beslut 10.
+     */
+    public function destroy(Container $container, Invitation $invitation): Response
+    {
+        Gate::authorize('manageAccess', $container);
+
+        if ($invitation->status !== 'pending') {
+            throw ApiException::make('invitation.not_pending', ['invitation' => $invitation->ulid], 422);
+        }
+
+        $invitation->status = 'revoked';
+        $invitation->save();
+
+        return response()->noContent();
+    }
+
+    /**
+     * Löser upp inbjudarnas ULID i EN fråga, oavsett antal rader (issue
+     * 10a § Beslut 14) — ingen `belongsTo`-lazy-load per rad. Sätts på
+     * varje modellinstans med `setAttribute()` innan
+     * App\Http\Resources\InvitationResource läser dem, samma mönster som
+     * ContainerAccessController::hydrateGranteeUlids().
+     *
+     * @param  Collection<int, Invitation>  $invitations
+     */
+    private function hydrateInviterUlids(Collection $invitations): void
+    {
+        $userIds = $invitations->pluck('invited_by_user_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $userUlids = User::query()->whereIn('id', $userIds)->pluck('ulid', 'id');
+
+        foreach ($invitations as $invitation) {
+            $invitation->setAttribute('invited_by_ulid', $userUlids->get($invitation->invited_by_user_id));
+        }
+    }
+}
