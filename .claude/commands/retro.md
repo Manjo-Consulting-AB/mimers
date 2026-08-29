@@ -14,20 +14,25 @@ Deras kontext och resonemang finns inte kvar och går inte att rekonstruera. Skr
 
 1. **Processnoteringarna** i milstolpens mergeade PR:er. Använd GitHub-verktygen; sök PR:er mot `main` vars gren heter `issue-NN-*` för milstolpens issuenummer enligt [Backlog](docs/Backlog.md).
 2. **`docs/Process/Lärdomar.md` § Observerat** — det som redan väntar på en andra träff.
-3. **Per PR:** antal commits, antal CI-körningar och hur många röda före grön, tid från öppnad till merge.
-4. **Ändrade filer mot issuens `In scope`-globbar.** Hämta rutan ur GitHub-issuen, jämför med PR:ens filer. Drift ut ur rutan är den enda helt automatiska mätningen av om issue-skrivandet håller.
-5. **PR:er där `Frågor och antaganden` inte var "Inga."**
-6. **`.claude/usage.jsonl`** om den finns — kostnad per gren. Läs som avvikelse inom axelprofilen, aldrig som absolut tal: en `elevated`- och `cross-module`-issue *ska* kosta mer. Jämför mot medianen för issues med **samma** axelprofil.
+3. **Grenar per issue** — hur många separata grenar issuen behövde innan den var färdig. Räkna `issue-NN-*` i `git log origin/main --merges`. Detta är metriken med bevisad signal; se `docs/Process/Lärdomar.md`.
+4. **Per PR:** antal commits och tid från öppnad till merge.
+5. **Ändrade filer mot issuens `In scope`-globbar.** Hämta rutan ur GitHub-issuen, jämför med PR:ens filer. Drift ut ur rutan är den enda helt automatiska mätningen av om issue-skrivandet håller.
+6. **PR:er där `Frågor och antaganden` inte var "Inga."**
+7. **`.claude/usage.jsonl`** om den finns — kostnad per gren. Läs som avvikelse inom axelprofilen, aldrig som absolut tal: en `elevated`- och `cross-module`-issue *ska* kosta mer. Jämför mot medianen för issues med **samma** axelprofil.
 
 ## Läs aldrig kostnaden ensam
 
 | Kostnadssignal | Motsignal |
 |---|---|
-| kronor per issue | antal röda CI-varv |
+| kronor per issue | **grenar per issue** |
 | tid till merge | antal ändrade filer utanför omfångsrutan |
 | antal commits | antal ställda frågor och deklarerade antaganden |
 
-En issue som gick billigt och snabbt men krävde tre röda varv och rörde filer utanför rutan gick inte bra. Mäts bara kostnad kommer arbetet att optimeras mot att se billigt ut — mindre läsning, färre frågor, fler gissningar. Det är precis det failure mode reglerna finns till för att förhindra.
+En issue som gick billigt och snabbt men behövde tre grenar och rörde filer utanför rutan gick inte bra.
+
+**Röda CI-varv är inte en motmetrik här.** Baslinjen visar 42 gröna körningar i rad; de röda som finns var antingen förväntade (appen fanns inte än) eller en skiftlägesbugg. Grinden ligger före pushen, inte i CI. Räkna dem ändå — den dagen siffran slår om från noll är det i sig en observation värd att skriva ner.
+
+Mäts bara kostnad kommer arbetet att optimeras mot att se billigt ut — mindre läsning, färre frågor, fler gissningar. Det är precis det failure mode reglerna finns till för att förhindra.
 
 ## Utdata
 
