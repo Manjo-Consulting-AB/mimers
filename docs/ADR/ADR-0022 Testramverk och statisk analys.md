@@ -59,6 +59,7 @@ Larastan framför ren PHPStan är mindre av ett vägval. Utan Eloquent-förståe
 - **`phpunit/phpunit` står inte i `composer.json`.** Pest äger versionen — Pest 5 kräver PHPUnit 13, och skelettets pinning på `^12.5.12` var det första som sprack. Två ställen att uppdatera är ett ställe för mycket.
 - **Nivå 5 är en startpunkt, inte ett tak.** Höjningen hör hemma i en egen issue efter issue 2.
 - **`composer lint`, `composer analyse` och `composer test`** är namnen som gäller, i CI och lokalt. `composer fix` rättar formateringen i stället för att larma.
+- **`parseModelCastsMethod: true` i `phpstan.neon`.** Larastan läser annars aldrig modellernas `casts()`, oavsett docblock ovanför metoden — en castad kolumn typas som `string` i stället för `Carbon`. Flaggan löser hela problemet utan kodändringar i modellerna, se issue 63.
 
 ## Alternativ
 

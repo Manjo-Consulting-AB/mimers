@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * En utfärdad TOTP-återställningskod, se issue 6c och
@@ -21,8 +20,6 @@ use Illuminate\Support\Carbon;
  * någonsin serialiseras (den gör det inte i dagsläget, ingen kontroller
  * returnerar en TotpRecoveryCode — bara de klartextkoder
  * RecoveryCodeBroker::generate() returnerar en gång).
- *
- * @property Carbon|null $used_at
  */
 #[Fillable(['user_id', 'code_hash', 'used_at'])]
 #[Hidden(['code_hash'])]
