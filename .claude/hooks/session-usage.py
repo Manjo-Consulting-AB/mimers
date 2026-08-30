@@ -14,9 +14,9 @@ Registreras i .claude/settings.json:
 Raden nycklas på grennamn. Heter grenarna efter issuenummer mappas kostnaden
 till issue utan att något extra fält behöver fyllas i någonstans.
 
-De fyra räknarna hålls isär med flit. En summa av råa tokens säger inget om vad
-sessionen kostade - cache-läsning är en storleksordning billigare än vanlig input,
-och hur mycket billigare skiljer sig mellan leverantörerna.
+De fyra räknarna hålls isär med flit. Cache-läsning kostar ungefär en tiondel av
+vanlig input och cache-skrivning ungefär en fjärdedel mer, så en summa av råa
+tokens säger inget om vad sessionen kostade.
 """
 
 import datetime
@@ -25,25 +25,15 @@ import pathlib
 import subprocess
 import sys
 
-# USD per miljon tokens: (input, output, cache-läsning, cache-skrivning).
-#
-# Priserna står absolut och inte som multiplikatorer mot input, eftersom
-# leverantörerna inte skalar likadant. Claude tar ~0.1x för cache-läsning och
-# ~1.25x för cache-skrivning. Deepseek tar ~0.02x för en cache-träff och lägger
-# ingen premie alls på skrivningen - en miss är bara fullt inpris. Med en enda
-# uppsättning multiplikatorer blir den ena leverantören fel, och det är just den
-# termen som väger tyngst i långa sessioner.
-#
-# Deepseek-raderna är PEAK-pris. Sedan 2026-08-16 debiteras off-peak till 50%,
-# vilket den här hooken inte känner till. Det är medvetet: en jämförelse ska inte
-# kunna vinnas av att körningen råkade ligga på natten.
+# USD per miljon tokens. Multiplikatorerna gäller relativt input:
+# cache-läsning ~0.1x, cache-skrivning ~1.25x.
 PRICES = {
-    "claude-opus-5": (5.0, 25.0, 0.5, 6.25),
-    "claude-sonnet-5": (2.0, 10.0, 0.2, 2.5),
-    "claude-haiku-4-5": (1.0, 5.0, 0.1, 1.25),
-    "deepseek-v4-flash": (0.14, 0.28, 0.0028, 0.14),
-    "deepseek-v4-pro": (0.435, 0.87, 0.003625, 0.435),
+    "claude-opus-5": (5.0, 25.0),
+    "claude-sonnet-5": (2.0, 10.0),
+    "claude-haiku-4-5": (1.0, 5.0),
 }
+CACHE_READ_MULTIPLIER = 0.1
+CACHE_WRITE_MULTIPLIER = 1.25
 
 COUNTERS = (
     "input_tokens",
@@ -79,27 +69,28 @@ def read_usage(transcript: pathlib.Path) -> dict:
     return per_model
 
 
-def unpriced(per_model: dict) -> list[str]:
-    """Modeller i transkriptet som saknas i pristabellen."""
-    return sorted(model for model in per_model if model not in PRICES)
-
-
 def cost_usd(per_model: dict) -> float | None:
-    """Kostnad i USD. None om någon modell saknas i pristabellen.
-
-    Att en okänd modell nollar hela sessionen och inte bara sin egen andel är
-    avsiktligt: en halv kostnad ser rimlig ut och blir trodd. Vilken modell som
-    fällde raden står i fältet `opriced`, annars går den inte att felsöka.
-    """
-    if unpriced(per_model):
-        return None
+    """Kostnad i USD. None om någon modell saknas i pristabellen."""
     total = 0.0
     for model, counters in per_model.items():
-        input_price, output_price, cache_read_price, cache_write_price = PRICES[model]
+        price = PRICES.get(model)
+        if price is None:
+            return None
+        input_price, output_price = price
         total += counters["input_tokens"] / 1e6 * input_price
         total += counters["output_tokens"] / 1e6 * output_price
-        total += counters["cache_read_input_tokens"] / 1e6 * cache_read_price
-        total += counters["cache_creation_input_tokens"] / 1e6 * cache_write_price
+        total += (
+            counters["cache_read_input_tokens"]
+            / 1e6
+            * input_price
+            * CACHE_READ_MULTIPLIER
+        )
+        total += (
+            counters["cache_creation_input_tokens"]
+            / 1e6
+            * input_price
+            * CACHE_WRITE_MULTIPLIER
+        )
     return round(total, 4)
 
 
@@ -162,7 +153,6 @@ def main() -> int:
         "main": main_usage,
         "subagents": subagent_usage,
         "cost_usd": cost_usd(combined),
-        "opriced": unpriced(combined),
     }
 
     out = pathlib.Path(cwd) / ".claude" / "usage.jsonl"
