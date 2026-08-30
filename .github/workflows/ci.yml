@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  issues: read
 
 concurrency:
   group: ci-${{ github.head_ref }}
@@ -15,7 +16,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      # Hela historiken: acceptanskontrollen nedan behöver baskommiten.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -50,6 +54,14 @@ jobs:
           php artisan key:generate
           composer test
 
+      # Ett test som är grönt redan innan koden skrevs bevisar ingenting om sin
+      # "Klart när"-punkt, och CI ser likadan ut i båda fallen. Körs sist: steget
+      # bygger ett eget träd ur baskommiten och ska inte störa testerna ovan.
+      - name: Nya tester är röda på baskommiten
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/scripts/rott-pa-basen.sh
+
   # Nollsummeregeln är verkningslös om ingen håller den. En regelfil som växer
   # med en punkt per retro slutar bli läst, och då styr den ingenting.
   # Deterministiskt villkor, alltså ett skript - inte en modell.
@@ -57,6 +69,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Omfångsrutan är bindande enligt AGENTS.md men har fram tills nu bara
+      # kontrollerats av granskaren. Globbarna i issue-mallen är maskinläsbara
+      # med flit - deterministiskt villkor, alltså ett skript.
+      - name: Diffen ligger innanför omfångsrutan
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/omfangsruta.py
 
       - name: Ordbudget för AGENTS.md
         run: |
