@@ -30,6 +30,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0022 Testramverk och statisk analys]] | Pest 5 och Larastan nivå 5, globala hjälpfunktioner i test | [[Backlog]], [[Pipeline]] |
 | [[ADR-0023 TOTP-bibliotek]] | `pragmarx/google2fa`, inte Fortify, ingen QR på servern | [[Konton och åtkomst]] |
 | [[ADR-0024 Tunna controllers och actions]] | Tunn controller, `Gate::authorize()`, Action när regeln är värd ett test | [[Backlog]] |
+| [[ADR-0025 Modellval efter riskaxlar]] | Deepseek V4-Flash för låga axlar, Claude Sonnet för förhöjda | [[Backlog]] |
 
 ## Om att ändra ett beslut
 
