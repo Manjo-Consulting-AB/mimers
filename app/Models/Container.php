@@ -107,4 +107,18 @@ class Container extends Model
     {
         return $this->hasMany(Category::class);
     }
+
+    /**
+     * Containerns taggar — platt lista, se [[ADR-0004 Fria taggar och
+     * kategorier]] och issue 12. Bara relationen läggs till här; den krävs
+     * av `scopeBindings()` i routes/api.php för att en tagg-ULID från en
+     * annan container inte ska lösa upp under den här (issue 12 § Beslut
+     * 1). API-ytan bor i App\Http\Controllers\Api\TagController.
+     *
+     * @return HasMany<Tag, $this>
+     */
+    public function tags(): HasMany
+    {
+        return $this->hasMany(Tag::class);
+    }
 }

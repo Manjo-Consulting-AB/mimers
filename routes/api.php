@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\InvitationResponseController;
+use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -135,4 +136,17 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/containers/{container}/categories', [CategoryController::class, 'store']);
     Route::patch('/containers/{container}/categories/{category}', [CategoryController::class, 'update']);
     Route::delete('/containers/{container}/categories/{category}', [CategoryController::class, 'destroy']);
+
+    // Issue 12 · Taggar — platt lista per container, se
+    // App\Http\Controllers\Api\TagController. Ingen show(), se issue 12 §
+    // Beslut 1. `scopeBindings()` på gruppen ovan gäller även {tag} — utan
+    // det löser en tagg-ULID från container A upp under container B, se
+    // App\Models\Container::tags(). Grindarna är `view` (GET) och `update`
+    // (POST/PATCH/DELETE) på App\Policies\ContainerPolicy, inte en ny
+    // TagPolicy — issue 12 § Beslut 2. Kopplingen till items (`item_tag`)
+    // är issue 13b, filtrering på tagg är issue 15a — ingendera här.
+    Route::get('/containers/{container}/tags', [TagController::class, 'index']);
+    Route::post('/containers/{container}/tags', [TagController::class, 'store']);
+    Route::patch('/containers/{container}/tags/{tag}', [TagController::class, 'update']);
+    Route::delete('/containers/{container}/tags/{tag}', [TagController::class, 'destroy']);
 });
