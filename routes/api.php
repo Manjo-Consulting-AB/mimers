@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
 use App\Http\Controllers\Api\Auth\RecoveryCodeController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\Auth\TotpController;
+use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerInvitationController;
@@ -120,4 +121,18 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // skicka användaren till "verifiera din e-post" (§ Beslut 6 och 7).
     Route::post('/invitations/accept', [InvitationResponseController::class, 'accept']);
     Route::post('/invitations/reject', [InvitationResponseController::class, 'reject']);
+
+    // Issue 11 · Kategorier — en hierarki per container, se
+    // App\Http\Controllers\Api\CategoryController och
+    // App\Actions\Category\MoveCategory. {category} nästlas under
+    // {container} med samma scopeBindings() som gruppen redan har, löst
+    // genom App\Models\Container::categories() (issue 11 § Beslut 1) —
+    // samma resonemang som {access} ovan. Grindarna är view()/update(),
+    // båda befintliga i App\Policies\ContainerPolicy — ingen ny
+    // policymetod, se issue 11 § Beslut 2. Ingen show(): trädet hämtas i
+    // sin helhet av index().
+    Route::get('/containers/{container}/categories', [CategoryController::class, 'index']);
+    Route::post('/containers/{container}/categories', [CategoryController::class, 'store']);
+    Route::patch('/containers/{container}/categories/{category}', [CategoryController::class, 'update']);
+    Route::delete('/containers/{container}/categories/{category}', [CategoryController::class, 'destroy']);
 });

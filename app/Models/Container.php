@@ -91,4 +91,20 @@ class Container extends Model
     {
         return $this->hasMany(Invitation::class);
     }
+
+    /**
+     * Containerns kategoriträd, se [[Items och organisation]] § category
+     * och issue 11. Bara relationen läggs till här — den behövs för nästlad
+     * routebindning: `routes/api.php`s `->scopeBindings()` löser
+     * `{category}` genom den HÄR relationen, vilket är hela skyddet mot att
+     * en kategori-ULID från container A löses upp under container B (issue
+     * 11 § Beslut 1). API-ytan bor i
+     * App\Http\Controllers\Api\CategoryController.
+     *
+     * @return HasMany<Category, $this>
+     */
+    public function categories(): HasMany
+    {
+        return $this->hasMany(Category::class);
+    }
 }
