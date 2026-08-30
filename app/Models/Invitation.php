@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * En inbjudan att dela en container med någon som ännu inte har konto — se
@@ -31,8 +30,6 @@ use Illuminate\Support\Carbon;
  * sätts explicit av App\Http\Controllers\Api\ContainerInvitationController,
  * aldrig via massildelning (issue 10a § Beslut 15). Kvar som `#[Fillable]`
  * blir `email` och `level`, precis de två fält klienten skickar.
- *
- * @property Carbon $expires_at
  */
 #[Fillable(['email', 'level'])]
 #[Hidden(['token_hash'])]

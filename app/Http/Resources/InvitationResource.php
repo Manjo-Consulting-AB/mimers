@@ -26,10 +26,17 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * `pending`. Sanningen om utgång är App\Models\Invitation::isExpired(); den
  * här klassen frågar bara den, och 10b frågar samma metod.
  *
- * `expires_at` läses via `getAttribute()` i stället för `$this->fält`, av
- * samma PHPStan-skäl som ContainerAccessResource dokumenterar;
- * `invited_by_ulid` finns inte som kolumn alls, bara satt i minnet av
- * kontrollern.
+ * `expires_at` är en castad kolumn (App\Models\Invitation::casts()) och
+ * läses via egenskapsåtkomst, `$this->expires_at` — med
+ * `parseModelCastsMethod: true` i phpstan.neon typar Larastan den som
+ * `Carbon`, se ADR-0022 Testramverk och statisk analys § Konsekvenser och
+ * ContainerAccessResource som dokumenterar samma sak.
+ *
+ * `invited_by_ulid` läses däremot fortfarande via `getAttribute()`: den
+ * finns inte som kolumn eller cast alls, bara satt i minnet av
+ * kontrollern, så `@mixin` känner inte igen den — flaggan ovan hjälper
+ * bara castade kolumner. `getAttribute()` här är medvetet otypad (mixed),
+ * inte ett kringgående.
  *
  * @mixin Invitation
  */
@@ -47,7 +54,7 @@ class InvitationResource extends JsonResource
             'status' => $this->status === 'pending' && $this->resource->isExpired()
                 ? 'expired'
                 : $this->status,
-            'expires_at' => $this->resource->getAttribute('expires_at')?->toIso8601String(),
+            'expires_at' => $this->expires_at->toIso8601String(),
             'invited_by' => $this->resource->getAttribute('invited_by_ulid'),
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),

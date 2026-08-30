@@ -23,15 +23,18 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * avgör presentationen ur `revoked_at`/`expires_at` själv, precis som
  * ContainerResource inte härleder något.
  *
- * `grantee_ulid`/`granted_by_ulid` och `expires_at`/`revoked_at` läses via
- * `getAttribute()` i stället för `$this->fält` (magiska egenskaper via
- * `@mixin`): `getAttribute()` är otypad (mixed), medan PHPStans
- * casts()-tolkning (App\Models\ContainerAccess::casts()) inte känner igen
- * dess docblock-returtyp `array<string, string>` som en literal — utan
- * det här ser den `expires_at`/`revoked_at` som `string`, inte `Carbon`.
- * `grantee_ulid`/`granted_by_ulid` finns dessutom inte som kolumn eller
- * cast alls, bara satta i minnet av kontrollern (se ovan) — `@mixin` känner
- * inte igen dem som egenskaper.
+ * `expires_at`/`revoked_at` är castade kolumner (App\Models\ContainerAccess
+ * ::casts()) och läses via egenskapsåtkomst, `$this->expires_at` — med
+ * `parseModelCastsMethod: true` i phpstan.neon läser Larastan casts()-
+ * metodens literala array och typar dem som `Carbon`, inte `string`. Se
+ * ADR-0022 Testramverk och statisk analys § Konsekvenser.
+ *
+ * `grantee_ulid`/`granted_by_ulid` läses däremot fortfarande via
+ * `getAttribute()`, inte egenskapsåtkomst: de sätts i minnet av
+ * kontrollern (se ovan) och finns varken som kolumn eller cast, så
+ * `@mixin` känner inte igen dem — flaggan ovan hjälper bara castade
+ * kolumner. `getAttribute()` här är medvetet otypad (mixed), inte ett
+ * kringgående.
  *
  * @mixin ContainerAccess
  */
@@ -48,8 +51,8 @@ class ContainerAccessResource extends JsonResource
             'grantee' => $this->resource->getAttribute('grantee_ulid'),
             'level' => $this->level,
             'kind' => $this->kind,
-            'expires_at' => $this->resource->getAttribute('expires_at')?->toIso8601String(),
-            'revoked_at' => $this->resource->getAttribute('revoked_at')?->toIso8601String(),
+            'expires_at' => $this->expires_at?->toIso8601String(),
+            'revoked_at' => $this->revoked_at?->toIso8601String(),
             'granted_by' => $this->resource->getAttribute('granted_by_ulid'),
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),

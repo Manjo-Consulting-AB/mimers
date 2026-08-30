@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
 
 /**
  * Ett utfärdat magic link-token, se issue 5 och
@@ -18,9 +17,6 @@ use Illuminate\Support\Carbon;
  * se issue #18 § Beslut som redan är fattade punkt 1. `Hidden` här är ett
  * extra skyddsnät utifall raden någonsin serialiseras (den gör det inte i
  * dagsläget, ingen kontroller returnerar en MagicLinkToken).
- *
- * @property Carbon $expires_at
- * @property Carbon|null $used_at
  */
 #[Fillable(['email', 'token_hash', 'expires_at', 'used_at'])]
 #[Hidden(['token_hash'])]
