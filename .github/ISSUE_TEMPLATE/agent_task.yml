@@ -110,11 +110,11 @@ body:
     attributes:
       label: Modell
       description: >
-        Alla tre axlarna låga ger Haiku. Någon axel förhöjd ger Sonnet.
+        Alla tre axlarna låga ger Deepseek. Någon axel förhöjd ger Claude Sonnet.
         Stämmer inte valet med axlarna är någondera fel satt.
       options:
-        - Haiku (alla axlar låga)
-        - Sonnet (någon axel förhöjd)
+        - Deepseek (alla axlar låga)
+        - Claude Sonnet (någon axel förhöjd)
     validations:
       required: true
 
