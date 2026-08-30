@@ -2,7 +2,8 @@
 
 <!-- Vilken issue i docs/Backlog.md? T.ex. "Issue 4 · Autentisering med lösenord" -->
 
-Stänger #
+<!-- Nyckelordet måste vara engelskt — GitHub stänger inte på "Stänger". -->
+Closes #
 
 ## Vad ändringen gör
 

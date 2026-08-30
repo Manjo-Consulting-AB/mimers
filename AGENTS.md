@@ -72,7 +72,7 @@ Vilken modell som får vilken axelprofil står i [model-routing](https://github.
 ## Vad som krävs för att en PR ska mergas
 
 - **Varje "Klart när"-punkt i issuen motsvaras av ett test.** En PR utan det mergas inte. Det är den enda mekanism som skalar när granskaren inte hinner läsa varje rad.
-- CI är grön: `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`, `php artisan test`, `npm run build`.
+- CI är grön: `npm run build`, `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`, `php artisan test`. **Bygget först** — `UtrullningsartefaktTest` läser `public/build/manifest.json`, så sviten faller utan det.
 - PR-mallen är ifylld, inklusive vilka dokument du läst och processnoteringen.
 
 ## Nya beroenden
