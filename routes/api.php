@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Auth\TotpController;
 use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerInvitationController;
+use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
@@ -80,6 +81,15 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/accesses', [ContainerAccessController::class, 'index']);
     Route::post('/containers/{container}/accesses', [ContainerAccessController::class, 'store']);
     Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy']);
+
+    // Issue 9c · Deltagarlistan — vem som HAR åtkomst just nu, läsbar för
+    // VARJE deltagare och inte bara ägarkontot. Se
+    // App\Http\Controllers\Api\ContainerParticipantController. Grinden är
+    // App\Policies\ContainerPolicy::view(), den befintliga — inte
+    // viewAccesses() ovan, som är ägarkontots förvaltningsvy (issue 9c §
+    // Beslut 2). Bara GET: listan är en vy, aldrig ett sätt att ändra
+    // något (§ Beslut 1). Ansiktsraden i webben är issue 55.
+    Route::get('/containers/{container}/participants', [ContainerParticipantController::class, 'index']);
 
     // Issue 10a · Inbjudningar — avsändarytan: bjud in en e-postadress som
     // ännu inte har konto, lista containerns inbjudningar, dra tillbaka en

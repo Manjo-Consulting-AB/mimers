@@ -81,8 +81,30 @@ class ContainerAccess extends Model
     }
 
     /**
+     * Begränsar till rader som är GILTIGA (ej återkallade, ej utgångna) —
+     * regel 2 i [[Konton och åtkomst]] § Behörighetsregler, utan att knytas
+     * till en viss mottagare. `expires_at` NULL betyder "går aldrig ut", se
+     * issue 9a § Att se upp med.
+     *
+     * Utbrutet ur scopeValidFor() i issue 9c § Beslut 5, som anropar det
+     * nedan: deltagarlistan behöver samma villkor utan mottagarfiltret.
+     * Formulera INTE villkoret en andra gång någon annanstans — två
+     * formuleringar av "giltig" kan glida isär, se issue 9a § Beslut 8.
+     *
+     * @param  Builder<ContainerAccess>  $query
+     * @return Builder<ContainerAccess>
+     */
+    public function scopeValid(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('revoked_at')
+            ->where(fn (Builder $q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()));
+    }
+
+    /**
      * Begränsar till rader som är GILTIGA (ej återkallade, ej utgångna,
-     * regel 2) och som träffar $user på någon av de två vägarna i issue 9a
+     * regel 2 — via scopeValid() ovan) och som träffar $user på någon av de
+     * två vägarna i issue 9a
      * § Beslut 5: hens egen rad (`grantee_type = user`) eller en rad på ett
      * konto hon är medlem i (`grantee_type = account`, `$accountIds`).
      *
@@ -104,8 +126,7 @@ class ContainerAccess extends Model
     public function scopeValidFor(Builder $query, User $user, array $accountIds): Builder
     {
         return $query
-            ->whereNull('revoked_at')
-            ->where(fn (Builder $q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->valid()
             ->where(function (Builder $q) use ($user, $accountIds) {
                 $q->where(fn (Builder $q2) => $q2->where('grantee_type', 'user')->where('grantee_id', $user->id))
                     ->orWhere(fn (Builder $q2) => $q2->where('grantee_type', 'account')->whereIn('grantee_id', $accountIds));
