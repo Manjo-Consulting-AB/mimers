@@ -211,8 +211,9 @@ it('listningen laddar ägarkontot i förväg', function () {
     // som det andra inte har, och skeva jämförelsen nedan helt oberoende
     // av eager loading.
     // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
-    // (issue 80). Carbon direkt i stället för travelTo(): Pest typar $this i
-    // it()-closures som TestCall, så travelTo() når inte fram till TestCase.
+    // (issue 80). Carbon direkt i stället för travelTo() för att följa repots
+    // konvention att inte skriva $this-> i it()-closures (se SkeletonTest.php
+    // och SenasteAktivitetTest.php) — travelTo() vore fullt tillgängligt.
     Carbon::setTestNow(now());
 
     getJson('/api/containers', $headers)->assertOk();

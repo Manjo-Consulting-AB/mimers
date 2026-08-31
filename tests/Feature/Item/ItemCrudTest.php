@@ -448,8 +448,9 @@ it('the listing makes a constant number of queries', function () {
     ]);
 
     // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
-    // (issue 80). Carbon direkt i stället för travelTo(): Pest typar $this i
-    // it()-closures som TestCall, så travelTo() når inte fram till TestCase.
+    // (issue 80). Carbon direkt i stället för travelTo() för att följa repots
+    // konvention att inte skriva $this-> i it()-closures (se SkeletonTest.php
+    // och SenasteAktivitetTest.php) — travelTo() vore fullt tillgängligt.
     Carbon::setTestNow(now());
 
     getJson("/api/containers/{$container->ulid}/items", $headers)->assertOk();
