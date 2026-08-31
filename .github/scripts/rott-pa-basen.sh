@@ -17,8 +17,19 @@
 # att testet är bra. Ett test som faller på ett fatalt fel för att en klass saknas
 # räknas som rött, vilket är rätt utfall men ett svagt bevis.
 #
-# Läser BASE_SHA ur miljön. Avslutar 0 om alla nya tester är röda på basen eller om
-# PR:en inte lägger till några tester, 1 om något test går igenom utan koden.
+# Undantag: en testfixar utan kodändring (t.ex. issue 80 - tiden fryst runt en
+# redan existerande mätning för att ta bort ett race) kan aldrig bli röd på basen,
+# eftersom bas och head då delar samma applikationskod. En fil som har
+# `// rott-pa-basen: <motivering>` som första icke-tomma rad efter `<?php` hoppar
+# över körningen mot basen för just den filen - se issue 83. Markören tar bort en
+# maskinell kontroll, inte granskarens läsning av diffen: den litar på att den som
+# satte den har rätt, precis som issuens egna axlar litar på den som skriver dem.
+# Granulariteten är per fil - en fil som blandar en genuint ny acceptanstest med
+# en flakighetsfix ska inte ha markören.
+#
+# Läser BASE_SHA ur miljön. Avslutar 0 om alla nya tester är röda på basen (eller
+# undantagna) eller om PR:en inte lägger till några tester, 1 om något
+# icke-undantaget test går igenom utan koden.
 
 set -euo pipefail
 
@@ -73,6 +84,16 @@ php artisan key:generate --quiet
 GRONA=()
 for fil in "${TESTER[@]}"; do
     echo "--- $fil"
+
+    # Undantagsmarkören, se filhuvudet. Sökt i PR:ens version av filen, som
+    # redan ligger i $ARBETE/$fil (kopierad ovan) - inte i basens.
+    UNDANTAG="$(head -n 5 "$fil" | grep -m1 '^// rott-pa-basen: ' || true)"
+    if [ -n "$UNDANTAG" ]; then
+        MOTIVERING="${UNDANTAG#"// rott-pa-basen: "}"
+        echo "::notice file=$fil::undantagen från röd-på-bas-kontrollen: $MOTIVERING"
+        continue
+    fi
+
     if php artisan test "$fil" > "$ARBETE/utfall.log" 2>&1; then
         GRONA+=("$fil")
         echo "::error file=$fil::testet går igenom utan PR:ens implementation - det bevisar inget om acceptanskriteriet."
@@ -87,4 +108,4 @@ if [ ${#GRONA[@]} -gt 0 ]; then
     exit 1
 fi
 
-echo "Alla ${#TESTER[@]} testfiler är röda på basen."
+echo "Alla ${#TESTER[@]} testfiler är röda på basen eller undantagna."
