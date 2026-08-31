@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Category\ResolveCategoryDescendants;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Item\IndexItemRequest;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
 use App\Http\Resources\ItemResource;
@@ -42,19 +44,53 @@ class ItemController extends Controller
     /**
      * GET /api/containers/{container}/items — 200. Lists the container's
      * items, sorted by `name` ascending, no pagination (issue 13a § Beslut
-     * 10). `category`, `createdByAccount` and `tags` are eager-loaded so
+     * 10). The query string may carry the issue 15a filters, both optional
+     * and combined with AND: `tags[]` (every tag required, § Beslut 2) and
+     * `category` (the category and its whole subtree, § Beslut 4).
+     * IndexItemRequest has already proved every ULID exists in THIS
+     * container and is not soft-deleted — an unknown value is 422
+     * `validation.failed`, never an empty result (§ Beslut 7). A filter
+     * that matches nothing is still 200 with `{"data": []}`.
+     *
+     * `category`, `createdByAccount` and `tags` are eager-loaded so
      * ItemResource never triggers an unplanned lazy-load per row — the
      * list stays a constant number of queries regardless of item count
-     * (issue 13b § Beslut 10).
+     * (issue 13b § Beslut 10) and of the number of filter values or the
+     * depth of the category tree (issue 15a § Beslut 9).
      */
-    public function index(Container $container): JsonResponse
+    public function index(IndexItemRequest $request, Container $container, ResolveCategoryDescendants $resolveCategoryDescendants): JsonResponse
     {
         Gate::authorize('view', $container);
 
-        $items = $container->items()
-            ->with(['category', 'createdByAccount', 'tags'])
-            ->orderBy('name')
-            ->get();
+        $query = $container->items()
+            ->with(['category', 'createdByAccount', 'tags']);
+
+        $tagUlids = $request->validated('tags');
+
+        if ($tagUlids !== null && $tagUlids !== []) {
+            // IndexItemRequest has already proved each ULID exists in THIS
+            // container and is not soft-deleted; the container-scoped
+            // lookup below is what keeps the query correct even without
+            // that gate (issue 15a § Att se upp med).
+            $tagIds = Tag::whereIn('ulid', $tagUlids)
+                ->where('container_id', $container->id)
+                ->whereNull('deleted_at')
+                ->pluck('id')
+                ->all();
+
+            $query->withAllTags($tagIds);
+        }
+
+        $categoryUlid = $request->validated('category');
+
+        if ($categoryUlid !== null) {
+            $category = $container->categories()->where('ulid', $categoryUlid)->firstOrFail();
+            $categoryIds = $resolveCategoryDescendants->handle($category);
+
+            $query->inCategoryTree($categoryIds);
+        }
+
+        $items = $query->orderBy('name')->get();
 
         return ItemResource::collection($items)->response();
     }

@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUlid;
 use Database\Factories\ItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -119,6 +120,47 @@ class Item extends Model
     {
         return $this->belongsToMany(Tag::class, 'item_tag')
             ->withTimestamps();
+    }
+
+    /**
+     * Begränsar frågan till items som bär ALLA taggar i $tagIds — flera
+     * taggar kombineras med OCH (issue 15a § Beslut 2). En join mot
+     * `item_tag` med `whereIn('tag_id', $ids)`, grupperad på itemets nyckel
+     * med `HAVING COUNT(DISTINCT tag_id) = <antal>` (Beslut 3) — inte en
+     * `whereHas()` per tagg, som ger en underfråga per filtervärde och gör
+     * indexet `(tag_id, item_id)` från 13b § Beslut 1 meningslös.
+     *
+     * `$tagIds` är LÖPNUMMER, inte ULID:er — kontrollern löser upp ULID:erna
+     * inom containern först, en fråga oavsett antal (issue 15a § Beslut 9).
+     *
+     * @param  Builder<Item>  $query
+     * @param  list<int>  $tagIds
+     * @return Builder<Item>
+     */
+    public function scopeWithAllTags(Builder $query, array $tagIds): Builder
+    {
+        return $query
+            ->select('item.*')
+            ->join('item_tag', 'item_tag.item_id', '=', 'item.id')
+            ->whereIn('item_tag.tag_id', $tagIds)
+            ->groupBy('item.id')
+            ->havingRaw('COUNT(DISTINCT item_tag.tag_id) = ?', [count($tagIds)]);
+    }
+
+    /**
+     * Begränsar frågan till items i någon av kategorierna $categoryIds —
+     * kategorin själv plus alla ättlingar, som
+     * App\Actions\Category\ResolveCategoryDescendants har räknat ut (issue
+     * 15a § Beslut 4). Ättlingsupplösningen ligger ALLTID i Actionen,
+     * aldrig inlindad i ett scope (Beslut 6).
+     *
+     * @param  Builder<Item>  $query
+     * @param  list<int>  $categoryIds
+     * @return Builder<Item>
+     */
+    public function scopeInCategoryTree(Builder $query, array $categoryIds): Builder
+    {
+        return $query->whereIn('category_id', $categoryIds);
     }
 
     /**
