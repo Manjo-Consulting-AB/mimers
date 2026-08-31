@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Item;
+use App\Models\Tag;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -34,6 +35,15 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * `loadMissing([...])`, store: `setRelation(...)`) — otherwise the list
  * becomes N+1, see App\Http\Controllers\Api\ItemController.
  *
+ * `tags` (issue 13b § Beslut 8) is always present — `[]` for an item with
+ * no tags, never omitted, same rule as the nullable fields above. Each
+ * entry is built INLINE here rather than reusing TagResource: that class
+ * carries `created_at`/`updated_at`, which is noise inside an item, and
+ * the frontend paints the tag with `name` and `color` only. Sorting by
+ * name happens here so the controller's eager load stays a plain
+ * `with('tags')` — the order is a presentation concern. The entries never
+ * carry a sequential number.
+ *
  * @mixin Item
  */
 class ItemResource extends JsonResource
@@ -57,6 +67,14 @@ class ItemResource extends JsonResource
             'created_by_account' => $this->createdByAccount->ulid,
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),
+            'tags' => $this->tags
+                ->sortBy('name')
+                ->values()
+                ->map(fn (Tag $tag): array => [
+                    'ulid' => $tag->ulid,
+                    'name' => $tag->name,
+                    'color' => $tag->color,
+                ]),
         ];
     }
 }
