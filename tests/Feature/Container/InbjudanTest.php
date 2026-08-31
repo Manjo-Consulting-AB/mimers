@@ -333,6 +333,12 @@ it('listningen gör inte en fråga per rad', function () {
     bjudInRad($container, 'en@exempel.se');
     bjudInRad($container, 'tva@exempel.se');
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo() för att följa repots
+    // konvention att inte skriva $this-> i it()-closures (se SkeletonTest.php
+    // och SenasteAktivitetTest.php) — travelTo() vore fullt tillgängligt.
+    Carbon::setTestNow(now());
+
     // "Värm" Sanctum-guarden med ett omätt anrop innan mätningen börjar,
     // se samma resonemang i ContainerCrudTest.
     getJson("/api/containers/{$container->ulid}/invitations", $headers)->assertOk();
@@ -357,6 +363,8 @@ it('listningen gör inte en fråga per rad', function () {
     expect($andraSvaret->json('data'))->toHaveCount(4);
 
     expect($frågorMedFyraRader)->toBe($frågorMedTvåRader);
+
+    Carbon::setTestNow();
 });
 
 it('en ogiltig e-postadress avvisas', function () {

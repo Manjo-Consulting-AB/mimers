@@ -2,6 +2,7 @@
 
 use App\Models\Category;
 use App\Models\Container;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\getJson;
@@ -161,6 +162,12 @@ it('trädoperationerna gör ett konstant antal frågor', function () {
     $barn = Category::factory()->for($container, 'container')->create(['parent_id' => $förälderA->id]);
     Category::factory()->for($container, 'container')->count(3)->create();
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo() för att följa repots
+    // konvention att inte skriva $this-> i it()-closures (se SkeletonTest.php
+    // och SenasteAktivitetTest.php) — travelTo() vore fullt tillgängligt.
+    Carbon::setTestNow(now());
+
     // "Värm" Sanctum-guarden med ett omätt anrop innan mätningen börjar,
     // se samma resonemang i ContainerCrudTest.
     getJson("/api/containers/{$container->ulid}/categories", $headers)->assertOk();
@@ -195,4 +202,6 @@ it('trädoperationerna gör ett konstant antal frågor', function () {
     $andraSvaret->assertOk();
 
     expect($frågorMedStortTräd)->toBe($frågorMedLitetTräd);
+
+    Carbon::setTestNow();
 });

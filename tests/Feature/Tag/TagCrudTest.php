@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Tag;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\deleteJson;
@@ -308,6 +309,12 @@ it('listningen gör ett konstant antal frågor', function () {
     $container = Container::factory()->for($account, 'account')->create();
     Tag::factory()->for($container, 'container')->count(3)->create();
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo() för att följa repots
+    // konvention att inte skriva $this-> i it()-closures (se SkeletonTest.php
+    // och SenasteAktivitetTest.php) — travelTo() vore fullt tillgängligt.
+    Carbon::setTestNow(now());
+
     // Värm Sanctum-guarden innan mätningen börjar, samma resonemang som
     // ContainerCrudTest::it('listningen laddar ägarkontot i förväg').
     getJson("/api/containers/{$container->ulid}/tags", $headers)->assertOk();
@@ -334,4 +341,6 @@ it('listningen gör ett konstant antal frågor', function () {
     expect($andraSvaret->json('data'))->toHaveCount(8);
 
     expect($frågorMedÅttaTaggar)->toBe($frågorMedTreTaggar);
+
+    Carbon::setTestNow();
 });

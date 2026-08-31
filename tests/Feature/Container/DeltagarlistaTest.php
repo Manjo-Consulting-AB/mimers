@@ -4,6 +4,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\getJson;
@@ -354,6 +355,12 @@ it('deltagarlistan gör inte en fråga per deltagare', function () {
 
     $url = "/api/containers/{$container->ulid}/participants";
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo() för att följa repots
+    // konvention att inte skriva $this-> i it()-closures (se SkeletonTest.php
+    // och SenasteAktivitetTest.php) — travelTo() vore fullt tillgängligt.
+    Carbon::setTestNow(now());
+
     getJson($url, $headers)->assertOk();
 
     DB::enableQueryLog();
@@ -380,4 +387,6 @@ it('deltagarlistan gör inte en fråga per deltagare', function () {
     expect($andraSvaret->json('data'))->toHaveCount(10);
 
     expect($frågorMedTioDeltagare)->toBe($frågorMedTreDeltagare);
+
+    Carbon::setTestNow();
 });
