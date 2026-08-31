@@ -24,12 +24,28 @@ Beslutet fattades utan en färdig batch av jämförande körningar — det finns
 
 Den låga bucketen (alla tre axlar låga) är per definition den del av backloggen med lägst tvetydighet, minst spridningsyta och lägst riskklass — den bucket där en svagare modell gör minst skada om den presterar sämre, och där felet upptäcks billigt via samma testsvit som [[ADR-0022 Testramverk och statisk analys]] redan gör till den bärande kontrollmekanismen.
 
+## Uppföljning (2026-08-31)
+
+Tre shadow-körningar mot verkliga, tidigare oimplementerade issues, med Deepseek och Sonnet på identisk utgångspunkt i en läckagefri isolerad kopia av repot:
+
+| Issue | Sonnet | Deepseek | Resultat |
+|---|---|---|---|
+| 8 · Container (`risk_class: elevated`) | ingen siffra — mergad innan kostnadsloggningen fanns | $0,267 | Funktionellt likvärdig med den redan mergade Sonnet-lösningen |
+| 13a · Item CRUD | $4,671 | $0,188 (~25x billigare) | Likvärdig: 302/302 gröna tester, Pint och PHPStan rena, rätt filomfång |
+| 13b · item_tag | $9,063 | $0,354 inkl. en rättningsrunda (~26x billigare) | Se nedan |
+
+Issue 13b:s första Deepseek-körning bröt mot ett uttryckligt "Klart när"-krav: taggsynken skulle göra ett konstant antal databasfrågor oavsett antal taggar (Beslut 6 i issuen), men bokstavlig `sync()` plus per-element `Rule::exists()` skalar med antal taggar (13 frågor vid två taggar, 20 vid fem). Deepseeks eget test för just den punkten gick ändå grönt — det mätte bara en delmängd av frågorna. Felet fångades genom en oberoende empirisk kontroll (fullständig frågeräkning, inte agentens egen), inte av agenten själv. En andra körning, given exakt det fyndet, fixade båda källorna korrekt (verifierat: 11 frågor oavsett två eller fem taggar, samma som Sonnet).
+
+**Slutsats hittills:** Deepseek håller kvalitetsmässigt när kraven är explicit uppräknade och testbara — vilket den här repots issue-stil är byggd för — till en genomsnittlig kostnad på ungefär 4 % av Sonnets. Men den missar subtilare krav (en prestandaregression bortom "mitt eget test är grönt") om ingen granskar bortom testresultatet. Sonnet eller en människa i granskarledet är alltså fortsatt nödvändigt för den låga bucketen, inte valfritt — precis den roll `AGENTS.md`:s eskaleringsregel redan ger den.
+
+Sidofynd under arbetet, inte specifikt för Deepseek: en genuin, leverantörsoberoende testflakighet upptäcktes (`DB::listen`-baserade frågeräkningstest racear mot `UpdateLastActiveAt`-middlewarens sekundprecisa skrivning), rotorsaksbestämd och dokumenterad som [issue #80](https://github.com/Manjo-Consulting-AB/mimers/issues/80).
+
 ## Konsekvenser
 
 - **`AGENTS.md` och `agent_task.yml` namnger leverantör, inte roll.** En framtida modellväxling inom samma leverantör (t.ex. en ny Claude-modell för den förhöjda bucketen) är en enkel textändring i båda filerna, inte en ADR i sig — men ett leverantörsbyte som detta är det.
 - **`session-usage.py` måste prissätta varje modell som faktiskt körs.** Ett nytt leverantörsnamn utan en rad i `PRICES` ger ett odiagnostiserat `cost_usd: null`; se `opriced`-fältet i loggen för vilken modell som saknas.
 - **`model-routing.md` i `Manjo-Consulting-AB/ai-standards` måste hållas i synk manuellt.** Det är inte samma repo och ingår inte i den synkade AGENTS.md-blocket ([[AGENTS.md]] rad 25–53) — en ändring här uppdaterar inte den filen automatiskt.
-- **Ingen mätning bakåt.** Beslutet utvärderas framåt, mot nya issues som faktiskt körs på Deepseek, inte mot en jämförelse med redan stängda issues.
+- **Mätning finns nu framåt, se § Uppföljning.** Issue 8 hade redan en mergad Sonnet-lösning (utan loggad kostnad, se tabellen) och kördes om isolerat som ett rent kvalitetsprov; 13a och 13b var båda oimplementerade och kördes fräscht på båda modellerna parallellt, med jämförbar kostnad för första gången.
 
 ## Alternativ
 
