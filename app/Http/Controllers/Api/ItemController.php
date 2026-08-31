@@ -13,6 +13,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
@@ -46,26 +47,30 @@ class ItemController extends Controller
      * items, sorted by `name` ascending, no pagination (issue 13a § Beslut
      * 10). The query string may carry the issue 15a filters, both optional
      * and combined with AND: `tags[]` (every tag required, § Beslut 2) and
-     * `category` (the category and its whole subtree, § Beslut 4).
+     * `category` (the category and its whole subtree, § Beslut 4). Since
+     * issue 15b § Beslut 5 it also carries `q` (optional, `sometimes` in
+     * IndexItemRequest), a free-text search over the five searchable
+     * columns that combines with the tag/category filters with AND.
      * IndexItemRequest has already proved every ULID exists in THIS
      * container and is not soft-deleted — an unknown value is 422
      * `validation.failed`, never an empty result (§ Beslut 7). A filter
      * that matches nothing is still 200 with `{"data": []}`.
      *
-     * `category`, `createdByAccount` and `tags` are eager-loaded so
-     * ItemResource never triggers an unplanned lazy-load per row — the
-     * list stays a constant number of queries regardless of item count
-     * (issue 13b § Beslut 10) and of the number of filter values or the
-     * depth of the category tree (issue 15a § Beslut 9).
+     * When `q` is present the search goes through Scout's database driver
+     * (issue 15b § Beslut 3) with the container and the 15a filters applied
+     * in the `query()` callback; the plain Eloquent path below is unchanged
+     * when it is not. `category`, `createdByAccount` and `tags` are
+     * eager-loaded so ItemResource never triggers an unplanned lazy-load
+     * per row — the list stays a constant number of queries regardless of
+     * item count (issue 13b § Beslut 10) and of the number of filter values
+     * or the depth of the category tree (issue 15a § Beslut 9).
      */
     public function index(IndexItemRequest $request, Container $container, ResolveCategoryDescendants $resolveCategoryDescendants): JsonResponse
     {
         Gate::authorize('view', $container);
 
-        $query = $container->items()
-            ->with(['category', 'createdByAccount', 'tags']);
-
         $tagUlids = $request->validated('tags');
+        $tagIds = [];
 
         if ($tagUlids !== null && $tagUlids !== []) {
             // IndexItemRequest has already proved each ULID exists in THIS
@@ -77,20 +82,48 @@ class ItemController extends Controller
                 ->whereNull('deleted_at')
                 ->pluck('id')
                 ->all();
-
-            $query->withAllTags($tagIds);
         }
 
         $categoryUlid = $request->validated('category');
+        $categoryIds = null;
 
         if ($categoryUlid !== null) {
             $category = $container->categories()->where('ulid', $categoryUlid)->firstOrFail();
             $categoryIds = $resolveCategoryDescendants->handle($category);
-
-            $query->inCategoryTree($categoryIds);
         }
 
-        $items = $query->orderBy('name')->get();
+        $q = $request->validated('q');
+
+        if ($q !== null && $q !== '') {
+            $items = Item::search($q)
+                ->query(function (Builder $query) use ($container, $tagIds, $categoryIds) {
+                    /** @var Builder<Item> $query */
+                    $query->where('container_id', $container->id)
+                        ->with(['category', 'createdByAccount', 'tags']);
+
+                    if ($tagIds !== []) {
+                        $query->withAllTags($tagIds);
+                    }
+
+                    if ($categoryIds !== null) {
+                        $query->inCategoryTree($categoryIds);
+                    }
+                })
+                ->orderBy('name')
+                ->get();
+        } else {
+            $query = $container->items()->with(['category', 'createdByAccount', 'tags']);
+
+            if ($tagIds !== []) {
+                $query->withAllTags($tagIds);
+            }
+
+            if ($categoryIds !== null) {
+                $query->inCategoryTree($categoryIds);
+            }
+
+            $items = $query->orderBy('name')->get();
+        }
 
         return ItemResource::collection($items)->response();
     }

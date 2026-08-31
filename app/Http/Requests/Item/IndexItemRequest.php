@@ -7,15 +7,22 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * GET /api/containers/{container}/items, issue 15a. Validerar
- * querysträngens filter: `tags[]` (en lista av tagg-ULID:er) och
- * `category` (en kategori-ULID), båda valfria. Utan parametrar är
- * beteendet exakt som i 13a.
+ * Validerar items-listningens querysträng på BÅDA rutterna, issue 15b §
+ * Beslut 5 och 6: den globala `GET /api/items?q=...` (där `q` är
+ * obligatorisk) och containerns `GET /api/containers/{container}/items`
+ * (där `q` är valfri och kombineras med 15a:s `tags[]`/`category` med OCH).
  *
- * Ett okänt värde är ett VALIDERINGSFEL (422 `validation.failed`), inte ett
- * tomt resultat — en tagg eller kategori ur en ANNAN container, eller en
- * mjukraderad rad, är en fråga som är fel ställd (issue 15a § Beslut 7).
- * Samma containerscopade regel som 13b § Beslut 5, mot `ulid`, se
+ * `q` är `required` på den globala rutten — en global lista över allt
+ * användaren äger är inte en sökning, och den kan bli mycket stor — men
+ * `sometimes` på containerns lista. Samma request tjänar båda rutterna;
+ * skillnaden avgörs av om `{container}` finns i rutten.
+ *
+ * Fälten nedan är 15a:s filter och finns BARA på containerns rutt. Den
+ * globala rutten tar bara `q` (Beslut 6). Ett okänt värde är ett
+ * VALIDERINGSFEL (422 `validation.failed`), inte ett tomt resultat — en
+ * tagg eller kategori ur en ANNAN container, eller en mjukraderad rad, är
+ * en fråga som är fel ställd (issue 15a § Beslut 7). Samma containerscopade
+ * regel som 13b § Beslut 5, mot `ulid`, se
  * App\Http\Requests\Container\StoreContainerRequest.
  *
  * `tags` löses upp i EN `Tag::whereIn`-fråga i rules() och varje element
@@ -35,10 +42,36 @@ class IndexItemRequest extends FormRequest
     }
 
     /**
+     * Trimma `q` före valideringen — en enbart blank `q` ska vara samma sak
+     * som en tom, och därmed 422 `validation.failed` på den globala rutten
+     * (issue 15b § Beslut 6).
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('q')) {
+            $this->merge(['q' => trim((string) $this->input('q'))]);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
+        $onContainerRoute = $this->route('container') !== null;
+
+        $rules = [
+            'q' => [
+                $onContainerRoute ? 'sometimes' : 'required',
+                'string',
+                'max:255',
+            ],
+        ];
+
+        if (! $onContainerRoute) {
+            return $rules;
+        }
+
         $validTagUlids = [];
 
         if (is_array($tags = $this->input('tags')) && $tags !== []) {
@@ -53,16 +86,16 @@ class IndexItemRequest extends FormRequest
             }
         }
 
-        return [
-            'tags' => ['sometimes', 'array'],
-            'tags.*' => ['string', Rule::in($validTagUlids)],
-            'category' => [
-                'sometimes',
-                'string',
-                Rule::exists('category', 'ulid')->where(
-                    fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
-                ),
-            ],
+        $rules['tags'] = ['sometimes', 'array'];
+        $rules['tags.*'] = ['string', Rule::in($validTagUlids)];
+        $rules['category'] = [
+            'sometimes',
+            'string',
+            Rule::exists('category', 'ulid')->where(
+                fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
+            ),
         ];
+
+        return $rules;
     }
 }
