@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -118,5 +119,33 @@ class Item extends Model
     {
         return $this->belongsToMany(Tag::class, 'item_tag')
             ->withTimestamps();
+    }
+
+    /**
+     * Länkarna där det här itemet är från-sidan (`from_item_id`), se
+     * [[Items och organisation]] § item_link och issue 14. Tillsammans med
+     * linksTo() täcker de LÄSNINGEN i
+     * App\Http\Controllers\Api\ItemLinkController::index() — de två
+     * relationerna kombineras med union (issue 14 § Beslut 8), så listan
+     * aldrig blir N+1. Inget mer: inga `parents()`/`children()`/`siblings()`-
+     * hjälprelationer, och relationerna bäddas inte in i ItemResource (issue
+     * 14 § Beslut 9).
+     *
+     * @return HasMany<ItemLink, $this>
+     */
+    public function linksFrom(): HasMany
+    {
+        return $this->hasMany(ItemLink::class, 'from_item_id');
+    }
+
+    /**
+     * Länkarna där det här itemet är till-sidan (`to_item_id`), se
+     * linksFrom() ovan.
+     *
+     * @return HasMany<ItemLink, $this>
+     */
+    public function linksTo(): HasMany
+    {
+        return $this->hasMany(ItemLink::class, 'to_item_id');
     }
 }
