@@ -14,6 +14,14 @@ Registreras i .claude/settings.json:
 Raden nycklas på grennamn. Heter grenarna efter issuenummer mappas kostnaden
 till issue utan att något extra fält behöver fyllas i någonstans.
 
+Loggen skrivs till huvudträdets .claude/, inte till sessionens cwd. En session i
+en git-worktree har en egen .claude/usage.jsonl - och eftersom filen är
+gitignorerad följer den med när worktreen tas bort. M1:s issue-sessioner kördes
+alla i worktrees, så alla femton rader som överlevde var main-sessioner: precis
+de rader som inte kan svara på vad en issue kostade. Huvudträdet hittas via
+`git rev-parse --git-common-dir`, som pekar på originalrepots .git även från en
+worktree (--git-dir gör det inte).
+
 De fyra räknarna hålls isär med flit. Cache-läsning kostar ungefär en tiondel av
 vanlig input och cache-skrivning ungefär en fjärdedel mer, så en summa av råa
 tokens säger inget om vad sessionen kostade.
@@ -41,6 +49,12 @@ COUNTERS = (
     "cache_read_input_tokens",
     "cache_creation_input_tokens",
 )
+
+# Modeller som inte är modeller. "<synthetic>" är harnessets egna meddelanden
+# (avbrott, felnoteringar); de bär alltid noll tokens men saknas i PRICES, och
+# eftersom cost_usd() ger None så snart EN modell saknas nollställde de kostnaden
+# för hela raden. Tre av femton rader föll så, och det var de tre dyraste.
+GRATIS_MODELLER = frozenset({"<synthetic>"})
 
 
 def read_usage(transcript: pathlib.Path) -> dict:
@@ -73,6 +87,8 @@ def cost_usd(per_model: dict) -> float | None:
     """Kostnad i USD. None om någon modell saknas i pristabellen."""
     total = 0.0
     for model, counters in per_model.items():
+        if model in GRATIS_MODELLER:
+            continue
         price = PRICES.get(model)
         if price is None:
             return None
@@ -101,17 +117,29 @@ def merge(into: dict, other: dict) -> None:
             bucket[counter] += counters[counter]
 
 
-def git_branch(cwd: str) -> str:
+def git(cwd: str, *args: str) -> str | None:
     try:
         return subprocess.run(
-            ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
+            ["git", "-C", cwd, *args],
             capture_output=True,
             text=True,
             timeout=10,
             check=True,
         ).stdout.strip()
     except (subprocess.SubprocessError, OSError):
-        return "okänd"
+        return None
+
+
+def git_branch(cwd: str) -> str:
+    return git(cwd, "rev-parse", "--abbrev-ref", "HEAD") or "okänd"
+
+
+def loggfil(cwd: str) -> pathlib.Path:
+    """Huvudträdets .claude/usage.jsonl, även när sessionen kör i en worktree."""
+    gemensam = git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if gemensam:
+        return pathlib.Path(gemensam).parent / ".claude" / "usage.jsonl"
+    return pathlib.Path(cwd) / ".claude" / "usage.jsonl"
 
 
 def main() -> int:
@@ -155,7 +183,7 @@ def main() -> int:
         "cost_usd": cost_usd(combined),
     }
 
-    out = pathlib.Path(cwd) / ".claude" / "usage.jsonl"
+    out = loggfil(cwd)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
