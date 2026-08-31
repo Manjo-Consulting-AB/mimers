@@ -34,11 +34,18 @@ import subprocess
 import sys
 
 # USD per miljon tokens. Multiplikatorerna gäller relativt input:
-# cache-läsning ~0.1x, cache-skrivning ~1.25x.
+# cache-läsning ~0.1x, cache-skrivning ~1.25x - Anthropics egna, publicerade
+# siffror. ADR-0025 dokumenterar bara in/ut-priset för Deepseek
+# (0,14/0,28 USD/M, peak); ingen cache-kvot är verifierad för den
+# leverantören, så Deepseek-rader återanvänder Anthropics kvoter som en
+# okontrollerad approximation. Rör vid en session med mycket cache-läsning
+# (issue 13a: 23,5M token) och talet kan vara fel med flera gånger - se
+# docs/Process/Lärdomar.md.
 PRICES = {
     "claude-opus-5": (5.0, 25.0),
     "claude-sonnet-5": (2.0, 10.0),
     "claude-haiku-4-5": (1.0, 5.0),
+    "deepseek-v4-flash": (0.14, 0.28),  # ADR-0025 § Motivering
 }
 CACHE_READ_MULTIPLIER = 0.1
 CACHE_WRITE_MULTIPLIER = 1.25
@@ -83,16 +90,26 @@ def read_usage(transcript: pathlib.Path) -> dict:
     return per_model
 
 
+def opriced_models(per_model: dict) -> list[str]:
+    """Modeller i raden som varken är gratis eller har ett pris - se ADR-0025
+    § Konsekvenser, som krävde det här fältet och fick det två veckor senare."""
+    return sorted(
+        model
+        for model in per_model
+        if model not in GRATIS_MODELLER and model not in PRICES
+    )
+
+
 def cost_usd(per_model: dict) -> float | None:
-    """Kostnad i USD. None om någon modell saknas i pristabellen."""
+    """Kostnad i USD. None om någon modell saknas i pristabellen - se opriced_models()
+    för vilken, i stället för att gissa eller tysta felet."""
+    if opriced_models(per_model):
+        return None
     total = 0.0
     for model, counters in per_model.items():
         if model in GRATIS_MODELLER:
             continue
-        price = PRICES.get(model)
-        if price is None:
-            return None
-        input_price, output_price = price
+        input_price, output_price = PRICES[model]
         total += counters["input_tokens"] / 1e6 * input_price
         total += counters["output_tokens"] / 1e6 * output_price
         total += (
@@ -181,6 +198,7 @@ def main() -> int:
         "main": main_usage,
         "subagents": subagent_usage,
         "cost_usd": cost_usd(combined),
+        "opriced": opriced_models(combined),
     }
 
     out = loggfil(cwd)
