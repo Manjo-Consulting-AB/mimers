@@ -10,8 +10,11 @@ use App\Http\Resources\ItemResource;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\Tag;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -39,16 +42,17 @@ class ItemController extends Controller
     /**
      * GET /api/containers/{container}/items — 200. Lists the container's
      * items, sorted by `name` ascending, no pagination (issue 13a § Beslut
-     * 10). `category` and `createdByAccount` are eager-loaded so
+     * 10). `category`, `createdByAccount` and `tags` are eager-loaded so
      * ItemResource never triggers an unplanned lazy-load per row — the
-     * list stays a constant number of queries regardless of item count.
+     * list stays a constant number of queries regardless of item count
+     * (issue 13b § Beslut 10).
      */
     public function index(Container $container): JsonResponse
     {
         Gate::authorize('view', $container);
 
         $items = $container->items()
-            ->with(['category', 'createdByAccount'])
+            ->with(['category', 'createdByAccount', 'tags'])
             ->orderBy('name')
             ->get();
 
@@ -90,18 +94,41 @@ class ItemController extends Controller
             ? $container->categories()->where('ulid', $categoryUlid)->firstOrFail()
             : null;
 
-        $item = new Item($request->safe()->except(['account', 'category']));
-        $item->container_id = $container->id;
-        $item->category_id = $category?->id;
-        $item->created_by_user_id = $request->user()->id;
-        $item->created_by_account_id = $account->id;
-        $item->save();
+        // The tags are looked up ONCE, before the transaction: the request
+        // has already proven each ULID exists in THIS container and is not
+        // soft-deleted (StoreItemRequest § Beslut 5), so the lookup is
+        // trusted. In bulk — one query no matter how many tags, same rule
+        // as 9c § Beslut 8, see issue 13b § Beslut 6.
+        $tags = $request->has('tags')
+            ? Tag::whereIn('ulid', $request->validated('tags'))->get()
+            : collect();
 
-        // $account and $category are already in hand above — set the
+        $item = new Item($request->safe()->except(['account', 'category', 'tags']));
+
+        // The item write and the tag sync share one transaction (issue 13b
+        // § Beslut 7): an item saved with half its tagging is a state the
+        // user can neither see nor fix. replaceTags() has sync()'s replace
+        // semantics but keeps the query count constant, see that method. A
+        // new item starts with no tags, so an empty `tags` list needs no
+        // sync call.
+        DB::transaction(function () use ($item, $container, $category, $account, $request, $tags) {
+            $item->container_id = $container->id;
+            $item->category_id = $category?->id;
+            $item->created_by_user_id = $request->user()->id;
+            $item->created_by_account_id = $account->id;
+            $item->save();
+
+            if ($tags->isNotEmpty()) {
+                $this->replaceTags($item, $tags);
+            }
+        });
+
+        // $account, $category and $tags are already in hand above — set the
         // relations directly instead of letting ItemResource trigger new
         // queries for the same rows, see index() on N+1.
         $item->setRelation('category', $category);
         $item->setRelation('createdByAccount', $account);
+        $item->setRelation('tags', $tags);
 
         return (new ItemResource($item))
             ->response()
@@ -120,7 +147,7 @@ class ItemController extends Controller
 
         // A single row, but eager-load explicitly so ItemResource never
         // runs an unplanned lazy-load query, same reasoning as index().
-        $item->loadMissing(['category', 'createdByAccount']);
+        $item->loadMissing(['category', 'createdByAccount', 'tags']);
 
         return new ItemResource($item);
     }
@@ -130,14 +157,16 @@ class ItemController extends Controller
      * documented fields, all optional. `category` changes only when the KEY
      * is present in the body (`$request->has()`, never `filled()`): an
      * omitted `category` leaves it untouched, `category: null` clears it (§
-     * Beslut 7). `created_by_*` is never in the request's rules, so it can
-     * not be changed here (§ Beslut 6).
+     * Beslut 7). `tags` replaces the whole set the same way (issue 13b §
+     * Beslut 4): `has('tags')`, never `filled()`, so `tags: []` really
+     * clears — see replaceTags() below. `created_by_*` is never in the
+     * request's rules, so it can not be changed here (§ Beslut 6).
      */
     public function update(UpdateItemRequest $request, Container $container, Item $item): ItemResource
     {
         Gate::authorize('update', $container);
 
-        $item->fill($request->safe()->except(['category']));
+        $item->fill($request->safe()->except(['category', 'tags']));
 
         if ($request->has('category')) {
             $categoryUlid = $request->validated('category');
@@ -148,10 +177,22 @@ class ItemController extends Controller
             $item->category_id = $category?->id;
         }
 
-        $item->save();
+        // Item write and tag sync in one transaction, same reasoning as
+        // store() (issue 13b § Beslut 7). The tag ULID → id lookup is in
+        // bulk, one query regardless of count (§ Beslut 6). replaceTags()
+        // runs whenever the KEY is present — including `tags: []`, which
+        // clears.
+        DB::transaction(function () use ($item, $request) {
+            $item->save();
 
-        // See show() above — same reasoning, a single row.
-        $item->loadMissing(['category', 'createdByAccount']);
+            if ($request->has('tags')) {
+                $this->replaceTags($item, Tag::whereIn('ulid', $request->validated('tags'))->get());
+            }
+        });
+
+        // See show() above — same reasoning, a single row. `tags` is loaded
+        // AFTER the sync so the response reflects the new set.
+        $item->loadMissing(['category', 'createdByAccount', 'tags']);
 
         return new ItemResource($item);
     }
@@ -169,5 +210,36 @@ class ItemController extends Controller
         $item->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * Replaces the item's tag set with $tags, keeping sync()'s replace
+     * semantics (an omitted id is detached, a new one attached) but a
+     * CONSTANT number of queries no matter how many tags (issue 13b §
+     * Beslut 6). BelongsToMany::sync() attaches one pivot row per query —
+     * an INSERT per new tag. This diffs against the current pivot rows and
+     * then attach()/detach() the whole side at once: Eloquent batches the
+     * list into a single multi-row INSERT / DELETE regardless of count.
+     *
+     * The current set is read straight from the pivot table, NOT through
+     * the `tags()` relation — the relation applies SoftDeletes' global
+     * scope and would hide the pivot rows of soft-deleted tags that sync()
+     * still sees (issue 13b § Beslut 3).
+     */
+    private function replaceTags(Item $item, Collection $tags): void
+    {
+        $önskade = $tags->pluck('id')->all();
+        $nuvarande = DB::table('item_tag')->where('item_id', $item->id)->pluck('tag_id')->all();
+
+        $attachera = array_values(array_diff($önskade, $nuvarande));
+        $detachera = array_values(array_diff($nuvarande, $önskade));
+
+        if ($attachera !== []) {
+            $item->tags()->attach($attachera);
+        }
+
+        if ($detachera !== []) {
+            $item->tags()->detach($detachera);
+        }
     }
 }

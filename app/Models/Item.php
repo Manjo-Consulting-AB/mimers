@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -93,5 +94,29 @@ class Item extends Model
     public function createdByAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'created_by_account_id');
+    }
+
+    /**
+     * Itemets taggar — flera, till skillnad från kategorin som det finns
+     * högst en av, se [[ADR-0004 Fria taggar och kategorier]] och issue 13b.
+     * Kopplingen bor i `item_tag` och sätts med itemet, aldrig via egna
+     * rutter (issue 13b § Beslut 2).
+     *
+     * `->withTimestamps()` fyller `created_at`/`updated_at` på pivotraden —
+     * kolumnerna finns i migrationen och ska fyllas (issue 13b § Att se upp
+     * med). Uppsättningen sätts i klump med samma ersätt-semantik som
+     * `sync()` men konstant frågeantal, se
+     * App\Http\Controllers\Api\ItemController::replaceTags.
+     *
+     * SoftDeletes' globala scope gäller genom relationen: en mjukraderad
+     * tagg försvinner ur itemets svar medan pivotraden ligger kvar, så en
+     * återupplivad tagg kommer tillbaka på sina items (issue 13b § Beslut 9).
+     *
+     * @return BelongsToMany<Tag, $this>
+     */
+    public function tags(): BelongsToMany
+    {
+        return $this->belongsToMany(Tag::class, 'item_tag')
+            ->withTimestamps();
     }
 }

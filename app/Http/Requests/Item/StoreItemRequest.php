@@ -2,14 +2,15 @@
 
 namespace App\Http\Requests\Item;
 
+use App\Models\Tag;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * POST /api/containers/{container}/items, see issue 13a § Beslut 5–7.
- * The body is `{"name", "description"?, "manufacturer"?, "model"?,
- * "serial_number"?, "purchased_at"?, "warranty_until"?, "position_note"?,
- * "category"?, "account"}`.
+ * POST /api/containers/{container}/items, see issue 13a § Beslut 5–7 and
+ * issue 13b § Beslut 2–5. The body is `{"name", "description"?,
+ * "manufacturer"?, "model"?, "serial_number"?, "purchased_at"?,
+ * "warranty_until"?, "position_note"?, "category"?, "tags"?, "account"}`.
  *
  * `account` is a required account-ULID — the account the item is
  * attributed to, never a server-side "active account", see § Beslut 6. A
@@ -24,6 +25,16 @@ use Illuminate\Validation\Rule;
  * 404 and not an authorization error. `whereNull('deleted_at')` bypasses
  * Eloquent's global SoftDeletes scope, which `Rule::exists` does not know
  * about, see § Beslut 7.
+ *
+ * `tags` is an optional list of tag-ULIDs, each resolved in the SAME
+ * container and not soft-deleted (issue 13b § Beslut 5). A tag from another
+ * container would leak its name through the item resource to everyone who
+ * can see the container, so it is a validation error — with the field code
+ * under `tags.0`, `tags.1`, ... which ValidationErrorMapper handles like any
+ * dotted field name. The whole list is resolved in ONE `Tag::whereIn` query
+ * in rules() and each element is then checked in memory with `Rule::in` —
+ * a `Rule::exists` per element would run a `count(*)` query per tag, see §
+ * Beslut 6.
  *
  * `purchased_at` and `warranty_until` validate with `date_format:Y-m-d`,
  * NOT `date` — the latter accepts "next tuesday", see § Beslut 5.
@@ -50,6 +61,20 @@ class StoreItemRequest extends FormRequest
      */
     public function rules(): array
     {
+        $validTagUlids = [];
+
+        if (is_array($tags = $this->input('tags')) && $tags !== []) {
+            $tagUlids = array_filter($tags, 'is_string');
+
+            if ($tagUlids !== []) {
+                $validTagUlids = Tag::whereIn('ulid', $tagUlids)
+                    ->where('container_id', $this->route('container')->id)
+                    ->whereNull('deleted_at')
+                    ->pluck('ulid')
+                    ->all();
+            }
+        }
+
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -66,6 +91,8 @@ class StoreItemRequest extends FormRequest
                     fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
                 ),
             ],
+            'tags' => ['sometimes', 'array'],
+            'tags.*' => ['string', Rule::in($validTagUlids)],
             'account' => ['required', 'string', Rule::exists('account', 'ulid')],
         ];
     }
