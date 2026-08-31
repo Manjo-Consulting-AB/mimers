@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
+use App\Http\Controllers\Api\ItemSearchController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
@@ -166,6 +167,15 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show']);
     Route::patch('/containers/{container}/items/{item}', [ItemController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}', [ItemController::class, 'destroy']);
+
+    // Issue 15b · Fritextsök — den ENDA toppnivårutten som rör items, och
+    // den enda som finns just för att frågan är global: en sökning över ALLT
+    // användaren har åtkomst till, inte inom en pärm hon redan valt (issue
+    // 15b § Beslut 5). Rutten bär sitt eget åtkomstfilter (Container::scopeAccessibleBy(),
+    // Beslut 4) i stället för rutt-nästlingens grind — och det är därför den
+    // är issuens riskyta. Bara `q`, inga tagg-/kategorifilter (Beslut 6).
+    // Sökvyn i webben är issue 59.
+    Route::get('/items', [ItemSearchController::class, 'index']);
 
     // Issue 14 · Relationer mellan items, se
     // App\Http\Controllers\Api\ItemLinkController och

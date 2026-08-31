@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUlid;
 use Database\Factories\ContainerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -136,5 +137,43 @@ class Container extends Model
     public function items(): HasMany
     {
         return $this->hasMany(Item::class);
+    }
+
+    /**
+     * Begränsar till containers $user når: medlem i ägarkontot (regel 1 i
+     * [[Konton och åtkomst]] § Behörighetsregler) ELLER en giltig
+     * `container_access` som träffar henne eller ett av hennes konton
+     * (regel 2, via ContainerAccess::scopeValidFor()).
+     *
+     * Utbrutet ur App\Http\Controllers\Api\ContainerController::index() i
+     * issue 15b § Beslut 4, som den här metoden anropas från — och från
+     * fritextsökningen (App\Http\Controllers\Api\ItemSearchController), som
+     * behöver exakt samma villkor. Formulera INTE "containers jag når" en
+     * andra gång någon annanstans — två formuleringar av åtkomstvillkoret
+     * kan glida isär, och en sökning som läcker mellan containers är en
+     * allvarlig incident ([[ADR-0012 Sök]] § Konsekvenser). Samma slags
+     * utbrytning, av samma skäl, som ContainerAccess::scopeValid() i issue
+     * 9c § Beslut 5.
+     *
+     * `$accountIds` ska vara löpnumren (inte ULID:erna) för de konton
+     * $user är medlem i — anroparen hämtar dem med
+     * `$user->accounts->pluck('id')`. SoftDeletes' globala scope gäller
+     * här: en mjukraderad container matchar aldrig, eftersom scopet läggs
+     * på samma byggare (issue 15b § Att se upp med).
+     *
+     * @param  Builder<Container>  $query
+     * @param  list<int>  $accountIds
+     * @return Builder<Container>
+     */
+    public function scopeAccessibleBy(Builder $query, User $user, array $accountIds): Builder
+    {
+        return $query->where(function (Builder $query) use ($user, $accountIds) {
+            $query->whereHas('account.users', function (Builder $query) use ($user) {
+                $query->whereKey($user->id);
+            })->orWhereHas('accesses', function (Builder $query) use ($user, $accountIds) {
+                /** @var Builder<ContainerAccess> $query */
+                $query->validFor($user, $accountIds);
+            });
+        });
     }
 }

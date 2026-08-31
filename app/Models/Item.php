@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Laravel\Scout\Searchable;
 
 /**
  * The fundamental unit of the product — everything the user wants to
@@ -35,7 +36,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Item extends Model
 {
     /** @use HasFactory<ItemFactory> */
-    use HasFactory, HasUlid, SoftDeletes;
+    use HasFactory, HasUlid, Searchable, SoftDeletes;
 
     /**
      * The table is called `item`, not Eloquent's default plural `items`.
@@ -57,6 +58,31 @@ class Item extends Model
         return [
             'purchased_at' => 'date',
             'warranty_until' => 'date',
+        ];
+    }
+
+    /**
+     * The searchable columns, issue 15b § Beslut 3 — the document's five
+     * columns, same as the FULLTEXT index from 13a § Beslut 4. The
+     * database driver searches these via Scout's LIKE formulation; the
+     * keys are the columns, the values are ignored by the engine.
+     *
+     * No #[SearchUsingFullText] on purpose: that attribute makes Scout emit
+     * `whereFullText(...)`, which MariaDB handles and SQLite (the in-memory
+     * test database) does not — the suite would fall on every search
+     * (Beslut 3). The FULLTEXT index therefore stays unused until CI runs
+     * against MariaDB or Meilisearch arrives; turning it on is one line.
+     *
+     * @return array<string, mixed>
+     */
+    public function toSearchableArray(): array
+    {
+        return [
+            'name' => $this->name,
+            'description' => $this->description,
+            'manufacturer' => $this->manufacturer,
+            'model' => $this->model,
+            'serial_number' => $this->serial_number,
         ];
     }
 

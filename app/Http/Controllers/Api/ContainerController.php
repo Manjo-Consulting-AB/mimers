@@ -8,8 +8,6 @@ use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\ContainerAccess;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -47,20 +45,19 @@ class ContainerController extends Controller
      * villkor (ContainerAccess::scopeValidFor()) som policyns
      * hasContainerAccess() prövar för view(), så de två frågorna aldrig
      * kan glida isär.
+     *
+     * Åtkomstvillkoret är utbrutet till App\Models\Container::scopeAccessibleBy()
+     * (issue 15b § Beslut 4) och delas med fritextsökningen — formulera det
+     * inte om här. Det här är en ren utbrytning: beteendet är identiskt,
+     * bevisat av ContainerCrudTest och ContainerAtkomstApiTest.
      */
     public function index(Request $request): JsonResponse
     {
-        $accountIds = $request->user()->accounts->pluck('id')->values()->all();
+        $user = $request->user();
+        $accountIds = $user->accounts->pluck('id')->values()->all();
 
         $containers = Container::query()
-            ->where(function ($query) use ($request, $accountIds) {
-                $query->whereHas('account.users', function ($query) use ($request) {
-                    $query->whereKey($request->user()->id);
-                })->orWhereHas('accesses', function (Builder $query) use ($request, $accountIds) {
-                    /** @var Builder<ContainerAccess> $query */
-                    $query->validFor($request->user(), $accountIds);
-                });
-            })
+            ->accessibleBy($user, $accountIds)
             // Uppföljning på granskningen av PR #43: ContainerResource::toArray()
             // läser $this->account->ulid för varje rad. Utan eager loading
             // gör en lista med N containers N+1 frågor — en extra fråga
