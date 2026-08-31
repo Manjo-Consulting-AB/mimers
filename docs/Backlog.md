@@ -6,6 +6,8 @@ Issues i beroendeordning. Tillbaka till [[00 Index]].
 
 **Till den som skapar issues i GitHub:** använd mallen `Agentuppgift` (`.github/ISSUE_TEMPLATE/agent_task.yml`). En rubrik per issue nedan, beskrivningen som brödtext, acceptanskriterierna som checklista, beroenden med issue-nummer. Mallens övriga fält — omfångsrutan och de tre axlarna — står inte i backlogfilerna och måste fyllas i här: det är det enda ställe implementeraren ser dem.
 
+**Vilken av de två som är källan.** Valvet äger *vilket arbete som finns* och varför; GitHub-issuen äger *hur det utförs* — omfångsrutan, axlarna, besluten. Delar du en issue i a/b/c när du skriver den ändrar du det första, inte det andra: **skriv tillbaka delningen som en `Byggd som:`-rad** under rubriken här. Under M1 gjordes fyra delningar (9, 10, 13, 15) och ingen skrevs tillbaka, så backlogfilen beskrev en milstolpe som aldrig byggdes så. Numret i valvet förblir odelat — det är fortfarande ett stycke arbete; raden säger bara i hur många omgångar det togs.
+
 Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID utåt, soft delete, UTC, utf8mb4, inga ENUM, inga flyttal för pengar.
 
 ---
