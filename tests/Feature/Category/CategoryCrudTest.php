@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
+use App\Models\Item;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\deleteJson;
@@ -256,4 +257,26 @@ it('svaret bär aldrig ett löpnummer', function () {
     $response->assertOk();
     expect($response->json('data.0.id'))->toBeNull();
     expect($response->json('data.0.parent_id'))->toBeNull();
+});
+
+/*
+ * Issue 13a § Beslut 9: a category that at least one non-deleted item
+ * points at cannot be deleted — `category.has_items`, 422, with the count
+ * in `data`. No cascade, no silent nulling of `category_id`.
+ */
+it('a category with items cannot be deleted', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $category = Category::factory()->for($container, 'container')->create(['name' => 'Motor']);
+    Item::factory()->for($container, 'container')->create([
+        'category_id' => $category->id,
+        'created_by_user_id' => $user->id,
+        'created_by_account_id' => $account->id,
+    ]);
+
+    $response = deleteJson("/api/containers/{$container->ulid}/categories/{$category->ulid}", [], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('category.has_items');
+    expect($response->json('error.data.items'))->toBe(1);
 });
