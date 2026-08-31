@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
+use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
@@ -165,4 +166,15 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show']);
     Route::patch('/containers/{container}/items/{item}', [ItemController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}', [ItemController::class, 'destroy']);
+
+    // Issue 14 · Relationer mellan items, se
+    // App\Http\Controllers\Api\ItemLinkController och
+    // App\Actions\Item\LinkItems. {item} nästlas under {container} precis som
+    // items ovan, och {other} binds INTE av scopeBindings() — motparten slås
+    // upp inom containern i destroy() (issue 14 § Beslut 1 och 7). Grindarna
+    // är view() (GET) och update() (POST/DELETE), båda befintliga i
+    // App\Policies\ContainerPolicy — ingen ny policymetod (§ Beslut 2).
+    Route::get('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'index']);
+    Route::post('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'store']);
+    Route::delete('/containers/{container}/items/{item}/links/{other}', [ItemLinkController::class, 'destroy']);
 });
