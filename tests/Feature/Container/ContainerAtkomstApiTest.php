@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -204,6 +205,11 @@ it('listningen gör inte en fråga per rad', function () {
     beviljaAccess($container, User::factory()->create(), 'read', 'guest');
     beviljaAccess($container, Account::factory()->create(), 'read', 'managed');
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo(): Pest typar $this i
+    // it()-closures som TestCall, så travelTo() når inte fram till TestCase.
+    Carbon::setTestNow(now());
+
     // "Värm" Sanctum-guarden med ett omätt anrop innan mätningen börjar,
     // se samma resonemang i ContainerCrudTest.
     getJson("/api/containers/{$container->ulid}/accesses", $headers)->assertOk();
@@ -228,6 +234,8 @@ it('listningen gör inte en fråga per rad', function () {
     expect($andraSvaret->json('data'))->toHaveCount(4);
 
     expect($frågorMedFyraRader)->toBe($frågorMedTvåRader);
+
+    Carbon::setTestNow();
 });
 
 /*

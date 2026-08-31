@@ -5,6 +5,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\deleteJson;
@@ -446,6 +447,11 @@ it('the listing makes a constant number of queries', function () {
         'created_by_account_id' => $account->id,
     ]);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo(): Pest typar $this i
+    // it()-closures som TestCall, så travelTo() når inte fram till TestCase.
+    Carbon::setTestNow(now());
+
     getJson("/api/containers/{$container->ulid}/items", $headers)->assertOk();
 
     DB::enableQueryLog();
@@ -470,4 +476,6 @@ it('the listing makes a constant number of queries', function () {
     expect($secondResponse->json('data'))->toHaveCount(8);
 
     expect($queriesWithEightItems)->toBe($queriesWithThreeItems);
+
+    Carbon::setTestNow();
 });

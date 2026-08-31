@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\deleteJson;
@@ -209,6 +210,11 @@ it('listningen laddar ägarkontot i förväg', function () {
     // skulle det första mätta anropet bära en extra tokenuppslagsfråga
     // som det andra inte har, och skeva jämförelsen nedan helt oberoende
     // av eager loading.
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo(): Pest typar $this i
+    // it()-closures som TestCall, så travelTo() når inte fram till TestCase.
+    Carbon::setTestNow(now());
+
     getJson('/api/containers', $headers)->assertOk();
 
     DB::enableQueryLog();
@@ -232,4 +238,6 @@ it('listningen laddar ägarkontot i förväg', function () {
     expect($andraSvaret->json('data'))->toHaveCount(8);
 
     expect($frågorMedÅttaContainers)->toBe($frågorMedTreContainers);
+
+    Carbon::setTestNow();
 });

@@ -4,6 +4,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -314,6 +315,11 @@ it('listningen laddar taggarna i förväg', function () {
     ]);
     $tre->each(fn (Item $item) => $item->tags()->attach([$tagg->id]));
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo(): Pest typar $this i
+    // it()-closures som TestCall, så travelTo() når inte fram till TestCase.
+    Carbon::setTestNow(now());
+
     // Värm Sanctum-guarden med ett omätt anrop, samma mönster som
     // ContainerCrudTest::it('listningen laddar ägarkontot i förväg').
     getJson("/api/containers/{$container->ulid}/items", $headers)->assertOk();
@@ -342,6 +348,8 @@ it('listningen laddar taggarna i förväg', function () {
     expect($andraSvaret->json('data'))->toHaveCount(8);
 
     expect($frågorMedÅttaItems)->toBe($frågorMedTreItems);
+
+    Carbon::setTestNow();
 });
 
 /*
@@ -358,6 +366,11 @@ it('taggsynken gör ett konstant antal frågor oavsett antal taggar', function (
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $taggar = Tag::factory()->for($container, 'container')->count(5)->create();
+
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80). Carbon direkt i stället för travelTo(): Pest typar $this i
+    // it()-closures som TestCall, så travelTo() når inte fram till TestCase.
+    Carbon::setTestNow(now());
 
     // Värm Sanctum-guarden med ett omätt anrop, se testerna ovan.
     getJson("/api/containers/{$container->ulid}/items", $headers)->assertOk();
@@ -380,6 +393,8 @@ it('taggsynken gör ett konstant antal frågor oavsett antal taggar', function (
     DB::disableQueryLog();
 
     expect($frågorMedFemTaggar)->toBe($frågorMedTvåTaggar);
+
+    Carbon::setTestNow();
 });
 
 it('en read-deltagare nekas att tagga', function () {
