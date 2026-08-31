@@ -84,4 +84,18 @@ class Category extends Model
     {
         return $this->hasMany(Category::class, 'parent_id');
     }
+
+    /**
+     * Items pointing at this category, none of them soft-deleted (Eloquent's
+     * global SoftDeletes scope filters automatically). Used by
+     * App\Http\Controllers\Api\CategoryController::destroy() for the
+     * `category.has_items` check, see issue 13a § Beslut 9 — a category
+     * that classifies at least one item cannot be deleted.
+     *
+     * @return HasMany<Item, $this>
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(Item::class);
+    }
 }

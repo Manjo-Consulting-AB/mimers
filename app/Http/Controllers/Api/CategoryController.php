@@ -133,14 +133,17 @@ class CategoryController extends Controller
     }
 
     /**
-     * DELETE /api/containers/{container}/categories/{category} — 204,
-     * ingen kropp. Mjuk radering (SoftDeletes), nekad om kategorin har
-     * minst ett icke-raderat barn — `category.has_children`, 422, med
-     * antalet i `data` (§ Beslut 7). Ingen kaskad.
+     * DELETE /api/containers/{container}/categories/{category} — 204, no
+     * body. Soft deletion (SoftDeletes), denied if the category has at
+     * least one non-deleted child — `category.has_children`, 422, with the
+     * count in `data` (issue 11 § Beslut 7). No cascade.
      *
-     * Items finns inte än (issue 13a). Skriven så en andra kontroll
-     * (`category.has_items`) får plats utan att den här skrivs om — bygg
-     * den inte i förväg, se § Beslut 7.
+     * Also denied if at least one non-deleted item points at the category —
+     * `category.has_items`, 422, with the count in `data` (issue 13a §
+     * Beslut 9). No cascade, no silent nulling of `category_id`: a deletion
+     * silently emptying the classification of twenty items without anyone
+     * asking is exactly the kind of silent data loss [[ADR-0008 Soft delete
+     * och papperskorg]] exists for.
      */
     public function destroy(Container $container, Category $category): Response
     {
@@ -150,6 +153,12 @@ class CategoryController extends Controller
 
         if ($childrenCount > 0) {
             throw ApiException::make('category.has_children', ['children' => $childrenCount], 422);
+        }
+
+        $itemsCount = $category->items()->count();
+
+        if ($itemsCount > 0) {
+            throw ApiException::make('category.has_items', ['items' => $itemsCount], 422);
         }
 
         $category->delete();

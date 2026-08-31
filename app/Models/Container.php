@@ -121,4 +121,20 @@ class Container extends Model
     {
         return $this->hasMany(Tag::class);
     }
+
+    /**
+     * The container's items, see [[Items och organisation]] § item and
+     * issue 13a — the table M2 (files), M3 (tasks), M6 (loans) and M8
+     * (costs) all hang off. The relation is required by `scopeBindings()`
+     * in routes/api.php: `{item}` is resolved through THIS relation, which
+     * is the whole protection against an item ULID from container A
+     * resolving under container B (issue 13a § Beslut 1). The CRUD surface
+     * lives in App\Http\Controllers\Api\ItemController.
+     *
+     * @return HasMany<Item, $this>
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(Item::class);
+    }
 }

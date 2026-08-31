@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\InvitationResponseController;
+use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
@@ -149,4 +150,19 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/containers/{container}/tags', [TagController::class, 'store']);
     Route::patch('/containers/{container}/tags/{tag}', [TagController::class, 'update']);
     Route::delete('/containers/{container}/tags/{tag}', [TagController::class, 'destroy']);
+
+    // Issue 13a · Items — the fundamental unit of the product, nested under
+    // {container} like categories and tags, see
+    // App\Http\Controllers\Api\ItemController and issue 13a § Beslut 1.
+    // `scopeBindings()` on the group above also applies to {item} — without
+    // it an item ULID from container A resolves under container B, resolved
+    // through App\Models\Container::items(). The gates are the existing
+    // view()/update() on App\Policies\ContainerPolicy, no new policy method
+    // (§ Beslut 2). Tags (`item_tag`) are issue 13b, links between items are
+    // issue 14 — neither here.
+    Route::get('/containers/{container}/items', [ItemController::class, 'index']);
+    Route::post('/containers/{container}/items', [ItemController::class, 'store']);
+    Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show']);
+    Route::patch('/containers/{container}/items/{item}', [ItemController::class, 'update']);
+    Route::delete('/containers/{container}/items/{item}', [ItemController::class, 'destroy']);
 });
