@@ -1,6 +1,6 @@
 # ADR-0025 Modellval efter riskaxlar
 
-**Status:** Antagen 2026-08-30 · [[ADR-index]]
+**Status:** Ersatt av [[ADR-0026 Implementering och granskning efter riskaxlar]] 2026-09-01 · Antagen 2026-08-30 · [[ADR-index]]
 
 ## Kontext
 

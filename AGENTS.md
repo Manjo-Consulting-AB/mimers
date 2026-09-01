@@ -67,7 +67,7 @@ Minnesflaggan behövs i en worktree. Ändra inte `phpstan.neon` för att komma r
 
 Bär din issue flera **delmoment** — en migration *och* en API-yta, till exempel, alltså två skilda läs–skriv–testa-slingor med olika förlagor och olika testfiler — kan den vara upplagd för två sessioner på samma gren: den första gör sitt delmoment, kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Står det så i issuen, följ det.
 
-**Modellen väljs av axlarna, inte av dig.** Alla tre låga ger Deepseek, någon förhöjd ger Claude Sonnet; tabellen står i [model-routing](https://github.com/Manjo-Consulting-AB/ai-standards/blob/main/model-routing.md). Säger du till enligt regeln ovan avbryts sessionen och uppgiften går om till Claude Sonnet med tomt kontext. Det är den billiga utgången — och den förutsätter att du säger till medan sessionen är kort, inte när den redan svämmat över.
+**Axlarna väljer granskningen, inte dig.** Deepseek implementerar varje issue; axlarna avgör vem som granskar PR:en — ingen modell när alla tre är låga, Claude Sonnet vid någon förhöjd axel, Claude Opus vid `risk_class: elevated`. Tabellen står i [ADR-0026](docs/ADR/ADR-0026%20Implementering%20och%20granskning%20efter%20riskaxlar.md). Säger du till enligt regeln ovan avbryts sessionen och uppgiften går om med tomt kontext — till Deepseek om fyndet är konkret, till Sonnet om du missförstått uppgiften. Det är den billiga utgången, och den förutsätter att du säger till medan sessionen är kort.
 
 ## Vad som krävs för att en PR ska mergas
 
