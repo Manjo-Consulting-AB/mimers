@@ -7,6 +7,10 @@ on:
 permissions:
   contents: read
   issues: read
+  # För att kunna säga "#NN är en pull request, inte en issue" i klartext.
+  # Utan den ger issues-endpointen 403 för en PR, vilket ser ut som ett
+  # behörighetsfel när det i själva verket är en felaktig Closes-rad.
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.head_ref }}

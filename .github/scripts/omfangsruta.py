@@ -59,7 +59,9 @@ def notis(niva: str, text: str) -> None:
     print(f"::{niva}::{text}")
 
 
-def hamta_issue(repo: str, nummer: str, token: str) -> str:
+def hamta_issue(repo: str, nummer: str, token: str) -> dict:
+    """Issuen som dict. Anroparen skiljer på issue och pull request via nyckeln
+    "pull_request", som bara finns på den senare."""
     begaran = urllib.request.Request(
         f"https://api.github.com/repos/{repo}/issues/{nummer}",
         headers={
@@ -69,7 +71,7 @@ def hamta_issue(repo: str, nummer: str, token: str) -> str:
         },
     )
     with urllib.request.urlopen(begaran, timeout=30) as svar:
-        return json.load(svar).get("body") or ""
+        return json.load(svar)
 
 
 def avsnitt(kropp: str, etikett: str) -> str:
@@ -158,11 +160,43 @@ def main() -> int:
         notis("error", "GITHUB_REPOSITORY, GITHUB_TOKEN och BASE_SHA måste vara satta.")
         return 1
 
+    # Kontrollen felar stängt: kan rutan inte läsas får PR:en inte passera på
+    # antagandet att den nog var innanför. Meddelandet ska däremot peka på rätt
+    # orsak - en felaktig referens och en trasig API-nyckel ser likadana ut i en
+    # rå HTTPError, och den som läser loggen letar då på fel ställe.
     try:
-        kropp_issue = hamta_issue(repo, nummer, token)
-    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as fel:
-        notis("error", f"Kunde inte hämta issue #{nummer}: {fel}")
+        issue = hamta_issue(repo, nummer, token)
+    except urllib.error.HTTPError as fel:
+        if fel.code == 404:
+            notis(
+                "error",
+                f"#{nummer} finns inte i {repo}. Referensen i PR-kroppen pekar fel - "
+                "rätta Closes-raden till issuen den här grenen faktiskt löser.",
+            )
+        elif fel.code in (401, 403):
+            notis(
+                "error",
+                f"Nekad åtkomst till #{nummer} ({fel.code}). Vanligaste orsaken är att "
+                "referensen pekar på en pull request och inte en issue: issues-endpointen "
+                "kräver `pull-requests: read` för dem, medan ci.yml ger `issues: read`. "
+                "Kontrollera Closes-raden innan du misstänker behörigheterna.",
+            )
+        else:
+            notis("error", f"Kunde inte hämta #{nummer}: {fel}")
         return 1
+    except (urllib.error.URLError, TimeoutError) as fel:
+        notis("error", f"Kunde inte nå GitHub-API:et för #{nummer}: {fel}")
+        return 1
+
+    if "pull_request" in issue:
+        notis(
+            "error",
+            f"#{nummer} är en pull request, inte en issue - den har ingen omfångsruta. "
+            "Rätta Closes-raden i PR-kroppen.",
+        )
+        return 1
+
+    kropp_issue = issue.get("body") or ""
 
     innanfor = globbar(avsnitt(kropp_issue, "In scope"))
     utanfor = globbar(avsnitt(kropp_issue, "Out of scope"))
