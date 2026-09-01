@@ -15,6 +15,10 @@ use Illuminate\Validation\Rule;
  * "aktivt konto". En ULID som inte finns alls är ett valideringsfel; ett
  * konto som finns men som användaren inte är medlem i är ett
  * behörighetsfel (403 `auth.forbidden`) som kontrollern kastar, inte här.
+ * Bara `active`-konton duger som betalkonto: ett `read_only`- eller
+ * `closed`-konto ska inte kunna belastas för nya byten (kodgranskningsfynd
+ * 6), och där är det ett valideringsfel — `exists`-regeln nedan filtrerar
+ * på `status`.
  *
  * `file` valideras för närvaro och storlek. Taket är en TEKNISK spärr
  * (issue 16a § Beslut 9), inte en plangräns — `max` räknar kilobyte, därav
@@ -42,7 +46,7 @@ class StoreAttachmentRequest extends FormRequest
     {
         return [
             'file' => ['required', 'file', 'max:'.(int) (config('files.max_upload_bytes') / 1024)],
-            'account' => ['required', 'string', Rule::exists('account', 'ulid')],
+            'account' => ['required', 'string', Rule::exists('account', 'ulid')->where(fn ($query) => $query->where('status', 'active'))],
         ];
     }
 }

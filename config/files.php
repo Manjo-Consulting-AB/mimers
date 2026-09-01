@@ -18,4 +18,18 @@ return [
 
     'max_upload_bytes' => (int) env('FILES_MAX_UPLOAD_BYTES', 64 * 1024 * 1024),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Uppladdningstakt
+    |--------------------------------------------------------------------------
+    |
+    | Teknisk spärr på anropsfrekvensen för uppladdningsrutten, inte en
+    | plangräns — den första rutten som skriver obegränsat med byte ska inte
+    | kunna loopas av en autentiserad användare utan att något slår i, se
+    | kodgranskningsfynd 5. Kvoten är issue 27.
+    |
+    */
+
+    'upload_rate_limit_per_minute' => (int) env('FILES_UPLOAD_RATE_LIMIT_PER_MINUTE', 60),
+
 ];

@@ -20,7 +20,7 @@ En rad per unikt innehåll i hela systemet.
 | content_hash | CHAR(64) UNIQUE | SHA-256, hex. **Beräknas alltid på servern.** |
 | byte_size | BIGINT UNSIGNED | |
 | mime_type | VARCHAR(127) | Bestämd av servern genom innehållssniffning, inte av klientens `Content-Type` |
-| storage_path | VARCHAR(255) | `files/ab/cd/abcdef…` — hashen delad i prefix så att ingen katalog får hundratusen poster |
+| storage_path | VARCHAR(255) | `ab/cd/abcdef…` relativt diskens `files`-rot (diskroten är alltså `storage/files/`, se [[ADR-0019 Filleverans]]) — hashen delad i prefix så att ingen katalog får hundratusen poster |
 | reference_count | INT UNSIGNED | Antal levande `attachment`-rader |
 | scan_status | VARCHAR(20) | `pending` \| `clean` \| `infected` \| `skipped` |
 | created_at | | |

@@ -24,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureLoginRateLimiting();
+        $this->configureUploadRateLimiting();
     }
 
     /**
@@ -60,6 +61,26 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute(5)->by(LoginRateLimiter::emailKey($email)),
                 Limit::perMinute(10)->by(LoginRateLimiter::ipKey($request)),
             ];
+        });
+    }
+
+    /**
+     * Issue 16a · Uppladdningstakten. Uppladdningsrutten är den första som
+     * skriver obegränsat med byte — utan en spärr kan en autentiserad
+     * användare loopa unikt (icke-dedupbart) innehåll och fylla kontots
+     * disk, se kodgranskningsfynd 5. Kvoten är issue 27; det här är bara en
+     * teknisk spärr på anropsfrekvensen.
+     *
+     * Nyckeln är användaren, inte IP:n: rutten är autentiserad, och flera
+     * personer kan dela en IP (NAT) utan att de ska dela varandras budget.
+     * `config('files.upload_rate_limit_per_minute')` defaultar till 60, se
+     * config/files.php.
+     */
+    private function configureUploadRateLimiting(): void
+    {
+        RateLimiter::for('uploads', function (Request $request) {
+            return Limit::perMinute((int) config('files.upload_rate_limit_per_minute', 60))
+                ->by($request->user()->id ?? $request->ip());
         });
     }
 }

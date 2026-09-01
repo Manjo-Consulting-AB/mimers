@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
 use League\Flysystem\UnableToWriteFile;
 
@@ -452,7 +453,7 @@ it('en misslyckad uppladdning lämnar ingen halv rad', function () {
     $item = Item::factory()->for($container, 'container')->create();
 
     // Simulera en misslyckad diskrivning: putFileAs kastar (throw => true på
-    // disken) och transaktionen rullar tillbaka — ingen rad får lämnas kvar.
+    // disken) före transaktionen öppnas — ingen rad får lämnas kvar.
     $adapter = Mockery::mock(FilesystemAdapter::class);
     $adapter->shouldReceive('putFileAs')->andThrow(UnableToWriteFile::class, 'failed to write');
     Storage::shouldReceive('disk')->with('files')->andReturn($adapter);
@@ -465,4 +466,53 @@ it('en misslyckad uppladdning lämnar ingen halv rad', function () {
     $response->assertStatus(500);
     expect(DB::table('stored_file')->count())->toBe(0);
     expect(DB::table('attachment')->count())->toBe(0);
+});
+
+it('ett konto som inte är active nekas som betalkonto', function (string $status) {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+    $inaktivtKonto = Account::factory()->create(['status' => $status]);
+
+    $response = postJson("/api/containers/{$container->ulid}/items/{$item->ulid}/attachments", [
+        'file' => UploadedFile::fake()->createWithContent('a.pdf', 'innehåll'),
+        'account' => $inaktivtKonto->ulid,
+    ], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('validation.failed');
+    expect($response->json('error.data.fields.account.0.code'))->toBe('validation.exists');
+    expect(StoredFile::count())->toBe(0);
+    expect(Attachment::count())->toBe(0);
+})->with([
+    'read_only' => ['read_only'],
+    'closed' => ['closed'],
+]);
+
+it('en uppladdningsstorm över taket begränsas per användare', function () {
+    config(['files.upload_rate_limit_per_minute' => 2]);
+
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    // Användar-id:n återanvänds av SQLite mellan tester medan array-cachen
+    // lever kvar i processen — nollställ den här användarens räknare före
+    // och efter, så att inga tidigare tester drabbar det här testet och det
+    // här testet inte drabbar några senare. Nyckeln är md5('uploads' . id),
+    // se ThrottleRequests::handleRequestUsingNamedLimiter().
+    $cacheKey = md5('uploads'.$user->id);
+    RateLimiter::clear($cacheKey);
+
+    $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/attachments";
+
+    postJson($url, ['file' => UploadedFile::fake()->createWithContent('a.pdf', 'ett'), 'account' => $account->ulid], $headers)->assertCreated();
+    postJson($url, ['file' => UploadedFile::fake()->createWithContent('b.pdf', 'två'), 'account' => $account->ulid], $headers)->assertCreated();
+
+    $response = postJson($url, ['file' => UploadedFile::fake()->createWithContent('c.pdf', 'tre'), 'account' => $account->ulid], $headers);
+    $response->assertStatus(429);
+    expect($response->json('error.code'))->toBe('auth.too_many_attempts');
+    expect($response->json('error.data.retry_after_seconds'))->toBeInt()->toBeGreaterThan(0);
+
+    RateLimiter::clear($cacheKey);
 });
