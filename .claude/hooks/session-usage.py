@@ -14,14 +14,6 @@ Registreras i .claude/settings.json:
 Raden nycklas på grennamn. Heter grenarna efter issuenummer mappas kostnaden
 till issue utan att något extra fält behöver fyllas i någonstans.
 
-Loggen skrivs till huvudträdets .claude/, inte till sessionens cwd. En session i
-en git-worktree har en egen .claude/usage.jsonl - och eftersom filen är
-gitignorerad följer den med när worktreen tas bort. M1:s issue-sessioner kördes
-alla i worktrees, så alla femton rader som överlevde var main-sessioner: precis
-de rader som inte kan svara på vad en issue kostade. Huvudträdet hittas via
-`git rev-parse --git-common-dir`, som pekar på originalrepots .git även från en
-worktree (--git-dir gör det inte).
-
 De fyra räknarna hålls isär med flit. Cache-läsning kostar ungefär en tiondel av
 vanlig input och cache-skrivning ungefär en fjärdedel mer, så en summa av råa
 tokens säger inget om vad sessionen kostade.
@@ -34,18 +26,11 @@ import subprocess
 import sys
 
 # USD per miljon tokens. Multiplikatorerna gäller relativt input:
-# cache-läsning ~0.1x, cache-skrivning ~1.25x - Anthropics egna, publicerade
-# siffror. ADR-0025 dokumenterar bara in/ut-priset för Deepseek
-# (0,14/0,28 USD/M, peak); ingen cache-kvot är verifierad för den
-# leverantören, så Deepseek-rader återanvänder Anthropics kvoter som en
-# okontrollerad approximation. Rör vid en session med mycket cache-läsning
-# (issue 13a: 23,5M token) och talet kan vara fel med flera gånger - se
-# docs/Process/Lärdomar.md.
+# cache-läsning ~0.1x, cache-skrivning ~1.25x.
 PRICES = {
     "claude-opus-5": (5.0, 25.0),
     "claude-sonnet-5": (2.0, 10.0),
     "claude-haiku-4-5": (1.0, 5.0),
-    "deepseek-v4-flash": (0.14, 0.28),  # ADR-0025 § Motivering
 }
 CACHE_READ_MULTIPLIER = 0.1
 CACHE_WRITE_MULTIPLIER = 1.25
@@ -56,12 +41,6 @@ COUNTERS = (
     "cache_read_input_tokens",
     "cache_creation_input_tokens",
 )
-
-# Modeller som inte är modeller. "<synthetic>" är harnessets egna meddelanden
-# (avbrott, felnoteringar); de bär alltid noll tokens men saknas i PRICES, och
-# eftersom cost_usd() ger None så snart EN modell saknas nollställde de kostnaden
-# för hela raden. Tre av femton rader föll så, och det var de tre dyraste.
-GRATIS_MODELLER = frozenset({"<synthetic>"})
 
 
 def read_usage(transcript: pathlib.Path) -> dict:
@@ -90,26 +69,14 @@ def read_usage(transcript: pathlib.Path) -> dict:
     return per_model
 
 
-def opriced_models(per_model: dict) -> list[str]:
-    """Modeller i raden som varken är gratis eller har ett pris - se ADR-0025
-    § Konsekvenser, som krävde det här fältet och fick det två veckor senare."""
-    return sorted(
-        model
-        for model in per_model
-        if model not in GRATIS_MODELLER and model not in PRICES
-    )
-
-
 def cost_usd(per_model: dict) -> float | None:
-    """Kostnad i USD. None om någon modell saknas i pristabellen - se opriced_models()
-    för vilken, i stället för att gissa eller tysta felet."""
-    if opriced_models(per_model):
-        return None
+    """Kostnad i USD. None om någon modell saknas i pristabellen."""
     total = 0.0
     for model, counters in per_model.items():
-        if model in GRATIS_MODELLER:
-            continue
-        input_price, output_price = PRICES[model]
+        price = PRICES.get(model)
+        if price is None:
+            return None
+        input_price, output_price = price
         total += counters["input_tokens"] / 1e6 * input_price
         total += counters["output_tokens"] / 1e6 * output_price
         total += (
@@ -134,29 +101,17 @@ def merge(into: dict, other: dict) -> None:
             bucket[counter] += counters[counter]
 
 
-def git(cwd: str, *args: str) -> str | None:
+def git_branch(cwd: str) -> str:
     try:
         return subprocess.run(
-            ["git", "-C", cwd, *args],
+            ["git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
             capture_output=True,
             text=True,
             timeout=10,
             check=True,
         ).stdout.strip()
     except (subprocess.SubprocessError, OSError):
-        return None
-
-
-def git_branch(cwd: str) -> str:
-    return git(cwd, "rev-parse", "--abbrev-ref", "HEAD") or "okänd"
-
-
-def loggfil(cwd: str) -> pathlib.Path:
-    """Huvudträdets .claude/usage.jsonl, även när sessionen kör i en worktree."""
-    gemensam = git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    if gemensam:
-        return pathlib.Path(gemensam).parent / ".claude" / "usage.jsonl"
-    return pathlib.Path(cwd) / ".claude" / "usage.jsonl"
+        return "okänd"
 
 
 def main() -> int:
@@ -198,10 +153,9 @@ def main() -> int:
         "main": main_usage,
         "subagents": subagent_usage,
         "cost_usd": cost_usd(combined),
-        "opriced": opriced_models(combined),
     }
 
-    out = loggfil(cwd)
+    out = pathlib.Path(cwd) / ".claude" / "usage.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(record, ensure_ascii=False) + "\n")
