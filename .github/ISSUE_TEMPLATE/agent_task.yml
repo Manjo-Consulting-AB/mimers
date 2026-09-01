@@ -99,7 +99,7 @@ body:
       description: >
         elevated för autentisering, behörighet, pengar, kvoter, radering och filleverans.
         Vid tvekan: elevated. Det köper en djupare granskning, inte en dyrare
-        implementerare - och felet kostar mer än båda. Se ADR-0026.
+        implementerare - och felet kostar mer än båda.
       options:
         - none
         - elevated
@@ -112,7 +112,7 @@ body:
       label: Granskning
       description: >
         Deepseek implementerar varje issue. Axlarna avgör vem som granskar PR:en.
-        Stämmer inte valet med axlarna är någondera fel satt - se ADR-0026.
+        Stämmer inte valet med axlarna är någondera fel satt.
       options:
         - Ingen modellgranskning (alla axlar låga)
         - Sonnet, läser diffen (någon axel förhöjd, risk_class none)

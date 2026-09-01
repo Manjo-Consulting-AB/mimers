@@ -78,6 +78,7 @@ jobs:
       - name: Diffen ligger innanför omfångsrutan
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.head_ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 .github/scripts/omfangsruta.py
