@@ -83,6 +83,12 @@ it('en klientskickad hash ignoreras', function () {
     expect($stored->content_hash)->not->toBe($klientsHash);
 });
 
+// Dedupens RACE — två samtidiga uppladdningar av samma byten — kan inte övas
+// här: testsviten kör SQLite, som varken har gap-lås eller REPEATABLE READ.
+// MySQL-beteendet (dödläge 40001 som DB::transaction retryar, uniknyckelbrott
+// som läses om med lockForUpdate i stället för en förlegad consistent read)
+// är dokumenterat i App\Actions\Attachment\StoreAttachment, se
+// kodgranskningsfynd 1.
 it('samma innehåll två gånger ger en stored_file och två attachments', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
