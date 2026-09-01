@@ -44,3 +44,4 @@ Thumbs.db
 .claude/settings.local.json
 .claude/usage.jsonl
 .claude/hooks/__pycache__/
+.github/scripts/__pycache__/
