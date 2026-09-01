@@ -47,6 +47,21 @@ return [
             'report' => false,
         ],
 
+        // Issue 16a · Användarfiler. En egen disk, inte local och inte
+        // public — `storage_path()` är releasens storage/, på servern en
+        // symlänk till shared/storage/, så bytena överlever varje utrullning
+        // (issue 16a § Beslut 7). All filhantering går genom Storage-
+        // abstraktionen, aldrig genom file_put_contents eller
+        // move_uploaded_file ([[ADR-0007 Fillagring hos inleed]]).
+        // `throw => true`: en misslyckad skrivning får aldrig bli ett tyst
+        // `false` som ändå skapar en databasrad.
+        'files' => [
+            'driver' => 'local',
+            'root' => storage_path('files'),
+            'throw' => true,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
