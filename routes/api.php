@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\Auth\AuthenticatedTokenController;
 use App\Http\Controllers\Api\Auth\MagicLinkLoginController;
 use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
@@ -167,6 +168,17 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show']);
     Route::patch('/containers/{container}/items/{item}', [ItemController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}', [ItemController::class, 'destroy']);
+
+    // Issue 16a · Uppladdning av bilagor — bara POST här; listning och
+    // radering är 16b, nedladdning 19a. `{item}` nästlas under `{container}`
+    // med samma scopeBindings() som items ovan, löst genom
+    // App\Models\Container::items(). Grinden är den befintliga update() på
+    // App\Policies\ContainerPolicy, ingen ny policymetod (issue 16a §
+    // Beslut 1). throttle:uploads — den första rutten som skriver byte ska
+    // inte kunna loopas obegränsat, se
+    // App\Providers\AppServiceProvider::configureUploadRateLimiting().
+    Route::post('/containers/{container}/items/{item}/attachments', [AttachmentController::class, 'store'])
+        ->middleware('throttle:uploads');
 
     // Issue 15b · Fritextsök — den ENDA toppnivårutten som rör items, och
     // den enda som finns just för att frågan är global: en sökning över ALLT
