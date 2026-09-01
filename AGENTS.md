@@ -30,6 +30,8 @@ Regler för dig som implementerar en issue. De gäller i alla Manjo-repon och un
 
 **Omfångsrutan är bindande.** Issuen listar `In scope` — filerna och katalogerna du får ändra — och `Out of scope` — det du inte får röra även om det ser trasigt ut. Behöver arbetet en ändring utanför rutan är det inte en lov att ta den: **stanna och fråga i PR:en.** Det gäller också sådant ett `install`-kommando skapar åt dig; ställning som ramverket genererar men issuen inte bett om ska bort.
 
+Säger issuens delar emot varandra gäller **den bindande före den beskrivande**: rutan går före en ADR som vill ha en fil rutan inte listar, och ett acceptanskriterium går före exempelkod som inte kan uppfylla det. Välj den bindande, bygg vidare, och skriv i `Frågor och antaganden` att de sade emot varandra — motsägelsen är ett fel i issuen, och den som skrev den behöver se det.
+
 **De tre axlarna** sätts av den som skriver issuen, inte av dig:
 
 | Axel | Värden |
