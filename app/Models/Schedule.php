@@ -9,21 +9,23 @@ use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Regeln för återkommande underhåll — se [[Scheman och uppgifter]] §
  * schedule och [[ADR-0005 Schema och förekomst]]. Ett item har noll eller
- * flera scheman; förekomsten (den enskilda gången) är issue 22.
+ * flera scheman; förekomsten (den enskilda gången) är en rad i
+ * `schedule_occurrence` (issue 22a).
  *
  * `item_id` är medvetet UTESLUTEN ur `#[Fillable]` — sätts explicit på
  * modellinstansen i App\Http\Controllers\Api\ScheduleController efter att
  * itemet lästs från rutten, aldrig via massildelning. Samma mönster som
  * Item gör med `container_id`.
  *
- * Inga förekomster skapas här: `schedule_occurrence` finns inte förrän
- * issue 22a, och ett schema som skapas har alltså ingen öppen förekomst
- * förrän dess.
+ * Inga förekomster skapas här — den enda vägen in är
+ * App\Actions\Schedule\OpenNextOccurrence (issue 22 § Beslut 3).
  */
 #[Fillable(['title', 'notes', 'recurrence_type', 'interval_unit', 'interval_count', 'anchor_date', 'lead_days', 'is_active'])]
 #[RouteKey('ulid')]
@@ -98,5 +100,33 @@ class Schedule extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(Item::class);
+    }
+
+    /**
+     * Schemats förekomster — den öppna plus historiken (issue 22a). Det är
+     * DEN relationen listningen i
+     * App\Http\Controllers\Api\ScheduleOccurrenceController::index() går
+     * genom, sorterad `due_at` fallande där. En förekomst skapas aldrig här:
+     * den enda vägen in är App\Actions\Schedule\OpenNextOccurrence.
+     *
+     * @return HasMany<ScheduleOccurrence, $this>
+     */
+    public function occurrences(): HasMany
+    {
+        return $this->hasMany(ScheduleOccurrence::class);
+    }
+
+    /**
+     * Schemats öppna förekomst — den som förfaller härnäst, om schemat har
+     * en. Invarianterna (issue 22 § Beslut 7) garanterar högst en; är det
+     * ingen alls returnerar relationen null. Läsningen "saknar schemat en
+     * öppen förekomst?" i App\Http\Controllers\Api\ScheduleController går
+     * genom relationens existens.
+     *
+     * @return HasOne<ScheduleOccurrence, $this>
+     */
+    public function openOccurrence(): HasOne
+    {
+        return $this->hasOne(ScheduleOccurrence::class)->where('status', 'open');
     }
 }
