@@ -149,6 +149,22 @@ class Item extends Model
     }
 
     /**
+     * Itemets bilagor — de uppladdade filerna, se [[Filer och lagring]] §
+     * attachment och issue 16a/16b. Listningen i
+     * App\Http\Controllers\Api\AttachmentController::index() går genom den
+     * här relationen, och det är DEN som scopeBindings() löser `{attachment}`
+     * inom `{item}` genom — en bilaga på ett annat item ger 404 (issue 16b §
+     * Beslut 1). Mjukraderade bilagor filtreras bort av SoftDeletes globala
+     * scope medan raden ligger kvar, redo för papperskorgen (issue 20a).
+     *
+     * @return HasMany<Attachment, $this>
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(Attachment::class);
+    }
+
+    /**
      * Begränsar frågan till items som bär ALLA taggar i $tagIds — flera
      * taggar kombineras med OCH (issue 15a § Beslut 2). En join mot
      * `item_tag` med `whereIn('tag_id', $ids)`, grupperad på itemets nyckel

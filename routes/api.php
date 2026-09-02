@@ -180,6 +180,16 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/containers/{container}/items/{item}/attachments', [AttachmentController::class, 'store'])
         ->middleware('throttle:uploads');
 
+    // Issue 16b · Bilagelistan och mjukraderingen — GET listar itemets
+    // bilagor nyast först, DELETE mjukraderar en (issue 16b § Beslut 1–5).
+    // `{attachment}` nästlas under `{item}` med samma scopeBindings() som
+    // gruppen redan har, löst genom App\Models\Item::attachments() — hela
+    // skyddet mot en bilaga-ULID från ett annat item (Beslut 1). Grindarna
+    // är view() (GET) och update() (DELETE), båda befintliga i
+    // App\Policies\ContainerPolicy — ingen ny policymetod (Beslut 2).
+    Route::get('/containers/{container}/items/{item}/attachments', [AttachmentController::class, 'index']);
+    Route::delete('/containers/{container}/items/{item}/attachments/{attachment}', [AttachmentController::class, 'destroy']);
+
     // Issue 15b · Fritextsök — den ENDA toppnivårutten som rör items, och
     // den enda som finns just för att frågan är global: en sökning över ALLT
     // användaren har åtkomst till, inte inom en pärm hon redan valt (issue
