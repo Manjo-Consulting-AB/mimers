@@ -27,6 +27,13 @@ use RuntimeException;
  * § Beslut 5) — annars skulle 17b radera bytena under fötterna på den nya
  * bilagan 30 dagar efter att någon ANNAN användare gallrade sin.
  *
+ * Disk-skrivningen utanför transaktionen hoppar över rader som är markerade
+ * för gallring (`purge_after` satt), så en ny uppladdning av samma innehåll
+ * lägger bytena tillbaka. Det stänger inte fönstret helt — 17b kan unlinka
+ * mellan skrivningen och låset. 17b måste hålla radlåset över
+ * byteraderingen och läsa om `reference_count`/`purge_after` under låset
+ * innan den rör disken.
+ *
  * Unikhetsindexet på `content_hash` är sanningen — två samtidiga
  * uppladdningar av samma byten kan kollidera på det innan låset tas, och
  * QueryException-fångsten nedan gör just uniknyckelbrottet (MySQL 1062,
@@ -74,7 +81,17 @@ class StoreAttachment
         // bara en optimering för att slippa skriva när raden redan finns;
         // den är inte auktoritativ, och en redundant skrivning till samma
         // innehållsadresserade sökväg är per definition ofarlig.
-        if (StoredFile::where('content_hash', $hash)->doesntExist()) {
+        //
+        // `whereNull('purge_after')` (issue 17a § Beslut 5): raden kan finnas
+        // men vara MARKERAD för gallring — 17b är på väg att ta bort bytena.
+        // Då ska vi inte hoppa över skrivningen: en ny uppladdning av samma
+        // innehåll måste lägga bytena på disken igen innan den nollställer
+        // markeringen i transaktionen. Obs — detta stänger inte fönstret
+        // helt: 17b hinner fortfarande unlinka mellan den här skrivningen och
+        // `lockForUpdate` nedan. 17b MÅSTE hålla radlåset över byteraderingen
+        // och läsa om `reference_count`/`purge_after` under låset innan den
+        // rör disken, annars ärver den en tyst dataförlust.
+        if (StoredFile::where('content_hash', $hash)->whereNull('purge_after')->doesntExist()) {
             Storage::disk('files')->putFileAs(dirname($storagePath), $file, basename($storagePath));
         }
 
