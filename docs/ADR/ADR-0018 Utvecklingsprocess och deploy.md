@@ -20,7 +20,7 @@ Driftmiljön är delad hosting hos inleed: ingen root, ingen container, inget Do
 
 | Steg | Vem | Vad |
 |---|---|---|
-| Gren `issue-NN-kort-namn` | implementatören | arbetet sker isolerat |
+| Gren `feature/issue-NN` | implementatören | arbetet sker isolerat; NN är GitHub-numret, inte backlognumret |
 | PR mot `main` | implementatören | CI kör lint, analys och tester |
 | Merge | **Tony** | koden blir del av `main` |
 | Deploy till staging | automatiskt | varje commit i `main` |

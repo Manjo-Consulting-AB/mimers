@@ -14,7 +14,7 @@ Slå upp ditt issuenummer i [Backlog](docs/Backlog.md) och öppna **bara** din m
 
 | Steg | Vem |
 |---|---|
-| Gren `issue-NN-kort-namn` | du |
+| Gren `feature/issue-NN`, där NN är GitHub-numret | du |
 | PR mot `main`, CI grön | du |
 | Merge | Tony |
 | Deploy till staging | automatiskt vid merge |
@@ -69,7 +69,7 @@ Minnesflaggan behövs i en worktree. Ändra inte `phpstan.neon` för att komma r
 
 Bär din issue flera **delmoment** — en migration *och* en API-yta, till exempel, alltså två skilda läs–skriv–testa-slingor med olika förlagor och olika testfiler — kan den vara upplagd för två sessioner på samma gren: den första gör sitt delmoment, kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Står det så i issuen, följ det.
 
-**Axlarna väljer granskningen, inte dig.** Deepseek implementerar varje issue; axlarna avgör vem som granskar PR:en — ingen modell när alla tre är låga, Claude Sonnet vid någon förhöjd axel, Claude Opus vid `risk_class: elevated`. Tabellen står i [ADR-0026](docs/ADR/ADR-0026%20Implementering%20och%20granskning%20efter%20riskaxlar.md). Säger du till enligt regeln ovan avbryts sessionen och uppgiften går om med tomt kontext — till Deepseek om fyndet är konkret, till Sonnet om du missförstått uppgiften. Det är den billiga utgången, och den förutsätter att du säger till medan sessionen är kort.
+**Axlarna väljer granskningen, inte dig.** Deepseek implementerar varje issue; axlarna avgör hur djupt PR:en granskas — Claude Sonnet som lägst, Claude Opus vid `risk_class: elevated`. Varje PR får en läsare, och ingen mergas utan `review:approved`. Tabellen står i [ADR-0026](docs/ADR/ADR-0026%20Implementering%20och%20granskning%20efter%20riskaxlar.md). Säger du till enligt regeln ovan avbryts sessionen och uppgiften går om med tomt kontext — till Deepseek om fyndet är konkret, till Sonnet om du missförstått uppgiften. Det är den billiga utgången, och den förutsätter att du säger till medan sessionen är kort.
 
 ## Vad som krävs för att en PR ska mergas
 
