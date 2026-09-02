@@ -165,6 +165,25 @@ class Item extends Model
     }
 
     /**
+     * Itemets scheman — reglerna för återkommande underhåll, noll eller
+     * flera, se [[Scheman och uppgifter]] § schedule och [[ADR-0005 Schema
+     * och förekomst]] (issue 21). Listningen i
+     * App\Http\Controllers\Api\ScheduleController::index() går genom den här
+     * relationen, och det är DEN som scopeBindings() löser `{schedule}`
+     * inom `{item}` genom — ett schema på ett annat item ger 404 (issue 21 §
+     * Beslut 1). Mjukraderade scheman filtreras bort av SoftDeletes globala
+     * scope medan raden ligger kvar.
+     *
+     * Inga förekomster här: `schedule_occurrence` skapas i issue 22a.
+     *
+     * @return HasMany<Schedule, $this>
+     */
+    public function schedules(): HasMany
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    /**
      * Begränsar frågan till items som bär ALLA taggar i $tagIds — flera
      * taggar kombineras med OCH (issue 15a § Beslut 2). En join mot
      * `item_tag` med `whereIn('tag_id', $ids)`, grupperad på itemets nyckel

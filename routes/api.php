@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemSearchController;
+use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TrashController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
@@ -211,6 +212,22 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'index']);
     Route::post('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'store']);
     Route::delete('/containers/{container}/items/{item}/links/{other}', [ItemLinkController::class, 'destroy']);
+
+    // Issue 21 · Scheman — regeln för återkommande underhåll, noll eller
+    // flera per item, se App\Http\Controllers\Api\ScheduleController och
+    // App\Models\Schedule. {item} nästlas under {container} som items ovan,
+    // och {schedule} binds av gruppens scopeBindings() genom
+    // App\Models\Item::schedules() — hela skyddet mot ett schema på ett
+    // annat item (issue 21 § Beslut 1). Grindarna är view() (GET) och
+    // update() (POST/PATCH/DELETE), båda befintliga i
+    // App\Policies\ContainerPolicy — ingen ny policymetod (§ Beslut 2).
+    // Ingen show(): listan hämtar hela uppsättningen (§ Beslut 1).
+    // Förekomsterna (`schedule_occurrence`) är issue 22a/22b — ingenting
+    // här skapar en rad där.
+    Route::get('/containers/{container}/items/{item}/schedules', [ScheduleController::class, 'index']);
+    Route::post('/containers/{container}/items/{item}/schedules', [ScheduleController::class, 'store']);
+    Route::patch('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'update']);
+    Route::delete('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'destroy']);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och
