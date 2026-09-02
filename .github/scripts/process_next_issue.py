@@ -482,6 +482,16 @@ def wait_for_checks(pr_number):
         if "no checks reported" in output and attempt < 2:
             time.sleep(15)
             continue
+        # Granskningsgrinden kör om på `labeled`, och den körningen registreras
+        # inte i samma ögonblick som labeln sätts. Mätt 2026-09-02 på PR #118:
+        # `gh pr checks` visar bara den senaste körningen per checknamn (den
+        # gamla röda faller bort ur listningen, även om check-runs-API:et bär
+        # båda) - men läser man för tidigt är det fortfarande den gamla som är
+        # den senaste. Ett rött utfall läses därför om en gång innan det tros på.
+        if result.returncode != 0 and attempt < 2 and "granskning" in output:
+            print("  ⚠ Rött utfall med granskningsgrinden inblandad - läser om efter 20 s.")
+            time.sleep(20)
+            continue
         return result.returncode == 0
     return False
 
