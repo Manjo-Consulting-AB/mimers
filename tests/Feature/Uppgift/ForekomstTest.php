@@ -323,6 +323,35 @@ it('en förekomst öppnas på det anropade schemat, inte på den första raden i
     expect($andraRad->due_at->toDateString())->toBe('2027-06-15');
 });
 
+it('intervalschemats nästa förfall lagras utan tidskomponent', function () {
+    Carbon::setTestNow('2027-05-05 14:30:00');
+
+    [, , , , $item] = skapaForekomstKontext();
+    $schedule = Schedule::factory()->for($item, 'item')->create([
+        'interval_unit' => 'day',
+        'interval_count' => 1,
+        'lead_days' => 2,
+    ]);
+
+    // 22b complete() anropar OpenNextOccurrence med $from = completed_at =
+    // now() — en tidsstämpel mitt på dagen. Intervalgrenen ska bara ta
+    // datumdelen med sig in i due_at (Beslut 10 / issue 22 § Beslut 4).
+    $nasta = app(OpenNextOccurrence::class)->handle($schedule, now());
+
+    expect($nasta)->toBeInstanceOf(ScheduleOccurrence::class);
+
+    // Råa kolumnvärden, inte modellen — date-castet på ScheduleOccurrence
+    // städar bort tiden vid läsning och skulle dölja precis det här testet
+    // ska visa. SQLite är typlöst och lagrar strängen som den skrivs; ett
+    // klockslag mitt på dagen från $from får inte följa med.
+    $rad = DB::table('schedule_occurrence')->where('ulid', $nasta->ulid)->first();
+
+    expect($rad->due_at)->toMatch('/^2027-05-06( 00:00:00)?$/');
+    expect($rad->visible_from)->toMatch('/^2027-05-04( 00:00:00)?$/');
+
+    Carbon::setTestNow();
+});
+
 it('overdue härleds och lagras aldrig', function () {
     Carbon::setTestNow('2026-09-02 10:00:00');
 

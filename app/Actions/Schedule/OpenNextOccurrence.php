@@ -41,7 +41,7 @@ class OpenNextOccurrence
                 return null;
             }
 
-            if ($låst->occurrences()->where('status', 'open')->exists()) {
+            if ($låst->occurrences()->where('status', ScheduleOccurrence::STATUS_OPEN)->exists()) {
                 return null;
             }
 
@@ -96,7 +96,7 @@ class OpenNextOccurrence
 
         if ($schedule->recurrence_type === 'interval') {
             if ($from !== null) {
-                return $this->addInterval($from->copy(), $schedule);
+                return $this->addInterval($from->copy()->startOfDay(), $schedule);
             }
 
             if ($anchor === null) {
