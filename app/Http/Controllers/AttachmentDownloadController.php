@@ -37,9 +37,12 @@ class AttachmentDownloadController extends Controller
     {
         $attachment->load(['storedFile', 'item.container']);
 
-        // SoftDeletes' globala scope döljer bilagan i bindningen, men ett
-        // mjukraderat item måste kontrolleras uttryckligen — en bilaga i ett
-        // item som ligger i papperskorgen är inte nedladdningsbar (Beslut 7).
+        // SoftDeletes' globala scope gäller även genom relationerna: item()
+        // är en belongsTo mot en mjukraderingsmodell, så ett raderat item ger
+        // null här och 404 redan i === null-grenen. Detsamma gäller containern,
+        // som laddas via itemets container-relation. trashed()-anropen är
+        // bälte-och-hängslen om någon senare lägger withTrashed() i bindningen
+        // — de är inte det som skyddar i dag (Beslut 7).
         if ($attachment->item === null || $attachment->item->trashed()) {
             abort(404);
         }
@@ -99,13 +102,25 @@ class AttachmentDownloadController extends Controller
      * `$filename` i `filename*=UTF-8''…` och en ASCII-fallback i `filename=`.
      * Ett namn med citattecken, semikolon eller å-ä-ö sätts aldrig ihop för
      * hand — en oescapad rad i en header är en headerinjektion.
+     *
+     * Blir fallbacken tom (namn helt utan ASCII-tecken, t.ex. `写真`) eller
+     * innehåller den tecken utanför det skrivbara ASCII-intervallet kastar
+     * Symfonys hjälpare InvalidArgumentException. Den kan inte användas som
+     * `filename=`, men `filename*=UTF-8''…` bär fortfarande det riktiga
+     * namnet — fallbacken faller tillbaka på `download`, inget går förlorat.
      */
     private function disposition(string $filename): string
     {
+        $fallback = str_replace('%', '', Str::ascii($filename));
+
+        if (! preg_match('/^[\x20-\x7e]+$/', $fallback)) {
+            $fallback = 'download';
+        }
+
         return HeaderUtils::makeDisposition(
             HeaderUtils::DISPOSITION_ATTACHMENT,
             $filename,
-            str_replace('%', '', Str::ascii($filename)),
+            $fallback,
         );
     }
 }

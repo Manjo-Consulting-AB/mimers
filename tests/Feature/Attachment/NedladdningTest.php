@@ -133,6 +133,23 @@ it('ett filnamn med citattecken och å-ä-ö kodas korrekt', function () {
     expect($disposition)->toContain('kvitto%20%22sommar%22%20%C3%A5terbetalning.pdf');
 });
 
+it('ett filnamn helt utan ascii-tecken laddas ändå ner', function () {
+    [$account, $user] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    [, $attachment] = nedladdningFörberedelse($container, filnamn: '写真', innehåll: 'byten');
+
+    $response = actingAs($user)->get("/files/{$attachment->ulid}");
+
+    // Str::ascii('写真') är tom, och en tom fallback i filename= hade kastat
+    // InvalidArgumentException i Symfonys hjälpare. Filen är ändå
+    // nedladdningsbar: filename*=UTF-8''… bär det riktiga namnet, och
+    // fallbacken blir 'download' (Beslut 4).
+    $response->assertOk();
+    $disposition = $response->headers->get('content-disposition');
+    expect($disposition)->toStartWith('attachment');
+    expect($disposition)->toContain('%E5%86%99%E7%9C%9F');
+});
+
 it('X-Content-Type-Options är nosniff', function () {
     [$account, $user] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
@@ -306,8 +323,22 @@ it('nedladdningen gör ett konstant antal frågor', function () {
     [$account, $user] = kontoMedMedlem();
     $containerA = Container::factory()->for($account, 'account')->create();
     [, $attachmentA] = nedladdningFörberedelse($containerA, innehåll: 'byten A');
+
+    // Bilaga B är en bild med båda derivaten och hämtas med ?variant=thumb —
+    // en annan form än den första mätningen, så jämförelsen mäter något som
+    // kan skilja sig. Derivatuppslaget kostar exakt en fråga till.
     $containerB = Container::factory()->for($account, 'account')->create();
-    [, $attachmentB] = nedladdningFörberedelse($containerB, innehåll: 'byten B');
+    [, $attachmentB, $storedFileB] = nedladdningFörberedelse($containerB, filnamn: 'bild.jpg', innehåll: 'byten B', mime: 'image/jpeg');
+
+    foreach (['thumb', 'medium'] as $variant) {
+        $derivative = ImageDerivative::factory()->create([
+            'stored_file_id' => $storedFileB->id,
+            'variant' => $variant,
+            'storage_path' => $storedFileB->storage_path."_{$variant}.jpg",
+            'byte_size' => 5,
+        ]);
+        Storage::disk('files')->put($derivative->storage_path, 'mini');
+    }
 
     // Värm guarden med ett omätt anrop.
     actingAs($user)->get("/files/{$attachmentA->ulid}")->assertOk();
@@ -317,15 +348,16 @@ it('nedladdningen gör ett konstant antal frågor', function () {
     $frågorFörsta = count(DB::getQueryLog());
     DB::flushQueryLog();
 
-    actingAs($user)->get("/files/{$attachmentB->ulid}")->assertOk();
+    actingAs($user)->get("/files/{$attachmentB->ulid}?variant=thumb")->assertOk();
     $frågorAndra = count(DB::getQueryLog());
     DB::disableQueryLog();
 
-    // Eager loading — relationerna (storedFile, item, container) ska vara
-    // inlästa i ett konstant antal frågor, inte en fråga per nedladdning
-    // som växer med vad som än levereras.
-    expect($frågorAndra)->toBe($frågorFörsta);
-    expect($frågorFörsta)->toBeLessThanOrEqual(8);
+    // Sex frågor för en helt vanlig nedladdning: bindningen, de tre
+    // eagerladdade relationerna (stored_file, item, container) och de två
+    // policy-frågorna (kontot och exists-kollen). Inget löst tak med glapp där
+    // en N+1 kan gömma sig — variant-begäran ovan lägger exakt en fråga till.
+    expect($frågorFörsta)->toBe(6);
+    expect($frågorAndra)->toBe($frågorFörsta + 1);
 
     Carbon::setTestNow();
 });
