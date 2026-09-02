@@ -14,7 +14,7 @@ Slå upp ditt issuenummer i [Backlog](docs/Backlog.md) och öppna **bara** din m
 
 | Steg | Vem |
 |---|---|
-| Gren `issue-NN-kort-namn` | du |
+| Gren `feature/issue-NN`, där NN är GitHub-numret | du |
 | PR mot `main`, CI grön | du |
 | Merge | Tony |
 | Deploy till staging | automatiskt vid merge |

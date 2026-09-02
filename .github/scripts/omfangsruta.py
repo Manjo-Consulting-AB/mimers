@@ -66,10 +66,10 @@ RUBRIK = re.compile(r"^(?:#{1,6}\s+(?P<falt>.+?)|\*\*(?P<fet>.+?)\*\*)\s*$", re.
 # GitHub stänger på close/closes/closed, fix/fixes/fixed, resolve/resolves/resolved.
 # `stänger` accepteras för PR:er skrivna före 2026-08-30 men varnar - den stänger inget.
 STANGER = re.compile(r"\b(clos(?:e|es|ed)|fix(?:|es|ed)|resolv(?:e|es|ed)|stänger)\s+#(\d+)", re.IGNORECASE)
-# Implementationsgrenar heter issue-NN-kort-namn enligt AGENTS.md § Arbetsgång, men
-# agentkön (.github/scripts/process_next_issue.py) skapar feature/issue-NN. Båda
-# formerna accepteras tills konventionen är avgjord - annars är kravet på en
-# Closes-rad dött för varje kögenererad PR, vilket det var i hela M2.
+# Implementationsgrenar heter feature/issue-NN, se AGENTS.md § Arbetsgång - NN är
+# GitHub-numret, inte backlognumret (issue-15b stängde #72). Den gamla formen
+# issue-NN-kort-namn accepteras också: den står i M0-M1:s grennamn, och regexet är
+# det enda som avgör om en PR utan Closes-rad ska fällas eller släppas igenom.
 IMPLEMENTATIONSGREN = re.compile(r"^(?:feature/)?issue-\d+")
 TOMT = {"_No response_", "_Inget svar_"}
 
