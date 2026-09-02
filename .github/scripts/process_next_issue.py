@@ -276,11 +276,50 @@ def extract_risk_class(issue_body):
         m = re.search(r"`risk_class`\s*\|\s*`([^`]+)`", body, re.IGNORECASE)
 
     if not m:
-        return "low"
+        # Felar stängt. Tidigare gav en oläsbar axel "low", alltså automatisk merge
+        # utan att någon läser diffen - den bana som har minst kontroll, vald av ett
+        # regex som inte träffade. Samma fail-open-klass som omfångsrutans grind, och
+        # issue-mallen säger själv "vid tvekan: elevated". Se docs/Process/Lärdomar.md.
+        print("!! risk_class gick inte att läsa ur issuen - kör som 'high' (Opus + manuell merge).")
+        return "high"
 
     value = m.group(1).strip().lower()
     legacy_map = {"none": "low", "elevated": "high"}
     return legacy_map.get(value, value)
+
+
+PR_RUBRIKER = ("## Sammanfattning", "## Frågor och antaganden", "## Processnotering")
+
+
+def bygg_pr_kropp(issue_num, agent_summary):
+    """PR-kroppen: Closes-raden, modellens sammanfattning, och en synlig lucka
+    där en obligatorisk rubrik saknas.
+
+    agent_summary är modellens egen slutsammanfattning (se summary_instruction).
+    Tidigare skrevs den rakt av, och var den tom blev kroppen bara "Closes #N" -
+    tre av M2:s tio PR:er fick en kropp på exakt tio tecken. Värre: kön rör
+    aldrig .github/pull_request_template.md, så `Frågor och antaganden` och
+    `Processnotering` fanns i noll respektive tre av tio. De två fälten är
+    punkt 1 och 6 i retrons bevismängd, och en milstolpe utan dem går inte att
+    utvärdera i efterhand.
+
+    Saknas en rubrik skrivs den ut som en tom rubrik med en markering, i stället
+    för att utelämnas. En lucka som syns i PR:en kan åtgärdas; en som inte finns
+    i texten går inte att skilja från ett "Inget." - vilket är exakt samma
+    fail-open-fel som omfångsrutans grind gjorde. Se docs/Process/Lärdomar.md.
+    """
+    delar = [f"Closes #{issue_num}"]
+    text = (agent_summary or "").strip()
+    if text:
+        delar.append(text)
+
+    saknade = [r for r in PR_RUBRIKER if r.lower() not in text.lower()]
+    for rubrik in saknade:
+        delar.append(f"{rubrik}\n\n_Modellen skrev inte det här avsnittet._")
+    if saknade:
+        print(f"!! PR-kroppen saknar {len(saknade)} obligatorisk(a) rubrik(er): {', '.join(saknade)}")
+
+    return "\n\n".join(delar)
 
 
 def setup_worktree(branch_name):
@@ -444,12 +483,20 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     error_history = ""
 
     summary_instruction = (
-        "\n\nAvsluta ditt svar med en kort sammanfattning under rubriken "
-        "'## Sammanfattning': vilka filer som ändrades och varför, vilka av "
+        "\n\nAvsluta ditt svar med tre rubriker, i den här ordningen. De blir "
+        "PR-beskrivningen, så skriv dem för en granskare som inte har sett ditt "
+        "arbete, inte för dig själv.\n\n"
+        "'## Sammanfattning' - vilka filer som ändrades och varför, vilka av "
         "issuens numrerade beslut som följdes, och eventuella avvikelser från "
-        "issuens instruktioner - och i så fall varför. Den sammanfattningen "
-        "blir PR-beskrivningen, så skriv den för en granskare som inte har "
-        "sett ditt arbete, inte för dig själv."
+        "issuens instruktioner, i så fall varför.\n\n"
+        "'## Frågor och antaganden' - hittade du inte svaret i issuens läslista, "
+        "skriv frågan här i stället för att gissa i koden, och lista varje "
+        "antagande du ändå tvingats göra. Ligger en ändrad fil utanför issuens "
+        "'In scope', skriv vilken och varför här. 'Inga.' är ett giltigt svar.\n\n"
+        "'## Processnotering' - en rad: vad kostade mer än det borde? Fel axel, "
+        "för tunn läslista, otydlig omfångsruta, test som var svårt att skriva. "
+        "'Inget.' är ett giltigt och vanligt svar, men skriv det aktivt. Det här "
+        "fältet är det enda som överlever sessionen; det läses vid milstolpsretro."
     )
     agent_summary = ""
 
@@ -552,12 +599,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     run_cmd(["git", "commit", "-m", f"Fix #{issue_num}: {issue_title}"], cwd=worktree_path)
     run_cmd(["git", "push", "origin", branch_name, "--force"], cwd=worktree_path)
 
-    # agent_summary är modellens egen slutsammanfattning (se summary_instruction
-    # i FAS 1/2) - tidigare kastades den bort helt och PR-kroppen var bara
-    # "Closes #N", utan förklaring. Särskilt allvarligt för risk_class: low,
-    # som aldrig granskas av vare sig människa eller modell - PR-beskrivningen
-    # är då det enda som förklarar vad som gjordes och varför.
-    pr_body = f"Closes #{issue_num}\n\n{agent_summary}" if agent_summary.strip() else f"Closes #{issue_num}"
+    pr_body = bygg_pr_kropp(issue_num, agent_summary)
 
     pr_res = run_cmd([
         "gh", "pr", "create",

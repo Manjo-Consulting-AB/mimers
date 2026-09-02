@@ -30,9 +30,16 @@ Läser:
     GITHUB_TOKEN       för att hämta issuen
     BASE_SHA           commit att diffa mot
 
+Rutan läses i båda de former som finns i repot: issue-formulärets `### In scope`
+och den handskrivna `**In scope**` med en punktlista där sökvägen står i
+bakåtcitat. Hela M2 (#91-#100) skrevs i den senare formen, och skriptet svarade
+"ingen ifylld ruta" och exit 0 på var enda en - åtta filer utanför rutan mergades.
+Därför felar kontrollen numera stängt: en implementations-PR vars ruta inte går
+att läsa underkänns i stället för att hoppas över.
+
 Avslutar 0 om allt ligger innanför rutan, eller om kontrollen inte är tillämplig
-(process-PR utan issuereferens, eller issue utan ifylld ruta). 1 vid överträdelse,
-och 1 när en implementations-PR saknar issuereferens.
+(process-PR utan issuereferens eller utan ruta). 1 vid överträdelse, när en
+implementations-PR saknar issuereferens, och när dess issue saknar läsbar ruta.
 """
 
 import fnmatch
@@ -44,13 +51,26 @@ import sys
 import urllib.error
 import urllib.request
 
-# GitHub renderar issue-formulärets fält som "### <etikett>" följt av innehållet.
-RUBRIK = re.compile(r"^###\s+(.+?)\s*$", re.MULTILINE)
+# Rutan står i två former, båda i bruk. GitHub renderar issue-formulärets fält som
+# "### <etikett>"; issues skrivna för hand ur backloggfilerna sätter i stället en
+# fetstilt etikett under "## Omfång": "**In scope**". M2:s tio issues (#91-#100) är
+# alla av den senare sorten, och när skriptet bara kände den förra svarade det
+# "ingen ifylld ruta" och exit 0 på var enda en av dem - tredje gången samma skript
+# hoppade över sig själv tyst. Se docs/Process/Lärdomar.md.
+#
+# Alla rubriknivåer räknas som gräns, inte bara `###`. Den handskrivna rutan står
+# under `## Omfång` och följs av `## Axlar`; kändes bara `###` igen slutade
+# avsnittet `Out of scope` aldrig, och läste in hela issuens beslutstext som
+# globbar - 73 stycken i #91, varav flera var dess egna In scope-filer.
+RUBRIK = re.compile(r"^(?:#{1,6}\s+(?P<falt>.+?)|\*\*(?P<fet>.+?)\*\*)\s*$", re.MULTILINE)
 # GitHub stänger på close/closes/closed, fix/fixes/fixed, resolve/resolves/resolved.
 # `stänger` accepteras för PR:er skrivna före 2026-08-30 men varnar - den stänger inget.
 STANGER = re.compile(r"\b(clos(?:e|es|ed)|fix(?:|es|ed)|resolv(?:e|es|ed)|stänger)\s+#(\d+)", re.IGNORECASE)
-# Implementationsgrenar heter issue-NN-kort-namn, se AGENTS.md § Arbetsgång.
-IMPLEMENTATIONSGREN = re.compile(r"^issue-\d+")
+# Implementationsgrenar heter issue-NN-kort-namn enligt AGENTS.md § Arbetsgång, men
+# agentkön (.github/scripts/process_next_issue.py) skapar feature/issue-NN. Båda
+# formerna accepteras tills konventionen är avgjord - annars är kravet på en
+# Closes-rad dött för varje kögenererad PR, vilket det var i hela M2.
+IMPLEMENTATIONSGREN = re.compile(r"^(?:feature/)?issue-\d+")
 TOMT = {"_No response_", "_Inget svar_"}
 
 
@@ -75,10 +95,11 @@ def hamta_issue(repo: str, nummer: str, token: str) -> dict:
 
 
 def avsnitt(kropp: str, etikett: str) -> str:
-    """Texten under "### <etikett>", fram till nästa rubrik."""
+    """Texten under "### <etikett>" eller "**<etikett>**", fram till nästa rubrik."""
     traffar = list(RUBRIK.finditer(kropp))
     for index, traff in enumerate(traffar):
-        if traff.group(1).strip().lower() != etikett.lower():
+        namn = traff.group("falt") or traff.group("fet") or ""
+        if namn.strip().lower() != etikett.lower():
             continue
         start = traff.end()
         slut = traffar[index + 1].start() if index + 1 < len(traffar) else len(kropp)
@@ -86,14 +107,36 @@ def avsnitt(kropp: str, etikett: str) -> str:
     return ""
 
 
+def ar_sokvag(token: str) -> bool:
+    """Ser token ut som en sökväg eller en glob, och inte som ett ord i löptext?
+
+    Handskrivna rutor blandar sökvägar med förklaringar i samma punkt - `files`
+    är ett disknamn, `auth:sanctum` en middlewaregrupp, `create_stored_file_table`
+    en migrationsklass. Bara det som bär ett snedstreck eller en filändelse får
+    bli en glob; resten skulle ändå aldrig matcha en fil i diffen, men i rutan
+    `Out of scope` skulle det kunna fälla fel PR.
+    """
+    return "/" in token or re.fullmatch(r"[^\s/]+\.[A-Za-z0-9]+", token) is not None
+
+
 def globbar(text: str) -> list[str]:
-    """Raderna i ett avsnitt, utan kodstaket, kommentarer och tomrader."""
+    """Globbarna i ett avsnitt, oavsett om rutan är maskinskriven eller handskriven.
+
+    Issue-formuläret ger en bar glob per rad. Handskrivna rutor ger punktlistor
+    där globben står i bakåtcitat följd av en förklaring - `app/Models/Item.php`
+    — **bara** relationen `attachments()`. Läses raden rå blir den en glob som
+    aldrig matchar något, och då är varenda fil i diffen en överträdelse.
+    """
     rader = []
     for rad in text.splitlines():
         rad = rad.strip()
         if not rad or rad.startswith("```") or rad.startswith("#") or rad in TOMT:
             continue
-        rader.append(rad)
+        citerade = [t for t in re.findall(r"`([^`]+)`", rad) if ar_sokvag(t)]
+        if citerade:
+            rader.extend(citerade)
+        elif not rad.startswith(("-", "*")):
+            rader.append(rad)
     return rader
 
 
@@ -201,7 +244,22 @@ def main() -> int:
     innanfor = globbar(avsnitt(kropp_issue, "In scope"))
     utanfor = globbar(avsnitt(kropp_issue, "Out of scope"))
 
+    # Felar stängt för implementations-PR:er. Fram till 2026-09-02 var det här en
+    # varning plus exit 0, och eftersom rubrikformen inte kändes igen tog varje
+    # M2-PR den vägen: tio gröna process-jobb, åtta filer utanför rutan. En grind
+    # som svarar "ej tillämplig" går inte att skilja från en som godkänner, så en
+    # implementations-PR vars ruta inte går att läsa ska stanna.
     if not innanfor:
+        if IMPLEMENTATIONSGREN.match(gren):
+            notis(
+                "error",
+                f"Issue #{nummer} har ingen läsbar In scope-ruta, och `{gren}` är en "
+                "implementations-PR. Rutan är bindande enligt AGENTS.md och kan inte "
+                "hoppas över: skriv den i issuen som `### In scope` (issue-formuläret) "
+                "eller som `**In scope**` följt av en punktlista med sökvägar i "
+                "bakåtcitat, och kör om.",
+            )
+            return 1
         notis(
             "warning",
             f"Issue #{nummer} har ingen ifylld In scope-ruta - kontrollen hoppas över. "
@@ -225,12 +283,18 @@ def main() -> int:
         if f
     ]
 
+    # In scope vinner över Out of scope. Rutan är en positiv lista, och `Out of
+    # scope` är oftast löptext som förklarar vad som *inte* ingår - och som därför
+    # nämner de filer som ingår, i bakåtcitat. Vore ordningen den omvända fälldes
+    # sex av M2:s tio PR:er på sina egna tillåtna filer.
     brott: list[str] = []
     for fil in andrade:
+        if any(matchar(fil, m) for m in innanfor):
+            continue
         traffad_utanfor = [m for m in utanfor if matchar(fil, m)]
         if traffad_utanfor:
             brott.append(f"{fil} ligger under Out of scope ({', '.join(traffad_utanfor)})")
-        elif not any(matchar(fil, m) for m in innanfor):
+        else:
             brott.append(f"{fil} matchar ingen glob i In scope")
 
     print(f"Issue #{nummer}: {len(innanfor)} In scope-globbar, {len(utanfor)} Out of scope.")
