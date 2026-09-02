@@ -59,4 +59,16 @@ class StoredFile extends Model
     {
         return $this->hasMany(Attachment::class);
     }
+
+    /**
+     * De genererade miniatyrerna av de här bytena (issue 18). Gallringen i
+     * PurgesExpiredStoredFiles läser relationen för att radera derivatens
+     * filer och rader före `stored_file`-raden — FK:n är RESTRICT.
+     *
+     * @return HasMany<ImageDerivative, $this>
+     */
+    public function derivatives(): HasMany
+    {
+        return $this->hasMany(ImageDerivative::class);
+    }
 }

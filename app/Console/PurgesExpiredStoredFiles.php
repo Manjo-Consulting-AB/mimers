@@ -76,6 +76,19 @@ class PurgesExpiredStoredFiles
                                 return;
                             }
 
+                            // Derivaten först (issue 18 § Beslut 7): FK:n är
+                            // RESTRICT, så derivatraderna måste bort före
+                            // stored_file-raden — glöms det faller gallringen
+                            // på ett främmandenyckelfel varje natt, för alltid.
+                            // Samma felhantering som originalet: en saknad fil
+                            // är ingen felsignal, och kastar en radering rullas
+                            // transaktionen tillbaka och raderna ligger kvar
+                            // för nästa körning.
+                            foreach ($låst->derivatives as $derivat) {
+                                Storage::disk('files')->delete($derivat->storage_path);
+                                $derivat->delete();
+                            }
+
                             // Bytena först (Beslut 2). Disken 'files' har
                             // `throw => true`, så en fil som inte kan raderas
                             // kastar; en fil som redan är borta är en no-op och
