@@ -12,12 +12,14 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 **Läs:** [[Scheman och uppgifter]] § Flödet när en uppgift markeras klar
 **Klart när:** test visar att `fixed` räknar från kalendern och `interval` från `completed_at`, och att exakt en öppen förekomst finns per aktivt schema.
 **Beror på:** 21
+**Byggd som:** 22a tabellen, beräkningen av nästa förfall och den öppna förekomsten, 22b avslutsflödets fem steg
 
 ### 23. Beroenden mellan uppgifter
 Beroenden på förekomstnivå, ärvda från schemanivå när en ny förekomst skapas. Cykelkontroll på båda nivåerna.
 **Läs:** [[Scheman och uppgifter]] § occurrence_dependency
 **Klart när:** en förekomst med öppna beroenden inte kan stängas, och en cykel avvisas med felkod.
 **Beror på:** 22
+**Byggd som:** 23a `schedule_dependency` med cykelkontroll, 23b `occurrence_dependency` med arv och spärr i avslutsflödet
 
 ### 24. Todo-listan
 Endpoint som läser förekomster över alla åtkomliga containers, filtrerad enligt dokumentet.
