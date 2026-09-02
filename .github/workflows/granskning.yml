@@ -1,0 +1,63 @@
+name: Granskning
+
+# Grinden som gör "blev den här läst av någon" till ett merge-hinder i stället
+# för en vana inne i agentkön. Repot kan inte ha branch protection (privat repo
+# på gratisplanen - /branches/main/protection svarar 403), så GitHub kan inte
+# kräva något. Det enda som faktiskt stoppar en merge är att kön väntar in gröna
+# checkar innan den mergar, och en röd check här stoppar därför den automatiska
+# banan. PR #104 mergades i M2 helt utan review:approved; det kan den inte nu.
+#
+# Egen workflow, inte ett steg i ci.yml: labeln sätts efter att CI redan kört, och
+# `pull_request` triggar inte på `labeled` som standard - det är exakt fällan som
+# står i docs/Process/Lärdomar.md om PR #101, där en grind bedömde en text som
+# redan var ersatt. Med egen fil kan den här triggas om utan att testsviten körs
+# om i onödan.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: granskning-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  granskning:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Implementations-PR måste bära review:approved
+        env:
+          # Läses ur API:et vid körning, inte ur händelsens ögonblicksbild:
+          # en `synchronize` som kommer efter godkännandet bär annars den gamla
+          # etikettlistan, och grinden skulle bedöma ett läge som passerat.
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          case "$HEAD_REF" in
+            feature/issue-[0-9]*|issue-[0-9]*) ;;
+            *)
+              echo "::notice::\`$HEAD_REF\` är ingen implementationsgren - granskningskravet gäller inte. Retro-, process- och teknisk skuld-grenar mergas av Tony."
+              exit 0
+              ;;
+          esac
+
+          LABELS=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '[.labels[].name] | join(" ")')
+          echo "Etiketter: ${LABELS:-(inga)}"
+
+          case " $LABELS " in
+            *" review:approved "*)
+              echo "Granskad och godkänd."
+              ;;
+            *)
+              echo "::error::PR:en saknar \`review:approved\`. Varje implementations-PR ska läsas av en granskningsmodell innan den mergas - axeln väljer djup och modell, inte om det finns en läsare (ADR-0026). Etiketten sätts av granskningen själv; kör om den, eller sätt den för hand om du granskat manuellt."
+              exit 1
+              ;;
+          esac
