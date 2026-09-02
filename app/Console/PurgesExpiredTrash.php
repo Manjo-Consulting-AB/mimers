@@ -2,9 +2,11 @@
 
 namespace App\Console;
 
+use App\Actions\Trash\PurgeContainer;
 use App\Actions\Trash\PurgeContent;
 use App\Models\Attachment;
 use App\Models\Category;
+use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
 use Closure;
@@ -22,6 +24,10 @@ use Throwable;
  * retentionen har passerats (Beslut 1 och 11). HUR varje typ gallras ägs av
  * App\Actions\Trash\PurgeContent (Beslut 2): konsolen kör bara igenom dess
  * fyra metoder, i ordningen bilagor → items → kategorier → taggar (Beslut 7).
+ * Sedan 20c gallrar den också raderade containers vars
+ * `deleted_at` passerat retentionen — genom App\Actions\Trash\PurgeContainer,
+ * som tar med sig hela innehållet (Beslut 6: en femte gren i samma jobb, ett
+ * jobb per natt som gör hela papperskorgen är lättare att resonera om än två).
  *
  * Villkoret är `deleted_at IS NOT NULL` OCH äldre än retentionen — en levande
  * rad får aldrig röras av det här jobbet (Beslut 11). Undantaget är bilagorna
@@ -33,9 +39,9 @@ use Throwable;
  * vidare. Samma resonemang som 17b § Beslut 3 — en enda trasig rad får inte
  * lämna hela gallringen ogjord natt efter natt.
  *
- * `handle(): array` returnerar antalet gallrade poster per typ och loggar en
- * rad när summan är över noll; tyst när det inte fanns något att göra
- * (Beslut 10, samma som 17b § Beslut 5).
+ * `handle(): array` returnerar antalet gallrade poster per typ (containern
+ * räknas som en post) och loggar en rad när summan är över noll; tyst när
+ * det inte fanns något att göra (Beslut 10, samma som 17b § Beslut 5).
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
  * `Schedule::command(...)` — se AGENTS.md § Driftmiljön saknar proc_open. Av
@@ -46,12 +52,13 @@ class PurgesExpiredTrash
 {
     public function __construct(
         private readonly PurgeContent $purgeContent,
+        private readonly PurgeContainer $purgeContainer,
     ) {}
 
     /**
      * Gallrar allt vars retention har passerats.
      *
-     * @return array{attachment: int, item: int, category: int, tag: int}
+     * @return array{attachment: int, item: int, category: int, tag: int, container: int}
      */
     public function handle(): array
     {
@@ -78,6 +85,15 @@ class PurgesExpiredTrash
                 Tag::onlyTrashed()->where('deleted_at', '<=', $cutoff),
                 fn (Tag $tagg) => $this->purgeContent->tag($tagg),
             ),
+            // 20c · Raderade containers: PurgeContainer tar med sig hela
+            // innehållet, och varje container ligger i sin egen transaktion
+            // (Beslut 7) — samma chunkById/felhantering/loggning som de fyra
+            // grenarna ovan.
+            'container' => $this->gallra(
+                'container',
+                Container::onlyTrashed()->where('deleted_at', '<=', $cutoff),
+                fn (Container $container) => $this->purgeContainer->handle($container),
+            ),
         ];
 
         if (array_sum($borttagna) > 0) {
@@ -92,7 +108,7 @@ class PurgesExpiredTrash
      * försvinner under iterationen och pagingen måste följa primärnyckeln,
      * inte radnumret (Beslut 8).
      *
-     * @template TModel of Item|Attachment|Category|Tag
+     * @template TModel of Item|Attachment|Category|Tag|Container
      *
      * @param  Builder<TModel>  $query
      * @param  Closure(TModel): void  $perRad

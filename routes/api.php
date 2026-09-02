@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
+use App\Http\Controllers\Api\ContainerTrashController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
@@ -224,4 +225,19 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // containers är 20c.
     Route::get('/containers/{container}/trash', [TrashController::class, 'index']);
     Route::post('/containers/{container}/trash/restore', [TrashController::class, 'restore']);
+
+    // Issue 20c · Papperskorgen för raderade CONTAINERS — lista och
+    // återställ en container som någon råkat radera, se
+    // App\Http\Controllers\Api\ContainerTrashController och
+    // App\Http\Requests\Trash\RestoreContainerRequest. Toppnivå (issue 20c §
+    // Beslut 1): en raderad container kan inte nästlas under sig själv —
+    // {container}-bindningen ser bara levande rader — så listan bor på
+    // /trash/containers och restore tar ULID:en i kroppen, samma form som
+    // 20a § Beslut 6. Listan begränsas av själva frågan (containers vars
+    // ägarkonto användaren är medlem i), restore grinden är den befintliga
+    // delete()-metoden på App\Policies\ContainerPolicy — ingen ny
+    // policymetod (Beslut 2). Gallringen som tömmer den här papperskorgen är
+    // samma jobb som 20b, App\Console\PurgesExpiredTrash.
+    Route::get('/trash/containers', [ContainerTrashController::class, 'index']);
+    Route::post('/trash/containers/restore', [ContainerTrashController::class, 'restore']);
 });
