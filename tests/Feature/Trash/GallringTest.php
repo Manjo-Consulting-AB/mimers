@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Attachment\PurgeAttachment;
+use App\Actions\Trash\PurgeContainer;
 use App\Actions\Trash\PurgeContent;
 use App\Console\PurgesExpiredTrash;
 use App\Models\Account;
@@ -125,11 +126,13 @@ function gallringMjukradera(Item|Attachment|Category|Tag $modell, Carbon $delete
 /**
  * Kör gallringen precis som schemaläggningen gör.
  *
- * @return array{attachment: int, item: int, category: int, tag: int}
+ * @return array{attachment: int, item: int, category: int, tag: int, container: int}
  */
 function gallringKör(): array
 {
-    return (new PurgesExpiredTrash(new PurgeContent(new PurgeAttachment)))->handle();
+    $purgeContent = new PurgeContent(new PurgeAttachment);
+
+    return (new PurgesExpiredTrash($purgeContent, new PurgeContainer($purgeContent)))->handle();
 }
 
 it('innehåll äldre än retentionen gallras', function () {
@@ -449,7 +452,7 @@ it('ett fel på en post stoppar inte de andra', function () {
         }
     };
 
-    $antal = (new PurgesExpiredTrash($purgeContent))->handle();
+    $antal = (new PurgesExpiredTrash($purgeContent, new PurgeContainer(new PurgeContent(new PurgeAttachment))))->handle();
 
     expect($antal['item'])->toBe(1);
     expect(Item::withTrashed()->whereKey($trasig->id)->exists())->toBeTrue();
