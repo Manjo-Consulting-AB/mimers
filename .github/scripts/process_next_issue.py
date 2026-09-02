@@ -239,12 +239,16 @@ def run_review(model, review_prompt, pr_number, worktree_path):
 
     full_prompt = (
         f"{review_prompt}\n\n"
-        f"Skriv din granskning som vanligt. Om och bara om koden är godkänd utan "
-        f"kvarstående anmärkningar, kör som allra sista åtgärd exakt detta kommando "
-        f"(REST-API:et, inte 'gh pr edit --add-label' - det senare ger alltid ett "
-        f"ofarligt men förvirrande GraphQL-fel om 'Projects (classic)' i det här repot):\n"
+        f"Gör din granskning. Om och bara om koden är godkänd utan kvarstående "
+        f"anmärkningar, kör detta kommando (REST-API:et, inte 'gh pr edit "
+        f"--add-label' - det senare ger alltid ett ofarligt men förvirrande "
+        f"GraphQL-fel om 'Projects (classic)' i det här repot) INNAN du skriver "
+        f"ditt slutgiltiga svar, inte efter:\n"
         f"gh api repos/{GH_REPO}/issues/{pr_number}/labels -f \"labels[]=review:approved\"\n"
-        f"Kör INTE det kommandot om du har några fynd kvar."
+        f"Kör INTE det kommandot om du har några fynd kvar.\n\n"
+        f"Avsluta alltid med skriven text som sammanfattar vad du granskade och "
+        f"varför - godkänt eller inte. Bara den sista textturen sparas i loggen; "
+        f"ett verktygsanrop utan text efter sig försvinner spårlöst."
     )
     review_text = call_claude_direct(model, full_prompt, cwd=worktree_path)
 
