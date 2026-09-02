@@ -35,7 +35,7 @@ class OpenNextOccurrence
     public function handle(Schedule $schedule, ?Carbon $from = null): ?ScheduleOccurrence
     {
         return DB::transaction(function () use ($schedule, $from): ?ScheduleOccurrence {
-            $låst = $schedule->newQuery()->lockForUpdate()->first();
+            $låst = $schedule->newQuery()->whereKey($schedule->id)->lockForUpdate()->first();
 
             if ($låst === null) {
                 return null;

@@ -297,6 +297,32 @@ it('exakt en öppen förekomst finns per aktivt schema', function () {
     expect($oppna->first()->ulid)->toBe($open->ulid);
 });
 
+it('en förekomst öppnas på det anropade schemat, inte på den första raden i tabellen', function () {
+    [, , , , $item] = skapaForekomstKontext();
+    $första = Schedule::factory()->for($item, 'item')->create([
+        'title' => 'Första schemat',
+        'anchor_date' => '2026-01-01',
+    ]);
+    $andra = Schedule::factory()->for($item, 'item')->create([
+        'title' => 'Andra schemat',
+        'anchor_date' => '2027-06-15',
+    ]);
+
+    // $första är den första raden i schedule-tabellen och saknar öppen
+    // förekomst. Låser Actionen fel rad — newQuery()->first() utan whereKey —
+    // hamnar förekomsten på $första i stället för på $andra (granskningsfynd).
+    $förekomst = app(OpenNextOccurrence::class)->handle($andra);
+
+    expect($förekomst)->toBeInstanceOf(ScheduleOccurrence::class);
+    expect($förekomst->schedule_id)->toBe($andra->id);
+    expect(ScheduleOccurrence::where('schedule_id', $första->id)->count())->toBe(0);
+
+    $andraRad = ScheduleOccurrence::where('schedule_id', $andra->id)->first();
+    expect($andraRad)->not->toBeNull();
+    expect($andraRad->status)->toBe('open');
+    expect($andraRad->due_at->toDateString())->toBe('2027-06-15');
+});
+
 it('overdue härleds och lagras aldrig', function () {
     Carbon::setTestNow('2026-09-02 10:00:00');
 
