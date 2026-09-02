@@ -33,17 +33,20 @@ it('kopierar protected.htaccess till shared/storage/files vid utrullning', funct
 
     expect($deploy)
         ->toContain('mkdir -p "$APP/shared/storage/files"')
-        ->toContain('cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess"');
+        ->toContain('cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess.ny"')
+        ->toContain('mv -f "$APP/shared/storage/files/.htaccess.ny" "$APP/shared/storage/files/.htaccess"');
 });
 
-it('nekar direkt åtkomst på ORG_REQ_URI med mönstret ^ och förbjuder indexering', function () {
+it('tillåter bara /files/{ulid} på ORG_REQ_URI och förbjuder indexering', function () {
     $htaccess = file_get_contents(base_path('deploy/protected.htaccess'));
 
     expect($htaccess)
         ->toContain('RewriteEngine On')
-        ->toContain('RewriteCond %{ORG_REQ_URI} ^/_protected/')
+        ->toContain('RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+$')
         ->toContain('RewriteRule ^ - [F,L]')
         ->toContain('Options -Indexes');
+
+    expect($htaccess)->not->toContain('RewriteCond %{ORG_REQ_URI} ^/_protected/');
 });
 
 it('har giltig bash-syntax i deploy.sh och verifiera-filleverans.sh', function (string $skript) {

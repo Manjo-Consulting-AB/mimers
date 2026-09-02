@@ -29,7 +29,11 @@ ln -sfn "$APP/shared/storage" "$DIR/storage"
 # kan inte glida isär mellan miljöerna.
 mkdir -p "$APP/shared/storage/files"
 ln -sfn "$APP/shared/storage/files" "$DIR/public/_protected"
-cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess"
+# Skriv via en punktfil i samma katalog och byt med mv: cp trunkerar målet
+# först, och ett avbrutet anrop lämnar datakatalogen utan regler medan förra
+# releasen servar. mv är en rename inom samma filsystem och därmed atomiskt.
+cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess.ny"
+mv -f "$APP/shared/storage/files/.htaccess.ny" "$APP/shared/storage/files/.htaccess"
 
 cd "$DIR"
 php artisan config:cache

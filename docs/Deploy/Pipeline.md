@@ -421,7 +421,11 @@ ln -sfn "$APP/shared/storage" "$DIR/storage"
 # kan inte glida isär mellan miljöerna.
 mkdir -p "$APP/shared/storage/files"
 ln -sfn "$APP/shared/storage/files" "$DIR/public/_protected"
-cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess"
+# Skriv via en punktfil i samma katalog och byt med mv: cp trunkerar målet
+# först, och ett avbrutet anrop lämnar datakatalogen utan regler medan förra
+# releasen servar. mv är en rename inom samma filsystem och därmed atomiskt.
+cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess.ny"
+mv -f "$APP/shared/storage/files/.htaccess.ny" "$APP/shared/storage/files/.htaccess"
 
 cd "$DIR"
 php artisan config:cache
@@ -465,37 +469,41 @@ $APP/shared/storage/files/.htaccess           från deploy/protected.htaccess
 
 `.htaccess`-regeln kopieras från `deploy/protected.htaccess` vid varje utrullning, av samma skäl som uppladdningsgränserna i `public/.htaccess`: den versioneras med koden och kan inte glida isär mellan miljöerna. En handpåläggning på servern skrivs över nästa gång — det är avsikten.
 
-Regeln nekar direkt åtkomst men tillåter intern omdirigering:
+Regeln är en tillåt-lista som nekar direkt åtkomst men tillåter intern omdirigering:
 
 ```apache
 RewriteEngine On
-RewriteCond %{ORG_REQ_URI} ^/_protected/
+RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+$
 RewriteRule ^ - [F,L]
 
 Options -Indexes
 ```
 
-`%{ORG_REQ_URI}` håller URI:n från det ursprungliga anropet och ändras inte av LiteSpeeds interna omdirigering: ett direkt anrop mot `/_protected/…` nekas, medan ett anrop mot `/files/{ulid}` behåller den sökvägen och passerar. Mönstret är `^`, inte `^_protected/` — i en `.htaccess` inuti katalogen har katalogprefixet redan avlägsnats, så den formen matchar aldrig. `Options -Indexes` är bältet utöver hängslet: skulle regeln sluta gälla ska en katalogförfrågan ändå inte räkna upp innehållet.
+`%{ORG_REQ_URI}` håller URI:n från det ursprungliga anropet och ändras inte av LiteSpeeds interna omdirigering: ett direkt anrop mot `/_protected/…` har inte formen `/files/{ulid}` och nekas, medan ett anrop mot `/files/{ulid}` behåller den sökvägen och passerar. Regeln är en tillåt-lista, inte en neka-lista på URI:ns textform — filuppslaget görs på en normaliserad sökväg, så en neka-lista på `^/_protected/` hade missat kringgångar som `//_protected/…` eller `/./_protected/…`. En ULID innehåller varken `/`, `.` eller `%`, så ingen sådan variant kan tillfredsställa villkoret. `Options -Indexes` är bältet utöver hängslet: skulle regeln sluta gälla ska en katalogförfrågan ändå inte räkna upp innehållet.
 
 `FILES_INTERNAL_REDIRECT=true` sätts av Tony i `shared/.env`, en gång per miljö — ingen kod sätter den. Utan den strömmar appen filerna genom PHP med samma headers: allting fungerar, och det enda som märks är att processpoolen tar slut den dag någon laddar ner mycket.
 
-Skyddet bevisas mot en utrullad miljö med `deploy/verifiera-filleverans.sh <bas-url> <ulid> <token>`, som gör tre anrop med `curl` och avslutar med kod 1 så fort något avviker:
+Skyddet bevisas mot en utrullad miljö med `deploy/verifiera-filleverans.sh <bas-url> <ulid>`, som gör fyra anrop med `curl` och avslutar med kod 1 så fort något avviker:
 
 1. `GET /_protected/` → **403**
 2. `GET /_protected/ab/cd/<känd hash>` → **403**
-3. `GET /files/{ulid}` med `Authorization: Bearer <token>` → **200**, `Content-Disposition: attachment` och ett `Content-Type` som inte är `text/html`
+3. `GET //_protected/ab/cd/<känd hash>` → **403** (kringgångsform)
+4. `GET /files/{ulid}` med en giltig token → **200**, icke-tom kropp, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` och ett `Content-Type` som inte är `text/html`
 
-De två första anropen kräver ingen inloggning; det tredje behöver en bilaga som kontot får läsa och ett sanctum personal access token. Kört mot staging efter merge, med utdata klistrad i PR-tråden (issue 19b § Beslut 7).
+De tre första anropen kräver ingen inloggning; det fjärde behöver en bilaga som kontot får läsa och ett sanctum personal access token. Bilagan ska inte vara HTML — `text/html` vore ett korrekt svar för en `.html`-bilaga men kan inte skiljas från appens standardsvar. Token sätts hellre i `FILES_TOKEN` än som argument: ett argument syns i `ps` på den delade servern och hamnar i skalhistoriken. Kört mot staging efter merge, med utdata klistrad i PR-tråden (issue 19b § Beslut 7).
 
 ## Rollback
 
 ```bash
 ls -1dt ~/mimers/releases/       # hitta den förra
 ln -sfn ~/mimers/releases/2026-08-04-a3f19c ~/mimers/current
+ln -sfn ~/mimers/shared/storage/files ~/mimers/current/public/_protected
 php ~/mimers/current/artisan up
 ```
 
 Tio sekunder. **Databasen rullas inte tillbaka** — se expand/contract i [[ADR-0018 Utvecklingsprocess och deploy]].
+
+Raden med `_protected` återskapar symlänken för filleverans: en release som rullades ut före issue 19b saknar `public/_protected`, och utan raden ger samtliga nedladdningar 404 tills nästa deploy — utan att något i proceduren antyder varför. Länken pekar in i `shared/storage/files`, där bytena och `.htaccess` bor.
 
 **Provad på staging 2026-08-23**, med två releaser av samma kod. `current` flippades till föregående release, sajten kontrollerades, och `current` flippades tillbaka. Sajten svarade 200 i alla tre lägena.
 

@@ -1,13 +1,17 @@
-# Neka direkt åtkomst till /_protected/, men tillåt LiteSpeeds interna
-# omdirigering. %{ORG_REQ_URI} håller URI:n från det ursprungliga anropet och
-# ändras inte när LiteSpeed hämtar filen — /files/{ulid} passerar därför, ett
-# direkt anrop mot /_protected/… nekas. Se [[ADR-0019 Filleverans]].
+# Tillåt bara LiteSpeeds interna omdirigering, neka allt annat. Vid den
+# interna omdirigeringen från GET /files/{attachment} håller %{ORG_REQ_URI}
+# kvar den ursprungliga sökvägen (/files/{ulid}); ett direkt anrop mot
+# /_protected/… har kvar sin egen sökväg i variabeln och nekas. Se
+# [[ADR-0019 Filleverans]].
 #
-# Mönstret är "^", inte "^_protected/" — i en .htaccess inuti katalogen har
-# katalogprefixet redan avlägsnats, så "^_protected/" matchar aldrig och
-# regeln blir en öppen katalog som ser skyddad ut.
+# Regeln är en tillåt-lista, inte en neka-lista på URI:ns textform: uppslaget
+# av filen görs på en normaliserad sökväg, så en neka-lista på "^/_protected/"
+# missar varianter som //_protected/…, /./_protected/… och %5Fprotected/…,
+# som alla resolverar till samma fil utan att texten matchar. Tillåt-listan
+# nekar allt som inte redan har formen /files/{ulid}, och en ULID innehåller
+# varken /, . eller % — ingen av kringgångarna kan tillfredsställa villkoret.
 RewriteEngine On
-RewriteCond %{ORG_REQ_URI} ^/_protected/
+RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+$
 RewriteRule ^ - [F,L]
 
 # Bälte utöver hängslet: skulle regeln någon gång sluta gälla ska en

@@ -32,9 +32,14 @@ Se [Internal Redirect](https://docs.litespeedtech.com/lsws/redirect/) i LiteSpee
 `.htaccess` i `_protected/`:
 
 ```apache
-RewriteCond %{ORG_REQ_URI} ^/_protected/
-RewriteRule ^_protected/ - [R=403,F]
+RewriteEngine On
+RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+$
+RewriteRule ^ - [F,L]
+
+Options -Indexes
 ```
+
+Regeln är en **tillåt-lista**, inte en neka-lista: allt som inte redan har formen `/files/{ulid}` nekas. En neka-lista på `^/_protected/` vore fail-open — filuppslaget görs på en normaliserad sökväg, så varianter som `//_protected/…`, `/./_protected/…` och procentkodade former når samma fil utan att texten matchar. Tidigare versioner av den här ADR:en visade `RewriteCond %{ORG_REQ_URI} ^/_protected/` med `RewriteRule ^_protected/ - [R=403,F]`; utöver fail-open-resonemanget matchar mönstret `^_protected/` aldrig i en `.htaccess` inuti katalogen, där katalogprefixet redan avlägsnats — en regel som aldrig matchar är en öppen katalog som ser skyddad ut. `Options -Indexes` är bältet utöver hängslet.
 
 Appens nedladdningsroute, efter behörighetskontroll:
 
@@ -45,7 +50,7 @@ return response()->noContent()->withHeaders([
 ]);
 ```
 
-Direkt anrop mot `/_protected/ab/cd/…` ger 403, eftersom `ORG_REQ_URI` då **är** den sökvägen. Anrop mot `/files/{ulid}` passerar behörighetskontrollen, och vid den interna omdirigeringen är `ORG_REQ_URI` fortfarande `/files/{ulid}` — regeln matchar inte, och LiteSpeed levererar filen med `sendfile()`.
+Direkt anrop mot `/_protected/ab/cd/…` ger 403, eftersom `ORG_REQ_URI` då inte har formen `/files/{ulid}` och tillåt-listan nekar. Anrop mot `/files/{ulid}` passerar behörighetskontrollen, och vid den interna omdirigeringen är `ORG_REQ_URI` fortfarande `/files/{ulid}` — regeln nekar inte, och LiteSpeed levererar filen med `sendfile()`.
 
 ## Motivering
 
