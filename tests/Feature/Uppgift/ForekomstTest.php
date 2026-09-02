@@ -424,27 +424,34 @@ it('datum serialiseras utan tidszon', function () {
 });
 
 it('ett schema som inte kan öppna en förekomst rullar tillbaka hela skapandet', function () {
-    [, , , , $item] = skapaForekomstKontext();
+    [, , $headers, $container, $item] = skapaForekomstKontext();
 
-    // Ett schema utan anchor_date kan inte inträffa via API:et (issue 21 §
-    // Beslut 5) men kan byggas av en fabrik. Actionen ska kasta — det är en
-    // programmeringsfel-signal, inte ett användarfel (§ Att se upp med) — och
-    // hela skapandet, schemat INKLUSIVE, rullas tillbaka (Beslut 9).
-    $schedule = new Schedule([
-        'title' => 'Sönder',
-        'recurrence_type' => 'fixed',
-        'interval_unit' => 'day',
-        'interval_count' => 1,
-        'anchor_date' => null,
-    ]);
-    $schedule->item_id = $item->id;
+    // ScheduleOccurrence::creating löser ut inne i OpenNextOccurrence, som i
+    // sin tur körs inne i DB::transaction i controllern. Kastar den måste
+    // BÅDA transaktionerna rulla tillbaka och schemaraden försvinna — annars
+    // ligger ett schema kvar utan sin öppna förekomst, ett tillstånd
+    // användaren varken kan se eller laga (Beslut 9). Utan controllerns
+    // transaktion vore schemats INSERT redan committad och raden bli kvar.
+    //
+    // Felet framkallas här och inte med ett schema utan anchor_date: ett
+    // sådant kan inte nå store() genom API:et (issue 21 § Beslut 5), och ett
+    // test som replikerar controllerns transaktion i stället för att gå
+    // genom rutten bevisar att DB::transaction fungerar, inte att
+    // controllern använder den.
+    ScheduleOccurrence::creating(function () {
+        throw new RuntimeException('simulerat fel när förekomsten öppnas');
+    });
 
-    expect(fn () => DB::transaction(function () use ($schedule): void {
-        $schedule->save();
-        app(OpenNextOccurrence::class)->handle($schedule);
-    }))->toThrow(RuntimeException::class);
+    $response = postJson(
+        "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules",
+        forekomstSchemaKropp(['title' => 'Sönder']),
+        $headers,
+    );
 
-    expect(DB::table('schedule')->where('id', $schedule->id)->exists())->toBeFalse();
+    $response->assertStatus(500);
+
+    expect(DB::table('schedule')->where('title', 'Sönder')->exists())->toBeFalse();
+    expect(DB::table('schedule_occurrence')->count())->toBe(0);
 });
 
 it('ett schema på ett annat item nås inte via det här itemets rutt', function () {
