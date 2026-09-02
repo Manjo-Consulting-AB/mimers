@@ -18,9 +18,13 @@ Det är en utsaga om granskningen, inte om implementeraren.
 
 | Axelprofil | Implementerar | Granskar |
 |---|---|---|
-| Alla tre låga | Deepseek | Ingen modell — CI och mekanisk avläsning räcker |
+| Alla tre låga | Deepseek | ~~Ingen modell~~ → Claude Sonnet 5, se uppföljningen nedan |
 | Förhöjd axel, `risk_class: none` | Deepseek | Claude Sonnet 5, läser diffen |
 | `risk_class: elevated` | Deepseek | Claude Opus 5, läser issuens läslista |
+
+**Uppföljning 2026-09-02, efter M2:** raden om att ingen modell läser en PR med låga axlar är återtagen. Axeln väljer numera granskningens **djup och modell, inte om det finns en läsare** — Sonnet som lägsta nivå, Opus vid `elevated`. Det är en omsvängning av alternativet under § Alternativ (*"Låta Sonnet eller Opus granska varje PR, oavsett axlar"*), och skälet är att dess premiss inte höll i praktiken: M2:s två `none`-issues mergades automatiskt på 13 respektive 5 sekunder, och PR #108 bar då både en fil utanför omfångsrutan och en uttrycklig fråga i sin egen kropp som ingen läste.
+
+**Var ärlig om hur starkt beviset är.** Två av de tre konkreta felen täcks numera också mekaniskt — omfångsrutans grind är lagad, och en icke-tom `## Frågor och antaganden` stoppar automatisk merge. Argumentet i alternativet (*"en PR med alla axlar låga har inget en modell kan säga som inte CI redan sagt"*) är alltså mer sant nu än det var i M2, eftersom den CI-del som skulle säga det var trasig hela tiden. Omsvängningen är därför ett medvetet bälte utöver hängslet, inte ett motbevis. Sonnet på den billiga banan kostar storleksordningen 0,3–0,5 USD på en issue som kostat 0,50; **mät det vid M3-retron** — säger Sonnet ingenting på `none`-banan under en hel milstolpe är raden värd att ta tillbaka igen.
 
 **`elevated`-granskningen är en annan uppgift än en kodgranskning.** Den får issuens `Läs`-lista som indata och prövar betydelsen mot källdokumenten. Den ska uttryckligen inte godta PR-beskrivningens egen redogörelse för vad ändringen gör.
 
