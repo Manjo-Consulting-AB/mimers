@@ -2,26 +2,37 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Schedule\CloseOccurrence;
+use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Schedule\CompleteOccurrenceRequest;
 use App\Http\Resources\ScheduleOccurrenceResource;
+use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Schedule;
+use App\Models\ScheduleOccurrence;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Förekomsterna av ett schema, se issue 22. Bara `index()` — ingen show(),
- * ingen POST, ingen DELETE: en förekomst skapas ALDRIG av en klient, den är
+ * Förekomsterna av ett schema, se issue 22. Tre ytor: `index()` listar den
+ * öppna förekomsten och historiken (22a), `complete()`/`skip()` stänger en
+ * öppen förekomst och öppnar nästa i samma transaktion (22b). Ingen show(),
+ * ingen allmän POST/DELETE: en förekomst skapas ALDRIG av en klient, den är
  * systemets bokföring av ett schema och den enda vägen in är
- * App\Actions\Schedule\OpenNextOccurrence (issue 22 § Beslut 1).
+ * App\Actions\Schedule\OpenNextOccurrence (issue 22 § Beslut 1) — avslutet
+ * delegerar till den genom App\Actions\Schedule\CloseOccurrence, som bär
+ * hela flödet ([[ADR-0024 Tunna controllers och actions]]).
  *
  * routes/api.php nästlar `{item}` under `{container}` och `{schedule}` under
  * `{item}` med gruppens `->scopeBindings()`, precis som schemarutterna i
- * issue 21 — `{schedule}` löses genom App\Models\Item::schedules(). Ett
- * schema på ett annat item ger 404, hela skyddet mot en främmande ULID
- * (issue 22 § Beslut 1). Grinden är den befintliga `view` på
- * App\Policies\ContainerPolicy, ingen ny policymetod.
+ * issue 21 — `{schedule}` löses genom App\Models\Item::schedules() och
+ * `{occurrence}` genom App\Models\Schedule::occurrences(). Ett schema på ett
+ * annat item, eller en förekomst i ett annat schema, ger 404 — hela skyddet
+ * mot en främmande ULID (issue 22 § Beslut 1). Grinden är den befintliga
+ * `view` (index) respektive `update` (complete/skip) på
+ * App\Policies\ContainerPolicy, ingen ny policymetod (issue 22b § Beslut 1).
  */
 class ScheduleOccurrenceController extends Controller
 {
@@ -50,5 +61,86 @@ class ScheduleOccurrenceController extends Controller
             ->get();
 
         return ScheduleOccurrenceResource::collection($occurrences)->response();
+    }
+
+    /**
+     * POST /api/containers/{container}/items/{item}/schedules/{schedule}
+     * /occurrences/{occurrence}/complete — 200. Den ÖPPNA förekomsten stängs
+     * som `completed` och nästa öppnas i samma transaktion, se
+     * App\Actions\Schedule\CloseOccurrence. Två rutter i stället för ett
+     * statusfält (issue 22b § Beslut 1): en kropp med `{"status": "open"}`
+     * vore en väg att återöppna, och det vill vi uttryckligen inte ha.
+     */
+    public function complete(CompleteOccurrenceRequest $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence): JsonResponse
+    {
+        return $this->close($request, $container, $schedule, $occurrence, $closeOccurrence, ScheduleOccurrence::STATUS_COMPLETED);
+    }
+
+    /**
+     * POST /api/containers/{container}/items/{item}/schedules/{schedule}
+     * /occurrences/{occurrence}/skip — 200. Samma avslutsflöde som complete(),
+     * men med `status = 'skipped'` — och nästa `interval`-förfall räknas från
+     * den överhoppade förekomstens `due_at`, inte från `completed_at`
+     * (issue 22b § Beslut 4). `completion_note` är tillåten även här.
+     */
+    public function skip(CompleteOccurrenceRequest $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence): JsonResponse
+    {
+        return $this->close($request, $container, $schedule, $occurrence, $closeOccurrence, ScheduleOccurrence::STATUS_SKIPPED);
+    }
+
+    /**
+     * Det complete() och skip() delar. Fyra steg, i den ordningen
+     * ([[ADR-0024 Tunna controllers och actions]]): FormRequesten har
+     * validerat, `Gate::authorize('update')` avgör behörighet, CloseOccurrence
+     * utför hela flödet, och ScheduleOccurrenceResource formar svaret.
+     *
+     * `account` i kroppen är obligatorisk och måste vara ett konto användaren
+     * är medlem i — annars 403 `auth.forbidden`, samma kontroll som
+     * App\Http\Controllers\Api\ItemController::store() gör (issue 22b §
+     * Beslut 2). Det är ingen containerregel utan ett "får användaren skriva
+     * i det angivna kontots namn", och därför ligger den här och inte i
+     * policyn.
+     *
+     * Svaret är 200 med den stängda och den nya förekomsten i varsin
+     * ScheduleOccurrenceResource-form (issue 22b § Beslut 8). `next` är null
+     * när `recurrence_type` är `none`, men nyckeln finns alltid.
+     */
+    private function close(CompleteOccurrenceRequest $request, Container $container, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence, string $status): JsonResponse
+    {
+        Gate::authorize('update', $container);
+
+        $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
+
+        if (! $account->users()->whereKey($request->user()->id)->exists()) {
+            throw ApiException::make('auth.forbidden', [], 403);
+        }
+
+        $result = $closeOccurrence->handle(
+            $schedule,
+            $occurrence,
+            $request->user(),
+            $account,
+            $status,
+            $request->validated('completion_note'),
+        );
+
+        $closed = $result['closed'];
+        $next = $result['next'];
+
+        // Kontot är redan i handen och den nya förekomsten har inget konto —
+        // sätt relationerna direkt så resursen aldrig gör ett oplanerat
+        // lazy-load per rad (jfr index() ovan).
+        $closed->setRelation('completedByAccount', $account);
+
+        if ($next !== null) {
+            $next->setRelation('completedByAccount', null);
+        }
+
+        return response()->json([
+            'data' => [
+                'closed' => new ScheduleOccurrenceResource($closed),
+                'next' => $next === null ? null : new ScheduleOccurrenceResource($next),
+            ],
+        ]);
     }
 }

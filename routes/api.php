@@ -244,6 +244,21 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // rutt här senare, aldrig i den här listningen.
     Route::get('/containers/{container}/items/{item}/schedules/{schedule}/occurrences', [ScheduleOccurrenceController::class, 'index']);
 
+    // Issue 22b · Avslut — complete()/skip(), se
+    // App\Http\Controllers\Api\ScheduleOccurrenceController och
+    // App\Actions\Schedule\CloseOccurrence. Två rutter i stället för ett
+    // statusfält i kroppen (issue 22b § Beslut 1): en `{"status": "open"}`-
+    // kropp vore en väg att återöppna, och det vill vi inte ha. Båda tar
+    // `{"account", "completion_note"?}` (Beslut 2). `{occurrence}` binds av
+    // gruppens scopeBindings() genom App\Models\Schedule::occurrences()
+    // precis som `{schedule}` genom Item::schedules() ovan — en förekomst i
+    // ett annat schema ger 404. Grinden är den befintliga update() på
+    // App\Policies\ContainerPolicy. Beroendekontrollen (issue 23b) och
+    // notisavbrottet (M5) läggs in i CloseOccurrence av sina issues, aldrig
+    // som nya rutter här.
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete', [ScheduleOccurrenceController::class, 'complete']);
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip', [ScheduleOccurrenceController::class, 'skip']);
+
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och
     // App\Actions\Trash\RestoreContent. Två rutter, nästlade under
