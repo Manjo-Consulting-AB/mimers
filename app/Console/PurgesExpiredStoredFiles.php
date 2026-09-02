@@ -3,6 +3,7 @@
 namespace App\Console;
 
 use App\Models\StoredFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
@@ -29,6 +30,12 @@ use Throwable;
  * med `content_hash` och sökväg — loggen är driftens och sökvägen är det
  * enda som gör felet felsökbart — och körningen går vidare.
  *
+ * Varje rad låses och läses om under låset innan disken rörs (kravet står i
+ * StoreAttachment): chunkens WHERE gäller bara vid SELECT-tillfället, och en
+ * uppladdning som hinner öka `reference_count` mellan SELECT och unlink ska
+ * lämna raden orörd — annars ärver jobbet en tyst dataförlust där bilagan
+ * pekar på byten som inte längre finns.
+ *
  * All filhantering går genom `Storage::disk('files')` (Beslut 6), aldrig
  * `unlink()` eller absolut sökväg. Tomma prefixkataloger städas inte
  * (Beslut 7). Schemaläggs i routes/console.php med `Schedule::call`, aldrig
@@ -53,15 +60,35 @@ class PurgesExpiredStoredFiles
             ->chunkById(100, function ($filer) use (&$borttagna): void {
                 foreach ($filer as $fil) {
                     try {
-                        // Bytena först (Beslut 2). Disken 'files' har
-                        // `throw => true`, så en fil som inte kan raderas
-                        // kastar; en fil som redan är borta är en no-op och
-                        // ingen felsignal.
-                        Storage::disk('files')->delete($fil->storage_path);
+                        DB::transaction(function () use ($fil, &$borttagna): void {
+                            // Radlåset hålls ÖVER byteraderingen, och villkoren
+                            // läses om under låset — se StoreAttachment, som
+                            // ställer kravet i klartext. En rad som fått en ny
+                            // referens mellan chunkens SELECT och nu ska lämnas
+                            // orörd; $fil i chunkens ställe är en inaktuell
+                            // modellinstans och får aldrig avgöra.
+                            $låst = StoredFile::query()->whereKey($fil->getKey())->lockForUpdate()->first();
 
-                        if ($fil->delete()) {
-                            $borttagna++;
-                        }
+                            if ($låst === null
+                                || $låst->reference_count !== 0
+                                || $låst->purge_after === null
+                                || $låst->purge_after->isFuture()) {
+                                return;
+                            }
+
+                            // Bytena först (Beslut 2). Disken 'files' har
+                            // `throw => true`, så en fil som inte kan raderas
+                            // kastar; en fil som redan är borta är en no-op och
+                            // ingen felsignal. Kastar filraderingen rullas
+                            // transaktionen tillbaka och raden ligger kvar för
+                            // nästa körning. Låset över disk-I/O är kortvarigt —
+                            // ett unlink, inte en skrivning på upp till 64 MiB.
+                            Storage::disk('files')->delete($låst->storage_path);
+
+                            if ($låst->delete()) {
+                                $borttagna++;
+                            }
+                        });
                     } catch (Throwable $e) {
                         Log::error('Kunde inte fysiskt radera stored_file', [
                             'content_hash' => $fil->content_hash,

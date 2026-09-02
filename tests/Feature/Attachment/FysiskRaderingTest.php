@@ -4,6 +4,7 @@ use App\Console\PurgesExpiredStoredFiles;
 use App\Models\StoredFile;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -103,6 +104,34 @@ it('en fil med referenser rörs aldrig ens om purge_after passerat', function ()
     (new PurgesExpiredStoredFiles)->handle();
 
     expect(StoredFile::query()->whereKey($fil->id)->exists())->toBeTrue();
+    expect(Storage::disk('files')->exists($fil->storage_path))->toBeTrue();
+});
+
+it('en rad som fått en ny referens efter markeringen rörs inte', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    $fil = fysiskRaderingGallringsbarFil('2026-09-01 12:00:00');
+    fysiskRaderingSkapaByten($fil);
+
+    // Reproducerar fönstret mellan jobbets SELECT och radens byteradering:
+    // en uppladdning hinner öka räknaren och nollställa markeringen efter
+    // att chunken har läst raden men innan jobbet rör disken. DB::listen är
+    // den enda krok som når in där i ett synkront test — den kör
+    // uppladdningen i samma ögonblick chunk-frågan är tillbaka, medan
+    // jobbets modellinstans fortfarande är inaktuell (reference_count = 0).
+    // Utan omläsningen under radlåset skulle jobbet radera bytena under
+    // fötterna på den nya bilagan.
+    $applicerad = false;
+    DB::listen(function ($query) use ($fil, &$applicerad): void {
+        if ($applicerad || ! str_starts_with(ltrim($query->sql), 'select')) {
+            return;
+        }
+
+        $applicerad = true;
+        StoredFile::query()->whereKey($fil->id)
+            ->update(['reference_count' => 1, 'purge_after' => null]);
+    });
+
+    expect((new PurgesExpiredStoredFiles)->handle())->toBe(0);
     expect(Storage::disk('files')->exists($fil->storage_path))->toBeTrue();
 });
 
