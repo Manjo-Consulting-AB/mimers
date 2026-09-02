@@ -27,6 +27,9 @@ WORKTREE_BASE = os.path.join(REPO_ROOT, ".claude", "worktrees")
 LOCK_PATH = os.path.join(REPO_ROOT, ".claude", "process-next-issue.lock")
 GH_REPO = "Manjo-Consulting-AB/mimers"
 
+# Kortaste granskningsutlåtande som får bära ett godkännande. Se run_review().
+MIN_GRANSKNINGSTEXT = 400
+
 # =====================================================================
 # KONFIGURATION & HJÄLPFUNKTIONER
 # =====================================================================
@@ -144,6 +147,47 @@ def call_claude_direct(model, prompt, cwd):
     return result.stdout
 
 
+def bygg_granskningsprompt(issue_body, diff, uppfoljning=False):
+    """Granskningsprompten: issuen och diffen, inte diffen ensam.
+
+    Fram till 2026-09-02 fick granskaren bara `gh pr diff`. Den kunde därför
+    varken pricka av issuens "Klart när"-punkter - alltså definitionen av att
+    inget missats - eller veta vad omfångsrutan tillät. Följden syntes i M2:
+    fyra av åtta filer utanför rutan beställdes av granskningen själv (fynd 8-9
+    på PR #104, fynd 2 på #109, fynd 5 på #111). Fynden var sakligt riktiga och
+    ändå regelbrott, för granskaren kunde inte se rutan.
+
+    `uppfoljning` styr slutvarvet efter en åtgärdsloop: samma underlag, men
+    uttryckligen en ny granskning i stället för en efterlevnadskontroll.
+    """
+    inledning = (
+        "Du gör en avslutande granskning av en PR vars tidigare fynd ska vara åtgärdade. "
+        "Det här är INTE en avprickning av att fynden är fixade - det är en ny granskning "
+        "av hela lösningen som den ser ut nu. Åtgärderna kan ha infört något nytt."
+        if uppfoljning else
+        "Gör en noggrann säkerhets- och arkitekturgranskning av lösningen nedan."
+    )
+    return (
+        f"{inledning}\n\n"
+        f"=== ISSUEN, som är kontraktet ===\n{issue_body}\n\n"
+        f"=== HELA DIFFEN ===\n{diff}\n\n"
+        f"=== SÅ HÄR GRANSKAR DU ===\n"
+        f"1. Gå igenom issuens 'Klart när'-punkter en och en och peka ut vilket "
+        f"namngivet test som bevisar var och en. En punkt utan test är ett fynd - "
+        f"det är den enda kontrollen av att inget missats.\n"
+        f"2. Kontrollera att issuens numrerade beslut faktiskt följs, och att varje "
+        f"avvikelse är motiverad i PR-kroppen.\n"
+        f"3. Håll dig till issuens omfångsruta. Ligger en ändrad fil utanför 'In scope' "
+        f"är det ett fynd. Beställ ALDRIG en ändring i en fil som ligger utanför rutan - "
+        f"be i så fall om att den bryts ut till en egen issue. Rutan kontrolleras även "
+        f"maskinellt av .github/scripts/omfangsruta.py, så en sådan beställning gör bara "
+        f"PR:en röd.\n"
+        f"4. Sedan det vanliga: säkerhet, samtidighet, felhantering, datamodell.\n\n"
+        f"Har du fynd, skriv dem som en numrerad lista - konkret nog att en annan "
+        f"implementerare kan åtgärda dem utan att fråga dig något mer."
+    )
+
+
 def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, findings):
     """
     DeepSeek åtgärdar `findings` (Opus ursprungliga fynd, eller en tidigare
@@ -191,11 +235,18 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         run_cmd(["git", "commit", "-m", f"Åtgärda granskningsfynd, varv {round_num}"], cwd=worktree_path)
         run_cmd(["git", "push", "origin", branch_name], cwd=worktree_path)
 
+        # Slutvarvet är en ny granskning, inte en efterlevnadskontroll. Tidigare
+        # fick Sonnet bara fynden plus diffen och frågan "är samtliga fynd
+        # åtgärdade?" - en åtgärd som löste fyndet och bröt något annat gick då
+        # igenom, eftersom ingen tittade på det andra. Sonnet får nu hela issuen
+        # och hela den slutliga diffen, och får uttryckligen resa nya fynd.
         new_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
         check_prompt = (
-            f"Här är de fynd som skulle åtgärdas:\n{findings}\n\n"
-            f"Här är den uppdaterade diffen:\n\n{new_diff}\n\n"
-            f"Är samtliga fynd åtgärdade?"
+            f"{bygg_granskningsprompt(issue_body, new_diff, uppfoljning=True)}\n\n"
+            f"=== FYND SOM SKULLE ÅTGÄRDAS I DET HÄR VARVET ===\n{findings}\n\n"
+            f"Börja med att avgöra om vart och ett av dem är löst. Fortsätt sedan med "
+            f"den nya granskningen enligt punkterna ovan - godkänn bara om båda delarna "
+            f"är rena."
         )
         approved, sonnet_check = run_review("sonnet", check_prompt, pr_number, worktree_path)
         run_cmd(["gh", "pr", "comment", pr_number, "--body",
@@ -254,6 +305,25 @@ def run_review(model, review_prompt, pr_number, worktree_path):
 
     pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"], cwd=REPO_ROOT).stdout)
     approved = any(label["name"] == "review:approved" for label in pr["labels"])
+
+    # En granskning utan text är tappad, inte kortfattad. `--output-format text`
+    # sparar bara sista textturen, så ett verktygsanrop efter analysen åt upp
+    # den: Opus granskning av PR #113 blev raden "review:approved satt på #113."
+    # och ingenting mer. Etiketten satt, alltså mergades PR:en - på ett
+    # granskningsutlåtande som inte längre fanns. Att etiketten är kvar men
+    # texten borta är exakt det fallet ett tomt svar inte får godkänna.
+    if approved and len(review_text.strip()) < MIN_GRANSKNINGSTEXT:
+        notera = (
+            f"Granskningen godkände men lämnade bara {len(review_text.strip())} tecken text "
+            f"(minst {MIN_GRANSKNINGSTEXT} krävs). Utlåtandet är tappat, inte kort - "
+            f"godkännandet räknas inte."
+        )
+        print(f"!! {notera}")
+        run_cmd(["gh", "api", "--method", "DELETE",
+                 f"repos/{GH_REPO}/issues/{pr_number}/labels/review:approved"],
+                check=False, cwd=REPO_ROOT)
+        return False, f"{review_text}\n\n_{notera}_"
+
     return approved, review_text
 
 
@@ -320,6 +390,50 @@ def bygg_pr_kropp(issue_num, agent_summary):
         print(f"!! PR-kroppen saknar {len(saknade)} obligatorisk(a) rubrik(er): {', '.join(saknade)}")
 
     return "\n\n".join(delar)
+
+
+INGA_FRAGOR = {"inga", "inga.", "inget", "inget.", "nej", "nej.", "-", "n/a"}
+
+
+def oppna_fragor(pr_body):
+    """Texten under '## Frågor och antaganden', om den inte är ett tomt svar.
+
+    Fältet finns för att en implementerare som inte hittar svaret ska fråga i
+    stället för att gissa i koden - men i M2 läste ingen det. PR #108 skrev
+    "uteslut det från PR:en eller ta ställning separat" om en fil utanför
+    omfångsrutan och mergades tretton sekunder senare, eftersom
+    `risk_class: none` gick raka vägen till automatisk merge. AGENTS.md §
+    Omfångsrutan säger "stanna och fråga i PR:en", och en bana som mergar innan
+    någon kan svara gör den regeln omöjlig att följa.
+
+    Returnerar frågetexten (sanningsvärde True) eller "" när den är tom. Saknas
+    rubriken helt blockerar den inget - bygg_pr_kropp() skriver alltid ut den, så
+    det fallet är en handskriven PR, och de mergar Tony ändå.
+    """
+    m = re.search(r"^##\s*Frågor och antaganden\s*$(.*?)(?=^##\s|\Z)",
+                  pr_body or "", re.MULTILINE | re.DOTALL)
+    if not m:
+        return ""
+    text = m.group(1).strip()
+    # Kursiv markering från bygg_pr_kropp() betyder att modellen inte skrev
+    # avsnittet alls - det är inte samma sak som "Inga.", och ska stanna PR:en.
+    if not text:
+        return ""
+    return "" if text.strip("*_ ").lower() in INGA_FRAGOR else text
+
+
+def eskalera(issue_num, pr_number, worktree_path, branch_name, skal, exit_code=1):
+    """Lämna över till Tony: etikett, pushover, städa worktreen, avsluta.
+
+    Samlad på ett ställe därför att varje utgång ur granskningen måste göra
+    exakt de fyra sakerna. PR #104 mergades i M2 utan `review:approved` för att
+    en av vägarna ut inte gjorde dem.
+    """
+    run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
+             cwd=REPO_ROOT)
+    send_pushover(f"🚨 Issue #{issue_num}: {skal} PR #{pr_number} kräver dig.")
+    cleanup_worktree(worktree_path, branch_name)
+    sys.exit(exit_code)
 
 
 def setup_worktree(branch_name):
@@ -615,43 +729,59 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     pr_number = pr_url.rstrip("/").split("/")[-1]
 
     # -----------------------------------------------------------------
-    # REVIEW: HIGH RISK (Opus 5 + Manuell Merge)
+    # GRANSKNING: varje PR får en läsare. Axeln väljer djup och modell.
     # -----------------------------------------------------------------
-    if risk_class == "high":
-        print("--> HIGH RISK: Genererar Opus 5 review...")
-        pr_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
+    # Fram till 2026-09-02 gick risk_class: low rakt till automatisk merge utan
+    # att någon läste diffen - PR #108 mergades 13 sekunder efter att den
+    # öppnades, PR #112 efter 5, och #108 bar då både en fil utanför
+    # omfångsrutan och en uttrycklig fråga i sin egen kropp. ADR-0026 säger att
+    # en bred elevated-bucket ska kosta en djupare läsning, inte avgöra om det
+    # finns en läsare. En Sonnet-läsning ovanpå en issue som kostat 0,50 USD är
+    # brus i den summan; den ogranskade banan kostade oss mer än så.
+    granskare = "opus" if risk_class == "high" else "sonnet"
+    modellnamn = "Opus 5" if granskare == "opus" else "Sonnet 5"
+    print(f"--> risk_class: {risk_class} - granskas av {modellnamn}...")
 
-        opus_prompt = (
-            f"Gör en noggrann säkerhets- och arkitekturgranskning av denna diff:\n\n{pr_diff}\n\n"
-            f"Om du har fynd, skriv dem som en numrerad lista - konkret nog att en annan "
-            f"implementerare kan åtgärda dem utan att fråga dig något mer."
+    pr_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
+    godkand, granskning = run_review(
+        granskare, bygg_granskningsprompt(issue_body, pr_diff), pr_number, worktree_path
+    )
+    run_cmd(["gh", "pr", "comment", pr_number, "--body",
+              f"### {modellnamn} Granskningsanalys\n{granskning}"], cwd=REPO_ROOT)
+
+    godkand_direkt = godkand
+    if not godkand:
+        print(f"--> {modellnamn} hittade fynd - startar åtgärdsloop (DeepSeek + Sonnet, max 3 varv)...")
+        godkand, granskning = run_findings_fix_loop(
+            issue_body, pr_number, branch_name, worktree_path, granskning
         )
-        resolved, opus_review = run_review("opus", opus_prompt, pr_number, worktree_path)
-        run_cmd(["gh", "pr", "comment", pr_number, "--body", f"### Opus 5 Granskningsanalys\n{opus_review}"], cwd=REPO_ROOT)
+        if not godkand:
+            eskalera(
+                issue_num, pr_number, worktree_path, branch_name,
+                f"Fynd kvarstår efter åtgärdsloopen ({modellnamn} + tre varv).",
+            )
 
-        opus_approved_directly = resolved
-        findings = opus_review
+    godkand_av = f"{modellnamn} direkt" if godkand_direkt else "Sonnet 5, efter åtgärdsvarv"
 
-        # Opus fynd -> DeepSeek åtgärdar, Sonnet verifierar per varv (max 3).
-        # Sonnets APPROVE är slutgiltigt - ingen ny Opus-omgång efteråt. Sonnet
-        # kollar bara "gjorde agenten det som listades", inte en ny öppen
-        # granskning; det är Opus initiala fynd som är den bärande kontrollen,
-        # Sonnet verifierar bara efterlevnaden av dem.
-        if not resolved:
-            print("--> Opus hittade fynd - startar åtgärdsloop (DeepSeek + Sonnet-verifiering, max 3 varv)...")
-            resolved, findings = run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, findings)
+    # -----------------------------------------------------------------
+    # MERGE
+    # -----------------------------------------------------------------
+    # En obesvarad fråga i PR-kroppen stoppar den automatiska banan, oavsett
+    # axel. AGENTS.md § Omfångsrutan säger "stanna och fråga i PR:en", och en
+    # bana som mergar innan någon kan svara gör den regeln omöjlig att följa.
+    fragor = oppna_fragor(pr_body)
+    if fragor:
+        run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                  "### Obesvarad fråga\nPR-kroppens `## Frågor och antaganden` är inte tom, "
+                  "så den här PR:en mergas inte automatiskt. Svara i tråden och merga för hand."],
+                 cwd=REPO_ROOT)
+        eskalera(
+            issue_num, pr_number, worktree_path, branch_name,
+            f"Godkänd av {godkand_av}, men PR-kroppen har en obesvarad fråga.",
+            exit_code=0,
+        )
 
-            if not resolved:
-                run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
-                         cwd=REPO_ROOT)
-                send_pushover(
-                    f"🚨 Issue #{issue_num}: Opus fynd kvarstår efter åtgärdsloopen. "
-                    f"PR #{pr_number} kräver manuell granskning."
-                )
-                cleanup_worktree(worktree_path, branch_name)
-                sys.exit(1)
-
-        godkand_av = "Opus 5 direkt" if opus_approved_directly else "Sonnet 5, efter att Opus fynd åtgärdats"
+    if risk_class == "high":
         run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
                  cwd=REPO_ROOT)
         send_pushover(
@@ -661,54 +791,23 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         cleanup_worktree(worktree_path, branch_name)
         sys.exit(0)
 
-    # -----------------------------------------------------------------
-    # REVIEW: MEDIUM RISK (Sonnet 5 Review, mergar på APPROVE)
-    # -----------------------------------------------------------------
-    elif risk_class == "medium":
-        print("--> MEDIUM RISK: Verifierar med Sonnet 5...")
-        pr_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
-
-        review_prompt = f"Granska följande PR-diff för säkerhet och fel:\n{pr_diff}"
-        approved, review_result = run_review("sonnet", review_prompt, pr_number, worktree_path)
-
-        if approved:
-            if wait_for_checks(pr_number):
-                run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
-                send_pushover(f"✅ Issue #{issue_num} ('{issue_title}') verifierad av Sonnet 5 och mergad, PR #{pr_number}!")
-            else:
-                run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                          "### CI rött efter godkännande\nSonnet 5 godkände PR:en, men CI blev inte grönt. Mergar inte automatiskt."],
-                         cwd=REPO_ROOT)
-                run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
-                         cwd=REPO_ROOT)
-                send_pushover(f"🚨 PR #{pr_number} för Issue #{issue_num} godkändes av Sonnet men CI blev rött. Kräver granskning.")
-                cleanup_worktree(worktree_path, branch_name)
-                sys.exit(1)
-        else:
-            run_cmd(["gh", "pr", "comment", pr_number, "--body", f"### Sonnet 5 Underkände PR\n{review_result}"], cwd=REPO_ROOT)
-            run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
-                     cwd=REPO_ROOT)
-            send_pushover(f"🚨 Sonnet 5 underkände PR #{pr_number} för Issue #{issue_num}. Kräver granskning.")
-            cleanup_worktree(worktree_path, branch_name)
-            sys.exit(1)
-
-    # -----------------------------------------------------------------
-    # REVIEW: LOW RISK (Automatisk Merge)
-    # -----------------------------------------------------------------
+    # medium och low mergas automatiskt - men först när varje check är grön,
+    # och en av dem är nu granskning.yml, som är röd utan review:approved.
+    print("--> Väntar in CI innan automatisk merge...")
+    if wait_for_checks(pr_number):
+        run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
+        send_pushover(
+            f"✅ Issue #{issue_num} ('{issue_title}') godkänd av {godkand_av} och mergad, PR #{pr_number}!"
+        )
     else:
-        print("--> risk_class: low - Väntar in CI innan automatisk merge...")
-        if wait_for_checks(pr_number):
-            run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
-            send_pushover(f"✅ Issue #{issue_num} ('{issue_title}') löst och mergad, PR #{pr_number}!")
-        else:
-            run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                      "### CI rött\nrisk_class: low skulle mergas automatiskt, men CI blev inte grönt. Mergar inte."],
-                     cwd=REPO_ROOT)
-            run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
-                     cwd=REPO_ROOT)
-            send_pushover(f"🚨 PR #{pr_number} för Issue #{issue_num} (risk_class: low) fick rött CI. Kräver granskning.")
-            cleanup_worktree(worktree_path, branch_name)
-            sys.exit(1)
+        run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                  "### CI rött efter godkännande\nGranskningen godkände PR:en, men CI blev inte "
+                  "grönt. Mergar inte automatiskt."],
+                 cwd=REPO_ROOT)
+        eskalera(
+            issue_num, pr_number, worktree_path, branch_name,
+            f"Godkänd av {godkand_av} men CI blev rött.",
+        )
 
     cleanup_worktree(worktree_path, branch_name)
 
@@ -728,11 +827,13 @@ def find_pr_context(pr_number):
 
     issue = json.loads(run_cmd(["gh", "issue", "view", issue_num, "--json", "title,body"], cwd=REPO_ROOT).stdout)
 
-    opus_comments = [c["body"] for c in pr["comments"] if c["body"].startswith("### Opus 5 Granskningsanalys")]
-    if not opus_comments:
-        raise Exception(f"Hittade ingen 'Opus 5 Granskningsanalys'-kommentar på PR #{pr_number} att återuppta från.")
+    # Granskningen kan vara Opus eller Sonnet sedan alla PR:er får en läsare -
+    # leta på den gemensamma delen av rubriken, inte på modellnamnet.
+    granskningar = [c["body"] for c in pr["comments"] if "Granskningsanalys" in c["body"].splitlines()[0]]
+    if not granskningar:
+        raise Exception(f"Hittade ingen granskningskommentar på PR #{pr_number} att återuppta från.")
 
-    return issue_num, issue["title"], issue["body"], branch_name, opus_comments[-1]
+    return issue_num, issue["title"], issue["body"], branch_name, granskningar[-1]
 
 
 def resume_pr(pr_number):
