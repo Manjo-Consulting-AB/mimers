@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AttachmentDownloadController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\MagicLinkLoginController;
@@ -90,3 +91,17 @@ Route::middleware('auth')->group(function () {
     Route::post('/totp/recovery-codes', [RecoveryCodeController::class, 'store'])
         ->name('totp.recovery-codes.store');
 });
+
+/*
+ * Issue 19a · Nedladdning av bilagor, se
+ * App\Http\Controllers\AttachmentDownloadController och [[ADR-0019
+ * Filleverans]]. En rutt på appdomänen utanför /api (Beslut 1) — den klickas
+ * i en webbläsare, behöver sessionen och lämnar inga JSON-fel. Guarden är
+ * auth:sanctum (Beslut 2): samma rutt autentiserar en inloggad webbsession
+ * och en Authorization: Bearer-token, så en kommande mobilapp får inte en
+ * andra väg till samma bytes. `{attachment}` binds på bilagans ULID via
+ * #[RouteKey('ulid')] — ingen nästling under container och item.
+ */
+Route::get('/files/{attachment}', AttachmentDownloadController::class)
+    ->middleware('auth:sanctum')
+    ->name('files.download');

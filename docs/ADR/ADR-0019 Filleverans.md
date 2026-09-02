@@ -81,6 +81,28 @@ Hela mekanismen fungerar alltså end-to-end, med attrappkod och utan hjälp frå
 
 Kvar att verifiera står bara det som kräver en riktig miljö: att `deploy.sh` faktiskt sätter symlänken och `.htaccess` på filsubdomänen vid utrullning. Testet i issue 19 måste därför köras mot en utrullad miljö, inte mot en handbyggd katalog.
 
+## Uppföljning 2026-08-31 — leveransen på appdomänen tills vidare
+
+**Leveransen ligger på appdomänen, inte på `files.mimers.app`, tills vidare.** Nedladdningsrutten `GET /files/{attachment}` (issue 19a) svarar på appdomänen, och `X-LiteSpeed-Location: /_protected/…` löses därmed mot **appens** webbrot — i produktion `~/mimers/current/public/` — inte mot filsubdomänens katalogträd i § Beslut ovan. Koden följer den här uppföljningen, inte trädet: appen sätter alltid `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` och `Content-Type` explicit, så en uppladdad SVG- eller HTML-fil kan inte köra skript i appens domän. Den risk som kravet på egen origin var till för att neutralisera är alltså redan avstängd av svarsheadern.
+
+**Varför appdomänen duger tills vidare:** egen origin skyddar mot att uppladdade filer kör skript i appens domän — och det skyddet uppnås här av `attachment` + `nosniff` i stället för av en annan origin. Egen origin blir nödvändig först när filer ska visas **inline** i webben, och det är issue 61. Att leverera från appdomänen nu innebär inte heller något nytt att verifiera: symlänkstestet 2026-08-23 i § Verifierat på servern kördes redan mot `mimers.app` med en symlänk under appens webbrot.
+
+**Kompenserande krav, bindande så länge leveransen ligger på appdomänen:**
+
+- **Varje leverans är `Content-Disposition: attachment`, utan undantag.** Ingen typbaserad gren och ingen `?inline=1` — inte ens för bilder. Inline-visning är issue 61 och kräver den ADR-revidering som gör egen origin till villkor.
+- **`X-Content-Type-Options: nosniff` på varje svar**, tillsammans med en explicit `Content-Type` — LiteSpeed sätter inte typen efter innehållet vid intern omdirigering, se § Verifierat på servern.
+- **Samma `.htaccess`-regel på `%{ORG_REQ_URI}` som ovan.** Att katalogen ligger under appens webbrot i stället för filsubdomänens ändrar inte skyddet — regeln skiljer direktanrop från intern omdirigering oavsett vilken vhost som bär katalogen.
+
+**Webbroten 19b ska symlänka `_protected` i är appens, inte filsubdomänens `public_html`.** `deploy.sh` (19b) lägger symlänken och `.htaccess` i den nya releasen:
+
+```
+$DIR/public/_protected  ->  $APP/shared/storage/files
+```
+
+där `$APP` är `~/mimers` i produktion och `~/mimers-staging` på staging, och `$DIR` är den nya releasekatalogen (`$APP/releases/<RELEASE>`). Appens webbrot `~/domains/mimers.app/public_html` är redan en symlänk till `$APP/current/public` (se [[Pipeline]] § Engångsuppsättning), så en symlänk inne i releasens `public/` är precis vad URI:n `/_protected/…` träffar. Eftersom `deploy.sh` packar upp en ny releasekatalog varje utrullning måste symlänken läggas i varje ny release, inte en gång. En symlänk i filsubdomänens `public_html` hade inte synts av appdomänens vhost, och rutten hade gett 404 i produktion.
+
+**Filsubdomänen finns kvar och är fortfarande slutdestinationen.** Sajterna `files.mimers.app` och `files.staging.mimers.app` är uppsatta sedan 2026-08-23 (§ Konsekvenser) och katalogträdet i § Beslut står sig den dag leveransen flyttar dit — av issue 61 eller av annat skäl. Tills dess pekar trädet på fel webbrot för den kod som ligger i produktion.
+
 ## Alternativ
 
 **Hashen som sökväg utan rewrite-skydd.** LiteSpeeds egen förstahandsrekommendation. Valdes bort — hashen är härledbar och åtkomstkontrollen hade varit verkningslös.

@@ -32,4 +32,19 @@ return [
 
     'upload_rate_limit_per_minute' => (int) env('FILES_UPLOAD_RATE_LIMIT_PER_MINUTE', 60),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Intern omdirigering
+    |--------------------------------------------------------------------------
+    |
+    | True i staging och produktion (sätts i shared/.env): nedladdningsrouten
+    | svarar med X-LiteSpeed-Location och LiteSpeed levererar bytena med
+    | sendfile(), se [[ADR-0019 Filleverans]]. False lokalt och i testsviten:
+    | appen strömmar filen själv. Båda grenarna sätter samma headers — en
+    | miljöskillnad ska aldrig bli en säkerhetsskillnad (issue 19a § Beslut 6).
+    |
+    */
+
+    'internal_redirect' => (bool) env('FILES_INTERNAL_REDIRECT', false),
+
 ];
