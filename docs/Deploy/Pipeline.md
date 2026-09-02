@@ -413,6 +413,16 @@ ln -sfn "$APP/shared/.env" "$DIR/.env"
 rm -rf "$DIR/storage"
 ln -sfn "$APP/shared/storage" "$DIR/storage"
 
+# filleverans (issue 19b): bytena ligger i shared/storage/files, webbroten får
+# en _protected-symlänk in i dem. Länken läggs per release — en ny
+# releasekatalog har ingen — och före flippen av current nedan, så webbroten
+# pekar aldrig på en release utan skydd. .htaccess-regeln kopieras från repot
+# vid varje utrullning: en handpåläggning på servern skrivs över, och regeln
+# kan inte glida isär mellan miljöerna.
+mkdir -p "$APP/shared/storage/files"
+ln -sfn "$APP/shared/storage/files" "$DIR/public/_protected"
+cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess"
+
 cd "$DIR"
 php artisan config:cache
 php artisan route:cache
@@ -441,6 +451,41 @@ Ordningen är medveten:
 - **`down` körs på den gamla releasen.** Underhållsflaggan hamnar i `shared/storage` och gäller därför båda — det är just därför `storage` är delad.
 - **Migrationerna körs innan flippen**, medan ingen trafik finns. Med expand/contract tål den gamla koden det nya schemat, så ordningen är säker även om något går fel.
 - **`ln -sfn` är atomiskt.** Det finns inget ögonblick där `current` pekar på ingenting.
+
+## Filleverans
+
+Nedladdningsrutten i issue 19a svarar med `X-LiteSpeed-Location: /_protected/…`, och LiteSpeed levererar bytena med `sendfile()` — se [[ADR-0019 Filleverans]]. Katalogen som URI:n pekar på finns inte i repot; den läggs av `deploy.sh` i varje ny release:
+
+```
+$DIR/public/_protected                     →  $APP/shared/storage/files   symlänk
+$APP/shared/storage/files/.htaccess           från deploy/protected.htaccess
+```
+
+`public_html` är redan en symlänk till `current/public` (§ Engångsuppsättning), så webbroten får en pekare in i `shared/storage/files`, där bytena ligger kvar när releasen städas bort. Länken läggs före flippen av `current`; en ny releasekatalog har ingen `_protected`, och ett fönster där webbroten pekar på en release utan den vore en öppen katalog.
+
+`.htaccess`-regeln kopieras från `deploy/protected.htaccess` vid varje utrullning, av samma skäl som uppladdningsgränserna i `public/.htaccess`: den versioneras med koden och kan inte glida isär mellan miljöerna. En handpåläggning på servern skrivs över nästa gång — det är avsikten.
+
+Regeln nekar direkt åtkomst men tillåter intern omdirigering:
+
+```apache
+RewriteEngine On
+RewriteCond %{ORG_REQ_URI} ^/_protected/
+RewriteRule ^ - [F,L]
+
+Options -Indexes
+```
+
+`%{ORG_REQ_URI}` håller URI:n från det ursprungliga anropet och ändras inte av LiteSpeeds interna omdirigering: ett direkt anrop mot `/_protected/…` nekas, medan ett anrop mot `/files/{ulid}` behåller den sökvägen och passerar. Mönstret är `^`, inte `^_protected/` — i en `.htaccess` inuti katalogen har katalogprefixet redan avlägsnats, så den formen matchar aldrig. `Options -Indexes` är bältet utöver hängslet: skulle regeln sluta gälla ska en katalogförfrågan ändå inte räkna upp innehållet.
+
+`FILES_INTERNAL_REDIRECT=true` sätts av Tony i `shared/.env`, en gång per miljö — ingen kod sätter den. Utan den strömmar appen filerna genom PHP med samma headers: allting fungerar, och det enda som märks är att processpoolen tar slut den dag någon laddar ner mycket.
+
+Skyddet bevisas mot en utrullad miljö med `deploy/verifiera-filleverans.sh <bas-url> <ulid> <token>`, som gör tre anrop med `curl` och avslutar med kod 1 så fort något avviker:
+
+1. `GET /_protected/` → **403**
+2. `GET /_protected/ab/cd/<känd hash>` → **403**
+3. `GET /files/{ulid}` med `Authorization: Bearer <token>` → **200**, `Content-Disposition: attachment` och ett `Content-Type` som inte är `text/html`
+
+De två första anropen kräver ingen inloggning; det tredje behöver en bilaga som kontot får läsa och ett sanctum personal access token. Kört mot staging efter merge, med utdata klistrad i PR-tråden (issue 19b § Beslut 7).
 
 ## Rollback
 

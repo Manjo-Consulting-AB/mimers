@@ -21,6 +21,16 @@ ln -sfn "$APP/shared/.env" "$DIR/.env"
 rm -rf "$DIR/storage"
 ln -sfn "$APP/shared/storage" "$DIR/storage"
 
+# filleverans (issue 19b): bytena ligger i shared/storage/files, webbroten får
+# en _protected-symlänk in i dem. Länken läggs per release — en ny
+# releasekatalog har ingen — och före flippen av current nedan, så webbroten
+# pekar aldrig på en release utan skydd. .htaccess-regeln kopieras från repot
+# vid varje utrullning: en handpåläggning på servern skrivs över, och regeln
+# kan inte glida isär mellan miljöerna.
+mkdir -p "$APP/shared/storage/files"
+ln -sfn "$APP/shared/storage/files" "$DIR/public/_protected"
+cp "$DIR/deploy/protected.htaccess" "$APP/shared/storage/files/.htaccess"
+
 cd "$DIR"
 php artisan config:cache
 php artisan route:cache
