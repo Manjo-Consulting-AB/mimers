@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemSearchController;
 use App\Http\Controllers\Api\TagController;
+use App\Http\Controllers\Api\TrashController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -209,4 +210,18 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'index']);
     Route::post('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'store']);
     Route::delete('/containers/{container}/items/{item}/links/{other}', [ItemLinkController::class, 'destroy']);
+
+    // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
+    // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och
+    // App\Actions\Trash\RestoreContent. Två rutter, nästlade under
+    // {container} (issue 20a § Beslut 1): papperskorgen är EN lista, så en
+    // rutt per typ (/trash/items, /trash/tags, ...) vore fyra ytor med
+    // identisk logik. Grindarna är view() (GET) och update() (POST), båda
+    // befintliga i App\Policies\ContainerPolicy — ingen ny policymetod, ingen
+    // TrashPolicy. Restore-kroppen tar type+ulid; den enda ruttparametern är
+    // {container}, så scopeBindings() på gruppen ändrar ingenting här.
+    // Gallringen som tömmer papperskorgen är 20b; papperskorgen för raderade
+    // containers är 20c.
+    Route::get('/containers/{container}/trash', [TrashController::class, 'index']);
+    Route::post('/containers/{container}/trash/restore', [TrashController::class, 'restore']);
 });

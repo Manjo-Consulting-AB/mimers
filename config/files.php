@@ -47,4 +47,20 @@ return [
 
     'internal_redirect' => (bool) env('FILES_INTERNAL_REDIRECT', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Papperskorgens retention
+    |--------------------------------------------------------------------------
+    |
+    | Så länge mjukraderat innehåll ligger kvar innan gallringen (20b) tar
+    | bort det. Samma tal som fördröjningen innan filbytes raderas fysiskt,
+    | se [[ADR-0008 Soft delete och papperskorg]] § Retentionstiden i MVP —
+    | två tal att hålla isär blir ett tal som är fel. `expires_at` härleds ur
+    | `deleted_at` plus det här talet och lagras aldrig i en kolumn (issue
+    | 20a § Beslut 2).
+    |
+    */
+
+    'trash_retention_days' => (int) env('TRASH_RETENTION_DAYS', 30),
+
 ];
