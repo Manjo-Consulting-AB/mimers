@@ -8,9 +8,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Attachment\StoreAttachmentRequest;
 use App\Http\Resources\AttachmentResource;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 
@@ -20,8 +22,8 @@ use Illuminate\Support\Facades\Gate;
  * gruppens `scopeBindings()` — hela skyddet mot en item-ULID från en annan
  * container som löses upp här.
  *
- * Bara store() i den här issuen. Listning och radering av bilagor är 16b,
- * nedladdning 19a.
+ * store() är 16a:s POST-yta; index() och destroy() är 16b:s listning och
+ * mjukradering. Nedladdning av bytena är 19a.
  *
  * Samma två kontroller som App\Http\Controllers\Api\ItemController::store():
  * grinden är den befintliga `update` på App\Policies\ContainerPolicy
@@ -62,5 +64,53 @@ class AttachmentController extends Controller
         return (new AttachmentResource($attachment))
             ->response()
             ->setStatusCode(201);
+    }
+
+    /**
+     * GET /api/containers/{container}/items/{item}/attachments — 200.
+     * Itemets bilagor, nyast först: `created_at` fallande med `id` fallande
+     * som andrasortering, så två bilagor uppladdade samma sekund ändå får en
+     * stabil ordning (issue 16b § Beslut 3). Mjukraderade bilagor kommer
+     * aldrig med — SoftDeletes globala scope sköter det. Ingen paginering
+     * (Beslut 3).
+     *
+     * `storedFile` och `billedAccount` laddas eager eftersom
+     * AttachmentResource läser `mime_type`/`byte_size` respektive
+     * `billed_account` därifrån — listningen gör ett konstant antal frågor
+     * oavsett antalet bilagor (Beslut 5), aldrig en fråga per bilaga.
+     */
+    public function index(Container $container, Item $item): JsonResponse
+    {
+        Gate::authorize('view', $container);
+
+        $attachments = $item->attachments()
+            ->with(['storedFile', 'billedAccount'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return AttachmentResource::collection($attachments)->response();
+    }
+
+    /**
+     * DELETE /api/containers/{container}/items/{item}/attachments/{attachment}
+     * — 204, ingen kropp. Mjukradering och ingenting annat (issue 16b §
+     * Beslut 4): `delete()` sätter bara `deleted_at`. `stored_file`-
+     * `reference_count` minskas INTE och inga bytes rörs — minskningen sker
+     * först när bilagan lämnar papperskorgen, issue 17a
+     * ([[ADR-0008 Soft delete och papperskorg]]).
+     *
+     * `{attachment}` binds av gruppens scopeBindings() genom
+     * App\Models\Item::attachments() (§ Beslut 1), så en bilaga på ett annat
+     * item ger 404, och en redan mjukraderad bilaga syns inte av bindningen —
+     * 404 `resource.not_found`.
+     */
+    public function destroy(Container $container, Item $item, Attachment $attachment): Response
+    {
+        Gate::authorize('update', $container);
+
+        $attachment->delete();
+
+        return response()->noContent();
     }
 }
