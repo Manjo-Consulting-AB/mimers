@@ -21,9 +21,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * Alla kolumner är `#[Fillable]`: inget på den här tabellen sätts från en
  * klientbegäran (tabellen har ingen API-yta), alla värden kommer från
- * App\Actions\Attachment\StoreAttachment.
+ * App\Actions\Attachment\StoreAttachment. `purge_after` sätts av
+ * App\Actions\Attachment\PurgeAttachment när räknaren når noll (issue 17a).
  */
-#[Fillable(['content_hash', 'byte_size', 'mime_type', 'storage_path', 'reference_count', 'scan_status'])]
+#[Fillable(['content_hash', 'byte_size', 'mime_type', 'storage_path', 'reference_count', 'scan_status', 'purge_after'])]
 class StoredFile extends Model
 {
     /** @use HasFactory<StoredFileFactory> */
@@ -44,6 +45,7 @@ class StoredFile extends Model
         return [
             'byte_size' => 'integer',
             'reference_count' => 'integer',
+            'purge_after' => 'datetime',
         ];
     }
 

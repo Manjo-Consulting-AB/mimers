@@ -22,7 +22,10 @@ use RuntimeException;
  * inte databasen), sedan bytena till disken UTANFÖR transaktionen (disk-I/O
  * får aldrig hålla radlåset), och slutligen i en transaktion: lås befintlig
  * rad på hashen, öka dess `reference_count` om den finns, eller skapa raden
- * med `reference_count = 1`, och skapa attachment-raden.
+ * med `reference_count = 1`, och skapa attachment-raden. En befintlig rad
+ * som ökas får också `purge_after` nollställt i samma skrivning (issue 17a
+ * § Beslut 5) — annars skulle 17b radera bytena under fötterna på den nya
+ * bilagan 30 dagar efter att någon ANNAN användare gallrade sin.
  *
  * Unikhetsindexet på `content_hash` är sanningen — två samtidiga
  * uppladdningar av samma byten kan kollidera på det innan låset tas, och
@@ -104,14 +107,18 @@ class StoreAttachment
                     // committade — en vanlig consistent read kan under
                     // REPEATABLE READ läsa ur en förlegad snapshot och missa
                     // raden som uniknyckelbrottet just bevisade finns.
+                    // `purge_after` nollställs i samma skrivning, se Beslut 5.
                     $storedFile = StoredFile::where('content_hash', $hash)->lockForUpdate()->firstOrFail();
-                    $storedFile->increment('reference_count');
+                    $storedFile->increment('reference_count', 1, ['purge_after' => null]);
                 }
             } else {
                 // Increment är en SQL-operation, inte läs-ändra-skriv i PHP —
                 // samtidiga ökningar går förlorade om raden läses in och +1
-                // görs i minnet (§ Att se upp med).
-                $storedFile->increment('reference_count');
+                // görs i minnet (§ Att se upp med). `purge_after` nollställs i
+                // SAMMA skrivning: en gammal gallringsmarkering från en annan
+                // användares borttagna bilaga får inte överleva in i den nya
+                // bilagans livslängd (issue 17a § Beslut 5).
+                $storedFile->increment('reference_count', 1, ['purge_after' => null]);
             }
 
             $attachment = new Attachment;
