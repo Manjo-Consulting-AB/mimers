@@ -47,11 +47,21 @@ class ScheduleOccurrence extends Model
     protected $table = 'schedule_occurrence';
 
     /**
+     * De tre statusvärdena, var för sig — avslutsflödet (issue 22b) jämför
+     * och sätter dem och ska aldrig behöva stava strängarna.
+     */
+    public const STATUS_OPEN = 'open';
+
+    public const STATUS_COMPLETED = 'completed';
+
+    public const STATUS_SKIPPED = 'skipped';
+
+    /**
      * De giltiga värdena för `status`, se migrationens CHECK-villkor.
      *
      * @var list<string>
      */
-    public const STATUSES = ['open', 'completed', 'skipped'];
+    public const STATUSES = [self::STATUS_OPEN, self::STATUS_COMPLETED, self::STATUS_SKIPPED];
 
     /**
      * Get the attributes that should be cast.
