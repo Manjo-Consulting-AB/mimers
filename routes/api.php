@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemSearchController;
 use App\Http\Controllers\Api\ScheduleController;
+use App\Http\Controllers\Api\ScheduleOccurrenceController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TrashController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
@@ -222,12 +223,26 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // update() (POST/PATCH/DELETE), båda befintliga i
     // App\Policies\ContainerPolicy — ingen ny policymetod (§ Beslut 2).
     // Ingen show(): listan hämtar hela uppsättningen (§ Beslut 1).
-    // Förekomsterna (`schedule_occurrence`) är issue 22a/22b — ingenting
-    // här skapar en rad där.
+    // Ett schema som skapas aktivt öppnar sin första förekomst genom
+    // App\Actions\Schedule\OpenNextOccurrence (issue 22a) — men det är
+    // ACTIONEN som skapar raden i schedule_occurrence, aldrig en klient
+    // via den här rutten.
     Route::get('/containers/{container}/items/{item}/schedules', [ScheduleController::class, 'index']);
     Route::post('/containers/{container}/items/{item}/schedules', [ScheduleController::class, 'store']);
     Route::patch('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'destroy']);
+
+    // Issue 22a · Förekomsterna av ett schema — den öppna plus historiken,
+    // se App\Http\Controllers\Api\ScheduleOccurrenceController och
+    // App\Http\Resources\ScheduleOccurrenceResource. {schedule} binds av
+    // gruppens scopeBindings() genom App\Models\Item::schedules() precis som
+    // schemarutterna ovan — ett schema på ett annat item ger 404 (issue 22 §
+    // Beslut 1). Bara GET: en förekomst skapas aldrig av en klient, den enda
+    // vägen in är App\Actions\Schedule\OpenNextOccurrence. Grinden är den
+    // befintliga view() på App\Policies\ContainerPolicy — ingen ny
+    // policymetod. Todo-listan över containers (issue 24) lägger sin egen
+    // rutt här senare, aldrig i den här listningen.
+    Route::get('/containers/{container}/items/{item}/schedules/{schedule}/occurrences', [ScheduleOccurrenceController::class, 'index']);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och
