@@ -2,6 +2,7 @@
 
 namespace App\Actions\Attachment;
 
+use App\Jobs\GenerateImageDerivatives;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Item;
@@ -95,7 +96,16 @@ class StoreAttachment
             Storage::disk('files')->putFileAs(dirname($storagePath), $file, basename($storagePath));
         }
 
-        return DB::transaction(function () use ($item, $user, $account, $hash, $mimeType, $byteSize, $storagePath, $filename): Attachment {
+        // Fångas av stängningen via referens. Sätts bara i grenen där en NY
+        // stored_file skapades; se dispatchen efter transaktionen (Beslut 3).
+        $nyStoredFile = null;
+
+        $attachment = DB::transaction(function () use ($item, $user, $account, $hash, $mimeType, $byteSize, $storagePath, $filename, &$nyStoredFile): Attachment {
+            // Nollställs per försök: retryar DB::transaction hela stängningen
+            // (dödläge 40001) får inte en skapad stored_file från ett
+            // rullat tillbaka försök dispatchen — den raden finns inte.
+            $nyStoredFile = null;
+
             $storedFile = StoredFile::where('content_hash', $hash)->lockForUpdate()->first();
 
             if ($storedFile === null) {
@@ -108,6 +118,8 @@ class StoreAttachment
                         'reference_count' => 1,
                         'scan_status' => 'skipped',
                     ]);
+
+                    $nyStoredFile = $storedFile;
                 } catch (QueryException $e) {
                     // Uniknyckelbrott på content_hash: en samtidig
                     // uppladdning skapade raden mellan lockForUpdate-uppslaget
@@ -154,6 +166,18 @@ class StoreAttachment
 
             return $attachment;
         }, 3);
+
+        // Beslut 3: jobbet köas först efter att transaktionen committat — en
+        // arbetare som plockar jobbet innan raden finns skulle misslyckas —
+        // och bara i grenen där en NY stored_file skapades. En dedup-träff
+        // har redan sina derivat; att köa om dem är arbete som skriver samma
+        // filer igen. Andra villkoret: bara de tre MIME-typerna i Beslut 4
+        // kan få derivat — annars köas ingenting.
+        if ($nyStoredFile !== null && GenerateImageDerivatives::supportsMime($nyStoredFile->mime_type)) {
+            GenerateImageDerivatives::dispatch($nyStoredFile);
+        }
+
+        return $attachment;
     }
 
     /**
