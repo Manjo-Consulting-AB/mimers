@@ -86,15 +86,21 @@ class ContainerTrashController extends Controller
      *
      * RestoreContainerRequest har redan bevisat att ULID:en finns i
      * `container` och är mjukraderad — en levande container eller en okänd
-     * ULID är 422 `validation.failed` (Beslut 1). Grinden prövas på den
-     * mjukraderade instansen (Beslut 2): policyn läser `$container->account`,
-     * som inte är mjukraderad, så Gate::authorize('delete', ...) fungerar.
-     * Två vägar till 404 `resource.not_found` (Beslut 3, samma regel och
-     * samma skäl som 20a § Beslut 5): en ULID som inte längre finns bland de
-     * mjukraderade (redan purged), eller — efter att grinden godkänt — en
-     * container vars `deleted_at` passerat retentionen. Valideringen filtrerar
-     * inte på retention, så den utgångna containern hamnar här i stället för
-     * att bli ett 422-valideringsfel.
+     * ULID är 422 `validation.failed` (Beslut 1), och en gallrad container
+     * har ingen rad kvar, så också den faller i valideringen som 422 och
+     * når aldrig hit. Grinden prövas på den mjukraderade instansen (Beslut
+     * 2): policyn läser `$container->account`, som inte är mjukraderad, så
+     * Gate::authorize('delete', ...) fungerar.
+     *
+     * Den enda realistiska vägen till 404 `resource.not_found` (Beslut 3,
+     * samma regel och samma skäl som 20a § Beslut 5) är en container vars
+     * `deleted_at` passerat retentionen: valideringen filtrerar inte på
+     * retention, så den utgångna containern passerar den och avvisas här —
+     * efter att grinden godkänt — i stället för att bli ett
+     * 422-valideringsfel. `null`-grenen i uppslaget nedan är ingen av två
+     * normala vägar utan ett kapplöpningsskydd: den täcker bara att
+     * nattjobbet hunnit gallra containern mellan valideringens
+     * existensbevis och uppslaget här.
      *
      * Själva återställningen är `restore()` på EN rad (Beslut 4), ingen
      * kaskad och ingen genomgång av innehållet. Svaret bär posten med
