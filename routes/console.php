@@ -2,6 +2,7 @@
 
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PurgesExpiredStoredFiles;
+use App\Console\PurgesExpiredTrash;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -45,3 +46,23 @@ Schedule::call(fn () => app(PrunesExpiredMagicLinkTokens::class)->handle())
 Schedule::call(fn () => app(PurgesExpiredStoredFiles::class)->handle())
     ->daily()
     ->name('purge-expired-stored-files');
+
+/*
+ * Issue 20b · Gallringen av utgånget papperskorgsinnehåll: mjukraderade rader
+ * vars deleted_at passerat retentionen tas bort på riktigt — se
+ * App\Console\PurgesExpiredTrash, [[ADR-0008 Soft delete och papperskorg]] §
+ * Retentionstiden i MVP och config/files.php § trash_retention_days. Logiken
+ * bor i en vanlig klass, testad direkt i
+ * tests/Feature/Trash/GallringTest.php; det här är bara schemaläggningen.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan. Kör gärna i
+ * samma nattliga fönster som purge-expired-stored-files (17b), men det finns
+ * inget beroende mellan dem: bilagor som gallras i natt markerar bytes som
+ * får en egen 30-dagarsfrist ändå.
+ */
+Schedule::call(fn () => app(PurgesExpiredTrash::class)->handle())
+    ->daily()
+    ->name('purge-expired-trash');
