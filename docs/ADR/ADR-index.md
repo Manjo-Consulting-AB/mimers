@@ -1,6 +1,6 @@
 # ADR-index
 
-Tjugosex beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Tjugosju beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -32,6 +32,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0024 Tunna controllers och actions]] | Tunn controller, `Gate::authorize()`, Action när regeln är värd ett test | [[Backlog]] |
 | [[ADR-0025 Modellval efter riskaxlar]] | *Ersatt av ADR-0026.* Deepseek V4-Flash för låga axlar, Claude Sonnet för förhöjda | [[Backlog]] |
 | [[ADR-0026 Implementering och granskning efter riskaxlar]] | Deepseek implementerar allt, axlarna routar granskningen | [[Backlog]] |
+| [[ADR-0027 Agentisolering under utveckling]] | Ingen Docker per agent nu — worktrees + permissions-denylist räcker | Drift |
 
 ## Om att ändra ett beslut
 

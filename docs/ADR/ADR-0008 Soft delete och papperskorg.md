@@ -28,6 +28,19 @@ Fördröjningen innan bytes raderas fysiskt kostar nästan ingenting eftersom fi
 - `rsync --delete` får aldrig användas mot filbackupen — det propagerar en felaktig radering till backupen inom ett dygn.
 - Papperskorgens retention måste framgå av integritetspolicyn, eftersom raderad data lever kvar en tid.
 
+## Retentionstiden i MVP (2026-08-31)
+
+Beslutet ovan säger "papperskorg med retention" utan att sätta ett tal. Talet är **30 dagar**, räknat från `deleted_at`, och gäller allt användarskapat innehåll: container, item, attachment, category, tag, schedule.
+
+Samma tal som fördröjningen innan filbytes raderas fysiskt, och det är hela motiveringen: två tal att hålla isär blir ett tal som är fel. En användare som återställer på dag 29 får tillbaka både raden och filen, eftersom bytena tidigast kan gallras 30 dagar efter att referensräknaren nått noll — och räknaren minskas först när attachmenten lämnar papperskorgen.
+
+Konsekvenser:
+
+- **Papperskorgen exponerar återstående tid**, inte bara raderingsdatumet. Webbvyn (issue 62) visar den, och den räknas ut ur `deleted_at` plus retentionen — den lagras inte i en egen kolumn, som skulle kunna säga emot `deleted_at`.
+- **Gallringen är schemalagd, inte lat.** Ett innehåll som passerat retentionen får aldrig dyka upp i papperskorgen igen bara för att jobbet inte hunnit köra.
+- **Talet hör hemma i integritetspolicyn**, enligt konsekvenslistan ovan.
+- **Retentionen är inte en plangräns.** Free och Pro har samma 30 dagar. Skulle den någon gång skilja sig åt per plan är det en gräns i `plan.limits` och ett eget beslut.
+
 ## Alternativ
 
 **Hård radering med enbart backup som skydd.** Enklare frågor och mindre databas. Valdes bort — återläsning från backup för att rädda ett enskilt item är opraktiskt, och felet upptäcks ofta för sent.
