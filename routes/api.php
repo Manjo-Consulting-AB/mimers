@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemSearchController;
 use App\Http\Controllers\Api\ScheduleController;
+use App\Http\Controllers\Api\ScheduleDependencyController;
 use App\Http\Controllers\Api\ScheduleOccurrenceController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TrashController;
@@ -258,6 +259,23 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // som nya rutter här.
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete', [ScheduleOccurrenceController::class, 'complete']);
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip', [ScheduleOccurrenceController::class, 'skip']);
+
+    // Issue 23a · Beroenden mellan scheman — regeln "impellern kan inte bytas
+    // innan motorn är servad", se App\Http\Controllers\Api\ScheduleDependencyController
+    // och App\Actions\Schedule\DependSchedule. {schedule} är alltid den
+    // BEROENDE sidan, den som väntar, och binds av gruppens scopeBindings()
+    // genom App\Models\Item::schedules() precis som schemarutterna ovan
+    // (issue 23 § Beslut 3). {other} binds INTE — motparten slås upp inom
+    // containern i destroy(), precis som ItemLinkController (issue 14 §
+    // Beslut 7). Grindarna är view() (GET) och update() (POST/DELETE), båda
+    // befintliga i App\Policies\ContainerPolicy — ingen ny policymetod.
+    // GET listar det här schemats beroenden (vad det väntar på), inte vad som
+    // väntar på det (§ Beslut 3). Arvet till förekomsterna och spärren i
+    // avslutsflödet är issue 23b, todo-listans filtrering issue 24 —
+    // ingendera här.
+    Route::get('/containers/{container}/items/{item}/schedules/{schedule}/dependencies', [ScheduleDependencyController::class, 'index']);
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/dependencies', [ScheduleDependencyController::class, 'store']);
+    Route::delete('/containers/{container}/items/{item}/schedules/{schedule}/dependencies/{other}', [ScheduleDependencyController::class, 'destroy']);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och

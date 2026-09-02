@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -128,5 +129,37 @@ class Schedule extends Model
     public function openOccurrence(): HasOne
     {
         return $this->hasOne(ScheduleOccurrence::class)->where('status', 'open');
+    }
+
+    /**
+     * Scheman det här schemat BEROR PÅ — de som måste vara avklarade innan
+     * det här kan göras, se [[Scheman och uppgifter]] § occurrence_dependency
+     * och issue 23. Riktningen är den lagrade: raden i `schedule_dependency`
+     * har `schedule_id` = det här schemat och `depends_on_schedule_id` =
+     * motparten (§ Beslut 2). Mjukraderade motparter filtreras bort av
+     * SoftDeletes globala scope genom relationen.
+     *
+     * Relationen läggs här för 23b (arvet till förekomsterna) och 24
+     * (filtreringen); 23a bygger tabellen, ytan och cykelkontrollen och
+     * läser raderna direkt via App\Models\ScheduleDependency.
+     *
+     * @return BelongsToMany<Schedule, $this>
+     */
+    public function dependsOn(): BelongsToMany
+    {
+        return $this->belongsToMany(Schedule::class, 'schedule_dependency', 'schedule_id', 'depends_on_schedule_id');
+    }
+
+    /**
+     * Scheman som BEROR PÅ det här schemat — omvänt mot dependsOn(). Arvet i
+     * 23b och todo-filtreringen i 24 behöver båda riktningarna: "vad väntar
+     * på det här schemat?". Själva cykelkontrollen i 23a läser raderna direkt
+     * via App\Models\ScheduleDependency och använder inte de här relationerna.
+     *
+     * @return BelongsToMany<Schedule, $this>
+     */
+    public function dependents(): BelongsToMany
+    {
+        return $this->belongsToMany(Schedule::class, 'schedule_dependency', 'depends_on_schedule_id', 'schedule_id');
     }
 }
