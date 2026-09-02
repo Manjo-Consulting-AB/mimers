@@ -183,6 +183,9 @@ it('ett schema i en annan container avvisas', function () {
     $response->assertStatus(422);
     expect($response->json('error.code'))->toBe('validation.failed');
     expect($response->json('error.data.fields.depends_on'))->not->toBeNull();
+    // Beslut 4: alla tre lägena — finns inte, mjukraderad, annan container —
+    // ger validation.exists. Uppfinn ingen ny sub-kod.
+    expect($response->json('error.data.fields.depends_on.0.code'))->toBe('validation.exists');
     expect(DB::table('schedule_dependency')->count())->toBe(0);
 });
 
@@ -197,9 +200,12 @@ it('ett dubblerat beroende avvisas', function () {
     $igen = postJson(beroendeUrl($container, $item, $a), ['depends_on' => $b->ulid], $headers);
 
     // Beslut 9: ett dubblerat beroende är ett valideringsfel, inte en tyst
-    // no-op och inte en 201 som låtsas ha skapat något.
+    // no-op och inte en 201 som låtsas ha skapat något. Fältet som får felet
+    // är det klienten skickade, och koden är validation.unique — exakt vad
+    // Rule::unique hade gett, men utan att requesten skriver om ULID:en.
     $igen->assertStatus(422);
     expect($igen->json('error.code'))->toBe('validation.failed');
+    expect($igen->json('error.data.fields.depends_on.0.code'))->toBe('validation.unique');
     expect(DB::table('schedule_dependency')->count())->toBe(1);
 });
 
@@ -236,7 +242,13 @@ it('ett mjukraderat schemas beroende syns inte i listan och räknas inte i cykel
     $lista = getJson(beroendeUrl($container, $impeller, $byt), $headers);
     $lista->assertOk();
     expect($lista->json('data'))->toBe([]);
-    expect(DB::table('schedule_dependency')->count())->toBe(1);
+
+    // Raden ligger kvar i tabellen — återställs motorn blir beroendet synligt
+    // igen (Beslut 7).
+    expect(DB::table('schedule_dependency')
+        ->where('schedule_id', $byt->id)
+        ->where('depends_on_schedule_id', $serva->id)
+        ->exists())->toBeTrue();
 
     // Cykelkontrollen: en kedja P → Q → R där mitten mjukraderas. Med Q
     // levande skulle R → P sluta ringen; med Q borta räknas inte kanterna
@@ -253,7 +265,16 @@ it('ett mjukraderat schemas beroende syns inte i listan och räknas inte i cykel
     $accepterat = postJson(beroendeUrl($container, $motor, $r), ['depends_on' => $p->ulid], $headers);
     $accepterat->assertCreated();
 
-    // Bara den nya kanten lades till utöver de tre rader som redan låg kvar.
+    // Bara den nya kanten lades till utöver de tre rader som redan låg kvar —
+    // också kanterna genom Q ligger kvar, osynliga tills Q återställs.
+    expect(DB::table('schedule_dependency')
+        ->where('schedule_id', $p->id)
+        ->where('depends_on_schedule_id', $q->id)
+        ->exists())->toBeTrue();
+    expect(DB::table('schedule_dependency')
+        ->where('schedule_id', $q->id)
+        ->where('depends_on_schedule_id', $r->id)
+        ->exists())->toBeTrue();
     expect(DB::table('schedule_dependency')->count())->toBe(4);
 });
 

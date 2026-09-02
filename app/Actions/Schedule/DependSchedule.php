@@ -23,14 +23,14 @@ use App\Models\ScheduleDependency;
  * Riktningen är `$schedule` beror på `$other` (§ Beslut 2): raden skrivs med
  * `schedule_id` = $schedule och `depends_on_schedule_id` = $other.
  *
- * Cykelkontrollen hämtar containerns kanter i EN fråga och vandrar i PHP,
- * samma teknik och samma skäl som issue 11 § Beslut 8 och 14 § Beslut 6 —
- * `WITH RECURSIVE` finns inte i sqlite på det sätt testsviten skulle behöva,
- * och grafen är liten per definition (§ Beslut 6). Grafen är riktad och
- * acyklisk, inte ett träd: ett schema kan ha flera beroenden och flera
- * beroende, så vandringen följer ALLA kanter, aldrig bara den första.
- * Mjukraderade scheman räknas inte (§ Beslut 7): en kant med en mjukraderad
- * ände är osynlig tills schemat återställs.
+ * Cykelkontrollen läser containerns levande scheman och kanter i ett konstant
+ * antal frågor och vandrar i PHP, samma teknik och samma skäl som issue 11 §
+ * Beslut 8 och 14 § Beslut 6 — `WITH RECURSIVE` finns inte i sqlite på det
+ * sätt testsviten skulle behöva, och grafen är liten per definition (§ Beslut
+ * 6). Grafen är riktad och acyklisk, inte ett träd: ett schema kan ha flera
+ * beroenden och flera beroende, så vandringen följer ALLA kanter, aldrig bara
+ * den första. Mjukraderade scheman räknas inte (§ Beslut 7): en kant med en
+ * mjukraderad ände är osynlig tills schemat återställs.
  *
  * Raderingen bär ingen regel och bor i kontrollern (§ Beslut 7).
  */
@@ -85,27 +85,38 @@ class DependSchedule
     }
 
     /**
-     * Hämtar containerns `schedule_dependency`-kanter i EN fråga och bygger en
+     * Hämtar containerns `schedule_dependency`-kanter och bygger en
      * uppslagstabell i minnet: schema-id → lista av de scheman det beror på.
-     * Kopplar mot `item` på den beroende sidan för att begränsa till
-     * containern (invarianterna håller båda ändarna i samma container, så en
-     * sida räcker — samma resonemang som issue 14 § Beslut 6).
      *
-     * Endast kanter där BÅDA ändarna är levande scheman räknas (§ Beslut 7):
-     * schemat joins i två alias och `deleted_at` måste vara null på båda.
+     * Endast kanter där BÅDA ändarna är levande scheman i containern räknas
+     * (§ Beslut 7): först läses containerns levande scheman — scheman vars
+     * item ligger i containern och inte är mjukraderat — i EN fråga, sedan
+     * begränsas kanterna i EN fråga till par där båda id:na finns i den
+     * mängden. Ett mjukraderat schema (eller ett schema under ett mjukraderat
+     * item) har inga kanter, så raderna ligger kvar i tabellen men är
+     * osynliga tills schemat återställs.
+     *
+     * Frågeantalet är konstant — två frågor oavsett antalet scheman eller
+     * beroenden (§ Beslut 6).
      *
      * @return array<int, list<int>>
      */
     private function loadEdges(int $containerId): array
     {
+        $liveScheduleIds = Schedule::query()
+            ->whereIn('item_id', function ($query) use ($containerId) {
+                $query
+                    ->select('id')
+                    ->from('item')
+                    ->where('container_id', $containerId)
+                    ->whereNull('deleted_at');
+            })
+            ->pluck('id');
+
         $rows = ScheduleDependency::query()
-            ->join('schedule as dependent', 'dependent.id', '=', 'schedule_dependency.schedule_id')
-            ->join('item', 'item.id', '=', 'dependent.item_id')
-            ->where('item.container_id', $containerId)
-            ->whereNull('dependent.deleted_at')
-            ->join('schedule as antecedent', 'antecedent.id', '=', 'schedule_dependency.depends_on_schedule_id')
-            ->whereNull('antecedent.deleted_at')
-            ->get(['schedule_dependency.schedule_id', 'schedule_dependency.depends_on_schedule_id']);
+            ->whereIn('schedule_id', $liveScheduleIds)
+            ->whereIn('depends_on_schedule_id', $liveScheduleIds)
+            ->get(['schedule_id', 'depends_on_schedule_id']);
 
         $edges = [];
 

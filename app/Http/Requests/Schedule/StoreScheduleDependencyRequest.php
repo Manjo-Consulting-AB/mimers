@@ -2,10 +2,11 @@
 
 namespace App\Http\Requests\Schedule;
 
-use App\Models\Item;
 use App\Models\Schedule;
+use App\Models\ScheduleDependency;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * POST /api/containers/{container}/items/{item}/schedules/{schedule}/dependencies,
@@ -14,23 +15,21 @@ use Illuminate\Validation\Rule;
  * Beslut 4): två beroenden är två anrop, för en lista kräver ett svar på vad
  * som händer om den tredje bildar en cykel men de två första inte gör det.
  *
- * `depends_on`-ULID:en måste finnas i DEN container rutten redan bär och får
- * inte vara mjukraderad — en ULID som finns men hör till en annan container
- * är ett VALIDERINGSFEL (422 `validation.failed`), inte en 404 och inte ett
- * behörighetsfel, samma gränsdragning som issue 13a § Beslut 7 och 14 §
- * Beslut 7.
+ * `depends_on` förblir klientens ULID genom hela valideringen — fältets värde
+ * skrivs aldrig om. Existensen och containern prövas med `Rule::exists` mot
+ * `schedule.ulid`, begränsad i EN underfråga till containerns levande items:
+ * en ULID som inte finns, är mjukraderad eller hör till en annan container är
+ * ett VALIDERINGSFEL (422 `validation.failed` med `validation.exists` på
+ * `depends_on`), inte en 404 och inte ett tyst "hittade inget" — samma
+ * gränsdragning som issue 13a § Beslut 7 och 14 § Beslut 7.
  *
- * `prepareForValidation()` löser ULID:en till schemats löpnummer INNAN
- * reglerna prövas — Rule::unique jämför fältets värde mot en kolumn, och
- * kolumnen `depends_on_schedule_id` är ett löpnummer, inte en ULID. Fältet
- * bär därför schemats id internt; svaret och felhöljet exponerar det aldrig.
- * En ULID som inte finns (eller är mjukraderad) blir null och fäller
- * `required`.
- *
- * Dubbletten (samma par en gång till) är ett VALIDERINGSFEL (§ Beslut 9):
- * `Rule::unique` på paret, inte en tyst no-op och inte en 201 som låtsas ha
- * skapat något. Det unika indexet i migrationen ligger kvar som sista
- * skyddsnät.
+ * Dubbletten (samma par en gång till) är ett VALIDERINGSFEL (§ Beslut 9), inte
+ * en tyst no-op och inte en 201 som låtsas ha skapat något. Den avvisas i
+ * `withValidator()` genom att slå upp motpartens id och lägga felet på
+ * `depends_on` med regelnamnet `Unique`, så höljet blir identiskt med
+ * `Rule::unique` — `validation.unique` på fältet klienten skickade. Uppslaget
+ * kostar ett konstant antal frågor och påverkar inte Beslut 6:s kriterium. Det
+ * unika indexet i migrationen ligger kvar som sista skyddsnät.
  *
  * Att `depends_on` inte är schemat självt (dependency_self) och att ingen
  * cykel uppstår (dependency_cycle) prövas i App\Actions\Schedule\DependSchedule,
@@ -46,52 +45,62 @@ class StoreScheduleDependencyRequest extends FormRequest
     }
 
     /**
-     * Löser `depends_on`-ULID:en till schemats löpnummer, se klassdocblocket.
-     * Sökningen går genom Schedule-modellen, så SoftDeletes globala scope
-     * filtrerar redan bort mjukraderade scheman.
-     */
-    protected function prepareForValidation(): void
-    {
-        $dependsOn = $this->input('depends_on');
-
-        if ($dependsOn === null) {
-            return;
-        }
-
-        if (! is_string($dependsOn)) {
-            // En ULID är en sträng — ett heltal eller en array i kroppen är
-            // alltid fel. Null gör att `required` fäller.
-            $this->merge(['depends_on' => null]);
-
-            return;
-        }
-
-        $this->merge([
-            'depends_on' => Schedule::query()->where('ulid', $dependsOn)->value('id'),
-        ]);
-    }
-
-    /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
-        $container = $this->route('container');
-        $schedule = $this->route('schedule');
-
         return [
             'depends_on' => [
                 'required',
-                'integer',
-                Rule::exists('schedule', 'id')->where(
-                    fn ($query) => $query
+                'string',
+                Rule::exists('schedule', 'ulid')->where(function ($query) {
+                    $query
                         ->whereNull('deleted_at')
-                        ->whereIn('item_id', Item::query()->select('id')->where('container_id', $container->id))
-                ),
-                Rule::unique('schedule_dependency', 'depends_on_schedule_id')->where(
-                    fn ($query) => $query->where('schedule_id', $schedule->id)
-                ),
+                        ->whereIn('item_id', function ($subQuery) {
+                            $subQuery
+                                ->select('id')
+                                ->from('item')
+                                ->where('container_id', $this->route('container')->id)
+                                ->whereNull('deleted_at');
+                        });
+                }),
             ],
         ];
+    }
+
+    /**
+     * Dubblettkontrollen (§ Beslut 9) behöver paret (det här schemat, den
+     * tilltänkta motpartens id), så den kan inte uttryckas som en fristående
+     * fältregel över ULID:en — den läggs i `after()` och slår upp id:t där.
+     *
+     * Hoppar över sig själv om `depends_on` redan fällts av `Rule::exists`
+     * (fältet är ogiltigt, ingen mening att lägga ett andra fel ovanpå) eller
+     * om värdet inte är en uppslagbar ULID.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            $schedule = $this->route('schedule');
+            $dependsOn = $this->input('depends_on');
+
+            if (! is_string($dependsOn) || $dependsOn === '' || $validator->errors()->has('depends_on')) {
+                return;
+            }
+
+            $other = Schedule::query()->where('ulid', $dependsOn)->first();
+
+            if ($other === null || $other->is($schedule)) {
+                return;
+            }
+
+            $alreadyDependsOn = ScheduleDependency::query()
+                ->where('schedule_id', $schedule->id)
+                ->where('depends_on_schedule_id', $other->id)
+                ->exists();
+
+            if ($alreadyDependsOn) {
+                $validator->addFailure('depends_on', 'Unique');
+            }
+        });
     }
 }

@@ -101,12 +101,12 @@ class ScheduleDependencyController extends Controller
     {
         Gate::authorize('update', $container);
 
-        // `validated('depends_on')` är schemats löpnummer —
-        // StoreScheduleDependencyRequest översatte ULID:en i
-        // prepareForValidation() så Rule::unique kunde pröva paret.
+        // `validated('depends_on')` är fortfarande klientens ULID —
+        // StoreScheduleDependencyRequest lämnar fältets värde orört och låter
+        // Rule::exists mot schedule.ulid göra existens- och containerkontrollen.
         $other = Schedule::query()
             ->whereHas('item', fn ($query) => $query->where('container_id', $container->id))
-            ->where('id', $request->validated('depends_on'))
+            ->where('ulid', $request->validated('depends_on'))
             ->with('item:id,ulid,name')
             ->firstOrFail();
 
