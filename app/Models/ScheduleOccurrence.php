@@ -6,10 +6,12 @@ use App\Models\Concerns\HasUlid;
 use Database\Factories\ScheduleOccurrenceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Carbon;
 
 /**
  * Den ENSKILDA GÅNGEN av ett schema — se [[Scheman och uppgifter]] §
@@ -143,5 +145,57 @@ class ScheduleOccurrence extends Model
     public function dependents(): BelongsToMany
     {
         return $this->belongsToMany(ScheduleOccurrence::class, 'occurrence_dependency', 'depends_on_occurrence_id', 'occurrence_id');
+    }
+
+    /**
+     * Begränsar till de förekomster som hör hemma i todo-listan (issue 24) —
+     * dokumentets fyra villkor plus de som följer av att raden hänger under
+     * något ([[Scheman och uppgifter]] § Todo-listan, issue 24 § Beslut 3):
+     *
+     * - `status = 'open'`
+     * - `visible_from <= idag`. `whereDate()`, aldrig en rå kolumnjämförelse:
+     *   i sqlite lagras DATE-kolumner med en tidskomponent, och ett datum
+     *   ska inte bero på klockslaget när frågan körs (issue 24 § Att se upp
+     *   med).
+     * - containern är åtkomlig för användaren. Villkoret ligger på
+     *   Container-modellen (`scopeAccessibleBy`) och appliceras som `whereHas`
+     *   genom relationskedjan förekomst → schema → item → container — aldrig
+     *   som en `whereIn('container_id', ...)`-lista, se samma resonemang som
+     *   App\Http\Controllers\Api\ItemSearchController. SoftDeletes' globala
+     *   scope gäller automatiskt i underfrågorna, så ett mjukraderat schema,
+     *   item eller container faller ut här. `is_active` har inget globalt
+     *   scope utan skrivs ut explicit: ett pausat schema behåller sin öppna
+     *   förekomst (22a § Beslut 3), och den ska inte synas i listan.
+     * - inga öppna beroenden — samma villkor som spärren i 23b § Beslut 4.
+     *   En förekomst vars motpart har status `open` går inte att stänga och
+     *   ska inte stå bland det man kan göra nu. Ett öppet beroende vars
+     *   motpart ligger under ett mjukraderat schema eller item räknas inte:
+     *   motparten "existerar inte" där, i GET-listan eller i cykelkontrollen
+     *   (23b § Att se upp med). Villkoret är en enda `whereDoesntHave`-
+     *   underfråga, aldrig en fråga per rad (Beslut 4).
+     *
+     * @param  Builder<ScheduleOccurrence>  $query
+     * @param  list<int>  $accountIds  löpnumren för kontona $user är medlem i
+     * @return Builder<ScheduleOccurrence>
+     */
+    public function scopeTodoFor(Builder $query, User $user, array $accountIds): Builder
+    {
+        return $query
+            ->where('status', self::STATUS_OPEN)
+            ->whereDate('visible_from', '<=', Carbon::today())
+            ->whereHas('schedule', function (Builder $query) use ($user, $accountIds): void {
+                $query->where('schedule.is_active', true)
+                    ->whereHas('item', function (Builder $query) use ($user, $accountIds): void {
+                        $query->whereHas('container', function (Builder $query) use ($user, $accountIds): void {
+                            /** @var Builder<Container> $query */
+                            $query->accessibleBy($user, $accountIds);
+                        });
+                    });
+            })
+            ->whereDoesntHave('dependsOn', function (Builder $query): void {
+                $query
+                    ->where('status', self::STATUS_OPEN)
+                    ->whereHas('schedule.item');
+            });
     }
 }
