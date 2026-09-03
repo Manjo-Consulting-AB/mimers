@@ -7,6 +7,7 @@ use App\Models\Account;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -15,8 +16,12 @@ use RuntimeException;
  * Dokumentets fem steg ([[Scheman och uppgifter]] § Flödet när en uppgift
  * markeras klar) körs i EN transaktion, i den ordningen:
  *
- * 1. Beroendekontroll — issue 23b. Byggs på exakt den platsen i handle()
- *    nedan; den här issuen lämnar den tom men orörd.
+ * 1. Beroendekontroll — issue 23b § Beslut 4: har förekomsten ÖPPNA
+ *    beroenden (motpartens status är `open`) nekas stängningen med
+ *    `occurrence.blocked`, och `blocked_by` listar vartenda ett — inte bara
+ *    det första, annars bockar användaren av ett, får samma fel igen och lär
+ *    sig att systemet ljuger om vad som återstår. Kontrollen gäller BÅDA
+ *    rutterna: `skip` är också en stängning.
  * 2. Raden stängs: status, `completed_at`, `completed_by_user_id`,
  *    `completed_by_account_id`, ev. `completion_note`.
  * 3. Nästa `due_at` räknas — av App\Actions\Schedule\OpenNextOccurrence,
@@ -85,9 +90,53 @@ class CloseOccurrence
                 throw ApiException::make('schedule.inactive', [], 422);
             }
 
-            // Steg 1 — Beroendekontroll (issue 23b). `occurrence_dependency`
-            // finns inte ännu; kontrollen byggs av 23b på exakt den här
-            // platsen, först i flödet och efter att schemat låsts.
+            // Steg 1 — Beroendekontroll (issue 23b). En förekomst med ÖPPNA
+            // beroenden kan inte stängas (Beslut 4), och `skip` går genom
+            // samma spärr som `complete` — en uppgift som inte får göras än
+            // får inte heller hoppas över, annars är spärren en formalitet man
+            // klickar sig förbi. Kontrollen ligger först i flödet, innan
+            // någonting skrivs, och räknas i EN fråga oavsett antalet
+            // beroenden (§ Att se upp med). Ett beroende är uppfyllt så snart
+            // motparten inte längre är `open` (Beslut 5), så listan är
+            // blockerarna med motpartens status `open`.
+            //
+            // Ett beroende vars motpart ligger under ett MJUKRADERAT schema
+            // eller item existerar inte — varken här, i GET eller i
+            // cykelkontrollen (granskningen av 23b, samma regel som 23a §
+            // Beslut 7). Utan villkoret blir B blockerad av en förekomst som
+            // aldrig stängs — schemaradering stänger inga förekomster (22a) —
+            // och som användaren varken kan se eller göra något åt: osynligt
+            // trasigt. Raden ligger kvar i tabellen som historik (Beslut 5);
+            // den räknas bara inte längre. PAUSADE scheman är motsatsen: de
+            // ska blockera, för paus är reversibelt och synligt.
+            $blockedBy = DB::table('occurrence_dependency')
+                ->join('schedule_occurrence as blocker', 'blocker.id', '=', 'occurrence_dependency.depends_on_occurrence_id')
+                ->join('schedule', 'schedule.id', '=', 'blocker.schedule_id')
+                ->join('item', 'item.id', '=', 'schedule.item_id')
+                ->where('occurrence_dependency.occurrence_id', $aktuell->id)
+                ->where('blocker.status', ScheduleOccurrence::STATUS_OPEN)
+                ->whereNull('schedule.deleted_at')
+                ->whereNull('item.deleted_at')
+                ->orderBy('blocker.due_at')
+                // ULID:en som andra nyckel: två blockerare med samma due_at
+                // ska inte byta plats mellan körningar.
+                ->orderBy('blocker.ulid')
+                ->get(['blocker.ulid', 'blocker.due_at', 'schedule.title'])
+                ->map(fn ($rad): array => [
+                    'ulid' => $rad->ulid,
+                    'title' => $rad->title,
+                    // Query builder-formaterar inte DATE-kolumnen som Eloquent
+                    // gör — rakt ur sqlite är värdet "2027-05-05 00:00:00".
+                    // En Eloquent-relation med date-cast vore renare, men
+                    // spärren måste läsas på EN fråga och en relation med
+                    // eager loads är fler; utdata är identisk (granskningen).
+                    'due_at' => Carbon::parse($rad->due_at)->toDateString(),
+                ])
+                ->all();
+
+            if ($blockedBy !== []) {
+                throw ApiException::make('occurrence.blocked', ['blocked_by' => $blockedBy], 422);
+            }
 
             // Steg 2 — stäng raden.
             $aktuell->status = $status;

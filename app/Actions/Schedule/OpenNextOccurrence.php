@@ -2,7 +2,9 @@
 
 namespace App\Actions\Schedule;
 
+use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
+use App\Models\ScheduleDependency;
 use App\Models\ScheduleOccurrence;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -60,8 +62,58 @@ class OpenNextOccurrence
             $occurrence->status = 'open';
             $occurrence->save();
 
+            // Arvet från schemanivån (23b § Beslut 2), i SAMMA transaktion som
+            // förekomsten skapas: för varje schema den nya förekomstens schema
+            // beror på, koppla den till motpartens NUVARANDE öppna förekomst.
+            // Arvet är en engångshändelse vid skapandet — ett schemaberoende
+            // som läggs till senare rör den redan öppna förekomsten inte.
+            //
+            // Ordningen är den som gör arvet tryggt: anropas det här inifrån
+            // CloseOccurrence har den stängda förekomsten redan skrivits (steg
+            // 2 i flödet) INNAN den här Actionen körs (steg 4) — en läsning av
+            // motpartens status här ser alltså aldrig en rad som håller på att
+            // stängas i samma transaktion (23b § Att se upp med).
+            $this->inheritScheduleDependencies($låst, $occurrence);
+
             return $occurrence;
         });
+    }
+
+    /**
+     * Ärver schemanivåns beroenden till en NY förekomst (23b § Beslut 2):
+     * schemats `schedule_dependency`-rader säger vilka scheman det här
+     * schemat väntar på; var och en av dem kopplas till motpartens NUVARANDE
+     * öppna förekomst — i en fråga, aldrig en per beroende.
+     *
+     * Har motparten ingen öppen förekomst skrivs ingen rad. Ett mjukraderat
+     * eller pausat schema räknas inte ens om dess öppna rad ligger kvar: en
+     * beroenderad mot något som aldrig kommer att stängas är en uppgift
+     * användaren aldrig kan bocka av, och ett beroende som inte kan uppfyllas
+     * är värre än inget beroende (Beslut 2). Mjukraderade scheman faller ut
+     * genom SoftDeletes globala scope på `schedule`-relationen.
+     */
+    private function inheritScheduleDependencies(Schedule $schedule, ScheduleOccurrence $occurrence): void
+    {
+        $dependedScheduleIds = ScheduleDependency::query()
+            ->where('schedule_id', $schedule->id)
+            ->pluck('depends_on_schedule_id');
+
+        if ($dependedScheduleIds->isEmpty()) {
+            return;
+        }
+
+        $openTargets = ScheduleOccurrence::query()
+            ->whereIn('schedule_id', $dependedScheduleIds)
+            ->where('status', ScheduleOccurrence::STATUS_OPEN)
+            ->whereHas('schedule', fn ($query) => $query->where('is_active', true))
+            ->get(['id']);
+
+        foreach ($openTargets as $target) {
+            $dependency = new OccurrenceDependency;
+            $dependency->occurrence_id = $occurrence->id;
+            $dependency->depends_on_occurrence_id = $target->id;
+            $dependency->save();
+        }
     }
 
     /**
