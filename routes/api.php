@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemSearchController;
+use App\Http\Controllers\Api\OccurrenceDependencyController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ScheduleDependencyController;
 use App\Http\Controllers\Api\ScheduleOccurrenceController;
@@ -259,6 +260,23 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // som nya rutter här.
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete', [ScheduleOccurrenceController::class, 'complete']);
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip', [ScheduleOccurrenceController::class, 'skip']);
+
+    // Issue 23b · Beroenden mellan förekomster — "den här gången måste jag
+    // måla innan jag sjösätter", se App\Http\Controllers\Api\OccurrenceDependencyController
+    // och App\Actions\Schedule\DependOccurrence. {occurrence} är alltid den
+    // BEROENDE sidan, den som väntar, och binds av gruppens scopeBindings()
+    // genom App\Models\Schedule::occurrences() precis som förekomsterna ovan.
+    // {other} binds INTE — motparten slås upp inom containern i destroy(),
+    // precis som ScheduleDependencyController och ItemLinkController (issue 23a
+    // § Beslut 3). Grindarna är view() (GET) och update() (POST/DELETE), båda
+    // befintliga i App\Policies\ContainerPolicy — ingen ny policymetod.
+    // GET listar den här förekomstens beroenden (vad den väntar på), inte vad
+    // som väntar på den. Arvet från schemanivån sitter i
+    // App\Actions\Schedule\OpenNextOccurrence och spärren i avslutsflödet i
+    // App\Actions\Schedule\CloseOccurrence — ingendera är en rutt här.
+    Route::get('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies', [OccurrenceDependencyController::class, 'index']);
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies', [OccurrenceDependencyController::class, 'store']);
+    Route::delete('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies/{other}', [OccurrenceDependencyController::class, 'destroy']);
 
     // Issue 23a · Beroenden mellan scheman — regeln "impellern kan inte bytas
     // innan motorn är servad", se App\Http\Controllers\Api\ScheduleDependencyController

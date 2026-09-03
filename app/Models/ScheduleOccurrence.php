@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Den ENSKILDA GÅNGEN av ett schema — se [[Scheman och uppgifter]] §
@@ -115,5 +116,32 @@ class ScheduleOccurrence extends Model
     public function completedByAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'completed_by_account_id');
+    }
+
+    /**
+     * Förekomster den här förekomsten BEROR PÅ — de som måste vara stängda
+     * innan den här kan stängas, se [[Scheman och uppgifter]] §
+     * occurrence_dependency och issue 23b. Riktningen är den lagrade: raden
+     * i `occurrence_dependency` har `occurrence_id` = den här förekomsten
+     * och `depends_on_occurrence_id` = motparten (§ Beslut 1). Relationerna
+     * läggs här för 23b (spärren i avslutsflödet läser dem); själva
+     * cykelkontrollen i App\Actions\Schedule\DependOccurrence läser raderna
+     * direkt via App\Models\OccurrenceDependency.
+     *
+     * @return BelongsToMany<ScheduleOccurrence, $this>
+     */
+    public function dependsOn(): BelongsToMany
+    {
+        return $this->belongsToMany(ScheduleOccurrence::class, 'occurrence_dependency', 'occurrence_id', 'depends_on_occurrence_id');
+    }
+
+    /**
+     * Förekomster som BEROR PÅ den här förekomsten — omvänt mot dependsOn().
+     *
+     * @return BelongsToMany<ScheduleOccurrence, $this>
+     */
+    public function dependents(): BelongsToMany
+    {
+        return $this->belongsToMany(ScheduleOccurrence::class, 'occurrence_dependency', 'depends_on_occurrence_id', 'occurrence_id');
     }
 }
