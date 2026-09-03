@@ -166,7 +166,12 @@ class StoreAttachment
             // (logisk storlek, inte diskförbrukning). Ökningen måste ligga
             // inuti stängningen: DB::transaction retryar hela stängningen vid
             // dödläge, och en ökning utanför skulle räknas en gång per försök.
-            (new AdjustUsage)->handle($account->id, bytesDelta: $byteSize);
+            // Bytena läses ur $storedFile->byte_size — samma kolumn som
+            // sanningsfrågan i UsageCounter::calculateStorageBytes() summerar.
+            // UploadedFile::getSize() (int|false) är en annan källa och är
+            // dessutom inte det auktoritativa värdet i dedup-grenen
+            // (granskningsfynd 3).
+            (new AdjustUsage)->handle($account->id, bytesDelta: $storedFile->byte_size);
 
             // Resursen läser storedFile/billedAccount genom relationerna —
             // sätt dem direkt så inget oplanerat lazy-load sker.

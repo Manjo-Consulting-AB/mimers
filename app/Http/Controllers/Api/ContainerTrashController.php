@@ -109,7 +109,7 @@ class ContainerTrashController extends Controller
      * `deleted_at`/`expires_at` null — klienten kan ta bort den ur
      * papperskorgsvyn utan en ny hämtning.
      */
-    public function restore(RestoreContainerRequest $request): JsonResponse
+    public function restore(RestoreContainerRequest $request, AdjustUsage $adjustUsage): JsonResponse
     {
         $retentionDays = (int) config('files.trash_retention_days');
         $cutoff = now()->subDays($retentionDays);
@@ -128,16 +128,31 @@ class ContainerTrashController extends Controller
             throw ApiException::make('resource.not_found', [], 404);
         }
 
-        DB::transaction(function () use ($container): void {
+        DB::transaction(function () use ($container, $adjustUsage): void {
             // Återställningen och ökningen i en transaktion (issue 26a):
             // containern blir levande igen och kommer tillbaka i ägarkontots
-            // räknare. Bara när den faktiskt var mjukraderad — restore() på
-            // en levande container är en no-op och ska inte räknas två gånger.
-            $varMjukraderad = $container->trashed();
+            // räknare. Beslutet att öka grundas på radens tillstånd UNDER
+            // radlåset (granskningsfynd 1): två samtidiga återställningar av
+            // samma container skulle annars båda se en mjukraderad rad och öka
+            // räknaren två gånger. withTrashed — raden ligger i papperskorgen.
+            $rad = Container::withTrashed()
+                ->whereKey($container->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($rad === null) {
+                return;
+            }
+
+            $varMjukraderad = $rad->trashed();
+
+            // restore() på instansen även när en samtidig återställning redan
+            // hunnit först — en no-op i databasen som synkar instansens
+            // deleted_at, så svaret bär posten som levande.
             $container->restore();
 
             if ($varMjukraderad) {
-                (new AdjustUsage)->handle($container->account_id, containersDelta: 1);
+                $adjustUsage->handle($container->account_id, containersDelta: 1);
             }
         });
 

@@ -46,8 +46,17 @@ class PurgeAttachment
             // som ALDRIG mjukraderades, och för de raderna är det HÄR bytena
             // lämnar räkningen. withTrashed() eftersom bilagan ofta kommer
             // från papperskorgen.
+            //
+            // lockForUpdate — en current read. När actionen körs inifrån
+            // PurgeContent::item()/PurgeContainer ligger den i en redan öppen
+            // transaktion, och under REPEATABLE READ skulle en vanlig
+            // consistent read kunna läsa ur en snapshot som togs innan en
+            // användares mjukradering committades — då vore bilagan levande
+            // också för den här gallringen, och avdraget gjort en andra gång
+            // (granskningsfynd 1).
             $rad = Attachment::withTrashed()
                 ->whereKey($attachment->getKey())
+                ->lockForUpdate()
                 ->first();
 
             if ($rad === null) {

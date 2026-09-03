@@ -111,17 +111,31 @@ class AttachmentController extends Controller
      * item ger 404, och en redan mjukraderad bilaga syns inte av bindningen —
      * 404 `resource.not_found`.
      */
-    public function destroy(Container $container, Item $item, Attachment $attachment): Response
+    public function destroy(Container $container, Item $item, Attachment $attachment, AdjustUsage $adjustUsage): Response
     {
         Gate::authorize('update', $container);
 
         $byteSize = (int) $attachment->storedFile()->value('byte_size');
         $billedAccountId = $attachment->billed_account_id;
 
-        DB::transaction(function () use ($attachment, $billedAccountId, $byteSize): void {
+        DB::transaction(function () use ($attachment, $billedAccountId, $byteSize, $adjustUsage): void {
+            // Beslutet att minska grundas på radens tillstånd UNDER radlåset
+            // (granskningsfynd 1): två samtidiga DELETE på samma bilaga skulle
+            // annars båda se en levande rad och dra av bytena två gånger.
+            // lockForUpdate med SoftDeletes-scopet är en current read — är
+            // raden redan mjukraderad när låset tas finns inget att göra.
+            $levande = Attachment::query()
+                ->whereKey($attachment->getKey())
+                ->lockForUpdate()
+                ->exists();
+
+            if (! $levande) {
+                return;
+            }
+
             $attachment->delete();
 
-            (new AdjustUsage)->handle($billedAccountId, bytesDelta: -$byteSize);
+            $adjustUsage->handle($billedAccountId, bytesDelta: -$byteSize);
         });
 
         return response()->noContent();

@@ -76,14 +76,38 @@ class PurgeContainer
             // container som fortfarande var LEVANDE precis innan forceDelete.
             // Den vanliga vägen (mjukradering, 30 dagar, sedan gallring)
             // minskade redan räknaren vid mjukraderingen; ett andra avdrag
-            // vore dubbelräkning. `$raderade` skyddar mot att ett andra anrop
-            // med samma instans drar ifrån en gång till.
-            $varLevande = $container->deleted_at === null;
-            $accountId = $container->account_id;
+            // vore dubbelräkning.
+            //
+            // Radens tillstånd läses UNDER radlåset precis innan forceDelete
+            // (granskningsfynd 1): instansen laddades av anroparen helt
+            // utanför transaktionen, och en oskyddad `deleted_at`-avläsning kan
+            // vara förlegad och dubbelräkna under samtidighet.
+            $rad = Container::withTrashed()
+                ->whereKey($container->getKey())
+                ->lockForUpdate()
+                ->first();
 
-            $raderade = $container->forceDelete();
+            if ($rad === null) {
+                return;
+            }
 
-            if ($raderade > 0 && $varLevande) {
+            $varLevande = $rad->deleted_at === null;
+            $accountId = $rad->account_id;
+
+            // Byggarformen, inte Model::forceDelete, ger ANTALET raderade
+            // rader: Model::forceDelete returnerar bara sant för instansen
+            // (den fanns), oavsett om DELETE:en träffade något, och skyddar
+            // därför inte mot ett andra anrop som laddat om containern
+            // (granskningsfynd 2).
+            $raderade = Container::withTrashed()
+                ->whereKey($container->getKey())
+                ->forceDelete();
+
+            if ($raderade === 0) {
+                return;
+            }
+
+            if ($varLevande) {
                 (new AdjustUsage)->handle($accountId, containersDelta: -1);
             }
         });

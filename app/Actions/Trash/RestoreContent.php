@@ -68,8 +68,29 @@ class RestoreContent
             // Återställningen och en eventuell räknarökning i en transaktion
             // (issue 26a): en mjukraderad bilaga som blir levande igen kommer
             // tillbaka i kontots förbrukning, i samma transaktion som raden.
-            $varMjukraderad = $model->trashed();
+            //
+            // Beslutet att öka grundas på radens tillstånd UNDER radlåset, inte
+            // på instansen som kontrollern laddade före transaktionen: två
+            // samtidiga återställningar av samma rad skulle annars båda se
+            // `trashed()` och öka räknaren två gånger (granskningsfynd 1).
+            // newQueryWithoutScopes — instansen är mjukraderad — och
+            // lockForUpdate är en current read. Är raden redan borta (gallrad
+            // mellan kontrollerns uppslag och den här transaktionen) finns
+            // inget att återställa och ingen räknare att röra.
+            $rad = $model->newQueryWithoutScopes()
+                ->whereKey($model->getKey())
+                ->lockForUpdate()
+                ->first();
 
+            if ($rad === null) {
+                return;
+            }
+
+            $varMjukraderad = $rad->trashed();
+
+            // restore() körs på instansen även när en samtidig återställning
+            // redan hunnit först — den är då en no-op i databasen som bara
+            // synkar instansens deleted_at för den som anropar.
             $model->restore();
 
             if ($model instanceof Attachment && $varMjukraderad) {
