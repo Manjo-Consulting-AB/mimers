@@ -319,6 +319,29 @@ Poängen är att felet ska ha ett namn. Ett `mkdir -p` utan den kontrollen gör 
 
 Paketet skickas med `ssh` och `cat` i stället för `scp`, av ett besläktat skäl: `scp` går sedan OpenSSH 9 över SFTP, som inte har något skal bakom sig och därför varken expanderar `~` eller beter sig som raden efter. `ssh ... "cat > fil" < release.tar.gz` går genom samma skal som `bash -s`-raden. **Skriv inte tillbaka det till `scp`** utan att sätta `-O`.
 
+### Kör `ssh` med `-4`
+
+`mimers.app` och `staging.mimers.app` har **både** en A-post (`185.189.49.45`) och en AAAA-post (`2001:67c:750::30`). Utvecklings-VPS:en har ingen default-route för IPv6, och `ssh` provar AAAA först. Utan `-4` blir felet därför:
+
+```
+ssh: connect to host staging.mimers.app port 22: Network is unreachable
+```
+
+Det ser ut som att servern är nere. Den är det inte — routen saknas i andra änden av kabeln. Hela raden som fungerar:
+
+```bash
+ssh -4 -p 2020 -i ~/.ssh/<nyckel> s174280@prime5.inleed.net
+```
+
+Två saker som gör felet svårare än det borde vara:
+
+- **`curl` döljer det.** `curl https://staging.mimers.app/` faller tillbaka till A-posten och svarar 200. En grön `curl` bevisar alltså ingenting om huruvida `ssh` kommer fram.
+- **Port 22 timeoutar tyst.** SSH lyssnar på **2020**; ett anrop mot 22 hänger tills `ConnectTimeout` löper ut, vilket är ännu en förklädnad för samma "servern verkar nere".
+
+`DEPLOY_HOST` i utrullningen är värdnamnet, och GitHubs runners har IPv6 — därför har utrullningen aldrig sett det här. Felet finns bara på vägen in från VPS:en.
+
+Verifierat 2026-09-03, när staging skulle tas ur underhållsläge efter issue #136.
+
 ## Uppladdningsgränser
 
 Serverns standard är `upload_max_filesize = 2M` och `post_max_size = 8M`, vilket är meningslöst för en produkt som samlar manualer och kvitton. `php_value` i `.htaccess` slår igenom hos inleed — verifierat 2026-08-23 — och `public/.htaccess` följer med i artefakten. Gränserna bor därför **i repot**, inte som handpåläggning på servern:
