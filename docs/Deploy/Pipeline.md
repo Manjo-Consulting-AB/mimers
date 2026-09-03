@@ -25,11 +25,13 @@ gren "issue-11"
                         │              rullar ut på staging
                         │              artefakten sparas
                         │
-                   tagg vX.Y.Z + godkännande
+                   tagg vX.Y.Z vid stängd milstolpe
                         │
                    production.yml      hämtar SAMMA artefakt
                                        rullar ut i produktion
 ```
+
+Taggen sätts **en gång per stängd milstolpe**, inte när det råkar passa — se § Releaseritualen och [[ADR-0018 Utvecklingsprocess och deploy]] § Befordranstakt.
 
 ## Kataloglayout på servern
 
@@ -511,6 +513,59 @@ Att mäta att flippen faktiskt togs är knepigare än det låter: två releaser 
 
 **LiteSpeed följer den omflippade symlänken direkt**, utan omstart och utan cache-rensning. Det var den tysta risken: cachar webbservern den upplösta sökvägen ser en rollback ut att lyckas utan att ha bytt något.
 
+## Releaseritualen
+
+**En release per stängd milstolpe** — takten och skälet står i [[ADR-0018 Utvecklingsprocess och deploy]] § Befordranstakt. Här står bara handgreppen.
+
+Publiceringen är utrullningen: `production.yml` triggas på `release: published`, och produktionsmiljön har **inga protection rules** på nuvarande kontoplan. Det finns alltså inget godkännandesteg mellan `gh release create` och en flippad `current`. Bocka av listan före kommandot, inte efter.
+
+**1. Milstolpen är faktiskt stängd.** Inga öppna issues kvar i den, och den sista är mergad till `main`.
+
+```bash
+gh issue list --state open -L 100
+```
+
+**2. Staging är grön på den commit du tänker tagga.** Det är inte samma sak som att den senaste körningen är grön — en avbruten eller röd körning på just din commit betyder ingen artefakt att hämta.
+
+```bash
+SHA=$(git rev-parse origin/main)
+gh run list --workflow staging.yml -L 10 \
+  --json databaseId,headSha,conclusion \
+  -q "[.[] | select(.headSha==\"$SHA\" and .conclusion==\"success\")][0]"
+```
+
+**3. Artefakten finns kvar.** Retentionen är 90 dagar. Är den utgången finns ingenting att befordra — då får en tom commit till `main` bygga om, och taggen peka på den i stället.
+
+```bash
+gh api repos/:owner/:repo/actions/runs/RUN_ID/artifacts \
+  --jq '.artifacts[] | "\(.name) expired=\(.expired)"'
+```
+
+**4. Miljöskillnaderna är genomgångna.** Diffa `.env.example` mot förra taggen och kontrollera att varje ny nyckel antingen har rätt standardvärde i `config/` eller är satt i produktionens `shared/.env`. Det är den enda punkten i listan som inte går att verifiera från GitHub — `shared/.env` finns bara på servern.
+
+```bash
+git diff v0.1.0..origin/main -- .env.example
+```
+
+**5. Publicera.** Taggen skapas av `gh` på angiven commit; release notes grupperas per milstolpe.
+
+```bash
+gh release create v0.2.0 --target "$SHA" \
+  --title "v0.2.0 — M4 i produktion" --notes-file notes.md
+```
+
+**6. Följ utrullningen och verifiera.** Migrationerna körs av `deploy.sh` med underhållsläge runt sig; loggen är det enda stället de syns.
+
+```bash
+gh run list --workflow production.yml -L 1
+gh run view RUN_ID --log | grep -E "DONE|Utrullad|error"
+curl -sS -H "Accept: application/json" -w "\nHTTP %{http_code}\n" https://mimers.app/api/containers
+```
+
+Sista raden ska ge `401 auth.unauthenticated`, inte `404`. En `404` betyder att rutterna är gamla — `current` pekar på fel release, eller `route:cache` kördes mot en halv utrullning.
+
+Går något fel: se § Rollback, och kom ihåg att databasen inte följer med tillbaka.
+
 ## Branch protection
 
 **Medvetet uppskjuten 2026-08-23** — kontoplanen tillåter det inte, och Tony valde att inte uppgradera för det. Se § Kontoplanen tar bort tre av spärrarna och [[ADR-0018 Utvecklingsprocess och deploy]] § Spärrarna är uppskjutna. Listan står kvar som specifikation för den dag den går att verkställa, och som beskrivning av vad som gäller på disciplin tills dess.
@@ -526,7 +581,7 @@ Under repots *Rules* eller *Branch protection* för `main`:
 
 ## Vad issue 0 ska bevisa
 
-**Avklarat 2026-08-23.** Alla sex punkterna nedan är bevisade; `v0.0.1` ligger i produktion och `https://mimers.app` svarar. Listan står kvar som beskrivning av vad kedjan gör, inte som en checklista att beta av igen.
+**Avklarat 2026-08-23.** Alla sex punkterna nedan är bevisade; `v0.0.1` gick i produktion samma dag och `https://mimers.app` svarar. Produktionen står sedan 2026-09-03 på `v0.1.0` med M0–M3. Listan står kvar som beskrivning av vad kedjan gör, inte som en checklista att beta av igen.
 
 En tom Laravel, utan en rad domänkod, som:
 

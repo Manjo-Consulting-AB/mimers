@@ -22,6 +22,8 @@ Slå upp ditt issuenummer i [Backlog](docs/Backlog.md) och öppna **bara** din m
 
 Ingen pushar direkt till `main`, inte heller Tony.
 
+**En release per stängd milstolpe.** Är din issue milstolpens sista blir det en release när den mergats — säg till i PR:en om du märker det, så att retron och releasen körs i samma svep. Takten och skälen står i [ADR-0018](docs/ADR/ADR-0018%20Utvecklingsprocess%20och%20deploy.md) § Befordranstakt, handgreppen i [Pipeline](docs/Deploy/Pipeline.md) § Releaseritualen.
+
 <!-- ai-standards:begin agent-core -->
 
 Regler för dig som implementerar en issue. De gäller i alla Manjo-repon och underhålls i [ai-standards](https://github.com/Manjo-Consulting-AB/ai-standards). Repospecifika regler står utanför det här blocket — de går före när de säger emot, men de ska inte upprepa det som står här.

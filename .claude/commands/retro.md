@@ -40,5 +40,6 @@ Mäts bara kostnad kommer arbetet att optimeras mot att se billigt ut — mindre
 2. **Andra träffen på samma sak blir ett förslag.** En PR mot `AGENTS.md` — eller mot `agents/agent-core.md` i ai-standards om regeln gäller alla repon, inte bara det här. Varje förslag åtföljs av vad det ersätter och vilka två observationer som bär det.
 3. **Är det ett skript snarare än en regel** — kan svaret uttryckas som ett villkor — hör det hemma i `.github/workflows/ci.yml`, inte i en text någon ska minnas.
 4. **En kort sammanfattning:** vad gick bra, vad kostade mer än det borde, vad du inte kunde mäta.
+5. **Releasen.** Milstolpen är befordringsenheten: är den stängd ska den ut i produktion i samma svep som retron. Kontrollera om produktionen redan står på milstolpens kod — `gh release list -L 1` mot `git rev-parse origin/main` — och föreslå annars nästa version med utkast till release notes grupperade per milstolpe. Gå igenom [Pipeline](../../docs/Deploy/Pipeline.md) § Releaseritualen punkt för punkt; publicera inte utan Tonys uttryckliga ja, eftersom `release: published` rullar ut direkt utan godkännandesteg.
 
-Committa aldrig regeländringar direkt. Tony mergar, som allt annat.
+Committa aldrig regeländringar direkt. Tony mergar, som allt annat. Det gäller inte releasen — den publiceras av Tony, eller av dig på hans uttryckliga ja.
