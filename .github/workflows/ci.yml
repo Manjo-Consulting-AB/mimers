@@ -66,6 +66,53 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/scripts/rott-pa-basen.sh
 
+  # Testsviten kör sqlite i minnet, produktionen och staging kör mysql. Issue 12
+  # (M1) betalade den skillnaden i en skiftlägeskänslig jämförelse; issue 23b
+  # (M3) betalade den igen, dyrare: två indexnamn som Laravel härleder till 67
+  # respektive 66 tecken går rakt igenom sqlite och faller på mysqls
+  # 64-teckengräns. 660 gröna tester, grön CI, och staging nere efter merge -
+  # ingen instans i kedjan hade tillgång till den enda som kunde se felet.
+  # Deterministiskt villkor med ett känt kommando, alltså ett skript.
+  #
+  # Jobbet bevisar `up()` mot en tom databas, alltså exakt det utrullningen gör.
+  # Det säger inget om `down()` och inget om en migrering mot befintliga rader.
+  migreringar:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: mimers
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: fileinfo, mbstring, pdo_mysql, zip
+          coverage: none
+
+      - name: Installera beroenden
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      # .env.example pekar redan på mysql på 127.0.0.1:3306 med databasen
+      # `mimers` och tom root - samma värden som tjänsten ovan startas med.
+      - name: Migreringarna går på MySQL
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan migrate --force --no-interaction
+
   # Nollsummeregeln är verkningslös om ingen håller den. En regelfil som växer
   # med en punkt per retro slutar bli läst, och då styr den ingenting.
   # Deterministiskt villkor, alltså ett skript - inte en modell.
