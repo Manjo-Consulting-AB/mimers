@@ -2,6 +2,7 @@
 
 namespace App\Actions\Attachment;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Jobs\GenerateImageDerivatives;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -158,6 +159,14 @@ class StoreAttachment
             $attachment->uploaded_by_user_id = $user->id;
             $attachment->billed_account_id = $account->id;
             $attachment->save();
+
+            // Förbrukningen räknas transaktionellt (issue 26a): bilagan är
+            // levande, så kontots räknare ökar med bytena i SAMMA transaktion
+            // som raden — även i dedup-grenen, där stored_file-redan fanns
+            // (logisk storlek, inte diskförbrukning). Ökningen måste ligga
+            // inuti stängningen: DB::transaction retryar hela stängningen vid
+            // dödläge, och en ökning utanför skulle räknas en gång per försök.
+            (new AdjustUsage)->handle($account->id, bytesDelta: $byteSize);
 
             // Resursen läser storedFile/billedAccount genom relationerna —
             // sätt dem direkt så inget oplanerat lazy-load sker.

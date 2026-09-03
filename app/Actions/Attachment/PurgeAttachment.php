@@ -2,6 +2,7 @@
 
 namespace App\Actions\Attachment;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Models\Attachment;
 use App\Models\StoredFile;
 use Illuminate\Support\Facades\DB;
@@ -18,14 +19,13 @@ use Illuminate\Support\Facades\DB;
  * mjukraderad ELLER en som inte är det, och prövar inte vilket. Den som
  * anropar avgör om raden får försvinna.
  *
- * Fyra steg i en transaktion (Beslut 2):
- *
- * 1. forceDelete på attachment-raden.
- * 2. reference_count minskas som SQL — aldrig som läs-ändra-skriv i PHP,
- *    och aldrig under noll (Beslut 3).
- * 3. räknaren läses om INOM transaktionen; är den noll sätts
- *    purge_after = now() + 30 dagar.
- * 4. commit.
+ * Stegen i en transaktion (Beslut 2): först läses radens tillstånd (innan
+ * forceDelete gör det oåtkomligt), sedan forceDelete på attachment-raden,
+ * sedan minskas stored_file.reference_count som SQL — aldrig som
+ * läs-ändra-skriv i PHP, och aldrig under noll (Beslut 3) — sedan lämnar
+ * bytena kontots förbrukningsräkning om bilagan var levande (issue 26a §
+ * Beslut 6), och slutligen läses räknaren om INOM transaktionen; är den noll
+ * sätts purge_after = now() + 30 dagar.
  *
  * Bytena på disken rörs inte här (Beslut 4): efter actionen ligger filen
  * kvar med purge_after satt, och 17b tar hand om den. Det är de 30 dagarna
@@ -36,15 +36,35 @@ class PurgeAttachment
     public function handle(Attachment $attachment): void
     {
         DB::transaction(function () use ($attachment): void {
-            $storedFileId = $attachment->stored_file_id;
+            // Steg 1 och issue 26a § Beslut 6 — läs tillståndet INNAN raden
+            // försvinner: `billed_account_id`, `byte_size` och `deleted_at`
+            // sitter på rader som den här actionen inte kan läsa efter
+            // forceDelete. Den vanliga vägen — mjukradering, 30 dagar i
+            // papperskorgen, gallring — minskade redan kontots räknare vid
+            // mjukraderingen; ett andra avdrag här vore dubbelräkning. Men
+            // PurgeContainer och PurgeContent::item() gallrar också bilagor
+            // som ALDRIG mjukraderades, och för de raderna är det HÄR bytena
+            // lämnar räkningen. withTrashed() eftersom bilagan ofta kommer
+            // från papperskorgen.
+            $rad = Attachment::withTrashed()
+                ->whereKey($attachment->getKey())
+                ->first();
 
-            // Steg 1 och Beslut 7 — idempotent per anrop, inte per rad:
+            if ($rad === null) {
+                return;
+            }
+
+            $storedFileId = $rad->stored_file_id;
+            $billedAccountId = $rad->billed_account_id;
+            $byteSize = (int) StoredFile::query()->whereKey($storedFileId)->value('byte_size');
+            $varLevande = ! $rad->trashed();
+
+            // Steg 2 och Beslut 7 — idempotent per anrop, inte per rad:
             // forceDelete() på en rad som inte finns är en no-op i Eloquent
             // och går inte att skilja från en lyckad radering, så antalet
             // raderade rader är den enda tillförlitliga signalen. Ett andra
             // anrop med samma instans raderar 0 rader och får inte minska
-            // räknaren igen. withTrashed() eftersom bilagan ofta kommer från
-            // papperskorgen.
+            // räknaren igen.
             $raderade = Attachment::withTrashed()
                 ->whereKey($attachment->getKey())
                 ->forceDelete();
@@ -53,7 +73,7 @@ class PurgeAttachment
                 return;
             }
 
-            // Steg 2 och Beslut 3: minskningen är en SQL-operation, aldrig
+            // Steg 3 och Beslut 3: minskningen är en SQL-operation, aldrig
             // läs-ändra-skriv i PHP. Villkoret på > 0 skyddar INT
             // UNSIGNED-kolumnen — ett decrement på en nollräknare ger -1,
             // som i MySQL antingen kastar eller wrappar till ett gigantiskt
@@ -64,7 +84,15 @@ class PurgeAttachment
                 ->where('reference_count', '>', 0)
                 ->decrement('reference_count');
 
-            // Steg 3: räknaren läses om INOM transaktionen — två samtidiga
+            // issue 26a — en bilaga som var LEVANDE precis innan gallringen
+            // slutar vara levande nu, och bytena lämnar kontots räknare.
+            // Klampningen i AdjustUsage skyddar mot att en redan drivande
+            // räknare (26b:s avstämning har inte hunnit larma) går under noll.
+            if ($varLevande) {
+                (new AdjustUsage)->handle($billedAccountId, bytesDelta: -$byteSize);
+            }
+
+            // Sist: räknaren läses om INOM transaktionen — två samtidiga
             // gallringar får inte tappa en minskning. lockForUpdate är en
             // "current read" som ser det senast committade värdet, så
             // purge_after sätts bara när räknaren verkligen är noll och

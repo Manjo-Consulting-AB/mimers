@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Trash\RestoreContainerRequest;
@@ -11,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -126,7 +128,18 @@ class ContainerTrashController extends Controller
             throw ApiException::make('resource.not_found', [], 404);
         }
 
-        $container->restore();
+        DB::transaction(function () use ($container): void {
+            // Återställningen och ökningen i en transaktion (issue 26a):
+            // containern blir levande igen och kommer tillbaka i ägarkontots
+            // räknare. Bara när den faktiskt var mjukraderad — restore() på
+            // en levande container är en no-op och ska inte räknas två gånger.
+            $varMjukraderad = $container->trashed();
+            $container->restore();
+
+            if ($varMjukraderad) {
+                (new AdjustUsage)->handle($container->account_id, containersDelta: 1);
+            }
+        });
 
         return (new TrashEntryResource($this->entry($container, $retentionDays)))->response();
     }

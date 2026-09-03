@@ -2,6 +2,7 @@
 
 namespace App\Actions\Trash;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
@@ -71,7 +72,20 @@ class PurgeContainer
             DB::table('container_access')->where('container_id', $container->id)->delete();
             DB::table('invitation')->where('container_id', $container->id)->delete();
 
-            $container->forceDelete();
+            // issue 26a § Beslut 6 — containerräknaren minskas bara för en
+            // container som fortfarande var LEVANDE precis innan forceDelete.
+            // Den vanliga vägen (mjukradering, 30 dagar, sedan gallring)
+            // minskade redan räknaren vid mjukraderingen; ett andra avdrag
+            // vore dubbelräkning. `$raderade` skyddar mot att ett andra anrop
+            // med samma instans drar ifrån en gång till.
+            $varLevande = $container->deleted_at === null;
+            $accountId = $container->account_id;
+
+            $raderade = $container->forceDelete();
+
+            if ($raderade > 0 && $varLevande) {
+                (new AdjustUsage)->handle($accountId, containersDelta: -1);
+            }
         });
     }
 }

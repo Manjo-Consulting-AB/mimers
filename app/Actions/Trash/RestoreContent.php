@@ -2,11 +2,13 @@
 
 namespace App\Actions\Trash;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\Tag;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Återställer en mjukraderad rad ur papperskorgen, med reglerna från issue
@@ -62,6 +64,19 @@ class RestoreContent
             }
         }
 
-        $model->restore();
+        DB::transaction(function () use ($model): void {
+            // Återställningen och en eventuell räknarökning i en transaktion
+            // (issue 26a): en mjukraderad bilaga som blir levande igen kommer
+            // tillbaka i kontots förbrukning, i samma transaktion som raden.
+            $varMjukraderad = $model->trashed();
+
+            $model->restore();
+
+            if ($model instanceof Attachment && $varMjukraderad) {
+                $byteSize = (int) $model->storedFile()->value('byte_size');
+
+                (new AdjustUsage)->handle($model->billed_account_id, bytesDelta: $byteSize);
+            }
+        });
     }
 }

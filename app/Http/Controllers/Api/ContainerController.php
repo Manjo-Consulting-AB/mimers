@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
@@ -11,6 +12,7 @@ use App\Models\Container;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -92,9 +94,18 @@ class ContainerController extends Controller
 
         Gate::authorize('create', [Container::class, $account]);
 
-        $container = new Container($request->safe()->only(['name', 'kind']));
-        $container->account_id = $account->id;
-        $container->save();
+        $container = DB::transaction(function () use ($request, $account): Container {
+            $container = new Container($request->safe()->only(['name', 'kind']));
+            $container->account_id = $account->id;
+            $container->save();
+
+            // En levande container räknas mot ägarkontots containertak (issue
+            // 26a) — i samma transaktion som raden. Kontot är alltid ägaren;
+            // containerns räknare har inget "billed_account_id" att gå vilse i.
+            (new AdjustUsage)->handle($account->id, containersDelta: 1);
+
+            return $container;
+        });
 
         // $account är redan hämtad ovan (för Gate::authorize()) — sätt
         // relationen direkt i stället för att låta ContainerResource
@@ -156,7 +167,15 @@ class ContainerController extends Controller
     {
         Gate::authorize('delete', $container);
 
-        $container->delete();
+        $accountId = $container->account_id;
+
+        DB::transaction(function () use ($container, $accountId): void {
+            $container->delete();
+
+            // Mjukraderingen och minskningen i en transaktion (issue 26a) —
+            // containern slutar vara levande och lämnar ägarkontots räknare.
+            (new AdjustUsage)->handle($accountId, containersDelta: -1);
+        });
 
         return response()->noContent();
     }
