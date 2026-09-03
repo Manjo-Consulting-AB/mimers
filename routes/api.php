@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ScheduleDependencyController;
 use App\Http\Controllers\Api\ScheduleOccurrenceController;
 use App\Http\Controllers\Api\TagController;
+use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrashController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
@@ -323,4 +324,15 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // samma jobb som 20b, App\Console\PurgesExpiredTrash.
     Route::get('/trash/containers', [ContainerTrashController::class, 'index']);
     Route::post('/trash/containers/restore', [ContainerTrashController::class, 'restore']);
+
+    // Issue 24 · Todo-listan — "vad ska jag göra?", se
+    // App\Http\Controllers\Api\TodoController och
+    // App\Models\ScheduleOccurrence::scopeTodoFor(). En toppnivårutt precis
+    // som fritextsökningen (issue 15b § Beslut 5): frågan är global per
+    // definition — alla öppna förekomster över ALLA containers användaren har
+    // åtkomst till — så rutten bär sitt eget åtkomstfilter (Container::scopeAccessibleBy()
+    // genom relationskedjan, Beslut 2) i stället för rutt-nästlingens grind,
+    // och det är därför den är M3:s riskyta. Bara GET: listan är en vy; allt
+    // som ändrar en uppgift går genom 22b:s rutter ovan.
+    Route::get('/todo', [TodoController::class, 'index']);
 });
