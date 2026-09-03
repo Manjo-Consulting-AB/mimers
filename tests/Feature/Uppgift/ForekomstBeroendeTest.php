@@ -255,6 +255,34 @@ it('spärren gäller även skip', function () {
     expect($bytOpen->fresh()->status)->toBe('open');
 });
 
+it('ett beroende under ett mjukraderat schema blockerar inte och syns inte', function () {
+    [$account, , $headers, $container, $item] = skapaForekomstKontext('Flotten');
+    [$serva, $servaOpen] = oppnaForekomst($item, ['title' => 'Serva motorn']);
+    [$byt, $bytOpen] = oppnaForekomst($item, ['title' => 'Byt impeller']);
+
+    skapaBeroende($bytOpen, $servaOpen);
+
+    // Schemat mjukraderas — förekomsten stängs INTE (schemaradering rör den
+    // inte, 22a). Beroenderaden ligger kvar som historik (Beslut 5), men
+    // motparten "existerar inte" längre: den ska varken synas i listan eller
+    // blockera — annars är B låst av något osynligt som aldrig stängs
+    // (granskningen, samma regel som 23a § Beslut 7).
+    $serva->delete();
+
+    $lista = getJson(forekomstBeroendeUrl($container, $item, $byt, $bytOpen), $headers);
+    $lista->assertOk();
+    expect($lista->json('data'))->toBe([]);
+
+    $stängd = postJson(occurrenceUrl($container, $item, $byt, $bytOpen).'/complete', avslutKropp($account), $headers);
+    $stängd->assertOk();
+    expect($stängd->json('data.closed.status'))->toBe('completed');
+
+    expect(DB::table('occurrence_dependency')
+        ->where('occurrence_id', $bytOpen->id)
+        ->where('depends_on_occurrence_id', $servaOpen->id)
+        ->exists())->toBeTrue();
+});
+
 it('en förekomst kan stängas när beroendet är avbockat', function () {
     [$account, , $headers, $container, $item] = skapaForekomstKontext('Flotten');
     [$serva, $servaOpen] = oppnaForekomst($item, ['title' => 'Serva motorn']);
@@ -330,6 +358,28 @@ it('en förekomst kan inte bero på sig själv', function () {
     expect(DB::table('occurrence_dependency')->count())->toBe(0);
 });
 
+it('ett dubblerat beroende avvisas', function () {
+    [, , $headers, $container, $item] = skapaForekomstKontext('Flotten');
+    [$serva, $servaOpen] = oppnaForekomst($item, ['title' => 'Serva motorn']);
+    [$byt, $bytOpen] = oppnaForekomst($item, ['title' => 'Byt impeller']);
+
+    postJson(forekomstBeroendeUrl($container, $item, $byt, $bytOpen), [
+        'depends_on' => $servaOpen->ulid,
+    ], $headers)->assertCreated();
+
+    $igen = postJson(forekomstBeroendeUrl($container, $item, $byt, $bytOpen), [
+        'depends_on' => $servaOpen->ulid,
+    ], $headers);
+
+    // Ett dubblerat beroende är ett valideringsfel, inte en tyst no-op och
+    // inte en 201 som låtsas ha skapat något — 23a § Beslut 9 gäller ordagrant
+    // på förekomstnivå.
+    $igen->assertStatus(422);
+    expect($igen->json('error.code'))->toBe('validation.failed');
+    expect($igen->json('error.data.fields.depends_on.0.code'))->toBe('validation.unique');
+    expect(DB::table('occurrence_dependency')->count())->toBe(1);
+});
+
 it('en cykel mellan förekomster avvisas', function () {
     [, , $headers, $container, $item] = skapaForekomstKontext('Flotten');
     [$a, $aOpen] = oppnaForekomst($item, ['title' => 'A']);
@@ -356,6 +406,29 @@ it('en cykel mellan förekomster avvisas', function () {
     $viaMellanled->assertStatus(422);
     expect($viaMellanled->json('error.code'))->toBe('occurrence.dependency_cycle');
     expect(DB::table('occurrence_dependency')->count())->toBe(2);
+});
+
+it('en kant genom ett mjukraderat schema räknas inte i cykelkontrollen', function () {
+    [, , $headers, $container, $item] = skapaForekomstKontext('Flotten');
+    [$a, $aOpen] = oppnaForekomst($item, ['title' => 'A']);
+    [$b, $bOpen] = oppnaForekomst($item, ['title' => 'B']);
+    [$c, $cOpen] = oppnaForekomst($item, ['title' => 'C']);
+
+    // Kedjan A → B → C (i "väntar på"-riktningen).
+    skapaBeroende($aOpen, $bOpen);
+    skapaBeroende($bOpen, $cOpen);
+
+    // Mjukraderas B:s schema "existerar" kanterna genom B inte — A → B och
+    // B → C räknas inte, så C → A sluter ingen ring (granskningen, samma
+    // regel som 23a § Beslut 7 — samma algoritm, en nivå ner).
+    $b->delete();
+
+    $response = postJson(forekomstBeroendeUrl($container, $item, $c, $cOpen), [
+        'depends_on' => $aOpen->ulid,
+    ], $headers);
+
+    $response->assertCreated();
+    expect(DB::table('occurrence_dependency')->count())->toBe(3);
 });
 
 it('en förekomst i en annan container avvisas', function () {

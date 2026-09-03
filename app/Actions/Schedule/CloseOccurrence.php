@@ -99,18 +99,37 @@ class CloseOccurrence
             // beroenden (§ Att se upp med). Ett beroende är uppfyllt så snart
             // motparten inte längre är `open` (Beslut 5), så listan är
             // blockerarna med motpartens status `open`.
+            //
+            // Ett beroende vars motpart ligger under ett MJUKRADERAT schema
+            // eller item existerar inte — varken här, i GET eller i
+            // cykelkontrollen (granskningen av 23b, samma regel som 23a §
+            // Beslut 7). Utan villkoret blir B blockerad av en förekomst som
+            // aldrig stängs — schemaradering stänger inga förekomster (22a) —
+            // och som användaren varken kan se eller göra något åt: osynligt
+            // trasigt. Raden ligger kvar i tabellen som historik (Beslut 5);
+            // den räknas bara inte längre. PAUSADE scheman är motsatsen: de
+            // ska blockera, för paus är reversibelt och synligt.
             $blockedBy = DB::table('occurrence_dependency')
                 ->join('schedule_occurrence as blocker', 'blocker.id', '=', 'occurrence_dependency.depends_on_occurrence_id')
                 ->join('schedule', 'schedule.id', '=', 'blocker.schedule_id')
+                ->join('item', 'item.id', '=', 'schedule.item_id')
                 ->where('occurrence_dependency.occurrence_id', $aktuell->id)
                 ->where('blocker.status', ScheduleOccurrence::STATUS_OPEN)
+                ->whereNull('schedule.deleted_at')
+                ->whereNull('item.deleted_at')
                 ->orderBy('blocker.due_at')
+                // ULID:en som andra nyckel: två blockerare med samma due_at
+                // ska inte byta plats mellan körningar.
+                ->orderBy('blocker.ulid')
                 ->get(['blocker.ulid', 'blocker.due_at', 'schedule.title'])
                 ->map(fn ($rad): array => [
                     'ulid' => $rad->ulid,
                     'title' => $rad->title,
                     // Query builder-formaterar inte DATE-kolumnen som Eloquent
                     // gör — rakt ur sqlite är värdet "2027-05-05 00:00:00".
+                    // En Eloquent-relation med date-cast vore renare, men
+                    // spärren måste läsas på EN fråga och en relation med
+                    // eager loads är fler; utdata är identisk (granskningen).
                     'due_at' => Carbon::parse($rad->due_at)->toDateString(),
                 ])
                 ->all();
