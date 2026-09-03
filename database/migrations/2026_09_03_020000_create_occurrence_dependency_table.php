@@ -25,6 +25,12 @@ use Illuminate\Support\Facades\Schema;
  * - `(depends_on_occurrence_id, occurrence_id)`: läsningen "vad väntar på det
  *   här förekomsten" och den bakåtriktning cykelkontrollen behöver.
  *
+ * Båda indexen namnges explicit, till skillnad från övriga migrationer i
+ * repot: `occurrence` gör de härledda `{tabell}_{kolumner}_{typ}`-namnen 67
+ * respektive 66 tecken långa, över MySQL:s gräns på 64. `schedule_dependency`
+ * (issue 23a) klarar sig med härledda namn eftersom `schedule` är två tecken
+ * kortare än `occurrence`.
+ *
  * `ON DELETE RESTRICT` på båda nycklarna: en förekomst som är part i ett
  * beroende kan inte hårdraderas. Förekomster raderas aldrig i M3 (de följer
  * med schemat genom mjukradering), så det syns inte här — men gallringsjobb i
@@ -43,8 +49,8 @@ return new class extends Migration
             $table->foreignId('depends_on_occurrence_id')->constrained('schedule_occurrence')->onDelete('restrict');
             $table->timestamps();
 
-            $table->unique(['occurrence_id', 'depends_on_occurrence_id']);
-            $table->index(['depends_on_occurrence_id', 'occurrence_id']);
+            $table->unique(['occurrence_id', 'depends_on_occurrence_id'], 'occurrence_dependency_pair_unique');
+            $table->index(['depends_on_occurrence_id', 'occurrence_id'], 'occurrence_dependency_reverse_index');
         });
     }
 
