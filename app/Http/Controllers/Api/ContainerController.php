@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
@@ -11,6 +12,7 @@ use App\Models\Container;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -86,15 +88,24 @@ class ContainerController extends Controller
      * utelämnad ur App\Models\Container#[Fillable], se den klassens
      * docblock.
      */
-    public function store(StoreContainerRequest $request): JsonResponse
+    public function store(StoreContainerRequest $request, AdjustUsage $adjustUsage): JsonResponse
     {
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 
         Gate::authorize('create', [Container::class, $account]);
 
-        $container = new Container($request->safe()->only(['name', 'kind']));
-        $container->account_id = $account->id;
-        $container->save();
+        $container = DB::transaction(function () use ($request, $account, $adjustUsage): Container {
+            $container = new Container($request->safe()->only(['name', 'kind']));
+            $container->account_id = $account->id;
+            $container->save();
+
+            // En levande container räknas mot ägarkontots containertak (issue
+            // 26a) — i samma transaktion som raden. Kontot är alltid ägaren;
+            // containerns räknare har inget "billed_account_id" att gå vilse i.
+            $adjustUsage->handle($account->id, containersDelta: 1);
+
+            return $container;
+        });
 
         // $account är redan hämtad ovan (för Gate::authorize()) — sätt
         // relationen direkt i stället för att låta ContainerResource
@@ -152,11 +163,31 @@ class ContainerController extends Controller
      * sätter bara `deleted_at`. Papperskorg, återställning och gallring är
      * issue 20, se issue 8 § Beslut 10.
      */
-    public function destroy(Container $container): Response
+    public function destroy(Container $container, AdjustUsage $adjustUsage): Response
     {
         Gate::authorize('delete', $container);
 
-        $container->delete();
+        $accountId = $container->account_id;
+
+        DB::transaction(function () use ($container, $accountId, $adjustUsage): void {
+            // Beslutet att minska grundas på radens tillstånd UNDER radlåset
+            // (granskningsfynd 1): två samtidiga DELETE på samma container
+            // skulle annars båda se en levande rad och dra av en gång var.
+            $levande = Container::query()
+                ->whereKey($container->getKey())
+                ->lockForUpdate()
+                ->exists();
+
+            if (! $levande) {
+                return;
+            }
+
+            $container->delete();
+
+            // Mjukraderingen och minskningen i en transaktion (issue 26a) —
+            // containern slutar vara levande och lämnar ägarkontots räknare.
+            $adjustUsage->handle($accountId, containersDelta: -1);
+        });
 
         return response()->noContent();
     }

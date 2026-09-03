@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Trash\RestoreContainerRequest;
@@ -11,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -107,7 +109,7 @@ class ContainerTrashController extends Controller
      * `deleted_at`/`expires_at` null — klienten kan ta bort den ur
      * papperskorgsvyn utan en ny hämtning.
      */
-    public function restore(RestoreContainerRequest $request): JsonResponse
+    public function restore(RestoreContainerRequest $request, AdjustUsage $adjustUsage): JsonResponse
     {
         $retentionDays = (int) config('files.trash_retention_days');
         $cutoff = now()->subDays($retentionDays);
@@ -126,7 +128,33 @@ class ContainerTrashController extends Controller
             throw ApiException::make('resource.not_found', [], 404);
         }
 
-        $container->restore();
+        DB::transaction(function () use ($container, $adjustUsage): void {
+            // Återställningen och ökningen i en transaktion (issue 26a):
+            // containern blir levande igen och kommer tillbaka i ägarkontots
+            // räknare. Beslutet att öka grundas på radens tillstånd UNDER
+            // radlåset (granskningsfynd 1): två samtidiga återställningar av
+            // samma container skulle annars båda se en mjukraderad rad och öka
+            // räknaren två gånger. withTrashed — raden ligger i papperskorgen.
+            $rad = Container::withTrashed()
+                ->whereKey($container->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($rad === null) {
+                return;
+            }
+
+            $varMjukraderad = $rad->trashed();
+
+            // restore() på instansen även när en samtidig återställning redan
+            // hunnit först — en no-op i databasen som synkar instansens
+            // deleted_at, så svaret bär posten som levande.
+            $container->restore();
+
+            if ($varMjukraderad) {
+                $adjustUsage->handle($container->account_id, containersDelta: 1);
+            }
+        });
 
         return (new TrashEntryResource($this->entry($container, $retentionDays)))->response();
     }

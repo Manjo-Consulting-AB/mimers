@@ -2,6 +2,7 @@
 
 namespace App\Actions\Attachment;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Jobs\GenerateImageDerivatives;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -51,6 +52,12 @@ use RuntimeException;
  * från kroppens `account` efter medlemskapskontrollen (§ Beslut 2). Båda,
  * liksom `item_id` och `stored_file_id`, sätts explicit — aldrig via
  * massildelning.
+ *
+ * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
+ * se [[ADR-0024 Tunna controllers och actions]]. Räknaren är en beroendefri,
+ * tillståndslös lövaction utan egna beroenden att injicera eller mocka, och
+ * den här actionen är befintlig kod som 26a bara lägger ett anrop i; att trä
+ * räknaren genom konstruktorn vore omarbetning utan mottagare.
  */
 class StoreAttachment
 {
@@ -158,6 +165,19 @@ class StoreAttachment
             $attachment->uploaded_by_user_id = $user->id;
             $attachment->billed_account_id = $account->id;
             $attachment->save();
+
+            // Förbrukningen räknas transaktionellt (issue 26a): bilagan är
+            // levande, så kontots räknare ökar med bytena i SAMMA transaktion
+            // som raden — även i dedup-grenen, där stored_file-redan fanns
+            // (logisk storlek, inte diskförbrukning). Ökningen måste ligga
+            // inuti stängningen: DB::transaction retryar hela stängningen vid
+            // dödläge, och en ökning utanför skulle räknas en gång per försök.
+            // Bytena läses ur $storedFile->byte_size — samma kolumn som
+            // sanningsfrågan i UsageCounter::calculateStorageBytes() summerar.
+            // UploadedFile::getSize() (int|false) är en annan källa och är
+            // dessutom inte det auktoritativa värdet i dedup-grenen
+            // (granskningsfynd 3).
+            (new AdjustUsage)->handle($account->id, bytesDelta: $storedFile->byte_size);
 
             // Resursen läser storedFile/billedAccount genom relationerna —
             // sätt dem direkt så inget oplanerat lazy-load sker.

@@ -2,6 +2,7 @@
 
 namespace App\Actions\Trash;
 
+use App\Actions\Usage\AdjustUsage;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
@@ -43,6 +44,12 @@ use Illuminate\Support\Facades\DB;
  *
  * Kontot rörs aldrig (Beslut 8) — att gallra den sista containern på ett
  * konto raderar inte kontot.
+ *
+ * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
+ * se [[ADR-0024 Tunna controllers och actions]]. Räknaren är en beroendefri,
+ * tillståndslös lövaction utan egna beroenden att injicera eller mocka, och
+ * den här actionen är befintlig kod som 26a bara lägger ett anrop i; att trä
+ * räknaren genom konstruktorn vore omarbetning utan mottagare.
  */
 class PurgeContainer
 {
@@ -71,7 +78,44 @@ class PurgeContainer
             DB::table('container_access')->where('container_id', $container->id)->delete();
             DB::table('invitation')->where('container_id', $container->id)->delete();
 
-            $container->forceDelete();
+            // issue 26a § Beslut 6 — containerräknaren minskas bara för en
+            // container som fortfarande var LEVANDE precis innan forceDelete.
+            // Den vanliga vägen (mjukradering, 30 dagar, sedan gallring)
+            // minskade redan räknaren vid mjukraderingen; ett andra avdrag
+            // vore dubbelräkning.
+            //
+            // Radens tillstånd läses UNDER radlåset precis innan forceDelete
+            // (granskningsfynd 1): instansen laddades av anroparen helt
+            // utanför transaktionen, och en oskyddad `deleted_at`-avläsning kan
+            // vara förlegad och dubbelräkna under samtidighet.
+            $rad = Container::withTrashed()
+                ->whereKey($container->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($rad === null) {
+                return;
+            }
+
+            $varLevande = $rad->deleted_at === null;
+            $accountId = $rad->account_id;
+
+            // Byggarformen, inte Model::forceDelete, ger ANTALET raderade
+            // rader: Model::forceDelete returnerar bara sant för instansen
+            // (den fanns), oavsett om DELETE:en träffade något, och skyddar
+            // därför inte mot ett andra anrop som laddat om containern
+            // (granskningsfynd 2).
+            $raderade = Container::withTrashed()
+                ->whereKey($container->getKey())
+                ->forceDelete();
+
+            if ($raderade === 0) {
+                return;
+            }
+
+            if ($varLevande) {
+                (new AdjustUsage)->handle($accountId, containersDelta: -1);
+            }
         });
     }
 }
