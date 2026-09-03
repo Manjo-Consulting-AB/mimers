@@ -34,6 +34,12 @@ use Illuminate\Support\Facades\DB;
  * relationen `$attachment->item` respektive `$category->parent` vore att låta
  * den relaterade modellens SoftDeletes-scope svara null för en raderad
  * förälder, precis det fall som ska fångas här.
+ *
+ * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
+ * se [[ADR-0024 Tunna controllers och actions]]. Räknaren är en beroendefri,
+ * tillståndslös lövaction utan egna beroenden att injicera eller mocka, och
+ * den här actionen är befintlig kod som 26a bara lägger ett anrop i; att trä
+ * räknaren genom konstruktorn vore omarbetning utan mottagare.
  */
 class RestoreContent
 {

@@ -44,6 +44,12 @@ use Illuminate\Support\Facades\DB;
  *
  * Kontot rörs aldrig (Beslut 8) — att gallra den sista containern på ett
  * konto raderar inte kontot.
+ *
+ * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
+ * se [[ADR-0024 Tunna controllers och actions]]. Räknaren är en beroendefri,
+ * tillståndslös lövaction utan egna beroenden att injicera eller mocka, och
+ * den här actionen är befintlig kod som 26a bara lägger ett anrop i; att trä
+ * räknaren genom konstruktorn vore omarbetning utan mottagare.
  */
 class PurgeContainer
 {
