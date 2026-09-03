@@ -1,7 +1,8 @@
 #!/usr/bin/env -S python3 -u
 """Plockar äldsta öppna GitHub-issue och kör den genom Deepseek -> (vid fel) Sonnet,
 med Sonnet-review på medium risk och Opus-granskning på high risk innan mänsklig merge.
-Se ADR-0025/0026/0027.
+En obesvarad fråga i PR-kroppen eskaleras smalt till Opus (arkitekten) i stället för
+att gå direkt till Tony - se run_opus_answer(). Se ADR-0025/0026/0027.
 
 Körs i en isolerad git worktree (.claude/worktrees/issue-<n>), inte i huvudarbetsträdet -
 se ADR-0026: Docker valdes bort just för att batch-agenter redan körs isolerat i worktrees.
@@ -13,6 +14,7 @@ import os
 import re
 import fcntl
 import time
+from datetime import datetime, timezone
 
 # Ovillkorligen oskiftad utskrift - relevant oavsett hur skriptet startas
 # (shebangens -u gäller bara vid direkt körning, inte `python3 script.py`).
@@ -21,6 +23,29 @@ import time
 # hunnit.
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
+
+
+def is_peak_hour() -> bool:
+    """Sant under DeepSeeks peak hours (UTC, vardagar) - vi vill inte köra mot
+    dem då. Två fönster: 01:00-03:59 och 06:00-09:59 UTC, måndag-fredag."""
+    now = datetime.now(timezone.utc)
+    is_weekday = now.weekday() < 5  # 0 = måndag ... 6 = söndag
+    hour = now.hour
+
+    if is_weekday:
+        if 1 <= hour < 4:
+            return True
+        if 6 <= hour < 10:
+            return True
+
+    return False
+
+
+# Avbryt körningen direkt om det är peak-tid - innan låset tas eller något
+# issue plockas, oavsett vilket kommandoradsläge skriptet startas i.
+if is_peak_hour():
+    print("Hoppar över körning: Peak hours pågår (UTC).")
+    sys.exit(0)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WORKTREE_BASE = os.path.join(REPO_ROOT, ".claude", "worktrees")
@@ -190,9 +215,15 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False):
 
 def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, findings):
     """
-    DeepSeek åtgärdar `findings` (Opus ursprungliga fynd, eller en tidigare
+    Åtgärdar `findings` (Opus ursprungliga fynd, eller en tidigare
     Sonnet-avvisning), testar, committar, pushar till den befintliga PR:en,
-    och Sonnet verifierar smalt att just de fynden är åtgärdade - max 3 varv.
+    och Sonnet verifierar smalt att just de fynden är åtgärdade - tre varv med
+    DeepSeek, och om alla tre misslyckas ett fjärde och sista varv där Sonnet
+    själv gör åtgärden i stället för att bara verifiera den. Tanken är att en
+    stympad DeepSeek-lösning inte ska gå raka vägen till eskalering när
+    modellen som redan har hela kontexten (samma Sonnet som skrev fyndet) kan
+    ha bättre förutsättningar att lösa det själv.
+
     Sonnets APPROVE är slutgiltigt, ingen ny Opus-omgång här. Delad mellan
     huvudflödet (STEG 5, high risk) och --resume-pr, så det bara finns en
     implementation av loopen att hålla korrekt.
@@ -200,8 +231,14 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
     Returnerar (resolved: bool, findings: str) - findings är den senaste
     avvisningstexten om inte löst, annars oförändrad.
     """
-    for round_num in range(1, 4):
-        print(f" -> Åtgärdsvarv {round_num}/3...")
+    varv = [
+        ("DeepSeek", call_deepseek),
+        ("DeepSeek", call_deepseek),
+        ("DeepSeek", call_deepseek),
+        ("Sonnet", lambda prompt, cwd: call_claude_direct("sonnet", prompt, cwd)),
+    ]
+    for round_num, (agent_namn, fixare) in enumerate(varv, start=1):
+        print(f" -> Åtgärdsvarv {round_num}/{len(varv)} ({agent_namn})...")
         fix_prompt = (
             f"Åtgärda följande fynd från en kodgranskning av din egen lösning på detta issue:\n\n"
             f"{issue_body}\n\n"
@@ -209,15 +246,15 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
             f"Ändra koden i arbetsträdet så att varje fynd är löst. Uppfinn inget nytt - lös "
             f"bara det som listas."
         )
-        call_deepseek(fix_prompt, cwd=worktree_path)
+        fixare(fix_prompt, worktree_path)
 
-        # DeepSeek kan svara utan att röra en enda fil (missförstod fyndet,
+        # Agenten kan svara utan att röra en enda fil (missförstod fyndet,
         # eller trodde felaktigt att det redan var löst). `git commit` kraschar
         # då hela pipelinen med "nothing to commit" - fånga det innan dess och
         # låt varvet räknas som ett misslyckat försök i stället för en krasch.
         status = run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
         if not status:
-            print(f"  ⚠ DeepSeek gjorde inga ändringar på varv {round_num}.")
+            print(f"  ⚠ {agent_namn} gjorde inga ändringar på varv {round_num}.")
             findings = (
                 f"{findings}\n\nFörra åtgärdsförsöket ändrade inga filer alls - agenten "
                 f"verkar inte ha förstått vad som skulle göras, eller trodde felaktigt att "
@@ -232,8 +269,11 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
             continue
 
         run_cmd(["git", "add", "."], cwd=worktree_path)
-        run_cmd(["git", "commit", "-m", f"Åtgärda granskningsfynd, varv {round_num}"], cwd=worktree_path)
+        run_cmd(["git", "commit", "-m", f"Åtgärda granskningsfynd, varv {round_num} ({agent_namn})"], cwd=worktree_path)
         run_cmd(["git", "push", "origin", branch_name], cwd=worktree_path)
+        pushed_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
+        if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
+            print(f"  ⚠ PR:ens head hann inte synka mot commit {pushed_sha[:8]} - läser diffen ändå.")
 
         # Slutvarvet är en ny granskning, inte en efterlevnadskontroll. Tidigare
         # fick Sonnet bara fynden plus diffen och frågan "är samtliga fynd
@@ -325,6 +365,64 @@ def run_review(model, review_prompt, pr_number, worktree_path):
         return False, f"{review_text}\n\n_{notera}_"
 
     return approved, review_text
+
+
+MIN_OPUS_SVAR = 80
+
+
+def run_opus_answer(issue_body, fragor, pr_number, worktree_path):
+    """Eskalerar PR-kroppens '## Frågor och antaganden' till Opus - arkitekten -
+    i stället för att stanna hela PR:en hos Tony för varje fråga en implementerare
+    skrev. Se docs/Tankar.md / retro-anteckningen 2026-09-02: M3:s PR:er kom
+    tillbaka till Tony med frågor som Opus, inte Tony, är rätt instans att svara på.
+
+    Token-snålt med vilje: Opus får issuen och frågetexten, INTE diffen eller
+    hela PR:en - att läsa och hantera koden är granskningens jobb (run_review),
+    inte den här funktionens. Samma etikett-mönster som run_review() använder
+    för APPROVE, av samma skäl (se den funktionens docstring): fritext är inte
+    ett tillförlitligt facit för om ett svar kräver en kodändring.
+
+    Returnerar (svar: str, kraver_kodandring: bool).
+    """
+    run_cmd(["gh", "api", "--method", "DELETE",
+             f"repos/{GH_REPO}/issues/{pr_number}/labels/svar:kodandring-kravs"],
+            check=False, cwd=REPO_ROOT)
+
+    prompt = (
+        "Du är projektets arkitekt. En implementerande agent hittade inte svaret på "
+        "frågan/frågorna nedan i issuens läslista och gissade inte - den frågade i "
+        "stället, precis som den ska. Svara direkt och konkret på varje punkt, med "
+        "hänvisning till rätt ADR eller Datamodell-fil där det är relevant, så att "
+        "en implementerare kan agera på svaret utan att fråga igen.\n\n"
+        "Läs INTE koden, diffen eller PR:en - det är inte din uppgift här, bara att "
+        "ta det arkitekturbeslut frågan efterfrågar utifrån issuen och dokumentationen.\n\n"
+        f"=== ISSUEN ===\n{issue_body}\n\n"
+        f"=== FRÅGOR OCH ANTAGANDEN FRÅN IMPLEMENTERAREN ===\n{fragor}\n\n"
+        "Avsluta med att avgöra om ditt svar kräver en ändring i den redan skrivna "
+        "koden. Om ja, kör detta kommando (REST-API:et, inte 'gh pr edit --add-label' "
+        "- se skälet i granskningsinstruktionen du känner till) INNAN du skriver ditt "
+        "slutgiltiga svar, inte efter:\n"
+        f"gh api repos/{GH_REPO}/issues/{pr_number}/labels -f \"labels[]=svar:kodandring-kravs\"\n"
+        "Kör INTE det kommandot om svaret bara är en klargöring utan kodpåverkan.\n\n"
+        "Avsluta alltid med skriven text som är ditt svar - bara den sista textturen "
+        "sparas i loggen."
+    )
+    svar = call_claude_direct("opus", prompt, cwd=worktree_path)
+
+    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"], cwd=REPO_ROOT).stdout)
+    kraver_kodandring = any(label["name"] == "svar:kodandring-kravs" for label in pr["labels"])
+
+    if len(svar.strip()) < MIN_OPUS_SVAR:
+        # Samma fail-closed-resonemang som run_review(): ett tappat svar (bara
+        # ett verktygsanrop, ingen text efter) ska inte tolkas som "inget att
+        # göra" bara för att labeln råkar saknas.
+        svar = (
+            f"{svar}\n\n_Svaret var bara {len(svar.strip())} tecken - för kort för att "
+            f"lita på. Behandlas som att kodändring krävs._"
+        )
+        kraver_kodandring = True
+
+    return svar, kraver_kodandring
 
 
 def extract_risk_class(issue_body):
@@ -496,6 +594,39 @@ def wait_for_checks(pr_number):
     return False
 
 
+def wait_for_pr_head(pr_number, expected_sha, cwd, tries=5, delay=2):
+    """Väntar in att GitHub redovisar den nyss pushade committen som PR:ens
+    head innan diffen läses tillbaka - annars kan `gh pr diff` visa en diff
+    som ligger ett steg bakom den commit som just pushades.
+
+    Sett i praktiken på PR #132: åtgärdsloopens Sonnet-verifiering av varv 1
+    (kommentaren postades 52 s efter push) beskrev exakt det kodmönster
+    varvet just hade tagit bort - alltså en läsning mot en diff som ännu inte
+    hunnit spegla den pushade committen. Loopens tre kvarvarande varv fick då
+    ett fynd som redan var åtgärdat, kunde aldrig hitta något att ändra, och
+    hela PR:en eskalerades i onödan.
+
+    `gh pr view --json headRefOid` är billigt jämfört med `gh pr diff` och ett
+    direkt sätt att bekräfta synk innan den dyrare läsningen. Bäst-möjligt:
+    om synken aldrig sker inom `tries` försök läses diffen ändå - en evig
+    väntan här vore fel sorts försiktighet - men resultatet talar om att den
+    kan vara stale så anroparen kan logga en varning.
+
+    Returnerar True om headRefOid matchade `expected_sha` inom `tries` försök,
+    annars False.
+    """
+    for attempt in range(tries):
+        result = run_cmd(
+            ["gh", "pr", "view", pr_number, "--json", "headRefOid", "-q", ".headRefOid"],
+            check=False, cwd=cwd,
+        )
+        if result.stdout.strip() == expected_sha:
+            return True
+        if attempt < tries - 1:
+            time.sleep(delay)
+    return False
+
+
 def acquire_lock():
     os.makedirs(os.path.dirname(LOCK_PATH), exist_ok=True)
     lock_fd = open(LOCK_PATH, "w")
@@ -512,24 +643,38 @@ def acquire_lock():
 # HUVUDFLÖDE (PIPELINE)
 # =====================================================================
 
-def process_next_issue():
+def process_next_issue(issue_number=None):
     # -----------------------------------------------------------------
-    # STEG 1: HÄMTA DET ABSOLUT ÄLDSTA ÖPPNA ISSUET (STRIKT FIFO)
+    # STEG 1: HÄMTA ISSUET - ANTINGEN DET ABSOLUT ÄLDSTA ÖPPNA (STRIKT FIFO)
+    # ELLER, VID --issue, ETT UTTRYCKLIGEN VALT ISSUE SOM GÅR FÖRE KÖN.
     # -----------------------------------------------------------------
-    res = run_cmd([
-        "gh", "issue", "list",
-        "--state", "open",
-        "--search", "sort:created-asc",
-        "--limit", "1",
-        "--json", "number,title,labels,body",
-    ], cwd=REPO_ROOT)
-    issues = json.loads(res.stdout)
+    if issue_number is not None:
+        res = run_cmd([
+            "gh", "issue", "view", issue_number,
+            "--json", "number,title,labels,body,state",
+        ], cwd=REPO_ROOT, check=False)
+        if res.returncode != 0:
+            print(f"Kunde inte hämta issue #{issue_number}: {res.stderr}")
+            sys.exit(1)
+        issue = json.loads(res.stdout)
+        if issue["state"] != "OPEN":
+            print(f"Issue #{issue_number} är inte öppet (state: {issue['state']}).")
+            sys.exit(1)
+    else:
+        res = run_cmd([
+            "gh", "issue", "list",
+            "--state", "open",
+            "--search", "sort:created-asc",
+            "--limit", "1",
+            "--json", "number,title,labels,body",
+        ], cwd=REPO_ROOT)
+        issues = json.loads(res.stdout)
 
-    if not issues:
-        print("Kön är tom. Inga öppna issues att behandla.")
-        sys.exit(0)
+        if not issues:
+            print("Kön är tom. Inga öppna issues att behandla.")
+            sys.exit(0)
 
-    issue = issues[0]
+        issue = issues[0]
     issue_num = str(issue["number"])
     issue_title = issue["title"]
     issue_body = issue["body"]
@@ -722,6 +867,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     run_cmd(["git", "add", "."], cwd=worktree_path)
     run_cmd(["git", "commit", "-m", f"Fix #{issue_num}: {issue_title}"], cwd=worktree_path)
     run_cmd(["git", "push", "origin", branch_name, "--force"], cwd=worktree_path)
+    pushed_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
 
     pr_body = bygg_pr_kropp(issue_num, agent_summary)
 
@@ -752,6 +898,8 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     modellnamn = "Opus 5" if granskare == "opus" else "Sonnet 5"
     print(f"--> risk_class: {risk_class} - granskas av {modellnamn}...")
 
+    if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
+        print(f"  ⚠ PR:ens head hann inte synka mot commit {pushed_sha[:8]} - läser diffen ändå.")
     pr_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
     godkand, granskning = run_review(
         granskare, bygg_granskningsprompt(issue_body, pr_diff), pr_number, worktree_path
@@ -761,35 +909,63 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
 
     godkand_direkt = godkand
     if not godkand:
-        print(f"--> {modellnamn} hittade fynd - startar åtgärdsloop (DeepSeek + Sonnet, max 3 varv)...")
+        print(f"--> {modellnamn} hittade fynd - startar åtgärdsloop (3 varv DeepSeek, sedan 1 varv Sonnet)...")
         godkand, granskning = run_findings_fix_loop(
             issue_body, pr_number, branch_name, worktree_path, granskning
         )
         if not godkand:
             eskalera(
                 issue_num, pr_number, worktree_path, branch_name,
-                f"Fynd kvarstår efter åtgärdsloopen ({modellnamn} + tre varv).",
+                f"Fynd kvarstår efter åtgärdsloopen ({modellnamn} + tre DeepSeek-varv + ett Sonnet-varv).",
             )
 
     godkand_av = f"{modellnamn} direkt" if godkand_direkt else "Sonnet 5, efter åtgärdsvarv"
 
-    # -----------------------------------------------------------------
-    # MERGE
-    # -----------------------------------------------------------------
-    # En obesvarad fråga i PR-kroppen stoppar den automatiska banan, oavsett
-    # axel. AGENTS.md § Omfångsrutan säger "stanna och fråga i PR:en", och en
-    # bana som mergar innan någon kan svara gör den regeln omöjlig att följa.
+    los_fraga_och_merga(
+        issue_num, issue_title, issue_body, pr_number, pr_body, risk_class,
+        godkand_av, branch_name, worktree_path,
+    )
+
+
+def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
+                         risk_class, godkand_av, branch_name, worktree_path):
+    """MERGE-steget: löser en eventuell obesvarad fråga via Opus, sedan merge
+    eller överlämning enligt risk_class. Delad mellan huvudflödet (STEG 5) och
+    resume_question(), som återupptar exakt den här delen manuellt för en PR
+    som redan fastnat på den gamla "Obesvarad fråga"-banan (dvs. skapad innan
+    Opus-eskaleringen fanns).
+
+    En obesvarad fråga i PR-kroppen stoppade tidigare hela PR:en hos Tony,
+    oavsett axel - men frågorna är nästan alltid arkitekturfrågor ("vilket
+    fält", "vilken tabell"), och det är Opus, inte Tony, som är projektets
+    arkitekt (AGENTS.md § Omfångsrutan säger "stanna och fråga", inte "fråga
+    Tony"). Eskalera dit i stället: Opus svarar smalt (issuen + frågan, inte
+    diffen - se run_opus_answer), och kräver svaret en kodändring går den
+    genom samma DeepSeek+Sonnet-loop som ett vanligt granskningsfynd. Bara om
+    den loopen inte löser det, eller om Opus svar är tomt/tappat, når det Tony.
+    """
     fragor = oppna_fragor(pr_body)
     if fragor:
+        print("--> Obesvarad fråga i PR-kroppen - eskalerar till Opus (arkitekt)...")
+        opus_svar, kraver_kodandring = run_opus_answer(issue_body, fragor, pr_number, worktree_path)
         run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                  "### Obesvarad fråga\nPR-kroppens `## Frågor och antaganden` är inte tom, "
-                  "så den här PR:en mergas inte automatiskt. Svara i tråden och merga för hand."],
+                  f"### Opus 5 - arkitektsvar på Frågor och antaganden\n{opus_svar}"],
                  cwd=REPO_ROOT)
-        eskalera(
-            issue_num, pr_number, worktree_path, branch_name,
-            f"Godkänd av {godkand_av}, men PR-kroppen har en obesvarad fråga.",
-            exit_code=0,
-        )
+
+        if kraver_kodandring:
+            print("--> Opus svar kräver en kodändring - startar åtgärdsloop (DeepSeek + Sonnet)...")
+            godkand, granskning = run_findings_fix_loop(
+                issue_body, pr_number, branch_name, worktree_path, opus_svar
+            )
+            if not godkand:
+                eskalera(
+                    issue_num, pr_number, worktree_path, branch_name,
+                    f"Godkänd av {godkand_av}, men Opus svar på en PR-fråga kräver en "
+                    f"kodändring som inte blev löst inom åtgärdsloopen.",
+                )
+            godkand_av = f"{godkand_av}; Opus-svar åtgärdat och verifierat av Sonnet 5"
+        else:
+            print("--> Opus svar kräver ingen kodändring - fortsätter mot merge.")
 
     if risk_class == "high":
         run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
@@ -849,9 +1025,10 @@ def find_pr_context(pr_number):
 def resume_pr(pr_number):
     """Återupptar åtgärdsloopen för en befintlig PR vars Opus-granskning redan
     postats fynd på - t.ex. en PR skapad innan åtgärdsloopen fanns, eller en
-    som körde slut på sina 3 varv och du vill ge en ny chans efter att själv
-    ha petat i något. Kör INTE om DeepSeeks första försök eller Opus första
-    granskning - de har redan hänt och står kvar i PR:ens historik."""
+    som körde slut på sina 4 varv (3 DeepSeek + 1 Sonnet) och du vill ge en ny
+    chans efter att själv ha petat i något. Kör INTE om DeepSeeks första
+    försök eller Opus första granskning - de har redan hänt och står kvar i
+    PR:ens historik."""
     issue_num, issue_title, issue_body, branch_name, findings = find_pr_context(pr_number)
     print(f"\n==================================================")
     print(f" Återupptar PR #{pr_number} (Issue #{issue_num}: {issue_title})")
@@ -862,7 +1039,7 @@ def resume_pr(pr_number):
     run_cmd(["composer", "setup"], cwd=worktree_path)
 
     try:
-        print("--> Startar åtgärdsloop (DeepSeek + Sonnet-verifiering, max 3 varv)...")
+        print("--> Startar åtgärdsloop (3 varv DeepSeek, sedan 1 varv Sonnet, med Sonnet-verifiering)...")
         resolved, findings = run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, findings)
     except (Exception, KeyboardInterrupt) as e:
         avbruten = isinstance(e, KeyboardInterrupt)
@@ -883,6 +1060,57 @@ def resume_pr(pr_number):
     cleanup_worktree(worktree_path, branch_name)
 
 
+def resume_question(pr_number):
+    """Återupptar en PR som fastnade på den gamla "Obesvarad fråga"-banan -
+    dvs. skapad innan run_opus_answer() fanns, så dess `## Frågor och
+    antaganden` aldrig nådde Opus utan gick direkt till Tony (se PR #131,
+    issue #130). Körs INTE i det normala flödet - bara som manuell
+    återupptagning av en PR som redan står med `needs-human` av exakt den
+    anledningen."""
+    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefName,body"], cwd=REPO_ROOT).stdout)
+    pr_body = pr["body"] or ""
+    branch_name = pr["headRefName"]
+
+    m = re.search(r"Closes #(\d+)", pr_body, re.IGNORECASE)
+    if not m:
+        raise Exception(f"Hittade ingen 'Closes #N' i PR #{pr_number}s beskrivning - vet inte vilket issue det hör till.")
+    issue_num = m.group(1)
+
+    issue = json.loads(run_cmd(["gh", "issue", "view", issue_num, "--json", "title,body"], cwd=REPO_ROOT).stdout)
+    issue_title, issue_body = issue["title"], issue["body"]
+    risk_class = extract_risk_class(issue_body)
+
+    fragor = oppna_fragor(pr_body)
+    if not fragor:
+        print(f"PR #{pr_number} har ingen obesvarad fråga att lösa - inget att göra.")
+        return
+
+    print(f"\n==================================================")
+    print(f" Återupptar PR #{pr_number} (Issue #{issue_num}: {issue_title}) - obesvarad fråga")
+    print(f"==================================================\n")
+
+    worktree_path = setup_worktree_for_existing_branch(branch_name)
+    print("--> Bootstrappar worktree (composer setup)...")
+    run_cmd(["composer", "setup"], cwd=worktree_path)
+
+    modellnamn = "Opus 5" if risk_class == "high" else "Sonnet 5"
+    godkand_av = f"{modellnamn} (tidigare granskning, PR återupptagen för obesvarad fråga)"
+
+    try:
+        los_fraga_och_merga(
+            issue_num, issue_title, issue_body, pr_number, pr_body, risk_class,
+            godkand_av, branch_name, worktree_path,
+        )
+    except (Exception, KeyboardInterrupt) as e:
+        avbruten = isinstance(e, KeyboardInterrupt)
+        print(f"\n🚨 Återupptagandet {'avbrutet manuellt (^C)' if avbruten else f'kraschade oväntat: {e}'}")
+        cleanup_worktree(worktree_path, branch_name)
+        send_pushover(f"🚨 --resume-question {pr_number} {'avbrutet' if avbruten else 'kraschade'}: {e if not avbruten else 'manuellt'}")
+        if avbruten:
+            raise
+        sys.exit(1)
+
+
 # =====================================================================
 # STARTPUNKT
 # =====================================================================
@@ -891,6 +1119,10 @@ if __name__ == "__main__":
     try:
         if len(sys.argv) >= 3 and sys.argv[1] == "--resume-pr":
             resume_pr(sys.argv[2])
+        elif len(sys.argv) >= 3 and sys.argv[1] == "--resume-question":
+            resume_question(sys.argv[2])
+        elif len(sys.argv) >= 3 and sys.argv[1] == "--issue":
+            process_next_issue(issue_number=sys.argv[2])
         else:
             process_next_issue()
     finally:
