@@ -20,10 +20,12 @@ use Illuminate\Support\Facades\Schema;
  * DB::table, aldrig Plan::create — en gammal migration får inte bero på en
  * modell som kan ändras i en senare release.
  *
- * Hela up() är omsluten av hasTable-vakten så att en omkörning är idempotent
- * — annars skulle varken Schema::create eller CHECK-villkoret kunna köras
- * mot en tabell som redan finns. Själva raderna uppdateras med updateOrInsert
- * och dubbleras inte (test: "en omkörd migration dubblerar inte planraderna").
+ * Rader för free och pro skapas i seedPlans(), som up() anropar sist.
+ * seedPlans() är public och idempotent via updateOrInsert — en omkörd
+ * migration ska inte dubblera raderna (test: "en omkörd migration dubblerar
+ * inte planraderna"). Någon hasTable-vakt finns inte: Laravel kör aldrig
+ * samma migration två gånger, och en tabell som redan finns med fel form ska
+ * krascha deployen, inte tigas ihjäl.
  *
  * Pengar är BIGINT i minsta valutaenhet + CHAR(3), aldrig flyttal (AGENTS.md
  * § Databaskonventioner). Byten räknas binärt — 1 GB = 1 GiB. CHECK-villkoret
@@ -37,24 +39,31 @@ return new class extends Migration
      */
     public function up(): void
     {
-        if (! Schema::hasTable('plan')) {
-            Schema::create('plan', function (Blueprint $table) {
-                $table->id();
-                $table->string('code', 40)->unique();
-                $table->string('name', 100);
-                $table->bigInteger('price_amount');
-                $table->char('price_currency', 3);
-                $table->string('billing_period', 10);
-                $table->json('limits');
-                $table->boolean('is_public')->default(true);
-                $table->timestamps();
-            });
+        Schema::create('plan', function (Blueprint $table) {
+            $table->id();
+            $table->string('code', 40)->unique();
+            $table->string('name', 100);
+            $table->bigInteger('price_amount');
+            $table->char('price_currency', 3);
+            $table->string('billing_period', 10);
+            $table->json('limits');
+            $table->boolean('is_public')->default(true);
+            $table->timestamps();
+        });
 
-            if (Schema::getConnection()->getDriverName() === 'mysql') {
-                DB::statement("ALTER TABLE plan ADD CONSTRAINT plan_billing_period_check CHECK (billing_period IN ('year', 'month'))");
-            }
+        if (Schema::getConnection()->getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE plan ADD CONSTRAINT plan_billing_period_check CHECK (billing_period IN ('year', 'month'))");
         }
 
+        $this->seedPlans();
+    }
+
+    /**
+     * Skapa de inbyggda planraderna. Idempotent, så en omkörning — till
+     * exempel i test — inte dubblerar raderna.
+     */
+    public function seedPlans(): void
+    {
         $nu = now();
 
         foreach ([

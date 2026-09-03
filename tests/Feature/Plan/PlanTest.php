@@ -22,7 +22,7 @@ it('migrationen skapar planerna free och pro utan seeder', function () {
 
 it('en omkörd migration dubblerar inte planraderna', function () {
     $migration = require database_path('migrations/2026_09_03_030000_create_plan_table.php');
-    $migration->up();
+    $migration->seedPlans();
 
     expect(DB::table('plan')->count())->toBe(2);
     expect(DB::table('plan')->where('code', 'free')->count())->toBe(1);
