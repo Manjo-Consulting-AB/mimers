@@ -174,6 +174,16 @@ class ScheduleOccurrence extends Model
      *   (23b § Att se upp med). Villkoret är en enda `whereDoesntHave`-
      *   underfråga, aldrig en fråga per rad (Beslut 4).
      *
+     *   Asymmetrin mot `is_active`-villkoret två rader ovan är avsiktlig,
+     *   inte en inkonsekvens: en mjukraderad motpart blockerar INTE (raden
+     *   är oåtkomlig genom hela rutt-kedjan — ingen kan bocka av eller hoppa
+     *   över den, så beroendet vore permanent och osynligt trasigt), medan
+     *   en PAUSAD motpart blockerar FORTFARANDE (paus är reversibelt och
+     *   synligt — schemat kan återupptas, förekomsten bockas av eller
+     *   hoppas över — så det är rätt att A väntar). Villkoret nedan prövar
+     *   därför bara `status` och att schema/item finns (SoftDeletes' globala
+     *   scope), aldrig motpartens `is_active`.
+     *
      * @param  Builder<ScheduleOccurrence>  $query
      * @param  list<int>  $accountIds  löpnumren för kontona $user är medlem i
      * @return Builder<ScheduleOccurrence>
