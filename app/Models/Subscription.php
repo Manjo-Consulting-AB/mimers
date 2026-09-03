@@ -20,8 +20,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * `ulid` eftersom prenumerationen hör till ett konto och kan visas i en
  * kontovy — aldrig ett löpnummer utåt (issue 25 § Beslut 1).
+ *
+ * `account_id`, `plan_id` och `external_ref` är medvetet UTESLUTNA ur
+ * `#[Fillable]`: `account_id` binds vid skapandet och är unikt (ett konto,
+ * högst en prenumeration — issue 25 § Beslut 5), `plan_id` byts bara genom
+ * nedgraderingen i issue 28, och `external_ref` skrivs av det betalflöde som
+ * inte finns i MVP. Inget av dem får sättas via massildelning från en
+ * request; kod som skapar eller ändrar en prenumeration sätter dem explicit.
  */
-#[Fillable(['account_id', 'plan_id', 'status', 'current_period_end', 'grace_until', 'external_ref'])]
+#[Fillable(['status', 'current_period_end', 'grace_until'])]
 #[RouteKey('ulid')]
 class Subscription extends Model
 {

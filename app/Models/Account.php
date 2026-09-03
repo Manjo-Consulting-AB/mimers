@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use RuntimeException;
 
 /**
  * Ägarenheten i systemet, se [[Konton och åtkomst]] § account och
@@ -67,17 +68,24 @@ class Account extends Model
      *
      * Saknas free-planen är systemet trasigt och det ska märkas — kasta
      * hellre än att returnera null, annars ärver varje kontroll i 27 en
-     * nullkontroll som ingen kommer att skriva.
+     * nullkontroll som ingen kommer att skriva. Undantaget är ett
+     * RuntimeException, inte ModelNotFound: en saknad grundrad är ett
+     * serverfel (500), aldrig en 404 mot klienten.
      */
     public function currentPlan(): Plan
     {
         $subscription = $this->subscription;
 
         if ($subscription !== null && in_array($subscription->status, ['active', 'past_due'], true)) {
-            return $subscription->plan;
+            $plan = $subscription->plan;
+
+            if ($plan !== null) {
+                return $plan;
+            }
         }
 
-        return Plan::query()->where('code', 'free')->firstOrFail();
+        return Plan::query()->where('code', 'free')->first()
+            ?? throw new RuntimeException('Grundplanen [free] saknas i tabellen plan.');
     }
 
     /**
