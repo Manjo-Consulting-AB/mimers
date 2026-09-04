@@ -134,6 +134,12 @@ class EnforcesDowngrades
                     ->first();
 
                 if ($attachment === null) {
+                    Log::warning('downgrade.attachments_exhausted', [
+                        'account_ulid' => $row->ulid,
+                        'used_bytes' => $this->usedBytes($row->id),
+                        'limit_bytes' => $limit,
+                    ]);
+
                     break;
                 }
 

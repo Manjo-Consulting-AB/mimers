@@ -461,6 +461,39 @@ it('ett konto som redan ligger under gränsen flyttas till active utan radering'
     expect($subscription->refresh()->status)->toBe('cancelled');
 });
 
+it('när bilagorna tar slut innan gränsen nås loggas det och kontot blir ändå active', function () {
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    $logg = Log::spy();
+    sättPlangräns('free', 'storage_bytes', 100);
+    [$account, $subscription] = raderingForfalltKonto();
+    $user = User::factory()->create();
+    [, $item] = raderingContainerItem($account, $user);
+    $bilaga = raderingBilaga($item, $user, $account, 100);
+
+    // Räknaren står på 300 — mer än vad bilagan någonsin kan frigöra (t.ex.
+    // en räknare 26b inte hunnit stämma av, eller byten på fel konto). Den
+    // enda bilagan raderas (300 → 200) och kontot ligger ÄNDÅ över gränsen.
+    raderingStallForbrukning($account->id, 300);
+
+    raderingKör();
+
+    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->not->toBeNull();
+    expect($account->refresh()->status)->toBe('active');
+    expect($subscription->refresh()->status)->toBe('cancelled');
+    expect(raderingForbrukning($account->id))->toBe(200);
+
+    $logg->shouldHaveReceived('warning')->once()->withArgs(
+        fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.attachments_exhausted'
+            && ($kontext['account_ulid'] ?? null) === $account->ulid
+            && ($kontext['used_bytes'] ?? null) === 200
+            && ($kontext['limit_bytes'] ?? null) === 100,
+    );
+    $logg->shouldHaveReceived('info')->once()->withArgs(
+        fn (string $meddelande, array $kontext) => $meddelande === 'downgrade.enforced'
+            && ($kontext['account_ulid'] ?? null) === $account->ulid,
+    );
+});
+
 it('en återställning som spränger kvoten nekas', function () {
     sättPlangräns('free', 'storage_bytes', 1000);
     [$account, $user, $headers] = kontoMedMedlem();
