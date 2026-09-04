@@ -93,19 +93,26 @@ class AdvancesAccountLifecycle
      * Bara en loggrad (Beslut 4) — ingen bokföring av skickade påminnelser,
      * den historiken bär M5:s outbox (Beslut 3). Stängningen ovan har redan
      * lyft bort konton som passerat 15, så urvalet här är de som ligger i
-     * fönstret 12–15 månader.
+     * fönstret 12–15 månader. `inactive_since` selectas som kolumn ur samma
+     * SQL-uttryck som scopet (Account::inactiveSinceExpression) — definitionen
+     * formuleras en gång, aldrig om i PHP.
      */
     private function logNoticeDueAccounts(Carbon $noticeCutoff): void
     {
         $this->accountsToProcess(
             Account::query()
+                ->select('account.*', DB::raw(Account::inactiveSinceExpression().' AS inactivity_since'))
                 ->where('status', 'active')
                 ->whereDoesntHave('subscription', fn (Builder $q) => $q->whereIn('status', ['active', 'past_due']))
                 ->inactiveSince($noticeCutoff),
             function (Account $account): void {
+                // Kolumnen finns bara här — sätts i minnet av select-satsen
+                // ovan, är ingen kolumn på modellen (se TrashController).
+                $inactiveSince = $account->getAttribute('inactivity_since');
+
                 Log::info('account.inactivity_notice_due', [
                     'account_ulid' => $account->ulid,
-                    'inactive_since' => $this->inactiveSince($account)->toDateTimeString(),
+                    'inactive_since' => is_string($inactiveSince) ? Carbon::parse($inactiveSince)->toDateTimeString() : null,
                 ]);
             },
         );
@@ -176,12 +183,17 @@ class AdvancesAccountLifecycle
                 return;
             }
 
-            $exempt = Subscription::query()
+            // Undantaget (Beslut 6) läses under lås, som EnforcesDowngrades
+            // gör med subscription-raden: går en betalning igenom precis när
+            // nattjobbet kör ska kontot inte stängas ändå — lockForUpdate är
+            // en current read som väntar in den transaktionen.
+            $subscription = Subscription::query()
                 ->where('account_id', $row->id)
                 ->whereIn('status', ['active', 'past_due'])
-                ->exists();
+                ->lockForUpdate()
+                ->first();
 
-            if ($exempt) {
+            if ($subscription !== null) {
                 return;
             }
 
@@ -215,17 +227,5 @@ class AdvancesAccountLifecycle
 
             Log::info('account.reopened', ['account_ulid' => $row->ulid]);
         });
-    }
-
-    /**
-     * Kontots aktivitetstidpunkt — samma härledning som scopet i Beslut 1:
-     * senaste aktiviteten bland medlemmarna, med `created_at` som fallback
-     * när det inte finns någon (MAX över noll rader ger NULL).
-     */
-    private function inactiveSince(Account $account): Carbon
-    {
-        $senaste = $account->users()->max('last_active_at');
-
-        return Carbon::parse($senaste ?? $account->created_at);
     }
 }

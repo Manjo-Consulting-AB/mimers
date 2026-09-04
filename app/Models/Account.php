@@ -100,6 +100,24 @@ class Account extends Model
     }
 
     /**
+     * SQL-uttrycket för kontots aktivitetstidpunkt — den senaste aktiviteten
+     * bland medlemmarna, med `created_at` som fallback (innebörden beskrivs
+     * i scopeInactiveSince nedan). Samma sträng används i scopets WHERE och
+     * selectas som kolumn av App\Console\AdvancesAccountLifecycle för
+     * loggradens `inactive_since`: definitionen formuleras en gång, inte en
+     * gång i SQL och en gång om i PHP.
+     */
+    public static function inactiveSinceExpression(): string
+    {
+        return 'COALESCE('
+            .'(SELECT MAX(user.last_active_at)'
+            .' FROM account_user'
+            .' JOIN user ON user.id = account_user.user_id'
+            .' WHERE account_user.account_id = account.id),'
+            .' account.created_at)';
+    }
+
+    /**
      * Konton vars aktivitet ligger FÖRE $cutoff — kontolivscykelns enda
      * definition av inaktivitet (issue 29 § Beslut 1), anropad av
      * App\Console\AdvancesAccountLifecycle (29a) och av 29b:s raderingsjobb.
@@ -124,14 +142,6 @@ class Account extends Model
      */
     public function scopeInactiveSince(Builder $query, Carbon $cutoff): Builder
     {
-        return $query->whereRaw(
-            'COALESCE('
-                .'(SELECT MAX(user.last_active_at)'
-                .' FROM account_user'
-                .' JOIN user ON user.id = account_user.user_id'
-                .' WHERE account_user.account_id = account.id),'
-                .' account.created_at) < ?',
-            [$cutoff],
-        );
+        return $query->whereRaw(static::inactiveSinceExpression().' < ?', [$cutoff]);
     }
 }
