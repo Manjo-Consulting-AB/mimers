@@ -165,9 +165,13 @@ it('listan visar kontots levande bilagor sorterade på storlek fallande', functi
     [$account, $user, $headers] = kontoMedMedlem();
     [, $item] = nedgraderingContainerItem($account, $user, 'Mimer');
 
-    $liten = nedgraderingBilagaMedStorlek($item, $account, $user, 100);
+    // Två bilagor delar byte_size med flit: sorteringen är byte_size fallande
+    // och vid lika storlek attachment.id fallande — andrasorteringen som gör
+    // ordningen deterministisk (granskningsfynd 6). Utan den vore ordningen
+    // mellan $äldreLiten och $yngreLiten odefinierad och testet flaxigt.
+    $äldreLiten = nedgraderingBilagaMedStorlek($item, $account, $user, 100);
     $stor = nedgraderingBilagaMedStorlek($item, $account, $user, 300);
-    $mellan = nedgraderingBilagaMedStorlek($item, $account, $user, 200);
+    $yngreLiten = nedgraderingBilagaMedStorlek($item, $account, $user, 100);
 
     $response = getJson("/api/accounts/{$account->ulid}/storage", $headers);
 
@@ -175,8 +179,8 @@ it('listan visar kontots levande bilagor sorterade på storlek fallande', functi
     expect($response->json('data'))->toHaveCount(3);
     expect(collect($response->json('data'))->pluck('ulid')->all())->toBe([
         $stor->ulid,
-        $mellan->ulid,
-        $liten->ulid,
+        $yngreLiten->ulid,
+        $äldreLiten->ulid,
     ]);
 });
 
