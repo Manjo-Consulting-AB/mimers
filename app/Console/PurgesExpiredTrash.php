@@ -64,43 +64,43 @@ class PurgesExpiredTrash
     {
         $cutoff = now()->subDays((int) config('files.trash_retention_days'));
 
-        $borttagna = [
-            'attachment' => $this->gallra(
+        $deleted = [
+            'attachment' => $this->purge(
                 'attachment',
                 Attachment::onlyTrashed()->where('deleted_at', '<=', $cutoff),
-                fn (Attachment $bilaga) => $this->purgeContent->attachment($bilaga),
+                fn (Attachment $attachment) => $this->purgeContent->attachment($attachment),
             ),
-            'item' => $this->gallra(
+            'item' => $this->purge(
                 'item',
                 Item::onlyTrashed()->where('deleted_at', '<=', $cutoff),
                 fn (Item $item) => $this->purgeContent->item($item),
             ),
-            'category' => $this->gallra(
+            'category' => $this->purge(
                 'category',
                 Category::onlyTrashed()->where('deleted_at', '<=', $cutoff),
-                fn (Category $kategori) => $this->purgeContent->category($kategori),
+                fn (Category $category) => $this->purgeContent->category($category),
             ),
-            'tag' => $this->gallra(
+            'tag' => $this->purge(
                 'tag',
                 Tag::onlyTrashed()->where('deleted_at', '<=', $cutoff),
-                fn (Tag $tagg) => $this->purgeContent->tag($tagg),
+                fn (Tag $tag) => $this->purgeContent->tag($tag),
             ),
             // 20c · Raderade containers: PurgeContainer tar med sig hela
             // innehållet, och varje container ligger i sin egen transaktion
             // (Beslut 7) — samma chunkById/felhantering/loggning som de fyra
             // grenarna ovan.
-            'container' => $this->gallra(
+            'container' => $this->purge(
                 'container',
                 Container::onlyTrashed()->where('deleted_at', '<=', $cutoff),
                 fn (Container $container) => $this->purgeContainer->handle($container),
             ),
         ];
 
-        if (array_sum($borttagna) > 0) {
-            Log::info('Gallrade utgånget innehåll ur papperskorgen.', $borttagna);
+        if (array_sum($deleted) > 0) {
+            Log::info('Gallrade utgånget innehåll ur papperskorgen.', $deleted);
         }
 
-        return $borttagna;
+        return $deleted;
     }
 
     /**
@@ -111,27 +111,27 @@ class PurgesExpiredTrash
      * @template TModel of Item|Attachment|Category|Tag|Container
      *
      * @param  Builder<TModel>  $query
-     * @param  Closure(TModel): void  $perRad
+     * @param  Closure(TModel): void  $perRow
      */
-    private function gallra(string $typ, Builder $query, Closure $perRad): int
+    private function purge(string $type, Builder $query, Closure $perRow): int
     {
-        $borttagna = 0;
+        $deleted = 0;
 
-        $query->chunkById(100, function ($rader) use ($typ, $perRad, &$borttagna): void {
-            foreach ($rader as $rad) {
+        $query->chunkById(100, function ($rows) use ($type, $perRow, &$deleted): void {
+            foreach ($rows as $row) {
                 try {
-                    $perRad($rad);
-                    $borttagna++;
+                    $perRow($row);
+                    $deleted++;
                 } catch (Throwable $e) {
                     Log::error('Kunde inte gallra utgånget innehåll ur papperskorgen.', [
-                        'type' => $typ,
-                        'ulid' => $rad->ulid,
+                        'type' => $type,
+                        'ulid' => $row->ulid,
                         'exception' => $e->getMessage(),
                     ]);
                 }
             }
         });
 
-        return $borttagna;
+        return $deleted;
     }
 }

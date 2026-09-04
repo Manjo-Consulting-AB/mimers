@@ -70,15 +70,15 @@ class CloseOccurrence
             // Beslut 9: schemaraden låses FÖRST. Förekomsten läses sedan om
             // under det låset — en aktuell läsning som ser en samtidig
             // avslutning när den väl fått vänta på låset.
-            $låst = $schedule->newQuery()->whereKey($schedule->getKey())->lockForUpdate()->firstOrFail();
+            $lockedSchedule = $schedule->newQuery()->whereKey($schedule->getKey())->lockForUpdate()->firstOrFail();
 
-            $aktuell = $låst->occurrences()->whereKey($occurrence->getKey())->lockForUpdate()->firstOrFail();
+            $lockedOccurrence = $lockedSchedule->occurrences()->whereKey($occurrence->getKey())->lockForUpdate()->firstOrFail();
 
             // Beslut 5: bara en ÖPPEN förekomst kan stängas. Utan regeln
             // blir ett dubbelklick två stängningar och två nya förekomster,
             // och serien har hoppat ett steg utan att någon gjorde något.
-            if ($aktuell->status !== ScheduleOccurrence::STATUS_OPEN) {
-                throw ApiException::make('occurrence.not_open', ['status' => $aktuell->status], 422);
+            if ($lockedOccurrence->status !== ScheduleOccurrence::STATUS_OPEN) {
+                throw ApiException::make('occurrence.not_open', ['status' => $lockedOccurrence->status], 422);
             }
 
             // Beslut 6: ett pausat schema kan inte stängas — ett sådant
@@ -86,7 +86,7 @@ class CloseOccurrence
             // av den skulle skapa nästa förekomst på ett schema ingen vill ha
             // förekomster på. (Ett mjukraderat schema är osynligt genom
             // relationen och ger redan 404 i rutten.)
-            if (! $låst->is_active) {
+            if (! $lockedSchedule->is_active) {
                 throw ApiException::make('schedule.inactive', [], 422);
             }
 
@@ -113,7 +113,7 @@ class CloseOccurrence
                 ->join('schedule_occurrence as blocker', 'blocker.id', '=', 'occurrence_dependency.depends_on_occurrence_id')
                 ->join('schedule', 'schedule.id', '=', 'blocker.schedule_id')
                 ->join('item', 'item.id', '=', 'schedule.item_id')
-                ->where('occurrence_dependency.occurrence_id', $aktuell->id)
+                ->where('occurrence_dependency.occurrence_id', $lockedOccurrence->id)
                 ->where('blocker.status', ScheduleOccurrence::STATUS_OPEN)
                 ->whereNull('schedule.deleted_at')
                 ->whereNull('item.deleted_at')
@@ -122,15 +122,15 @@ class CloseOccurrence
                 // ska inte byta plats mellan körningar.
                 ->orderBy('blocker.ulid')
                 ->get(['blocker.ulid', 'blocker.due_at', 'schedule.title'])
-                ->map(fn ($rad): array => [
-                    'ulid' => $rad->ulid,
-                    'title' => $rad->title,
+                ->map(fn ($row): array => [
+                    'ulid' => $row->ulid,
+                    'title' => $row->title,
                     // Query builder-formaterar inte DATE-kolumnen som Eloquent
                     // gör — rakt ur sqlite är värdet "2027-05-05 00:00:00".
                     // En Eloquent-relation med date-cast vore renare, men
                     // spärren måste läsas på EN fråga och en relation med
                     // eager loads är fler; utdata är identisk (granskningen).
-                    'due_at' => Carbon::parse($rad->due_at)->toDateString(),
+                    'due_at' => Carbon::parse($row->due_at)->toDateString(),
                 ])
                 ->all();
 
@@ -139,12 +139,12 @@ class CloseOccurrence
             }
 
             // Steg 2 — stäng raden.
-            $aktuell->status = $status;
-            $aktuell->completed_at = now();
-            $aktuell->completed_by_user_id = $user->id;
-            $aktuell->completed_by_account_id = $account->id;
-            $aktuell->completion_note = $completionNote;
-            $aktuell->save();
+            $lockedOccurrence->status = $status;
+            $lockedOccurrence->completed_at = now();
+            $lockedOccurrence->completed_by_user_id = $user->id;
+            $lockedOccurrence->completed_by_account_id = $account->id;
+            $lockedOccurrence->completion_note = $completionNote;
+            $lockedOccurrence->save();
 
             // Steg 3 och 4 — nästa förfall räknas och nästa förekomst skapas
             // av OpenNextOccurrence, i samma transaktion. `$from` är det enda
@@ -154,15 +154,15 @@ class CloseOccurrence
             // flytta hela den framtida serien. `fixed` ignorerar `$from` och
             // räknar alltid från kalendern.
             $from = $status === ScheduleOccurrence::STATUS_SKIPPED
-                ? $aktuell->due_at
-                : $aktuell->completed_at;
+                ? $lockedOccurrence->due_at
+                : $lockedOccurrence->completed_at;
 
-            $next = $this->openNextOccurrence->handle($låst, $from);
+            $next = $this->openNextOccurrence->handle($lockedSchedule, $from);
 
             // Steg 5 — Avbryt oskickade notiser för den stängda förekomsten
             // (M5). Byggs på exakt den här platsen, sist i flödet.
 
-            return ['closed' => $aktuell, 'next' => $next];
+            return ['closed' => $lockedOccurrence, 'next' => $next];
         });
     }
 }

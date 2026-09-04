@@ -297,18 +297,18 @@ class ItemController extends Controller
      */
     private function replaceTags(Item $item, Collection $tags): void
     {
-        $önskade = $tags->pluck('id')->all();
-        $nuvarande = DB::table('item_tag')->where('item_id', $item->id)->pluck('tag_id')->all();
+        $desired = $tags->pluck('id')->all();
+        $current = DB::table('item_tag')->where('item_id', $item->id)->pluck('tag_id')->all();
 
-        $attachera = array_values(array_diff($önskade, $nuvarande));
-        $detachera = array_values(array_diff($nuvarande, $önskade));
+        $toAttach = array_values(array_diff($desired, $current));
+        $toDetach = array_values(array_diff($current, $desired));
 
-        if ($attachera !== []) {
-            $item->tags()->attach($attachera);
+        if ($toAttach !== []) {
+            $item->tags()->attach($toAttach);
         }
 
-        if ($detachera !== []) {
-            $item->tags()->detach($detachera);
+        if ($toDetach !== []) {
+            $item->tags()->detach($toDetach);
         }
     }
 }
