@@ -27,6 +27,13 @@ use Illuminate\Support\Facades\Schema;
  * samma migration två gånger, och en tabell som redan finns med fel form ska
  * krascha deployen, inte tigas ihjäl.
  *
+ * Pros `max_file_bytes` är 64 MB, inte 100 MB: serverns `upload_max_filesize`
+ * hos inleed står på 64M (`public/.htaccess`, speglad i `config/files.php`),
+ * och en plangräns över det tekniska taket kan aldrig slå i — uppladdningen
+ * dör som ett valideringsfel i StoreAttachmentRequest långt före
+ * Entitlements. Talen flyttas tillsammans, se [[ADR-0014 Prismodell]]
+ * § Konsekvenser.
+ *
  * Pengar är BIGINT i minsta valutaenhet + CHAR(3), aldrig flyttal (AGENTS.md
  * § Databaskonventioner). Byten räknas binärt — 1 GB = 1 GiB. CHECK-villkoret
  * läggs bara på mysql; sqlite (test) saknar stöd för ALTER TABLE ... ADD
@@ -97,7 +104,7 @@ return new class extends Migration
                 'limits' => [
                     'containers' => null,
                     'storage_bytes' => 25 * 1024 * 1024 * 1024,
-                    'max_file_bytes' => 100 * 1024 * 1024,
+                    'max_file_bytes' => 64 * 1024 * 1024,
                     'shared_users_per_container' => null,
                     'webhooks' => true,
                     'pdf_binder' => true,

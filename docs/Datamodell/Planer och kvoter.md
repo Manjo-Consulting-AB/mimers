@@ -33,7 +33,7 @@ Ett nytt B2B-erbjudande ska vara en ny rad i den här tabellen, inte ny kod. Det
 |---|---|---|
 | Containers | 1 | obegränsat |
 | Utrymme | 1 GB | 25 GB |
-| Max filstorlek | 10 MB | 100 MB |
+| Max filstorlek | 10 MB | 64 MB |
 | Delade användare per container | 1 | obegränsat |
 | Påminnelser och ICS | ja | ja |
 | Export | ja | ja |
@@ -43,6 +43,8 @@ Ett nytt B2B-erbjudande ska vara en ny rad i den här tabellen, inte ny kod. Det
 | PDF-pärm | nej | ja |
 | Ägarbyte | nej | ja |
 | Utlåningspåminnelser | nej | ja |
+
+Pro-taket på 64 MB är satt av servern, inte av prismodellen: `upload_max_filesize` hos inleed står på 64M, se [[Pipeline]] § Uppladdningsgränser. Det tekniska taket i `config/files.php` är samma tal, och `max_file_bytes` ska aldrig ligga över det — en plangräns som aldrig hinner slå i blir ett HTTP-fel istället för ett förklarat kvotmeddelande. Byter vi hostingplattform kan talet justeras om kunderna efterfrågar det.
 
 Pro ligger på **39–49 €/år**. Påminnelser och export är medvetet fria: påminnelserna skapar vanan, exporten skapar förtroendet. Se [[ADR-0014 Prismodell]].
 
