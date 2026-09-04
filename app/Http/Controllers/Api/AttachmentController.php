@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Attachment\StoreAttachment;
-use App\Actions\Usage\AdjustUsage;
+use App\Actions\Attachment\TrashAttachment;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Attachment\StoreAttachmentRequest;
@@ -16,7 +16,6 @@ use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use RuntimeException;
 
@@ -118,42 +117,23 @@ class AttachmentController extends Controller
      * — det sker först när bilagan lämnar papperskorgen, issue 17a
      * ([[ADR-0008 Soft delete och papperskorg]]).
      *
-     * Förbrukningen följer däremot bilagan direkt (issue 26a): en bilaga som
-     * slutar vara levande slutar också räknas mot kontots kvot, i SAMMA
-     * transaktion som mjukraderingen. Bytena läses ur stored_file innan
-     * `delete()` — de ligger inte på attachment-raden.
+     * Hela arbetet — mjukraderingen OCH minskningen av kontots förbrukning
+     * (issue 26a), i samma transaktion — bor sedan issue 28 i
+     * App\Actions\Attachment\TrashAttachment (issue 28 § Beslut 5): den här
+     * rutten och storage-ytans bulkrensning gör exakt samma sak, och paret
+     * får inte ligga i två filer. Beteendet är oförändrat: samma grind, samma
+     * 204, samma räkning.
      *
      * `{attachment}` binds av gruppens scopeBindings() genom
      * App\Models\Item::attachments() (§ Beslut 1), så en bilaga på ett annat
      * item ger 404, och en redan mjukraderad bilaga syns inte av bindningen —
      * 404 `resource.not_found`.
      */
-    public function destroy(Container $container, Item $item, Attachment $attachment, AdjustUsage $adjustUsage): Response
+    public function destroy(Container $container, Item $item, Attachment $attachment, TrashAttachment $trashAttachment): Response
     {
         Gate::authorize('update', $container);
 
-        $byteSize = (int) $attachment->storedFile()->value('byte_size');
-        $billedAccountId = $attachment->billed_account_id;
-
-        DB::transaction(function () use ($attachment, $billedAccountId, $byteSize, $adjustUsage): void {
-            // Beslutet att minska grundas på radens tillstånd UNDER radlåset
-            // (granskningsfynd 1): två samtidiga DELETE på samma bilaga skulle
-            // annars båda se en levande rad och dra av bytena två gånger.
-            // lockForUpdate med SoftDeletes-scopet är en current read — är
-            // raden redan mjukraderad när låset tas finns inget att göra.
-            $levande = Attachment::query()
-                ->whereKey($attachment->getKey())
-                ->lockForUpdate()
-                ->exists();
-
-            if (! $levande) {
-                return;
-            }
-
-            $attachment->delete();
-
-            $adjustUsage->handle($billedAccountId, bytesDelta: -$byteSize);
-        });
+        $trashAttachment->handle($attachment);
 
         return response()->noContent();
     }
