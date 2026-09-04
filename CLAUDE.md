@@ -29,6 +29,7 @@ Din issues **Läs**-lista är utgångspunkten. Tabellen här är för frågor so
 | planer, kvoter, förbrukning, nedgradering | `Planer och kvoter.md` |
 | **varför** ett beslut ser ut som det gör | `docs/ADR/ADR-index.md`, sedan rätt ADR |
 | felkodsformatet i API:et | `AGENTS.md` § Felformat |
+| vilket språk ett namn i koden ska ha | `AGENTS.md` § Språk i koden |
 | CI, miljöer, utrullning, servern hos inleed | `docs/Deploy/Pipeline.md` |
 | en fråga ingen har svarat på | `docs/Tankar.md` |
 
