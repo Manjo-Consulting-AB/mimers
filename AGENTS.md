@@ -1,10 +1,10 @@
 # AGENTS.md
 
-Regler för dig som implementerar en issue i det här repot. Läs den här filen helt — den är kort med flit.
+Regler för dig som implementerar en issue i det här repot. Läs filen helt — den är kort med flit.
 
-**Vad** du ska läsa står i `CLAUDE.md`, kartan över dokumentationen. Den här filen handlar om **hur** du ska arbeta. De överlappar inte.
+**Vad** du ska läsa står i `CLAUDE.md`. Den här filen handlar om **hur**. De överlappar inte.
 
-Motiveringen bakom processen står i [ADR-0018](docs/ADR/ADR-0018%20Utvecklingsprocess%20och%20deploy.md). Läs den bara om du undrar över en avvägning.
+Motiveringen bakom processen står i [ADR-0018](docs/ADR/ADR-0018%20Utvecklingsprocess%20och%20deploy.md) — läs den bara om du undrar över en avvägning.
 
 ## Innan du börjar
 
@@ -22,7 +22,7 @@ Slå upp ditt issuenummer i [Backlog](docs/Backlog.md) och öppna **bara** din m
 
 Ingen pushar direkt till `main`, inte heller Tony.
 
-**En release per stängd milstolpe.** Är din issue milstolpens sista blir det en release när den mergats — säg till i PR:en om du märker det, så att retron och releasen körs i samma svep. Takten och skälen står i [ADR-0018](docs/ADR/ADR-0018%20Utvecklingsprocess%20och%20deploy.md) § Befordranstakt, handgreppen i [Pipeline](docs/Deploy/Pipeline.md) § Releaseritualen.
+**En release per stängd milstolpe.** Är din issue milstolpens sista — säg till i PR:en, så att retron och releasen körs i samma svep. Takten står i [ADR-0018](docs/ADR/ADR-0018%20Utvecklingsprocess%20och%20deploy.md) § Befordranstakt, handgreppen i [Pipeline](docs/Deploy/Pipeline.md) § Releaseritualen.
 
 <!-- ai-standards:begin agent-core -->
 
@@ -69,31 +69,31 @@ Reglerna står i blocket ovan. Här står bara kommandona de motsvarar.
 
 Minnesflaggan behövs i en worktree. Ändra inte `phpstan.neon` för att komma runt det.
 
-Bär din issue flera **delmoment** — en migration *och* en API-yta, till exempel, alltså två skilda läs–skriv–testa-slingor med olika förlagor och olika testfiler — kan den vara upplagd för två sessioner på samma gren: den första gör sitt delmoment, kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Står det så i issuen, följ det.
+Bär din issue flera **delmoment** — en migration *och* en API-yta — kan den vara upplagd för två sessioner på samma gren: den första kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Står det så i issuen, följ det.
 
-**Axlarna väljer mergegrinden, inte dig.** Deepseek implementerar varje issue; Claude Sonnet granskar varje PR, oavsett `risk_class` — axeln avgör bara om mergen är automatisk eller manuell hos Tony. Claude Opus rör inte den löpande granskningen; dess enda roll är att svara på en obesvarad `## Frågor och antaganden` i PR-kroppen. Varje PR får en läsare, och ingen mergas utan `review:approved`. Tabellen står i [ADR-0026](docs/ADR/ADR-0026%20Implementering%20och%20granskning%20efter%20riskaxlar.md) (uppföljning 2026-09-03). Säger du till enligt regeln ovan avbryts sessionen och uppgiften går om med tomt kontext — till Deepseek om fyndet är konkret, till Sonnet om du missförstått uppgiften. Det är den billiga utgången, och den förutsätter att du säger till medan sessionen är kort.
+**Axlarna väljer mergegrinden, inte dig.** Deepseek implementerar varje issue; Sonnet granskar varje PR oavsett `risk_class` — axeln avgör bara om mergen är automatisk eller manuell hos Tony. Ingen PR mergas utan `review:approved`. Opus rör inte den löpande granskningen; dess enda roll är att svara på en obesvarad `## Frågor och antaganden` i PR-kroppen. Se [ADR-0026](docs/ADR/ADR-0026%20Implementering%20och%20granskning%20efter%20riskaxlar.md) (uppföljning 2026-09-03). Säger du till enligt regeln ovan avbryts sessionen och uppgiften går om med tomt kontext — till Deepseek om fyndet är konkret, till Sonnet om du missförstått uppgiften.
 
 ## Vad som krävs för att en PR ska mergas
 
-- **Varje "Klart när"-punkt i issuen motsvaras av ett test.** En PR utan det mergas inte. Det är den enda mekanism som skalar när granskaren inte hinner läsa varje rad.
+- **Varje "Klart när"-punkt i issuen motsvaras av ett test.** En PR utan det mergas inte.
 - CI är grön: `npm run build`, `vendor/bin/pint --test`, `vendor/bin/phpstan analyse`, `php artisan test`. **Bygget först** — `UtrullningsartefaktTest` läser `public/build/manifest.json`, så sviten faller utan det.
 - PR-mallen är ifylld, inklusive vilka dokument du läst och processnoteringen.
 
 ## Nya beroenden
 
-**Nya composer- och npm-paket kräver Tonys godkännande.** Ett beroende är ett arkitekturbeslut och hör hemma i en ADR, inte i en implementationsissue. Föreslå det i PR:en och vänta på svar — lägg inte till det och be om ursäkt sedan.
+**Nya composer- och npm-paket kräver Tonys godkännande.** Föreslå paketet i PR:en och vänta på svar — lägg inte till det och be om ursäkt sedan.
 
 ## Språk i koden
 
 **Identifierare är på engelska. Prosa är på svenska.** Gränsen går vid vad kompilatorn läser, inte vid vad människan läser.
 
-- **Engelska** i `app/`, `database/`, `routes/`, `config/` och `resources/js/`: klasser, metoder, funktioner, variabler, konstanter, tabell- och kolumnnamn, rutter, felkoder, jobbnamn. Aldrig `å`, `ä` eller `ö` i ett identifierarnamn — de överlever inte alla verktygskedjor, och en halvsvensk metodsignatur tvingar varje läsare att gissa vilket språk nästa namn ligger på.
+- **Engelska** i `app/`, `database/`, `routes/`, `config/` och `resources/js/`: klasser, metoder, funktioner, variabler, konstanter, tabell- och kolumnnamn, rutter, felkoder, jobbnamn. Aldrig `å`, `ä` eller `ö` i ett identifierarnamn.
 - **Svenska** i kommentarer, docblock, commit-meddelanden, PR-kroppar, issues och dokumentationen under `docs/`.
-- **`tests/` är svenska med flit** — filnamn, `it(...)`-beskrivningar och hjälpfunktioner (`bjudInRad()`, `kontoMedMedlem()`, `gallringKör()`). Testerna är den läsbara beskrivningen av vad systemet ska göra, och domänen — båtar, förtöjning, gallring — har svenska ord som inte blir tydligare av att översättas. Skriv inte om en befintlig hjälpare till engelska.
+- **`tests/` är svenska med flit** — filnamn, `it(...)`-beskrivningar och hjälpfunktioner (`bjudInRad()`, `kontoMedMedlem()`, `gallringKör()`). Skriv inte om en befintlig hjälpare till engelska.
 
-Det här är en kodkonvention, inte ett i18n-beslut. [ADR-0013](docs/ADR/ADR-0013%20Spr%C3%A5k%20och%20i18n.md) handlar om det språk **användaren** möter — locale, mejlmallar, felkodernas översättning i klienten — och säger ingenting om identifierare.
+Det här är en kodkonvention, inte ett i18n-beslut. [ADR-0013](docs/ADR/ADR-0013%20Spr%C3%A5k%20och%20i18n.md) handlar om det språk **användaren** möter och säger ingenting om identifierare.
 
-**Följ filen du redan står i.** Hittar du en avvikelse mot regeln ovan: döp inte om den i förbifarten, den ligger utanför din issues omfång. Skriv den under `## Frågor och antaganden` i PR-kroppen så blir den en egen issue.
+**Följ filen du redan står i.** Hittar du en avvikelse mot regeln ovan: döp inte om den i förbifarten. Skriv den under `## Frågor och antaganden` i PR-kroppen så blir den en egen issue.
 
 ## Databaskonventioner
 
@@ -140,7 +140,7 @@ Varje felsvar har en stabil kod plus tillräckligt med data för att klienten sk
 
 - **`code` är alltid en punktseparerad, stabil sträng.** Domän först, sedan vad som hände: `auth.invalid_credentials`, `quota.storage_exceeded`. Inte `error.login_failed_try_again`.
 - **`data` finns alltid**, även tom — och tom `data` serialiseras som `{}`, aldrig `[]`, så klienten slipper hantera två typer.
-- **Ingen `message`-nyckel.** Inte ens som bekvämlighet: finns den börjar klienter läsa den, och då är i18n tillbaka i fel lager.
+- **Ingen `message`-nyckel.** Inte ens som bekvämlighet.
 - **Statuskoderna är de vanliga.** 422 validering, 401 oautentiserad, 403 nekad, 404 saknas, 405 fel metod, 429 för många försök. Höljet ändrar kroppen, inte statusen.
 - **Översätt inte.** Ingen `__()` i felsvar, ingen `lang/`-fil för dem.
 
@@ -153,9 +153,9 @@ Varje felsvar har en stabil kod plus tillräckligt med data för att klienten sk
 } } } }
 ```
 
-**Höljet gäller `/api`, inte webbsidorna.** Webben kör Inertia och behåller Laravels vanliga valideringsfel — Inertia-adapterns formulärhantering bygger på dem. Se [ADR-0020](docs/ADR/ADR-0020%20Plattformsidentitet%20och%20frontendgr%C3%A4ns.md) § Konsekvenser.
+**Höljet gäller `/api`, inte webbsidorna.** Webben kör Inertia och behåller Laravels vanliga valideringsfel. Se [ADR-0020](docs/ADR/ADR-0020%20Plattformsidentitet%20och%20frontendgr%C3%A4ns.md) § Konsekvenser.
 
-Implementationen ligger i `bootstrap/app.php` (`withExceptions`), `App\Support\Api\ApiError` och `App\Support\Api\ValidationErrorMapper`. Ett oväntat undantag ger `server.error` utan undantagstext i produktion, men renderar Laravels vanliga felsida när `app.debug` är på — annars går varje API-bugg inte att felsöka.
+Implementationen ligger i `bootstrap/app.php` (`withExceptions`), `App\Support\Api\ApiError` och `App\Support\Api\ValidationErrorMapper`. Ett oväntat undantag ger `server.error` utan undantagstext i produktion, men renderar Laravels vanliga felsida när `app.debug` är på.
 
 Serverrenderat innehåll — mejl, ICS, PDF — väljer språk från mottagarens `locale`, inte från requestens `Accept-Language`.
 
