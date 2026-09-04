@@ -54,7 +54,15 @@ LOCK_PATH = os.path.join(REPO_ROOT, ".claude", "process-next-issue.lock")
 GH_REPO = "Manjo-Consulting-AB/mimers"
 
 # Kortaste granskningsutlåtande som får bära ett godkännande. Se run_review().
+# Den första granskningen går igenom hela diffen och blir alltid lång. Ett
+# uppföljningsvarv som bekräftar att ett enda fynd är åtgärdat är legitimt
+# kort - samma tröskel på båda kastade ett giltigt godkännande på PR #162
+# (241 tecken) och brände sedan tre åtgärdsvarv på ett "fynd" som i själva
+# verket var godkännandet. Därav två trösklar. Det tappade svaret som
+# heuristiken faktiskt finns för ("review:approved satt på #113.") är en
+# rad på ~30 tecken och fastnar fortfarande i den lägre.
 MIN_GRANSKNINGSTEXT = 400
+MIN_GRANSKNINGSTEXT_UPPFOLJNING = 150
 
 # Lägsta andel kvar av Anthropic-kontots rullande 5-timmarsfönster för att
 # påbörja ett nytt issue. Se usage_ok_to_proceed().
@@ -111,18 +119,25 @@ def run_local_tests(cwd):
     if res.returncode != 0:
         return False, (res.stdout or "") + "\n" + (res.stderr or "")
 
+    # Den tillfälliga commiten behövs bara för att få ocommittat arbete in i
+    # HEAD. Har agenten committat själv ligger ändringarna redan där, och
+    # rott-pa-basen kan köras rakt av - att som förr returnera tidigt på ett
+    # rent arbetsträd hade tyst hoppat över hela grinden i just det fallet.
     status = run_cmd(["git", "status", "--porcelain"], cwd=cwd).stdout.strip()
-    if not status:
-        # Inget att committa - rott-pa-basen har då inget nytt/ändrat test att
-        # pröva. Om det här var det enda försöket fångar STEG 5:s egen
-        # "ingen ändring alls"-kontroll det separat.
-        return True, ""
-
-    run_cmd(["git", "add", "."], cwd=cwd)
-    run_cmd(["git", "commit", "-m", "Tillfällig commit för rott-pa-basen-kontroll"], cwd=cwd)
+    tillfallig_commit = bool(status)
+    if tillfallig_commit:
+        run_cmd(["git", "add", "."], cwd=cwd)
+        run_cmd(["git", "commit", "-m", "Tillfällig commit för rott-pa-basen-kontroll"], cwd=cwd)
 
     run_cmd(["git", "fetch", "origin", "main"], cwd=cwd)
     base_sha = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=cwd).stdout.strip()
+    head_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=cwd).stdout.strip()
+    if head_sha == base_sha:
+        # Varken arbetsträd eller commits skiljer sig från basen - rott-pa-basen
+        # har inget nytt/ändrat test att pröva. Om det här var det enda försöket
+        # fångar STEG 5:s egen "ingen ändring alls"-kontroll det separat.
+        return True, ""
+
     rott_res = run_cmd(
         ["bash", ".github/scripts/rott-pa-basen.sh"], check=False, cwd=cwd,
         env={**os.environ, "BASE_SHA": base_sha},
@@ -130,7 +145,8 @@ def run_local_tests(cwd):
     rott_ok = (rott_res.returncode == 0)
     rott_output = (rott_res.stdout or "") + "\n" + (rott_res.stderr or "")
 
-    run_cmd(["git", "reset", "--soft", "HEAD~1"], cwd=cwd)
+    if tillfallig_commit:
+        run_cmd(["git", "reset", "--soft", "HEAD~1"], cwd=cwd)
 
     if not rott_ok:
         return False, f"Nya/ändrade tester är gröna redan på basen (rott-pa-basen.sh):\n{rott_output}"
@@ -291,14 +307,22 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
             f"Ändra koden i arbetsträdet så att varje fynd är löst. Uppfinn inget nytt - lös "
             f"bara det som listas."
         )
+        head_fore = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
         fixare(fix_prompt, worktree_path)
 
         # Agenten kan svara utan att röra en enda fil (missförstod fyndet,
         # eller trodde felaktigt att det redan var löst). `git commit` kraschar
         # då hela pipelinen med "nothing to commit" - fånga det innan dess och
         # låt varvet räknas som ett misslyckat försök i stället för en krasch.
+        #
+        # Den kan också ha committat själv: PR #163 fick sin åtgärd som en egen
+        # commit av agenten, varpå arbetsträdet var rent och alla fyra varven
+        # bokfördes som "inga ändringar" trots att fynden var lösta. Ett rent
+        # arbetsträd ensamt betyder alltså inte att inget hänt - HEAD måste
+        # också stå kvar.
         status = run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
-        if not status:
+        head_efter = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
+        if not status and head_efter == head_fore:
             print(f"  ⚠ {agent_namn} gjorde inga ändringar på varv {round_num}.")
             findings = (
                 f"{findings}\n\nFörra åtgärdsförsöket ändrade inga filer alls - agenten "
@@ -307,14 +331,23 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
             )
             continue
 
+        if head_efter != head_fore:
+            print(f"  i {agent_namn} committade själv på varv {round_num} - behåller den commiten.")
+
         passed, test_output = run_local_tests(cwd=worktree_path)
         if not passed:
             print(f"  ✗ Åtgärden bröt testsviten på varv {round_num}.")
             findings = f"{findings}\n\nÅtgärden bröt testsviten:\n```\n{test_output[:1500]}\n```"
             continue
 
+        # Bara det agenten lämnade ocommittat ska bli en ny commit. Har den
+        # committat själv, och Pint inte ändrat något ovanpå, finns inget kvar
+        # att committa - och ett ovillkorligt `git commit` kraschar då på
+        # "nothing to commit", precis den krasch guarden ovan finns för.
         run_cmd(["git", "add", "."], cwd=worktree_path)
-        run_cmd(["git", "commit", "-m", f"Åtgärda granskningsfynd, varv {round_num} ({agent_namn})"], cwd=worktree_path)
+        staged = run_cmd(["git", "diff", "--cached", "--name-only"], cwd=worktree_path).stdout.strip()
+        if staged:
+            run_cmd(["git", "commit", "-m", f"Åtgärda granskningsfynd, varv {round_num} ({agent_namn})"], cwd=worktree_path)
         run_cmd(["git", "push", "origin", branch_name], cwd=worktree_path)
         pushed_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
         if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
@@ -333,19 +366,40 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
             f"den nya granskningen enligt punkterna ovan - godkänn bara om båda delarna "
             f"är rena."
         )
-        approved, sonnet_check = run_review("sonnet", check_prompt, pr_number, worktree_path)
+        approved, sonnet_check, tappad = run_review(
+            "sonnet", check_prompt, pr_number, worktree_path,
+            min_text=MIN_GRANSKNINGSTEXT_UPPFOLJNING,
+        )
+        if tappad:
+            # Etiketten satt men texten är borta. Ett tappat utlåtande är inte
+            # fynd: skickas det in i nästa varvs fix_prompt får åtgärdsagenten
+            # ett godkännande att "åtgärda" och gör följdriktigt ingenting
+            # (PR #162 brände tre varv så). Läs om granskningen en gång i
+            # stället - håller den inte andra gången går PR:en till Tony.
+            print("  ↻ Utlåtandet tappat - läser om granskningen en gång.")
+            approved, sonnet_check, tappad = run_review(
+                "sonnet", check_prompt, pr_number, worktree_path,
+                min_text=MIN_GRANSKNINGSTEXT_UPPFOLJNING,
+            )
+
         run_cmd(["gh", "pr", "comment", pr_number, "--body",
                   f"### Sonnet 5 - verifiering av åtgärdsvarv {round_num}\n{sonnet_check}"],
                  cwd=REPO_ROOT)
 
         if approved:
             return True, findings
+        if tappad:
+            return False, (
+                f"{sonnet_check}\n\nGranskningens utlåtande tappades två gånger i rad på "
+                f"varv {round_num}. Loopen kan inte avgöra om fynden är lösta, och vägrar "
+                f"gissa - PR:en behöver läsas av en människa."
+            )
         findings = sonnet_check
 
     return False, findings
 
 
-def run_review(model, review_prompt, pr_number, worktree_path):
+def run_review(model, review_prompt, pr_number, worktree_path, min_text=MIN_GRANSKNINGSTEXT):
     """
     Kör en granskning och avgör godkännande via en GitHub-label modellen själv
     sätter som sista åtgärd - inte genom att tolka fritext. En label är alltid
@@ -368,7 +422,10 @@ def run_review(model, review_prompt, pr_number, worktree_path):
     granskningskommentar) - fast den faktiskt gjorde det ibland. REST-API:et
     har ingen sådan bieffekt och svarar rent.
 
-    Returnerar (approved: bool, review_text: str).
+    Returnerar (approved: bool, review_text: str, tappad: bool). `tappad` är
+    sant när modellen satte etiketten men texten är för kort för att bära
+    godkännandet. Då är utlåtandet borta, inte negativt - anroparen får inte
+    behandla texten som fynd att åtgärda.
     """
     run_cmd(["gh", "api", "--method", "DELETE", f"repos/{GH_REPO}/issues/{pr_number}/labels/review:approved"],
              check=False, cwd=REPO_ROOT)
@@ -397,19 +454,19 @@ def run_review(model, review_prompt, pr_number, worktree_path):
     # och ingenting mer. Etiketten satt, alltså mergades PR:en - på ett
     # granskningsutlåtande som inte längre fanns. Att etiketten är kvar men
     # texten borta är exakt det fallet ett tomt svar inte får godkänna.
-    if approved and len(review_text.strip()) < MIN_GRANSKNINGSTEXT:
+    if approved and len(review_text.strip()) < min_text:
         notera = (
             f"Granskningen godkände men lämnade bara {len(review_text.strip())} tecken text "
-            f"(minst {MIN_GRANSKNINGSTEXT} krävs). Utlåtandet är tappat, inte kort - "
+            f"(minst {min_text} krävs). Utlåtandet är tappat, inte kort - "
             f"godkännandet räknas inte."
         )
         print(f"!! {notera}")
         run_cmd(["gh", "api", "--method", "DELETE",
                  f"repos/{GH_REPO}/issues/{pr_number}/labels/review:approved"],
                 check=False, cwd=REPO_ROOT)
-        return False, f"{review_text}\n\n_{notera}_"
+        return False, f"{review_text}\n\n_{notera}_", True
 
-    return approved, review_text
+    return approved, review_text, False
 
 
 MIN_OPUS_SVAR = 80
@@ -983,7 +1040,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
         print(f"  ⚠ PR:ens head hann inte synka mot commit {pushed_sha[:8]} - läser diffen ändå.")
     pr_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
-    godkand, granskning = run_review(
+    godkand, granskning, _ = run_review(
         granskare, bygg_granskningsprompt(issue_body, pr_diff), pr_number, worktree_path
     )
     run_cmd(["gh", "pr", "comment", pr_number, "--body",
