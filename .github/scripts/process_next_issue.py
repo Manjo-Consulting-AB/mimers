@@ -58,7 +58,7 @@ MIN_GRANSKNINGSTEXT = 400
 
 # Lägsta andel kvar av Anthropic-kontots rullande 5-timmarsfönster för att
 # påbörja ett nytt issue. Se usage_ok_to_proceed().
-MIN_USAGE_REMAINING = 0.30
+MIN_USAGE_REMAINING = 0.15
 
 # =====================================================================
 # KONFIGURATION & HJÄLPFUNKTIONER
