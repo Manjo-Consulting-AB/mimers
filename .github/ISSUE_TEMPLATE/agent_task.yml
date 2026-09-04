@@ -111,12 +111,13 @@ body:
     attributes:
       label: Granskning
       description: >
-        Deepseek implementerar varje issue. Varje PR granskas - axlarna avgör hur
-        djupt, inte om det finns en läsare. Stämmer inte valet med axlarna är
-        någondera fel satt.
+        Deepseek implementerar varje issue. Sonnet granskar varje PR, oavsett axlar
+        (ADR-0026, uppföljning 2026-09-03) - axeln väljer mergegrinden (automatisk vs
+        manuell hos Tony), inte granskningsmodellen. Opus svarar bara på obesvarade
+        frågor i PR-kroppen.
       options:
         - Sonnet, läser issuen och diffen (risk_class none)
-        - Opus, läser issuens läslista (risk_class elevated)
+        - Sonnet, läser issuen, diffen och läslistan (risk_class elevated)
     validations:
       required: true
 

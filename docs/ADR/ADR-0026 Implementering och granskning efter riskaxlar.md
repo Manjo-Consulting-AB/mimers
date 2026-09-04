@@ -20,13 +20,21 @@ Det är en utsaga om granskningen, inte om implementeraren.
 |---|---|---|
 | Alla tre låga | Deepseek | ~~Ingen modell~~ → Claude Sonnet 5, se uppföljningen nedan |
 | Förhöjd axel, `risk_class: none` | Deepseek | Claude Sonnet 5, läser diffen |
-| `risk_class: elevated` | Deepseek | Claude Opus 5, läser issuens läslista |
+| `risk_class: elevated` | Deepseek | ~~Claude Opus 5, läser issuens läslista~~ → Claude Sonnet 5, se uppföljning 2026-09-03 |
 
 **Uppföljning 2026-09-02, efter M2:** raden om att ingen modell läser en PR med låga axlar är återtagen. Axeln väljer numera granskningens **djup och modell, inte om det finns en läsare** — Sonnet som lägsta nivå, Opus vid `elevated`. Det är en omsvängning av alternativet under § Alternativ (*"Låta Sonnet eller Opus granska varje PR, oavsett axlar"*), och skälet är att dess premiss inte höll i praktiken: M2:s två `none`-issues mergades automatiskt på 13 respektive 5 sekunder, och PR #108 bar då både en fil utanför omfångsrutan och en uttrycklig fråga i sin egen kropp som ingen läste.
 
 **Var ärlig om hur starkt beviset är.** Två av de tre konkreta felen täcks numera också mekaniskt — omfångsrutans grind är lagad, och en icke-tom `## Frågor och antaganden` stoppar automatisk merge. Argumentet i alternativet (*"en PR med alla axlar låga har inget en modell kan säga som inte CI redan sagt"*) är alltså mer sant nu än det var i M2, eftersom den CI-del som skulle säga det var trasig hela tiden. Omsvängningen är därför ett medvetet bälte utöver hängslet, inte ett motbevis. Sonnet på den billiga banan kostar storleksordningen 0,3–0,5 USD på en issue som kostat 0,50; **mät det vid M3-retron** — säger Sonnet ingenting på `none`-banan under en hel milstolpe är raden värd att ta tillbaka igen.
 
-**`elevated`-granskningen är en annan uppgift än en kodgranskning.** Den får issuens `Läs`-lista som indata och prövar betydelsen mot källdokumenten. Den ska uttryckligen inte godta PR-beskrivningens egen redogörelse för vad ändringen gör.
+**Uppföljning 2026-09-03: Opus tas bort ur den löpande granskningen. Sonnet granskar varje PR, oavsett `risk_class`.** Anledningen är inte kostnad utan uppgiftens form. Issue-mallen tvingar sedan ADR-0026 fram ett fullständigt kontrakt per issue — numrerade `Beslut`, en `Läs`-lista, `In scope`/`Out of scope` som globbar, `Klart när` som ett test per punkt — och det kontraktet skrivs, för `elevated`-issues, redan med samma eftertanke en arkitektgranskning skulle stått för. Vad som återstår för granskaren är att pröva diffen mot ett redan skrivet facit: matchar de numrerade besluten, håller omfångsrutan, finns testet för varje "Klart när"-punkt. Det är en efterlevnadskontroll, inte ett nytt omdöme, och `bygg_granskningsprompt()` (se `process_next_issue.py`) har redan bett granskaren om precis det, oavsett vilken modell som kört den — Sonnet och Opus har fått identisk prompt och samma verktygsåtkomst till källdokumenten hela tiden. Skillnaden mellan modellerna har aldrig legat i vad de ombads göra.
+
+Opus roll krymper till den redan befintliga smala eskaleringen: en obesvarad `## Frågor och antaganden` i PR-kroppen (`los_fraga_och_merga()`), där frågan per definition inte har ett svar i läslistan och kräver ett arkitekturbeslut ingen dokumentläsning kan mekanisera. Det är den uppgift som faktiskt kräver ett nytt omdöme — inte den löpande granskningen.
+
+Det här upphäver inte `risk_class: elevated`s andra effekt: manuell merge hos Tony efter läst diff (se nedan) står kvar oförändrad, av samma skäl som förut. Det som ändras är bara vilken modell som läser diffen först, inte vem som har sista ordet.
+
+Som bieffekt gör det här den oåtkomliga mellannivån i skalan (`none`/`elevated` i mallen, mappat till `low`/`high` i skriptet — se [[Lärdomar]], rest vid M2-retron) ofarlig snarare än löst: `risk_class` väljer inte längre granskningsmodell, bara mergegrinden, så en aldrig nåbar `medium`-nivå hade ändå inte gjort någon skillnad. Mallen är inte ändrad av det här beslutet.
+
+**Granskningen är en efterlevnadskontroll mot ett redan skrivet kontrakt, inte en fri kodgranskning.** Den får issuens `Läs`-lista som indata och prövar betydelsen mot källdokumenten. Den ska uttryckligen inte godta PR-beskrivningens egen redogörelse för vad ändringen gör.
 
 **Granskningen körs i en färsk session per PR**, aldrig i en långlivad orkestrerarsession. En granskare vars kontext bär trettio tidigare diffar är både dyrare per PR och sämre på den trettionde.
 
@@ -65,6 +73,7 @@ Det enda som bryter slingan är en granskare som läser **källdokumenten** i st
 ## Konsekvenser
 
 - **[[AGENTS.md]] och `agent_task.yml` namnger granskningsnivå, inte implementerare.** Fältet `Modell` i issue-mallen heter numera `Granskning` och har tre lägen i stället för två. Ingen konsument parsar fältetiketten; bytet är rent redaktionellt.
+- **`agent_task.yml`s `Granskning`-fält pekar på Sonnet i båda lägena, efter uppföljningen 2026-09-03.** Texten är liksom förut redaktionell — ingen konsument parsar den — men den fick följa med i samma ändring, annars hade mallen motsagt den faktiska routningen i `process_next_issue.py`.
 - **`risk_class` betyder något annat än i ADR-0025.** Den köper inte längre en dyrare implementerare utan en djupare granskning. Mallens råd *"vid tvekan: elevated"* står kvar, men motiveringen är billigare än förut — det är därför regeln tål att 67 % hamnar där.
 - **Mätningen är en förutsättning, inte en förbättring.** Eskaleringsfrekvens per axelprofil loggas från M2:s första issue. **Stoppregel: eskalerar `elevated` oftare än 30 % flyttar implementationen tillbaka till Sonnet för den gruppen** — då med data, inte med ett antagande. Instrumentet finns i `.claude/hooks/session-usage.py`; se [[ADR-0016 Kostnadsregistrering]].
 - **Omfångsrutans grind måste faktiskt köra innan beslutet får full effekt.** `omfangsruta.py` har aldrig kört en enda gång (se [[Lärdomar]] § Observerat). Grinden är den som gör en billig implementerare säker att köra — hela resonemanget ovan lutar sig mot att den fångar den dyraste feltypen. Den ska vara lagad innan M2 startar.
