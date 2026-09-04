@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AccountStorageController;
 use App\Http\Controllers\Api\AttachmentController;
 use App\Http\Controllers\Api\Auth\AuthenticatedTokenController;
 use App\Http\Controllers\Api\Auth\MagicLinkLoginController;
@@ -335,4 +336,17 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // och det är därför den är M3:s riskyta. Bara GET: listan är en vy; allt
     // som ändrar en uppgift går genom 22b:s rutter ovan.
     Route::get('/todo', [TodoController::class, 'index']);
+
+    // Issue 28 · Nedgraderingen, steg 2 — kontots urvalslista av bilagor,
+    // se App\Http\Controllers\Api\AccountStorageController och
+    // App\Policies\AccountPolicy. En KONTOruta, inte en containerruta (issue
+    // 28 § Beslut 2): listan är kontots levande bilagor tvärs över containers
+    // — kontot är det som belastas, och bilagor kan ligga i containers kontot
+    // inte äger — så rutten bär sitt eget filter (billed_account_id) i
+    // stället för rutt-nästlingens grind, precis som todo-listan (issue 24).
+    // Grindarna är de nya viewStorage()/manageStorage() på AccountPolicy —
+    // inte ContainerPolicy (Beslut 4): rensningen är tillåten fastän kontot
+    // är read_only, och det är hela poängen med ytan.
+    Route::get('/accounts/{account}/storage', [AccountStorageController::class, 'index']);
+    Route::delete('/accounts/{account}/storage', [AccountStorageController::class, 'destroy']);
 });
