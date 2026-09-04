@@ -10,6 +10,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\User;
+use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
@@ -79,7 +80,7 @@ class ContainerAccessController extends Controller
      * modellinstansen, aldrig via massildelning — se
      * App\Models\ContainerAccess docblock och issue 9b § Beslut 8.
      */
-    public function store(StoreContainerAccessRequest $request, Container $container): JsonResponse
+    public function store(StoreContainerAccessRequest $request, Container $container, Entitlements $entitlements): JsonResponse
     {
         Gate::authorize('manageAccess', $container);
 
@@ -101,6 +102,13 @@ class ContainerAccessController extends Controller
         if ($existing !== null) {
             throw ApiException::make('container_access.already_granted', ['access' => $existing->ulid], 422);
         }
+
+        // Kvotkontrollen efter Gate (Beslut 3) och efter dubblettspärren: att
+        // bevilja någon som redan har en giltig åtkomst är inte en ny
+        // delning. Båda ingångarna till delning — direkt åtkomst här och
+        // inbjudan i ContainerInvitationController — delar samma tak (issue
+        // 27 § Beslut 5).
+        $entitlements->assertCanShareContainer($container);
 
         $access = new ContainerAccess($request->safe()->only(['grantee_type', 'level', 'kind', 'expires_at']));
         $access->grantee_id = $granteeModel->id;

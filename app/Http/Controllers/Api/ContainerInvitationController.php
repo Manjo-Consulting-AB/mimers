@@ -10,6 +10,7 @@ use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Notifications\InvitationNotification;
+use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
@@ -105,7 +106,7 @@ class ContainerInvitationController extends Controller
      * sätts explicit på modellinstansen, aldrig via massildelning — se
      * App\Models\Invitation och § Beslut 15.
      */
-    public function store(StoreInvitationRequest $request, Container $container): JsonResponse
+    public function store(StoreInvitationRequest $request, Container $container, Entitlements $entitlements): JsonResponse
     {
         Gate::authorize('manageAccess', $container);
 
@@ -120,6 +121,14 @@ class ContainerInvitationController extends Controller
         if ($existing instanceof Invitation) {
             throw ApiException::make('invitation.already_pending', ['invitation' => $existing->ulid], 422);
         }
+
+        // Kvotkontrollen kommer efter Gate (Beslut 3) och efter
+        // duplikatspärren: att bjuda in någon som redan har en pending
+        // inbjudan är inte en ny delning, så den ska svara already_pending,
+        // inte avslöja taket. Delningstaket följer ägarkontots plan och
+        // räknar även den här inbjudan när den ligger pending (issue 27 §
+        // Beslut 5).
+        $entitlements->assertCanShareContainer($container);
 
         // Klartexten är mejlets enda konsument — den skickas i länken
         // nedan och lagras aldrig, se klassens docblock.
