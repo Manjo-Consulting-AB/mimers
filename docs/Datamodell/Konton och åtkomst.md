@@ -146,7 +146,7 @@ Sammanfattat, att implementera som en policy och inte utspritt i controllers:
 1. Ägarkontots medlemmar har full behörighet till containern.
 2. Övriga får behörighet via `container_access` där `revoked_at IS NULL` och `expires_at` inte passerats.
 3. `read` får läsa. `write` får skapa och ändra items, filer, scheman — men **aldrig** radera containern, hantera åtkomster eller initiera ägarbyte.
-4. Är kontot `read_only` nekas allt skrivande oavsett behörighet — **utom att återkalla en åtkomst**. Det minskar exponeringen i stället för att öka den, och ett fruset konto ska inte vara utlåst från att klippa en relation det inte längre vill ha. Att bevilja eller bjuda in är däremot fortfarande spärrat.
+4. Är kontot `read_only` nekas allt skrivande oavsett behörighet — **utom två saker: att återkalla en åtkomst, och att rensa lagring**. Båda minskar exponeringen i stället för att öka den, och ett fruset konto ska varken vara utlåst från att klippa en relation det inte längre vill ha eller från att ta sig under sin nya gräns. Rensningen går via `DELETE /api/accounts/{account}/storage` (issue 28a) och prövas mot `AccountPolicy` utan `read_only`-kontroll; det är just den vägen ur en nedgradering som `read_only` finns till för att framtvinga. Att bevilja eller bjuda in är däremot fortfarande spärrat.
 5. Uppladdningar räknas mot **den uppladdande användarens konto**, inte ägarkontot.
 
 **Att hantera åtkomster och att se dem är två olika saker.** Regel 3 spärrar det första: bara ägarkontots medlemmar beviljar, bjuder in och återkallar, och de är också de enda som ser åtkomsternas förvaltningsvy — nivåer, utgångsdatum, vem som beviljade, historiken av återkallade rader och de inbjudningar som ännu inte besvarats.

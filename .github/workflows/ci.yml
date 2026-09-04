@@ -134,15 +134,73 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 .github/scripts/omfangsruta.py
 
+      # Budgeten gäller den som ändrar filen, inte den som råkar öppna en PR
+      # medan den ligger över. I M4 tog PR #156 filen till 1944 ord, och de fem
+      # nästa implementations-PR:erna blev röda på ett steg de varken orsakade
+      # eller fick laga - AGENTS.md står i Out of scope för varje sådan issue.
+      # Alla fem mergades röda, vilket är det dyra utfallet: en grind som är
+      # röd på allt slutar betyda något. Rör PR:en inte filen räcker en varning.
+      #
+      # Mätningen sker mot grenens huvud, inte mot merge-refen som checkouten
+      # ger, och i en fastspikad lokal. Issue 149:s körning rapporterade 1806
+      # ord medan Tony mätte 1771 lokalt på samma commit, och skillnaden är
+      # inte filen utan `wc`: "a — b" är två ord i lokalen C och tre i C.UTF-8,
+      # eftersom em-strecket räknas som ett eget ord först i den senare.
+      # AGENTS.md har 31 fristående em-streck; de plus § och – är hela
+      # differensen på 35. Utan LC_ALL mäter grinden alltså ett annat tal än
+      # den som ska skära i filen - PR #167 sänkte den till 1771 lokalt och
+      # CI såg fortfarande 1806. Lokalen spikas till runnerns egen (C.UTF-8),
+      # så att talet inte ändras i tysthet, och kommandot skrivs ut så att
+      # det går att reproducera.
+      #
+      # Ett stort block i filen synkas in från ai-standards och underhålls
+      # inte här - det vore fel att låta det äta av en budget som ska styra
+      # repospecifika tillägg. Budgeten mäter därför bara texten utanför
+      # <!-- ai-standards:begin/end agent-core -->. Mätt idag är det 1236 ord,
+      # vilket ger 64 ords marginal mot den nya budgeten 1300 - ungefär tre
+      # medianregler, historiskt har ett enskilt regeltillägg i den här filen
+      # kostat 5-48 ord, median 20.
+      #
+      # Nästa steg kontrollerar att markörerna finns, men det körs mot
+      # arbetsträdets checkout, som för en pull_request-händelse är
+      # merge-refen - inte nödvändigtvis samma innehåll som head-SHA:t den
+      # här ordräkningen mäter mot. Att luta sig mot stegordningen hade
+      # knutit ihop två steg som mäter olika saker. Kontrollen görs därför
+      # här också, mot samma SHA: saknas markörerna eller finns de i fel
+      # antal felar steget tydligt i stället för att tyst falla tillbaka på
+      # att mäta hela filen - en grind som inte kan skilja "inget att göra"
+      # från "jag tittade åt fel håll" rapporterar grönt i båda fallen, se
+      # docs/Process/Lärdomar.md.
       - name: Ordbudget för AGENTS.md
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          BUDGET=1800
-          ORD=$(wc -w < AGENTS.md)
-          echo "AGENTS.md: $ORD ord (budget $BUDGET)"
-          if [ "$ORD" -gt "$BUDGET" ]; then
-            echo "::error file=AGENTS.md::$ORD ord överstiger budgeten $BUDGET. Lägger ändringen till en regel ska den peka ut vilken som blev överflödig - se docs/Process/Lärdomar.md."
+          BUDGET=1300
+          SHA="${HEAD_SHA:-HEAD}"
+
+          BEGIN=$(git show "$SHA:AGENTS.md" | grep -c 'ai-standards:begin agent-core' || true)
+          END=$(git show "$SHA:AGENTS.md" | grep -c 'ai-standards:end agent-core' || true)
+          if [ "$BEGIN" != "1" ] || [ "$END" != "1" ]; then
+            echo "::error file=AGENTS.md::budgeten mäter texten utanför det synkade blocket och kräver exakt en begin- och en end-markör på $SHA, hittade $BEGIN respektive $END."
             exit 1
           fi
+
+          ORD=$(git show "$SHA:AGENTS.md" | sed '/ai-standards:begin agent-core/,/ai-standards:end agent-core/d' | LC_ALL=C.UTF-8 wc -w)
+          echo "AGENTS.md på $SHA utanför det synkade blocket: $ORD ord (budget $BUDGET)"
+          echo "Reproducera lokalt: sed '/ai-standards:begin agent-core/,/ai-standards:end agent-core/d' AGENTS.md | LC_ALL=C.UTF-8 wc -w"
+
+          if [ "$ORD" -le "$BUDGET" ]; then
+            exit 0
+          fi
+
+          if [ -n "$BASE_SHA" ] && git diff --quiet "$BASE_SHA" "$SHA" -- AGENTS.md; then
+            echo "::warning file=AGENTS.md::$ORD ord utanför det synkade blocket överstiger budgeten $BUDGET, men den här PR:en rör inte filen. Den som tog den över budgeten äger nedskärningen - se docs/Process/Lärdomar.md."
+            exit 0
+          fi
+
+          echo "::error file=AGENTS.md::$ORD ord utanför det synkade blocket överstiger budgeten $BUDGET. Lägger ändringen till en regel ska den peka ut vilken som blev överflödig - se docs/Process/Lärdomar.md."
+          exit 1
 
       - name: Markörerna för det synkade blocket är hela
         run: |
