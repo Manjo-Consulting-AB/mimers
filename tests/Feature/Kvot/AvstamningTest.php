@@ -186,13 +186,56 @@ it('ett konto med bilagor men utan räknarrad får en rad', function () {
 });
 
 it('ett konto utan bilagor får ingen tom rad', function () {
+    // Fixture: ett konto utan innehåll i NÅGON av de två räknade
+    // dimensionerna — varken bilagor eller containers. "Utan bilagor" i
+    // acceptanslistans namn får inte läsas som "men med containers": ett
+    // konto med containers ska få en rad (se nästa test), så det här testet
+    // handlar om konton som helt saknar innehåll (Beslut 4).
     $account = Account::factory()->create();
+    expect(Attachment::query()->where('billed_account_id', $account->id)->exists())->toBeFalse();
+    expect(Container::query()->where('account_id', $account->id)->exists())->toBeFalse();
+
+    $logg = Log::spy();
 
     (new ReconcilesUsageCounters)->handle();
 
     // Kontot finns men har inget innehåll — ingen tom rad skapas bara för att
-    // kontot finns (Beslut 4).
+    // kontot finns, och ingen avvikelse larmas (Beslut 4).
     expect(avstamningRad($account->id))->toBeNull();
+    $logg->shouldNotHaveReceived('warning');
+});
+
+it('ett konto med containers men utan bilagor får en rad', function () {
+    [$account] = avstamningSetup();
+
+    expect(avstamningRad($account->id))->toBeNull();
+    $logg = Log::spy();
+
+    (new ReconcilesUsageCounters)->handle();
+
+    // Bakåtfyllningens regel (Beslut 4) är att ett konto med innehåll i någon
+    // av de två räknade dimensionerna ska ha en rad. container_count är ett
+    // räknarfält på samma villkor som storage_bytes, och gränsen för free är
+    // 1 container — ett pre-26a-konto som aldrig får en rad skulle av 27a
+    // läsas som container_count = 0 och få skapa en container till, över
+    // taket. Raden skrivs med de räknade värdena: storage_bytes = 0,
+    // container_count = N är fullt giltigt.
+    $rad = avstamningRad($account->id);
+    expect($rad)->not->toBeNull();
+    expect($rad->storage_bytes)->toBe(0);
+    expect($rad->container_count)->toBe(1);
+
+    // En varning, för container_count — fältet vars räknare (0) inte matchar
+    // det faktiska (1). storage_bytes står 0 mot 0 och rapporterar ingen
+    // avvikelse, oavsett att raden är ny.
+    $logg->shouldHaveReceived('warning')->once()->withArgs(
+        fn (string $meddelande, array $kontext) => $meddelande === 'usage_counter.drift'
+            && ($kontext['account_ulid'] ?? null) === $account->ulid
+            && ($kontext['field'] ?? null) === 'container_count'
+            && ($kontext['counter'] ?? null) === 0
+            && ($kontext['actual'] ?? null) === 1
+            && ($kontext['delta'] ?? null) === 1,
+    );
 });
 
 it('mjukraderade bilagor räknas inte in', function () {
