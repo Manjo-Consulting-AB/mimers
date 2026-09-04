@@ -3,6 +3,7 @@
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PurgesExpiredStoredFiles;
 use App\Console\PurgesExpiredTrash;
+use App\Console\ReconcilesUsageCounters;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -66,3 +67,21 @@ Schedule::call(fn () => app(PurgesExpiredStoredFiles::class)->handle())
 Schedule::call(fn () => app(PurgesExpiredTrash::class)->handle())
     ->daily()
     ->name('purge-expired-trash');
+
+/*
+ * Issue 26b · Den nattliga avstämningen av usage_counter: räknar om
+ * summorna, rättar det som glidit och larmar — se
+ * App\Console\ReconcilesUsageCounters, [[Planer och kvoter]] § usage_counter
+ * och issue 26a § Beslut 2. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Kvot/AvstamningTest.php; det här är bara schemaläggningen.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * nattliga fönster som gallringsjobben: en drift ska vara lagad innan
+ * kontrollpunkterna (27a/27b) läser räknaren nästa dag.
+ */
+Schedule::call(fn () => app(ReconcilesUsageCounters::class)->handle())
+    ->daily()
+    ->name('reconcile-usage-counters');
