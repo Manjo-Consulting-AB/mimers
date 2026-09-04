@@ -142,9 +142,16 @@ jobs:
       # röd på allt slutar betyda något. Rör PR:en inte filen räcker en varning.
       #
       # Mätningen sker mot grenens huvud, inte mot merge-refen som checkouten
-      # ger. Issue 149:s körning rapporterade 1806 ord medan både huvudet och
-      # basen mätte 1771 - merge-refen är ett filtillstånd som inte finns i
-      # något av dem, och en budget ska mätas på något som går att öppna.
+      # ger, och i en fastspikad lokal. Issue 149:s körning rapporterade 1806
+      # ord medan Tony mätte 1771 lokalt på samma commit, och skillnaden är
+      # inte filen utan `wc`: "a — b" är två ord i lokalen C och tre i C.UTF-8,
+      # eftersom em-strecket räknas som ett eget ord först i den senare.
+      # AGENTS.md har 31 fristående em-streck; de plus § och – är hela
+      # differensen på 35. Utan LC_ALL mäter grinden alltså ett annat tal än
+      # den som ska skära i filen - PR #167 sänkte den till 1771 lokalt och
+      # CI såg fortfarande 1806. Lokalen spikas till runnerns egen (C.UTF-8),
+      # så att talet inte ändras i tysthet, och kommandot skrivs ut så att
+      # det går att reproducera.
       - name: Ordbudget för AGENTS.md
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -152,8 +159,9 @@ jobs:
         run: |
           BUDGET=1800
           SHA="${HEAD_SHA:-HEAD}"
-          ORD=$(git show "$SHA:AGENTS.md" | wc -w)
+          ORD=$(git show "$SHA:AGENTS.md" | LC_ALL=C.UTF-8 wc -w)
           echo "AGENTS.md på $SHA: $ORD ord (budget $BUDGET)"
+          echo "Reproducera lokalt: LC_ALL=C.UTF-8 wc -w < AGENTS.md"
 
           if [ "$ORD" -le "$BUDGET" ]; then
             exit 0
