@@ -34,22 +34,28 @@ use Illuminate\Support\Facades\DB;
  * inte vem som får radera den. Den som anropar har redan låst upp vägen
  * genom en policy (ContainerPolicy::update respektive AccountPolicy).
  *
+ * Returvärdet är sant om raden faktiskt mjukraderades här, falskt om den
+ * redan var borta (mjukraderad eller saknad) — samma teknik som
+ * PurgeAttachment::handle, där antalet raderade rader är den enda
+ * tillförlitliga signalen. En samtidig radering av samma bilaga mellan en
+ * tidigare SELECT och radlåset här ska inte räknas två gånger av anroparen.
+ *
  * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
  * se [[ADR-0024 Tunna controllers och actions]] och PurgeAttachments
  * docblock.
  */
 class TrashAttachment
 {
-    public function handle(Attachment $attachment): void
+    public function handle(Attachment $attachment): bool
     {
-        DB::transaction(function () use ($attachment): void {
+        return DB::transaction(function () use ($attachment): bool {
             $rad = Attachment::query()
                 ->whereKey($attachment->getKey())
                 ->lockForUpdate()
                 ->first();
 
             if ($rad === null || $rad->trashed()) {
-                return;
+                return false;
             }
 
             $billedAccountId = $rad->billed_account_id;
@@ -58,6 +64,8 @@ class TrashAttachment
             $rad->delete();
 
             (new AdjustUsage)->handle($billedAccountId, bytesDelta: -$byteSize);
+
+            return true;
         });
     }
 }

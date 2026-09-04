@@ -92,7 +92,13 @@ class AccountStorageController extends Controller
      *
      * Svaret bär antalet faktiskt borttagna bilagor och kontots
      * `usage_counter.storage_bytes` efter transaktionen — klienten kan visa
-     * hur långt hon har kvar utan ett andra anrop.
+     * hur långt hon har kvar utan ett andra anrop. Antalet räknas INTE ur
+     * `$attachments->count()`: den SELECT:en körs före radlåset i
+     * TrashAttachment::handle, och en bilaga som någon annan mjukraderar
+     * samtidigt skulle då räknas med trots att handle() tyst hoppar över den
+     * (granskningsfynd — samma teknik som PurgeAttachment::handle).
+     * `$removed` summeras ur handle()s returvärde i stället: bara rader som
+     * faktiskt mjukraderades här räknas.
      */
     public function destroy(RemoveStorageRequest $request, Account $account, TrashAttachment $trashAttachment): JsonResponse
     {
@@ -104,9 +110,12 @@ class AccountStorageController extends Controller
             ->get()
             ->keyBy('ulid');
 
-        DB::transaction(function () use ($attachments, $trashAttachment): void {
+        $removed = 0;
+        DB::transaction(function () use ($attachments, $trashAttachment, &$removed): void {
             foreach ($attachments as $attachment) {
-                $trashAttachment->handle($attachment);
+                if ($trashAttachment->handle($attachment)) {
+                    $removed++;
+                }
             }
         });
 
@@ -116,7 +125,7 @@ class AccountStorageController extends Controller
 
         return response()->json([
             'data' => [
-                'removed' => $attachments->count(),
+                'removed' => $removed,
                 'storage_bytes' => $storageBytes,
             ],
         ]);
