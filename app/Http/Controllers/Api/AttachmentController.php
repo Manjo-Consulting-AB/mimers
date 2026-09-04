@@ -12,11 +12,13 @@ use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
+use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use RuntimeException;
 
 /**
  * POST /api/containers/{container}/items/{item}/attachments, se issue 16a
@@ -43,7 +45,7 @@ class AttachmentController extends Controller
      * ->exists() — avgör om användaren får skriva i det kontots namn; en
      * icke-medlem får 403 `auth.forbidden`, samma mönster som ItemController.
      */
-    public function store(StoreAttachmentRequest $request, Container $container, Item $item, StoreAttachment $storeAttachment): JsonResponse
+    public function store(StoreAttachmentRequest $request, Container $container, Item $item, StoreAttachment $storeAttachment, Entitlements $entitlements): JsonResponse
     {
         Gate::authorize('update', $container);
 
@@ -55,6 +57,21 @@ class AttachmentController extends Controller
 
         $file = $request->file('file');
         assert($file instanceof UploadedFile); // krävd och storleksvaliderad i requesten ovan
+
+        $byteSize = $file->getSize();
+        if ($byteSize === false) {
+            throw new RuntimeException('Den mottagna filen kunde inte läsas.');
+        }
+
+        // Plangränserna prövas här, efter medlemskapskontrollen och före
+        // StoreAttachment (issue 27b § Beslut 4). Styckstorleken kontrolleras
+        // bara här: en fil som ändå nekas ska varken skrivas till disken
+        // eller få en rad. Totalkvoten kontrolleras här som en billig
+        // avvisning OCH en gång till, auktoritativt, inne i StoreAttachments
+        // transaktion — den här tidiga kontrollen är aldrig den enda, för den
+        // håller inte mot två samtidiga uppladdningar (issue 27b § Beslut 4).
+        $entitlements->assertFileWithinLimit($account, $byteSize);
+        $entitlements->assertStorageWithinLimit($account, $byteSize);
 
         $attachment = $storeAttachment->handle(
             item: $item,
