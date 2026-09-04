@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\AdvancesAccountLifecycle;
+use App\Console\DeletesDormantAccounts;
 use App\Console\EnforcesDowngrades;
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PurgesExpiredStoredFiles;
@@ -115,14 +116,32 @@ Schedule::call(fn () => app(EnforcesDowngrades::class)->handle())
  * Kontolivscykel och [[ADR-0009 Kvoter och livscykel]]. Tidsgränserna bor i
  * config/konton.php. Logiken bor i en vanlig klass, testad direkt i
  * tests/Feature/Konto/LivscykelTest.php; det här är bara schemaläggningen.
- * Raderingen vid 18 månader är 29b och läggs till här när den byggs.
+ * Kör i samma nattliga fönster som gallrings- och nedgraderingsjobben.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(AdvancesAccountLifecycle::class)->handle())
+    ->daily()
+    ->name('advance-account-lifecycle');
+
+/*
+ * Issue 29b · Kontolivscykelns sista steg: raderingen vid 18 månader — se
+ * App\Console\DeletesDormantAccounts, [[Planer och kvoter]] § Kontolivscykel
+ * och [[ADR-0009 Kvoter och livscykel]]. Jobbet körs efter 29a:s steg i
+ * routes/console.php — stängningen (15 månader) måste ha hunnit före
+ * raderingen (18), och återöppningen ska ha fått öppna konton vars medlemmar
+ * återvänt. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Konto/KontoraderingTest.php; det här är bara schemaläggningen.
  *
  * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
  * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
  * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
  * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
- * nattliga fönster som gallrings- och nedgraderingsjobben.
+ * nattliga fönster som 29a och de andra jobben.
  */
-Schedule::call(fn () => app(AdvancesAccountLifecycle::class)->handle())
+Schedule::call(fn () => app(DeletesDormantAccounts::class)->handle())
     ->daily()
-    ->name('advance-account-lifecycle');
+    ->name('delete-dormant-accounts');
