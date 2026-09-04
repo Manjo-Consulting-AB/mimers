@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\AdvancesAccountLifecycle;
 use App\Console\EnforcesDowngrades;
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PurgesExpiredStoredFiles;
@@ -106,3 +107,22 @@ Schedule::call(fn () => app(ReconcilesUsageCounters::class)->handle())
 Schedule::call(fn () => app(EnforcesDowngrades::class)->handle())
     ->daily()
     ->name('enforce-downgrades');
+
+/*
+ * Issue 29a · Kontolivscykeln: påminnelsen vid 12 månader och stängningen
+ * vid 15, plus återöppningen när en medlem återvänder — se
+ * App\Console\AdvancesAccountLifecycle, [[Planer och kvoter]] §
+ * Kontolivscykel och [[ADR-0009 Kvoter och livscykel]]. Tidsgränserna bor i
+ * config/konton.php. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Konto/LivscykelTest.php; det här är bara schemaläggningen.
+ * Raderingen vid 18 månader är 29b och läggs till här när den byggs.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * nattliga fönster som gallrings- och nedgraderingsjobben.
+ */
+Schedule::call(fn () => app(AdvancesAccountLifecycle::class)->handle())
+    ->daily()
+    ->name('advance-account-lifecycle');
