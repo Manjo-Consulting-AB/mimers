@@ -358,6 +358,8 @@ php_value memory_limit 256M
 
 Behöver gränsen höjas över vad `.htaccess` tillåter finns CloudLinuxs PHP Selector i DirectAdmin-panelen som andra väg.
 
+Pro-planens `max_file_bytes` är bundet till talet ovan och ligger på 64 MB. Höjs eller sänks `upload_max_filesize` ska plangränsen och `config/files.php` följa med i samma ändring — varför står i [[ADR-0014 Prismodell]].
+
 `retention-days: 90` är inte kosmetik. Går artefakten ut går det inte längre att skeppa den commiten till produktion utan att bygga om, och då är bygg-en-gång-principen bruten.
 
 ## `.github/workflows/production.yml`

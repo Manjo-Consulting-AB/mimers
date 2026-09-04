@@ -1,6 +1,6 @@
 # ADR-0014 Prismodell
 
-**Status:** Antagen 2026-08-03 · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Pro-filstorleken sänkt till 64 MB 2026-09-04 efter serverns tak · [[ADR-index]]
 
 ## Kontext
 
@@ -12,7 +12,7 @@ Evernotes gratisnivå (50 anteckningar, en notebook) och deras Starter på 79 �
 
 **Gratis:** en container, 1 GB, 10 MB per fil, en delad användare. Påminnelser, ICS och export ingår.
 
-**Pro, 39–49 €/år:** obegränsat antal containers, obegränsad delning, 25 GB, 100 MB per fil, utskrivbar PDF-pärm, ägarbyte, webhooks, utlåningspåminnelser.
+**Pro, 39–49 €/år:** obegränsat antal containers, obegränsad delning, 25 GB, 64 MB per fil, utskrivbar PDF-pärm, ägarbyte, webhooks, utlåningspåminnelser.
 
 **Mottagaren vid ägarbyte får tolv månader Pro.**
 
@@ -27,6 +27,8 @@ Betalning via **merchant of record** — Paddle eller Lemon Squeezy.
 **Gränserna flyttades från filstorlek till antal containers och totalt utrymme.** En mobilbild är 3–5 MB och en manual ofta 10 — begränsningar på 1 MB och tre bilagor slår till på dag ett. Användaren möter väggen innan hon förstått vad produkten är bra för, och upplever det inte som "här borde jag uppgradera" utan som "det här funkar inte". Produktens dragningskraft är ackumulerad data, och den känslan uppstår efter månader. Gratisnivån måste tillåta ackumulering.
 
 **Påminnelser och export är medvetet fria.** Påminnelserna skapar vanan som gör att någon återvänder; strypta blir kontot bortglömt istället för uppgraderat. Export skapar förtroende och krävs ändå enligt GDPR.
+
+**Pro-filstorleken är 64 MB för att det är vad servern klarar.** `upload_max_filesize` hos inleed står på 64M, satt i `public/.htaccess` och speglad i `config/files.php` — se [[Pipeline]] § Uppladdningsgränser. Ett annonserat tak på 100 MB hade varit ett löfte plattformen bryter vid uppladdning nummer ett, och en gräns som slår i som ett HTTP-fel istället för som ett förklarat kvotmeddelande är den sämsta sortens gräns. Talet är alltså en följd av hostingen, inte av prissättningen: byter vi plattform får det justeras om kunderna efterfrågar det. 64 MB rymmer fortfarande en skannad manual eller en videosekvens från telefonen, så gränsen kostar inget i praktiken idag.
 
 **Priset höjdes från 10 €.** Marginalen på 10 € är god — särskilt med dedup, där femhundra användare med samma manual kostar en manual — men priset måste bära supporten. Mejl från 5 % av kunderna en gång om året äter upp årsavgiften.
 
@@ -47,6 +49,7 @@ Merchant of record valdes eftersom digitala tjänster till privatpersoner i EU s
 - Gränserna ligger i `plan.limits` som JSON, så ett nytt B2B-erbjudande blir en ny rad, inte ny kod. Se [[Planer och kvoter]].
 - Rättighetslagret byggs i MVP; betalflödet kopplas på senare.
 - B2B-priset bärs av personalroller, white-label, massoperationer, revisionslogg och API-access — inte av kvot. Utan de delarna säljs bara utrymme, och då pressas priset.
+- **Pro-filstorleken är bunden till hostingen.** Höjs `upload_max_filesize` — ny plattform eller PHP Selector — ska `max_file_bytes` i planen, `config/files.php` och `public/.htaccess` flyttas tillsammans. Sänks taket någon gång utan att planen följer med annonserar vi något servern inte kan leverera.
 - **B2B-siffrorna är resonerade uppskattningar, inte marknadsdata.** Validera med två–tre varv som designpartners innan något byggs.
 
 ## Alternativ

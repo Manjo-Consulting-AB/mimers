@@ -68,7 +68,7 @@ it('gränserna är exakt dokumentets tal', function () {
     expect($free->planLimit('shared_users_per_container'))->toBe(1);
 
     expect($pro->planLimit('storage_bytes'))->toBe(25 * 1024 * 1024 * 1024);
-    expect($pro->planLimit('max_file_bytes'))->toBe(100 * 1024 * 1024);
+    expect($pro->planLimit('max_file_bytes'))->toBe(64 * 1024 * 1024);
 });
 
 it('priset är minsta valutaenhet plus valutakod', function () {
