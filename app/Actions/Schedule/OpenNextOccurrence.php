@@ -37,27 +37,27 @@ class OpenNextOccurrence
     public function handle(Schedule $schedule, ?Carbon $from = null): ?ScheduleOccurrence
     {
         return DB::transaction(function () use ($schedule, $from): ?ScheduleOccurrence {
-            $låst = $schedule->newQuery()->whereKey($schedule->id)->lockForUpdate()->first();
+            $lockedSchedule = $schedule->newQuery()->whereKey($schedule->id)->lockForUpdate()->first();
 
-            if ($låst === null) {
+            if ($lockedSchedule === null) {
                 return null;
             }
 
-            if ($låst->occurrences()->where('status', ScheduleOccurrence::STATUS_OPEN)->exists()) {
+            if ($lockedSchedule->occurrences()->where('status', ScheduleOccurrence::STATUS_OPEN)->exists()) {
                 return null;
             }
 
-            $dueAt = $this->dueAt($låst, $from);
+            $dueAt = $this->dueAt($lockedSchedule, $from);
 
             if ($dueAt === null) {
                 return null;
             }
 
             $occurrence = new ScheduleOccurrence;
-            $occurrence->schedule_id = $låst->id;
+            $occurrence->schedule_id = $lockedSchedule->id;
             // Glappet fryses i raden: ändras `lead_days` senare rör det nästa
             // förekomst, inte den öppna (Beslut 5).
-            $occurrence->visible_from = $dueAt->copy()->subDays($låst->lead_days);
+            $occurrence->visible_from = $dueAt->copy()->subDays($lockedSchedule->lead_days);
             $occurrence->due_at = $dueAt;
             $occurrence->status = 'open';
             $occurrence->save();
@@ -73,7 +73,7 @@ class OpenNextOccurrence
             // 2 i flödet) INNAN den här Actionen körs (steg 4) — en läsning av
             // motpartens status här ser alltså aldrig en rad som håller på att
             // stängas i samma transaktion (23b § Att se upp med).
-            $this->inheritScheduleDependencies($låst, $occurrence);
+            $this->inheritScheduleDependencies($lockedSchedule, $occurrence);
 
             return $occurrence;
         });
@@ -136,7 +136,7 @@ class OpenNextOccurrence
 
         if ($schedule->recurrence_type === 'none') {
             if ($anchor === null) {
-                throw $this->programmeringsfel('Ett schema med recurrence_type none utan anchor_date kan inte öppna en förekomst.');
+                throw $this->programmingError('Ett schema med recurrence_type none utan anchor_date kan inte öppna en förekomst.');
             }
 
             if ($schedule->occurrences()->exists()) {
@@ -152,7 +152,7 @@ class OpenNextOccurrence
             }
 
             if ($anchor === null) {
-                throw $this->programmeringsfel('Ett schema med recurrence_type interval utan anchor_date kan inte öppna sin första förekomst.');
+                throw $this->programmingError('Ett schema med recurrence_type interval utan anchor_date kan inte öppna sin första förekomst.');
             }
 
             return $anchor->copy();
@@ -160,7 +160,7 @@ class OpenNextOccurrence
 
         // recurrence_type === 'fixed'
         if ($anchor === null) {
-            throw $this->programmeringsfel('Ett schema med recurrence_type fixed utan anchor_date kan inte öppna en förekomst.');
+            throw $this->programmingError('Ett schema med recurrence_type fixed utan anchor_date kan inte öppna en förekomst.');
         }
 
         return $this->nextCalendarDue($anchor, $schedule);
@@ -177,7 +177,7 @@ class OpenNextOccurrence
         $count = $schedule->interval_count;
 
         if (! is_int($count) || $count < 1) {
-            throw $this->programmeringsfel('Ett schema med recurrence_type fixed/interval utan positivt interval_count kan inte öppna en förekomst.');
+            throw $this->programmingError('Ett schema med recurrence_type fixed/interval utan positivt interval_count kan inte öppna en förekomst.');
         }
 
         return match ($unit) {
@@ -185,7 +185,7 @@ class OpenNextOccurrence
             'week' => $date->addWeeks($count),
             'month' => $date->addMonthsNoOverflow($count),
             'year' => $date->addYearsNoOverflow($count),
-            default => throw $this->programmeringsfel('Okänd interval_unit på schemat: '.($unit ?? 'null')),
+            default => throw $this->programmingError('Okänd interval_unit på schemat: '.($unit ?? 'null')),
         };
     }
 
@@ -207,7 +207,7 @@ class OpenNextOccurrence
         $count = $schedule->interval_count;
 
         if (! is_int($count) || $count < 1) {
-            throw $this->programmeringsfel('Ett schema med recurrence_type fixed/interval utan positivt interval_count kan inte öppna en förekomst.');
+            throw $this->programmingError('Ett schema med recurrence_type fixed/interval utan positivt interval_count kan inte öppna en förekomst.');
         }
 
         if (! $anchor->lessThan($today)) {
@@ -266,8 +266,8 @@ class OpenNextOccurrence
         return $months;
     }
 
-    private function programmeringsfel(string $meddelande): RuntimeException
+    private function programmingError(string $message): RuntimeException
     {
-        return new RuntimeException($meddelande);
+        return new RuntimeException($message);
     }
 }

@@ -51,7 +51,7 @@ class GenerateImageDerivatives implements ShouldQueue
      *
      * @var array<string, int>
      */
-    private const VARIANTER = [
+    private const VARIANTS = [
         'thumb' => 320,
         'medium' => 1024,
     ];
@@ -62,7 +62,7 @@ class GenerateImageDerivatives implements ShouldQueue
      *
      * @var array<string, string>
      */
-    private const ÄNDELSE = [
+    private const EXTENSION = [
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
         'image/webp' => 'webp',
@@ -76,7 +76,7 @@ class GenerateImageDerivatives implements ShouldQueue
      */
     public static function supportsMime(string $mime): bool
     {
-        return isset(self::ÄNDELSE[$mime]);
+        return isset(self::EXTENSION[$mime]);
     }
 
     /**
@@ -102,13 +102,13 @@ class GenerateImageDerivatives implements ShouldQueue
             // All filhantering går genom Storage-abstraktionen
             // ([[ADR-0007 Fillagring hos inleed]]); `path()` är bara hur GD,
             // som inte kan läsa en abstraktion, nås fram till bytena.
-            $original = $this->läsBild(
+            $original = $this->readImage(
                 $this->storedFile->mime_type,
                 Storage::disk('files')->path($this->storedFile->storage_path),
             );
 
             try {
-                $this->generera($original);
+                $this->generateVariants($original);
             } finally {
                 // GD-resurserna frigörs alltid — annars äter en batch upp
                 // memory_limit (issue 18 § Att se upp med).
@@ -126,28 +126,28 @@ class GenerateImageDerivatives implements ShouldQueue
     /**
      * Skalar originalets bild till varje variant och skriver rad och fil.
      */
-    private function generera(GdImage $original): void
+    private function generateVariants(GdImage $original): void
     {
-        $bredd = imagesx($original);
-        $höjd = imagesy($original);
+        $width = imagesx($original);
+        $height = imagesy($original);
         $disk = Storage::disk('files');
 
-        foreach (self::VARIANTER as $variant => $mål) {
-            $längsta = max($bredd, $höjd);
+        foreach (self::VARIANTS as $variant => $target) {
+            $longestSide = max($width, $height);
 
             // Förstora aldrig (Beslut 2): en bild som redan är mindre än
             // eller lika med målet får ingen variant.
-            if ($längsta <= $mål) {
+            if ($longestSide <= $target) {
                 continue;
             }
 
-            $skala = $mål / $längsta;
-            $nyBredd = max(1, (int) round($bredd * $skala));
-            $nyHöjd = max(1, (int) round($höjd * $skala));
+            $scale = $target / $longestSide;
+            $newWidth = max(1, (int) round($width * $scale));
+            $newHeight = max(1, (int) round($height * $scale));
 
-            $derivat = imagecreatetruecolor($nyBredd, $nyHöjd);
+            $derivative = imagecreatetruecolor($newWidth, $newHeight);
 
-            if (! $derivat instanceof GdImage) {
+            if (! $derivative instanceof GdImage) {
                 throw new RuntimeException('Bildytan för varianten kunde inte skapas.');
             }
 
@@ -156,28 +156,28 @@ class GenerateImageDerivatives implements ShouldQueue
                 // förbereds (issue 18 § Att se upp med) — en genomskinlig
                 // bild får inte bli svart. imagealphablending(false) +
                 // imagesavealpha(true) gäller även webp.
-                imagealphablending($derivat, false);
-                imagesavealpha($derivat, true);
+                imagealphablending($derivative, false);
+                imagesavealpha($derivative, true);
 
-                $transparent = imagecolorallocatealpha($derivat, 0, 0, 0, 127);
-                imagefill($derivat, 0, 0, $transparent);
+                $transparent = imagecolorallocatealpha($derivative, 0, 0, 0, 127);
+                imagefill($derivative, 0, 0, $transparent);
 
-                imagecopyresampled($derivat, $original, 0, 0, 0, 0, $nyBredd, $nyHöjd, $bredd, $höjd);
+                imagecopyresampled($derivative, $original, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
 
-                $byten = $this->koda($this->storedFile->mime_type, $derivat);
+                $bytes = $this->encode($this->storedFile->mime_type, $derivative);
             } finally {
-                imagedestroy($derivat);
+                imagedestroy($derivative);
             }
 
-            $sökväg = $this->storedFile->storage_path.'_'.$variant.'.'.self::ÄNDELSE[$this->storedFile->mime_type];
-            $disk->put($sökväg, $byten);
+            $path = $this->storedFile->storage_path.'_'.$variant.'.'.self::EXTENSION[$this->storedFile->mime_type];
+            $disk->put($path, $bytes);
 
             // updateOrCreate gör omkörningen ofarlig (Beslut 1): UNIQUE
             // (stored_file_id, variant) — exakt en rad per variant, hur många
             // gånger jobbet än körs.
             ImageDerivative::updateOrCreate(
                 ['stored_file_id' => $this->storedFile->id, 'variant' => $variant],
-                ['storage_path' => $sökväg, 'byte_size' => strlen($byten)],
+                ['storage_path' => $path, 'byte_size' => strlen($bytes)],
             );
         }
     }
@@ -188,43 +188,43 @@ class GenerateImageDerivatives implements ShouldQueue
      * för en E_WARNING — felet ska loggas och jobbet avslutas (Beslut 5),
      * inte skräpa i loggen som en varning.
      */
-    private function läsBild(string $mime, string $sökväg): GdImage
+    private function readImage(string $mime, string $path): GdImage
     {
-        $bild = match ($mime) {
-            'image/jpeg' => @imagecreatefromjpeg($sökväg),
-            'image/png' => @imagecreatefrompng($sökväg),
-            'image/webp' => @imagecreatefromwebp($sökväg),
+        $image = match ($mime) {
+            'image/jpeg' => @imagecreatefromjpeg($path),
+            'image/png' => @imagecreatefrompng($path),
+            'image/webp' => @imagecreatefromwebp($path),
             default => throw new RuntimeException("Okänd MIME-typ för bildläsning ({$mime})."),
         };
 
-        if (! $bild instanceof GdImage) {
+        if (! $image instanceof GdImage) {
             throw new RuntimeException("Bilden kunde inte avkodas av GD ({$mime}).");
         }
 
-        return $bild;
+        return $image;
     }
 
     /**
      * Kodar om bilden till originalets format: jpeg och webp med kvalitet 82,
      * png utan kvalitetsparametrar (Beslut 4).
      */
-    private function koda(string $mime, GdImage $bild): string
+    private function encode(string $mime, GdImage $image): string
     {
         ob_start();
 
         $ok = match ($mime) {
-            'image/jpeg' => imagejpeg($bild, null, 82),
-            'image/png' => imagepng($bild),
-            'image/webp' => imagewebp($bild, null, 82),
+            'image/jpeg' => imagejpeg($image, null, 82),
+            'image/png' => imagepng($image),
+            'image/webp' => imagewebp($image, null, 82),
             default => throw new RuntimeException("Okänd MIME-typ för bildkodning ({$mime})."),
         };
 
-        $byten = ob_get_clean();
+        $bytes = ob_get_clean();
 
-        if (! $ok || $byten === false) {
+        if (! $ok || $bytes === false) {
             throw new RuntimeException("Bildkodningen misslyckades ({$mime}).");
         }
 
-        return $byten;
+        return $bytes;
     }
 }

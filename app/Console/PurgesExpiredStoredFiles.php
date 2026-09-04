@@ -52,27 +52,27 @@ class PurgesExpiredStoredFiles
      */
     public function handle(): int
     {
-        $borttagna = 0;
+        $deleted = 0;
 
         StoredFile::query()
             ->where('reference_count', 0)
             ->where('purge_after', '<=', now())
-            ->chunkById(100, function ($filer) use (&$borttagna): void {
-                foreach ($filer as $fil) {
+            ->chunkById(100, function ($storedFiles) use (&$deleted): void {
+                foreach ($storedFiles as $storedFile) {
                     try {
-                        DB::transaction(function () use ($fil, &$borttagna): void {
+                        DB::transaction(function () use ($storedFile, &$deleted): void {
                             // Radlåset hålls ÖVER byteraderingen, och villkoren
                             // läses om under låset — se StoreAttachment, som
                             // ställer kravet i klartext. En rad som fått en ny
                             // referens mellan chunkens SELECT och nu ska lämnas
-                            // orörd; $fil i chunkens ställe är en inaktuell
+                            // orörd; $storedFile i chunkens ställe är en inaktuell
                             // modellinstans och får aldrig avgöra.
-                            $låst = StoredFile::query()->whereKey($fil->getKey())->lockForUpdate()->first();
+                            $lockedFile = StoredFile::query()->whereKey($storedFile->getKey())->lockForUpdate()->first();
 
-                            if ($låst === null
-                                || $låst->reference_count !== 0
-                                || $låst->purge_after === null
-                                || $låst->purge_after->isFuture()) {
+                            if ($lockedFile === null
+                                || $lockedFile->reference_count !== 0
+                                || $lockedFile->purge_after === null
+                                || $lockedFile->purge_after->isFuture()) {
                                 return;
                             }
 
@@ -84,9 +84,9 @@ class PurgesExpiredStoredFiles
                             // är ingen felsignal, och kastar en radering rullas
                             // transaktionen tillbaka och raderna ligger kvar
                             // för nästa körning.
-                            foreach ($låst->derivatives as $derivat) {
-                                Storage::disk('files')->delete($derivat->storage_path);
-                                $derivat->delete();
+                            foreach ($lockedFile->derivatives as $derivative) {
+                                Storage::disk('files')->delete($derivative->storage_path);
+                                $derivative->delete();
                             }
 
                             // Bytena först (Beslut 2). Disken 'files' har
@@ -96,26 +96,26 @@ class PurgesExpiredStoredFiles
                             // transaktionen tillbaka och raden ligger kvar för
                             // nästa körning. Låset över disk-I/O är kortvarigt —
                             // ett unlink, inte en skrivning på upp till 64 MiB.
-                            Storage::disk('files')->delete($låst->storage_path);
+                            Storage::disk('files')->delete($lockedFile->storage_path);
 
-                            if ($låst->delete()) {
-                                $borttagna++;
+                            if ($lockedFile->delete()) {
+                                $deleted++;
                             }
                         });
                     } catch (Throwable $e) {
                         Log::error('Kunde inte fysiskt radera stored_file', [
-                            'content_hash' => $fil->content_hash,
-                            'storage_path' => $fil->storage_path,
+                            'content_hash' => $storedFile->content_hash,
+                            'storage_path' => $storedFile->storage_path,
                             'exception' => $e->getMessage(),
                         ]);
                     }
                 }
             });
 
-        if ($borttagna > 0) {
-            Log::info("Fysiskt raderade {$borttagna} stored_file.");
+        if ($deleted > 0) {
+            Log::info("Fysiskt raderade {$deleted} stored_file.");
         }
 
-        return $borttagna;
+        return $deleted;
     }
 }
