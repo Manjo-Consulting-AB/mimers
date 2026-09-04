@@ -25,10 +25,11 @@ use App\Models\User;
  * 3. `level` avgör, `kind` avgör aldrig: `read` läser, `write` läser och
  *    ändrar men får ALDRIG radera containern eller hantera åtkomster
  *    (issue 9b) — se issue 9a § Beslut 6.
- * 4. Är kontot `read_only` nekas allt skrivande oavsett behörighet.
- *    Läsning är alltid tillåten. Sedan issue 9a gäller det här ÄVEN det
- *    mottagande kontot på en `managed`-rad, se issue 9a § Beslut 9 —
- *    hasContainerAccess()s `$excludeReadOnlyGranteeAccounts`.
+ * 4. Är kontot fryst — `read_only` (nedgraderingen, issue 28) eller
+ *    `closed` (kontolivscykeln, issue 29a) — nekas allt skrivande oavsett
+ *    behörighet. Läsning är alltid tillåten. Sedan issue 9a gäller det här
+ *    ÄVEN det mottagande kontot på en `managed`-rad, se issue 9a § Beslut 9
+ *    — hasContainerAccess()s `$excludeFrozenGranteeAccounts`.
  *
  * Regel 5 (uppladdningar räknas mot den uppladdande användarens konto) är
  * inte en behörighetsfråga och hör inte hemma här.
@@ -51,8 +52,8 @@ class ContainerPolicy
 
     /**
      * Får användaren skapa en container åt det angivna kontot? Regel 1
-     * (medlemskap) OCH regel 4 (kontot får inte vara `read_only` — att
-     * skapa en container är att skriva).
+     * (medlemskap) OCH regel 4 (kontot får inte vara fryst — `read_only`
+     * eller `closed` — att skapa en container är att skriva).
      *
      * `container_access` (issue 9) ger aldrig rätt att SKAPA containers åt
      * ett annat konto — den behörigheten gäller en befintlig container, inte
@@ -60,7 +61,7 @@ class ContainerPolicy
      */
     public function create(User $user, Account $account): bool
     {
-        return $this->isMemberOfOwnerAccount($user, $account) && ! $this->isReadOnly($account);
+        return $this->isMemberOfOwnerAccount($user, $account) && ! $this->isFrozen($account);
     }
 
     /**
@@ -68,19 +69,19 @@ class ContainerPolicy
      * (en giltig `write`-access), plus regel 4 — som nu gäller på TVÅ
      * nivåer: ägarkontot fryser containern för alla oavsett väg in (kollas
      * först, innan någon väg prövas), och en `managed`-access dessutom
-     * nekas om DET MOTTAGANDE kontot är `read_only` (hanteras inuti
+     * nekas om DET MOTTAGANDE kontot är fryst (hanteras inuti
      * hasContainerAccess()). En `member`/`guest`-access (mottagaren är en
      * användare, inte ett konto) får ingen extra kontokontroll, se issue 9a
      * § Beslut 9.
      */
     public function update(User $user, Container $container): bool
     {
-        if ($this->isReadOnly($container->account)) {
+        if ($this->isFrozen($container->account)) {
             return false;
         }
 
         return $this->isMemberOfOwnerAccount($user, $container->account)
-            || $this->hasContainerAccess($user, $container, ['write'], excludeReadOnlyGranteeAccounts: true);
+            || $this->hasContainerAccess($user, $container, ['write'], excludeFrozenGranteeAccounts: true);
     }
 
     /**
@@ -93,7 +94,7 @@ class ContainerPolicy
      */
     public function delete(User $user, Container $container): bool
     {
-        return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isReadOnly($container->account);
+        return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isFrozen($container->account);
     }
 
     /**
@@ -114,11 +115,11 @@ class ContainerPolicy
     /**
      * Får användaren BEVILJA en ny åtkomst (issue 9b, POST)? Regel 1 + regel
      * 4, exakt som delete() ovan — att bevilja ÖKAR exponeringen, så ett
-     * `read_only`-ägarkonto nekas.
+     * fryst ägarkonto (`read_only` eller `closed`) nekas.
      */
     public function manageAccess(User $user, Container $container): bool
     {
-        return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isReadOnly($container->account);
+        return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isFrozen($container->account);
     }
 
     /**
@@ -149,12 +150,14 @@ class ContainerPolicy
 
     /**
      * Regel 4: kontots skrivspärr. Sitter på kontot (`account.status`),
-     * aldrig på användaren — ett `closed`-konto hör till kontolivscykeln,
-     * issue 29, och hanteras inte här.
+     * aldrig på användaren. Två tillstånd fryser skrivandet: `read_only`
+     * (nedgraderingen, issue 28) och `closed` (kontolivscykeln, issue 29a —
+     * ett stängt konto ska inte kunna skrivas i, då vore stängningen en
+     * etikett utan verkan). Läsning påverkas aldrig av regel 4.
      */
-    private function isReadOnly(Account $account): bool
+    private function isFrozen(Account $account): bool
     {
-        return $account->status === 'read_only';
+        return in_array($account->status, ['read_only', 'closed'], true);
     }
 
     /**
@@ -167,23 +170,23 @@ class ContainerPolicy
      * egen `member`/`guest`-rad, eller en `managed`-rad på ett konto hon är
      * medlem i — se ContainerAccess::scopeValidFor().
      *
-     * $excludeReadOnlyGranteeAccounts implementerar regel 4:s andra gren
+     * $excludeFrozenGranteeAccounts implementerar regel 4:s andra gren
      * (§ Beslut 9): en `managed`-rad ska INTE ge skrivbehörighet om det
-     * MOTTAGANDE kontot är `read_only`, även om ägarkontot är friskt. Sätts
-     * bara av update() — läsning (regel 4: "påverkas aldrig") skickar in
-     * hela kontolistan ofiltrerad. En `member`/`guest`-rad (mottagaren är
-     * en användare) berörs aldrig av det här filtret, se § Beslut 9: "en
-     * användares eget konto styr inte vad hon får göra i någon annans
-     * container."
+     * MOTTAGANDE kontot är fryst — `read_only` eller `closed` — även om
+     * ägarkontot är friskt. Sätts bara av update() — läsning (regel 4:
+     * "påverkas aldrig") skickar in hela kontolistan ofiltrerad. En
+     * `member`/`guest`-rad (mottagaren är en användare) berörs aldrig av
+     * det här filtret, se § Beslut 9: "en användares eget konto styr inte
+     * vad hon får göra i någon annans container."
      *
      * @param  list<'read'|'write'>  $levels
      */
-    private function hasContainerAccess(User $user, Container $container, array $levels, bool $excludeReadOnlyGranteeAccounts = false): bool
+    private function hasContainerAccess(User $user, Container $container, array $levels, bool $excludeFrozenGranteeAccounts = false): bool
     {
         $accounts = $user->accounts;
 
-        if ($excludeReadOnlyGranteeAccounts) {
-            $accounts = $accounts->reject(fn (Account $account) => $this->isReadOnly($account));
+        if ($excludeFrozenGranteeAccounts) {
+            $accounts = $accounts->reject(fn (Account $account) => $this->isFrozen($account));
         }
 
         return ContainerAccess::query()
