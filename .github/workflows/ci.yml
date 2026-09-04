@@ -134,15 +134,38 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 .github/scripts/omfangsruta.py
 
+      # Budgeten gäller den som ändrar filen, inte den som råkar öppna en PR
+      # medan den ligger över. I M4 tog PR #156 filen till 1944 ord, och de fem
+      # nästa implementations-PR:erna blev röda på ett steg de varken orsakade
+      # eller fick laga - AGENTS.md står i Out of scope för varje sådan issue.
+      # Alla fem mergades röda, vilket är det dyra utfallet: en grind som är
+      # röd på allt slutar betyda något. Rör PR:en inte filen räcker en varning.
+      #
+      # Mätningen sker mot grenens huvud, inte mot merge-refen som checkouten
+      # ger. Issue 149:s körning rapporterade 1806 ord medan både huvudet och
+      # basen mätte 1771 - merge-refen är ett filtillstånd som inte finns i
+      # något av dem, och en budget ska mätas på något som går att öppna.
       - name: Ordbudget för AGENTS.md
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           BUDGET=1800
-          ORD=$(wc -w < AGENTS.md)
-          echo "AGENTS.md: $ORD ord (budget $BUDGET)"
-          if [ "$ORD" -gt "$BUDGET" ]; then
-            echo "::error file=AGENTS.md::$ORD ord överstiger budgeten $BUDGET. Lägger ändringen till en regel ska den peka ut vilken som blev överflödig - se docs/Process/Lärdomar.md."
-            exit 1
+          SHA="${HEAD_SHA:-HEAD}"
+          ORD=$(git show "$SHA:AGENTS.md" | wc -w)
+          echo "AGENTS.md på $SHA: $ORD ord (budget $BUDGET)"
+
+          if [ "$ORD" -le "$BUDGET" ]; then
+            exit 0
           fi
+
+          if [ -n "$BASE_SHA" ] && git diff --quiet "$BASE_SHA" "$SHA" -- AGENTS.md; then
+            echo "::warning file=AGENTS.md::$ORD ord överstiger budgeten $BUDGET, men den här PR:en rör inte filen. Den som tog den över budgeten äger nedskärningen - se docs/Process/Lärdomar.md."
+            exit 0
+          fi
+
+          echo "::error file=AGENTS.md::$ORD ord överstiger budgeten $BUDGET. Lägger ändringen till en regel ska den peka ut vilken som blev överflödig - se docs/Process/Lärdomar.md."
+          exit 1
 
       - name: Markörerna för det synkade blocket är hela
         run: |
