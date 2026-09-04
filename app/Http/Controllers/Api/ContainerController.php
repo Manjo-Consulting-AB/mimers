@@ -9,6 +9,7 @@ use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
 use App\Models\Account;
 use App\Models\Container;
+use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -88,11 +89,18 @@ class ContainerController extends Controller
      * utelämnad ur App\Models\Container#[Fillable], se den klassens
      * docblock.
      */
-    public function store(StoreContainerRequest $request, AdjustUsage $adjustUsage): JsonResponse
+    public function store(StoreContainerRequest $request, AdjustUsage $adjustUsage, Entitlements $entitlements): JsonResponse
     {
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 
         Gate::authorize('create', [Container::class, $account]);
+
+        // Behörighet först, kvot sedan (issue 27 § Beslut 3): en användare
+        // som inte får skapa åt kontot ska få auth.forbidden — inte veta hur
+        // många containers kontot har. Kvoten gäller det konto som anges i
+        // kroppen, samma konto som blir ägare och vars plan gäller (§
+        // Beslut 4).
+        $entitlements->assertCanCreateContainer($account);
 
         $container = DB::transaction(function () use ($request, $account, $adjustUsage): Container {
             $container = new Container($request->safe()->only(['name', 'kind']));
