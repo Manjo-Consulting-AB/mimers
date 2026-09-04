@@ -1,8 +1,9 @@
 #!/usr/bin/env -S python3 -u
 """Plockar äldsta öppna GitHub-issue och kör den genom Deepseek -> (vid fel) Sonnet,
-med Sonnet-review på medium risk och Opus-granskning på high risk innan mänsklig merge.
-En obesvarad fråga i PR-kroppen eskaleras smalt till Opus (arkitekten) i stället för
-att gå direkt till Tony - se run_opus_answer(). Se ADR-0025/0026/0027.
+med Sonnet-review på varje PR oavsett risk_class innan merge (manuell hos Tony på
+high, annars automatisk). En obesvarad fråga i PR-kroppen eskaleras smalt till Opus
+(arkitekten) i stället för att gå direkt till Tony - se run_opus_answer(). Se
+ADR-0025/0026 (uppföljning 2026-09-03)/0027.
 
 Körs i en isolerad git worktree (.claude/worktrees/issue-<n>), inte i huvudarbetsträdet -
 se ADR-0026: Docker valdes bort just för att batch-agenter redan körs isolerat i worktrees.
@@ -54,6 +55,10 @@ GH_REPO = "Manjo-Consulting-AB/mimers"
 
 # Kortaste granskningsutlåtande som får bära ett godkännande. Se run_review().
 MIN_GRANSKNINGSTEXT = 400
+
+# Lägsta andel kvar av Anthropic-kontots rullande 5-timmarsfönster för att
+# påbörja ett nytt issue. Se usage_ok_to_proceed().
+MIN_USAGE_REMAINING = 0.30
 
 # =====================================================================
 # KONFIGURATION & HJÄLPFUNKTIONER
@@ -170,6 +175,46 @@ def call_claude_direct(model, prompt, cwd):
     ]
     result = run_cmd(cmd, check=True, cwd=cwd)
     return result.stdout
+
+
+def usage_ok_to_proceed():
+    """Vakt mot att påbörja ett issue när Anthropic-kontots rullande
+    5-timmarsfönster snart är slut - en Sonnet-granskning eller
+    Opus-eskalering mitt i issuet skulle annars kunna avbrytas halvvägs.
+
+    Kollen görs med ett minimalt Sonnet-anrop vars stream-json-utdata
+    innehåller en rate_limit_event-rad. Kommandots prefix (fram till och med
+    bypassPermissions) måste vara identiskt med call_claude_direct()s -
+    ändra bara svansen, annars matchar ingen allow-rad i
+    ~/.claude/settings.json och den oövervakade cron-körningen stannar på
+    permission-klassificeraren.
+    """
+    cmd = [
+        "claude",
+        "-p", "ok",
+        "--model", "sonnet",
+        "--permission-mode", "bypassPermissions",
+        "--output-format", "stream-json",
+        "--verbose",
+        "--max-turns", "1",
+    ]
+    result = run_cmd(cmd, check=False)
+    for line in result.stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "rate_limit_event":
+            utilization = event["rate_limit_info"]["unifiedWindows"]["five_hour"]["utilization"]
+            remaining = 1 - utilization
+            if remaining < MIN_USAGE_REMAINING:
+                print(f"⏸️ Endast {remaining:.0%} kvar av 5-timmarsfönstret "
+                      f"(kräver minst {MIN_USAGE_REMAINING:.0%}). Hoppar över den här körningen.")
+                return False
+            return True
+
+    print("⚠️ Kunde inte läsa usage-status (ingen rate_limit_event i svaret) - fortsätter ändå.")
+    return True
 
 
 def bygg_granskningsprompt(issue_body, diff, uppfoljning=False):
@@ -448,7 +493,7 @@ def extract_risk_class(issue_body):
         # utan att någon läser diffen - den bana som har minst kontroll, vald av ett
         # regex som inte träffade. Samma fail-open-klass som omfångsrutans grind, och
         # issue-mallen säger själv "vid tvekan: elevated". Se docs/Process/Lärdomar.md.
-        print("!! risk_class gick inte att läsa ur issuen - kör som 'high' (Opus + manuell merge).")
+        print("!! risk_class gick inte att läsa ur issuen - kör som 'high' (manuell merge).")
         return "high"
 
     value = m.group(1).strip().lower()
@@ -664,6 +709,7 @@ def process_next_issue(issue_number=None):
         res = run_cmd([
             "gh", "issue", "list",
             "--state", "open",
+            "--label", "Build",
             "--search", "sort:created-asc",
             "--limit", "1",
             "--json", "number,title,labels,body",
@@ -706,6 +752,9 @@ def process_next_issue(issue_number=None):
         send_pushover(f"⚠️ Issue #{issue_num} var 'in-progress' utan öppen PR. Märkt needs-human.")
         sys.exit(0)
 
+    if not usage_ok_to_proceed():
+        sys.exit(0)
+
     print(f"\n==================================================")
     print(f" Påbörjar arbete med Issue #{issue_num}: {issue_title} (risk_class: {risk_class})")
     print(f"==================================================\n")
@@ -714,10 +763,10 @@ def process_next_issue(issue_number=None):
     run_cmd(["gh", "issue", "edit", issue_num, "--add-label", "in-progress"], cwd=REPO_ROOT)
 
     worktree_path = setup_worktree(branch_name)
-    print("--> Bootstrappar worktree (composer setup)...")
-    run_cmd(["composer", "setup"], cwd=worktree_path)
 
     try:
+        print("--> Bootstrappar worktree (composer setup)...")
+        run_cmd(["composer", "setup"], cwd=worktree_path)
         _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class, branch_name, worktree_path)
     except (Exception, KeyboardInterrupt) as e:
         # KeyboardInterrupt ärver BaseException, inte Exception - fångas inte
@@ -782,10 +831,30 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
             )
 
         agent_summary = call_deepseek(prompt, cwd=worktree_path)
+        print(f"  Agentens sammanfattning (försök {attempt}):\n{agent_summary}")
+
+        # Görs innan run_local_tests(): en agent som inte rörde en fil ger en
+        # tom `git status`, och run_local_tests() tolkar då avsaknaden av en
+        # rott-pa-basen-kontroll att pröva som "gröna tester" (se dess
+        # docstring). Utan den här kontrollen bröt loopen direkt på ett enda
+        # no-op-försök och hoppade över både försök 2-3 och hela
+        # Sonnet-eskaleringen i STEG 3 - upptäckt först i STEG 5:s egen
+        # "ingen ändring alls"-kontroll, efter att hela pipelinen redan gett
+        # upp på issuet.
+        no_diff = not run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
+        if no_diff:
+            print(f"  ✗ Försök {attempt}: inga filer ändrades.")
+            last_error_output = "Inga filer ändrades alls - lösningen uteblev."
+            error_history += (
+                f"\n--- Försök {attempt} ---\nDu svarade utan att ändra en enda fil i "
+                f"arbetsträdet. Skriv faktisk kod som löser issuet.\n"
+            )
+            continue
 
         passed, test_output = run_local_tests(cwd=worktree_path)
         if passed:
             print("  ✓ Tester GRÖNA med DeepSeek!")
+            send_pushover(f"🧩 Issue #{issue_num}: DeepSeek löste testerna på försök {attempt}/3. Skapar PR...")
             deepseek_success = True
             break
         else:
@@ -813,6 +882,9 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
 
         agent_summary = call_claude_direct("sonnet", sonnet_prompt, cwd=worktree_path)
         passed, test_output = run_local_tests(cwd=worktree_path)
+
+        if passed:
+            send_pushover(f"🧩 Issue #{issue_num}: Sonnet löste testerna efter DeepSeeks 3 försök. Skapar PR...")
 
         if not passed:
             print("\n[FAS 3] Tester RÖDA även med Sonnet. Stoppar hela kön!")
@@ -894,9 +966,19 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     # en bred elevated-bucket ska kosta en djupare läsning, inte avgöra om det
     # finns en läsare. En Sonnet-läsning ovanpå en issue som kostat 0,50 USD är
     # brus i den summan; den ogranskade banan kostade oss mer än så.
-    granskare = "opus" if risk_class == "high" else "sonnet"
-    modellnamn = "Opus 5" if granskare == "opus" else "Sonnet 5"
+    #
+    # Fram till 2026-09-03 granskade Opus risk_class: high. Uppföljningen i
+    # ADR-0026 tog bort den grenen: issue-mallen tvingar redan fram ett fullt
+    # kontrakt (numrerade beslut, läslista, omfångsruta, ett test per "Klart
+    # när"-punkt), så granskningen är en efterlevnadskontroll mot det
+    # kontraktet - inte ett nytt arkitekturomdöme. Sonnet läser samma prompt
+    # Opus fick (bygg_granskningsprompt() skiljer aldrig på modell). Opus roll
+    # är nu bara den smala eskaleringen i los_fraga_och_merga() för obesvarade
+    # frågor - det är den uppgift som faktiskt kräver ett nytt omdöme.
+    granskare = "sonnet"
+    modellnamn = "Sonnet 5"
     print(f"--> risk_class: {risk_class} - granskas av {modellnamn}...")
+    send_pushover(f"👀 Issue #{issue_num}: PR #{pr_number} skapad, granskas nu av {modellnamn} (risk_class: {risk_class}).")
 
     if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
         print(f"  ⚠ PR:ens head hann inte synka mot commit {pushed_sha[:8]} - läser diffen ändå.")
@@ -910,6 +992,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     godkand_direkt = godkand
     if not godkand:
         print(f"--> {modellnamn} hittade fynd - startar åtgärdsloop (3 varv DeepSeek, sedan 1 varv Sonnet)...")
+        send_pushover(f"🔁 Issue #{issue_num}: {modellnamn} hittade fynd på PR #{pr_number}, startar åtgärdsloop.")
         godkand, granskning = run_findings_fix_loop(
             issue_body, pr_number, branch_name, worktree_path, granskning
         )
@@ -947,6 +1030,7 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
     fragor = oppna_fragor(pr_body)
     if fragor:
         print("--> Obesvarad fråga i PR-kroppen - eskalerar till Opus (arkitekt)...")
+        send_pushover(f"❓ Issue #{issue_num}: obesvarad fråga på PR #{pr_number}, eskalerar till Opus (arkitekt).")
         opus_svar, kraver_kodandring = run_opus_answer(issue_body, fragor, pr_number, worktree_path)
         run_cmd(["gh", "pr", "comment", pr_number, "--body",
                   f"### Opus 5 - arkitektsvar på Frågor och antaganden\n{opus_svar}"],
@@ -954,6 +1038,7 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
 
         if kraver_kodandring:
             print("--> Opus svar kräver en kodändring - startar åtgärdsloop (DeepSeek + Sonnet)...")
+            send_pushover(f"🔁 Issue #{issue_num}: Opus svar på PR #{pr_number} kräver en kodändring, startar åtgärdsloop.")
             godkand, granskning = run_findings_fix_loop(
                 issue_body, pr_number, branch_name, worktree_path, opus_svar
             )
