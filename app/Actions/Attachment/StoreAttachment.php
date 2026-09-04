@@ -9,6 +9,7 @@ use App\Models\Attachment;
 use App\Models\Item;
 use App\Models\StoredFile;
 use App\Models\User;
+use App\Support\Plan\Entitlements;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -156,6 +157,18 @@ class StoreAttachment
                 // bilagans livslängd (issue 17a § Beslut 5).
                 $storedFile->increment('reference_count', 1, ['purge_after' => null]);
             }
+
+            // Den AUKTORITATIVA kvotkontrollen, under radlåset på kontots
+            // usage_counter-rad och före attachment-raden skapas (issue 27b §
+            // Beslut 4). Kontrollern har redan gjort en billig avvisning, men
+            // den ser en siffra som kan vara inaktuell: två samtidiga
+            // uppladdningar kan båda passera den tidiga kontrollen, och
+            // lockForUpdate här serialiserar dem — den andra ser den förstas
+            // ökning och nekas. Kastet rullar tillbaka hela transaktionen,
+            // inklusive stored_file-raden som just skapades eller ökades.
+            // Räknat på $storedFile->byte_size — samma tal AdjustUsage lägger
+            // till i räknaren strax nedanför.
+            (new Entitlements)->assertStorageWithinLimit($account, $storedFile->byte_size);
 
             $attachment = new Attachment;
             $attachment->item_id = $item->id;

@@ -113,4 +113,76 @@ final class Entitlements
 
         throw ApiException::make('plan.feature_unavailable', ['feature' => $feature], 403);
     }
+
+    /**
+     * Styckstorleken: `max_file_bytes` i kontots plan mot filens byten.
+     * Kontrollen sitter i AttachmentController::store(), direkt efter att
+     * kontot hämtats och medlemskapet bevisats, och innan StoreAttachment
+     * anropas (issue 27b § Beslut 4). En fil som ändå nekas ska varken
+     * skrivas till disken eller få en attachment-rad — därför ligger
+     * kontrollen före actionen, inte inuti den.
+     */
+    public function assertFileWithinLimit(Account $account, int $byteSize): void
+    {
+        $limit = $account->planLimit('max_file_bytes');
+
+        if ($limit === null) {
+            return;
+        }
+
+        if ($byteSize > $limit) {
+            throw ApiException::make('quota.max_file_size_exceeded', [
+                'limit_bytes' => $limit,
+                'file_bytes' => $byteSize,
+            ], 403);
+        }
+    }
+
+    /**
+     * Totalkvoten: `storage_bytes` i kontots plan mot räknarens
+     * `storage_bytes` plus filens byten. Anropas på TVÅ ställen (issue 27b §
+     * Beslut 4): en billig avvisning i AttachmentController::store() innan
+     * bytena skrivs till disken, och en gång till inne i StoreAttachments
+     * transaktion. Bara den andra håller mot samtidiga uppladdningar — den
+     * tidiga ser en siffra som kan vara inaktuell när transaktionen läser
+     * igen.
+     *
+     * Läsningen är därför en låsande current read (lockForUpdate): inne i
+     * transaktionen serialiserar den samtidiga uppladdare på kontots
+     * räknarrad, och den som väntar ser den förstas ökning när låset
+     * släpper. I kontrollerns anrop — utanför en transaktion, i autocommit —
+     * släpps låset i slutet av satsen och läsningen är ofarlig. Båda
+     * anropen delar samma formulering; en kontroll med egen formel skulle
+     * glida isär från räknaren och från 26b:s avstämning (issue 27b § Att se
+     * upp med).
+     *
+     * Saknas räknarraden är förbrukningen noll, och låset låser ingenting:
+     * två samtidiga första uppladdningar på ett tomt konto kan båda passera
+     * här. På ett tomt konto rymmer kvoten dem båda, så konsekvensen är
+     * noll — att uppfinna en rad att låsa vore att betala för ett lås som
+     * inte behövs (issue 27b § Att se upp med).
+     */
+    public function assertStorageWithinLimit(Account $account, int $byteSize): void
+    {
+        $limit = $account->planLimit('storage_bytes');
+
+        if ($limit === null) {
+            return;
+        }
+
+        $used = (int) UsageCounter::query()
+            ->where('account_id', $account->id)
+            ->lockForUpdate()
+            ->value('storage_bytes');
+
+        // used + file > limit nekar; en fil som exakt fyller kvoten, eller en
+        // första fil på ett tomt konto, ska gå igenom.
+        if ($used + $byteSize > $limit) {
+            throw ApiException::make('quota.storage_exceeded', [
+                'limit_bytes' => $limit,
+                'used_bytes' => $used,
+                'file_bytes' => $byteSize,
+            ], 403);
+        }
+    }
 }
