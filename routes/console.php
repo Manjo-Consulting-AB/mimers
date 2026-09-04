@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\EnforcesDowngrades;
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PurgesExpiredStoredFiles;
 use App\Console\PurgesExpiredTrash;
@@ -85,3 +86,23 @@ Schedule::call(fn () => app(PurgesExpiredTrash::class)->handle())
 Schedule::call(fn () => app(ReconcilesUsageCounters::class)->handle())
     ->daily()
     ->name('reconcile-usage-counters');
+
+/*
+ * Issue 28b · Verkställandet av nedgraderingen: konton vars frist gått ut får
+ * bilagor raderade, nyast först, tills kontot ligger under gratisplanens gräns
+ * och återgår till active — se App\Console\EnforcesDowngrades, [[Planer och
+ * kvoter]] § Nedgradering och [[ADR-0009 Kvoter och livscykel]]. Logiken bor i
+ * en vanlig klass, testad direkt i
+ * tests/Feature/Kvot/NedgraderingsraderingTest.php; det här är bara
+ * schemaläggningen.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * nattliga fönster som gallringsjobben: en nedgradering ska vara klar innan
+ * kontrollpunkterna (27a/27b) läser räknaren nästa dag.
+ */
+Schedule::call(fn () => app(EnforcesDowngrades::class)->handle())
+    ->daily()
+    ->name('enforce-downgrades');

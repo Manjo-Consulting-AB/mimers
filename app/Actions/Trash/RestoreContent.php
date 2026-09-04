@@ -4,10 +4,12 @@ namespace App\Actions\Trash;
 
 use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
+use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\Tag;
+use App\Support\Plan\Entitlements;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -94,14 +96,29 @@ class RestoreContent
 
             $varMjukraderad = $rad->trashed();
 
+            // Issue 28b Beslut 6 · Hålet som steg 5 öppnar: en bilaga som
+            // återställs kommer tillbaka i kontots förbrukning, och en
+            // återställning som skulle spränga kvoten nekas med samma kod och
+            // data som uppladdningen (Entitlements::assertStorageWithinLimit,
+            // issue 27b). Bara bilagor kostar byten — item, kategori och tagg
+            // rör ingen räknare och ingen gräns, så de grenarna är orörda.
+            // Kontrollen ligger före restore(): en nekad återställning lämnar
+            // raden i papperskorgen.
+            $byteSize = 0;
+
+            if ($model instanceof Attachment && $varMjukraderad) {
+                $byteSize = (int) $model->storedFile()->value('byte_size');
+                $konto = Account::query()->whereKey($model->billed_account_id)->firstOrFail();
+
+                (new Entitlements)->assertStorageWithinLimit($konto, $byteSize);
+            }
+
             // restore() körs på instansen även när en samtidig återställning
             // redan hunnit först — den är då en no-op i databasen som bara
             // synkar instansens deleted_at för den som anropar.
             $model->restore();
 
             if ($model instanceof Attachment && $varMjukraderad) {
-                $byteSize = (int) $model->storedFile()->value('byte_size');
-
                 (new AdjustUsage)->handle($model->billed_account_id, bytesDelta: $byteSize);
             }
         });
