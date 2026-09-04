@@ -8,8 +8,6 @@ use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
-use App\Models\Schedule;
-use App\Models\ScheduleOccurrence;
 use App\Models\Subscription;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,10 +40,9 @@ use Throwable;
  *   är förbjuden: inte heller de containers som saknar medlemmar rörs.
  * - Bilagor kontot betalar för i andras containers blockerar (Beslut 5):
  *   de är kundens innehåll, och FK:n tillåter inte att kontot raderas medan
- *   de finns kvar. Detsamma gäller items som tillskrivits kontot och
- *   avklarade förekomster i främmande containers — samma sorts
- *   RESTRICT-referens från innehåll kontot inte äger (se Frågor och
- *   antaganden i PR:n för 29b).
+ *   de finns kvar. Radera aldrig i en främmande pärm — hoppa över kontot
+ *   och lämna frågan om vad som ska hända med innehållet till [[Tankar]]
+ *   (se Frågor och antaganden i PR:n för 29b).
  *
  * Ett konto i taget, en transaktion per konto, och ett fel stoppar inte de
  * andra (Beslut 8). Schemaläggs i routes/console.php med
@@ -150,15 +147,16 @@ class DeletesDormantAccounts
                 return;
             }
 
-            // Beslut 5 — innehåll som pekar på kontot från containers det inte
-            // äger. Radera ingenting; frågan om vad som ska hända med innehållet
-            // hör hemma i [[Tankar]] (se Frågor och antaganden i PR:n för 29b).
-            $foreignReason = $this->foreignReferenceReason($row);
-
-            if ($foreignReason !== null) {
+            // Beslut 5 — bilagor kontot betalar för i containers det inte äger.
+            // De är kundens innehåll och kan inte raderas här, men FK:n
+            // (`attachment.billed_account_id`, RESTRICT) hindrar kontoraderingen
+            // medan de finns kvar. Radera ingenting; frågan om vad som ska hända
+            // med dem hör hemma i [[Tankar]] (se Frågor och antaganden i PR:n
+            // för 29b).
+            if ($this->hasForeignBilledAttachment($row)) {
                 Log::warning('account.deletion_blocked', [
                     'account_ulid' => $row->ulid,
-                    'reason' => $foreignReason,
+                    'reason' => 'foreign_billed_attachments',
                 ]);
 
                 return;
@@ -169,17 +167,24 @@ class DeletesDormantAccounts
     }
 
     /**
-     * ULID:erna för de levande containers kontot äger som har aktiva
-     * medlemmar — minst en giltig container_access (ContainerAccess::scopeValid)
-     * eller en obesvarad, icke utgången inbjudan. Samma räkning som
-     * delningstaket i 27a § Beslut 5. Mjukraderade containers räknas inte:
-     * de är redan på väg bort och ska gallras med kontot.
+     * ULID:erna för de containers kontot äger som har aktiva medlemmar —
+     * minst en giltig container_access (ContainerAccess::scopeValid) eller en
+     * obesvarad, icke utgången inbjudan. Samma räkning som delningstaket i
+     * 27a § Beslut 5.
+     *
+     * Mjukraderade containers räknas också: en soft delete sätter bara
+     * `deleted_at` på container-raden och återkallar inte container_access —
+     * innehållet ligger kvar, oftast helt levande, tills gallringsjobbet tar
+     * det. En mjukraderad container med aktiva medlemmar ska därför blockera
+     * lika mycket som en levande: DeleteAccount tömmer den med withTrashed(),
+     * och radering utan att ägarskapet erbjudits är precis vad
+     * acceptanskriteriet förbjuder.
      *
      * @return Collection<int, string>
      */
     private function ownedContainersWithActiveMembers(Account $account): Collection
     {
-        return Container::query()
+        return Container::withTrashed()
             ->where('account_id', $account->id)
             ->where(function (Builder $query) {
                 $query->whereHas('accesses', function (Builder $query) {
@@ -193,31 +198,18 @@ class DeletesDormantAccounts
     }
 
     /**
-     * Skälet till att kontot inte får raderas, eller null om inget hindrar.
-     * Kontot har lämnat RESTRICT-referenser i containers det inte äger: en
-     * bilaga det betalar för (Beslut 5), ett item det tillskrivits, eller en
-     * avklarad förekomst. Alla tre är innehåll någon annan äger och kan inte
-     * raderas av den här raderingen — men hindrar account-raden från att
-     * försvinna. Svaret är att hoppa över kontot, aldrig att städa i främmande
-     * pärmar.
+     * Har kontot lämnat en RESTRICT-referens i en container det inte äger: en
+     * bilaga det betalar för (Beslut 5) — kundens innehåll i en främmande
+     * pärm. Den kan inte raderas av den här raderingen men hindrar
+     * account-raden från att försvinna. Svaret är att hoppa över kontot,
+     * aldrig att städa i främmande pärmar.
+     *
+     * Under implementeringen hittades ytterligare två RESTRICT-referenser av
+     * samma sort — `item.created_by_account_id` och
+     * `schedule_occurrence.completed_by_account_id` — som inte står i Beslut
+     * 5. De är noterade i Frågor och antaganden (PR:n för 29b) som en fråga
+     * för [[Tankar]], inte implementerade här.
      */
-    private function foreignReferenceReason(Account $account): ?string
-    {
-        if ($this->hasForeignBilledAttachment($account)) {
-            return 'foreign_billed_attachments';
-        }
-
-        if ($this->hasForeignAttributedItem($account)) {
-            return 'foreign_attributed_items';
-        }
-
-        if ($this->hasForeignCompletedOccurrence($account)) {
-            return 'foreign_completed_occurrences';
-        }
-
-        return null;
-    }
-
     private function hasForeignBilledAttachment(Account $account): bool
     {
         return Attachment::withTrashed()
@@ -227,34 +219,6 @@ class DeletesDormantAccounts
                 $query->withTrashed()->whereHas('container', function (Builder $query) use ($account): void {
                     /** @var Builder<Container> $query */
                     $query->withTrashed()->where('account_id', '!=', $account->id);
-                });
-            })
-            ->exists();
-    }
-
-    private function hasForeignAttributedItem(Account $account): bool
-    {
-        return Item::withTrashed()
-            ->where('created_by_account_id', $account->id)
-            ->whereHas('container', function (Builder $query) use ($account): void {
-                /** @var Builder<Container> $query */
-                $query->withTrashed()->where('account_id', '!=', $account->id);
-            })
-            ->exists();
-    }
-
-    private function hasForeignCompletedOccurrence(Account $account): bool
-    {
-        return ScheduleOccurrence::query()
-            ->where('completed_by_account_id', $account->id)
-            ->whereHas('schedule', function (Builder $query) use ($account): void {
-                /** @var Builder<Schedule> $query */
-                $query->withTrashed()->whereHas('item', function (Builder $query) use ($account): void {
-                    /** @var Builder<Item> $query */
-                    $query->withTrashed()->whereHas('container', function (Builder $query) use ($account): void {
-                        /** @var Builder<Container> $query */
-                        $query->withTrashed()->where('account_id', '!=', $account->id);
-                    });
                 });
             })
             ->exists();

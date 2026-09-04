@@ -11,8 +11,6 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Invitation;
 use App\Models\Item;
-use App\Models\Schedule;
-use App\Models\ScheduleOccurrence;
 use App\Models\StoredFile;
 use App\Models\Subscription;
 use App\Models\UsageCounter;
@@ -239,6 +237,32 @@ it('en återkallad åtkomst räknas inte', function () {
     expect(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse();
 });
 
+it('en mjukraderad container med aktiva medlemmar blockerar raderingen', function () {
+    [$konto, $medlem] = kontoraderingVilande();
+    $container = kontoraderingContainer($konto);
+    $annatKonto = Account::factory()->create();
+
+    ContainerAccess::factory()->for($container, 'container')->create([
+        'grantee_type' => 'account',
+        'grantee_id' => $annatKonto->id,
+        'level' => 'write',
+        'kind' => 'managed',
+        'granted_by_user_id' => $medlem->id,
+    ]);
+
+    // En soft delete återkallar inte container_access — den sätter bara
+    // `deleted_at` på container-raden och innehållet ligger kvar tills
+    // gallringsjobbet tar det. Medlemmarna är alltså fortfarande aktiva när
+    // raderingsjobbet kör, och ägarskapet har inte erbjudits.
+    $container->delete();
+
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    kontoraderingKör();
+
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeTrue();
+    expect(Container::withTrashed()->whereKey($container->id)->exists())->toBeTrue();
+});
+
 it('ett konto med aktiv prenumeration raderas aldrig', function () {
     [$konto] = kontoraderingVilande();
 
@@ -274,60 +298,6 @@ it('ett konto med bilagor betalda i en främmande container raderas inte', funct
         fn (string $meddelande, array $kontext) => $meddelande === 'account.deletion_blocked'
             && ($kontext['account_ulid'] ?? null) === $konto->ulid
             && ($kontext['reason'] ?? null) === 'foreign_billed_attachments',
-    );
-});
-
-it('ett konto med items tillskrivna i en främmande container raderas inte', function () {
-    [$konto, $medlem] = kontoraderingVilande();
-    $annatKonto = Account::factory()->create();
-    $container = kontoraderingContainer($annatKonto);
-
-    // Ett rent metadata-item — utan bilaga — som kontot lämnat i en
-    // främmande container. FK:n (item.created_by_account_id, RESTRICT)
-    // hindrar kontoraderingen ändå, så kontot måste hoppas över.
-    kontoraderingItem($container, $konto, $medlem, ['name' => 'Loggpost från varvet']);
-
-    Carbon::setTestNow('2026-09-04 12:00:00');
-    $logg = Log::spy();
-    kontoraderingKör();
-
-    expect(Account::query()->whereKey($konto->id)->exists())->toBeTrue();
-    $logg->shouldHaveReceived('warning')->once()->withArgs(
-        fn (string $meddelande, array $kontext) => $meddelande === 'account.deletion_blocked'
-            && ($kontext['account_ulid'] ?? null) === $konto->ulid
-            && ($kontext['reason'] ?? null) === 'foreign_attributed_items',
-    );
-});
-
-it('ett konto med förekomster avklarade i en främmande container raderas inte', function () {
-    [$konto, $medlem] = kontoraderingVilande();
-    $annatKonto = Account::factory()->create();
-    $annatMedlem = kontoraderingMedlem($annatKonto);
-    $container = kontoraderingContainer($annatKonto);
-    $item = kontoraderingItem($container, $annatKonto, $annatMedlem);
-
-    // En avklarad förekomst som tillskrivits kontot — en historikrad i en
-    // främmande container som aldrig raderas.
-    $schema = Schedule::factory()->create(['item_id' => $item->id]);
-    ScheduleOccurrence::factory()->create([
-        'schedule_id' => $schema->id,
-        'due_at' => '2024-05-01',
-        'visible_from' => '2024-05-01',
-        'status' => 'completed',
-        'completed_at' => Carbon::parse('2024-05-01 12:00:00'),
-        'completed_by_user_id' => $medlem->id,
-        'completed_by_account_id' => $konto->id,
-    ]);
-
-    Carbon::setTestNow('2026-09-04 12:00:00');
-    $logg = Log::spy();
-    kontoraderingKör();
-
-    expect(Account::query()->whereKey($konto->id)->exists())->toBeTrue();
-    $logg->shouldHaveReceived('warning')->once()->withArgs(
-        fn (string $meddelande, array $kontext) => $meddelande === 'account.deletion_blocked'
-            && ($kontext['account_ulid'] ?? null) === $konto->ulid
-            && ($kontext['reason'] ?? null) === 'foreign_completed_occurrences',
     );
 });
 
