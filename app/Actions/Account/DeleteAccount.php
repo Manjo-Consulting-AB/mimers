@@ -73,6 +73,16 @@ class DeleteAccount
                 $this->purgeContainer->handle($container);
             }
 
+            // Notiser på kontonivå (utan container, t.ex. account.inactive) —
+            // container-notiserna togs av PurgeContainer ovan. Issue 30 §
+            // Beslut 8: nycklarna är ON DELETE RESTRICT, så utan städningen
+            // kastar account-raderingen nedan ett integritetsfel i
+            // kontolivscykelns nattliga jobb (29b). Leveransraderna först.
+            DB::table('notification_delivery')
+                ->whereIn('notification_id', DB::table('notification')->where('account_id', $accountId)->select('id'))
+                ->delete();
+            DB::table('notification')->where('account_id', $accountId)->delete();
+
             DB::table('usage_counter')->where('account_id', $accountId)->delete();
             DB::table('subscription')->where('account_id', $accountId)->delete();
             DB::table('account_user')->where('account_id', $accountId)->delete();
