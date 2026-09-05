@@ -10,6 +10,7 @@ use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PurgesExpiredStoredFiles;
 use App\Console\PurgesExpiredTrash;
 use App\Console\ReconcilesUsageCounters;
+use App\Console\SendsWeeklyDigest;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -202,3 +203,27 @@ Schedule::call(fn () => app(DeliversNotifications::class)->handle())
     ->everyMinute()
     ->name('deliver-notifications')
     ->withoutOverlapping();
+
+/*
+ * Issue 35 · Veckosammanfattningen: samlar `digest`-markerade leveranser till
+ * ett mejl per mottagare — se App\Console\SendsWeeklyDigest, [[Notiser]] §
+ * notification_preference och config/notiser.php § digest. Logiken bor i en
+ * vanlig klass, testad direkt i
+ * tests/Feature/Notis/VeckosammanfattningTest.php; det här är bara
+ * schemaläggningen.
+ *
+ * Måndagar 06:00 UTC — 07:00 eller 08:00 i Sverige, före arbetsdagen och
+ * efter natten. `available_at` och tysta timmar läses INTE av jobbet (Beslut
+ * 6): fönstret finns för att ingen ska väckas klockan tre, och ett veckobrev
+ * som skickas en bestämd morgon väcker ingen. Att skjuta varje mottagares
+ * sammanfattning till hens lokala morgon vore ett andra köschema för en enda
+ * mejltyp.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(SendsWeeklyDigest::class)->handle())
+    ->weeklyOn(1, '06:00')
+    ->name('send-weekly-digest');

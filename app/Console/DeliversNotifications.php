@@ -32,6 +32,8 @@ use Throwable;
  * kolumnen ligger på notisen, inte på leveransen, och en fråga bara mot
  * leveranstabellen skulle skicka tysta-timmar-notiser klockan tre på natten.
  * Bara `channel = 'email'` levereras här; webhook-kanalen läggs till i 37b.
+ * Bara `digest = false` levereras här — `digest = true`-rader samlas i
+ * veckosammanfattningen (35 § Beslut 3) och ska inte nås av minutloopen.
  * Sorteringen på id gör ordningen deterministisk och gör att en rad som
  * fastnat inte hoppas över för alltid.
  *
@@ -78,6 +80,7 @@ class DeliversNotifications
             ->join('notification', 'notification.id', '=', 'notification_delivery.notification_id')
             ->where('notification_delivery.status', NotificationDelivery::STATUS_PENDING)
             ->where('notification_delivery.channel', NotificationDelivery::CHANNEL_EMAIL)
+            ->where('notification_delivery.digest', false)
             ->where('notification.available_at', '<=', now())
             ->orderBy('notification_delivery.id')
             ->limit($batchSize)

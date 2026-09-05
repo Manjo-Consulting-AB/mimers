@@ -92,11 +92,14 @@ class CreateNotification
                     $delivery = new NotificationDelivery;
                     $delivery->notification_id = $notification->getKey();
                     $delivery->channel = $channel;
+                    // Valet mellan direktleverans och veckosammanfattning
+                    // fryses in här, från samma preferensuppslag som avgjorde
+                    // `enabled` (35 § Beslut 2): en användare som ändrar sin
+                    // inställning på tisdagen ska inte retroaktivt ändra hur
+                    // måndagens redan skapade notis levereras.
+                    $delivery->digest = $this->preferences->digest($user, $type, $channel);
                     $delivery->status = NotificationDelivery::STATUS_PENDING;
                     $delivery->attempts = 0;
-                    // En `digest`-markerad notis får sin leveransrad precis som
-                    // allt annat i den här issuen; 35 byter ut det mot att
-                    // veckojobbet plockar den i stället (31a § Beslut 7).
                     $delivery->save();
                 }
 

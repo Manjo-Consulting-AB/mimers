@@ -67,6 +67,27 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Veckosammanfattningen
+    |--------------------------------------------------------------------------
+    |
+    | Begränsningarna för App\Console\SendsWeeklyDigest, se issue 35 § Beslut
+    | 6. `max_items` är ett tak på hur många poster mejlet listar, av samma
+    | skäl som `batch_size` i 34a: ett konto med fyrahundra förfallande
+    | uppgifter ska inte generera ett mejl som mottagarens klient vägrar
+    | visa. De poster som inte ryms listas inte — men bokförs ändå som
+    | skickade, så de dyker inte upp i nästa veckas sammanfattning (35 §
+    | "Att se upp med").
+    |
+    */
+
+    'digest' => [
+
+        'max_items' => (int) env('NOTIFICATION_DIGEST_MAX_ITEMS', 50),
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Kvotvarningar
     |--------------------------------------------------------------------------
     |

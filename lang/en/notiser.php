@@ -25,6 +25,12 @@ return [
         'line' => 'Your account has been inactive for :months months. If you do not log in before :close_at, the account will close and its data will be deleted.',
         'action' => 'Log in',
     ],
+    'digest' => [
+        'subject' => 'Your week in Mimers: :count reminders',
+        'greeting' => 'Hello!',
+        'intro' => 'Here is what is coming up.',
+        'more' => 'And :count more.',
+    ],
     'unsubscribe' => [
         'footer' => 'Do not want this kind of notification? :link',
         'link' => 'Unsubscribe',
