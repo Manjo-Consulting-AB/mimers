@@ -80,7 +80,7 @@ function avregistreringsPayload(): array
 function avregistreringsUrl(User $user, string $type): string
 {
     return URL::temporarySignedRoute(
-        'notiser.unsubscribe.confirm',
+        'notifications.unsubscribe.confirm',
         now()->addDays(30),
         ['user' => $user->ulid, 'type' => $type],
     );
@@ -99,7 +99,7 @@ it('notismejlet bär en avregistreringslänk i sidfoten', function () {
 
     expect($html)->toContain('Vill du inte ha den här sortens notiser?');
     expect($html)->toContain('>Avregistrera</a>');
-    expect($html)->toContain('/notiser/avregistrera/'.$user->ulid.'/'.Notification::TYPE_TASK_DUE);
+    expect($html)->toContain('/notifications/unsubscribe/'.$user->ulid.'/'.Notification::TYPE_TASK_DUE);
 });
 
 it('notismejlet bär List-Unsubscribe-headern', function () {
@@ -131,7 +131,7 @@ it('notismejlet bär List-Unsubscribe-headern', function () {
     // RFC 8058: URL:en inom vinkelparenteser, annars ignorerar Gmail den tyst.
     expect($listUnsubscribe)->not->toBeNull();
     expect($listUnsubscribe->getBody())
-        ->toStartWith('<'.config('app.url').'/notiser/avregistrera/'.$user->ulid.'/'.Notification::TYPE_TASK_DUE.'?expires=')
+        ->toStartWith('<'.config('app.url').'/notifications/unsubscribe/'.$user->ulid.'/'.Notification::TYPE_TASK_DUE.'?expires=')
         ->toContain('signature=')
         ->toEndWith('>');
     expect($listUnsubscribePost?->getBody())->toBe('List-Unsubscribe=One-Click');
@@ -165,7 +165,7 @@ it('en GET på länken ändrar ingenting', function () {
 
     get(avregistreringsUrl($user, Notification::TYPE_TASK_DUE))
         ->assertOk()
-        ->assertSee('Sluta ta emot '.Notification::TYPE_TASK_DUE.'?');
+        ->assertSee('Sluta ta emot påminnelser om uppgifter?');
 
     expect(NotificationPreference::query()->count())->toBe(0);
 });
@@ -217,7 +217,15 @@ it('en avanmälan skriver ingen undertryckningsrad', function () {
 it('en osignerad begäran avvisas', function () {
     $user = User::factory()->create();
 
-    get('/notiser/avregistrera/'.$user->ulid.'/'.Notification::TYPE_TASK_DUE)->assertForbidden();
+    get('/notifications/unsubscribe/'.$user->ulid.'/'.Notification::TYPE_TASK_DUE)->assertForbidden();
+
+    expect(NotificationPreference::query()->count())->toBe(0);
+});
+
+it('en osignerad POST avvisas', function () {
+    $user = User::factory()->create();
+
+    post('/notifications/unsubscribe/'.$user->ulid.'/'.Notification::TYPE_TASK_DUE)->assertForbidden();
 
     expect(NotificationPreference::query()->count())->toBe(0);
 });
@@ -236,7 +244,7 @@ it('en manipulerad typ i sökvägen avvisas', function () {
 it('en utgången länk avvisas', function () {
     $user = User::factory()->create();
     $url = URL::temporarySignedRoute(
-        'notiser.unsubscribe.confirm',
+        'notifications.unsubscribe.confirm',
         now()->subDays(31),
         ['user' => $user->ulid, 'type' => Notification::TYPE_TASK_DUE],
     );

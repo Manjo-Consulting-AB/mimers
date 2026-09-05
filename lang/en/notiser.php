@@ -31,5 +31,14 @@ return [
         'confirm_heading' => 'Stop receiving :type?',
         'confirm_button' => 'Yes, turn off',
         'done' => 'You will not receive this kind of notification anymore. You can turn it back on under notification settings.',
+        'types' => [
+            'task_due' => 'task reminders',
+            'task_overdue' => 'overdue task alerts',
+            'loan_due' => 'loan reminders',
+            'quota_warning' => 'storage quota warnings',
+            'invitation_received' => 'binder invitations',
+            'transfer_requested' => 'ownership transfer requests',
+            'account_inactive' => 'inactive account warnings',
+        ],
     ],
 ];

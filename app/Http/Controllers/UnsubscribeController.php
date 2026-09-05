@@ -9,6 +9,7 @@ use App\Support\Notification\LocaleResolver;
 use App\Support\Notification\NotificationPreferences;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\View\View;
 
 /**
@@ -48,8 +49,8 @@ class UnsubscribeController extends Controller
         // Formuläret POSTar till exakt den URL som verifierades — queryn bär
         // `expires` och `signature`, och den signerade POST:en valideras av
         // samma middleware som GET:en.
-        return view('notis.avregistrera', [
-            'type' => $type,
+        return view('notifications.unsubscribe', [
+            'typeLabel' => $this->typeLabel($type),
             'url' => $request->fullUrl(),
         ]);
     }
@@ -65,7 +66,7 @@ class UnsubscribeController extends Controller
 
         App::setLocale($this->locales->forUser($user));
 
-        return view('notis.avregistrerad');
+        return view('notifications.unsubscribed');
     }
 
     private function abortIfUnknown(string $type): void
@@ -73,5 +74,15 @@ class UnsubscribeController extends Controller
         if (! in_array($type, $this->preferences->types(), true)) {
             abort(404);
         }
+    }
+
+    private function typeLabel(string $type): string
+    {
+        // Etiketten läses ur lang-filerna med samma punkt→understreck-regel
+        // som resten av mailet (32a § Beslut 4); typkoden är reserven om
+        // nyckeln saknas — en intern kod ska aldrig visas för mottagaren.
+        $key = 'notiser.unsubscribe.types.'.str_replace('.', '_', $type);
+
+        return Lang::has($key) ? trans($key) : $type;
     }
 }

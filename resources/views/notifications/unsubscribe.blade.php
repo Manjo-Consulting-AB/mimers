@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ trans('notiser.unsubscribe.confirm_heading', ['type' => $type]) }}</title>
+    <title>{{ trans('notiser.unsubscribe.confirm_heading', ['type' => $typeLabel]) }}</title>
     <style>
         :root { color-scheme: light dark; }
         body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f4f5f7; color: #1f2937; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
@@ -15,7 +15,7 @@
 </head>
 <body>
     <main>
-        <h1>{{ trans('notiser.unsubscribe.confirm_heading', ['type' => $type]) }}</h1>
+        <h1>{{ trans('notiser.unsubscribe.confirm_heading', ['type' => $typeLabel]) }}</h1>
         <form method="POST" action="{{ $url }}">
             <button type="submit">{{ trans('notiser.unsubscribe.confirm_button') }}</button>
         </form>

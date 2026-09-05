@@ -120,11 +120,11 @@ Route::get('/files/{attachment}', AttachmentDownloadController::class)
  * session, och den signerade URL:en är hela skyddet (Beslut 1, riskklassen
  * bygger på det). `{user}` binds på `ulid`, `{type}` valideras i kontrollern.
  */
-Route::get('/notiser/avregistrera/{user}/{type}', [UnsubscribeController::class, 'confirm'])
+Route::get('/notifications/unsubscribe/{user}/{type}', [UnsubscribeController::class, 'confirm'])
     ->middleware('signed')
-    ->name('notiser.unsubscribe.confirm');
+    ->name('notifications.unsubscribe.confirm');
 
-Route::post('/notiser/avregistrera/{user}/{type}', [UnsubscribeController::class, 'store'])
+Route::post('/notifications/unsubscribe/{user}/{type}', [UnsubscribeController::class, 'store'])
     ->middleware('signed')
     ->withoutMiddleware(PreventRequestForgery::class)
-    ->name('notiser.unsubscribe');
+    ->name('notifications.unsubscribe');

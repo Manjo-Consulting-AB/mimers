@@ -27,7 +27,7 @@ final class UnsubscribeLink
     public function for(User $user, string $type): string
     {
         return URL::temporarySignedRoute(
-            'notiser.unsubscribe.confirm',
+            'notifications.unsubscribe.confirm',
             now()->addDays(self::TTL_DAYS),
             ['user' => $user->ulid, 'type' => $type],
         );
