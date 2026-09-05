@@ -3,8 +3,10 @@
 namespace App\Support\Notification;
 
 use App\Mail\NotificationMail;
+use App\Models\EmailSuppression;
 use App\Models\NotificationDelivery;
 use Illuminate\Support\Facades\Lang;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use InvalidArgumentException;
 
@@ -16,7 +18,9 @@ use InvalidArgumentException;
  *
  * Kanalen rör INTE leveransradens `status`, `attempts`, `last_error` eller
  * `sent_at` — de ägs av leveransloopen (34a), och en klass som både skickar
- * och bokför blir omöjlig att testa isolerat (issue 32a § Beslut 8).
+ * och bokför blir omöjlig att testa isolerat (issue 32a § Beslut 8). En
+ * undertryckt mottagare (33a) kastar AddressSuppressedException före språkval
+ * och rendering; 34a fångar den och sätter `suppressed`.
  *
  * Språket väljs av LocaleResolver och bärs av själva mailet via
  * `$mailable->locale()` — Laravel sätter och återställer appens locale runt
@@ -44,6 +48,22 @@ final class EmailChannel
             // notis utan mottagare, och 31a:s kanalval gör inte det. Kastet
             // här är den enda platsen där felet kan upptäckas.
             throw new InvalidArgumentException('En e-postleverans kräver en mottagande användare, men notisen har user_id = null.');
+        }
+
+        // En undertryckt adress kostar inget mallanrop (Beslut 3): frågan
+        // ligger före språkvalet och före renderingen, så ordningen gör testet
+        // entydigt — ingenting hann hända. Kanalen kastar; det är 34a:s loop
+        // som bokför `status = 'suppressed'` (Beslut 4). Loggen vid kastet
+        // finns där för att spåret ska finnas den dag regeln mot
+        // kontolivscykeln beslutas (Beslut 6).
+        if (EmailSuppression::isSuppressed($user->email)) {
+            Log::warning('notification.address_suppressed', [
+                'account_ulid' => $notification->account->ulid,
+                'user_ulid' => $user->ulid,
+                'reason' => EmailSuppression::reasonFor($user->email),
+            ]);
+
+            throw new AddressSuppressedException($user->email);
         }
 
         $locale = $this->locales->forUser($user);
