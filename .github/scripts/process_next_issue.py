@@ -101,6 +101,18 @@ MASKINKOMMENTAR_PREFIX = "### "
 # atgarda_arkitektsvar().
 ATGARDA_LABEL = "atgarda:arkitektsvar"
 
+# Etiketten pipelinen sätter själv medan åtgärdsloopen körs på ett arkitektsvar.
+# ATGARDA_LABEL tas bort direkt (fail-closed, se atgarda_arkitektsvar()), och
+# utan den här stod PR:en i 25 minuter utan ett enda spår av att något hänt -
+# ingen etikett, ingen kommentar, ingen notis (PR #192, 2026-09-05). Den sätts
+# vid start och tas bort i alla utgångar.
+PAGAR_LABEL = "atgarda:pagar"
+
+# Första raden i beskedet om att en väntande ATGARDA_LABEL ligger still över
+# peak hours. Dubbelt använd: som rubrik när det postas, och som markör för att
+# det redan är postat. Se peak_besked_atgarda().
+PEAK_BESKED_RUBRIK = "### Åtgärdsloopen väntar på peak hours"
+
 # =====================================================================
 # KONFIGURATION & HJÄLPFUNKTIONER
 # =====================================================================
@@ -712,6 +724,23 @@ def besvara_arkitektfragor(pr_number=None):
             send_pushover(f"🚨 PR #{n}: arkitektfrågan kraschade: {e}")
 
 
+def satt_label(pr_number, label):
+    """Sätter en etikett på en PR. check=False: en etikett som inte kunde sättas
+    (labeln borttagen ur repot, nätverksglapp) får inte fälla en körning som
+    annars hade gjort jobbet - den är en statusmarkör, inte ett villkor."""
+    run_cmd(["gh", "pr", "edit", str(pr_number), "--add-label", label],
+            check=False, cwd=REPO_ROOT)
+
+
+def ta_bort_label(pr_number, label):
+    """Tar bort en etikett från en PR. check=False av samma skäl som satt_label(),
+    plus att GitHub svarar 404 när etiketten inte satt där - vilket är det
+    normala när städningen körs två gånger."""
+    run_cmd(["gh", "api", "--method", "DELETE",
+             f"repos/{GH_REPO}/issues/{pr_number}/labels/{label}"],
+            check=False, cwd=REPO_ROOT)
+
+
 def senaste_arkitektsvar(comments):
     """Den senast postade arkitektsvar-kommentaren i tråden - antingen från
     ARKITEKT_LABEL-banan ("... arkitektsvar på din fråga") eller den äldre
@@ -752,6 +781,12 @@ def atgarda_arkitektsvar(pr_number):
     Etiketten tas bort FÖRE åtgärdsloopen körs, av samma fail-closed-skäl som
     besvara_arkitektfraga(): en krasch ska ge en PR som fastnar synligt hos
     Tony, inte en loop som kör om samma svar var tionde minut.
+
+    Att den tas bort först betyder att banan måste kvittera själv. Loopen tar
+    20-40 minuter (composer setup, fyra åtgärdsvarv, testsvit, CI) och satte
+    tidigare inget spår förrän den var klar: PR #192 såg död ut i 25 minuter
+    trots att den arbetade hela tiden. Därför en kvittenskommentar, en notis och
+    PAGAR_LABEL vid start - och PAGAR_LABEL bort igen i varje utgång.
     """
     pr = json.loads(run_cmd(
         ["gh", "pr", "view", pr_number, "--json", "number,title,body,state,headRefName,comments"],
@@ -759,11 +794,10 @@ def atgarda_arkitektsvar(pr_number):
 
     if pr["state"] != "OPEN":
         print(f"--> PR #{pr_number} är {pr['state']} - hoppar över.")
+        ta_bort_label(pr_number, ATGARDA_LABEL)
         return
 
-    run_cmd(["gh", "api", "--method", "DELETE",
-             f"repos/{GH_REPO}/issues/{pr_number}/labels/{ATGARDA_LABEL}"],
-            check=False, cwd=REPO_ROOT)
+    ta_bort_label(pr_number, ATGARDA_LABEL)
 
     svar = senaste_arkitektsvar(pr["comments"])
     if not svar:
@@ -779,36 +813,91 @@ def atgarda_arkitektsvar(pr_number):
     issue_num, issue_title, issue_body = hamta_issue_for_pr(pr_number, pr["body"])
     branch_name = pr["headRefName"]
 
+    # Kvittensen postas innan något långsamt startar, och innan något som kan
+    # krascha: syns den inte i tråden har banan aldrig kommit igång, och det är
+    # i sig svaret på "vad hände med min etikett?".
+    satt_label(pr_number, PAGAR_LABEL)
+    run_cmd(["gh", "pr", "comment", pr_number, "--body",
+             f"### Åtgärdsloopen startad på arkitektsvaret\n`{ATGARDA_LABEL}` plockad, "
+             f"`{PAGAR_LABEL}` satt. Kör senaste arkitektsvaret som fynd genom fyra "
+             f"åtgärdsvarv (DeepSeek x3, sedan Sonnet) och mergar automatiskt om CI blir "
+             f"grönt. Tar normalt 20-40 minuter; nästa kommentar här är utfallet."],
+            cwd=REPO_ROOT)
+    send_pushover(f"🔧 PR #{pr_number}: åtgärdsloopen igång på arkitektsvaret (~20-40 min).")
+
     print(f"--> Kör åtgärdsloopen på PR #{pr_number} med arkitektsvaret som fynd...")
-    worktree_path = setup_worktree_for_existing_branch(branch_name)
-    print("--> Bootstrappar worktree (composer setup)...")
-    run_cmd(["composer", "setup"], cwd=worktree_path)
-
     try:
-        resolved, _ = run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, svar)
-    except (Exception, KeyboardInterrupt) as e:
-        avbruten = isinstance(e, KeyboardInterrupt)
-        cleanup_worktree(worktree_path, branch_name)
-        send_pushover(f"🚨 {ATGARDA_LABEL} på PR #{pr_number} {'avbrutet manuellt (^C)' if avbruten else f'kraschade: {e}'}")
-        if avbruten:
-            raise
+        worktree_path = setup_worktree_for_existing_branch(branch_name)
+        print("--> Bootstrappar worktree (composer setup)...")
+        run_cmd(["composer", "setup"], cwd=worktree_path)
+
+        try:
+            resolved, _ = run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, svar)
+        except (Exception, KeyboardInterrupt) as e:
+            avbruten = isinstance(e, KeyboardInterrupt)
+            cleanup_worktree(worktree_path, branch_name)
+            run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                     f"### Åtgärdsloopen {'avbröts manuellt' if avbruten else 'kraschade'}\n"
+                     f"{'Körningen avbröts med ^C.' if avbruten else f'Felet: `{e}`'} Inget mergades. "
+                     f"Sätt `{ATGARDA_LABEL}` igen för ett nytt försök."],
+                    cwd=REPO_ROOT)
+            send_pushover(f"🚨 {ATGARDA_LABEL} på PR #{pr_number} {'avbrutet manuellt (^C)' if avbruten else f'kraschade: {e}'}")
+            if avbruten:
+                raise
+            return
+
+        if not resolved:
+            run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                     "### Arkitektsvaret blev inte åtgärdat\nFyra åtgärdsvarv räckte inte - "
+                     "issuet är märkt `needs-human`."], cwd=REPO_ROOT)
+            eskalera(issue_num, pr_number, worktree_path, branch_name,
+                      "Arkitektsvaret krävde en kodändring som inte blev löst inom åtgärdsloopen.")
+            return
+
+        print("--> Åtgärdat - väntar in CI innan automatisk merge...")
+        if wait_for_checks(pr_number):
+            run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
+            send_pushover(f"✅ Issue #{issue_num} ('{issue_title}') mergad efter arkitektsvar, PR #{pr_number}!")
+            cleanup_worktree(worktree_path, branch_name)
+        else:
+            run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                     "### CI rött efter arkitektsvar\nÅtgärdsloopen löste fynden, men CI blev inte grönt. "
+                     "Mergar inte automatiskt."], cwd=REPO_ROOT)
+            eskalera(issue_num, pr_number, worktree_path, branch_name, "Åtgärdat men CI blev rött.")
+    finally:
+        # Också vid sys.exit() ur eskalera() och vid ^C: statusetiketten får
+        # aldrig bli kvar och påstå att något fortfarande kör. En merged PR
+        # svarar 404 på borttagningen, vilket ta_bort_label() sväljer.
+        ta_bort_label(pr_number, PAGAR_LABEL)
+
+
+def peak_besked_atgarda():
+    """Talar om, en gång per PR, att en väntande ATGARDA_LABEL ligger stilla för
+    att peak hours pågår.
+
+    Peakfönstren är 01-04 och 06-10 UTC på vardagar (is_peak_hour). Sätter Tony
+    etiketten 07:15 händer ingenting förrän 10:00, och utan det här beskedet
+    ser det ut precis som en trasig etikett - vilket var hela problembilden
+    kring PR #192. Beskedet postas som kommentar och räknas som postat därefter,
+    så en PR som väntar hela fönstret inte får en kommentar var tionde minut.
+    """
+    res = run_cmd(["gh", "pr", "list", "--state", "open", "--label", ATGARDA_LABEL,
+                   "--limit", "10", "--json", "number,comments"], check=False, cwd=REPO_ROOT)
+    if res.returncode != 0:
+        print(f"⚠️ Kunde inte lista PR:er med {ATGARDA_LABEL}: {res.stderr}")
         return
 
-    if not resolved:
-        eskalera(issue_num, pr_number, worktree_path, branch_name,
-                  "Arkitektsvaret krävde en kodändring som inte blev löst inom åtgärdsloopen.")
-        return
-
-    print("--> Åtgärdat - väntar in CI innan automatisk merge...")
-    if wait_for_checks(pr_number):
-        run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
-        send_pushover(f"✅ Issue #{issue_num} ('{issue_title}') mergad efter arkitektsvar, PR #{pr_number}!")
-        cleanup_worktree(worktree_path, branch_name)
-    else:
-        run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                 "### CI rött efter arkitektsvar\nÅtgärdsloopen löste fynden, men CI blev inte grönt. "
-                 "Mergar inte automatiskt."], cwd=REPO_ROOT)
-        eskalera(issue_num, pr_number, worktree_path, branch_name, "Åtgärdat men CI blev rött.")
+    for pr in json.loads(res.stdout):
+        nummer = str(pr["number"])
+        if any((c.get("body") or "").startswith(PEAK_BESKED_RUBRIK) for c in pr.get("comments") or []):
+            continue
+        print(f"--> PR #{nummer} väntar på att peak hours ska ta slut - postar besked.")
+        run_cmd(["gh", "pr", "comment", nummer, "--body",
+                 f"{PEAK_BESKED_RUBRIK}\nEtiketten `{ATGARDA_LABEL}` är sedd, men åtgärdsloopen "
+                 f"kör DeepSeek och startar inte under peak hours (vardagar 01-04 och 06-10 UTC). "
+                 f"Den startar av sig själv vid nästa cron-körning efter fönstret."],
+                cwd=REPO_ROOT)
+        send_pushover(f"⏸️ PR #{nummer}: {ATGARDA_LABEL} väntar på att peak hours ska ta slut.")
 
 
 def atgarda_arkitektsvar_alla(pr_number=None):
@@ -1616,6 +1705,8 @@ if __name__ == "__main__":
             # Arkitektfrågor först, och utan peak-vakt: de kör Opus, inte
             # DeepSeek, och ska besvaras inom tio minuter oavsett klockslag.
             besvara_arkitektfragor()
+            if is_peak_hour():
+                peak_besked_atgarda()
             avbryt_vid_peak()
             atgarda_arkitektsvar_alla()
             process_next_issue()
