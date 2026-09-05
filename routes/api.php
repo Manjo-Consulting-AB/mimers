@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
 use App\Http\Controllers\Api\Auth\RecoveryCodeController;
 use App\Http\Controllers\Api\Auth\RegisteredUserController;
 use App\Http\Controllers\Api\Auth\TotpController;
+use App\Http\Controllers\Api\CalendarFeedController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ContainerAccessController;
 use App\Http\Controllers\Api\ContainerController;
@@ -377,4 +378,22 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // är read_only, och det är hela poängen med ytan.
     Route::get('/accounts/{account}/storage', [AccountStorageController::class, 'index']);
     Route::delete('/accounts/{account}/storage', [AccountStorageController::class, 'destroy']);
+
+    // Issue 36a · ICS-kalenderfeed — skapa, lista och återkalla de hemliga
+    // prenumerationslänkarna för en container, se
+    // App\Http\Controllers\Api\CalendarFeedController. Grinden är den
+    // befintliga view() på App\Policies\ContainerPolicy — ingen ny
+    // policymetod (Beslut 4): den som får läsa containern får prenumerera på
+    // dess kalender. {calendar_feed} nästlas under {container} med samma
+    // scopeBindings() som gruppen redan har, löst genom
+    // App\Models\Container::calendarFeeds() (Beslut 3) — samma resonemang
+    // som {access} och {invitation} ovan. (Att ruttparametern heter
+    // calendar_feed och inte feed är en följd av att Laravels
+    // scopeBindings härleder relationens namn ur parametern: {feed} hade
+    // krävt en feeds()-relation, se Frågor och antaganden.)
+    // DELETE återkallar (sätter revoked_at), raderar inte. Själva feeden —
+    // rutten som svarar med text/calendar — är 36b och ligger inte här.
+    Route::get('/containers/{container}/calendar-feeds', [CalendarFeedController::class, 'index']);
+    Route::post('/containers/{container}/calendar-feeds', [CalendarFeedController::class, 'store']);
+    Route::delete('/containers/{container}/calendar-feeds/{calendar_feed}', [CalendarFeedController::class, 'destroy']);
 });

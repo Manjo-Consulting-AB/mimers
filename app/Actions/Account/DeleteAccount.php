@@ -73,6 +73,13 @@ class DeleteAccount
                 $this->purgeContainer->handle($container);
             }
 
+            // calendar_feed behöver ingen egen rad här (issue 36a § Beslut
+            // 7): feederna på kontots EGNA containers togs av PurgeContainer
+            // ovan, och en feed på någon ANNANS container — en medlem som
+            // prenumererat på en pärm kontot inte äger — hänger på `user_id`.
+            // Användare raderas aldrig av den här actionen (29b § Beslut 6),
+            // så den raden blir aldrig en främmandenyckel som blockerar.
+
             // Notiser på kontonivå (utan container, t.ex. account.inactive) —
             // container-notiserna togs av PurgeContainer ovan. Issue 30 §
             // Beslut 8: nycklarna är ON DELETE RESTRICT, så utan städningen
