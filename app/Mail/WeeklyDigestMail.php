@@ -19,10 +19,21 @@ use Illuminate\Mail\Mailables\Envelope;
  * Omslaget — ämnesrad, hälsning, intro och "fler"-raden — ligger under
  * `notiser.digest.*`.
  *
- * Ämnesradens `:count` är antalet poster som LISTAS i mejlet. När listan har
- * kapats av `notiser.digest.max_items` berättar `moreCount` (texten
- * `notiser.digest.more`) att det finns fler än de som visas — men alla poster
- * som plockats bokförs som skickade ändå (35 § "Att se upp med").
+ * Ämnesradens `:count` (`totalCount`) är antalet rader som BOKFÖRS i den här
+ * sammanfattningen — alla hämtade `pending`-rader, inte bara de `max_items`
+ * som ryms i listan. Ett konto med 400 förfallande uppgifter ska få
+ * "…: 400 påminnelser" även om mejlet bara listar 50; `more`-texten
+ * (`moreCount` = totalen − listade) talar om att det finns fler. Är listan
+ * inte kapad är totalen och det listade samma tal.
+ *
+ * Avregistreringslänk saknas MEDVETET: sammanfattningen är ett
+ * icke-transaktionellt massutskick ([[Notiser]] § email_suppression) och
+ * behöver en egen avregistreringsdestination plus `List-Unsubscribe`, men
+ * 32b:s per-typ-mekanism duger inte — mejlet blandar typer, och att peka på
+ * en av dem skulle avregistrera från en del av innehållet. Det kräver en ny
+ * rutt och en ny `lang/`-nyckel, som 35 lägger utanför omfånget; se
+ * arkitektsvaret på issue 203 och uppföljningsarbetet där. Får inte gå i
+ * produktion mot riktiga mottagare innan det finns.
  *
  * Precis som NotificationMail skickas det via `Mail::to($user)->locale(...)`,
  * aldrig som ett queued jobb — se NotificationMail för varför
@@ -32,16 +43,19 @@ class WeeklyDigestMail extends Mailable
 {
     /**
      * @param  list<array{type: string, payload: array<string, mixed>}>  $items
+     * @param  int  $moreCount  totalen − listade; visas som `notiser.digest.more`
+     * @param  int  $totalCount  antalet rader som bokförs; visas i ämnesraden
      */
     public function __construct(
         public readonly array $items,
         public readonly int $moreCount,
+        public readonly int $totalCount,
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: trans('notiser.digest.subject', ['count' => count($this->items)]),
+            subject: trans('notiser.digest.subject', ['count' => $this->totalCount]),
         );
     }
 

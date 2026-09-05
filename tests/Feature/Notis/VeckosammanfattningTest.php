@@ -375,6 +375,10 @@ it('listan kapas vid max_items och alla plockade rader bokförs', function () {
     $mail = Mail::sent(WeeklyDigestMail::class)->first();
     expect(count($mail->items))->toBe(2);
 
+    // Ämnesraden räknar de BOKFÖRDA raderna, inte de listade (arkitektsvar på
+    // issue 203, punkt 1): tre rader skickas, två visas.
+    expect(veckoÄmne($mail))->toBe('Din vecka i Mimers: 3 påminnelser');
+
     $html = $mail->render();
     expect($html)->toContain('Äldst');
     expect($html)->toContain('Mellan');

@@ -126,9 +126,12 @@ final class SendsWeeklyDigest
         // alla plockade rader markeras `sent`, även de som inte ryms i listan
         // (35 § "Att se upp med") — de ska inte dyka upp i nästa veckas mejl.
         // Sorteringen är äldst först, så en kapad lista tappar det nyaste.
+        // Ämnesraden räknar de BOKFÖRDA raderna (`$total`), inte de listade —
+        // mottagaren ska få en sann bild av veckan även när listan är kapad.
         $maxItems = (int) config('notiser.digest.max_items', 50);
+        $total = $kanda->count();
         $visade = $kanda->take($maxItems);
-        $fler = max(0, $kanda->count() - $visade->count());
+        $fler = max(0, $total - $visade->count());
 
         $items = $visade
             ->map(fn (NotificationDelivery $delivery): array => [
@@ -140,7 +143,7 @@ final class SendsWeeklyDigest
 
         try {
             Mail::to($user)->locale($locale)->send(
-                new WeeklyDigestMail($items, $fler)
+                new WeeklyDigestMail($items, $fler, $total)
             );
         } catch (Throwable $e) {
             // Utskicket misslyckades: raderna står kvar som `pending` med
