@@ -34,9 +34,10 @@ use Illuminate\Support\Facades\DB;
  * för sig (20a) ska också bort, och det är CONTAINERNS `deleted_at` som
  * avgör — inte innehållets.
  *
- * `container_access` och `invitation` pekar på containern och har ingen
- * mening utan den, så de tas hårt (Beslut 5 punkt 5) — glöms de faller
- * `forceDelete()` på ett främmandenyckelfel varje natt.
+ * `container_access`, `invitation` och `calendar_feed` (issue 36a § Beslut
+ * 7) pekar på containern och har ingen mening utan den, så de tas hårt
+ * (Beslut 5 punkt 5) — glöms de faller `forceDelete()` på ett
+ * främmandenyckelfel varje natt.
  *
  * Hela containern hanteras i EN transaktion (Beslut 7): misslyckas något
  * rullas allt tillbaka och nästa natt tar om containern. En halvt raderad
@@ -87,6 +88,7 @@ class PurgeContainer
 
             DB::table('container_access')->where('container_id', $container->id)->delete();
             DB::table('invitation')->where('container_id', $container->id)->delete();
+            DB::table('calendar_feed')->where('container_id', $container->id)->delete();
 
             // issue 26a § Beslut 6 — containerräknaren minskas bara för en
             // container som fortfarande var LEVANDE precis innan forceDelete.

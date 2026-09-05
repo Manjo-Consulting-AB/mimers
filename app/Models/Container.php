@@ -140,6 +140,26 @@ class Container extends Model
     }
 
     /**
+     * Containerns ICS-kalenderfeeds, se [[Notiser]] § ICS-kalenderfeed och
+     * issue 36a. Bara relationen läggs till här — den krävs av
+     * `scopeBindings()` i routes/api.php för att en feed-ULID från en annan
+     * container inte ska lösa upp under den här (issue 36a § Beslut 3),
+     * samma mönster som accesses()/invitations() ovan. API-ytan bor i
+     * App\Http\Controllers\Api\CalendarFeedController; själva feeden (36b)
+     * rör aldrig den här relationen — den slår upp på token_hash direkt.
+     *
+     * ALLA rader, oavsett `revoked_at` — listningen visar även återkallade
+     * feeder, och en användare kan ha flera rader till samma container
+     * (Beslut 2).
+     *
+     * @return HasMany<CalendarFeed, $this>
+     */
+    public function calendarFeeds(): HasMany
+    {
+        return $this->hasMany(CalendarFeed::class);
+    }
+
+    /**
      * Begränsar till containers $user når: medlem i ägarkontot (regel 1 i
      * [[Konton och åtkomst]] § Behörighetsregler) ELLER en giltig
      * `container_access` som träffar henne eller ett av hennes konton
