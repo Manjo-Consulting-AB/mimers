@@ -9,6 +9,9 @@ ADR-0025/0026 (uppföljning 2026-09-03, 2026-09-05)/0027.
 Varje körning börjar med att svara på Tonys egna arkitektfrågor: en öppen PR med
 etiketten `fraga:arkitekt` får sin sista mänskliga kommentar besvarad av Opus -
 med diffen den här gången - innan issue-kön betas av. Se besvara_arkitektfragor().
+Direkt därefter körs `atgarda:arkitektsvar`: Tony sätter den etiketten själv när
+han bedömer att ett postat arkitektsvar ska genomföras, och åtgärdsloopen kör
+det svaret som fynd och mergar automatiskt vid godkänt. Se atgarda_arkitektsvar().
 
 Körs i en isolerad git worktree (.claude/worktrees/issue-<n>), inte i huvudarbetsträdet -
 se ADR-0026: Docker valdes bort just för att batch-agenter redan körs isolerat i worktrees.
@@ -91,6 +94,12 @@ ARKITEKT_LABEL = "fraga:arkitekt"
 # en människa gör det inte - det är hela skillnaden arkitektbanan behöver för
 # att veta var i tråden frågan börjar. Se arkitektfraga_ur_kommentarer().
 MASKINKOMMENTAR_PREFIX = "### "
+
+# Etiketten Tony sätter på en PR för att låta åtgärdsloopen köra på Opus
+# senaste arkitektsvar, i stället för att köra --resume-pr i en terminal.
+# Speglar ARKITEKT_LABEL: den frågar, den här agerar på svaret. Se
+# atgarda_arkitektsvar().
+ATGARDA_LABEL = "atgarda:arkitektsvar"
 
 # =====================================================================
 # KONFIGURATION & HJÄLPFUNKTIONER
@@ -701,6 +710,132 @@ def besvara_arkitektfragor(pr_number=None):
         except Exception as e:
             print(f"⚠️ Arkitektfrågan på PR #{n} kunde inte besvaras: {e}")
             send_pushover(f"🚨 PR #{n}: arkitektfrågan kraschade: {e}")
+
+
+def senaste_arkitektsvar(comments):
+    """Den senast postade arkitektsvar-kommentaren i tråden - antingen från
+    ARKITEKT_LABEL-banan ("... arkitektsvar på din fråga") eller den äldre
+    eskaleringen av '## Frågor och antaganden' ("... arkitektsvar på Frågor
+    och antaganden"). Båda är samma roll (arkitekten) som svarar på en fråga;
+    vilken väg som ställde den spelar ingen roll för vad åtgärdsloopen ska
+    göra med svaret. Se atgarda_arkitektsvar().
+    """
+    for c in reversed(comments):
+        rader = (c.get("body") or "").strip().splitlines()
+        if rader and "arkitektsvar" in rader[0]:
+            return c["body"]
+    return ""
+
+
+def hamta_issue_for_pr(pr_number, pr_body):
+    """'Closes #N' i PR-beskrivningen -> issuets nummer, titel och body.
+    Delad av find_pr_context() och atgarda_arkitektsvar()."""
+    m = re.search(r"Closes #(\d+)", pr_body or "", re.IGNORECASE)
+    if not m:
+        raise Exception(f"Hittade ingen 'Closes #N' i PR #{pr_number}s beskrivning - vet inte vilket issue det hör till.")
+    issue_num = m.group(1)
+    issue = json.loads(run_cmd(["gh", "issue", "view", issue_num, "--json", "title,body"], cwd=REPO_ROOT).stdout)
+    return issue_num, issue["title"], issue["body"]
+
+
+def atgarda_arkitektsvar(pr_number):
+    """Kör åtgärdsloopen (DeepSeek x3 + Sonnet) med Opus senaste arkitektsvar
+    som fynd, sedan väntar in CI och mergar automatiskt (ADR-0026, uppföljning
+    2026-09-05) - allt utlöst av en etikett i stället för --resume-pr i en
+    terminal.
+
+    Ingen egen kraver_kodandring-klassificering här, till skillnad från
+    run_opus_answer(): Tony sätter etiketten själv, efter att redan ha läst
+    svaret och bedömt att det ska köras - modellen behöver inte gissa det
+    en gång till.
+
+    Etiketten tas bort FÖRE åtgärdsloopen körs, av samma fail-closed-skäl som
+    besvara_arkitektfraga(): en krasch ska ge en PR som fastnar synligt hos
+    Tony, inte en loop som kör om samma svar var tionde minut.
+    """
+    pr = json.loads(run_cmd(
+        ["gh", "pr", "view", pr_number, "--json", "number,title,body,state,headRefName,comments"],
+        cwd=REPO_ROOT).stdout)
+
+    if pr["state"] != "OPEN":
+        print(f"--> PR #{pr_number} är {pr['state']} - hoppar över.")
+        return
+
+    run_cmd(["gh", "api", "--method", "DELETE",
+             f"repos/{GH_REPO}/issues/{pr_number}/labels/{ATGARDA_LABEL}"],
+            check=False, cwd=REPO_ROOT)
+
+    svar = senaste_arkitektsvar(pr["comments"])
+    if not svar:
+        print(f"--> PR #{pr_number} bär {ATGARDA_LABEL} men har inget arkitektsvar i tråden.")
+        run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                 f"### Hittade inget arkitektsvar\nPR:en bar `{ATGARDA_LABEL}`, men ingen kommentar i "
+                 f"tråden är ett arkitektsvar. Be arkitekten svara först med `{ARKITEKT_LABEL}`, sätt "
+                 f"sedan `{ATGARDA_LABEL}` igen."],
+                cwd=REPO_ROOT)
+        send_pushover(f"❓ PR #{pr_number}: {ATGARDA_LABEL} satt, men inget arkitektsvar att köra på.")
+        return
+
+    issue_num, issue_title, issue_body = hamta_issue_for_pr(pr_number, pr["body"])
+    branch_name = pr["headRefName"]
+
+    print(f"--> Kör åtgärdsloopen på PR #{pr_number} med arkitektsvaret som fynd...")
+    worktree_path = setup_worktree_for_existing_branch(branch_name)
+    print("--> Bootstrappar worktree (composer setup)...")
+    run_cmd(["composer", "setup"], cwd=worktree_path)
+
+    try:
+        resolved, _ = run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, svar)
+    except (Exception, KeyboardInterrupt) as e:
+        avbruten = isinstance(e, KeyboardInterrupt)
+        cleanup_worktree(worktree_path, branch_name)
+        send_pushover(f"🚨 {ATGARDA_LABEL} på PR #{pr_number} {'avbrutet manuellt (^C)' if avbruten else f'kraschade: {e}'}")
+        if avbruten:
+            raise
+        return
+
+    if not resolved:
+        eskalera(issue_num, pr_number, worktree_path, branch_name,
+                  "Arkitektsvaret krävde en kodändring som inte blev löst inom åtgärdsloopen.")
+        return
+
+    print("--> Åtgärdat - väntar in CI innan automatisk merge...")
+    if wait_for_checks(pr_number):
+        run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
+        send_pushover(f"✅ Issue #{issue_num} ('{issue_title}') mergad efter arkitektsvar, PR #{pr_number}!")
+        cleanup_worktree(worktree_path, branch_name)
+    else:
+        run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                 "### CI rött efter arkitektsvar\nÅtgärdsloopen löste fynden, men CI blev inte grönt. "
+                 "Mergar inte automatiskt."], cwd=REPO_ROOT)
+        eskalera(issue_num, pr_number, worktree_path, branch_name, "Åtgärdat men CI blev rött.")
+
+
+def atgarda_arkitektsvar_alla(pr_number=None):
+    """Triage: öppna PR:er med ATGARDA_LABEL får åtgärdsloopen körd på Opus
+    senaste arkitektsvar, före issue-kön. Till skillnad från
+    besvara_arkitektfragor() kör den här DeepSeek, så anroparen måste kalla
+    avbryt_vid_peak() innan den här funktionen - se STARTPUNKT.
+
+    Ett fel på en PR stoppar inte de andra och inte kön, av samma skäl som
+    besvara_arkitektfragor().
+    """
+    if pr_number:
+        nummer = [str(pr_number)]
+    else:
+        res = run_cmd(["gh", "pr", "list", "--state", "open", "--label", ATGARDA_LABEL,
+                       "--limit", "10", "--json", "number"], check=False, cwd=REPO_ROOT)
+        if res.returncode != 0:
+            print(f"⚠️ Kunde inte lista PR:er med {ATGARDA_LABEL}: {res.stderr}")
+            return
+        nummer = [str(pr["number"]) for pr in json.loads(res.stdout)]
+
+    for n in nummer:
+        try:
+            atgarda_arkitektsvar(n)
+        except Exception as e:
+            print(f"⚠️ {ATGARDA_LABEL} på PR #{n} kunde inte köras: {e}")
+            send_pushover(f"🚨 PR #{n}: {ATGARDA_LABEL} kraschade: {e}")
 
 
 def extract_risk_class(issue_body):
@@ -1357,13 +1492,7 @@ def find_pr_context(pr_number):
     DeepSeeks första försök."""
     pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefName,body,comments"], cwd=REPO_ROOT).stdout)
     branch_name = pr["headRefName"]
-
-    m = re.search(r"Closes #(\d+)", pr.get("body") or "", re.IGNORECASE)
-    if not m:
-        raise Exception(f"Hittade ingen 'Closes #N' i PR #{pr_number}s beskrivning - vet inte vilket issue det hör till.")
-    issue_num = m.group(1)
-
-    issue = json.loads(run_cmd(["gh", "issue", "view", issue_num, "--json", "title,body"], cwd=REPO_ROOT).stdout)
+    issue_num, issue_title, issue_body = hamta_issue_for_pr(pr_number, pr.get("body"))
 
     # Granskningen kan vara Opus eller Sonnet sedan alla PR:er får en läsare -
     # leta på den gemensamma delen av rubriken, inte på modellnamnet.
@@ -1371,7 +1500,7 @@ def find_pr_context(pr_number):
     if not granskningar:
         raise Exception(f"Hittade ingen granskningskommentar på PR #{pr_number} att återuppta från.")
 
-    return issue_num, issue["title"], issue["body"], branch_name, granskningar[-1]
+    return issue_num, issue_title, issue_body, branch_name, granskningar[-1]
 
 
 def resume_pr(pr_number):
@@ -1480,11 +1609,15 @@ if __name__ == "__main__":
             process_next_issue(issue_number=sys.argv[2])
         elif len(sys.argv) >= 3 and sys.argv[1] == "--arkitekt":
             besvara_arkitektfragor(sys.argv[2])
+        elif len(sys.argv) >= 3 and sys.argv[1] == "--atgarda-arkitektsvar":
+            avbryt_vid_peak()
+            atgarda_arkitektsvar_alla(sys.argv[2])
         else:
             # Arkitektfrågor först, och utan peak-vakt: de kör Opus, inte
             # DeepSeek, och ska besvaras inom tio minuter oavsett klockslag.
             besvara_arkitektfragor()
             avbryt_vid_peak()
+            atgarda_arkitektsvar_alla()
             process_next_issue()
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
