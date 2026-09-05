@@ -62,7 +62,7 @@ final class EmailChannel
         // skickas. `Mail::to($user)` skulle annars välja råa `preferredLocale()`
         // (`sv_SE`), som ingen katalog heter (Beslut 3).
         Mail::to($user)->locale($locale)->send(
-            new NotificationMail($notification->type, $notification->payload)
+            new NotificationMail($user, $notification->type, $notification->payload)
         );
     }
 }

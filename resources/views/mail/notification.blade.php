@@ -8,4 +8,9 @@
 <x-mail::button :url="config('app.url')">
 {{ trans("notiser.{$key}.action") }}
 </x-mail::button>
+
+<x-slot:subcopy>
+@php($link = '['.trans('notiser.unsubscribe.link').']('.$unsubscribeUrl.')')
+{{ trans('notiser.unsubscribe.footer', ['link' => $link]) }}
+</x-slot:subcopy>
 </x-mail::message>

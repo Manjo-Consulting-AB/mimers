@@ -25,4 +25,11 @@ return [
         'line' => 'Your account has been inactive for :months months. If you do not log in before :close_at, the account will close and its data will be deleted.',
         'action' => 'Log in',
     ],
+    'unsubscribe' => [
+        'footer' => 'Do not want this kind of notification? :link',
+        'link' => 'Unsubscribe',
+        'confirm_heading' => 'Stop receiving :type?',
+        'confirm_button' => 'Yes, turn off',
+        'done' => 'You will not receive this kind of notification anymore. You can turn it back on under notification settings.',
+    ],
 ];

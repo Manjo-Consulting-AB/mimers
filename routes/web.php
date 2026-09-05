@@ -9,7 +9,9 @@ use App\Http\Controllers\Auth\RecoveryCodeController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -105,3 +107,24 @@ Route::middleware('auth')->group(function () {
 Route::get('/files/{attachment}', AttachmentDownloadController::class)
     ->middleware('auth:sanctum')
     ->name('files.download');
+
+/*
+ * Issue 32b · Avanmälan från en notistyp utan inloggning, se
+ * App\Http\Controllers\UnsubscribeController och
+ * App\Support\Notification\UnsubscribeLink. Rutterna är signerade och ligger
+ * medvetet utanför `auth`-gruppen — mottagaren klickar i en mejlklient och har
+ * ingen session (Beslut 1).
+ *
+ * CSRF är avstängt på POST:en (PreventRequestForgery): List-Unsubscribe
+ * One-Click (RFC 8058) skickar en POST utan användarmedverkan och utan någon
+ * session, och den signerade URL:en är hela skyddet (Beslut 1, riskklassen
+ * bygger på det). `{user}` binds på `ulid`, `{type}` valideras i kontrollern.
+ */
+Route::get('/notiser/avregistrera/{user}/{type}', [UnsubscribeController::class, 'confirm'])
+    ->middleware('signed')
+    ->name('notiser.unsubscribe.confirm');
+
+Route::post('/notiser/avregistrera/{user}/{type}', [UnsubscribeController::class, 'store'])
+    ->middleware('signed')
+    ->withoutMiddleware(PreventRequestForgery::class)
+    ->name('notiser.unsubscribe');
