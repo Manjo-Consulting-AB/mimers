@@ -25,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureLoginRateLimiting();
         $this->configureUploadRateLimiting();
+        $this->configurePostmarkWebhookRateLimiting();
     }
 
     /**
@@ -81,6 +82,27 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('uploads', function (Request $request) {
             return Limit::perMinute((int) config('files.upload_rate_limit_per_minute', 60))
                 ->by($request->user()->id ?? $request->ip());
+        });
+    }
+
+    /**
+     * Issue 33b · Postmark-webhookens takt. Den enda rutten i systemet som
+     * en främmande server anropar — och den är oautentiserad i
+     * auth:sanctum-mening, se App\Http\Controllers\Api\PostmarkWebhookController.
+     * Utan en spärr kan en okänd avsändare hamra rutten med gissade lösenord
+     * i obegränsad takt. Nyckeln är IP:n: det finns ingen inloggad användare
+     * att knyta anropet till.
+     *
+     * Taket ligger högt med flit — Postmark skickar i skurar efter ett
+     * utskick, och en spärr som slår i mot vår egen leverantör tappar
+     * studsar. `config('notiser.postmark.webhook_rate_limit_per_minute')`
+     * defaultar till 300, se config/notiser.php.
+     */
+    private function configurePostmarkWebhookRateLimiting(): void
+    {
+        RateLimiter::for('postmark-webhook', function (Request $request) {
+            return Limit::perMinute((int) config('notiser.postmark.webhook_rate_limit_per_minute', 300))
+                ->by($request->ip());
         });
     }
 }
