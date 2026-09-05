@@ -887,6 +887,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
                 f"Analysera felet och korrigera projektkoden."
             )
 
+        head_fore = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
         agent_summary = call_deepseek(prompt, cwd=worktree_path)
         print(f"  Agentens sammanfattning (försök {attempt}):\n{agent_summary}")
 
@@ -898,7 +899,20 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         # Sonnet-eskaleringen i STEG 3 - upptäckt först i STEG 5:s egen
         # "ingen ändring alls"-kontroll, efter att hela pipelinen redan gett
         # upp på issuet.
-        no_diff = not run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
+        #
+        # `git status` ensam räcker inte: agenten kör med bypassPermissions
+        # och kan committa (eller committa OCH pusha OCH öppna en PR) själv,
+        # exakt som run_findings_fix_loop() redan vet om (PR #163). Hände på
+        # issue #172/PR #187 - DeepSeek löste och committade issuet på ett
+        # tidigt försök, `git status` var därför rent, och loopen läste det
+        # som "inga filer ändrades" utan att någonsin köra testerna. HEAD
+        # måste alltså också ha stått still för att det ska räknas som ett
+        # no-op-försök.
+        head_efter = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
+        no_diff = (
+            not run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
+            and head_efter == head_fore
+        )
         if no_diff:
             print(f"  ✗ Försök {attempt}: inga filer ändrades.")
             last_error_output = "Inga filer ändrades alls - lösningen uteblev."
@@ -978,8 +992,18 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     # på "nothing to commit" i --resume-pr:s åtgärdsloop (samma klass av fel),
     # och skulle krascha lika ograciöst här. En PR utan diff är meningslös,
     # så det är en riktig needs-human-situation, inte en pipelinekrasch.
+    #
+    # Samma HEAD-kontroll som FAS 1/2 numera gör: ett rent arbetsträd betyder
+    # inte att inget hände - agenten kan ha committat (eller committat OCH
+    # pushat OCH öppnat en PR) själv. `agent_committed` fångar det förra;
+    # PR-koll nedan fångar det senare (issue #172/PR #187).
+    run_cmd(["git", "fetch", "origin", "main"], cwd=worktree_path)
     status = run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
-    if not status:
+    base_sha = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=worktree_path).stdout.strip()
+    head_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
+    agent_committed = head_sha != base_sha
+
+    if not status and not agent_committed:
         print("\n⚠️ Tester gröna men ingen fil ändrades - agenten hävdade en lösning utan diff.")
         cleanup_worktree(worktree_path, branch_name)
         run_cmd(["gh", "issue", "comment", issue_num, "--body",
@@ -993,25 +1017,41 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         send_pushover(f"🚨 Issue #{issue_num}: agenten gjorde inga ändringar trots gröna tester. Kräver granskning.")
         sys.exit(1)
 
-    run_cmd(["git", "add", "."], cwd=worktree_path)
-    run_cmd(["git", "commit", "-m", f"Fix #{issue_num}: {issue_title}"], cwd=worktree_path)
+    # Ocommittat kvar? Committa det. Har agenten redan committat allt själv
+    # finns inget att lägga till - ett ovillkorligt commit hade kraschat på
+    # "nothing to commit".
+    if status:
+        run_cmd(["git", "add", "."], cwd=worktree_path)
+        run_cmd(["git", "commit", "-m", f"Fix #{issue_num}: {issue_title}"], cwd=worktree_path)
     run_cmd(["git", "push", "origin", branch_name, "--force"], cwd=worktree_path)
     pushed_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
 
-    pr_body = bygg_pr_kropp(issue_num, agent_summary)
+    # Agenten kan ha öppnat PR:en själv redan (samma bypassPermissions-åtkomst
+    # som gör att den kan committa och pusha). Återanvänd den i stället för
+    # att skapa en dublett.
+    existing_pr = run_cmd(
+        ["gh", "pr", "list", "--head", branch_name, "--state", "open", "--json", "number"],
+        check=False, cwd=worktree_path,
+    )
+    existing = json.loads(existing_pr.stdout) if existing_pr.returncode == 0 else []
+    if existing:
+        pr_number = str(existing[0]["number"])
+        print(f"--> Agenten hade redan öppnat PR #{pr_number} - återanvänder den i stället för en ny.")
+    else:
+        pr_body = bygg_pr_kropp(issue_num, agent_summary)
 
-    pr_res = run_cmd([
-        "gh", "pr", "create",
-        "--title", f"Fix #{issue_num}: {issue_title}",
-        "--body", pr_body,
-        # --head krävs explicit: `git push origin <branch>` (utan -u) pushar
-        # branchen men sätter aldrig lokal upstream-tracking, och gh pr create
-        # kan då inte avgöra head-branchen även om fjärr-branchen finns.
-        "--head", branch_name,
-    ], cwd=worktree_path)
-    # gh 2.23.0 saknar --json på pr create; kommandot skriver PR-URL:en på stdout.
-    pr_url = pr_res.stdout.strip().splitlines()[-1]
-    pr_number = pr_url.rstrip("/").split("/")[-1]
+        pr_res = run_cmd([
+            "gh", "pr", "create",
+            "--title", f"Fix #{issue_num}: {issue_title}",
+            "--body", pr_body,
+            # --head krävs explicit: `git push origin <branch>` (utan -u) pushar
+            # branchen men sätter aldrig lokal upstream-tracking, och gh pr create
+            # kan då inte avgöra head-branchen även om fjärr-branchen finns.
+            "--head", branch_name,
+        ], cwd=worktree_path)
+        # gh 2.23.0 saknar --json på pr create; kommandot skriver PR-URL:en på stdout.
+        pr_url = pr_res.stdout.strip().splitlines()[-1]
+        pr_number = pr_url.rstrip("/").split("/")[-1]
 
     # -----------------------------------------------------------------
     # GRANSKNING: varje PR får en läsare. Axeln väljer djup och modell.
