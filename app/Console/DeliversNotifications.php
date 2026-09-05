@@ -8,7 +8,6 @@ use App\Support\Notification\EmailChannel;
 use App\Support\Notification\UnknownNotificationTypeException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Throwable;
 
 /**
@@ -58,16 +57,13 @@ use Throwable;
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
  * `Schedule::command` och aldrig `->runInBackground()` — se AGENTS.md §
  * Driftmiljön saknar proc_open.
- *
- * Kanalen hämtas ur containern per rad, inte via konstruktorn: EmailChannel
- * är final och går därför inte att ersätta med en subklass, och testerna måste
- * kunna byta ut den mot en kanal som kastar (leveransloopen i
- * tests/Feature/Notis/LeveransloopTest.php). `app(EmailChannel::class)`
- * respekterar en utbytt bindning; en konstruktorinjekterad final klass skulle
- * låsa testet vid den riktiga kanalen.
  */
 class DeliversNotifications
 {
+    public function __construct(
+        private readonly EmailChannel $channel,
+    ) {}
+
     /**
      * Levererar en omgång väntande e-postleveranser och loggar en
      * sammanfattning — men bara när något gjordes (Beslut 7): en tom minut ska
@@ -141,27 +137,23 @@ class DeliversNotifications
             $maxAttempts = (int) config('notiser.delivery.max_attempts', 5);
 
             try {
-                $channel = app(EmailChannel::class);
-                $channel->send($delivery);
+                $this->channel->send($delivery);
             } catch (AddressSuppressedException $e) {
                 $delivery->status = NotificationDelivery::STATUS_SUPPRESSED;
-                // Str::limit lägger annars på avslutningen ("...") utöver
-                // gränsen, så gränsen måste vara tom för att kolumnen ska få
-                // högst 1 000 tecken (Beslut 5).
-                $delivery->last_error = Str::limit($e->getMessage(), 1000, '');
+                $delivery->last_error = mb_substr($e->getMessage(), 0, 1000);
                 $delivery->save();
 
                 return 'suppressed';
             } catch (UnknownNotificationTypeException $e) {
                 $delivery->status = NotificationDelivery::STATUS_FAILED;
                 $delivery->attempts = $delivery->attempts + 1;
-                $delivery->last_error = Str::limit($e->getMessage(), 1000, '');
+                $delivery->last_error = mb_substr($e->getMessage(), 0, 1000);
                 $delivery->save();
 
                 return 'failed';
             } catch (Throwable $e) {
                 $delivery->attempts = $delivery->attempts + 1;
-                $delivery->last_error = Str::limit($e->getMessage(), 1000, '');
+                $delivery->last_error = mb_substr($e->getMessage(), 0, 1000);
                 $delivery->status = $delivery->attempts >= $maxAttempts
                     ? NotificationDelivery::STATUS_FAILED
                     : NotificationDelivery::STATUS_PENDING;

@@ -7,9 +7,10 @@ use App\Models\EmailSuppression;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
 use App\Models\User;
-use App\Support\Notification\EmailChannel;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
@@ -22,12 +23,14 @@ use function Pest\Laravel\artisan;
  * notification_delivery samt config/notiser.php § delivery.
  *
  * Klassen anropas direkt, precis som AvstamningTest anropar
- * ReconcilesUsageCounters. Eftersom EmailChannel är final och inte går att
- * ersätta med en subklass löses loopen genom containern: ett test som vill
- * låta kanalen kasta byter ut bindningen med app()->instance(...) före
- * anropet. De övriga testerna kör den riktiga kanalen mot Mail::fake() och
- * räknar skickade mejl — en loop som sätter `sent` utan att skicka består
- * annars varje test.
+ * ReconcilesUsageCounters. EmailChannel injiceras i konstruktorn och alla
+ * tester kör den riktiga kanalen. De flesta mot Mail::fake() och räknade
+ * skickade mejl — en loop som sätter `sent` utan att skicka består annars
+ * varje test. Felen framkallas under kanalen i stället för i kanalen: tre
+ * tester låter transporten fela och konkurrenstestet låter en
+ * annan körning boka rad 2 som skickad mitt i utskicket av rad 1, båda genom
+ * en Event::listen(MessageSending::class)-lyssnare. Mail::fake() skickar
+ * aldrig och dispatchar därför inte eventet, så de testerna avstår från den.
  *
  * `Carbon::setTestNow()` styr `now()` i loopen; testerna fäller var för sig
  * in den tid leveranserna ska vara mogna. Varje "Klart när"-punkt i issuen
@@ -37,44 +40,6 @@ use function Pest\Laravel\artisan;
 afterEach(function () {
     Carbon::setTestNow();
 });
-
-/**
- * En kanal som kastar. Eftersom EmailChannel är final kan testet inte göra en
- * subklass som kastar; klassen binds i stället in i containern under
- * EmailChannel::class, och loopen anropar den genom samma gränssnitt.
- */
-final class KanalSomKastar
-{
-    public function __construct(
-        private readonly RuntimeException $undantag,
-    ) {}
-
-    public function send(NotificationDelivery $leverans): void
-    {
-        throw $this->undantag;
-    }
-}
-
-/**
- * En kanal som simulerar en överlappande körning: när den skickar en rad
- * bokför den `sent` på övriga väntande rader, som om en annan process hunnit
- * före. Statuskontrollen inuti transaktionen (Beslut 4) ska då hindra loopen
- * från att skicka dem en gång till.
- */
-final class KanalSomSkickarResten
-{
-    public int $anrop = 0;
-
-    public function send(NotificationDelivery $leverans): void
-    {
-        $this->anrop++;
-
-        NotificationDelivery::query()
-            ->whereKeyNot($leverans->getKey())
-            ->where('status', NotificationDelivery::STATUS_PENDING)
-            ->update(['status' => NotificationDelivery::STATUS_SENT]);
-    }
-}
 
 /**
  * Ett konto med en medlem. Användaren sätts som medlem i kontot så att
@@ -107,8 +72,8 @@ function leveransPayload(): array
 /**
  * En e-postleverans som förfallit (`available_at` passerat), på en notis som
  * e-postkanalen kan skicka. Attributen gör att ett test kan göra notisen
- * omogen, utan mottagare eller av okänd typ — samma skepnad 34b:s generatorer
- * och 31a:s kanalval aldrig skapar.
+ * omogen eller av okänd typ — samma skepnad 34b:s generatorer och 31a:s
+ * kanalval aldrig skapar.
  *
  * @param  array<string, mixed>  $notisAttribut
  * @param  array<string, mixed>  $leveransAttribut
@@ -129,7 +94,9 @@ function skapaLeverans(Account $account, User $user, array $notisAttribut = [], 
 }
 
 /**
- * Kör en omgång av leveransloopen med den riktiga (eller utbytta) kanalen.
+ * Kör en omgång av leveransloopen. EmailChannel injiceras i konstruktorn och
+ * app(...) löser upp den tillsammans med klassen, precis som schemaläggaren
+ * gör i routes/console.php.
  */
 function leveransKor(): void
 {
@@ -226,36 +193,46 @@ it('en okänd notistyp ger failed direkt', function () {
 });
 
 it('ett tillfälligt fel går tillbaka till pending', function () {
-    Mail::fake();
     [$account, $user] = leveransKontext();
-    // En e-postleverans utan mottagare finns inte i produktionen, men kanalen
-    // kastar InvalidArgumentException för den — ett "annat undantag" som går
-    // tillbaka till pending (Beslut 5; evig omkörning är accepterat, se "Att
-    // se upp med").
-    $leverans = skapaLeverans($account, $user, ['user_id' => null]);
+    $leverans = skapaLeverans($account, $user);
+    $försök = 0;
+
+    // Transporten felar: en lyssnare kastar inifrån mailern, samma väg som ett
+    // SMTP-fel tar i produktionen. Utan Mail::fake — den skickar aldrig och
+    // dispatchar därför inte MessageSending. Felet är ett "annat undantag" och
+    // går tillbaka till pending (Beslut 5); nästa försök är om en minut.
+    Event::listen(MessageSending::class, function () use (&$försök): never {
+        $försök++;
+        throw new RuntimeException('smtp: anslutningen nekades');
+    });
 
     leveransKor();
 
     $rad = $leverans->fresh();
     expect($rad->status)->toBe(NotificationDelivery::STATUS_PENDING);
     expect($rad->attempts)->toBe(1);
-    expect($rad->last_error)->not->toBeNull();
-    Mail::assertNothingSent();
+    expect($rad->last_error)->toBe('smtp: anslutningen nekades');
+    expect($försök)->toBe(1);
 });
 
 it('en leverans ger upp efter max_attempts', function () {
-    Mail::fake();
     [$account, $user] = leveransKontext();
-    // Fyra tidigare försök har redan gjorts; det femte felet passerar
-    // max_attempts (default 5) och ger `failed`.
-    $leverans = skapaLeverans($account, $user, ['user_id' => null], ['attempts' => 4]);
+    // Fyra tidigare försök har redan gjorts; det femte felet — transporten som
+    // kastar — passerar max_attempts (default 5) och ger `failed`.
+    $leverans = skapaLeverans($account, $user, [], ['attempts' => 4]);
+    $försök = 0;
+
+    Event::listen(MessageSending::class, function () use (&$försök): never {
+        $försök++;
+        throw new RuntimeException('smtp: kontakten bröts');
+    });
 
     leveransKor();
 
     $rad = $leverans->fresh();
     expect($rad->status)->toBe(NotificationDelivery::STATUS_FAILED);
     expect($rad->attempts)->toBe(5);
-    Mail::assertNothingSent();
+    expect($försök)->toBe(1);
 });
 
 it('ett fel på en rad stoppar inte de andra', function () {
@@ -278,20 +255,27 @@ it('ett fel på en rad stoppar inte de andra', function () {
 
 it('en rad som redan är sent skickas inte igen', function () {
     [$account, $user] = leveransKontext();
-    $forsta = skapaLeverans($account, $user);
+    $första = skapaLeverans($account, $user);
     $andra = skapaLeverans($account, $user);
-    $kanal = new KanalSomSkickarResten;
+    $skickade = 0;
 
-    app()->instance(EmailChannel::class, $kanal);
-    app(DeliversNotifications::class)->handle();
+    // Rad 1 skickas först — ORDER BY id gör ordningen bestämd. Medan mailet
+    // går ut bokför lyssnaren `sent` på rad 2, som om en överlappande körning
+    // hann före. Statuskontrollen inuti transaktionen (Beslut 4) ska då hindra
+    // loopen från att skicka rad 2 en gång till: bara ett mejl går iväg.
+    Event::listen(MessageSending::class, function () use (&$skickade, $andra): void {
+        $skickade++;
+        NotificationDelivery::query()
+            ->whereKey($andra->getKey())
+            ->update(['status' => NotificationDelivery::STATUS_SENT]);
+    });
 
-    // Kanalen bokförde `sent` på rad 2 medan rad 1 skickades — en överlappande
-    // körning hann före. Statuskontrollen inuti transaktionen (Beslut 4) ska
-    // då hindra loopen från att anropa kanalen för rad 2 en gång till.
-    expect($forsta->fresh()->status)->toBe(NotificationDelivery::STATUS_SENT);
+    leveransKor();
+
+    expect($första->fresh()->status)->toBe(NotificationDelivery::STATUS_SENT);
     expect($andra->fresh()->status)->toBe(NotificationDelivery::STATUS_SENT);
     expect($andra->fresh()->attempts)->toBe(0);
-    expect($kanal->anrop)->toBe(1);
+    expect($skickade)->toBe(1);
 });
 
 it('batch_size begränsar körningen', function () {
@@ -315,12 +299,12 @@ it('last_error trunkeras', function () {
     $leverans = skapaLeverans($account, $user);
 
     // En stacktrace från en HTTP-klient kan vara tiotusentals tecken (Beslut
-    // 5); kolumnen är TEXT men en rad ingen läser är inte värd att lagra i
-    // sin helhet.
-    app()->instance(EmailChannel::class, new KanalSomKastar(
-        new RuntimeException(str_repeat('a', 5000))
-    ));
-    app(DeliversNotifications::class)->handle();
+    // 5); kolumnen är TEXT men en rad ingen läser är inte värd att lagra i sin
+    // helhet. Trunkeringen sker med mb_substr — ingen ellips läggs på, så
+    // kolumnen får högst 1 000 tecken.
+    Event::listen(MessageSending::class, fn () => throw new RuntimeException(str_repeat('a', 5000)));
+
+    leveransKor();
 
     expect(mb_strlen($leverans->fresh()->last_error))->toBe(1000);
 });
