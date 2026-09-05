@@ -47,4 +47,8 @@ return [
             'account_inactive' => 'varningar om inaktiva konton',
         ],
     ],
+    'calendar' => [
+        'name' => 'Underhåll: :container',
+        'overdue_prefix' => 'Försenad: ',
+    ],
 ];

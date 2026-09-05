@@ -26,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureLoginRateLimiting();
         $this->configureUploadRateLimiting();
         $this->configurePostmarkWebhookRateLimiting();
+        $this->configureCalendarFeedRateLimiting();
     }
 
     /**
@@ -104,5 +105,23 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute((int) config('notiser.postmark.webhook_rate_limit_per_minute', 300))
                 ->by($request->ip());
         });
+    }
+
+    /**
+     * Issue 36b · ICS-kalenderfeedens takt. Feedrutten
+     * (App\Http\Controllers\CalendarFeedDownloadController) är oautentiserad
+     * — tokenet i URL:en är autentiseringen — och en spärr ska hindra den
+     * som gissar token i loop. Nyckeln är TOKENET, inte IP:n: kalenderklienter
+     * delar utgående IP i mobilnät och bakom brandväggar, och en spärr per IP
+     * skulle stänga av alla i samma nät (Beslut 7).
+     *
+     * `config('notiser.calendar.rate_limit_per_minute')` defaultar till 60,
+     * se config/notiser.php.
+     */
+    private function configureCalendarFeedRateLimiting(): void
+    {
+        RateLimiter::for('calendar', fn (Request $request) => Limit::perMinute(
+            (int) config('notiser.calendar.rate_limit_per_minute', 60)
+        )->by((string) $request->route('token')));
     }
 }

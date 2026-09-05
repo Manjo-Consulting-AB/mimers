@@ -105,4 +105,25 @@ return [
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | ICS-kalenderfeed
+    |--------------------------------------------------------------------------
+    |
+    | Takten för feedrutten GET /kalender/{token}.ics, se
+    | App\Providers\AppServiceProvider::configureCalendarFeedRateLimiting()
+    | och issue 36b § Beslut 7. 60 per minut är långt över vad en
+    | kalenderklient behöver (Google Calendar hämtar med egen takt), och
+    | ändå ett tak mot den som gissar token i loop. Nyckeln är tokenet,
+    | inte IP:n — kalenderklienter delar utgående IP i mobilnät och bakom
+    | brandväggar, och en spärr per IP skulle stänga av alla i samma nät.
+    |
+    */
+
+    'calendar' => [
+
+        'rate_limit_per_minute' => (int) env('NOTIFICATION_CALENDAR_RATE_LIMIT_PER_MINUTE', 60),
+
+    ],
+
 ];
