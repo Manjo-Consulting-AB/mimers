@@ -27,7 +27,8 @@ use Illuminate\Support\Facades\DB;
  * formulerar inte om förvalen: för typer utan rad hämtas `enabled`/`digest`
  * därifrån (med `$user = null`, så rader aldrig slås upp — en saknad rad
  * betyder förvalet). Listan över typer kommer från
- * UpdateNotificationPreferencesRequest::TYPES, se dess docblock.
+ * NotificationPreferences::types() — nycklarna i 31a-klassens EMAIL_DEFAULTS,
+ * se dess docblock.
  */
 class NotificationPreferenceController extends Controller
 {
@@ -91,7 +92,7 @@ class NotificationPreferenceController extends Controller
 
         $items = [];
 
-        foreach (UpdateNotificationPreferencesRequest::TYPES as $type) {
+        foreach ($preferences->types() as $type) {
             $row = $rows->get($type);
 
             $items[] = $row === null

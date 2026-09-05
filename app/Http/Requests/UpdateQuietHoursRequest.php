@@ -18,7 +18,10 @@ use Illuminate\Validation\Validator;
  *
  * `quiet_hours_start`/`end` är `date_format:H:i` ELLER `null`, och båda
  * måste anges tillsammans — det ena satt och det andra `null` är inget
- * fönster (31a § Beslut 5). Fällan med `nullable` plus `required_with` är
+ * fönster (31a § Beslut 5). Formatet är `H:i` in och `H:i` ut: kontrollern
+ * normaliserar TIME-kolumnens `22:00:00` till `22:00`, så issue 65 skickar
+ * `22:00` och får tillbaka exakt den strängen. Fällan med `nullable` plus
+ * `required_with` är
  * att den senare inte triggar när det andra fältet är null, så paret
  * prövas i `withValidator()` i stället: `addFailure()` med regelnamnet
  * `RequiredWith` ger höljet `validation.required_with`, samma kod som om
