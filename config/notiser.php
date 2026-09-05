@@ -42,4 +42,27 @@ return [
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Leveransloopen
+    |--------------------------------------------------------------------------
+    |
+    | Minutjobbets begränsningar, se App\Console\DeliversNotifications och
+    | issue 34a § Beslut 6. `batch_size` är ett tak på hur många leveranser en
+    | körning skickar — loopen delar minuten med fem andra nattliga jobb, och
+    | en långsam mottagare blockerar dem alla ([[ADR-0010 Notisarkitektur]] §
+    | Konsekvenser). 200 mejl i minuten är 288 000 per dygn — långt över vad
+    | produkten kommer att skicka, och ändå ett tak. `max_attempts` är hur
+    | många gånger en rad försöks innan den ges upp och markeras `failed`.
+    |
+    */
+
+    'delivery' => [
+
+        'batch_size' => (int) env('NOTIFICATION_DELIVERY_BATCH_SIZE', 200),
+
+        'max_attempts' => (int) env('NOTIFICATION_DELIVERY_MAX_ATTEMPTS', 5),
+
+    ],
+
 ];

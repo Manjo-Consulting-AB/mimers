@@ -2,6 +2,7 @@
 
 use App\Console\AdvancesAccountLifecycle;
 use App\Console\DeletesDormantAccounts;
+use App\Console\DeliversNotifications;
 use App\Console\EnforcesDowngrades;
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PurgesExpiredStoredFiles;
@@ -145,3 +146,23 @@ Schedule::call(fn () => app(AdvancesAccountLifecycle::class)->handle())
 Schedule::call(fn () => app(DeletesDormantAccounts::class)->handle())
     ->daily()
     ->name('delete-dormant-accounts');
+
+/*
+ * Issue 34a · Leveransloopen: plockar `pending`-leveranser vars `available_at`
+ * passerats, kör dem genom e-postkanalen och bokför utfallet — se
+ * App\Console\DeliversNotifications, [[Notiser]] § Kön och config/notiser.php
+ * § delivery. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Notis/LeveransloopTest.php; det här är bara schemaläggningen.
+ * Körs varje minut, utan överlappning (Beslut 1): cachelåset i
+ * `withoutOverlapping()` gör att en långsam körning som fortfarande skickar
+ * när nästa minut slår till inte läser samma `pending`-rader en gång till.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(DeliversNotifications::class)->handle())
+    ->everyMinute()
+    ->name('deliver-notifications')
+    ->withoutOverlapping();
