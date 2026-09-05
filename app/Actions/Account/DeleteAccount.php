@@ -19,12 +19,16 @@ use Illuminate\Support\Facades\Log;
  * som de främmande nycklarna kräver — alla är ON DELETE RESTRICT
  * (AGENTS.md § Databaskonventioner), så det finns ingen kaskad som städar:
  *
- * 1. varje container kontot äger, genom PurgeContainer — med withTrashed(),
+ * 1. webhook_delivery-raderna på kontots endpoints (issue 37b § Beslut 10) —
+ *    först av alla: raderna pekar på både notification och webhook_endpoint,
+ *    båda ON DELETE RESTRICT, och containergallringen nedan raderar
+ *    container-notiser som leveransrader kan peka på,
+ * 2. varje container kontot äger, genom PurgeContainer — med withTrashed(),
  *    en mjukraderad container ska också bort,
- * 2. usage_counter-raden och webhook_endpoint-raderna (issue 37a § Beslut 8),
- * 3. subscription-raden om den finns,
- * 4. account_user-raderna,
- * 5. account-raden.
+ * 3. usage_counter-raden och webhook_endpoint-raderna (issue 37a § Beslut 8),
+ * 4. subscription-raden om den finns,
+ * 5. account_user-raderna,
+ * 6. account-raden.
  *
  * `user`-rader raderas inte (issue 29b § Beslut 6): en användare är en
  * person som kan vara medlem i andra konton. Personen raderas i en egen
@@ -45,6 +49,16 @@ class DeleteAccount
     {
         DB::transaction(function () use ($account): void {
             $accountId = $account->getKey();
+
+            // Webhook-leveranserna på kontots endpoints, issue 37b § Beslut
+            // 10. Raden ligger här, FÖRE container-gallringen och före
+            // notisraderingen: en leverans pekar på BÅDE webhook_endpoint och
+            // notification, båda ON DELETE RESTRICT. Försvinner leveransen
+            // inte först kan varken endpointsen nedan eller notisraderna —
+            // kontots här, containrarnas inuti PurgeContainer — raderas.
+            DB::table('webhook_delivery')
+                ->whereIn('webhook_endpoint_id', DB::table('webhook_endpoint')->where('account_id', $accountId)->select('id'))
+                ->delete();
 
             // withTrashed() — en container som redan är mjukraderad ska
             // också bort, annars blockerar den account-raderingen på FK:n.
@@ -92,11 +106,11 @@ class DeleteAccount
 
             DB::table('usage_counter')->where('account_id', $accountId)->delete();
 
-            // Webhook-endpoints på kontot (issue 37a § Beslut 8), bredvid
-            // usage_counter-raderingen ovan: nyckeln mot account är ON DELETE
-            // RESTRICT, så utan städningen kastar account-raderingen nedan ett
-            // integritetsfel. 37b utökar den här raden med webhook_delivery
-            // när den tabellen finns.
+            // Webhook-endpoints på kontot (issue 37a § Beslut 8, utökat i 37b
+            // § Beslut 10), bredvid usage_counter-raderingen ovan: nyckeln mot
+            // account är ON DELETE RESTRICT, så utan städningen kastar
+            // account-raderingen nedan ett integritetsfel. Leveransraderna togs
+            // överst i transaktionen, före container-gallringen.
             DB::table('webhook_endpoint')->where('account_id', $accountId)->delete();
 
             DB::table('subscription')->where('account_id', $accountId)->delete();

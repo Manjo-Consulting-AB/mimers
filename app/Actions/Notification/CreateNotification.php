@@ -7,8 +7,11 @@ use App\Models\Container;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
 use App\Models\User;
+use App\Models\WebhookDelivery;
+use App\Models\WebhookEndpoint;
 use App\Support\Notification\NotificationPreferences;
 use App\Support\Notification\QuietHours;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Carbon;
@@ -103,6 +106,29 @@ class CreateNotification
                     $delivery->save();
                 }
 
+                // Utfläkningen till webhook-endpoints, issue 37b § Beslut 3:
+                // den sker här, när notisen skapas, i samma transaktion — inte
+                // i leveransloopen. Vid skapandet är mängden känd och
+                // transaktionen redan öppen; i loopen i stället skulle kräva
+                // en fråga "vilka notiser har ännu inte fläkts ut", utan
+                // naturlig avgränsning. En endpoint som registreras imorgon
+                // får inte gårdagens händelser: webhooken är en prenumeration
+                // framåt, inte ett arkiv.
+                //
+                // `event_types` är en JSON-kolumn (i sqlite TEXT, castad till
+                // array på modellen, 37a). Endpointsen läses och filtreras i
+                // PHP — ett konto har enstaka endpoints, och en JSON_CONTAINS
+                // skulle göra frågan omöjlig att köra i sqlite-testsviten.
+                foreach ($this->webhookEndpointsFor($account, $type) as $endpoint) {
+                    $delivery = new WebhookDelivery;
+                    $delivery->webhook_endpoint_id = $endpoint->getKey();
+                    $delivery->notification_id = $notification->getKey();
+                    $delivery->status = WebhookDelivery::STATUS_PENDING;
+                    $delivery->attempts = 0;
+                    $delivery->next_attempt_at = now();
+                    $delivery->save();
+                }
+
                 return $notification;
             } catch (UniqueConstraintViolationException $e) {
                 if ($dedupeKey === null) {
@@ -133,5 +159,24 @@ class CreateNotification
             ->where('dedupe_key', $dedupeKey)
             ->when($locking, fn ($query) => $query->lockForUpdate())
             ->first();
+    }
+
+    /**
+     * Kontots AKTIVA endpoints som prenumererar på notistypen — mottagarna av
+     * utfläkningen (issue 37b § Beslut 3). En inaktiv endpoint (is_active =
+     * false, efter automatisk inaktivering eller manuell avstängning) får inga
+     * nya rader. Filtreringen på `event_types` sker i PHP, inte i SQL — se
+     * kommentaren i handle().
+     *
+     * @return Collection<int, WebhookEndpoint>
+     */
+    private function webhookEndpointsFor(Account $account, string $type): Collection
+    {
+        return WebhookEndpoint::query()
+            ->where('account_id', $account->getKey())
+            ->where('is_active', true)
+            ->get()
+            ->filter(fn (WebhookEndpoint $endpoint): bool => in_array($type, $endpoint->event_types, true))
+            ->values();
     }
 }

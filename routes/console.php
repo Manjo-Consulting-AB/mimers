@@ -3,6 +3,7 @@
 use App\Console\AdvancesAccountLifecycle;
 use App\Console\DeletesDormantAccounts;
 use App\Console\DeliversNotifications;
+use App\Console\DeliversWebhooks;
 use App\Console\EnforcesDowngrades;
 use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
@@ -202,6 +203,26 @@ Schedule::call(fn () => app(DeletesDormantAccounts::class)->handle())
 Schedule::call(fn () => app(DeliversNotifications::class)->handle())
     ->everyMinute()
     ->name('deliver-notifications')
+    ->withoutOverlapping();
+
+/*
+ * Issue 37b · Webhook-leveransloopen: anropar kontons endpoints för de
+ * `pending`-rader vars `next_attempt_at` passerats och bokför utfallet — se
+ * App\Console\DeliversWebhooks, [[Notiser]] § Webhooks och config/notiser.php
+ * § webhook. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Notis/WebhookleveransTest.php; det här är bara schemaläggningen.
+ * Körs varje minut, utan överlappning (Beslut 5): cachelåset i
+ * `withoutOverlapping()` gör att en långsam körning som fortfarande anropar
+ * när nästa minut slår till inte läser samma `pending`-rader en gång till.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(DeliversWebhooks::class)->handle())
+    ->everyMinute()
+    ->name('deliver-webhooks')
     ->withoutOverlapping();
 
 /*
