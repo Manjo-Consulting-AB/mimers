@@ -11,12 +11,12 @@ use App\Models\User;
  * Laravel via namnkonventionen `App\Models\Account` →
  * `App\Policies\AccountPolicy`, ingen registrering behövs.
  *
- * De två metoderna vaktar kontots storage-yta
- * (App\Http\Controllers\Api\AccountStorageController): att SE urvalslistan
- * av bilagor och att RENSA dem. Båda kräver medlemskap i kontot
- * (`account_user`), ingen rollskillnad — samma linje som
- * ContainerPolicy::isMemberOfOwnerAccount(), som inte heller skiljer på
- * `owner`, `admin` och `member`.
+ * De två storage-metoderna vaktar kontots urvalslista av bilagor
+ * (App\Http\Controllers\Api\AccountStorageController): att SE listan och att
+ * RENSA den. Båda kräver medlemskap i kontot (`account_user`), ingen
+ * rollskillnad — samma linje som ContainerPolicy::isMemberOfOwnerAccount().
+ * manageWebhooks() (issue 37a) är strängare: en webhook skickar ut kontots
+ * data, så bara `owner` och `admin` får förvalta den.
  *
  * Ingen `read_only`-kontroll i någondera metoden — med flit. Att radera egna
  * bilagor för att komma under kvoten är samma sorts handling som regel 4:s
@@ -45,6 +45,25 @@ class AccountPolicy
     public function manageStorage(User $user, Account $account): bool
     {
         return $this->isMember($user, $account);
+    }
+
+    /**
+     * Får användaren förvalta kontots webhooks — lista, registrera, ändra och
+     * ta bort endpoints (issue 37a § Beslut 4)? Kräver `owner` eller `admin`,
+     * strängare än medlemskapet i viewStorage()/manageStorage(). Skälet: en
+     * webhook SKICKAR UT kontots data till en adress medlemmen väljer. En
+     * `member` som lägger upp en endpoint mot sin egen server har byggt en
+     * exfiltrationsväg ur varvskontot, och till skillnad från en
+     * bilageradering ökar handlingen exponeringen i stället för att minska
+     * den — se [[Konton och åtkomst]] § Behörighetsregler regel 4 och
+     * klassdocblocken ovan för det motsatta fallet.
+     */
+    public function manageWebhooks(User $user, Account $account): bool
+    {
+        return $account->users()
+            ->whereKey($user->id)
+            ->wherePivotIn('role', ['owner', 'admin'])
+            ->exists();
     }
 
     private function isMember(User $user, Account $account): bool
