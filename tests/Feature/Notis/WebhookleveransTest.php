@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 use function Pest\Laravel\artisan;
+use function Pest\Laravel\deleteJson;
 
 /*
  * Issue 37b · Leveransen — utfläkningen från en notis till kontots endpoints,
@@ -521,6 +522,50 @@ it('ett raderat konto tar med sig leveranser och endpoints', function () {
     expect(DB::table('webhook_endpoint')->count())->toBe(0);
     expect(DB::table('webhook_delivery')->count())->toBe(0);
     expect(DB::table('notification')->count())->toBe(0);
+});
+
+it('en endpoint med leveransrader går att ta bort', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $endpoint = webhookEndpoint($account);
+    webhookLeverans($endpoint);
+    webhookLeverans($endpoint);
+
+    $svar = deleteJson("/api/accounts/{$account->ulid}/webhooks/{$endpoint->ulid}", [], $headers);
+
+    // 204 — leveransraderna städas FÖRE endpointen. Utan städningen blockerar
+    // webhook_delivery (ON DELETE RESTRICT) varje radering av en endpoint som
+    // någon gång tagit emot en händelse (granskningsfynd, Beslut 10).
+    $svar->assertNoContent();
+    expect(DB::table('webhook_endpoint')->where('id', $endpoint->id)->exists())->toBeFalse();
+    expect(DB::table('webhook_delivery')->where('webhook_endpoint_id', $endpoint->id)->count())->toBe(0);
+});
+
+it('en container med en utfläkt notis går att gallra', function () {
+    [$account] = webhookKonto();
+    $container = Container::factory()->for($account, 'account')->create();
+    $endpoint = webhookEndpoint($account);
+
+    $notis = app(CreateNotification::class)->handle(
+        type: Notification::TYPE_TASK_DUE,
+        account: $account,
+        container: $container,
+        payload: [],
+    );
+    expect(DB::table('webhook_delivery')->where('notification_id', $notis->id)->count())->toBe(1);
+
+    // Papperskorgens gallring (20c) raderar MUKRADERADE containers — samma
+    // sluttillstånd som container-raderingen lämnar efter sig.
+    $container->delete();
+
+    // Utan webhook_delivery-städningen i PurgeContainer kastar gallringen ett
+    // integritetsfel här: leveransraden pekar på notisen (granskningsfynd).
+    (new PurgeContainer(new PurgeContent(new PurgeAttachment)))->handle($container);
+
+    expect(DB::table('notification')->where('id', $notis->id)->exists())->toBeFalse();
+    expect(DB::table('webhook_delivery')->where('notification_id', $notis->id)->count())->toBe(0);
+    // Endpointen ägs av kontot, inte av containern — gallringen rör den inte
+    // (Beslut 10), bara de leveransrader som pekar på containerns notiser.
+    expect(DB::table('webhook_endpoint')->where('id', $endpoint->id)->exists())->toBeTrue();
 });
 
 it('en inaktiv endpoint behåller sina pending-rader', function () {
