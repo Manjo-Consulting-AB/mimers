@@ -67,6 +67,37 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Webhook-leveransen
+    |--------------------------------------------------------------------------
+    |
+    | Begränsningarna för App\Console\DeliversWebhooks, se issue 37b § Beslut
+    | 8. `timeout_seconds` är snäv med flit: allt arbete sker i den enda
+    | process minutcronen startar, och en långsam leverans blockerar de övriga
+    | under samma minut ([[ADR-0010 Notisarkitektur]] § Konsekvenser) — hellre
+    | ett omförsök nästa minut än att vänta ut en död mottagare.
+    | `max_attempts` är hur många gånger en rad anropas innan den ges upp och
+    | markeras `failed`; backoffen är 2^(försök−1) minuter, takad vid 60.
+    | `deactivate_after_failures` är hur många slutgiltigt misslyckade
+    | leveranser i följd en endpoint tål innan den inaktiveras automatiskt
+    | (is_active = false) — räknaren nollställs vid varje lyckad leverans och
+    | vid manuell återaktivering (37a § Beslut 3).
+    |
+    */
+
+    'webhook' => [
+
+        'timeout_seconds' => (int) env('WEBHOOK_TIMEOUT_SECONDS', 5),
+
+        'batch_size' => (int) env('WEBHOOK_BATCH_SIZE', 100),
+
+        'max_attempts' => (int) env('WEBHOOK_MAX_ATTEMPTS', 6),
+
+        'deactivate_after_failures' => (int) env('WEBHOOK_DEACTIVATE_AFTER_FAILURES', 20),
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Veckosammanfattningen
     |--------------------------------------------------------------------------
     |
