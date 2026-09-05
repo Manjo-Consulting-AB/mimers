@@ -9,6 +9,7 @@ use App\Http\Controllers\Auth\RecoveryCodeController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -128,3 +129,22 @@ Route::post('/notifications/unsubscribe/{user}/{type}', [UnsubscribeController::
     ->middleware('signed')
     ->withoutMiddleware(PreventRequestForgery::class)
     ->name('notifications.unsubscribe');
+
+/*
+ * Issue 36b · ICS-kalenderfeed, se App\Http\Controllers\CalendarFeedDownloadController,
+ * App\Support\Notification\IcsDocument och [[Notiser]] § ICS-kalenderfeed.
+ * Rutten ligger medvetet utanför `auth`-gruppen: kalenderklienten har varken
+ * session eller cookie och hämtar i bakgrunden — tokenet i URL:en är
+ * autentiseringen (Beslut 1). Sökvägen `/kalender/{token}.ics` är kontraktet
+ * 36a § Beslut 6 utlovade och får inte ändras — en URL som redan ligger i
+ * någons kalenderapp går inte att döpa om.
+ *
+ * `where('token', '[A-Za-z0-9]{64}')` gör en manipulerad URL till en 404
+ * från routern, utan databasfråga. `throttle:calendar` är taket mot den som
+ * gissar token i loop, se
+ * App\Providers\AppServiceProvider::configureCalendarFeedRateLimiting().
+ */
+Route::get('/kalender/{token}.ics', CalendarFeedDownloadController::class)
+    ->middleware('throttle:'.'calendar')
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('calendar.feed');

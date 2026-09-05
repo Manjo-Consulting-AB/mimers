@@ -47,4 +47,8 @@ return [
             'account_inactive' => 'inactive account warnings',
         ],
     ],
+    'calendar' => [
+        'name' => 'Maintenance: :container',
+        'overdue_prefix' => 'Overdue: ',
+    ],
 ];
