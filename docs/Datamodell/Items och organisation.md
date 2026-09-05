@@ -84,6 +84,8 @@ Lagra relationen **en gång** och härled motsatsen vid läsning — skriver du 
 
 Cykelkontroll krävs för `parent`/`child`. Se motsvarande resonemang i [[Scheman och uppgifter]].
 
+**`parent`/`child` bär behörighet, `sibling` gör det inte.** En åtkomst som pekar på ett item når även itemets ättlingar via `parent`/`child`, transitivt och aldrig uppåt. `sibling` är symmetrisk och hade därför spridit behörighet åt båda håll utan gräns — motorn `sibling` masten skulle ha delat masten på köpet. Att lägga till ett barn utvidgar alltså en befintlig delning, vilket delningsvyn måste visa. Att **ändra** en länk kräver `write` i båda ändar, annars kan en mottagare länka in ett item hon inte får se. Se [[ADR-0028 Åtkomst på itemnivå]].
+
 ## loan
 
 Utlåning. Markera en pryl som utlånad, hålla reda på vem som har den, och bli påmind när den skulle ha kommit tillbaka.

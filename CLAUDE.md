@@ -52,7 +52,7 @@ Skriv inte in radnummer från minnet — de flyttar sig vid varje redigering. K�
 - `docs/Översikt.md` — produkten på fem minuter
 - `docs/Backlog.md` — indextabell: issuenummer → milstolpefil
 - `docs/Backlog/` — en fil per milstolpe, issues med läslista och acceptanskriterier
-- `docs/ADR/` — 24 beslut, ett per fil, med kontext och konsekvenser
+- `docs/ADR/` — 28 beslut, ett per fil, med kontext och konsekvenser
 - `docs/Datamodell/` — vad systemet består av, uppdelat per domän
 - `docs/Deploy/Pipeline.md` — CI, miljöer, utrullning, verifierade fakta om servern
 - `docs/Tankar.md` — obesvarade frågor
