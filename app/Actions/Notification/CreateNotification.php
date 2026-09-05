@@ -87,7 +87,14 @@ class CreateNotification
                     throw $e;
                 }
 
-                $existing = $this->findByDedupeKey($dedupeKey);
+                // Två cronkörningar hann båda se att raden saknades och den
+                // här tappade racet på uniknyckeln. Omläsningen MÅSTE vara
+                // låsande: den första läsningen ovan etablerade transaktionens
+                // snapshot, och under MySQL:s REPEATABLE READ ser en vanlig
+                // SELECT fortsatt raden som saknad trots att konkurrenten
+                // hann committa. En låsande läsning läser senaste committade
+                // data, inte snapshotten (issue 30 § Beslut 7).
+                $existing = $this->findByDedupeKey($dedupeKey, locking: true);
 
                 if ($existing === null) {
                     throw $e;
@@ -98,8 +105,11 @@ class CreateNotification
         });
     }
 
-    private function findByDedupeKey(string $dedupeKey): ?Notification
+    private function findByDedupeKey(string $dedupeKey, bool $locking = false): ?Notification
     {
-        return Notification::query()->where('dedupe_key', $dedupeKey)->first();
+        return Notification::query()
+            ->where('dedupe_key', $dedupeKey)
+            ->when($locking, fn ($query) => $query->lockForUpdate())
+            ->first();
     }
 }
