@@ -51,3 +51,10 @@ Hemlig prenumerationslänk per container och användare, återkallbar. Visar bar
 **Klart när:** **SSRF-validering** avvisar privata IP-intervall, localhost och molnmetadata vid både registrering och varje leverans.
 **Beror på:** 30, 27
 **Byggd som:** 37a registret, plangrinden och SSRF vid registrering, 37b leveransen med HMAC, backoff och automatisk inaktivering
+
+### 38. Byt e-postleverantör till Mailgun
+Postmark ut, Mailgun in — samma funktion, bättre villkor. Transporten är ett paket- och konfigurationsbyte; webhooken byter autentisering från HTTP Basic till Mailguns HMAC-signatur och byter händelsenamn.
+**Läs:** [[Notiser]] § E-post och § email_suppression, [[ADR-0010 Notisarkitektur]] § Motivering (uppföljning 2026-09-05)
+**Klart när:** `MAIL_MAILER=mailgun` går att sätta utan att någon `POSTMARK_*` finns kvar, och webhookrutten avvisar ett anrop med felaktig signatur.
+**Beror på:** 32, 33
+**Byggd som:** 38a transporten (paket, `config/mail.php`, `config/services.php`, `.env.example`), 38b webhookens signaturverifiering och händelsemappning

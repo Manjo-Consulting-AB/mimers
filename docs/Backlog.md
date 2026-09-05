@@ -23,7 +23,7 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M2 Filer]] | **16–20** | uppladdning med innehållshash, referensräkning och fördröjd radering, miniatyrer, säker filleverans, papperskorg |
 | [[M3 Uppgifter]] | **21–24** | scheman, förekomster och avslut, beroenden mellan uppgifter, todo-listan |
 | [[M4 Planer och kvoter]] | **25–29** | planer och rättigheter, förbrukningsräkning, kontrollpunkter för rättigheter, nedgradering, kontolivscykel |
-| [[M5 Notiser]] | **30–37** | notiskärna, preferenser och tysta timmar, e-post via mailgun, studshantering, notisgeneratorer, veckosammanfattning, … |
+| [[M5 Notiser]] | **30–38** | notiskärna, preferenser och tysta timmar, e-post via mailgun, studshantering, notisgeneratorer, veckosammanfattning, … |
 | [[M6 Resten av MVP]] | **38–41** | utlåning, ägarbyte, revisionslogg, export |
 | [[M7 Drift]] | **42–44** | backupscript, dead man's switch, återläsningsrunbook |
 | [[M8 Kostnadsregistrering]] | **45–47** | kostnadsrader, kostnadsrapport, kostnadskrok vid avbockad uppgift |
