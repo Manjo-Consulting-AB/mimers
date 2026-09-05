@@ -32,6 +32,12 @@ use Symfony\Component\HttpFoundation\Response;
  *   Villkoret formuleras med Container::scopeAccessibleBy() genom
  *   relationskedjan förekomst → schema → item → container, aldrig som en
  *   `whereIn('container_id', ...)`-lista mot löpnummer.
+ * - En mjukraderad container ger en TOM kalender, inte 404 — samma regel
+ *   som ovan: tokenet lever, innehållet gör det inte. Containern hämtas
+ *   med `withTrashed()` för namnet (`X-WR-CALNAME`), och förekomstfrågan
+ *   tömmer sig själv genom att `scopeAccessibleBy()` går igenom SoftDeletes'
+ *   globala scope. 404 reserveras för att containerraden faktiskt är borta
+ *   (purge).
  * - `visible_from` filtreras INTE: en kalender visar framtiden, så en
  *   förekomst som förfaller om fyra månader ska stå i kalendern. Därför
  *   används inte scopeTodoFor(), som också filtrerar på blockerande
@@ -46,16 +52,25 @@ class CalendarFeedDownloadController extends Controller
     public function __invoke(Request $request, string $token): Response
     {
         $feed = CalendarFeed::query()
-            ->with(['container', 'user.accounts'])
+            ->with(['user.accounts'])
             ->where('token_hash', hash('sha256', $token))
             ->whereNull('revoked_at')
             ->first();
 
-        // En mjukraderad container ger null här — containern är borta för
-        // alla (även innehållet är oåtkomligt genom SoftDeletes' globala
-        // scope i frågan nedan), och en feed utan namn kan inte rendera en
-        // kalender. 404 är samma svar som efter purgen, då raden är borta.
-        abort_if($feed === null || $feed->container === null, 404);
+        abort_if($feed === null, 404);
+
+        // Containern hämtas med withTrashed(): en mjukraderad container (i
+        // papperskorgen i upp till 30 dagar, [[ADR-0008 Soft delete och
+        // papperskorg]]) ger en TOM kalender, inte 404 — samma regel som en
+        // återkallad åtkomst: tokenet lever, innehållet gör det inte. Ett
+        // 404 under papperskorgsfönstret får kalenderklienterna att
+        // avregistrera prenumerationen, så den vore död när användaren
+        // återställer containern. 404 reserveras för att containerraden
+        // faktiskt är borta (purge). Namnet är feedanvändarens egen data och
+        // röjer inget för någon som redan har tokenet.
+        $container = $feed->container()->withTrashed()->first();
+
+        abort_if($container === null, 404);
 
         $accountIds = $feed->user->accounts->pluck('id')->values()->all();
 
@@ -86,7 +101,7 @@ class CalendarFeedDownloadController extends Controller
             App::setLocale($this->locales->forUser($feed->user));
 
             $ics = (new IcsDocument(
-                trans('notiser.calendar.name', ['container' => $feed->container->name]),
+                trans('notiser.calendar.name', ['container' => $container->name]),
                 trans('notiser.calendar.overdue_prefix'),
                 $occurrences,
             ))->render();

@@ -220,6 +220,21 @@ it('en återkallad åtkomst tömmer feeden', function () {
     expect($kropp)->not->toContain('BEGIN:VEVENT');
 });
 
+it('en container i papperskorgen ger en tom kalender', function () {
+    [, $user, $container] = kalenderkonto();
+    [, $token] = kalenderfeedMedToken($container, $user);
+    kalenderuppgift($container, ['title' => 'Byt impeller']);
+
+    $container->delete();
+
+    $kropp = get("/kalender/{$token}.ics")->assertOk()->getContent();
+
+    expect($kropp)->toContain('BEGIN:VCALENDAR');
+    expect($kropp)->toContain('END:VCALENDAR');
+    expect($kropp)->toContain('X-WR-CALNAME:Underhåll: Vindil');
+    expect($kropp)->not->toContain('BEGIN:VEVENT');
+});
+
 it('DTEND är dagen efter due_at', function () {
     [, $user, $container] = kalenderkonto();
     [, $token] = kalenderfeedMedToken($container, $user);
