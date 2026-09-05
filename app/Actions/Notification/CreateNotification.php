@@ -7,17 +7,19 @@ use App\Models\Container;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
 use App\Models\User;
+use App\Support\Notification\NotificationPreferences;
+use App\Support\Notification\QuietHours;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Skapar en notis — den ENDA vägen in i `notification`, se issue 30
  * (M5 Notiser). En notis skapas som en rad och levereras sedan av kön,
  * aldrig synkront i ett request ([[ADR-0010 Notisarkitektur]] § Beslut); den
- * här actionen skriver bara utboksraden och sin e-postleverans. Ingenting
- * skickas, ingen kanal finns, inget schemalagt jobb tillkommer — leveransen
- * är 34a, kanalerna 32a och 37b.
+ * här actionen skriver bara utboksraden och leveransraderna. Ingenting
+ * skickas av den — leveransen är 34a, kanalerna 32a och 37b.
  *
  * Idempotent mot minutcronen (Beslut 7): en generator som frågar "vilka
  * förekomster förfaller idag" svarar likadant sextio gånger i timmen
@@ -33,13 +35,19 @@ use Illuminate\Support\Facades\DB;
  * om och returneras — en `firstOrCreate` som inte fångar kastet vore samma
  * sak som ingen dedupe alls den dag två körningar överlappar.
  *
- * I den här issuen skapas en `pending`-e-postleverans per notis och någon
- * frågas inte (preferenserna är 31a). Unik `(notification_id, channel)` är
- * den ANDRA spärren mot dubbletter och gäller även när `dedupe_key` är null:
- * samma notis kan aldrig få två leveransrader på samma kanal.
+ * I den här issuen skapas en `pending`-e-postleverans per notis och kanal,
+ * vald utifrån mottagarens preferenser (31a § Beslut 6). Unik
+ * `(notification_id, channel)` är den ANDRA spärren mot dubbletter och gäller
+ * även när `dedupe_key` är null: samma notis kan aldrig få två leveransrader
+ * på samma kanal.
  */
 class CreateNotification
 {
+    public function __construct(
+        private readonly NotificationPreferences $preferences,
+        private readonly QuietHours $quietHours,
+    ) {}
+
     public function handle(
         string $type,
         Account $account,
@@ -68,18 +76,29 @@ class CreateNotification
                 $notification->subject_id = $subject?->getKey();
                 $notification->payload = $payload;
                 $notification->dedupe_key = $dedupeKey;
-                // Tysta timmar räknas inte här — available_at sätts till now().
-                // Tidszonsräkningen är 31a, som byter ut det enda uttrycket
-                // (issue 30 § Beslut 6).
-                $notification->available_at = now();
+                // Tidigaste leverans utifrån mottagarens tysta timmar, i
+                // mottagarens tidszon; allt lagras i UTC (31a § Beslut 5).
+                // Carbon::instance gör returvärdet konkret — Eloquent castar
+                // `available_at` till Carbon och Larastan nekar gränssnittet.
+                $notification->available_at = Carbon::instance($this->quietHours->availableAt($user, now()));
                 $notification->save();
 
-                $delivery = new NotificationDelivery;
-                $delivery->notification_id = $notification->getKey();
-                $delivery->channel = NotificationDelivery::CHANNEL_EMAIL;
-                $delivery->status = NotificationDelivery::STATUS_PENDING;
-                $delivery->attempts = 0;
-                $delivery->save();
+                // Kanalerna kommer från preferenserna (Beslut 6). En notis
+                // vars enda kanal är avstängd får INGEN leveransrad — men
+                // notisraden ovan skapades ändå: outboxen är händelseloggen,
+                // och 35 (veckosammanfattningen) och 37b (webhookarna) läser
+                // `notification`, inte `notification_delivery`.
+                foreach ($this->preferences->channelsFor($user, $type) as $channel) {
+                    $delivery = new NotificationDelivery;
+                    $delivery->notification_id = $notification->getKey();
+                    $delivery->channel = $channel;
+                    $delivery->status = NotificationDelivery::STATUS_PENDING;
+                    $delivery->attempts = 0;
+                    // En `digest`-markerad notis får sin leveransrad precis som
+                    // allt annat i den här issuen; 35 byter ut det mot att
+                    // veckojobbet plockar den i stället (31a § Beslut 7).
+                    $delivery->save();
+                }
 
                 return $notification;
             } catch (UniqueConstraintViolationException $e) {
