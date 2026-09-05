@@ -6,6 +6,10 @@ axel så länge systemet är i förproduktion utan testare (se ADR-0026, uppföl
 (arkitekten) i stället för att gå direkt till Tony - se run_opus_answer(). Se
 ADR-0025/0026 (uppföljning 2026-09-03, 2026-09-05)/0027.
 
+Varje körning börjar med att svara på Tonys egna arkitektfrågor: en öppen PR med
+etiketten `fraga:arkitekt` får sin sista mänskliga kommentar besvarad av Opus -
+med diffen den här gången - innan issue-kön betas av. Se besvara_arkitektfragor().
+
 Körs i en isolerad git worktree (.claude/worktrees/issue-<n>), inte i huvudarbetsträdet -
 se ADR-0026: Docker valdes bort just för att batch-agenter redan körs isolerat i worktrees.
 """
@@ -43,11 +47,18 @@ def is_peak_hour() -> bool:
     return False
 
 
-# Avbryt körningen direkt om det är peak-tid - innan låset tas eller något
-# issue plockas, oavsett vilket kommandoradsläge skriptet startas i.
-if is_peak_hour():
-    print("Hoppar över körning: Peak hours pågår (UTC).")
-    sys.exit(0)
+def avbryt_vid_peak():
+    """Avbryter en körning som kan starta DeepSeek när det är peak-tid.
+
+    Låg fram till 2026-09-05 på modulnivå, före låset och oavsett läge. Sedan
+    arkitektbanan finns (besvara_arkitektfragor) duger inte det: den kör Opus,
+    inte DeepSeek, och en fråga Tony ställer 07:15 en vardag ska inte ligga
+    obesvarad till 10:00 UTC för en kvot den aldrig rör. Varje bana som kan
+    starta DeepSeek kallar den här i stället - arkitektbanan gör det inte.
+    """
+    if is_peak_hour():
+        print("Hoppar över körning: Peak hours pågår (UTC).")
+        sys.exit(0)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WORKTREE_BASE = os.path.join(REPO_ROOT, ".claude", "worktrees")
@@ -68,6 +79,18 @@ MIN_GRANSKNINGSTEXT_UPPFOLJNING = 150
 # Lägsta andel kvar av Anthropic-kontots rullande 5-timmarsfönster för att
 # påbörja ett nytt issue. Se usage_ok_to_proceed().
 MIN_USAGE_REMAINING = 0.15
+
+# Etiketten Tony sätter på en PR för att lyfta en egen fråga till arkitekten.
+# ASCII av samma skäl som `svar:kodandring-kravs`: etikettnamnet går genom
+# gh:s REST-sökväg, och ett `å` där är en percent-kodning som inte tillför
+# något. Se besvara_arkitektfragor().
+ARKITEKT_LABEL = "fraga:arkitekt"
+
+# Varje kommentar pipelinen själv postar inleds med en `### `-rubrik
+# (granskningsanalys, verifieringsvarv, arkitektsvar, CI-notis). Frågan från
+# en människa gör det inte - det är hela skillnaden arkitektbanan behöver för
+# att veta var i tråden frågan börjar. Se arkitektfraga_ur_kommentarer().
+MASKINKOMMENTAR_PREFIX = "### "
 
 # =====================================================================
 # KONFIGURATION & HJÄLPFUNKTIONER
@@ -526,6 +549,158 @@ def run_opus_answer(issue_body, fragor, pr_number, worktree_path):
         kraver_kodandring = True
 
     return svar, kraver_kodandring
+
+
+def arkitektfraga_ur_kommentarer(comments):
+    """Frågan är den obrutna svansen av mänskliga kommentarer sist i tråden.
+
+    Pipelinen postar bara `### `-rubricerade kommentarer (MASKINKOMMENTAR_PREFIX),
+    så allt efter den sista sådana är skrivet av en människa. Att läsa svansen i
+    stället för bara den allra sista kommentaren gör att Tony kan skriva frågan i
+    två omgångar innan han sätter etiketten - och att läsa den i stället för hela
+    tråden gör att en granskningsanalys på tiotusen tecken aldrig hamnar i
+    arkitektens prompt.
+
+    Tar man om en redan besvarad PR börjar svansen efter arkitektsvaret, som
+    också är en `### `-kommentar. En gammal fråga kan alltså inte besvaras två
+    gånger av misstag.
+    """
+    svans = []
+    for c in reversed(comments):
+        text = (c.get("body") or "").strip()
+        if not text:
+            continue
+        if text.splitlines()[0].startswith(MASKINKOMMENTAR_PREFIX):
+            break
+        svans.append(text)
+    return "\n\n".join(reversed(svans)).strip()
+
+
+def bygg_arkitektprompt(issue_body, pr_titel, pr_diff, fraga):
+    """Arkitektprompten för en fråga Tony ställt på en PR - med diffen.
+
+    Skild från run_opus_answer()s prompt med flit. Den svarar på en fråga en
+    implementerare ställde INNAN någon läst koden, och är blind för diffen just
+    därför: frågan är "vilket fält", inte "varför blev det så här". Tonys frågor
+    kommer från andra hållet - han står i en färdig PR och undrar över något i
+    den - och ett arkitektsvar som inte får se koden svarar då bredvid.
+    """
+    issue_del = (
+        f"=== ISSUEN PR:EN GENOMFÖR ===\n{issue_body}\n\n"
+        if issue_body else
+        "=== ISSUEN PR:EN GENOMFÖR ===\n(PR:en pekar inte ut något issue - bedöm utifrån diffen.)\n\n"
+    )
+    return (
+        "Du är projektets arkitekt. Tony har läst PR:en nedan och ställt en fråga "
+        "om den. Svara direkt och konkret, med hänvisning till rätt ADR eller "
+        "Datamodell-fil där det är relevant. Är svaret ett beslut: fatta det, och "
+        "skriv ut vad det innebär för koden som redan står i diffen.\n\n"
+        "Du står i repot och får läsa dokumentationen under docs/ för att svara. "
+        "Ändra INGA filer, kör inga tester och öppna ingen PR - din enda uppgift "
+        "är svaret.\n\n"
+        f"{issue_del}"
+        f"=== PR: {pr_titel} ===\n{pr_diff}\n\n"
+        f"=== TONYS FRÅGA ===\n{fraga}\n\n"
+        "Avsluta med skriven text som är ditt svar - bara den sista textturen "
+        "sparas i loggen."
+    )
+
+
+def besvara_arkitektfraga(pr_number):
+    """Besvarar en enskild PR:s arkitektfråga: läs frågan, ta bort etiketten,
+    fråga Opus, posta svaret.
+
+    Etiketten tas bort FÖRE Opus-anropet, inte efter. Kraschar körningen
+    däremellan blir svaret uteblivet - men alternativet, att ta bort den efter,
+    gör en krasch till en fråga som ställs om var tionde minut i all evighet.
+    Ett uteblivet svar syns; en loop mot Opus gör det inte förrän räkningen kommer.
+
+    Svaret postas som PR-kommentar, inte i en Claude Code-session: frågan och
+    svaret ska stå kvar bredvid varandra i tråden för nästa granskningsvarv och
+    för retron.
+    """
+    pr = json.loads(run_cmd(
+        ["gh", "pr", "view", pr_number, "--json", "number,title,body,state,comments"],
+        cwd=REPO_ROOT).stdout)
+
+    if pr["state"] != "OPEN":
+        print(f"--> PR #{pr_number} är {pr['state']} - hoppar över.")
+        return
+
+    fraga = arkitektfraga_ur_kommentarer(pr["comments"])
+
+    run_cmd(["gh", "api", "--method", "DELETE",
+             f"repos/{GH_REPO}/issues/{pr_number}/labels/{ARKITEKT_LABEL}"],
+            check=False, cwd=REPO_ROOT)
+
+    if not fraga:
+        print(f"--> PR #{pr_number} bär {ARKITEKT_LABEL} men har ingen mänsklig "
+              f"kommentar sist i tråden - inget att svara på.")
+        run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                 f"### Arkitektfrågan hittades inte\nPR:en bar `{ARKITEKT_LABEL}`, men sist i "
+                 f"tråden står ingen mänsklig kommentar - bara pipelinens egna. Skriv frågan "
+                 f"som en kommentar (utan `### `-rubrik) och sätt etiketten igen."],
+                cwd=REPO_ROOT)
+        send_pushover(f"❓ PR #{pr_number}: {ARKITEKT_LABEL} satt, men ingen fråga att läsa.")
+        return
+
+    print(f"--> Arkitektfråga på PR #{pr_number} - eskalerar till Opus...")
+    pr_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=REPO_ROOT).stdout
+
+    issue_body = ""
+    m = re.search(r"Closes #(\d+)", pr.get("body") or "", re.IGNORECASE)
+    if m:
+        res = run_cmd(["gh", "issue", "view", m.group(1), "--json", "body"],
+                      check=False, cwd=REPO_ROOT)
+        if res.returncode == 0:
+            issue_body = json.loads(res.stdout)["body"] or ""
+
+    svar = call_claude_direct(
+        "opus", bygg_arkitektprompt(issue_body, pr["title"], pr_diff, fraga), cwd=REPO_ROOT)
+
+    if len(svar.strip()) < MIN_OPUS_SVAR:
+        # Samma fail-closed-resonemang som run_review() och run_opus_answer():
+        # ett tappat svar ska synas som ett tappat svar, inte som ett kort svar.
+        # Etiketten sätts INTE tillbaka - då blir en modell som konsekvent tappar
+        # svaret en loop mot Opus var tionde minut.
+        print(f"--> Opus svar var bara {len(svar.strip())} tecken - lämnar över till Tony.")
+        send_pushover(f"🚨 PR #{pr_number}: Opus arkitektsvar var för kort ({len(svar.strip())} tecken) - läs själv.")
+    else:
+        send_pushover(f"🏛️ PR #{pr_number}: arkitektsvar från Opus postat.")
+
+    run_cmd(["gh", "pr", "comment", pr_number, "--body",
+             f"### Opus 5 - arkitektsvar på din fråga\n{svar}"], cwd=REPO_ROOT)
+
+
+def besvara_arkitektfragor(pr_number=None):
+    """Triage före issue-kön: öppna PR:er med `fraga:arkitekt` får sitt svar först.
+
+    Finns för att en fråga Tony vill ställa arkitekten inte ska kräva en egen
+    Claude Code-session. Kommentar + etikett räcker; cronen plockar upp den inom
+    tio minuter. Banan kör Opus och rör varken DeepSeek eller issue-kön, därför
+    ingen peak-vakt (avbryt_vid_peak) - men den delar lås med kön, så ett issue
+    som redan körs får svaret att vänta in det. Det är avsiktligt: sekventiellt
+    är begripligt, parallellt är två agenter i samma repo.
+
+    Ett fel på en PR stoppar inte de andra och inte kön - den här körningens
+    huvuduppgift är fortfarande att beta av issues.
+    """
+    if pr_number:
+        nummer = [str(pr_number)]
+    else:
+        res = run_cmd(["gh", "pr", "list", "--state", "open", "--label", ARKITEKT_LABEL,
+                       "--limit", "10", "--json", "number"], check=False, cwd=REPO_ROOT)
+        if res.returncode != 0:
+            print(f"⚠️ Kunde inte lista PR:er med {ARKITEKT_LABEL}: {res.stderr}")
+            return
+        nummer = [str(pr["number"]) for pr in json.loads(res.stdout)]
+
+    for n in nummer:
+        try:
+            besvara_arkitektfraga(n)
+        except Exception as e:
+            print(f"⚠️ Arkitektfrågan på PR #{n} kunde inte besvaras: {e}")
+            send_pushover(f"🚨 PR #{n}: arkitektfrågan kraschade: {e}")
 
 
 def extract_risk_class(issue_body):
@@ -1295,12 +1470,21 @@ if __name__ == "__main__":
     lock_fd = acquire_lock()
     try:
         if len(sys.argv) >= 3 and sys.argv[1] == "--resume-pr":
+            avbryt_vid_peak()
             resume_pr(sys.argv[2])
         elif len(sys.argv) >= 3 and sys.argv[1] == "--resume-question":
+            avbryt_vid_peak()
             resume_question(sys.argv[2])
         elif len(sys.argv) >= 3 and sys.argv[1] == "--issue":
+            avbryt_vid_peak()
             process_next_issue(issue_number=sys.argv[2])
+        elif len(sys.argv) >= 3 and sys.argv[1] == "--arkitekt":
+            besvara_arkitektfragor(sys.argv[2])
         else:
+            # Arkitektfrågor först, och utan peak-vakt: de kör Opus, inte
+            # DeepSeek, och ska besvaras inom tio minuter oavsett klockslag.
+            besvara_arkitektfragor()
+            avbryt_vid_peak()
             process_next_issue()
     finally:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
