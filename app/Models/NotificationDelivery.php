@@ -66,7 +66,9 @@ class NotificationDelivery extends Model
     /**
      * Get the attributes that should be cast.
      *
-     * `attempts` är SMALLINT UNSIGNED, `sent_at` en tidsstämpel.
+     * `attempts` är SMALLINT UNSIGNED, `sent_at` en tidsstämpel och `digest`
+     * en boolean — i sqlite (testsviten) ligger boolean som ett heltal, och
+     * utan castet vore `'0'` sant (issue 35 § Att se upp med).
      *
      * @return array<string, string>
      */
@@ -75,6 +77,7 @@ class NotificationDelivery extends Model
         return [
             'attempts' => 'integer',
             'sent_at' => 'datetime',
+            'digest' => 'boolean',
         ];
     }
 

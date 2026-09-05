@@ -25,6 +25,12 @@ return [
         'line' => 'Kontot har varit inaktivt i :months månader. Loggar du inte in före :close_at stängs kontot och uppgifterna raderas.',
         'action' => 'Logga in',
     ],
+    'digest' => [
+        'subject' => 'Din vecka i Mimers: :count påminnelser',
+        'greeting' => 'Hej!',
+        'intro' => 'Det här är på gång den närmaste tiden.',
+        'more' => 'Och :count till.',
+    ],
     'unsubscribe' => [
         'footer' => 'Vill du inte ha den här sortens notiser? :link',
         'link' => 'Avregistrera',
