@@ -21,7 +21,7 @@ OAuth2 införs först den dag en tredjepart bygger mot API:et.
 
 Cookie-läget är säkrare för webbfrontenden — en token i `localStorage` är en token som kan stjälas via XSS. Bearer-tokens behövs ändå för det som inte är en webbläsare på egen domän, och det är dem mobilapparna kommer att använda.
 
-Magic links passar användningsmönstret ovanligt bra, men gör e-postleveransen inloggningskritisk. Att ha båda vägarna in betyder att ett leveransproblem hos Postmark inte låser ute alla kunder samtidigt.
+Magic links passar användningsmönstret ovanligt bra, men gör e-postleveransen inloggningskritisk. Att ha båda vägarna in betyder att ett leveransproblem hos e-postleverantören inte låser ute alla kunder samtidigt.
 
 TOTP är särskilt viktigt för B2B: ett varv sitter på hundra kunders dokumentation.
 

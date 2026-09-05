@@ -73,13 +73,24 @@ Seglare befinner sig ofta inte i sin hemtidszon. Tidszonen hör därför på anv
 
 ## E-post
 
-Levereras via **Postmark**. SPF, DKIM och DMARC måste sättas upp på `mimers.app` — transaktionsmejl från delad hosting hamnar annars i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös.
+Levereras via **Mailgun**. SPF, DKIM och DMARC måste sättas upp på avsändardomänen — transaktionsmejl från delad hosting hamnar annars i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös. Leverantören var Postmark fram till 2026-09-05, se [[ADR-0010 Notisarkitektur]] § Motivering (uppföljning).
 
 Mallar finns på svenska och engelska, valda utifrån mottagarens `locale`. Se [[ADR-0013 Språk och i18n]].
 
 ### email_suppression
 
-Studsar och spamanmälningar tas emot via Postmarks webhook.
+Studsar och spamanmälningar tas emot via **Mailguns webhook**. Anropet autentiseras inte med lösenord utan med Mailguns HMAC-SHA256-signatur över `timestamp` + `token`, verifierad mot kontots webhook-signeringsnyckel.
+
+Fyra händelsetyper prenumereras på, och `reason` faller ut ur dem:
+
+| Mailgun-händelse | Blir |
+|---|---|
+| `permanent_fail` (`event: failed`, `severity: permanent`) | `hard_bounce` |
+| `temporary_fail` (`event: failed`, `severity: temporary`) | ingen rad — en full inkorg är ett skäl att försöka igen imorgon |
+| `complained` | `spam_complaint` |
+| `unsubscribed` | `unsubscribe` |
+
+Mailgun skickar ingen händelse när en undertryckning **tas bort**. En adress som spärrats av misstag släpps därför manuellt: radera raden här och motsvarande rad i Mailguns egen spärrlista.
 
 | Kolumn | Typ |
 |---|---|
