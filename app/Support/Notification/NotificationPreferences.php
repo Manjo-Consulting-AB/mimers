@@ -31,6 +31,10 @@ final class NotificationPreferences
      * produkten är säsongsbetonad och tjugo separata mejl på en förmiddag
      * ger en avprenumeration.
      *
+     * Ordningen är API-synlig: `array_keys()` på den här konstanten är
+     * listan preferensytan ritar (issue 31b § Beslut 2), i samma ordning som
+     * typkonstanterna deklareras i App\Models\Notification. Flytta inte om.
+     *
      * @var array<string, array{enabled: bool, digest: bool}>
      */
     private const EMAIL_DEFAULTS = [
@@ -38,9 +42,9 @@ final class NotificationPreferences
         Notification::TYPE_TASK_OVERDUE => ['enabled' => true, 'digest' => true],
         Notification::TYPE_LOAN_DUE => ['enabled' => true, 'digest' => false],
         Notification::TYPE_QUOTA_WARNING => ['enabled' => true, 'digest' => false],
-        Notification::TYPE_ACCOUNT_INACTIVE => ['enabled' => true, 'digest' => false],
         Notification::TYPE_INVITATION_RECEIVED => ['enabled' => true, 'digest' => false],
         Notification::TYPE_TRANSFER_REQUESTED => ['enabled' => true, 'digest' => false],
+        Notification::TYPE_ACCOUNT_INACTIVE => ['enabled' => true, 'digest' => false],
     ];
 
     /**
@@ -51,6 +55,19 @@ final class NotificationPreferences
      * @var array{enabled: bool, digest: bool}
      */
     private const UNKNOWN_DEFAULT = ['enabled' => true, 'digest' => false];
+
+    /**
+     * Typerna preferensytan handlar om — nycklarna i EMAIL_DEFAULTS, i den
+     * ordning listan ska ritas (issue 31b § Beslut 2). Typnamnrymden är öppen
+     * (issue 30 § Beslut 4), så det här är listan över KÄNDA typer, inte en
+     * uttömmande lista över vad `notification.type` kan bära.
+     *
+     * @return list<string>
+     */
+    public function types(): array
+    {
+        return array_keys(self::EMAIL_DEFAULTS);
+    }
 
     /**
      * Kanalerna en notis av den här typen ska levereras på, för den här
