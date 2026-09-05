@@ -76,16 +76,11 @@ class PurgeContainer
                 $this->purgeContent->tag($tag);
             }
 
-            // Notiser som pekar på containern — issue 30 § Beslut 8 och 37b §
-            // Beslut 10. Nycklarna är ON DELETE RESTRICT, så utan städningen
-            // kastar forceDelete nedan ett integritetsfel i papperskorgens
-            // gallring (20c). Båda leveransraderna först, notisraderna sedan —
-            // ordningen är given av nycklarna: webhook_delivery pekar på BÅDE
-            // webhook_endpoint och notification. Notiser raderas, de arkiveras
-            // inte.
-            DB::table('webhook_delivery')
-                ->whereIn('notification_id', DB::table('notification')->where('container_id', $container->id)->select('id'))
-                ->delete();
+            // Notiser som pekar på containern — issue 30 § Beslut 8. Båda
+            // nycklarna är ON DELETE RESTRICT, så utan städningen kastar
+            // forceDelete nedan ett integritetsfel i papperskorgens gallring
+            // (20c). Leveransraderna först, notisraderna sedan — ordningen är
+            // given av nycklarna. Notiser raderas, de arkiveras inte.
             DB::table('notification_delivery')
                 ->whereIn('notification_id', DB::table('notification')->where('container_id', $container->id)->select('id'))
                 ->delete();

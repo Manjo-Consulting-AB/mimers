@@ -14,7 +14,6 @@ use App\Support\Notification\UrlSafetyValidator;
 use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
@@ -156,18 +155,10 @@ class WebhookEndpointController extends Controller
      * Raderar raden på riktigt (Beslut 1): en endpoint som ska bort ska bort,
      * ingen mjukradering och ingen bevarad URL. Idempotent på samma sätt som
      * all DELETE: en redan raderad endpoint har redan gett 404 i bindningen.
-     *
-     * Leveransraderna (37b) städas före endpointen — webhook_delivery pekar
-     * på endpointen med ON DELETE RESTRICT, så en endpoint som någon gång
-     * tagit emot en händelse gav annars 500 på den här rutten. Raderna tas
-     * med, även pending: kön tillhör endpointen, och utan en mottagare kvar
-     * finns det ingen att försöka mot.
      */
     public function destroy(Account $account, WebhookEndpoint $webhook): Response
     {
         Gate::authorize('manageWebhooks', $account);
-
-        DB::table('webhook_delivery')->where('webhook_endpoint_id', $webhook->getKey())->delete();
 
         $webhook->delete();
 
