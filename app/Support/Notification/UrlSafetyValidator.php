@@ -26,9 +26,11 @@ namespace App\Support\Notification;
  *
  * FILTER_FLAG_NO_RES_RANGE täcker 169.254.0.0/16 och därmed molnens
  * metadatatjänst på 169.254.169.254 — men den (och NO_PRIV_RANGE) täcker inte
- * 0.0.0.0/8 i alla PHP-versioner, så den stängs uttryckligen. parse_url() är
- * inte en säkerhetsgräns: den accepterar skräp, så varje fält kontrolleras
- * här, inget antas.
+ * 0.0.0.0/8 i alla PHP-versioner, och inte heller en privat IPv4-adress som
+ * bäddats in i NAT64-prefixet 64:ff9b::/96 eller 6to4-prefixet 2002::/16 i
+ * hexadecimal form — de stängs uttryckligen. parse_url() är inte en
+ * säkerhetsgräns: den accepterar skräp, så varje fält kontrolleras här, inget
+ * antas.
  *
  * DNS-uppslaget görs med PHP:s egna funktioner (dns_get_record), aldrig ett
  * externt program — exec och proc_open är avstängda hos inleed (AGENTS.md §
@@ -150,6 +152,52 @@ final class UrlSafetyValidator
 
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
             throw new UnsafeUrlException('reserved_ip');
+        }
+
+        // NAT64 (64:ff9b::/96) och 6to4 (2002::/16) bäddar in en IPv4-adress i
+        // prefixet, och i sin hexadecimala form passerar en privat eller
+        // reserverad sådan filterkontrollen ovan — 64:ff9b::a9fe:a9fe ÄR
+        // 169.254.169.254. Avkoda den inbäddade adressen och pröva den mot
+        // samma regler.
+        $this->assertSafeEmbeddedIpv4($ip);
+    }
+
+    /**
+     * Avvisar en IPv6-adress vars prefix bäddar in en privat eller reserverad
+     * IPv4-adress. FILTER_FLAG_NO_PRIV_RANGE/NO_RES_RANGE ser bara de
+     * adresser vars inbäddade IPv4 står i punktform; den hexadecimala formen
+     * av samma adress passerar. IPv4-mappade adresser (::ffff:a.b.c.d)
+     * fångas redan av filtret ovan och hanteras inte här.
+     *
+     * @throws UnsafeUrlException
+     */
+    private function assertSafeEmbeddedIpv4(string $ip): void
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) === false) {
+            return;
+        }
+
+        $paket = inet_pton($ip);
+
+        if ($paket === false || strlen($paket) !== 16) {
+            return;
+        }
+
+        $inbäddad = null;
+
+        // NAT64-prefixet 64:ff9b::/96: hexteten 0064 och ff9b följt av nollor,
+        // och de sista 32 bitarna är IPv4-adressen.
+        if (substr($paket, 0, 12) === "\x00\x64\xff\x9b".str_repeat("\x00", 8)) {
+            $inbäddad = substr($paket, 12, 4);
+        }
+
+        // 6to4-prefixet 2002::/16: bitarna 16–48 bär IPv4-adressen.
+        if ($paket[0] === "\x20" && $paket[1] === "\x02") {
+            $inbäddad = substr($paket, 2, 4);
+        }
+
+        if ($inbäddad !== null) {
+            $this->assertSafeIp(inet_ntop($inbäddad));
         }
     }
 }

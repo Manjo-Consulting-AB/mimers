@@ -307,6 +307,38 @@ it('molnets metadataadress avvisas', function () {
     expect($response->json('error.data.reason'))->toBe('reserved_ip');
 });
 
+it('en nat64-adress som bäddar in en privat ip avvisas', function () {
+    // 64:ff9b::/96 bäddar in IPv4 i de sista 32 bitarna — den hexadecimala
+    // formen 64:ff9b::a9fe:a9fe ÄR 169.254.169.254 (molnets metadatatjänst)
+    // men passerar FILTER_FLAG_NO_PRIV_RANGE/NO_RES_RANGE, så den avkodas och
+    // avvisas uttryckligen (granskningen av PR #206).
+    [$account, , $headers] = webhookProKonto();
+
+    $response = postJson("/api/accounts/{$account->ulid}/webhooks", [
+        'url' => 'https://[64:ff9b::a9fe:a9fe]/notiser',
+        'event_types' => [Notification::TYPE_TASK_DUE],
+    ], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('webhook.unsafe_url');
+    expect($response->json('error.data.reason'))->toBe('reserved_ip');
+});
+
+it('en 6to4-adress som bäddar in en privat ip avvisas', function () {
+    // 2002::/16 bär IPv4 i bitarna 16–48 — 2002:a9fe:a9fe:: ÄR
+    // 169.254.169.254, av samma skäl som NAT64-testet ovan.
+    [$account, , $headers] = webhookProKonto();
+
+    $response = postJson("/api/accounts/{$account->ulid}/webhooks", [
+        'url' => 'https://[2002:a9fe:a9fe::]/notiser',
+        'event_types' => [Notification::TYPE_TASK_DUE],
+    ], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('webhook.unsafe_url');
+    expect($response->json('error.data.reason'))->toBe('reserved_ip');
+});
+
 it('ett värdnamn som pekar på en privat ip avvisas', function () {
     // DNS-uppslag slås aldrig upp mot nätet i testsviten — resolvern
     // injiceras (issue 37a § Att se upp med).
