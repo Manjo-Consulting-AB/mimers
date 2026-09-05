@@ -336,6 +336,44 @@ it('bara den ena tiden satt avvisas', function () {
     expect($medSlut->json('error.data.fields.quiet_hours_start.0.code'))->toBe('validation.required_with');
 });
 
+it('den andra nyckeln helt utelämnad avvisas, även när den första är null', function () {
+    [$konto, $user, $headers] = preferensYtaKontext();
+    $user->update([
+        'timezone' => 'Europe/Stockholm',
+        'quiet_hours_start' => '22:00:00',
+        'quiet_hours_end' => '07:00:00',
+    ]);
+
+    // En kropp med bara `quiet_hours_start: null` (utan `quiet_hours_end`-
+    // nyckeln alls) får inte läsas som "ingendera satt": validated() tar bara
+    // med nycklar som finns i kroppen, så uppdateringen skulle nollställa
+    // start och lämna end orörd — ett fönster med bara ena sidan (Beslut 5).
+    $baraStart = patchJson('/api/me/quiet-hours', [
+        'quiet_hours_start' => null,
+    ], $headers);
+
+    $baraStart->assertStatus(422);
+    expect($baraStart->json('error.code'))->toBe('validation.failed');
+    expect($baraStart->json('error.data.fields.quiet_hours_end.0.code'))->toBe('validation.required_with');
+
+    $user->refresh();
+    expect($user->quiet_hours_start)->toBe('22:00:00');
+    expect($user->quiet_hours_end)->toBe('07:00:00');
+
+    // Spegelbilden: bara `quiet_hours_end` närvarande, utan start-nyckeln.
+    $baraSlut = patchJson('/api/me/quiet-hours', [
+        'quiet_hours_end' => null,
+    ], $headers);
+
+    $baraSlut->assertStatus(422);
+    expect($baraSlut->json('error.code'))->toBe('validation.failed');
+    expect($baraSlut->json('error.data.fields.quiet_hours_start.0.code'))->toBe('validation.required_with');
+
+    $user->refresh();
+    expect($user->quiet_hours_start)->toBe('22:00:00');
+    expect($user->quiet_hours_end)->toBe('07:00:00');
+});
+
 it('en ogiltig tidszon avvisas', function () {
     [, $user, $headers] = preferensYtaKontext();
 
