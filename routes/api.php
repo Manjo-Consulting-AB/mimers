@@ -18,7 +18,9 @@ use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemSearchController;
+use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Api\OccurrenceDependencyController;
+use App\Http\Controllers\Api\QuietHoursController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ScheduleDependencyController;
 use App\Http\Controllers\Api\ScheduleOccurrenceController;
@@ -336,6 +338,19 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // och det är därför den är M3:s riskyta. Bara GET: listan är en vy; allt
     // som ändrar en uppgift går genom 22b:s rutter ovan.
     Route::get('/todo', [TodoController::class, 'index']);
+
+    // Issue 31b · Preferensytan och de tysta timmarna, se
+    // App\Http\Controllers\Api\NotificationPreferenceController och
+    // App\Http\Controllers\Api\QuietHoursController. Tre TOPPNIVÅrutter under
+    // /me (Beslut 1): det finns ingen legitim anledning för en användare att
+    // läsa eller ändra någon annans notisinställningar, och en rutt utan
+    // identifierare är en rutt som inte går att peka fel — samma val som
+    // /api/todo gjorde (issue 24 § Beslut 1). Varje fråga utgår därför från
+    // $request->user(); ingen policy och ingen Gate (Beslut 3). Kanalen
+    // webhook saknas med flit: preferenser styr inte webhooks (31a § Beslut 4).
+    Route::get('/me/notification-preferences', [NotificationPreferenceController::class, 'index']);
+    Route::put('/me/notification-preferences', [NotificationPreferenceController::class, 'update']);
+    Route::patch('/me/quiet-hours', [QuietHoursController::class, 'update']);
 
     // Issue 28 · Nedgraderingen, steg 2 — kontots urvalslista av bilagor,
     // se App\Http\Controllers\Api\AccountStorageController och
