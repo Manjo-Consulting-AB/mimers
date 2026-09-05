@@ -30,9 +30,13 @@ Det är en utsaga om granskningen, inte om implementeraren.
 
 Opus roll krymper till den redan befintliga smala eskaleringen: en obesvarad `## Frågor och antaganden` i PR-kroppen (`los_fraga_och_merga()`), där frågan per definition inte har ett svar i läslistan och kräver ett arkitekturbeslut ingen dokumentläsning kan mekanisera. Det är den uppgift som faktiskt kräver ett nytt omdöme — inte den löpande granskningen.
 
-Det här upphäver inte `risk_class: elevated`s andra effekt: manuell merge hos Tony efter läst diff (se nedan) står kvar oförändrad, av samma skäl som förut. Det som ändras är bara vilken modell som läser diffen först, inte vem som har sista ordet.
+Det här upphävde inte `risk_class: elevated`s andra effekt: manuell merge hos Tony efter läst diff (se nedan) — ~~stod kvar oförändrad, av samma skäl som förut~~ → borttagen i uppföljningen 2026-09-05. Det som ändrades här var bara vilken modell som läser diffen först, inte vem som hade sista ordet; det senare ändrades senare.
 
-Som bieffekt gör det här den oåtkomliga mellannivån i skalan (`none`/`elevated` i mallen, mappat till `low`/`high` i skriptet — se [[Lärdomar]], rest vid M2-retron) ofarlig snarare än löst: `risk_class` väljer inte längre granskningsmodell, bara mergegrinden, så en aldrig nåbar `medium`-nivå hade ändå inte gjort någon skillnad. Mallen är inte ändrad av det här beslutet.
+Som bieffekt gör det här den oåtkomliga mellannivån i skalan (`none`/`elevated` i mallen, mappat till `low`/`high` i skriptet — se [[Lärdomar]], rest vid M2-retron) ofarlig snarare än löst: `risk_class` väljer inte längre granskningsmodell, ~~bara mergegrinden~~ → och sedan uppföljningen 2026-09-05 inte heller mergegrinden, se nedan. Mallen är inte ändrad av det här beslutet.
+
+**Uppföljning 2026-09-05: den manuella mergegrinden på `risk_class: high` (skriptets namn för `elevated`) tas bort. En godkänd granskning mergar automatiskt, oavsett axel — tillfälligt.** Skälet är var i sin livscykel produkten är: inga testare och ingen produktionstrafik betyder att felkostnaden för en granskning som missar något på `elevated` i dag är en rättning i en miljö utan användare, inte en incident. Det är just den kostnadsskillnaden — *"när granskningen missar på `elevated` landar kostnaden i produktion"* — som ursprungligen motiverade gaten, och den är för närvarande falsk i sak. Tony vill fortsatt bli notifierad varje gång en PR mergas (pushover redan i `los_fraga_och_merga()`), men vill inte vara den som mergar.
+
+**Detta är en tillfällig ändring, inte en omvärdering av risken i sig.** Gaten återinförs — genom att återställa `if risk_class == "high"`-grenen i `los_fraga_och_merga()` — inför produktionssättning och när testare tas ombord, för då gäller motiveringen från 2026-09-01 igen oförändrad. Mät samma sak som förra uppföljningen bad om (eskaleringsfrekvens per axelprofil) så att beslutet att återinföra gaten fattas med data om hur ofta granskningen faktiskt missar på `elevated`, inte bara på magkänsla.
 
 **Granskningen är en efterlevnadskontroll mot ett redan skrivet kontrakt, inte en fri kodgranskning.** Den får issuens `Läs`-lista som indata och prövar betydelsen mot källdokumenten. Den ska uttryckligen inte godta PR-beskrivningens egen redogörelse för vad ändringen gör.
 
@@ -54,7 +58,7 @@ Granskaren avger ett strukturerat utfall — `godkänd`, `omtag`, `eskalera`, `i
 
 **Hård spärr: högst två Deepseek-varv, ett Sonnet-varv, sedan stannar uppgiften hos Tony.** Ett tredje varv på samma nivå betyder nästan alltid att issuen är fel skriven.
 
-**`risk_class: elevated` mergas av Tony efter läst diff.** Oförändrat mot [[ADR-0018 Utvecklingsprocess och deploy]], och inte förhandlingsbart av kostnadsskäl: när granskningen missar på `elevated` landar kostnaden i produktion, och den syns inte i `.claude/usage.jsonl`.
+**`risk_class: elevated` mergades tidigare av Tony efter läst diff — se uppföljning 2026-09-05.**
 
 ## Motivering
 

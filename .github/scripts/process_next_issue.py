@@ -1,9 +1,10 @@
 #!/usr/bin/env -S python3 -u
 """Plockar äldsta öppna GitHub-issue och kör den genom Deepseek -> (vid fel) Sonnet,
-med Sonnet-review på varje PR oavsett risk_class innan merge (manuell hos Tony på
-high, annars automatisk). En obesvarad fråga i PR-kroppen eskaleras smalt till Opus
+med Sonnet-review på varje PR oavsett risk_class innan merge - automatisk oavsett
+axel så länge systemet är i förproduktion utan testare (se ADR-0026, uppföljning
+2026-09-05). En obesvarad fråga i PR-kroppen eskaleras smalt till Opus
 (arkitekten) i stället för att gå direkt till Tony - se run_opus_answer(). Se
-ADR-0025/0026 (uppföljning 2026-09-03)/0027.
+ADR-0025/0026 (uppföljning 2026-09-03, 2026-09-05)/0027.
 
 Körs i en isolerad git worktree (.claude/worktrees/issue-<n>), inte i huvudarbetsträdet -
 se ADR-0026: Docker valdes bort just för att batch-agenter redan körs isolerat i worktrees.
@@ -1109,8 +1110,9 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
 
 def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
                          risk_class, godkand_av, branch_name, worktree_path):
-    """MERGE-steget: löser en eventuell obesvarad fråga via Opus, sedan merge
-    eller överlämning enligt risk_class. Delad mellan huvudflödet (STEG 5) och
+    """MERGE-steget: löser en eventuell obesvarad fråga via Opus, sedan automatisk
+    merge när CI är grönt (oavsett risk_class - se ADR-0026, uppföljning
+    2026-09-05). Delad mellan huvudflödet (STEG 5) och
     resume_question(), som återupptar exakt den här delen manuellt för en PR
     som redan fastnat på den gamla "Obesvarad fråga"-banan (dvs. skapad innan
     Opus-eskaleringen fanns).
@@ -1149,19 +1151,12 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
         else:
             print("--> Opus svar kräver ingen kodändring - fortsätter mot merge.")
 
-    if risk_class == "high":
-        run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
-                 cwd=REPO_ROOT)
-        send_pushover(
-            f"🔍 HIGH RISK: PR #{pr_number} för Issue #{issue_num} är klar för din manuella merge!\n"
-            f"Godkänd av {godkand_av}."
-        )
-        cleanup_worktree(worktree_path, branch_name)
-        sys.exit(0)
-
-    # medium och low mergas automatiskt - men först när varje check är grön,
-    # och en av dem är nu granskning.yml, som är röd utan review:approved.
-    print("--> Väntar in CI innan automatisk merge...")
+    # Fram till 2026-09-05 stoppade risk_class: high här för manuell merge hos
+    # Tony (ADR-0026). Uppföljningen samma dag tar bort gaten: så länge systemet
+    # inte är i produktion och inga testare är ombord är felkostnaden av en
+    # godkänd men fel PR låg nog att en genomförd granskning räcker, oavsett
+    # axel. Gaten återinförs inför produktionssättning/testare - se ADR-0026.
+    print(f"--> risk_class: {risk_class}, godkänd av {godkand_av} - väntar in CI innan automatisk merge...")
     if wait_for_checks(pr_number):
         run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
         send_pushover(
