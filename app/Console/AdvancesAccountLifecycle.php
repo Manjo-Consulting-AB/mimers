@@ -2,7 +2,9 @@
 
 namespace App\Console;
 
+use App\Actions\Notification\CreateNotification;
 use App\Models\Account;
+use App\Models\Notification;
 use App\Models\Subscription;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,10 +24,10 @@ use Throwable;
  *   `read_only_reason = 'inactivity'` (Beslut 5). Bara statusraden ändras —
  *   data behålls, och ett `closed`-konto är fryst för skrivning, se
  *   App\Policies\ContainerPolicy.
- * - 12 månader, men ännu inte 15: kontot loggas som påminnelsepliktigt
- *   (Beslut 4). Ingenting skickas — kanalerna byggs i M5, vars issue anropar
- *   Account::scopeInactiveSince() för att hämta mängden. Steget är medvetet
- *   en halv implementation tills M5 finns.
+ * - 12 månader, men ännu inte 15: kontot varnas — en `account.inactive`-notis
+ *   per medlem (Beslut 4 och 34b § Beslut 8), via App\Actions\Notification\
+ *   CreateNotification. Loggraden finns kvar bredvid: den är det enda spåret
+ *   i produktion om notisen inte går fram.
  * - En medlem som gjort ett API-anrop inom gränsen öppnar ett stängt konto
  *   igen (Beslut 7): `active` med `read_only_reason = null`. Bara konton
  *   stängda för inaktivitet öppnas — ett `read_only`-konto (utebliven
@@ -57,7 +59,7 @@ use Throwable;
 class AdvancesAccountLifecycle
 {
     /**
-     * Kör ett steg av kontolivscykeln: stänger förfallna konton, loggar
+     * Kör ett steg av kontolivscykeln: stänger förfallna konton, varnar
      * påminnelsepliktiga och öppnar konton vars medlemmar återvänt.
      */
     public function handle(): void
@@ -89,11 +91,13 @@ class AdvancesAccountLifecycle
     }
 
     /**
-     * Steg 1: konton som passerat 12 månader loggas som påminnelsepliktiga.
-     * Bara en loggrad (Beslut 4) — ingen bokföring av skickade påminnelser,
-     * den historiken bär M5:s outbox (Beslut 3). Stängningen ovan har redan
-     * lyft bort konton som passerat 15, så urvalet här är de som ligger i
-     * fönstret 12–15 månader. `inactive_since` selectas som kolumn ur samma
+     * Steg 1: konton som passerat 12 månader varnas. En `account.inactive`-
+     * notis per medlem (alla roller — varningen gäller att allt försvinner,
+     * inte en plan), se 34b § Beslut 8. Loggraden finns kvar bredvid: den är
+     * det enda spåret i produktion om notisen inte går fram. Bokföringen av
+     * skickade varningar bär M5:s outbox (Beslut 3). Stängningen ovan har
+     * redan lyft bort konton som passerat 15, så urvalet här är de som ligger
+     * i fönstret 12–15 månader. `inactive_since` selectas som kolumn ur samma
      * SQL-uttryck som scopet (Account::inactiveSinceExpression) — definitionen
      * formuleras en gång, aldrig om i PHP.
      */
@@ -114,8 +118,45 @@ class AdvancesAccountLifecycle
                     'account_ulid' => $account->ulid,
                     'inactive_since' => is_string($inactiveSince) ? Carbon::parse($inactiveSince)->toDateTimeString() : null,
                 ]);
+
+                $this->warnAccountInactive($account, $inactiveSince);
             },
         );
+    }
+
+    /**
+     * Skickar `account.inactive`-varningen för ett konto i fönstret 12–15
+     * månader: en notis per medlem, alla roller. `close_at` räknas som
+     * kontots senaste aktivitet plus `inactivity_close_months` — kontot
+     * stängs den dag aktiviteten passerat gränsen, och `inactive_since` är
+     * den aktivitetstidpunkt scopet ovan redan räknat fram.
+     *
+     * `dedupe_key` bär månad (Beslut 5): varningen upprepas en gång i
+     * månaden i stället för en enda gång — [[Planer och kvoter]] §
+     * Kontolivscykel: "skicka fler än en varning".
+     */
+    private function warnAccountInactive(Account $account, mixed $inactiveSince): void
+    {
+        if (! is_string($inactiveSince)) {
+            return;
+        }
+
+        $months = (int) config('konton.inactivity_notice_months');
+        $closeAt = Carbon::parse($inactiveSince)->addMonths((int) config('konton.inactivity_close_months'));
+
+        foreach ($account->users as $member) {
+            app(CreateNotification::class)->handle(
+                type: Notification::TYPE_ACCOUNT_INACTIVE,
+                account: $account,
+                user: $member,
+                subject: $account,
+                payload: [
+                    'months' => $months,
+                    'close_at' => $closeAt->toDateString(),
+                ],
+                dedupeKey: 'account.inactive:'.$account->ulid.':'.$member->ulid.':'.now()->format('Y-m'),
+            );
+        }
     }
 
     /**

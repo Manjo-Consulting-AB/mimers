@@ -65,4 +65,23 @@ return [
 
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Kvotvarningar
+    |--------------------------------------------------------------------------
+    |
+    | Trösklarna för App\Console\GeneratesQuotaWarnings, se issue 34b §
+    | Beslut 7. Bara den HÖGSTA tröskel som slagits i skickas per körning:
+    | ett konto på 105 % av lagringsgränsen får en varning med `percent` 100,
+    | inte två. Talen är procent av `usage_counter.storage_bytes` mot planens
+    | `storage_bytes`-gräns.
+    |
+    */
+
+    'quota' => [
+
+        'warning_thresholds' => [80, 100],
+
+    ],
+
 ];

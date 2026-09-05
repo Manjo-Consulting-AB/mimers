@@ -4,6 +4,8 @@ use App\Console\AdvancesAccountLifecycle;
 use App\Console\DeletesDormantAccounts;
 use App\Console\DeliversNotifications;
 use App\Console\EnforcesDowngrades;
+use App\Console\GeneratesQuotaWarnings;
+use App\Console\GeneratesTaskNotifications;
 use App\Console\PrunesExpiredMagicLinkTokens;
 use App\Console\PurgesExpiredStoredFiles;
 use App\Console\PurgesExpiredTrash;
@@ -89,6 +91,40 @@ Schedule::call(fn () => app(PurgesExpiredTrash::class)->handle())
 Schedule::call(fn () => app(ReconcilesUsageCounters::class)->handle())
     ->daily()
     ->name('reconcile-usage-counters');
+
+/*
+ * Issue 34b · Uppgiftsnotiserna: förekomster som blivit synliga eller
+ * förfallit skapar en task.due/task.overdue per mottagare — se
+ * App\Console\GeneratesTaskNotifications och [[Notiser]] § Kön. Logiken bor
+ * i en vanlig klass, testad direkt i tests/Feature/Notis/UppgiftsnotisTest.php;
+ * det här är bara schemaläggningen. Var 15:e minut, enligt tabellen i
+ * [[Notiser]] § Kön.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(GeneratesTaskNotifications::class)->handle())
+    ->everyFifteenMinutes()
+    ->name('generate-task-notifications');
+
+/*
+ * Issue 34b · Kvotvarningarna: konton som passerat 80 % eller 100 % av
+ * lagringsgränsen får en notis per ägare och administratör — se
+ * App\Console\GeneratesQuotaWarnings och [[Notiser]] § Kön. Logiken bor i en
+ * vanlig klass, testad direkt i tests/Feature/Notis/KvotvarningTest.php; det
+ * här är bara schemaläggningen. Körs efter avstämningen ovan (26b) i samma
+ * nattliga fönster, så varningen bygger på ett rättat tal (Beslut 2).
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(GeneratesQuotaWarnings::class)->handle())
+    ->daily()
+    ->name('generate-quota-warnings');
 
 /*
  * Issue 28b · Verkställandet av nedgraderingen: konton vars frist gått ut får
