@@ -14,17 +14,18 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 **Beror på:** 30
 **Byggd som:** 31a tabellen, förvalen och `available_at` ur tysta timmar, 31b preferensytan och de tysta timmarna i API:et
 
-### 32. E-post via Postmark
+### 32. E-post via Mailgun
 Mallar på svenska och engelska, valda från mottagarens locale. SPF, DKIM, DMARC på `mimers.app`. Avregistreringslänk och inställningssida.
 **Läs:** [[Notiser]] § E-post, [[ADR-0013 Språk och i18n]]
 **Beror på:** 31
 **Byggd som:** 32a e-postkanalen, `lang/`-katalogen och mallarna på två språk, 32b avregistreringslänken och `List-Unsubscribe`
 
 ### 33. Studshantering
-`email_suppression` matad av Postmarks webhook. Undertryckta adresser ger `suppressed` istället för leveransförsök, och kopplas till livscykeln.
+`email_suppression` matad av Mailguns webhook. Undertryckta adresser ger `suppressed` istället för leveransförsök, och kopplas till livscykeln.
 **Läs:** [[Notiser]] § email_suppression
 **Beror på:** 32, 29
-**Byggd som:** 33a `email_suppression` och spärren i kanalen, 33b Postmarks webhook för studsar och spamanmälningar
+**Byggd som:** 33a `email_suppression` och spärren i kanalen, 33b webhooken för studsar och spamanmälningar
+**Not:** 32a och 33b byggdes mot Postmark. Leverantören byttes till Mailgun 2026-09-05, se [[ADR-0010 Notisarkitektur]] § Motivering (uppföljning).
 
 ### 34. Notisgeneratorer
 Jobben i tabellen: uppgiftsnotiser var 15:e minut, utlåning dagligen, leverans varje minut, kvotvarningar dagligen, livscykel dagligen.
@@ -50,3 +51,10 @@ Hemlig prenumerationslänk per container och användare, återkallbar. Visar bar
 **Klart när:** **SSRF-validering** avvisar privata IP-intervall, localhost och molnmetadata vid både registrering och varje leverans.
 **Beror på:** 30, 27
 **Byggd som:** 37a registret, plangrinden och SSRF vid registrering, 37b leveransen med HMAC, backoff och automatisk inaktivering
+
+### 38. Byt e-postleverantör till Mailgun
+Postmark ut, Mailgun in — samma funktion, bättre villkor. Transporten är ett paket- och konfigurationsbyte; webhooken byter autentisering från HTTP Basic till Mailguns HMAC-signatur och byter händelsenamn.
+**Läs:** [[Notiser]] § E-post och § email_suppression, [[ADR-0010 Notisarkitektur]] § Motivering (uppföljning 2026-09-05)
+**Klart när:** `MAIL_MAILER=mailgun` går att sätta utan att någon `POSTMARK_*` finns kvar, och webhookrutten avvisar ett anrop med felaktig signatur.
+**Beror på:** 32, 33
+**Byggd som:** 38a transporten (paket, `config/mail.php`, `config/services.php`, `.env.example`), 38b webhookens signaturverifiering och händelsemappning

@@ -52,7 +52,7 @@ Båda skickar mejl till godtyckliga adresser.
 
 **Befintligt skydd:** rate-limit per adress och per IP ([[ADR-0011 Autentisering]]).
 
-**Motmedel:** tak för antal utestående `pending`-inbjudningar per konto. Den verkliga kostnaden här är inte utrymme utan leveransryktet hos Postmark — och magic links är inloggningskritiska, så ett skadat rykte låser ute betalande kunder.
+**Motmedel:** tak för antal utestående `pending`-inbjudningar per konto. Den verkliga kostnaden här är inte utrymme utan leveransryktet hos e-postleverantören — och magic links är inloggningskritiska, så ett skadat rykte låser ute betalande kunder.
 
 ### 6. Export och skörd av rapportdata
 
@@ -64,7 +64,7 @@ Tillagd 2026-08-22. En utlåning bär en fritt inskriven `borrower_email` som in
 
 **Motmedel:** systemet mejlar aldrig låntagaren. Påminnelsen går till den som lånat ut, med adressen synlig i vyn så att hen själv tar kontakt. Se [[Items och organisation]] § loan.
 
-Det kostar en aning bekvämlighet och tar bort hela vektorn — ingen avanmälningslänk, inga studsar från adresser vi inte äger relationen till, ingen påverkan på leveransryktet hos Postmark. Ska automatiska påminnelser till låntagaren någon gång byggas kräver de verifiering av adressen först, och då är det ett eget beslut.
+Det kostar en aning bekvämlighet och tar bort hela vektorn — ingen avanmälningslänk, inga studsar från adresser vi inte äger relationen till, ingen påverkan på leveransryktet hos e-postleverantören. Ska automatiska påminnelser till låntagaren någon gång byggas kräver de verifiering av adressen först, och då är det ett eget beslut.
 
 ### Mätningen
 

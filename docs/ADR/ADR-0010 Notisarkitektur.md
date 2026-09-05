@@ -16,7 +16,13 @@ Telegram byggs inte som förstapartsintegration.
 
 ## Motivering
 
-**E-post** är obligatorisk men leveransen är underskattad. Transaktionsmejl från delad hosting hamnar i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös. Därför Postmark med SPF, DKIM och DMARC på `mimers.app` — några timmars arbete som avgör om produkten fungerar.
+**E-post** är obligatorisk men leveransen är underskattad. Transaktionsmejl från delad hosting hamnar i skräpposten, och en påminnelseprodukt vars påminnelser inte syns är värdelös. Därför en riktig leverantör — ~~Postmark~~ → **Mailgun**, se uppföljningen nedan — med SPF, DKIM och DMARC på `mimers.app`. Några timmars arbete som avgör om produkten fungerar.
+
+**Uppföljning 2026-09-05: leverantören byts från Postmark till Mailgun.** Skälet är villkoren, inte funktionen: båda är transaktionsleverantörer med API-transport i Symfony Mailer, domänverifiering med SPF och DKIM, och en webhook som rapporterar studsar och spamanmälningar tillbaka. Ingenting i beslutet ovan hänger på vilken av dem det är — motiveringen är *"en leverantör med eget sändarrykte i stället för delad hosting"*, och den håller oförändrad. Det som byts är namnet, transportpaketet, miljövariablerna och webhookens form.
+
+**Webhookens autentisering är den enda sakliga skillnaden.** Postmark lade användarnamn och lösenord i webhook-URL:en och skickade dem som HTTP Basic; Mailgun signerar i stället varje anrop med HMAC-SHA256 över `timestamp` + `token`, med kontots webhook-signeringsnyckel som nyckel. Det är en starkare mekanism — hemligheten går aldrig över tråden — men den kräver också att mottagaren skyddar mot återuppspelning, eftersom en avlyssnad signatur annars går att skicka om. Kravet från ADR:ns § Konsekvenser (*"studsar och spamanmälningar matas tillbaka in i systemet"*) är oförändrat; vad koden ska verifiera är det inte.
+
+**En återkallad undertryckning har ingen motsvarighet hos Mailgun.** Postmark skickade `SubscriptionChange` med `SuppressSending: false` när någon återaktiverade en adress i gränssnittet, och issue 33b byggde en väg tillbaka på den händelsen. Mailgun för sina spärrlistor själv och skickar ingen webhook när en rad tas bort ur dem. Vägen tillbaka för en adress som undertryckts av misstag blir därför manuell — ta bort raden i `email_suppression` och i Mailguns egen lista — tills något efterfrågar mer. Det är en försämring, den enda i bytet, och den är liten: den rör en händelse som inträffar när en människa redan sitter i ett gränssnitt.
 
 **ICS-feeden** är den underskattade vinnaren. En hemlig prenumerationslänk som Apple Calendar eller Google Calendar hämtar själv. En läsendpoint som genererar en textfil: nästan gratis att bygga, ingen leveransproblematik, inget spamfilter, fungerar på varje enhet. För en produkt som i grunden handlar om underhållsschema ger den mer verkligt värde än push.
 
