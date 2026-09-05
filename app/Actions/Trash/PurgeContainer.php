@@ -75,6 +75,16 @@ class PurgeContainer
                 $this->purgeContent->tag($tag);
             }
 
+            // Notiser som pekar på containern — issue 30 § Beslut 8. Båda
+            // nycklarna är ON DELETE RESTRICT, så utan städningen kastar
+            // forceDelete nedan ett integritetsfel i papperskorgens gallring
+            // (20c). Leveransraderna först, notisraderna sedan — ordningen är
+            // given av nycklarna. Notiser raderas, de arkiveras inte.
+            DB::table('notification_delivery')
+                ->whereIn('notification_id', DB::table('notification')->where('container_id', $container->id)->select('id'))
+                ->delete();
+            DB::table('notification')->where('container_id', $container->id)->delete();
+
             DB::table('container_access')->where('container_id', $container->id)->delete();
             DB::table('invitation')->where('container_id', $container->id)->delete();
 
