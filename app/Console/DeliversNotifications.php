@@ -42,7 +42,9 @@ use Throwable;
  * `Schedule::withoutOverlapping()` skulle svika (cachelåset nollställs eller
  * går ut mitt i en lång körning). `lockForUpdate()` är verkningslöst i sqlite
  * och därmed i testsviten; det som bär är statuskontrollen, inte låset. Ett
- * fel på en rad stoppar inte de andra.
+ * fel på en rad stoppar inte de andra: ett oväntat fel utanför de tre kända
+ * utfallsvägarna i deliver() fångas i handle() och loggas som
+ * `notification.delivery_failed`.
  *
  * Utfallen står i Beslut 5-tabellen i issuen: skickat ger `sent` med
  * `sent_at`, en undertryckt adress (33a) ger `suppressed` utan att räkna upp
@@ -88,7 +90,24 @@ class DeliversNotifications
         $utfall = ['sent' => 0, 'failed' => 0, 'suppressed' => 0, 'pending' => 0];
 
         foreach ($deliveryIds as $id) {
-            $resultat = $this->deliver((int) $id);
+            $deliveryId = (int) $id;
+
+            try {
+                $resultat = $this->deliver($deliveryId);
+            } catch (Throwable $e) {
+                // Ett oväntat fel utanför de tre kända utfallsvägarna i
+                // deliver() — i urvalsläsningen, bokföringen eller själva
+                // DB::transaction — får inte tysta resten av batchen (Beslut
+                // 4), precis som AdvancesAccountLifecycle gör. Raden ligger
+                // kvar som `pending` och plockas nästa minut; felet loggas så
+                // att en körning som slutar skicka inte försvinner spårlöst.
+                Log::error('notification.delivery_failed', [
+                    'delivery_id' => $deliveryId,
+                    'exception' => $e->getMessage(),
+                ]);
+
+                continue;
+            }
 
             if ($resultat !== null) {
                 $utfall[$resultat]++;
