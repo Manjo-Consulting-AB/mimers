@@ -29,6 +29,7 @@ use App\Http\Controllers\Api\ScheduleOccurrenceController;
 use App\Http\Controllers\Api\TagController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\TrashController;
+use App\Http\Controllers\Api\WebhookEndpointController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Support\Facades\Route;
@@ -378,6 +379,23 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // är read_only, och det är hela poängen med ytan.
     Route::get('/accounts/{account}/storage', [AccountStorageController::class, 'index']);
     Route::delete('/accounts/{account}/storage', [AccountStorageController::class, 'destroy']);
+
+    // Issue 37a · Webhooks — registret, plangrinden och SSRF-valideringen vid
+    // registrering, se App\Http\Controllers\Api\WebhookEndpointController.
+    // En KONTOruta, inte en containerruta (Beslut 1): en webhook tillhör ett
+    // konto — URL:en, funktionen och plangrinden är kontots — så rutterna
+    // nästlas under {account} precis som storage ovan. Grinden är den nya
+    // manageWebhooks() på AccountPolicy, som kräver owner/admin (Beslut 4),
+    // och plangrinden (webhooks, POST/PATCH) sitter i kontrollern efter
+    // Gate::authorize() (Beslut 5).
+    // {webhook} binds av gruppens scopeBindings() genom
+    // App\Models\Account::webhooks() — en endpoint i konto B går inte att
+    // ändra via konto A:s rutt, den ger 404 (Beslut 3). Leveransen (HMAC,
+    // omförsök, SSRF vid leverans) är 37b och ligger inte här.
+    Route::get('/accounts/{account}/webhooks', [WebhookEndpointController::class, 'index']);
+    Route::post('/accounts/{account}/webhooks', [WebhookEndpointController::class, 'store']);
+    Route::patch('/accounts/{account}/webhooks/{webhook}', [WebhookEndpointController::class, 'update']);
+    Route::delete('/accounts/{account}/webhooks/{webhook}', [WebhookEndpointController::class, 'destroy']);
 
     // Issue 36a · ICS-kalenderfeed — skapa, lista och återkalla de hemliga
     // prenumerationslänkarna för en container, se

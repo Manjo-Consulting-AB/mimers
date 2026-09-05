@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  *
  * 1. varje container kontot äger, genom PurgeContainer — med withTrashed(),
  *    en mjukraderad container ska också bort,
- * 2. usage_counter-raden,
+ * 2. usage_counter-raden och webhook_endpoint-raderna (issue 37a § Beslut 8),
  * 3. subscription-raden om den finns,
  * 4. account_user-raderna,
  * 5. account-raden.
@@ -91,6 +91,14 @@ class DeleteAccount
             DB::table('notification')->where('account_id', $accountId)->delete();
 
             DB::table('usage_counter')->where('account_id', $accountId)->delete();
+
+            // Webhook-endpoints på kontot (issue 37a § Beslut 8), bredvid
+            // usage_counter-raderingen ovan: nyckeln mot account är ON DELETE
+            // RESTRICT, så utan städningen kastar account-raderingen nedan ett
+            // integritetsfel. 37b utökar den här raden med webhook_delivery
+            // när den tabellen finns.
+            DB::table('webhook_endpoint')->where('account_id', $accountId)->delete();
+
             DB::table('subscription')->where('account_id', $accountId)->delete();
             DB::table('account_user')->where('account_id', $accountId)->delete();
 

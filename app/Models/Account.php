@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -58,6 +59,20 @@ class Account extends Model
     public function subscription(): HasOne
     {
         return $this->hasOne(Subscription::class);
+    }
+
+    /**
+     * Kontots webhook-endpoints (issue 37a § Beslut 3). Relationen finns för
+     * att routes/api.php nästlar {webhook} under {account} med
+     * scopeBindings() — Laravel löser den nästlade bindningen genom just den
+     * här metoden (App\Models\Account → webhooks()), så utan den går en
+     * endpoint i konto B att ändra via konto A:s rutt.
+     *
+     * @return HasMany<WebhookEndpoint, $this>
+     */
+    public function webhooks(): HasMany
+    {
+        return $this->hasMany(WebhookEndpoint::class);
     }
 
     /**
