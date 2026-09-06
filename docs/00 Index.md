@@ -14,6 +14,7 @@ Systemet heter **Mimers** och bor på `mimers.app`. Namnet syftar på Mimer i no
 |---|---|
 | förstå produkten på fem minuter | [[Översikt]] |
 | veta vad som ingår i MVP | [[Översikt]] § Avgränsning |
+| veta hur vi står oss mot ett annat verktyg | [[Konkurrens]] |
 | bygga eller ändra en tabell | rätt fil under **Datamodell/** |
 | veta *varför* något är som det är | rätt ADR under **ADR/** |
 | ta nästa arbetsuppgift | [[Backlog]] |

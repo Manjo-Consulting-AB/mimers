@@ -31,6 +31,7 @@ Din issues **Läs**-lista är utgångspunkten. Tabellen här är för frågor so
 | felkodsformatet i API:et | `AGENTS.md` § Felformat |
 | vilket språk ett namn i koden ska ha | `AGENTS.md` § Språk i koden |
 | CI, miljöer, utrullning, servern hos inleed | `docs/Deploy/Pipeline.md` |
+| hur vi står oss mot ett annat verktyg | `docs/Konkurrens.md` |
 | en fråga ingen har svarat på | `docs/Tankar.md` |
 
 ## Läs avsnitt, inte hela filer
@@ -50,6 +51,7 @@ Skriv inte in radnummer från minnet — de flyttar sig vid varje redigering. K�
 
 - `docs/00 Index.md` — startpunkt för en människa
 - `docs/Översikt.md` — produkten på fem minuter
+- `docs/Konkurrens.md` — hur vi står oss mot Obsidian, Evernote, Notion och de andra
 - `docs/Backlog.md` — indextabell: issuenummer → milstolpefil
 - `docs/Backlog/` — en fil per milstolpe, issues med läslista och acceptanskriterier
 - `docs/ADR/` — 28 beslut, ett per fil, med kontext och konsekvenser
