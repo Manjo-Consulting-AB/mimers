@@ -21,11 +21,6 @@ return [
         'scheme' => 'https',
     ],
 
-    // Postmark-paketet är borttaget (issue 38a). Ramverkets basconfig
-    // (vendor/laravel/framework/config/services.php) mergas alltid in i appens,
-    // så postmark nollas här för att inte dyka upp bland tjänsterna.
-    'postmark' => null,
-
     'resend' => [
         'key' => env('RESEND_API_KEY'),
     ],

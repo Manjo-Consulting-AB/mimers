@@ -10,9 +10,16 @@
  * 38b och rörs inte här.
  */
 
-it('har mailgun som mailer och ingen postmark-mailer kvar', function () {
+it('har mailgun som mailer och ingen postmark-mailer i appens config', function () {
     expect(config('mail.mailers.mailgun.transport'))->toBe('mailgun');
-    expect(config('mail.mailers.postmark'))->toBeNull();
+
+    // Appens config läses som fil, inte via config(): ramverkets basconfig
+    // (vendor/laravel/framework/config/mail.php) mergas in i config('mail.mailers')
+    // nyckel för nyckel, så dess postmark-mailer överlever alltid. Det som ska
+    // vara borta är appens egen rad.
+    $mail = require config_path('mail.php');
+
+    expect($mail['mailers'])->not->toHaveKey('postmark');
 });
 
 it('har en roundrobin utan transport vars paket inte är installerat', function () {
@@ -29,7 +36,12 @@ it('har services.mailgun med domän, hemlighet, endpoint och scheme', function (
         'endpoint',
         'scheme',
     ]);
-    expect(config('services.postmark'))->toBeNull();
+
+    // Läses som fil av samma skäl som ovan: config('services.postmark') är
+    // aldrig null, basconfigens tjänster läggs under appens config.
+    $services = require config_path('services.php');
+
+    expect($services)->not->toHaveKey('postmark');
 });
 
 it('har EU-endpointen som förval när MAILGUN_ENDPOINT inte är satt', function () {

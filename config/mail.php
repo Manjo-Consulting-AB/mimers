@@ -57,12 +57,6 @@ return [
             'transport' => 'mailgun',
         ],
 
-        // Postmark-paketet är borttaget (issue 38a). Ramverkets basconfig
-        // (vendor/laravel/framework/config/mail.php) mergas alltid in i appens,
-        // så postmark nollas här för att inte dyka upp som en mailer utan
-        // fungerande transport.
-        'postmark' => null,
-
         'resend' => [
             'transport' => 'resend',
         ],
