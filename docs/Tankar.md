@@ -24,6 +24,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Personradering är inte löst, och kontoraderingen rör den inte.** `DeleteAccount` raderar aldrig `user`-rader: en person kan vara medlem i andra konton, så raderingen av ett konto får inte ta med sig människan. Det är rätt avgränsning för issue 29b, men det betyder att det inte finns någon väg alls för en enskild person att bli raderad ur systemet — vilket är ett GDPR-krav och inte en teknisk detalj. Behöver en egen issue med egna krav; frågan är i vilken milstolpe. Restes i granskningen av issue 29b (PR #168), 2026-09-04.
 
+- **Issuenummer 38 bär två olika issues.** [[M5 Notiser]] § 38 är *Byt e-postleverantör till Mailgun*, [[M6 Resten av MVP]] § 38 är *Utlåning* — och [[Backlog]]:s tabell speglar kollisionen med intervallen `30–38` och `38–41`. Följden är att en `Beror på:`-rad som pekar på 38 inte är entydig; M10 § 67 gör det redan, där grannarna 39 och 41 antyder men inte bevisar att Utlåning avses. Den ena är byggd (`Byggd som:` 38a och 38b), den andra inte, så det billigaste vore att ge Utlåning ett nytt nummer — men det avgörs av om det redan finns en GitHub-issue som bär numret, vilket bara den som skapat den vet. Frågan är alltså vilken av de två som byter, och vad som då ska hända med `Beror på:`-raden i M10. Upptäckt när dokumentationens räkneverk stämdes av mot filerna, 2026-09-06.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
