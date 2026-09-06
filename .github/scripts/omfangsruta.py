@@ -73,6 +73,35 @@ STANGER = re.compile(r"\b(clos(?:e|es|ed)|fix(?:|es|ed)|resolv(?:e|es|ed)|stäng
 IMPLEMENTATIONSGREN = re.compile(r"^(?:feature/)?issue-\d+")
 TOMT = {"_No response_", "_Inget svar_"}
 
+# Issue 30 (PR #186) byggde app/Models/Notification.php med sju TYPE_*-konstanter
+# men medvetet ingen samlad TYPES-lista - modellens docblock säger uttryckligen
+# att `type` är ett ÖPPET namnrum, och notification_preference-migrationen ger
+# `type` inget CHECK-villkor av samma skäl. Ändå refererade tre senare issuer
+# `Notification::TYPES` som en given
+# förutsättning: issue 173 (på fyra ställen, "finns redan från issue 30
+# § Beslut 4"), issue 175 (Beslut 6) och issue 183. Tre implementerare gjorde
+# samma utredning var för sig, kom till samma slutsats, och skrev samma fynd i
+# "Frågor och antaganden" - PR #189:s processnotering säger att just det
+# kostade mest i den issuen. Lösningarna gled dessutom isär: 173 lade listan på
+# NotificationPreferences::types(), 183 på WebhookEndpoint::EVENT_TYPES. Se
+# docs/Process/Lärdomar.md § Observerat.
+#
+# Kontrollen nedan fångar mönstret innan det upprepas en fjärde gång: en
+# bakåtciterad `Klass::KONSTANT` i issuekroppen där klassen finns under app/
+# men konstanten inte gör det. Den är en VARNING, aldrig ett fel - grinden ska
+# inte fälla en issue för att en tidigare issue medvetet valde bort en
+# konstant, bara flagga att den som implementerar bör dubbelkolla innan hen
+# antar att den finns, i stället för att göra samma utredning en fjärde gång.
+#
+# Mönstret är medvetet snävt till VERSALKONSTANTER (`Klass::KONSTANT`, inte
+# `Klass::metod()`). Mätt mot milstolpens sexton issuekroppar gav den bredare
+# formen - som även fångar metodanrop - 20 varningar varav bara 3 äkta; resten
+# var fasadanrop (`Schedule::call`, `Notification::fake`) och ärvda
+# Eloquent-metoder (`EmailSuppression::where`). En grind som är röd på allt
+# slutar betyda något, se ci.yml:s egna kommentarer om ordbudgeten.
+KLASSKONSTANT = re.compile(r"`(?P<klass>[A-Z][A-Za-z0-9_]*)::(?P<konstant>[A-Z0-9_]{3,})`")
+KODBLOCK = re.compile(r"```.*?```", re.DOTALL)
+
 
 def notis(niva: str, text: str) -> None:
     """Skriv en GitHub Actions-annotering. Hamnar i körningens sammanfattning."""
@@ -150,6 +179,61 @@ def matchar(fil: str, monster: str) -> bool:
     """
     monster = monster.rstrip("/")
     return fnmatch.fnmatch(fil, monster) or fnmatch.fnmatch(fil, f"{monster}/*")
+
+
+def hitta_klassfil(klass: str) -> str | None:
+    """Sökvägen till filen som definierar `class|interface|trait|enum <klass>`
+    under app/, eller None om ingen sådan finns.
+
+    En klass som inte finns är inte ett fel här - det är det vanliga fallet
+    när issuen som citerar konstanten är samma issue som ska skapa klassen.
+    Varningen gäller bara när klassen redan finns men konstanten inte gör
+    det.
+    """
+    deklaration = re.compile(rf"\b(?:class|interface|trait|enum)\s+{re.escape(klass)}\b")
+    for rot, _, filer in os.walk("app"):
+        for namn in filer:
+            if not namn.endswith(".php"):
+                continue
+            sokvag = os.path.join(rot, namn)
+            with open(sokvag, encoding="utf-8") as f:
+                if deklaration.search(f.read()):
+                    return sokvag
+    return None
+
+
+def varna_om_paihittade_konstanter(kropp_issue: str, nummer: str) -> None:
+    """Varna för varje `Klass::KONSTANT` i issuekroppen vars klass finns under
+    app/ men vars konstant inte gör det.
+
+    Kodblock hoppas över först - exempelkod som visar hur en konstant *skulle*
+    kunna heta ska inte läsas som ett påstående om att den finns. Samma par
+    varnas bara en gång även om det citeras flera gånger i kroppen.
+    """
+    sedda: set[tuple[str, str]] = set()
+    utan_kodblock = KODBLOCK.sub("", kropp_issue)
+    for traff in KLASSKONSTANT.finditer(utan_kodblock):
+        klass, konstant = traff.group("klass"), traff.group("konstant")
+        if (klass, konstant) in sedda:
+            continue
+        sedda.add((klass, konstant))
+
+        sokvag = hitta_klassfil(klass)
+        if sokvag is None:
+            continue
+
+        with open(sokvag, encoding="utf-8") as f:
+            if re.search(rf"\bconst\s+{re.escape(konstant)}\b", f.read()):
+                continue
+
+        notis(
+            "warning",
+            f"Issue #{nummer} citerar `{klass}::{konstant}`, men den konstanten "
+            f"finns inte i {sokvag}. Kontrollera innan du antar att den finns - "
+            "en tidigare issue kan ha valt bort den med flit (som "
+            "Notification::TYPES, som app/Models/Notification.php medvetet "
+            "saknar, se issue 30 § Beslut 4).",
+        )
 
 
 def hitta_issue(kropp_pr: str, gren: str) -> tuple[str | None, str]:
@@ -240,6 +324,9 @@ def main() -> int:
         return 1
 
     kropp_issue = issue.get("body") or ""
+
+    # Ren varning, oberoende av rutans utfall nedan - byter aldrig exit-koden.
+    varna_om_paihittade_konstanter(kropp_issue, nummer)
 
     innanfor = globbar(avsnitt(kropp_issue, "In scope"))
     utanfor = globbar(avsnitt(kropp_issue, "Out of scope"))
