@@ -134,6 +134,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 .github/scripts/omfangsruta.py
 
+      # Processnoteringen och frågeavsnittet är de enda artefakter som överlever
+      # sessionen, och båda har försvunnit tyst en gång var - PR #168 utan
+      # frågorna, PR #210 utan processnoteringen, den senare mergad grön.
+      # Rubriken finns eller finns inte: deterministiskt villkor, alltså ett
+      # skript. Motiveringen i sin helhet står i skriptets docstring.
+      - name: PR-kroppen bär processnoteringen och frågorna
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: python3 .github/scripts/pr_kroppen.py
+
       # Budgeten gäller den som ändrar filen, inte den som råkar öppna en PR
       # medan den ligger över. I M4 tog PR #156 filen till 1944 ord, och de fem
       # nästa implementations-PR:erna blev röda på ett steg de varken orsakade
