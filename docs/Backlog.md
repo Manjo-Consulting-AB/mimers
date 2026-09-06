@@ -28,7 +28,8 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M7 Drift]] | **42–44** | backupscript, dead man's switch, återläsningsrunbook |
 | [[M8 Kostnadsregistrering]] | **45–47** | kostnadsrader, kostnadsrapport, kostnadskrok vid avbockad uppgift |
 | [[M9 Missbruksskydd]] | **48–50** | tak för utestående inbjudningar, ägarbytesbonusen en gång per mottagande konto, nattlig missbruksrapport |
+| [[M11 Åtkomst på itemnivå]] | **69–75** | ladder och migrering, omfångsupplösning, grindar, beviljande, filtrering av listning/sök/rapporter, notiser · **byggs före M10** |
 | [[M10 Webbfrontend]] | **51–68** | frontendskal, språk i frontenden, inloggnings- och kontovyer, containervyer, delning och inbjudningar, kategorier och taggar, … |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 
-Totalt 71 issues under `docs/Backlog/`. Issue 6 är delad i 6a, 6b och 6c.
+Totalt 78 issues under `docs/Backlog/`. Issue 6 är delad i 6a, 6b och 6c. **M11 står sist i numret men grindar sex issues i M10** — 55, 57, 58, 59, 62 och 67 bygger på behörighetsmodellen den ändrar. Beroendena i issuerna är det som gäller, precis som M10:s egen ingress säger.

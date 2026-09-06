@@ -32,9 +32,11 @@ Lista, skapa, redigera, välja aktiv container. `kind` styr presentation, inte l
 **Beror på:** 53, 8
 
 ### 55. Delning och inbjudningar
-Bjuda in med R/RW, se och återkalla utestående inbjudningar, acceptflödet för mottagaren. Åtkomstformerna presenteras med sina faktiska konsekvenser — ett varv som får `managed` ska se att det inte äger pärmen.
-**Läs:** [[ADR-0003 Åtkomstmodell]], [[Konton och åtkomst]] § invitation
-**Beror på:** 54, 9, 10
+Bjuda in, se och återkalla utestående inbjudningar, acceptflödet för mottagaren. Åtkomstformerna presenteras med sina faktiska konsekvenser — ett varv som får `managed` ska se att det inte äger pärmen.
+
+**Fyra nivåer, två synliga.** [[ADR-0028 Åtkomst på itemnivå]] ersatte R/RW med ladder `read` < `create` < `write` < `delete`. Visa `read` och `write` som standard; `create` och `delete` hör hemma bakom "avancerat". Fyra val är för mycket för en ägare som bara delar med sambon. Här bor också delningen av **enskilda items**: ägaren måste se hur många items en grant faktiskt når, så att "motorn" inte tyst betyder fyra items.
+**Läs:** [[ADR-0003 Åtkomstmodell]], [[ADR-0028 Åtkomst på itemnivå]], [[Konton och åtkomst]] § invitation
+**Beror på:** 54, 9, 10, 72
 
 ### 56. Kategorier och taggar
 CRUD för båda. **Färdiga kategoriuppsättningar** per språk och containertyp bor här, som frontenddata — API:et får aldrig veta vad orden betyder.
@@ -44,18 +46,21 @@ CRUD för båda. **Färdiga kategoriuppsättningar** per språk och containertyp
 
 ### 57. Itemvyer
 Lista med miniatyrer, detaljvy, skapa och redigera. Kategori, taggar, fritext.
-**Läs:** [[Items och organisation]]
-**Beror på:** 56, 13
+Ett item användaren bara har `read` på visas utan redigeringsytor, inte med knappar som ger felkod.
+**Läs:** [[Items och organisation]], [[ADR-0028 Åtkomst på itemnivå]]
+**Beror på:** 56, 13, 71
 
 ### 58. Relationer mellan items
 Koppla ihop items och navigera relationerna från detaljvyn.
-**Läs:** [[Items och organisation]] § relationer
-**Beror på:** 57, 14
+En länk till ett item utanför användarens omfång visas inte alls — inte som ett namnlöst spöke.
+**Läs:** [[Items och organisation]] § item_link, [[ADR-0028 Åtkomst på itemnivå]]
+**Beror på:** 57, 14, 71
 
 ### 59. Sök och filter
 Fritextsök plus filtrering på kategori, tagg och container. Tomt resultat säger vad som filtrerades bort.
-**Läs:** [[ADR-0012 Sök]], [[Items och organisation]]
-**Beror på:** 57, 15
+"Tomt resultat säger vad som filtrerades bort" gäller **användarens egna filter** — aldrig att träffar dolts av behörighet, se issue 73.
+**Läs:** [[ADR-0012 Sök]], [[Items och organisation]], [[ADR-0028 Åtkomst på itemnivå]]
+**Beror på:** 57, 15, 73
 
 ### 60. Uppladdning
 Drag-drop, flera filer samtidigt, framdrift per fil, miniatyrer när de finns. Kvotfel visas som gräns och värde, inte som ett rått felmeddelande.
@@ -71,8 +76,9 @@ Visning av bilder och PDF:er, nedladdningslänkar mot filoriginet.
 
 ### 62. Papperskorg
 Lista raderat innehåll, återställ, se hur lång tid som återstår.
-**Läs:** [[ADR-0008 Soft delete och papperskorg]]
-**Beror på:** 57, 20
+Papperskorgen visar bara det användaren själv kunde se innan det raderades, se issue 74.
+**Läs:** [[ADR-0008 Soft delete och papperskorg]], [[ADR-0028 Åtkomst på itemnivå]]
+**Beror på:** 57, 20, 74
 
 ### 63. Scheman och uppgifter
 Skapa scheman på item, se förekomster, bocka av, hantera beroenden. Försenat visas som härlett tillstånd.
@@ -97,7 +103,7 @@ Visa aktuell plan, förbrukning mot gränser, och vad som händer vid nedgraderi
 ### 67. Utlåning, ägarbyte och export
 De tre flödena i M6 som behöver en yta: markera utlånat med mottagare, initiera och acceptera ägarbyte, begära export.
 **Läs:** [[Items och organisation]] § utlåning, [[Konton och åtkomst]] § ownership_transfer
-**Beror på:** 57, 38, 39, 41
+**Beror på:** 57, 38, 39, 41, 74
 
 ### 68. Mobilanpassning och tillgänglighetsgenomgång
 En genomgång, inte en ny funktion: vyerna används på telefon i en hamn med dålig uppkoppling. Tangentbordsnavigering, fokusordning, kontrast, träffytor, och att långsamma svar syns som något annat än en död sida.
