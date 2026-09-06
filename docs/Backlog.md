@@ -32,4 +32,4 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M10 Webbfrontend]] | **51–68** | frontendskal, språk i frontenden, inloggnings- och kontovyer, containervyer, delning och inbjudningar, kategorier och taggar, … |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 
-Totalt 78 issues under `docs/Backlog/`. Issue 6 är delad i 6a, 6b och 6c. **M11 står sist i numret men grindar sex issues i M10** — 55, 57, 58, 59, 62 och 67 bygger på behörighetsmodellen den ändrar. Beroendena i issuerna är det som gäller, precis som M10:s egen ingress säger.
+Totalt 77 issuerubriker under `docs/Backlog/`, numrerade 0–75. Issue 6 är delad i 6a, 6b och 6c. **Nummer 38 bär två olika issues** — *Byt e-postleverantör till Mailgun* i M5 och *Utlåning* i M6. Vilken som ska byta nummer är inte avgjort; se [[Tankar]]. **M11 står sist i numret men grindar sex issues i M10** — 55, 57, 58, 59, 62 och 67 bygger på behörighetsmodellen den ändrar. Beroendena i issuerna är det som gäller, precis som M10:s egen ingress säger.
