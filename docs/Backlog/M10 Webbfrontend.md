@@ -103,7 +103,7 @@ Visa aktuell plan, förbrukning mot gränser, och vad som händer vid nedgraderi
 ### 67. Utlåning, ägarbyte och export
 De tre flödena i M6 som behöver en yta: markera utlånat med mottagare, initiera och acceptera ägarbyte, begära export.
 **Läs:** [[Items och organisation]] § utlåning, [[Konton och åtkomst]] § ownership_transfer
-**Beror på:** 57, 38, 39, 41, 74
+**Beror på:** 57, 76, 39, 41, 74
 
 ### 68. Mobilanpassning och tillgänglighetsgenomgång
 En genomgång, inte en ny funktion: vyerna används på telefon i en hamn med dålig uppkoppling. Tangentbordsnavigering, fokusordning, kontrast, träffytor, och att långsamma svar syns som något annat än en död sida.
