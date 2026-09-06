@@ -14,9 +14,17 @@ return [
     |
     */
 
-    'postmark' => [
-        'key' => env('POSTMARK_API_KEY'),
+    'mailgun' => [
+        'domain' => env('MAILGUN_DOMAIN'),
+        'secret' => env('MAILGUN_SECRET'),
+        'endpoint' => env('MAILGUN_ENDPOINT', 'api.eu.mailgun.net'),
+        'scheme' => 'https',
     ],
+
+    // Postmark-paketet är borttaget (issue 38a). Ramverkets basconfig
+    // (vendor/laravel/framework/config/services.php) mergas alltid in i appens,
+    // så postmark nollas här för att inte dyka upp bland tjänsterna.
+    'postmark' => null,
 
     'resend' => [
         'key' => env('RESEND_API_KEY'),
