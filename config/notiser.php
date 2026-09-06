@@ -22,6 +22,8 @@ return [
 
         'webhook_signing_key' => env('MAILGUN_WEBHOOK_SIGNING_KEY'),
 
+        // Överskrivbara på servern utan ny release; förvalen är de som gäller.
+
         /*
         |--------------------------------------------------------------------------
         | Tidsfönstret för webhookens signatur
@@ -29,12 +31,13 @@ return [
         |
         | Hur gammal en signaturs `timestamp` får vara innan anropet avvisas,
         | se MailgunWebhookController::authenticated(). Fönstret är generöst
-        | med flit (15 minuter): Mailgun kan fördröja webhookar i sin kö, och
-        | ett snävt fönster tappar studsar vi faktiskt behöver (Beslut 3).
+        | med flit (15 minuter som förval): Mailgun kan fördröja webhookar i
+        | sin kö, och ett snävt fönster tappar studsar vi faktiskt behöver
+        | (Beslut 3).
         |
         */
 
-        'webhook_tolerance_seconds' => 900,
+        'webhook_tolerance_seconds' => env('MAILGUN_WEBHOOK_TOLERANCE_SECONDS', 900),
 
         /*
         |--------------------------------------------------------------------------
@@ -43,14 +46,14 @@ return [
         |
         | Spärr på anropsfrekvensen för webhookrutten, se
         | App\Providers\AppServiceProvider::configureMailgunWebhookRateLimiting().
-        | Taket ligger högt med flit (300/minut per IP): Mailgun skickar i
-        | skurar efter ett utskick, och en spärr som slår i mot vår egen
-        | leverantör tappar studsar (Beslut 7). Gränsen finns för att en
+        | Taket ligger högt med flit (300/minut per IP som förval): Mailgun
+        | skickar i skurar efter ett utskick, och en spärr som slår i mot vår
+        | egen leverantör tappar studsar (Beslut 7). Gränsen finns för att en
         | okänd avsändare inte ska kunna hamra rutten i obegränsad takt.
         |
         */
 
-        'webhook_rate_limit_per_minute' => 300,
+        'webhook_rate_limit_per_minute' => env('MAILGUN_WEBHOOK_RATE_LIMIT_PER_MINUTE', 300),
 
     ],
 
