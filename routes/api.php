@@ -19,9 +19,9 @@ use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemSearchController;
+use App\Http\Controllers\Api\MailgunWebhookController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Api\OccurrenceDependencyController;
-use App\Http\Controllers\Api\PostmarkWebhookController;
 use App\Http\Controllers\Api\QuietHoursController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ScheduleDependencyController;
@@ -59,16 +59,17 @@ Route::post('/login/magic-link', [MagicLinkRequestController::class, 'store'])
 Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store']);
 
 /*
- * Issue 33b · Postmarks webhook för studsar, spamanmälningar och
- * avanmälningar, se App\Http\Controllers\Api\PostmarkWebhookController.
- * Rutten ligger UTANFÖR auth:sanctum-gruppen — Postmark har ingen token;
- * autentiseringen är HTTP Basic mot en hemlighet i miljön, se
- * config/notiser.php och issue 33b § Beslut 2. Och den ligger i api.php,
- * inte web.php, just för att API-gruppen saknar CSRF-kontroll: en
- * webbrutt skulle kräva ett undantag i bootstrap/app.php (Beslut 1).
+ * Issue 38b · Mailguns webhook för studsar, spamanmälningar och
+ * avanmälningar, se App\Http\Controllers\Api\MailgunWebhookController.
+ * Rutten ligger UTANFÖR auth:sanctum-gruppen — Mailgun har ingen token;
+ * autentiseringen är en HMAC-SHA256-signatur över timestamp + token i
+ * nyttolasten, verifierad mot nyckeln i config/notiser.php (Beslut 2). Och
+ * den ligger i api.php, inte web.php, just för att API-gruppen saknar
+ * CSRF-kontroll: en webbrutt skulle kräva ett undantag i bootstrap/app.php
+ * (Beslut 1).
  */
-Route::post('/webhooks/postmark', PostmarkWebhookController::class)
-    ->middleware('throttle:postmark-webhook');
+Route::post('/webhooks/mailgun', MailgunWebhookController::class)
+    ->middleware('throttle:mailgun-webhook');
 
 // scopeBindings(): issue 9b § Beslut 1 — {access} nedan måste slås upp
 // INOM {container}, annars går det att återkalla en åtkomst i fel
