@@ -30,7 +30,7 @@ return [
     | your mailers below. You may also add additional mailers if needed.
     |
     | Supported: "smtp", "sendmail", "mailgun", "ses", "ses-v2",
-    |            "postmark", "resend", "log", "array",
+    |            "resend", "log", "array",
     |            "failover", "roundrobin"
     |
     */
@@ -53,12 +53,8 @@ return [
             'transport' => 'ses',
         ],
 
-        'postmark' => [
-            'transport' => 'postmark',
-            // 'message_stream_id' => env('POSTMARK_MESSAGE_STREAM_ID'),
-            // 'client' => [
-            //     'timeout' => 5,
-            // ],
+        'mailgun' => [
+            'transport' => 'mailgun',
         ],
 
         'resend' => [
@@ -92,7 +88,7 @@ return [
             'transport' => 'roundrobin',
             'mailers' => [
                 'ses',
-                'postmark',
+                'mailgun',
             ],
             'retry_after' => 60,
         ],
