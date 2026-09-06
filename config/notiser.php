@@ -4,41 +4,53 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Postmark-webhooken
+    | Mailgun-webhooken
     |--------------------------------------------------------------------------
     |
-    | Hemligheten som Postmark autentiserar sig med när webhooken anropas,
-    | se [[Notiser]] § email_suppression och issue 33b. Postmark skickar
-    | HTTP Basic mot den här hemligheten (Beslut 2) — användarnamnet och
-    | lösenordet läggs direkt i webhook-URL:en hos Postmark. Saknas något av
-    | fälten avvisar rutten ALLT, oavsett vad som skickas: ett tomt env()
-    | som jämförs mot ett tomt inskickat lösenord vore en öppen rutt i varje
-    | miljö där någon glömt sätta variabeln (Beslut 2).
+    | Nyckeln som Mailgun signerar webhookanropen med, se [[Notiser]] §
+    | email_suppression och issue 38b. Varje anrop bär ett signatur-objekt
+    | med `timestamp`, `token` och `signature`; signaturen är HMAC-SHA256 över
+    | `timestamp` + `token` med den här nyckeln (Beslut 2). Mailgun lägger
+    | inga inloggningsuppgifter i URL:en. Är nyckeln inte konfigurerad avvisar
+    | rutten ALLT: ett tomt env() som HMAC-nyckel ger en giltig signatur för
+    | den som känner till att nyckeln är tom, en öppen rutt i varje miljö där
+    | någon glömt sätta variabeln (Beslut 2).
     |
     */
 
-    'postmark' => [
+    'mailgun' => [
 
-        'webhook_user' => env('POSTMARK_WEBHOOK_USER'),
-
-        'webhook_password' => env('POSTMARK_WEBHOOK_PASSWORD'),
+        'webhook_signing_key' => env('MAILGUN_WEBHOOK_SIGNING_KEY'),
 
         /*
         |--------------------------------------------------------------------------
-        | Postmark-webhookens takt
+        | Tidsfönstret för webhookens signatur
         |--------------------------------------------------------------------------
         |
-        | Spärr på anropsfrekvensen för webhookrutten, se
-        | App\Providers\AppServiceProvider::configurePostmarkWebhookRateLimiting().
-        | Taket ligger högt med flit (300/minut per IP): Postmark skickar i
-        | skurar efter ett utskick, och en spärr som slår i mot vår egen
-        | leverantör tappar studsar (Beslut 6). Gränsen finns för att en
-        | okänd avsändare inte ska kunna hamra rutten med gissade lösenord i
-        | obegränsad takt.
+        | Hur gammal en signaturs `timestamp` får vara innan anropet avvisas,
+        | se MailgunWebhookController::authenticated(). Fönstret är generöst
+        | med flit (15 minuter): Mailgun kan fördröja webhookar i sin kö, och
+        | ett snävt fönster tappar studsar vi faktiskt behöver (Beslut 3).
         |
         */
 
-        'webhook_rate_limit_per_minute' => (int) env('POSTMARK_WEBHOOK_RATE_LIMIT_PER_MINUTE', 300),
+        'webhook_tolerance_seconds' => 900,
+
+        /*
+        |--------------------------------------------------------------------------
+        | Mailgun-webhookens takt
+        |--------------------------------------------------------------------------
+        |
+        | Spärr på anropsfrekvensen för webhookrutten, se
+        | App\Providers\AppServiceProvider::configureMailgunWebhookRateLimiting().
+        | Taket ligger högt med flit (300/minut per IP): Mailgun skickar i
+        | skurar efter ett utskick, och en spärr som slår i mot vår egen
+        | leverantör tappar studsar (Beslut 7). Gränsen finns för att en
+        | okänd avsändare inte ska kunna hamra rutten i obegränsad takt.
+        |
+        */
+
+        'webhook_rate_limit_per_minute' => 300,
 
     ],
 

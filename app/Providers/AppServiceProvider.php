@@ -25,7 +25,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureLoginRateLimiting();
         $this->configureUploadRateLimiting();
-        $this->configurePostmarkWebhookRateLimiting();
+        $this->configureMailgunWebhookRateLimiting();
         $this->configureCalendarFeedRateLimiting();
     }
 
@@ -87,22 +87,22 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Issue 33b · Postmark-webhookens takt. Den enda rutten i systemet som
+     * Issue 38b · Mailgun-webhookens takt. Den enda rutten i systemet som
      * en främmande server anropar — och den är oautentiserad i
-     * auth:sanctum-mening, se App\Http\Controllers\Api\PostmarkWebhookController.
-     * Utan en spärr kan en okänd avsändare hamra rutten med gissade lösenord
-     * i obegränsad takt. Nyckeln är IP:n: det finns ingen inloggad användare
-     * att knyta anropet till.
+     * auth:sanctum-mening, se App\Http\Controllers\Api\MailgunWebhookController.
+     * Utan en spärr kan en okänd avsändare hamra rutten i obegränsad takt.
+     * Nyckeln är IP:n: det finns ingen inloggad användare att knyta anropet
+     * till.
      *
-     * Taket ligger högt med flit — Postmark skickar i skurar efter ett
+     * Taket ligger högt med flit — Mailgun skickar i skurar efter ett
      * utskick, och en spärr som slår i mot vår egen leverantör tappar
-     * studsar. `config('notiser.postmark.webhook_rate_limit_per_minute')`
+     * studsar. `config('notiser.mailgun.webhook_rate_limit_per_minute')`
      * defaultar till 300, se config/notiser.php.
      */
-    private function configurePostmarkWebhookRateLimiting(): void
+    private function configureMailgunWebhookRateLimiting(): void
     {
-        RateLimiter::for('postmark-webhook', function (Request $request) {
-            return Limit::perMinute((int) config('notiser.postmark.webhook_rate_limit_per_minute', 300))
+        RateLimiter::for('mailgun-webhook', function (Request $request) {
+            return Limit::perMinute((int) config('notiser.mailgun.webhook_rate_limit_per_minute', 300))
                 ->by($request->ip());
         });
     }
