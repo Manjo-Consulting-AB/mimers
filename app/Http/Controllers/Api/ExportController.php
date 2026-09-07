@@ -10,6 +10,7 @@ use App\Models\Container;
 use App\Models\Export;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -38,25 +39,42 @@ class ExportController extends Controller
      * en `pending`/`running`-rad finns ger 422 `export.already_running` med
      * den pågående radens ULID. En färdig (`ready`) rad hindrar inte en ny —
      * innehållet ändras, och användaren ska kunna ta en ny påse.
+     *
+     * Kontrollen och raden sitter i en transaktion med containerraden låst
+     * (`lockForUpdate`): två samtidiga POST:ar mot samma container måste köa
+     * på låset, så bara den första hinner skapa sin `pending`-rad — den andra
+     * läser den och får 422. Utan låset skulle dubbelklick, två flikar eller
+     * en klients retry kunna skapa två rader, och två `BuildContainerExport`
+     * skulle packa samma container till två påsar.
      */
     public function store(Request $request, Container $container): JsonResponse
     {
         Gate::authorize('view', $container);
 
-        $existing = $container->exports()
-            ->whereIn('status', [Export::STATUS_PENDING, Export::STATUS_RUNNING])
-            ->first();
+        $export = DB::transaction(function () use ($request, $container): Export {
+            // Lås containerraden så att check+insert blir atomärt för
+            // samtidiga beställningar mot samma container.
+            Container::whereKey($container->id)->lockForUpdate()->first();
 
-        if ($existing instanceof Export) {
-            throw ApiException::make('export.already_running', ['export' => $existing->ulid], 422);
-        }
+            $existing = $container->exports()
+                ->whereIn('status', [Export::STATUS_PENDING, Export::STATUS_RUNNING])
+                ->first();
 
-        $export = new Export;
-        $export->container_id = $container->id;
-        $export->requested_by_user_id = $request->user()->id;
-        $export->status = Export::STATUS_PENDING;
-        $export->save();
+            if ($existing instanceof Export) {
+                throw ApiException::make('export.already_running', ['export' => $existing->ulid], 422);
+            }
 
+            $export = new Export;
+            $export->container_id = $container->id;
+            $export->requested_by_user_id = $request->user()->id;
+            $export->status = Export::STATUS_PENDING;
+            $export->save();
+
+            return $export;
+        });
+
+        // Jobbet köas efter transaktionen är klar (Beslut 1), precis som
+        // GenerateImageDerivatives.
         BuildContainerExport::dispatch($export);
 
         return (new ExportResource($export))
