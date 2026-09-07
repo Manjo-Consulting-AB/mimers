@@ -126,11 +126,17 @@ jobs:
       # Omfångsrutan är bindande enligt AGENTS.md men har fram tills nu bara
       # kontrollerats av granskaren. Globbarna i issue-mallen är maskinläsbara
       # med flit - deterministiskt villkor, alltså ett skript.
+      #
+      # PR_CREATED_AT ger skriptet PR:ens öppningstid, så att en issuekropp som
+      # redigerades *efter* öppningen går att skilja från en som redigerades
+      # innan - se skriptets docstring för M5:s fem röda utfall, varav två
+      # löstes genom att skriva om rutan i stället för att vänta på svar.
       - name: Diffen ligger innanför omfångsrutan
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           HEAD_REF: ${{ github.head_ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_CREATED_AT: ${{ github.event.pull_request.created_at }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 .github/scripts/omfangsruta.py
 
