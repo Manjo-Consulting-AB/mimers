@@ -140,7 +140,17 @@ class LoanController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $lockedLoan->fill($request->validated());
+            // Bara de fält klienten faktiskt skickade skrivs tillbaka.
+            // `validated()` bär HELA det sammanslagna tillståndet — radens
+            // tidigare värden (lästa vid request-resolution, före låset) plus
+            // klientens, se UpdateLoanRequest::validationData(). Att fylla
+            // alltihop skulle skriva de inaktuella, pre-lock-värdena över den
+            // nyss låsta raden och t.ex. tyst återöppna ett lån en samtidig
+            // PATCH just stängde (granskningsfynd). Det sammanslagna
+            // tillståndet behövs bara för tvärfältsvalideringen.
+            $lockedLoan->fill(
+                array_intersect_key($request->validated(), $request->all())
+            );
 
             if ($lockedLoan->returned_at === null) {
                 $this->assertNoOpenLoan($lockedItem, $lockedLoan);
