@@ -27,8 +27,48 @@ Läser:
     PR_BODY            PR-beskrivningen, för att hitta stängningsnyckelordet
     HEAD_REF           PR:ens grennamn, för att avgöra om referensen är obligatorisk
     GITHUB_REPOSITORY  ägare/repo
-    GITHUB_TOKEN       för att hämta issuen
+    GITHUB_TOKEN       för att hämta issuen, och för GraphQL-anropet nedan
     BASE_SHA           commit att diffa mot
+    PR_CREATED_AT      PR:ens skapelsetid, för att avgöra vilka redigeringar av
+                        issuekroppen som hann ske innan PR:en öppnades
+
+Rutan går att flytta i efterhand utan att röra en diff, och det gjorde den. Under
+M5 fällde den här kontrollen fem gånger, och bara **en** löstes som processen
+föreskriver: issue 184 (PR #207) lät filerna utanför rutan ligga kvar som en
+överträdelse, reverterade raderna och facit står i commit `8ac8479`. Issue 172
+(PR #187) var en ren mallmiss - PR-kroppen saknade `Closes #NN`. De tre
+återstående fälldes av grinden och mergades ändå gröna, för att issuekroppen
+redigerades medan PR:en var öppen:
+
+  - Issue 175 (PR #192): kroppen redigerades fyra gånger medan PR:en var öppen
+    (09:33:34, 11:52:02, 11:54:31, 11:58:03 den 2026-09-05). Grinden var röd
+    11:52:36 och 11:58:27. `In scope` innehåller i dag
+    `app/Support/Notification/EmailChannel.php` med exakt det skäl PR-kroppen
+    samtidigt angav för att filen låg **utanför** rutan.
+  - Issue 183 (PR #206): kroppen redigerades 18:47:16, mellan röd grind
+    18:38:28 och merge 18:52:00. De två fällda filerna (`app/Models/Account.php`,
+    `app/Support/Notification/UnsafeUrlException.php`) står i dag i `In scope`.
+  - Issue 173 (PR #189): kroppen rördes aldrig - PR:en mergades i stället med
+    steget rött. `process` står `fail` på körning 33954480512 än i dag.
+
+Grindens egen felutskrift säger ordagrant: "Ligger en fil utanför rutan med
+avsikt: skriv vilken och varför i PR:en och vänta på svar - vidga inte rutan i
+efterhand." Två av tre gjorde precis tvärtom: rutan skrevs om till att omsluta
+diffen i stället. Följden är att metriken "omfångsdrift i mergat läge = 0" inte
+mäter något - den är noll för att rutan i två fall skrevs om till att omsluta
+diffen, inte för att diffen höll sig innanför den. Se docs/Process/Lärdomar.md
+§ Observerat.
+
+Kontrollen nedan (`linjalen_flyttad` och det som anropar den i `main`) läser
+issuens redigeringshistorik via GraphQL - REST-svaret `hamta_issue` ger bara
+den kropp som gäller just nu, vilket är precis det en omskriven ruta gör sig
+osynlig för. Den skiljer på att flytta linjalen (`In scope`/`Out of scope`
+ändras efter att PR:en öppnades - fel) och att rätta en stavning (kroppen
+ändras någon annanstans - varning, för det är en legitim rättelse). Kan
+anropet inte göras - saknad GraphQL-behörighet, trasigt svar - varnar
+kontrollen och fortsätter i stället för att rapportera grönt: en grind som
+inte kan skilja "inget att göra" från "jag tittade åt fel håll" får inte
+tiga om skillnaden.
 
 Rutan läses i båda de former som finns i repot: issue-formulärets `### In scope`
 och den handskrivna `**In scope**` med en punktlista där sökvägen står i
@@ -42,6 +82,7 @@ Avslutar 0 om allt ligger innanför rutan, eller om kontrollen inte är tillämp
 implementations-PR saknar issuereferens, och när dess issue saknar läsbar ruta.
 """
 
+import difflib
 import fnmatch
 import json
 import os
@@ -123,6 +164,80 @@ def hamta_issue(repo: str, nummer: str, token: str) -> dict:
         return json.load(svar)
 
 
+# REST-svaret ovan ger bara den kropp som gäller just nu - exakt det en ruta som
+# skrivits om efter PR-öppningen gör sig osynlig för. GraphQL:s
+# `userContentEdits` ger historiken: varje redigering, nyast först, med
+# `editedAt` och ett `diff`-fält som i praktiken är hela kroppen vid den
+# revisionen - inte en differens mot föregående. Det har verifierats manuellt
+# mot repots egna issues (t.ex. #175): den senaste noden är alltid byte-för-byte
+# identisk med den aktuella kroppen, vilket bara stämmer om `diff` är
+# tillståndet *efter* redigeringen, inte före.
+GRAPHQL_URL = "https://api.github.com/graphql"
+
+
+def hamta_redigeringshistorik(repo: str, nummer: str, token: str) -> dict:
+    """Issuens skapelsetid, aktuella kropp och redigeringshistorik via GraphQL.
+
+    Kastar vidare vid nätverksfel, GraphQL-fel eller ett svar utan issue -
+    anroparen avgör om det ska varna eller fälla. Se `linjalen_flyttad` för
+    varför det bara får bli en varning.
+    """
+    agare, namn = repo.split("/", 1)
+    fraga = """
+    query($agare: String!, $namn: String!, $nummer: Int!) {
+      repository(owner: $agare, name: $namn) {
+        issue(number: $nummer) {
+          createdAt
+          body
+          userContentEdits(first: 50) {
+            nodes { editedAt diff }
+          }
+        }
+      }
+    }
+    """
+    kropp = json.dumps(
+        {"query": fraga, "variables": {"agare": agare, "namn": namn, "nummer": int(nummer)}}
+    ).encode()
+    begaran = urllib.request.Request(
+        GRAPHQL_URL,
+        data=kropp,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(begaran, timeout=30) as svar:
+        svarskropp = json.load(svar)
+    fel = svarskropp.get("errors")
+    if fel:
+        raise RuntimeError(f"GraphQL svarade med fel: {fel}")
+    issue = ((svarskropp.get("data") or {}).get("repository") or {}).get("issue")
+    if issue is None:
+        raise RuntimeError(f"#{nummer} gick inte att hämta via GraphQL - tomt svar.")
+    return issue
+
+
+def kropp_vid_pr_oppning(historik: dict, pr_skapad: str) -> str:
+    """Issuekroppen som den såg ut när PR:en öppnades.
+
+    `userContentEdits` levereras nyast först. Baslinjen är den sista
+    redigeringen vars `editedAt` ligger **före** PR:ens `createdAt` - allt
+    nyare hörde till efter öppningen och ska inte räknas som ursprungsläge.
+    Finns ingen sådan redigering (issuen redigerades först efter att PR:en
+    öppnades, eller aldrig alls) är den äldsta kända revisionen originalet;
+    saknas redigeringar helt är den aktuella kroppen sitt eget original.
+    """
+    noder = historik.get("userContentEdits", {}).get("nodes") or []
+    if not noder:
+        return historik.get("body") or ""
+    fore = [n for n in noder if n["editedAt"] < pr_skapad]
+    if fore:
+        return fore[0]["diff"] or ""
+    return noder[-1]["diff"] or ""
+
+
 def avsnitt(kropp: str, etikett: str) -> str:
     """Texten under "### <etikett>" eller "**<etikett>**", fram till nästa rubrik."""
     traffar = list(RUBRIK.finditer(kropp))
@@ -134,6 +249,24 @@ def avsnitt(kropp: str, etikett: str) -> str:
         slut = traffar[index + 1].start() if index + 1 < len(traffar) else len(kropp)
         return kropp[start:slut]
     return ""
+
+
+def linjalen_flyttad(kropp_vid_oppning: str, kropp_nu: str) -> list[tuple[str, str, str]]:
+    """Vilka av `In scope`/`Out of scope` som skiljer sig från vid PR-öppningen.
+
+    Returnerar en lista av (etikett, då, nu) för varje avsnitt vars text har
+    ändrats. Bara de här två avsnitten räknas - en redigering av målet, ett
+    beslut eller "Klart när" är en legitim rättelse, inte en flyttad linjal,
+    och ska inte fälla kontrollen. Se modulens docstring för bakgrunden:
+    issue 175 och 183 är exakt det här mönstret, verifierat i M5.
+    """
+    skillnader = []
+    for etikett in ("In scope", "Out of scope"):
+        da = avsnitt(kropp_vid_oppning, etikett).strip()
+        nu = avsnitt(kropp_nu, etikett).strip()
+        if da != nu:
+            skillnader.append((etikett, da, nu))
+    return skillnader
 
 
 def ar_sokvag(token: str) -> bool:
@@ -327,6 +460,63 @@ def main() -> int:
 
     # Ren varning, oberoende av rutans utfall nedan - byter aldrig exit-koden.
     varna_om_paihittade_konstanter(kropp_issue, nummer)
+
+    # Linjalen flyttad efter att PR:en öppnades? Bara implementationsgrenar -
+    # samma villkor som `hitta_issue` använder för att kräva en Closes-rad.
+    # Verktygs-, retro- och processgrenar har ingen bindande ruta att flytta.
+    # Kan GraphQL-anropet inte göras varnas det i stället för att fälla -
+    # se modulens docstring och `hamta_redigeringshistorik`.
+    if IMPLEMENTATIONSGREN.match(gren):
+        pr_skapad = os.environ.get("PR_CREATED_AT") or ""
+        if not pr_skapad:
+            notis(
+                "warning",
+                "PR_CREATED_AT är inte satt - kan inte avgöra om omfångsrutan "
+                "redigerades efter att PR:en öppnades. Kontrollen av flyttad "
+                "linjal hoppas över.",
+            )
+        else:
+            try:
+                historik = hamta_redigeringshistorik(repo, nummer, token)
+                kropp_vid_oppning = kropp_vid_pr_oppning(historik, pr_skapad)
+            except (
+                urllib.error.HTTPError,
+                urllib.error.URLError,
+                TimeoutError,
+                RuntimeError,
+                KeyError,
+                ValueError,
+            ) as fel:
+                notis(
+                    "warning",
+                    f"Kunde inte läsa #{nummer}s redigeringshistorik via GraphQL: {fel}. "
+                    "Kontrollen av flyttad linjal hoppas över - vanligaste orsaken är att "
+                    "GITHUB_TOKEN saknar GraphQL-behörighet på issuen.",
+                )
+            else:
+                skillnader = linjalen_flyttad(kropp_vid_oppning, kropp_issue)
+                if skillnader:
+                    for etikett, da, nu in skillnader:
+                        notis(
+                            "error",
+                            f"`{etikett}` i #{nummer} redigerades efter att PR:en öppnades.",
+                        )
+                        diff = difflib.unified_diff(
+                            (da + "\n").splitlines(keepends=True),
+                            (nu + "\n").splitlines(keepends=True),
+                            fromfile=f"{etikett} vid PR-öppning",
+                            tofile=f"{etikett} nu",
+                        )
+                        print("".join(diff))
+                    notis(
+                        "error",
+                        f"Omfångsrutan i #{nummer} ändrades efter att PR:en öppnades - det "
+                        "är att flytta linjalen, inte att rätta en stavning. Deklarera "
+                        "avvikelsen under `## Frågor och antaganden` och vänta på svar, "
+                        "eller revertera raderna som ligger utanför rutan - vidga inte "
+                        "rutan i efterhand.",
+                    )
+                    return 1
 
     innanfor = globbar(avsnitt(kropp_issue, "In scope"))
     utanfor = globbar(avsnitt(kropp_issue, "Out of scope"))
