@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MailgunWebhookController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Api\OccurrenceDependencyController;
+use App\Http\Controllers\Api\OwnershipTransferController;
 use App\Http\Controllers\Api\QuietHoursController;
 use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\ScheduleDependencyController;
@@ -153,6 +154,30 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // skicka användaren till "verifiera din e-post" (§ Beslut 6 och 7).
     Route::post('/invitations/accept', [InvitationResponseController::class, 'accept']);
     Route::post('/invitations/reject', [InvitationResponseController::class, 'reject']);
+
+    // Issue 39a · Ägarbyte — avsändar- och mottagarytan, se
+    // App\Http\Controllers\Api\OwnershipTransferController. Ingen accept här:
+    // den transaktion som flyttar containern, förbrukningen, åtkomsterna och
+    // planen är 39b och lägger sina egna rutter senare, aldrig här.
+    //
+    // Avsändarens yta nästlas under {container} (Beslut 14) och {transfer}
+    // binds av gruppens scopeBindings() genom
+    // App\Models\Container::transfers() — en transfer-ULID från en annan
+    // container ger 404, samma resonemang som {invitation} ovan. Grindarna är
+    // viewTransfers() (GET) och den nya transfer()-metoden (POST/DELETE) på
+    // App\Policies\ContainerPolicy; plangrinden sitter i kontrollern efter
+    // gaten (Beslut 8).
+    Route::get('/containers/{container}/transfers', [OwnershipTransferController::class, 'index']);
+    Route::post('/containers/{container}/transfers', [OwnershipTransferController::class, 'store']);
+    Route::delete('/containers/{container}/transfers/{transfer}', [OwnershipTransferController::class, 'destroy']);
+
+    // Mottagarens yta är TOPPNIVÅ (Beslut 14): hon känner per definition inte
+    // till containern än — samma val som /api/todo (issue 24). Urvalet i
+    // kontrollern (inboxQuery, Beslut 15) är hela skyddet: en främmande ULID
+    // ger 404, inte 403. Ingen policy — den som radens mottagarväg pekar ut
+    // ÄR behörig, och en rad som inte pekar på användaren ska vara osynlig.
+    Route::get('/transfers', [OwnershipTransferController::class, 'incoming']);
+    Route::post('/transfers/{transfer}/reject', [OwnershipTransferController::class, 'reject']);
 
     // Issue 11 · Kategorier — en hierarki per container, se
     // App\Http\Controllers\Api\CategoryController och

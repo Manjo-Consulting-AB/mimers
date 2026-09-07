@@ -31,6 +31,12 @@ return [
         'line' => 'Your account has been inactive for :months months. If you do not log in before :close_at, the account will close and its data will be deleted.',
         'action' => 'Log in',
     ],
+    'transfer_requested' => [
+        'subject' => 'Someone wants to take over the binder ":container"',
+        'greeting' => 'Hello!',
+        'line' => 'A transfer request is waiting for the binder ":container". Sign in to see it under Transfers.',
+        'action' => 'View transfer',
+    ],
     'digest' => [
         'subject' => 'Your week in Mimers: :count reminders',
         'greeting' => 'Hello!',

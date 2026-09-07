@@ -160,6 +160,23 @@ class Container extends Model
     }
 
     /**
+     * Ägarbytena av containern — se [[Konton och åtkomst]] §
+     * ownership_transfer och issue 39a. Bara relationen läggs till här; den
+     * krävs av `scopeBindings()` i routes/api.php för att en transfer-ULID
+     * från en annan container inte ska lösas upp under den här (Beslut 14),
+     * samma mönster som invitations() ovan. ALLA rader, oavsett `status` —
+     * avsändarlistan visar även tillbakadragna och utgångna, och
+     * dubblettspärren filtrerar själv på `pending`. API-ytan bor i
+     * App\Http\Controllers\Api\OwnershipTransferController.
+     *
+     * @return HasMany<OwnershipTransfer, $this>
+     */
+    public function transfers(): HasMany
+    {
+        return $this->hasMany(OwnershipTransfer::class);
+    }
+
+    /**
      * Begränsar till containers $user når: medlem i ägarkontot (regel 1 i
      * [[Konton och åtkomst]] § Behörighetsregler) ELLER en giltig
      * `container_access` som träffar henne eller ett av hennes konton
