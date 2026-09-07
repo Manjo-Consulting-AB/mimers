@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: hjälparfil utan egna tester - ren flytt av delade Pest-hjälpare, ingen acceptanskriterie-yta att vara röd på basen.
+
 /*
  * Globala Pest-hjälpare som mer än en testfil anropar.
  *
