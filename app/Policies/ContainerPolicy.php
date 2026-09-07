@@ -123,6 +123,20 @@ class ContainerPolicy
     }
 
     /**
+     * Får användaren INITIERA ett ägarbyte av containern (issue 39a, POST
+     * och DELETE)? Regel 1 + regel 4, exakt som manageAccess() ovan —
+     * [[Konton och åtkomst]] § Behörighetsregler: "Ingen nivå får radera
+     * containern, hantera åtkomster eller initiera ägarbyte". En
+     * `write`-innehavare når den alltså aldrig, och ett fryst ägarkonto
+     * nekas. Plangrinden (ownership_transfer är en Pro-funktion) sitter i
+     * kontrollern efter den här gaten, se issue 39a § Beslut 8.
+     */
+    public function transfer(User $user, Container $container): bool
+    {
+        return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isFrozen($container->account);
+    }
+
+    /**
      * Får användaren ÅTERKALLA en åtkomst (issue 9b, DELETE)? Bara regel 1 —
      * INGEN regel 4-kontroll. Att återkalla är en skrivning, men regel 4
      * undantar den uttryckligen: den MINSKAR exponeringen i stället för att

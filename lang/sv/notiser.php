@@ -31,6 +31,12 @@ return [
         'line' => 'Kontot har varit inaktivt i :months månader. Loggar du inte in före :close_at stängs kontot och uppgifterna raderas.',
         'action' => 'Logga in',
     ],
+    'transfer_requested' => [
+        'subject' => 'Någon vill ta över pärmen ":container"',
+        'greeting' => 'Hej!',
+        'line' => 'En begäran om ägarbyte väntar på pärmen ":container". Logga in för att se den under Ägarbyte.',
+        'action' => 'Visa ägarbyte',
+    ],
     'digest' => [
         'subject' => 'Din vecka i Mimers: :count påminnelser',
         'greeting' => 'Hej!',
