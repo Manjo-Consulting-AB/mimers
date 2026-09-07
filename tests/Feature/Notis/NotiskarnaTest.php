@@ -25,8 +25,8 @@ use Throwable;
  *
  * Ingenting skickas och ingen kanal finns i den här issuen: testerna går
  * direkt mot modeller och action, ingen HTTP, precis som ForekomstTest.
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) är redan
- * deklarerad och återanvänds rakt av genom Pests globala namnrymd.
+ * kontoMedMedlem() är en global testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Varje "Klart när"-punkt i issuen motsvarar ett namngivet test här.
  */

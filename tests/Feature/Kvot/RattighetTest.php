@@ -22,10 +22,8 @@ use function Pest\Laravel\postJson;
  * efter Gate::authorize() (Beslut 3): en användare utan behörighet ska få
  * auth.forbidden, aldrig en kvotkod som avslöjar var kontot står.
  *
- * kontoMedMedlem() är deklarerad i tests/Feature/Container/ContainerCrudTest.php,
- * beviljaAccess() i tests/Feature/Container/ContainerAtkomstTest.php och
- * bjudInRad() i tests/Feature/Container/InbjudanTest.php — Pests globala
- * namnrymd gör dem åtkomliga rakt av här.
+ * kontoMedMedlem(), beviljaAccess() och bjudInRad() är globala testhjälpare
+ * i tests/Support/Testhjalpare.php.
  *
  * Gratisfallet kräver ingen fixture: free-planen kommer ur migrationen
  * (issue 25 § Beslut 2). Ett Pro-fall kräver en subscription-rad.

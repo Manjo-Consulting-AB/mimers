@@ -22,9 +22,8 @@ use function Pest\Laravel\postJson;
  * separat i tests/Feature/Category/CategoryFlyttTest.php — här bara
  * CRUD, behörighet, scoping och resursformatet.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) och
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) är
- * redan deklarerade och återanvänds rakt av via Pests globala namnrymd.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * "Klart när" (CategoryCrudTest):
  * - skapar en rotkategori i containern

@@ -17,10 +17,8 @@ use function Pest\Laravel\getJson;
  * App\Http\Controllers\Api\TodoController, App\Http\Resources\TodoEntryResource
  * och App\Models\ScheduleOccurrence::scopeTodoFor().
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php),
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) och
- * oppnaForekomst()/skapaBeroende() (tests/Feature/Uppgift/ForekomstBeroendeTest.php)
- * är redan deklarerade och återanvänds rakt av genom Pests globala namnrymd.
+ * kontoMedMedlem(), beviljaAccess(), oppnaForekomst() och skapaBeroende()
+ * är globala testhjälpare i tests/Support/Testhjalpare.php.
  *
  * Klockan fryses för varje test: visible_from-villkoret jämför DATUM med
  * dagens datum, så utan en fryst tid beror utfallet på klockslaget när

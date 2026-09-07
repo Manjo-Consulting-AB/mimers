@@ -66,17 +66,6 @@ function uppladdningSetup(): array
     return [$account, $user, $container, $item, $headers];
 }
 
-/**
- * Sänk/höj en gräns i en plans limits-JSON för det här testet.
- */
-function sättPlangräns(string $kod, string $nyckel, int $värde): void
-{
-    $plan = Plan::where('code', $kod)->firstOrFail();
-    $limits = $plan->limits;
-    $limits[$nyckel] = $värde;
-    $plan->update(['limits' => $limits]);
-}
-
 it('en fil under plangränsen laddas upp', function () {
     [$account, , $container, $item, $headers] = uppladdningSetup();
 

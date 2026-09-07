@@ -17,8 +17,8 @@ use function Pest\Laravel\postJson;
  * 4, 8 och 9) — CRUD, behörighet och resursformatet testas separat i
  * tests/Feature/Category/CategoryCrudTest.php.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) är
- * redan deklarerad och återanvänds rakt av via Pests globala namnrymd.
+ * kontoMedMedlem() är en global testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * "Klart när" (CategoryFlyttTest):
  * - en kategori kan inte få sig själv som förälder

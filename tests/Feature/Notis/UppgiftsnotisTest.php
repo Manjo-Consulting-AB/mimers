@@ -14,10 +14,8 @@ use Illuminate\Support\Carbon;
  * som todo-listan. Se App\Console\GeneratesTaskNotifications, [[Notiser]] §
  * Kön och App\Models\ScheduleOccurrence::scopeTodoFor().
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php),
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) och
- * oppnaForekomst()/skapaBeroende() (tests/Feature/Uppgift/ForekomstBeroendeTest.php)
- * återanvänds rakt av genom Pests globala namnrymd.
+ * kontoMedMedlem(), beviljaAccess(), oppnaForekomst() och skapaBeroende()
+ * är globala testhjälpare i tests/Support/Testhjalpare.php.
  *
  * Klockan fryses för varje test: visible_from- och due_at-villkoren jämför
  * DATUM med dagens datum, så utan en fryst tid beror utfallet på klockslaget

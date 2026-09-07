@@ -27,9 +27,8 @@ use function Pest\Laravel\postJson;
  * Själva leveransen — HMAC-signaturen, omförsöken och SSRF-kontrollen vid
  * varje leverans — är issue 37b och testas inte här.
  *
- * kontoMedMedlem() är deklarerad i
- * tests/Feature/Container/ContainerCrudTest.php — Pests globala namnrymd gör
- * den åtkomlig rakt av här, samma mönster som KalenderfeedTest. Ett konto
+ * kontoMedMedlem() är en global testhjälpare i
+ * tests/Support/Testhjalpare.php, samma mönster som KalenderfeedTest. Ett konto
  * med rollen 'member' som enda medlem är orealistiskt, men precis vad
  * behörighetstesterna behöver: grinden läser bara medlemskapet och rollen.
  *

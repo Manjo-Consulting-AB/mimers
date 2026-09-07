@@ -21,11 +21,9 @@ use function Pest\Laravel\postJson;
  * App\Http\Requests\Schedule\CompleteOccurrenceRequest och
  * App\Models\ScheduleOccurrence.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php),
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) och
- * skapaForekomstKontext()/forekomstSchemaKropp()
- * (tests/Feature/Uppgift/ForekomstTest.php) är redan deklarerade och
- * återanvänds rakt av genom Pests globala namnrymd.
+ * kontoMedMedlem(), beviljaAccess(), skapaForekomstKontext(),
+ * forekomstSchemaKropp() och avslutKropp() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Klockan fryses för varje test: `completed_at` sätts av flödet och
  * `interval` räknar nästa förfall därifrån, så utan en fryst tid skulle
@@ -62,23 +60,6 @@ function skapaAvslutKontext(array $schemaKropp): array
     $url = "{$schemasUrl}/{$schedule->ulid}/occurrences/{$occurrence->ulid}";
 
     return [$account, $user, $headers, $container, $item, $schedule, $occurrence, $url];
-}
-
-/**
- * Kroppen för complete/skip — `account` obligatorisk, `completion_note` med
- * bara när testet vill ha den.
- *
- * @return array<string, mixed>
- */
-function avslutKropp(Account $account, ?string $note = null): array
-{
-    $kropp = ['account' => $account->ulid];
-
-    if ($note !== null) {
-        $kropp['completion_note'] = $note;
-    }
-
-    return $kropp;
 }
 
 it('en öppen förekomst markeras klar och nästa öppnas i samma svar', function () {

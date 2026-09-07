@@ -22,11 +22,9 @@ use function Pest\Laravel\postJson;
  * - koderna ligger aldrig i klartext i databasen
  * - en omgenerering ogiltigförklarar de gamla
  *
- * användareMedBekräftadTotp() är redan deklarerad i
- * tests/Feature/Auth/TotpInloggningTest.php — Pest laddar alla testfiler i
- * samma globala namnrymd (se den filens egen kommentar om totpKodFör()
- * från tests/Feature/Auth/TotpAktiveringTest.php), så den återanvänds rakt
- * av här i stället för att skapas på nytt.
+ * användareMedBekräftadTotp() och totpKodFör() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php, som Composers autoloader laddar före varje
+ * körning — de återanvänds här i stället för att skapas på nytt.
  */
 
 /**

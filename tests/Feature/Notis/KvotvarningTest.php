@@ -14,8 +14,8 @@ use Illuminate\Support\Carbon;
  * App\Console\GeneratesQuotaWarnings, [[Planer och kvoter]] § usage_counter
  * och config/notiser.php § quota.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) återanvänds
- * rakt av genom Pests globala namnrymd. Klockan fryses där en dedupe-nyckel
+ * kontoMedMedlem() är en global testhjälpare i
+ * tests/Support/Testhjalpare.php. Klockan fryses där en dedupe-nyckel
  * bär månad (Beslut 5). Varje "Klart när"-punkt i issuen (8–13) motsvarar ett
  * namngivet test här.
  */

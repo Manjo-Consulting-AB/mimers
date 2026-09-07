@@ -2,9 +2,7 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\ContainerAccess;
 use App\Models\User;
-use Illuminate\Support\Carbon;
 
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
@@ -18,10 +16,9 @@ use function Pest\Laravel\patchJson;
  * Regel 1 är redan bevisad i ContainerBehorighetTest.php — testas inte om
  * här.
  *
- * kontoMedMedlem() är deklarerad i
- * tests/Feature/Container/ContainerCrudTest.php — se den filens egen
- * kommentar om varför Pests globala namnrymd gör den återanvändbar rakt av
- * här, samma mönster som ContainerBehorighetTest.php redan använder.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php, som Composers autoloader laddar före varje
+ * körning — också när bara den här katalogen körs.
  *
  * "Klart när" (ContainerAtkomstTest):
  * - en read-access ger läsning men inte ändring
@@ -37,34 +34,6 @@ use function Pest\Laravel\patchJson;
  * - listningen tar med containers användaren har access till
  * - listningen tar inte med containers vars access är återkallad eller utgången
  */
-
-/**
- * Skapar en container_access-rad. $grantee är antingen en User
- * (grantee_type = user, dvs `member`/`guest`) eller ett Account
- * (grantee_type = account, dvs `managed`), se issue 9a § Beslut 5.
- * `granted_by_user_id` är obligatorisk (§ Att se upp med) men vem det är
- * spelar ingen roll för de här testerna, så en fristående användare skapas
- * åt raden.
- */
-function beviljaAccess(
-    Container $container,
-    User|Account $grantee,
-    string $level,
-    string $kind,
-    ?Carbon $expiresAt = null,
-    ?Carbon $revokedAt = null,
-): ContainerAccess {
-    return ContainerAccess::factory()->create([
-        'container_id' => $container->id,
-        'grantee_type' => $grantee instanceof User ? 'user' : 'account',
-        'grantee_id' => $grantee->id,
-        'level' => $level,
-        'kind' => $kind,
-        'expires_at' => $expiresAt,
-        'revoked_at' => $revokedAt,
-        'granted_by_user_id' => User::factory()->create()->id,
-    ]);
-}
 
 it('en read-access ger läsning men inte ändring', function () {
     [, $user, $headers] = kontoMedMedlem();

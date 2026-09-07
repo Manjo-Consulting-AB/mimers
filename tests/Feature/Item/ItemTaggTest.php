@@ -19,9 +19,8 @@ use function Pest\Laravel\postJson;
  * App\Http\Requests\Item\StoreItemRequest, App\Http\Requests\Item\UpdateItemRequest,
  * App\Http\Resources\ItemResource och App\Models\Item.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) och
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) är redan
- * deklarerade och återanvänds direkt genom Pests globala namnrymd.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Varje "Klart när"-punkt i issuen är ett namngivet test här; att
  * ItemCrudTest fortsätter gå igenom oförändrad är 13a-beviset och testas

@@ -18,10 +18,9 @@ use function Pest\Laravel\get;
  * issue 36. Se App\Http\Controllers\CalendarFeedDownloadController,
  * App\Support\Notification\IcsDocument och routes/web.php § Beslut 1.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) och
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) är
- * redan deklarerade och återanvänds genom Pests globala namnrymd, samma
- * mönster som IcsFeedTest-föregångaren KalenderfeedTest.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php, samma mönster som
+ * IcsFeedTest-föregångaren KalenderfeedTest.
  *
  * Klockan fryses för varje test: "försenad" härleds av att `due_at` passerats
  * och `last_fetched_at` skrivs med now() — utan en fryst tid beror utfallet

@@ -6,7 +6,6 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
-use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -22,50 +21,12 @@ use function Pest\Laravel\postJson;
  * App\Http\Resources\ScheduleOccurrenceResource och App\Models\Schedule
  * (relationerna occurrences()/openOccurrence()).
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) och
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) är
- * redan deklarerade och återanvänds rakt av genom Pests globala namnrymd.
+ * kontoMedMedlem(), beviljaAccess(), skapaForekomstKontext() och
+ * forekomstSchemaKropp() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Varje "Klart när"-punkt i issuen motsvarar ett namngivet test här.
  */
-
-/**
- * Ett konto med en medlem, en container ägd av kontot och ett item i
- * containern. Itemets `created_by_*` sätts till medlemmen, precis som
- * SchemaCrudTest gör, så raderna är sammanhängande.
- *
- * @return array{0: Account, 1: User, 2: array<string, string>, 3: Container, 4: Item}
- */
-function skapaForekomstKontext(string $namn = 'Flotten'): array
-{
-    [$account, $user, $headers] = kontoMedMedlem();
-    $container = Container::factory()->for($account, 'account')->create();
-    $item = Item::factory()->for($container, 'container')->create([
-        'name' => $namn,
-        'created_by_user_id' => $user->id,
-        'created_by_account_id' => $account->id,
-    ]);
-
-    return [$account, $user, $headers, $container, $item];
-}
-
-/**
- * En sammanhängande kropp för POST /schedules, interval som standard. Varje
- * fält kan överstyras.
- *
- * @param  array<string, mixed>  $overrides
- * @return array<string, mixed>
- */
-function forekomstSchemaKropp(array $overrides = []): array
-{
-    return array_merge([
-        'title' => 'Byt impeller',
-        'recurrence_type' => 'interval',
-        'interval_unit' => 'month',
-        'interval_count' => 12,
-        'anchor_date' => '2027-05-05',
-    ], $overrides);
-}
 
 it('ett aktivt schema får en öppen förekomst när det skapas', function () {
     [, , $headers, $container, $item] = skapaForekomstKontext();

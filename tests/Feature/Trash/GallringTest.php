@@ -4,15 +4,12 @@ use App\Actions\Attachment\PurgeAttachment;
 use App\Actions\Trash\PurgeContainer;
 use App\Actions\Trash\PurgeContent;
 use App\Console\PurgesExpiredTrash;
-use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Category;
-use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\StoredFile;
 use App\Models\Tag;
-use App\Models\User;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -50,70 +47,6 @@ afterEach(function () {
 });
 
 /**
- * Ett konto, en användare och en container — skaparen på varje item måste
- * finnas, och fabrikens egna default-skapare hade annars skapat ovidkommande
- * konton per item.
- *
- * @return array{0: Account, 1: User, 2: Container}
- */
-function gallringContainer(): array
-{
-    $account = Account::factory()->create();
-    $user = User::factory()->create();
-    $container = Container::factory()->for($account, 'account')->create();
-
-    return [$account, $user, $container];
-}
-
-/**
- * Ett item direkt i containern, med $user/$account som skapare.
- */
-function gallringItem(Container $container, Account $account, User $user, array $attribut = []): Item
-{
-    return Item::factory()->for($container, 'container')->create(array_merge([
-        'created_by_user_id' => $user->id,
-        'created_by_account_id' => $account->id,
-    ], $attribut));
-}
-
-/**
- * En bilaga direkt på itemet.
- */
-function gallringBilaga(Item $item, Account $account, User $user, array $attribut = []): Attachment
-{
-    return Attachment::factory()->for($item, 'item')->create(array_merge([
-        'uploaded_by_user_id' => $user->id,
-        'billed_account_id' => $account->id,
-    ], $attribut));
-}
-
-/**
- * En kategori direkt i containern.
- */
-function gallringKategori(Container $container, array $attribut = []): Category
-{
-    return Category::factory()->for($container, 'container')->create($attribut);
-}
-
-/**
- * En tagg direkt i containern.
- */
-function gallringTagg(Container $container, array $attribut = []): Tag
-{
-    return Tag::factory()->for($container, 'container')->create($attribut);
-}
-
-/**
- * En stored_file med `reference_count` satt för hand. Fabrikerna räknar
- * inte — räknaren är domänkodens ansvar (StoreAttachment/PurgeAttachment),
- * så antalet bilagor måste stämmas av mot räknaren i testet.
- */
-function gallringStoredFil(int $referenceCount = 1): StoredFile
-{
-    return StoredFile::factory()->create(['reference_count' => $referenceCount]);
-}
-
-/**
  * Mjukraderar en rad genom att sätta deleted_at — samma sluttillstånd som
  * raderingsrutterna (SoftDeletes) men med kontrollerad tidpunkt.
  */
@@ -121,18 +54,6 @@ function gallringMjukradera(Item|Attachment|Category|Tag $modell, Carbon $delete
 {
     $modell->deleted_at = $deletedAt;
     $modell->save();
-}
-
-/**
- * Kör gallringen precis som schemaläggningen gör.
- *
- * @return array{attachment: int, item: int, category: int, tag: int, container: int}
- */
-function gallringKör(): array
-{
-    $purgeContent = new PurgeContent(new PurgeAttachment);
-
-    return (new PurgesExpiredTrash($purgeContent, new PurgeContainer($purgeContent)))->handle();
 }
 
 it('innehåll äldre än retentionen gallras', function () {
