@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Notification\CreateNotification;
+use App\Actions\OwnershipTransfer\AcceptOwnershipTransfer;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\OwnershipTransfer\AcceptOwnershipTransferRequest;
 use App\Http\Requests\OwnershipTransfer\StoreOwnershipTransferRequest;
+use App\Http\Resources\ContainerResource;
 use App\Http\Resources\OwnershipTransferResource;
 use App\Models\Account;
 use App\Models\Container;
@@ -22,18 +25,19 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
 
 /**
- * Ägarbyte, avsändar- och mottagarytan — issue 39a. Ingen accept här: den
+ * Ägarbyte — avsändarytan (39a) och mottagarytan med accept (39b). Den
  * transaktion som flyttar containern, förbrukningen, åtkomsterna och planen
- * är 39b och rör ingen fil i den här issuen.
+ * bor i App\Actions\OwnershipTransfer\AcceptOwnershipTransfer och anropas av
+ * accept() nedan.
  *
  * INGEN behörighetslogik bor här: avsändarsidan (store/destroy) anropar bara
  * `Gate::authorize('transfer', $container)` mot den nya policymetoden i
  * App\Policies\ContainerPolicy (Beslut 7), och index anropar
  * `viewTransfers()` — avsändarens vy över just ägarbytena, en egen yta med
  * egen rutt, egen resurs och egen grind (issue 39a). Mottagarsidan
- * (incoming/reject) anropar INGEN policy: den som radens mottagarväg pekar ut
- * ÄR behörig, och en rad som inte pekar på användaren ska vara osynlig, inte
- * ge ett behörighetsfel som läcker att raden finns (Beslut 15).
+ * (incoming/reject/accept) anropar INGEN policy: den som radens mottagarväg
+ * pekar ut ÄR behörig, och en rad som inte pekar på användaren ska vara
+ * osynlig, inte ge ett behörighetsfel som läcker att raden finns (Beslut 15).
  *
  * Avsändarytan nästlas under {container} i routes/api.php med
  * `scopeBindings()` — en transfer-ULID från en annan container löser aldrig
@@ -224,6 +228,67 @@ class OwnershipTransferController extends Controller
     }
 
     /**
+     * POST /api/transfers/{transfer}/accept — 200 med containern.
+     *
+     * Urvalet här är mottagarvägen UTAN status- och tidsvillkoren (Beslut 15
+     * och 39b § Beslut 1): en rad som väl är mottagarens men inte längre
+     * `pending` ska ge `transfer.not_pending`, och en utgången rad
+     * `transfer.expired` (422) — inte försvinna som 404. En rad som inte
+     * pekar på användaren är däremot osynlig: 404, aldrig 403.
+     *
+     * Själva transaktionen (kvotkontroll, flytt av container, förbrukning,
+     * åtkomster och plan) bor i AcceptOwnershipTransfer — det här är skalet
+     * [[ADR-0024 Tunna controllers och actions]] beskriver. Svaret är
+     * containern mottagaren just fick, samma form som
+     * App\Http\Controllers\Api\InvitationResponseController::accept().
+     */
+    public function accept(
+        AcceptOwnershipTransferRequest $request,
+        OwnershipTransfer $transfer,
+        AcceptOwnershipTransfer $acceptOwnershipTransfer,
+    ): ContainerResource {
+        /** @var User $user */
+        $user = $request->user();
+
+        $incoming = $this->recipientQuery($user)
+            ->whereKey($transfer->getKey())
+            ->first();
+
+        if (! $incoming instanceof OwnershipTransfer) {
+            throw ApiException::make('resource.not_found', [], 404);
+        }
+
+        $container = $acceptOwnershipTransfer->handle(
+            $transfer,
+            $this->resolveReceiver($transfer, $request),
+        );
+
+        $container->loadMissing('account');
+
+        return new ContainerResource($container);
+    }
+
+    /**
+     * Beslut 2: vilket konto tar emot? Är `to_account_id` satt är svaret
+     * givet — requesten har redan bevisat att en eventuell `to_account` i
+     * kroppen pekar på samma konto. Är bara `to_email` satt måste kroppen
+     * bära `to_account`, och requesten har bevisat att det är ett konto
+     * användaren är medlem i.
+     */
+    private function resolveReceiver(
+        OwnershipTransfer $transfer,
+        AcceptOwnershipTransferRequest $request,
+    ): Account {
+        if ($transfer->to_account_id !== null) {
+            return Account::query()->findOrFail($transfer->to_account_id);
+        }
+
+        return Account::query()
+            ->where('ulid', $request->validated('to_account'))
+            ->firstOrFail();
+    }
+
+    /**
      * En `transfer.requested`-notis per medlem i det mottagande kontot, genom
      * App\Actions\Notification\CreateNotification — den enda vägen in i
      * `notification`, som respekterar preferenser och tysta timmar och skapar
@@ -270,21 +335,37 @@ class OwnershipTransferController extends Controller
      * listas men inte går att avvisa — eller tvärtom — vore en bugg.
      *
      * Villkoren: `status = 'pending'`, inte utgången (`created_at` +
-     * TTL_DAYS i framtiden), containern lever (SoftDeletes — en mjukraderad
-     * pärm ska inte erbjudas till övertag, och resursen läser dess namn),
-     * och antingen `to_account_id` bland användarens konton eller `to_email`
-     * lika med användarens VERIFIERADE adress (jämförelse i gemener; en
-     * overifierad adress ska inte se begäran — [[ADR-0003 Åtkomstmodell]]).
+     * TTL_DAYS i framtiden), och containern lever (SoftDeletes — en
+     * mjukraderad pärm ska inte erbjudas till övertag, och resursen läser
+     * dess namn). Själva mottagarvägen — vilka rader som ÄR användarens — är
+     * utbruten i recipientQuery() nedan, som accept använder utan status-
+     * och tidsvillkoren (39b § Beslut 1 och 5).
      *
      * @return Builder<OwnershipTransfer>
      */
     private function inboxQuery(User $user): Builder
     {
+        return $this->recipientQuery($user)
+            ->where('status', 'pending')
+            ->where('created_at', '>', now()->subDays(OwnershipTransfer::TTL_DAYS));
+    }
+
+    /**
+     * Mottagarvägen, utbruten ur inboxQuery(): en rad ÄR användarens när
+     * antingen `to_account_id` finns bland hennes konton eller `to_email` är
+     * lika med hennes VERIFIERADE adress (jämförelse i gemener; en
+     * overifierad adress ska inte se begäran — [[ADR-0003 Åtkomstmodell]]).
+     * Inga status- eller tidsvillkor här: accept behöver hitta även rader
+     * som inte längre går att acceptera för att kunna svara
+     * `transfer.not_pending`/`transfer.expired` i stället för 404.
+     *
+     * @return Builder<OwnershipTransfer>
+     */
+    private function recipientQuery(User $user): Builder
+    {
         $accountIds = $user->accounts->pluck('id');
 
         return OwnershipTransfer::query()
-            ->where('status', 'pending')
-            ->where('created_at', '>', now()->subDays(OwnershipTransfer::TTL_DAYS))
             ->whereHas('container')
             ->where(function (Builder $query) use ($user, $accountIds): void {
                 $query->whereIn('to_account_id', $accountIds);
