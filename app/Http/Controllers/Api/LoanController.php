@@ -12,6 +12,7 @@ use App\Models\Item;
 use App\Models\Loan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -34,6 +35,10 @@ use Illuminate\Support\Facades\Gate;
  * formregel (§ Beslut 4). Den är för liten för en egen Action ([[ADR-0024
  * Tunna controllers och actions]]: bara skrivningar med en regel värd ett
  * eget test får en) och ingen fil i app/Actions får röras i den här issuen.
+ * Spärren är en check-then-act och körs därför i EN transaktion med
+ * `lockForUpdate()` på ITEM-raden (granskningsfynd; samma konvention som
+ * ContainerController::destroy och 22a/22b) — låset ligger aldrig på
+ * loan-tabellen, en tom mängd rader är ett gap lock i MySQL (22a § Beslut 7).
  *
  * `item_id` sätts explicit från rutten, aldrig via massildelning — `item_id`
  * är UTESLUTEN ur Loan#[Fillable] (§ Beslut 9). Påminnelsen mot `due_at` —
@@ -69,16 +74,31 @@ class LoanController extends Controller
      * (§ Beslut 9). Den öppna-lån-spärren ligger här, efter valideringen:
      * ett item med en redan öppen utlåning (`returned_at IS NULL`) får inte
      * en andra (§ Beslut 4).
+     *
+     * Spärrens check-then-act och skrivningen delar EN transaktion under
+     * `lockForUpdate()` på ITEM-raden (granskningsfynd): två samtidiga POST
+     * på samma item serialiseras och den andra ser den förstas öppna lån.
+     * Låset ligger aldrig på loan-tabellen — en tom mängd rader är ett gap
+     * lock i MySQL (22a § Beslut 7).
      */
     public function store(StoreLoanRequest $request, Container $container, Item $item): JsonResponse
     {
         Gate::authorize('update', $container);
 
-        $this->assertNoOpenLoan($item);
+        $loan = DB::transaction(function () use ($request, $item): Loan {
+            $lockedItem = $item->newQuery()
+                ->whereKey($item->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $loan = new Loan($request->validated());
-        $loan->item_id = $item->id;
-        $loan->save();
+            $this->assertNoOpenLoan($lockedItem);
+
+            $loan = new Loan($request->validated());
+            $loan->item_id = $lockedItem->id;
+            $loan->save();
+
+            return $loan;
+        });
 
         return (new LoanResource($loan))
             ->response()
@@ -96,18 +116,40 @@ class LoanController extends Controller
      * ändringen. Ett stängt lån som nollställer `returned_at` medan ett
      * annat lån är öppet avvisas (§ Beslut 4); att stänga (sätta
      * `returned_at`) eller röra andra fält på ett stängt lån rör ingen spärr.
+     *
+     * Spärrens check-then-act och skrivningen delar EN transaktion under
+     * `lockForUpdate()` på ITEM-raden (granskningsfynd) — två samtidiga
+     * PATCH som båda återöppnar ett stängt lån på samma item serialiseras,
+     * och den andra ser den förstas öppna lån. Lånet läses sedan om under
+     * item-låset, en current read (22b § Beslut 9): en PATCH byggd på en
+     * inaktuell rad ska inte omedvetet återöppna ett lån en samtidig begäran
+     * just stängde.
      */
     public function update(UpdateLoanRequest $request, Container $container, Item $item, Loan $loan): LoanResource
     {
         Gate::authorize('update', $container);
 
-        $loan->fill($request->validated());
+        $loan = DB::transaction(function () use ($request, $item, $loan): Loan {
+            $lockedItem = $item->newQuery()
+                ->whereKey($item->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if ($loan->returned_at === null) {
-            $this->assertNoOpenLoan($item, $loan);
-        }
+            $lockedLoan = $lockedItem->loans()
+                ->whereKey($loan->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $loan->save();
+            $lockedLoan->fill($request->validated());
+
+            if ($lockedLoan->returned_at === null) {
+                $this->assertNoOpenLoan($lockedItem, $lockedLoan);
+            }
+
+            $lockedLoan->save();
+
+            return $lockedLoan;
+        });
 
         return new LoanResource($loan);
     }
@@ -135,6 +177,10 @@ class LoanController extends Controller
      * att återöppnas) avvisas skrivningen med `loan.already_open` och den
      * befintliga utlåningens ULID i `data.loan` — så klienten kan peka ut
      * raden som blockerar.
+     *
+     * Måste anropas under `lockForUpdate()` på item-raden (se store och
+     * update) — check-then-act utan låset låter två samtidiga skrivningar
+     * passera och bryter "högst en öppen utlåning".
      */
     private function assertNoOpenLoan(Item $item, ?Loan $except = null): void
     {
