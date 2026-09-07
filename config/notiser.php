@@ -153,6 +153,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Utlåningspåminnelser
+    |--------------------------------------------------------------------------
+    |
+    | Fönstret för App\Console\GeneratesLoanNotifications, se issue 76 §
+    | Beslut 1. Talet är antalet dagar före förfallodatumet. Tre dagar är
+    | fortfarande handlingsbart; tre veckor i förväg glöms bort och skapar
+    | bara en andra påminnelse som aldrig kommer — `dedupe_key` ger ett lån
+    | exakt en påminnelse, så den som missar fönstret får ingen andra chans.
+    |
+    */
+
+    'loan' => [
+
+        'remind_days_before' => (int) env('NOTIFICATION_LOAN_REMIND_DAYS_BEFORE', 3),
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | ICS-kalenderfeed
     |--------------------------------------------------------------------------
     |

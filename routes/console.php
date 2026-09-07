@@ -5,6 +5,7 @@ use App\Console\DeletesDormantAccounts;
 use App\Console\DeliversNotifications;
 use App\Console\DeliversWebhooks;
 use App\Console\EnforcesDowngrades;
+use App\Console\GeneratesLoanNotifications;
 use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
 use App\Console\PrunesExpiredMagicLinkTokens;
@@ -127,6 +128,23 @@ Schedule::call(fn () => app(GeneratesTaskNotifications::class)->handle())
 Schedule::call(fn () => app(GeneratesQuotaWarnings::class)->handle())
     ->daily()
     ->name('generate-quota-warnings');
+
+/*
+ * Issue 76 · Utlåningsnotiserna: öppna utlåningar vars förfallodatum närmar
+ * sig skapar en loan.due per mottagare — se App\Console\GeneratesLoanNotifications
+ * och [[Notiser]] § Kön. Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Utlaning/UtlaningsnotisTest.php; det här är bara
+ * schemaläggningen. Dagligen, enligt tabellen i [[Notiser]] § Kön, i samma
+ * nattliga fönster som kvotvarningarna ovan.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(GeneratesLoanNotifications::class)->handle())
+    ->daily()
+    ->name('generate-loan-notifications');
 
 /*
  * Issue 28b · Verkställandet av nedgraderingen: konton vars frist gått ut får

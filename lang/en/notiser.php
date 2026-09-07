@@ -13,6 +13,12 @@ return [
         'line' => 'The task ":title" on ":item" in the binder ":container" was due on :date and is now overdue.',
         'action' => 'Open task',
     ],
+    'loan_due' => [
+        'subject' => ':item is due back :date',
+        'greeting' => 'Hello!',
+        'line' => 'The ":item" you lent to :borrower is due back :date.',
+        'action' => 'Open loan',
+    ],
     'quota_warning' => [
         'subject' => 'Your storage is :percent % full',
         'greeting' => 'Hello!',

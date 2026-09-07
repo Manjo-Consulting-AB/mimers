@@ -399,11 +399,13 @@ function gallringKör(): array
 // --- tests/Feature/Kvot ---------------------------------------------------
 
 /**
- * Sänk/höj en gräns i en plans limits-JSON för det här testet.
+ * Sänk/höj en gräns i en plans limits-JSON för det här testet. Gränsen kan
+ * vara en siffra (`storage_bytes`) eller ett booleskt flaggvärde
+ * (`loan_reminders`), se issue 76 § Beslut 10.
  *
  * Ursprungligen i tests/Feature/Kvot/UppladdningskvotTest.php.
  */
-function sättPlangräns(string $kod, string $nyckel, int $värde): void
+function sättPlangräns(string $kod, string $nyckel, int|bool $värde): void
 {
     $plan = Plan::where('code', $kod)->firstOrFail();
     $limits = $plan->limits;
