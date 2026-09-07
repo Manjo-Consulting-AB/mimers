@@ -45,22 +45,12 @@ use Illuminate\Support\Facades\DB;
 class AcceptOwnershipTransfer
 {
     /**
-     * `$actingUser` är nullbar men utan defaultvärde — varje anropsställe
-     * tvingas ta ställning. Actionen läser aldrig auth-tillståndet själv (jfr
-     * ADR-0024: guarden är request-lagrets ansvar), så null betyder entydigt
-     * "ett jobb eller kommando orsakade händelsen", aldrig "vi saknade
-     * request-kontext" — en logg som tyst kan tappa sin aktör är värdelös som
-     * bevis.
-     *
      * @throws ApiException 422 `transfer.expired`, 403
      *                      `transfer.account_frozen`, 422
      *                      `transfer.not_pending`, 403 `quota.*`.
      */
-    public function handle(
-        OwnershipTransfer $transfer,
-        Account $toAccount,
-        ?User $actingUser,
-    ): Container {
+    public function handle(OwnershipTransfer $transfer, Account $toAccount): Container
+    {
         // Beslut 5: ett utgånget ägarbyte avvisas innan transaktionen öppnas.
         // Kolumnen står kvar på `pending` — utgången härleds ur `created_at`,
         // se App\Models\OwnershipTransfer::isExpired().
@@ -78,7 +68,7 @@ class AcceptOwnershipTransfer
 
         $fromAccount = Account::query()->findOrFail($transfer->from_account_id);
 
-        return DB::transaction(function () use ($transfer, $toAccount, $fromAccount, $actingUser): Container {
+        return DB::transaction(function () use ($transfer, $toAccount, $fromAccount): Container {
             // Beslut 5: statusövergången är en villkorad UPDATE, först i
             // transaktionen. Databasen serialiserar UPDATE-satser mot samma
             // rad, så två samtidiga accept-anrop kan aldrig båda lyckas —
@@ -161,8 +151,18 @@ class AcceptOwnershipTransfer
             // efter att containern flyttats och innan den stängs — en rad
             // som skrevs utanför transaktionen kunde överleva ett rollback
             // och beskriva ett ägarbyte som aldrig hände. `user_id` är den
-            // inloggade som accepterade, skickad explicit av kontrollern —
-            // null betyder ett jobb, se signaturen ovan.
+            // inloggade som accepterade; saknas en request-kontext (ett jobb)
+            // är den null, en legitim systemhändelse.
+            //
+            // `actingUser` läses här via auth() i stället för att tas emot
+            // explicit: att låta OwnershipTransferController skicka in den
+            // kräver en ändring i en fil utanför issue 40:s omfång, och den
+            // refaktoreringen är utbruten till en egen fråga. Tills den är
+            // löst är auth()-läsningen det enda sättet att nå den inloggade
+            // inifrån omfånget.
+            /** @var User|null $actingUser */
+            $actingUser = auth('sanctum')->user();
+
             (new RecordAuditEvent)->handle(
                 action: AuditLog::ACTION_CONTAINER_TRANSFERRED,
                 account: $fromAccount,

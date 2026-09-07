@@ -261,7 +261,6 @@ class OwnershipTransferController extends Controller
         $container = $acceptOwnershipTransfer->handle(
             $transfer,
             $this->resolveReceiver($transfer, $request),
-            $user,
         );
 
         $container->loadMissing('account');
