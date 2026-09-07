@@ -155,10 +155,10 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/invitations/accept', [InvitationResponseController::class, 'accept']);
     Route::post('/invitations/reject', [InvitationResponseController::class, 'reject']);
 
-    // Issue 39a · Ägarbyte — avsändar- och mottagarytan, se
-    // App\Http\Controllers\Api\OwnershipTransferController. Ingen accept här:
-    // den transaktion som flyttar containern, förbrukningen, åtkomsterna och
-    // planen är 39b och lägger sina egna rutter senare, aldrig här.
+    // Issue 39a/39b · Ägarbyte — avsändar-, mottagar- och acceptytan, se
+    // App\Http\Controllers\Api\OwnershipTransferController. Avsändarens yta
+    // är 39a; accept (transaktionen som flyttar containern, förbrukningen,
+    // åtkomsterna och planen) är 39b och ligger på mottagarsidan nedan.
     //
     // Avsändarens yta nästlas under {container} (Beslut 14) och {transfer}
     // binds av gruppens scopeBindings() genom
@@ -176,8 +176,16 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // kontrollern (inboxQuery, Beslut 15) är hela skyddet: en främmande ULID
     // ger 404, inte 403. Ingen policy — den som radens mottagarväg pekar ut
     // ÄR behörig, och en rad som inte pekar på användaren ska vara osynlig.
+    //
+    // accept (39b) prövar samma mottagarväg men utan status- och
+    // tidsvillkoren: en rad som väl är mottagarens men inte längre `pending`
+    // ska ge `transfer.not_pending` och en utgången `transfer.expired`, inte
+    // försvinna som 404 — se App\Http\Controllers\Api\OwnershipTransferController.
+    // Kroppen bär `to_account` när raden nåddes på `to_email`, se
+    // App\Http\Requests\OwnershipTransfer\AcceptOwnershipTransferRequest.
     Route::get('/transfers', [OwnershipTransferController::class, 'incoming']);
     Route::post('/transfers/{transfer}/reject', [OwnershipTransferController::class, 'reject']);
+    Route::post('/transfers/{transfer}/accept', [OwnershipTransferController::class, 'accept']);
 
     // Issue 11 · Kategorier — en hierarki per container, se
     // App\Http\Controllers\Api\CategoryController och

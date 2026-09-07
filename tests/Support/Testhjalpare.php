@@ -45,6 +45,7 @@ use App\Models\Item;
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
 use App\Models\OccurrenceDependency;
+use App\Models\OwnershipTransfer;
 use App\Models\Plan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -128,6 +129,28 @@ function bjudInRad(
         'expires_at' => $expiresAt ?? now()->addDays(Invitation::TTL_DAYS),
         'invited_by_user_id' => User::factory()->create()->id,
     ]);
+}
+
+// --- tests/Feature/Agarbyte ----------------------------------------------
+
+/**
+ * Skapar en ägarbytesrad direkt i databasen, för de tester som behöver ett
+ * utgångsläge rutten själv aldrig producerar (39b:s accept-tester, och de
+ * undantagna items som 39b testas med). `from_account_id` och
+ * `initiated_by_user_id` får förnuftiga defaultvärden; fabrikens egen default
+ * sätter en mottagarväg (to_account) så raden uppfyller CHECK-villkoret.
+ *
+ * 39a har en egen `ägarbyteRad()` i tests/Feature/Agarbyte/AgarbyteTest.php
+ * med samma form; den här hjälparen har ett eget namn för att de två filerna
+ * ska kunna läsas separat utan att kollidera när hela sviten körs.
+ */
+function skapaÄgarbyteRad(Container $container, array $attribut = []): OwnershipTransfer
+{
+    return OwnershipTransfer::factory()->create(array_merge([
+        'container_id' => $container->id,
+        'from_account_id' => $container->account_id,
+        'initiated_by_user_id' => User::factory()->create()->id,
+    ], $attribut));
 }
 
 // --- tests/Feature/Auth -------------------------------------------------
