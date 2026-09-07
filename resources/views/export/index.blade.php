@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ $locale === 'sv' ? 'sv' : 'en' }}">
+<html lang="{{ $locale }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -27,99 +27,26 @@
 <body>
     <main>
         @php
-            $texts = $locale === 'sv' ? [
-                'heading' => 'Export av',
-                'exported' => 'Exporterad',
-                'contents' => 'Innehåll',
-                'category' => 'Kategori',
-                'description' => 'Beskrivning',
-                'manufacturer' => 'Tillverkare',
-                'model' => 'Modell',
-                'serial_number' => 'Serienummer',
-                'purchased_at' => 'Inköpt',
-                'warranty_until' => 'Garanti till',
-                'position_note' => 'Placering',
-                'tags' => 'Taggar',
-                'links' => 'Länkar',
-                'schedules' => 'Scheman',
-                'loans' => 'Utlåningar',
-                'attachments' => 'Bilagor',
-                'recurrence' => 'Upprepning',
-                'occurrences' => 'Förekomster',
-                'visible_from' => 'Synlig från',
-                'due_at' => 'Förfaller',
-                'completed_at' => 'Klar',
-                'status' => 'Status',
-                'borrower' => 'Låntagare',
-                'lent_at' => 'Utlånad',
-                'returned_at' => 'Återlämnad',
-                'note' => 'Anteckning',
-                'no_value' => '—',
-                'missing' => 'Filens byten saknas på disken',
-                'none' => 'Inga',
-                'recurrence_none' => 'Engång',
-                'recurrence_fixed' => 'Fast datum',
-                'recurrence_interval' => 'Intervall',
-                'status_open' => 'Öppen',
-                'status_completed' => 'Klar',
-                'status_skipped' => 'Hoppad över',
-                'relation_parent' => 'Förälder:',
-                'relation_child' => 'Barn:',
-                'relation_sibling' => 'Syskon:',
-            ] : [
-                'heading' => 'Export of',
-                'exported' => 'Exported',
-                'contents' => 'Contents',
-                'category' => 'Category',
-                'description' => 'Description',
-                'manufacturer' => 'Manufacturer',
-                'model' => 'Model',
-                'serial_number' => 'Serial number',
-                'purchased_at' => 'Purchased',
-                'warranty_until' => 'Warranty until',
-                'position_note' => 'Position',
-                'tags' => 'Tags',
-                'links' => 'Links',
-                'schedules' => 'Schedules',
-                'loans' => 'Loans',
-                'attachments' => 'Attachments',
-                'recurrence' => 'Recurrence',
-                'occurrences' => 'Occurrences',
-                'visible_from' => 'Visible from',
-                'due_at' => 'Due',
-                'completed_at' => 'Completed',
-                'status' => 'Status',
-                'borrower' => 'Borrower',
-                'lent_at' => 'Lent',
-                'returned_at' => 'Returned',
-                'note' => 'Note',
-                'no_value' => '—',
-                'missing' => 'File bytes missing on disk',
-                'none' => 'None',
-                'recurrence_none' => 'Once',
-                'recurrence_fixed' => 'Fixed date',
-                'recurrence_interval' => 'Interval',
-                'status_open' => 'Open',
-                'status_completed' => 'Completed',
-                'status_skipped' => 'Skipped',
-                'relation_parent' => 'Parent:',
-                'relation_child' => 'Child:',
-                'relation_sibling' => 'Sibling:',
-            ];
-
             $itemsByUlid = collect($payload['items'])->keyBy('ulid');
             $tagsByUlid = collect($payload['tags'])->keyBy('ulid');
             $categoriesByUlid = collect($payload['categories'])->keyBy('ulid');
 
-            $recurrenceLabel = fn (string $type): string => $texts['recurrence_'.$type] ?? $type;
-            $statusLabel = fn (string $status): string => $texts['status_'.$status] ?? $status;
+            // Etiketterna läses ur lang/{sv,en}/export.php, samma form som
+            // mejlen mot notiser.php. `$label` bygger nyckeln för de värden
+            // som kommer ur databasen (recurrence_type, status, relation) och
+            // faller tillbaka på råvärdet om nyckeln saknas — en intern kod
+            // ska aldrig visas som en översättningsnyckel.
+            $translator = app('translator');
+            $label = fn (string $prefix, string $value): string => $translator->has('export.'.$prefix.'_'.$value)
+                ? trans('export.'.$prefix.'_'.$value)
+                : $value;
         @endphp
 
-        <h1>{{ $texts['heading'] }} {{ $containerName }}</h1>
-        <p class="exported">{{ $texts['exported'] }}: {{ $payload['exported_at'] }}</p>
+        <h1>{{ trans('export.heading') }} {{ $containerName }}</h1>
+        <p class="exported">{{ trans('export.exported') }}: {{ $payload['exported_at'] }}</p>
 
         @if (count($payload['items']) > 0)
-            <h2>{{ $texts['contents'] }}</h2>
+            <h2>{{ trans('export.contents') }}</h2>
             <ul class="toc">
                 @foreach ($payload['items'] as $item)
                     <li><a href="#{{ $item['ulid'] }}">{{ $item['name'] }}</a></li>
@@ -132,41 +59,41 @@
 
             <dl>
                 @if ($item['category_ulid'] !== null)
-                    <dt>{{ $texts['category'] }}</dt>
-                    <dd>{{ $categoriesByUlid[$item['category_ulid']]['name'] ?? $texts['no_value'] }}</dd>
+                    <dt>{{ trans('export.category') }}</dt>
+                    <dd>{{ $categoriesByUlid[$item['category_ulid']]['name'] ?? trans('export.no_value') }}</dd>
                 @endif
                 @if ($item['description'] !== null)
-                    <dt>{{ $texts['description'] }}</dt>
+                    <dt>{{ trans('export.description') }}</dt>
                     <dd>{{ $item['description'] }}</dd>
                 @endif
                 @if ($item['manufacturer'] !== null)
-                    <dt>{{ $texts['manufacturer'] }}</dt>
+                    <dt>{{ trans('export.manufacturer') }}</dt>
                     <dd>{{ $item['manufacturer'] }}</dd>
                 @endif
                 @if ($item['model'] !== null)
-                    <dt>{{ $texts['model'] }}</dt>
+                    <dt>{{ trans('export.model') }}</dt>
                     <dd>{{ $item['model'] }}</dd>
                 @endif
                 @if ($item['serial_number'] !== null)
-                    <dt>{{ $texts['serial_number'] }}</dt>
+                    <dt>{{ trans('export.serial_number') }}</dt>
                     <dd>{{ $item['serial_number'] }}</dd>
                 @endif
                 @if ($item['purchased_at'] !== null)
-                    <dt>{{ $texts['purchased_at'] }}</dt>
+                    <dt>{{ trans('export.purchased_at') }}</dt>
                     <dd>{{ $item['purchased_at'] }}</dd>
                 @endif
                 @if ($item['warranty_until'] !== null)
-                    <dt>{{ $texts['warranty_until'] }}</dt>
+                    <dt>{{ trans('export.warranty_until') }}</dt>
                     <dd>{{ $item['warranty_until'] }}</dd>
                 @endif
                 @if ($item['position_note'] !== null)
-                    <dt>{{ $texts['position_note'] }}</dt>
+                    <dt>{{ trans('export.position_note') }}</dt>
                     <dd>{{ $item['position_note'] }}</dd>
                 @endif
             </dl>
 
             @if (count($item['tags']) > 0)
-                <p class="sub">{{ $texts['tags'] }}</p>
+                <p class="sub">{{ trans('export.tags') }}</p>
                 <ul class="chips">
                     @foreach ($item['tags'] as $tagUlid)
                         <li class="chip">{{ $tagsByUlid[$tagUlid]['name'] ?? $tagUlid }}</li>
@@ -175,21 +102,21 @@
             @endif
 
             @if (count($item['links']) > 0)
-                <p class="sub">{{ $texts['links'] }}</p>
+                <p class="sub">{{ trans('export.links') }}</p>
                 <ul>
                     @foreach ($item['links'] as $link)
-                        <li>{{ $texts['relation_'.$link['relation']] ?? $link['relation'] }}
+                        <li>{{ $label('relation', $link['relation']) }}
                             {{ $itemsByUlid[$link['item_ulid']]['name'] ?? $link['item_ulid'] }}</li>
                     @endforeach
                 </ul>
             @endif
 
             @if (count($item['schedules']) > 0)
-                <p class="sub">{{ $texts['schedules'] }}</p>
+                <p class="sub">{{ trans('export.schedules') }}</p>
                 @foreach ($item['schedules'] as $schedule)
                     <p><strong>{{ $schedule['title'] }}</strong>
                         @if ($schedule['recurrence_type'] !== null)
-                            · {{ $texts['recurrence'] }}: {{ $recurrenceLabel($schedule['recurrence_type']) }}
+                            · {{ trans('export.recurrence') }}: {{ $label('recurrence', $schedule['recurrence_type']) }}
                         @endif
                     </p>
                     @if ($schedule['notes'] !== null)
@@ -200,11 +127,11 @@
                             @foreach ($schedule['occurrences'] as $occurrence)
                                 <li>
                                     @if ($occurrence['status'] !== 'open')
-                                        {{ $statusLabel($occurrence['status']) }} ·
+                                        {{ $label('status', $occurrence['status']) }} ·
                                     @endif
-                                    {{ $texts['due_at'] }}: {{ $occurrence['due_at'] }}
+                                    {{ trans('export.due_at') }}: {{ $occurrence['due_at'] }}
                                     @if ($occurrence['completed_at'] !== null)
-                                        · {{ $texts['completed_at'] }}: {{ $occurrence['completed_at'] }}
+                                        · {{ trans('export.completed_at') }}: {{ $occurrence['completed_at'] }}
                                     @endif
                                 </li>
                             @endforeach
@@ -214,27 +141,27 @@
             @endif
 
             @if (count($item['loans']) > 0)
-                <p class="sub">{{ $texts['loans'] }}</p>
+                <p class="sub">{{ trans('export.loans') }}</p>
                 @foreach ($item['loans'] as $loan)
                     <dl>
-                        <dt>{{ $texts['borrower'] }}</dt>
+                        <dt>{{ trans('export.borrower') }}</dt>
                         <dd>{{ $loan['borrower_name'] }}
                             @if ($loan['borrower_email'] !== null)
                                 ({{ $loan['borrower_email'] }})
                             @endif
                         </dd>
-                        <dt>{{ $texts['lent_at'] }}</dt>
+                        <dt>{{ trans('export.lent_at') }}</dt>
                         <dd>{{ $loan['lent_at'] }}</dd>
                         @if ($loan['due_at'] !== null)
-                            <dt>{{ $texts['due_at'] }}</dt>
+                            <dt>{{ trans('export.due_at') }}</dt>
                             <dd>{{ $loan['due_at'] }}</dd>
                         @endif
                         @if ($loan['returned_at'] !== null)
-                            <dt>{{ $texts['returned_at'] }}</dt>
+                            <dt>{{ trans('export.returned_at') }}</dt>
                             <dd>{{ $loan['returned_at'] }}</dd>
                         @endif
                         @if ($loan['note'] !== null)
-                            <dt>{{ $texts['note'] }}</dt>
+                            <dt>{{ trans('export.note') }}</dt>
                             <dd>{{ $loan['note'] }}</dd>
                         @endif
                     </dl>
@@ -242,14 +169,14 @@
             @endif
 
             @if (count($item['attachments']) > 0)
-                <p class="sub">{{ $texts['attachments'] }}</p>
+                <p class="sub">{{ trans('export.attachments') }}</p>
                 <ul>
                     @foreach ($item['attachments'] as $attachment)
                         <li>
                             @if (isset($attachment['path']))
                                 <a href="{{ $attachment['path'] }}">{{ $attachment['filename'] }}</a>
                             @else
-                                {{ $attachment['filename'] }} <span class="missing">({{ $texts['missing'] }})</span>
+                                {{ $attachment['filename'] }} <span class="missing">({{ trans('export.missing') }})</span>
                             @endif
                         </li>
                     @endforeach

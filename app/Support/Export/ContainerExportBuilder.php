@@ -16,6 +16,7 @@ use App\Support\Notification\LocaleResolver;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
@@ -338,17 +339,32 @@ class ContainerExportBuilder
     /**
      * Renderar index.html — en enda självständig fil utan externa resurser
      * (Beslut 11). Språket väljs från den beställande användarens locale,
-     * samma regel som mejlen (AGENTS.md § Serverrenderat innehåll).
+     * samma regel som mejlen (AGENTS.md § Serverrenderat innehåll). Texterna
+     * ligger i lang/{sv,en}/export.php, samma form som mejlen mot
+     * lang/{sv,en}/notiser.php.
+     *
+     * Appens locale sätts runt renderingen och återställs i finally — jobbet
+     * kör i en kö där appens locale är processens, inte den beställande
+     * användarens, och en kvarglömd locale vore en bugg som smittar allt som
+     * renderas efter det här jobbet (samma mönster som CalendarFeedDownload).
      */
     private function renderIndexHtml(Export $export, Container $container, array $payload): string
     {
         $locale = (new LocaleResolver)->forUser($export->requestedBy);
 
-        return view('export.index', [
-            'payload' => $payload,
-            'containerName' => $container->name,
-            'locale' => $locale,
-        ])->render();
+        $tidigare = App::getLocale();
+
+        try {
+            App::setLocale($locale);
+
+            return view('export.index', [
+                'payload' => $payload,
+                'containerName' => $container->name,
+                'locale' => $locale,
+            ])->render();
+        } finally {
+            App::setLocale($tidigare);
+        }
     }
 
     private function addEntry(ZipArchive $zip, string $name, string $content): void
