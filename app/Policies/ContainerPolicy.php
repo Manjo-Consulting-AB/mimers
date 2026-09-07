@@ -158,6 +158,24 @@ class ContainerPolicy
     }
 
     /**
+     * Får användaren SE containerns revisionslogg (issue 40)? Bara regel 1 —
+     * INGEN regel 4-kontroll, av samma skäl som viewAccesses() och
+     * viewTransfers(): läsning påverkas aldrig av att kontot är fryst, och
+     * ett konto som håller på att nedgraderas måste kunna se sin egen
+     * historik. En delegerad `write`-innehavare får inget se: loggen berättar
+     * vem som haft åtkomst och när, och det är ägarens uppgift (issue 40 §
+     * Beslut 7).
+     *
+     * Identisk kropp med viewAccesses() i dag — ändå en egen metod, av samma
+     * skäl som viewTransfers() ovan: åtkomsthistorik och överlåtelsehistorik
+     * är olika ytor och kan ändras oberoende av varandra. Slå inte ihop dem.
+     */
+    public function viewAuditLog(User $user, Container $container): bool
+    {
+        return $this->isMemberOfOwnerAccount($user, $container->account);
+    }
+
+    /**
      * Får användaren ÅTERKALLA en åtkomst (issue 9b, DELETE)? Bara regel 1 —
      * INGEN regel 4-kontroll. Att återkalla är en skrivning, men regel 4
      * undantar den uttryckligen: den MINSKAR exponeringen i stället för att

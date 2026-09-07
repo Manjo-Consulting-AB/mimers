@@ -2,9 +2,11 @@
 
 namespace App\Actions\OwnershipTransfer;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Invitation;
@@ -12,6 +14,7 @@ use App\Models\Item;
 use App\Models\OwnershipTransfer;
 use App\Models\Plan;
 use App\Models\Subscription;
+use App\Models\User;
 use App\Support\Plan\Entitlements;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
@@ -29,9 +32,11 @@ use Illuminate\Support\Facades\DB;
  * plan, containern flyttas, förbrukningen flyttas mellan räknarna (den enda
  * vägen in i dem är App\Actions\Usage\AdjustUsage), åtkomsterna återkallas
  * och den kvarhållna åtkomsten skapas om sådan begärts, och mottagaren får
- * tolv månader Pro. Skriver inget i `audit_log` — det gör issue 40, som
- * lägger anropet här. Ingen bonusspärr ("en gång per mottagande konto") —
- * det är issue 49 (M9), som hakar i den här transaktionen senare.
+ * tolv månader Pro. Sist i transaktionen skrivs `audit_log`-raden för
+ * `container.transferred` (issue 40 § Beslut 9) — efter att containern
+ * flyttats och innan transaktionen stängs, så loggen aldrig kan beskriva
+ * ett ägarbyte som inte hände. Ingen bonusspärr ("en gång per mottagande
+ * konto") — det är issue 49 (M9), som hakar i den här transaktionen senare.
  *
  * Anropas av App\Http\Controllers\Api\OwnershipTransferController efter att
  * den bevisat att raden är mottagarens (annars 404) och löst ut vilket
@@ -142,7 +147,29 @@ class AcceptOwnershipTransfer
             // Beslut 9: tolv månader Pro till mottagarkontot.
             $this->beviljaPro($toAccount);
 
-            // issue 40: här ska audit_log-raden för ägarbytet skrivas.
+            // Beslut 9 (issue 40): loggraden skrivs INNE i transaktionen,
+            // efter att containern flyttats och innan den stängs — en rad
+            // som skrevs utanför transaktionen kunde överleva ett rollback
+            // och beskriva ett ägarbyte som aldrig hände. `user_id` är den
+            // inloggade som accepterade; saknas en request-kontext (ett jobb)
+            // är den null, en legitim systemhändelse.
+            /** @var User|null $actingUser */
+            $actingUser = auth('sanctum')->user();
+
+            (new RecordAuditEvent)->handle(
+                action: AuditLog::ACTION_CONTAINER_TRANSFERRED,
+                account: $fromAccount,
+                user: $actingUser,
+                container: $container,
+                subjectType: 'ownership_transfer',
+                subjectUlid: $transfer->ulid,
+                meta: [
+                    'from_account' => $fromAccount->ulid,
+                    'to_account' => $toAccount->ulid,
+                    'excluded_item_count' => count($transfer->excluded_item_ids ?? []),
+                    'retain_access_level' => $transfer->retain_access_level,
+                ],
+            );
 
             return $container;
         });

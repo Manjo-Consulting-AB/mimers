@@ -2,18 +2,22 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContainerAccess\StoreContainerAccessRequest;
 use App\Http\Resources\ContainerAccessResource;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\User;
 use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -133,15 +137,49 @@ class ContainerAccessController extends Controller
      * Redan återkallad: 204 utan att röra `revoked_at` — den ursprungliga
      * tidsstämpeln är historiken (9a § Beslut 4) och en andra `DELETE` får
      * inte skriva om den. `ContainerAccess` använder inte `SoftDeletes`.
+     *
+     * Sedan issue 40 sker själva återkallningen och `access.revoked`-raden i
+     * audit_log i EN transaktion (Beslut 10) — en logg som skrevs utanför
+     * transaktionen kunde överleva ett rollback och beskriva en återkallelse
+     * som inte hände. En redan återkallad rad rörs inte och loggas inte en
+     * andra gång.
      */
-    public function destroy(Container $container, ContainerAccess $access): Response
+    public function destroy(Request $request, Container $container, ContainerAccess $access): Response
     {
         Gate::authorize('revokeAccess', $container);
 
-        if ($access->revoked_at === null) {
-            $access->revoked_at = now();
-            $access->save();
-        }
+        // ULID:en till `meta.grantee` löses upp i förväg — `ContainerAccess`
+        // har medvetet ingen `grantee()`-relation (se modellens docblock), så
+        // uppslagningen görs som en platt fråga, samma teknik som
+        // hydrateGranteeUlids() nedan.
+        $granteeUlid = $access->grantee_type === 'user'
+            ? User::query()->whereKey($access->grantee_id)->value('ulid')
+            : Account::query()->whereKey($access->grantee_id)->value('ulid');
+
+        DB::transaction(function () use ($request, $container, $access, $granteeUlid): void {
+            if ($access->revoked_at === null) {
+                $access->revoked_at = now();
+                $access->save();
+
+                /** @var User $revoker */
+                $revoker = $request->user();
+
+                (new RecordAuditEvent)->handle(
+                    action: AuditLog::ACTION_ACCESS_REVOKED,
+                    account: $container->account,
+                    user: $revoker,
+                    container: $container,
+                    subjectType: 'container_access',
+                    subjectUlid: $access->ulid,
+                    meta: [
+                        'grantee_type' => $access->grantee_type,
+                        'grantee' => $granteeUlid,
+                        'level' => $access->level,
+                        'kind' => $access->kind,
+                    ],
+                );
+            }
+        });
 
         return response()->noContent();
     }
