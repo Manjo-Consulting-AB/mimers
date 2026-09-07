@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AccountStorageController;
 use App\Http\Controllers\Api\AttachmentController;
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\Auth\AuthenticatedTokenController;
 use App\Http\Controllers\Api\Auth\MagicLinkLoginController;
 use App\Http\Controllers\Api\Auth\MagicLinkRequestController;
@@ -186,6 +187,14 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/transfers', [OwnershipTransferController::class, 'incoming']);
     Route::post('/transfers/{transfer}/reject', [OwnershipTransferController::class, 'reject']);
     Route::post('/transfers/{transfer}/accept', [OwnershipTransferController::class, 'accept']);
+
+    // Issue 40 · Revisionsloggen — containerns historik av känsliga
+    // händelser, se App\Http\Controllers\Api\AuditLogController och
+    // App\Policies\ContainerPolicy::viewAuditLog(). Bara GET och bara regel 1
+    // (medlemskap i ägarkontot): loggen berättar vem som haft åtkomst och
+    // när, och det är ägarens uppgift (Beslut 7). Det finns ingen rutt som
+    // ändrar eller raderar en rad — loggen är append-only (Beslut 3).
+    Route::get('/containers/{container}/audit-log', [AuditLogController::class, 'index']);
 
     // Issue 11 · Kategorier — en hierarki per container, se
     // App\Http\Controllers\Api\CategoryController och
