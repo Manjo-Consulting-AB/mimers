@@ -21,9 +21,8 @@ use function Pest\Laravel\postJson;
  * App\Http\Requests\Item\UpdateItemRequest,
  * App\Http\Resources\ItemResource and App\Models\Item.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) and
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) are
- * already declared and reused directly through Pest's global namespace.
+ * kontoMedMedlem() and beviljaAccess() are global test helpers in
+ * tests/Support/Testhjalpare.php.
  *
  * Each "Klart när" bullet in the issue maps to one named test here; the
  * category-with-items guard lives in CategoryCrudTest.

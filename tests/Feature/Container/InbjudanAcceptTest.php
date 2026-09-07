@@ -27,11 +27,8 @@ use function Pest\Laravel\postJson;
  * anropar ingen policy alls (§ Beslut 12), och att den beviljade åtkomsten
  * BITER prövas via en vanlig GET på containern.
  *
- * kontoMedMedlem() är deklarerad i
- * tests/Feature/Container/ContainerCrudTest.php och beviljaAccess() i
- * tests/Feature/Container/ContainerAtkomstTest.php — Pests globala
- * namnrymd gör dem åtkomliga rakt av här, samma mönster som
- * InbjudanTest.php redan använder.
+ * kontoMedMedlem(), beviljaAccess() och bjudInRad() är globala testhjälpare
+ * i tests/Support/Testhjalpare.php.
  *
  * Mejl skickas aldrig mot en riktig utgång — `Notification::fake()` i det
  * test som går genom avsändarrutten, som i
@@ -91,7 +88,8 @@ function inbjudanMedToken(Container $container, string $email, array $overrides 
 
 /**
  * En inloggad mottagare med en given adress, plus ett Sanctum-headerpar —
- * samma form som kontoMedMedlem() i ContainerCrudTest.php, men utan konto:
+ * samma form som kontoMedMedlem() i tests/Support/Testhjalpare.php, men
+ * utan konto:
  * den inbjudna har per definition ingen relation till containern, och
  * behöver inget konto för att kunna svara på inbjudan.
  *

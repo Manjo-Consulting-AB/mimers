@@ -20,9 +20,9 @@ use function Pest\Laravel\postJson;
  * App\Http\Resources\TrashEntryResource, routes/api.php och
  * config/files.php § trash_retention_days.
  *
- * kontoMedMedlem() och beviljaAccess() återanvänds via Pests globala
- * namnrymd — deklareras i tests/Feature/Container/ContainerCrudTest.php
- * respektive ContainerAtkomstTest.php, samma mönster som DeltagarlistaTest.
+ * kontoMedMedlem(), beviljaAccess(), papperskorgsItem() och
+ * papperskorgsBilaga() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Testerna sätter mestadels papperskorgstillståndet direkt med modellerna
  * (mjukraderaPapperskorg()) i stället för via raderingsrutterna — det är
@@ -50,30 +50,6 @@ use function Pest\Laravel\postJson;
  * - svaret bär aldrig ett löpnummer
  * - listningen gör ett konstant antal frågor
  */
-
-/**
- * Skapar ett item direkt i containern, med $user/$account som skapare —
- * fabrikens egna default-skapare hade annars skapat två ovidkommande
- * användare/konton per item.
- */
-function papperskorgsItem(Container $container, Account $account, User $user, array $attribut = []): Item
-{
-    return Item::factory()->for($container, 'container')->create(array_merge([
-        'created_by_user_id' => $user->id,
-        'created_by_account_id' => $account->id,
-    ], $attribut));
-}
-
-/**
- * Skapar en bilaga direkt på itemet.
- */
-function papperskorgsBilaga(Item $item, Account $account, User $user, array $attribut = []): Attachment
-{
-    return Attachment::factory()->for($item, 'item')->create(array_merge([
-        'uploaded_by_user_id' => $user->id,
-        'billed_account_id' => $account->id,
-    ], $attribut));
-}
 
 /**
  * Mjukraderar en rad genom att sätta deleted_at — samma sluttillstånd som

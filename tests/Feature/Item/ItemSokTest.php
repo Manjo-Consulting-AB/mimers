@@ -18,9 +18,8 @@ use function Pest\Laravel\getJson;
  * åtkomstvillkoret), App\Models\Item (Searchable + toSearchableArray) och
  * App\Http\Requests\Item\IndexItemRequest.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) och
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) är redan
- * deklarerade och återanvänds direkt genom Pests globala namnrymd.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Issuens tyngdpunkt är läckagetesterna längst upp: sökresultat får aldrig
  * lämna containers användaren har åtkomst till ([[ADR-0012 Sök]] §

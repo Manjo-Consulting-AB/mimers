@@ -17,8 +17,8 @@ use function Pest\Laravel\putJson;
  * App\Http\Controllers\Api\QuietHoursController och [[Notiser]] §
  * notification_preference.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) är redan
- * deklarerad och återanvänds rakt av genom Pests globala namnrymd.
+ * kontoMedMedlem() är en global testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Varje "Klart när"-punkt i issuen motsvarar ett namngivet test här.
  */

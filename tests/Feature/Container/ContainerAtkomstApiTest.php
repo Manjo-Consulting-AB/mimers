@@ -22,9 +22,8 @@ use function Pest\Laravel\postJson;
  * App\Http\Resources\ContainerAccessResource och de tre nya metoderna i
  * App\Policies\ContainerPolicy (viewAccesses/manageAccess/revokeAccess).
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) och
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) är
- * redan deklarerade och återanvänds rakt av via Pests globala namnrymd.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * "Klart när" (ContainerAtkomstApiTest):
  * - ägarkontots medlem kan bevilja en åtkomst

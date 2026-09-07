@@ -25,11 +25,8 @@ use function Pest\Laravel\getJson;
  * prövas om här. Det som prövas här är motsatsen: att inget av det läcker
  * ut i den här listan.
  *
- * kontoMedMedlem() och beviljaAccess() är deklarerade i
- * tests/Feature/Container/ContainerCrudTest.php respektive
- * tests/Feature/Container/ContainerAtkomstTest.php och återanvänds rakt av
- * via Pests globala namnrymd, samma mönster som ContainerAtkomstTest.php
- * själv använder.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * "Klart när" (DeltagarlistaTest):
  * - ägarkontot står alltid först i listan

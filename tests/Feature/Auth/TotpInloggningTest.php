@@ -24,30 +24,9 @@ use function Pest\Laravel\postJson;
  * - kodförsök begränsas per användare
  */
 
-// totpKodFör() är redan deklarerad i tests/Feature/Auth/TotpAktiveringTest.php
-// — Pest laddar alla testfiler i samma globala namnrymd, så den
-// återanvänds rakt av här i stället för att deklareras på nytt (PHP
-// tillåter inte två funktioner med samma namn).
-
-/**
- * Skapar en användare med en REDAN bekräftad TOTP, utan att gå via
- * aktiveringsrutterna (som hör till issue #19 och inte rörs här) —
- * samma resultat som ett lyckat App\Support\Auth\TotpBroker::confirm(),
- * satt direkt på modellen.
- *
- * @return array{0: User, 1: string} [$user, $secret]
- */
-function användareMedBekräftadTotp(): array
-{
-    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
-
-    $secret = (new Google2FA)->generateSecretKey();
-    $user->totp_secret = $secret;
-    $user->totp_confirmed_at = now();
-    $user->save();
-
-    return [$user, $secret];
-}
+// användareMedBekräftadTotp() och totpKodFör() är globala testhjälpare i
+// tests/Support/Testhjalpare.php, som Composers autoloader laddar före varje
+// körning.
 
 it('nekar webbinloggning utan kod när TOTP är bekräftad — inget kodfält, ingen session', function () {
     [$user] = användareMedBekräftadTotp();

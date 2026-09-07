@@ -19,9 +19,8 @@ use function Pest\Laravel\postJson;
  * App\Http\Requests\Schedule\UpdateScheduleRequest,
  * App\Http\Resources\ScheduleResource och App\Models\Schedule.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php) och
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php) är
- * redan deklarerade och återanvänds rakt av genom Pests globala namnrymd.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Varje "Klart när"-punkt i issuen motsvarar ett namngivet test här.
  */

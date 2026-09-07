@@ -25,11 +25,9 @@ use function Pest\Laravel\postJson;
  * behörighetstesterna nedan bevisar bara att INBJUDNINGSRUTTERNA hänger på
  * rätt grind, inte policyn i sig.
  *
- * kontoMedMedlem() är deklarerad i
- * tests/Feature/Container/ContainerCrudTest.php och beviljaAccess() i
- * tests/Feature/Container/ContainerAtkomstTest.php — Pests globala
- * namnrymd gör dem åtkomliga rakt av här, samma mönster som
- * ContainerAtkomstApiTest.php redan använder.
+ * kontoMedMedlem(), beviljaAccess() och bjudInRad() är globala testhjälpare
+ * i tests/Support/Testhjalpare.php, som Composers autoloader laddar före
+ * varje körning.
  *
  * "Klart när" (InbjudanTest):
  * - ägarkontots medlem kan bjuda in en e-postadress
@@ -51,28 +49,6 @@ use function Pest\Laravel\postJson;
  * - en ogiltig e-postadress avvisas
  * - en ogiltig level avvisas
  */
-
-/**
- * Skapar en invitation-rad direkt, förbi API:et — för de tester som
- * behöver ett utgångsläge rutten själv aldrig producerar (en utgången
- * `pending`-rad, en `accepted`). `invited_by_user_id` är obligatorisk (FK)
- * men vem det är spelar ingen roll här, så en fristående användare skapas
- * åt raden, precis som beviljaAccess() gör i ContainerAtkomstTest.php.
- */
-function bjudInRad(
-    Container $container,
-    string $email,
-    string $status = 'pending',
-    ?Carbon $expiresAt = null,
-): Invitation {
-    return Invitation::factory()->create([
-        'container_id' => $container->id,
-        'email' => $email,
-        'status' => $status,
-        'expires_at' => $expiresAt ?? now()->addDays(Invitation::TTL_DAYS),
-        'invited_by_user_id' => User::factory()->create()->id,
-    ]);
-}
 
 it('ägarkontots medlem kan bjuda in en e-postadress', function () {
     [$account, $user, $headers] = kontoMedMedlem();

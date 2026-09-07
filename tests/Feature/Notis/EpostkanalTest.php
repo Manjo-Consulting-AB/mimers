@@ -22,7 +22,9 @@ use InvalidArgumentException;
  * Språket testas på mejlets faktiska ämnesrad, aldrig genom att läsa tillbaka
  * App::getLocale() — ett test som bara läser locale-strängen bevisar ingenting
  * om mallen. MailFake bygger inte mailet vid send, så mejlets ämnesrad sätts
- * först vid render(); se mejletsÄmne() nedan.
+ * först vid render(); se mejletsÄmne() i tests/Support/Testhjalpare.php,
+ * dit den flyttades tillsammans med epostLeverans() och uppgiftsPayload()
+ * när UndertryckningTest slutade dubblera dem.
  */
 
 /**
@@ -39,45 +41,6 @@ function epostKontext(string $kontoLocale = 'sv_SE', ?string $anvandarLocale = '
     $account->users()->attach($user, ['role' => 'owner']);
 
     return [$account, $user];
-}
-
-/**
- * @param  array<string, mixed>  $payload
- */
-function epostLeverans(Account $account, User $user, string $type, array $payload): NotificationDelivery
-{
-    $notification = Notification::factory()->create([
-        'account_id' => $account->id,
-        'user_id' => $user->id,
-        'type' => $type,
-        'payload' => $payload,
-    ]);
-
-    return NotificationDelivery::factory()->create(['notification_id' => $notification->id]);
-}
-
-/**
- * @return array<string, string>
- */
-function uppgiftsPayload(): array
-{
-    return [
-        'title' => 'Byt impeller',
-        'item' => 'Drev',
-        'container' => 'Vindil',
-        'date' => '2026-09-20',
-    ];
-}
-
-function mejletsÄmne(NotificationMail $mail): string
-{
-    // MailFake bygger inte mailet när det skickas — subject och markdown-vy
-    // hydreras först av prepareMailableForDelivery() vid render() (envelope()
-    // och content() i NotificationMail). Renderingen sker under mailets egen
-    // locale, som Laravel återställer efteråt.
-    $mail->render();
-
-    return $mail->subject;
 }
 
 it('en leverans till en svensk användare skickar ett svenskt mejl', function () {

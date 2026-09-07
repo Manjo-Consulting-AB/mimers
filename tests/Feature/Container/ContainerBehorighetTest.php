@@ -16,11 +16,9 @@ use function Pest\Laravel\postJson;
  * egen behörighetslogik — varje kontroll här bevisar att policyn (inte
  * kontrollern) fattar beslutet.
  *
- * kontoMedMedlem() är deklarerad i
- * tests/Feature/Container/ContainerCrudTest.php — Pest laddar alla
- * testfiler i samma globala namnrymd (se den filens egen kommentar, samma
- * mönster som tests/Feature/Auth/AterstallningskoderTest.php återanvänder
- * användareMedBekräftadTotp()), så den återanvänds rakt av här.
+ * kontoMedMedlem() är en global testhjälpare i
+ * tests/Support/Testhjalpare.php, som Composers autoloader laddar före varje
+ * körning.
  *
  * "Klart när" (ContainerBehorighetTest):
  * - en oautentiserad begäran ger 401 auth.unauthenticated

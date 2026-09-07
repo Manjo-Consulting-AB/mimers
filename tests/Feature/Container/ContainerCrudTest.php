@@ -4,7 +4,6 @@
 
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -34,27 +33,6 @@ use function Pest\Laravel\postJson;
  * genomgående en `owner`, vars fulla behörighet den svitens
  * "alla tre rollerna ..."-test redan bevisar.
  */
-
-/**
- * Ett konto med en medlem i angiven roll, plus ett Sanctum-headerpar för
- * medlemmen — återanvänds rakt av i ContainerBehorighetTest.php, samma
- * mönster som användareMedBekräftadTotp() i
- * tests/Feature/Auth/TotpInloggningTest.php delas med
- * tests/Feature/Auth/AterstallningskoderTest.php.
- *
- * @return array{0: Account, 1: User, 2: array<string, string>} [$account, $user, $headers]
- */
-function kontoMedMedlem(string $roll = 'owner'): array
-{
-    $account = Account::factory()->create();
-    $user = User::factory()->create();
-    $account->users()->attach($user, ['role' => $roll]);
-
-    $token = $user->createToken('api');
-    $headers = ['Authorization' => "Bearer {$token->plainTextToken}"];
-
-    return [$account, $user, $headers];
-}
 
 it('skapar en container åt ett konto användaren är medlem i', function () {
     [$account, , $headers] = kontoMedMedlem();

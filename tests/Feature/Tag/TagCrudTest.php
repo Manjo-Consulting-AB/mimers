@@ -20,10 +20,8 @@ use function Pest\Laravel\postJson;
  * App\Http\Requests\Tag\UpdateTagRequest, App\Http\Resources\TagResource,
  * App\Models\Tag och App\Models\Container::tags().
  *
- * kontoMedMedlem() är deklarerad i
- * tests/Feature/Container/ContainerCrudTest.php och beviljaAccess() i
- * tests/Feature/Container/ContainerAtkomstTest.php — båda åtkomliga via
- * Pests globala namnrymd, se de filernas egna kommentarer.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * "Klart när" (TagCrudTest):
  * - skapar en tagg i containern

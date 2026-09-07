@@ -21,16 +21,6 @@ use function Pest\Laravel\postJson;
  * - avstängning kräver samma bekräftelse som aktivering
  */
 
-/**
- * Beräknar en giltig kod för $secret rakt av mot Google2FA, precis som en
- * autentiseringsapp skulle göra — testerna "läser inte" hemligheten ur
- * broker-koden, de simulerar en app som har den inlästa.
- */
-function totpKodFör(string $secret): string
-{
-    return (new Google2FA)->getCurrentOtp($secret);
-}
-
 it('genererar en hemlighet via webben och exponerar en otpauth://-URI', function () {
     $user = User::factory()->create();
     actingAs($user);

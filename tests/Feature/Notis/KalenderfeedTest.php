@@ -22,10 +22,8 @@ use function Pest\Laravel\postJson;
  * Själva feeden — rutten som svarar med text/calendar och skriver
  * last_fetched_at — är issue 36b och testas inte här.
  *
- * kontoMedMedlem() är deklarerad i
- * tests/Feature/Container/ContainerCrudTest.php och beviljaAccess() i
- * tests/Feature/Container/ContainerAtkomstTest.php — Pests globala
- * namnrymd gör dem åtkomliga rakt av här, samma mönster som InbjudanTest.
+ * kontoMedMedlem() och beviljaAccess() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php.
  *
  * Behörigheten är 8:s view()-policy oförändrad
  * (App\Policies\ContainerPolicy::view()), så behörighetstesterna nedan

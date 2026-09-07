@@ -38,12 +38,11 @@ use function Pest\Laravel\postJson;
  * att återställning rör bara container-raden (Beslut 4) och att gallringen
  * tar med sig allt (Beslut 5–8).
  *
- * kontoMedMedlem() och beviljaAccess() återanvänds via Pests globala
- * namnrymd (deklareras i ContainerCrudTest.php respektive
- * ContainerAtkomstTest.php), och papperskorgsItem/papperskorgsBilaga samt
- * gallringItem/gallringBilaga/gallringKategori/gallringTagg/
- * gallringStoredFil/gallringKör från PapperskorgTest.php respektive
- * GallringTest.php — samma mönster som PapperskorgTest redan använder.
+ * kontoMedMedlem(), beviljaAccess(), papperskorgsItem(),
+ * papperskorgsBilaga() och gallringItem/gallringBilaga/gallringKategori/
+ * gallringTagg/gallringStoredFil/gallringKör() är globala testhjälpare i
+ * tests/Support/Testhjalpare.php, som Composers autoloader laddar före varje
+ * körning.
  *
  * Testerna sätter papperskorgstillståndet direkt med modellerna
  * (containerKorgMjukradera()) i stället för via raderingsrutten — det är

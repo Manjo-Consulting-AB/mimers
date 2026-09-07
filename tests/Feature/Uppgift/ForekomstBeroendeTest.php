@@ -1,17 +1,14 @@
 <?php
 
-use App\Actions\Schedule\OpenNextOccurrence;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
-use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
 use App\Models\ScheduleDependency;
 use App\Models\ScheduleOccurrence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
@@ -26,12 +23,9 @@ use function Pest\Laravel\postJson;
  * App\Http\Resources\OccurrenceDependencyResource och
  * App\Models\OccurrenceDependency.
  *
- * kontoMedMedlem() (tests/Feature/Container/ContainerCrudTest.php),
- * beviljaAccess() (tests/Feature/Container/ContainerAtkomstTest.php),
- * skapaForekomstKontext()/forekomstSchemaKropp()
- * (tests/Feature/Uppgift/ForekomstTest.php) och avslutKropp()
- * (tests/Feature/Uppgift/AvslutTest.php) är redan deklarerade och återanvänds
- * rakt av genom Pests globala namnrymd.
+ * kontoMedMedlem(), beviljaAccess(), skapaForekomstKontext(),
+ * forekomstSchemaKropp(), avslutKropp(), oppnaForekomst() och skapaBeroende()
+ * är globala testhjälpare i tests/Support/Testhjalpare.php.
  *
  * Klockan fryses för varje test, av samma skäl som AvslutTest: avslutsflödet
  * sätter `completed_at` och `interval` räknar nästa förfall därifrån, och
@@ -46,49 +40,6 @@ beforeEach(function () {
 afterEach(function () {
     Carbon::setTestNow();
 });
-
-/**
- * Skapar ett aktivt schema under $item och öppnar dess första förekomst genom
- * App\Actions\Schedule\OpenNextOccurrence — den enda vägen in i
- * schedule_occurrence också i produktionen (issue 22 § Beslut 1). Återkommandetypen
- * är `interval` med `anchor_date` = 2027-05-05 om inte $overrides säger något
- * annat, så förekomstens `due_at` är förutsägbar.
- *
- * @param  array<string, mixed>  $overrides
- * @return array{0: Schedule, 1: ScheduleOccurrence}
- */
-function oppnaForekomst(Item $item, array $overrides = []): array
-{
-    $schedule = Schedule::factory()->for($item, 'item')->create(array_merge([
-        'title' => 'Serva motorn',
-        'recurrence_type' => 'interval',
-        'interval_unit' => 'month',
-        'interval_count' => 12,
-        'anchor_date' => '2027-05-05',
-    ], $overrides));
-
-    $occurrence = app(OpenNextOccurrence::class)->handle($schedule);
-
-    if ($occurrence === null) {
-        throw new RuntimeException('Öppnade ingen förekomst för ett aktivt schema med anchor_date.');
-    }
-
-    return [$schedule, $occurrence];
-}
-
-/**
- * Skriver en beroenderad direkt i tabellen — vad $väntande väntar på $motpart.
- * Testerna som prövar själva ytan (POST) anropar endpointen; de som prövar
- * spärren eller listan bygger raden direkt här för att hålla varje test
- * fokuserat.
- */
-function skapaBeroende(ScheduleOccurrence $väntande, ScheduleOccurrence $motpart): void
-{
-    $dependency = new OccurrenceDependency;
-    $dependency->occurrence_id = $väntande->id;
-    $dependency->depends_on_occurrence_id = $motpart->id;
-    $dependency->save();
-}
 
 /**
  * Prefixet till en förekomsts rutter. $item måste vara förekomstens schemas
