@@ -156,12 +156,14 @@ class OwnershipTransferController extends Controller
     {
         Gate::authorize('transfer', $container);
 
-        if ($transfer->status !== 'pending') {
+        $revoked = OwnershipTransfer::query()
+            ->whereKey($transfer->getKey())
+            ->where('status', 'pending')
+            ->update(['status' => 'revoked']);
+
+        if ($revoked !== 1) {
             throw ApiException::make('transfer.not_pending', ['transfer' => $transfer->ulid], 422);
         }
-
-        $transfer->status = 'revoked';
-        $transfer->save();
 
         return response()->noContent();
     }

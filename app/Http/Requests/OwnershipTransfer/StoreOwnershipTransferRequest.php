@@ -45,6 +45,7 @@ class StoreOwnershipTransferRequest extends FormRequest
             'to_account' => ['nullable', 'string', 'ulid', Rule::exists('account', 'ulid'), 'prohibits:to_email', 'required_without:to_email'],
             'to_email' => ['nullable', 'string', 'email', 'max:255', 'prohibits:to_account', 'required_without:to_account'],
             'excluded_items' => ['sometimes', 'array'],
+            'excluded_items.*' => ['string'],
             'retain_access_level' => ['nullable', 'string', Rule::in(['read', 'write'])],
         ];
     }
