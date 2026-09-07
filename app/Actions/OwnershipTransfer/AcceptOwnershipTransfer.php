@@ -266,9 +266,11 @@ class AcceptOwnershipTransfer
 
         DB::table('item_tag')->whereIn('item_id', $ids)->delete();
 
-        // Beslut 12: beroenden som efter flytten skulle spänna över två
-        // containers tas bort — nu när itemen har sin slutgiltiga container.
+        // Beslut 12: beroenden och `item_link`-rader som efter flytten skulle
+        // spänna över två containers tas bort — nu när itemen har sin
+        // slutgiltiga container.
         $this->taBortSpanandeBeroenden($container, $behallnaContainer);
+        $this->taBortSpanandeLankar($container, $behallnaContainer);
 
         // Beslut 10: säljarens räknare ökar med ett här, och nettoförändringen
         // blir noll när Beslut 7 dragit av ursprungscontainern.
@@ -319,6 +321,35 @@ class AcceptOwnershipTransfer
 
         if ($spanandeForekomster->isNotEmpty()) {
             DB::table('occurrence_dependency')->whereIn('id', $spanandeForekomster)->delete();
+        }
+    }
+
+    /**
+     * Beslut 12, `item_link`-sidan (issue 14): en länk mellan ett undantaget
+     * och ett kvarvarande item pekar efter utlyftet över två containers, och
+     * en sådan rad läcker den ena partens namn och ULID till den andra pärmen
+     * (ItemLinkController slår upp motpartens namn utan containerfilter).
+     * Rader där ändarna hamnat i SAMMA container — båda undantagna eller båda
+     * kvar — står kvar orört. Tabellen har ingen egen container (§ Beslut 3),
+     * så containrarna jämförs via itemen, som här har sin slutgiltiga
+     * container.
+     */
+    private function taBortSpanandeLankar(
+        Container $container,
+        Container $behallnaContainer,
+    ): void {
+        $containerIds = [$container->id, $behallnaContainer->id];
+
+        $spanande = DB::table('item_link')
+            ->join('item AS fran', 'fran.id', '=', 'item_link.from_item_id')
+            ->join('item AS till', 'till.id', '=', 'item_link.to_item_id')
+            ->whereIn('fran.container_id', $containerIds)
+            ->whereIn('till.container_id', $containerIds)
+            ->whereColumn('fran.container_id', '!=', 'till.container_id')
+            ->pluck('item_link.id');
+
+        if ($spanande->isNotEmpty()) {
+            DB::table('item_link')->whereIn('id', $spanande)->delete();
         }
     }
 

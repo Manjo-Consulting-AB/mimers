@@ -8,6 +8,7 @@ use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemLink;
 use App\Models\Loan;
 use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
@@ -27,8 +28,9 @@ use function Pest\Laravel\postJson;
  * Session 1 (Beslut 1–9, transaktionen) testas i AcceptTest.php. De här
  * testerna bygger på att transaktionen finns och prövar utlyftet av de
  * undantagna itemsen: en ny container åt säljaren, `category_id` nollställs,
- * `item_tag`-raderna tas bort, beroenden som skulle spänna över två
- * containers försvinner, och bytena räknas först EFTER utlyftet (Beslut 13).
+ * `item_tag`-raderna tas bort, beroenden och `item_link`-rader som skulle
+ * spänna över två containers försvinner, och bytena räknas först EFTER
+ * utlyftet (Beslut 13).
  *
  * kontoMedMedlem(), skapaÄgarbyteRad(), skapaBeroende() och oppnaForekomst()
  * är globala testhjälpare i tests/Support/Testhjalpare.php.
@@ -252,6 +254,36 @@ it('schemaberoenden som skulle spänna över två containers tas bort, medan de 
     expect(OccurrenceDependency::query()
         ->where('occurrence_id', $forekomstE2->id)
         ->where('depends_on_occurrence_id', $forekomstE1->id)
+        ->exists())->toBeTrue();
+});
+
+it('item_link-rader som skulle spänna över två containers tas bort, medan de mellan två undantagna items står kvar', function () {
+    [$säljarkonto, $säljarUser, $container, $köparkonto, $köparHeaders] = undantagBas();
+
+    $e1 = undantagItem($container, $säljarkonto, $säljarUser, ['name' => 'Försäkringsbrev']);
+    $e2 = undantagItem($container, $säljarkonto, $säljarUser, ['name' => 'Inköpskvitto']);
+    $n1 = undantagItem($container, $säljarkonto, $säljarUser, ['name' => 'Drev']);
+
+    // N1 är länkad till E1 — efter utlyftet spänner länken över två
+    // containers och ska bort. E2:s länk till E1 — båda undantagna — står kvar.
+    $spanande = new ItemLink;
+    $spanande->from_item_id = $n1->id;
+    $spanande->to_item_id = $e1->id;
+    $spanande->relation = 'parent';
+    $spanande->save();
+
+    $kvar = new ItemLink;
+    $kvar->from_item_id = $e2->id;
+    $kvar->to_item_id = $e1->id;
+    $kvar->relation = 'parent';
+    $kvar->save();
+
+    undantagAcceptera($container, $köparkonto, $köparHeaders, [$e1->ulid, $e2->ulid]);
+
+    expect(ItemLink::count())->toBe(1);
+    expect(ItemLink::query()
+        ->where('from_item_id', $e2->id)
+        ->where('to_item_id', $e1->id)
         ->exists())->toBeTrue();
 });
 
