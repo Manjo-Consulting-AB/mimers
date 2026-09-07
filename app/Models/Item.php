@@ -184,6 +184,22 @@ class Item extends Model
     }
 
     /**
+     * Itemets utlåningar — historiken plus högst en öppen, se
+     * [[Items och organisation]] § loan och issue 76. Listningen i
+     * App\Http\Controllers\Api\LoanController::index() går genom den här
+     * relationen, och det är DEN som scopeBindings() löser `{loan}` inom
+     * `{item}` genom — ett lån på ett annat item ger 404 (issue 76 § Beslut
+     * 5). Mjukraderade lån filtreras bort av SoftDeletes globala scope medan
+     * raden ligger kvar.
+     *
+     * @return HasMany<Loan, $this>
+     */
+    public function loans(): HasMany
+    {
+        return $this->hasMany(Loan::class);
+    }
+
+    /**
      * Begränsar frågan till items som bär ALLA taggar i $tagIds — flera
      * taggar kombineras med OCH (issue 15a § Beslut 2). En join mot
      * `item_tag` med `whereIn('tag_id', $ids)`, grupperad på itemets nyckel
