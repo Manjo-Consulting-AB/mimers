@@ -164,7 +164,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // binds av gruppens scopeBindings() genom
     // App\Models\Container::transfers() — en transfer-ULID från en annan
     // container ger 404, samma resonemang som {invitation} ovan. Grindarna är
-    // viewAccesses() (GET) och den nya transfer()-metoden (POST/DELETE) på
+    // viewTransfers() (GET) och den nya transfer()-metoden (POST/DELETE) på
     // App\Policies\ContainerPolicy; plangrinden sitter i kontrollern efter
     // gaten (Beslut 8).
     Route::get('/containers/{container}/transfers', [OwnershipTransferController::class, 'index']);
