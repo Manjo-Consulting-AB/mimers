@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
 use App\Http\Controllers\Api\ItemSearchController;
+use App\Http\Controllers\Api\LoanController;
 use App\Http\Controllers\Api\MailgunWebhookController;
 use App\Http\Controllers\Api\NotificationPreferenceController;
 use App\Http\Controllers\Api\OccurrenceDependencyController;
@@ -314,6 +315,21 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}/schedules/{schedule}/dependencies', [ScheduleDependencyController::class, 'index']);
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/dependencies', [ScheduleDependencyController::class, 'store']);
     Route::delete('/containers/{container}/items/{item}/schedules/{schedule}/dependencies/{other}', [ScheduleDependencyController::class, 'destroy']);
+
+    // Issue 76 · Utlåning — historik plus högst en öppen per item, se
+    // App\Http\Controllers\Api\LoanController och App\Models\Loan. {item}
+    // nästlas under {container} som items ovan, och {loan} binds av gruppens
+    // scopeBindings() genom App\Models\Item::loans() — hela skyddet mot ett
+    // lån på ett annat item, eller ett item i en annan container: båda ger
+    // 404 (issue 76 § Beslut 5). Grindarna är view() (GET) och update()
+    // (POST/PATCH/DELETE), båda befintliga i App\Policies\ContainerPolicy —
+    // ingen ny policymetod (§ Beslut 6). Ingen show(): listan hämtar hela
+    // uppsättningen (§ Beslut 5). Påminnelsen mot `due_at` är 76b och lägger
+    // sina egna rutter senare, aldrig här.
+    Route::get('/containers/{container}/items/{item}/loans', [LoanController::class, 'index']);
+    Route::post('/containers/{container}/items/{item}/loans', [LoanController::class, 'store']);
+    Route::patch('/containers/{container}/items/{item}/loans/{loan}', [LoanController::class, 'update']);
+    Route::delete('/containers/{container}/items/{item}/loans/{loan}', [LoanController::class, 'destroy']);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och
