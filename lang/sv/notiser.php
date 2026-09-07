@@ -13,6 +13,12 @@ return [
         'line' => 'Uppgiften ":title" på ":item" i pärmen ":container" förföll :date och är nu försenad.',
         'action' => 'Öppna uppgiften',
     ],
+    'loan_due' => [
+        'subject' => ':item ska tillbaka :date',
+        'greeting' => 'Hej!',
+        'line' => '":item" som du lånat ut till :borrower ska lämnas tillbaka :date.',
+        'action' => 'Öppna utlåningen',
+    ],
     'quota_warning' => [
         'subject' => 'Lagringsutrymmet är :percent % fullt',
         'greeting' => 'Hej!',
