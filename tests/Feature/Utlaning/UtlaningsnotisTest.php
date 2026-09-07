@@ -174,11 +174,32 @@ it('ett gratiskonto får ingen notis för samma utlåning', function () {
     [$account, $user, $container, $item] = utlaningsnotisKontext(pro: false);
     utlaningsnotisLan($item);
 
+    // Sätt gränsen explicit — raden är testets premiss, inte dess mekanik
+    // (Beslut 10): seedet har redan false på gratisplanen, men ett test vars
+    // förutsättning står i en migrering byter tyst påstående den dag radens
+    // värde ändras.
+    sättPlangräns('free', 'loan_reminders', false);
+
     utlaningsnotisKor();
 
-    // Grinden läses, den kastar inte (Beslut 6): gratisplanens
-    // `loan_reminders` är false och kontot hoppas över i stället för att
-    // logga ett fångat undantag.
+    // Grinden läses, den kastar inte (Beslut 6): kontot hoppas över i
+    // stället för att logga ett fångat undantag.
+    expect(Notification::query()->count())->toBe(0);
+});
+
+it('ett pro-konto med loan_reminders satt till false får ingen notis för samma utlåning', function () {
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    [, , , $item] = utlaningsnotisKontext();
+    utlaningsnotisLan($item);
+
+    // Det test som faktiskt bevisar Beslut 6: grinden läser
+    // planLimit('loan_reminders'), inte planens slug. `=== false` mot en
+    // gratisplan går igenom även om implementationen råkar vara
+    // `$plan->slug === 'free'`; ett pro-konto vars gräns är false gör det inte.
+    sättPlangräns('pro', 'loan_reminders', false);
+
+    utlaningsnotisKor();
+
     expect(Notification::query()->count())->toBe(0);
 });
 
