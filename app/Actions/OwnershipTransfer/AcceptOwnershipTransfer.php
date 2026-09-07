@@ -45,15 +45,11 @@ use Illuminate\Support\Facades\DB;
 class AcceptOwnershipTransfer
 {
     /**
-     * `$actingUser` är den inloggade som accepterar, skickad av controllern
-     * (ADR-0024 — en Action hämtar aldrig själv global auth-state). Är den
-     * null (ett jobb som accepterar) skrivs loggraden som en systemhändelse.
-     *
      * @throws ApiException 422 `transfer.expired`, 403
      *                      `transfer.account_frozen`, 422
      *                      `transfer.not_pending`, 403 `quota.*`.
      */
-    public function handle(OwnershipTransfer $transfer, Account $toAccount, ?User $actingUser = null): Container
+    public function handle(OwnershipTransfer $transfer, Account $toAccount): Container
     {
         // Beslut 5: ett utgånget ägarbyte avvisas innan transaktionen öppnas.
         // Kolumnen står kvar på `pending` — utgången härleds ur `created_at`,
@@ -72,7 +68,7 @@ class AcceptOwnershipTransfer
 
         $fromAccount = Account::query()->findOrFail($transfer->from_account_id);
 
-        return DB::transaction(function () use ($transfer, $toAccount, $fromAccount, $actingUser): Container {
+        return DB::transaction(function () use ($transfer, $toAccount, $fromAccount): Container {
             // Beslut 5: statusövergången är en villkorad UPDATE, först i
             // transaktionen. Databasen serialiserar UPDATE-satser mot samma
             // rad, så två samtidiga accept-anrop kan aldrig båda lyckas —
@@ -155,7 +151,11 @@ class AcceptOwnershipTransfer
             // efter att containern flyttats och innan den stängs — en rad
             // som skrevs utanför transaktionen kunde överleva ett rollback
             // och beskriva ett ägarbyte som aldrig hände. `user_id` är den
-            // inloggade som accepterade, vidarebefordrad av controllern.
+            // inloggade som accepterade; saknas en request-kontext (ett jobb)
+            // är den null, en legitim systemhändelse.
+            /** @var User|null $actingUser */
+            $actingUser = auth('sanctum')->user();
+
             (new RecordAuditEvent)->handle(
                 action: AuditLog::ACTION_CONTAINER_TRANSFERRED,
                 account: $fromAccount,
