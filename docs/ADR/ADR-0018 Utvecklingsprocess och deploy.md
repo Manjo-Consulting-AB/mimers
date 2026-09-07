@@ -23,7 +23,7 @@ Driftmiljön är delad hosting hos inleed: ingen root, ingen container, inget Do
 | Gren `feature/issue-NN` | implementatören | arbetet sker isolerat; NN är GitHub-numret, inte backlognumret |
 | PR mot `main` | implementatören | CI kör lint, analys och tester |
 | Merge | **Tony** | koden blir del av `main` |
-| Deploy till staging | automatiskt | varje commit i `main` |
+| Deploy till staging | automatiskt | ~~varje commit i `main`~~ → vid versionstaggen, se uppföljning 2026-09-07 |
 | Release `vX.Y.Z` | **Tony** | vid stängd milstolpe, på en commit som redan testats på staging |
 | Deploy till produktion | automatiskt efter godkännande | GitHub Environment med Tony som required reviewer |
 
@@ -31,7 +31,15 @@ Driftmiljön är delad hosting hos inleed: ingen root, ingen container, inget Do
 
 **En release per stängd milstolpe.** När milstolpens sista issue är mergad och staging är grön på den commiten publiceras en release — i samma svep som retron körs, aldrig som en separat sak att komma ihåg. Milstolpen är befordringsenheten: `M0`–`M3` blev `v0.1.0`, `M4` blir `v0.2.0`, och `1.0.0` är MVP i drift. Se § Befordranstakt.
 
-**Bygg en gång.** Bygget sker vid merge till `main` och paketeras till en artefakt. Staging och produktion rullar ut **samma artefakt** — produktionsdeployen bygger aldrig om.
+**Bygg en gång.** Bygget sker ~~vid merge till `main`~~ → på versionstaggen (uppföljning 2026-09-07) och paketeras till en artefakt. Staging och produktion rullar ut **samma artefakt** — produktionsdeployen bygger aldrig om.
+
+**Uppföljning 2026-09-07: staging byggs på versionstaggen, inte på varje commit i `main` — tillfälligt.** Skälet är förbrukning, inte principen. Agentkön mergade 80 PR:er på sju dagar, vilket blev 80 bygg- och utrullningspar och ~694 GitHub-minuter i månaden; tillsammans med resten av pipelinen sprack Free-planens kvot på 2 000 minuter med över 100 %. Mätningen och de fem ändringarna står i [[Pipeline]] § Minutbudgeten.
+
+Vad som faktiskt betalades: staging speglar inte längre `main` commit för commit. Det är en förlust först när någon läser av staging mellan releaser, och så länge inga testare är ombord och ingen milstolpe är utrullad finns ingen sådan läsare. `workflow_dispatch` finns kvar för den som ändå behöver det.
+
+Vad som blev bättre på köpet: kravet i § Befordranstakt — *"taggen ska peka på en commit som redan varit grön på staging"* — var förut en kontroll i efterhand mot en artefakt som råkade byggas för varje main-commit. Nu byggs artefakten på exakt den commit som ska befordras, och kravet blir en ordning i ritualen i stället för en förhoppning: tagg → staging grön → release publiceras. Se [[Pipeline]] § Releaseritualen.
+
+**Detta är en tillfällig ändring.** `push`-triggern på `main` återinförs när produkten har testare, eller om GitHub-kvoten slutar vara den bindande begränsningen — en självhostad runner tar bort den helt, se [[Pipeline]] § Om det spricker igen.
 
 **Push, inte pull.** GitHub Actions skickar paketet över SSH och kör utrullningen. Servern hämtar ingenting och behöver varken git, composer eller node.
 

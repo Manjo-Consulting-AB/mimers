@@ -1,0 +1,77 @@
+name: Migreringar
+
+# Testsviten kör sqlite i minnet, produktionen och staging kör mysql. Issue 12
+# (M1) betalade den skillnaden i en skiftlägeskänslig jämförelse; issue 23b
+# (M3) betalade den igen, dyrare: två indexnamn som Laravel härleder till 67
+# respektive 66 tecken går rakt igenom sqlite och faller på mysqls
+# 64-teckengräns. 660 gröna tester, grön CI, och staging nere efter merge -
+# ingen instans i kedjan hade tillgång till den enda som kunde se felet.
+# Deterministiskt villkor med ett känt kommando, alltså ett skript.
+#
+# Jobbet bevisar `up()` mot en tom databas, alltså exakt det utrullningen gör.
+# Det säger inget om `down()` och inget om en migrering mot befintliga rader.
+#
+# Egen fil sedan 2026-09-07, inte ett jobb i ci.yml, för sökvägsfiltret nedan:
+# `paths` går bara att sätta per workflow, inte per jobb. Kontrollen kostade
+# 489 minuter i månaden medan bara 18 av 80 PR:er rörde en migrering - resten
+# betalade en mysql-tjänst plus en minuts avrundning för att köra noll nya
+# migreringar. `composer.lock` är med för att en ny Laravel-version kan ändra
+# hur schemat härleds utan att en enda fil under database/migrations rörs.
+#
+# Repot har ingen branch protection (privat repo på gratisplanen, se
+# Pipeline.md § Branch protection), så filtret kan inte råka blockera en merge
+# på en check som aldrig rapporterades: kön läser `gh pr checks`, som bara
+# bedömer de workflows som faktiskt startade.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'database/migrations/**'
+      - 'composer.lock'
+      - '.github/workflows/migreringar.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migreringar-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  migreringar:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: mimers
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: fileinfo, mbstring, pdo_mysql, zip
+          coverage: none
+
+      - name: Installera beroenden
+        run: composer install --prefer-dist --no-interaction --no-progress
+
+      # .env.example pekar redan på mysql på 127.0.0.1:3306 med databasen
+      # `mimers` och tom root - samma värden som tjänsten ovan startas med.
+      - name: Migreringarna går på MySQL
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan migrate --force --no-interaction

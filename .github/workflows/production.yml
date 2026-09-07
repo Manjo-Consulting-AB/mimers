@@ -19,6 +19,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Sedan 2026-09-07 bygger staging på versionstaggen, inte på varje push
+      # till main. Ordningen i releaseritualen är därför bindande och inte bara
+      # en rekommendation: taggen pushas först, staging bygger och rullar ut
+      # artefakten, och först när den körningen är grön publiceras releasen.
+      # Publiceras releasen i samma andetag som taggen skapas (`gh release
+      # create --target`) hinner staging inte bli klar, och det här steget
+      # felar - avsiktligt. Det är en utebliven utrullning, inte en trasig: det
+      # enda som behövs är att köra om jobbet när staging blivit grön.
       - name: Hämta artefakten som testades på staging
         env:
           GH_TOKEN: ${{ github.token }}
@@ -27,7 +35,12 @@ jobs:
           RUN=$(gh run list --commit "$SHA" --workflow staging.yml \
                   --status success --limit 1 --json databaseId -q '.[0].databaseId')
           if [ -z "$RUN" ]; then
-            echo "Ingen grön staging-körning för $SHA. Taggen pekar på en commit som aldrig rullats ut på staging."
+            echo "Ingen grön staging-körning för $SHA."
+            echo "Staging byggs på versionstaggen. Antingen är körningen inte klar än - kör om"
+            echo "det här jobbet när den är grön - eller så publicerades releasen utan att taggen"
+            echo "pushades först. Se Pipeline.md § Releaseritualen."
+            gh run list --commit "$SHA" --workflow staging.yml --limit 5 \
+              --json databaseId,status,conclusion -q '.[] | "  körning \(.databaseId): \(.status)/\(.conclusion // "-")"' || true
             exit 1
           fi
           gh run download "$RUN" -n "release-$SHA"

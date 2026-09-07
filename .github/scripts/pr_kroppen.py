@@ -15,7 +15,8 @@ AGENTS.md; det som inte är giltigt är att hoppa över fältet. Mallens egna
 HTML-kommentarer räknas inte som innehåll — annars vore en oredigerad mall grön.
 
 Gäller bara implementationsgrenar. Retro-, process- och teknisk skuld-PR:er
-använder inte mallen, precis som i granskning.yml.
+använder inte mallen. Grenprefixet är samma avgränsning som granskningsgrinden
+använde innan den flyttade in i kön (process_next_issue.py: pr_far_mergas).
 """
 
 from __future__ import annotations

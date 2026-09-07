@@ -855,14 +855,15 @@ def atgarda_arkitektsvar(pr_number):
             return
 
         print("--> Åtgärdat - väntar in CI innan automatisk merge...")
-        if wait_for_checks(pr_number):
+        if pr_far_mergas(pr_number):
             run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
             send_pushover(f"✅ Issue #{issue_num} ('{issue_title}') mergad efter arkitektsvar, PR #{pr_number}!")
             cleanup_worktree(worktree_path, branch_name)
         else:
             run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                     "### CI rött efter arkitektsvar\nÅtgärdsloopen löste fynden, men CI blev inte grönt. "
-                     "Mergar inte automatiskt."], cwd=REPO_ROOT)
+                     "### Mergespärren slog till efter arkitektsvar\nÅtgärdsloopen löste fynden, men "
+                     "antingen blev CI inte grönt eller så saknades `review:approved` vid "
+                     "mergetillfället. Mergar inte automatiskt."], cwd=REPO_ROOT)
             eskalera(issue_num, pr_number, worktree_path, branch_name, "Åtgärdat men CI blev rött.")
     finally:
         # Också vid sys.exit() ur eskalera() och vid ^C: statusetiketten får
@@ -1065,14 +1066,43 @@ def cleanup_worktree(worktree_path, branch_name):
     run_cmd(["git", "branch", "-D", branch_name], check=False, cwd=REPO_ROOT)
 
 
-def wait_for_checks(pr_number):
-    """Väntar in CI innan merge. `gh pr merge` mergar annars direkt,
-    oavsett om GitHub Actions ens hunnit starta - repot har ingen
-    branch protection som stoppar det (PR #112, ren race: mergad
-    14:25:32, testjobbet klart 14:27:01). "no checks reported" strax
-    efter en push betyder att Actions inte registrerat körningen än,
-    inte att inga checkar finns - då väntar vi och försöker igen i
-    stället för att läsa det som grönt."""
+def pr_far_mergas(pr_number):
+    """Den enda spärren före merge: `review:approved` sitter på PR:en, och CI är
+    grönt. Båda merge-ställena går genom den här funktionen, så det finns ett
+    ställe att hålla korrekt - inte tre som glider isär (se PR #163 och issue
+    #172, där samma kontroll fanns på tre ställen och bara ett blev lagat).
+
+    Etikettkravet låg fram till 2026-09-07 i .github/workflows/granskning.yml.
+    Den grinden var ett eget jobb som körde i sex sekunder och debiterades som
+    en hel minut, 181 gånger på en vecka: 793 minuter i månaden för en
+    API-fråga som kön ändå kan ställa gratis. Den var dessutom svagare än det
+    här: en check speglar etikettläget vid *körningen*, och en etikett som togs
+    bort efteråt syntes inte - därav omläsningsknepet som stod här förut.
+    Läsningen sker nu i samma andetag som mergen, mot API:et, och kan inte vara
+    inaktuell. Att grinden var en check spelade heller ingen roll för
+    verkställigheten: repot har ingen branch protection (privat repo på
+    gratisplanen, Pipeline.md § Branch protection), så det enda som någonsin
+    stoppat en merge är den här kön.
+
+    Kön mergar bara sina egna implementations-PR:er. Kravet är därför
+    ovillkorligt här, till skillnad från i workflowen, som fick undanta
+    retro-, process- och skuldgrenar eftersom den körde på varje PR - även
+    dem Tony mergar för hand.
+
+    `gh pr merge` mergar direkt om den inte hindras, oavsett om Actions ens
+    hunnit starta (PR #112, ren race: mergad 14:25:32, testjobbet klart
+    14:27:01). "no checks reported" strax efter en push betyder att Actions
+    inte registrerat körningen än, inte att inga checkar finns - då väntar vi
+    och försöker igen i stället för att läsa det som grönt.
+    """
+    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"],
+                            cwd=REPO_ROOT).stdout)
+    if not any(label["name"] == "review:approved" for label in pr["labels"]):
+        print("!! PR:en saknar `review:approved` vid mergetillfället - mergar inte. "
+              "Varje implementations-PR ska läsas av en granskningsmodell innan den "
+              "mergas (ADR-0026).")
+        return False
+
     for attempt in range(3):
         result = run_cmd(
             ["gh", "pr", "checks", pr_number, "--watch", "--interval", "15"],
@@ -1081,16 +1111,6 @@ def wait_for_checks(pr_number):
         output = ((result.stdout or "") + (result.stderr or "")).lower()
         if "no checks reported" in output and attempt < 2:
             time.sleep(15)
-            continue
-        # Granskningsgrinden kör om på `labeled`, och den körningen registreras
-        # inte i samma ögonblick som labeln sätts. Mätt 2026-09-02 på PR #118:
-        # `gh pr checks` visar bara den senaste körningen per checknamn (den
-        # gamla röda faller bort ur listningen, även om check-runs-API:et bär
-        # båda) - men läser man för tidigt är det fortfarande den gamla som är
-        # den senaste. Ett rött utfall läses därför om en gång innan det tros på.
-        if result.returncode != 0 and attempt < 2 and "granskning" in output:
-            print("  ⚠ Rött utfall med granskningsgrinden inblandad - läser om efter 20 s.")
-            time.sleep(20)
             continue
         return result.returncode == 0
     return False
@@ -1556,15 +1576,16 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
     # godkänd men fel PR låg nog att en genomförd granskning räcker, oavsett
     # axel. Gaten återinförs inför produktionssättning/testare - se ADR-0026.
     print(f"--> risk_class: {risk_class}, godkänd av {godkand_av} - väntar in CI innan automatisk merge...")
-    if wait_for_checks(pr_number):
+    if pr_far_mergas(pr_number):
         run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
         send_pushover(
             f"✅ Issue #{issue_num} ('{issue_title}') godkänd av {godkand_av} och mergad, PR #{pr_number}!"
         )
     else:
         run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                  "### CI rött efter godkännande\nGranskningen godkände PR:en, men CI blev inte "
-                  "grönt. Mergar inte automatiskt."],
+                  "### Mergespärren slog till efter godkännande\nGranskningen godkände PR:en, men "
+                  "antingen blev CI inte grönt eller så satt inte `review:approved` kvar vid "
+                  "mergetillfället. Mergar inte automatiskt."],
                  cwd=REPO_ROOT)
         eskalera(
             issue_num, pr_number, worktree_path, branch_name,
