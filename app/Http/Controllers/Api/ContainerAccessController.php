@@ -141,8 +141,12 @@ class ContainerAccessController extends Controller
      * Sedan issue 40 sker själva återkallningen och `access.revoked`-raden i
      * audit_log i EN transaktion (Beslut 10) — en logg som skrevs utanför
      * transaktionen kunde överleva ett rollback och beskriva en återkallelse
-     * som inte hände. En redan återkallad rad rörs inte och loggas inte en
-     * andra gång.
+     * som inte hände. Raden läses om och låses INNE i transaktionen
+     * (`lockForUpdate`): route-modellbindningens instans lästes innan
+     * transaktionen öppnades, och två samtidiga DELETE-anrop mot samma access
+     * skulle annars båda se `revoked_at === null` på sin egen instans och
+     * skriva var sin loggrad för samma återkallelse. En redan återkallad rad
+     * rörs inte och loggas inte en andra gång.
      */
     public function destroy(Request $request, Container $container, ContainerAccess $access): Response
     {
@@ -151,15 +155,21 @@ class ContainerAccessController extends Controller
         // ULID:en till `meta.grantee` löses upp i förväg — `ContainerAccess`
         // har medvetet ingen `grantee()`-relation (se modellens docblock), så
         // uppslagningen görs som en platt fråga, samma teknik som
-        // hydrateGranteeUlids() nedan.
+        // hydrateGranteeUlids() nedan. `grantee_id` rörs aldrig av en
+        // återkallning, så uppslagningen kan stå utanför transaktionen.
         $granteeUlid = $access->grantee_type === 'user'
             ? User::query()->whereKey($access->grantee_id)->value('ulid')
             : Account::query()->whereKey($access->grantee_id)->value('ulid');
 
         DB::transaction(function () use ($request, $container, $access, $granteeUlid): void {
-            if ($access->revoked_at === null) {
-                $access->revoked_at = now();
-                $access->save();
+            $låstAccess = ContainerAccess::query()
+                ->whereKey($access->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($låstAccess->revoked_at === null) {
+                $låstAccess->revoked_at = now();
+                $låstAccess->save();
 
                 /** @var User $revoker */
                 $revoker = $request->user();
@@ -170,12 +180,12 @@ class ContainerAccessController extends Controller
                     user: $revoker,
                     container: $container,
                     subjectType: 'container_access',
-                    subjectUlid: $access->ulid,
+                    subjectUlid: $låstAccess->ulid,
                     meta: [
-                        'grantee_type' => $access->grantee_type,
+                        'grantee_type' => $låstAccess->grantee_type,
                         'grantee' => $granteeUlid,
-                        'level' => $access->level,
-                        'kind' => $access->kind,
+                        'level' => $låstAccess->level,
+                        'kind' => $låstAccess->kind,
                     ],
                 );
             }
