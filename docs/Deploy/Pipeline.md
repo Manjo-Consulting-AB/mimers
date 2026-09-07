@@ -17,21 +17,26 @@ Tillbaka till [[00 Index]].
 ```
 gren "issue-11"
    │
-   ├─ PR ──────────► ci.yml            lint, analys, tester
+   ├─ PR ──────────► ci.yml            lint, analys, tester, processgrindar
+   │                 migreringar.yml   bara när en migrering ändras
    │
-   └─ merge till main
+   └─ merge till main                  (ingenting körs här)
+        │
+   tagg vX.Y.Z vid stängd milstolpe
         │
         └────────► staging.yml         bygger release.tar.gz
                         │              rullar ut på staging
                         │              artefakten sparas
                         │
-                   tagg vX.Y.Z vid stängd milstolpe
+                   release publiceras när staging är grön
                         │
                    production.yml      hämtar SAMMA artefakt
                                        rullar ut i produktion
 ```
 
 Taggen sätts **en gång per stängd milstolpe**, inte när det råkar passa — se § Releaseritualen och [[ADR-0018 Utvecklingsprocess och deploy]] § Befordranstakt.
+
+**Merge till `main` startar ingenting sedan 2026-09-07.** Staging byggde tidigare på varje push till `main`; med agentkön blev det ~80 utrullningar i veckan, och GitHub-kvoten sprack. Så länge inga testare är ombord och ingen milstolpe är utrullad behöver staging bara spegla det som ska befordras — se § Minutbudgeten. Behöver du staging på en otaggad commit, kör `staging.yml` för hand med `workflow_dispatch`.
 
 ## Kataloglayout på servern
 
@@ -134,6 +139,8 @@ Vilket det än blir ska det vara ett val. Skillnaden mot [[ADR-0018 Utvecklingsp
 
 Körs på varje PR. Grön här är förutsättningen för att merge-knappen ska gå att trycka.
 
+Filen har **ett jobb**, `test`. Processgrindarna — omfångsrutan, PR-kroppen och ordbudgeten för `AGENTS.md` — låg i ett eget `process`-jobb fram till 2026-09-07 och är nu steg i samma jobb, märkta `if: ${{ !cancelled() }}` så att ett rött testutfall inte döljer ett rött processutfall. Skälet är minutbudgeten: de tre grindarna kör tillsammans på sju sekunder, och ett eget jobb debiteras som en hel minut. Se § Minutbudgeten.
+
 ```yaml
 name: CI
 
@@ -194,20 +201,47 @@ Extensionlistan i `setup-php` är inte kosmetik. `ext-fileinfo` är ett hårt kr
 
 Testerna kör mot SQLite in-memory, konfigurerat i `phpunit.xml`. Skiljer sig databasen för mycket från produktion får en `services:`-block med `mariadb:10.6` läggas till — men börja enkelt.
 
+## `.github/workflows/migreringar.yml`
+
+Kör migreringarna mot en riktig MySQL 8. Testsviten kör SQLite in-memory; produktionen och staging kör MySQL, och den skillnaden har kostat två gånger. Issue 12 (M1) betalade den i en skiftlägeskänslig jämförelse. Issue 23b (M3) betalade den dyrare: två indexnamn som Laravel härleder till 67 respektive 66 tecken går rakt igenom SQLite och faller på MySQLs 64-teckengräns. 660 gröna tester, grön CI, och staging nere efter merge.
+
+Jobbet bevisar `up()` mot en tom databas — exakt det utrullningen gör. Det säger ingenting om `down()` och ingenting om en migrering mot befintliga rader.
+
+Det låg i `ci.yml` fram till 2026-09-07 och flyttade ut i en egen fil för att kunna sökvägsfiltreras: `paths` går bara att sätta per workflow, aldrig per jobb.
+
+```yaml
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'database/migrations/**'
+      - 'composer.lock'
+      - '.github/workflows/migreringar.yml'
+```
+
+`composer.lock` är med för att en ny Laravel-version kan ändra hur schemanamn härleds utan att en enda fil under `database/migrations/` rörs.
+
+Att filtret inte kan blockera en merge på en check som aldrig rapporterades beror på att repot saknar branch protection (se § Branch protection): kön läser `gh pr checks`, som bara bedömer de workflows som faktiskt startade. Skulle branch protection någon gång slås på måste den här checken läggas upp som *required* med en tom motsvarighet, annars fastnar varje PR som inte rör en migrering.
+
 ## `.github/workflows/staging.yml`
 
-Bygger artefakten och rullar ut den på testmiljön. Körs automatiskt vid varje merge.
+Bygger artefakten och rullar ut den på testmiljön. **Körs på versionstaggen**, inte på merge till `main` (ändrat 2026-09-07, se § Minutbudgeten).
+
+Bygge och utrullning ligger i **ett** jobb. De var två fram till 2026-09-07, delade bara av artefaktöverlämningen — vilket kostade en hel debiterad minut per körning för ett utrullningssteg som kör på 16 sekunder. `upload-artifact` fungerar lika bra i samma jobb, och `production.yml` hämtar artefakten precis som förut.
 
 ```yaml
 name: Staging
 
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
-  build:
+  slapp:
     runs-on: ubuntu-latest
+    environment: staging
     steps:
       - uses: actions/checkout@v4
 
@@ -244,17 +278,6 @@ jobs:
           name: release-${{ github.sha }}
           path: release.tar.gz
           retention-days: 90
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-${{ github.sha }}
 
       - name: Rulla ut
         env:
@@ -365,6 +388,8 @@ Pro-planens `max_file_bytes` är bundet till talet ovan och ligger på 64 MB. H�
 ## `.github/workflows/production.yml`
 
 Bygger ingenting. Hämtar artefakten som redan testats på staging.
+
+Sedan staging bygger på taggen i stället för på varje merge (2026-09-07) är **ordningen i releaseritualen bindande**: taggen pushas först, staging bygger och rullar ut, och först när den körningen är grön publiceras releasen. Skapas taggen och releasen i samma andetag — `gh release create --target` — hinner staging inte bli klar, och artefakthämtningen felar. Det är en utebliven utrullning, inte en trasig: kör om jobbet när staging blivit grön.
 
 ```yaml
 name: Produktion
@@ -550,21 +575,29 @@ Publiceringen är utrullningen: `production.yml` triggas på `release: published
 gh issue list --state open -L 100
 ```
 
-**2. Staging är grön på den commit du tänker tagga.** Det är inte samma sak som att den senaste körningen är grön — en avbruten eller röd körning på just din commit betyder ingen artefakt att hämta.
+**2. Pusha taggen — det är den som bygger staging.** Sedan 2026-09-07 kör `staging.yml` på taggen, inte på merge till `main`. Taggen skapas alltså här, utan release, och releasen publiceras först i steg 5.
 
 ```bash
 SHA=$(git rev-parse origin/main)
-gh run list --workflow staging.yml -L 10 \
-  --json databaseId,headSha,conclusion \
-  -q "[.[] | select(.headSha==\"$SHA\" and .conclusion==\"success\")][0]"
+git tag v0.2.0 "$SHA"
+git push origin v0.2.0
 ```
 
-**3. Artefakten finns kvar.** Retentionen är 90 dagar. Är den utgången finns ingenting att befordra — då får en tom commit till `main` bygga om, och taggen peka på den i stället.
+**3. Staging är grön på taggen.** Bygget och utrullningen ligger i samma jobb, så grön betyder både att artefakten finns och att den gick att rulla ut. Ingen grön körning här betyder ingen artefakt för produktionen att hämta.
 
 ```bash
-gh api repos/:owner/:repo/actions/runs/RUN_ID/artifacts \
-  --jq '.artifacts[] | "\(.name) expired=\(.expired)"'
+gh run list --workflow staging.yml -L 5 \
+  --json databaseId,headSha,status,conclusion \
+  -q "[.[] | select(.headSha==\"$SHA\")][0]"
 ```
+
+Läs av staging på riktigt innan du går vidare — det är hela poängen med att den byggs före releasen och inte samtidigt:
+
+```bash
+curl -sS -o /dev/null -w "%{http_code}\n" https://staging.mimers.app
+```
+
+Artefakten har 90 dagars retention. Det är gott om tid mellan steg 3 och steg 5, men står taggen kvar obefordrad i månader får den byggas om — kör `staging.yml` på nytt med `workflow_dispatch`.
 
 **4. Miljöskillnaderna är genomgångna.** Diffa `.env.example` mot förra taggen och kontrollera att varje ny nyckel antingen har rätt standardvärde i `config/` eller är satt i produktionens `shared/.env`. Det är den enda punkten i listan som inte går att verifiera från GitHub — `shared/.env` finns bara på servern.
 
@@ -572,12 +605,14 @@ gh api repos/:owner/:repo/actions/runs/RUN_ID/artifacts \
 git diff v0.1.0..origin/main -- .env.example
 ```
 
-**5. Publicera.** Taggen skapas av `gh` på angiven commit; release notes grupperas per milstolpe.
+**5. Publicera.** Taggen finns redan från steg 2, så `--verify-tag` används i stället för `--target`: det får kommandot att vägra om taggen mot förmodan saknas, i stället för att skapa en ny och starta ett staging-bygge som produktionen sedan kapplöper. Release notes grupperas per milstolpe.
 
 ```bash
-gh release create v0.2.0 --target "$SHA" \
+gh release create v0.2.0 --verify-tag \
   --title "v0.2.0 — M4 i produktion" --notes-file notes.md
 ```
+
+Publiceringen är utrullningen. Felar `production.yml` på *"Ingen grön staging-körning"* betyder det att steg 3 inte var klart — inget är utrullat, kör om jobbet när staging blivit grön.
 
 **6. Följ utrullningen och verifiera.** Migrationerna körs av `deploy.sh` med underhållsläge runt sig; loggen är det enda stället de syns.
 
@@ -590,6 +625,46 @@ curl -sS -H "Accept: application/json" -w "\nHTTP %{http_code}\n" https://mimers
 Sista raden ska ge `401 auth.unauthenticated`, inte `404`. En `404` betyder att rutterna är gamla — `current` pekar på fel release, eller `route:cache` kördes mot en halv utrullning.
 
 Går något fel: se § Rollback, och kom ihåg att databasen inte följer med tillbaka.
+
+## Minutbudgeten
+
+GitHub Actions-kvoten sprack 2026-09-07: förbrukningen låg över 100 % av kvoten på en org som ligger på Free-planen (2 000 minuter i månaden). Mätt på september månads 404 körningar, som täcker sju dagar och 80 mergade PR:er:
+
+| Jobb | Körningar | Debiterat | Faktisk tid | Per månad |
+|---|---:|---:|---:|---:|
+| CI / test | 134 | 280 min | 217 min | 1 200 |
+| Granskning | 181 | 185 min | **18 min** | 793 |
+| CI / process | 134 | 134 min | **16 min** | 574 |
+| CI / migreringar | 88 | 114 min | 89 min | 489 |
+| Staging / build | 81 | 81 min | 43 min | 347 |
+| Staging / deploy | 81 | 81 min | 22 min | 347 |
+| **Summa** | **702** | **878 min** | 406 min | **~3 760** |
+
+**Diagnosen är inte att något kör för länge — det är att för mycket kör som eget jobb.** GitHub debiterar lägst en hel minut per *jobb*, oavsett om det tog sex sekunder. 878 debiterade minuter mot 406 faktiska betyder att 54 % av notan var avrundning. Granskningsgrinden ensam kostade 793 minuter i månaden för 18 minuters arbete.
+
+Fem ändringar, alla gjorda 2026-09-07:
+
+1. **Processgrindarna blev steg i `test`** i stället för ett eget `process`-jobb. −574 min/mån. `if: ${{ !cancelled() }}` bevarar det parallella jobbets enda verkliga fördel: att båda utfallen syns i samma körning.
+2. **Granskningsgrinden flyttade in i kön.** `granskning.yml` är borttagen; `process_next_issue.py: pr_far_mergas()` läser `review:approved` mot API:et i samma andetag som mergen. −793 min/mån, och spärren blev starkare — se § Granskningsgrinden nedan.
+3. **`migreringar` blev en egen, sökvägsfiltrerad workflow.** Bara 18 av 80 PR:er rörde en migrering. −380 min/mån.
+4. **Staging bygger och rullar ut i ett jobb.** −347 min/mån.
+5. **Staging kör på versionstaggen, inte på merge till `main`.** −347 min/mån, och beslutet är uttryckligen tillfälligt: så länge inga testare är ombord och ingen milstolpe är utrullad behöver staging inte spegla varje mellansteg. Återinförs när produkten har testare.
+
+Kvar: ~1 400 min/mån mot 2 000 i kvot.
+
+### Granskningsgrinden
+
+`granskning.yml` gjorde `review:approved` till ett merge-hinder genom att vara en röd check. Två skäl till att den flyttade in i kön i stället för att bara köras mer sällan:
+
+**Den var dyr för vad den gjorde.** En API-fråga om en etikett, sex sekunder, 181 gånger i veckan, en debiterad minut styck.
+
+**Den var svagare än den såg ut.** En check speglar etikettläget vid *körningen* — togs etiketten bort efteråt syntes det inte, vilket är precis varför kön hade ett omläsningsknep med 20 sekunders paus inbyggt. Och verkställigheten satt aldrig i checken: repot saknar branch protection, så det enda som någonsin stoppat en merge är kön själv. Att läsa etiketten i samma andetag som mergen är alltså både billigare och mer korrekt.
+
+Kravet är ovillkorligt i kön, till skillnad från i workflowen. Den fick undanta retro-, process- och skuldgrenar eftersom den körde på varje PR, även dem Tony mergar för hand; kön mergar bara sina egna implementations-PR:er.
+
+### Om det spricker igen
+
+Nästa steg är en **självhostad runner** — självhostade minuter är gratis, och repot är privat, så risken med otillförlitliga fork-PR:er finns inte. Den kan inte bo på VPS:en som kör agentkön: 2 kärnor, 2 GB RAM och ~2,7 GB ledigt disk räcker inte för `test` plus en MySQL-tjänst vid sidan av kön. Det skulle behöva en egen gäst på Proxmox-värden.
 
 ## Branch protection
 

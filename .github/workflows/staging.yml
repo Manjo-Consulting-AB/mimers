@@ -1,8 +1,26 @@
 name: Staging
 
+# Triggern var `push` till `main` fram till 2026-09-07. Med 80 mergade PR:er på
+# en vecka blev det 80 bygg- och utrullningspar, ~694 minuter i månaden, för att
+# hålla staging synkad commit för commit med main. Så länge inga testare är
+# ombord och ingen milstolpe är utrullad betalar den synkningen ingenting -
+# staging behöver spegla det som ska befordras, inte varje mellansteg.
+#
+# Nu körs den på versionstaggen i stället. Det gör också steg 2 i
+# releaseritualen sant i stället för ungefärligt: förut byggdes en artefakt per
+# main-commit och taggen fick hoppas på att just dess commit hade en grön
+# körning kvar; nu byggs artefakten på exakt den commit som ska befordras, och
+# `production.yml` hämtar den. Taggen ska därför pushas *före* releasen
+# publiceras - se Pipeline.md § Releaseritualen.
+#
+# `workflow_dispatch` finns kvar som utgång: behöver staging läsas av på en
+# commit som inte ska taggas går den att starta för hand.
+
 on:
   push:
-    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -12,8 +30,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # Bygge och utrullning låg i två jobb fram till 2026-09-07, delade bara av
+  # artefaktöverlämningen. GitHub debiterar hel minut per jobb, och
+  # utrullningssteget kör på 16 sekunder - delningen kostade alltså en hel
+  # minut per körning för ingenting. `upload-artifact` fungerar lika bra i
+  # samma jobb, och produktionen hämtar den precis som förut.
+  slapp:
     runs-on: ubuntu-latest
+    environment: staging
     steps:
       - uses: actions/checkout@v4
 
@@ -44,23 +68,14 @@ jobs:
           tar -czf ../release.tar.gz --exclude='./.git' --exclude='./tests' --exclude='./node_modules' .
           mv ../release.tar.gz release.tar.gz
 
+      # Artefakten är det produktionen befordrar, inte något som byggs om där.
+      # Den sparas därför även när jobbet också rullar ut själv.
       - name: Spara artefakten
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ github.sha }}
           path: release.tar.gz
           retention-days: 90
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: staging
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-${{ github.sha }}
 
       - name: Rulla ut
         env:

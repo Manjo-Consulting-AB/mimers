@@ -66,62 +66,12 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/scripts/rott-pa-basen.sh
 
-  # Testsviten kör sqlite i minnet, produktionen och staging kör mysql. Issue 12
-  # (M1) betalade den skillnaden i en skiftlägeskänslig jämförelse; issue 23b
-  # (M3) betalade den igen, dyrare: två indexnamn som Laravel härleder till 67
-  # respektive 66 tecken går rakt igenom sqlite och faller på mysqls
-  # 64-teckengräns. 660 gröna tester, grön CI, och staging nere efter merge -
-  # ingen instans i kedjan hade tillgång till den enda som kunde se felet.
-  # Deterministiskt villkor med ett känt kommando, alltså ett skript.
-  #
-  # Jobbet bevisar `up()` mot en tom databas, alltså exakt det utrullningen gör.
-  # Det säger inget om `down()` och inget om en migrering mot befintliga rader.
-  migreringar:
-    runs-on: ubuntu-latest
-
-    services:
-      mysql:
-        image: mysql:8
-        env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
-          MYSQL_DATABASE: mimers
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.4'
-          extensions: fileinfo, mbstring, pdo_mysql, zip
-          coverage: none
-
-      - name: Installera beroenden
-        run: composer install --prefer-dist --no-interaction --no-progress
-
-      # .env.example pekar redan på mysql på 127.0.0.1:3306 med databasen
-      # `mimers` och tom root - samma värden som tjänsten ovan startas med.
-      - name: Migreringarna går på MySQL
-        run: |
-          cp .env.example .env
-          php artisan key:generate
-          php artisan migrate --force --no-interaction
-
-  # Nollsummeregeln är verkningslös om ingen håller den. En regelfil som växer
-  # med en punkt per retro slutar bli läst, och då styr den ingenting.
-  # Deterministiskt villkor, alltså ett skript - inte en modell.
-  process:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      # Processkontrollerna låg till 2026-09-07 i ett eget jobb. De kör på sju
+      # sekunder tillsammans, men GitHub debiterar hel minut per jobb - 134
+      # körningar i veckan kostade 134 minuter för 16 minuters arbete. Som steg
+      # här kostar de ingenting extra. `if: !cancelled()` bevarar det enda jobbet
+      # faktiskt gav: att ett rött testutfall och ett rött processutfall syntes i
+      # samma körning i stället för att det ena dolde det andra.
 
       # Omfångsrutan är bindande enligt AGENTS.md men har fram tills nu bara
       # kontrollerats av granskaren. Globbarna i issue-mallen är maskinläsbara
@@ -132,6 +82,7 @@ jobs:
       # innan - se skriptets docstring för M5:s fem röda utfall, varav två
       # löstes genom att skriva om rutan i stället för att vänta på svar.
       - name: Diffen ligger innanför omfångsrutan
+        if: ${{ !cancelled() }}
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           HEAD_REF: ${{ github.head_ref }}
@@ -146,6 +97,7 @@ jobs:
       # Rubriken finns eller finns inte: deterministiskt villkor, alltså ett
       # skript. Motiveringen i sin helhet står i skriptets docstring.
       - name: PR-kroppen bär processnoteringen och frågorna
+        if: ${{ !cancelled() }}
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           HEAD_REF: ${{ github.head_ref }}
@@ -189,6 +141,7 @@ jobs:
       # från "jag tittade åt fel håll" rapporterar grönt i båda fallen, se
       # docs/Process/Lärdomar.md.
       - name: Ordbudget för AGENTS.md
+        if: ${{ !cancelled() }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -220,6 +173,7 @@ jobs:
           exit 1
 
       - name: Markörerna för det synkade blocket är hela
+        if: ${{ !cancelled() }}
         run: |
           BEGIN=$(grep -c 'ai-standards:begin agent-core' AGENTS.md || true)
           END=$(grep -c 'ai-standards:end agent-core' AGENTS.md || true)
