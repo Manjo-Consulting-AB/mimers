@@ -177,6 +177,26 @@ class Container extends Model
     }
 
     /**
+     * Containerns exporter — beställda fullständiga uttag av innehållet, se
+     * [[Backlog]] M6 § 41 och App\Models\Export. Bara relationen läggs till
+     * här; den krävs av `scopeBindings()` i routes/api.php för att en
+     * export-ULID från en annan container inte ska lösa upp under den här
+     * (issue 41 § Beslut 5), samma mönster som transfers() ovan. API-ytan
+     * bor i App\Http\Controllers\Api\ExportController, själva bygget i
+     * App\Jobs\BuildContainerExport.
+     *
+     * ALLA rader, oavsett `status` — listningen visar historiken, och
+     * duplikatspärren (högst en `pending`/`running` i taget) filtrerar själv
+     * på status.
+     *
+     * @return HasMany<Export, $this>
+     */
+    public function exports(): HasMany
+    {
+        return $this->hasMany(Export::class);
+    }
+
+    /**
      * Begränsar till containers $user når: medlem i ägarkontot (regel 1 i
      * [[Konton och åtkomst]] § Behörighetsregler) ELLER en giltig
      * `container_access` som träffar henne eller ett av hennes konton
