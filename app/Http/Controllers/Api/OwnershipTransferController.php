@@ -29,7 +29,8 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
  * INGEN behörighetslogik bor här: avsändarsidan (store/destroy) anropar bara
  * `Gate::authorize('transfer', $container)` mot den nya policymetoden i
  * App\Policies\ContainerPolicy (Beslut 7), och index anropar
- * `viewAccesses()` — samma avsändarvy som inbjudningarna (10a). Mottagarsidan
+ * `viewTransfers()` — avsändarens vy över just ägarbytena, en egen yta med
+ * egen rutt, egen resurs och egen grind (issue 39a). Mottagarsidan
  * (incoming/reject) anropar INGEN policy: den som radens mottagarväg pekar ut
  * ÄR behörig, och en rad som inte pekar på användaren ska vara osynlig, inte
  * ge ett behörighetsfel som läcker att raden finns (Beslut 15).
@@ -51,12 +52,12 @@ class OwnershipTransferController extends Controller
      * `created_at` fallande. Resursen redovisar en utgången `pending`-rad
      * som `expired` utan att kolumnen ändras (Beslut 10).
      *
-     * `viewAccesses()` är bara regel 1 (medlemskap) — ett `read_only`
+     * `viewTransfers()` är bara regel 1 (medlemskap) — ett `read_only`
      * ägarkonto får fortfarande se sin lista, se App\Policies\ContainerPolicy.
      */
     public function index(Container $container): JsonResponse
     {
-        Gate::authorize('viewAccesses', $container);
+        Gate::authorize('viewTransfers', $container);
 
         $transfers = $container->transfers()
             ->with(['container', 'toAccount'])

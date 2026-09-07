@@ -137,6 +137,27 @@ class ContainerPolicy
     }
 
     /**
+     * Får användaren SE containerns ägarbyten (issue 39a, avsändarens lista)?
+     * Bara regel 1 — INGEN regel 4-kontroll, av samma skäl som
+     * viewAccesses(): ett `read_only`-ägarkonto måste kunna se sina
+     * utestående ägarbyten, för att se listan är att läsa.
+     *
+     * Identisk kropp med viewAccesses() i dag — ändå TVÅ metoder, för de
+     * betyder olika saker (åtkomsthistorik vs överlåtelsehistorik) och kan
+     * komma att ändras oberoende av varandra: 39b och 40 bygger på den här
+     * ytan. Slå inte ihop dem.
+     *
+     * Asymmetrin mot transfer() (DELETE, initieringen) är avsiktlig: att dra
+     * tillbaka ett ägarbyte är en skrivning som regel 4 INTE undantar — de
+     * uttömmande uppräknade undantagen i regel 4 är återkalla åtkomst och
+     * rensa lagring, och ägarbyte är inte ett av dem.
+     */
+    public function viewTransfers(User $user, Container $container): bool
+    {
+        return $this->isMemberOfOwnerAccount($user, $container->account);
+    }
+
+    /**
      * Får användaren ÅTERKALLA en åtkomst (issue 9b, DELETE)? Bara regel 1 —
      * INGEN regel 4-kontroll. Att återkalla är en skrivning, men regel 4
      * undantar den uttryckligen: den MINSKAR exponeringen i stället för att
