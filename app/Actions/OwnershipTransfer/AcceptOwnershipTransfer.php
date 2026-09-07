@@ -22,21 +22,20 @@ use Illuminate\Support\Facades\DB;
  * App\Actions\Invitation\AcceptInvitation, med samma engångsspärr och samma
  * "allt eller inget"-form.
  *
- * Det som sker, i ordningen i Beslut 4–9: utgånget ägarbyte avvisas innan
+ * Det som sker, i ordningen i Beslut 4–13: utgånget ägarbyte avvisas innan
  * transaktionen öppnas, status flippas med en villkorad UPDATE först inne i
- * transaktionen, kvotkontrollerna görs mot mottagarens NUVARANDE plan,
- * containern flyttas, förbrukningen flyttas mellan räknarna (den enda vägen
- * in i dem är App\Actions\Usage\AdjustUsage), åtkomsterna återkallas och den
- * kvarhållna åtkomsten skapas om sådan begärts, och mottagaren får tolv
- * månader Pro. Skriver inget i `audit_log` — det gör issue 40, som lägger
- * anropet här. Ingen bonusspärr ("en gång per mottagande konto") — det är
- * issue 49 (M9), som hakar i den här transaktionen senare.
+ * transaktionen, de items säljaren behåller lyfts ut till en egen container
+ * (session 2, Beslut 10–13), kvotkontrollerna görs mot mottagarens NUVARANDE
+ * plan, containern flyttas, förbrukningen flyttas mellan räknarna (den enda
+ * vägen in i dem är App\Actions\Usage\AdjustUsage), åtkomsterna återkallas
+ * och den kvarhållna åtkomsten skapas om sådan begärts, och mottagaren får
+ * tolv månader Pro. Skriver inget i `audit_log` — det gör issue 40, som
+ * lägger anropet här. Ingen bonusspärr ("en gång per mottagande konto") —
+ * det är issue 49 (M9), som hakar i den här transaktionen senare.
  *
  * Anropas av App\Http\Controllers\Api\OwnershipTransferController efter att
  * den bevisat att raden är mottagarens (annars 404) och löst ut vilket
- * konto som tar emot. Mottagarkontot är upplåst (Beslut 3) och säljarens
- * undantagna items har ännu inte lyfts ut — det är session 2 i samma issue,
- * som fyller i steget markerat nedan.
+ * konto som tar emot. Mottagarkontot är upplåst (Beslut 3).
  */
 class AcceptOwnershipTransfer
 {
@@ -80,9 +79,13 @@ class AcceptOwnershipTransfer
 
             $container = Container::query()->findOrFail($transfer->container_id);
 
-            // Session 2 (samma issue): här lyfts de undantagna itemen ut till
-            // en egen container innan bytena räknas — Beslut 10–13. Kvot-
-            // kontrollen för säljarens nya container hoppas över med flit.
+            // Session 2 (Beslut 10–13): de items säljaren behåller lyfts ut
+            // till en egen container INNAN bytena räknas (Beslut 13) — annars
+            // flyttas säljarens försäkringsbrevs-bilagor till köparens kvot,
+            // och köparen nekas för byte hon aldrig får (Beslut 4). Är
+            // `excluded_item_ids` tom skapas ingen container alls.
+            $this->lyftUtBehallnaItems($transfer, $container, $fromAccount);
+
             $bytesSomFlyttas = $this->bytesAttFlytta($container, $fromAccount);
 
             // Beslut 4: kvotkontroll mot mottagarens NUVARANDE plan, före
@@ -198,6 +201,125 @@ class AcceptOwnershipTransfer
         return Item::query()
             ->where('container_id', $container->id)
             ->select('id');
+    }
+
+    /**
+     * Session 2, Beslut 10–13: de items säljaren behåller — inköpspris,
+     * försäkringsbrev — lyfts ut till en egen container ägd av säljaren, i
+     * samma transaktion. De kan inte ligga kvar i containern som byter ägare
+     * och de får inte kastas.
+     *
+     * Kvotkontrollen för säljarens nya container hoppas över MED FLIT: en
+     * säljare som hunnit nedgraderas mellan initiering och accept skulle
+     * annars blockera en accept köparen inte kan påverka, och pärmen är redan
+     * initierad av ett Pro-konto.
+     */
+    private function lyftUtBehallnaItems(
+        OwnershipTransfer $transfer,
+        Container $container,
+        Account $fromAccount,
+    ): void {
+        $excludedUlids = $transfer->excluded_item_ids ?? [];
+
+        if ($excludedUlids === []) {
+            return;
+        }
+
+        // ULID:erna validerades mot containern vid initieringen (39a § Beslut
+        // 5), men slås upp här av accepten igen och bara bland LEVANDE items i
+        // DEN HÄR containern. Ett item som hunnit mjukraderas kan inte lyftas
+        // ut, och en ULID som av någon anledning inte längre hör till
+        // containern får inte flytta ett annat kontos item.
+        $behallna = Item::query()
+            ->whereIn('ulid', $excludedUlids)
+            ->where('container_id', $container->id)
+            ->get();
+
+        if ($behallna->isEmpty()) {
+            return;
+        }
+
+        // Beslut 10: ny container ägd av säljaren, samma `kind` som
+        // ursprungscontainern. Ingen annan kolumn ärvs — det här är en ny
+        // pärm, inte en klon.
+        $behallnaContainer = new Container;
+        $behallnaContainer->account_id = $fromAccount->id;
+        $behallnaContainer->name = $container->name.' (behållna poster)';
+        $behallnaContainer->kind = $container->kind;
+        $behallnaContainer->save();
+
+        $ids = $behallna->pluck('id');
+
+        // Beslut 11: itemen får den nya containern och `category_id`
+        // nollställs — kategorier är per container (issue 11), en kategori i
+        // den gamla pärmen är otillgänglig från den nya. `item_tag`-raderna
+        // för de undantagna itemen tas bort av samma skäl (issue 12). Det är
+        // en medveten förlust av två etiketter på en handfull items, inte av
+        // innehåll.
+        Item::query()
+            ->whereIn('id', $ids)
+            ->update([
+                'container_id' => $behallnaContainer->id,
+                'category_id' => null,
+                'updated_at' => now(),
+            ]);
+
+        DB::table('item_tag')->whereIn('item_id', $ids)->delete();
+
+        // Beslut 12: beroenden som efter flytten skulle spänna över två
+        // containers tas bort — nu när itemen har sin slutgiltiga container.
+        $this->taBortSpanandeBeroenden($container, $behallnaContainer);
+
+        // Beslut 10: säljarens räknare ökar med ett här, och nettoförändringen
+        // blir noll när Beslut 7 dragit av ursprungscontainern.
+        (new AdjustUsage)->handle($fromAccount->id, containersDelta: +1);
+    }
+
+    /**
+     * Beslut 12: `schedule_dependency` och `occurrence_dependency` (issue
+     * 23a/23b) kan efter utlyftet peka från ett schema i den nya pärmen till
+     * ett i den gamla, eller tvärtom. Sådana rader raderas i samma
+     * transaktion. Ett beroende mellan två items som hamnat i SAMMA container
+     * — båda undantagna eller båda kvar — står kvar orört.
+     *
+     * Containrarna jämförs som de STÅR efter utlyftet; därför anropas den här
+     * metoden efter att itemen fått sin nya container.
+     */
+    private function taBortSpanandeBeroenden(
+        Container $container,
+        Container $behallnaContainer,
+    ): void {
+        $containerIds = [$container->id, $behallnaContainer->id];
+
+        $spanandeScheman = DB::table('schedule_dependency')
+            ->join('schedule AS schema', 'schema.id', '=', 'schedule_dependency.schedule_id')
+            ->join('item AS item', 'item.id', '=', 'schema.item_id')
+            ->join('schedule AS motpart', 'motpart.id', '=', 'schedule_dependency.depends_on_schedule_id')
+            ->join('item AS motpartsItem', 'motpartsItem.id', '=', 'motpart.item_id')
+            ->whereIn('item.container_id', $containerIds)
+            ->whereIn('motpartsItem.container_id', $containerIds)
+            ->whereColumn('item.container_id', '!=', 'motpartsItem.container_id')
+            ->pluck('schedule_dependency.id');
+
+        if ($spanandeScheman->isNotEmpty()) {
+            DB::table('schedule_dependency')->whereIn('id', $spanandeScheman)->delete();
+        }
+
+        $spanandeForekomster = DB::table('occurrence_dependency')
+            ->join('schedule_occurrence AS forekomst', 'forekomst.id', '=', 'occurrence_dependency.occurrence_id')
+            ->join('schedule AS schema', 'schema.id', '=', 'forekomst.schedule_id')
+            ->join('item AS item', 'item.id', '=', 'schema.item_id')
+            ->join('schedule_occurrence AS motpart', 'motpart.id', '=', 'occurrence_dependency.depends_on_occurrence_id')
+            ->join('schedule AS motpartsSchema', 'motpartsSchema.id', '=', 'motpart.schedule_id')
+            ->join('item AS motpartsItem', 'motpartsItem.id', '=', 'motpartsSchema.item_id')
+            ->whereIn('item.container_id', $containerIds)
+            ->whereIn('motpartsItem.container_id', $containerIds)
+            ->whereColumn('item.container_id', '!=', 'motpartsItem.container_id')
+            ->pluck('occurrence_dependency.id');
+
+        if ($spanandeForekomster->isNotEmpty()) {
+            DB::table('occurrence_dependency')->whereIn('id', $spanandeForekomster)->delete();
+        }
     }
 
     /**
