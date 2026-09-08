@@ -4,6 +4,7 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 
 ### 42. Backupscript
 Daglig `mariadb-dump --single-transaction` till egen server, veckovis filsynk **utan `--delete`**, månatlig arkivkopia. Egen server **hämtar** över SSH; inga backup-credentials på produktionsservern. Krypterat, restic rekommenderat.
+**Byggd som:** 42a serversidan hos inleed (det `command=`-låsta skriptet), 42b hämtaren på egen server (restic, filsynk, arkiv)
 **Läs:** [[ADR-0015 Backup]]
 **Beror på:** 1
 
