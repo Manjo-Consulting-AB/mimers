@@ -50,7 +50,7 @@
 # 0 det värsta utfallet i hela kedjan. Hämtaren i 42b litar på exit-koden.
 set -euo pipefail
 
-VERSION="2"   # höjs vid varje ändring, så att glapp mot repot syns på stderr
+VERSION="3"   # höjs vid varje ändring, så att glapp mot repot syns på stderr
 
 # Bara produktion, med flit (Beslut 5). Staging är engångsdata som återskapas
 # av en utrullning, och en miljöväljare vore ytterligare en indata på en nyckel
@@ -205,6 +205,22 @@ rsync_gren() {
 
   if [ "$sender" -ne 1 ]; then
     echo "mimers-backup: --sender saknas — utan den är anropet en skrivning" >&2
+    exit 64
+  fi
+
+  # Kontraktet med 42b är en enda källa: rsync --server --sender <flaggor> . <sökväg>.
+  # Allt som inte börjar på - är ett positionsargument, och det får finnas exakt
+  # två: käll-markören "." och sökvägen. Fler positionsargument vore ytterligare
+  # käll-sökvägar — rsync läser dem allihop — och då kunde en läckt nyckel läsa
+  # godtyckliga filer på servern, inte bara filkatalogen. Att bara validera sista
+  # token räcker därför inte: även en andra markör (". X . <sökväg>") vore en
+  # extra källa.
+  local positionella=()
+  for token in "${argv[@]:2}"; do
+    [[ "$token" == -* ]] || positionella+=("$token")
+  done
+  if [ "${#positionella[@]}" -ne 2 ] || [ "${positionella[0]}" != . ]; then
+    echo "mimers-backup: rsync-anropet får inte ha fler än en källsökväg — formatet är 'rsync --server --sender <flaggor> . <sökväg>'" >&2
     exit 64
   fi
 

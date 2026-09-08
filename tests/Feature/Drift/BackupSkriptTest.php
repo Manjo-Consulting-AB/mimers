@@ -277,7 +277,7 @@ it('ger exit 64 och ingenting på stdout för tomt eller okänt kommando', funct
 
     expect($kod)->toBe(64);
     expect($stdout)->toBe([]);
-    expect($stderr)->toContain('mimers-backup v2');
+    expect($stderr)->toContain('mimers-backup v3');
 })->with([
     'tomt kommando' => '',
     'okänt kommando' => 'hej',
@@ -381,6 +381,32 @@ it('avvisar en sökväg som innehåller ..', function () {
     expect($stderr)->toContain("'..'");
 });
 
+it('avvisar ett rsync-anrop med extra källsökväg före den giltiga sista sökvägen', function () {
+    $scenarie = backupSkriptScenarie();
+    [$kod, $stdout, $stderr] = backupSkriptKör(
+        $scenarie,
+        'rsync --server --sender -logDtpre.iLsfxCIvu . /etc/passwd '.$scenarie['filkatalog'].'/'
+    );
+
+    expect($kod)->toBe(64);
+    expect($stdout)->toBe([]);
+    expect($stderr)->toContain('fler än en källsökväg');
+    expect(file_exists($scenarie['capture']))->toBeFalse('rsync-stubben ska inte ha körts');
+});
+
+it('avvisar ett rsync-anrop med extra källsökväg före en andra käll-markör', function () {
+    $scenarie = backupSkriptScenarie();
+    [$kod, $stdout, $stderr] = backupSkriptKör(
+        $scenarie,
+        'rsync --server --sender -logDtpre.iLsfxCIvu . /etc/passwd . '.$scenarie['filkatalog'].'/'
+    );
+
+    expect($kod)->toBe(64);
+    expect($stdout)->toBe([]);
+    expect($stderr)->toContain('fler än en källsökväg');
+    expect(file_exists($scenarie['capture']))->toBeFalse('rsync-stubben ska inte ha körts');
+});
+
 it('avvisar tokens med kodtecken i rsync-kommandot', function (string $token) {
     $scenarie = backupSkriptScenarie();
     [$kod, $stdout, $stderr] = backupSkriptKör(
@@ -403,7 +429,7 @@ it('innehåller varken php artisan eller eval, men väl en VERSION-rad', functio
 
     expect($skript)->not->toContain('php artisan');
     expect($skript)->not->toContain('eval');
-    expect($skript)->toContain('VERSION="2"');
+    expect($skript)->toContain('VERSION="3"');
 });
 
 it('skriver ingenting i appkatalogen under dumpen', function () {
