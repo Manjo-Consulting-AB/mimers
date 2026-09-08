@@ -67,7 +67,9 @@ for APP in ~/mimers ~/mimers-staging; do
   mkdir -p "$APP"/shared/storage/framework/{cache/data,sessions,views}
 done
 
-# .env skapas här och bara här, en per miljö. Återstår.
+# .env skapas här och bara här, en per miljö. APP_KEY och databasuppgifterna
+# finns BARA på servern. De sju mejlnycklarna sätts däremot i GitHub och skrivs
+# in av utrullningen - se ADR-0030.
 nano ~/mimers/shared/.env
 nano ~/mimers-staging/shared/.env
 
@@ -87,6 +89,10 @@ crontab -e
 
 **Uppgifter som schemaläggs måste vara `->call()` eller `->job()`.** `proc_open` är avstängt, så `->command(...)` fungerar inte. Se [[ADR-0018 Utvecklingsprocess och deploy]].
 
+**Kön behöver ingen egen rad här.** `QUEUE_CONNECTION=database` i båda miljöerna, och arbetaren är schemalagd i `routes/console.php` — minutcronen ovan kör den, som allt annat. Det finns alltså ingen `queue:work` att starta för hand, ingen daemon att hålla vid liv, och inget som behöver göras om på en ny server utöver cron-raden. Talen och skälet står i [[ADR-0031 Köarbetaren körs av schemaläggaren]].
+
+Att den faktiskt drar kön läses av med `retro-fakta`: avsnittet **Kön** skriver ut `jobs`, `failed_jobs` och raden `köarbetare:`. Står det *INGEN hittad* med jobb i tabellen är kön död, och exportknappen levererar inte.
+
 **Agentens läsnyckel.** Retron läser servern genom ett skript som är låst till en egen nyckel — inget skal, ingen skrivrättighet. Motiveringen och de två villkoren på skriptet står i [[ADR-0029 Agentens läsåtkomst till servern]]. Nyckelparet genereras av Tony; privathalvan passerar aldrig genom en agent.
 
 ```bash
@@ -105,8 +111,8 @@ printf 'command="/home/s174280/bin/retro-fakta",restrict %s\n' "$(cat claude-ret
 Anropet, från utvecklings-VPS:en:
 
 ```bash
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net staging
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net staging
 ```
 
 `command=` gör att servern kör skriptet oavsett vad klienten ber om — klientens kommando hamnar i `SSH_ORIGINAL_COMMAND`, och skriptet läser bara miljönamnet ur det. `restrict` stänger portforwarding, agentforwarding, X11 och pty. Skriptet skriver ut sin egen version, så att ett glapp mellan serverns kopia och repots syns i utdatan.
@@ -136,6 +142,15 @@ Lägg upp två *Environments* i repots inställningar: `staging` och `production
 | `DEPLOY_KEY` | privat nyckel, **egen nyckel per miljö** | sätts inte i förväg |
 | `DEPLOY_KNOWN_HOSTS` | utdata från `ssh-keyscan -p 2020 prime5.inleed.net` | tre rader: ed25519, rsa, ecdsa |
 | `DEPLOY_PATH` | appkatalogen för miljön | `/home/s174280/mimers` respektive `/home/s174280/mimers-staging` |
+| `MAIL_MAILER` | `mailgun` i båda miljöerna | skrivs in i `shared/.env` vid utrullning |
+| `MAIL_FROM_ADDRESS` | `info@mimers.app` | ⇑ |
+| `MAIL_FROM_NAME` | avsändarnamnet | ⇑ |
+| `MAILGUN_DOMAIN` | `mg.mimers.app` respektive `mg-staging.mimers.app` | ⇑ |
+| `MAILGUN_SECRET` | Mailguns sändnings-API-nyckel, olika per miljö | ⇑ |
+| `MAILGUN_ENDPOINT` | `api.eu.mailgun.net` vid EU-region | ⇑ |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | nyckeln HMAC-signaturen verifieras med | ⇑ |
+
+De sju nedersta transporteras till serverns `shared/.env` av utrullningen, se [[ADR-0030 Miljövariabler ur GitHubs secrets]]. **Listan som avgör vilka som transporteras står i `env:`-blocket i `staging.yml` och `production.yml`** — en secret som läggs upp här men inte där når aldrig appen, tyst. Det var precis den luckan som gjorde att M5 låg utrullad i produktion utan att kunna skicka ett mejl; `retro-fakta` är motmedlet, den visar vad som faktiskt hamnade i filen.
 
 `production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör — se begränsningen nedan.
 
@@ -379,7 +394,7 @@ ssh: connect to host staging.mimers.app port 22: Network is unreachable
 Det ser ut som att servern är nere. Den är det inte — routen saknas i andra änden av kabeln. Hela raden som fungerar:
 
 ```bash
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
 ```
 
 Sista ordet är miljövalet som `retro-fakta` läser, inte en del av lösningen på routeproblemet — se § Engångsuppsättning.
@@ -629,11 +644,11 @@ Artefakten har 90 dagars retention. Det är gott om tid mellan steg 3 och steg 5
 
 ```bash
 git diff v0.1.0..origin/main -- .env.example
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net staging
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net staging
 ```
 
-Läs samtidigt av kön i utdatan. Två köade jobb är utrullade och ingenting startar en arbetare (issue 235); `QUEUE_CONNECTION` och radantalet i `jobs` avgör om en ny release levererar det den lovar.
+Läs samtidigt av avsnittet **Kön** i utdatan. `köarbetare:` ska säga *schemalagd i routes/console.php*, och `jobs` ska inte ha rader som ligger kvar mellan två körningar. Kön dras av schemaläggaren sedan [[ADR-0031 Köarbetaren körs av schemaläggaren]] — en tom `jobs` med en arbetare betyder att kön töms, samma tabell utan arbetare betyder att exporten aldrig blir klar.
 
 **5. Publicera.** Taggen finns redan från steg 2, så `--verify-tag` används i stället för `--target`: det får kommandot att vägra om taggen mot förmodan saknas, i stället för att skapa en ny och starta ett staging-bygge som produktionen sedan kapplöper. Release notes grupperas per milstolpe.
 

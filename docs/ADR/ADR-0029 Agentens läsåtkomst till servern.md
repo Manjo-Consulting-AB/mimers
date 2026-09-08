@@ -38,7 +38,7 @@ Skriptet är `deploy/retro-fakta.sh` i repot, installerat som `~/bin/retro-fakta
 
 **Två villkor på skriptet.**
 
-1. **Det dumpar aldrig `shared/.env`.** Nyckelnamnen listas; värden skrivs bara ut för en namngiven lista ofarliga (`APP_ENV`, `APP_DEBUG`, `APP_URL`, `QUEUE_CONNECTION`, `MAIL_MAILER`, `DB_CONNECTION`, `FILE_DELIVERY`). Allt annat redovisas som *satt* eller *saknas*. En röjd nyckel ska inte läcka `APP_KEY`, `MAILGUN_SECRET` eller databaslösenordet.
+1. **Det dumpar aldrig `shared/.env`.** Nyckelnamnen listas; värden skrivs bara ut för en namngiven lista ofarliga (`APP_ENV`, `APP_URL`, `QUEUE_CONNECTION`, `MAIL_MAILER`, `DB_CONNECTION`, `FILES_INTERNAL_REDIRECT`, …). Allt annat redovisas som *satt* eller *saknas*. En röjd nyckel ska inte läcka `APP_KEY`, `MAILGUN_SECRET` eller databaslösenordet.
 2. **Det bootar inte Laravel.** Ren shell plus `mysql`-klienten. Skälet är att diagnostiken måste fungera när appen inte gör det — en halv utrullning är precis det läge man vill kunna läsa av, och `php artisan` svarar då inte.
 
 **Skrivvägarna ändras inte.** GitHub Actions håller deploynycklarna, `production.yml` äger `current`, `deploy.sh` äger migreringarna. Den här nyckeln kan ingenting av det, och ska inte kunna det.
@@ -63,6 +63,16 @@ Alternativet att inte ge någon åtkomst alls är inte gratis. Kostnaden betalas
 - Retron får en punkt i bevismängden: kör `retro-fakta` mot båda miljöerna innan releasen bockas av. Det hör hemma i retro-prompten i ai-standards, inte i `AGENTS.md`.
 - Nyckeln ligger okrypterad på utvecklings-VPS:en. Det är accepterat **därför att** den inte kan något annat än att köra skriptet; skulle forced command någon gång tas bort är den en fullvärdig inloggning till produktionen, och då gäller den här ADR:n inte längre.
 - Utökas skriptet senare gäller de två villkoren fortfarande. Ett tillägg som skriver ut ett hemligt värde, eller som börjar skriva på disk, är en ny ADR — inte en commit.
+
+## Uppföljning 2026-09-08: första körningen
+
+Nyckeln sattes upp samma dag och skriptet kördes mot båda miljöerna. Tre saker att bära med sig.
+
+**Den första installationen var trasig, och rapporten såg ändå fullständig ut.** Serverns kopia saknade sina första 51 rader — shebang, `set -uo pipefail`, `VERSION`, `case`-blocket som sätter `MILJO` och `APP`, samt `ENVFIL`. Följden blev att `$APP` och `$ENVFIL` var tomma, alltså att varje sökvägsberoende avsnitt rapporterade *saknas* om sökvägen `""`. Utan `set -u` — den raden var också borta — avbröt ingenting, och utdatan påstod att `current` saknades på en server där den fanns. Skriptet bör därför i en senare version vägra köra när `VERSION` eller `APP` är tomma; en tom rapport ska aldrig kunna se ut som en fullständig. Installera med `scp`, inte genom att klistra in i en heredoc.
+
+**`mysql` är ett deprecerat alias hos inleed** och skriver `Deprecated program name … use '/usr/bin/mariadb' instead` på stderr. v1 slog ihop stderr med svaret och rapporterade *"databasen svarar inte"* mot en databas som svarade utmärkt. v2 väljer `mariadb` när den finns och håller stderr isär från svaret.
+
+**Noll rader i `jobs` besvarar inte frågan ensamt.** Det kan lika gärna betyda att inget någonsin köats som att kön töms, och i produktion var det det förra — `storage/files` är tom, alltså har inget miniatyrjobb någonsin dispatchats. Skriptet skriver därför sedan v2 ut om det finns en arbetare alls, som ett eget svar bredvid radantalet.
 
 ## Alternativ
 
