@@ -32,7 +32,7 @@ Schedule::call(function () {
         '--memory' => 96,
         '--tries' => 1,
     ]);
-})->everyMinute()->name('drain-queue')->withoutOverlapping();
+})->everyMinute()->name('drain-queue')->withoutOverlapping(10);
 ```
 
 `Artisan::call` kör kommandot **i schemaläggarens egen process** — ingen `proc_open`, alltså inget som spricker hos inleed. `queue:work` är i sig en loop i samma process; det är `queue:listen` som startar barnprocesser, och den är förbjuden redan.
@@ -62,8 +62,18 @@ Priset är en minuts latens innan ett jobb plockas upp, och att kön delar proce
 - `.env.example` får `DB_QUEUE_RETRY_AFTER=600`. Nyckeln behöver **inte** sättas i `shared/.env`: förvalet i `config/queue.php` ändras i samma svep, så miljöerna får rätt värde utan handpåläggning.
 - **Jobb måste hålla sig under fem minuter.** Byggs exporten någon gång om till något som tar längre tid är det den här ADR:n som ska ändras, inte `--timeout` i förbifarten.
 - [[Pipeline]] § *Engångsuppsättning* skriver ut att ingen extra cron-rad behövs, och § *Releaseritualen* får en punkt: läs av `jobs` och `köarbetare` i `retro-fakta` efter utrullningen.
-- Ett jobb som slår i timeouten avbryter resten av den minutens schemaläggningskörning. Accepterat därför att arbetaren ligger sist och nästa minut kör ändå — men det är skälet till att posten aldrig får flyttas uppåt i filen.
+- Ett jobb som slår i timeouten avbryter resten av den minutens schemaläggningskörning. Accepterat därför att arbetaren ligger sist och nästa minut kör de andra posterna ändå — men det är skälet till att posten aldrig får flyttas uppåt i filen. **För `drain-queue` själv gäller inte "nästa minut kör ändå"** — se uppföljningen nedan.
 - Väljer vi någon gång en riktig kötjänst — Redis hos en annan leverantör, eller en VPS med supervisor — faller hela den här konstruktionen bort. Den är en anpassning till delad hosting, inte en arkitektur.
+
+## Uppföljning 2026-09-08: låset behöver en livslängd
+
+Granskningen av #239 hittade en lucka i beslutet ovan, och den är rättad i koden: posten är `->withoutOverlapping(10)`, inte `->withoutOverlapping()`.
+
+Förvalet är **1440 minuter**. Låset släpps annars på tre vägar — `finish()` i ett `finally`, ett undantag i `start()`, eller pcntl-hanteraren för SIGTERM/SIGINT/SIGQUIT. Ingen av dem gäller den väg den här ADR:n själv beskriver som väntad: `Worker::kill()` anropar `posix_kill` (avstängt hos inleed) och därefter `exit()`, som varken kör `finally` eller är en signal. Efter en enda jobbtimeout hade `drain-queue` alltså legat tyst i ett dygn, och kön fyllts på under tiden.
+
+Tio minuter är valt för att ligga över den lagliga maxkörningen: `--max-time` 50 s plus ett sista jobb som får gå till `--timeout` 300 s ≈ 5,8 minuter. Ett kortare tak kan löpa ut mitt i en riktig körning och släppa in en andra arbetare. Övriga tal är orörda — `max-time + timeout < retry_after` (50 + 300 < 600) gäller fortfarande.
+
+Konsekvensen för meningen i *Konsekvenser* ovan: **att "nästa minut kör ändå" gäller de andra schemaposterna, inte `drain-queue` själv.** Ligger dess lås kvar hoppar schemat över just den posten tills låset löper ut — som mest tio minuter, i stället för ett dygn.
 
 ## Alternativ
 
