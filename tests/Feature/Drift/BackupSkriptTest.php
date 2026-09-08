@@ -277,7 +277,7 @@ it('ger exit 64 och ingenting på stdout för tomt eller okänt kommando', funct
 
     expect($kod)->toBe(64);
     expect($stdout)->toBe([]);
-    expect($stderr)->toContain('mimers-backup v3');
+    expect($stderr)->toContain('mimers-backup v4');
 })->with([
     'tomt kommando' => '',
     'okänt kommando' => 'hej',
@@ -354,10 +354,27 @@ it('avvisar raderande rsync-flaggor', function (string $flagga) {
     expect($kod)->toBe(64);
     expect($stdout)->toBe([]);
     expect($stderr)->toContain('rsync får inte');
+    expect(file_exists($scenarie['capture']))->toBeFalse('rsync-stubben ska inte ha körts');
 })->with([
     '--delete' => '--delete',
     '--delete-after' => '--delete-after',
     '--remove-source-files' => '--remove-source-files',
+]);
+
+it('avvisar okända rsync-flaggor med sidoeffekt utanför filkatalogen', function (string $flagga) {
+    $scenarie = backupSkriptScenarie();
+    [$kod, $stdout, $stderr] = backupSkriptKör(
+        $scenarie,
+        'rsync --server --sender '.$flagga.' . '.$scenarie['filkatalog'].'/'
+    );
+
+    expect($kod)->toBe(64);
+    expect($stdout)->toBe([]);
+    expect($stderr)->toContain('rsync får inte');
+    expect(file_exists($scenarie['capture']))->toBeFalse('rsync-stubben ska inte ha körts');
+})->with([
+    '--log-file med godtycklig sökväg' => '--log-file=/tmp/mimers-stulen-logg',
+    '--files-from från stdin' => '--files-from=-',
 ]);
 
 it('avvisar en sökväg utanför filkatalogen', function () {
@@ -429,7 +446,7 @@ it('innehåller varken php artisan eller eval, men väl en VERSION-rad', functio
 
     expect($skript)->not->toContain('php artisan');
     expect($skript)->not->toContain('eval');
-    expect($skript)->toContain('VERSION="3"');
+    expect($skript)->toContain('VERSION="4"');
 });
 
 it('skriver ingenting i appkatalogen under dumpen', function () {

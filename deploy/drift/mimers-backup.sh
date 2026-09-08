@@ -50,7 +50,7 @@
 # 0 det värsta utfallet i hela kedjan. Hämtaren i 42b litar på exit-koden.
 set -euo pipefail
 
-VERSION="3"   # höjs vid varje ändring, så att glapp mot repot syns på stderr
+VERSION="4"   # höjs vid varje ändring, så att glapp mot repot syns på stderr
 
 # Bara produktion, med flit (Beslut 5). Staging är engångsdata som återskapas
 # av en utrullning, och en miljöväljare vore ytterligare en indata på en nyckel
@@ -174,6 +174,7 @@ rensa_sökväg() {
 # till kod.
 rsync_gren() {
   local argv=() token sender=0 pat sista avslutande_snedstreck=0
+  local tillatna='logDtpre.iLsfxCIvu' b rest
   read -r -a argv <<<"$KOM" || true
 
   if [ "${argv[0]:-}" != rsync ] || [ "${argv[1]:-}" != --server ]; then
@@ -181,26 +182,46 @@ rsync_gren() {
     exit 64
   fi
 
-  for token in "${argv[@]}"; do
+  # Allowlist, inte blocklist: en okänd flagga är en rsync-funktion med
+  # sidoeffekt utanför filkatalogen — --delete* och --remove-source-files
+  # skriver, --log-file=… skriver dit klienten pekar, --files-from=… läser
+  # godtyckliga sökvägar — så allt utom det kända avvisas här i stället för
+  # att jaga flaggor en och en. --server sitter redan i argv[1] (kontrollerad
+  # ovan) och --sender är den enda andra långa flaggan en läsande begäran har.
+  # Korta flaggor måste vara en enda bokstavsbunt vars tecken finns i den mängd
+  # den riktiga rsync-klienten skickar för en läsande överföring; 42b kör med
+  # --no-protect-args, så sökvägen ligger i argv som sista token och valideras
+  # nedan. -s/--protect-args/--secluded-args kräver en egen gren: de flyttar
+  # sökvägen från argv till protokollströmmen och då finns inget kvar att
+  # validera — -s är dessutom en teckenbunt som annars skulle passera allow-
+  # listen, för s ingår i den mängd den riktiga klienten skickar.
+  for token in "${argv[@]:2}"; do
     if [[ ! "$token" =~ ^[-A-Za-z0-9._/=:,+@]+$ ]]; then
       echo "mimers-backup: otillåten token i rsync-kommandot" >&2
       exit 64
     fi
-    [ "$token" = --sender ] && sender=1
+    if [ "$token" = --sender ]; then
+      sender=1
+      continue
+    fi
     case "$token" in
-      --delete*)
-        echo "mimers-backup: rsync får inte radera (hittade '$token')" >&2
-        exit 64
-        ;;
-      --remove-source-files)
-        echo "mimers-backup: rsync får inte ta bort källfiler" >&2
-        exit 64
-        ;;
       -s|--protect-args|--secluded-args)
         echo "mimers-backup: rsync får inte köras med skyddade argument ('$token') — klienten måste skicka sökvägen i argv, med --no-protect-args" >&2
         exit 64
         ;;
     esac
+    if [[ "$token" == --* ]]; then
+      echo "mimers-backup: rsync får inte köras med flaggan '$token' — enda tillåtna långa flaggorna är --server och --sender" >&2
+      exit 64
+    fi
+    if [[ "$token" == -* ]]; then
+      b="${token#-}"
+      rest="${b//[$tillatna]/}"
+      if [ -n "$rest" ]; then
+        echo "mimers-backup: rsync får inte köras med flaggan '$token' — varje tecken i en kort flaggbunt måste finnas i $tillatna" >&2
+        exit 64
+      fi
+    fi
   done
 
   if [ "$sender" -ne 1 ]; then
