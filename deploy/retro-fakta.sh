@@ -26,7 +26,7 @@
 # ut, nämligen som ingen utskrift alls.
 set -uo pipefail
 
-VERSION="1"   # höjs vid varje ändring, så att glapp mot repot syns i utdatan
+VERSION="3"   # höjs vid varje ändring, så att glapp mot repot syns i utdatan
 
 # Miljön kommer från klientens kommando, som med command= i authorized_keys
 # hamnar i SSH_ORIGINAL_COMMAND i stället för att köras. Den valideras mot
@@ -48,7 +48,7 @@ ENVFIL="$APP/shared/.env"
 # Nycklar vars värden är ofarliga att skriva ut. Allt utanför listan redovisas
 # som satt/saknas. Lägg aldrig till en nyckel här utan att först fråga vad ett
 # läckage av den skulle kosta - se ADR-0029.
-OFARLIGA="APP_ENV APP_DEBUG APP_URL QUEUE_CONNECTION MAIL_MAILER MAILGUN_DOMAIN MAILGUN_ENDPOINT DB_CONNECTION DB_HOST DB_DATABASE FILESYSTEM_DISK SESSION_DRIVER CACHE_STORE LOG_CHANNEL"
+OFARLIGA="APP_ENV APP_DEBUG APP_URL QUEUE_CONNECTION MAIL_MAILER MAIL_FROM_ADDRESS MAILGUN_DOMAIN MAILGUN_ENDPOINT DB_CONNECTION DB_HOST DB_DATABASE FILESYSTEM_DISK FILES_INTERNAL_REDIRECT EXPORT_RETENTION_DAYS TRASH_RETENTION_DAYS SESSION_DRIVER CACHE_STORE LOG_CHANNEL"
 
 rubrik() { printf '\n== %s ==\n' "$1"; }
 
@@ -126,22 +126,31 @@ DB_H=$(envvarde DB_HOST || echo 127.0.0.1)
 DB_N=$(envvarde DB_DATABASE || echo '')
 DB_U=$(envvarde DB_USERNAME || echo '')
 DB_P=$(envvarde DB_PASSWORD || echo '')
-if ! command -v mysql >/dev/null 2>&1; then
-  echo 'mysql-klienten saknas i PATH - kan inte läsa jobs/failed_jobs.'
+# `mysql` finns kvar som alias men skriver en deprecationsvarning på stderr:
+# "Deprecated program name. It will be removed in a future release, use
+# '/usr/bin/mariadb' instead". Med 2>&1 hamnade den i svaret och gjorde varje
+# fråga till ett fel - v1 rapporterade "databasen svarar inte" mot en databas
+# som svarade utmärkt. Därav både klientvalet och att stderr hålls isär från
+# svaret nedan.
+KLIENT="$(command -v mariadb || command -v mysql || true)"
+if [ -z "$KLIENT" ]; then
+  echo 'varken mariadb- eller mysql-klienten finns i PATH - kan inte läsa jobs/failed_jobs.'
 elif [ -z "$DB_N" ] || [ -z "$DB_U" ]; then
   echo 'DB_DATABASE eller DB_USERNAME saknas i .env - hoppar över databasen.'
 else
   # Lösenordet går via MYSQL_PWD och inte som argument: argument syns i ps för
   # alla på en delad maskin. Det skrivs aldrig ut.
-  fraga() { MYSQL_PWD="$DB_P" mysql -N -B -h "$DB_H" -u "$DB_U" "$DB_N" -e "$1" 2>&1; }
+  fraga() { MYSQL_PWD="$DB_P" "$KLIENT" -N -B -h "$DB_H" -u "$DB_U" "$DB_N" -e "$1" 2>/dev/null; }
+  fragefel() { MYSQL_PWD="$DB_P" "$KLIENT" -N -B -h "$DB_H" -u "$DB_U" "$DB_N" -e "$1" 2>&1 >/dev/null; }
   # Prova anslutningen en gång. Utan det upprepas samma felrad sex gånger, och
   # "databasen svarar inte" ser ut som sex olika problem.
-  if ! prov=$(fraga "select 1;") || [ "$prov" != "1" ]; then
-    printf 'databasen svarar inte: %s\n' "$(printf '%s' "$prov" | head -1)"
+  prov=$(fraga "select 1;")
+  if [ "$prov" != "1" ]; then
+    printf 'databasen svarar inte: %s\n' "$(fragefel "select 1;" | head -1)"
     DB_N=""
   fi
 fi
-if [ -n "${DB_N:-}" ] && command -v mysql >/dev/null 2>&1; then
+if [ -n "${DB_N:-}" ] && [ -n "${KLIENT:-}" ]; then
   for tabell in jobs failed_jobs; do
     svar=$(fraga "select count(*) from \`$tabell\`;")
     printf '%-12s %s\n' "$tabell" "$svar"
@@ -156,6 +165,20 @@ if [ -n "${DB_N:-}" ] && command -v mysql >/dev/null 2>&1; then
   printf 'migreringar (antal, senaste batch): %s\n' "$svar"
   svar=$(fraga "select migration from migrations order by id desc limit 3;" | tr '\n' ' ')
   printf 'tre senaste: %s\n' "$svar"
+fi
+# Noll rader i `jobs` betyder INTE att kön töms - det kan lika gärna betyda att
+# inget någonsin köats. Frågan "finns det en arbetare" har ett eget svar, och
+# utan den raden är radantalet ovan omöjligt att tolka. Se issue 235.
+if [ -n "${APP:-}" ]; then
+  if crontab -l 2>/dev/null | grep -F "$APP" | grep -q 'queue:work'; then
+    echo 'köarbetare: schemalagd i cron'
+  elif [ -r "$APP/current/routes/console.php" ] && grep -q 'queue:work\|queue:listen' "$APP/current/routes/console.php" 2>/dev/null; then
+    echo 'köarbetare: schemalagd i routes/console.php'
+  elif pgrep -u "$(id -un)" -f 'queue:work' >/dev/null 2>&1; then
+    echo 'köarbetare: en process kör just nu'
+  else
+    echo 'köarbetare: INGEN hittad (varken cron, routes/console.php eller en levande process)'
+  fi
 fi
 
 # ---------------------------------------------------------------------------
