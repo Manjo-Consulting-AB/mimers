@@ -9,6 +9,7 @@ use App\Console\GeneratesLoanNotifications;
 use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
 use App\Console\PrunesExpiredMagicLinkTokens;
+use App\Console\PurgesExpiredExports;
 use App\Console\PurgesExpiredStoredFiles;
 use App\Console\PurgesExpiredTrash;
 use App\Console\ReconcilesUsageCounters;
@@ -76,6 +77,26 @@ Schedule::call(fn () => app(PurgesExpiredStoredFiles::class)->handle())
 Schedule::call(fn () => app(PurgesExpiredTrash::class)->handle())
     ->daily()
     ->name('purge-expired-trash');
+
+/*
+ * Issue 41b · Gallringen av färdiga exportartefakter: bytena tas bort och
+ * raden sätts till `expired` när retentionen passerat — se
+ * App\Console\PurgesExpiredExports, config/files.php § export_retention_days
+ * och [[Backlog]] M6 § 41. Jobbet tar också hand om `failed`-rader äldre än
+ * retentionen och föräldralösa `.part`-filer. Logiken bor i en vanlig klass,
+ * testad direkt i tests/Feature/Export/ExportNedladdningTest.php; det här är
+ * bara schemaläggningen.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan. Körs i samma
+ * nattliga fönster som purge-expired-stored-files (17b) och
+ * purge-expired-trash (20b).
+ */
+Schedule::call(fn () => app(PurgesExpiredExports::class)->handle())
+    ->daily()
+    ->name('purge-expired-exports');
 
 /*
  * Issue 26b · Den nattliga avstämningen av usage_counter: räknar om

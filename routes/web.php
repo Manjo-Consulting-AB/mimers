@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CalendarFeedDownloadController;
+use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -108,6 +109,17 @@ Route::middleware('auth')->group(function () {
 Route::get('/files/{attachment}', AttachmentDownloadController::class)
     ->middleware('auth:sanctum')
     ->name('files.download');
+
+/*
+ * Issue 41b · Nedladdning av en färdig export, se
+ * App\Http\Controllers\ExportDownloadController och [[Backlog]] M6 § 41.
+ * Samma placering och middleware som /files/{attachment}, av samma skäl
+ * (Beslut 1): den klickas i en webbläsare och ska inte svara med JSON-fel.
+ * `{export}` binds på exportens ULID via #[RouteKey('ulid')].
+ */
+Route::get('/exports/{export}/download', ExportDownloadController::class)
+    ->middleware('auth:sanctum')
+    ->name('exports.download');
 
 /*
  * Issue 32b · Avanmälan från en notistyp utan inloggning, se
