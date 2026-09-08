@@ -287,3 +287,40 @@ Schedule::call(fn () => app(DeliversWebhooks::class)->handle())
 Schedule::call(fn () => app(SendsWeeklyDigest::class)->handle())
     ->weeklyOn(1, '06:00')
     ->name('send-weekly-digest');
+
+/*
+ * Issue 237 · Köarbetaren: tömmer `jobs`-tabellen varje minut. Inget annat
+ * startar en arbetare — `QUEUE_CONNECTION=database` står i båda miljöernas
+ * shared/.env, och varken deploy.sh eller crontabben kör queue:work. Se
+ * ADR-0031 för besluten. Logiken bor inte i en vanlig klass (till skillnad
+ * från posterna ovan) för att den inte bär någon: ett kommandoanrop och fem
+ * flaggor, och en klass runt `Artisan::call` vore ett lager utan innehåll.
+ *
+ * `Artisan::call` kör kommandot i schemaläggarens egen process — ingen
+ * `Schedule::command(...)` eller `->runInBackground()`, båda går via Symfony
+ * Process/proc_open, avstängt hos inleed i både webb-SAPI och CLI, se
+ * AGENTS.md § Driftmiljön saknar proc_open. `queue:work` är i sig en loop i
+ * samma process; det är `queue:listen` som startar barnprocesser.
+ *
+ * Posten ligger SIST med flit, flytta den aldrig uppåt: slår ett jobb i
+ * `--timeout` anropar Laravel `Worker::kill()`, som anropar `posix_kill`
+ * (avstängt hos inleed) och därefter `exit()` — processen dör mitt i
+ * schemaläggningskörningen. Ligger posten sist har allt annat som var i tur
+ * redan kört, och nästa minut startar en ny process ändå.
+ *
+ * Sync-grenen är inte en artighet (Beslut 4): sync-drivern kan inte poppas
+ * ifrån, och testsviten kör med den.
+ */
+Schedule::call(function () {
+    if (config('queue.default') === 'sync') {
+        return;
+    }
+
+    Artisan::call('queue:work', [
+        '--stop-when-empty' => true,
+        '--max-time' => 50,
+        '--timeout' => 300,
+        '--memory' => 96,
+        '--tries' => 1,
+    ]);
+})->everyMinute()->name('drain-queue')->withoutOverlapping();
