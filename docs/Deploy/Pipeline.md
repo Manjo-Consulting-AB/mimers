@@ -87,6 +87,30 @@ crontab -e
 
 **Uppgifter som schemaläggs måste vara `->call()` eller `->job()`.** `proc_open` är avstängt, så `->command(...)` fungerar inte. Se [[ADR-0018 Utvecklingsprocess och deploy]].
 
+**Agentens läsnyckel.** Retron läser servern genom ett skript som är låst till en egen nyckel — inget skal, ingen skrivrättighet. Motiveringen och de två villkoren på skriptet står i [[ADR-0029 Agentens läsåtkomst till servern]]. Nyckelparet genereras av Tony; privathalvan passerar aldrig genom en agent.
+
+```bash
+# skriptet, från repot, utanför current/ - se ADR-0029 om varför det inte
+# installeras av deploy.sh
+mkdir -p ~/bin
+cp <repo>/deploy/retro-fakta.sh ~/bin/retro-fakta
+chmod 700 ~/bin/retro-fakta
+
+# raden i authorized_keys, tillagd additivt med en backup före - aldrig genom
+# DirectAdmins SSH Keys-sida, se § En röjd nyckel
+cp ~/.ssh/authorized_keys ~/.ssh/authorized_keys.bak
+printf 'command="/home/s174280/bin/retro-fakta",restrict %s\n' "$(cat claude-retro.pub)" >> ~/.ssh/authorized_keys
+```
+
+Anropet, från utvecklings-VPS:en:
+
+```bash
+ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net staging
+```
+
+`command=` gör att servern kör skriptet oavsett vad klienten ber om — klientens kommando hamnar i `SSH_ORIGINAL_COMMAND`, och skriptet läser bara miljönamnet ur det. `restrict` stänger portforwarding, agentforwarding, X11 och pty. Skriptet skriver ut sin egen version, så att ett glapp mellan serverns kopia och repots syns i utdatan.
+
 ## Repo och organisation
 
 Koden bor i **`Manjo-Consulting-AB/mimers`**. Orgen bär bolagsnamnet och får ett repo per app; produktidentiteten sitter i domänen, inte i org-sluggen. En egen org per app hade inte gett någon ytterligare avskärmning — secrets, environments och branch protection är per repo — men hade dubblat det som faktiskt administreras på org-nivå: 2FA-policy, medlemmar, rulesets och app-installationer.
@@ -355,8 +379,10 @@ ssh: connect to host staging.mimers.app port 22: Network is unreachable
 Det ser ut som att servern är nere. Den är det inte — routen saknas i andra änden av kabeln. Hela raden som fungerar:
 
 ```bash
-ssh -4 -p 2020 -i ~/.ssh/<nyckel> s174280@prime5.inleed.net
+ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
 ```
+
+Sista ordet är miljövalet som `retro-fakta` läser, inte en del av lösningen på routeproblemet — se § Engångsuppsättning.
 
 Två saker som gör felet svårare än det borde vara:
 
@@ -599,11 +625,15 @@ curl -sS -o /dev/null -w "%{http_code}\n" https://staging.mimers.app
 
 Artefakten har 90 dagars retention. Det är gott om tid mellan steg 3 och steg 5, men står taggen kvar obefordrad i månader får den byggas om — kör `staging.yml` på nytt med `workflow_dispatch`.
 
-**4. Miljöskillnaderna är genomgångna.** Diffa `.env.example` mot förra taggen och kontrollera att varje ny nyckel antingen har rätt standardvärde i `config/` eller är satt i produktionens `shared/.env`. Det är den enda punkten i listan som inte går att verifiera från GitHub — `shared/.env` finns bara på servern.
+**4. Miljöskillnaderna är genomgångna.** Diffa `.env.example` mot förra taggen och kontrollera att varje ny nyckel antingen har rätt standardvärde i `config/` eller är satt i produktionens `shared/.env`. Punkten går inte att verifiera från GitHub — `shared/.env` finns bara på servern — men sedan [[ADR-0029 Agentens läsåtkomst till servern]] går den att läsa av utan att någon loggar in för hand. `retro-fakta` listar vilka nycklar som är satta, och skriver ut värdet för de ofarliga.
 
 ```bash
 git diff v0.1.0..origin/main -- .env.example
+ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net staging
 ```
+
+Läs samtidigt av kön i utdatan. Två köade jobb är utrullade och ingenting startar en arbetare (issue 235); `QUEUE_CONNECTION` och radantalet i `jobs` avgör om en ny release levererar det den lovar.
 
 **5. Publicera.** Taggen finns redan från steg 2, så `--verify-tag` används i stället för `--target`: det får kommandot att vägra om taggen mot förmodan saknas, i stället för att skapa en ny och starta ett staging-bygge som produktionen sedan kapplöper. Release notes grupperas per milstolpe.
 
@@ -724,5 +754,5 @@ En privat nyckel, `claude_rsa`, låg kvar i serverns egen `~/.ssh/`, och dess pu
 
 Två saker att ta med sig:
 
-- **`authorized_keys` innehåller numera driftkritiska rader.** `github-actions-staging` och `github-actions-production` är deploykedjans enda väg in. Faller de bort slutar utrullningen fungera — och det märks först vid nästa release, inte när misstaget görs.
+- **`authorized_keys` innehåller numera driftkritiska rader.** `github-actions-staging` och `github-actions-production` är deploykedjans enda väg in. Faller de bort slutar utrullningen fungera — och det märks först vid nästa release, inte när misstaget görs. Sedan [[ADR-0029 Agentens läsåtkomst till servern]] står där även `claude-retro`, som till skillnad från de två andra är låst med `command=` och inte kan rulla ut något. `retro-fakta` skriver ut filens radkommentarer — bara namnen, aldrig nyckelmaterial — så bortfallet går att upptäcka innan nästa release.
 - **Redigera därför aldrig filen genom DirectAdmins SSH Keys-sida.** Den skriver om `authorized_keys` i sin helhet. Vid nyckelbytet ovan överlevde deployraderna, men ordningen i filen ändrades, vilket visar att hela filen skrevs om. Lägg till och ta bort additivt över shell, med en backup före.

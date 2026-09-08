@@ -54,7 +54,7 @@ Skriv inte in radnummer från minnet — de flyttar sig vid varje redigering. K�
 - `docs/Konkurrens.md` — hur vi står oss mot Obsidian, Evernote, Notion och de andra
 - `docs/Backlog.md` — indextabell: issuenummer → milstolpefil
 - `docs/Backlog/` — en fil per milstolpe, issues med läslista och acceptanskriterier
-- `docs/ADR/` — 28 beslut, ett per fil, med kontext och konsekvenser
+- `docs/ADR/` — 29 beslut, ett per fil, med kontext och konsekvenser
 - `docs/Datamodell/` — vad systemet består av, uppdelat per domän
 - `docs/Deploy/Pipeline.md` — CI, miljöer, utrullning, verifierade fakta om servern
 - `docs/Tankar.md` — obesvarade frågor om **produkten**
