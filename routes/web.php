@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\ExportDownloadController;
+use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -160,3 +161,18 @@ Route::get('/kalender/{token}.ics', CalendarFeedDownloadController::class)
     ->middleware('throttle:'.'calendar')
     ->where('token', '[A-Za-z0-9]{64}')
     ->name('calendar.feed');
+
+/*
+ * Issue 43 · Dead man's switch-ytan, se
+ * App\Http\Controllers\HeartbeatController och issue 43 § Beslut 6. Rutten
+ * ligger medvetet utanför `auth`-gruppen: vakten på VPS:en har varken session
+ * eller cookie — den delade hemligheten i X-Drift-Token är autentiseringen
+ * (Beslut 1). Kontrollern avvisar med 404 när headern saknas, är fel, eller
+ * när config('drift.token') är osatt.
+ *
+ * `throttle:60,1` är en spärr mot den som hamrar ytan i gissningssyfte —
+ * inline-formen nycklar på IP:n, vilket räcker här: den enda tänkta
+ * anroparen (vakten, en gång i timmen) delar inte utgående IP med någon.
+ */
+Route::get('/drift/heartbeat', HeartbeatController::class)
+    ->middleware('throttle:60,1');
