@@ -604,6 +604,10 @@ Att mäta att flippen faktiskt togs är knepigare än det låter: två releaser 
 
 **LiteSpeed följer den omflippade symlänken direkt**, utan omstart och utan cache-rensning. Det var den tysta risken: cachar webbservern den upplösta sökvägen ser en rollback ut att lyckas utan att ha bytt något.
 
+## Återläsning från backup
+
+När något ska tillbaka ur en backup — en hårdraderad rad, en trasig databas, saknade filer eller hela kontot hos inleed — finns runbooken i [[Återläsning]]. Den börjar i papperskorgen, tar scenarierna i den ordning de inträffar och samlar installationsstegen för hela driftkedjan (42a, 42b, 43 och återläsningstestet). Stegen upprepas inte här.
+
 ## Releaseritualen
 
 **En release per stängd milstolpe** — takten och skälet står i [[ADR-0018 Utvecklingsprocess och deploy]] § Befordranstakt. Här står bara handgreppen.
