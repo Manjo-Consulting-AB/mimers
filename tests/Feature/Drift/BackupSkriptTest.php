@@ -232,6 +232,23 @@ it('låter uppgifterna nå mariadb-dump genom en defaults-extra-file, aldrig som
     expect(file_exists($träff[1]))->toBeFalse('authfilen ska vara borttagen när skriptet avslutat');
 });
 
+it('bevarar # inuti ett citerat lösenord i authfilen', function (string $rad) {
+    $scenarie = backupSkriptScenarie();
+    file_put_contents($scenarie['hem'].'/mimers/shared/.env', implode("\n", [
+        'DB_DATABASE=s174280_mimers',
+        'DB_USERNAME=s174280_mimers',
+        "DB_PASSWORD=$rad",
+        'DB_HOST=127.0.0.1',
+    ])."\n");
+    [$kod, , $stderr] = backupSkriptKör($scenarie, 'dump');
+
+    expect($kod)->toBe(0, $stderr);
+    expect(file_get_contents($scenarie['capture']))->toContain('password=hemligt#lösen');
+})->with([
+    'dubbelciterat' => '"hemligt#lösen"',
+    'enkeltciterat' => "'hemligt#lösen'",
+]);
+
 it('avslutar icke-noll när mariadb-dump gör det, och städar authfilen ändå', function () {
     $scenarie = backupSkriptScenarie();
     [$kod, $stdout, $stderr] = backupSkriptKör($scenarie, 'dump', ['MIMERS_TEST_DUMP_RC' => '7']);

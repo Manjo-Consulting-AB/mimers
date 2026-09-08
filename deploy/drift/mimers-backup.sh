@@ -48,16 +48,33 @@ ENVFIL="$APP/shared/.env"
 FILKATALOG="$APP/shared/storage/files"
 
 # Läser en nyckel ur shared/.env utan att exponera resten av filen. Sista
-# förekomsten vinner, som i Laravels egen läsning; citattecken och
-# radslutskommentarer skalas av. Värden skrivs aldrig ut härifrån.
+# förekomsten vinner, som i Laravels egen läsning; citattecken skalas av och
+# en radslutskommentar tas bort. Värden skrivs aldrig ut härifrån.
 envvarde() {
   [ -r "$ENVFIL" ] || return 1
   local rad
   rad=$(grep -E "^[[:space:]]*${1}=" "$ENVFIL" 2>/dev/null | tail -n 1) || return 1
   [ -n "$rad" ] || return 1
   rad="${rad#*=}"
-  rad="${rad%%#*}"
-  rad="$(printf '%s' "$rad" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/")"
+
+  # Citerade värden först: en # inuti citattecken är data — ett lösenord kan
+  # innehålla ett — och får inte klippas av. I ett ociterat värde tar en
+  # kommentar vid vid första #, som i Laravels egen läsning (phpdotenv).
+  rad="$(printf '%s' "$rad" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  case "$rad" in
+    \'*)
+      rad="${rad#\'}"
+      rad="${rad%%\'*}"
+      ;;
+    \"*)
+      rad="${rad#\"}"
+      rad="${rad%%\"*}"
+      ;;
+    *)
+      rad="${rad%%#*}"
+      rad="$(printf '%s' "$rad" | sed -e 's/[[:space:]]*$//')"
+      ;;
+  esac
   printf '%s' "$rad"
 }
 
