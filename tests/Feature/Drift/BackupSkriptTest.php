@@ -60,6 +60,14 @@ function backupSkriptScenarie(): array
     fi
   done
 } >> "$MIMERS_TEST_CAPTURE"
+# Läge för signal-testet: skriv att dumpen är i gång (med egen pid så att
+# orkestreraren kan städa bort den efterlämnade stubben) och sov sedan tills
+# någon avbryter skriptet.
+if [ -n "${MIMERS_TEST_READY:-}" ]; then
+  echo "$$" > "$MIMERS_TEST_STUBPID"
+  touch "$MIMERS_TEST_READY"
+  exec sleep 30
+fi
 if [ "${MIMERS_TEST_DUMP_RC:-0}" != 0 ]; then
   echo 'stub: dumpen misslyckades' >&2
   exit "${MIMERS_TEST_DUMP_RC}"
@@ -269,7 +277,7 @@ it('ger exit 64 och ingenting på stdout för tomt eller okänt kommando', funct
 
     expect($kod)->toBe(64);
     expect($stdout)->toBe([]);
-    expect($stderr)->toContain('mimers-backup v1');
+    expect($stderr)->toContain('mimers-backup v2');
 })->with([
     'tomt kommando' => '',
     'okänt kommando' => 'hej',
@@ -295,7 +303,7 @@ it('startar rsync med samma argument för en giltig rsync --server --sender', fu
     }
 });
 
-it('accepterar en relativ sökväg under hemkatalogen', function () {
+it('accepterar en relativ sökväg under hemkatalogen och skriver tillbaka den som absolut, med avslutande / bevarad', function () {
     $scenarie = backupSkriptScenarie();
     [$kod, , $stderr] = backupSkriptKör(
         $scenarie,
@@ -303,7 +311,24 @@ it('accepterar en relativ sökväg under hemkatalogen', function () {
     );
 
     expect($kod)->toBe(0, $stderr);
-    expect(file_get_contents($scenarie['capture']))->toContain('=== rsync ===');
+    $capture = file_get_contents($scenarie['capture']);
+    expect($capture)->toContain('=== rsync ===');
+    expect($capture)->toContain('ARG <'.$scenarie['filkatalog'].'/>');
+    expect($capture)->not->toContain('ARG <mimers/shared/storage/files/>');
+});
+
+it('skriver tillbaka en relativ sökväg utan avslutande / som kanonisk absolut utan /', function () {
+    $scenarie = backupSkriptScenarie();
+    [$kod, , $stderr] = backupSkriptKör(
+        $scenarie,
+        'rsync --server --sender -logDtpre.iLsfxCIvu . mimers/shared/storage/files'
+    );
+
+    expect($kod)->toBe(0, $stderr);
+    $capture = file_get_contents($scenarie['capture']);
+    expect($capture)->toContain('=== rsync ===');
+    expect($capture)->toContain('ARG <'.$scenarie['filkatalog'].'>');
+    expect($capture)->not->toContain('ARG <'.$scenarie['filkatalog'].'/>');
 });
 
 it('avvisar ett rsync-anrop utan --sender', function () {
@@ -378,7 +403,7 @@ it('innehåller varken php artisan eller eval, men väl en VERSION-rad', functio
 
     expect($skript)->not->toContain('php artisan');
     expect($skript)->not->toContain('eval');
-    expect($skript)->toContain('VERSION="1"');
+    expect($skript)->toContain('VERSION="2"');
 });
 
 it('skriver ingenting i appkatalogen under dumpen', function () {
@@ -387,4 +412,134 @@ it('skriver ingenting i appkatalogen under dumpen', function () {
 
     expect($kod)->toBe(0, $stderr);
     expect(backupSkriptFiler($scenarie['hem'].'/mimers'))->toBe(['shared/.env']);
+});
+
+it('avvisar rsync-anrop med skyddade argument', function (string $flagga) {
+    $scenarie = backupSkriptScenarie();
+    [$kod, $stdout, $stderr] = backupSkriptKör(
+        $scenarie,
+        'rsync --server --sender '.$flagga.' . '.$scenarie['filkatalog'].'/'
+    );
+
+    expect($kod)->toBe(64);
+    expect($stdout)->toBe([]);
+    expect($stderr)->toContain('--no-protect-args');
+})->with([
+    '-s' => '-s',
+    '--protect-args' => '--protect-args',
+    '--secluded-args' => '--secluded-args',
+]);
+
+it('avslutar 1 — inte 64 — när .env saknas', function () {
+    $scenarie = backupSkriptScenarie();
+    unlink($scenarie['hem'].'/mimers/shared/.env');
+    [$kod, $stdout, $stderr] = backupSkriptKör($scenarie, 'dump');
+
+    expect($kod)->toBe(1);
+    expect($stdout)->toBe([]);
+    expect($stderr)->toContain('DB_DATABASE saknas');
+});
+
+it('lämnar TMPDIR tom när dumpen misslyckas', function () {
+    $scenarie = backupSkriptScenarie();
+    $authdir = $scenarie['bas'].'/authdir';
+    mkdir($authdir, 0777, true);
+    [$kod, , $stderr] = backupSkriptKör($scenarie, 'dump', [
+        'MIMERS_TEST_DUMP_RC' => '7',
+        'TMPDIR' => $authdir,
+    ]);
+
+    expect($kod)->toBe(7);
+    expect($stderr)->toContain('mariadb-dump avslutade med kod 7');
+    expect(backupSkriptFiler($authdir))->toBe([]);
+});
+
+it('tar bort authfilen när skriptet dör av SIGTERM mitt i en dump', function () {
+    $scenarie = backupSkriptScenarie();
+    $authdir = $scenarie['bas'].'/authdir';
+    mkdir($authdir, 0777, true);
+    $redo = $scenarie['bas'].'/redo';
+    $stubpid = $scenarie['bas'].'/stubpid';
+    $signalStdout = $scenarie['bas'].'/signal-stdout.txt';
+    $signalStderr = $scenarie['bas'].'/signal-stderr.txt';
+
+    $skript = base_path('deploy/drift/mimers-backup.sh');
+    $path = getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin';
+
+    $orchestratör = <<<'SH'
+#!/usr/bin/env bash
+set -u
+export HOME="__HEM__"
+export PATH="__STUB__:__PATH__"
+export SSH_ORIGINAL_COMMAND="dump"
+export MIMERS_TEST_CAPTURE="__CAPTURE__"
+export MIMERS_TEST_READY="__REDO__"
+export MIMERS_TEST_STUBPID="__STUBPID__"
+export TMPDIR="__AUTHDIR__"
+
+# setsid lägger skriptet i en egen processgrupp. En död ssh-session tar med sig
+# hela gruppen — skriptet och mariadb-dump samtidigt — och det är det läget som
+# ska övas: skickas TERM bara till bash väntar bash ut dumpen innan trappen
+# körs, och authfilen städas inte förrän dumpen själv ger sig.
+setsid bash "__SKRIPT__" >"__SIGNAL_STDOUT__" 2>"__SIGNAL_STDERR__" &
+skriptpid=$!
+
+i=0
+while [ ! -e "__REDO__" ] && [ "$i" -lt 200 ]; do
+  i=$((i + 1))
+  sleep 0.05
+done
+
+kill -TERM -"$skriptpid"
+wait "$skriptpid"
+rc=$?
+
+if [ -f "__STUBPID__" ]; then
+  kill "$(cat "__STUBPID__")" 2>/dev/null
+fi
+
+printf 'rc=%s\n' "$rc"
+printf 'kvar=<%s>\n' "$(ls -A "__AUTHDIR__" | tr '\n' ' ')"
+SH;
+
+    $orchestratör = str_replace(
+        [
+            '__HEM__',
+            '__STUB__',
+            '__PATH__',
+            '__CAPTURE__',
+            '__REDO__',
+            '__STUBPID__',
+            '__AUTHDIR__',
+            '__SKRIPT__',
+            '__SIGNAL_STDOUT__',
+            '__SIGNAL_STDERR__',
+        ],
+        [
+            $scenarie['hem'],
+            $scenarie['stub'],
+            $path,
+            $scenarie['capture'],
+            $redo,
+            $stubpid,
+            $authdir,
+            $skript,
+            $signalStdout,
+            $signalStderr,
+        ],
+        $orchestratör
+    );
+    $körfil = $scenarie['bas'].'/kor-signal.sh';
+    file_put_contents($körfil, $orchestratör);
+    exec('bash '.escapeshellarg($körfil).' 2>&1', $rader, $kod);
+
+    expect($kod)->toBe(0, implode("\n", $rader));
+
+    $resultat = implode("\n", $rader);
+    preg_match('/rc=(\d+)/', $resultat, $rcTräff);
+    preg_match('/kvar=<([^>]*)>/', $resultat, $kvarTräff);
+
+    expect($rcTräff[1] ?? null)->toBe('1');
+    expect($kvarTräff[1] ?? 'saknas')->toBe('');
+    expect(backupSkriptFiler($authdir))->toBe([]);
 });

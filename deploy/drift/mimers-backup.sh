@@ -3,7 +3,7 @@
 # Lämnar ut en konsistent databasdump och användarfilerna, för backup på en egen
 # server. Hämtaren körs på den egna servern (42b); det här skriptet skriver
 # aldrig något till disk hos inleed utöver en temporär autentiseringsfil under
-# /tmp. Produktionsservern får aldrig veta vart backupen går, se
+# ${TMPDIR:-/tmp}. Produktionsservern får aldrig veta vart backupen går, se
 # docs/ADR/ADR-0015 Backup.md § Konsekvenser.
 #
 # Installeras som ~/bin/mimers-backup, chmod 700, och låses till en EGEN nyckel
@@ -17,6 +17,13 @@
 #   rsync --server --sender …   → den läsande rsync klienten begärt
 #   allt annat, inklusive tomt  → exit 64, en rad på stderr, ingenting på stdout
 #
+# Exit-koder: 64 betyder uteslutande "begäran avvisad" — okänt verb, eller en
+# rsync-argv som inte klarar valideringen. Det är ett kontraktsbrott mellan 42a
+# och 42b som en människa måste titta på. Allt annat som går fel — saknad .env,
+# mktemp som faller, en dump som avbryts — avslutar med 1 eller mariadb-dumps
+# egen kod, så att 42b kan skilja "backupen misslyckades" från "nyckeln blev
+# ombedd något den inte gör".
+#
 # Formen — command=-låsningen, den egna nyckeln, att skriptet bor i ~/bin och
 # inte installeras av utrullningen — är ADR-0029:s:
 # docs/ADR/ADR-0029 Agentens läsåtkomst till servern.md. Installationsstegen
@@ -29,16 +36,21 @@
 #     gårdagens även när databasen knappt ändrats.
 #   * lösenordet står aldrig på en kommandorad: det läses ur shared/.env och
 #     når mariadb-dump genom en --defaults-extra-file, skapad under umask 077.
+#     Den tas bort av en EXIT-trap; HUP/INT/TERM/PIPE fångas för att tvinga
+#     fram exit även när hämtaren avbryter mitt i en dump, så att filen med
+#     produktionslösenordet inte blir kvar i /tmp på en delad maskin.
 #   * Laravel bootas inte. Ren shell plus mariadb-dump — en halv utrullning är
 #     precis det läge man vill kunna ta en backup i, och appens artisan-svar
 #     finns då inte.
+#   * rsync-klienten i 42b kör med --no-protect-args: sökvägen ska ligga i argv
+#     som sista token, inte i protokollströmmen, för att kunna valideras här.
 #
 # set -euo pipefail, till skillnad från retro-fakta.sh: där ska ett avsnitt
 # kunna falla utan att ta resten med sig, här är en avbruten dump som avslutar
 # 0 det värsta utfallet i hela kedjan. Hämtaren i 42b litar på exit-koden.
 set -euo pipefail
 
-VERSION="1"   # höjs vid varje ändring, så att glapp mot repot syns på stderr
+VERSION="2"   # höjs vid varje ändring, så att glapp mot repot syns på stderr
 
 # Bara produktion, med flit (Beslut 5). Staging är engångsdata som återskapas
 # av en utrullning, och en miljöväljare vore ytterligare en indata på en nyckel
@@ -46,6 +58,8 @@ VERSION="1"   # höjs vid varje ändring, så att glapp mot repot syns på stder
 APP="$HOME/mimers"
 ENVFIL="$APP/shared/.env"
 FILKATALOG="$APP/shared/storage/files"
+
+AUTHFIL=""   # sätts i dump-grenen; EXIT-trappen städar den
 
 # Läser en nyckel ur shared/.env utan att exponera resten av filen. Sista
 # förekomsten vinner, som i Laravels egen läsning; citattecken skalas av och
@@ -118,8 +132,14 @@ skapa_authfil() {
 }
 
 dumpa() {
-  skapa_authfil
+  # Trapporna sätts före authfilen skapas. En bar EXIT-trap räcker inte: dör
+  # bash av en otrappad signal — SIGHUP när ssh-sessionen faller, SIGPIPE när
+  # hämtaren avbryter mitt i en dump — körs EXIT-trappen aldrig och filen med
+  # produktionslösenordet blir kvar i /tmp. Signaltrappen tvingar bara fram
+  # exit, som i sin tur kör EXIT-trappen.
   trap 'rm -f "$AUTHFIL"' EXIT
+  trap 'exit 1' HUP INT TERM PIPE
+  skapa_authfil
   # --single-transaction ger ett konsistent InnoDB-läge utan att låsa, --quick
   # buffrar inte en hel tabell i minnet på en delad maskin, och --no-tablespaces
   # för att kontot saknar PROCESS-privilegiet.
@@ -134,13 +154,26 @@ dumpa() {
   fi
 }
 
+# Rensar en sökväg till kanonisk form: dubbla snedstreck och ./-komponenter tas
+# bort. ..-sekvenser har redan avvisats av valideringen. Syftet är att det som
+# jämförs mot filkatalogen är exakt det som sedan körs.
+rensa_sökväg() {
+  local s="$1" n
+  while :; do
+    n="$(printf '%s\n' "$s" | sed -e 's#//\{1,\}#/#g' -e 's#/\./#/#g' -e 's#^\./##')"
+    [ "$n" = "$s" ] && break
+    s="$n"
+  done
+  printf '%s' "$s"
+}
+
 # Validerar rsync-kommandot token för token och kör det sedan. Hela poängen med
 # command= är att en läckt nyckel inte ska ge ett skal — därför delas strängen
 # med read och körs aldrig som kod, och varje token måste ligga i en tillåten
 # teckenmängd. Det stänger ;, backticks, $(, > och allt annat som gör en sträng
 # till kod.
 rsync_gren() {
-  local argv=() token sender=0 pat
+  local argv=() token sender=0 pat sista avslutande_snedstreck=0
   read -r -a argv <<<"$KOM" || true
 
   if [ "${argv[0]:-}" != rsync ] || [ "${argv[1]:-}" != --server ]; then
@@ -155,8 +188,18 @@ rsync_gren() {
     fi
     [ "$token" = --sender ] && sender=1
     case "$token" in
-      --delete*)             echo "mimers-backup: rsync får inte radera (hittade '$token')" >&2; exit 64 ;;
-      --remove-source-files) echo "mimers-backup: rsync får inte ta bort källfiler" >&2; exit 64 ;;
+      --delete*)
+        echo "mimers-backup: rsync får inte radera (hittade '$token')" >&2
+        exit 64
+        ;;
+      --remove-source-files)
+        echo "mimers-backup: rsync får inte ta bort källfiler" >&2
+        exit 64
+        ;;
+      -s|--protect-args|--secluded-args)
+        echo "mimers-backup: rsync får inte köras med skyddade argument ('$token') — klienten måste skicka sökvägen i argv, med --no-protect-args" >&2
+        exit 64
+        ;;
     esac
   done
 
@@ -165,19 +208,29 @@ rsync_gren() {
     exit 64
   fi
 
-  # Sista token är sökvägen. Normalisera bort en avslutande /, avvisa allt som
-  # innehåller .., och kräv att sökvägen hamnar i filkatalogen. sshd startar
-  # forced command i hemkatalogen, så en relativ sökväg räknas därifrån.
-  pat="${argv[${#argv[@]}-1]}"
-  pat="${pat%/}"
+  # Sista token är sökvägen (kontraktet med 42b: klienten kör --no-protect-args).
+  # sshd startar forced command i hemkatalogen, men skriptet litar inte på cwd:
+  # sökvägen görs absolut och kanonisk och skrivs tillbaka i argv före exec, så
+  # att det som validerades är exakt det som körs. En avslutande / bevaras —
+  # --sender behandlar files/ (katalogens innehåll) och files (katalogen som en
+  # nivå hos mottagaren) olika, och skriptet ska inte tyst byta trädets form.
+  sista="${argv[${#argv[@]}-1]}"
+  if [[ "$sista" == */ ]]; then
+    avslutande_snedstreck=1
+    while [[ "$sista" == */ ]]; do sista="${sista%/}"; done
+  fi
+  pat="$sista"
   case "$pat" in
     *..*) echo "mimers-backup: sökvägen får inte innehålla '..'" >&2; exit 64 ;;
   esac
   [[ "$pat" == /* ]] || pat="$HOME/$pat"
+  pat="$(rensa_sökväg "$pat")"
   if [ "$pat" != "$FILKATALOG" ] && [ "${pat#"$FILKATALOG"/}" = "$pat" ]; then
     echo "mimers-backup: sökvägen ligger utanför $FILKATALOG" >&2
     exit 64
   fi
+  [ "$avslutande_snedstreck" -eq 1 ] && pat="$pat/"
+  argv[${#argv[@]}-1]="$pat"
 
   exec rsync "${argv[@]:1}"
 }
