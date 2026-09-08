@@ -26,7 +26,7 @@
 # ut, nämligen som ingen utskrift alls.
 set -uo pipefail
 
-VERSION="3"   # höjs vid varje ändring, så att glapp mot repot syns i utdatan
+VERSION="4"   # höjs vid varje ändring, så att glapp mot repot syns i utdatan
 
 # Miljön kommer från klientens kommando, som med command= i authorized_keys
 # hamnar i SSH_ORIGINAL_COMMAND i stället för att köras. Den valideras mot
@@ -51,6 +51,15 @@ ENVFIL="$APP/shared/.env"
 OFARLIGA="APP_ENV APP_DEBUG APP_URL QUEUE_CONNECTION MAIL_MAILER MAIL_FROM_ADDRESS MAILGUN_DOMAIN MAILGUN_ENDPOINT DB_CONNECTION DB_HOST DB_DATABASE FILESYSTEM_DISK FILES_INTERNAL_REDIRECT EXPORT_RETENTION_DAYS TRASH_RETENTION_DAYS SESSION_DRIVER CACHE_STORE LOG_CHANNEL"
 
 rubrik() { printf '\n== %s ==\n' "$1"; }
+
+# Crontabben läses en gång, före första avsnittet som behöver den. Utdata och
+# felkod hålls isär: "raden saknas" och "gick inte att läsa" är olika svar.
+CRON_UT=""
+CRON_RC=0
+if command -v crontab >/dev/null 2>&1; then
+  CRON_UT=$(crontab -l 2>&1)
+  CRON_RC=$?
+fi
 
 # Läser en nyckel ur .env utan att exponera resten av filen. Sista
 # förekomsten vinner, som i Laravels egen läsning; citattecken och
@@ -169,15 +178,22 @@ fi
 # Noll rader i `jobs` betyder INTE att kön töms - det kan lika gärna betyda att
 # inget någonsin köats. Frågan "finns det en arbetare" har ett eget svar, och
 # utan den raden är radantalet ovan omöjligt att tolka. Se issue 235.
+#
+# Ordningen är medveten: repot först, cron sist. Arbetaren BOR i
+# routes/console.php sedan ADR-0031, och crontabben går inte alltid att läsa
+# under den låsta nyckeln - se CRON_UT nedan. En kontroll som frågar cron
+# först svarar därför "ingen arbetare" om en läsning misslyckas.
 if [ -n "${APP:-}" ]; then
-  if crontab -l 2>/dev/null | grep -F "$APP" | grep -q 'queue:work'; then
-    echo 'köarbetare: schemalagd i cron'
-  elif [ -r "$APP/current/routes/console.php" ] && grep -q 'queue:work\|queue:listen' "$APP/current/routes/console.php" 2>/dev/null; then
+  if [ -r "$APP/current/routes/console.php" ] && grep -q 'queue:work\|queue:listen' "$APP/current/routes/console.php" 2>/dev/null; then
     echo 'köarbetare: schemalagd i routes/console.php'
+  elif printf '%s' "${CRON_UT:-}" | grep -F "$APP" | grep -q 'queue:work'; then
+    echo 'köarbetare: schemalagd i cron'
   elif pgrep -u "$(id -un)" -f 'queue:work' >/dev/null 2>&1; then
     echo 'köarbetare: en process kör just nu'
+  elif [ "${CRON_RC:-1}" -ne 0 ]; then
+    echo 'köarbetare: ingen i routes/console.php, och crontabben gick inte att läsa - OBESVARAT'
   else
-    echo 'köarbetare: INGEN hittad (varken cron, routes/console.php eller en levande process)'
+    echo 'köarbetare: INGEN hittad (varken routes/console.php, cron eller en levande process)'
   fi
 fi
 
@@ -185,8 +201,22 @@ fi
 rubrik "Schemaläggning"
 # Minutcronen är det som kör Schedule::call-jobben. Faller raden bort slutar
 # notiser, gallring och kvotavstämning tyst - inget test ser det.
+# `crontab -l` svarar inte likadant i alla sessioner: under nyckeln med
+# command= i authorized_keys gav den tom utdata 2026-09-08 medan samma skript
+# över ett vanligt skal skrev ut båda raderna. v3 slog ihop det med "ingen
+# cron-rad finns", vilket är fel svar på en fråga som inte gick att ställa -
+# och den sortens tystnad är precis vad skriptet finns för att undvika. Utdata
+# och felkod fångas därför var för sig, och rc != 0 eller tom utdata redovisas
+# som obesvarat.
 if command -v crontab >/dev/null 2>&1; then
-  crontab -l 2>/dev/null | grep -F "$APP" || echo "ingen cron-rad nämner $APP"
+  if [ "$CRON_RC" -ne 0 ]; then
+    printf 'crontab -l misslyckades (rc=%s): %s\n' "$CRON_RC" "$(printf '%s' "$CRON_UT" | head -2)"
+  elif [ -z "$CRON_UT" ]; then
+    echo 'crontab -l gav tom utdata - OBESVARAT, inte samma sak som att raden saknas.'
+    echo 'Kör skriptet över ett vanligt skal för att avgöra vilket det är.'
+  else
+    printf '%s' "$CRON_UT" | grep -F "$APP" || echo "ingen cron-rad nämner $APP"
+  fi
 else
   echo 'crontab-kommandot saknas.'
 fi

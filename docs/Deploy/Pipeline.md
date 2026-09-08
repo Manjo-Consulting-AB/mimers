@@ -89,6 +89,10 @@ crontab -e
 
 **Uppgifter som schemaläggs måste vara `->call()` eller `->job()`.** `proc_open` är avstängt, så `->command(...)` fungerar inte. Se [[ADR-0018 Utvecklingsprocess och deploy]].
 
+**Kön behöver ingen egen rad här.** `QUEUE_CONNECTION=database` i båda miljöerna, och arbetaren är schemalagd i `routes/console.php` — minutcronen ovan kör den, som allt annat. Det finns alltså ingen `queue:work` att starta för hand, ingen daemon att hålla vid liv, och inget som behöver göras om på en ny server utöver cron-raden. Talen och skälet står i [[ADR-0031 Köarbetaren körs av schemaläggaren]].
+
+Att den faktiskt drar kön läses av med `retro-fakta`: avsnittet **Kön** skriver ut `jobs`, `failed_jobs` och raden `köarbetare:`. Står det *INGEN hittad* med jobb i tabellen är kön död, och exportknappen levererar inte.
+
 **Agentens läsnyckel.** Retron läser servern genom ett skript som är låst till en egen nyckel — inget skal, ingen skrivrättighet. Motiveringen och de två villkoren på skriptet står i [[ADR-0029 Agentens läsåtkomst till servern]]. Nyckelparet genereras av Tony; privathalvan passerar aldrig genom en agent.
 
 ```bash
@@ -107,8 +111,8 @@ printf 'command="/home/s174280/bin/retro-fakta",restrict %s\n' "$(cat claude-ret
 Anropet, från utvecklings-VPS:en:
 
 ```bash
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net staging
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net staging
 ```
 
 `command=` gör att servern kör skriptet oavsett vad klienten ber om — klientens kommando hamnar i `SSH_ORIGINAL_COMMAND`, och skriptet läser bara miljönamnet ur det. `restrict` stänger portforwarding, agentforwarding, X11 och pty. Skriptet skriver ut sin egen version, så att ett glapp mellan serverns kopia och repots syns i utdatan.
@@ -390,7 +394,7 @@ ssh: connect to host staging.mimers.app port 22: Network is unreachable
 Det ser ut som att servern är nere. Den är det inte — routen saknas i andra änden av kabeln. Hela raden som fungerar:
 
 ```bash
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
 ```
 
 Sista ordet är miljövalet som `retro-fakta` läser, inte en del av lösningen på routeproblemet — se § Engångsuppsättning.
@@ -640,11 +644,11 @@ Artefakten har 90 dagars retention. Det är gott om tid mellan steg 3 och steg 5
 
 ```bash
 git diff v0.1.0..origin/main -- .env.example
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net production
-ssh -4 -p 2020 -i ~/.ssh/claude-retro s174280@prime5.inleed.net staging
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net staging
 ```
 
-Läs samtidigt av kön i utdatan. Två köade jobb är utrullade och ingenting startar en arbetare (issue 235); `QUEUE_CONNECTION` och radantalet i `jobs` avgör om en ny release levererar det den lovar.
+Läs samtidigt av avsnittet **Kön** i utdatan. `köarbetare:` ska säga *schemalagd i routes/console.php*, och `jobs` ska inte ha rader som ligger kvar mellan två körningar. Kön dras av schemaläggaren sedan [[ADR-0031 Köarbetaren körs av schemaläggaren]] — en tom `jobs` med en arbetare betyder att kön töms, samma tabell utan arbetare betyder att exporten aldrig blir klar.
 
 **5. Publicera.** Taggen finns redan från steg 2, så `--verify-tag` används i stället för `--target`: det får kommandot att vägra om taggen mot förmodan saknas, i stället för att skapa en ny och starta ett staging-bygge som produktionen sedan kapplöper. Release notes grupperas per milstolpe.
 

@@ -36,6 +36,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0028 Åtkomst på itemnivå]] | Åtkomst per item, nivåerna en ladder read < create < write < delete | [[Konton och åtkomst]], [[Items och organisation]] |
 | [[ADR-0029 Agentens läsåtkomst till servern]] | Nyckel låst till ett läsande skript med `command=`, aldrig ett skal | Drift, [[Pipeline]] |
 | [[ADR-0030 Miljövariabler ur GitHubs secrets]] | Utrullningen upsertar miljöns secrets i `shared/.env` före `config:cache` | Drift, [[Pipeline]] |
+| [[ADR-0031 Köarbetaren körs av schemaläggaren]] | Schemalagd `queue:work --stop-when-empty` sist i `routes/console.php`, ingen daemon | Drift, [[Pipeline]] |
 
 ## Om att ändra ett beslut
 
