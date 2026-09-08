@@ -266,7 +266,7 @@ it('en ready-rad vars fil redan är borta gallras ändå, och efterföljande rad
     expect(Storage::disk('files')->exists($medFilPath))->toBeFalse();
 });
 
-it('en failed-rad äldre än retentionen gallras: .part-filen tas bort och raden sätts till expired', function () {
+it('en failed-rad med artefakt äldre än retentionen: filen tas bort, statusen förblir failed', function () {
     Carbon::setTestNow('2026-09-08 12:00:00');
 
     [$account, $user] = kontoMedMedlem();
@@ -277,16 +277,23 @@ it('en failed-rad äldre än retentionen gallras: .part-filen tas bort och raden
         'status' => Export::STATUS_FAILED,
         'created_at' => now()->subDays(30),
     ]);
-    $partial = 'exports/'.$container->ulid.'/'.$export->ulid.'.zip.part';
-    Storage::disk('files')->put($partial, 'halvskriven');
+    $path = 'exports/'.$container->ulid.'/'.$export->ulid.'.zip';
+    $export->storage_path = $path;
+    $export->byte_size = 5;
+    $export->save();
+    Storage::disk('files')->put($path, 'byten');
 
     $antal = (new PurgesExpiredExports)->handle();
 
     expect($antal)->toBe(1);
-    expect($export->refresh()->status)->toBe(Export::STATUS_EXPIRED);
+    expect($export->refresh()->status)->toBe(Export::STATUS_FAILED);
     expect($export->refresh()->storage_path)->toBeNull();
-    expect(Storage::disk('files')->exists($partial))->toBeFalse();
+    expect($export->refresh()->byte_size)->toBeNull();
+    expect(Storage::disk('files')->exists($path))->toBeFalse();
     expect(Export::count())->toBe(1);
+
+    // Redan städad: storage_path är null, så urvalet hittar raden inte igen.
+    expect((new PurgesExpiredExports)->handle())->toBe(0);
 });
 
 it('en .part-fil äldre än ett dygn tas bort, en färsk ligger kvar', function () {

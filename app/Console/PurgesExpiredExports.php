@@ -18,9 +18,14 @@ use Throwable;
  *     från disken och raden sätts till `expired` med `storage_path` och
  *     `byte_size` null. Raden raderas inte — beställningen är historik,
  *     precis som en levererad webhook.
- *  2. Misslyckade exporter (`failed`) äldre än retentionen får samma
- *     behandling: en eventuell halvskriven artefakt tas bort och raden sätts
- *     till `expired`, så inga bytes ligger kvar för alltid.
+ *  2. Misslyckade exporter (`failed`) äldre än retentionen som ändå fått en
+ *     artefakt (`storage_path` satt): filen tas bort och `storage_path` och
+ *     `byte_size` nollställs. Statusen förblir `failed` — `expired` betyder
+ *     att artefakten fanns och gallrades efter sitt leveransfönster, och att
+ *     skriva över en `failed`-rad med det raderar just den historik raden
+ *     finns till för (beställningen är historik, precis som en levererad
+ *     webhook). Idempotensen kommer av urvalet, inte statusen: en rad som
+ *     städats har `storage_path` null och väljs aldrig igen.
  *  3. Föräldralösa `.part`-filer äldre än ett dygn tas bort från
  *     `exports/`-katalogen. En krasch mitt i ett bygge lämnar en sådan, och
  *     ingen annan kod städar den.
@@ -44,8 +49,9 @@ class PurgesExpiredExports
     /**
      * Gallrar allt som passerat retentionen.
      *
-     * @return int Antal exportrader som sattes till `expired`. `.part`-filerna
-     *             räknas inte — de är inga rader.
+     * @return int Antal exportrader vars artefakt gallrades — `ready`-rader
+     *             som sattes till `expired` och `failed`-rader vars fil togs
+     *             bort. `.part`-filerna räknas inte — de är inga rader.
      */
     public function handle(): int
     {
@@ -120,7 +126,14 @@ class PurgesExpiredExports
     }
 
     /**
-     * @return int Antal rader som sattes till `expired`.
+     * Rader som aldrig blev hämtbara men ändå fått byten på disken. Åldern
+     * räknas från `created_at` — en `failed`-export fick aldrig något
+     * leveransfönster, så `expires_at` kan vara null och är inget 41b ska
+     * bero på. `whereNotNull('storage_path')` är den vanliga "redan
+     * städad"-vakten: när raden gallrats är `storage_path` null och urvalet
+     * hittar den inte igen.
+     *
+     * @return int Antal rader vars artefakt togs bort (statusen förblir `failed`).
      */
     private function purgeFailed(Carbon $cutoff): int
     {
@@ -128,6 +141,7 @@ class PurgesExpiredExports
 
         Export::query()
             ->where('status', Export::STATUS_FAILED)
+            ->whereNotNull('storage_path')
             ->where('created_at', '<=', $cutoff)
             ->chunkById(100, function ($exports) use (&$gallrade): void {
                 foreach ($exports as $export) {
@@ -146,27 +160,21 @@ class PurgesExpiredExports
             return DB::transaction(function () use ($export): bool {
                 $locked = Export::query()->whereKey($export->getKey())->lockForUpdate()->first();
 
-                if ($locked === null || $locked->status !== Export::STATUS_FAILED) {
+                if ($locked === null
+                    || $locked->status !== Export::STATUS_FAILED
+                    || $locked->storage_path === null) {
                     return false;
                 }
 
-                if ($locked->storage_path !== null) {
-                    Storage::disk('files')->delete($locked->storage_path);
-                }
+                Storage::disk('files')->delete($locked->storage_path);
 
-                // En misslyckad export har normalt ingen storage_path — jobbet
-                // nollställer den aldrig — men en halvskriven `.part`-fil kan
-                // ha lämnats kvar när BuildContainerExports egen städning
-                // misslyckades. Sökvägen är alltid härledd ur raden, aldrig
-                // indata (Beslut 5). Containern hämtas med withTrashed: raden
-                // kan leva kvar under en mjukraderad container.
-                $containerUlid = $locked->container()->withTrashed()->value('ulid');
-
-                if ($containerUlid !== null) {
-                    Storage::disk('files')->delete('exports/'.$containerUlid.'/'.$locked->ulid.'.zip.part');
-                }
-
-                $locked->status = Export::STATUS_EXPIRED;
+                // Statusen förblir `failed` — `expired` reserveras för en
+                // export som blev hämtbar och gallrades efter sitt
+                // leveransfönster. En `.part`-fil hör inte hit: den städas av
+                // katalogsvepet (uppgift 3) på mtime, oavsett vilken rad den
+                // tillhörde — en härledd sökväg här skulle duplicera 41a:s
+                // namnkonvention och missa kraschfallen där jobbet dog innan
+                // `storage_path` ens skrevs.
                 $locked->storage_path = null;
                 $locked->byte_size = null;
                 $locked->save();
