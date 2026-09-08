@@ -308,6 +308,14 @@ Schedule::call(fn () => app(SendsWeeklyDigest::class)->handle())
  * schemaläggningskörningen. Ligger posten sist har allt annat som var i tur
  * redan kört, och nästa minut startar en ny process ändå.
  *
+ * `withoutOverlapping(10)` — inte förvalet 1440 minuter. `exit()` ovan
+ * hoppar över mutex-städningen som annars sköts av `finish()` i ett finally
+ * eller pcntl-signalhanteraren, så låset måste kunna löpa ut av sig självt
+ * efter en timeout; med förvalet stannar posten i 24 timmar, tyst. Tio
+ * minuter ligger säkert över den lagliga maxkörningen på `--max-time` 50 s
+ * plus en sista jobbtimeout på 300 s ≈ 5,8 min, och en fastkilad post
+ * självläker inom tio minuter i stället för ett dygn.
+ *
  * Sync-grenen är inte en artighet (Beslut 4): sync-drivern kan inte poppas
  * ifrån, och testsviten kör med den.
  */
@@ -323,4 +331,4 @@ Schedule::call(function () {
         '--memory' => 96,
         '--tries' => 1,
     ]);
-})->everyMinute()->name('drain-queue')->withoutOverlapping();
+})->everyMinute()->name('drain-queue')->withoutOverlapping(10);

@@ -6,7 +6,6 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Artisan;
-use Mockery;
 use RuntimeException;
 
 use function Pest\Laravel\artisan;
@@ -68,6 +67,12 @@ it('registrerar drain-queue varje minut, utan överlappning', function () {
 
     expect($händelse->getExpression())->toBe('* * * * *');
     expect($händelse->withoutOverlapping)->toBeTrue();
+
+    // Låset måste ha en explicit livslängd: förvalet 1440 min gör att en post
+    // som dör i `exit()` efter en jobbtimeout (Worker::kill hoppar över
+    // mutex-städningen) ligger nere i ett dygn. Tio minuter löper ut av sig
+    // självt och är > den lagliga maxkörningen (50 + 300 s ≈ 5,8 min).
+    expect($händelse->expiresAt)->toBe(10);
 
     // Schemalagd som en closure (Schedule::call), inte som ett
     // Artisan-kommando — se AGENTS.md § Driftmiljön saknar proc_open.
