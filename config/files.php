@@ -63,4 +63,18 @@ return [
 
     'trash_retention_days' => (int) env('TRASH_RETENTION_DAYS', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Exportens retention
+    |--------------------------------------------------------------------------
+    |
+    | Så länge en färdig export ligger kvar på disken innan gallringen (41b)
+    | tar bort den, se [[Backlog]] M6 § 41 § Beslut 7. `expires_at` sätts av
+    | jobbet när artefakten är klar och härleds aldrig på annat håll. Sju
+    | dagar: en export är en påse man hämtar, inte ett arkiv man förvarar.
+    |
+    */
+
+    'export_retention_days' => (int) env('EXPORT_RETENTION_DAYS', 7),
+
 ];

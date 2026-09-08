@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\ContainerTrashController;
+use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
@@ -195,6 +196,21 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // när, och det är ägarens uppgift (Beslut 7). Det finns ingen rutt som
     // ändrar eller raderar en rad — loggen är append-only (Beslut 3).
     Route::get('/containers/{container}/audit-log', [AuditLogController::class, 'index']);
+
+    // Issue 41 · Export — beställ en fullständig export av containern
+    // (metadata + filer), se App\Http\Controllers\Api\ExportController och
+    // App\Support\Export\ContainerExportBuilder. POST skapar en export-rad i
+    // `pending` och lägger App\Jobs\BuildContainerExport på kön; klienten
+    // pollar show() tills status är `ready` eller `failed`. Grinden är den
+    // befintliga view() på App\Policies\ContainerPolicy — ingen ny
+    // policymetod, ingen plangrind, export är fri på alla nivåer
+    // ([[ADR-0014 Prismodell]]). `{export}` binds av gruppens
+    // scopeBindings() genom App\Models\Container::exports() — en export-ULID
+    // från en annan container ger 404 (Beslut 5). Nedladdningen (41b) lägger
+    // en rutt i routes/web.php, aldrig här.
+    Route::post('/containers/{container}/exports', [ExportController::class, 'store']);
+    Route::get('/containers/{container}/exports', [ExportController::class, 'index']);
+    Route::get('/containers/{container}/exports/{export}', [ExportController::class, 'show']);
 
     // Issue 11 · Kategorier — en hierarki per container, se
     // App\Http\Controllers\Api\CategoryController och
