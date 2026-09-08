@@ -31,6 +31,7 @@ Din issues **Läs**-lista är utgångspunkten. Tabellen här är för frågor so
 | felkodsformatet i API:et | `AGENTS.md` § Felformat |
 | vilket språk ett namn i koden ska ha | `AGENTS.md` § Språk i koden |
 | CI, miljöer, utrullning, servern hos inleed | `docs/Deploy/Pipeline.md` |
+| återläsning, att få tillbaka data ur en backup | `docs/Deploy/Återläsning.md` |
 | hur vi står oss mot ett annat verktyg | `docs/Konkurrens.md` |
 | en fråga ingen har svarat på | `docs/Tankar.md` |
 
