@@ -435,6 +435,30 @@ it('skickar exakt ett återställningsmeddelande när en larmad nyckel blir grö
     expect(file_exists($scenarie['state'].'/larm/backup:dump'))->toBeFalse();
 });
 
+it('frisförklarar inte ett rött jobb när ytan samtidigt är onåbar', function () {
+    $scenarie = vaktScenarie(['DRIFT_JOBS' => 'drain-queue:20 deliver-notifications:15']);
+    $nu = time();
+    $kropp = '{"now":"'.vaktIso($nu).'","jobs":{"deliver-notifications":"'.vaktIso($nu).'","drain-queue":"'.vaktIso($nu - 3 * 3600).'"}}';
+
+    [$kod1] = vaktKor($scenarie, ['MIMERS_TEST_BODY' => $kropp]);
+    expect($kod1)->not->toBe(0);
+    expect(file_exists($scenarie['state'].'/larm/jobb:drain-queue'))->toBeTrue();
+
+    // Ytan blir onåbar i nästa omgång: kolla_jobb körs inte, men drain-queue
+    // är fortfarande dött. Larmfilen ska ligga kvar och inget
+    // "grönt igen"-meddelande ska gå för jobbnyckeln — tystnaden om ytan är
+    // inte grönt för jobbet.
+    [$kod2] = vaktKor($scenarie, ['MIMERS_TEST_CURL_RC' => '7']);
+    expect($kod2)->not->toBe(0);
+
+    expect(file_exists($scenarie['state'].'/larm/jobb:drain-queue'))->toBeTrue();
+    expect(file_exists($scenarie['state'].'/larm/yta'))->toBeTrue();
+
+    $capture = file_get_contents($scenarie['capture']);
+    expect(vaktLarmAntal($capture))->toBe(2, 'jobb-larmet plus yt-larmet — inget återställningsmeddelande');
+    expect(vaktLarmText($capture))->not->toContain('grönt igen');
+});
+
 it('skickar veckopulsen när allt är grönt och puls.ok saknas, och uppdaterar filen', function () {
     $scenarie = vaktScenarie();
     unlink($scenarie['state'].'/puls.ok');

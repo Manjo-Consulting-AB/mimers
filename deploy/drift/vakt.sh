@@ -218,8 +218,18 @@ fi
 # --- Återställningar och veckopuls -----------------------------------------
 # En nyckel som larmat en tidigare körning men är grön nu får ETT
 # återställningsmeddelande, och larmfilen tas bort (Beslut 10).
+#
+# jobb:*-nycklarna rörs bara när kolla_jobb kördes den här omgången, dvs när
+# YTA_NOW_EPOK sattes. Misslyckades curl, svarade ytan inte 200 eller gick
+# kroppen inte att tolka kördes kolla_jobb aldrig och ingen jobb:*-nyckel
+# rördes i $RODA_DIR — en sådan omgång får inte frisförklara ett jobb som
+# larmat av ett verkligt skäl. Tystnaden om ytan är inte grönt för jobbet
+# (Beslut 9).
 for fil in "$LARM_KAT"/*; do
   nyckel="$(basename "$fil")"
+  case "$nyckel" in
+    jobb:*) [ -z "$YTA_NOW_EPOK" ] && continue ;;
+  esac
   if [ ! -f "$RODA_DIR/$nyckel" ]; then
     if [ -x "$NOTIFY_CMD" ]; then
       "$NOTIFY_CMD" "$nyckel är grönt igen" "Mimers drift" >/dev/null 2>&1 || true
