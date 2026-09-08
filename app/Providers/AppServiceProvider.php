@@ -2,9 +2,12 @@
 
 namespace App\Providers;
 
+use App\Listeners\RecordsScheduleHeartbeat;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -27,6 +30,21 @@ class AppServiceProvider extends ServiceProvider
         $this->configureUploadRateLimiting();
         $this->configureMailgunWebhookRateLimiting();
         $this->configureCalendarFeedRateLimiting();
+        $this->configureScheduleHeartbeat();
+    }
+
+    /**
+     * Issue 43 · Dead man's switch, Beslut 4. Lyssnaren på
+     * Illuminate\Console\Events\ScheduledTaskFinished skriver en
+     * heartbeat-rad per schemapost som kört klart utan fel — se
+     * App\Listeners\RecordsScheduleHeartbeat och App\Models\Heartbeat.
+     * Registreringen ligger här i stället för som en rad per post i
+     * routes/console.php: en post till är en `Schedule::call(...)` till, utan
+     * att någon behöver komma ihåg en femtonde rad någon annanstans.
+     */
+    private function configureScheduleHeartbeat(): void
+    {
+        Event::listen(ScheduledTaskFinished::class, RecordsScheduleHeartbeat::class);
     }
 
     /**
