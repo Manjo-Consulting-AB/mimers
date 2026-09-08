@@ -83,6 +83,13 @@ jobs:
           PORT: ${{ secrets.DEPLOY_PORT }}
           USER: ${{ secrets.DEPLOY_USER }}
           PATH_REMOTE: ${{ secrets.DEPLOY_PATH }}
+          MAIL_MAILER: ${{ secrets.MAIL_MAILER }}
+          MAIL_FROM_ADDRESS: ${{ secrets.MAIL_FROM_ADDRESS }}
+          MAIL_FROM_NAME: ${{ secrets.MAIL_FROM_NAME }}
+          MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
+          MAILGUN_SECRET: ${{ secrets.MAILGUN_SECRET }}
+          MAILGUN_ENDPOINT: ${{ secrets.MAILGUN_ENDPOINT }}
+          MAILGUN_WEBHOOK_SIGNING_KEY: ${{ secrets.MAILGUN_WEBHOOK_SIGNING_KEY }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.DEPLOY_KEY }}" > ~/.ssh/id_ed25519
@@ -105,4 +112,25 @@ jobs:
           # över SFTP, som inte har något skal bakom sig. Här tolkas sökvägen av
           # ett skal på servern, precis som i raden nedan.
           ssh -p "$PORT" "$USER@$HOST" "mkdir -p $PATH_REMOTE/incoming && cat > $PATH_REMOTE/incoming/$RELEASE.tar.gz" < release.tar.gz
+
+          # shared/.env är sedan ADR-0030 delvis renderad ur miljöns secrets: de
+          # sju nycklarna nedan skrivs in, allt annat i filen lämnas orört.
+          # Värdena går över stdin och aldrig som argument - argument syns i
+          # `ps` för varje annan kund på den delade maskinen - och `umask 077`
+          # gör att fragmentet inte ens kortvarigt är läsbart för andra.
+          # env-uppdatera.sh tar bort det igen, också om den avbryts.
+          #
+          # Steget ligger FÖRE deploy.sh med flit: deploy.sh kör
+          # `php artisan config:cache`, så en .env som uppdateras efteråt får
+          # ingen effekt förrän nästa utrullning.
+          printf '%s\n' \
+            "MAIL_MAILER=$MAIL_MAILER" \
+            "MAIL_FROM_ADDRESS=$MAIL_FROM_ADDRESS" \
+            "MAIL_FROM_NAME=$MAIL_FROM_NAME" \
+            "MAILGUN_DOMAIN=$MAILGUN_DOMAIN" \
+            "MAILGUN_SECRET=$MAILGUN_SECRET" \
+            "MAILGUN_ENDPOINT=$MAILGUN_ENDPOINT" \
+            "MAILGUN_WEBHOOK_SIGNING_KEY=$MAILGUN_WEBHOOK_SIGNING_KEY" \
+          | ssh -p "$PORT" "$USER@$HOST" "umask 077; cat > $PATH_REMOTE/shared/.env.inkommande"
+          ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE" < deploy/env-uppdatera.sh
           ssh -p "$PORT" "$USER@$HOST" "bash -s -- $PATH_REMOTE $RELEASE" < deploy/deploy.sh

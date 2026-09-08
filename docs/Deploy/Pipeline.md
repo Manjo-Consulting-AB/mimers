@@ -67,7 +67,9 @@ for APP in ~/mimers ~/mimers-staging; do
   mkdir -p "$APP"/shared/storage/framework/{cache/data,sessions,views}
 done
 
-# .env skapas här och bara här, en per miljö. Återstår.
+# .env skapas här och bara här, en per miljö. APP_KEY och databasuppgifterna
+# finns BARA på servern. De sju mejlnycklarna sätts däremot i GitHub och skrivs
+# in av utrullningen - se ADR-0030.
 nano ~/mimers/shared/.env
 nano ~/mimers-staging/shared/.env
 
@@ -136,6 +138,15 @@ Lägg upp två *Environments* i repots inställningar: `staging` och `production
 | `DEPLOY_KEY` | privat nyckel, **egen nyckel per miljö** | sätts inte i förväg |
 | `DEPLOY_KNOWN_HOSTS` | utdata från `ssh-keyscan -p 2020 prime5.inleed.net` | tre rader: ed25519, rsa, ecdsa |
 | `DEPLOY_PATH` | appkatalogen för miljön | `/home/s174280/mimers` respektive `/home/s174280/mimers-staging` |
+| `MAIL_MAILER` | `mailgun` i båda miljöerna | skrivs in i `shared/.env` vid utrullning |
+| `MAIL_FROM_ADDRESS` | `info@mimers.app` | ⇑ |
+| `MAIL_FROM_NAME` | avsändarnamnet | ⇑ |
+| `MAILGUN_DOMAIN` | `mg.mimers.app` respektive `mg-staging.mimers.app` | ⇑ |
+| `MAILGUN_SECRET` | Mailguns sändnings-API-nyckel, olika per miljö | ⇑ |
+| `MAILGUN_ENDPOINT` | `api.eu.mailgun.net` vid EU-region | ⇑ |
+| `MAILGUN_WEBHOOK_SIGNING_KEY` | nyckeln HMAC-signaturen verifieras med | ⇑ |
+
+De sju nedersta transporteras till serverns `shared/.env` av utrullningen, se [[ADR-0030 Miljövariabler ur GitHubs secrets]]. **Listan som avgör vilka som transporteras står i `env:`-blocket i `staging.yml` och `production.yml`** — en secret som läggs upp här men inte där når aldrig appen, tyst. Det var precis den luckan som gjorde att M5 låg utrullad i produktion utan att kunna skicka ett mejl; `retro-fakta` är motmedlet, den visar vad som faktiskt hamnade i filen.
 
 `production` sätts dessutom upp med **required reviewer: Tony**. Det är den inställningen som gör att GitHub stannar och frågar innan produktionsdeployen kör — se begränsningen nedan.
 

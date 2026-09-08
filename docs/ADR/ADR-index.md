@@ -1,6 +1,6 @@
 # ADR-index
 
-Tjugonio beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Trettio beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -35,6 +35,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0027 Agentisolering under utveckling]] | Ingen Docker per agent nu — worktrees + permissions-denylist räcker | Drift |
 | [[ADR-0028 Åtkomst på itemnivå]] | Åtkomst per item, nivåerna en ladder read < create < write < delete | [[Konton och åtkomst]], [[Items och organisation]] |
 | [[ADR-0029 Agentens läsåtkomst till servern]] | Nyckel låst till ett läsande skript med `command=`, aldrig ett skal | Drift, [[Pipeline]] |
+| [[ADR-0030 Miljövariabler ur GitHubs secrets]] | Utrullningen upsertar miljöns secrets i `shared/.env` före `config:cache` | Drift, [[Pipeline]] |
 
 ## Om att ändra ett beslut
 
