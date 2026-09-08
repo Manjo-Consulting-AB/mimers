@@ -116,12 +116,16 @@ Mottagaren måste skapa konto och verifiera sin e-post för att acceptera. Det �
 |---|---|---|
 | id, ulid | | |
 | container_id | FK | |
-| from_account_id, to_account_id | FK | |
+| from_account_id | FK | |
+| to_account_id | FK NULL | `NULL` när mottagaren ännu saknar konto — då bär `to_email` adressen. Exakt en av de två är satt. |
 | to_email | VARCHAR(255) NULL | Om mottagaren saknar konto |
 | excluded_item_ids | JSON | Items säljaren behåller — inköpspris, försäkringsbrev |
 | retain_access_level | VARCHAR(20) NULL | Varvet behåller ofta `write` efter överlämning |
-| status | VARCHAR(20) | `pending` \| `accepted` \| `rejected` \| `expired` |
+| status | VARCHAR(20) | `pending` \| `accepted` \| `rejected` \| `expired` \| `revoked` |
 | accepted_at | TIMESTAMP NULL | |
+| initiated_by_user_id | FK | Speglar `invitation.invited_by_user_id`; accepten sätter den som `granted_by_user_id` på en kvarhållen åtkomst |
+
+`revoked` är avsändarens ånger, av samma skäl som på `invitation`: en överlåtelse som skickats till fel adress måste gå att dra tillbaka. Raden raderas aldrig. Utgången härleds ur `created_at` i kod — `status` står kvar på `pending` när tiden passerat, samma princip som `container_access` och `invitation`. **Ingen `token_hash`:** en inbjudan ger läsrätt, ett ägarbyte överlåter hela pärmen, och en bärartoken i ett mejl till en overifierad adress vore en kapabilitet att ta emot någon annans pärm. Mottagaren hittar sitt inkommande ägarbyte på identitet — konto eller verifierad adress — inte på hemlighet.
 
 **Vid accept** ska implementationen, i en transaktion: kontrollera att mottagarens plan rymmer containern (annars nekas överlåtelsen med felkod, inte tyst), flytta `container.account_id`, flytta förbrukat utrymme mellan `usage_counter`-rader, återkalla åtkomster som inte ska följa med, skapa den kvarhållna åtkomsten om sådan begärts, och skriva en `audit_log`-rad. Mottagaren får tolv månader Pro enligt [[ADR-0014 Prismodell]].
 
@@ -131,15 +135,18 @@ Krävs av B2B och av ägarbyten — i en mäklarsituation är det ett värde i s
 
 | Kolumn | Typ | Not |
 |---|---|---|
-| id | | |
-| account_id, user_id | FK NULL | |
+| id, ulid | | Loggen är läsbar genom API:et, så raden bär ULID som allt annat |
+| account_id, user_id | FK NULL | Aktörens konto och användare. `user_id` är `NULL` när ett jobb orsakat händelsen |
 | container_id | FK NULL | |
-| action | VARCHAR(60) | `container.transferred`, `access.revoked`, … |
-| subject_type, subject_id | | |
-| meta | JSON | |
+| action | VARCHAR(60) | `container.transferred`, `access.revoked`, … Öppet namnrum, inget CHECK |
+| subject_type | VARCHAR(40) NULL | Domännamn (`container_access`), aldrig ett klassnamn |
+| subject_id | CHAR(26) NULL | Subjektets ULID |
+| meta | JSON | Aldrig e-postadresser — loggen läses av hela ägarkontot |
 | created_at | | |
 
 Index: `(container_id, created_at)`.
+
+**Append-only.** Ingen `updated_at`, ingen `deleted_at`, ingen rutt som ändrar eller raderar en rad. Det är den enda avvikelsen från [[Datamodell – översikt]]:s tidsstämpel- och soft delete-krav som är motiverad av vad tabellen är: en logg som går att skriva om är inget bevis.
 
 ## Behörighetsregler
 

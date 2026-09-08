@@ -24,12 +24,11 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Personradering är inte löst, och kontoraderingen rör den inte.** `DeleteAccount` raderar aldrig `user`-rader: en person kan vara medlem i andra konton, så raderingen av ett konto får inte ta med sig människan. Det är rätt avgränsning för issue 29b, men det betyder att det inte finns någon väg alls för en enskild person att bli raderad ur systemet — vilket är ett GDPR-krav och inte en teknisk detalj. Behöver en egen issue med egna krav; frågan är i vilken milstolpe. Restes i granskningen av issue 29b (PR #168), 2026-09-04.
 
-- **Issuenummer 38 bär två olika issues.** [[M5 Notiser]] § 38 är *Byt e-postleverantör till Mailgun*, [[M6 Resten av MVP]] § 38 är *Utlåning* — och [[Backlog]]:s tabell speglar kollisionen med intervallen `30–38` och `38–41`. Följden är att en `Beror på:`-rad som pekar på 38 inte är entydig; M10 § 67 gör det redan, där grannarna 39 och 41 antyder men inte bevisar att Utlåning avses. Den ena är byggd (`Byggd som:` 38a och 38b), den andra inte, så det billigaste vore att ge Utlåning ett nytt nummer — men det avgörs av om det redan finns en GitHub-issue som bär numret, vilket bara den som skapat den vet. Frågan är alltså vilken av de två som byter, och vad som då ska hända med `Beror på:`-raden i M10. Upptäckt när dokumentationens räkneverk stämdes av mot filerna, 2026-09-06.
-
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
 
+- Issuenummer 38 bar två olika issues — *Byt e-postleverantör till Mailgun* i [[M5 Notiser]] och *Utlåning* i [[M6 Resten av MVP]] → Mailgun behöll numret, eftersom den redan var byggd som 38a/38b och bär det i GitHub (#200, #201); *Utlåning* är sedan 2026-09-07 **issue 76**. Kriteriet som avgjorde var det som stod i frågan: den som redan hade en GitHub-issue på numret fick behålla det. `Beror på`-raden i [[M10 Webbfrontend]] § 67 pekar nu på 76, [[Backlog]]:s tabell läser `39–41, 76` för M6, och totalintervallet är 0–76. Restes 2026-09-06, avgjort 2026-09-07.
 - Underkategorier, och om ett item kan tillhöra flera kategorier → [[Items och organisation]] § category. Kategorier är hierarkiska via `parent_id`, ett item tillhör högst en. Taggar är platta, medvetet.
 - Fil-dedup via innehållshash och radering när sista referensen försvinner → [[Filer och lagring]] och [[ADR-0006 Innehållsadresserad lagring]].
 - Utlåning med påminnelse → [[Items och organisation]] § loan. Påminnelsen går till den som lånat ut, aldrig till låntagaren; skälet står i [[ADR-0017 Missbruksvektorer]] § 7.

@@ -24,7 +24,7 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M3 Uppgifter]] | **21–24** | scheman, förekomster och avslut, beroenden mellan uppgifter, todo-listan |
 | [[M4 Planer och kvoter]] | **25–29** | planer och rättigheter, förbrukningsräkning, kontrollpunkter för rättigheter, nedgradering, kontolivscykel |
 | [[M5 Notiser]] | **30–38** | notiskärna, preferenser och tysta timmar, e-post via mailgun, studshantering, notisgeneratorer, veckosammanfattning, … |
-| [[M6 Resten av MVP]] | **38–41** | utlåning, ägarbyte, revisionslogg, export |
+| [[M6 Resten av MVP]] | **39–41, 76** | utlåning, ägarbyte, revisionslogg, export |
 | [[M7 Drift]] | **42–44** | backupscript, dead man's switch, återläsningsrunbook |
 | [[M8 Kostnadsregistrering]] | **45–47** | kostnadsrader, kostnadsrapport, kostnadskrok vid avbockad uppgift |
 | [[M9 Missbruksskydd]] | **48–50** | tak för utestående inbjudningar, ägarbytesbonusen en gång per mottagande konto, nattlig missbruksrapport |
@@ -32,4 +32,4 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M10 Webbfrontend]] | **51–68** | frontendskal, språk i frontenden, inloggnings- och kontovyer, containervyer, delning och inbjudningar, kategorier och taggar, … |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 
-Totalt 77 issuerubriker under `docs/Backlog/`, numrerade 0–75. Issue 6 är delad i 6a, 6b och 6c. **Nummer 38 bär två olika issues** — *Byt e-postleverantör till Mailgun* i M5 och *Utlåning* i M6. Vilken som ska byta nummer är inte avgjort; se [[Tankar]]. **M11 står sist i numret men grindar sex issues i M10** — 55, 57, 58, 59, 62 och 67 bygger på behörighetsmodellen den ändrar. Beroendena i issuerna är det som gäller, precis som M10:s egen ingress säger.
+Totalt 77 issuerubriker under `docs/Backlog/`, numrerade 0–76. Issue 6 är delad i 6a, 6b och 6c. **Nummer 38 bar två olika issues fram till 2026-09-07** — *Byt e-postleverantör till Mailgun* i M5 och *Utlåning* i M6. Mailgun var redan byggd som 38a/38b och behöll numret; Utlåning är sedan dess **76**, och `Beror på`-raden i M10 § 67 följde med. Se [[Tankar]] § Avgjort och flyttat. **M11 står sist i numret men grindar sex issues i M10** — 55, 57, 58, 59, 62 och 67 bygger på behörighetsmodellen den ändrar. Beroendena i issuerna är det som gäller, precis som M10:s egen ingress säger.
