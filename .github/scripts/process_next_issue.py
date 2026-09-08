@@ -543,6 +543,14 @@ def run_opus_answer(issue_body, fragor, pr_number, worktree_path):
         "en implementerare kan agera på svaret utan att fråga igen.\n\n"
         "Läs INTE koden, diffen eller PR:en - det är inte din uppgift här, bara att "
         "ta det arkitekturbeslut frågan efterfrågar utifrån issuen och dokumentationen.\n\n"
+        "Behöver ditt svar en fil som ligger utanför issuens omfångsruta - typiskt "
+        "en helt ny fil som `Out of scope` aldrig var skriven för att förbjuda - så "
+        "bevilja undantaget uttryckligen och maskinläsbart: skriv en rad som är exakt "
+        "`Beviljat undantag från omfångsrutan:` och direkt under den ett kodblock med "
+        "en sökväg per rad. CI:s omfångsgrind läser bara den formen. En beviljning i "
+        "löptext ser den inte, och då fälls PR:en av den order du just gav - se issue "
+        "223 (PR #231), som mergades röd på exakt de två filer arkitekten beordrat. "
+        "Bevilja aldrig fler filer än svaret kräver.\n\n"
         f"=== ISSUEN ===\n{issue_body}\n\n"
         f"=== FRÅGOR OCH ANTAGANDEN FRÅN IMPLEMENTERAREN ===\n{fragor}\n\n"
         "Avsluta med att avgöra om ditt svar kräver en ändring i den redan skrivna "
@@ -619,6 +627,14 @@ def bygg_arkitektprompt(issue_body, pr_titel, pr_diff, fraga):
         "Du står i repot och får läsa dokumentationen under docs/ för att svara. "
         "Ändra INGA filer, kör inga tester och öppna ingen PR - din enda uppgift "
         "är svaret.\n\n"
+        "Behöver ditt svar en fil som ligger utanför issuens omfångsruta - typiskt "
+        "en helt ny fil som `Out of scope` aldrig var skriven för att förbjuda - så "
+        "bevilja undantaget uttryckligen och maskinläsbart: skriv en rad som är exakt "
+        "`Beviljat undantag från omfångsrutan:` och direkt under den ett kodblock med "
+        "en sökväg per rad. CI:s omfångsgrind läser bara den formen. En beviljning i "
+        "löptext ser den inte, och då fälls PR:en av den order du just gav - se issue "
+        "223 (PR #231), som mergades röd på exakt de två filer arkitekten beordrat. "
+        "Bevilja aldrig fler filer än svaret kräver.\n\n"
         f"{issue_del}"
         f"=== PR: {pr_titel} ===\n{pr_diff}\n\n"
         f"=== TONYS FRÅGA ===\n{fraga}\n\n"
@@ -1066,6 +1082,72 @@ def cleanup_worktree(worktree_path, branch_name):
     run_cmd(["git", "branch", "-D", branch_name], check=False, cwd=REPO_ROOT)
 
 
+def godkannandet_galler_koden(pr_number):
+    """Sitter `review:approved` på den kod som faktiskt ligger på grenen?
+
+    Etiketten bär ingen commit. Läsningen i pr_far_mergas() är färsk i TID - den
+    sker i samma andetag som mergen - men inte mot KOD, och det är två olika
+    saker. Issue 221 (PR #229, M6) visar skillnaden i tidslinjen: `labeled
+    review:approved` 18:37:09, `committed` 19:12:49, `head_ref_force_pushed`
+    19:12:53. Grenens samtliga commits byttes ut 35 minuter efter godkännandet
+    och etiketten satt kvar. En ny granskning två minuter senare fann att
+    session 2 var oimplementerad och att PR-kroppen beskrev ändringar som inte
+    fanns i diffen. Hade kön nått mergen i det fönstret hade den mergat ett
+    godkännande vars kod ingen granskare sett.
+
+    Villkoret är deterministiskt: kom en `committed` eller `head_ref_force_pushed`
+    efter den senaste `labeled review:approved`, gäller godkännandet inte HEAD.
+
+    Felar öppet med en varning, inte stängt: kan tidslinjen inte läsas blir
+    utfallet det kön hade innan kontrollen fanns. En trasig API-läsning ska inte
+    låsa kön, men den ska heller inte tiga - se docs/Process/Lärdomar.md om
+    grindar som inte kan skilja "inget att göra" från "jag tittade åt fel håll".
+    """
+    res = run_cmd(["gh", "api", "--paginate",
+                   f"repos/{GH_REPO}/issues/{pr_number}/timeline"],
+                  check=False, cwd=REPO_ROOT)
+    if res.returncode != 0:
+        print(f"?? Kunde inte läsa tidslinjen för PR #{pr_number}: {res.stderr.strip()} "
+              "- kan inte avgöra om godkännandet gäller HEAD. Fortsätter.")
+        return True
+    try:
+        handelser = json.loads(res.stdout)
+    except json.JSONDecodeError:
+        # --paginate limmar ihop flera JSON-arrayer; enklare att be om en sida.
+        res = run_cmd(["gh", "api",
+                       f"repos/{GH_REPO}/issues/{pr_number}/timeline?per_page=100"],
+                      check=False, cwd=REPO_ROOT)
+        if res.returncode != 0:
+            print(f"?? Kunde inte läsa tidslinjen för PR #{pr_number} - fortsätter.")
+            return True
+        try:
+            handelser = json.loads(res.stdout)
+        except json.JSONDecodeError:
+            print(f"?? Tidslinjen för PR #{pr_number} gick inte att tolka - fortsätter.")
+            return True
+
+    godkant = ""
+    for h in handelser:
+        if h.get("event") == "labeled" and (h.get("label") or {}).get("name") == "review:approved":
+            godkant = max(godkant, h.get("created_at") or "")
+    if not godkant:
+        print(f"?? Hittade ingen `labeled review:approved` i tidslinjen för PR "
+              f"#{pr_number}, trots att etiketten sitter - fortsätter.")
+        return True
+
+    for h in handelser:
+        if h.get("event") not in ("committed", "head_ref_force_pushed"):
+            continue
+        nar = h.get("created_at") or ((h.get("committer") or {}).get("date") or "")
+        if nar and nar > godkant:
+            print(f"!! PR #{pr_number}: `review:approved` sattes {godkant}, men grenen "
+                  f"fick `{h['event']}` {nar}. Godkännandet gäller inte den kod som "
+                  "ligger på HEAD - mergar inte. Kör granskningen igen på den nya "
+                  "commiten (issue 221 / PR #229, se docs/Process/Lärdomar.md).")
+            return False
+    return True
+
+
 def pr_far_mergas(pr_number):
     """Den enda spärren före merge: `review:approved` sitter på PR:en, och CI är
     grönt. Båda merge-ställena går genom den här funktionen, så det finns ett
@@ -1101,6 +1183,9 @@ def pr_far_mergas(pr_number):
         print("!! PR:en saknar `review:approved` vid mergetillfället - mergar inte. "
               "Varje implementations-PR ska läsas av en granskningsmodell innan den "
               "mergas (ADR-0026).")
+        return False
+
+    if not godkannandet_galler_koden(pr_number):
         return False
 
     for attempt in range(3):

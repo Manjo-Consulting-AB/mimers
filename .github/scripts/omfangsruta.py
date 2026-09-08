@@ -31,6 +31,8 @@ Läser:
     BASE_SHA           commit att diffa mot
     PR_CREATED_AT      PR:ens skapelsetid, för att avgöra vilka redigeringar av
                         issuekroppen som hann ske innan PR:en öppnades
+    GITHUB_EVENT_PATH  sätts av Actions själv i varje steg; ger PR-numret som
+                        behövs för att läsa beviljade undantag ur arkitektsvaret
 
 Rutan går att flytta i efterhand utan att röra en diff, och det gjorde den. Under
 M5 fällde den här kontrollen fem gånger, och bara **en** löstes som processen
@@ -50,6 +52,12 @@ redigerades medan PR:en var öppen:
     `app/Support/Notification/UnsafeUrlException.php`) står i dag i `In scope`.
   - Issue 173 (PR #189): kroppen rördes aldrig - PR:en mergades i stället med
     steget rött. `process` står `fail` på körning 33954480512 än i dag.
+
+Sedan M6 finns en väg som varken flyttar linjalen eller kräver en revert:
+ett arkitektsvar kan bevilja ett undantag med markören `Beviljat undantag från
+omfångsrutan:` följt av ett kodblock med sökvägar. Se `beviljade_undantag()` för
+varför just arkitektsvaret är platsen, och för issue 223 (PR #231) som mergades
+röd på exakt de två filer arkitekten hade beordrat.
 
 Grindens egen felutskrift säger ordagrant: "Ligger en fil utanför rutan med
 avsikt: skriv vilken och varför i PR:en och vänta på svar - vidga inte rutan i
@@ -217,6 +225,96 @@ def hamta_redigeringshistorik(repo: str, nummer: str, token: str) -> dict:
     if issue is None:
         raise RuntimeError(f"#{nummer} gick inte att hämta via GraphQL - tomt svar.")
     return issue
+
+
+# Ett beviljat undantag måste gå att läsa maskinellt, annars fälls PR:en av den
+# order den följde. Issue 223 (PR #231, M6): Opus skrev ordagrant "Undantag från
+# `Out of scope`, uttryckligen beviljat: skapa `lang/sv/export.php` och
+# `lang/en/export.php`" - motiverat, eftersom listan fanns för att skydda
+# BEFINTLIGA filer mot kollision med issue 39 och 40, inte för att förbjuda två
+# nya. Implementeraren gjorde som den blev tillsagd, granskaren såg beviljandet
+# och godkände, och det här skriptet fällde ändå körningen på exakt de två
+# filerna: det läste bara issuekroppen. Kön vägrade merga, och PR:en stod fem
+# timmar tills Tony mergade den röd. Ingen instans gjorde fel - det saknades en
+# plats att skriva beviljandet där grinden kunde se det.
+#
+# Issuekroppen är fel plats: att redigera den i efterhand ÄR att flytta linjalen,
+# och `linjalen_flyttad` finns till för att fälla just det. PR-kroppen är också
+# fel plats - den skrivs av implementeraren, alltså den som ska hindras. Kvar
+# står arkitektsvaret: en kommentar pipelinen själv postar (se
+# process_next_issue.py, run_opus_answer och besvara_arkitektfraga), som ingen
+# kan efterredigera osynligt och som står kvar i tråden för granskningen och för
+# retron.
+#
+# Undantaget vidgar rutan men göms aldrig: varje beviljad fil skrivs ut som en
+# ::warning:: med länk till kommentaren som beviljade den, så att omfångsdrift
+# fortfarande går att räkna i efterhand. En tyst vidgning vore samma metrikförlust
+# som en omskriven ruta.
+UNDANTAGSMARKOR = "Beviljat undantag från omfångsrutan:"
+ARKITEKTRUBRIK = re.compile(r"^###\s+.*arkitektsvar", re.IGNORECASE)
+
+
+def pr_nummer_ur_handelsen() -> str | None:
+    """PR-numret ur GITHUB_EVENT_PATH.
+
+    Actions sätter den variabeln i varje steg utan att workflowen behöver räkna
+    upp den i sitt `env:`-block, så kontrollen nedan kan läggas till utan att
+    ci.yml rörs. Saknas filen - skriptet körs för hand - hoppas kontrollen över.
+    """
+    sokvag = os.environ.get("GITHUB_EVENT_PATH") or ""
+    if not sokvag or not os.path.exists(sokvag):
+        return None
+    try:
+        with open(sokvag, encoding="utf-8") as f:
+            handelse = json.load(f)
+    except (OSError, ValueError):
+        return None
+    nummer = (handelse.get("pull_request") or {}).get("number")
+    return str(nummer) if nummer else None
+
+
+def beviljade_undantag(repo: str, pr_nummer: str, token: str) -> list[tuple[str, str]]:
+    """Sökvägar som ett arkitektsvar uttryckligen beviljat, med länk till svaret.
+
+    Formen är avsiktligt stel: en rad som är exakt UNDANTAGSMARKOR, följd av ett
+    kodblock med en sökväg per rad, i en kommentar vars rubrik är ett
+    arkitektsvar. Stelheten är poängen - en grind som gissar vad ett svar menade
+    är ingen grind. Står markören inte där finns inget undantag, och rutan gäller
+    som förut.
+
+    Felar öppet, inte stängt: kan kommentarerna inte läsas returneras en tom
+    lista, vilket ger exakt det utfall skriptet hade innan den här funktionen
+    fanns. Ett tappat API-anrop ska inte vidga rutan.
+    """
+    url = f"https://api.github.com/repos/{repo}/issues/{pr_nummer}/comments?per_page=100"
+    begaran = urllib.request.Request(url, headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "omfangsruta",
+    })
+    try:
+        with urllib.request.urlopen(begaran, timeout=30) as svar:
+            kommentarer = json.load(svar)
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as fel:
+        notis("warning", f"Kunde inte läsa PR #{pr_nummer}s kommentarer: {fel}. "
+                         "Beviljade undantag kan inte läsas - rutan gäller som skriven.")
+        return []
+
+    beviljade: list[tuple[str, str]] = []
+    for kommentar in kommentarer:
+        kropp = kommentar.get("body") or ""
+        forsta = kropp.lstrip().splitlines()[0] if kropp.strip() else ""
+        if not ARKITEKTRUBRIK.match(forsta):
+            continue
+        for block in re.findall(
+            rf"^\s*{re.escape(UNDANTAGSMARKOR)}\s*\n\s*```[^\n]*\n(.*?)^\s*```",
+            kropp, re.MULTILINE | re.DOTALL,
+        ):
+            for rad in block.splitlines():
+                rad = rad.strip().strip("`").strip()
+                if rad and ar_sokvag(rad):
+                    beviljade.append((rad, kommentar.get("html_url", "")))
+    return beviljade
 
 
 def kropp_vid_pr_oppning(historik: dict, pr_skapad: str) -> str:
@@ -564,9 +662,26 @@ def main() -> int:
     # scope` är oftast löptext som förklarar vad som *inte* ingår - och som därför
     # nämner de filer som ingår, i bakåtcitat. Vore ordningen den omvända fälldes
     # sex av M2:s tio PR:er på sina egna tillåtna filer.
+    # Beviljade undantag vidgar rutan, men bara de som står i ett arkitektsvar och
+    # bara med markören - se beviljade_undantag(). Varje träff skrivs ut, så att
+    # omfångsdrift går att räkna i efterhand trots att grinden släpper igenom den.
+    undantag: list[tuple[str, str]] = []
+    pr_nummer = pr_nummer_ur_handelsen()
+    if pr_nummer:
+        undantag = beviljade_undantag(repo, pr_nummer, token)
+
     brott: list[str] = []
     for fil in andrade:
         if any(matchar(fil, m) for m in innanfor):
+            continue
+        beviljat = [(m, url) for m, url in undantag if matchar(fil, m)]
+        if beviljat:
+            _, url = beviljat[0]
+            notis(
+                "warning",
+                f"{fil} ligger utanför omfångsrutan men är uttryckligen beviljad i "
+                f"arkitektsvaret ({url}). Släpps igenom, räknas som omfångsdrift i retron.",
+            )
             continue
         traffad_utanfor = [m for m in utanfor if matchar(fil, m)]
         if traffad_utanfor:
