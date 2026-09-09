@@ -2,7 +2,7 @@
 
 Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet — läs dem en gång, inte per issue.
 
-Tillagd 2026-08-04, efter att planeringsfasen avslutats. Se [[ADR-0016 Kostnadsregistrering]]. **Ligger inte i MVP-listan i [[Översikt]] § Avgränsning** — flytta in den dit om den ska med i första släppet.
+Tillagd 2026-08-04, efter att planeringsfasen avslutats. Se [[ADR-0016 Kostnadsregistrering]]. **Ingår i MVP sedan 2026-09-09** — milstolpen står i [[Översikt]] § Avgränsning under "Ingår i MVP", och byggs efter M7.
 
 ### 45. Kostnadsrader
 `cost_entry` med CRUD. `item_id` obligatorisk, `container_id` denormaliserad från itemet. Belopp i minsta valutaenhet, negativa belopp tillåtna. Inmatning accepterar både komma och punkt som decimaltecken och **avvisar** fler decimaler än valutan tillåter istället för att avrunda tyst. Leverantör trimmas vid sparning. Autocomplete-endpoint som ger distinkta leverantörer inom containern, sorterade på användningsfrekvens.

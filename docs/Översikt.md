@@ -40,6 +40,7 @@ Webben byggs med Inertia och Vue i samma Laravel-app och konsumerar alltså inte
 - Fil-dedup via innehållshash
 - Planer och kvoter med förbrukningsräkning — **även om betalning inte byggs**
 - Notiser via e-post, ICS-kalenderfeed och webhooks
+- Kostnadsregistrering per item, med rapporten bakom Pro — se [[ADR-0016 Kostnadsregistrering]]
 - Soft delete och papperskorg
 - Sök och filtrering
 - Svenska och engelska
