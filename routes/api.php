@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\ContainerController;
 use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\ContainerTrashController;
+use App\Http\Controllers\Api\CostEntryController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
@@ -388,6 +389,22 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/containers/{container}/items/{item}/loans', [LoanController::class, 'store']);
     Route::patch('/containers/{container}/items/{item}/loans/{loan}', [LoanController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}/loans/{loan}', [LoanController::class, 'destroy']);
+
+    // Issue 45a · Kostnadsregistrering — vad ett item har kostat, se
+    // App\Http\Controllers\Api\CostEntryController och App\Models\CostEntry.
+    // {item} nästlas under {container} som items ovan, och {cost} binds av
+    // gruppens scopeBindings() genom App\Models\Item::costs() — hela skyddet
+    // mot en kostnad på ett annat item, eller ett item i en annan container:
+    // båda ger 404 (issue 45a § Beslut 7). Grindarna är view() (GET) och
+    // update() (POST/PATCH/DELETE), båda befintliga i
+    // App\Policies\ContainerPolicy — ingen ny policymetod (§ Beslut 8).
+    // Ingen show(): listan hämtar hela uppsättningen (§ Beslut 7).
+    // Leverantörsytans autocomplete är 45b och lägger sina egna rutter här
+    // under, aldrig i den här issuen.
+    Route::get('/containers/{container}/items/{item}/costs', [CostEntryController::class, 'index']);
+    Route::post('/containers/{container}/items/{item}/costs', [CostEntryController::class, 'store']);
+    Route::patch('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'update']);
+    Route::delete('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'destroy']);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och
