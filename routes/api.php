@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\ContainerInvitationController;
 use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\ContainerTrashController;
 use App\Http\Controllers\Api\CostEntryController;
+use App\Http\Controllers\Api\CostReportController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
@@ -416,6 +417,17 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // befintliga view() på App\Policies\ContainerPolicy — ingen ny
     // policymetod (§ Beslut 2). Bara GET: uppslaget är en läsyta.
     Route::get('/containers/{container}/costs/suppliers', [CostEntryController::class, 'suppliers']);
+
+    // Issue 46 · Kostnadsrapporten — grupperad summering av containerns
+    // kostnadsrader, se App\Http\Controllers\Api\CostReportController och
+    // App\Support\Cost\CostReport. En rutt, en container (issue 46 § Beslut
+    // 1): rapporten är alltid scopad till en container, och kriteriet
+    // "summerar aldrig rader från containers användaren saknar åtkomst till"
+    // uppfylls av routebindningen plus grinden. Två grindar — view() följt
+    // av ägarkontots plan (assertFeature 'cost_reports') — i den ordningen
+    // (§ Beslut 2). Enda kontrollpunkten i M8 som rör en funktion och inte
+    // en gräns: registrering är fri, summering kräver Pro.
+    Route::get('/containers/{container}/costs/report', CostReportController::class);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och
