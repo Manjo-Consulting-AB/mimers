@@ -73,7 +73,7 @@ class ScheduleOccurrenceController extends Controller
      */
     public function complete(CompleteOccurrenceRequest $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence): JsonResponse
     {
-        return $this->close($request, $container, $schedule, $occurrence, $closeOccurrence, ScheduleOccurrence::STATUS_COMPLETED);
+        return $this->close($request, $container, $item, $schedule, $occurrence, $closeOccurrence, ScheduleOccurrence::STATUS_COMPLETED);
     }
 
     /**
@@ -85,7 +85,7 @@ class ScheduleOccurrenceController extends Controller
      */
     public function skip(CompleteOccurrenceRequest $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence): JsonResponse
     {
-        return $this->close($request, $container, $schedule, $occurrence, $closeOccurrence, ScheduleOccurrence::STATUS_SKIPPED);
+        return $this->close($request, $container, $item, $schedule, $occurrence, $closeOccurrence, ScheduleOccurrence::STATUS_SKIPPED);
     }
 
     /**
@@ -104,8 +104,18 @@ class ScheduleOccurrenceController extends Controller
      * Svaret är 200 med den stängda och den nya förekomsten i varsin
      * ScheduleOccurrenceResource-form (issue 22b § Beslut 8). `next` är null
      * när `recurrence_type` är `none`, men nyckeln finns alltid.
+     *
+     * `cost_prompt` är kostnadskroken (issue 47): när förekomsten stängdes som
+     * `completed` bär svaret ett erbjudande att registrera en kostnad på
+     * itemet, med `incurred_on` förifyllt till `completed_at`:ets datum. Vid
+     * `skip` är värdet null — nyckeln finns alltid, samma regel som `next`
+     * (issue 47 § Beslut 2). Erbjudandet är bara en extra nyckel i svaret:
+     * ingenting skrivs, ingen relation lagras mellan kostnaden och
+     * förekomsten, och avslutsflödet i CloseOccurrence är orört. Itemet som
+     * erbjudandet pekar på är rutten `{item}` — complete()/skip() har det
+     * redan bundet, inget nytt uppslag (Beslut 4).
      */
-    private function close(CompleteOccurrenceRequest $request, Container $container, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence, string $status): JsonResponse
+    private function close(CompleteOccurrenceRequest $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence, string $status): JsonResponse
     {
         Gate::authorize('update', $container);
 
@@ -136,10 +146,19 @@ class ScheduleOccurrenceController extends Controller
             $next->setRelation('completedByAccount', null);
         }
 
+        // Kostnadskroken (issue 47 § Beslut 1): en KEY till i data, bredvid
+        // closed och next. completed_at är en tidsstämpel och incurred_on en
+        // DATE, så uttaget är $closed->completed_at->toDateString() — en dag,
+        // aldrig en tidsstämpel (Beslut 3, jfr LoanResource).
+        $costPrompt = $status === ScheduleOccurrence::STATUS_COMPLETED
+            ? ['item' => $item->ulid, 'incurred_on' => $closed->completed_at->toDateString()]
+            : null;
+
         return response()->json([
             'data' => [
                 'closed' => new ScheduleOccurrenceResource($closed),
                 'next' => $next === null ? null : new ScheduleOccurrenceResource($next),
+                'cost_prompt' => $costPrompt,
             ],
         ]);
     }
