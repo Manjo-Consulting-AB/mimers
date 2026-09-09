@@ -5,6 +5,7 @@ namespace App\Actions\Trash;
 use App\Actions\Attachment\PurgeAttachment;
 use App\Models\Attachment;
 use App\Models\Category;
+use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\Tag;
@@ -63,7 +64,11 @@ class PurgeContent
      * 3. item_link-raderna där itemet är `from_item_id` ELLER `to_item_id`,
      *    hårt — en länk kan peka på itemet från andra hållet, och en hasMany
      *    i en riktning hittar bara hälften,
-     * 4. forceDelete på itemet.
+     * 4. kostnadsraderna på itemet, hårt — ÄVEN de mjukraderade, med
+     *    withTrashed() (issue 45a § Beslut 10): cost_entry.item_id är
+     *    ON DELETE RESTRICT, så utan den här raden skulle forceDelete på
+     *    itemet falla på ett främmandenyckelfel,
+     * 5. forceDelete på itemet.
      *
      * Allt i EN transaktion: en bilaga som hunnit bort men inte itemet vore
      * en permanent radering av innehåll som papperskorgen fortfarande lovar
@@ -87,6 +92,12 @@ class PurgeContent
                 ->where('from_item_id', $itemId)
                 ->orWhere('to_item_id', $itemId)
                 ->delete();
+
+            // withTrashed() — en kostnadsrad som mjukraderats syns inte
+            // annars, och den måste med (issue 45a § Beslut 10). Rader som
+            // följer med ett mjukraderat item i papperskorgen har ofta
+            // deleted_at satt.
+            CostEntry::withTrashed()->where('item_id', $itemId)->forceDelete();
 
             $item->forceDelete();
         });

@@ -6,6 +6,7 @@ use App\Actions\Trash\PurgeContent;
 use App\Console\PurgesExpiredTrash;
 use App\Models\Attachment;
 use App\Models\Category;
+use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\StoredFile;
@@ -50,7 +51,7 @@ afterEach(function () {
  * Mjukraderar en rad genom att sätta deleted_at — samma sluttillstånd som
  * raderingsrutterna (SoftDeletes) men med kontrollerad tidpunkt.
  */
-function gallringMjukradera(Item|Attachment|Category|Tag $modell, Carbon $deletedAt): void
+function gallringMjukradera(Item|Attachment|Category|Tag|CostEntry $modell, Carbon $deletedAt): void
 {
     $modell->deleted_at = $deletedAt;
     $modell->save();
@@ -241,6 +242,37 @@ it('ett gallrat item tar med sig sina länkar åt båda hållen', function () {
         ->where('from_item_id', $item->id)
         ->orWhere('to_item_id', $item->id)
         ->exists())->toBeFalse();
+});
+
+it('ett gallrat item tar med sig sina kostnadsrader', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    // En levande kostnadsrad och en mjukraderad — itemet tar med sig båda
+    // (issue 45a § Beslut 10): cost_entry.item_id är ON DELETE RESTRICT, så
+    // utan den hårda raderingen av raderna skulle forceDelete på itemet falla
+    // på ett främmandenyckelfel.
+    CostEntry::factory()->for($item, 'item')->create([
+        'container_id' => $item->container_id,
+        'description' => 'Impeller',
+        'created_by_user_id' => $user->id,
+        'created_by_account_id' => $account->id,
+    ]);
+    $raderad = CostEntry::factory()->for($item, 'item')->create([
+        'container_id' => $item->container_id,
+        'description' => 'Olja',
+        'created_by_user_id' => $user->id,
+        'created_by_account_id' => $account->id,
+    ]);
+    gallringMjukradera($raderad, Carbon::parse('2026-08-28 12:00:00'));
+
+    expect(fn () => gallringKör())->not->toThrow(Throwable::class);
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(CostEntry::withTrashed()->where('item_id', $item->id)->exists())->toBeFalse();
 });
 
 it('en gallrad kategori nollställer items category_id', function () {

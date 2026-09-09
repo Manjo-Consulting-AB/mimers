@@ -200,6 +200,23 @@ class Item extends Model
     }
 
     /**
+     * The item's cost entries — the history of what it has cost, see
+     * [[Items och organisation]] § cost_entry, [[ADR-0016 Kostnadsregistrering]]
+     * and issue 45a. The listing in
+     * App\Http\Controllers\Api\CostEntryController::index() goes through this
+     * relation, and it is THIS one that scopeBindings() resolves `{cost}`
+     * within `{item}` through — a cost entry on another item gives 404
+     * (issue 45a § Beslut 7). Soft-deleted entries are filtered out by
+     * SoftDeletes' global scope while the row stays put.
+     *
+     * @return HasMany<CostEntry, $this>
+     */
+    public function costs(): HasMany
+    {
+        return $this->hasMany(CostEntry::class);
+    }
+
+    /**
      * Begränsar frågan till items som bär ALLA taggar i $tagIds — flera
      * taggar kombineras med OCH (issue 15a § Beslut 2). En join mot
      * `item_tag` med `whereIn('tag_id', $ids)`, grupperad på itemets nyckel
