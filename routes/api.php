@@ -406,6 +406,17 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::patch('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'destroy']);
 
+    // Issue 45b · Leverantörsuppslaget för autocomplete — distinkta
+    // leverantörer i containern, sorterade på användningsfrekvens, se
+    // App\Http\Controllers\Api\CostEntryController::suppliers() och
+    // [[Items och organisation]] § Leverantörsfältet. Ytan ligger på
+    // CONTAINERN, inte på itemet (issue 45b § Beslut 1): den som registrerar
+    // en kostnad på ett nytt item ska få containerns hela historia, och
+    // frågan mot cost_entry ska inte behöva joina item. Grinden är den
+    // befintliga view() på App\Policies\ContainerPolicy — ingen ny
+    // policymetod (§ Beslut 2). Bara GET: uppslaget är en läsyta.
+    Route::get('/containers/{container}/costs/suppliers', [CostEntryController::class, 'suppliers']);
+
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och
     // App\Actions\Trash\RestoreContent. Två rutter, nästlade under

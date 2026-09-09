@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Support\Cost\MinorUnits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -47,6 +48,14 @@ use Illuminate\Support\Facades\Gate;
  */
 class CostEntryController extends Controller
 {
+    /**
+     * Högst 50 förslag. Uppslaget matar en autocomplete, inte en rapport, och
+     * klienten hämtar listan en gång och filtrerar medan användaren skriver —
+     * fler rader hade bara gjort hämtningen långsammare (issue 45b § Beslut
+     * 3–4). Inget konfigvärde, ingen query-parameter.
+     */
+    private const SUPPLIER_SUGGESTION_LIMIT = 50;
+
     /**
      * GET /api/containers/{container}/items/{item}/costs — 200. Sorterad
      * `incurred_on` fallande med `id` fallande som andrasortering, så den
@@ -152,6 +161,55 @@ class CostEntryController extends Controller
         $cost->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * GET /api/containers/{container}/costs/suppliers — 200. Distinkta
+     * leverantörer i containern, sorterade på användningsfrekvens fallande
+     * med leverantörsnamn stigande som andrasortering — uppslagsytan för
+     * autocomplete, issue 45b.
+     *
+     * Ytan ligger på CONTAINERN, inte på itemet (issue 45b § Beslut 1): den
+     * som registrerar en kostnad på ett nytt item ska få containerns hela
+     * leverantörshistorik, och `container_id` är denormaliserad på raden just
+     * för att frågan inte ska behöva joina `item`. En enda `GROUP BY` mot
+     * `cost_entry` — ingen relation, ingen Eloquent-modell — som indexet
+     * `(container_id, deleted_at, supplier)` från 45a gör billig i stället
+     * för en full scan.
+     *
+     * `supplier` normaliseras aldrig (ADR-0016): en `strtolower()` i
+     * grupperingen hade gett en lista med värden som inte finns i någon rad
+     * (issue 45b § Beslut 5). Mjukraderade rader räknas inte och `NULL`
+     * filtreras bort — en kostnad i papperskorgen ska inte hålla liv i en
+     * leverantör, och en kostnad utan leverantör är inte en leverantör som
+     * heter ingenting (§ Beslut 3). Inga värden som förekommer på ett raderat
+     * ITEM göms: kostnadsraden är inte raderad, och uppslaget är ett
+     * inmatningsstöd, inte en summering (§ Klart när, sista punkten).
+     */
+    public function suppliers(Container $container): JsonResponse
+    {
+        Gate::authorize('view', $container);
+
+        $rader = DB::table('cost_entry')
+            ->where('container_id', $container->id)
+            ->whereNull('deleted_at')
+            ->whereNotNull('supplier')
+            ->selectRaw('supplier, COUNT(*) AS antal')
+            ->groupBy('supplier')
+            ->orderByDesc('antal')
+            ->orderBy('supplier')
+            ->limit(self::SUPPLIER_SUGGESTION_LIMIT)
+            ->get();
+
+        return response()->json([
+            'data' => array_map(
+                static fn (object $rad): array => [
+                    'supplier' => $rad->supplier,
+                    'count' => (int) $rad->antal,
+                ],
+                $rader->all()
+            ),
+        ]);
     }
 
     /**
