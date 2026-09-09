@@ -113,6 +113,15 @@ PAGAR_LABEL = "atgarda:pagar"
 # det redan är postat. Se peak_besked_atgarda().
 PEAK_BESKED_RUBRIK = "### Åtgärdsloopen väntar på peak hours"
 
+# Etiketten granskaren sätter själv på en PR när den har triagerat PR-kroppens
+# "## Frågor och antaganden" och inget av punkterna krävde ett arkitekturbeslut
+# - se ska_eskalera_till_arkitekt() och bygg_granskningsprompt(). Till skillnad
+# från ARKITEKT_LABEL och ATGARDA_LABEL, som är Tonys egna vägar TILL
+# arkitekten, är den här granskningens väg FÖRBI arkitekten: satt av modellen
+# själv, efter samma etikett-mönster som review:approved (se run_review()s
+# docstring om varför en label och inte fritext).
+ARKITEKTFRAGA_BESVARAD = "fraga:besvarad"
+
 # =====================================================================
 # KONFIGURATION & HJÄLPFUNKTIONER
 # =====================================================================
@@ -278,7 +287,7 @@ def usage_ok_to_proceed():
     return True
 
 
-def bygg_granskningsprompt(issue_body, diff, uppfoljning=False):
+def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_number=None):
     """Granskningsprompten: issuen och diffen, inte diffen ensam.
 
     Fram till 2026-09-02 fick granskaren bara `gh pr diff`. Den kunde därför
@@ -290,6 +299,30 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False):
 
     `uppfoljning` styr slutvarvet efter en åtgärdsloop: samma underlag, men
     uttryckligen en ny granskning i stället för en efterlevnadskontroll.
+
+    `fragor` är PR-kroppens '## Frågor och antaganden' (oppna_fragor()) - tom
+    sträng när avsnittet saknas eller bara var "Inga." Är den satt bjuds
+    granskaren, som redan har issuen och läslistan framför sig, in att triagera
+    frågorna i SAMMA varv i stället för att de per automatik går till Opus i
+    los_fraga_och_merga() (issue 259). En dämpare, inte en klassificerare:
+    kan granskaren svara på en punkt utan att koden behöver ändras sätter den
+    ARKITEKTFRAGA_BESVARAD, annars sätter den ingenting och frågan eskalerar
+    som förut. Tom `fragor` ger en teckenidentisk prompt med innan - det är
+    själva regressionsskyddet för att den här ändringen inte stör den vanliga
+    granskningen.
+
+    `pr_number` krävs så fort `fragor` är satt: kommandot som sätter etiketten
+    måste bära det riktiga PR-numret, precis som run_review() redan gör för
+    review:approved. Fram till den här ändringen stod bokstavligen
+    `<PR-numret>` i prompten med en instruktion om att fylla i det - och en
+    modell skriver av en platshållare bokstavligt lika ofta som den fyller i
+    den, så etiketten sattes aldrig, tyst, och utfallet såg ut som att
+    granskaren avstod (samma tysta felklass som resten av filen är fail-closed
+    mot). `fragor` utan `pr_number` reser därför ValueError direkt här, vid
+    promptbygget - hellre en högljudd krasch på anropsstället, som pekar rakt
+    på den rad som glömde skicka med numret, än att tyst falla tillbaka på
+    platshållaren igen eller tyst hoppa över frågeblocket (då skulle etiketten
+    aldrig kunna sättas, vilket är precis den brist den här issuen fixar).
     """
     inledning = (
         "Du gör en avslutande granskning av en PR vars tidigare fynd ska vara åtgärdade. "
@@ -298,10 +331,40 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False):
         if uppfoljning else
         "Gör en noggrann säkerhets- och arkitekturgranskning av lösningen nedan."
     )
+    fragor_block = ""
+    if fragor:
+        if pr_number is None:
+            raise ValueError(
+                "bygg_granskningsprompt() fick 'fragor' utan 'pr_number' - "
+                "kommandot som sätter ARKITEKTFRAGA_BESVARAD kan inte byggas "
+                "utan ett riktigt PR-nummer. Anropsstället måste skicka med det."
+            )
+        fragor_block = (
+            f"=== FRÅGOR OCH ANTAGANDEN FRÅN IMPLEMENTERAREN ===\n{fragor}\n\n"
+            f"Gå igenom varje punkt i frågeavsnittet ovan och svara på den utifrån issuen "
+            f"och läslistan.\n"
+            f"Sätt etiketten `{ARKITEKTFRAGA_BESVARAD}` om och bara om varje punkt antingen "
+            f"har ett svar du hittade i issuen eller läslistan, eller är ett antagande du "
+            f"bekräftar som riktigt - och inget av svaren kräver en ändring i koden.\n"
+            f"Kräver en punkt ett arkitekturbeslut som varken issuen eller läslistan ger, "
+            f"sätt INTE etiketten. Den frågan går då till arkitekten i stället, och det är "
+            f"rätt utfall - inte ett misslyckande.\n"
+            f"Kräver en punkt en kodändring är den ett vanligt fynd i din numrerade lista "
+            f"nedan, inte en etikett.\n"
+            f"Vid minsta tvekan: sätt inte etiketten.\n"
+            f"Skriv dina svar i din avslutande text, under rubriken "
+            f"'## Frågor och antaganden — hanterade', en punkt per fråga.\n"
+            f"Sätt etiketten (REST-API:et, av samma skäl som review:approved - se "
+            f"instruktionen du får nedan) INNAN du skriver den avslutande texten, inte "
+            f"efter:\n"
+            f"gh api repos/{GH_REPO}/issues/{pr_number}/labels -f "
+            f"\"labels[]={ARKITEKTFRAGA_BESVARAD}\"\n\n"
+        )
     return (
         f"{inledning}\n\n"
         f"=== ISSUEN, som är kontraktet ===\n{issue_body}\n\n"
         f"=== HELA DIFFEN ===\n{diff}\n\n"
+        f"{fragor_block}"
         f"=== SÅ HÄR GRANSKAR DU ===\n"
         f"1. Gå igenom issuens 'Klart när'-punkter en och en och peka ut vilket "
         f"namngivet test som bevisar var och en. En punkt utan test är ett fynd - "
@@ -319,7 +382,7 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False):
     )
 
 
-def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, findings):
+def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, findings, fragor=""):
     """
     Åtgärdar `findings` (Opus ursprungliga fynd, eller en tidigare
     Sonnet-avvisning), testar, committar, pushar till den befintliga PR:en,
@@ -333,6 +396,14 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
     Sonnets APPROVE är slutgiltigt, ingen ny Opus-omgång här. Delad mellan
     huvudflödet (STEG 5, high risk) och --resume-pr, så det bara finns en
     implementation av loopen att hålla korrekt.
+
+    `fragor` skickas vidare till bygg_granskningsprompt(..., uppfoljning=True)
+    så att en PR som hade en obesvarad fråga kvar när åtgärdsloopen startade
+    fortsätter att bjuda in granskaren att triagera den på varje verifieringsvarv
+    - annars förlorar en PR som råkade ha fynd sin chans att slippa Opus (issue
+    259). Förvalet "" gäller de tre anropen som kör efter frågesteget redan är
+    avgjort (atgarda_arkitektsvar(), resume_pr(), Opus-svarsbanan i
+    los_fraga_och_merga()); bara huvudflödets anrop i STEG 5 skickar något annat.
 
     Returnerar (resolved: bool, findings: str) - findings är den senaste
     avvisningstexten om inte löst, annars oförändrad.
@@ -405,7 +476,7 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         # och hela den slutliga diffen, och får uttryckligen resa nya fynd.
         new_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
         check_prompt = (
-            f"{bygg_granskningsprompt(issue_body, new_diff, uppfoljning=True)}\n\n"
+            f"{bygg_granskningsprompt(issue_body, new_diff, uppfoljning=True, fragor=fragor, pr_number=pr_number)}\n\n"
             f"=== FYND SOM SKULLE ÅTGÄRDAS I DET HÄR VARVET ===\n{findings}\n\n"
             f"Börja med att avgöra om vart och ett av dem är löst. Fortsätt sedan med "
             f"den nya granskningen enligt punkterna ovan - godkänn bara om båda delarna "
@@ -442,6 +513,23 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         findings = sonnet_check
 
     return False, findings
+
+
+def har_label(pr_number, label):
+    """Sant om `label` sitter på PR:en just nu - ett enda `gh pr view --json
+    labels`-anrop delat av run_review() (`review:approved`) och
+    run_opus_answer() (`svar:kodandring-kravs`) i stället för att båda skriver
+    exakt samma läsning och tolkning var för sig.
+
+    Skälet är konkret, inte kosmetiskt: samma "gjorde agenten något"-kontroll
+    fanns på tre ställen i den här filen, och fixen i PR #163 träffade bara ett
+    av dem (issue #172) - den tredje kopian upptäcktes inte förrän en riktig
+    körning gick fel på den. En delad hjälpare kan bara vara fel på ett ställe,
+    så nästa etikett-läsning som behövs (issue 259: `fraga:besvarad`) läggs här
+    i stället för att bli en tredje egen kopia av samma `gh`-anrop.
+    """
+    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"], cwd=REPO_ROOT).stdout)
+    return any(l["name"] == label for l in pr["labels"])
 
 
 def run_review(model, review_prompt, pr_number, worktree_path, min_text=MIN_GRANSKNINGSTEXT):
@@ -490,8 +578,7 @@ def run_review(model, review_prompt, pr_number, worktree_path, min_text=MIN_GRAN
     )
     review_text = call_claude_direct(model, full_prompt, cwd=worktree_path)
 
-    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"], cwd=REPO_ROOT).stdout)
-    approved = any(label["name"] == "review:approved" for label in pr["labels"])
+    approved = har_label(pr_number, "review:approved")
 
     # En granskning utan text är tappad, inte kortfattad. `--output-format text`
     # sparar bara sista textturen, så ett verktygsanrop efter analysen åt upp
@@ -564,8 +651,7 @@ def run_opus_answer(issue_body, fragor, pr_number, worktree_path):
     )
     svar = call_claude_direct("opus", prompt, cwd=worktree_path)
 
-    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"], cwd=REPO_ROOT).stdout)
-    kraver_kodandring = any(label["name"] == "svar:kodandring-kravs" for label in pr["labels"])
+    kraver_kodandring = har_label(pr_number, "svar:kodandring-kravs")
 
     if len(svar.strip()) < MIN_OPUS_SVAR:
         # Samma fail-closed-resonemang som run_review(): ett tappat svar (bara
@@ -1037,6 +1123,27 @@ def oppna_fragor(pr_body):
     if not text:
         return ""
     return "" if text.strip("*_ ").lower() in INGA_FRAGOR else text
+
+
+def ska_eskalera_till_arkitekt(fragor, labels):
+    """Avgör om PR-kroppens '## Frågor och antaganden' ska nå Opus, eller om
+    granskaren redan triagerat bort den.
+
+    En dämpare, inte en klassificerare (issue 259, beslut 1): oppna_fragor()
+    är kvar som den enda triggern, oförändrad - den här funktionen lägger bara
+    till ett andra villkor. Opus anropas när frågetexten finns OCH etiketten
+    ARKITEKTFRAGA_BESVARAD saknas. Saknas frågetexten, saknas etiketten, är
+    etiketten fel stavad (`fraga:arkitekt`, `besvarad` och liknande räknas
+    inte), eller har PR:en aldrig granskats: eskalera. Grinden kan alltså bara
+    bli mildare av något som aktivt hänt - att granskaren satte etiketten -
+    aldrig av att något uteblivit. Samma fail-closed-resonemang som
+    `review:approved` i run_review()s docstring.
+
+    Ren funktion med flit, och den enda som testas för det här beslutet: hela
+    avgörandet ska gå att läsa och testa på ett ställe, i stället för en
+    inline-if med två villkor på anropsstället i los_fraga_och_merga().
+    """
+    return bool(fragor) and ARKITEKTFRAGA_BESVARAD not in labels
 
 
 def eskalera(issue_num, pr_number, worktree_path, branch_name, skal, exit_code=1):
@@ -1542,6 +1649,17 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     if existing:
         pr_number = str(existing[0]["number"])
         print(f"--> Agenten hade redan öppnat PR #{pr_number} - återanvänder den i stället för en ny.")
+        # pr_body sätts annars bara i else-grenen nedan (bygg_pr_kropp()). Har
+        # agenten öppnat PR:en själv - vilket den här grenen finns just för att
+        # hantera - är variabeln annars osatt, och koden lite längre ner
+        # (oppna_fragor(pr_body), och pr_body som skickas in i
+        # los_fraga_och_merga()) kraschar på UnboundLocalError. Läs kroppen
+        # från GitHub i stället: frågeavsnittet i den är precis det
+        # los_fraga_och_merga() (via oppna_fragor()) behöver för att veta om
+        # PR:en har en obesvarad fråga att eskalera.
+        pr_body = run_cmd(
+            ["gh", "pr", "view", pr_number, "--json", "body", "-q", ".body"], cwd=worktree_path
+        ).stdout
     else:
         pr_body = bygg_pr_kropp(issue_num, agent_summary)
 
@@ -1585,8 +1703,16 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
         print(f"  ⚠ PR:ens head hann inte synka mot commit {pushed_sha[:8]} - läser diffen ändå.")
     pr_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
+
+    # Engångsnollställning av ARKITEKTFRAGA_BESVARAD för den här körningen,
+    # före den FÖRSTA granskningen - inte i run_review(), som körs upp till fem
+    # gånger per PR och skulle nollställa ett godkännande från ett tidigare
+    # åtgärdsvarv. Sätter granskaren etiketten här, eller på ett senare varv,
+    # ska den ligga kvar ända till los_fraga_och_merga() (issue 259, beslut 6).
+    ta_bort_label(pr_number, ARKITEKTFRAGA_BESVARAD)
+    fragor = oppna_fragor(pr_body)
     godkand, granskning, _ = run_review(
-        granskare, bygg_granskningsprompt(issue_body, pr_diff), pr_number, worktree_path
+        granskare, bygg_granskningsprompt(issue_body, pr_diff, fragor=fragor, pr_number=pr_number), pr_number, worktree_path
     )
     run_cmd(["gh", "pr", "comment", pr_number, "--body",
               f"### {modellnamn} Granskningsanalys\n{granskning}"], cwd=REPO_ROOT)
@@ -1596,7 +1722,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         print(f"--> {modellnamn} hittade fynd - startar åtgärdsloop (3 varv DeepSeek, sedan 1 varv Sonnet)...")
         send_pushover(f"🔁 Issue #{issue_num}: {modellnamn} hittade fynd på PR #{pr_number}, startar åtgärdsloop.")
         godkand, granskning = run_findings_fix_loop(
-            issue_body, pr_number, branch_name, worktree_path, granskning
+            issue_body, pr_number, branch_name, worktree_path, granskning, fragor=fragor
         )
         if not godkand:
             eskalera(
@@ -1629,9 +1755,18 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
     diffen - se run_opus_answer), och kräver svaret en kodändring går den
     genom samma DeepSeek+Sonnet-loop som ett vanligt granskningsfynd. Bara om
     den loopen inte löser det, eller om Opus svar är tomt/tappat, når det Tony.
+
+    Sedan issue 259 är Opus-anropet inte längre ovillkorligt av att frågan
+    finns: bygg_granskningsprompt() bjuder redan in granskaren att triagera
+    samma fråga i sitt eget varv, och satte den ARKITEKTFRAGA_BESVARAD där
+    hoppar den här funktionen över Opus helt (ska_eskalera_till_arkitekt()).
+    Etiketten är en dämpare på triggern, inte en ny trigger - saknas den, av
+    vilken anledning som helst, eskalerar det precis som förut.
     """
     fragor = oppna_fragor(pr_body)
-    if fragor:
+    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"], cwd=REPO_ROOT).stdout)
+    labels = [label["name"] for label in pr["labels"]]
+    if ska_eskalera_till_arkitekt(fragor, labels):
         print("--> Obesvarad fråga i PR-kroppen - eskalerar till Opus (arkitekt)...")
         send_pushover(f"❓ Issue #{issue_num}: obesvarad fråga på PR #{pr_number}, eskalerar till Opus (arkitekt).")
         opus_svar, kraver_kodandring = run_opus_answer(issue_body, fragor, pr_number, worktree_path)
@@ -1742,7 +1877,12 @@ def resume_question(pr_number):
     antaganden` aldrig nådde Opus utan gick direkt till Tony (se PR #131,
     issue #130). Körs INTE i det normala flödet - bara som manuell
     återupptagning av en PR som redan står med `needs-human` av exakt den
-    anledningen."""
+    anledningen.
+
+    Tar bort ARKITEKTFRAGA_BESVARAD innan los_fraga_och_merga() anropas (issue
+    259, beslut 8). Kör Tony den här flaggan manuellt är hela poängen att
+    arkitekten faktiskt ska svara - en etikett som blev kvar från en tidigare,
+    ovetande körning får inte tysta det via ska_eskalera_till_arkitekt()."""
     pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefName,body"], cwd=REPO_ROOT).stdout)
     pr_body = pr["body"] or ""
     branch_name = pr["headRefName"]
@@ -1771,6 +1911,8 @@ def resume_question(pr_number):
 
     modellnamn = "Opus 5" if risk_class == "high" else "Sonnet 5"
     godkand_av = f"{modellnamn} (tidigare granskning, PR återupptagen för obesvarad fråga)"
+
+    ta_bort_label(pr_number, ARKITEKTFRAGA_BESVARAD)
 
     try:
         los_fraga_och_merga(
