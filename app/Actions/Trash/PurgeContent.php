@@ -8,6 +8,8 @@ use App\Models\Category;
 use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\Loan;
+use App\Models\Schedule;
 use App\Models\Tag;
 use Illuminate\Support\Facades\DB;
 
@@ -57,27 +59,79 @@ class PurgeContent
      * gallras finns det inget att hänga en bilaga på längre, och FK:n är
      * RESTRICT — den kan alltså inte ligga kvar. Ordningen per item:
      *
-     * 1. varje bilaga på itemet — ÄVEN de som aldrig mjukraderades — genom
+     * 1. occurrence_dependency där någon av itemets förekomster är
+     *    `occurrence_id` ELLER `depends_on_occurrence_id`, hårt — en annan
+     *    items förekomst kan vänta på den här, och en hasMany i en riktning
+     *    hittar bara hälften (issue 256 § Beslut 1),
+     * 2. schedule_occurrence för itemets scheman, hårt — tabellen har ingen
+     *    `deleted_at`,
+     * 3. schedule_dependency där något av itemets scheman är `schedule_id`
+     *    ELLER `depends_on_schedule_id`, hårt — samma skäl som ovan,
+     * 4. schedule för itemet — ÄVEN de mjukraderade, med withTrashed():
+     *    relationen följer det globala scopet (issue 256 § Beslut 2),
+     * 5. loan för itemet — ÄVEN de mjukraderade, med withTrashed(): samma
+     *    skäl som för schemat (issue 256 § Beslut 2),
+     * 6. varje bilaga på itemet — ÄVEN de som aldrig mjukraderades — genom
      *    PurgeAttachment,
-     * 2. item_tag-raderna för itemet, hårt (pivoten har varken `ulid` eller
+     * 7. item_tag-raderna för itemet, hårt (pivoten har varken `ulid` eller
      *    `deleted_at`, issue 13b § Beslut 3),
-     * 3. item_link-raderna där itemet är `from_item_id` ELLER `to_item_id`,
+     * 8. item_link-raderna där itemet är `from_item_id` ELLER `to_item_id`,
      *    hårt — en länk kan peka på itemet från andra hållet, och en hasMany
      *    i en riktning hittar bara hälften,
-     * 4. kostnadsraderna på itemet, hårt — ÄVEN de mjukraderade, med
+     * 9. kostnadsraderna på itemet, hårt — ÄVEN de mjukraderade, med
      *    withTrashed() (issue 45a § Beslut 10): cost_entry.item_id är
      *    ON DELETE RESTRICT, så utan den här raden skulle forceDelete på
      *    itemet falla på ett främmandenyckelfel,
-     * 5. forceDelete på itemet.
+     * 10. forceDelete på itemet.
      *
-     * Allt i EN transaktion: en bilaga som hunnit bort men inte itemet vore
-     * en permanent radering av innehåll som papperskorgen fortfarande lovar
-     * att kunna visa.
+     * Lån och scheman är oberoende av varandra — ordningen dem emellan
+     * spelar ingen roll — men kedjan under ett schema (förekomster och
+     * beroenden före själva schemat) måste gå nedifrån och upp. Allt i EN
+     * transaktion: en bilaga som hunnit bort men inte itemet vore en
+     * permanent radering av innehåll som papperskorgen fortfarande lovar att
+     * kunna visa.
      */
     public function item(Item $item): void
     {
         DB::transaction(function () use ($item): void {
             $itemId = $item->getKey();
+
+            // occurrence_dependency och schedule_dependency har ingen
+            // `deleted_at` och tas hårt med DB::table, som item_tag. Båda
+            // riktningarna: en rad kan peka på itemets rad från andra hållet,
+            // och en hasMany åt ett håll hittar bara hälften (Beslut 1).
+            $itemetsForekomster = DB::table('schedule_occurrence')
+                ->join('schedule', 'schedule.id', '=', 'schedule_occurrence.schedule_id')
+                ->where('schedule.item_id', $itemId)
+                ->select('schedule_occurrence.id');
+
+            DB::table('occurrence_dependency')
+                ->whereIn('occurrence_id', $itemetsForekomster)
+                ->orWhereIn('depends_on_occurrence_id', (clone $itemetsForekomster))
+                ->delete();
+
+            // Förekomsterna måste bort före schemat — schedule_occurrence
+            // pekar på schedule med ON DELETE RESTRICT. Delfrågan tar med
+            // även mjukraderade scheman: DB::table känner inga globala scopet.
+            DB::table('schedule_occurrence')
+                ->whereIn('schedule_id', DB::table('schedule')->where('item_id', $itemId)->select('id'))
+                ->delete();
+
+            $itemetsScheman = DB::table('schedule')->where('item_id', $itemId)->select('id');
+
+            DB::table('schedule_dependency')
+                ->whereIn('schedule_id', $itemetsScheman)
+                ->orWhereIn('depends_on_schedule_id', (clone $itemetsScheman))
+                ->delete();
+
+            // withTrashed() — ett schema som mjukraderats syns inte genom
+            // relationen annars, och det måste med (Beslut 2). Samma mönster
+            // som kostnadsraderna nedan.
+            Schedule::withTrashed()->where('item_id', $itemId)->forceDelete();
+
+            // withTrashed() — samma skäl som för schemat: en mjukraderad
+            // utlåning ska också bort (Beslut 2).
+            Loan::withTrashed()->where('item_id', $itemId)->forceDelete();
 
             // withTrashed() — bilagor som mjukraderats syns inte annars, och
             // de måste med (Beslut 4). Relationen följer också det globala
