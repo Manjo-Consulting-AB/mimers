@@ -1095,6 +1095,22 @@ def bygg_pr_kropp(issue_num, agent_summary):
     return "\n\n".join(delar)
 
 
+def sakerstall_closes_rad(pr_body, issue_num):
+    """Lägger till `Closes #<issue_num>` överst om den saknas, annars None.
+
+    Skyddar bara PR:er öppnade via bygg_pr_kropp() ovan - en agent som öppnar
+    PR:en själv (se `existing`-grenen i _process_in_worktree) kan skriva
+    vilken kropp den vill, och gjorde det för PR #262 (issue #254): en egen
+    "## Sammanfattning"-mall utan Closes-raden. Utfallet var att
+    omfangsruta.py fällde CI och issue #254 landade hos Tony för att lägga
+    till en rad vars värde redan står i branchnamnet - exakt det
+    pr_kroppen.py:s docstring varnar för att låta ett skript missa.
+    """
+    if re.search(rf"Closes #{issue_num}\b", pr_body or "", re.IGNORECASE):
+        return None
+    return f"Closes #{issue_num}\n\n" + (pr_body or "")
+
+
 INGA_FRAGOR = {"inga", "inga.", "inget", "inget.", "nej", "nej.", "-", "n/a"}
 
 
@@ -1660,6 +1676,12 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         pr_body = run_cmd(
             ["gh", "pr", "view", pr_number, "--json", "body", "-q", ".body"], cwd=worktree_path
         ).stdout
+
+        lagad_kropp = sakerstall_closes_rad(pr_body, issue_num)
+        if lagad_kropp is not None:
+            print(f"--> Agentens PR-kropp saknar 'Closes #{issue_num}' - lägger till den.")
+            pr_body = lagad_kropp
+            run_cmd(["gh", "pr", "edit", pr_number, "--body", pr_body], cwd=worktree_path)
     else:
         pr_body = bygg_pr_kropp(issue_num, agent_summary)
 
