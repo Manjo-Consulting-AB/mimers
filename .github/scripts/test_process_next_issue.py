@@ -112,24 +112,45 @@ def test_bygg_granskningsprompt_tom_fragor_ar_teckenidentisk_med_dagens():
 
 def test_bygg_granskningsprompt_med_fragor_innehaller_text_etikett_och_gh_api():
     """Klart när #7: en icke-tom `fragor` bjuder in etiketten - texten, dess
-    eget namn, och gh-kommandot som sätter den ska alla synas i prompten."""
-    prompt = p.bygg_granskningsprompt("ISSUEBODY", "DIFFTEXT", fragor="Vilket fält ska X ligga i?")
-    assert "Vilket fält ska X ligga i?" in prompt
-    assert p.ARKITEKTFRAGA_BESVARAD in prompt
-    assert "gh api" in prompt
-    assert f"labels[]={p.ARKITEKTFRAGA_BESVARAD}" in prompt
-
-
-def test_bygg_granskningsprompt_uppfoljning_far_samma_fragoblock():
-    """Klart när #8: åtgärdsvarvets granskning (uppfoljning=True) får samma
-    frågeblock som förstagångsgranskningen."""
+    eget namn, och gh-kommandot som sätter den ska alla synas i prompten, med
+    det riktiga PR-numret ilagt - inte platshållaren `<PR-numret>` som en
+    granskare aldrig kunde fylla i (den bugg den här issuen fixar)."""
     prompt = p.bygg_granskningsprompt(
-        "ISSUEBODY", "DIFFTEXT", uppfoljning=True, fragor="Vilket fält ska X ligga i?"
+        "ISSUEBODY", "DIFFTEXT", fragor="Vilket fält ska X ligga i?", pr_number="260"
     )
     assert "Vilket fält ska X ligga i?" in prompt
     assert p.ARKITEKTFRAGA_BESVARAD in prompt
     assert "gh api" in prompt
     assert f"labels[]={p.ARKITEKTFRAGA_BESVARAD}" in prompt
+    assert "issues/260/labels" in prompt
+    assert "<PR-numret>" not in prompt
+
+
+def test_bygg_granskningsprompt_uppfoljning_far_samma_fragoblock():
+    """Klart när #8: åtgärdsvarvets granskning (uppfoljning=True) får samma
+    frågeblock som förstagångsgranskningen, med samma riktiga PR-nummer."""
+    prompt = p.bygg_granskningsprompt(
+        "ISSUEBODY", "DIFFTEXT", uppfoljning=True, fragor="Vilket fält ska X ligga i?",
+        pr_number="260",
+    )
+    assert "Vilket fält ska X ligga i?" in prompt
+    assert p.ARKITEKTFRAGA_BESVARAD in prompt
+    assert "gh api" in prompt
+    assert f"labels[]={p.ARKITEKTFRAGA_BESVARAD}" in prompt
+    assert "issues/260/labels" in prompt
+    assert "<PR-numret>" not in prompt
+
+
+def test_bygg_granskningsprompt_fragor_utan_pr_number_reser_fel():
+    """Fragor utan pr_number får inte gå tyst fel - se docstringen för valet:
+    ett direkt ValueError vid promptbygget, hellre än att tyst skriva
+    platshållaren igen eller tyst hoppa över frågeblocket."""
+    try:
+        p.bygg_granskningsprompt("ISSUEBODY", "DIFFTEXT", fragor="Vilket fält ska X ligga i?")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("bygg_granskningsprompt() borde ha rest ValueError utan pr_number")
 
 
 # =====================================================================

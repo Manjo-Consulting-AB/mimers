@@ -287,7 +287,7 @@ def usage_ok_to_proceed():
     return True
 
 
-def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor=""):
+def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_number=None):
     """Granskningsprompten: issuen och diffen, inte diffen ensam.
 
     Fram till 2026-09-02 fick granskaren bara `gh pr diff`. Den kunde därför
@@ -310,6 +310,19 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor=""):
     som förut. Tom `fragor` ger en teckenidentisk prompt med innan - det är
     själva regressionsskyddet för att den här ändringen inte stör den vanliga
     granskningen.
+
+    `pr_number` krävs så fort `fragor` är satt: kommandot som sätter etiketten
+    måste bära det riktiga PR-numret, precis som run_review() redan gör för
+    review:approved. Fram till den här ändringen stod bokstavligen
+    `<PR-numret>` i prompten med en instruktion om att fylla i det - och en
+    modell skriver av en platshållare bokstavligt lika ofta som den fyller i
+    den, så etiketten sattes aldrig, tyst, och utfallet såg ut som att
+    granskaren avstod (samma tysta felklass som resten av filen är fail-closed
+    mot). `fragor` utan `pr_number` reser därför ValueError direkt här, vid
+    promptbygget - hellre en högljudd krasch på anropsstället, som pekar rakt
+    på den rad som glömde skicka med numret, än att tyst falla tillbaka på
+    platshållaren igen eller tyst hoppa över frågeblocket (då skulle etiketten
+    aldrig kunna sättas, vilket är precis den brist den här issuen fixar).
     """
     inledning = (
         "Du gör en avslutande granskning av en PR vars tidigare fynd ska vara åtgärdade. "
@@ -320,6 +333,12 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor=""):
     )
     fragor_block = ""
     if fragor:
+        if pr_number is None:
+            raise ValueError(
+                "bygg_granskningsprompt() fick 'fragor' utan 'pr_number' - "
+                "kommandot som sätter ARKITEKTFRAGA_BESVARAD kan inte byggas "
+                "utan ett riktigt PR-nummer. Anropsstället måste skicka med det."
+            )
         fragor_block = (
             f"=== FRÅGOR OCH ANTAGANDEN FRÅN IMPLEMENTERAREN ===\n{fragor}\n\n"
             f"Gå igenom varje punkt i frågeavsnittet ovan och svara på den utifrån issuen "
@@ -337,8 +356,8 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor=""):
             f"'## Frågor och antaganden — hanterade', en punkt per fråga.\n"
             f"Sätt etiketten (REST-API:et, av samma skäl som review:approved - se "
             f"instruktionen du får nedan) INNAN du skriver den avslutande texten, inte "
-            f"efter, med samma PR-nummer som du använder för review:approved:\n"
-            f"gh api repos/{GH_REPO}/issues/<PR-numret>/labels -f "
+            f"efter:\n"
+            f"gh api repos/{GH_REPO}/issues/{pr_number}/labels -f "
             f"\"labels[]={ARKITEKTFRAGA_BESVARAD}\"\n\n"
         )
     return (
@@ -457,7 +476,7 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         # och hela den slutliga diffen, och får uttryckligen resa nya fynd.
         new_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
         check_prompt = (
-            f"{bygg_granskningsprompt(issue_body, new_diff, uppfoljning=True, fragor=fragor)}\n\n"
+            f"{bygg_granskningsprompt(issue_body, new_diff, uppfoljning=True, fragor=fragor, pr_number=pr_number)}\n\n"
             f"=== FYND SOM SKULLE ÅTGÄRDAS I DET HÄR VARVET ===\n{findings}\n\n"
             f"Börja med att avgöra om vart och ett av dem är löst. Fortsätt sedan med "
             f"den nya granskningen enligt punkterna ovan - godkänn bara om båda delarna "
@@ -1630,6 +1649,17 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     if existing:
         pr_number = str(existing[0]["number"])
         print(f"--> Agenten hade redan öppnat PR #{pr_number} - återanvänder den i stället för en ny.")
+        # pr_body sätts annars bara i else-grenen nedan (bygg_pr_kropp()). Har
+        # agenten öppnat PR:en själv - vilket den här grenen finns just för att
+        # hantera - är variabeln annars osatt, och koden lite längre ner
+        # (oppna_fragor(pr_body), och pr_body som skickas in i
+        # los_fraga_och_merga()) kraschar på UnboundLocalError. Läs kroppen
+        # från GitHub i stället: frågeavsnittet i den är precis det
+        # los_fraga_och_merga() (via oppna_fragor()) behöver för att veta om
+        # PR:en har en obesvarad fråga att eskalera.
+        pr_body = run_cmd(
+            ["gh", "pr", "view", pr_number, "--json", "body", "-q", ".body"], cwd=worktree_path
+        ).stdout
     else:
         pr_body = bygg_pr_kropp(issue_num, agent_summary)
 
@@ -1682,7 +1712,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     ta_bort_label(pr_number, ARKITEKTFRAGA_BESVARAD)
     fragor = oppna_fragor(pr_body)
     godkand, granskning, _ = run_review(
-        granskare, bygg_granskningsprompt(issue_body, pr_diff, fragor=fragor), pr_number, worktree_path
+        granskare, bygg_granskningsprompt(issue_body, pr_diff, fragor=fragor, pr_number=pr_number), pr_number, worktree_path
     )
     run_cmd(["gh", "pr", "comment", pr_number, "--body",
               f"### {modellnamn} Granskningsanalys\n{granskning}"], cwd=REPO_ROOT)
