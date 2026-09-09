@@ -485,6 +485,34 @@ it('ett ULID som inte finns i containern ger 422, aldrig ett tomt resultat', fun
     expect($påItem->json('error.data.fields'))->toHaveKey('item');
 });
 
+it('ett ULID som pekar på ett mjukraderat objekt i containern ger 422, aldrig ett tomt resultat', function () {
+    [$account, $user, $headers, $container] = rapportProKontext();
+    $kategori = Category::factory()->for($container, 'container')->create(['name' => 'Motor']);
+    $tagg = Tag::factory()->for($container, 'container')->create(['name' => 'Service']);
+    $item = rapportItem($container, $account, $user, ['name' => 'Impeller']);
+
+    $kategori->delete();
+    $tagg->delete();
+    $item->delete();
+
+    $url = "/api/containers/{$container->ulid}/costs/report";
+
+    $påKategori = getJson("{$url}?group_by=item&category={$kategori->ulid}", $headers);
+    $påKategori->assertStatus(422);
+    expect($påKategori->json('error.code'))->toBe('validation.failed');
+    expect($påKategori->json('error.data.fields'))->toHaveKey('category');
+
+    $påTagg = getJson("{$url}?group_by=item&tags[]={$tagg->ulid}", $headers);
+    $påTagg->assertStatus(422);
+    expect($påTagg->json('error.code'))->toBe('validation.failed');
+    expect($påTagg->json('error.data.fields'))->toHaveKey('tags.0');
+
+    $påItem = getJson("{$url}?group_by=item&item={$item->ulid}", $headers);
+    $påItem->assertStatus(422);
+    expect($påItem->json('error.code'))->toBe('validation.failed');
+    expect($påItem->json('error.data.fields'))->toHaveKey('item');
+});
+
 it('en container utan kostnader ger 200 med groups [] och totals []', function () {
     [,, $headers, $container] = rapportProKontext();
 
