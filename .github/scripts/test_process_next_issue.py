@@ -186,6 +186,40 @@ def test_oppna_fragor_riktig_fraga_ger_icke_tomt():
 
 
 # =====================================================================
+# sakerstall_closes_rad() - lagar en agent-öppnad PR som saknar Closes-raden
+# (PR #262 / issue #254: agenten öppnade PR:en själv med en egen mall utan
+# "Closes #", omfangsruta.py fällde CI och issue #254 landade hos Tony för
+# att lägga till en rad vars värde redan stod i branchnamnet)
+# =====================================================================
+
+def test_sakerstall_closes_rad_saknas_laggs_till():
+    kropp = p.sakerstall_closes_rad("## Sammanfattning\n\nNågot.", "254")
+    assert kropp == "Closes #254\n\n## Sammanfattning\n\nNågot."
+
+
+def test_sakerstall_closes_rad_finns_redan_ger_none():
+    assert p.sakerstall_closes_rad("Closes #254\n\nText.", "254") is None
+
+
+def test_sakerstall_closes_rad_fel_nummer_raknas_som_saknad():
+    """En Closes-rad mot fel issue ska lagas, inte tolkas som redan löst."""
+    kropp = p.sakerstall_closes_rad("Closes #47\n\nText.", "254")
+    assert kropp == "Closes #254\n\nCloses #47\n\nText."
+
+
+def test_sakerstall_closes_rad_case_insensitive():
+    assert p.sakerstall_closes_rad("closes #254", "254") is None
+
+
+def test_sakerstall_closes_rad_tom_kropp():
+    assert p.sakerstall_closes_rad("", "254") == "Closes #254\n\n"
+
+
+def test_sakerstall_closes_rad_none_kropp():
+    assert p.sakerstall_closes_rad(None, "254") == "Closes #254\n\n"
+
+
+# =====================================================================
 # Beslut 11: modulen är importerbar utan sidoeffekter
 # =====================================================================
 
