@@ -9,6 +9,11 @@ use App\Models\Category;
 use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\Loan;
+use App\Models\OccurrenceDependency;
+use App\Models\Schedule as Schema;
+use App\Models\ScheduleDependency;
+use App\Models\ScheduleOccurrence;
 use App\Models\StoredFile;
 use App\Models\Tag;
 use Illuminate\Console\Scheduling\Schedule;
@@ -55,6 +60,22 @@ function gallringMjukradera(Item|Attachment|Category|Tag|CostEntry $modell, Carb
 {
     $modell->deleted_at = $deletedAt;
     $modell->save();
+}
+
+/**
+ * Ett schema direkt på itemet — domänmodellens schedule (inte konsol-Schedule).
+ */
+function gallringSchema(Item $item, array $attribut = []): Schema
+{
+    return Schema::factory()->for($item, 'item')->create($attribut);
+}
+
+/**
+ * En utlåning direkt på itemet.
+ */
+function gallringLan(Item $item, array $attribut = []): Loan
+{
+    return Loan::factory()->for($item, 'item')->create($attribut);
 }
 
 it('innehåll äldre än retentionen gallras', function () {
@@ -273,6 +294,291 @@ it('ett gallrat item tar med sig sina kostnadsrader', function () {
 
     expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
     expect(CostEntry::withTrashed()->where('item_id', $item->id)->exists())->toBeFalse();
+});
+
+it('ett gallrat item tar med sig sina utlåningar', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    gallringLan($item, ['borrower_name' => 'Nisse']);
+
+    gallringKör();
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    // DB::table, inte modellen — loan har SoftDeletes och en kvarvarande
+    // mjukraderad rad skulle vara osynlig för ett vanligt uppslag.
+    expect(DB::table('loan')->where('item_id', $item->id)->exists())->toBeFalse();
+});
+
+it('en mjukraderad utlåning följer med ett gallrat item', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    $lan = gallringLan($item, ['borrower_name' => 'Nisse']);
+    $lan->delete();
+
+    gallringKör();
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(DB::table('loan')->where('item_id', $item->id)->exists())->toBeFalse();
+});
+
+it('ett gallrat item tar med sig sina scheman och förekomster', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    $schema = gallringSchema($item, ['title' => 'Impellerbyte']);
+    ScheduleOccurrence::factory()->for($schema, 'schedule')->create([
+        'due_at' => '2026-10-01',
+        'visible_from' => '2026-10-01',
+    ]);
+    ScheduleOccurrence::factory()->for($schema, 'schedule')->completed()->create();
+
+    gallringKör();
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule')->where('item_id', $item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule_occurrence')->where('schedule_id', $schema->id)->exists())->toBeFalse();
+});
+
+it('ett mjukraderat schema följer med ett gallrat item', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    $schema = gallringSchema($item, ['title' => 'Impellerbyte']);
+    ScheduleOccurrence::factory()->for($schema, 'schedule')->create();
+    $schema->delete();
+
+    gallringKör();
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    // Mjukraderingen får inte skydda raden: schemat och dess förekomster ska
+    // vara HÅRT borta.
+    expect(DB::table('schedule')->where('item_id', $item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule_occurrence')->where('schedule_id', $schema->id)->exists())->toBeFalse();
+});
+
+it('ett beroende där itemets förekomst väntar på en annans följer med', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    $motpart = gallringItem($container, $account, $user, ['name' => 'Motpart']);
+    $forekomst = ScheduleOccurrence::factory()->for(gallringSchema($item), 'schedule')->create();
+    $motpartsForekomst = ScheduleOccurrence::factory()->for(gallringSchema($motpart), 'schedule')->create();
+
+    OccurrenceDependency::factory()->create([
+        'occurrence_id' => $forekomst->id,
+        'depends_on_occurrence_id' => $motpartsForekomst->id,
+    ]);
+
+    gallringKör();
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(DB::table('occurrence_dependency')
+        ->where('occurrence_id', $forekomst->id)
+        ->orWhere('depends_on_occurrence_id', $forekomst->id)
+        ->exists())->toBeFalse();
+    expect(Item::query()->whereKey($motpart->id)->exists())->toBeTrue();
+    expect(DB::table('schedule_occurrence')->where('id', $motpartsForekomst->id)->exists())->toBeTrue();
+});
+
+it('ett beroende där en annans förekomst väntar på itemets följer med', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    $motpart = gallringItem($container, $account, $user, ['name' => 'Motpart']);
+    $forekomst = ScheduleOccurrence::factory()->for(gallringSchema($item), 'schedule')->create();
+    $motpartsForekomst = ScheduleOccurrence::factory()->for(gallringSchema($motpart), 'schedule')->create();
+
+    OccurrenceDependency::factory()->create([
+        'occurrence_id' => $motpartsForekomst->id,
+        'depends_on_occurrence_id' => $forekomst->id,
+    ]);
+
+    gallringKör();
+
+    // Riktningen en hasMany missar: raden står på MOTPARTENS förekomst men
+    // pekar in i itemets. Den måste också bort, annars faller nästa natt.
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(DB::table('occurrence_dependency')
+        ->where('occurrence_id', $motpartsForekomst->id)
+        ->where('depends_on_occurrence_id', $forekomst->id)
+        ->exists())->toBeFalse();
+    expect(Item::query()->whereKey($motpart->id)->exists())->toBeTrue();
+    expect(DB::table('schedule_occurrence')->where('id', $motpartsForekomst->id)->exists())->toBeTrue();
+});
+
+it('ett schema-beroende där itemets schema väntar på ett annat följer med', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    $motpart = gallringItem($container, $account, $user, ['name' => 'Motpart']);
+    $schema = gallringSchema($item);
+    $motpartsSchema = gallringSchema($motpart);
+
+    ScheduleDependency::factory()->create([
+        'schedule_id' => $schema->id,
+        'depends_on_schedule_id' => $motpartsSchema->id,
+    ]);
+
+    gallringKör();
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule_dependency')
+        ->where('schedule_id', $schema->id)
+        ->orWhere('depends_on_schedule_id', $schema->id)
+        ->exists())->toBeFalse();
+    expect(Item::query()->whereKey($motpart->id)->exists())->toBeTrue();
+    expect(DB::table('schedule')->where('id', $motpartsSchema->id)->exists())->toBeTrue();
+});
+
+it('ett schema-beroende där ett annat schema väntar på itemets följer med', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    $motpart = gallringItem($container, $account, $user, ['name' => 'Motpart']);
+    $schema = gallringSchema($item);
+    $motpartsSchema = gallringSchema($motpart);
+
+    ScheduleDependency::factory()->create([
+        'schedule_id' => $motpartsSchema->id,
+        'depends_on_schedule_id' => $schema->id,
+    ]);
+
+    gallringKör();
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule_dependency')
+        ->where('schedule_id', $motpartsSchema->id)
+        ->where('depends_on_schedule_id', $schema->id)
+        ->exists())->toBeFalse();
+    expect(Item::query()->whereKey($motpart->id)->exists())->toBeTrue();
+    expect(DB::table('schedule')->where('id', $motpartsSchema->id)->exists())->toBeTrue();
+});
+
+it('ett item med bilaga, tagg, länk, schema, förekomster, beroenden och utlåning gallras i en transaktion', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    $motpart = gallringItem($container, $account, $user, ['name' => 'Motpart']);
+
+    $tagg = gallringTagg($container);
+    $item->tags()->attach($tagg);
+    $motpart->tags()->attach($tagg);
+    ItemLink::factory()->create(['from_item_id' => $item->id, 'to_item_id' => $motpart->id, 'relation' => 'parent']);
+    ItemLink::factory()->create(['from_item_id' => $motpart->id, 'to_item_id' => $item->id, 'relation' => 'parent']);
+    gallringBilaga($item, $account, $user);
+    gallringLan($item, ['borrower_name' => 'Nisse']);
+    $motpartsLan = gallringLan($motpart, ['borrower_name' => 'Kajsa']);
+
+    $schema = gallringSchema($item, ['title' => 'Impellerbyte']);
+    $forekomst = ScheduleOccurrence::factory()->for($schema, 'schedule')->create();
+    $motpartsSchema = gallringSchema($motpart, ['title' => 'Remdrift']);
+    $motpartsForekomst = ScheduleOccurrence::factory()->for($motpartsSchema, 'schedule')->create();
+
+    // Beroenden åt båda hållen på båda nivåerna — itemet väntar på motparten
+    // och motparten väntar på itemet.
+    OccurrenceDependency::factory()->create([
+        'occurrence_id' => $forekomst->id,
+        'depends_on_occurrence_id' => $motpartsForekomst->id,
+    ]);
+    ScheduleDependency::factory()->create([
+        'schedule_id' => $motpartsSchema->id,
+        'depends_on_schedule_id' => $schema->id,
+    ]);
+
+    expect(fn () => gallringKör())->not->toThrow(Throwable::class);
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(Attachment::withTrashed()->where('item_id', $item->id)->exists())->toBeFalse();
+    expect(DB::table('item_tag')->where('item_id', $item->id)->exists())->toBeFalse();
+    expect(DB::table('item_link')
+        ->where('from_item_id', $item->id)
+        ->orWhere('to_item_id', $item->id)
+        ->exists())->toBeFalse();
+    expect(DB::table('loan')->where('item_id', $item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule')->where('item_id', $item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule_occurrence')->where('schedule_id', $schema->id)->exists())->toBeFalse();
+    expect(DB::table('occurrence_dependency')
+        ->where('occurrence_id', $forekomst->id)
+        ->orWhere('depends_on_occurrence_id', $forekomst->id)
+        ->exists())->toBeFalse();
+    expect(DB::table('schedule_dependency')
+        ->where('schedule_id', $schema->id)
+        ->orWhere('depends_on_schedule_id', $schema->id)
+        ->exists())->toBeFalse();
+
+    // Motpartens item, scheman, förekomster och lån är orörda.
+    expect(Item::query()->whereKey($motpart->id)->exists())->toBeTrue();
+    expect(DB::table('schedule')->where('id', $motpartsSchema->id)->exists())->toBeTrue();
+    expect(DB::table('schedule_occurrence')->where('id', $motpartsForekomst->id)->exists())->toBeTrue();
+    expect(DB::table('loan')->where('id', $motpartsLan->id)->exists())->toBeTrue();
+});
+
+it('en gallrad container tar med sig ett schemalagt item', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    // Containerns deleted_at avgör — innehållet kan vara helt levande.
+    $container->deleted_at = Carbon::parse('2026-08-01 12:00:00');
+    $container->save();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Innehåll']);
+    $schema = gallringSchema($item);
+    ScheduleOccurrence::factory()->for($schema, 'schedule')->create();
+    gallringLan($item, ['borrower_name' => 'Nisse']);
+
+    $antal = gallringKör();
+
+    expect($antal['container'])->toBe(1);
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule')->where('item_id', $item->id)->exists())->toBeFalse();
+    expect(DB::table('schedule_occurrence')->where('schedule_id', $schema->id)->exists())->toBeFalse();
+    expect(DB::table('loan')->where('item_id', $item->id)->exists())->toBeFalse();
+    expect(DB::table('container')->where('id', $container->id)->exists())->toBeFalse();
+});
+
+it('nattjobbet rapporterar ett schemalagt item som gallrat utan fel', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    $logg = Log::spy();
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+    gallringSchema($item);
+
+    $antal = gallringKör();
+
+    expect($antal['item'])->toBe(1);
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    $logg->shouldNotHaveReceived('error');
 });
 
 it('en gallrad kategori nollställer items category_id', function () {
