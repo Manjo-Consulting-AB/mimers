@@ -88,6 +88,30 @@ it('post skapar en kostnad och svarar utan löpnummer', function () {
     expect($rad->created_by_account_id)->toBe($container->account_id);
 });
 
+it('en managed-skribent tillskrivs det mottagande kontot, inte ägarkontot', function () {
+    $ägarKonto = Account::factory()->create();
+    $container = Container::factory()->for($ägarKonto, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    $mottagandeKonto = Account::factory()->create();
+    $skribent = User::factory()->create();
+    $mottagandeKonto->users()->attach($skribent, ['role' => 'member']);
+    beviljaAccess($container, $mottagandeKonto, 'write', 'managed');
+
+    $token = $skribent->createToken('api');
+    $headers = ['Authorization' => "Bearer {$token->plainTextToken}"];
+    $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
+
+    $response = postJson($url, kostnadsKropp(), $headers);
+
+    $response->assertCreated();
+    expect($response->json('data.created_by_account'))->toBe($mottagandeKonto->ulid);
+
+    $rad = CostEntry::where('ulid', $response->json('data.ulid'))->first();
+    expect($rad->created_by_account_id)->toBe($mottagandeKonto->id);
+    expect($rad->created_by_account_id)->not->toBe($container->account_id);
+});
+
 it('container_id i kroppen ignoreras och raden får itemets container', function () {
     [$account, $user, $headers, $container, $item] = skapaKostnadsItem();
     $annatItem = Item::factory()->for($container, 'container')->create([
