@@ -103,6 +103,10 @@ jobs:
           HEAD_REF: ${{ github.head_ref }}
         run: python3 .github/scripts/pr_kroppen.py
 
+      - name: Pipelinens egna enhetstester
+        if: ${{ !cancelled() }}
+        run: python3 .github/scripts/test_process_next_issue.py
+
       # Budgeten gäller den som ändrar filen, inte den som råkar öppna en PR
       # medan den ligger över. I M4 tog PR #156 filen till 1944 ord, och de fem
       # nästa implementations-PR:erna blev röda på ett steg de varken orsakade
