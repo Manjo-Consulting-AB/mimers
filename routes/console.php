@@ -14,6 +14,7 @@ use App\Console\PurgesExpiredExports;
 use App\Console\PurgesExpiredStoredFiles;
 use App\Console\PurgesExpiredTrash;
 use App\Console\ReconcilesUsageCounters;
+use App\Console\ReportsAbuseSignals;
 use App\Console\SendsWeeklyDigest;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -136,6 +137,32 @@ Schedule::call(fn () => app(PrunesRegistrationIps::class)->handle())
 Schedule::call(fn () => app(ReconcilesUsageCounters::class)->handle())
     ->daily()
     ->name('reconcile-usage-counters');
+
+/*
+ * Issue 50b (M9) · Den nattliga missbruksrapporten: räknar fram åtta
+ * mätvärden om hur gratisnivån används och skriver dem till loggen — se
+ * App\Console\ReportsAbuseSignals och [[ADR-0017 Missbruksvektorer]]
+ * § Mätningen. Rapporten larmar inte, spärrar ingenting och skriver ingenting
+ * i databasen; den är underlag för att sätta trösklar som idag är gissningar.
+ * Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Missbruk/MissbruksrapportTest.php; det här är bara
+ * schemaläggningen.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ *
+ * `->dailyAt('01:00')`, inte `->daily()`: avstämningen ovan (26b) körs 00:00,
+ * och den här rapporten läser den räknare avstämningen just rättat. En rapport
+ * som läser en räknare tio minuter innan den rättas rapporterar drift som
+ * missbruk. Fönstret för de tidsbundna talen är de senaste sju dygnen
+ * (config/missbruk.php § window_days) — jobbet körs varje natt, talen är
+ * rullande.
+ */
+Schedule::call(fn () => app(ReportsAbuseSignals::class)->handle())
+    ->dailyAt('01:00')
+    ->name('report-abuse-signals');
 
 /*
  * Issue 34b · Uppgiftsnotiserna: förekomster som blivit synliga eller
