@@ -4,10 +4,11 @@ namespace App\Console;
 
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Notification\CreateNotification;
+use App\Models\Container;
 use App\Models\Notification;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
+use App\Support\Access\ItemScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -18,18 +19,17 @@ use Throwable;
  * mallarna 32a. Se [[Notiser]] § Kön och § notification.
  *
  * Urvalet är exakt det todo-listan formulerar — `ScheduleOccurrence::
- * scopeTodoFor()` (Beslut 3): öppen, `visible_from <= idag`, aktivt schema
- * och inga blockerande beroenden. Det formuleras inte om här; en andra
- * formulering av samma regel skulle glida isär från listan och låta
- * produktens två ytor säga olika saker om samma uppgift.
+ * scopeTodoFor()` (Beslut 3): öppen, `visible_from <= idag`, aktivt schema,
+ * inga blockerande beroenden, och bara de items mottagaren når. Det
+ * formuleras inte om här; en andra formulering av samma regel skulle glida
+ * isär från listan och låta produktens två ytor säga olika saker om samma
+ * uppgift.
  *
  * Generators har ingen inloggad användare, så loopen går över MOTTAGARE i
  * stället för förekomster (Beslut 4): för varje användare hämtas hens konton
- * och todoFor körs en gång. Scopets åtkomstvillkor når även containers via
- * delegerad `container_access`, men bara ägarkontots medlemmar ska få
- * påminnelser — en guest med läsrätt på en charterbåt ska inte få veta att
- * impellern ska bytas (Beslut 4). Frågan begränsas därför till containers
- * som ägs av konton användaren är medlem i.
+ * och todoFor körs en gång. VEM som får en påminnelse är en egen fråga som
+ * scopet inte svarar på — den avgörs i mayNotify(): ägarkontots medlemmar
+ * (34b § Beslut 4, oförändrat) och, sedan M11, mottagare av ett enskilt item.
  *
  * Varje förekomst ger högst två notiser över tid, en per typ: `task.due` när
  * den blir synlig och `task.overdue` när datumet passerats. `dedupe_key` bär
@@ -43,7 +43,8 @@ use Throwable;
  * Memon i ResolveItemScope töms per användare (issue 75 § Beslut 2). Loopen
  * är ETT schemalagt anrop, och `scoped()` töms mellan anrop men inte mellan
  * varv i en loop — utan `flush()` bär jobbet varje användares omfång i varje
- * container hen når, samtidigt, resten av natten.
+ * container hen når, samtidigt, resten av natten. mayNotify() löser upp
+ * omfånget på den instansen, så memon är belastad och tömningen behövs.
  *
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
  * `Schedule::command` — se AGENTS.md § Driftmiljön saknar proc_open.
@@ -56,7 +57,7 @@ class GeneratesTaskNotifications
 
     /**
      * Skapar uppgiftsnotiser för alla som har en synlig eller förfallen
-     * förekomst i en container deras konto äger.
+     * förekomst inom sitt omfång — se mayNotify() för vem det är.
      */
     public function handle(): void
     {
@@ -83,8 +84,8 @@ class GeneratesTaskNotifications
 
     /**
      * En användare i taget: alla hens konton, och todoFor begränsat till de
-     * containers kontona äger — se klassdocblocket om varför begränsningen
-     * behövs ovanpå scopet. `$accountIds` är kontona användaren är medlem i.
+     * items hen når — se klassdocblocket. `$accountIds` är kontona användaren
+     * är medlem i; vem som får en påminnelse avgörs av mayNotify().
      */
     private function notifyForUser(User $user): void
     {
@@ -97,14 +98,56 @@ class GeneratesTaskNotifications
         $occurrences = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
             ->with(['schedule.item.container.account'])
-            ->whereHas('schedule.item.container', function (Builder $query) use ($accountIds): void {
-                $query->whereIn('account_id', $accountIds);
-            })
             ->get();
 
+        if ($occurrences->isEmpty()) {
+            return;
+        }
+
+        // Containrarna som faktiskt bär en förekomst, upplösta i ETT anrop —
+        // frågekostnaden får inte växa med antalet containers (Beslut 2).
+        $containerIds = $occurrences
+            ->map(fn (ScheduleOccurrence $occurrence): int => $occurrence->schedule->item->container_id)
+            ->unique()
+            ->values()
+            ->all();
+
+        $scopes = $this->scopes->forContainers($user, $containerIds);
+
         foreach ($occurrences as $occurrence) {
+            $container = $occurrence->schedule->item->container;
+
+            if (! $this->mayNotify($container, $scopes[$container->id], $accountIds)) {
+                continue;
+            }
+
             $this->notifyForOccurrence($occurrence, $user);
         }
+    }
+
+    /**
+     * Vem generatorn får påminna. Urvalet av FÖREKOMSTER är todoFor:s och
+     * rörs inte (Beslut 1); det här är recipientfrågan ovanpå det.
+     *
+     * Ägarkontots medlem når hela containern (ResolveItemScope regel 1) och
+     * får påminnelser om allt i den, precis som före M11. En mottagare av ett
+     * enskilt item får ett BEGRÄNSAT omfång och påminnelser om exakt det
+     * itemet och dess ättlingar — vad hon når, aldrig mer (issue 75 § Klart
+     * när; ADR-0028 § Konsekvenser, "Notisgeneratorerna").
+     *
+     * En container-bred delegering är obegränsad precis som ägaren
+     * (`item_id IS NULL`) men saknar ägarskapet, och får därför inga
+     * påminnelser: den är 34b § Beslut 4 och rörs inte här. Skillnaden
+     * mellan de två är hela poängen med mayNotify() — `unrestricted()` är
+     * samma svar för en ägare och en container-bred gäst, så ägarskapet
+     * måste prövas för sig.
+     *
+     * @param  list<int>  $accountIds
+     */
+    private function mayNotify(Container $container, ItemScope $scope, array $accountIds): bool
+    {
+        return in_array($container->account_id, $accountIds, true)
+            || ! $scope->isUnrestricted();
     }
 
     /**
