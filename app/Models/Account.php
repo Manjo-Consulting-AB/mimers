@@ -23,7 +23,7 @@ use RuntimeException;
  * Inget soft delete: kontolivscykeln går via `status`
  * (`active` | `read_only` | `closed`), inte via `deleted_at`.
  */
-#[Fillable(['type', 'name', 'locale', 'timezone', 'unit_system', 'status', 'read_only_reason'])]
+#[Fillable(['type', 'name', 'locale', 'timezone', 'unit_system', 'status', 'read_only_reason', 'registration_ip'])]
 #[RouteKey('ulid')]
 class Account extends Model
 {
@@ -34,6 +34,17 @@ class Account extends Model
      * Tabellen heter `account`, inte Eloquents standardplural `accounts`.
      */
     protected $table = 'account';
+
+    /**
+     * Registrerings-IP:t lämnar aldrig servern (Beslut 7). Kolumnen finns
+     * bara för den nattliga missbruksrapporten (50b) och gallras efter
+     * config('konton.registration_ip_retention_days'); ingen resurs, ingen
+     * rutt och inget exportfält läser den. `$hidden` hindrar en framtida
+     * toArray() från att läcka den.
+     *
+     * @var list<string>
+     */
+    protected $hidden = ['registration_ip'];
 
     /**
      * `transfer_bonus_granted_at` är mottagarkontots spärr mot att få

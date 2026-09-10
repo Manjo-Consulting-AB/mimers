@@ -27,4 +27,21 @@ return [
 
     'inactivity_delete_months' => (int) env('ACCOUNT_INACTIVITY_DELETE_MONTHS', 18),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Gallringsfrist för registrerings-IP:t
+    |--------------------------------------------------------------------------
+    |
+    | Hur länge account.registration_ip behålls innan App\Console\
+    | PrunesRegistrationIps nollar det, räknat i dagar från account.
+    | created_at. Nittio dagar för att [[ADR-0017 Missbruksvektorer]]
+    | § Konsekvenser säger att trösklarna ska revideras när tre månaders data
+    | finns — kortare och den nattliga rapporten (50b) kan inte se det mönster
+    | den finns till för, längre och vi behåller en personuppgift utan att
+    | kunna säga varför. Se [[Registerförteckning]].
+    |
+    */
+
+    'registration_ip_retention_days' => (int) env('ACCOUNT_REGISTRATION_IP_RETENTION_DAYS', 90),
+
 ];

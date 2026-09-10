@@ -9,6 +9,7 @@ use App\Console\GeneratesLoanNotifications;
 use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
 use App\Console\PrunesExpiredMagicLinkTokens;
+use App\Console\PrunesRegistrationIps;
 use App\Console\PurgesExpiredExports;
 use App\Console\PurgesExpiredStoredFiles;
 use App\Console\PurgesExpiredTrash;
@@ -97,6 +98,26 @@ Schedule::call(fn () => app(PurgesExpiredTrash::class)->handle())
 Schedule::call(fn () => app(PurgesExpiredExports::class)->handle())
     ->daily()
     ->name('purge-expired-exports');
+
+/*
+ * Issue 50a · Gallringen av registrerings-IP:t: account.registration_ip nollas
+ * på konton äldre än fristen i config/konton.php § registration_ip_retention_days
+ * — se App\Console\PrunesRegistrationIps, [[Registerförteckning]] och
+ * [[ADR-0017 Missbruksvektorer]] § Konsekvenser. Jobbet nollar en kolumn, det
+ * raderar aldrig ett konto; det gör delete-dormant-accounts (29b) nedan, och
+ * de två jobben har ingenting med varandra att göra. Logiken bor i en vanlig
+ * klass, testad direkt i tests/Feature/Missbruk/RegistreringsIpTest.php; det
+ * här är bara schemaläggningen. Kör i samma nattliga fönster som de andra
+ * gallringsjobben.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan.
+ */
+Schedule::call(fn () => app(PrunesRegistrationIps::class)->handle())
+    ->daily()
+    ->name('prune-registration-ips');
 
 /*
  * Issue 26b · Den nattliga avstämningen av usage_counter: räknar om

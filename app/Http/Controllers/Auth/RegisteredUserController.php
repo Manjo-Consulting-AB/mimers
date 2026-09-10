@@ -26,6 +26,7 @@ class RegisteredUserController extends Controller
             $request->string('name')->toString(),
             $request->string('email')->toString(),
             $request->string('password')->toString(),
+            $request->ip(),
         );
 
         $user->sendEmailVerificationNotification();
