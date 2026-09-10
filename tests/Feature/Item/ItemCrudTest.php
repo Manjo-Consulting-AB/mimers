@@ -369,7 +369,7 @@ it('a read participant is denied creating, updating and deleting', function () {
     expect($delete->json('error.code'))->toBe('auth.forbidden');
 });
 
-it('a write participant may create, update and delete items', function () {
+it('a write participant may create and update items but not delete them', function () {
     [, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for(Account::factory()->create(), 'account')->create();
     beviljaAccess($container, $user, 'write', 'member');
@@ -386,6 +386,32 @@ it('a write participant may create, update and delete items', function () {
     $update = patchJson("/api/containers/{$container->ulid}/items/{$ulid}", ['name' => 'Changed'], $headers);
     $update->assertOk();
     expect($update->json('data.name'))->toBe('Changed');
+
+    // Sedan issue 71 är `delete` ett eget steg på laddern: `write` ändrar det
+    // som redan står där men tar inte bort det, se [[ADR-0028 Åtkomst på
+    // itemnivå]] § Beslut och tests/Feature/Omfang/ItemgrindTest.php.
+
+    $delete = deleteJson("/api/containers/{$container->ulid}/items/{$ulid}", [], $headers);
+    $delete->assertStatus(403);
+    expect($delete->json('error.code'))->toBe('auth.forbidden');
+});
+
+it('a delete participant may create, update and delete items', function () {
+    [, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for(Account::factory()->create(), 'account')->create();
+    beviljaAccess($container, $user, 'delete', 'member');
+
+    $account = $user->accounts->first();
+
+    $create = postJson("/api/containers/{$container->ulid}/items", [
+        'name' => 'Pump',
+        'account' => $account->ulid,
+    ], $headers);
+    $create->assertCreated();
+    $ulid = $create->json('data.ulid');
+
+    $update = patchJson("/api/containers/{$container->ulid}/items/{$ulid}", ['name' => 'Changed'], $headers);
+    $update->assertOk();
 
     $delete = deleteJson("/api/containers/{$container->ulid}/items/{$ulid}", [], $headers);
     $delete->assertNoContent();

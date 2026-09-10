@@ -221,10 +221,29 @@ it('en read-deltagare får lista men inte radera', function () {
     expect($radera->json('error.code'))->toBe('auth.forbidden');
 });
 
-it('en write-deltagare får radera', function () {
+it('en write-deltagare får inte radera', function () {
     [$egetKonto, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for(Account::factory()->create(), 'account')->create();
     beviljaAccess($container, $user, 'write', 'member');
+    $item = Item::factory()->for($container, 'container')->create([
+        'created_by_user_id' => $user->id,
+        'created_by_account_id' => $egetKonto->id,
+    ]);
+    $bilaga = skapaBilagaPåItem($item, $egetKonto, $user);
+
+    // Sedan issue 71 kräver raderingen `delete` på itemet; `write` räcker för
+    // att ändra men inte för att ta bort, se [[ADR-0028 Åtkomst på itemnivå]]
+    // § Beslut.
+    $radera = deleteJson("/api/containers/{$container->ulid}/items/{$item->ulid}/attachments/{$bilaga->ulid}", [], $headers);
+    $radera->assertStatus(403);
+    expect($radera->json('error.code'))->toBe('auth.forbidden');
+    expect(DB::table('attachment')->where('id', $bilaga->id)->value('deleted_at'))->toBeNull();
+});
+
+it('en delete-deltagare får radera', function () {
+    [$egetKonto, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for(Account::factory()->create(), 'account')->create();
+    beviljaAccess($container, $user, 'delete', 'member');
     $item = Item::factory()->for($container, 'container')->create([
         'created_by_user_id' => $user->id,
         'created_by_account_id' => $egetKonto->id,

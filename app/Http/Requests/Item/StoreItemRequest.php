@@ -10,7 +10,8 @@ use Illuminate\Validation\Rule;
  * POST /api/containers/{container}/items, see issue 13a § Beslut 5–7 and
  * issue 13b § Beslut 2–5. The body is `{"name", "description"?,
  * "manufacturer"?, "model"?, "serial_number"?, "purchased_at"?,
- * "warranty_until"?, "position_note"?, "category"?, "tags"?, "account"}`.
+ * "warranty_until"?, "position_note"?, "category"?, "tags"?, "parent"?,
+ * "account"}`.
  *
  * `account` is a required account-ULID — the account the item is
  * attributed to, never a server-side "active account", see § Beslut 6. A
@@ -25,6 +26,13 @@ use Illuminate\Validation\Rule;
  * 404 and not an authorization error. `whereNull('deleted_at')` bypasses
  * Eloquent's global SoftDeletes scope, which `Rule::exists` does not know
  * about, see § Beslut 7.
+ *
+ * `parent` is an optional, nullable item-ULID and follows `category`
+ * EXACTLY — same container, not soft-deleted, same `Rule::exists` shape
+ * (issue 71 § Beslut 2). It is not a column: the controller links the new
+ * item as a child of `parent` through App\Actions\Item\LinkItems, and the
+ * gate is ItemPolicy::create() against that parent. An omitted `parent`
+ * means a top-level item, gated by ContainerPolicy::createItem().
  *
  * `tags` is an optional list of tag-ULIDs, each resolved in the SAME
  * container and not soft-deleted (issue 13b § Beslut 5). A tag from another
@@ -51,8 +59,10 @@ class StoreItemRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        // App\Policies\ContainerPolicy::update() decides authorization in
-        // the controller, not here — see issue 13a § Beslut 2.
+        // ItemPolicy::create() (when `parent` is set) and
+        // ContainerPolicy::createItem() decide authorization in the
+        // controller, not here — see issue 13a § Beslut 2 and issue 71
+        // § Beslut 2.
         return true;
     }
 
@@ -88,6 +98,13 @@ class StoreItemRequest extends FormRequest
                 'nullable',
                 'string',
                 Rule::exists('category', 'ulid')->where(
+                    fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
+                ),
+            ],
+            'parent' => [
+                'nullable',
+                'string',
+                Rule::exists('item', 'ulid')->where(
                     fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
                 ),
             ],

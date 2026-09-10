@@ -22,10 +22,20 @@ use Illuminate\Support\Facades\Gate;
  * annan container (§ Beslut 1).
  *
  * INGEN behörighetslogik bor här — varje metod anropar bara
- * `Gate::authorize()` mot de befintliga grindarna `view` (GET) och `update`
- * (POST, DELETE) på App\Policies\ContainerPolicy. Inte `delete` — det
- * betyder "får radera containern" och skulle låsa ute varje write-deltagare,
- * se issue 14 § Beslut 2 och issue 13a § Beslut 2.
+ * `Gate::authorize()` mot ITEMETS egna grindar på App\Policies\ItemPolicy
+ * sedan issue 71 § Beslut 1 och 4: `view` (GET), `update` (POST, DELETE).
+ * Aldrig `delete` — att knyta eller knyta upp en relation tar inte bort
+ * något av itemen, och [[ADR-0028 Åtkomst på itemnivå]] § Beslut säger
+ * uttryckligen att "att ändra `item_link` kräver `write` i båda ändar".
+ *
+ * BÅDA ändarna auktoriseras, också vid skapande (§ Beslut 4). Förr
+ * auktoriserades bara containern i store(), så en mottagare kunde länka in
+ * ett item hon inte får se. Ordningen är `$item` FÖRST, motparten efter
+ * uppslaget, så att en mottagare som inte når itemet i rutten får 403 innan
+ * hon får veta något om motparten. Motparten bevisas mot containern redan i
+ * StoreItemLinkRequest, så en okänd ULID är ett valideringsfel (422
+ * `validation.failed`) och en känd men onåbar ger 403 — aldrig 404, och
+ * aldrig motpartens namn i svaret.
  *
  * `{other}` binds INTE av scopeBindings() (§ Beslut 1 och 7) — bara
  * `{container}` och `{item}` gör det. Motparten slås upp för hand, inom
@@ -49,7 +59,7 @@ class ItemLinkController extends Controller
      */
     public function index(Container $container, Item $item): JsonResponse
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $item);
 
         $links = $item->linksFrom()
             ->union($item->linksTo()->getQuery())
@@ -86,14 +96,19 @@ class ItemLinkController extends Controller
      * upp. Alla regler (normalisering, dubblettspärr, cykel, container) ligger
      * i App\Actions\Item\LinkItems, inte här (§ Beslut 11).
      *
+     * Två grindar, `update` i båda ändar (issue 71 § Beslut 4): `$item`
+     * först, `$other` efter uppslaget. Se klassens docblock för ordningen.
+     *
      * 201-svaret är samma format som listningen: relationen sedd från `$item`
      * (§ Beslut 8).
      */
     public function store(StoreItemLinkRequest $request, Container $container, Item $item, LinkItems $linkItems): JsonResponse
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $item);
 
         $other = $container->items()->where('ulid', $request->validated('item'))->firstOrFail();
+
+        Gate::authorize('update', $other);
 
         $link = $linkItems->handle($item, $other, $request->validated('relation'));
 
@@ -114,13 +129,16 @@ class ItemLinkController extends Controller
      *
      * Finns ingen länk mellan paret (eller motparten inte i containern):
      * 404 `resource.not_found`. Raderingen bär ingen regel och skrivs rakt i
-     * kontrollern (§ Beslut 11).
+     * kontrollern (§ Beslut 11) — men `update` krävs i båda ändar, precis
+     * som i store() (issue 71 § Beslut 4).
      */
     public function destroy(Container $container, Item $item, string $other): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $item);
 
         $otherItem = $container->items()->where('ulid', $other)->firstOrFail();
+
+        Gate::authorize('update', $otherItem);
 
         $link = ItemLink::query()
             ->where(fn ($query) => $query->where('from_item_id', $item->id)->where('to_item_id', $otherItem->id))

@@ -22,11 +22,17 @@ use Symfony\Component\HttpFoundation\Response;
  * filen själv med Storage::response() — samma headers, riktiga bytes.
  *
  * INGEN behörighetslogik bor här: efter att itemet visat sig inte vara
- * mjukraderat anropas bara Gate::authorize('view', ...) mot den befintliga
- * grinden i App\Policies\ContainerPolicy (Beslut 2). Läsning räcker för att
- * ladda ner; det är aldrig update. `{attachment}` binds på bilagans ULID via
- * #[RouteKey('ulid')] — en mjukraderad bilaga syns inte av bindningen och ger
- * 404 (Beslut 7).
+ * mjukraderat anropas bara Gate::authorize('view', ...) — sedan issue 71 mot
+ * BILAGANS ITEM, App\Policies\ItemPolicy::view() (Beslut 5). Läsning räcker
+ * för att ladda ner; det är aldrig `update` och aldrig containern. Det här är
+ * filleverans, och en containergrind där itemets skulle stått är exakt det fel
+ * [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser räknar upp: en
+ * omfångsbegränsad mottagare hade kunnat hämta en bilaga på ett item hon inte
+ * ser. Signeringen och tidsbegränsningen på rutten ändrar ingenting här — en
+ * signatur säger vem som bad om länken, inte vad hon får se nu.
+ *
+ * `{attachment}` binds på bilagans ULID via #[RouteKey('ulid')] — en
+ * mjukraderad bilaga syns inte av bindningen och ger 404 (Beslut 7).
  *
  * Sökvägen till bytena är aldrig indata (Beslut 8): rutten tar en ULID, slår
  * upp stored_file-raden och levererar den sökväg som står i databasen.
@@ -53,7 +59,7 @@ class AttachmentDownloadController extends Controller
             abort(404);
         }
 
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $attachment->item);
 
         $storedFile = $attachment->storedFile;
         $storagePath = $storedFile->storage_path;

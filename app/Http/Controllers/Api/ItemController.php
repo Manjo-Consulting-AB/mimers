@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Category\ResolveCategoryDescendants;
+use App\Actions\Item\LinkItems;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Item\IndexItemRequest;
@@ -28,10 +29,11 @@ use Illuminate\Support\Facades\Gate;
  * from another container resolving here (§ Beslut 1).
  *
  * NO authorization logic lives here — every method only calls
- * `Gate::authorize()` against the EXISTING gates `view` (index, show) and
- * `update` (store, update, destroy) on App\Policies\ContainerPolicy. Not
- * `delete` — that means "may delete the container" and would lock out
- * every `write` participant, see § Beslut 2. A denied gate throws
+ * `Gate::authorize()`. Since issue 71 the gates are the item's own, on
+ * App\Policies\ItemPolicy, and the ladder decides: `view` reads, `create`
+ * adds, `update` changes what is already there, `delete` soft-deletes. Only
+ * index() still asks the container (`view`) — filtering the listing per
+ * scope is issue 73, see § Beslut 1. A denied gate throws
  * `AuthorizationException`, which bootstrap/app.php maps to
  * `auth.forbidden` (403).
  *
@@ -135,12 +137,25 @@ class ItemController extends Controller
      * user can be a member of several.
      *
      * StoreItemRequest has already proved that `account` EXISTS (otherwise
-     * 422 validation.failed) and that `category` (if any) belongs to THIS
-     * container and is not soft-deleted. The membership check below —
-     * `$account->users()->whereKey(...)->exists()` — decides whether THIS
-     * user may write in that account's name; a non-membership is 403
-     * `auth.forbidden`, deliberately NOT `Gate::authorize('create',
-     * [Container::class, $account])`, which is about creating containers.
+     * 422 validation.failed), that `category` (if any) belongs to THIS
+     * container and is not soft-deleted, and the same for `parent`. The
+     * membership check below — `$account->users()->whereKey(...)->exists()`
+     * — decides whether THIS user may write in that account's name; a
+     * non-membership is 403 `auth.forbidden`, deliberately NOT
+     * `Gate::authorize('create', [Container::class, $account])`, which is
+     * about creating containers.
+     *
+     * TWO gates, one per path (issue 71 § Beslut 2). Without `parent` the
+     * item lands at the top level and the gate is
+     * ContainerPolicy::createItem() — an owner-account member or a
+     * CONTAINER-WIDE `create` holder passes, a scope-limited recipient gets
+     * 403 (an item grant reaches no root). With `parent` the gate is
+     * ItemPolicy::create() against the parent, and the new item is linked
+     * as its child in the SAME transaction that already wraps the write:
+     * the recipient then extends her own scope, which is exactly what
+     * [[ADR-0028 Åtkomst på itemnivå]] § Beslut says `create` may do. The
+     * link goes through App\Actions\Item\LinkItems — never a hand-written
+     * ItemLink row — so normalization and the cycle check apply.
      *
      * `container_id`, `category_id`, `created_by_user_id` and
      * `created_by_account_id` are set explicitly on the model instance —
@@ -148,9 +163,19 @@ class ItemController extends Controller
      * class's docblock. `created_by_user_id` always comes from the token,
      * never from the body (§ Beslut 6).
      */
-    public function store(StoreItemRequest $request, Container $container): JsonResponse
+    public function store(StoreItemRequest $request, Container $container, LinkItems $linkItems): JsonResponse
     {
-        Gate::authorize('update', $container);
+        $parentUlid = $request->validated('parent');
+
+        $parent = $parentUlid !== null
+            ? $container->items()->where('ulid', $parentUlid)->firstOrFail()
+            : null;
+
+        if ($parent !== null) {
+            Gate::authorize('create', $parent);
+        } else {
+            Gate::authorize('createItem', $container);
+        }
 
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 
@@ -172,7 +197,7 @@ class ItemController extends Controller
             ? Tag::whereIn('ulid', $request->validated('tags'))->get()
             : collect();
 
-        $item = new Item($request->safe()->except(['account', 'category', 'tags']));
+        $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent']));
 
         // The item write and the tag sync share one transaction (issue 13b
         // § Beslut 7): an item saved with half its tagging is a state the
@@ -180,7 +205,7 @@ class ItemController extends Controller
         // semantics but keeps the query count constant, see that method. A
         // new item starts with no tags, so an empty `tags` list needs no
         // sync call.
-        DB::transaction(function () use ($item, $container, $category, $account, $request, $tags) {
+        DB::transaction(function () use ($item, $container, $category, $account, $request, $tags, $parent, $linkItems) {
             $item->container_id = $container->id;
             $item->category_id = $category?->id;
             $item->created_by_user_id = $request->user()->id;
@@ -189,6 +214,10 @@ class ItemController extends Controller
 
             if ($tags->isNotEmpty()) {
                 $this->replaceTags($item, $tags);
+            }
+
+            if ($parent !== null) {
+                $linkItems->handle($parent, $item, 'parent');
             }
         });
 
@@ -209,10 +238,16 @@ class ItemController extends Controller
      * against `ulid` (App\Models\Item#[RouteKey('ulid')]) and is scoped to
      * the container by `scopeBindings()`; a soft-deleted row never resolves
      * (SoftDeletes' global scope) — either gives 404 `resource.not_found`.
+     *
+     * Since issue 71 the gate is the ITEM's `view`, not the container's. An
+     * item inside the container but outside the caller's scope still gives
+     * 403 here — turning that into a 404 is issue 73 § Beslut 8, and the
+     * container parameter stays in the signature because `{item}`'s scoped
+     * binding is resolved against it (ImplicitRouteBinding).
      */
     public function show(Container $container, Item $item): ItemResource
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $item);
 
         // A single row, but eager-load explicitly so ItemResource never
         // runs an unplanned lazy-load query, same reasoning as index().
@@ -230,10 +265,16 @@ class ItemController extends Controller
      * Beslut 4): `has('tags')`, never `filled()`, so `tags: []` really
      * clears — see replaceTags() below. `created_by_*` is never in the
      * request's rules, so it can not be changed here (§ Beslut 6).
+     *
+     * Issue 71 § Beslut 3: the gate is `update` on the ITEM, never `create`.
+     * A `create` recipient may add, never touch what is already there, and
+     * that holds for the WHOLE body — there is deliberately no field-by-field
+     * gate: no field on an existing item is one a `create` recipient may
+     * change.
      */
     public function update(UpdateItemRequest $request, Container $container, Item $item): ItemResource
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $item);
 
         $item->fill($request->safe()->except(['category', 'tags']));
 
@@ -271,10 +312,16 @@ class ItemController extends Controller
      * deletion: App\Models\Item uses SoftDeletes, so `delete()` only sets
      * `deleted_at`. The trash, restore and pruning are issue 20, see issue
      * 13a § Beslut 9.
+     *
+     * Issue 71 § Beslut 1 and 6: the gate is the item's `delete`, a step of
+     * its own on the ladder — a `write` recipient changes an item but does
+     * not remove it. `delete` is soft deletion and nothing else; physical
+     * pruning stays the owner account's, see [[ADR-0008 Soft delete och
+     * papperskorg]], and no new path to forceDelete() is opened here.
      */
     public function destroy(Container $container, Item $item): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('delete', $item);
 
         $item->delete();
 

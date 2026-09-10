@@ -343,20 +343,34 @@ it('nedladdningen gör ett konstant antal frågor', function () {
     // Värm guarden med ett omätt anrop.
     actingAs($user)->get("/files/{$attachmentA->ulid}")->assertOk();
 
+    // Sedan issue 71 går grinden genom App\Actions\Access\ResolveItemScope,
+    // som är registrerad `scoped()` och därför memoiserar sitt svar per
+    // användare och container — även mellan anropen i EN testprocess. I drift
+    // är varje request en egen process och memon alltid tom; här nollställs
+    // den så båda mätningarna är kalla och talen jämförbara.
+    $kall = function () use ($user): void {
+        $user->unsetRelation('accounts');
+        app()->forgetScopedInstances();
+    };
+
+    $kall();
     DB::enableQueryLog();
     actingAs($user)->get("/files/{$attachmentA->ulid}")->assertOk();
     $frågorFörsta = count(DB::getQueryLog());
     DB::flushQueryLog();
 
+    $kall();
     actingAs($user)->get("/files/{$attachmentB->ulid}?variant=thumb")->assertOk();
     $frågorAndra = count(DB::getQueryLog());
     DB::disableQueryLog();
 
-    // Sex frågor för en helt vanlig nedladdning: bindningen, de tre
-    // eagerladdade relationerna (stored_file, item, container) och de två
-    // policy-frågorna (kontot och exists-kollen). Inget löst tak med glapp där
-    // en N+1 kan gömma sig — variant-begäran ovan lägger exakt en fråga till.
-    expect($frågorFörsta)->toBe(6);
+    // Sju frågor för en helt vanlig nedladdning: bindningen, de tre
+    // eagerladdade relationerna (stored_file, item, container) och de tre som
+    // omfångsupplösningen kostar (användarens konton, containerns ägare och
+    // grant-raderna — ingen itemgrant finns, så graf-frågan hoppas över).
+    // Inget löst tak med glapp där en N+1 kan gömma sig — variant-begäran ovan
+    // lägger exakt en fråga till.
+    expect($frågorFörsta)->toBe(7);
     expect($frågorAndra)->toBe($frågorFörsta + 1);
 
     Carbon::setTestNow();
