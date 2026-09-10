@@ -155,23 +155,27 @@ class ReportsAbuseSignals
      * laddat upp något", och en raderad bilaga var ändå en uppladdning. Andelen
      * sjunker alltså inte av att någon tömmer papperskorgen.
      *
+     * Båda talen är aggregat över hela systemet (Beslut 13): `NOT EXISTS`
+     * låter databasen avgöra vilka konton som saknar bilaga, i stället för att
+     * transportera ett id-set som växer med antalet gratiskonton genom PHP.
+     *
      * @return array{accounts: int, never_uploaded: int, share: float}
      */
     private function freeAccountsNeverUploaded(): array
     {
-        $accountIds = $this->freeAccountsQuery()->pluck('account.id');
-        $accounts = $accountIds->count();
+        $accounts = $this->freeAccountsQuery()->count();
 
         if ($accounts === 0) {
             return ['accounts' => 0, 'never_uploaded' => 0, 'share' => 0.0];
         }
 
-        $uploadande = DB::table('attachment')
-            ->whereIn('billed_account_id', $accountIds)
-            ->distinct()
-            ->count('billed_account_id');
-
-        $aldrig = $accounts - $uploadande;
+        $aldrig = $this->freeAccountsQuery()
+            ->whereNotExists(function (Builder $q): void {
+                $q->selectRaw('1')
+                    ->from('attachment')
+                    ->whereColumn('attachment.billed_account_id', 'account.id');
+            })
+            ->count();
 
         return [
             'accounts' => $accounts,

@@ -528,6 +528,36 @@ it('samtliga trösklar och fönstret läses ur config/missbruk.php', function ()
 
     config(['missbruk.managed_container_min' => 1]);
     expect($jobbet->handle()['managed_access_breadth'])->toHaveCount(1);
+
+    // reference_count_min och distinct_account_min: samma fil listas först när
+    // båda trösklarna är passerade.
+    $fil = StoredFile::factory()->create(['reference_count' => 5]);
+    foreach (range(1, 3) as $i) {
+        missbrukBilaga(Account::factory()->create(), $fil);
+    }
+
+    expect($jobbet->handle()['shared_stored_files'])->toBe([]);
+
+    config(['missbruk.reference_count_min' => 5]);
+    expect($jobbet->handle()['shared_stored_files'])->toHaveCount(1);
+
+    config(['missbruk.distinct_account_min' => 4]);
+    expect($jobbet->handle()['shared_stored_files'])->toBe([]);
+
+    config(['missbruk.distinct_account_min' => 3]);
+    expect($jobbet->handle()['shared_stored_files'])->toHaveCount(1);
+
+    // ip_container_min: tre containers samma dygn för samma registrerings-IP.
+    $varv = Account::factory()->create(['registration_ip' => '203.0.113.201']);
+    foreach (range(1, 3) as $i) {
+        Container::factory()->for($varv, 'account')->create(['created_at' => now()->subDays(2)]);
+    }
+
+    config(['missbruk.ip_container_min' => 4]);
+    expect($jobbet->handle()['container_clusters_per_registration_ip'])->toBe([]);
+
+    config(['missbruk.ip_container_min' => 3]);
+    expect($jobbet->handle()['container_clusters_per_registration_ip'])->toHaveCount(1);
 });
 
 it('antalet frågor växer inte med antalet konton', function () {
