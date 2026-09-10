@@ -29,12 +29,7 @@ it('en omkörd migration dubblerar inte planraderna', function () {
     expect(DB::table('plan')->where('code', 'pro')->count())->toBe(1);
 });
 
-it('limits bär de tio nycklarna i båda planerna', function () {
-    // Den tionde, `pending_invitations`, backfillas av
-    // 2026_09_10_010000_add_pending_invitations_limit_to_plan.php och hamnar
-    // sist — create_plan_table.php rörs aldrig (issue 48 § Beslut 1 och 2).
-    // Dokumentet räknar ännu nio; det uppdateras i en egen commit (issue 48
-    // § Beslut 11).
+it('limits bär dokumentets nio nycklar i båda planerna', function () {
     $nycklar = [
         'containers',
         'storage_bytes',
@@ -45,7 +40,6 @@ it('limits bär de tio nycklarna i båda planerna', function () {
         'ownership_transfer',
         'loan_reminders',
         'cost_reports',
-        'pending_invitations',
     ];
 
     foreach (['free', 'pro'] as $kod) {
