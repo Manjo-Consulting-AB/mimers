@@ -2,6 +2,7 @@
 
 namespace App\Console;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Actions\Notification\CreateNotification;
 use App\Models\Notification;
 use App\Models\ScheduleOccurrence;
@@ -39,11 +40,20 @@ use Throwable;
  * Ett fel för en användare stoppar inte de andra (Beslut 9): varje användare
  * ligger i ett eget try/catch och ett fångat fel loggas som en varning.
  *
+ * Memon i ResolveItemScope töms per användare (issue 75 § Beslut 2). Loopen
+ * är ETT schemalagt anrop, och `scoped()` töms mellan anrop men inte mellan
+ * varv i en loop — utan `flush()` bär jobbet varje användares omfång i varje
+ * container hen når, samtidigt, resten av natten.
+ *
  * Schemaläggs i routes/console.php med `Schedule::call`, aldrig
  * `Schedule::command` — se AGENTS.md § Driftmiljön saknar proc_open.
  */
 class GeneratesTaskNotifications
 {
+    public function __construct(
+        private readonly ResolveItemScope $scopes,
+    ) {}
+
     /**
      * Skapar uppgiftsnotiser för alla som har en synlig eller förfallen
      * förekomst i en container deras konto äger.
@@ -61,6 +71,11 @@ class GeneratesTaskNotifications
                             'user_ulid' => $user->ulid,
                             'exception' => $e->getMessage(),
                         ]);
+                    } finally {
+                        // `finally` och inte slutet av try: ett fångat fel
+                        // ska inte lämna en användares omfång kvar till nästa
+                        // varv i loopen (Beslut 2).
+                        $this->scopes->flush();
                     }
                 }
             });

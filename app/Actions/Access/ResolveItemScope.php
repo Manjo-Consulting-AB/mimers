@@ -116,6 +116,22 @@ class ResolveItemScope
     }
 
     /**
+     * Tömmer memon. Anropas av nattjobb som går igenom många användare.
+     *
+     * `scoped()` töms mellan requests och kö-jobb, aldrig mellan varv i en
+     * loop: en generator som går igenom hela användartabellen i ett enda
+     * schemalagt anrop skulle annars bära varje användares omfång i varje
+     * container hen når, samtidigt, resten av natten (issue 75 § Beslut 2).
+     *
+     * Anropas ALDRIG från en controller — en request har en användare, och
+     * memon är hela poängen där.
+     */
+    public function flush(): void
+    {
+        $this->memo = [];
+    }
+
+    /**
      * Hur många items en grant på var och ett av $itemIds faktiskt når,
      * inklusive itemet självt — underlaget för `reach` i förvaltningsvyn,
      * se issue 72 § Beslut 5.
