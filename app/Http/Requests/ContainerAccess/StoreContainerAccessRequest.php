@@ -4,13 +4,14 @@ namespace App\Http\Requests\ContainerAccess;
 
 use App\Models\Account;
 use App\Models\Container;
+use App\Support\Access\AccessLevel;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
  * POST /api/containers/{container}/accesses, se issue 9b § Beslut 3:
- * kroppen är `{grantee_type, grantee, level, kind, expires_at?}`.
+ * kroppen är `{grantee_type, grantee, level, kind, expires_at?, item?}`.
  *
  * `grantee` är ett ULID (mottagarens, inte ett löpnummer), precis som
  * `account` i App\Http\Requests\Container\StoreContainerRequest — samma
@@ -23,6 +24,16 @@ use Illuminate\Validation\Validator;
  * helt över när `grantee_type` inte är `user` eller `account` —
  * `Rule::in` på `grantee_type` ger då redan sitt eget 422, och en `exists`
  * mot en påhittad tabell ska aldrig hinna köras, se issue 9b § Beslut 5.
+ *
+ * Sedan issue 72 § Beslut 1 är `level` alla fyra stegen i laddern, och
+ * `item` är ett valfritt item-ULID. Numeriskt samma form som `category` i
+ * App\Http\Requests\Item\StoreItemRequest och `parent` i
+ * App\Http\Requests\Category\StoreCategoryRequest: ULID:en slås upp INOM
+ * den container rutten bär och får inte vara mjukraderad. En ULID ur en
+ * ANNAN container är därför ett valideringsfel (422 `validation.failed`,
+ * fältkoden `validation.exists` på `item`) — aldrig 404, och aldrig en
+ * tyst container-bred grant. `whereNull('deleted_at')` går förbi Eloquents
+ * globala SoftDeletes-scope, som `Rule::exists` inte känner till.
  *
  * Två ytterligare kontroller kräver mer än en enskild fältregel och bor
  * därför i withValidator() nedan, se issue 9b § Beslut 4 och § Beslut 6:
@@ -56,9 +67,16 @@ class StoreContainerAccessRequest extends FormRequest
         return [
             'grantee_type' => ['required', 'string', Rule::in(['user', 'account'])],
             'grantee' => $granteeRules,
-            'level' => ['required', 'string', Rule::in(['read', 'write'])],
+            'level' => ['required', 'string', Rule::in(AccessLevel::LADDER)],
             'kind' => ['required', 'string', Rule::in(['member', 'managed', 'guest'])],
             'expires_at' => ['nullable', 'date', 'after:now'],
+            'item' => [
+                'nullable',
+                'string',
+                Rule::exists('item', 'ulid')->where(
+                    fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
+                ),
+            ],
         ];
     }
 

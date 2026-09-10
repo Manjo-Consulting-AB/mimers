@@ -52,6 +52,20 @@ class ContainerParticipantController extends Controller
      * den skulle röja en adress för någon som ännu inte sagt ja — därför
      * rörs `invitation` inte av den här frågan.
      *
+     * Sedan issue 72 § Beslut 9 grupperas raderna på
+     * `(grantee_type, grantee_id)`: en mottagare med fyra itemåtkomster ger
+     * EN post, inte fyra. Posten är oförändrad i form och bär ingen
+     * `item`-nyckel, ingen `reach` och ingen `level` — att deltagarlistan
+     * inte avslöjar vem som har vilket omfång är samma princip som redan
+     * gäller nivåer och utgångsdatum, se [[ADR-0028 Åtkomst på itemnivå]]
+     * § Konsekvenser och App\Http\Resources\ParticipantResource.
+     *
+     * Har en mottagare flera rader med olika `kind` — teoretiskt möjligt —
+     * vinner den rad som sorteras först på `created_at`. `kind` styr bara
+     * presentation (issue 9a § Beslut 6) och aldrig behörighet, så vilken
+     * som vinner spelar ingen roll; sorteringen på `id` efter `created_at`
+     * gör ändå valet deterministiskt.
+     *
      * Ordningen är ägaren först, sedan `created_at` stigande (§ Beslut 7).
      * Ingen sortering på namn — den skulle flytta runt posterna varje gång
      * någon döper om sitt konto. `id` är bara ett deterministiskt
@@ -101,7 +115,17 @@ class ContainerParticipantController extends Controller
             'role' => 'owner',
         ]];
 
+        $sedda = [];
+
         foreach ($accesses as $access) {
+            $nyckel = $access->grantee_type.':'.$access->grantee_id;
+
+            if (isset($sedda[$nyckel])) {
+                continue;
+            }
+
+            $sedda[$nyckel] = true;
+
             $grantee = $access->grantee_type === 'user'
                 ? $users->get($access->grantee_id)
                 : $accounts->get($access->grantee_id);
