@@ -5,6 +5,7 @@ namespace App\Support\Plan;
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\Invitation;
 use App\Models\UsageCounter;
 
 /**
@@ -85,14 +86,63 @@ final class Entitlements
         // Formuleringen av "giltig access" återanvänder
         // ContainerAccess::scopeValid() — samma villkor som policyn och
         // deltagarlistan, två formuleringar skulle glida isär (issue 9c).
+        // Detsamma gäller de obesvarade inbjudningarna: villkoret bor i
+        // Invitation::scopeOutstanding() sedan issue 48 § Beslut 5, och
+        // formulerades tidigare en andra gång här.
         $used = $container->accesses()->valid()->count()
-            + $container->invitations()
-                ->where('status', 'pending')
-                ->where('expires_at', '>', now())
-                ->count();
+            + $container->invitations()->outstanding()->count();
 
         if ($used >= $limit) {
             throw ApiException::make('quota.shared_users_exceeded', ['limit' => $limit, 'used' => $used], 403);
+        }
+    }
+
+    /**
+     * Inbjudningstaket: `pending_invitations` i ÄGARKONTOTS plan mot antalet
+     * obesvarade, icke utgångna inbjudningar över kontots ALLA containers
+     * (issue 48). Det som skyddas är inte utrymme utan leveransryktet hos
+     * e-postleverantören — inbjudningar går till overifierade adresser, och
+     * magic links är inloggningskritiska ([[ADR-0017 Missbruksvektorer]] § 5).
+     *
+     * Signaturen tar ett `Account` som assertCanCreateContainer(): kontot är
+     * containerns ägarkonto, och bara ägarkontots medlemmar får bjuda in
+     * ([[Konton och åtkomst]] § Behörighetsregler regel 3, bevakat av
+     * manageAccess()), så ägarkontot ÄR avsändarens konto — och delningstaket
+     * ovan läser redan ägarkontots plan.
+     *
+     * Taket räknas med en COUNT, aldrig med en `usage_counter`-kolumn: en
+     * räknare måste hållas i takt av varje accept, avvisning,
+     * tillbakadragning OCH av tidens gång — en `pending`-rad går ut utan att
+     * någon kod kör. Ett tal som bara kan härledas ska härledas (issue 48
+     * § Beslut 4).
+     *
+     * Containerns SoftDeletes-scope gäller i underfrågan, så en mjukraderad
+     * containers inbjudningar räknas inte — avsiktligt, samma linje som
+     * containertaket, där en mjukraderad container frigör sin plats.
+     *
+     * Ingen låsning och ingen transaktion: två samtidiga POST kan båda läsa
+     * `used = N-1` och passera. Konsekvensen är en inbjudan för mycket, och
+     * den går ut av sig själv efter Invitation::TTL_DAYS — samma avvägning
+     * som assertCanCreateContainer() gör (issue 27 § Beslut 7).
+     * `lockForUpdate()` hör hemma där en överfull disk är dyr, inte här.
+     */
+    public function assertPendingInvitationsWithinLimit(Account $account): void
+    {
+        $limit = $account->planLimit('pending_invitations');
+
+        if ($limit === null) {
+            return;
+        }
+
+        // Vägen till kontot går via container_id → container.account_id;
+        // `invitation` har ingen account_id och ingen genväg ska byggas.
+        $used = Invitation::query()
+            ->outstanding()
+            ->whereIn('container_id', Container::query()->where('account_id', $account->id)->select('id'))
+            ->count();
+
+        if ($used >= $limit) {
+            throw ApiException::make('quota.pending_invitations_exceeded', ['limit' => $limit, 'used' => $used], 403);
         }
     }
 

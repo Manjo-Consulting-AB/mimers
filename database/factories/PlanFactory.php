@@ -32,6 +32,7 @@ class PlanFactory extends Factory
                 'storage_bytes' => 1024 * 1024 * 1024,
                 'max_file_bytes' => 10 * 1024 * 1024,
                 'shared_users_per_container' => 1,
+                'pending_invitations' => 10,
                 'webhooks' => false,
                 'pdf_binder' => false,
                 'ownership_transfer' => false,

@@ -7,6 +7,7 @@ use Database\Factories\InvitationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -102,6 +103,31 @@ class Invitation extends Model
     public function invitedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'invited_by_user_id');
+    }
+
+    /**
+     * "Obesvarad och inte utgången" — den ENDA formuleringen av villkoret
+     * (issue 48 § Beslut 5). Det stod tidigare ordagrant på två ställen,
+     * duplikatspärren i App\Http\Controllers\Api\ContainerInvitationController
+     * och App\Support\Plan\Entitlements::assertCanShareContainer(); en tredje
+     * kopia som glider isär är precis det ContainerAccess::scopeValid() bröts
+     * ut för att undvika.
+     *
+     * Utgång härleds ur `expires_at` och ALDRIG ur `status`: kolumnen står
+     * kvar på `pending` när tiden passerat — ingen bakgrundsprocess flippar
+     * den (issue 10a § Beslut 7). Det är därför `accepted`, `rejected` och
+     * `revoked` faller ur status-villkoret och en utgången `pending`-rad ur
+     * expires_at-villkoret, utan att någon kolumn ändras.
+     *
+     * Samma form som App\Models\ContainerAccess::scopeValid() — Builder in,
+     * Builder ut, ingen `#[Scope]`-attribut.
+     *
+     * @param  Builder<Invitation>  $query
+     * @return Builder<Invitation>
+     */
+    public function scopeOutstanding(Builder $query): Builder
+    {
+        return $query->where('status', 'pending')->where('expires_at', '>', now());
     }
 
     /**

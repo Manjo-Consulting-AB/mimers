@@ -114,8 +114,7 @@ class ContainerInvitationController extends Controller
 
         $existing = $container->invitations()
             ->where('email', $email)
-            ->where('status', 'pending')
-            ->where('expires_at', '>', now())
+            ->outstanding()
             ->first();
 
         if ($existing instanceof Invitation) {
@@ -129,6 +128,14 @@ class ContainerInvitationController extends Controller
         // räknar även den här inbjudan när den ligger pending (issue 27 §
         // Beslut 5).
         $entitlements->assertCanShareContainer($container);
+
+        // Kontotaket kommer sist (issue 48 § Beslut 8): delningstaket är den
+        // gräns användaren kan göra något åt, och först när den är passerad
+        // är frågan om utskicksvolymen. Taket räknas på ägarkontot, som
+        // delningstaket ovan. Undantaget kastas före Str::random(), före
+        // save() och före Notification::route() — ett nekande lämnar inga
+        // spår, varken rad, token eller mejl (issue 48 § Beslut 9).
+        $entitlements->assertPendingInvitationsWithinLimit($container->account);
 
         // Klartexten är mejlets enda konsument — den skickas i länken
         // nedan och lagras aldrig, se klassens docblock.
