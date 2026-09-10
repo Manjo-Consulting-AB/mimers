@@ -86,6 +86,14 @@ class ContainerPolicy
      * hasContainerAccess()). En `member`/`guest`-access (mottagaren är en
      * användare, inte ett konto) får ingen extra kontokontroll, se issue 9a
      * § Beslut 9.
+     *
+     * Sedan issue 70 krävs att raden är CONTAINER-BRED (`item_id IS NULL`,
+     * `containerWideOnly`). Att byta namn på pärmen är en containervid
+     * handling, och en `write` på ett enskilt item får inte ge den — annars
+     * hade en itemgrant blivit en ContainerPolicy::create() i smyg. Det här
+     * är den ENDA platsen i systemet där `item_id IS NULL` står som villkor:
+     * view() får det aldrig, för då låses en omfångsbegränsad mottagare ute
+     * från själva containerrutten (issue 69 § Beslut 4).
      */
     public function update(User $user, Container $container): bool
     {
@@ -94,7 +102,43 @@ class ContainerPolicy
         }
 
         return $this->isMemberOfOwnerAccount($user, $container->account)
-            || $this->hasContainerAccess($user, $container, AccessLevel::WRITE, excludeFrozenGranteeAccounts: true);
+            || $this->hasContainerAccess(
+                $user,
+                $container,
+                AccessLevel::WRITE,
+                excludeFrozenGranteeAccounts: true,
+                containerWideOnly: true,
+            );
+    }
+
+    /**
+     * Får användaren skapa ett TOPPNIVÅ-item i containern? Regel 1 ELLER en
+     * CONTAINER-BRED grant på `create` eller högre, plus regel 4. Sedan
+     * issue 70 § Beslut 9.
+     *
+     * En omfångsbegränsad mottagare når aldrig den här metoden: hon skapar
+     * barn-items UNDER det hon fått, och det auktoriseras med
+     * App\Policies\ItemPolicy::create() mot föräldern. En itemgrant — även
+     * på `delete` — ger därför ingen rot i containern.
+     *
+     * `ContainerPolicy::create()` kan INTE återanvändas: den tar ett
+     * `Account` och handlar om att skapa containers åt ett konto, se dess
+     * docblock.
+     */
+    public function createItem(User $user, Container $container): bool
+    {
+        if ($this->isFrozen($container->account)) {
+            return false;
+        }
+
+        return $this->isMemberOfOwnerAccount($user, $container->account)
+            || $this->hasContainerAccess(
+                $user,
+                $container,
+                AccessLevel::CREATE,
+                excludeFrozenGranteeAccounts: true,
+                containerWideOnly: true,
+            );
     }
 
     /**
@@ -258,22 +302,38 @@ class ContainerPolicy
      * varje kollation som finns, och ordningen är semantisk och finns bara
      * i PHP, se [[ADR-0028 Åtkomst på itemnivå]] § Beslut 2.
      *
-     * `item_id` filtreras INTE här i den här issuen — kolumnen skrivs
-     * aldrig, så frågan vore en no-op. Issue 70 äger omfångsupplösningen,
-     * se [[ADR-0028 Åtkomst på itemnivå]] § Beslut 4.
+     * `$containerWideOnly` begränsar till rader med `item_id IS NULL` — en
+     * CONTAINER-BRED grant, alltså. Sätts av update() och createItem(),
+     * aldrig av view(): containervida handlingar får inte vinnas på en
+     * itemgrant, men en omfångsbegränsad mottagare måste ändå nå
+     * containerrutten för att kunna se det hon fått (issue 69 § Beslut 4
+     * och issue 70 § Beslut 9).
+     *
+     * Upplösningen av VILKA items en mottagare når bor i
+     * App\Actions\Access\ResolveItemScope, inte här, se issue 70 § Beslut 1.
      */
-    private function hasContainerAccess(User $user, Container $container, string $minimumLevel, bool $excludeFrozenGranteeAccounts = false): bool
-    {
+    private function hasContainerAccess(
+        User $user,
+        Container $container,
+        string $minimumLevel,
+        bool $excludeFrozenGranteeAccounts = false,
+        bool $containerWideOnly = false,
+    ): bool {
         $accounts = $user->accounts;
 
         if ($excludeFrozenGranteeAccounts) {
             $accounts = $accounts->reject(fn (Account $account) => $this->isFrozen($account));
         }
 
-        return ContainerAccess::query()
+        $query = ContainerAccess::query()
             ->where('container_id', $container->id)
             ->whereIn('level', AccessLevel::atOrAbove($minimumLevel))
-            ->validFor($user, $accounts->pluck('id')->values()->all())
-            ->exists();
+            ->validFor($user, $accounts->pluck('id')->values()->all());
+
+        if ($containerWideOnly) {
+            $query->whereNull('item_id');
+        }
+
+        return $query->exists();
     }
 }

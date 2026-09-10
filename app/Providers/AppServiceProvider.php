@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Listeners\RecordsScheduleHeartbeat;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -18,7 +19,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Issue 70 § Beslut 10. ItemPolicy anropas en gång per item i en
+        // listning, så upplösningen memoiserar sitt svar — men `scoped()`,
+        // inte `singleton()`: en singleton hade burit en användares omfång
+        // vidare till nästa kö-jobb i samma worker, vilket är ett läckage
+        // och inte en optimering. Se App\Actions\Access\ResolveItemScope.
+        $this->app->scoped(ResolveItemScope::class);
     }
 
     /**
