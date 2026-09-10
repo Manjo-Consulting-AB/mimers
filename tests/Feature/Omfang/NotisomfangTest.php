@@ -32,15 +32,20 @@ use Illuminate\Support\Facades\Mail;
  * Konsekvenser ("Notisgeneratorerna — en omfångsbegränsad mottagare får inte
  * notiser om items hon inte når").
  *
- * VIKTIGT OM VAD TESTERNA VISAR. Uppgifts- och utlåningsnotiserna har redan
- * TVÅ spärrar i samma riktning: omfångsfiltret i scopeTodoFor() (issue 74)
- * och 34b:s kontogrind — notifyForUser() loopar `$user->accounts` och
- * begränsar förekomsterna till containers som de kontona ÄGER. Den som äger
- * containern når hela den (ResolveItemScope regel 1), så en omfångsbegränsad
- * mottagare når aldrig ens generatorernas fråga. Det syns i Klart när-punkt 1
- * och 3: de kan inte uppfyllas utan att kontogrinden rivs, och det finns ett
- * befintligt test ("en gäst med delegerad åtkomst får ingen uppgiftsnotis")
- * som håller den på plats. Issuens Frågor och antaganden tar upp motsägelsen.
+ * VIKTIGT OM VAD TESTERNA VISAR. Uppgiftsnotiserna har två spärrar som pekar
+ * åt olika håll beroende på VILKEN sorts delegerad åtkomst mottagaren har.
+ * scopeTodoFor() (issue 74) begränsar redan förekomsterna till de items
+ * mottagaren når. Ovanpå det avgör
+ * GeneratesTaskNotifications::recipientReachesContainer() om containern
+ * räknas alls: ägd av hennes konto — alltid med (regel 1 ger henne redan
+ * hela containern) — annars bara med om hennes omfång i containern är
+ * `restricted()`, dvs en itemgrant. Är omfånget `unrestricted()` utan att
+ * vara ägt är det en container-bred gäst, och 34b:s Beslut 4 håller henne
+ * utanför precis som förut — det finns ett befintligt test för det ("en gäst
+ * med delegerad åtkomst får ingen uppgiftsnotis").
+ *
+ * En mottagare med en ITEM-grant (restricted scope) är alltså den nya vägen
+ * in: hon får uppgiftsnotiser för de items hon når, aldrig för ett syskon.
  *
  * Fixturen är omfångsupplösningens (issue 70):
  *
@@ -167,7 +172,7 @@ function notisomfangFrågor(Closure $anrop): int
 
 // --- Uppgiftsnotiserna -----------------------------------------------------
 
-it('en omfångsbegränsad mottagare får ingen uppgiftsnotis — varken om itemet hon når eller om ett syskon', function () {
+it('en omfångsbegränsad mottagare får en uppgiftsnotis om itemet hon når, men ingen om ett syskon', function () {
     [, $ägare, $container, $motor, $mast] = notisomfangBas();
     $mottagare = notisomfangMottagare($container, $motor);
 
@@ -177,10 +182,11 @@ it('en omfångsbegränsad mottagare får ingen uppgiftsnotis — varken om iteme
     app(GeneratesTaskNotifications::class)->handle();
 
     // Omfångsfiltret i scopeTodoFor() (issue 74) ger henne motorn och inte
-    // masten — men hon når inte ens generatorns fråga: 34b:s kontogrind
-    // begränsar förekomsterna till containers hennes EGET konto äger. Båda
-    // spärrarna pekar åt samma håll, och noll rader är svaret.
-    expect(Notification::query()->where('user_id', $mottagare->id)->count())->toBe(0);
+    // masten, och hennes itemgrant gör containern `restricted()` — inte
+    // container-bred — så recipientReachesContainer() släpper igenom henne.
+    $hennes = Notification::query()->where('user_id', $mottagare->id)->pluck('payload');
+    expect($hennes)->toHaveCount(1);
+    expect($hennes->first()['item'])->toBe('Motorn');
 
     // Ägarkontots medlem når hela containern (regel 1) och får båda.
     $ägarens = Notification::query()->where('user_id', $ägare->id)->pluck('payload');
@@ -250,10 +256,10 @@ it('ingen notisrads payload nämner ett item utanför mottagarens omfång', func
         );
     }
 
-    // Bara ägaren får rader i den här fixturen: mottagaren når motorn men
-    // aldrig generatorns fråga.
-    expect(Notification::query()->count())->toBe(2);
-    expect(Notification::query()->where('user_id', $mottagare->id)->exists())->toBeFalse();
+    // Ägaren får båda (regel 1); mottagaren får bara motorn — kontrollen
+    // ovan är kvittot på att ingen av raderna nämner masten för henne.
+    expect(Notification::query()->count())->toBe(3);
+    expect(Notification::query()->where('user_id', $mottagare->id)->count())->toBe(1);
 });
 
 it('dedupe-nycklarna är oförändrade — en andra körning samma natt skapar inga nya rader', function () {
@@ -262,11 +268,14 @@ it('dedupe-nycklarna är oförändrade — en andra körning samma natt skapar i
     notisomfangUppgift($motor, 'Byt impeller', '2026-09-02');
 
     app(GeneratesTaskNotifications::class)->handle();
+    // Både ägaren (regel 1) och mottagaren (itemgranten på motorn) får en
+    // rad var för samma förekomst.
     $efterFörsta = Notification::query()->pluck('dedupe_key')->sort()->values()->all();
+    expect($efterFörsta)->toHaveCount(2);
 
     app(GeneratesTaskNotifications::class)->handle();
 
-    expect(Notification::query()->count())->toBe(1);
+    expect(Notification::query()->count())->toBe(2);
     expect(Notification::query()->pluck('dedupe_key')->sort()->values()->all())->toBe($efterFörsta);
 });
 
@@ -356,7 +365,7 @@ it('veckosammanfattningen skickas inte alls till en mottagare vars omfång sakna
     );
 });
 
-it('veckosammanfattningen listar ägarens poster och når inte den omfångsbegränsade mottagaren', function () {
+it('veckosammanfattningen till en omfångsbegränsad mottagare listar bara hennes egna poster', function () {
     Mail::fake();
     [, $ägare, $container, $motor, $mast] = notisomfangBas();
     $mottagare = notisomfangMottagare($container, $motor);
@@ -367,24 +376,26 @@ it('veckosammanfattningen listar ägarens poster och når inte den omfångsbegr�
     app(GeneratesTaskNotifications::class)->handle();
     app(SendsWeeklyDigest::class)->handle();
 
-    // Ägaren når hela containern: båda posterna i ETT mejl. Den
-    // omfångsbegränsade mottagaren får inget alls — hennes omfång kan inte
-    // bära en enda händelse, se filens huvudkommentar. Att hon skulle få ett
-    // mejl med bara sina egna poster är Klart när-punkt 9, och den kan inte
-    // uppfyllas: se huvudkommentaren och PR:ens Frågor och antaganden.
-    $mejl = Mail::sent(WeeklyDigestMail::class)->first();
-    expect($mejl)->not->toBeNull();
-    expect($mejl->hasTo($ägare->email))->toBeTrue();
-    expect(count($mejl->items))->toBe(2);
+    // Ägaren når hela containern: båda posterna i ETT mejl.
+    $ägarensMejl = Mail::sent(WeeklyDigestMail::class)
+        ->first(fn (WeeklyDigestMail $mail): bool => $mail->hasTo($ägare->email));
+    expect($ägarensMejl)->not->toBeNull();
+    expect(count($ägarensMejl->items))->toBe(2);
 
-    $html = $mejl->render();
-    expect($html)->toContain('Byt impeller');
-    expect($html)->toContain('Kontrollera riggen');
+    $ägarensHtml = $ägarensMejl->render();
+    expect($ägarensHtml)->toContain('Byt impeller');
+    expect($ägarensHtml)->toContain('Kontrollera riggen');
 
-    Mail::assertNotSent(
-        WeeklyDigestMail::class,
-        fn (WeeklyDigestMail $mail): bool => $mail->hasTo($mottagare->email),
-    );
+    // Den omfångsbegränsade mottagaren når bara motorn: hennes mejl nämner
+    // den posten och inte syskonets (Klart när-punkt 9).
+    $hennesMejl = Mail::sent(WeeklyDigestMail::class)
+        ->first(fn (WeeklyDigestMail $mail): bool => $mail->hasTo($mottagare->email));
+    expect($hennesMejl)->not->toBeNull();
+    expect(count($hennesMejl->items))->toBe(1);
+
+    $hennesHtml = $hennesMejl->render();
+    expect($hennesHtml)->toContain('Byt impeller');
+    expect($hennesHtml)->not->toContain('Kontrollera riggen');
 });
 
 // --- Memon och frågekostnaden (Beslut 2) ----------------------------------
