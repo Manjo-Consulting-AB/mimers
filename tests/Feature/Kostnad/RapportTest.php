@@ -1,9 +1,5 @@
 <?php
 
-// rott-pa-basen: testfix, ingen kodändring — mätningen av konstant frågeantal
-// glömmer ResolveItemScope mellan anropen (issue 74, session 2). Filen bär
-// inget nytt acceptanstest; det nya bor i AggregatfilterTest.php.
-
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
@@ -580,20 +576,10 @@ it('rapporten gör ett konstant antal frågor oavsett datamängden', function ()
     // Värm Sanctum-guarden med ett omätt anrop innan mätningen börjar.
     getJson($urlLiten, $headers)->assertOk();
 
-    // ResolveItemScope är `scoped` och memoiserar per request i drift, men i
-    // testsviten överlever den mellan HTTP-anropen (Container::
-    // forgetScopedInstances() körs bara i kö-arbetare). Glöm den inför varje
-    // mätning, annars mäter man förra anropets omfång i stället för det här
-    // anropets — och den ena containern hade sett billigare ut än den andra.
-    // Samma mönster som ListningsfilterTest::listningsFrågor().
-    app()->forgetScopedInstances();
-
     DB::enableQueryLog();
     getJson($urlLiten, $headers)->assertOk();
     $frågorLiten = count(DB::getQueryLog());
     DB::flushQueryLog();
-
-    app()->forgetScopedInstances();
 
     getJson($urlStor, $headers)->assertOk();
     $frågorStor = count(DB::getQueryLog());

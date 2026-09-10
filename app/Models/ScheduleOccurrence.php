@@ -200,12 +200,19 @@ class ScheduleOccurrence extends Model
      * `forContainers()` och inte `handle()` per container: genereraren kör
      * scopet en gång per användare i en `chunkById`-loop över hela
      * användartabellen, och en upplösning per container hade blivit ett
-     * nattjobb som växer med kundstocken. Upplösningen är konstant — den
-     * memoiserade ResolveItemScope ställer tre frågor, fyra när någon
-     * container har en itemgrant — och de två frågorna här (containrarna och
-     * omfånget) ersätter den `whereHas('container')`-kedja som stod i
-     * villkoret tidigare. Antalet frågor beror alltså inte på antalet
-     * containers eller förekomster.
+     * nattjobb som växer med kundstocken. Upplösningen är konstant — en
+     * ResolveItemScope ställer tre frågor, fyra när någon container har en
+     * itemgrant — och de två frågorna här (containrarna och omfånget)
+     * ersätter den `whereHas('container')`-kedja som stod i villkoret
+     * tidigare. Antalet frågor beror alltså inte på antalet containers eller
+     * förekomster.
+     *
+     * Upplösningen sker på en FÄRSK instans (`build()`) och inte på den
+     * `scoped`-bundna. Memon på den senare finns för ItemPolicy, som frågar
+     * en gång per rad i en listning; scopet frågar en gång per anrop, och för
+     * det skulle memon bara göra frågekostnaden beroende av vad samma
+     * PHP-process råkade ha löst upp tidigare — ett mått som inte hör till
+     * anropet.
      *
      * Filtret formuleras som två grenar på item-nivån: items i de containers
      * där omfånget är OMFATTANDE, plus de enskilda items ett BEGRÄNSAT
@@ -224,7 +231,7 @@ class ScheduleOccurrence extends Model
             ->pluck('id')
             ->all();
 
-        $scopes = app(ResolveItemScope::class)->forContainers($user, $containerIds);
+        $scopes = app()->build(ResolveItemScope::class)->forContainers($user, $containerIds);
 
         $unrestrictedContainers = [];
         $scopedItemIds = [];

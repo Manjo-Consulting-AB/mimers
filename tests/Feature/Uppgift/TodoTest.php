@@ -1,9 +1,5 @@
 <?php
 
-// rott-pa-basen: testfix, ingen kodändring — mätningen av konstant frågeantal
-// glömmer ResolveItemScope mellan anropen (issue 74, session 2). Filen bär
-// inget nytt acceptanstest; det nya bor i AggregatfilterTest.php.
-
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
@@ -422,13 +418,6 @@ it('listningen gör ett konstant antal frågor', function () {
     // ContainerCrudTest och ForekomstBeroendeTest.
     getJson('/api/todo', $headers)->assertOk();
 
-    // ResolveItemScope är `scoped` och memoiserar per request i drift, men i
-    // testsviten överlever den mellan HTTP-anropen (Container::
-    // forgetScopedInstances() körs bara i kö-arbetare). Glöm den inför varje
-    // mätning, annars mäter man förra anropets omfång i stället för det här
-    // anropets. Samma mönster som ListningsfilterTest::listningsFrågor().
-    app()->forgetScopedInstances();
-
     $frågor = 0;
     DB::listen(function () use (&$frågor): void {
         $frågor++;
@@ -448,8 +437,6 @@ it('listningen gör ett konstant antal frågor', function () {
     foreach (['Zeta', 'Eta', 'Theta'] as $namn) {
         todoUppgift($extra->get(1), $user, $account, $namn, '2026-09-02');
     }
-
-    app()->forgetScopedInstances();
 
     $frågor = 0;
     $andra = getJson('/api/todo', $headers);

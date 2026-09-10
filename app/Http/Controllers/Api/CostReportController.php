@@ -33,20 +33,26 @@ use Illuminate\Support\Facades\Gate;
  * ([[ADR-0024 Tunna controllers och actions]]).
  *
  * Issue 74 § Beslut 5 och 10: kontrollern löser upp omfånget — EN gång per
- * request, via den `scoped`-memoiserade ResolveItemScope — och skickar in
- * det. CostReport anropar inte upplösningen själv: den är en Support-klass
- * som tar en container och parametrar och ska förbli testbar utan en
- * inloggad användare.
+ * request — och skickar in det. CostReport anropar inte upplösningen själv:
+ * den är en Support-klass som tar en container och parametrar och ska
+ * förbli testbar utan en inloggad användare.
+ *
+ * Upplösningen sker på en FÄRSK instans och inte på den `scoped`-bundna.
+ * Memon på den senare finns för ItemPolicy, som frågar en gång per rad i en
+ * listning; rapporten frågar en gång per request, och för den skulle memon
+ * bara göra frågekostnaden beroende av vad samma PHP-process råkade ha
+ * löst upp tidigare. `build()` binder den till anropet i stället — samma
+ * kostnad varje gång, vilket är vad en ny request ser i drift.
  */
 class CostReportController extends Controller
 {
-    public function __invoke(CostReportRequest $request, Container $container, Entitlements $entitlements, CostReport $report, ResolveItemScope $resolveItemScope): JsonResponse
+    public function __invoke(CostReportRequest $request, Container $container, Entitlements $entitlements, CostReport $report): JsonResponse
     {
         Gate::authorize('view', $container);
 
         $entitlements->assertFeature($container->account, 'cost_reports');
 
-        $scope = $resolveItemScope->handle($request->user(), $container);
+        $scope = app()->build(ResolveItemScope::class)->handle($request->user(), $container);
 
         return response()->json([
             'data' => $report->build($container, $request->validated(), $scope),
