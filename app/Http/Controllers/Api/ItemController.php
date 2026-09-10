@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Actions\Category\ResolveCategoryDescendants;
 use App\Actions\Item\LinkItems;
 use App\Exceptions\Api\ApiException;
@@ -32,10 +33,10 @@ use Illuminate\Support\Facades\Gate;
  * `Gate::authorize()`. Since issue 71 the gates are the item's own, on
  * App\Policies\ItemPolicy, and the ladder decides: `view` reads, `create`
  * adds, `update` changes what is already there, `delete` soft-deletes. Only
- * index() still asks the container (`view`) — filtering the listing per
- * scope is issue 73, see § Beslut 1. A denied gate throws
- * `AuthorizationException`, which bootstrap/app.php maps to
- * `auth.forbidden` (403).
+ * index() still asks the container (`view`) — that gate decides whether the
+ * caller may enter at all, and issue 73 § Beslut 2 filters the ROWS per
+ * scope on top of it. A denied gate throws `AuthorizationException`, which
+ * bootstrap/app.php maps to `auth.forbidden` (403).
  *
  * The one non-policy check is the membership test in store(): whether the
  * user may act in the name of the account given in the body (§ Beslut 6).
@@ -66,10 +67,22 @@ class ItemController extends Controller
      * per row — the list stays a constant number of queries regardless of
      * item count (issue 13b § Beslut 10) and of the number of filter values
      * or the depth of the category tree (issue 15a § Beslut 9).
+     *
+     * Issue 73 § Beslut 2: the scope restricts the ROWS. The tag/category
+     * filters from 15a stay on top, unchanged — they are all AND, so their
+     * order relative to the scope does not matter. No pagination and no
+     * counter is added (§ Beslut 6): nothing in the response may carry a
+     * number that reveals how many rows were filtered away.
      */
-    public function index(IndexItemRequest $request, Container $container, ResolveCategoryDescendants $resolveCategoryDescendants): JsonResponse
+    public function index(IndexItemRequest $request, Container $container, ResolveCategoryDescendants $resolveCategoryDescendants, ResolveItemScope $resolveItemScope): JsonResponse
     {
         Gate::authorize('view', $container);
+
+        // Omfånget löses upp EN gång överst (issue 73 § Beslut 8) och
+        // appliceras i BÅDA grenarna nedan — Scout när `q` finns, rak
+        // Eloquent annars. Att bara filtrera den ena är precis den symmetri
+        // som glöms bort, och den som glöms läcker (issue 73 § Beslut 2).
+        $scope = $resolveItemScope->handle($request->user(), $container);
 
         $tagUlids = $request->validated('tags');
         $tagIds = [];
@@ -98,9 +111,10 @@ class ItemController extends Controller
 
         if ($q !== null && $q !== '') {
             $items = Item::search($q)
-                ->query(function (Builder $query) use ($container, $tagIds, $categoryIds) {
+                ->query(function (Builder $query) use ($container, $tagIds, $categoryIds, $scope) {
                     /** @var Builder<Item> $query */
                     $query->where('container_id', $container->id)
+                        ->inScope($scope)
                         ->with(['category', 'createdByAccount', 'tags']);
 
                     if ($tagIds !== []) {
@@ -114,7 +128,7 @@ class ItemController extends Controller
                 ->orderBy('name')
                 ->get();
         } else {
-            $query = $container->items()->with(['category', 'createdByAccount', 'tags']);
+            $query = $container->items()->inScope($scope)->with(['category', 'createdByAccount', 'tags']);
 
             if ($tagIds !== []) {
                 $query->withAllTags($tagIds);
@@ -240,10 +254,13 @@ class ItemController extends Controller
      * (SoftDeletes' global scope) — either gives 404 `resource.not_found`.
      *
      * Since issue 71 the gate is the ITEM's `view`, not the container's. An
-     * item inside the container but outside the caller's scope still gives
-     * 403 here — turning that into a 404 is issue 73 § Beslut 8, and the
-     * container parameter stays in the signature because `{item}`'s scoped
-     * binding is resolved against it (ImplicitRouteBinding).
+     * item inside the container but outside the caller's scope gives 403
+     * here — issue 73 § Beslut 3 settled it: one code for "known but out of
+     * scope" across ten controllers, never a `firstOrFail()` detour to 404,
+     * which would only reveal the difference to a caller who already holds
+     * the 26-character ULID. The container parameter stays in the signature
+     * because `{item}`'s scoped binding is resolved against it
+     * (ImplicitRouteBinding).
      */
     public function show(Container $container, Item $item): ItemResource
     {

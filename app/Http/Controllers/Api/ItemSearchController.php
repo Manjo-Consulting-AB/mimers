@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Item\IndexItemRequest;
 use App\Http\Resources\ItemResource;
@@ -41,18 +42,72 @@ class ItemSearchController extends Controller
      * scope gäller automatiskt i underfrågan — en mjukraderad container kan
      * inte dyka upp via en lista löpnummer som hämtats med `withTrashed()`
      * (issue 15b § Att se upp med).
+     *
+     * Sedan issue 73 § Beslut 4 räcker containeråtkomsten inte: den som når
+     * containern når inte nödvändigtvis allt i den. Frågan går över ALLA
+     * containers användaren når, och omfånget är olika i varje — hon kan äga
+     * sin egen, ha `read` på hela sambons och en grant på motorn i
+     * båtklubbens. Villkoret blir därför en OR över containers, byggt av ETT
+     * anrop till ResolveItemScope::forContainers() (konstant frågekostnad,
+     * issue 70 § Beslut 2):
+     *
+     *     (container_id IN [containers där omfånget är obegränsat])
+     *     OR (item.id IN [itemnummer ur de begränsade omfången])
+     *
+     * Den inledande `whereIn('item.id', [])` är INTE en optimering utan
+     * skyddet: den kompilerar till `0 = 1`, så den nästlade gruppen har
+     * alltid minst ett villkor. Är båda listorna tomma blir svaret därför
+     * tomt — i stället för en OR-grupp som faller bort och lämnar
+     * `whereHas` ensam (issue 73 § Beslut 4: det klassiska felet i en
+     * dynamiskt byggd orWhere är ett sökresultat över hela databasen).
+     *
+     * `accessibleBy` står kvar i `whereHas` precis som förut: den avgör
+     * vilka containers som får delta, och SoftDeletes' globala scope i
+     * underfrågan hindrar en mjukraderad container från att dyka upp.
+     * Omfångsvillkoret ligger BREDVID den, inte i stället för den.
      */
-    public function index(IndexItemRequest $request): JsonResponse
+    public function index(IndexItemRequest $request, ResolveItemScope $resolveItemScope): JsonResponse
     {
         $user = $request->user();
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
+        $containerIds = Container::query()
+            ->accessibleBy($user, $accountIds)
+            ->pluck('id')
+            ->all();
+
+        $unrestrictedContainerIds = [];
+        $itemIds = [];
+
+        foreach ($resolveItemScope->forContainers($user, $containerIds) as $containerId => $scope) {
+            if ($scope->isUnrestricted()) {
+                $unrestrictedContainerIds[] = $containerId;
+
+                continue;
+            }
+
+            foreach ($scope->itemIds() ?? [] as $itemId) {
+                $itemIds[] = $itemId;
+            }
+        }
+
         $items = Item::search($request->validated('q'))
-            ->query(function (Builder $query) use ($user, $accountIds) {
+            ->query(function (Builder $query) use ($user, $accountIds, $unrestrictedContainerIds, $itemIds) {
                 $query
                     ->whereHas('container', function (Builder $query) use ($user, $accountIds) {
                         /** @var Builder<Container> $query */
                         $query->accessibleBy($user, $accountIds);
+                    })
+                    ->where(function (Builder $query) use ($unrestrictedContainerIds, $itemIds) {
+                        $query->whereIn('item.id', []);
+
+                        if ($unrestrictedContainerIds !== []) {
+                            $query->orWhereIn('item.container_id', $unrestrictedContainerIds);
+                        }
+
+                        if ($itemIds !== []) {
+                            $query->orWhereIn('item.id', $itemIds);
+                        }
                     })
                     ->with(['category', 'createdByAccount', 'tags']);
             })

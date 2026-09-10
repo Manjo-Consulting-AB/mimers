@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Actions\Category\MoveCategory;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
@@ -10,8 +11,12 @@ use App\Http\Requests\Category\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use App\Models\Container;
+use App\Models\Item;
+use App\Support\Access\ItemScope;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -45,8 +50,20 @@ class CategoryController extends Controller
      * (löpnummer → ULID, byggt i minnet) i stället för att låta
      * CategoryResource läsa Eloquent-relationen `parent` — annars blir
      * listningen N+1. Se CategoryResource docblock.
+     *
+     * Issue 73 § Beslut 5: en OMFÅNGSBEGRÄNSAD mottagare ser bara
+     * kategorier som innehåller minst ett item hon når, PLUS deras
+     * förfäder. Förfäderna följer med för att ett träd med hål i är
+     * obegripligt, och de avslöjar ingenting utöver det barnet redan
+     * avslöjat. Ett OMFATTANDE omfång är oförändrat: hela trädet, även en
+     * tom kategori — ägaren ska se sin egen.
+     *
+     * Trädet hämtas fortfarande i EN fråga (hela containern), förfäderna
+     * vandras i minnet på den samlingen — samma teknik som
+     * App\Actions\Category\ResolveCategoryDescendants, fast uppåt. Den enda
+     * extra frågan är vilka kategorier de synliga itemen pekar på.
      */
-    public function index(Container $container): JsonResponse
+    public function index(Request $request, Container $container, ResolveItemScope $resolveItemScope): JsonResponse
     {
         Gate::authorize('view', $container);
 
@@ -54,6 +71,12 @@ class CategoryController extends Controller
             ->orderBy('position')
             ->orderBy('id')
             ->get();
+
+        $scope = $resolveItemScope->handle($request->user(), $container);
+
+        if (! $scope->isUnrestricted()) {
+            $categories = $this->categoriesWithinScope($categories, $scope);
+        }
 
         $ulidById = $categories->pluck('ulid', 'id');
 
@@ -65,6 +88,51 @@ class CategoryController extends Controller
         }
 
         return CategoryResource::collection($categories)->response();
+    }
+
+    /**
+     * Behåller bara de kategorier som bär minst ett item $scope når, plus
+     * deras förfäder — issue 73 § Beslut 5. Vandringen går UPPÅT längs
+     * `parent_id` på den redan hämtade trädkollektionen, i minnet: en
+     * kategori vars förälder ligger utanför urvalet lägger till den, och
+     * sedan dess förälder, tills roten. En besökt mängd gör vandringen
+     * säker även om en cykel skulle ha skrivits förbi MoveCategory.
+     *
+     * @param  Collection<int, Category>  $categories
+     * @return Collection<int, Category>
+     */
+    private function categoriesWithinScope(Collection $categories, ItemScope $scope): Collection
+    {
+        $holding = Item::query()
+            ->inScope($scope)
+            ->whereNotNull('category_id')
+            ->distinct()
+            ->pluck('category_id');
+
+        $parentById = $categories->pluck('parent_id', 'id');
+
+        $visible = [];
+        $pending = $holding->all();
+
+        while ($pending !== []) {
+            $id = (int) array_pop($pending);
+
+            if (isset($visible[$id])) {
+                continue;
+            }
+
+            $visible[$id] = true;
+
+            $parentId = $parentById->get($id);
+
+            if ($parentId !== null) {
+                $pending[] = (int) $parentId;
+            }
+        }
+
+        return $categories
+            ->filter(fn (Category $category) => isset($visible[$category->id]))
+            ->values();
     }
 
     /**

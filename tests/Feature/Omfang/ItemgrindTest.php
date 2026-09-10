@@ -398,18 +398,17 @@ it('en read-mottagare får lista relationerna på sitt item', function () {
     [$container, , $motor, , $impeller] = grindFixture();
     [, $mottagare, $headers] = kontoMedMedlem();
 
-    // Läsning räcker för listningen; att FILTRERA bort det hon inte når är
-    // issue 73, och görs medvetet inte här — se issuens omfångsruta.
     grindGrant($container, $mottagare, $motor, AccessLevel::READ);
 
     $svar = getJson("/api/containers/{$container->ulid}/items/{$motor->ulid}/links", $headers);
 
     // Motorn har två kanter i fixturen: båten är dess förälder och impellern
-    // dess barn. Båda ligger inom omfånget.
+    // dess barn. Bara barnet ligger inom omfånget — arvet går uteslutande
+    // nedåt, så båten nås inte av en grant på motorn. Att länken till den
+    // döljs helt är issue 73 § Beslut 7; fram till dess visades båda.
     $svar->assertOk();
-    expect($svar->json('data'))->toHaveCount(2);
-    expect(collect($svar->json('data'))->pluck('item.name')->sort()->values()->all())
-        ->toBe(collect([$impeller->name, 'Båten'])->sort()->values()->all());
+    expect($svar->json('data'))->toHaveCount(1);
+    expect($svar->json('data.0.item.name'))->toBe($impeller->name);
 });
 
 it('en mottagare utan grant nekas relationerna helt', function () {

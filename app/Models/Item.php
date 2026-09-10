@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasUlid;
+use App\Support\Access\ItemScope;
 use Database\Factories\ItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
@@ -255,6 +256,31 @@ class Item extends Model
     public function scopeInCategoryTree(Builder $query, array $categoryIds): Builder
     {
         return $query->whereIn('category_id', $categoryIds);
+    }
+
+    /**
+     * Begränsar frågan till de items $scope når — issue 73 § Beslut 1. Ett
+     * OMFATTANDE omfång (ägarkontots medlem, container-bred grant) lägger
+     * inget villkor alls: `itemIds()` svarar `null` och "hela containern"
+     * ska inte materialiseras till en `whereIn` med varje löpnummer.
+     *
+     * Formuleringen bor HÄR och skrivs inte för hand i en controller —
+     * två formuleringar av "vad mottagaren når" glider isär precis som två
+     * formuleringar av "giltig access" (issue 9a § Beslut 8).
+     *
+     * Kolumnen kvalificeras (`item.id`, inte `id`): scopet används både på
+     * rena item-frågor och i Scouts `query()`-callback, och kostnadsrapporten
+     * och exporten joinar mot `item` i issue 74. En otvetydig kolumn är
+     * billigare än en join som plötsligt får en tvetydig `id`.
+     *
+     * @param  Builder<Item>  $query
+     * @return Builder<Item>
+     */
+    public function scopeInScope(Builder $query, ItemScope $scope): Builder
+    {
+        return $scope->isUnrestricted()
+            ? $query
+            : $query->whereIn('item.id', $scope->itemIds());
     }
 
     /**
