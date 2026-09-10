@@ -6,6 +6,7 @@ use App\Actions\Category\ResolveCategoryDescendants;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
+use App\Support\Access\ItemScope;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\DB;
  *     cost_entry.container_id = {container}
  *     AND cost_entry.deleted_at IS NULL
  *     AND item.deleted_at IS NULL
+ *     AND item.id IN {det anropande kontots omfång}   (issue 74 § Beslut 5)
  *
  * Joinen mot `item` behövs alltid — `container_id` sparar in den bara för
  * SCOPINGEN, inte för papperskorgen: en kostnad på ett raderat item är
@@ -29,6 +31,13 @@ use Illuminate\Support\Facades\DB;
  * användaren inte kan klicka sig fram till. Filtren (item, category
  * inklusive underträd, tags[] med OCH, supplier, from/to) kombineras med
  * OCH på den här mängden.
+ *
+ * Sedan issue 74 § Beslut 5 bär frågan också omfånget. En kostnadssumma är
+ * ett tystare läckage än en listning: en total som är för hög avslöjar att
+ * det finns poster mottagaren inte ser, utan att visa en enda av dem.
+ * Klassen löser inte upp omfånget själv — den tar `ItemScope` som argument
+ * och förblir därmed testbar utan en inloggad användare; upplösningen gör
+ * CostReportController (issue 74 § Beslut 10).
  *
  * Summeringen sker per valuta, `SUM(amount)` på heltalskolumnen castad till
  * `int`, och totalsumman räknas ALLTID med en egen `GROUP BY currency` över
@@ -52,13 +61,14 @@ final class CostReport
 
     /**
      * @param  array<string, mixed>  $params  de validerade parametrarna ur CostReportRequest
+     * @param  ItemScope  $scope  omfånget för den anropande användaren, upplöst av CostReportController (issue 74 § Beslut 5)
      * @return array{group_by: string, period: ?string, groups: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>, totals: list<array{currency: string, amount: int, count: int}>}
      */
-    public function build(Container $container, array $params): array
+    public function build(Container $container, array $params, ItemScope $scope): array
     {
         $groupBy = (string) $params['group_by'];
 
-        $base = $this->baseQuery($container, $params);
+        $base = $this->baseQuery($container, $params, $scope);
 
         $groups = match ($groupBy) {
             'item' => $this->groupByItem($base),
@@ -77,13 +87,32 @@ final class CostReport
         ];
     }
 
-    private function baseQuery(Container $container, array $params): Builder
+    private function baseQuery(Container $container, array $params, ItemScope $scope): Builder
     {
         $query = DB::table('cost_entry')
             ->join('item', 'item.id', '=', 'cost_entry.item_id')
             ->where('cost_entry.container_id', $container->id)
             ->whereNull('cost_entry.deleted_at')
             ->whereNull('item.deleted_at');
+
+        // Issue 74 § Beslut 5: omfånget läggs i BASFRÅGAN, en gång — alla
+        // fem grupperingarna och toppnivåns totals bygger på samma Builder,
+        // så ingen av dem behöver veta om filtret. Ett filter som lades i
+        // groupByItem() och glömdes i totals() hade gett en rapport där
+        // delarna inte summerar till helheten, vilket är svårare att upptäcka
+        // än att den läcker.
+        //
+        // `Item::inScope()` kan inte användas här: frågan är en Query\Builder
+        // över en join, inte en Item-modellfråga. `itemIds()` svarar `null`
+        // för ett omfattande omfång — "hela containern" ska inte
+        // materialiseras till en `whereIn` med varje löpnummer (issue 73
+        // § Beslut 1) — och kolumnen kvalificeras eftersom joinen gör `id`
+        // tvetydig, samma skäl som i Item::scopeInScope().
+        $itemIds = $scope->itemIds();
+
+        if ($itemIds !== null) {
+            $query->whereIn('item.id', $itemIds);
+        }
 
         if (! empty($params['item'])) {
             $itemId = Item::query()

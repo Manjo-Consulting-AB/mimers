@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Cost\StoreCostEntryRequest;
 use App\Http\Requests\Cost\UpdateCostEntryRequest;
@@ -13,6 +14,7 @@ use App\Models\Item;
 use App\Models\User;
 use App\Support\Cost\MinorUnits;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -185,19 +187,43 @@ class CostEntryController extends Controller
      * heter ingenting (§ Beslut 3). Inga värden som förekommer på ett raderat
      * ITEM göms: kostnadsraden är inte raderad, och uppslaget är ett
      * inmatningsstöd, inte en summering (§ Klart när, sista punkten).
+     *
+     * Issue 74 § Beslut 6: ytan står kvar på containergrinden, men den
+     * LÄCKER — en lista med "Advokatbyrån Ek & Partners" säger något om
+     * pärmen som mottagaren av motorn inte ska veta. För en OMFÅNGSBEGRÄNSAD
+     * mottagare joinas därför `item` in och omfånget styr raderna. För ett
+     * OMFATTANDE omfång läggs ingen join till: den befintliga frågan mot
+     * bara `cost_entry` är billigare (indexet från 45a), och de två fallen
+     * är två grenar med flit — en join som alltid görs hade kostat ägaren
+     * en join i onödan. Raderna är desamma som förut; bara urvalet skiljer.
+     *
+     * Mjukraderade items filtreras INTE bort i den begränsade grenen: samma
+     * regel som ägaren har, att ett värde som förekommer på ett raderat item
+     * inte göms. Omfånget är grant-baserat och ett mjukraderat item behåller
+     * sin plats i grafen (issue 74 § Beslut 3).
      */
-    public function suppliers(Container $container): JsonResponse
+    public function suppliers(Request $request, Container $container, ResolveItemScope $resolveItemScope): JsonResponse
     {
         Gate::authorize('view', $container);
 
-        $rader = DB::table('cost_entry')
-            ->where('container_id', $container->id)
-            ->whereNull('deleted_at')
-            ->whereNotNull('supplier')
-            ->selectRaw('supplier, COUNT(*) AS antal')
-            ->groupBy('supplier')
+        $query = DB::table('cost_entry')
+            ->where('cost_entry.container_id', $container->id)
+            ->whereNull('cost_entry.deleted_at')
+            ->whereNotNull('cost_entry.supplier');
+
+        $scope = $resolveItemScope->handle($request->user(), $container);
+        $itemIds = $scope->itemIds();
+
+        if ($itemIds !== null) {
+            $query->join('item', 'item.id', '=', 'cost_entry.item_id')
+                ->whereIn('item.id', $itemIds);
+        }
+
+        $rader = $query
+            ->selectRaw('cost_entry.supplier AS supplier, COUNT(*) AS antal')
+            ->groupBy('cost_entry.supplier')
             ->orderByDesc('antal')
-            ->orderBy('supplier')
+            ->orderBy('cost_entry.supplier')
             ->limit(self::SUPPLIER_SUGGESTION_LIMIT)
             ->get();
 

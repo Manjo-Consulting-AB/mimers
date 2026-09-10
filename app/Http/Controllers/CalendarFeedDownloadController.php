@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Models\CalendarFeed;
 use App\Models\Container;
+use App\Models\Item;
 use App\Models\ScheduleOccurrence;
 use App\Support\Notification\IcsDocument;
 use App\Support\Notification\LocaleResolver;
@@ -42,11 +44,27 @@ use Symfony\Component\HttpFoundation\Response;
  *   förekomst som förfaller om fyra månader ska stå i kalendern. Därför
  *   används inte scopeTodoFor(), som också filtrerar på blockerande
  *   beroenden (Beslut 3).
+ *
+ * Issue 74 § Beslut 9: urvalet filtreras också på OMFÅNGET. Backlogfilen
+ * listar inte feeden bland aggregaten, men den hör hit: den är en
+ * containervy som räknar per container, och den är den enda av dem som
+ * LÄMNAR systemet och fortsätter uppdateras av sig själv. En feed-URL som en
+ * omfångsbegränsad mottagare hämtat prenumererar alltså annars på hela
+ * pärmens underhållsplan, i hennes egen kalender, för alltid — med itemets
+ * namn i SUMMARY.
+ *
+ * Omfånget är FEEDENS användare (`$feed->user`), samma resonemang som
+ * exportens beställare (Beslut 8): tokenet är autentiseringen, och den som
+ * skapade feeden är den ende vars åtkomst frågan kan ställas om. Filtret
+ * läggs på förekomsternas item, bredvid det befintliga containervillkoret —
+ * `Container::scopeAccessibleBy()` svarar på "når hon containern", omfånget
+ * på "når hon itemet inuti den", och båda behövs.
  */
 class CalendarFeedDownloadController extends Controller
 {
     public function __construct(
         private readonly LocaleResolver $locales,
+        private readonly ResolveItemScope $resolveItemScope,
     ) {}
 
     public function __invoke(Request $request, string $token): Response
@@ -74,12 +92,16 @@ class CalendarFeedDownloadController extends Controller
 
         $accountIds = $feed->user->accounts->pluck('id')->values()->all();
 
+        $scope = $this->resolveItemScope->handle($feed->user, $container);
+
         $occurrences = ScheduleOccurrence::query()
             ->where('status', ScheduleOccurrence::STATUS_OPEN)
-            ->whereHas('schedule', function (Builder $query) use ($feed, $accountIds): void {
+            ->whereHas('schedule', function (Builder $query) use ($feed, $accountIds, $scope): void {
                 $query->where('schedule.is_active', true)
-                    ->whereHas('item', function (Builder $query) use ($feed, $accountIds): void {
+                    ->whereHas('item', function (Builder $query) use ($feed, $accountIds, $scope): void {
+                        /** @var Builder<Item> $query */
                         $query->where('item.container_id', $feed->container_id)
+                            ->inScope($scope)
                             ->whereHas('container', function (Builder $query) use ($feed, $accountIds): void {
                                 /** @var Builder<Container> $query */
                                 $query->accessibleBy($feed->user, $accountIds);

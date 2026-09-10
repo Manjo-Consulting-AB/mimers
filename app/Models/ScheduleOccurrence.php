@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Models\Concerns\HasUlid;
 use Database\Factories\ScheduleOccurrenceFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -166,6 +167,11 @@ class ScheduleOccurrence extends Model
      *   item eller container faller ut här. `is_active` har inget globalt
      *   scope utan skrivs ut explicit: ett pausat schema behåller sin öppna
      *   förekomst (22a § Beslut 3), och den ska inte synas i listan.
+     * - **itemet ligger inom användarens omfång** (issue 74 § Beslut 7). En
+     *   container-bred åtkomst räcker inte: sedan ADR-0028 kan en mottagare
+     *   ha `read` på ett enskilt item i en container hon i övrigt inte ser,
+     *   och todo-listan är en TOPPNIVÅvy som annars namnger varje annat items
+     *   uppgifter i pärmen.
      * - inga öppna beroenden — samma villkor som spärren i 23b § Beslut 4.
      *   En förekomst vars motpart har status `open` går inte att stänga och
      *   ska inte stå bland det man kan göra nu. Ett öppet beroende vars
@@ -184,22 +190,63 @@ class ScheduleOccurrence extends Model
      *   därför bara `status` och att schema/item finns (SoftDeletes' globala
      *   scope), aldrig motpartens `is_active`.
      *
+     * Omfånget (issue 74 § Beslut 7 och 10) löses upp HÄR, en gång per
+     * anrop, och inte i anroparen: scopet är delat mellan TodoController och
+     * App\Console\GeneratesTaskNotifications, och filtret hör hemma i scopet
+     * så att listan och notiserna aldrig kan säga olika saker om vad
+     * mottagaren ser. Genereraren rörs därför inte av issue 74 — den får
+     * filtret genom det här anropet, och följdverkan verifieras i issue 75.
+     *
+     * `forContainers()` och inte `handle()` per container: genereraren kör
+     * scopet en gång per användare i en `chunkById`-loop över hela
+     * användartabellen, och en upplösning per container hade blivit ett
+     * nattjobb som växer med kundstocken. Upplösningen är konstant — den
+     * memoiserade ResolveItemScope ställer tre frågor, fyra när någon
+     * container har en itemgrant — och de två frågorna här (containrarna och
+     * omfånget) ersätter den `whereHas('container')`-kedja som stod i
+     * villkoret tidigare. Antalet frågor beror alltså inte på antalet
+     * containers eller förekomster.
+     *
+     * Filtret formuleras som två grenar på item-nivån: items i de containers
+     * där omfånget är OMFATTANDE, plus de enskilda items ett BEGRÄNSAT
+     * omfång når. Är båda tomma (användaren når ingenting) ger `whereIn` mot
+     * en tom lista `0 = 1` i båda grenarna, alltså inga rader — en tom lista
+     * är alltid "når ingenting", aldrig "når allt" (ItemScope).
+     *
      * @param  Builder<ScheduleOccurrence>  $query
      * @param  list<int>  $accountIds  löpnumren för kontona $user är medlem i
      * @return Builder<ScheduleOccurrence>
      */
     public function scopeTodoFor(Builder $query, User $user, array $accountIds): Builder
     {
+        $containerIds = Container::query()
+            ->accessibleBy($user, $accountIds)
+            ->pluck('id')
+            ->all();
+
+        $scopes = app(ResolveItemScope::class)->forContainers($user, $containerIds);
+
+        $unrestrictedContainers = [];
+        $scopedItemIds = [];
+
+        foreach ($scopes as $containerId => $scope) {
+            if ($scope->isUnrestricted()) {
+                $unrestrictedContainers[] = $containerId;
+
+                continue;
+            }
+
+            $scopedItemIds = array_merge($scopedItemIds, $scope->itemIds() ?? []);
+        }
+
         return $query
             ->where('status', self::STATUS_OPEN)
             ->whereDate('visible_from', '<=', Carbon::today())
-            ->whereHas('schedule', function (Builder $query) use ($user, $accountIds): void {
+            ->whereHas('schedule', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {
                 $query->where('schedule.is_active', true)
-                    ->whereHas('item', function (Builder $query) use ($user, $accountIds): void {
-                        $query->whereHas('container', function (Builder $query) use ($user, $accountIds): void {
-                            /** @var Builder<Container> $query */
-                            $query->accessibleBy($user, $accountIds);
-                        });
+                    ->whereHas('item', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {
+                        $query->whereIn('item.container_id', $unrestrictedContainers)
+                            ->orWhereIn('item.id', $scopedItemIds);
                     });
             })
             ->whereDoesntHave('dependsOn', function (Builder $query): void {
