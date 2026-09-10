@@ -1,5 +1,9 @@
 <?php
 
+// rott-pa-basen: testfix, ingen kodändring — mätningen av konstant frågeantal
+// glömmer ResolveItemScope mellan anropen (issue 74, session 2). Filen bär
+// inget nytt acceptanstest; det nya bor i AggregatfilterTest.php.
+
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
