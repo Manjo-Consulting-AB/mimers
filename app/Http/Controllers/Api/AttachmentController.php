@@ -29,10 +29,20 @@ use RuntimeException;
  * mjukradering. Nedladdning av bytena är 19a.
  *
  * Samma två kontroller som App\Http\Controllers\Api\ItemController::store():
- * grinden är den befintliga `update` på App\Policies\ContainerPolicy
- * (§ Beslut 1 — inte `delete`, ingen ny AttachmentPolicy), och
- * medlemskapskontrollen nedan avgör om DEN HÄR användaren får handla i det
- * angivna kontots namn (§ Beslut 2). Båda felen blir 403 `auth.forbidden`.
+ * grinden är ITEMETS egen — `create` i store(), `view` i index(), `delete` i
+ * destroy() — på App\Policies\ItemPolicy sedan issue 71 § Beslut 1. Ingen
+ * AttachmentPolicy skrivs: bilagan följer itemet, se [[ADR-0028 Åtkomst på
+ * itemnivå]] § Beslut ("itemets beroenden följer itemet") och issue 70
+ * § Beslut 7. Medlemskapskontrollen nedan avgör om DEN HÄR användaren får
+ * handla i det angivna kontots namn (§ Beslut 2). Båda felen blir 403
+ * `auth.forbidden`.
+ *
+ * Före issue 71 var grinden `update` på containern i alla tre — vilket lät
+ * en `write`-mottagare radera en bilaga och krävde en container-bred grant
+ * för att ladda upp en. `{item}` binds genom App\Models\Container::items()
+ * via gruppens `scopeBindings()`, och `Container $container` står kvar i
+ * signaturerna just för det: ImplicitRouteBinding löser barnbindningen mot
+ * den redan lösta föräldern.
  */
 class AttachmentController extends Controller
 {
@@ -43,10 +53,15 @@ class AttachmentController extends Controller
      * Medlemskapskontrollen nedan — `$account->users()->whereKey(...)`
      * ->exists() — avgör om användaren får skriva i det kontots namn; en
      * icke-medlem får 403 `auth.forbidden`, samma mönster som ItemController.
+     *
+     * Grinden är `create` på itemet (issue 71 § Beslut 1): att lägga en
+     * bilaga PÅ ett item är att lägga till, inte att ändra. Uppladdningen
+     * räknas mot det uppladdande kontot, oförändrat (issue 26a, [[ADR-0028
+     * Åtkomst på itemnivå]] § Konsekvenser).
      */
     public function store(StoreAttachmentRequest $request, Container $container, Item $item, StoreAttachment $storeAttachment, Entitlements $entitlements): JsonResponse
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('create', $item);
 
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 
@@ -99,7 +114,7 @@ class AttachmentController extends Controller
      */
     public function index(Container $container, Item $item): JsonResponse
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $item);
 
         $attachments = $item->attachments()
             ->with(['storedFile', 'billedAccount'])
@@ -121,8 +136,9 @@ class AttachmentController extends Controller
      * (issue 26a), i samma transaktion — bor sedan issue 28 i
      * App\Actions\Attachment\TrashAttachment (issue 28 § Beslut 5): den här
      * rutten och storage-ytans bulkrensning gör exakt samma sak, och paret
-     * får inte ligga i två filer. Beteendet är oförändrat: samma grind, samma
-     * 204, samma räkning.
+     * får inte ligga i två filer. Beteendet är oförändrat: samma 204, samma
+     * räkning. Sedan issue 71 är grinden `delete` på ITEMET — att mjukradera
+     * en bilaga tar bort, och `write` räcker inte (§ Beslut 1 och 6).
      *
      * `{attachment}` binds av gruppens scopeBindings() genom
      * App\Models\Item::attachments() (§ Beslut 1), så en bilaga på ett annat
@@ -131,7 +147,7 @@ class AttachmentController extends Controller
      */
     public function destroy(Container $container, Item $item, Attachment $attachment, TrashAttachment $trashAttachment): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('delete', $item);
 
         $trashAttachment->handle($attachment);
 
