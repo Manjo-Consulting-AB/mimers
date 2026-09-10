@@ -28,8 +28,9 @@ use Symfony\Component\HttpFoundation\Response;
  * filleverans, och en containergrind där itemets skulle stått är exakt det fel
  * [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser räknar upp: en
  * omfångsbegränsad mottagare hade kunnat hämta en bilaga på ett item hon inte
- * ser. Signeringen och tidsbegränsningen på rutten ändrar ingenting här — en
- * signatur säger vem som bad om länken, inte vad hon får se nu.
+ * ser. Rutten är i dag inte signerad eller tidsbegränsad — bara auth:sanctum.
+ * Skulle en signatur läggas till senare ändrar det ingenting här: den skulle
+ * säga vem som bad om länken, inte vad hon får se nu.
  *
  * `{attachment}` binds på bilagans ULID via #[RouteKey('ulid')] — en
  * mjukraderad bilaga syns inte av bindningen och ger 404 (Beslut 7).
