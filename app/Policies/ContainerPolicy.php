@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\User;
+use App\Support\Access\AccessLevel;
 
 /**
  * Behörighet till en container, se [[Konton och åtkomst]] §
@@ -22,9 +23,13 @@ use App\Models\User;
  * 2. Övriga får behörighet via `container_access` där `revoked_at IS NULL`
  *    och `expires_at` inte passerats — se issue 9a § Beslut 5,
  *    hasContainerAccess() nedan.
- * 3. `level` avgör, `kind` avgör aldrig: `read` läser, `write` läser och
- *    ändrar men får ALDRIG radera containern eller hantera åtkomster
- *    (issue 9b) — se issue 9a § Beslut 6.
+ * 3. `level` avgör, `kind` avgör aldrig. Sedan issue 69 är `level` en
+ *    ladder om fyra steg — `read` < `create` < `write` < `delete`, se
+ *    App\Support\Access\AccessLevel och [[ADR-0028 Åtkomst på itemnivå]] §
+ *    Beslut. Grinden frågar efter en MINIMINIVÅ, och en rad når den om
+ *    dess nivå ligger på eller ovanför. Ingen nivå får radera containern
+ *    eller hantera åtkomster — inte heller `delete`, som betyder
+ *    mjukradering inom sitt eget omfång, se delete() nedan och issue 9b.
  * 4. Är kontot fryst — `read_only` (nedgraderingen, issue 28) eller
  *    `closed` (kontolivscykeln, issue 29a) — nekas allt skrivande oavsett
  *    behörighet. Läsning är alltid tillåten. Sedan issue 9a gäller det här
@@ -41,13 +46,20 @@ class ContainerPolicy
 {
     /**
      * Får användaren se containern? Regel 1 ELLER regel 2 (en giltig
-     * `read`- eller `write`-access). Regel 4 gäller INTE här — läsning är
+     * access på minst `read`). Regel 4 gäller INTE här — läsning är
      * alltid tillåten oavsett `account.status`, för ingendera vägen in.
+     *
+     * Minimikravet är `read`, den LÄGSTA nivån, så alla fyra nivåerna
+     * passerar. Sätt ALDRIG ett `item_id IS NULL`-filter här: en
+     * omfångsbegränsad mottagare måste passera den här grinden för att nå
+     * `GET /containers/{container}/items` över huvud taget, och det är
+     * issue 73 som sedan filtrerar bort det hon inte når, se issue 69
+     * § Beslut 4.
      */
     public function view(User $user, Container $container): bool
     {
         return $this->isMemberOfOwnerAccount($user, $container->account)
-            || $this->hasContainerAccess($user, $container, ['read', 'write']);
+            || $this->hasContainerAccess($user, $container, AccessLevel::READ);
     }
 
     /**
@@ -66,7 +78,8 @@ class ContainerPolicy
 
     /**
      * Får användaren ändra namn/kind på containern? Regel 1 ELLER regel 2
-     * (en giltig `write`-access), plus regel 4 — som nu gäller på TVÅ
+     * (en giltig access på minst `write` — alltså `write` eller `delete`),
+     * plus regel 4 — som nu gäller på TVÅ
      * nivåer: ägarkontot fryser containern för alla oavsett väg in (kollas
      * först, innan någon väg prövas), och en `managed`-access dessutom
      * nekas om DET MOTTAGANDE kontot är fryst (hanteras inuti
@@ -81,7 +94,7 @@ class ContainerPolicy
         }
 
         return $this->isMemberOfOwnerAccount($user, $container->account)
-            || $this->hasContainerAccess($user, $container, ['write'], excludeFrozenGranteeAccounts: true);
+            || $this->hasContainerAccess($user, $container, AccessLevel::WRITE, excludeFrozenGranteeAccounts: true);
     }
 
     /**
@@ -232,9 +245,24 @@ class ContainerPolicy
      * det här filtret, se § Beslut 9: "en användares eget konto styr inte
      * vad hon får göra i någon annans container."
      *
-     * @param  list<'read'|'write'>  $levels
+     * Sedan issue 69 tar metoden ett MINIMIKRAV i stället för en lista med
+     * tillåtna nivåer: en rad når grinden om dess nivå ligger på eller
+     * ovanför minimikravet. Det ger samma svar på samma rader som förut —
+     * `view()` gav `read`|`write` och får nu alla fyra, men `create` och
+     * `delete` hade inga innehavare förrän migreringen skapade dem, och
+     * de `write`-rader som fanns blev `delete`, som båda minimikraven
+     * släpper igenom.
+     *
+     * Jämförelsen görs som `whereIn` mot AccessLevel::atOrAbove(), ALDRIG
+     * som en strängjämförelse i SQL: `'delete' >= 'write'` är falskt i
+     * varje kollation som finns, och ordningen är semantisk och finns bara
+     * i PHP, se [[ADR-0028 Åtkomst på itemnivå]] § Beslut 2.
+     *
+     * `item_id` filtreras INTE här i den här issuen — kolumnen skrivs
+     * aldrig, så frågan vore en no-op. Issue 70 äger omfångsupplösningen,
+     * se [[ADR-0028 Åtkomst på itemnivå]] § Beslut 4.
      */
-    private function hasContainerAccess(User $user, Container $container, array $levels, bool $excludeFrozenGranteeAccounts = false): bool
+    private function hasContainerAccess(User $user, Container $container, string $minimumLevel, bool $excludeFrozenGranteeAccounts = false): bool
     {
         $accounts = $user->accounts;
 
@@ -244,7 +272,7 @@ class ContainerPolicy
 
         return ContainerAccess::query()
             ->where('container_id', $container->id)
-            ->whereIn('level', $levels)
+            ->whereIn('level', AccessLevel::atOrAbove($minimumLevel))
             ->validFor($user, $accounts->pluck('id')->values()->all())
             ->exists();
     }

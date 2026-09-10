@@ -21,6 +21,12 @@ class ContainerAccessFactory extends Factory
     {
         return [
             'container_id' => Container::factory(),
+            // Container-bred är standardläget — se [[Konton och åtkomst]] §
+            // container_access. Uttalat NULL i stället för utelämnat, så
+            // issue 70–75:s tester kan sätta kolumnen med
+            // `->create(['item_id' => $item->id])` utan att först behöva ta
+            // reda på om fabriken råkar sätta något.
+            'item_id' => null,
             'grantee_type' => 'user',
             'grantee_id' => User::factory(),
             'level' => 'read',

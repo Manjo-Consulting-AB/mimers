@@ -25,12 +25,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * raden någonsin serialiseras direkt; App\Http\Resources\InvitationResource
  * listar ändå bara de fält den ska.
  *
- * `container_id`, `token_hash`, `status` och `invited_by_user_id` är
- * medvetet UTESLUTNA ur `#[Fillable]`, samma resonemang som
- * `Container::$account_id` och `ContainerAccess::$granted_by_user_id` — de
- * sätts explicit av App\Http\Controllers\Api\ContainerInvitationController,
- * aldrig via massildelning (issue 10a § Beslut 15). Kvar som `#[Fillable]`
- * blir `email` och `level`, precis de två fält klienten skickar.
+ * `container_id`, `item_id`, `token_hash`, `status` och
+ * `invited_by_user_id` är medvetet UTESLUTNA ur `#[Fillable]`, samma
+ * resonemang som `Container::$account_id` och
+ * `ContainerAccess::$granted_by_user_id` — de sätts explicit av
+ * App\Http\Controllers\Api\ContainerInvitationController, aldrig via
+ * massildelning (issue 10a § Beslut 15). Kvar som `#[Fillable]` blir
+ * `email` och `level`, precis de två fält klienten skickar.
  */
 #[Fillable(['email', 'level'])]
 #[Hidden(['token_hash'])]
@@ -93,6 +94,20 @@ class Invitation extends Model
     public function container(): BelongsTo
     {
         return $this->belongsTo(Container::class);
+    }
+
+    /**
+     * Itemet inbjudan är avgränsad till, eller NULL för hela containern —
+     * speglar `container_access.item_id`, se [[ADR-0028 Åtkomst på
+     * itemnivå]] § Beslut och [[Konton och åtkomst]] § invitation.
+     * Relationen behövs av issue 72:s förvaltningsvy; i den här issuen är
+     * kolumnen alltid NULL.
+     *
+     * @return BelongsTo<Item, $this>
+     */
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(Item::class);
     }
 
     /**

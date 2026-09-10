@@ -82,7 +82,16 @@ class PurgeContent
      *    withTrashed() (issue 45a § Beslut 10): cost_entry.item_id är
      *    ON DELETE RESTRICT, så utan den här raden skulle forceDelete på
      *    itemet falla på ett främmandenyckelfel,
-     * 10. forceDelete på itemet.
+     * 10. itemåtkomsterna — container_access- och invitation-raderna med
+     *    `item_id` satt, hårt (issue 69). Båda kolumnerna är ON DELETE
+     *    RESTRICT, och PurgeContainer::handle() gallrar items FÖRE
+     *    container_access-raderna, så utan den här raden faller den
+     *    nattliga gallringen på ett främmandenyckelfel varje natt utan att
+     *    någon ser det. Hårt, inte `revoked_at`: historiken om vem som
+     *    haft åtkomst till ett item som fysiskt inte längre finns är inte
+     *    historik värd att bevara, och `audit_log` har kvar sin rad — den
+     *    pekar på ULID:er som strängar och har ingen FK hit,
+     * 11. forceDelete på itemet.
      *
      * Lån och scheman är oberoende av varandra — ordningen dem emellan
      * spelar ingen roll — men kedjan under ett schema (förekomster och
@@ -152,6 +161,13 @@ class PurgeContent
             // följer med ett mjukraderat item i papperskorgen har ofta
             // deleted_at satt.
             CostEntry::withTrashed()->where('item_id', $itemId)->forceDelete();
+
+            // Itemåtkomsterna (issue 69): båda kolumnerna är ON DELETE
+            // RESTRICT, och ett item som har — eller har haft — en
+            // itemåtkomst går annars inte att forceDelete:a. Hårt, inte
+            // `revoked_at`, se docblocken.
+            DB::table('container_access')->where('item_id', $itemId)->delete();
+            DB::table('invitation')->where('item_id', $itemId)->delete();
 
             $item->forceDelete();
         });

@@ -30,6 +30,9 @@ class InvitationFactory extends Factory
     {
         return [
             'container_id' => Container::factory(),
+            // Container-bred är standardläget, precis som för
+            // ContainerAccessFactory — se [[Konton och åtkomst]] § invitation.
+            'item_id' => null,
             'email' => mb_strtolower(fake()->unique()->safeEmail()),
             'level' => 'read',
             'token_hash' => hash('sha256', Str::random(64)),
