@@ -118,6 +118,14 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // är en annan yta, issue 9c — läggs inte här.
     Route::get('/containers/{container}/accesses', [ContainerAccessController::class, 'index']);
     Route::post('/containers/{container}/accesses', [ContainerAccessController::class, 'store']);
+    // Issue 72 § Beslut 4 · Ändra en befintlig åtkomst. Bara `level` och
+    // `expires_at` går att ändra — `item_id`, `grantee_type`, `grantee_id`
+    // och `kind` är `prohibited` i UpdateContainerAccessRequest, eftersom att
+    // flytta en grant är att avsluta en relation och börja en annan.
+    // Grinden är manageAccess, samma som store(): att ändra en åtkomst ÄR
+    // att hantera åtkomster ([[Konton och åtkomst]] § Behörighetsregler
+    // regel 3).
+    Route::patch('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'update']);
     Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy']);
 
     // Issue 9c · Deltagarlistan — vem som HAR åtkomst just nu, läsbar för

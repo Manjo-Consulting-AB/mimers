@@ -280,13 +280,17 @@ it('gallrar en container vars items bär itemåtkomster, hela vägen', function 
 });
 
 /*
- * Ytan är oförändrad i den här issuen: databasen kan bära `create` och
- * `delete`, men API:et ska ännu inte kunna SKAPA dem. Att öppna
- * StoreContainerAccessRequest och StoreInvitationRequest är issue 72 — en
- * valideringsregel som släpper in dem här vore att flytta grinden i
- * samma PR som schemat, och göra felsökningen omöjlig om något går sönder.
+ * Grinden i den här issuen gick från "stängd" till "öppen": databasen kunde
+ * redan bära `create` och `delete` (migrationen ovan), men
+ * StoreContainerAccessRequest och StoreInvitationRequest släppte inte in dem
+ * — det var issue 72 § Beslut 1:s uppgift.
+ *
+ * Testerna är därför VÄNDA, inte borttagna. Samma grind prövas, från andra
+ * sidan: nivån ska nu gå hela vägen in i raden, på båda ytorna. Att bara
+ * stryka dem hade tappat bevakningen av att valideringsregeln och laddern
+ * faktiskt hänger ihop — och lämnat en grön fil efter sig.
  */
-it('avvisar fortfarande create och delete som level på en åtkomst', function (string $nivå) {
+it('tar emot create och delete som level på en åtkomst', function (string $nivå) {
     [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $mottagare = User::factory()->create();
@@ -298,12 +302,16 @@ it('avvisar fortfarande create och delete som level på en åtkomst', function (
         'kind' => 'member',
     ], $headers);
 
-    $svar->assertStatus(422);
-    expect($svar->json('error.code'))->toBe('validation.failed');
-    expect($svar->json('error.data.fields.level'))->not->toBeNull();
+    $svar->assertCreated();
+    expect($svar->json('data.level'))->toBe($nivå);
+
+    expect(DB::table('container_access')
+        ->where('container_id', $container->id)
+        ->where('grantee_id', $mottagare->id)
+        ->value('level'))->toBe($nivå);
 })->with(['create', 'delete']);
 
-it('avvisar fortfarande create och delete som level på en inbjudan', function (string $nivå) {
+it('tar emot create och delete som level på en inbjudan', function (string $nivå) {
     [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
 
@@ -312,7 +320,10 @@ it('avvisar fortfarande create och delete som level på en inbjudan', function (
         'level' => $nivå,
     ], $headers);
 
-    $svar->assertStatus(422);
-    expect($svar->json('error.code'))->toBe('validation.failed');
-    expect($svar->json('error.data.fields.level'))->not->toBeNull();
+    $svar->assertCreated();
+    expect($svar->json('data.level'))->toBe($nivå);
+
+    expect(DB::table('invitation')
+        ->where('container_id', $container->id)
+        ->value('level'))->toBe($nivå);
 })->with(['create', 'delete']);

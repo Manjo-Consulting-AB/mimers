@@ -116,6 +116,47 @@ class ResolveItemScope
     }
 
     /**
+     * Hur många items en grant på var och ett av $itemIds faktiskt når,
+     * inklusive itemet självt — underlaget för `reach` i förvaltningsvyn,
+     * se issue 72 § Beslut 5.
+     *
+     * Talet räknas med SAMMA slutning som resolve() använder: den privata
+     * closeOverDescendants() får ett enda item som grant på `read` och
+     * svaret är exakt de items den granten når. En andra vandring skriven
+     * här skulle kunna glida isär från upplösningen och visa ägaren ett tal
+     * som inte är det behörigheten faktiskt ger.
+     *
+     * Kantladdningen är loadChildrenByParent() — EN fråga för containerns
+     * `parent`-kanter, oavsett hur många rader listningen bär. Slutningen
+     * därefter sker i minnet. Att ställa frågan per rad vore precis den
+     * N+1 issue 9b § Beslut 11 löste för mottagarnas ULID:er.
+     *
+     * Ingen memoisering: de anropande ytorna (POST, PATCH och
+     * förvaltningsvyns index) läser om sina egna rader direkt efteråt, och
+     * memon i den här klassen är per `{user, container}` — den beskriver
+     * VILKA items en användare når, inte hur många en enskild grant når.
+     *
+     * @param  list<int>  $itemIds
+     * @return array<int, int> item_id → antal items granten når, inklusive sig självt
+     */
+    public function reach(int $containerId, array $itemIds): array
+    {
+        if ($itemIds === []) {
+            return [];
+        }
+
+        $childrenByParent = $this->loadChildrenByParent([$containerId])[$containerId] ?? [];
+
+        $reach = [];
+
+        foreach ($itemIds as $itemId) {
+            $reach[$itemId] = count($this->closeOverDescendants([$itemId => AccessLevel::READ], $childrenByParent));
+        }
+
+        return $reach;
+    }
+
+    /**
      * @param  list<int>  $containerIds
      * @return array<int, ItemScope>
      */

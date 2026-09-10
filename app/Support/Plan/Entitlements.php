@@ -5,8 +5,10 @@ namespace App\Support\Plan;
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\Invitation;
 use App\Models\UsageCounter;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Rättigheterna till kontots plan — kontrollpunkterna i [[Planer och kvoter]]
@@ -68,12 +70,34 @@ final class Entitlements
 
     /**
      * Delningstaket: `shared_users_per_container` i ÄGARKONTOTS plan mot
-     * antalet andra än ägarkontot som har åtkomst — giltiga
-     * container_access-rader plus obesvarade, icke utgångna inbjudningar
-     * (issue 27 § Beslut 5). Kontrollen sitter på BÅDA ingångarna —
+     * antalet andra än ägarkontot som har åtkomst — DISTINKTA mottagare med
+     * giltig åtkomst plus distinkta adresser med obesvarad, icke utgången
+     * inbjudan (issue 27 § Beslut 5, räkningen omgjord i issue 72 § Beslut
+     * 6). Kontrollen sitter på BÅDA ingångarna —
      * ContainerInvitationController::store() och
      * ContainerAccessController::store() — för en kontroll på bara den ena
      * är en kontroll som går att kringgå.
+     *
+     * Taket räknar MOTTAGARE, inte rader: med itemåtkomster får en och
+     * samma mottagare flera giltiga rader — en per item — och ett tak som
+     * räknade rader skulle fällas av att ägaren delat fyra items med SAMMA
+     * varv. Nyckeln är `(grantee_type, grantee_id)`; de två namnrymderna
+     * får inte kollapsa till samma mottagare.
+     *
+     * En adress som både har en `pending`-inbjudan och en giltig åtkomst
+     * räknas som TVÅ. Det är samma närmevärde som i dag — inbjudan och
+     * åtkomst går inte att para ihop innan accepten — och det är medvetet
+     * konservativt: taket ska hellre fällas en gång för mycket än släppa
+     * igenom en delning över gränsen.
+     *
+     * `used` i felsvarets `data` är det distinkta talet, så klientens
+     * meddelande stämmer med det tal som faktiskt jämförs.
+     *
+     * Formuleringen av "giltig access" återanvänder
+     * ContainerAccess::scopeValid() — samma villkor som policyn och
+     * deltagarlistan, två formuleringar skulle glida isär (issue 9c).
+     * Detsamma gäller de obesvarade inbjudningarna: villkoret bor i
+     * Invitation::scopeOutstanding() sedan issue 48 § Beslut 5.
      */
     public function assertCanShareContainer(Container $container): void
     {
@@ -83,14 +107,24 @@ final class Entitlements
             return;
         }
 
-        // Formuleringen av "giltig access" återanvänder
-        // ContainerAccess::scopeValid() — samma villkor som policyn och
-        // deltagarlistan, två formuleringar skulle glida isär (issue 9c).
-        // Detsamma gäller de obesvarade inbjudningarna: villkoret bor i
-        // Invitation::scopeOutstanding() sedan issue 48 § Beslut 5, och
-        // formulerades tidigare en andra gång här.
-        $used = $container->accesses()->valid()->count()
-            + $container->invitations()->outstanding()->count();
+        // Räknas i databasen som `count(*)` över en DISTINCT-projektion —
+        // `COUNT(DISTINCT a, b)` finns inte i sqlite och en
+        // strängkonkatenering hade inte varit portabel mellan sqlite och
+        // mysql. En fråga, aldrig en per rad.
+        $granteeCount = (int) DB::query()
+            ->fromSub(
+                ContainerAccess::query()
+                    ->where('container_id', $container->id)
+                    ->valid()
+                    ->select('grantee_type', 'grantee_id')
+                    ->distinct(),
+                'valid_grantee',
+            )
+            ->count();
+
+        $invitationCount = $container->invitations()->outstanding()->distinct()->count('email');
+
+        $used = $granteeCount + $invitationCount;
 
         if ($used >= $limit) {
             throw ApiException::make('quota.shared_users_exceeded', ['limit' => $limit, 'used' => $used], 403);

@@ -71,8 +71,16 @@ class AcceptInvitation
             // ContainerAccess::scopeValidFor() så de två aldrig glider
             // isär — skapas ingen andra rad. Inbjudan är ändå accepterad
             // och svaret är detsamma.
+            //
+            // `item_id`-villkoret (issue 72 § Beslut 7) är samma tillägg som
+            // dubblettspärren i App\Http\Controllers\Api\ContainerAccessController::store()
+            // fick, av samma skäl: utan det kan en itemsinbjudan inte
+            // accepteras av någon som redan har en container-bred rad — och
+            // det är just kombinationen ADR-0028 § Beslut regel 4 finns till
+            // för ("read på pärmen, write på motorn").
             $harRedanAtkomst = ContainerAccess::query()
                 ->where('container_id', $container->id)
+                ->where('item_id', $invitation->item_id)
                 ->validFor($user, $user->accounts->pluck('id')->values()->all())
                 ->exists();
 
@@ -95,8 +103,12 @@ class AcceptInvitation
      * `expires_at = null` av samma skäl, och `granted_by_user_id` pekar på
      * den som DELEGERADE, inte på den som klickade.
      *
-     * `container_id` och `granted_by_user_id` sätts explicit på instansen —
-     * de är medvetet uteslutna ur App\Models\ContainerAccess#[Fillable].
+     * `container_id`, `item_id` och `granted_by_user_id` sätts explicit på
+     * instansen — de är medvetet uteslutna ur
+     * App\Models\ContainerAccess#[Fillable]. `item_id` kopieras rakt av från
+     * inbjudan (issue 72 § Beslut 7): en itemsinbjudan ger en itemrad, en
+     * container-bred inbjudan ger en container-bred rad, och nivån följer med
+     * oförändrad.
      */
     private function createAccess(Invitation $invitation, User $user): void
     {
@@ -108,6 +120,7 @@ class AcceptInvitation
             'expires_at' => null,
         ]);
         $access->container_id = $invitation->container_id;
+        $access->item_id = $invitation->item_id;
         $access->granted_by_user_id = $invitation->invited_by_user_id;
         $access->save();
     }

@@ -38,6 +38,12 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * bara castade kolumner. `getAttribute()` här är medvetet otypad (mixed),
  * inte ett kringgående.
  *
+ * Sedan issue 72 § Beslut 5 bär resursen `item`: inbjudans item-ULID eller
+ * `null` för hela containern, speglande `container_access.item_id`.
+ * Kontrollern löser upp ULID:en och sätter `item_ulid` på instansen, samma
+ * mönster som `invited_by_ulid`. Ingen `reach`: inbjudan är inte accepterad
+ * än, och talet skulle vara ett löfte om en graf som kan hinna ändras.
+ *
  * @mixin Invitation
  */
 class InvitationResource extends JsonResource
@@ -50,6 +56,7 @@ class InvitationResource extends JsonResource
         return [
             'ulid' => $this->ulid,
             'email' => $this->email,
+            'item' => $this->resource->getAttribute('item_ulid'),
             'level' => $this->level,
             'status' => $this->status === 'pending' && $this->resource->isExpired()
                 ? 'expired'

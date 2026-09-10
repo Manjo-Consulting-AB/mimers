@@ -8,6 +8,7 @@ use App\Http\Requests\Invitation\StoreInvitationRequest;
 use App\Http\Resources\InvitationResource;
 use App\Models\Container;
 use App\Models\Invitation;
+use App\Models\Item;
 use App\Models\User;
 use App\Notifications\InvitationNotification;
 use App\Support\Plan\Entitlements;
@@ -69,14 +70,16 @@ class ContainerInvitationController extends Controller
             ->get();
 
         $this->hydrateInviterUlids($invitations);
+        $this->hydrateItemUlids($invitations);
 
         return InvitationResource::collection($invitations)->response();
     }
 
     /**
      * POST /api/containers/{container}/invitations — 201.
-     * `StoreInvitationRequest` har redan bevisat att `email` är en adress
-     * och att `level` är `read` eller `write`.
+     * `StoreInvitationRequest` har redan bevisat att `email` är en adress,
+     * att `level` är ett steg i laddern och att ett skickat `item` finns i
+     * DEN HÄR containern och är levande.
      *
      * `manageAccess()` avgör behörighet (regel 1 + regel 4). Att bjuda in
      * ÄR att hantera åtkomster: regel 3 säger att `write` aldrig får det,
@@ -137,6 +140,14 @@ class ContainerInvitationController extends Controller
         // spår, varken rad, token eller mejl (issue 48 § Beslut 9).
         $entitlements->assertPendingInvitationsWithinLimit($container->account);
 
+        // `item` speglar container_access.item_id, se [[Konton och åtkomst]]
+        // § invitation och issue 72 § Beslut 2 och 7. ULID:en är redan
+        // bevisad finnas i DEN HÄR containern och vara levande av
+        // StoreInvitationRequest; `withTrashed()` behövs därför inte här.
+        $item = $request->validated('item') === null
+            ? null
+            : Item::where('ulid', $request->validated('item'))->firstOrFail();
+
         // Klartexten är mejlets enda konsument — den skickas i länken
         // nedan och lagras aldrig, se klassens docblock.
         $rawToken = Str::random(self::TOKEN_LENGTH);
@@ -146,6 +157,9 @@ class ContainerInvitationController extends Controller
             'level' => $request->validated('level'),
         ]);
         $invitation->container_id = $container->id;
+        // Kolumnen är medvetet inte #[Fillable] — den sätts explicit, som
+        // container_id och invited_by_user_id.
+        $invitation->item_id = $item?->id;
         $invitation->token_hash = hash('sha256', $rawToken);
         $invitation->status = 'pending';
         $invitation->expires_at = now()->addDays(Invitation::TTL_DAYS);
@@ -166,6 +180,7 @@ class ContainerInvitationController extends Controller
         Notification::route('mail', $invitation->email)->notify(new InvitationNotification($url, $container));
 
         $invitation->setAttribute('invited_by_ulid', $request->user()->ulid);
+        $invitation->setAttribute('item_ulid', $item?->ulid);
 
         return (new InvitationResource($invitation))
             ->response()
@@ -225,6 +240,38 @@ class ContainerInvitationController extends Controller
 
         foreach ($invitations as $invitation) {
             $invitation->setAttribute('invited_by_ulid', $userUlids->get($invitation->invited_by_user_id));
+        }
+    }
+
+    /**
+     * Löser upp inbjudningarnas item-ULID:er i EN fråga, oavsett antal rader
+     * — `Invitation` har en `item()`-relation, men en lazy load per rad vore
+     * precis den N+1 som issue 10a § Beslut 14 undvek för inbjudarna.
+     * Samma mönster som hydrateInviterUlids() ovan.
+     *
+     * `withTrashed()`: en inbjudan till ett sedan länge mjukraderat item ska
+     * redovisas med sitt item, inte som `null` — `null` hade lästs som en
+     * container-bred inbjudan.
+     *
+     * @param  Collection<int, Invitation>  $invitations
+     */
+    private function hydrateItemUlids(Collection $invitations): void
+    {
+        $itemIds = $invitations->pluck('item_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $itemUlids = $itemIds === []
+            ? collect()
+            : Item::withTrashed()->whereIn('id', $itemIds)->pluck('ulid', 'id');
+
+        foreach ($invitations as $invitation) {
+            $invitation->setAttribute(
+                'item_ulid',
+                $invitation->item_id === null ? null : $itemUlids->get($invitation->item_id),
+            );
         }
     }
 }
