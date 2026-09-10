@@ -1,5 +1,12 @@
 <?php
 
+// rott-pa-basen: testfix, ingen acceptanskriterie-yta. Ändringen är
+// app()->forgetScopedInstances() i frågeräkningen — utan den mäter scenariot
+// med en container förra anropets memo i stället för sin egen kostnad, och
+// jämförelsen faller på memon (6 mot 4) i stället för på implementationen.
+// Fixen är grön på både bas och head; den nya acceptanskriterie-ytan för
+// issue 73 ligger i tests/Feature/Omfang/{Listningsfilter,Sokfilter}Test.php.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
