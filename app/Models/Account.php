@@ -36,6 +36,22 @@ class Account extends Model
     protected $table = 'account';
 
     /**
+     * `transfer_bonus_granted_at` är mottagarkontots spärr mot att få
+     * ägarbytesbonusen mer än en gång — NULL betyder "aldrig fått den", se
+     * issue 49 och [[ADR-0017 Missbruksvektorer]] § 4. Kolumnen sätts av
+     * accepttransaktionen, aldrig av en request, och står därför inte i
+     * #[Fillable] ovan.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'transfer_bonus_granted_at' => 'datetime',
+        ];
+    }
+
+    /**
      * Kontots medlemmar. Rollen (`owner` | `admin` | `member`) lagras på
      * kopplingstabellen `account_user`, se [[Konton och åtkomst]]
      * § account_user.

@@ -35,8 +35,10 @@ use Illuminate\Support\Facades\DB;
  * tolv månader Pro. Sist i transaktionen skrivs `audit_log`-raden för
  * `container.transferred` (issue 40 § Beslut 9) — efter att containern
  * flyttats och innan transaktionen stängs, så loggen aldrig kan beskriva
- * ett ägarbyte som inte hände. Ingen bonusspärr ("en gång per mottagande
- * konto") — det är issue 49 (M9), som hakar i den här transaktionen senare.
+ * ett ägarbyte som inte hände. Bonusspärren ("en gång per mottagande konto",
+ * issue 49/M9) sitter i beviljaPro() sist i klassen: en villkorad UPDATE på
+ * account.transfer_bonus_granted_at, inne i samma transaktion. Utebliven
+ * bonus rullar aldrig tillbaka ägarbytet — bara Pro-tiden uteblir.
  *
  * Anropas av App\Http\Controllers\Api\OwnershipTransferController efter att
  * den bevisat att raden är mottagarens (annars 404) och löst ut vilket
@@ -144,8 +146,10 @@ class AcceptOwnershipTransfer
                 $this->skapaKvarhallAtkomst($transfer);
             }
 
-            // Beslut 9: tolv månader Pro till mottagarkontot.
-            $this->beviljaPro($toAccount);
+            // Beslut 9: tolv månader Pro till mottagarkontot — en gång per
+            // mottagande konto (issue 49/Beslut 3). Nekar spärren lämnas
+            // `false` tillbaka och ägarbytet fortsätter oberört.
+            $proBonusGranted = $this->beviljaPro($toAccount);
 
             // Beslut 9 (issue 40): loggraden skrivs INNE i transaktionen,
             // efter att containern flyttats och innan den stängs — en rad
@@ -175,6 +179,7 @@ class AcceptOwnershipTransfer
                     'to_account' => $toAccount->ulid,
                     'excluded_item_count' => count($transfer->excluded_item_ids ?? []),
                     'retain_access_level' => $transfer->retain_access_level,
+                    'pro_bonus_granted' => $proBonusGranted,
                 ],
             );
 
@@ -408,6 +413,9 @@ class AcceptOwnershipTransfer
 
     /**
      * Beslut 9 och [[ADR-0014 Prismodell]]: mottagaren får tolv månader Pro.
+     * Bonusen ges dock **en gång per mottagande konto** — annars kan en
+     * Pro-användare ringa den mellan egna konton och förlänga sin Pro-tid
+     * gratis, se [[ADR-0017 Missbruksvektorer]] § 4 och issue 49.
      *
      * Saknar kontot en subscription-rad skapas en aktiv Pro-rad från idag.
      * Har kontot redan en aktiv Pro-rad FÖRLÄNGS perioden från sitt
@@ -416,9 +424,33 @@ class AcceptOwnershipTransfer
      * (uppsagd, obetald eller en annan plan) sätts den till Pro, aktiv, från
      * idag. `account.status` rörs aldrig — ett `read_only`-konto blir inte
      * aktivt av att få en pärm, och här nekas accepten redan i Beslut 3.
+     *
+     * Returnerar `true` om bonusen gavs, `false` om kontot redan konsumerat
+     * den. Anroparen lägger det i `audit_log`-radens `meta`, så skillnaden
+     * mellan ett ägarbyte som gav Pro och ett som inte gjorde det syns.
      */
-    private function beviljaPro(Account $account): void
+    private function beviljaPro(Account $account): bool
     {
+        // Beslut 3 (issue 49): spärren är en villkorad UPDATE, inte en
+        // läsning följd av ett `if`. Databasen serialiserar UPDATE-satser
+        // mot samma rad, så två samtidiga accepter av två olika ägarbyten
+        // till samma mottagarkonto kan aldrig båda se NULL. Ett
+        // `if ($account->transfer_bonus_granted_at === null)` följt av ett
+        // `save()` skulle kunna det — och det är precis vektorn ADR-0017
+        // beskriver, eftersom den som ringer bonusen mellan egna konton
+        // styr båda ändarna. Inget separat `lockForUpdate()` behövs;
+        // UPDATE:n tar sitt eget radlås.
+        $granted = Account::query()
+            ->whereKey($account->getKey())
+            ->whereNull('transfer_bonus_granted_at')
+            ->update(['transfer_bonus_granted_at' => now()]);
+
+        if ($granted !== 1) {
+            // Redan konsumerad. Ägarbytet rullas INTE tillbaka och svaret
+            // ändras inte (Beslut 4) — bara Pro-tiden uteblir.
+            return false;
+        }
+
         $pro = Plan::query()->where('code', 'pro')->firstOrFail();
 
         $subscription = Subscription::query()
@@ -435,14 +467,14 @@ class AcceptOwnershipTransfer
             $subscription->grace_until = null;
             $subscription->save();
 
-            return;
+            return true;
         }
 
         if ($subscription->status === 'active' && $subscription->plan_id === $pro->id) {
             $subscription->current_period_end = $subscription->current_period_end->addYear();
             $subscription->save();
 
-            return;
+            return true;
         }
 
         $subscription->plan_id = $pro->id;
@@ -450,5 +482,7 @@ class AcceptOwnershipTransfer
         $subscription->current_period_end = now()->addYear();
         $subscription->grace_until = null;
         $subscription->save();
+
+        return true;
     }
 }
