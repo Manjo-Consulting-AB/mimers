@@ -286,6 +286,14 @@ it('sökningen gör ett konstant antal frågor', function () {
     // ContainerCrudTest::it('listningen laddar ägarkontot i förväg').
     getJson('/api/items?q=Guldheden', $headers)->assertOk();
 
+    // ResolveItemScope är `scoped` och memoiserar per request, men i
+    // testsviten överlever memon mellan HTTP-anropen — Container::
+    // forgetScopedInstances() körs bara i kö-arbetare. Utan den här raden
+    // slipper scenario 1 betala omfångsupplösningen (issue 73 lossar upp
+    // varje container användaren når) och jämförelsen mäter memon i stället
+    // för frågekostnaden.
+    app()->forgetScopedInstances();
+
     $frågor = 0;
     DB::listen(function () use (&$frågor) {
         $frågor++;
@@ -307,6 +315,8 @@ it('sökningen gör ett konstant antal frågor', function () {
             'created_by_account_id' => $account->id,
         ]);
     }
+
+    app()->forgetScopedInstances();
 
     $frågor = 0;
     $andra = getJson('/api/items?q=Guldheden', $headers);

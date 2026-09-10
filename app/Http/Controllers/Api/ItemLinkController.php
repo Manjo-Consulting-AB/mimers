@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Actions\Item\LinkItems;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
@@ -11,6 +12,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 
@@ -56,10 +58,20 @@ class ItemLinkController extends Controller
      * Beslut 8). En mjukraderad motpart filtreras bort av SoftDeletes
      * globala scope i namnfrågan, så dess länkar döljs (§ Beslut 10) medan
      * raden ligger kvar.
+     *
+     * Issue 73 § Beslut 7: omfånget läggs i SAMMA filter, inte som ett andra
+     * pass efteråt. En motpart utanför mottagarens omfång faller bort i
+     * namnfrågan och därmed ur `$visible` nedan — länken finns inte i
+     * svaret alls. Inte ett `null`-namn, inte en post med bara ULID, inte
+     * ett spöke: ett spöke säger "det finns något här du inte får se", och
+     * den upplysningen är hela det läckage issuen stänger ([[ADR-0028
+     * Åtkomst på itemnivå]] § Konsekvenser).
      */
-    public function index(Container $container, Item $item): JsonResponse
+    public function index(Request $request, Container $container, Item $item, ResolveItemScope $resolveItemScope): JsonResponse
     {
         Gate::authorize('view', $item);
+
+        $scope = $resolveItemScope->handle($request->user(), $container);
 
         $links = $item->linksFrom()
             ->union($item->linksTo()->getQuery())
@@ -73,6 +85,7 @@ class ItemLinkController extends Controller
 
         $itemsById = Item::query()
             ->whereIn('id', $counterpartIds)
+            ->inScope($scope)
             ->get(['id', 'ulid', 'name'])
             ->keyBy('id');
 
