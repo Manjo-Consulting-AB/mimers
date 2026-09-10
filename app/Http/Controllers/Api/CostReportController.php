@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Cost\CostReportRequest;
 use App\Models\Container;
@@ -27,9 +28,21 @@ use Illuminate\Support\Facades\Gate;
  *
  * Kontrollern gör inget mer än grindarna: CostReportRequest bevisar
  * parametrarna, och App\Support\Cost\CostReport bygger grupper och totaler.
- * Inget räknande i kontrollern — M11 ska lägga ett åtkomstfilter på
- * itemnivå på exakt den här frågan, och den ändringen ska ha ett ställe att
- * landa på ([[ADR-0024 Tunna controllers och actions]]).
+ * Inget räknande i kontrollern — M11 lade åtkomstfiltret på itemnivå på
+ * exakt den här frågan, och den ändringen landade i Support-klassen
+ * ([[ADR-0024 Tunna controllers och actions]]).
+ *
+ * Issue 74 § Beslut 5 och 10: kontrollern löser upp omfånget — EN gång per
+ * request — och skickar in det. CostReport anropar inte upplösningen själv:
+ * den är en Support-klass som tar en container och parametrar och ska
+ * förbli testbar utan en inloggad användare.
+ *
+ * Upplösningen sker på en FÄRSK instans och inte på den `scoped`-bundna.
+ * Memon på den senare finns för ItemPolicy, som frågar en gång per rad i en
+ * listning; rapporten frågar en gång per request, och för den skulle memon
+ * bara göra frågekostnaden beroende av vad samma PHP-process råkade ha
+ * löst upp tidigare. `build()` binder den till anropet i stället — samma
+ * kostnad varje gång, vilket är vad en ny request ser i drift.
  */
 class CostReportController extends Controller
 {
@@ -39,8 +52,10 @@ class CostReportController extends Controller
 
         $entitlements->assertFeature($container->account, 'cost_reports');
 
+        $scope = app()->build(ResolveItemScope::class)->handle($request->user(), $container);
+
         return response()->json([
-            'data' => $report->build($container, $request->validated()),
+            'data' => $report->build($container, $request->validated(), $scope),
         ]);
     }
 }

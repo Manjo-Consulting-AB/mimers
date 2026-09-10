@@ -2,6 +2,7 @@
 
 namespace App\Support\Export;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
@@ -51,6 +52,22 @@ use ZipArchive;
  * automatiskt genom relationerna för item, kategori, tagg, schema, lån och
  * bilaga. Papperskorgen är inte pärmen (Beslut 9).
  *
+ * Issue 74 § Beslut 8: exporten tar med exakt det BESTÄLLAREN når.
+ * Omfånget är `$export->requested_by_user_id` — raden som redan finns på
+ * Export — inte den inloggade användarens vid nedladdningen och inte
+ * containerägarens: jobbet körs i kön långt efter att requesten är slut, och
+ * den som beställde är den enda som är definierad då.
+ *
+ * Filtret läggs på `$items`, EN gång, tidigt. Följdverkningarna faller ut av
+ * sig själva: bilagorna, schemana och lånen hänger på itemen och följer med
+ * dem, `addLinks()` villkorar redan på BÅDA ändarna
+ * mot `$items` så en länk till ett dolt item följer inte med, och
+ * `index.html` renderas ur samma payload. Kategorierna och taggarna i
+ * payloaden är containervida listor och tas för en omfångsbegränsad
+ * beställare med bara i den mån de används av de exporterade itemen — samma
+ * regel som issue 73 satte för `GET /categories` och `GET /tags`, och av
+ * samma skäl (issue 74 § Beslut 8).
+ *
  * Klassen är inte final — testsviten byter ut build() genom en anonym
  * underklass för att öva jobbets felhantering.
  */
@@ -64,10 +81,25 @@ class ContainerExportBuilder
             ->with(['categories', 'tags'])
             ->findOrFail($export->container_id);
 
+        // Upplösningen sker här och inte i konstruktorn: `scoped()` tömmer
+        // memon mellan kö-jobb, vilket är precis vad den finns till för — en
+        // property hade burit en användares omfång vidare till nästa jobb i
+        // samma worker (issue 74 § Beslut 10, issue 70 § Beslut 10).
+        $scope = app(ResolveItemScope::class)->handle($export->requestedBy, $container);
+
         $items = $container->items()
+            ->inScope($scope)
             ->with(['category', 'tags', 'attachments.storedFile', 'schedules.occurrences', 'loans'])
             ->orderBy('id')
             ->get();
+
+        $categories = $scope->isUnrestricted()
+            ? $container->categories
+            : $this->categoriesUsedBy($container->categories, $items);
+
+        $tags = $scope->isUnrestricted()
+            ? $container->tags
+            : $this->tagsUsedBy($container->tags, $items);
 
         $dir = 'exports/'.$container->ulid;
         $partial = $dir.'/'.$export->ulid.'.zip.part';
@@ -87,7 +119,7 @@ class ContainerExportBuilder
 
             $this->addLinks($itemArrays, $items);
 
-            $payload = $this->payload($container, $itemArrays);
+            $payload = $this->payload($container, $itemArrays, $categories, $tags);
 
             $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
@@ -223,12 +255,18 @@ class ContainerExportBuilder
      * id:n, ingenting om container_access, inbjudningar, konton eller
      * e-postadresser.
      *
+     * Kategorierna och taggarna kommer färdigfiltrerade från build() (issue
+     * 74 § Beslut 8) — för ett omfattande omfång är de containerns egna
+     * samlingar, oförändrade.
+     *
      * @param  array<int, array<string, mixed>>  $itemArrays
+     * @param  Collection<int, Category>  $categories
+     * @param  Collection<int, Tag>  $tags
      * @return array<string, mixed>
      */
-    private function payload(Container $container, array $itemArrays): array
+    private function payload(Container $container, array $itemArrays, $categories, $tags): array
     {
-        $categoryUlidById = $container->categories->keyBy('id')->map(fn (Category $category): string => $category->ulid);
+        $categoryUlidById = $categories->keyBy('id')->map(fn (Category $category): string => $category->ulid);
 
         return [
             'exported_at' => self::toTime(now()),
@@ -239,7 +277,7 @@ class ContainerExportBuilder
                 'kind' => $container->kind,
                 'created_at' => self::toTime($container->created_at),
             ],
-            'categories' => $container->categories->map(fn (Category $category): array => [
+            'categories' => $categories->map(fn (Category $category): array => [
                 'ulid' => $category->ulid,
                 'name' => $category->name,
                 'position' => $category->position,
@@ -247,13 +285,77 @@ class ContainerExportBuilder
                     ? ($categoryUlidById[$category->parent_id] ?? null)
                     : null,
             ])->values()->all(),
-            'tags' => $container->tags->map(fn (Tag $tag): array => [
+            'tags' => $tags->map(fn (Tag $tag): array => [
                 'ulid' => $tag->ulid,
                 'name' => $tag->name,
                 'color' => $tag->color,
             ])->values()->all(),
             'items' => array_values($itemArrays),
         ];
+    }
+
+    /**
+     * De kategorier en omfångsbegränsad beställares export bär: de som de
+     * exporterade itemen pekar på, PLUS deras förfäder — issue 74 § Beslut 8,
+     * samma regel som issue 73 § Beslut 5 satte för `GET /categories`.
+     * Förfäderna följer med för att `parent_ulid` annars pekar ut en rad som
+     * inte finns i filen; ett träd med hål i är obegripligt, och föräldern
+     * avslöjar ingenting utöver det barnet redan avslöjat.
+     *
+     * Vandringen går UPPÅT längs `parent_id` på den redan hämtade
+     * trädkollektionen, i minnet — samma teknik som CategoryController::
+     * categoriesWithinScope(). En besökt mängd gör den säker även om en cykel
+     * skulle ha skrivits förbi MoveCategory.
+     *
+     * @param  Collection<int, Category>  $categories  containerns hela träd
+     * @param  Collection<int, Item>  $items
+     * @return Collection<int, Category>
+     */
+    private function categoriesUsedBy($categories, $items)
+    {
+        $parentById = $categories->pluck('parent_id', 'id');
+
+        $visible = [];
+        $pending = $items->pluck('category_id')->filter()->unique()->values()->all();
+
+        while ($pending !== []) {
+            $id = (int) array_pop($pending);
+
+            if (isset($visible[$id])) {
+                continue;
+            }
+
+            $visible[$id] = true;
+
+            $parentId = $parentById[$id] ?? null;
+
+            if ($parentId !== null) {
+                $pending[] = (int) $parentId;
+            }
+        }
+
+        return $categories->filter(fn (Category $category): bool => isset($visible[$category->id]))->values();
+    }
+
+    /**
+     * De taggar en omfångsbegränsad beställares export bär: de som sitter på
+     * minst ett exporterat item (issue 74 § Beslut 8, samma regel som issue
+     * 73 § Beslut 5 för `GET /tags`). Taggarna läses ur itemens redan
+     * eager-laddade `tags`-relation — ingen extra fråga, och SoftDeletes'
+     * globala scope har redan rensat bort mjukraderade taggar.
+     *
+     * @param  Collection<int, Tag>  $tags  containerns alla taggar
+     * @param  Collection<int, Item>  $items
+     * @return Collection<int, Tag>
+     */
+    private function tagsUsedBy($tags, $items)
+    {
+        $usedIds = $items
+            ->flatMap(fn (Item $item) => $item->tags->pluck('id'))
+            ->unique()
+            ->all();
+
+        return $tags->filter(fn (Tag $tag): bool => in_array($tag->id, $usedIds, true))->values();
     }
 
     /**
