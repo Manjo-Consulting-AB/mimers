@@ -26,10 +26,18 @@ class CreatesUserWithPersonalAccount
      *                            har redan en `hashed`-cast på modellen (se
      *                            App\Models\User), en andra Hash::make() skulle
      *                            dubbelhasha lösenordet.
+     * @param  string|null  $registrationIp  Requestens IP, hämtad av controllern
+     *                                       med `$request->ip()` (Beslut 4) — actionen läser
+     *                                       aldrig `request()` själv. Obligatorisk och utan
+     *                                       defaultvärde (Beslut 3): en tredje anropare som
+     *                                       glömmer den ska få ett fel, inte tyst skriva
+     *                                       null. `?string` för att värdet FÅR vara null,
+     *                                       inte för att det får utelämnas — en request utan
+     *                                       pålitlig IP ska inte hindra en registrering.
      */
-    public function handle(string $name, string $email, string $password): User
+    public function handle(string $name, string $email, string $password, ?string $registrationIp): User
     {
-        return DB::transaction(function () use ($name, $email, $password): User {
+        return DB::transaction(function () use ($name, $email, $password, $registrationIp): User {
             $user = User::query()->create([
                 'name' => $name,
                 'email' => $email,
@@ -52,6 +60,10 @@ class CreatesUserWithPersonalAccount
                 'timezone' => 'Europe/Stockholm',
                 'unit_system' => 'metric',
                 'status' => 'active',
+                // Skrivs i samma transaktion som kontot skapas (Beslut 5) —
+                // ingen andra skrivning, ingen ->update() efteråt. Enda
+                // stället i app/ där ett konto skapas, se Beslut 3.
+                'registration_ip' => $registrationIp,
             ]);
 
             $account->users()->attach($user, ['role' => 'owner']);

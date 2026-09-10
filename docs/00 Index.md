@@ -22,6 +22,7 @@ Systemet heter **Mimers** och bor på `mimers.app`. Namnet syftar på Mimer i no
 | veta vilka dokument en uppgift kräver | `CLAUDE.md` i repo-roten |
 | sätta upp eller ändra CI och deploy | [[Pipeline]] |
 | återställa data ur en backup | [[Återläsning]] |
+| veta vilka personuppgifter systemet behandlar | [[Registerförteckning]] |
 
 ## Datamodell
 
