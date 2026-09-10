@@ -27,11 +27,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Att se upp med), så uppslagningen görs som en platt fråga i stället, se
  * scopeValidFor() nedan.
  *
- * `container_id` och `granted_by_user_id` är medvetet UTESLUTNA ur
- * `#[Fillable]`, samma resonemang som `Container::$account_id` — de sätts
- * explicit av den kod som skapar raden (issue 9b), aldrig via
- * massildelning. `revoked_at` sätts av en dedikerad återkallningsåtgärd
- * (issue 9b), inte via `fill()`, och är därför inte heller `#[Fillable]`.
+ * `container_id`, `item_id` och `granted_by_user_id` är medvetet UTESLUTNA
+ * ur `#[Fillable]`, samma resonemang som `Container::$account_id` — de
+ * sätts explicit av den kod som skapar raden (issue 9b, och för `item_id`
+ * issue 72), aldrig via massildelning. `revoked_at` sätts av en dedikerad
+ * återkallningsåtgärd (issue 9b), inte via `fill()`, och är därför inte
+ * heller `#[Fillable]`.
  */
 #[Fillable(['grantee_type', 'grantee_id', 'level', 'kind', 'expires_at'])]
 #[RouteKey('ulid')]
@@ -67,6 +68,19 @@ class ContainerAccess extends Model
     public function container(): BelongsTo
     {
         return $this->belongsTo(Container::class);
+    }
+
+    /**
+     * Itemet åtkomsten är avgränsad till, eller NULL för en container-bred
+     * åtkomst — se [[ADR-0028 Åtkomst på itemnivå]] § Beslut och
+     * [[Konton och åtkomst]] § container_access. Relationen behövs av
+     * issue 72:s förvaltningsvy; i den här issuen är kolumnen alltid NULL.
+     *
+     * @return BelongsTo<Item, $this>
+     */
+    public function item(): BelongsTo
+    {
+        return $this->belongsTo(Item::class);
     }
 
     /**
