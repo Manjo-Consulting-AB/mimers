@@ -2,10 +2,12 @@
 
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\User;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 
+use function Pest\Laravel\actingAs;
 use function Pest\Laravel\from;
 use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
@@ -30,6 +32,29 @@ it('renderar Error med status 404 på en webbrutt när debug är av', function (
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Error')
             ->where('status', 404)
+            ->where('auth.user', null)
+            ->has('auth.accounts', 0)
+        );
+});
+
+it('delar de gemensamma propsen även för en inloggad besökare på en obefintlig URL', function () {
+    withoutVite();
+    config(['app.debug' => false]);
+
+    $user = User::factory()->create();
+    Account::factory()->create()->users()->attach($user, ['role' => 'owner']);
+
+    // Utan fallback-rutten i routes/web.php körs aldrig
+    // HandleInertiaRequests för en URL utan rutt, och Error.vue kraschar i
+    // webbläsaren på `props.auth.user` — Inertias assertion läser bara
+    // server-payloaden och kör ingen Vue, så bara den här kontrollen fångar
+    // att nyckeln verkligen finns.
+    actingAs($user)->get('/finns-inte')
+        ->assertNotFound()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Error')
+            ->where('status', 404)
+            ->where('auth.user.ulid', $user->ulid)
         );
 });
 

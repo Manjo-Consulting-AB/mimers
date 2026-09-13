@@ -201,3 +201,24 @@ Route::get('/kalender/{token}.ics', CalendarFeedDownloadController::class)
  */
 Route::get('/drift/heartbeat', HeartbeatController::class)
     ->middleware('throttle:60,1');
+
+/*
+ * Issue 51 § Beslut 6 · Felsidan kräver en matchad rutt.
+ *
+ * `web`-middlewaregruppen hänger på rutter, inte på routerns väg för "ingen
+ * träff" (ApplicationBuilder::buildRoutingCallback() registrerar
+ * routes/web.php med Route::middleware('web')->group(...)). En URL som inte
+ * matchar någon rutt alls når därför aldrig HandleInertiaRequests, och
+ * respond()-closuren i bootstrap/app.php skulle rendera Error utan `auth` —
+ * en krasch i klienten
+ * (`props.auth.user` är undefined) för precis det scenario felsidan finns
+ * till. Fallback-rutten ligger i samma grupp, så de delade propsen hinner
+ * delas innan 404:an kastas och fångas.
+ *
+ * `(?!api/)` håller /api utanför: en oregistrerad /api-URL ska svara 404
+ * eller 405 ur routern, precis som förut — annars skuggas
+ * MethodNotAllowed-uppslaget (GET-fallbacken matchar då en POST-väg och
+ * 405 blir 404, eller tvärtom) och felkodshöljets tester faller.
+ */
+Route::fallback(fn () => abort(404))
+    ->where('fallbackPlaceholder', '(?!api/).*');
