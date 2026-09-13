@@ -12,6 +12,7 @@ use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\HeartbeatController;
+use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -147,6 +148,20 @@ Route::middleware('auth')->group(function () {
      */
     Route::post('/totp/recovery-codes', [RecoveryCodeController::class, 'store'])
         ->name('totp.recovery-codes.store');
+
+    /*
+     * Issue 53b · Säkerhetssidan — tvåfaktorns aktivering, avstängning och
+     * återställningskoder. Den ENDA rutt den här issuen lägger till, och
+     * den enda den får lägga till: en GET som renderar. Formulären i vyn
+     * postar till de fyra rutter som redan ligger i den här gruppen ovan.
+     *
+     * Ingen rutt för /settings utan underväg. Den som går dit får 404 —
+     * med flit, se issue 53b § Beslut 2: en tom mellansida ingen sedan tar
+     * bort är sämre än en ärlig 404, och issue 53c gör profilen till
+     * inställningarnas förstasida.
+     */
+    Route::get('/settings/security', SecurityController::class)
+        ->name('settings.security');
 });
 
 /*
