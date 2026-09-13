@@ -7,17 +7,26 @@ use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
 use App\Support\Frontend\ActiveContainer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Lang;
 use Inertia\Middleware;
 
 /**
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Fyra nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Sex nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
  * App\Support\Frontend\ActiveContainer och `flash.status` ur sessionen.
+ *
+ * `locale` och `translations` kom med issue 52: locale sätts av
+ * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
+ * `web`-gruppen, så `App::getLocale()` är redan rätt när `share()` körs.
+ * `translations` är `lang/{locale}/ui.php` och ingenting annat — notiser.php
+ * och export.php är serverrenderat innehåll (mejl, ICS, PDF) och levereras
+ * aldrig som prop.
  *
  * Allt är closures. Inertias middleware anropar share() på varje webbanrop
  * — även POST-rutter som bara svarar med en omdirigering — och löser först
@@ -65,6 +74,8 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => fn (): array => $this->auth($request),
             'activeContainer' => fn (): ?string => $this->activeContainer->forUser($request->user()),
+            'locale' => fn (): string => App::getLocale(),
+            'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
                 'status' => fn (): ?string => $request->session()->get('status'),
             ],

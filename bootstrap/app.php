@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\UpdateLastActiveAt;
 use App\Support\Api\ApiError;
 use App\Support\Api\ValidationErrorMapper;
@@ -26,7 +27,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Issue 52: SetLocale ligger FÖRE HandleInertiaRequests — den senares
+        // share() läser den locale som redan är satt. Bara i webbgruppen:
+        // /api returnerar felkoder, aldrig meningar, och har inget språk att
+        // välja (AGENTS.md § Felformat i API:et).
         $middleware->web(append: [
+            SetLocale::class,
             HandleInertiaRequests::class,
         ]);
 
