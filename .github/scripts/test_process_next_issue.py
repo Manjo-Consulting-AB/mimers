@@ -313,6 +313,105 @@ def test_beviljar_inte_undantag_pa_tomt_svar():
     assert p.beviljar_undantag(None) is False
 
 
+# =====================================================================
+# arkitektsvar_pa_oppen_fraga() - eskaleringen finns på BÅDA banorna
+# (issue 292 / PR #299: granskaren skrev tre varv i rad att fyndet krävde
+#  ett arkitektbeslut, och ingen väg ledde dit)
+# =====================================================================
+
+def _kalla(filnamn="process_next_issue.py"):
+    return open(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), filnamn),
+        encoding="utf-8",
+    ).read()
+
+
+def _funktionskropp(namn, filnamn="process_next_issue.py"):
+    """Källtexten för EN funktion på toppnivå - så att ett träffande ord i en
+    annan funktions docstring inte kan få ett tripwire-test att se grönt ut."""
+    kalla = _kalla(filnamn)
+    start = kalla.index(f"\ndef {namn}(")
+    nasta = kalla.find("\ndef ", start + 1)
+    return kalla[start:nasta if nasta != -1 else len(kalla)]
+
+
+def test_arkitekteskaleringen_anropas_fran_bada_banorna():
+    """Klart när: både MERGE-steget (efter godkännande) och GRANSKNINGS-steget
+    (när åtgärdsloopen inte fick något godkänt) går via samma funktion.
+
+    Tripwire mot exakt den generaliseringsmiss retron redan noterat: en
+    mekanism som finns på ett anropsställe och saknas på ett annat."""
+    for funktion in ("_process_in_worktree", "los_fraga_och_merga"):
+        assert "= arkitektsvar_pa_oppen_fraga(" in _funktionskropp(funktion), (
+            f"{funktion}() eskalerar inte en obesvarad fråga till arkitekten. "
+            f"Ett omnämnande i en kommentar räcker inte - anropet ska finnas."
+        )
+
+
+def test_ingen_egen_kopia_av_eskaleringen_kvar():
+    """Tripwire: run_opus_answer() ska bara nås via den delade funktionen.
+    Två inline-kopior var hela felet - den ena hann aldrig få banan som
+    saknades."""
+    rader = [
+        rad.strip() for rad in _kalla().splitlines()
+        if "= run_opus_answer(" in rad
+    ]
+    assert len(rader) == 1, f"run_opus_answer anropas från fler än ett ställe: {rader}"
+
+
+def test_atgardsloopens_avslag_far_inte_ga_rakt_till_eskalera():
+    """Klart när: `if not godkand: eskalera(...)` direkt efter åtgärdsloopen i
+    run_review_flow är precis det som lämnade issue 292 på needs-human med kön
+    blockerad. Arkitektfrågan ska ligga emellan."""
+    kropp = _funktionskropp("_process_in_worktree")
+    loop = kropp.index("granskning, fragor=fragor")
+    eskalering = kropp.index("Fynd kvarstår efter åtgärdsloopen")
+    assert "= arkitektsvar_pa_oppen_fraga(" in kropp[loop:eskalering], (
+        "Åtgärdsloopens avslag går rakt till eskalera() igen - arkitektfrågan hoppas över."
+    )
+
+
+# =====================================================================
+# backa_trasig_egen_commit() - en agentcommit som föll på testgrinden
+# får inte bli kvar (issue 292 / PR #299: varv 4:s Sonnet committade och
+# pushade en revert som gjorde sviten röd, och den blev PR:ens head)
+# =====================================================================
+
+def test_backar_inget_nar_agenten_inte_committat_sjalv():
+    """Ett varv där bara arbetsträdet ändrats ska inte röra git alls - loopens
+    vanliga väg committar och pushar själv efter testgrinden."""
+    class _Tyst:
+        """Svarar på allt backningen kan tänkas läsa, så att testet faller på
+        sin assertion i stället för på ett AttributeError."""
+        returncode, stdout, stderr = 0, "", ""
+
+    anropade = []
+    original = p.run_cmd
+    p.run_cmd = lambda *a, **kw: (anropade.append(a), _Tyst())[1]
+    try:
+        p.backa_trasig_egen_commit("/finns/inte", "feature/issue-292", "abc123", "abc123", 4)
+    finally:
+        p.run_cmd = original
+    assert anropade == [], f"Rörde git trots att HEAD stod stilla: {anropade}"
+
+
+def test_backningen_anvander_force_with_lease_inte_force():
+    """En blank --force skriver över vad som helst som hunnit landa på grenen."""
+    kropp = _funktionskropp("backa_trasig_egen_commit")
+    assert "--force-with-lease" in kropp
+    assert '"--force"' not in kropp
+
+
+def test_testgrindens_avslag_backar_egen_commit():
+    """Klart när: raden som skriver 'Åtgärden bröt testsviten' följs av
+    backningen, inte av ett ensamt `continue`."""
+    kalla = _kalla()
+    start = kalla.index("Åtgärden bröt testsviten på varv")
+    assert "        backa_trasig_egen_commit(" in kalla[start:start + 600], (
+        "Ett varv som bröt sviten lämnar agentens egen commit kvar på grenen."
+    )
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
