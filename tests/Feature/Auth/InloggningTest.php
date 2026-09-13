@@ -42,7 +42,7 @@ it('loggar in en webbsession med rätt uppgifter', function () {
         'password' => 'ratt-losenord',
     ]);
 
-    $response->assertRedirect(route('welcome'));
+    $response->assertRedirect(route('dashboard'));
     assertAuthenticatedAs($user);
 });
 

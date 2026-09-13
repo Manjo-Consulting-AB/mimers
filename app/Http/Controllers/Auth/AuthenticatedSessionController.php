@@ -37,9 +37,12 @@ class AuthenticatedSessionController extends Controller
      * Rutten fanns tidigare bara som POST, så `auth`-middlewarens
      * omdirigering av en utloggad besökare hamnade på en URL som svarade
      * 405. Sidan bär e-post, lösenord, serverns fel och en knapp — inget
-     * TOTP-fält, ingen magic link-flik och ingen länk till registrering.
-     * Det är issue 53a, som också äger vart store() skickar användaren
-     * efter en lyckad inloggning.
+     * TOTP-fält i förväg och ingen magic link-flik (issue 53a § Beslut 3).
+     *
+     * Issue 53a · kodfältet: vyn renderar fältet `code` först när
+     * store() nedan har bundit TotpRequiredException till det. Att visa
+     * det i förväg vore en sidokanal — se
+     * App\Http\Requests\Auth\LoginRequest::authenticate().
      *
      * Ingen logik här: vyn renderas och formuläret postar till store()
      * nedan, som redan validerar med LoginRequest.
@@ -73,7 +76,10 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('welcome'));
+        // Issue 53a § Beslut 2: den inloggade landar på /dashboard, inte på
+        // startsidan. destroy() nedan behåller `welcome` — den som loggar ut
+        // ska inte skickas till en skyddad sida.
+        return redirect()->intended(route('dashboard'));
     }
 
     public function destroy(Request $request): RedirectResponse

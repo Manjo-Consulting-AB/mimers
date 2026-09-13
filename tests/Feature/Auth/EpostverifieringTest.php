@@ -36,7 +36,7 @@ it('markerar e-posten som verifierad via en giltig signerad länk', function () 
     $user = User::factory()->unverified()->create();
 
     actingAs($user);
-    get(signeradVerifieringslank($user))->assertRedirect(route('welcome'));
+    get(signeradVerifieringslank($user))->assertRedirect(route('dashboard'));
 
     expect($user->fresh()->hasVerifiedEmail())->toBeTrue();
     Event::assertDispatched(Verified::class);
@@ -60,7 +60,7 @@ it('är idempotent — en redan verifierad e-post kan besökas igen utan fel', f
     expect($user->hasVerifiedEmail())->toBeTrue();
 
     actingAs($user);
-    get(signeradVerifieringslank($user))->assertRedirect(route('welcome'));
+    get(signeradVerifieringslank($user))->assertRedirect(route('dashboard'));
 
     Event::assertNotDispatched(Verified::class);
 });

@@ -34,7 +34,7 @@ it('skapar en användare med ett eget personkonto som ägare vid webbregistrerin
         'password' => 'giltigt-losenord',
     ]);
 
-    $response->assertRedirect(route('welcome'));
+    $response->assertRedirect(route('dashboard'));
 
     $user = User::query()->where('email', 'ny@example.com')->firstOrFail();
     assertAuthenticated();

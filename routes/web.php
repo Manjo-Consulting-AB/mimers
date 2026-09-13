@@ -51,6 +51,14 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [RegisteredUserController::class, 'store'])
         ->name('register');
 
+    /*
+     * Issue 53a · registreringsformuläret. Samma grupp och samma skäl som
+     * `login.create` nedan: bara en utloggad besökare ska se det, och en
+     * inloggad skickas till /dashboard av `guest`-middlewaren.
+     */
+    Route::get('/register', [RegisteredUserController::class, 'create'])
+        ->name('register.create');
+
     // throttle:login · issue 7 · Rate limiting och felkodsformat. Se
     // App\Providers\AppServiceProvider::configureLoginRateLimiting().
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])
@@ -81,6 +89,14 @@ Route::middleware('guest')->group(function () {
         ->middleware('throttle:'.LoginRateLimiter::NAME)
         ->name('magic-link.request');
 
+    /*
+     * Issue 53a · formuläret som begär länken. `back()` i store() ovan
+     * landar här, så flashkoden `magic-link-sent` renderas på samma sida
+     * som formuläret — se App\Http\Controllers\Auth\MagicLinkRequestController.
+     */
+    Route::get('/login/magic-link', [MagicLinkRequestController::class, 'create'])
+        ->name('magic-link.create');
+
     Route::get('/login/magic-link/consume', MagicLinkLoginController::class)
         ->name('magic-link.consume');
 });
@@ -90,6 +106,17 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->name('logout');
 
 Route::middleware('auth')->group(function () {
+    /*
+     * Issue 53a · Verifieringssidan. Namnet `verification.notice` är inte
+     * fritt valt: Laravels `verified`-middleware skickar en overifierad
+     * användare till just route('verification.notice'), och utan den här
+     * rutten kraschar ramverket den dag någon sätter `verified` på en rutt.
+     * Ingen rutt har `verified` i den här issuen — kravet gäller att ta emot
+     * delning, inte att använda appen (routes/api.php).
+     */
+    Route::get('/email/verify', [VerifyEmailController::class, 'create'])
+        ->name('verification.notice');
+
     Route::get('/email/verify/{id}/{hash}', VerifyEmailController::class)
         ->middleware('signed')
         ->name('verification.verify');

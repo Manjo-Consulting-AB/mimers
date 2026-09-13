@@ -24,16 +24,49 @@ return [
             'heading' => 'Log in',
             'submit' => 'Log in',
         ],
+
+        'code' => [
+            'label' => 'One-time code or recovery code',
+        ],
+
+        'register' => [
+            'title' => 'Create an account',
+            'heading' => 'Create an account',
+            'submit' => 'Create an account',
+            'link' => 'Create an account',
+            'password_hint' => 'At least eight characters.',
+            'login' => 'Already have an account? Log in',
+        ],
+
+        'magic_link' => [
+            'title' => 'Log in with a link',
+            'heading' => 'Log in with a link',
+            'link' => 'Log in with a link',
+            'intro' => 'We will send a login link to your email address. The link can be used once and is valid for fifteen minutes.',
+            'submit' => 'Send the link',
+            'login' => 'Back to the login',
+        ],
+
+        'verify' => [
+            'title' => 'Verify your email address',
+            'heading' => 'Verify your email address',
+            'banner' => 'Your email address is not verified yet.',
+            'body' => 'We will send an email with a verification link to your address. Click the link in the email to confirm it.',
+            'send' => 'Send the verification email',
+        ],
+
+        'logout' => 'Log out',
     ],
 
     'form' => [
+        'name' => 'Name',
         'email' => 'Email',
         'password' => 'Password',
     ],
 
     'flash' => [
         'verification-link-sent' => 'A new verification email has been sent.',
-        'magic-link-sent' => 'We have sent a login link to your email.',
+        'magic-link-sent' => 'If the address exists with us, we have sent a link to it.',
         'totp-confirmed' => 'Two-factor authentication is on.',
         'totp-disabled' => 'Two-factor authentication is off.',
         'session-expired' => 'Your session expired. Please try again.',

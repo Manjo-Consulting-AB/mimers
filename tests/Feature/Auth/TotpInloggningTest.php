@@ -73,7 +73,7 @@ it('loggar in en webbsession med en giltig TOTP-kod', function () {
         'email' => $user->email,
         'password' => 'ratt-losenord',
         'code' => totpKodFör($secret),
-    ])->assertRedirect(route('welcome'));
+    ])->assertRedirect(route('dashboard'));
 
     assertAuthenticatedAs($user);
 });
@@ -108,7 +108,7 @@ it('loggar in utan kod när kontot har en hemlighet men den är inte bekräftad 
     postJson('/login', [
         'email' => $user->email,
         'password' => 'ratt-losenord',
-    ])->assertRedirect(route('welcome'));
+    ])->assertRedirect(route('dashboard'));
 
     assertAuthenticatedAs($user);
 });
