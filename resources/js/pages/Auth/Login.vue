@@ -2,6 +2,7 @@
 import { Head, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
+import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
  * Den arbetade förlagan för varje formulär i M10, se issue 51 § Beslut 9.
@@ -22,7 +23,14 @@ import FormField from '../../components/FormField.vue';
  * Sidan ägs av issue 53a efter den här: TOTP-fältet, magic link-fliken och
  * länken till registrering är 53a:s, liksom vart store() skickar användaren
  * efter en lyckad inloggning.
+ *
+ * Etiketterna och knapptexten kommer ur lang/{locale}/ui.php sedan issue 52 —
+ * `form.email` och `auth.login.*`. Serverns valideringsfel är redan översatta
+ * när de når hit: `form.errors.email` bär meningen ur validation.php på
+ * användarens språk.
  */
+const { t } = useTranslations();
+
 const form = useForm({
     email: '',
     password: '',
@@ -40,12 +48,12 @@ function submit() {
 
 <template>
     <AppLayout>
-        <Head title="Logga in" />
+        <Head :title="t('auth.login.title')" />
 
-        <h1 class="text-2xl font-semibold">Logga in</h1>
+        <h1 class="text-2xl font-semibold">{{ t('auth.login.heading') }}</h1>
 
         <form class="mt-6 flex max-w-sm flex-col gap-4" @submit.prevent="submit">
-            <FormField v-slot="{ describedBy }" label="E-post" id="email" :error="form.errors.email">
+            <FormField v-slot="{ describedBy }" :label="t('form.email')" id="email" :error="form.errors.email">
                 <input
                     id="email"
                     v-model="form.email"
@@ -58,7 +66,7 @@ function submit() {
                 >
             </FormField>
 
-            <FormField v-slot="{ describedBy }" label="Lösenord" id="password" :error="form.errors.password">
+            <FormField v-slot="{ describedBy }" :label="t('form.password')" id="password" :error="form.errors.password">
                 <input
                     id="password"
                     v-model="form.password"
@@ -76,7 +84,7 @@ function submit() {
                 :disabled="form.processing"
                 class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
             >
-                Logga in
+                {{ t('auth.login.submit') }}
             </button>
         </form>
     </AppLayout>

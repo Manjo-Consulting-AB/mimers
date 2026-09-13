@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import FlashMessage from '../components/FlashMessage.vue';
+import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Den enda layouten i M10.
@@ -19,7 +20,11 @@ import FlashMessage from '../components/FlashMessage.vue';
  * routinghjälpare i JavaScript, se issue 51 § Beslut 7: en URL som bara
  * servern kan bygga — en signerad länk, en med ett ULID i — skickas som en
  * prop i stället.
+ *
+ * All text går genom t() sedan issue 52 — ingen sträng i den här filen når
+ * användaren utan att först ha passerat lang/{locale}/ui.php.
  */
+const { t } = useTranslations();
 const user = computed(() => usePage().props.auth.user);
 </script>
 
@@ -27,12 +32,12 @@ const user = computed(() => usePage().props.auth.user);
     <div class="flex min-h-full flex-col bg-slate-50 text-slate-900">
         <header class="border-b border-slate-200 bg-white">
             <nav class="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-3">
-                <Link href="/" class="text-lg font-semibold">Mimers</Link>
+                <Link href="/" class="text-lg font-semibold">{{ t('common.brand') }}</Link>
 
                 <div class="flex items-center gap-4 text-sm">
-                    <Link v-if="user" href="/dashboard" class="hover:underline">Översikt</Link>
+                    <Link v-if="user" href="/dashboard" class="hover:underline">{{ t('nav.dashboard') }}</Link>
                     <span v-if="user" class="text-slate-600">{{ user.name }}</span>
-                    <Link v-else href="/login" class="hover:underline">Logga in</Link>
+                    <Link v-else href="/login" class="hover:underline">{{ t('nav.login') }}</Link>
                 </div>
             </nav>
         </header>
@@ -44,7 +49,7 @@ const user = computed(() => usePage().props.auth.user);
         </main>
 
         <footer class="border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-            Mimers
+            {{ t('common.brand') }}
         </footer>
     </div>
 </template>
