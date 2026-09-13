@@ -11,6 +11,8 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
@@ -167,5 +169,48 @@ return Application::configure(basePath: dirname(__DIR__))
             $status = $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
 
             return ApiError::response('server.error', [], $status);
+        });
+
+        /*
+         * Issue 51 § Beslut 6 · Felsidorna på webben.
+         *
+         * `respond()` körs EFTER allt ovan — den är sista steget innan
+         * svaret lämnar handlern, se
+         * Illuminate\Foundation\Exceptions\Handler::finalizeRenderedResponse()
+         * — så den kan byta ut ett redan renderat svar utan att en enda av
+         * render()-closurerna ovan flyttar sig. `/api`-höljet är alltså
+         * orört: ett anrop dit returneras oförändrat, och likaså ett anrop
+         * som ber om JSON.
+         *
+         * Statuskoderna är de fem en besökare kan landa i utan att ha gjort
+         * något fel: nekad (403), saknad (404), utgången session (419),
+         * för många försök (429) och serverfel (500). Under utveckling
+         * (app.debug) behåller Laravel sin egen felsida med stacktrace,
+         * precis som AGENTS.md § Felformat i API:et beskriver för
+         * `server.error`.
+         *
+         * 419 är undantaget: användaren har fyllt i ett formulär och ska
+         * inte förlora det till en sida som säger "419". Svaret blir
+         * i stället en omdirigering tillbaka till formuläret med
+         * `flash.status`, samma mekanism som resten av webben använder.
+         */
+        $exceptions->respond(function (Response $response, Throwable $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson() || config('app.debug')) {
+                return $response;
+            }
+
+            $status = $response->getStatusCode();
+
+            if ($status === 419) {
+                return back()->with('status', 'session-expired');
+            }
+
+            if (! in_array($status, [403, 404, 429, 500], true)) {
+                return $response;
+            }
+
+            return Inertia::render('Error', ['status' => $status])
+                ->toResponse($request)
+                ->setStatusCode($status);
         });
     })->create();

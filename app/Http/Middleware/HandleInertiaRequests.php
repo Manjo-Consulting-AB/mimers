@@ -2,9 +2,33 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Resources\AccountResource;
+use App\Http\Resources\AuthUserResource;
+use App\Models\Account;
+use App\Support\Frontend\ActiveContainer;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
+/**
+ * De delade propsen — det enda som når varje webbsida, se issue 51
+ * § Beslut 2 och 3.
+ *
+ * Fyra nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
+ * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
+ * Resource-klasser som /api"), `activeContainer` ur
+ * App\Support\Frontend\ActiveContainer och `flash.status` ur sessionen.
+ *
+ * Allt är closures. Inertias middleware anropar share() på varje webbanrop
+ * — även POST-rutter som bara svarar med en omdirigering — och löser först
+ * senare upp det som faktiskt ska serialiseras, så en closure är skillnaden
+ * mellan "frågan ställs när sidan renderas" och "frågan ställs på varje
+ * anrop". `auth` är därför också lazy, inte bara `activeContainer`.
+ *
+ * `errors` delas medvetet INTE här. Inertia lägger redan sessionens
+ * valideringsfel i propsen (Inertia\Middleware::share()), och en egen
+ * version skuggar den — se issue 51 § Beslut 9.
+ */
 class HandleInertiaRequests extends Middleware
 {
     /**
@@ -15,6 +39,8 @@ class HandleInertiaRequests extends Middleware
      * @var string
      */
     protected $rootView = 'app';
+
+    public function __construct(private readonly ActiveContainer $activeContainer) {}
 
     /**
      * Determines the current asset version.
@@ -37,7 +63,47 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
-            //
+            'auth' => fn (): array => $this->auth($request),
+            'activeContainer' => fn (): ?string => $this->activeContainer->forUser($request->user()),
+            'flash' => [
+                'status' => fn (): ?string => $request->session()->get('status'),
+            ],
+        ];
+    }
+
+    /**
+     * Den inloggade användaren och hennes konton, eller tomt för en gäst.
+     *
+     * ETT villkor högst upp, inte en `?->`-kedja per fält: ett fält som
+     * glöms blir en null-krasch i en komponent, och ett som glöms i den
+     * andra riktningen blir ett läckage. En gäst får `user: null` och
+     * `accounts: []` — samma form som en inloggad får, så en komponent
+     * aldrig behöver två avpackningsvägar.
+     *
+     * `accounts.subscription.plan` laddas i förväg. Utan det kostar varje
+     * konto egna frågor och en sida med tre konton blir dyrare än en med
+     * ett; med det är frågekostnaden konstant i antalet konton. Planen
+     * själv kommer ur PlanResource::forAccount(), som äger sitt eget
+     * memoiserade free-uppslag.
+     */
+    private function auth(Request $request): array
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return [
+                'user' => null,
+                'accounts' => [],
+            ];
+        }
+
+        $user->loadMissing('accounts.subscription.plan');
+
+        return [
+            'user' => AuthUserResource::make($user)->resolve($request),
+            'accounts' => $user->accounts
+                ->map(fn (Account $account): array => AccountResource::make($account)->resolve($request))
+                ->all(),
         ];
     }
 }

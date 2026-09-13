@@ -11,6 +11,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
 
 /**
  * Webbens inloggning/utloggning — Laravels sessionsguard med CSRF, inte
@@ -29,6 +31,24 @@ use Illuminate\Validation\ValidationException;
  */
 class AuthenticatedSessionController extends Controller
 {
+    /**
+     * GET /login — inloggningsformuläret, se issue 51 § Beslut 10.
+     *
+     * Rutten fanns tidigare bara som POST, så `auth`-middlewarens
+     * omdirigering av en utloggad besökare hamnade på en URL som svarade
+     * 405. Sidan bär e-post, lösenord, serverns fel och en knapp — inget
+     * TOTP-fält, ingen magic link-flik och ingen länk till registrering.
+     * Det är issue 53a, som också äger vart store() skickar användaren
+     * efter en lyckad inloggning.
+     *
+     * Ingen logik här: vyn renderas och formuläret postar till store()
+     * nedan, som redan validerar med LoginRequest.
+     */
+    public function create(): Response
+    {
+        return Inertia::render('Auth/Login');
+    }
+
     public function store(LoginRequest $request): RedirectResponse
     {
         try {

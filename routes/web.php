@@ -18,9 +18,22 @@ use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', fn () => Inertia::render('Welcome', [
-    'version' => app()->version(),
-]))->name('welcome');
+/*
+ * Issue 51 · Frontendskalet (M10). Rutten renderar Inertia-komponenten
+ * med samma namn som filen under resources/js/pages/ — `Welcome` här,
+ * `Auth/Login` för en nästlad sida — och ingenting annat. Sidnamnet är
+ * kontraktet: app.js löser upp det mot import.meta.glob över pages/, så en
+ * omdöpning bryter varje Inertia::render() som pekar på det.
+ *
+ * Den skyddade exempvyn. Avsiktligt tom på innehåll — issue 64 ersätter
+ * den med todo-vyn — och därför en closure i stället för en controller
+ * som ändå ska bort.
+ */
+Route::get('/dashboard', fn () => Inertia::render('Dashboard'))
+    ->middleware('auth')
+    ->name('dashboard');
+
+Route::get('/', fn () => Inertia::render('Welcome'))->name('welcome');
 
 /*
  * Issue 4 · Autentisering med lösenord. Webben kör på Laravels
@@ -29,9 +42,10 @@ Route::get('/', fn () => Inertia::render('Welcome', [
  * API-endpoints ligger i routes/api.php och delar FormRequests med de här
  * rutterna, se App\Http\Controllers\Api\Auth.
  *
- * Inga GET-rutter som renderar Inertia-formulär läggs till här — de hör
- * till frontend-milstolpen (M10), inte den här issuen. `RegisterRequest`
- * och `LoginRequest` (validering + FormRequests) är det som testas.
+ * `RegisterRequest` och `LoginRequest` (validering + FormRequests) är det
+ * som testas i den här gruppen. GET-rutterna som renderar Inertia-formulären
+ * kom med M10 (issue 51) och ligger där de hör hemma: inloggningssidan i
+ * den här gruppen, eftersom bara en utloggad besökare ska se den.
  */
 Route::middleware('guest')->group(function () {
     Route::post('/register', [RegisteredUserController::class, 'store'])
@@ -42,6 +56,17 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])
         ->middleware('throttle:'.LoginRateLimiter::NAME)
         ->name('login');
+
+    /*
+     * Issue 51 § Beslut 10 · GET /login. Rutten heter `login.create` och
+     * inte `login`: namnet `login` är taget av POST-rutten ovan, som
+     * `auth`-middlewaren skickar en utloggad besökare till
+     * (route('login')), och att byta namn på den bryter varje
+     * route('login') i ramverket. Före den här rutten svarade en sådan
+     * omdirigering 405.
+     */
+    Route::get('/login', [AuthenticatedSessionController::class, 'create'])
+        ->name('login.create');
 
     /*
      * Issue 5 · Magic link. throttle:login återanvänds rakt av på
