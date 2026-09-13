@@ -246,6 +246,34 @@ def test_import_gor_inga_processanrop():
     assert result.stdout.strip() == "OK"
 
 
+
+# =====================================================================
+# beviljar_undantag() - omkörningen av CI efter ett beviljat undantag
+# =====================================================================
+
+def test_undantagsmarkoren_ar_synkad_med_omfangsrutan():
+    """Markören är speglad i två skript; drift gör omkörningen tyst verkningslös."""
+    import omfangsruta
+    assert p.UNDANTAGSMARKOR == omfangsruta.UNDANTAGSMARKOR
+
+
+def test_beviljar_undantag_med_markoren():
+    svar = ("### Arkitektsvar\n\nUndantag beviljat.\n\n"
+            "Beviljat undantag från omfångsrutan:\n```\ntests/Feature/Omfang/MigreringTest.php\n```")
+    assert p.beviljar_undantag(svar) is True
+
+
+def test_beviljar_inte_undantag_utan_markoren():
+    """PR #284 fick sitt undantag i prosa först - den formen är inte ett undantag."""
+    assert p.beviljar_undantag("Undantag från omfångsrutan beviljas för filen.") is False
+
+
+def test_beviljar_inte_undantag_pa_tomt_svar():
+    """Ett tappat Opus-svar får inte råka starta om CI."""
+    assert p.beviljar_undantag("") is False
+    assert p.beviljar_undantag(None) is False
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
