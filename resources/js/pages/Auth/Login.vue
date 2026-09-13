@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
@@ -46,6 +46,13 @@ import { useErrorFocus } from './useErrorFocus.js';
  * återställningskoden är tio tecken ur `Str::random()`s alfanumeriska alfabet
  * (App\Support\Auth\RecoveryCodeBroker), och en numerisk tangentbordsknapp
  * hade stängt ute den på en telefon.
+ *
+ * Fokuset på det fält som just dykt upp ägs av `focusFirstError` och ingen
+ * annan. Ett eget `watch` på `codeRequested` som fokuserade själva inmatningen
+ * körde samtidigt som `useErrorFocus` fokuserade `#code-error`, i samma
+ * serversvar och utan inbördes ordning — vann inmatningen tystades exakt det
+ * Beslut 10 kräver. En mekanism, inte två: `errors.code` är det första felet
+ * servern sätter här, så `focusFirstError` landar på `#code-error`.
  */
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
@@ -57,16 +64,6 @@ const form = useForm({
 });
 
 const codeRequested = computed(() => Boolean(form.errors.code));
-const codeInput = ref(null);
-
-watch(codeRequested, async (requested) => {
-    if (!requested) {
-        return;
-    }
-
-    await nextTick();
-    codeInput.value?.focus();
-});
 
 function submit() {
     form.post('/login', {
@@ -130,7 +127,6 @@ function submit() {
             >
                 <input
                     id="code"
-                    ref="codeInput"
                     v-model="form.code"
                     :aria-describedby="describedBy"
                     type="text"
