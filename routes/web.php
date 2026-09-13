@@ -12,6 +12,8 @@ use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\HeartbeatController;
+use App\Http\Controllers\Settings\AccountSettingsController;
+use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
@@ -162,6 +164,41 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/settings/security', SecurityController::class)
         ->name('settings.security');
+
+    /*
+     * Issue 53c · Kontoinställningarna — profil och konton, se
+     * App\Http\Controllers\Settings\ProfileController och
+     * App\Http\Controllers\Settings\AccountSettingsController.
+     *
+     * Här får /settings äntligen ett hem. 53b lämnade den som en ärlig 404
+     * med flit (issue 53b § Beslut 2) och utlovade att 53c gör profilen till
+     * inställningarnas förstasida. Omdirigeringen är en egen rutt och inte en
+     * sida, så /settings aldrig renderar något eget — den som bokmärkt
+     * adressen hamnar rätt, och en tom mellansida uppstår aldrig.
+     *
+     * `{account}` binds på kontots ULID via #[RouteKey('ulid')] på
+     * App\Models\Account — aldrig på löpnumret, och aldrig ur kroppen
+     * (Beslut 1). Ett konto som identifieras i kroppen är en rutt utan objekt
+     * att auktorisera mot; här finns objektet i rutten och
+     * App\Policies\AccountPolicy::update() prövas mot det i kontrollern.
+     *
+     * En ny inställningssida får också en egen rad i
+     * resources/js/layouts/settingsSections.js — navigationen renderas ur den
+     * listan, och en sida ingen kan navigera till är en sida ingen hittar.
+     */
+    Route::redirect('/settings', '/settings/profile')->name('settings');
+
+    Route::get('/settings/profile', [ProfileController::class, 'edit'])
+        ->name('settings.profile');
+
+    Route::patch('/settings/profile', [ProfileController::class, 'update'])
+        ->name('settings.profile.update');
+
+    Route::get('/settings/accounts', [AccountSettingsController::class, 'index'])
+        ->name('settings.accounts');
+
+    Route::patch('/settings/accounts/{account}', [AccountSettingsController::class, 'update'])
+        ->name('settings.accounts.update');
 });
 
 /*

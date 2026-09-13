@@ -83,6 +83,8 @@ return [
         'magic-link-sent' => 'Om adressen finns hos oss har vi skickat en länk till den.',
         'totp-confirmed' => 'Tvåfaktorsinloggning är påslagen.',
         'totp-disabled' => 'Tvåfaktorsinloggning är avstängd.',
+        'profile-updated' => 'Profilen är sparad.',
+        'account-updated' => 'Kontouppgifterna är sparade.',
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -102,7 +104,76 @@ return [
         'title' => 'Inställningar',
 
         'nav' => [
+            'profile' => 'Profil',
+            'accounts' => 'Konton',
             'security' => 'Säkerhet',
+        ],
+
+        // Språk- och enhetsnamnen till väljarna. Nycklarna är kolumnvärdena
+        // (`sv_SE`, `metric`), inte katalognamnen `sv`/`en`: en kolumn som
+        // heter `sv_SE` ska slås upp som `sv_SE`, se
+        // App\Support\Notification\LocaleResolver.
+        'locales' => [
+            'sv_SE' => 'svenska',
+            'en_GB' => 'engelska',
+        ],
+
+        'units' => [
+            'metric' => 'metriskt',
+            'imperial' => 'imperialt',
+        ],
+
+        // Profilen, se issue 53c. `*_follow` är förstavalet i varje väljare —
+        // det postar `null`, som betyder "följ kontots inställning". Den
+        // namngivna formen bär kontots gällande värde i parentesen och
+        // används när användaren är medlem i exakt ett konto; `*_follow_plain`
+        // är reserven när flera konton gör värdet oavgörbart.
+        'profile' => [
+            'title' => 'Profil',
+            'heading' => 'Profil',
+
+            'name' => 'Namn',
+
+            // E-postadressen visas men ändras inte här (Beslut 3): bytet
+            // kräver ett verifieringsflöde som ingen issue beskriver.
+            'email' => 'E-post',
+            'email_verified' => 'Adressen är verifierad.',
+            'email_unverified' => 'Adressen är inte verifierad än.',
+            'email_no_change' => 'E-postadressen kan inte ändras här.',
+
+            'locale' => 'Språk',
+            'locale_follow' => 'Följ kontots språk (:account)',
+            'locale_follow_plain' => 'Följ kontots språk',
+
+            'timezone' => 'Tidszon',
+            'timezone_follow' => 'Följ kontots tidszon (:timezone)',
+            'timezone_follow_plain' => 'Följ kontots tidszon',
+
+            'unit_system' => 'Enhetssystem',
+            'unit_follow' => 'Följ kontots enhetssystem (:unit)',
+            'unit_follow_plain' => 'Följ kontots enhetssystem',
+
+            'submit' => 'Spara',
+        ],
+
+        // Kontosidan, se issue 53c § Beslut 9. `role` är användarens egen roll
+        // på kortet; `read_only` förklarar varför ett kort saknar formulär när
+        // användaren har rollen för det men kontot är fryst.
+        'accounts' => [
+            'title' => 'Konton',
+            'heading' => 'Konton',
+            'intro' => 'Ett konto i taget. Ändringarna gäller alla som är med i kontot.',
+
+            'roles' => [
+                'owner' => 'Ägare',
+                'admin' => 'Administratör',
+                'member' => 'Medlem',
+            ],
+
+            'read_only' => 'Du kan se uppgifterna men inte ändra dem.',
+            'empty' => 'Du är inte med i något konto.',
+
+            'submit' => 'Spara',
         ],
 
         'security' => [

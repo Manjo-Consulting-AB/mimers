@@ -48,11 +48,17 @@ it('skickar en utloggad besökare till inloggningen', function () {
     get('/settings/security')->assertRedirect('/login');
 });
 
-it('har ingen egen sida för /settings — den som går dit får 404 tills 53c', function () {
+/*
+ * 53b lämnade /settings som en ärlig 404 med flit (§ Beslut 2) och utlovade
+ * att 53c gör profilen till inställningarnas förstasida. Här är den
+ * utlovningen infriad: adressen omdirigerar i stället för att rendera något
+ * eget, och den som bokmärkt den hamnar rätt. Själva målet prövas i
+ * InstallningsvyerTest.
+ */
+it('omdirigerar /settings till profilen sedan 53c', function () {
     withoutVite();
-    config(['app.debug' => false]);
 
-    actingAs(User::factory()->create())->get('/settings')->assertNotFound();
+    actingAs(User::factory()->create())->get('/settings')->assertRedirect('/settings/profile');
 });
 
 /*

@@ -69,6 +69,8 @@ return [
         'magic-link-sent' => 'If the address exists with us, we have sent a link to it.',
         'totp-confirmed' => 'Two-factor authentication is on.',
         'totp-disabled' => 'Two-factor authentication is off.',
+        'profile-updated' => 'Your profile has been saved.',
+        'account-updated' => 'The account details have been saved.',
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -84,7 +86,62 @@ return [
         'title' => 'Settings',
 
         'nav' => [
+            'profile' => 'Profile',
+            'accounts' => 'Accounts',
             'security' => 'Security',
+        ],
+
+        'locales' => [
+            'sv_SE' => 'Swedish',
+            'en_GB' => 'English',
+        ],
+
+        'units' => [
+            'metric' => 'Metric',
+            'imperial' => 'Imperial',
+        ],
+
+        'profile' => [
+            'title' => 'Profile',
+            'heading' => 'Profile',
+
+            'name' => 'Name',
+
+            'email' => 'Email',
+            'email_verified' => 'The address is verified.',
+            'email_unverified' => 'The address is not verified yet.',
+            'email_no_change' => 'The email address cannot be changed here.',
+
+            'locale' => 'Language',
+            'locale_follow' => 'Follow the account language (:account)',
+            'locale_follow_plain' => 'Follow the account language',
+
+            'timezone' => 'Time zone',
+            'timezone_follow' => 'Follow the account time zone (:timezone)',
+            'timezone_follow_plain' => 'Follow the account time zone',
+
+            'unit_system' => 'Unit system',
+            'unit_follow' => 'Follow the account unit system (:unit)',
+            'unit_follow_plain' => 'Follow the account unit system',
+
+            'submit' => 'Save',
+        ],
+
+        'accounts' => [
+            'title' => 'Accounts',
+            'heading' => 'Accounts',
+            'intro' => 'One account at a time. The changes apply to everyone in the account.',
+
+            'roles' => [
+                'owner' => 'Owner',
+                'admin' => 'Admin',
+                'member' => 'Member',
+            ],
+
+            'read_only' => 'You can see the details but not change them.',
+            'empty' => 'You are not a member of any account.',
+
+            'submit' => 'Save',
         ],
 
         'security' => [
