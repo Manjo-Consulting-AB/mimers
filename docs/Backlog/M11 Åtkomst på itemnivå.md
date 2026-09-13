@@ -53,7 +53,7 @@ Läckageytan, del två — alla aggregat som i dag räknar per container. Papper
 **Beror på:** 70, 73
 
 ### 75. Notisgeneratorerna respekterar omfång
-Generatorerna från M5 skickar i dag till alla med åtkomst till containern. En omfångsbegränsad mottagare får bara notiser om items hon når — förfallna uppgifter, utlåningar, kvotvarningar som rör hennes eget innehåll. Kontonivåns notiser (fakturering, nedgradering) är oförändrade, de rör kontot och inte pärmen.
-**Läs:** [[Notiser]], [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser
-**Klart när:** en mottagare med `read` på ett item aldrig får en notis som nämner ett annat items namn, och veckosammanfattningen inte skickas alls till en mottagare vars omfång saknar händelser.
+Generatorerna från M5 skickar i dag till alla med åtkomst till containern — och till ingen utanför ägarkontot alls, eftersom 34b:s kontogrind stänger ute varje delegerad mottagare. Uppgiftsnotisen byter grind: den går till den som kan bocka av uppgiften, alltså den som når itemet på minst `write`, ättlingarna inräknade. En mottagare med bara `read` får ingen uppgiftsnotis — uppgiften syns i hennes todo-lista när hon loggar in. Kvotvarningar rör kontot och inte pärmen och går aldrig till en delegerad mottagare, oavsett omfång; utlåningsnotiserna likaså. Kontonivåns notiser (fakturering, nedgradering) är oförändrade.
+**Läs:** [[Notiser]] § Vem får en uppgiftsnotis, [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser (uppföljning 2026-09-13)
+**Klart när:** en mottagare med `write` på ett item får notiser om det itemet och dess ättlingar men aldrig en som nämner ett annat items namn, en mottagare med bara `read` får ingen uppgiftsnotis alls, och veckosammanfattningen skickas inte alls till en mottagare vars omfång saknar händelser.
 **Beror på:** 70, 34

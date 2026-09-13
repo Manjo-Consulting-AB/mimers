@@ -10,6 +10,16 @@ En notis **skapas som en rad**, levereras sedan av kön. Aldrig skickad synkront
 
 I MVP finns tre utgångar: **e-post**, **ICS-kalenderfeed** och **webhooks**.
 
+## Vem får en uppgiftsnotis
+
+En uppgiftsnotis går till den som kan bocka av uppgiften: mottagaren når itemet på minst `write`. Ägarkontots medlemmar når hela pärmen på `delete` och får därför allt som förut.
+
+En delegerad mottagare får notiser om de items hennes grant når på `write` eller `delete`, itemets ättlingar inräknade, och aldrig en rad som nämner ett item hon inte når. Med bara `read` eller `create` får hon ingen uppgiftsnotis alls — uppgiften syns i hennes todo-lista när hon loggar in, men produkten påminner henne inte om den. Detsamma gäller en container-bred grant: `write` ger påminnelser, `read` ger inga.
+
+Kvotvarningar är kontots och inte pärmens och går bara till ägarkontots `owner` och `admin`, aldrig till en delegerad mottagare oavsett omfång. Utlåningsnotiser går bara till ägarkontots medlemmar.
+
+Motiveringen står i [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser (uppföljning 2026-09-13).
+
 ## notification
 
 Outboxen. Vad som hänt, till vem.

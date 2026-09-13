@@ -84,7 +84,7 @@ Kolumn i `container_access` framför egen tabell: åtkomsterna ska förbli läsb
 - **`item_link`** — en länk till ett item utanför omfånget döljs helt, inte som ett namnlöst spöke.
 - **Papperskorgen** (issue 20a) — i dag en containervy, annars ett fönster in i allt som någon gång raderats.
 - **Kostnadsrapporten** (M8) och **todo-listan** (M3) — summerar och listar bara synliga items.
-- **Notisgeneratorerna** (M5) — en omfångsbegränsad mottagare får inte notiser om items hon inte når.
+- **Notisgeneratorerna** (M5) — en omfångsbegränsad mottagare får inte notiser om items hon inte når, och uppgiftsnotisen går bara till den som kan bocka av uppgiften. Se uppföljningen nedan.
 - **Exporten** (issue 41).
 
 **Deltagarlistan** räknar en omfångsbegränsad mottagare som deltagare, men avslöjar inte vem som har vilket omfång — samma princip som redan gäller för nivåer och utgångsdatum.
@@ -96,6 +96,12 @@ Kolumn i `container_access` framför egen tabell: åtkomsterna ska förbli läsb
 **Uppladdningskvoten är oförändrad.** `attachment.billed_account_id` är det uppladdande kontot, så en `create`-mottagare betalar för sina egna bilagor. Se [[ADR-0003 Åtkomstmodell]] och [[ADR-0017 Missbruksvektorer]].
 
 **Frontenden visar två nivåer som standard.** Fyra val är för mycket för en ägare som bara delar med sambon; `create` och `delete` hör hemma bakom "avancerat". Se [[M10 Webbfrontend]].
+
+**Uppföljning 2026-09-13 — uppgiftsnotisen följer `write`, inte åtkomsten.** Punkten om notisgeneratorerna sade bara vad en omfångsbegränsad mottagare inte får, och issue 75 visade att det inte räckte som regel. Generatorn hade sedan 34b en kontogrind som stängde ute varje delegerad mottagare: bara containers som mottagarens egna konton ÄGER kom med i frågan. Ett omfångsfilter ovanpå den grinden filtrerar en mängd som alltid är tom, och issuens krav att en delegat ska få notiser om sitt item gick därför inte att uppfylla utan att riva grinden.
+
+Grinden är nu en nivåjämförelse i stället för en ägarjämförelse: mottagaren får notisen om hon når itemet på minst `write`. Skälet är att `complete()` och `skip()` går via `ItemPolicy::update()`, alltså `write` — en mottagare med `read` ser uppgiften i todo-listan men kan aldrig stänga den, och `task.due` följd av `task.overdue` till henne vore en återkommande uppmaning att göra något produkten inte låter henne göra. Hennes enda utväg vore att stänga av notistypen helt.
+
+Följden är att 34b § Beslut 4 nu handlar om **läsrätt**, inte om ägarskap: gästen med `read` på hela charterbåten får fortfarande inte veta att impellern ska bytas, men en gäst med `write` får det. Hon är medförvaltare och inte åskådare, och hon är den som kan bocka av uppgiften. Ägarkontots medlemmar passerar grinden på regel 1, som ger dem `delete` på hela containern, så deras notiser är oförändrade.
 
 ## Alternativ
 
