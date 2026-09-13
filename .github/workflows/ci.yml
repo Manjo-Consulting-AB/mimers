@@ -3,6 +3,18 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    # `edited` utöver de tre normala (opened, synchronize, reopened): flera
+    # steg nedan läser PR:ens KROPP ur händelsens payload
+    # (github.event.pull_request.body), och den payloaden är fryst vid
+    # händelsen. En kropp som ändras efteråt syns därför aldrig - inte ens vid
+    # en omkörning, som spelar upp samma payload igen. Det bet i pipelinen för
+    # issue #291: process_next_issue.py lade till den saknade `Closes #291`
+    # EFTER sin sista push, omfangsruta.py fortsatte se en kropp utan
+    # Closes-rad, och PR #297 stod röd på ett fel som redan var åtgärdat.
+    # Med `edited` utlöser rättelsen en ny körning med en färsk payload.
+    # concurrency-gruppen nedan avbryter den föregående, så en redigering
+    # under en pågående körning kostar inte två.
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read

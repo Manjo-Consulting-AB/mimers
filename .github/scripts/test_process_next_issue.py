@@ -220,6 +220,45 @@ def test_sakerstall_closes_rad_none_kropp():
 
 
 # =====================================================================
+# bygg_kroppsuppdatering() - PR-kroppen skrivs om via REST, inte gh pr edit
+# (issue #291: `gh pr edit 297 --body ...` kraschade hela körningen med
+# "Projects (classic) is being deprecated ... repository.pullRequest.projectCards",
+# kroppen blev aldrig uppdaterad, och CI fällde PR #297 för saknad Closes-rad)
+# =====================================================================
+
+def test_kroppsuppdatering_gar_via_rest_inte_gh_pr_edit():
+    argv = p.bygg_kroppsuppdatering("297", "Closes #291\n\n## Sammanfattning")
+    assert argv[:3] == ["gh", "api", "--method"]
+    assert "edit" not in argv
+    assert argv[3] == "PATCH"
+    assert argv[4] == f"repos/{p.GH_REPO}/pulls/297"
+
+
+def test_kroppsuppdatering_skickar_hela_kroppen():
+    """Kroppen skickas som ett enda -f-argument; radbrytningar och backticks
+    ska överleva ordagrant (argv, inget skal)."""
+    kropp = "Closes #291\n\n## Sammanfattning\n\n- `lang/sv/ui.php` \u2014 text"
+    argv = p.bygg_kroppsuppdatering("297", kropp)
+    assert argv[-2] == "-f"
+    assert argv[-1] == f"body={kropp}"
+
+
+def test_ingen_gh_pr_edit_kvar_i_skriptet():
+    """Tripwire: varje `gh pr edit` mot en PR i det här repot felar på
+    projectCards. Etiketten (satt_label) och kroppen gick båda den vägen;
+    nya anrop ska inte smyga tillbaka in."""
+    kalla = open(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "process_next_issue.py"),
+        encoding="utf-8",
+    ).read()
+    rader = [
+        rad.strip() for rad in kalla.splitlines()
+        if '"gh", "pr", "edit"' in rad.replace(" ", " ")
+    ]
+    assert rader == [], f"gh pr edit används fortfarande: {rader}"
+
+
+# =====================================================================
 # Beslut 11: modulen är importerbar utan sidoeffekter
 # =====================================================================
 

@@ -879,8 +879,17 @@ def besvara_arkitektfragor(pr_number=None):
 def satt_label(pr_number, label):
     """Sätter en etikett på en PR. check=False: en etikett som inte kunde sättas
     (labeln borttagen ur repot, nätverksglapp) får inte fälla en körning som
-    annars hade gjort jobbet - den är en statusmarkör, inte ett villkor."""
-    run_cmd(["gh", "pr", "edit", str(pr_number), "--add-label", label],
+    annars hade gjort jobbet - den är en statusmarkör, inte ett villkor.
+
+    REST (`gh api .../labels`), inte `gh pr edit --add-label`, av exakt samma
+    skäl som run_review() redan skriver ut för granskningsmodellen: varje
+    `gh pr edit` mot en PR i det här repot går via en GraphQL-mutation som
+    alltid svarar med felet om att "Projects (classic)" fasas ut
+    (repository.pullRequest.projectCards). Med check=False blev det ett tyst
+    fel här - etiketten sattes ibland, ibland inte, och ingen loggrad
+    skvallrade. Se ta_bort_label() nedan, som redan gick via REST."""
+    run_cmd(["gh", "api", f"repos/{GH_REPO}/issues/{pr_number}/labels",
+             "-f", f"labels[]={label}"],
             check=False, cwd=REPO_ROOT)
 
 
@@ -1143,6 +1152,27 @@ def bygg_pr_kropp(issue_num, agent_summary):
         print(f"!! PR-kroppen saknar {len(saknade)} obligatorisk(a) rubrik(er): {', '.join(saknade)}")
 
     return "\n\n".join(delar)
+
+
+def bygg_kroppsuppdatering(pr_number, body):
+    """argv:n som skriver om en PR-kropp - REST, inte `gh pr edit --body`.
+
+    `gh pr edit` går via en GraphQL-mutation som i det här repot alltid felar
+    med "Projects (classic) is being deprecated"
+    (repository.pullRequest.projectCards), trots att inget projekt är
+    inblandat. run_review() dokumenterade det redan för etiketterna, men
+    lagningen av den saknade Closes-raden (PR #263) skrevs som ett
+    `gh pr edit --body` ändå - och kraschade hela körningen för issue #291:
+    kroppen uppdaterades aldrig, omfangsruta.py fällde CI på PR #297 för en
+    saknad Closes-rad, och issuen landade på 'needs-human'. Samma
+    generaliseringsmiss som retron redan noterat: fixen fanns på ett ställe,
+    inte på alla som delar felet.
+
+    REST-endpointen rör inga projektkort och svarar rent. Returnerar argv i
+    stället för att köra - så att formen kan testas utan att något nätanrop
+    sker (test_process_next_issue.py testar bara rena funktioner)."""
+    return ["gh", "api", "--method", "PATCH", f"repos/{GH_REPO}/pulls/{pr_number}",
+            "-f", f"body={body}"]
 
 
 def sakerstall_closes_rad(pr_body, issue_num):
@@ -1731,7 +1761,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         if lagad_kropp is not None:
             print(f"--> Agentens PR-kropp saknar 'Closes #{issue_num}' - lägger till den.")
             pr_body = lagad_kropp
-            run_cmd(["gh", "pr", "edit", pr_number, "--body", pr_body], cwd=worktree_path)
+            run_cmd(bygg_kroppsuppdatering(pr_number, pr_body), cwd=worktree_path)
     else:
         pr_body = bygg_pr_kropp(issue_num, agent_summary)
 
