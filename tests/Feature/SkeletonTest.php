@@ -19,7 +19,10 @@ it('svarar på rotrutten med en Inertia-sida', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Welcome')
-            ->has('version')
+            // `version` var skalets platshållare, se issue 51 § Beslut 11.
+            // Raden är den gamla assertionens sanna motsats: den faller på
+            // baskommiten, där rutten fortfarande skickar app()->version().
+            ->missing('version')
         );
 });
 
