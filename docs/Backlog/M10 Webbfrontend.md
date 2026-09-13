@@ -25,6 +25,7 @@ Registrering, inloggning, utloggning, e-postverifiering, magic link, TOTP-aktive
 **Läs:** [[ADR-0011 Autentisering]], [[Konton och åtkomst]]
 **Klart när:** hela vägen in fungerar i webbläsaren för alla tre inloggningssätten, och rate limiting ger ett begripligt meddelande i stället för ett tomt fel.
 **Beror på:** 52, 4, 5, 6
+**Byggd som:** 53a vägen in (registrering, inloggning, magic link, e-postverifiering), 53b tvåfaktorns aktivering och återställningskoderna, 53c kontoinställningarna — profilen, kontot och `AccountPolicy::update()`
 
 ### 54. Containervyer
 Lista, skapa, redigera, välja aktiv container. `kind` styr presentation, inte logik.
