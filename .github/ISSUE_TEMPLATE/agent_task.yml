@@ -45,6 +45,10 @@ body:
       description: >
         Globbar, en per rad. Detta är de enda filer som får ändras.
         Formatet läses maskinellt vid granskning och retro - skriv globbar, inte prosa.
+        Ta med de BEFINTLIGA testfiler vars förväntan den här issuen gör felaktig -
+        en tripwire en tidigare issue lämnade, eller ett test på en yta issuen ändrar.
+        Åtta sådana filer föll utanför rutan i M11 och kostade fem issues varsin
+        upptäckt; de syns när issuen skrivs, inte när den byggs.
       placeholder: |
         app/Models/ContainerAccess.php
         app/Policies/**

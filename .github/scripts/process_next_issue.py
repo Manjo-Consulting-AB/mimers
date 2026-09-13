@@ -144,6 +144,54 @@ def run_cmd(args, check=True, capture_output=True, cwd=None, env=None):
     return result
 
 
+# Markören omfangsruta.py letar efter i arkitektsvaren. Speglad här i stället för
+# importerad: omfangsruta.py körs i Actions och det här skriptet på VPS:en, och en
+# importkoppling mellan dem vore en ny felkälla i bägge riktningar. Drift fångas i
+# stället av test_process_next_issue.py, som importerar båda och jämför.
+UNDANTAGSMARKOR = "Beviljat undantag från omfångsrutan:"
+
+
+def beviljar_undantag(svar):
+    """Beviljar det här arkitektsvaret ett undantag från omfångsrutan?
+
+    Ren funktion, avsiktligt: hela beslutet är "står markören i texten", och
+    formen är lika stel som omfangsruta.py:s egen läsning av den.
+    """
+    return UNDANTAGSMARKOR in (svar or "")
+
+
+def kora_om_ci_efter_undantag(pr_number, svar):
+    """Starta om CI när ett arkitektsvar beviljar undantag från omfångsrutan.
+
+    omfangsruta.py läser beviljade undantag ur PR:ens kommentarer *vid körning*.
+    Ett undantag som postas efter den sista körningen ändrar därför ingenting:
+    steget står kvar rött, och med auto-merge på `review:approved` (ADR-0026,
+    uppföljning 2026-09-05) hinner mergen före nästa körning. Det har hänt tre
+    gånger - issue 223 (PR #231, M6, se omfangsruta.py:s docstring), och issue 72
+    (PR #284) och 73 (PR #285) i M11, där Opus skrev instruktionen "Kör om CI"
+    rakt ut i svaret och ingen gjorde det.
+
+    Felar omkörningen är det inte värt att fälla PR-flödet på: grinden var röd
+    redan, och värsta utfallet är det vi hade förut. Därför bara en varning.
+    """
+    if not beviljar_undantag(svar):
+        return
+
+    print(f"--> Arkitektsvaret beviljar undantag från omfångsrutan - kör om CI på #{pr_number}.")
+    try:
+        gren = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefName"],
+                                  cwd=REPO_ROOT).stdout)["headRefName"]
+        korningar = json.loads(run_cmd(
+            ["gh", "run", "list", "--workflow", "ci.yml", "--branch", gren, "-L", "1",
+             "--json", "databaseId"], cwd=REPO_ROOT).stdout)
+        if not korningar:
+            print("⚠️ Ingen CI-körning på grenen - grinden läser undantaget först vid nästa push.")
+            return
+        run_cmd(["gh", "run", "rerun", str(korningar[0]["databaseId"]), "--failed"], cwd=REPO_ROOT)
+    except Exception as e:
+        print(f"⚠️ Kunde inte köra om CI på #{pr_number}: {e}")
+
+
 def run_local_tests(cwd):
     """
     Kvalitetsgrind: Pint (auto-fix, aldrig ett skäl att fela), PHPStan
@@ -793,6 +841,8 @@ def besvara_arkitektfraga(pr_number):
 
     run_cmd(["gh", "pr", "comment", pr_number, "--body",
              f"### Opus 5 - arkitektsvar på din fråga\n{svar}"], cwd=REPO_ROOT)
+
+    kora_om_ci_efter_undantag(pr_number, svar)
 
 
 def besvara_arkitektfragor(pr_number=None):
@@ -1795,6 +1845,8 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
         run_cmd(["gh", "pr", "comment", pr_number, "--body",
                   f"### Opus 5 - arkitektsvar på Frågor och antaganden\n{opus_svar}"],
                  cwd=REPO_ROOT)
+
+        kora_om_ci_efter_undantag(pr_number, opus_svar)
 
         if kraver_kodandring:
             print("--> Opus svar kräver en kodändring - startar åtgärdsloop (DeepSeek + Sonnet)...")
