@@ -68,7 +68,7 @@ it('loggar in en webbsession helt utan lösenord', function () {
 
     $url = begärLänkOchFångaUrl($user->email);
 
-    get($url)->assertRedirect(route('welcome'));
+    get($url)->assertRedirect(route('dashboard'));
 
     assertAuthenticatedAs($user);
 });
@@ -125,7 +125,7 @@ it('kan inte lösa in samma token två gånger på webben heller — den andra l
     $user = User::factory()->create();
     $url = begärLänkOchFångaUrl($user->email);
 
-    get($url)->assertRedirect(route('welcome'));
+    get($url)->assertRedirect(route('dashboard'));
 
     postJson('/logout');
 

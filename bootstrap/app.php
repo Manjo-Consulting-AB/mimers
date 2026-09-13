@@ -69,12 +69,14 @@ return Application::configure(basePath: dirname(__DIR__))
          * "Felkodsregeln ... gäller därmed /api, inte webbsidorna." Webben
          * kör Inertia och ska behålla Laravels vanliga valideringsfel.
          *
-         * Varje closure nedan returnerar null för ett webbanrop, så
-         * Laravels vanliga felrendering tar över helt oförändrad —
-         * `Handler::renderViaCallbacks()` fortsätter till nästa
+         * Alla closures nedan utom ThrottleRequestsException returnerar null
+         * för ett webbanrop, så Laravels vanliga felrendering tar över helt
+         * oförändrad — `Handler::renderViaCallbacks()` fortsätter till nästa
          * registrerade closure (och sist till default-rendering) när en
          * closure returnerar null, se
          * vendor/laravel/framework/.../Foundation/Exceptions/Handler.php.
+         * Undantaget är takgränsen, som sedan issue 53a § Beslut 6 svarar
+         * webben med ett formulärfel i stället för en tom 429-sida.
          * Ordningen nedan spelar roll av samma skäl: mer specifika
          * undantagstyper registreras före den generella
          * Throwable-fångaren sist, som annars skulle vinna över dem.
@@ -134,17 +136,37 @@ return Application::configure(basePath: dirname(__DIR__))
             return ApiError::response('resource.method_not_allowed', [], 405);
         });
 
+        /*
+         * Issue 53a § Beslut 6 · Takgränsen på webben.
+         *
+         * `throttle:login` kastar ThrottleRequestsException INNAN
+         * kontrollern körs, så inget try/catch i en kontroller hjälper — en
+         * webbsida skulle annars svara en tom 429-sida utan vare sig
+         * förklaring eller väg tillbaka. Webben får i stället samma sak som
+         * varje annat serverfel i ett formulär: tillbaka till formuläret
+         * med felet på fältet `email`, formulerat med antalet sekunder.
+         *
+         * Det gäller varje webbrutt som kastar undantaget, inte bara
+         * inloggningen — magic link-begäran delar samma begränsare, och det
+         * är avsiktligt.
+         *
+         * `except('password')` är inte en detalj: `old()`-värden hamnar i
+         * sessionen, och ett lösenord som ligger kvar där tills sessionen
+         * töms är en läcka utan nytta.
+         */
         $exceptions->render(function (ThrottleRequestsException $e, Request $request) {
-            if (! $request->is('api/*')) {
-                return null;
-            }
-
             // ThrottleRequests-middlewaret (Illuminate\Routing\Middleware\ThrottleRequests)
             // sätter Retry-After i undantagets headers, inte som ett eget
             // konstruktorargument — se issue 7 § Beslut som redan är
-            // fattade punkt 5. Retry-After-headern behålls också, utöver
-            // retry_after_seconds i kroppen.
+            // fattade punkt 5. Retry-After-headern behålls också på /api,
+            // utöver retry_after_seconds i kroppen.
             $retryAfterSeconds = (int) ($e->getHeaders()['Retry-After'] ?? 0);
+
+            if (! $request->is('api/*')) {
+                return back()
+                    ->withInput($request->except('password'))
+                    ->withErrors(['email' => __('auth.throttle', ['seconds' => $retryAfterSeconds])]);
+            }
 
             return ApiError::response('auth.too_many_attempts', [
                 'retry_after_seconds' => $retryAfterSeconds,

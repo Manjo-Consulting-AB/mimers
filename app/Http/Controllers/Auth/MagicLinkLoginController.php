@@ -37,6 +37,7 @@ class MagicLinkLoginController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('welcome'));
+        // Issue 53a § Beslut 2: samma mål som lösenordsinloggningen.
+        return redirect()->intended(route('dashboard'));
     }
 }

@@ -29,16 +29,58 @@ return [
             'heading' => 'Logga in',
             'submit' => 'Logga in',
         ],
+
+        // Etiketten nämner båda med flit: LoginRequest provar samma
+        // inskickade värde som engångskod och som återställningskod, och ger
+        // samma fel oavsett vilket som misslyckades — se issue 53a § Beslut 4.
+        'code' => [
+            'label' => 'Engångskod eller återställningskod',
+        ],
+
+        'register' => [
+            'title' => 'Skapa konto',
+            'heading' => 'Skapa konto',
+            'submit' => 'Skapa konto',
+            'link' => 'Skapa ett konto',
+            'password_hint' => 'Minst åtta tecken.',
+            'login' => 'Har du redan ett konto? Logga in',
+        ],
+
+        'magic_link' => [
+            'title' => 'Logga in med länk',
+            'heading' => 'Logga in med länk',
+            'link' => 'Logga in med en länk',
+            'intro' => 'Vi skickar en inloggningslänk till din e-postadress. Länken går att använda en gång och gäller i en kvart.',
+            'submit' => 'Skicka länken',
+            'login' => 'Tillbaka till inloggningen',
+        ],
+
+        // Verifieringstexten renderas både i bannern på varje inloggad sida
+        // och på /email/verify — se issue 53a § Beslut 7. Samma nycklar, en
+        // komponent.
+        'verify' => [
+            'title' => 'Verifiera din e-postadress',
+            'heading' => 'Verifiera din e-postadress',
+            'banner' => 'Din e-postadress är inte verifierad än.',
+            'body' => 'Vi skickar ett mejl med en verifieringslänk till din adress. Klicka på länken i mejlet för att bekräfta den.',
+            'send' => 'Skicka verifieringsmejlet',
+        ],
+
+        'logout' => 'Logga ut',
     ],
 
     'form' => [
+        'name' => 'Namn',
         'email' => 'E-post',
         'password' => 'Lösenord',
     ],
 
     'flash' => [
         'verification-link-sent' => 'Ett nytt verifieringsmejl har skickats.',
-        'magic-link-sent' => 'Vi har skickat en inloggningslänk till din e-post.',
+        // Aldrig "vi har skickat en länk till dig": MagicLinkRequestController
+        // svarar likadant för en adress som inte finns, så vyn vet inte om
+        // något mejl gick iväg — se issue 53a § Beslut 5.
+        'magic-link-sent' => 'Om adressen finns hos oss har vi skickat en länk till den.',
         'totp-confirmed' => 'Tvåfaktorsinloggning är påslagen.',
         'totp-disabled' => 'Tvåfaktorsinloggning är avstängd.',
         'session-expired' => 'Din session hann gå ut. Försök igen.',

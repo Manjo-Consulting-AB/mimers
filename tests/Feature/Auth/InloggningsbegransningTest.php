@@ -2,6 +2,7 @@
 
 use App\Models\User;
 
+use function Pest\Laravel\from;
 use function Pest\Laravel\postJson;
 use function Pest\Laravel\withServerVariables;
 
@@ -153,7 +154,7 @@ it('rensar e-postbegränsningen på webben vid en lyckad inloggning, så nästa 
     postJson('/login', [
         'email' => $user->email,
         'password' => 'ratt-losenord',
-    ])->assertRedirect(route('welcome'));
+    ])->assertRedirect(route('dashboard'));
 
     // Webbens /login sitter bakom `guest`-middleware (routes/web.php) —
     // måste loggas ut igen innan nästa /login-anrop, annars omdirigeras
@@ -166,7 +167,7 @@ it('rensar e-postbegränsningen på webben vid en lyckad inloggning, så nästa 
     ])->assertStatus(422);
 });
 
-it('begränsar webbens inloggning på samma sätt, men utan höljet — Laravels vanliga svar', function () {
+it('begränsar webbens inloggning på samma sätt, men som ett formulärfel i stället för höljet', function () {
     $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
 
     for ($i = 0; $i < 5; $i++) {
@@ -176,15 +177,23 @@ it('begränsar webbens inloggning på samma sätt, men utan höljet — Laravels
         ])->assertStatus(422);
     }
 
-    $response = postJson('/login', [
+    $response = from('/login')->postJson('/login', [
         'email' => $user->email,
         'password' => 'fel-losenord',
     ]);
 
-    // Samma begränsare (throttle:login), men det maskinläsbara höljet
-    // gäller bara /api — se issue 7 § Beslut som redan är fattade punkt 1
-    // och tests/Feature/Auth/DeladValideringTest.php.
-    $response->assertStatus(429);
-    expect($response->json('error'))->toBeNull();
-    expect($response->headers->has('Retry-After'))->toBeTrue();
+    // Samma begränsare (throttle:login), fortfarande utan höljet — det
+    // maskinläsbara höljet gäller bara /api, se issue 7 § Beslut som redan
+    // är fattade punkt 1 och tests/Feature/Auth/DeladValideringTest.php.
+    //
+    // Sedan issue 53a § Beslut 6 svarar webben inte 429 alls: bootstrap/app.php
+    // gör ThrottleRequestsException till en omdirigering tillbaka till
+    // formuläret med felet på fältet `email`, så användaren får en mening med
+    // antalet sekunder i stället för en tom 429-sida. Att kroppen inte bär
+    // något hölje syns på att svaret är en omdirigering och inget JSON-svar;
+    // `$response->json()` går inte att fråga här — TestResponse kastar om det
+    // undantag som renderades när kroppen inte går att avkoda som JSON.
+    // Skillnaden webb mot /api prövas i tests/Feature/Frontend/TakgransTest.php.
+    $response->assertRedirect('/login');
+    $response->assertSessionHasErrors('email');
 });

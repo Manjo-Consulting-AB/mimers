@@ -1,8 +1,10 @@
 <script setup>
-import { Head, useForm } from '@inertiajs/vue3';
+import { computed, nextTick, ref, watch } from 'vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+import { useErrorFocus } from '../../composables/useErrorFocus.js';
 
 /*
  * Den arbetade förlagan för varje formulär i M10, se issue 51 § Beslut 9.
@@ -20,28 +22,68 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *      det redan — och ingen skriver `<p v-if="errors.x">` för hand;
  *      FormField renderar felet och kopplar det till fältet.
  *
- * Sidan ägs av issue 53a efter den här: TOTP-fältet, magic link-fliken och
- * länken till registrering är 53a:s, liksom vart store() skickar användaren
- * efter en lyckad inloggning.
- *
  * Etiketterna och knapptexten kommer ur lang/{locale}/ui.php sedan issue 52 —
  * `form.email` och `auth.login.*`. Serverns valideringsfel är redan översatta
  * när de når hit: `form.errors.email` bär meningen ur validation.php på
  * användarens språk.
+ *
+ * Issue 53a § Beslut 4 · engångskoden. `code` skickas med i varje anrop men
+ * RENDERAS först när `form.errors.code` finns, alltså när servern har bett om
+ * den — AuthenticatedSessionController binder TotpRequiredException dit.
+ * Fältet får aldrig synas i förväg: att visa det för en besökare som ännu inte
+ * angett rätt lösenord avslöjar både att adressen finns och att kontot har
+ * tvåfaktor, precis den sidokanal LoginRequest::authenticate() prövar
+ * lösenordet före koden för att undvika. Ett felaktigt lösenord sätter
+ * `errors.email`, aldrig `errors.code`, och fältet förblir dolt.
+ *
+ * Etiketten nämner återställningskoden: LoginRequest provar samma inskickade
+ * värde som engångskod och som återställningskod och ger samma fel oavsett
+ * vilket som misslyckades (tests/Feature/Auth/AterstallningskoderTest.php).
+ * En vy som frågade efter "kod från appen" och gömde återställningskoden
+ * bakom en egen länk skulle återinföra en skillnad servern med flit raderat.
+ *
+ * Fältet är `type="text"` utan `inputmode`: engångskoden är sex siffror, men
+ * återställningskoden är tio tecken ur `Str::random()`s alfanumeriska alfabet
+ * (App\Support\Auth\RecoveryCodeBroker), och en numerisk tangentbordsknapp
+ * hade stängt ute den på en telefon.
  */
 const { t } = useTranslations();
+const { focusFirstError } = useErrorFocus();
 
 const form = useForm({
     email: '',
     password: '',
+    code: '',
+});
+
+const codeRequested = computed(() => Boolean(form.errors.code));
+const codeInput = ref(null);
+
+watch(codeRequested, async (requested) => {
+    if (!requested) {
+        return;
+    }
+
+    await nextTick();
+    codeInput.value?.focus();
 });
 
 function submit() {
     form.post('/login', {
-        // Lösenordet töms när svaret kommit, oavsett utfall. E-postadressen
-        // står kvar, så ett felstavat lösenord går att rätta utan att skriva
-        // om allt.
-        onFinish: () => form.reset('password'),
+        // Tangentbordsanvändaren ska hamna på felet, inte kvar på knappen —
+        // se useErrorFocus.js.
+        onError: focusFirstError,
+
+        // Lösenordet töms när svaret kommit. Undantaget är när servern bad om
+        // engångskoden: då är lösenordet redan rätt och att tömma det tvingar
+        // fram en omskrivning av ett fält användaren just skrev — samma skäl
+        // som gör att takgränsen i bootstrap/app.php inte skickar tillbaka
+        // lösenordet. Ett felaktigt lösenord sätter `errors.email` och töms.
+        onFinish: () => {
+            if (!codeRequested.value) {
+                form.reset('password');
+            }
+        },
     });
 }
 </script>
@@ -79,6 +121,25 @@ function submit() {
                 >
             </FormField>
 
+            <FormField
+                v-if="codeRequested"
+                v-slot="{ describedBy }"
+                :label="t('auth.code.label')"
+                id="code"
+                :error="form.errors.code"
+            >
+                <input
+                    id="code"
+                    ref="codeInput"
+                    v-model="form.code"
+                    :aria-describedby="describedBy"
+                    type="text"
+                    name="code"
+                    autocomplete="one-time-code"
+                    class="rounded border border-slate-300 bg-white px-3 py-2"
+                >
+            </FormField>
+
             <button
                 type="submit"
                 :disabled="form.processing"
@@ -87,5 +148,10 @@ function submit() {
                 {{ t('auth.login.submit') }}
             </button>
         </form>
+
+        <div class="mt-6 flex max-w-sm flex-col gap-2 text-sm">
+            <Link href="/login/magic-link" class="text-blue-700 hover:underline">{{ t('auth.magic_link.link') }}</Link>
+            <Link href="/register" class="text-blue-700 hover:underline">{{ t('auth.register.link') }}</Link>
+        </div>
     </AppLayout>
 </template>

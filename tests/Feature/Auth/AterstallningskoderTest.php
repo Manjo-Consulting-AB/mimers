@@ -131,7 +131,7 @@ it('loggar in en webbsession med en giltig återställningskod i stället för T
         'email' => $user->email,
         'password' => 'ratt-losenord',
         'code' => $koder[0],
-    ])->assertRedirect(route('welcome'));
+    ])->assertRedirect(route('dashboard'));
 
     assertAuthenticatedAs($user);
 });

@@ -22,6 +22,11 @@ import { computed } from 'vue';
  * på servern, i samma FormRequest som /api använder
  * ([[ADR-0021 Frontendteknik]]). Den som skriver `<input>` plus en egen
  * `<p v-if="errors.x">` i sin vy har byggt den sextonde varianten.
+ *
+ * `tabindex="-1"` på felmeddelandet sedan issue 53a § Beslut 10: ett
+ * element utan tabindex går inte att sätta fokus på, och det är hit fokus
+ * ska när servern svarar — se resources/js/composables/useErrorFocus.js.
+ * Fältet blir inte tabbbart av det, bara fokuserbart med kod.
  */
 const props = defineProps({
     label: { type: String, required: true },
@@ -38,6 +43,6 @@ const describedBy = computed(() => (props.error ? `${props.id}-error` : undefine
 
         <slot :described-by="describedBy" />
 
-        <p v-if="error" :id="`${id}-error`" class="text-sm text-red-700">{{ error }}</p>
+        <p v-if="error" :id="`${id}-error`" tabindex="-1" class="text-sm text-red-700 outline-none">{{ error }}</p>
     </div>
 </template>
