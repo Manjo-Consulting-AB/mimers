@@ -93,4 +93,54 @@ return [
         '429' => 'Du har gjort för många försök. Vänta en stund och försök igen.',
         '500' => 'Något gick fel hos oss. Försök igen om en stund.',
     ],
+
+    // Inställningarna, se issue 53b. `nav` är sidonavigationen, en nyckel per
+    // post i resources/js/layouts/settingsSections.js — samma `key` där som
+    // här. Issue 53c (Profil, Konto), 65 (Notiser) och 66 (Plan) lägger sina
+    // nycklar i samma gren.
+    'settings' => [
+        'title' => 'Inställningar',
+
+        'nav' => [
+            'security' => 'Säkerhet',
+        ],
+
+        'security' => [
+            'title' => 'Säkerhet',
+            'heading' => 'Säkerhet',
+
+            'totp' => [
+                'heading' => 'Tvåfaktorsinloggning',
+                'intro' => 'Tvåfaktorsinloggning kräver en engångskod från en autentiseringsapp varje gång du loggar in.',
+
+                // Läge 2, se issue 53b § Beslut 4: ingen QR-kod, URI och
+                // hemlighet som text. Varningen om att hemligheten bara visas
+                // en gång står i recovery_once nedan, för kodarket.
+                'enable' => 'Aktivera tvåfaktor',
+                'setup_intro' => 'Skanna länken med din autentiseringsapp, eller skriv in hemligheten för hand. Bekräfta sedan med koden appen visar.',
+                'uri_label' => 'Länk till autentiseringsappen',
+                'secret_label' => 'Hemlighet att skriva in för hand',
+                'copy' => 'Kopiera länken',
+                'copied' => 'Länken är kopierad',
+                'code_label' => 'Engångskod',
+                'confirm' => 'Bekräfta och slå på',
+                'confirmed_at' => 'Tvåfaktorsinloggning är på sedan :date.',
+
+                // Varningarna står som text i formuläret, aldrig i en
+                // confirm()-dialog, se issue 53b § Beslut 7. Båda kommer ur
+                // brokerklassernas beslut: en omgenerering raderar hela arket
+                // (RecoveryCodeBroker § Beslut 3), och en avstängning tar
+                // koderna med sig (§ Beslut 5).
+                'recovery_heading' => 'Återställningskoder',
+                'recovery_remaining' => 'Koder kvar: :count',
+                'recovery_warning' => 'Ett nytt ark gör alla tidigare koder obrukbara direkt.',
+                'recovery_generate' => 'Generera nya koder',
+                'recovery_once' => 'Koderna visas bara den här gången. Spara dem där du kommer åt dem utan appen.',
+
+                'disable_heading' => 'Stäng av tvåfaktorsinloggning',
+                'disable_warning' => 'När du stänger av raderas återställningskoderna. Slår du på igen får du ett nytt ark.',
+                'disable_submit' => 'Stäng av tvåfaktorn',
+            ],
+        ],
+    ],
 ];

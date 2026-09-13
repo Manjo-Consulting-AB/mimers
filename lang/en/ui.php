@@ -79,4 +79,42 @@ return [
         '429' => 'Too many attempts. Wait a moment and try again.',
         '500' => 'Something went wrong on our side. Try again in a moment.',
     ],
+
+    'settings' => [
+        'title' => 'Settings',
+
+        'nav' => [
+            'security' => 'Security',
+        ],
+
+        'security' => [
+            'title' => 'Security',
+            'heading' => 'Security',
+
+            'totp' => [
+                'heading' => 'Two-factor authentication',
+                'intro' => 'Two-factor authentication requires a one-time code from an authenticator app every time you log in.',
+
+                'enable' => 'Enable two-factor',
+                'setup_intro' => 'Scan the link with your authenticator app, or enter the secret by hand. Then confirm with the code the app shows.',
+                'uri_label' => 'Link for the authenticator app',
+                'secret_label' => 'Secret to enter by hand',
+                'copy' => 'Copy the link',
+                'copied' => 'The link is copied',
+                'code_label' => 'One-time code',
+                'confirm' => 'Confirm and turn on',
+                'confirmed_at' => 'Two-factor authentication has been on since :date.',
+
+                'recovery_heading' => 'Recovery codes',
+                'recovery_remaining' => 'Codes left: :count',
+                'recovery_warning' => 'A new sheet makes every previous code unusable right away.',
+                'recovery_generate' => 'Generate new codes',
+                'recovery_once' => 'The codes are shown this once only. Save them where you can reach them without the app.',
+
+                'disable_heading' => 'Turn off two-factor authentication',
+                'disable_warning' => 'Turning it off deletes the recovery codes. Turning it on again gives you a new sheet.',
+                'disable_submit' => 'Turn off two-factor',
+            ],
+        ],
+    ],
 ];
