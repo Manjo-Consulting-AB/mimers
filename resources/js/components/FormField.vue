@@ -25,7 +25,7 @@ import { computed } from 'vue';
  *
  * `tabindex="-1"` på felmeddelandet sedan issue 53a § Beslut 10: ett
  * element utan tabindex går inte att sätta fokus på, och det är hit fokus
- * ska när servern svarar — se resources/js/composables/useErrorFocus.js.
+ * ska när servern svarar — se resources/js/pages/Auth/useErrorFocus.js.
  * Fältet blir inte tabbbart av det, bara fokuserbart med kod.
  */
 const props = defineProps({

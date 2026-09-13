@@ -3,7 +3,7 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
-import { useErrorFocus } from '../../composables/useErrorFocus.js';
+import { useErrorFocus } from './useErrorFocus.js';
 
 /*
  * Magic link — formuläret som begär länken, se issue 53a § Beslut 5. Samma

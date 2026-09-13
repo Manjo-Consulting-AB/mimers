@@ -3,7 +3,7 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
-import { useErrorFocus } from '../../composables/useErrorFocus.js';
+import { useErrorFocus } from './useErrorFocus.js';
 
 /*
  * Registreringen, se issue 53a § Beslut 8. Samma mönster som Auth/Login.vue —

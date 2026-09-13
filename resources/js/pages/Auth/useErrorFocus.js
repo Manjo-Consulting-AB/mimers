@@ -3,6 +3,13 @@ import { nextTick } from 'vue';
 /*
  * Fokus på första felmeddelandet, se issue 53a § Beslut 10.
  *
+ * Filen ligger hos sina enda tre användare (pages/Auth) i stället för i
+ * resources/js/composables/: den vyn är den enda som importerar den, och
+ * issue 53a:s omfångsruta räknar inte upp composables-katalogen. En ny fil
+ * utanför rutan fäller omfångsgrinden (se .github/scripts/omfangsruta.py).
+ * Inertia löser upp sidor på `./pages/**\/*.vue`, så en .js-fil här bredvid
+ * vyerna krockar inte med sidnamnen.
+ *
  * Ett formulär som postas och kommer tillbaka med ett fel ska inte lämna
  * fokus kvar på skicka-knappen: den som använder tangentbord eller
  * skärmläsare får då ingen signal om att svaret ens kom, än mindre var felet

@@ -90,14 +90,11 @@ it('registrerar en besökare, loggar in henne och landar på dashboard', functio
     assertAuthenticatedAs(User::query()->where('email', 'ny-vy@example.com')->firstOrFail());
 });
 
-it('visar en upptagen e-postadress som ett fältfel och behåller namnet', function () {
+it('visar en upptagen e-postadress som ett fältfel', function () {
     withoutVite();
 
     User::factory()->create(['email' => 'upptagen-vy@example.com']);
 
-    // Serverns halva av "behåller namnet i formuläret": Inertia behåller
-    // fältets värde i komponenten, och adressen ligger kvar i old()-påsen
-    // för den som laddar om sidan.
     followingRedirects()
         ->from('/register')
         ->post('/register', [
@@ -109,6 +106,31 @@ it('visar en upptagen e-postadress som ett fältfel och behåller namnet', funct
             ->component('Auth/Register')
             ->has('errors.email')
         );
+
+    assertGuest();
+});
+
+it('behåller namnet i formuläret när e-postadressen är upptagen', function () {
+    withoutVite();
+
+    User::factory()->create(['email' => 'upptagen-vy@example.com']);
+
+    // Serverns halva av "behåller namnet": RegisterRequest nekar, och svaret
+    // bär namnet i old()-påsen så att formuläret står kvar ifyllt för den som
+    // laddar om sidan. Att Inertia dessutom behåller fältets värde i
+    // komponenten är `v-model` i Auth/Register och syns inte här.
+    //
+    // Egen test i stället för en assertion i testet ovan: att läsa
+    // sessionspåsen konsumerar flashdata, så en omdirigering som följs efter
+    // den läsningen renderar Auth/Register utan `errors.email`.
+    $svar = from('/register')->post('/register', [
+        'name' => 'Redan Registrerad',
+        'email' => 'upptagen-vy@example.com',
+        'password' => 'giltigt-losenord',
+    ]);
+
+    $svar->assertSessionHasErrors('email');
+    $svar->assertSessionHasInput('name', 'Redan Registrerad');
 
     assertGuest();
 });

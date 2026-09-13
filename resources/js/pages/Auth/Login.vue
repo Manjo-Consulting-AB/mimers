@@ -4,7 +4,7 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
-import { useErrorFocus } from '../../composables/useErrorFocus.js';
+import { useErrorFocus } from './useErrorFocus.js';
 
 /*
  * Den arbetade förlagan för varje formulär i M10, se issue 51 § Beslut 9.
