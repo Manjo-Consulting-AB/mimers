@@ -32,6 +32,7 @@ Jobben i tabellen: uppgiftsnotiser var 15:e minut, utlåning dagligen, leverans 
 **Läs:** [[Notiser]] § Kön
 **Beror på:** 24, 30
 **Byggd som:** 34a leveransloopen (minutjobbet som tömmer outboxen), 34b generatorerna för uppgiftsnotiser, kvotvarningar och inaktivitet
+34b:s kontogrind — bara containers som mottagarens egna konton äger — ersattes i issue 75 av en nivågrind på `write`, se [[Notiser]] § Vem får en uppgiftsnotis.
 
 ### 35. Veckosammanfattning
 Standard för uppgiftspåminnelser. Samlar allt markerat `digest`.
