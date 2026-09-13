@@ -57,7 +57,7 @@ it('webbregistrering sparar requestens IP på kontot', function () {
         'name' => 'Webb Person',
         'email' => 'webb-ip@example.com',
         'password' => 'giltigt-losenord',
-    ])->assertRedirect(route('welcome'));
+    ])->assertRedirect(route('dashboard'));
 
     $user = User::query()->where('email', 'webb-ip@example.com')->firstOrFail();
 
