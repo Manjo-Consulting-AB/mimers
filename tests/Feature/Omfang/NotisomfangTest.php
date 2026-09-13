@@ -32,20 +32,20 @@ use Illuminate\Support\Facades\Mail;
  * Konsekvenser ("Notisgeneratorerna — en omfångsbegränsad mottagare får inte
  * notiser om items hon inte når").
  *
- * VIKTIGT OM VAD TESTERNA VISAR. Uppgiftsnotiserna har två spärrar som pekar
- * åt olika håll beroende på VILKEN sorts delegerad åtkomst mottagaren har.
- * scopeTodoFor() (issue 74) begränsar redan förekomsterna till de items
- * mottagaren når. Ovanpå det avgör
- * GeneratesTaskNotifications::recipientReachesContainer() om containern
- * räknas alls: ägd av hennes konto — alltid med (regel 1 ger henne redan
- * hela containern) — annars bara med om hennes omfång i containern är
- * `restricted()`, dvs en itemgrant. Är omfånget `unrestricted()` utan att
- * vara ägt är det en container-bred gäst, och 34b:s Beslut 4 håller henne
- * utanför precis som förut — det finns ett befintligt test för det ("en gäst
- * med delegerad åtkomst får ingen uppgiftsnotis").
+ * VIKTIGT OM VAD TESTERNA VISAR. Uppgiftsnotiserna har två spärrar.
+ * scopeTodoFor() (issue 74) begränsar förekomsterna till de items mottagaren
+ * når. Ovanpå det ligger en NIVÅGRIND (issue 75 § Beslut 8): notisen går
+ * bara till den som kan bocka av uppgiften, alltså `AccessLevel::WRITE` —
+ * `complete()`/`skip()` går via ItemPolicy::update(). Den som bara har
+ * `read` ser uppgiften i todo-listan men kan aldrig stänga den.
  *
- * En mottagare med en ITEM-grant (restricted scope) är alltså den nya vägen
- * in: hon får uppgiftsnotiser för de items hon når, aldrig för ett syskon.
+ * Grinden är en nivå och inte en kontogrind, så mottagargrupperna blir:
+ * ägarkontots medlemmar (regel 1 ger `unrestricted(DELETE)`, som klarar
+ * `write`) — oförändrat; container-bred gäst på `write`/`delete` — ny väg in
+ * (34b:s Beslut 4 mjukas upp); container-bred gäst på `read`/`create` och
+ * itemgrant på `read`/`create` — inget; itemgrant på `write`/`delete` — hon
+ * får notiser om sitt item OCH dess ättlingar, eftersom nivån ärvs genom
+ * closeOverDescendants(), men aldrig om ett syskon.
  *
  * Fixturen är omfångsupplösningens (issue 70):
  *
@@ -174,7 +174,7 @@ function notisomfangFrågor(Closure $anrop): int
 
 it('en omfångsbegränsad mottagare får en uppgiftsnotis om itemet hon når, men ingen om ett syskon', function () {
     [, $ägare, $container, $motor, $mast] = notisomfangBas();
-    $mottagare = notisomfangMottagare($container, $motor);
+    $mottagare = notisomfangMottagare($container, $motor, 'write');
 
     notisomfangUppgift($motor, 'Byt impeller', '2026-09-02');
     notisomfangUppgift($mast, 'Kontrollera riggen', '2026-09-02');
@@ -182,8 +182,7 @@ it('en omfångsbegränsad mottagare får en uppgiftsnotis om itemet hon når, me
     app(GeneratesTaskNotifications::class)->handle();
 
     // Omfångsfiltret i scopeTodoFor() (issue 74) ger henne motorn och inte
-    // masten, och hennes itemgrant gör containern `restricted()` — inte
-    // container-bred — så recipientReachesContainer() släpper igenom henne.
+    // masten, och hennes itemgrant på `write` klarar nivågrinden (Beslut 8).
     $hennes = Notification::query()->where('user_id', $mottagare->id)->pluck('payload');
     expect($hennes)->toHaveCount(1);
     expect($hennes->first()['item'])->toBe('Motorn');
@@ -194,6 +193,42 @@ it('en omfångsbegränsad mottagare får en uppgiftsnotis om itemet hon når, me
     expect($ägarens->pluck('item')->sort()->values()->all())->toBe(['Masten', 'Motorn']);
 });
 
+it('en mottagare med bara läsrätt på itemet får ingen uppgiftsnotis alls', function () {
+    [, $ägare, $container, $motor] = notisomfangBas();
+    $mottagare = notisomfangMottagare($container, $motor);
+
+    notisomfangUppgift($motor, 'Byt impeller', '2026-09-02');
+
+    app(GeneratesTaskNotifications::class)->handle();
+
+    // Klart när-punkt 1–3 i issue 280: en mottagare med bara `read` på ett
+    // item ser uppgiften i todo-listan men kan aldrig bocka av den —
+    // complete()/skip() går via ItemPolicy::update(). Nivågrinden håller
+    // henne utanför, och `read` räcker alltså inte längre.
+    expect(Notification::query()->where('user_id', $mottagare->id)->count())->toBe(0);
+
+    // Ägaren är oförändrad: regel 1 ger `unrestricted(DELETE)`.
+    expect(Notification::query()->where('user_id', $ägare->id)->count())->toBe(1);
+});
+
+it('en mottagare med skrivrätt på ett item får notis även om itemets ättling', function () {
+    [, , $container, $motor, $mast, $impeller] = notisomfangBas();
+    $mottagare = notisomfangMottagare($container, $motor, 'write');
+
+    // Impellern hänger under motorn, masten är ett syskon till den.
+    notisomfangUppgift($impeller, 'Smörj lagret', '2026-09-02');
+    notisomfangUppgift($mast, 'Kontrollera riggen', '2026-09-02');
+
+    app(GeneratesTaskNotifications::class)->handle();
+
+    // Nivån ärvs NEDÅT genom closeOverDescendants() (ADR-0028 regel 3), så
+    // granten på motorn bär `write` hela vägen till impellern. Masten är
+    // varken itemet eller en ättling och faller utanför.
+    $hennes = Notification::query()->where('user_id', $mottagare->id)->pluck('payload');
+    expect($hennes)->toHaveCount(1);
+    expect($hennes->first()['item'])->toBe('Impellern');
+});
+
 it('ägarkontots medlemmar och en container-bred mottagare får samma notiser som före issuen', function () {
     [$ägarkonto, $ägare, $container, $motor, $mast, $impeller] = notisomfangBas();
 
@@ -201,8 +236,9 @@ it('ägarkontots medlemmar och en container-bred mottagare får samma notiser so
     $ägarkonto->users()->attach($medlem, ['role' => 'member']);
 
     // En container-bred grant UTANFÖR ägarkontot — samma läge som 34b:s
-    // gästtest. Kontogrinden ger henne inga påminnelser, och den här issuen
-    // rör inte det beslutet.
+    // gästtest. Hennes nivå är `read`, och nivågrinden (Beslut 8) håller
+    // henne utanför: hon ser uppgifterna i todo-listan men kan inte bocka av
+    // dem. Punkten är oförändrad i sak sedan 34b.
     $gäst = notisomfangMottagare($container, null);
 
     notisomfangUppgift($motor, 'Byt impeller', '2026-09-02');
@@ -223,9 +259,27 @@ it('ägarkontots medlemmar och en container-bred mottagare får samma notiser so
     expect(Notification::query()->where('user_id', $gäst->id)->count())->toBe(0);
 });
 
+it('en container-bred gäst med skrivrätt får uppgiftsnotiser', function () {
+    [, , $container, $motor, $mast] = notisomfangBas();
+
+    // Samma gäst som ovan, men på `write`. Det är den avsiktliga
+    // uppmjukningen av 34b § Beslut 4 (issue 280 § Beslut 8): hon kan bocka
+    // av uppgifterna, alltså ska hon få veta att de förfaller.
+    $gäst = notisomfangMottagare($container, null, 'write');
+
+    notisomfangUppgift($motor, 'Byt impeller', '2026-09-02');
+    notisomfangUppgift($mast, 'Kontrollera riggen', '2026-09-02');
+
+    app(GeneratesTaskNotifications::class)->handle();
+
+    $hennes = Notification::query()->where('user_id', $gäst->id)->pluck('payload');
+    expect($hennes)->toHaveCount(2);
+    expect($hennes->pluck('item')->sort()->values()->all())->toBe(['Masten', 'Motorn']);
+});
+
 it('ingen notisrads payload nämner ett item utanför mottagarens omfång', function () {
     [, $ägare, $container, $motor, $mast] = notisomfangBas();
-    $mottagare = notisomfangMottagare($container, $motor);
+    $mottagare = notisomfangMottagare($container, $motor, 'write');
 
     notisomfangUppgift($motor, 'Byt impeller', '2026-09-02');
     notisomfangUppgift($mast, 'Kontrollera riggen', '2026-09-02');
@@ -264,7 +318,7 @@ it('ingen notisrads payload nämner ett item utanför mottagarens omfång', func
 
 it('dedupe-nycklarna är oförändrade — en andra körning samma natt skapar inga nya rader', function () {
     [, , $container, $motor] = notisomfangBas();
-    notisomfangMottagare($container, $motor);
+    notisomfangMottagare($container, $motor, 'write');
     notisomfangUppgift($motor, 'Byt impeller', '2026-09-02');
 
     app(GeneratesTaskNotifications::class)->handle();
@@ -368,7 +422,7 @@ it('veckosammanfattningen skickas inte alls till en mottagare vars omfång sakna
 it('veckosammanfattningen till en omfångsbegränsad mottagare listar bara hennes egna poster', function () {
     Mail::fake();
     [, $ägare, $container, $motor, $mast] = notisomfangBas();
-    $mottagare = notisomfangMottagare($container, $motor);
+    $mottagare = notisomfangMottagare($container, $motor, 'write');
 
     notisomfangUppgift($motor, 'Byt impeller', '2026-09-02');
     notisomfangUppgift($mast, 'Kontrollera riggen', '2026-09-02');
@@ -447,6 +501,10 @@ it('kostar ett konstant antal frågor per användare, oavsett hur många contain
     ]);
     notisomfangUppgift($item, 'Byt impeller', '2026-09-02');
 
+    // Gästen har skrivrätt på basitemet, alltså passerar hon nivågrinden
+    // (Beslut 8) och får en notisrad. Det är den enda notisraden i testet.
+    $gäst = notisomfangMottagare($container, $item, 'write');
+
     // Värmningen skapar notisraden. Båda mätningarna träffar sedan
     // dedupe-nyckeln och gör exakt samma arbete — annars hade den andra
     // körningen varit billigare bara för att raden redan fanns.
@@ -454,20 +512,50 @@ it('kostar ett konstant antal frågor per användare, oavsett hur många contain
 
     $frågorFörEn = notisomfangFrågor(fn () => app(GeneratesTaskNotifications::class)->handle());
 
-    // Tio containers till med tio items var — fortfarande EN förekomst, så
-    // användaren når 111 items i stället för 1. Upplösningen ska kosta
-    // lika många frågor: det är kravet, och skälet till att nattjobbet inte
-    // växer med kundstocken (issue 70 § Beslut 2).
-    Container::factory()->for($konto, 'account')->count(10)->create()
-        ->each(function (Container $ny) use ($ägare, $konto): void {
-            Item::factory()->for($ny, 'container')->count(10)->create([
+    // Tio containers till, var och en med en ÖPPEN förekomst som gästen NÅR:
+    // hon har en itemgrant på `read` i dem, så scopeTodoFor() tar med dem och
+    // deras container-id:n når forContainers() i notifyForUser(). Det är
+    // skillnaden mot före den här ändringen — tio containers UTAN förekomster
+    // kom aldrig fram till grinden, och testet kunde därför inte fälla att
+    // omfånget löstes en gång PER FÖREKOMST i stället för i ett svep. Med
+    // förekomster växte frågeantalet med fyra per container; med batchningen
+    // står det still, och det är den mätningen som är hela testet.
+    //
+    // Nivågrinden stoppar dem samtidigt — `read` räcker inte (Beslut 8) — så
+    // ingen notisrad tillkommer och frågeantalet mäter upplösningen och
+    // ingenting annat. Kontot är ägarlöst med flit: en ägare hade fått tio
+    // notisrader och grumlat mätningen.
+    $utanÄgare = Account::factory()->create();
+
+    Container::factory()->for($utanÄgare, 'account')->count(10)->create()
+        ->each(function (Container $ny) use ($gäst, $utanÄgare): void {
+            $del = Item::factory()->for($ny, 'container')->create([
                 'name' => 'Del',
-                'created_by_user_id' => $ägare->id,
-                'created_by_account_id' => $konto->id,
+                'created_by_user_id' => $gäst->id,
+                'created_by_account_id' => $utanÄgare->id,
+            ]);
+
+            notisomfangUppgift($del, 'Serva', '2026-09-02');
+
+            ContainerAccess::factory()->create([
+                'container_id' => $ny->id,
+                'item_id' => $del->id,
+                'grantee_type' => 'user',
+                'grantee_id' => $gäst->id,
+                'level' => 'read',
+                'kind' => 'guest',
+                'granted_by_user_id' => $gäst->id,
             ]);
         });
+
+    // Kvittot på att de elva förekomsterna verkligen når grinden — annars vore
+    // mätningen tyst tom den dag åtkomsten slutar lösas ut.
+    expect(ScheduleOccurrence::query()
+        ->todoFor($gäst, $gäst->accounts->pluck('id')->values()->all())
+        ->count())->toBe(11);
 
     $frågorFörMånga = notisomfangFrågor(fn () => app(GeneratesTaskNotifications::class)->handle());
 
     expect($frågorFörMånga)->toBe($frågorFörEn);
+    expect(Notification::query()->where('user_id', $gäst->id)->count())->toBe(1);
 });

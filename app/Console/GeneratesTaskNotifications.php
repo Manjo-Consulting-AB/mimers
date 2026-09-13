@@ -4,10 +4,10 @@ namespace App\Console;
 
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Notification\CreateNotification;
-use App\Models\Container;
 use App\Models\Notification;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use App\Support\Access\AccessLevel;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -23,18 +23,25 @@ use Throwable;
  * formulering av samma regel skulle glida isär från listan och låta
  * produktens två ytor säga olika saker om samma uppgift.
  *
+ * Ovanpå urvalet ligger en NIVÅGRIND, inte en kontogrind (issue 75
+ * § Beslut 8): notisen går till den som kan bocka av uppgiften, och
+ * `complete()`/`skip()` går via ItemPolicy::update() — alltså
+ * `AccessLevel::WRITE`. En mottagare med bara `read` ser uppgiften i
+ * todo-listan men kan aldrig stänga den, och `task.due` följd av
+ * `task.overdue` till henne vore en uppmaning produkten inte låter henne
+ * följa. Ägarkontots medlemmar passerar grinden utan undantag: regel 1 ger
+ * dem `unrestricted(DELETE)`, och `delete` klarar `write`.
+ *
+ * Grinden ställs per FÖREKOMST, men omfånget löses i ETT batchat anrop:
+ * `forContainers()` för förekomsternas containers, en gång per användare,
+ * och svaret indexeras per container. Ett `handle()` per förekomst hade gett
+ * samma svar till priset av tre frågor per förekomst.
+ *
  * Generators har ingen inloggad användare, så loopen går över MOTTAGARE i
  * stället för förekomster (Beslut 4): för varje användare hämtas hens konton
- * och todoFor körs en gång. Scopets åtkomstvillkor når även containers via
- * delegerad `container_access`, men en gäst med container-BRED åtkomst ska
- * inte få påminnelser — en guest med läsrätt på hela charterbåten ska inte få
- * veta att impellern ska bytas (Beslut 4, 34b). En gäst med ett ITEM-omfång
- * ska däremot (issue 75 § Beslut 1): todoFor() har redan begränsat
- * förekomsterna till de items hon når, så `recipientReachesContainer()`
- * avgör bara om containern räknas alls — ägd av hennes konto, eller
- * `restricted()` hos henne. En container som är `unrestricted()` hos henne
- * UTAN att vara ägd är exakt gästen med container-bred åtkomst, och den
- * grenen är oförändrad sedan 34b.
+ * och todoFor körs en gång. `scopeTodoFor()` bygger sin EGEN instans med
+ * `app()->build()`, så den injicerade `$this->scopes` har kall memo — batchen
+ * ovan kan alltså inte läsas ur en redan värmd cache, den är hela poängen.
  *
  * Varje förekomst ger högst två notiser över tid, en per typ: `task.due` när
  * den blir synlig och `task.overdue` när datumet passerats. `dedupe_key` bär
@@ -61,7 +68,7 @@ class GeneratesTaskNotifications
 
     /**
      * Skapar uppgiftsnotiser för alla som har en synlig eller förfallen
-     * förekomst i en container deras konto äger.
+     * förekomst de kan bocka av.
      */
     public function handle(): void
     {
@@ -89,9 +96,8 @@ class GeneratesTaskNotifications
     /**
      * En användare i taget: alla hens konton, och todoFor som redan
      * begränsar förekomsterna till de items hon når (issue 74). Kvar att
-     * avgöra här är bara vilka CONTAINERS som räknas alls — se
-     * recipientReachesContainer() och klassdocblocket. `$accountIds` är
-     * kontona användaren är medlem i.
+     * avgöra här är bara NIVÅN (Beslut 8) — se klassdocblocket. `$accountIds`
+     * är kontona användaren är medlem i.
      */
     private function notifyForUser(User $user): void
     {
@@ -104,36 +110,25 @@ class GeneratesTaskNotifications
         $occurrences = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
             ->with(['schedule.item.container.account'])
-            ->get()
-            ->filter(fn (ScheduleOccurrence $occurrence): bool => $this->recipientReachesContainer(
-                $user,
-                $accountIds,
-                $occurrence->schedule->item->container,
-            ));
+            ->get();
+
+        // ETT anrop för alla containers förekomsterna ligger i. forContainers()
+        // svarar med en nyckel per begärd container, så indexeringen nedan är
+        // alltid definierad — en container utan svar blir `restricted([])` och
+        // släpper inte igenom något.
+        $scopes = $this->scopes->forContainers(
+            $user,
+            $occurrences->pluck('schedule.item.container_id')->unique()->values()->all(),
+        );
+
+        $occurrences = $occurrences->filter(
+            fn (ScheduleOccurrence $occurrence): bool => $scopes[$occurrence->schedule->item->container_id]
+                ->allows($occurrence->schedule->item->id, AccessLevel::WRITE),
+        );
 
         foreach ($occurrences as $occurrence) {
             $this->notifyForOccurrence($occurrence, $user);
         }
-    }
-
-    /**
-     * Ägd av ett av användarens konton — alltid med (rule 1 ger henne redan
-     * hela containern). Annars bara med om hennes omfång i containern är
-     * `restricted()`: en itemgrant, som todoFor() redan har filtrerat
-     * förekomsterna efter. Är omfånget `unrestricted()` utan att vara ägt är
-     * det en container-bred gäst, och Beslut 4 (34b) håller henne utanför.
-     *
-     * ResolveItemScope::forContainers() har redan körts inne i todoFor() för
-     * VARJE container användaren når (issue 74), så anropet här träffar
-     * memon och kostar noll extra frågor.
-     */
-    private function recipientReachesContainer(User $user, array $accountIds, Container $container): bool
-    {
-        if (in_array($container->account_id, $accountIds, true)) {
-            return true;
-        }
-
-        return ! $this->scopes->handle($user, $container)->isUnrestricted();
     }
 
     /**
