@@ -430,6 +430,46 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_nu
     )
 
 
+def backa_trasig_egen_commit(worktree_path, branch_name, head_fore, head_efter, round_num):
+    """Backar en commit åtgärdsagenten gjorde själv och som föll på testgrinden.
+
+    Loopen pushar först EFTER att sviten gått grönt - men en agent som kör
+    `git commit` och `git push` inne i sin egen session har redan hunnit
+    förbi den grinden. Gjorde den det och sviten sedan är röd blev utfallet
+    förut: loggen skrev "Åtgärden bröt testsviten", varvet räknades som
+    misslyckat, och commiten låg kvar - både i arbetsträdet, där nästa varv
+    byggde vidare på den, och på PR:en, där den blev det Tony fick ärva.
+
+    Det hände på issue 292 (PR #299) 2026-09-13: sista varvets Sonnet
+    committade och pushade en revert som gjorde sviten röd, loopen tog slut,
+    och PR:ens head var en commit pipelinen själv nyss dömt ut. Ingenting i
+    tråden sa det.
+
+    --force-with-lease, inte --force: står något annat än den utdömda
+    commiten på origin har någon annan skrivit under tiden, och då är det
+    inte vår commit att backa. Misslyckas pushen är arbetsträdet ändå
+    återställt, vilket är den viktigare halvan - nästa varv ska inte bygga
+    vidare på en känt trasig commit.
+    """
+    if head_efter == head_fore:
+        return
+
+    print(f"  ↩ {head_efter[:8]} bröt sviten - backar den och återställer arbetsträdet.")
+    run_cmd(["git", "reset", "--hard", head_fore], cwd=worktree_path)
+
+    fjarr = run_cmd(["git", "ls-remote", "origin", f"refs/heads/{branch_name}"],
+                    check=False, cwd=worktree_path).stdout.split()
+    if not fjarr or fjarr[0] != head_efter:
+        return
+
+    print(f"  ↩ Commiten hann till origin - backar även {branch_name} på PR:en.")
+    res = run_cmd(["git", "push", "--force-with-lease", "origin",
+                   f"{head_fore}:refs/heads/{branch_name}"],
+                  check=False, cwd=worktree_path)
+    if res.returncode != 0:
+        print(f"  ⚠ Kunde inte backa {branch_name} på origin: {res.stderr}")
+
+
 def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, findings, fragor=""):
     """
     Åtgärdar `findings` (Opus ursprungliga fynd, eller en tidigare
@@ -502,6 +542,7 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         if not passed:
             print(f"  ✗ Åtgärden bröt testsviten på varv {round_num}.")
             findings = f"{findings}\n\nÅtgärden bröt testsviten:\n```\n{test_output[:1500]}\n```"
+            backa_trasig_egen_commit(worktree_path, branch_name, head_fore, head_efter, round_num)
             continue
 
         # Bara det agenten lämnade ocommittat ska bli en ny commit. Har den
@@ -1242,6 +1283,56 @@ def ska_eskalera_till_arkitekt(fragor, labels):
     return bool(fragor) and ARKITEKTFRAGA_BESVARAD not in labels
 
 
+def arkitektsvar_pa_oppen_fraga(issue_body, pr_number, pr_body, worktree_path, rubrik):
+    """Eskalerar PR-kroppens obesvarade '## Frågor och antaganden' till Opus och
+    postar svaret - eller returnerar None om det inte finns något att eskalera.
+
+    Utbruten ur los_fraga_och_merga() för att ha EN implementation av
+    eskaleringen, inte två. Anropas från två håll, och de två hållen är hela
+    poängen med funktionen:
+
+      1. MERGE-steget, efter ett godkännande (los_fraga_och_merga) - den
+         ursprungliga banan.
+      2. GRANSKNINGS-steget, när åtgärdsloopen INTE fick något godkänt
+         (run_review_flow) - banan som saknades.
+
+    Att den saknades på (2) är felet den här funktionen finns för att laga.
+    Åtgärdsloopen kan bara ändra kod, men bygg_granskningsprompt() beordrar
+    uttryckligen granskaren att lämna fynd som ingen kodändring får lösa:
+    "Beställ ALDRIG en ändring i en fil som ligger utanför rutan - be i så
+    fall om att den bryts ut till en egen issue." Ett sådant fynd kräver ett
+    arkitektbeslut, och fram till nu fanns ingen väg från det fyndet till
+    arkitekten: granskaren avslog, loopen brände fyra varv på något ingen
+    kodändring kunde lösa, och eskalera() lämnade issuen på needs-human med
+    kön blockerad.
+
+    Sett i praktiken på issue 292 (PR #299), 2026-09-13: granskaren skrev tre
+    varv i rad att `tests/Feature/Missbruk/RegistreringsIpTest.php` låg utanför
+    rutan och att det "kräver ett arkitektsvar - inte en kodändring från mig".
+    Rutan var en rad för kort: filen assertar den redirect issuens Beslut 2
+    byter. Undantagsvägen (`Beviljat undantag från omfångsrutan:`) fanns redan
+    och hade löst det på ett varv - men bara Tony kunde nå den, för hand.
+
+    Returnerar (svar, kraver_kodandring) när Opus svarade, annars None.
+    """
+    fragor = oppna_fragor(pr_body)
+    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"],
+                            cwd=REPO_ROOT).stdout)
+    labels = [label["name"] for label in pr["labels"]]
+    if not ska_eskalera_till_arkitekt(fragor, labels):
+        return None
+
+    opus_svar, kraver_kodandring = run_opus_answer(issue_body, fragor, pr_number, worktree_path)
+    run_cmd(["gh", "pr", "comment", pr_number, "--body", f"### {rubrik}\n{opus_svar}"],
+            cwd=REPO_ROOT)
+
+    # Beviljar svaret ett undantag måste CI läsa om kommentarerna, annars står
+    # omfångsgrinden kvar röd på en fil arkitekten just släppt igenom.
+    kora_om_ci_efter_undantag(pr_number, opus_svar)
+
+    return opus_svar, kraver_kodandring
+
+
 def eskalera(issue_num, pr_number, worktree_path, branch_name, skal, exit_code=1):
     """Lämna över till Tony: etikett, pushover, städa worktreen, avsluta.
 
@@ -1826,6 +1917,31 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         godkand, granskning = run_findings_fix_loop(
             issue_body, pr_number, branch_name, worktree_path, granskning, fragor=fragor
         )
+
+        # Loopen kan bara ändra kod. Är det som blockerar i stället en fråga
+        # ingen besvarat - typiskt "den här filen ligger utanför rutan, det
+        # kräver ett arkitektbeslut, inte en kodändring från mig" - så brände
+        # den fyra varv på något den aldrig kunde lösa. Fråga arkitekten INNAN
+        # det når Tony, och kör loopen en gång till med svaret i handen.
+        # Exakt samma eskalering som MERGE-steget gör efter ett godkännande;
+        # den fattades bara här. Se arkitektsvar_pa_oppen_fraga() för fallet
+        # som avslöjade det (issue 292 / PR #299).
+        if not godkand:
+            arkitektsvar = arkitektsvar_pa_oppen_fraga(
+                issue_body, pr_number, pr_body, worktree_path,
+                "Opus 5 - arkitektsvar på kvarstående fynd",
+            )
+            if arkitektsvar:
+                opus_svar, _ = arkitektsvar
+                print("--> Arkitektsvaret postat - kör åtgärdsloopen en sista gång med svaret som underlag...")
+                send_pushover(
+                    f"🏛️ Issue #{issue_num}: fynd kvarstod på PR #{pr_number}, arkitektsvar hämtat - loopen kör om."
+                )
+                godkand, granskning = run_findings_fix_loop(
+                    issue_body, pr_number, branch_name, worktree_path,
+                    f"{granskning}\n\n=== ARKITEKTSVAR PÅ DE HÄR FYNDEN ===\n{opus_svar}",
+                )
+
         if not godkand:
             eskalera(
                 issue_num, pr_number, worktree_path, branch_name,
@@ -1865,19 +1981,14 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
     Etiketten är en dämpare på triggern, inte en ny trigger - saknas den, av
     vilken anledning som helst, eskalerar det precis som förut.
     """
-    fragor = oppna_fragor(pr_body)
-    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"], cwd=REPO_ROOT).stdout)
-    labels = [label["name"] for label in pr["labels"]]
-    if ska_eskalera_till_arkitekt(fragor, labels):
-        print("--> Obesvarad fråga i PR-kroppen - eskalerar till Opus (arkitekt)...")
-        send_pushover(f"❓ Issue #{issue_num}: obesvarad fråga på PR #{pr_number}, eskalerar till Opus (arkitekt).")
-        opus_svar, kraver_kodandring = run_opus_answer(issue_body, fragor, pr_number, worktree_path)
-        run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                  f"### Opus 5 - arkitektsvar på Frågor och antaganden\n{opus_svar}"],
-                 cwd=REPO_ROOT)
-
-        kora_om_ci_efter_undantag(pr_number, opus_svar)
-
+    print("--> Kontrollerar om PR-kroppen har en obesvarad fråga att eskalera...")
+    arkitektsvar = arkitektsvar_pa_oppen_fraga(
+        issue_body, pr_number, pr_body, worktree_path,
+        "Opus 5 - arkitektsvar på Frågor och antaganden",
+    )
+    if arkitektsvar:
+        opus_svar, kraver_kodandring = arkitektsvar
+        send_pushover(f"❓ Issue #{issue_num}: obesvarad fråga på PR #{pr_number}, eskalerad till Opus (arkitekt).")
         if kraver_kodandring:
             print("--> Opus svar kräver en kodändring - startar åtgärdsloop (DeepSeek + Sonnet)...")
             send_pushover(f"🔁 Issue #{issue_num}: Opus svar på PR #{pr_number} kräver en kodändring, startar åtgärdsloop.")
