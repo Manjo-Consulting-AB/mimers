@@ -90,6 +90,10 @@ return [
         'item-created' => 'The item has been created.',
         'item-updated' => 'The item has been saved.',
         'item-deleted' => 'The item is in the trash. It can be restored within 30 days.',
+        'item-link-created' => 'The relation has been created.',
+        // Unlinking removes the connection and nothing else — the row is
+        // deleted hard (issue 14 decision 10), but both items remain.
+        'item-link-removed' => 'The link is gone. Both items remain.',
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -134,6 +138,30 @@ return [
             'parent_not_in_container' => 'The chosen parent category is not in this binder.',
             'has_children' => 'The category has :children subcategories and cannot be deleted.',
             'has_items' => 'The category has :items items and cannot be deleted.',
+        ],
+
+        // The relation form's four domain errors, see issue 58 decision 6.
+        // They arrive as App\Exceptions\Api\ApiException from
+        // App\Actions\Item\LinkItems and become field errors in
+        // App\Http\Controllers\ItemLinkController — never a raw JSON body in
+        // the middle of a page.
+        //
+        // `self`, `cross_container` and `pair_exists` belong to the `item`
+        // field (which item was chosen), `cycle` to `relation` (which
+        // direction was chosen). `pair_exists` carries the existing relation
+        // in `data.relation` and the sentence MUST say it — the words below
+        // are the code turned into an adjective, and a message that throws
+        // `data` away is worse than the error code it replaced.
+        'item_link' => [
+            'self' => 'An item cannot be linked to itself.',
+            'cross_container' => 'Relations only go between items in the same binder.',
+            'pair_exists' => 'The two are already linked: the counterpart is :relation.',
+            'relation_word' => [
+                'parent' => 'a parent',
+                'child' => 'a child',
+                'sibling' => 'a sibling',
+            ],
+            'cycle' => 'That direction would make a circle: this item is already above the counterpart, directly or through other items.',
         ],
     ],
 
@@ -390,6 +418,12 @@ return [
             // employee. Only on creation: who created the row is history
             // (decision 4).
             'account' => 'Account',
+
+            // The parent, when the child item is created from the detail
+            // view's link (issue 58 decision 7). A line of text and not a
+            // selector: the link has already answered the question, and
+            // `parent` is only sent on creation.
+            'parent' => 'Created under: :name',
         ],
 
         'create' => [
@@ -413,6 +447,59 @@ return [
         'destroy' => [
             'action' => 'Delete',
             'confirm' => 'The item goes to the trash and can be restored within 30 days. Continue?',
+        ],
+
+        // The relation section, see issue 58 decisions 3, 4, 8, 9 and 10. It
+        // lives in resources/js/components/ItemLinkSection.vue.
+        //
+        // `group` is the three headings and `relation` the labels in the
+        // direction selector — both seen from the COUNTERPART's side
+        // (decision 4), the same way the list from the server reads. A
+        // counterpart outside the scope has no key at all: it is not drawn
+        // (decision 3), and a line describing something hidden would be the
+        // leak itself.
+        'links' => [
+            'heading' => 'Relations',
+            'description' => 'What this item belongs to, and what belongs to it.',
+
+            'group' => [
+                'parent' => 'Parent items',
+                'child' => 'Child items',
+                'sibling' => 'Siblings',
+            ],
+
+            'empty' => 'The item is not linked to anything.',
+            'remove' => 'Unlink',
+            // Deleting a link is hard (issue 14 decision 10) and has no
+            // trash — what disappears is the connection, never the items.
+            'remove_confirm' => 'Only the link is removed. Both items remain. Continue?',
+
+            // The way to the child item (decision 7).
+            'create_child' => [
+                'action' => 'New item under this one',
+            ],
+
+            'form_heading' => 'Link to another item',
+            'counterpart' => 'Item',
+            'counterpart_none' => '— choose an item —',
+            'no_counterparts' => 'There are no other items to link to.',
+
+            'relation' => [
+                'label' => 'The counterpart is',
+                'none' => '— choose a direction —',
+                'parent' => 'A parent item',
+                'child' => 'A child item',
+                'sibling' => 'A sibling',
+            ],
+
+            // Decision 8: what a direction does to the sharing, in one
+            // sentence. No computation — no question about which grants
+            // exist and no counter. That number belongs to the sharing view
+            // (55a), and a second truth about the scope is one that can
+            // drift apart.
+            'relation_note' => 'Sharing a parent item also reaches its child items — siblings share nothing.',
+
+            'submit' => 'Link',
         ],
     ],
 

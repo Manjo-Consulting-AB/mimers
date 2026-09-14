@@ -2,20 +2,23 @@
 import { computed } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
+import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import { itemFields } from '../../../components/itemPresentation.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
 
 /*
- * Itemets detaljvy, se issue 57a § Beslut 4, 5, 6, 7 och 8.
+ * Itemets detaljvy, se issue 57a § Beslut 4, 5, 6, 7 och 8, och issue 58.
  *
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
  * ur App\Http\Resources\ContainerResource.
  *
- * **Bara itemets egna fält, kategorin och taggarna.** Relationssektionen är
- * issue 58, bilagorna 60, schemana 63, kostnaderna 45–47 och utlåningen 67 —
- * ingen av dem har en yta här, och ingenting i den här filen läser
- * `attachment`.
+ * **Itemets egna fält, kategorin, taggarna och relationerna.** Bilagorna är
+ * 60, schemana 63, kostnaderna 45–47 och utlåningen 67 — ingen av dem har en
+ * yta här, och ingenting i den här filen läser `attachment`. Relationssektionen
+ * bor i resources/js/components/ItemLinkSection.vue: den bär sitt eget
+ * formulär och sina egna fel, precis som ContainerAccessRow gör för
+ * åtkomsterna, så ett fältfel på en relation inte färgar resten av sidan.
  *
  * **Ett tomt fält utelämnas, aldrig påhittat** (Beslut 8). `fields` filtrerar
  * bort `null` och tomma strängar, så en rad utan beskrivning visar ingen
@@ -28,10 +31,15 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * **`can` ritar skrivytorna** (Beslut 6 och issue 57b § Beslut 2 och 8). Varje
  * flagga är sin egen grind: `can.update` är `ItemPolicy::update()` (`write`-
  * pinnen), `can.delete` är `ItemPolicy::delete()` (`delete`-pinnen, en pinne
- * högre) och `can.create` är `ItemPolicy::create()` på ITEMET, som ritar
- * barn-itemets skapayta i issue 58. En användare med bara `read` får alla
- * falska och ser ingen skrivyta alls; en `write`-mottagare ser redigeringen
- * men inte raderingsknappen.
+ * högre) och `can.create` är `ItemPolicy::create()` på ITEMET. En användare
+ * med bara `read` får alla falska och ser ingen skrivyta alls; en
+ * `write`-mottagare ser redigeringen men inte raderingsknappen.
+ *
+ * **`can.create` ritar två ytor** (issue 58 § Beslut 7): länken *Nytt item
+ * under det här*, som går till skapandeformuläret med `?parent`, och
+ * relationsformuläret inuti ItemLinkSection. Båda är samma grind som
+ * `ItemController::store()` prövar mot föräldern, så en `create`-mottagare
+ * som nått det här itemet ser dem och en `read`-mottagare inte.
  *
  * **Raderingen bekräftas och säger vad som händer** (§ Beslut 8). Den är mjuk
  * — `deleted_at` sätts och ingenting annat ([[ADR-0008 Soft delete och
@@ -48,6 +56,13 @@ const props = defineProps({
     item: { type: Object, required: true },
     /* Kategori-ULID → namn; tom när itemet saknar kategori. */
     categories: { type: Object, required: true },
+    /*
+     * Relationerna grupperade i överordnade, underordnade och syskon — redan
+     * filtrerade per omfång av servern (issue 58 § Beslut 2 och 3).
+     */
+    links: { type: Object, required: true },
+    /* Items användaren får ändra och som inte redan är kopplade. */
+    counterparts: { type: Array, required: true },
     can: { type: Object, required: true },
 });
 
@@ -111,6 +126,20 @@ function destroy() {
             >
                 {{ t('item.destroy.action') }}
             </button>
+
+            <!--
+                Barn-itemet (issue 58 § Beslut 7). Föräldern kommer ur länken
+                och formuläret visar den som en rad text — den här vyn är
+                detaljvyn för just det itemet, så frågan "under vad?" är redan
+                besvarad och ställs inte igen.
+            -->
+            <Link
+                v-if="can.create"
+                :href="`/containers/${container.ulid}/items/create?parent=${item.ulid}`"
+                class="font-medium text-blue-700 hover:underline"
+            >
+                {{ t('item.links.create_child.action') }}
+            </Link>
         </div>
 
         <dl class="mt-8 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
@@ -130,5 +159,13 @@ function destroy() {
 
             <ItemTagList class="mt-2" :tags="item.tags" />
         </section>
+
+        <ItemLinkSection
+            :container-ulid="container.ulid"
+            :item-ulid="item.ulid"
+            :links="links"
+            :counterparts="counterparts"
+            :can="can"
+        />
     </ContainerLayout>
 </template>

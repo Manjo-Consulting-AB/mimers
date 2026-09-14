@@ -46,6 +46,13 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  *
  * Ingen egen validering: reglerna bor i StoreItemRequest/UpdateItemRequest och
  * felen renderas av FormField vid sitt fält ([[ADR-0021 Frontendteknik]]).
+ *
+ * **Föräldern kommer ur länken och är inget val** (issue 58 § Beslut 7).
+ * Detaljvyns *Nytt item under det här* skickar `?parent={ulid}`, kontrollern
+ * har redan auktoriserat mot föräldern, och formuläret visar den som en rad
+ * text — en väljare hade varit en andra fråga om något användaren redan
+ * besvarat. `parent` skickas bara i skapandeläget: `UpdateItemRequest` tar
+ * inte emot fältet, och ett item som redan finns byter inte förälder här.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -57,6 +64,8 @@ const props = defineProps({
     account: { type: String, default: '' },
     /* Itemet som redigeras, eller null när ett nytt item skapas. */
     item: { type: Object, default: null },
+    /* Föräldern ur `?parent`, eller null för ett item på toppnivån. */
+    parent: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -84,7 +93,9 @@ const fields = {
     tags: props.item?.tags?.map((tag) => tag.ulid) ?? [],
 };
 
-const form = useForm(props.item === null ? { account: props.account, ...fields } : fields);
+const form = useForm(props.item === null
+    ? { account: props.account, parent: props.parent?.ulid ?? null, ...fields }
+    : fields);
 
 /*
  * Taggfelet ligger på `tags.0`, `tags.1`, ... och inte på `tags` — regeln bor
@@ -113,6 +124,12 @@ function submit() {
 
 <template>
     <form class="flex max-w-lg flex-col gap-4" @submit.prevent="submit">
+        <!-- Föräldern ur länken, som en rad text och inte som en väljare
+             (issue 58 § Beslut 7). Värdet är ändå med i postningen. -->
+        <p v-if="item === null && parent" class="text-sm text-slate-600">
+            {{ t('item.form.parent', { name: parent.name }) }}
+        </p>
+
         <FormField
             v-slot="{ describedBy }"
             :label="t('item.form.name')"
