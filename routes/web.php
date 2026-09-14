@@ -20,6 +20,7 @@ use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
+use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -311,6 +312,35 @@ Route::middleware('auth')->group(function () {
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show'])
         ->scopeBindings()
         ->name('containers.items.show');
+
+    /*
+     * Issue 58 · Relationerna — knyta och knyta upp, se
+     * App\Http\Controllers\ItemLinkController.
+     *
+     * Två rutter och ingenting annat (Beslut 1). Listningen ritas på
+     * detaljvyn ur App\Actions\Item\ListItemLinks och har ingen egen rutt:
+     * samma Action bär `/api`:s `GET .../links`, och en andra väg till samma
+     * läsning hade varit en andra sanning om omfånget.
+     *
+     * `{other}` binds INTE av scopeBindings() (issue 14 § Beslut 1 och 7):
+     * motparten är en strängparameter och slås upp inom containern i
+     * destroy(), så en ULID från en annan pärm blir 404. `{container}` och
+     * `{item}` binds båda på ULID via #[RouteKey('ulid')] och löses genom
+     * containerns items()-relation, som alla andra itemrutter här.
+     *
+     * Barn-itemets väg till formuläret är ingen ny rutt: `parent` går som
+     * query-sträng till `containers.items.create` ovan (Beslut 1 och 7).
+     *
+     * Båda svaren är 302 tillbaka till itemets detaljvy med en flash-kod —
+     * mönstret från issue 51 § Beslut 5, `status` och ingenting annat.
+     */
+    Route::post('/containers/{container}/items/{item}/links', [ItemLinkController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.links.store');
+
+    Route::delete('/containers/{container}/items/{item}/links/{other}', [ItemLinkController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.links.destroy');
 
     Route::post('/containers', [ContainerController::class, 'store'])
         ->name('containers.store');

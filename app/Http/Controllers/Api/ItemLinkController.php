@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Access\ResolveItemScope;
 use App\Actions\Item\LinkItems;
+use App\Actions\Item\ListItemLinks;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Item\StoreItemLinkRequest;
@@ -52,54 +52,20 @@ class ItemLinkController extends Controller
      * `relation` är vad motparten är för det här itemet. Ordningen är
      * motpartens `name` stigande.
      *
-     * Uppslaget är två frågor med union över from_item_id/to_item_id — här
-     * genom de två relationerna App\Models\Item::linksFrom()/linksTo() —
-     * plus EN fråga för motparternas namn, aldrig en fråga per länk (§
-     * Beslut 8). En mjukraderad motpart filtreras bort av SoftDeletes
-     * globala scope i namnfrågan, så dess länkar döljs (§ Beslut 10) medan
-     * raden ligger kvar.
-     *
-     * Issue 73 § Beslut 7: omfånget läggs i SAMMA filter, inte som ett andra
-     * pass efteråt. En motpart utanför mottagarens omfång faller bort i
-     * namnfrågan och därmed ur `$visible` nedan — länken finns inte i
-     * svaret alls. Inte ett `null`-namn, inte en post med bara ULID, inte
-     * ett spöke: ett spöke säger "det finns något här du inte får se", och
-     * den upplysningen är hela det läckage issuen stänger ([[ADR-0028
-     * Åtkomst på itemnivå]] § Konsekvenser).
+     * **Kroppen flyttade till App\Actions\Item\ListItemLinks i issue 58
+     * § Beslut 2** — unionen över from_item_id/to_item_id, motpartsuppslaget
+     * i EN fråga med omfånget i SAMMA fråga (issue 73 § Beslut 7) och
+     * sorteringen bor där nu, och webbens relationssektion ritar samma lista
+     * ur samma Action. Den här metoden är grinden plus anropet, precis som
+     * `Api\ItemController::index()` blev i issue 57a § Beslut 3, så de två
+     * ytorna aldrig kan glida isär. Svaret, ordningen och antalet frågor är
+     * oförändrade.
      */
-    public function index(Request $request, Container $container, Item $item, ResolveItemScope $resolveItemScope): JsonResponse
+    public function index(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks): JsonResponse
     {
         Gate::authorize('view', $item);
 
-        $scope = $resolveItemScope->handle($request->user(), $container);
-
-        $links = $item->linksFrom()
-            ->union($item->linksTo()->getQuery())
-            ->get();
-
-        $counterpartIds = $links
-            ->map(fn (ItemLink $link) => $this->counterpartId($link, $item))
-            ->unique()
-            ->values()
-            ->all();
-
-        $itemsById = Item::query()
-            ->whereIn('id', $counterpartIds)
-            ->inScope($scope)
-            ->get(['id', 'ulid', 'name'])
-            ->keyBy('id');
-
-        $visible = $links->filter(fn (ItemLink $link) => $itemsById->has($this->counterpartId($link, $item)));
-
-        $visible->each(function (ItemLink $link) use ($item, $itemsById) {
-            $counterpart = $itemsById->get($this->counterpartId($link, $item));
-
-            $link->setAttribute('counterpart_ulid', $counterpart->ulid);
-            $link->setAttribute('counterpart_name', $counterpart->name);
-            $link->setAttribute('relation_to_item', $link->relationSeenFromItem($item->id));
-        });
-
-        return ItemLinkResource::collection($visible->sortBy('counterpart_name')->values())->response();
+        return ItemLinkResource::collection($listItemLinks->handle($request->user(), $container, $item))->response();
     }
 
     /**
@@ -165,14 +131,5 @@ class ItemLinkController extends Controller
         $link->delete();
 
         return response()->noContent();
-    }
-
-    /**
-     * Motpartens id för en länk sedd från `$item` — den ände som INTE är
-     * `$item`.
-     */
-    private function counterpartId(ItemLink $link, Item $item): int
-    {
-        return $link->from_item_id === $item->id ? $link->to_item_id : $link->from_item_id;
     }
 }

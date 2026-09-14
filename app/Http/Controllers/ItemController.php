@@ -3,19 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Category\ListCategories;
+use App\Actions\Item\LinkItems;
+use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
 use App\Actions\Tag\ListTags;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
+use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
 use App\Http\Resources\TagResource;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\ItemLink;
 use App\Models\Tag;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -70,6 +75,16 @@ use Inertia\Response;
  * `AuthorizationException`, som bootstrap/app.php renderar som felsidan för
  * 403 på webben. Det enda undantaget är medlemsprövningen i store(), se den
  * metodens docblock.
+ *
+ * **Relationerna är en sektion till på detaljvyn** (issue 58 § Beslut 2, 3,
+ * 5 och 7). Listan kommer ur App\Actions\Item\ListItemLinks — samma Action
+ * som `Api\ItemLinkController::index()` anropar — och motpartsväljaren ur
+ * `ListItems` plus en `update`-grind per kandidat. Varken listan eller
+ * väljaren formulerar ett eget omfångsfilter: den som ligger utanför
+ * mottagarens omfång finns inte i någon av dem, och vyn lägger ingenting
+ * ovanpå (issue 73 § Beslut 7). Skrivningarna bor i
+ * App\Http\Controllers\ItemLinkController; barn-itemet är den här
+ * kontrollerns `parent`-gren.
  */
 class ItemController extends Controller
 {
@@ -125,15 +140,27 @@ class ItemController extends Controller
      * 404: "känd men utanför omfånget" har en kod över tio kontrollrar
      * (issue 73 § Beslut 3), och webben uppfinner inte en elfte regel.
      *
-     * **Bara itemets egna fält, kategorin och taggarna** (Beslut 4 och 8).
-     * Relationssektionen är issue 58, bilagorna 60, schemana 63, kostnaderna
+     * **Bara itemets egna fält, kategorin, taggarna och relationerna**
+     * (Beslut 4 och 8, issue 58). Bilagorna är 60, schemana 63, kostnaderna
      * 45–47 och utlåningen 67.
      *
      * `categories` bär kategorins NAMN bredvid resursen — se klassens
      * docblock. Ett item utan kategori får en tom uppslagstabell och vyn
      * utelämnar raden; den hittar aldrig på ett värde (Beslut 8).
+     *
+     * **Relationssektionen får tre propar** (issue 58 § Beslut 2, 3 och 5).
+     * `links` är App\Actions\Item\ListItemLinks svar, grupperat i de tre
+     * riktningarna och varje grupp sorterad som Actionen levererar den. `can`
+     * bär redan `update`, som ritar formuläret och upp-knytningen, och
+     * `create`, som ritar länken till barn-itemet. Att gruppera här och inte i
+     * vyn är samma linje som `categoryNames()`: formatering, inte logik, och
+     * gruppnycklarna är relationens tre värden.
+     *
+     * Motpartsväljaren bär bara `{ulid, name}` — samma form som
+     * delningssidans omfångsväljare (issue 55b § Beslut 5), och den ritas bara
+     * för `can.update`.
      */
-    public function show(Request $request, Container $container, Item $item): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems): Response
     {
         Gate::authorize('view', $item);
 
@@ -146,10 +173,14 @@ class ItemController extends Controller
 
         $user = $request->user();
 
+        $links = $listItemLinks->handle($user, $container, $item);
+
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
             'categories' => $this->categoryNames([$item]),
+            'links' => $this->groupLinks(ItemLinkResource::collection($links)->resolve($request)),
+            'counterparts' => $this->counterparts($user, $container, $item, $links, $listItems),
             'can' => [
                 'update' => Gate::forUser($user)->allows('update', $item),
                 'delete' => Gate::forUser($user)->allows('delete', $item),
@@ -160,12 +191,23 @@ class ItemController extends Controller
 
     /**
      * GET /containers/{container}/items/create — formuläret, se issue 57b
-     * § Beslut 1, 4 och 5.
+     * § Beslut 1, 4 och 5, och issue 58 § Beslut 1 och 7.
      *
-     * Grinden är `ContainerPolicy::createItem()` på PÄRMEN — samma grind som
-     * `store()` prövar och samma flagga listan ritar sin skapaknapp efter. En
-     * omfångsbegränsad mottagare får 403 här: hon skapar barn-items under det
-     * hon nått, och den ytan är issue 58 (§ Beslut 3).
+     * **Två vägar in, och grinden följer vägen.** Utan `?parent` är grinden
+     * `ContainerPolicy::createItem()` på PÄRMEN — samma grind som `store()`
+     * prövar och samma flagga listan ritar sin skapaknapp efter. Med
+     * `?parent={ulid}` är grinden `ItemPolicy::create()` på FÖRÄLDERN, och
+     * det är den enda väg en omfångsbegränsad mottagare har hit: hon når
+     * ingen rot i pärmen och får 403 på den första vägen, men hon får lägga
+     * in "impellerbyte 2026" under det hon redan nått ([[ADR-0028 Åtkomst på
+     * itemnivå]] § Beslut: "create får skapa både inuti itemet och nya
+     * barn-items"). Samma två grindar, i samma ordning, som `store()` prövar
+     * — väljer någon olika svarar formuläret 200 och postningen 403.
+     *
+     * Föräldern slås upp INOM pärmen, precis som `store()` gör: en ULID ur en
+     * annan pärm är 404, och en mjukraderad rad löser aldrig upp. Den skickas
+     * som `{ulid, name}` och ritas som en rad text — föräldern kommer ur
+     * länken och är inget val (§ Beslut 7).
      *
      * **Två väljare, två Actions** (§ Beslut 5). Kategorierna och taggarna
      * hämtas med `ListCategories` och `ListTags` — samma Actions som 56a:s
@@ -181,7 +223,13 @@ class ItemController extends Controller
      */
     public function create(Request $request, Container $container, ListCategories $listCategories, ListTags $listTags): Response
     {
-        Gate::authorize('createItem', $container);
+        $parent = $this->parent($container, $this->parentUlid($request));
+
+        if ($parent !== null) {
+            Gate::authorize('create', $parent);
+        } else {
+            Gate::authorize('createItem', $container);
+        }
 
         $container->loadMissing('account');
 
@@ -191,6 +239,7 @@ class ItemController extends Controller
             'container' => ContainerResource::make($container)->resolve($request),
             'categories' => CategoryResource::collection($listCategories->handle($user, $container))->resolve($request),
             'tags' => TagResource::collection($listTags->handle($user, $container))->resolve($request),
+            'parent' => $parent === null ? null : ['ulid' => $parent->ulid, 'name' => $parent->name],
         ]);
     }
 
@@ -199,18 +248,25 @@ class ItemController extends Controller
      *
      * `StoreItemRequest` delas rakt av med `/api` och har redan bevisat att
      * `account` finns, att `category` (om någon) hör till DEN HÄR pärmen och
-     * inte är mjukraderad, och samma sak för varje tagg-ULID. Kroppen bär
-     * `parent` i reglerna, men webbens formulär skickar den aldrig:
-     * barn-itemet och relationerna är issue 58, och grenen i
-     * `Api\ItemController::store()` som byter grind mot föräldern skrivs
-     * därför inte av här (§ Beslut 3). `parent` filtreras bort ur `safe()`
-     * tillsammans med `account`, `category` och `tags` — ingen av dem är en
-     * kolumn (App\Models\Item § Fillable).
+     * inte är mjukraderad, och samma sak för varje tagg-ULID och för
+     * `parent`. `parent` filtreras bort ur `safe()` tillsammans med `account`,
+     * `category` och `tags` — ingen av dem är en kolumn (App\Models\Item
+     * § Fillable).
      *
-     * **Grinden är `createItem` på PÄRMEN** (§ Beslut 2), inte `create` på ett
-     * item: ett item som skapas på toppnivån har ingen förälder att
-     * auktorisera mot, och en omfångsbegränsad mottagare når ingen rot. Den
-     * som blandar ihop dem ger en itemgrant rätt att lägga en rot i pärmen.
+     * **Två grindar, en per väg** (issue 58 § Beslut 7, samma par och samma
+     * ordning som `Api\ItemController::store()` sedan issue 71 § Beslut 2).
+     * Utan `parent` landar itemet på toppnivån och grinden är
+     * `ContainerPolicy::createItem()` på PÄRMEN — ett toppnivå-item har ingen
+     * förälder att auktorisera mot, och en omfångsbegränsad mottagare når
+     * ingen rot. Med `parent` är grinden `ItemPolicy::create()` på
+     * FÖRÄLDERN, och den som har `createItem` på pärmen men inte `create` på
+     * föräldern får 403. Att blanda ihop dem ger en itemgrant rätt att lägga
+     * en rot i pärmen.
+     *
+     * **Länkningen går genom `LinkItems`, i SAMMA transaktion som
+     * skrivningen** (§ Beslut 7) — aldrig en handskriven `ItemLink`-rad, så
+     * normaliseringen, dubbettspärren och cykelkontrollen från issue 14
+     * gäller. Ingen egen cykelkontroll här: den finns på ett ställe.
      *
      * **Medlemsprövningen är inte en policyfråga** (§ Beslut 2 och 4). Att
      * användaren inte är medlem i det anropade kontot är 403 — samma prövning
@@ -218,13 +274,20 @@ class ItemController extends Controller
      * INTE som `Gate::authorize('create', [Container::class, $account])`, som
      * handlar om att skapa containers.
      *
-     * Itemet och taggknytningen ligger i EN transaktion, precis som i
-     * `Api\ItemController::store()`: ett item sparat med halv taggning är ett
-     * tillstånd användaren varken kan se eller rätta.
+     * Itemet, taggknytningen och länken ligger i EN transaktion, precis som i
+     * `Api\ItemController::store()`: ett item sparat med halv taggning — eller
+     * utan sin förälder — är ett tillstånd användaren varken kan se eller
+     * rätta.
      */
-    public function store(StoreItemRequest $request, Container $container): RedirectResponse
+    public function store(StoreItemRequest $request, Container $container, LinkItems $linkItems): RedirectResponse
     {
-        Gate::authorize('createItem', $container);
+        $parent = $this->parent($container, $request->validated('parent'));
+
+        if ($parent !== null) {
+            Gate::authorize('create', $parent);
+        } else {
+            Gate::authorize('createItem', $container);
+        }
 
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 
@@ -241,7 +304,7 @@ class ItemController extends Controller
 
         $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent']));
 
-        DB::transaction(function () use ($item, $container, $category, $account, $request, $tags): void {
+        DB::transaction(function () use ($item, $container, $category, $account, $request, $tags, $parent, $linkItems): void {
             $item->container_id = $container->id;
             $item->category_id = $category?->id;
             $item->created_by_user_id = $request->user()->id;
@@ -250,6 +313,13 @@ class ItemController extends Controller
 
             if ($tags->isNotEmpty()) {
                 $this->replaceTags($item, $tags);
+            }
+
+            // `parent` beskriver vad FÖRÄLDERN är för det nya itemet, inte
+            // tvärtom — samma riktning som Api\ItemController::store() och
+            // samma ord som LinkItems::normalize() förväntar sig.
+            if ($parent !== null) {
+                $linkItems->handle($parent, $item, 'parent');
             }
         });
 
@@ -371,6 +441,98 @@ class ItemController extends Controller
         return $categoryUlid === null
             ? null
             : $container->categories()->where('ulid', $categoryUlid)->firstOrFail();
+    }
+
+    /**
+     * Föräldern ur en ULID, uppslagen INOM pärmen — samma uppslag och samma
+     * skäl som `category()` ovan, och samma som `Api\ItemController::store()`
+     * gör. `StoreItemRequest` har redan bevisat att ULID:en finns i DEN HÄR
+     * pärmen och inte är mjukraderad; uppslaget här är vad som ger 404 i
+     * stället för 422 om raden hinner försvinna mellan de två.
+     */
+    private function parent(Container $container, ?string $parentUlid): ?Item
+    {
+        return $parentUlid === null
+            ? null
+            : $container->items()->where('ulid', $parentUlid)->firstOrFail();
+    }
+
+    /**
+     * `parent` ur query-strängen på skapandeformuläret (§ Beslut 7).
+     *
+     * Värdet är användarinput och kan komma som en lista (`?parent[]=…`) —
+     * allt annat än en sträng läses som "ingen förälder". Formuläret är en
+     * GET utan FormRequest (§ Beslut 7 i issue 58: ingen ny FormRequest), så
+     * den enda gränsen mot en array finns här; `store()` får samma fält
+     * färdigvaliderat av StoreItemRequest.
+     */
+    private function parentUlid(Request $request): ?string
+    {
+        $parent = $request->query('parent');
+
+        return is_string($parent) ? $parent : null;
+    }
+
+    /**
+     * Relationerna i sina tre grupper (§ Beslut 9), i ordningen
+     * överordnade–underordnade–syskon. Nycklarna är relationens tre värden,
+     * alltså samma ord som `ItemLinkResource` bär i `relation`, och
+     * ordningen INOM varje grupp är den Actionen levererade (motpartens
+     * namn) — grupperingen sorterar inte om något.
+     *
+     * @param  list<array{item: array{ulid: string, name: string}, relation: string}>  $links
+     * @return array{parent: list<array<string, mixed>>, child: list<array<string, mixed>>, sibling: list<array<string, mixed>>}
+     */
+    private function groupLinks(array $links): array
+    {
+        $groups = ['parent' => [], 'child' => [], 'sibling' => []];
+
+        foreach ($links as $link) {
+            $groups[$link['relation']][] = $link;
+        }
+
+        return $groups;
+    }
+
+    /**
+     * Motparterna som går att knyta det här itemet till (§ Beslut 5).
+     * Kandidaterna är pärmens items INOM användarens omfång — ListItems äger
+     * det filtret och den här kontrollern formulerar inget eget — minus
+     * itemet självt och de som redan är kopplade. Varje kandidat prövas
+     * dessutom med `update`, för en relation kräver `write` i BÅDA ändar
+     * (issue 71 § Beslut 4, issue 14 § Beslut 4).
+     *
+     * **Filtret är artighet och inte skydd.** Grinden i
+     * App\Http\Controllers\ItemLinkController::store() är den som gäller,
+     * och den prövar samma sak igen — en kandidat som slinker igenom här
+     * nekas där.
+     *
+     * **Noll extra frågor per kandidat.** `container` sätts ur den redan
+     * hämtade pärmen, så ItemPolicy slipper slå upp den per rad, och
+     * App\Actions\Access\ResolveItemScope är memoiserad per
+     * `{user}:{container}` — samma resonemang som `can`-flaggorna i klassen.
+     *
+     * @param  Collection<int, ItemLink>  $links
+     * @return list<array{ulid: string, name: string}>
+     */
+    private function counterparts(?User $user, Container $container, Item $item, Collection $links, ListItems $listItems): array
+    {
+        // $user är nollbar därför att Request::user() är det; rutten ligger
+        // bakom `auth`, så i drift är svaret aldrig tomt av den anledningen.
+        if ($user === null) {
+            return [];
+        }
+
+        $linked = $links->pluck('counterpart_ulid')->all();
+
+        return $listItems->handle($user, $container)
+            ->reject(fn (Item $candidate): bool => $candidate->id === $item->id
+                || in_array($candidate->ulid, $linked, true))
+            ->each(fn (Item $candidate) => $candidate->setRelation('container', $container))
+            ->filter(fn (Item $candidate): bool => Gate::forUser($user)->allows('update', $candidate))
+            ->map(fn (Item $candidate): array => ['ulid' => $candidate->ulid, 'name' => $candidate->name])
+            ->values()
+            ->all();
     }
 
     /**

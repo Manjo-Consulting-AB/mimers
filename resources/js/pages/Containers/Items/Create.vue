@@ -27,11 +27,19 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * `ListTags` i kontrollern — samma Actions som kategorisidan och taggsidan
  * anropar. Är någon av dem tom pekar ItemForm på respektive sida i stället för
  * att rita en tom väljare.
+ *
+ * **`parent` kommer ur `?parent={ulid}`** (issue 58 § Beslut 7) och är `null`
+ * för ett item på toppnivån. Det är samma sida och samma formulär: den enda
+ * skillnaden är raden med förälderns namn och att det nya itemet knyts som
+ * barn i samma transaktion. Kontrollern auktoriserar mot föräldern när den
+ * finns — den här filen ritar bara vad den fick.
  */
 const props = defineProps({
     container: { type: Object, required: true },
     categories: { type: Array, required: true },
     tags: { type: Array, required: true },
+    /* Föräldern ur `?parent`, eller null för ett item på toppnivån. */
+    parent: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -60,6 +68,7 @@ const account = computed(() => {
             :tags="tags"
             :accounts="accounts"
             :account="account"
+            :parent="parent"
         />
     </ContainerLayout>
 </template>

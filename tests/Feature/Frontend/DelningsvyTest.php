@@ -974,6 +974,15 @@ it('lägger delningssidan i pärmens navigation', function () {
  * Sedan issue 57b finns itemets POST här. Den skapar en item-rad och rör inga
  * åtkomster; att få SKAPA i en pärm och att få BEVILJA åtkomst till den är två
  * olika pinnar ([[ADR-0028 Åtkomst på itemnivå]] § Beslut).
+ *
+ * Sedan issue 58 finns relationens POST här. Den skriver en `item_link`-rad
+ * och rör inga åtkomster — men den är den ENDA posten i listan som har med
+ * delning att göra, och därför värd en mening: en `parent`/`child`-kant bär
+ * behörighet nedåt ([[ADR-0028 Åtkomst på itemnivå]] § Beslut regel 1), så
+ * att knyta ihop två items kan utvidga vad någon annan når. Det är just
+ * därför grinden är `update` i BÅDA ändarna (issue 71 § Beslut 4) och inte
+ * en åtkomstskrivning: ingen ny grant skapas, ingen mottagare läggs till, och
+ * ett delat item kan inte knytas ihop av någon som bara ser det.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -981,11 +990,13 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Itemet, containerns eget skapande, inbjudan, kategorin, uppsättningen
-    // och taggen. Ingen /accesses. Ordningen är registreringsordningen i
-    // routes/web.php — itemruten ligger ovanför `POST /containers`.
+    // Itemet, relationen, containerns eget skapande, inbjudan, kategorin,
+    // uppsättningen och taggen. Ingen /accesses. Ordningen är
+    // registreringsordningen i routes/web.php — itemrutterna ligger ovanför
+    // `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
+        'containers/{container}/items/{item}/links',
         'containers',
         'containers/{container}/invitations',
         'containers/{container}/categories',

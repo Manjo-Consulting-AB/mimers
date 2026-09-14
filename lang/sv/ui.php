@@ -106,6 +106,10 @@ return [
         'item-created' => 'Itemet är skapat.',
         'item-updated' => 'Itemet är sparat.',
         'item-deleted' => 'Itemet ligger i papperskorgen. Det går att återställa i 30 dagar.',
+        'item-link-created' => 'Relationen är skapad.',
+        // Upp-knytningen tar bort kopplingen och ingenting annat — raden i
+        // länken är hård (issue 14 § Beslut 10), men båda itemen finns kvar.
+        'item-link-removed' => 'Kopplingen är borta. Båda itemen finns kvar.',
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -169,6 +173,30 @@ return [
             'parent_not_in_container' => 'Den valda överordnade kategorin ligger inte i den här pärmen.',
             'has_children' => 'Kategorin har :children underkategorier och kan inte raderas.',
             'has_items' => 'Kategorin har :items items och kan inte raderas.',
+        ],
+
+        // Relationsformulärets fyra domänfel, se issue 58 § Beslut 6. De
+        // kommer som App\Exceptions\Api\ApiException ur
+        // App\Actions\Item\LinkItems och blir fältfel i
+        // App\Http\Controllers\ItemLinkController — aldrig en rå JSON-kropp
+        // mitt i en sida.
+        //
+        // `self`, `cross_container` och `pair_exists` hör till fältet `item`
+        // (vilket item som valdes), `cycle` till `relation` (vilken riktning
+        // som valdes). `pair_exists` bär den befintliga relationen i
+        // `data.relation` och meningen SKA säga den — orden nedan är koden
+        // översatt till ett adjektiv, och ett meddelande som slänger bort
+        // `data` är sämre än felkoden det ersatte.
+        'item_link' => [
+            'self' => 'Ett item kan inte kopplas till sig självt.',
+            'cross_container' => 'Relationer går bara mellan items i samma pärm.',
+            'pair_exists' => 'De två är redan kopplade: motparten är :relation.',
+            'relation_word' => [
+                'parent' => 'överordnad',
+                'child' => 'underordnad',
+                'sibling' => 'syskon',
+            ],
+            'cycle' => 'Riktningen skulle göra en cirkel: det här itemet är redan överordnat motparten, direkt eller genom andra items.',
         ],
     ],
 
@@ -473,6 +501,11 @@ return [
             // Kontot posten tillskrivs — varvet, inte den anställde. Bara vid
             // skapandet: vem som skapade raden är historik (Beslut 4).
             'account' => 'Konto',
+
+            // Föräldern, när barn-itemet skapas ur detaljvyns länk (issue 58
+            // § Beslut 7). En rad text och inte en väljare: länken har redan
+            // besvarat frågan, och `parent` skickas bara i skapandeläget.
+            'parent' => 'Skapas under: :name',
         ],
 
         'create' => [
@@ -496,6 +529,58 @@ return [
         'destroy' => [
             'action' => 'Radera',
             'confirm' => 'Itemet hamnar i papperskorgen och går att återställa i 30 dagar. Vill du fortsätta?',
+        ],
+
+        // Relationssektionen, se issue 58 § Beslut 3, 4, 8, 9 och 10.
+        // Sektionen bor i resources/js/components/ItemLinkSection.vue.
+        //
+        // `group` är de tre rubrikerna och `relation` etiketterna i
+        // riktningsväljaren — båda sedda från MOTPARTENS sida (Beslut 4),
+        // vilket är samma håll som listan från servern läser. Motparten utanför
+        // omfånget har ingen nyckel: den ritas inte alls (Beslut 3), och en
+        // rad som beskriver något dolt vore själva läckaget.
+        'links' => [
+            'heading' => 'Relationer',
+            'description' => 'Vad det här itemet hör till, och vad som hör till det.',
+
+            'group' => [
+                'parent' => 'Överordnade',
+                'child' => 'Underordnade',
+                'sibling' => 'Syskon',
+            ],
+
+            'empty' => 'Itemet är inte kopplat till något.',
+            'remove' => 'Knyt upp',
+            // Raderingen av en länk är hård (issue 14 § Beslut 10) och har
+            // ingen papperskorg — det som försvinner är kopplingen, aldrig
+            // itemen.
+            'remove_confirm' => 'Bara kopplingen tas bort. Båda itemen finns kvar. Vill du fortsätta?',
+
+            // Vägen till barn-itemet (Beslut 7).
+            'create_child' => [
+                'action' => 'Nytt item under det här',
+            ],
+
+            'form_heading' => 'Knyt ihop med ett annat item',
+            'counterpart' => 'Item',
+            'counterpart_none' => '— välj item —',
+            'no_counterparts' => 'Det finns inga andra items att koppla till.',
+
+            'relation' => [
+                'label' => 'Motparten är',
+                'none' => '— välj riktning —',
+                'parent' => 'Överordnat item',
+                'child' => 'Underordnat item',
+                'sibling' => 'Syskon',
+            ],
+
+            // Beslut 8: vad en riktning gör med delningen, i en mening.
+            // Ingen beräkning — ingen fråga om vilka grants som finns och
+            // ingen räknare. Den siffran hör till delningsvyn (55a), och en
+            // andra sanning om omfånget är en sanning som kan glida isär.
+            'relation_note' => 'Den som delar ett överordnat item når även dess underordnade — syskon delar ingenting.',
+
+            'submit' => 'Knyt ihop',
         ],
     ],
 
