@@ -47,4 +47,30 @@ final class ApiException extends RuntimeException implements Responsable
     {
         return ApiError::response($this->errorCode, $this->data, $this->status);
     }
+
+    /**
+     * Felkoden, för en anropare som ska formulera sitt EGET svar i stället
+     * för att rendera JSON-höljet — se issue 54 § Beslut 4 och
+     * App\Support\Frontend\ApiErrorTranslator. Additivt: ingen befintlig
+     * anropare rörs, och `toResponse()` ovan läser samma fält.
+     *
+     * Heter INTE `code()`: `Throwable::getCode()` finns redan och betyder
+     * något annat (den numeriska statusen), och två `code` i samma klass är
+     * en fälla för nästa läsare.
+     */
+    public function errorCode(): string
+    {
+        return $this->errorCode;
+    }
+
+    /**
+     * Ersättningarna som hör till koden — `:limit`, `:used` — för samma
+     * anropare som errorCode() ovan. Alltid en array, även tom.
+     *
+     * @return array<string, mixed>
+     */
+    public function data(): array
+    {
+        return $this->data;
+    }
 }

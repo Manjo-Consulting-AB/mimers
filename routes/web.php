@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActiveContainerController;
 use App\Http\Controllers\AttachmentDownloadController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CalendarFeedDownloadController;
+use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\Settings\AccountSettingsController;
@@ -199,6 +201,57 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/settings/accounts/{account}', [AccountSettingsController::class, 'update'])
         ->name('settings.accounts.update');
+
+    /*
+     * Issue 54 · Containerytan — listan, skapandet och redigeringen, se
+     * App\Http\Controllers\ContainerController och
+     * App\Http\Controllers\ActiveContainerController.
+     *
+     * Sex rutter, och den första webbytan mot en domänresurs `/api` redan
+     * äger. Ingenting av API:et byggs om: StoreContainerRequest,
+     * UpdateContainerRequest och ContainerResource delas rakt av, och
+     * skapandet går genom App\Actions\Container\CreateContainer — samma
+     * action som Api\ContainerController::store() anropar (Beslut 3).
+     * Vägen till `/api` är alltså inte kopierad hit, den är delad.
+     *
+     * `{container}` binds på ULID via #[RouteKey('ulid')] på
+     * App\Models\Container, som överallt annars.
+     *
+     * **Ingen GET /containers/{container}.** Pärmens egen sida är itemlistan
+     * och den är issue 57 (Beslut 2). En tom detaljvy nu blir en sida 57
+     * skriver om ändå, och två sidor som slåss om samma URL är dyrare än en
+     * URL som ännu inte finns. Listan länkar till edit, ingenting annat.
+     *
+     * **Ingen DELETE.** Papperskorgen som återställer en raderad pärm är
+     * issue 62, och ingen issue i M10 beställer en raderingsknapp innan dess.
+     *
+     * `/containers/create` ligger före `/containers/{container}/edit` i
+     * filen för läsbarhetens skull — `create` är ett fast segment och
+     * `{container}` en parameter, så de kan inte kollidera.
+     */
+    Route::get('/containers', [ContainerController::class, 'index'])
+        ->name('containers.index');
+
+    Route::get('/containers/create', [ContainerController::class, 'create'])
+        ->name('containers.create');
+
+    Route::post('/containers', [ContainerController::class, 'store'])
+        ->name('containers.store');
+
+    Route::get('/containers/{container}/edit', [ContainerController::class, 'edit'])
+        ->name('containers.edit');
+
+    Route::patch('/containers/{container}', [ContainerController::class, 'update'])
+        ->name('containers.update');
+
+    /*
+     * Den aktiva pärmen sätts på tre ställen (Beslut 6): här, i store() ovan,
+     * och i App\Support\Frontend\ActiveContainer::set() som är den enda som
+     * rör sessionsnyckeln. `view`-grinden och inte `update`: att välja vilken
+     * pärm man arbetar i är att läsa.
+     */
+    Route::put('/containers/{container}/active', ActiveContainerController::class)
+        ->name('containers.active');
 });
 
 /*
