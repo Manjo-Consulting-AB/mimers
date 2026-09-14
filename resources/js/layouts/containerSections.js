@@ -16,8 +16,10 @@
  * texten formuleras på servern och slås bara upp på klienten, se
  * [[ADR-0021 Frontendteknik]] och resources/js/composables/useTranslations.js.
  *
- * Issue 57 gör itemlistan till pärmens förstasida och lägger sin rad ovanför
- * den här.
+ * `items` kom med issue 57a § Beslut 1 och ligger FÖRST: itemen är pärmen,
+ * och kategorierna och taggarna är hur den är ordnad. `href` pekar på pärmens
+ * EGEN URL — `/containers/{ulid}` är förstasidan och inte en undersida, och
+ * den raden är därför den enda vars href är ett prefix till de andra.
  *
  * `sharing` kom med issue 55a § Beslut 1. Raden är allt som krävdes: layouten
  * renderar navigationen ur den här listan, så en ny sektion är en ny rad här
@@ -31,6 +33,7 @@
  * inte hur issues råkade bli klara.
  */
 export const containerSections = [
+    { key: 'items', href: (ulid) => `/containers/${ulid}` },
     { key: 'categories', href: (ulid) => `/containers/${ulid}/categories` },
     { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },

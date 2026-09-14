@@ -308,6 +308,9 @@ return [
         ],
 
         'nav' => [
+            // `items` ligger först, som raden i containerSections.js: itemen är
+            // pärmen, kategorierna och taggarna är hur den är ordnad.
+            'items' => 'Items',
             'categories' => 'Kategorier',
             'tags' => 'Taggar',
             'sharing' => 'Delning',
@@ -400,6 +403,36 @@ return [
             'save' => 'Spara',
             'destroy' => 'Radera',
             'empty' => 'Inga taggar än.',
+        ],
+    ],
+
+    // Itemsidorna, se issue 57a § Beslut 10. Samma indelning som `container`:
+    // `index` är listan, `show` är detaljvyn. Miniatyrerna och skapaytan är
+    // issue 61 respektive 57b och har därför inga nycklar här än.
+    'item' => [
+        // Listan är pärmens förstasida. `empty` säger att PÄRMEN är tom och
+        // aldrig att den kanske är det: en omfångsbegränsad mottagare ser bara
+        // det hon når, och ett "inga träffar bland N" hade avslöjat hur många
+        // rader som filtrerats bort (issue 73 § Beslut 6).
+        'index' => [
+            'title' => 'Items',
+            'heading' => 'Items',
+            'empty' => 'Pärmen är tom.',
+        ],
+
+        // Detaljvyns fältetiketter. Bara itemets EGNA fält, kategorin och
+        // taggarna — relationer, bilagor, scheman, kostnader och utlåning är
+        // issue 58, 60, 63, 45–47 och 67 och har inga nycklar här.
+        'show' => [
+            'description' => 'Beskrivning',
+            'manufacturer' => 'Tillverkare',
+            'model' => 'Modell',
+            'serial_number' => 'Serienummer',
+            'purchased_at' => 'Inköpsdatum',
+            'warranty_until' => 'Garanti till',
+            'position_note' => 'Placering',
+            'category' => 'Kategori',
+            'tags' => 'Taggar',
         ],
     ],
 
