@@ -541,6 +541,44 @@ return [
         ],
     ],
 
+    // The global search, see issue 59b decisions 4, 6, 7 and 8. The page lives
+    // in resources/js/pages/Search.vue, the field in
+    // resources/js/components/SearchField.vue — the field sits in the SHARED
+    // layout and therefore shows on every signed-in page (decision 5).
+    //
+    // `empty` names the search term and stops there (decision 6): no number of
+    // rows that existed, no hint that something was held back, no listing of
+    // which binders were searched — which binders at all is information in
+    // itself. A user with access to nothing gets word for word the same
+    // sentence as a user whose term matches nothing, because the sentence
+    // knows nothing about scope.
+    //
+    // `intro` and `whole_words` are the starting state, i.e. the state where
+    // no query ran at all (decisions 4 and 7). The last line says the search
+    // matches whole words: Swedish stemming does not exist in the MVP
+    // ([[ADR-0012 Sök]]), and no compensation is built in the view — no
+    // stemming in JavaScript, no second search on a truncated word. One line
+    // is the whole answer.
+    //
+    // `in_container` is the prefix before the binder name, and only the
+    // prefix: the name is its own link to the binder's front page (decision
+    // 3), so the words cannot live in one string.
+    'search' => [
+        'title' => 'Search',
+        'heading' => 'Search',
+
+        'intro' => 'Searches name, description, manufacturer, model and serial number — in every binder you can reach.',
+        'whole_words' => 'The search matches whole words: “battery” does not find “batteries”.',
+        'empty' => 'No hits for “:q”.',
+        'in_container' => 'in',
+
+        'field' => [
+            'label' => 'Search all binders',
+            'placeholder' => 'Search term',
+            'submit' => 'Search',
+        ],
+    ],
+
     // The sharing page, see issue 55a. Two sections with different audiences
     // (decision 3), and the texts follow that split.
     'sharing' => [

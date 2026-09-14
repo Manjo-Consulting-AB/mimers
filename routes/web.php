@@ -21,6 +21,7 @@ use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
+use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -119,6 +120,28 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
     ->name('logout');
 
 Route::middleware('auth')->group(function () {
+    /*
+     * Issue 59b · Den globala sökningen, se
+     * App\Http\Controllers\SearchController.
+     *
+     * EN rutt och EN sida (Beslut 1). Den ligger på TOPPNIVÅ och inte under
+     * en pärm — det är hela poängen med den globala frågan: "var la jag den
+     * där?" är en fråga över allt användaren har åtkomst till, inte inom en
+     * pärm hon redan valt (issue 15b § Beslut 5).
+     *
+     * `GET` och inte `POST`: frågan är en querysträng, så en sökning går att
+     * spara, dela och backa ur — samma skäl som 59a § Beslut 1. Filtren
+     * (tagg, kategori) hör till en pärm och finns bara i pärmens lista;
+     * den här rutten tar bara `q` (Beslut 1 och 4).
+     *
+     * Ingen `throttle`. Sökningen är en vanlig läsning av inloggade
+     * användarens eget innehåll, och ett tak hade gått ut över den som
+     * söker — [[ADR-0012 Sök]] väljer databasdrivrutinen för att den klarar
+     * plattformen, inte för att ytan ska begränsas per användare.
+     */
+    Route::get('/search', [SearchController::class, 'index'])
+        ->name('search');
+
     /*
      * Issue 53a · Verifieringssidan. Namnet `verification.notice` är inte
      * fritt valt: Laravels `verified`-middleware skickar en overifierad

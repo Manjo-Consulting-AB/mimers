@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import FlashMessage from '../components/FlashMessage.vue';
+import SearchField from '../components/SearchField.vue';
 import VerifyEmailNotice from '../components/VerifyEmailNotice.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -24,6 +25,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * All text går genom t() sedan issue 52 — ingen sträng i den här filen når
  * användaren utan att först ha passerat lang/{locale}/ui.php.
+ *
+ * Sökfältet kom med issue 59b § Beslut 5: den globala sökningen hör i den
+ * delade layouten, för en sökning som bara finns på söksidan är en sökning
+ * ingen hittar. Det ritas bara för en inloggad användare — utloggad renderas
+ * layouten utan det (`v-if="user"`), och det är hela villkoret: rutten ligger
+ * bakom `auth`, så en gäst har inget att söka i. Fältet är ett vanligt
+ * GET-formulär mot /search och ligger i
+ * resources/js/components/SearchField.vue.
  *
  * Verifieringsbannern kom med issue 53a § Beslut 7: `email_verified_at` är
  * null hos en overifierad användare (AuthUserResource lämnar fältet, aldrig
@@ -48,6 +57,8 @@ const showsVerificationNotice = computed(
         <header class="border-b border-slate-200 bg-white">
             <nav class="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-3">
                 <Link href="/" class="text-lg font-semibold">{{ t('common.brand') }}</Link>
+
+                <SearchField v-if="user" />
 
                 <div class="flex items-center gap-4 text-sm">
                     <Link v-if="user" href="/dashboard" class="hover:underline">{{ t('nav.dashboard') }}</Link>

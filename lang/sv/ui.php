@@ -623,6 +623,43 @@ return [
         ],
     ],
 
+    // Den globala sökningen, se issue 59b § Beslut 4, 6, 7 och 8. Sidan bor i
+    // resources/js/pages/Search.vue, fältet i
+    // resources/js/components/SearchField.vue — fältet ligger i den DELADE
+    // layouten och syns därför på varje inloggad sida (Beslut 5).
+    //
+    // `empty` nämner sökordet och slutar där (Beslut 6): inget tal om hur
+    // många rader som fanns, ingen antydan om att något dolts, ingen
+    // uppräkning av vilka pärmar som genomsöktes — vilka pärmar som helst är
+    // i sig en upplysning. En användare utan åtkomst till någonting alls får
+    // ordagrant samma mening som en vars sökord inte matchar, för meningen
+    // vet ingenting om omfånget.
+    //
+    // `intro` och `whole_words` är utgångsläget, alltså läget när ingen fråga
+    // kördes alls (Beslut 4 och 7). Den sista raden säger att sökningen
+    // matchar hela ord: svensk stemming finns inte i MVP ([[ADR-0012 Sök]]),
+    // och ingen kompensation byggs i vyn — ingen stamning i JavaScript, ingen
+    // andra sökning med trunkerat ord. En rad är hela svaret.
+    //
+    // `in_container` är prefixet före pärmnamnet, och bara prefixet: namnet är
+    // en egen länk till pärmens förstasida (Beslut 3), så orden kan inte
+    // ligga i samma sträng.
+    'search' => [
+        'title' => 'Sök',
+        'heading' => 'Sök',
+
+        'intro' => 'Söker i namn, beskrivning, tillverkare, modell och serienummer — i alla pärmar du når.',
+        'whole_words' => 'Sökningen matchar hela ord: ”batteri” hittar inte ”batterier”.',
+        'empty' => 'Inga träffar på ”:q”.',
+        'in_container' => 'i',
+
+        'field' => [
+            'label' => 'Sök i alla pärmar',
+            'placeholder' => 'Sökord',
+            'submit' => 'Sök',
+        ],
+    ],
+
     // Delningssidan, se issue 55a. Sidan bär två sektioner med olika publik
     // (§ Beslut 3): deltagarna ser varje deltagare, åtkomsterna ser bara
     // ägarkontot. Texterna nedan följer samma uppdelning — `participants`
