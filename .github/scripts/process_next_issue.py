@@ -135,9 +135,31 @@ def send_pushover(message):
         print(f"⚠️ Kunde inte skicka Pushover-notis via {script_path}: {e}")
 
 
-def run_cmd(args, check=True, capture_output=True, cwd=None, env=None):
-    """Kör terminalkommandon säkert (utan shell=True)."""
-    result = subprocess.run(args, text=True, capture_output=capture_output, cwd=cwd, env=env)
+# Linux vägrar exekvera ett kommando där ett enskilt argument är längre än
+# MAX_ARG_STRLEN (32 sidor = 128 KiB, hårdkodat i kärnan, går inte att höja med
+# ulimit). Överskridet argument ger execve() E2BIG, som Python rapporterar som
+# "[Errno 7] Argument list too long" - ett fel som pekar ut kommandot men inte
+# vilket argument som var för långt. Gränsen speglas här bara för att kunna ge
+# den upplysningen; ingen prompt får längre gå via argv (se call_claude_direct()).
+MAX_ARG_STRLEN = 128 * 1024
+
+
+def run_cmd(args, check=True, capture_output=True, cwd=None, env=None, input=None):
+    """Kör terminalkommandon säkert (utan shell=True).
+
+    `input` skickas på processens stdin i stället för som argument. Det är enda
+    vägen för text som kan bli stor (prompter med hela PR-diffen i): argv har en
+    hård längdgräns per argument, stdin har ingen.
+    """
+    for arg in args:
+        if len(arg) > MAX_ARG_STRLEN:
+            raise Exception(
+                f"Argumentet till '{args[0]}' är {len(arg)} tecken - över kärnans "
+                f"gräns på {MAX_ARG_STRLEN}. Skicka texten på stdin via run_cmd(..., "
+                f"input=...) i stället. Argumentets början: {arg[:200]!r}"
+            )
+    result = subprocess.run(args, text=True, capture_output=capture_output,
+                            cwd=cwd, env=env, input=input)
     if check and result.returncode != 0:
         cmd_str = " ".join(args)
         raise Exception(f"Kommando misslyckades: {cmd_str}\nFEL: {result.stderr}")
@@ -263,15 +285,18 @@ def call_deepseek(prompt, cwd):
     anropas. Detta är den enda vägen som faktiskt routar till DeepSeek - ett
     direkt `claude --model haiku`-anrop använder orkestrerarens egna
     ANTHROPIC_BASE_URL (obefintlig -> riktig Anthropic Haiku, 5-7x dyrare).
+
+    Prompten går på stdin, av samma skäl som i call_claude_direct(). Wrappern
+    är ett `exec claude ... "$@"`, så stdin når claude orört.
     """
     print("--> Startar DeepSeek via claude-subagent...")
     cmd = [
         os.path.expanduser("~/.local/bin/claude-subagent"),
-        "-p", prompt,
+        "-p",
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",
     ]
-    result = run_cmd(cmd, check=True, cwd=cwd)
+    result = run_cmd(cmd, check=True, cwd=cwd, input=prompt)
     return result.stdout
 
 
@@ -282,16 +307,27 @@ def call_claude_direct(model, prompt, cwd):
     rad för exakt detta kommando, annars stannar den oövervakade cron-körningen
     på permission-klassificeraren. Se ADR-0026: eskalering körs oövervakad, inte
     med mänsklig tillsyn i realtid, vilket kräver den explicita allow-listningen.
+
+    Prompten skickas på stdin, inte som `-p <prompt>`. Argv har en hård gräns på
+    128 KiB per argument (MAX_ARG_STRLEN), och granskningsprompten bär hela
+    `gh pr diff` - en stor PR sprängde gränsen och hela åtgärdsloopen dog på
+    "[Errno 7] Argument list too long" innan modellen ens anropades. Det hände
+    upprepade gånger och krävde varje gång att Tony satte `atgarda:arkitektsvar`
+    på nytt. stdin har ingen motsvarande gräns, så prompten kan inte längre bli
+    för stor för att skickas. Behåll formen: allow-raden i settings.json matchar
+    prefixet `claude -p --model <modell> --permission-mode bypassPermissions`,
+    och ett återinfört promptargument skulle både bryta matchningen och ta
+    tillbaka kraschen.
     """
     print(f"--> Startar {model} direkt...")
     cmd = [
         "claude",
-        "-p", prompt,
+        "-p",
         "--model", model,
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",
     ]
-    result = run_cmd(cmd, check=True, cwd=cwd)
+    result = run_cmd(cmd, check=True, cwd=cwd, input=prompt)
     return result.stdout
 
 
@@ -305,18 +341,19 @@ def usage_ok_to_proceed():
     bypassPermissions) måste vara identiskt med call_claude_direct()s -
     ändra bara svansen, annars matchar ingen allow-rad i
     ~/.claude/settings.json och den oövervakade cron-körningen stannar på
-    permission-klassificeraren.
+    permission-klassificeraren. Därför går prompten på stdin här också, trots
+    att "ok" aldrig kan bli för lång: prefixet ska vara ett och samma.
     """
     cmd = [
         "claude",
-        "-p", "ok",
+        "-p",
         "--model", "sonnet",
         "--permission-mode", "bypassPermissions",
         "--output-format", "stream-json",
         "--verbose",
         "--max-turns", "1",
     ]
-    result = run_cmd(cmd, check=False)
+    result = run_cmd(cmd, check=False, input="ok")
     for line in result.stdout.splitlines():
         try:
             event = json.loads(line)
@@ -1931,6 +1968,34 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         pr_url = pr_res.stdout.strip().splitlines()[-1]
         pr_number = pr_url.rstrip("/").split("/")[-1]
 
+    granska_och_merga(
+        issue_num, issue_title, issue_body, pr_number, pr_body, risk_class,
+        branch_name, worktree_path, pushed_sha=pushed_sha,
+    )
+
+
+def granska_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
+                      risk_class, branch_name, worktree_path, pushed_sha=None):
+    """Granskningen och allt efter den: första läsningen, åtgärdsloopen vid fynd,
+    arkitekteskaleringen och mergen.
+
+    Utbruten ur STEG 5 för att `--granska` ska kunna köra exakt samma bana på en
+    PR som redan finns. Skälet är konkret: när FAS 4 kraschade mellan
+    PR-skapandet och den första granskningen (PR #312, Errno 7 på en prompt som
+    gick i argv) fanns ingen väg tillbaka. `--resume-pr` och
+    `--atgarda-arkitektsvar` läser båda fynd ur en granskningskommentar, och den
+    hade aldrig postats - PR:en var färdigbyggd, CI-grön och oåtkomlig för varje
+    startpunkt skriptet hade.
+
+    Kopiera inte tillbaka den här banan in i STEG 5. Samma "gjorde agenten
+    något"-kontroll låg en gång i tre kopior, och fixen i PR #163 träffade bara
+    en av dem (issue #172) - se har_label()s docstring. En delad funktion kan
+    bara vara fel på ett ställe.
+
+    `pushed_sha` är sha:n huvudflödet just pushade och måste vänta in innan
+    diffen läses. `--granska` läser en PR vars head redan står stilla och
+    skickar därför inget.
+    """
     # -----------------------------------------------------------------
     # GRANSKNING: varje PR får en läsare. Axeln väljer djup och modell.
     # -----------------------------------------------------------------
@@ -1955,7 +2020,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     print(f"--> risk_class: {risk_class} - granskas av {modellnamn}...")
     send_pushover(f"👀 Issue #{issue_num}: PR #{pr_number} skapad, granskas nu av {modellnamn} (risk_class: {risk_class}).")
 
-    if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
+    if pushed_sha and not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
         print(f"  ⚠ PR:ens head hann inte synka mot commit {pushed_sha[:8]} - läser diffen ändå.")
     pr_diff = run_cmd(["gh", "pr", "diff", pr_number], cwd=worktree_path).stdout
 
@@ -2016,6 +2081,8 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         issue_num, issue_title, issue_body, pr_number, pr_body, risk_class,
         godkand_av, branch_name, worktree_path,
     )
+
+
 
 
 def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
@@ -2108,6 +2175,62 @@ def find_pr_context(pr_number):
         raise Exception(f"Hittade ingen granskningskommentar på PR #{pr_number} att återuppta från.")
 
     return issue_num, issue_title, issue_body, branch_name, granskningar[-1]
+
+
+def granska_pr(pr_number):
+    """Kör den FÖRSTA granskningen på en PR som redan finns, och fortsätter in i
+    åtgärdsloopen och mergen precis som huvudflödet hade gjort.
+
+    För en PR som blev skapad men aldrig granskad - FAS 4 kraschade i glappet
+    mellan `gh pr create` och den första `run_review()`. Skillnaden mot
+    --resume-pr är just den granskningskommentaren: --resume-pr återupptar
+    ÅTGÄRDSLOOPEN och kräver därför fynd att åtgärda, medan den här banan är för
+    PR:er där ingen granskning hunnit posta något alls. Kör den inte på en PR
+    som redan har en granskningsanalys i tråden - då är --resume-pr rätt väg,
+    och den här skulle läsa om diffen från noll och betala för det.
+    """
+    pr = json.loads(run_cmd(
+        ["gh", "pr", "view", pr_number, "--json", "number,state,body,headRefName,comments"],
+        cwd=REPO_ROOT).stdout)
+
+    if pr["state"] != "OPEN":
+        print(f"PR #{pr_number} är {pr['state']} - det finns inget att granska.")
+        sys.exit(1)
+
+    # Fail-closed mot dubbelgranskning: finns analysen redan är det --resume-pr
+    # som gäller, och att köra vidare här skulle posta en andra förstagranskning
+    # i samma tråd och starta om åtgärdsloopen från fynd som redan är åtgärdade.
+    if any("Granskningsanalys" in (c["body"] or "\n").splitlines()[0] for c in pr["comments"]):
+        print(f"PR #{pr_number} har redan en granskningsanalys i tråden - "
+              f"använd --resume-pr {pr_number} i stället.")
+        sys.exit(1)
+
+    pr_body = pr["body"]
+    branch_name = pr["headRefName"]
+    issue_num, issue_title, issue_body = hamta_issue_for_pr(pr_number, pr_body)
+    risk_class = extract_risk_class(issue_body)
+
+    print(f"\n==================================================")
+    print(f" Granskar PR #{pr_number} (Issue #{issue_num}: {issue_title})")
+    print(f"==================================================\n")
+
+    worktree_path = setup_worktree_for_existing_branch(branch_name)
+    print("--> Bootstrappar worktree (composer setup)...")
+    run_cmd(["composer", "setup"], cwd=worktree_path)
+
+    try:
+        granska_och_merga(
+            issue_num, issue_title, issue_body, pr_number, pr_body, risk_class,
+            branch_name, worktree_path,
+        )
+    except (Exception, KeyboardInterrupt) as e:
+        avbruten = isinstance(e, KeyboardInterrupt)
+        print(f"\n🚨 Granskningen {'avbruten manuellt (^C)' if avbruten else f'kraschade oväntat: {e}'}")
+        cleanup_worktree(worktree_path, branch_name)
+        send_pushover(f"🚨 --granska {pr_number} {'avbrutet' if avbruten else 'kraschade'}: {e if not avbruten else 'manuellt'}")
+        if avbruten:
+            raise
+        sys.exit(1)
 
 
 def resume_pr(pr_number):
@@ -2215,6 +2338,9 @@ if __name__ == "__main__":
         if len(sys.argv) >= 3 and sys.argv[1] == "--resume-pr":
             avbryt_vid_peak()
             resume_pr(sys.argv[2])
+        elif len(sys.argv) >= 3 and sys.argv[1] == "--granska":
+            avbryt_vid_peak()
+            granska_pr(sys.argv[2])
         elif len(sys.argv) >= 3 and sys.argv[1] == "--resume-question":
             avbryt_vid_peak()
             resume_question(sys.argv[2])
