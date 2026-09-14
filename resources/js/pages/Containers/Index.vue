@@ -25,6 +25,10 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *
  * Redigeringslänken visas efter `can.update`, som kontrollern räknat med
  * policyn (Beslut 9). Flaggan är presentation; rutten auktoriserar ändå.
+ *
+ * Pärmnamnet är en länk till pärmens EGEN sida — itemlistan, se issue 57a
+ * § Beslut 1. Det är den enda ändringen i den här filen; knapparna för aktiv
+ * pärm och redigering står kvar som de är.
  */
 defineProps({
     containers: { type: Array, required: true },
@@ -63,7 +67,12 @@ const isShared = (container) => accountName(container) === null;
 
         <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
             <li v-for="container in containers" :key="container.ulid" class="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
-                <span class="font-medium">{{ container.name }}</span>
+                <Link
+                    :href="`/containers/${container.ulid}`"
+                    class="font-medium text-blue-700 hover:underline"
+                >
+                    {{ container.name }}
+                </Link>
 
                 <span class="text-sm text-slate-600">{{ t(`container.kind.${container.kind}`) }}</span>
 

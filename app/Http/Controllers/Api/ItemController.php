@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Access\ResolveItemScope;
-use App\Actions\Category\ResolveCategoryDescendants;
 use App\Actions\Item\LinkItems;
+use App\Actions\Item\ListItems;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Item\IndexItemRequest;
@@ -15,7 +14,6 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
@@ -48,98 +46,31 @@ class ItemController extends Controller
     /**
      * GET /api/containers/{container}/items — 200. Lists the container's
      * items, sorted by `name` ascending, no pagination (issue 13a § Beslut
-     * 10). The query string may carry the issue 15a filters, both optional
-     * and combined with AND: `tags[]` (every tag required, § Beslut 2) and
-     * `category` (the category and its whole subtree, § Beslut 4). Since
-     * issue 15b § Beslut 5 it also carries `q` (optional, `sometimes` in
-     * IndexItemRequest), a free-text search over the five searchable
-     * columns that combines with the tag/category filters with AND.
-     * IndexItemRequest has already proved every ULID exists in THIS
-     * container and is not soft-deleted — an unknown value is 422
-     * `validation.failed`, never an empty result (§ Beslut 7). A filter
-     * that matches nothing is still 200 with `{"data": []}`.
+     * 10). The query string carries the issue 15a filters and 15b's `q`,
+     * all optional and combined with AND; a filter that matches nothing is
+     * still 200 with `{"data": []}`. IndexItemRequest has already proved
+     * every ULID exists in THIS container and is not soft-deleted — an
+     * unknown value is 422 `validation.failed`, never an empty result
+     * (issue 15a § Beslut 7).
      *
-     * When `q` is present the search goes through Scout's database driver
-     * (issue 15b § Beslut 3) with the container and the 15a filters applied
-     * in the `query()` callback; the plain Eloquent path below is unchanged
-     * when it is not. `category`, `createdByAccount` and `tags` are
-     * eager-loaded so ItemResource never triggers an unplanned lazy-load
-     * per row — the list stays a constant number of queries regardless of
-     * item count (issue 13b § Beslut 10) and of the number of filter values
-     * or the depth of the category tree (issue 15a § Beslut 9).
-     *
-     * Issue 73 § Beslut 2: the scope restricts the ROWS. The tag/category
-     * filters from 15a stay on top, unchanged — they are all AND, so their
-     * order relative to the scope does not matter. No pagination and no
-     * counter is added (§ Beslut 6): nothing in the response may carry a
-     * number that reveals how many rows were filtered away.
+     * The body moved to App\Actions\Item\ListItems in issue 57a § Beslut 3 —
+     * the scope (issue 73 § Beslut 2), the tag lookup and
+     * ResolveCategoryDescendants, the Scout branch when `q` is present and
+     * the plain Eloquent branch otherwise, the eager loads that keep the
+     * list a constant number of queries (issue 13b § Beslut 10) and the
+     * absence of a counter (§ Beslut 6) all live there now, and the web
+     * item list draws from the same Action. This method is the gate plus
+     * the call, so the two surfaces can never diverge.
      */
-    public function index(IndexItemRequest $request, Container $container, ResolveCategoryDescendants $resolveCategoryDescendants, ResolveItemScope $resolveItemScope): JsonResponse
+    public function index(IndexItemRequest $request, Container $container, ListItems $listItems): JsonResponse
     {
         Gate::authorize('view', $container);
 
-        // Omfånget löses upp EN gång överst (issue 73 § Beslut 8) och
-        // appliceras i BÅDA grenarna nedan — Scout när `q` finns, rak
-        // Eloquent annars. Att bara filtrera den ena är precis den symmetri
-        // som glöms bort, och den som glöms läcker (issue 73 § Beslut 2).
-        $scope = $resolveItemScope->handle($request->user(), $container);
-
-        $tagUlids = $request->validated('tags');
-        $tagIds = [];
-
-        if ($tagUlids !== null && $tagUlids !== []) {
-            // IndexItemRequest has already proved each ULID exists in THIS
-            // container and is not soft-deleted; the container-scoped
-            // lookup below is what keeps the query correct even without
-            // that gate (issue 15a § Att se upp med).
-            $tagIds = Tag::whereIn('ulid', $tagUlids)
-                ->where('container_id', $container->id)
-                ->whereNull('deleted_at')
-                ->pluck('id')
-                ->all();
-        }
-
-        $categoryUlid = $request->validated('category');
-        $categoryIds = null;
-
-        if ($categoryUlid !== null) {
-            $category = $container->categories()->where('ulid', $categoryUlid)->firstOrFail();
-            $categoryIds = $resolveCategoryDescendants->handle($category);
-        }
-
-        $q = $request->validated('q');
-
-        if ($q !== null && $q !== '') {
-            $items = Item::search($q)
-                ->query(function (Builder $query) use ($container, $tagIds, $categoryIds, $scope) {
-                    /** @var Builder<Item> $query */
-                    $query->where('container_id', $container->id)
-                        ->inScope($scope)
-                        ->with(['category', 'createdByAccount', 'tags']);
-
-                    if ($tagIds !== []) {
-                        $query->withAllTags($tagIds);
-                    }
-
-                    if ($categoryIds !== null) {
-                        $query->inCategoryTree($categoryIds);
-                    }
-                })
-                ->orderBy('name')
-                ->get();
-        } else {
-            $query = $container->items()->inScope($scope)->with(['category', 'createdByAccount', 'tags']);
-
-            if ($tagIds !== []) {
-                $query->withAllTags($tagIds);
-            }
-
-            if ($categoryIds !== null) {
-                $query->inCategoryTree($categoryIds);
-            }
-
-            $items = $query->orderBy('name')->get();
-        }
+        $items = $listItems->handle($request->user(), $container, [
+            'tags' => $request->validated('tags'),
+            'category' => $request->validated('category'),
+            'q' => $request->validated('q'),
+        ]);
 
         return ItemResource::collection($items)->response();
     }

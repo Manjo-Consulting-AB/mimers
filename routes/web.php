@@ -19,6 +19,7 @@ use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\InvitationResponseController;
+use App\Http\Controllers\ItemController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -223,11 +224,6 @@ Route::middleware('auth')->group(function () {
      * `{container}` binds på ULID via #[RouteKey('ulid')] på
      * App\Models\Container, som överallt annars.
      *
-     * **Ingen GET /containers/{container}.** Pärmens egen sida är itemlistan
-     * och den är issue 57 (Beslut 2). En tom detaljvy nu blir en sida 57
-     * skriver om ändå, och två sidor som slåss om samma URL är dyrare än en
-     * URL som ännu inte finns. Listan länkar till edit, ingenting annat.
-     *
      * **Ingen DELETE.** Papperskorgen som återställer en raderad pärm är
      * issue 62, och ingen issue i M10 beställer en raderingsknapp innan dess.
      *
@@ -240,6 +236,36 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/containers/create', [ContainerController::class, 'create'])
         ->name('containers.create');
+
+    /*
+     * Issue 57a · Itemsidorna — pärmens förstasida och detaljvyn, se
+     * App\Http\Controllers\ItemController.
+     *
+     * Två GET-rutter och ingenting annat (Beslut 1). Skapandet och
+     * redigeringen är 57b, och den här issuen lägger ingen skrivande rutt.
+     *
+     * **`GET /containers/{container}` måste registreras EFTER
+     * `GET /containers/create`** — annars matchar `{container}` strängen
+     * `create` och formuläret blir en 404. Det är hela skälet att raden har
+     * en plats och inte bara en rutt. URL:en är pärmens egen sida och inte en
+     * tom detaljvy: App\Http\Controllers\ContainerController har ingen
+     * `show()` med flit (issue 54 § Beslut 2), och den som svarar här är
+     * itemkontrollern.
+     *
+     * **`scopeBindings()` på `{item}`**, av exakt samma skäl som
+     * `routes/api.php` gör det (issue 13a § Beslut 1, issue 9b § Beslut 1):
+     * utan det löser en item-ULID från en annan pärm upp här, och ett item i
+     * pärm B går att nå via pärm A:s rutt. Den blir 404.
+     *
+     * `{container}` och `{item}` binds båda på ULID via `#[RouteKey('ulid')]`
+     * på App\Models\Container respektive App\Models\Item.
+     */
+    Route::get('/containers/{container}', [ItemController::class, 'index'])
+        ->name('containers.show');
+
+    Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show'])
+        ->scopeBindings()
+        ->name('containers.items.show');
 
     Route::post('/containers', [ContainerController::class, 'store'])
         ->name('containers.store');
@@ -361,8 +387,8 @@ Route::middleware('auth')->group(function () {
      * `{container}`, `{category}` och `{tag}` binds alla på ULID via
      * `#[RouteKey('ulid')]` på App\Models\Container, Category respektive Tag.
      *
-     * **Sidorna har ingen `destroy()` på pärmen och ingen itemvy** — de hör
-     * till issue 62 respektive 57.
+     * **Sidorna har ingen `destroy()` på pärmen** — den hör till issue 62.
+     * Itemvyn kom med issue 57a och ligger i sin egen grupp ovan.
      *
      * Skrivningarna svarar `back()` med en flash-kod — mönstret från issue 51
      * § Beslut 5, `status` och ingenting annat — och ett domänfel som ett

@@ -237,6 +237,10 @@ return [
         ],
 
         'nav' => [
+            // `items` comes first, like the row in containerSections.js: the
+            // items are the binder, the categories and tags are how it is
+            // organised.
+            'items' => 'Items',
             'categories' => 'Categories',
             'tags' => 'Tags',
             'sharing' => 'Sharing',
@@ -325,6 +329,28 @@ return [
             'save' => 'Save',
             'destroy' => 'Delete',
             'empty' => 'No tags yet.',
+        ],
+    ],
+
+    // The item pages, see issue 57a decision 10. Same split as `container`:
+    // `index` is the list, `show` is the detail view.
+    'item' => [
+        'index' => [
+            'title' => 'Items',
+            'heading' => 'Items',
+            'empty' => 'The binder is empty.',
+        ],
+
+        'show' => [
+            'description' => 'Description',
+            'manufacturer' => 'Manufacturer',
+            'model' => 'Model',
+            'serial_number' => 'Serial number',
+            'purchased_at' => 'Purchase date',
+            'warranty_until' => 'Warranty until',
+            'position_note' => 'Location',
+            'category' => 'Category',
+            'tags' => 'Tags',
         ],
     ],
 

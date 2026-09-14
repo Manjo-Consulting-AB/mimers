@@ -29,6 +29,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Navigationen renderas ur containerSections med v-for — en post till kräver
  * ingen ändring här, bara en rad i listan. Texten kommer ur t() med nyckeln
  * `container.nav.<key>`, aldrig ur en sträng i den här filen.
+ *
+ * Undantaget är itemlistan (issue 57a), vars href är pärmens EGNA url och
+ * därför ett prefix till alla andra — se isActive() nedan.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -39,8 +42,20 @@ const page = usePage();
 
 const sectionHref = (section) => section.href(props.container.ulid);
 
+const containerRoot = computed(() => `/containers/${props.container.ulid}`);
+
 function isActive(section) {
-    return page.url === sectionHref(section) || page.url.startsWith(`${sectionHref(section)}/`);
+    const href = sectionHref(section);
+
+    // Itemlistan (issue 57a) är pärmens EGEN url och därmed ett prefix till
+    // varje annan sektion — /containers/X matchar /containers/X/categories.
+    // Utan det här undantaget hade `items` lyst på varje sida under pärmen,
+    // vid sidan av den sida man faktiskt står på.
+    if (href === containerRoot.value) {
+        return page.url === href;
+    }
+
+    return page.url === href || page.url.startsWith(`${href}/`);
 }
 
 const sectionLabel = (section) => t(`container.nav.${section.key}`);
