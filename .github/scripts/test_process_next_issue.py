@@ -14,7 +14,9 @@ Körs av CI (.github/workflows/ci.yml, steget "Pipelinens egna enhetstester")
 och lokalt med:
     python3 .github/scripts/test_process_next_issue.py
 """
+import json
 import os
+import re
 import subprocess
 import sys
 
@@ -341,7 +343,9 @@ def test_arkitekteskaleringen_anropas_fran_bada_banorna():
 
     Tripwire mot exakt den generaliseringsmiss retron redan noterat: en
     mekanism som finns på ett anropsställe och saknas på ett annat."""
-    for funktion in ("_process_in_worktree", "los_fraga_och_merga"):
+    # GRANSKNINGS-steget bor i granska_och_merga() sedan det brots ut ur
+    # _process_in_worktree() sa att --granska kan kora samma bana (PR #312).
+    for funktion in ("granska_och_merga", "los_fraga_och_merga"):
         assert "= arkitektsvar_pa_oppen_fraga(" in _funktionskropp(funktion), (
             f"{funktion}() eskalerar inte en obesvarad fråga till arkitekten. "
             f"Ett omnämnande i en kommentar räcker inte - anropet ska finnas."
@@ -363,7 +367,7 @@ def test_atgardsloopens_avslag_far_inte_ga_rakt_till_eskalera():
     """Klart när: `if not godkand: eskalera(...)` direkt efter åtgärdsloopen i
     run_review_flow är precis det som lämnade issue 292 på needs-human med kön
     blockerad. Arkitektfrågan ska ligga emellan."""
-    kropp = _funktionskropp("_process_in_worktree")
+    kropp = _funktionskropp("granska_och_merga")
     loop = kropp.index("granskning, fragor=fragor")
     eskalering = kropp.index("Fynd kvarstår efter åtgärdsloopen")
     assert "= arkitektsvar_pa_oppen_fraga(" in kropp[loop:eskalering], (
@@ -472,6 +476,179 @@ def test_senaste_arkitektsvar_tar_svaret_och_inte_notisen():
 
 def test_senaste_arkitektsvar_tom_trad():
     assert p.senaste_arkitektsvar([]) == ""
+
+
+# =====================================================================
+# Prompter går på stdin, aldrig i argv (Errno 7, "Argument list too long")
+# =====================================================================
+
+class _Fangad:
+    """Fångar argumenten till run_cmd i stället för att köra något."""
+
+    def __init__(self):
+        self.args = None
+        self.input = None
+        self.stdout = "svar från modellen"
+
+    def __call__(self, args, **kw):
+        self.args = args
+        self.input = kw.get("input")
+        return self
+
+
+def test_deepseek_far_prompten_pa_stdin_inte_i_argv():
+    fangad = _Fangad()
+    original = p.run_cmd
+    p.run_cmd = fangad
+    try:
+        p.call_deepseek("PROMPTTEXT", cwd=".")
+    finally:
+        p.run_cmd = original
+    assert fangad.input == "PROMPTTEXT"
+    assert "PROMPTTEXT" not in fangad.args
+
+
+def test_call_claude_direct_far_prompten_pa_stdin_inte_i_argv():
+    fangad = _Fangad()
+    original = p.run_cmd
+    p.run_cmd = fangad
+    try:
+        p.call_claude_direct("sonnet", "PROMPTTEXT", cwd=".")
+    finally:
+        p.run_cmd = original
+    assert fangad.input == "PROMPTTEXT"
+    assert "PROMPTTEXT" not in fangad.args
+
+
+def test_claude_kommandots_prefix_matchar_allow_raden():
+    """Allow-raden i ~/.claude/settings.json matchar på prefix. Ett återinfört
+    promptargument efter -p skulle både bryta matchningen (cron-körningen
+    stannar på permission-klassificeraren) och ta tillbaka Errno 7."""
+    fangad = _Fangad()
+    original = p.run_cmd
+    p.run_cmd = fangad
+    try:
+        p.call_claude_direct("opus", "x" * 500_000, cwd=".")
+    finally:
+        p.run_cmd = original
+    # Argumenten kortas i felmeddelandet: prompten här är en halv megabyte, och
+    # ett assert som skriver ut den gör testutskriften oläsbar.
+    kortad = [a[:40] for a in fangad.args]
+    assert fangad.args[:6] == [
+        "claude", "-p", "--model", "opus", "--permission-mode", "bypassPermissions",
+    ], kortad
+
+
+def test_run_cmd_avvisar_for_langt_argument_med_begripligt_fel():
+    """Kärnan ger bara '[Errno 7] Argument list too long: claude' och pekar inte
+    ut vilket argument som sprängde gränsen. Guarden gör det - och felar innan
+    execve() i stället för mitt i en 20-40 minuter lång åtgärdsloop."""
+    try:
+        p.run_cmd(["echo", "x" * (p.MAX_ARG_STRLEN + 1)])
+    except Exception as e:
+        assert "stdin" in str(e), str(e)
+        assert str(p.MAX_ARG_STRLEN) in str(e), str(e)
+    else:
+        raise AssertionError("run_cmd släppte igenom ett argument över MAX_ARG_STRLEN")
+
+
+def test_run_cmd_slapper_igenom_argument_precis_under_gransen():
+    resultat = p.run_cmd(["true"] + ["x" * (p.MAX_ARG_STRLEN - 1)])
+    assert resultat.returncode == 0
+
+
+def test_ingen_prompt_i_argv_kvar_i_skriptet():
+    """Tripwire: `-p` följt av ett promptargument är exakt mönstret som
+    kraschade åtgärdsloopen upprepade gånger. Inget nytt anrop ska smyga in."""
+    kalla = open(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "process_next_issue.py"),
+        encoding="utf-8",
+    ).read()
+    # Nästa element efter "-p" ska vara en flagga ("--model", "--permission-mode"),
+    # aldrig en prompt - vare sig en variabel eller ett strängliteral.
+    traffar = re.findall(r'"-p",\s*(?!"--)([^\s,\]]+)', kalla)
+    assert traffar == [], f'"-p" följs av ett promptargument: {traffar}'
+
+
+# =====================================================================
+# --granska: den forsta granskningen pa en PR som redan finns
+# =====================================================================
+
+def test_granska_och_merga_finns_i_en_enda_kopia():
+    """Granskningsbanan ar utbruten sa STEG 5 och --granska delar den. Skulle
+    den kopieras tillbaka kan en fix traffa den ena kopian och missa den andra -
+    exakt det som hande med "gjorde agenten nagot"-kontrollen (issue #172)."""
+    kalla = open(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "process_next_issue.py"),
+        encoding="utf-8",
+    ).read()
+    assert kalla.count("def granska_och_merga(") == 1
+    # Anropas fran huvudflodet och fran --granska, ingen annanstans.
+    assert kalla.count("granska_och_merga(") == 3, kalla.count("granska_och_merga(")
+
+
+def test_granska_pr_ar_wirad_till_cli():
+    kalla = open(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "process_next_issue.py"),
+        encoding="utf-8",
+    ).read()
+    assert 'sys.argv[1] == "--granska"' in kalla
+    assert "granska_pr(sys.argv[2])" in kalla
+
+
+def test_granska_pr_vagrar_pa_pr_som_redan_granskats():
+    """Fail-closed: en andra forstagranskning skulle posta en ny analys i samma
+    trad och starta om atgardsloopen fran fynd som redan ar atgardade."""
+    svar = json.dumps({
+        "number": 312, "state": "OPEN", "body": "Closes #305",
+        "headRefName": "feature/issue-305",
+        "comments": [{"body": "### Sonnet 5 Granskningsanalys\nAllt bra."}],
+    })
+
+    class _Svar:
+        stdout = svar
+
+    original = p.run_cmd
+    p.run_cmd = lambda args, **kw: _Svar()
+    try:
+        p.granska_pr("312")
+    except SystemExit as e:
+        assert e.code == 1
+    else:
+        raise AssertionError("granska_pr kordes pa en redan granskad PR")
+    finally:
+        p.run_cmd = original
+
+
+def test_granska_pr_vagrar_pa_stangd_pr():
+    svar = json.dumps({
+        "number": 312, "state": "MERGED", "body": "Closes #305",
+        "headRefName": "feature/issue-305", "comments": [],
+    })
+
+    class _Svar:
+        stdout = svar
+
+    original = p.run_cmd
+    p.run_cmd = lambda args, **kw: _Svar()
+    try:
+        p.granska_pr("312")
+    except SystemExit as e:
+        assert e.code == 1
+    else:
+        raise AssertionError("granska_pr kordes pa en stangd PR")
+    finally:
+        p.run_cmd = original
+
+
+def test_granska_och_merga_utan_pushed_sha_vantar_inte_in_head():
+    """--granska laser en PR vars head star stilla och skickar ingen sha.
+    wait_for_pr_head() far inte anropas med None - den skulle indexera pa den."""
+    kalla = open(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "process_next_issue.py"),
+        encoding="utf-8",
+    ).read()
+    assert "if pushed_sha and not wait_for_pr_head(pr_number, pushed_sha, worktree_path):" in kalla
 
 
 if __name__ == "__main__":
