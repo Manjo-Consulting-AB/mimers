@@ -153,6 +153,15 @@ class CategoryController extends Controller
      * trädet inte längre tomt, och det finns inget tillstånd att synkronisera
      * (Beslut 6).
      *
+     * **Kontrollen och skrivningen är samma kritiska sektion.** Låg tomhets-
+     * kontrollen före transaktionen kunde två samtidiga anrop mot samma tomma
+     * pärm bägge passera den innan någon av dem hunnit skriva, och trädet hade
+     * fördubblats — precis det Beslut 3 kallar "inte en smaksak". Låset sitter
+     * därför på CONTAINERRADEN (`lockForUpdate()`), inte på `exists()`-frågan:
+     * mot en tabell som per definition är tom låser en sådan fråga ingenting
+     * alls. Det andra anropet väntar på radlåset, ser sedan raderna och får
+     * 422.
+     *
      * Felet är en MENING ur `lang/`, inte en API-felkod: rutten finns bara på
      * webben och har ingen motsvarighet i `/api` att hålla koden i takt med,
      * till skillnad från `category.has_children` och de andra i
@@ -165,13 +174,15 @@ class CategoryController extends Controller
     ): RedirectResponse {
         Gate::authorize('update', $container);
 
-        if ($container->categories()->exists()) {
-            throw ValidationException::withMessages([
-                'categories' => trans('ui.container.categories.preset_not_empty'),
-            ]);
-        }
-
         DB::transaction(function () use ($request, $container, $createCategory): void {
+            $container = Container::query()->whereKey($container->id)->lockForUpdate()->firstOrFail();
+
+            if ($container->categories()->exists()) {
+                throw ValidationException::withMessages([
+                    'categories' => trans('ui.container.categories.preset_not_empty'),
+                ]);
+            }
+
             foreach ($request->validated('categories') as $preset) {
                 $root = $createCategory->handle($container, $preset['name'], null, null);
 
