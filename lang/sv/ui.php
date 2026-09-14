@@ -96,6 +96,12 @@ return [
         'invitation-revoked' => 'Inbjudan är tillbakadragen.',
         'invitation-accepted' => 'Inbjudan är accepterad. Pärmen ligger under Pärmar.',
         'invitation-rejected' => 'Inbjudan är avvisad.',
+        'category-created' => 'Kategorin är skapad.',
+        'category-updated' => 'Kategorin är sparad.',
+        'category-deleted' => 'Kategorin är raderad.',
+        'tag-created' => 'Taggen är skapad.',
+        'tag-updated' => 'Taggen är sparad.',
+        'tag-deleted' => 'Taggen är raderad.',
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -143,6 +149,22 @@ return [
             'expired' => 'Inbjudan har gått ut.',
             'email_mismatch' => 'Inbjudan gäller en annan e-postadress än den du är inloggad med.',
             'email_not_verified' => 'Verifiera din e-postadress först, och försök sedan igen.',
+        ],
+
+        // Kategorins domänfel, se issue 56a § Beslut 4. De tre första gäller en
+        // FLYTT och hamnar på fältet `parent`; de två sista gäller en RADERING
+        // och hamnar på formulärnyckeln `category`, som sidan ritar som en ruta
+        // över trädet (App\Http\Controllers\CategoryController).
+        //
+        // Talen kommer ur `ApiException::data()` — `max_depth`, `children`,
+        // `items` — och meddelandet SKA använda dem. Ett meddelande utan talet
+        // är sämre än felkoden det ersatte.
+        'category' => [
+            'max_depth_exceeded' => 'En kategori får ligga på högst :max_depth nivåer.',
+            'cycle' => 'En kategori kan inte flyttas in i sig själv eller in i en av sina egna underkategorier.',
+            'parent_not_in_container' => 'Den valda överordnade kategorin ligger inte i den här pärmen.',
+            'has_children' => 'Kategorin har :children underkategorier och kan inte raderas.',
+            'has_items' => 'Kategorin har :items items och kan inte raderas.',
         ],
     ],
 
@@ -285,6 +307,8 @@ return [
         ],
 
         'nav' => [
+            'categories' => 'Kategorier',
+            'tags' => 'Taggar',
             'sharing' => 'Delning',
             'settings' => 'Inställningar',
         ],
@@ -320,6 +344,49 @@ return [
             'kind' => 'Typ',
 
             'submit' => 'Spara',
+        ],
+
+        // Kategoriträdet, se issue 56a § Beslut 1, 2, 3 och 4. `description`
+        // är den ena halvan av ADR-0004:s skillnad — taggsidan bär den andra,
+        // och en vy som visar två likadana listor river det beslutet.
+        'categories' => [
+            'title' => 'Kategorier',
+            'heading' => 'Kategorier',
+            'description' => 'Var sakerna hör hemma. Ett item ligger i högst en kategori, och kategorierna bildar ett träd på högst fem nivåer.',
+
+            'name' => 'Namn',
+            'parent' => 'Överordnad kategori',
+            'parent_root' => '— ingen, lägg i roten —',
+            'position' => 'Position',
+
+            'create_heading' => 'Ny kategori',
+            'create' => 'Skapa',
+            'save' => 'Spara',
+            'destroy' => 'Radera',
+            'empty' => 'Inga kategorier än.',
+        ],
+
+        // Tagglistan, se issue 56a § Beslut 6 och 8. `description` är den
+        // andra halvan av ADR-0004:s skillnad. `item_count` bär träffräknaren,
+        // som är per omfång och aldrig per pärm.
+        'tags' => [
+            'title' => 'Taggar',
+            'heading' => 'Taggar',
+            'description' => 'Allt annat man vill kunna filtrera på. En tagg är platt, ligger utanpå kategorin och ett item kan bära hur många som helst.',
+
+            'name' => 'Namn',
+            'color' => 'Färg',
+            'color_placeholder' => '#rrggbb',
+            // Färgen är valfri, och `null` är ett svar — ingen standardfärg
+            // väljs åt användaren (Beslut 8).
+            'no_color' => 'Ingen färg',
+            'item_count' => 'Sitter på :count items',
+
+            'create_heading' => 'Ny tagg',
+            'create' => 'Skapa',
+            'save' => 'Spara',
+            'destroy' => 'Radera',
+            'empty' => 'Inga taggar än.',
         ],
     ],
 

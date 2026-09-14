@@ -24,8 +24,15 @@
  * och ingen ändring i ContainerLayout. 55b lägger sin inbjudningsyta som en
  * tredje SEKTION på samma sida, inte som en egen rad — den hör till
  * delningen.
+ *
+ * `categories` och `tags` kom med issue 56a § Beslut 1: två sidor, två rader.
+ * De ligger före `sharing` därför att strukturen är det man arbetar i och
+ * delningen det man ställer in — ordningen är hur en användare möter pärmen,
+ * inte hur issues råkade bli klara.
  */
 export const containerSections = [
+    { key: 'categories', href: (ulid) => `/containers/${ulid}/categories` },
+    { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
     { key: 'settings', href: (ulid) => `/containers/${ulid}/edit` },
 ];
