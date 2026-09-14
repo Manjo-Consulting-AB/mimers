@@ -40,8 +40,9 @@ use Inertia\Response;
  * ([[ADR-0021 Frontendteknik]] § Konsekvenser om drift mellan webbens behov
  * och API:ets kontrakt). Pärmens ULID, namn och `kind` läggs därför BREDVID
  * resursen, i samma form som `can` läggs bredvid `ContainerResource` i
- * App\Http\Controllers\ContainerController::index(). Containern är
- * eager-laddad i actionen, så listan förblir ett konstant antal frågor.
+ * App\Http\Controllers\ContainerController::index(). Actionen laddar INTE
+ * containern — `/api` bad aldrig om den — så sidan laddar den själv, riktat,
+ * efter anropet: en enda extra fråga, konstant över antalet träffar.
  *
  * **Tomt resultat säger vad som söktes — ingenting annat** (Beslut 6). Sidan
  * spänner över flera pärmar med olika omfång i var och en, och texten nämner
@@ -62,6 +63,13 @@ class SearchController extends Controller
      */
     public function index(Request $request, SearchAccessibleItems $searchAccessibleItems): Response
     {
+        // Trimning sker FÖRE validering, som IndexItemRequest::
+        // prepareForValidation() gör: annars prövas `max:255` mot det råa
+        // värdet och en q som är kort nog efter trim nekas ändå.
+        if (is_string($request->query('q'))) {
+            $request->merge(['q' => trim($request->query('q'))]);
+        }
+
         // Lånad form av IndexItemRequest:s regel, utan dess `required` — se
         // klassens docblock. `nullable` gör ett saknat fält till ett giltigt
         // värde; `q` är ett fält i ett formulär och ett fel hamnar vid det.
@@ -80,14 +88,19 @@ class SearchController extends Controller
 
         $items = $searchAccessibleItems->handle($request->user(), $q);
 
+        // Riktad eager load HÄR, inte i actionens delade with([...]): /api
+        // bad aldrig om pärmen och ska svara med samma antal frågor som förut
+        // (Beslut 2, Klart när). Webbsidan får sin pärm i en enda extra fråga,
+        // konstant över antalet träffar.
+        $items->loadMissing('container');
+
         return Inertia::render('Search', [
             'q' => $q,
             'results' => $items
                 ->map(fn (Item $item): array => [
                     ...ItemResource::make($item)->resolve($request),
                     // BREDVID resursen, aldrig inuti den — se klassens
-                    // docblock. Ingen fråga: `container` kom med actionens
-                    // eager load.
+                    // docblock. Ingen fråga: `container` laddades ovan.
                     'container' => [
                         'ulid' => $item->container->ulid,
                         'name' => $item->container->name,

@@ -7,7 +7,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Fritextsökningen över ALLA containers användaren når — kroppen som tidigare
@@ -32,10 +32,12 @@ use Illuminate\Support\Collection;
  * Sökningen går via Scouts databasdrivrutin: en `LIKE`-formulering över
  * Item::toSearchableArray()s fem kolumner (issue 15b § Beslut 3), ingen
  * relevansordning utan `name` stigande (Beslut 7), taggarna laddas i förväg
- * så 13b § Beslut 10:s N+1-skydd inte förloras (Beslut 9). Containern laddas
- * i förväg av samma skäl: varje träff ska kunna säga vilken pärm den ligger i
- * utan en fråga per rad (issue 59b § Beslut 3) — `ItemResource` bär ingen
- * `container`-nyckel, och den ska den inte få heller.
+ * så 13b § Beslut 10:s N+1-skydd inte förloras (Beslut 9). `container` laddas
+ * däremot INTE här: `/api` bad aldrig om pärmen, och att ladda den i den
+ * delade `with([...])` är en extra fråga på en rutt som ska svara exakt som
+ * förut (issue 59b Klart när). Behöver en anropare pärmen — webbens sida gör
+ * det, varje träff ska kunna säga vilken pärm den ligger i (Beslut 3) — laddar
+ * den den själv, riktat, efter anropet.
  *
  * Åtkomstvillkoret är utbrutet till `Container::scopeAccessibleBy()`
  * (Beslut 4) och appliceras här som en `whereHas('container', ...)` på
@@ -121,7 +123,7 @@ class SearchAccessibleItems
                             $query->orWhereIn('item.id', $itemIds);
                         }
                     })
-                    ->with(['container', 'category', 'createdByAccount', 'tags']);
+                    ->with(['category', 'createdByAccount', 'tags']);
             })
             ->orderBy('name')
             ->get();
