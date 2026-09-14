@@ -965,6 +965,11 @@ it('lägger delningssidan i pärmens navigation', function () {
  * Sedan issue 56a finns också kategorins och taggens POST här. Ingen av dem rör
  * åtkomster — den här listan är hela uppräkningen av POST-rutter under en pärm,
  * och det är hela poängen: den ska behöva ändras när en ny yta lägger till en.
+ *
+ * Sedan issue 56b finns även uppsättningens POST här. Den skapar vanliga
+ * kategorier genom App\Actions\Category\CreateCategory och rör inga åtkomster
+ * — den är alltså ytterligare ett exempel på motsatsen till en direkt
+ * bevilning, inte ett undantag från regeln.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -972,12 +977,13 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Containerns eget skapande, inbjudan, kategorin och taggen. Ingen
-    // /accesses.
+    // Containerns eget skapande, inbjudan, kategorin, uppsättningen och taggen.
+    // Ingen /accesses.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers',
         'containers/{container}/invitations',
         'containers/{container}/categories',
+        'containers/{container}/categories/preset',
         'containers/{container}/tags',
     ]);
 

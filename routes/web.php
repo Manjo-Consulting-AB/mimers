@@ -374,6 +374,22 @@ Route::middleware('auth')->group(function () {
     Route::post('/containers/{container}/categories', [CategoryController::class, 'store'])
         ->name('containers.categories.store');
 
+    /*
+     * Den färdiga uppsättningen, se issue 56b § Beslut 3 och 4. POST lägger in
+     * hela uppsättningen, DELETE tackar nej till förslaget för den här pärmen i
+     * den här sessionen.
+     *
+     * **Bägge ligger FÖRE `{category}`-rutterna nedan.** En DELETE mot
+     * `/categories/preset` matchar annars `containers.categories.destroy` och
+     * `preset` hade bundits som en kategori-ULID — 404 i stället för ett nej
+     * som håller.
+     */
+    Route::post('/containers/{container}/categories/preset', [CategoryController::class, 'storePreset'])
+        ->name('containers.categories.preset');
+
+    Route::delete('/containers/{container}/categories/preset', [CategoryController::class, 'dismissPreset'])
+        ->name('containers.categories.preset.dismiss');
+
     Route::patch('/containers/{container}/categories/{category}', [CategoryController::class, 'update'])
         ->scopeBindings()
         ->name('containers.categories.update');

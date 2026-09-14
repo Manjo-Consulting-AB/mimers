@@ -6,6 +6,7 @@ use App\Actions\Category\CreateCategory;
 use App\Actions\Category\ListCategories;
 use App\Actions\Category\MoveCategory;
 use App\Exceptions\Api\ApiException;
+use App\Http\Requests\Category\StoreCategoryPresetRequest;
 use App\Http\Requests\Category\StoreCategoryRequest;
 use App\Http\Requests\Category\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
@@ -15,6 +16,7 @@ use App\Models\Container;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -22,7 +24,12 @@ use Inertia\Response;
 
 /**
  * Webbens kategoriträd — listan och skrivningarna, se issue 56a § Beslut 1,
- * 2, 3, 4 och 5.
+ * 2, 3, 4 och 5, och den färdiga uppsättningen, se issue 56b § Beslut 3 och 4.
+ *
+ * **Uppsättningen är vanliga kategorier** (56b § Beslut 6). Ingen kolumn, ingen
+ * `meta`, ingen `template_source_id` märker raderna som kommande från ett
+ * förslag — efteråt går varje rad att döpa om, flytta och radera med ytorna
+ * här intill, och ingenting i systemet vet att de en gång var ett förslag.
  *
  * **Ingenting av `/api` görs om.** `StoreCategoryRequest`,
  * `UpdateCategoryRequest` och `CategoryResource` delas rakt av (ingen ny
@@ -58,6 +65,17 @@ use Inertia\Response;
 class CategoryController extends Controller
 {
     /**
+     * Sessionsnyckeln för de pärmar vars förslag tackats nej till, se issue
+     * 56b § Beslut 4. En lista av containerns ULID:n, ingenting annat — nej:et
+     * är ett sessionsbegrepp och får aldrig bli en kolumn (Beslut 4: "en
+     * kolumn för att minnas ett nej vore en migration för ett nej").
+     *
+     * Stavas BARA här, precis som App\Support\Frontend\ActiveContainer::
+     * SESSION_KEY, så en omladdning av nyckeln är en rad och inte en jakt.
+     */
+    public const PRESET_DISMISSED_SESSION_KEY = 'category_preset_dismissed_ulids';
+
+    /**
      * GET /containers/{container}/categories — trädet.
      *
      * `categories` är den platta listan ur `CategoryResource`, sorterad på
@@ -68,6 +86,15 @@ class CategoryController extends Controller
      * presentation; grinden är policyn, och varje skrivning auktoriserar med
      * `Gate::authorize()` oavsett vad sidan visade — samma linje som issue 54
      * § Beslut 9.
+     *
+     * `presetDismissed` är det enda servern vet om det färdiga förslaget (issue
+     * 56b § Beslut 2 och 4): att användaren tackat nej till det för DEN HÄR
+     * pärmen i DEN HÄR sessionen. **Uppsättningen själv skickas aldrig som
+     * prop.** Vilka ord förslaget innehåller beror på localen och pärmens
+     * `kind`, och den väljaren bor i `resources/js/data/categoryPresets.js` —
+     * servern får aldrig veta vad orden betyder ([[ADR-0004 Fria taggar och
+     * kategorier]]). Att tomheten avgör om kortet ritas är sidans sak: den
+     * frågan är redan ställd av listan.
      */
     public function index(Request $request, Container $container, ListCategories $listCategories): Response
     {
@@ -83,6 +110,7 @@ class CategoryController extends Controller
             'can' => [
                 'manage' => Gate::forUser($user)->allows('update', $container),
             ],
+            'presetDismissed' => $this->presetDismissed($container),
         ]);
     }
 
@@ -106,6 +134,122 @@ class CategoryController extends Controller
         );
 
         return back()->with('status', 'category-created');
+    }
+
+    /**
+     * POST /containers/{container}/categories/preset — 302 tillbaka.
+     *
+     * Den färdiga uppsättningen, se issue 56b § Beslut 3. Kroppen är en lista
+     * med namn servern inte förstår; den skapar en rad per namn, rot först och
+     * sedan barnen med roten som förälder, **i den ordning listan kommer**, i
+     * EN transaktion. App\Actions\Category\CreateCategory sätter positionen —
+     * ingen egen räkning här, för då hade två sanningar om syskonordningen
+     * funnits.
+     *
+     * **Bara en TOM pärm.** Har containern minst en levande kategori är svaret
+     * 422 på formulärnyckeln `categories` och ingenting skrivs. Utan den
+     * kontrollen är rutten ett sätt att fördubbla trädet med en knapp som ser
+     * ut som ett förslag. Det är också hela idempotensen: när raderna finns är
+     * trädet inte längre tomt, och det finns inget tillstånd att synkronisera
+     * (Beslut 6).
+     *
+     * **Kontrollen och skrivningen är samma kritiska sektion.** Låg tomhets-
+     * kontrollen före transaktionen kunde två samtidiga anrop mot samma tomma
+     * pärm bägge passera den innan någon av dem hunnit skriva, och trädet hade
+     * fördubblats — precis det Beslut 3 kallar "inte en smaksak". Låset sitter
+     * därför på CONTAINERRADEN (`lockForUpdate()`), inte på `exists()`-frågan:
+     * mot en tabell som per definition är tom låser en sådan fråga ingenting
+     * alls. Det andra anropet väntar på radlåset, ser sedan raderna och får
+     * 422.
+     *
+     * Felet är en MENING ur `lang/`, inte en API-felkod: rutten finns bara på
+     * webben och har ingen motsvarighet i `/api` att hålla koden i takt med,
+     * till skillnad från `category.has_children` och de andra i
+     * App\Http\Controllers\Api\CategoryController.
+     */
+    public function storePreset(
+        StoreCategoryPresetRequest $request,
+        Container $container,
+        CreateCategory $createCategory,
+    ): RedirectResponse {
+        Gate::authorize('update', $container);
+
+        DB::transaction(function () use ($request, $container, $createCategory): void {
+            $container = Container::query()->whereKey($container->id)->lockForUpdate()->firstOrFail();
+
+            if ($container->categories()->exists()) {
+                throw ValidationException::withMessages([
+                    'categories' => trans('ui.container.categories.preset_not_empty'),
+                ]);
+            }
+
+            foreach ($request->validated('categories') as $preset) {
+                $root = $createCategory->handle($container, $preset['name'], null, null);
+
+                foreach ($preset['children'] ?? [] as $child) {
+                    $createCategory->handle($container, $child, $root, null);
+                }
+            }
+        });
+
+        return back()->with('status', 'category-preset-applied');
+    }
+
+    /**
+     * DELETE /containers/{container}/categories/preset — 302 tillbaka.
+     *
+     * "Nej tack", se issue 56b § Beslut 4. Pärmens ULID hamnar i en lista i
+     * sessionen och sidan renderar om utan förslaget. Ingen flagga i
+     * databasen, ingen kolumn, ingen ny tabell.
+     *
+     * Att nej:et inte överlever en ny session är ett medvetet val: kombinationen
+     * "tom pärm" och "ny session" är sällsynt, och en påminnelse där är
+     * hjälpsam snarare än tjatig.
+     *
+     * Grinden är `update()` — samma som för att lägga in uppsättningen. Bara
+     * den som får skriva ser kortet, och bara den som ser kortet kan tacka nej
+     * till det.
+     */
+    public function dismissPreset(Container $container): RedirectResponse
+    {
+        Gate::authorize('update', $container);
+
+        $dismissed = $this->dismissedUlids();
+
+        if (! in_array($container->ulid, $dismissed, true)) {
+            $dismissed[] = $container->ulid;
+
+            session()->put(self::PRESET_DISMISSED_SESSION_KEY, $dismissed);
+        }
+
+        return back();
+    }
+
+    /**
+     * Har förslaget för $container tackats nej till i den här sessionen?
+     */
+    private function presetDismissed(Container $container): bool
+    {
+        return in_array($container->ulid, $this->dismissedUlids(), true);
+    }
+
+    /**
+     * ULID:n för de pärmar sessionen tackat nej till. En trasig eller saknad
+     * sessionspost blir en tom lista — sessionen är användarens, och ett nej
+     * som tappats ska visa förslaget igen, inte krascha sidan (samma linje som
+     * App\Support\Frontend\ActiveContainer::forUser()).
+     *
+     * @return list<string>
+     */
+    private function dismissedUlids(): array
+    {
+        $dismissed = session()->get(self::PRESET_DISMISSED_SESSION_KEY, []);
+
+        if (! is_array($dismissed)) {
+            return [];
+        }
+
+        return array_values(array_filter($dismissed, 'is_string'));
     }
 
     /**

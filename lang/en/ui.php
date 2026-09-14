@@ -83,6 +83,7 @@ return [
         'category-created' => 'The category has been created.',
         'category-updated' => 'The category has been saved.',
         'category-deleted' => 'The category has been deleted.',
+        'category-preset-applied' => 'The categories have been added. Change them however you like.',
         'tag-created' => 'The tag has been created.',
         'tag-updated' => 'The tag has been saved.',
         'tag-deleted' => 'The tag has been deleted.',
@@ -291,6 +292,18 @@ return [
             'save' => 'Save',
             'destroy' => 'Delete',
             'empty' => 'No categories yet.',
+
+            // The suggestion on an empty binder, see issue 56b decision 4. The
+            // words in the set itself are NOT here and never will be: they live
+            // in resources/js/data/categoryPresets.js, per language and kind.
+            // `preset_not_empty` is the route's answer on a binder that already
+            // has categories and lands on the `categories` form key — a
+            // sentence, not an API error code, since the route is web-only.
+            'preset_heading' => 'Ready-made set',
+            'preset_description' => 'We can fill the binder with a ready-made suggestion of categories. You can rename, move and delete them just like any other category afterwards.',
+            'preset_apply' => 'Add the set',
+            'preset_dismiss' => 'No thanks',
+            'preset_not_empty' => 'The binder already has categories. A set can only be added to an empty binder.',
         ],
 
         // The tag list, see issue 56a decisions 6 and 8.
