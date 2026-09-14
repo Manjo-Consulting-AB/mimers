@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { Link, useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import { parentOptions } from './categoryTree.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -32,18 +32,30 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * **Radera är en <Link method="delete">**, inte ett eget formulär: rutten är en
  * DELETE och Inertia skickar CSRF-tokenet åt oss, samma mönster som
  * ContainerAccessRow. Ingen knapp döljs — behörighetskontroller görs i
- * policies, aldrig genom att gömma en knapp. Nekas raderingen hamnar felet på
- * formulärnyckeln `category` och ritas av sidan, inte här: felpåsen kan inte
- * säga vilken rad det gäller.
+ * policies, aldrig genom att gömma en knapp.
+ *
+ * **Nekas raderingen ritas felet HÄR**, vid den berörda raden (Beslut 4).
+ * Felpåsen bär felet på formulärnyckeln `category` och kan inte säga vilken rad
+ * det gäller, så sidan håller reda på ULID:n för den rad vars radering senast
+ * skickades och skickar den hit. Ett träd om fem nivåer kan ha många noder som
+ * heter något kort: "Kategorin har 3 items och kan inte raderas" högst upp
+ * lämnar användaren att gissa vilken av dem som nekades.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
     category: { type: Object, required: true },
     categories: { type: Array, required: true },
+    /* ULID:n för den rad vars radering senast skickades, eller null. */
+    deleteErrorUlid: { type: String, default: null },
 });
+
+const emit = defineEmits(['delete']);
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
+const page = usePage();
+
+const deleteFailed = computed(() => props.deleteErrorUlid === props.category.ulid);
 
 /* Fältens id:n måste vara unika i trädet — varje nod har samma fältnamn. */
 const field = (name) => `category-${props.category.ulid}-${name}`;
@@ -135,8 +147,17 @@ function submit() {
             as="button"
             preserve-scroll
             class="self-start text-sm text-red-700 underline"
+            @click="emit('delete', category.ulid)"
         >
             {{ t('container.categories.destroy') }}
         </Link>
+
+        <p
+            v-if="deleteFailed && page.props.errors.category"
+            role="alert"
+            class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+            {{ page.props.errors.category }}
+        </p>
     </div>
 </template>

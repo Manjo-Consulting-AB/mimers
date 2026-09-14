@@ -723,11 +723,13 @@ it('renderar trädet rekursivt och bygger hierarkin i vyn', function () {
 });
 
 /*
- * Beslut 4: felet ur en nekad radering ritas som EN ruta över trädet — felpåsen
- * kan inte säga vilken rad det gäller, och en ruta per rad hade upprepat samma
- * mening lika många gånger som trädet har noder.
+ * Beslut 4: felet ur en nekad radering ritas vid den berörda raden. Felpåsen
+ * kan inte säga vilken rad det gäller, så sidan minns ULID:n för raden som
+ * nekades; rutan här är FALLBACKEN för när ingen rad är känd (se
+ * Categories.vue). Själva placeringen är presentationslogik och prövas inte
+ * här — att meddelandet bär talet prövas på felpåsens innehåll nedan.
  */
-it('renderar kategori-felet som en ruta över trädet', function () {
+it('renderar en fallback-ruta för kategori-felet på sidan', function () {
     $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
 
     expect($sida)->toContain('errors.category')

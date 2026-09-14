@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import CategoryCreateForm from '../../components/CategoryCreateForm.vue';
@@ -26,10 +26,13 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * likadana listor river det beslutet.
  *
  * **`errors.category`** är ett domänfel ur en nekad radering — kategorin har
- * barn eller items — och ritas som EN ruta över trädet (Beslut 4).
- * Felpåsen kan inte säga vilken rad felet gäller, och en ruta per rad hade
- * upprepat samma mening lika många gånger som trädet har noder. Formulärfel
- * som hör till ett fält (`name`, `position`, `parent`) ritas av raden själv.
+ * barn eller items — och ritas vid DEN BERÖRDA RADEN (Beslut 4).
+ * Felpåsen kan inte säga vilken rad felet gäller, så sidan minns ULID:n för
+ * den rad vars radering senast skickades och skickar den ner i trädet; bara
+ * den `<li>`:n ritar rutan. Är ULID:n `null` — ett fel som överlevde en
+ * omladdning, vilket i praktiken inte händer eftersom Inertias felpåse är per
+ * svar — ritas rutan här ovanför trädet som fallback. Formulärfel som hör till
+ * ett fält (`name`, `position`, `parent`) ritas av raden själv.
  *
  * `can.manage` styr om skrivytorna ritas. Flaggan är presentation; grinden är
  * policyn, och varje skrivning auktoriserar med `Gate::authorize()` oavsett
@@ -45,6 +48,14 @@ const { t } = useTranslations();
 const page = usePage();
 
 const tree = computed(() => buildCategoryTree(props.categories));
+
+/*
+ * ULID:n för den rad vars radering senast skickades — klientstate, med flit.
+ * Servern lägger felet på formulärnyckeln `category` och har ingen radidentitet
+ * att ge; se filens kommentar och Beslut 4.
+ */
+const deleteErrorUlid = ref(null);
+
 </script>
 
 <template>
@@ -55,7 +66,7 @@ const tree = computed(() => buildCategoryTree(props.categories));
         <p class="mt-1 text-sm text-slate-600">{{ t('container.categories.description') }}</p>
 
         <p
-            v-if="page.props.errors.category"
+            v-if="deleteErrorUlid === null && page.props.errors.category"
             role="alert"
             class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
         >
@@ -63,7 +74,13 @@ const tree = computed(() => buildCategoryTree(props.categories));
         </p>
 
         <ul v-if="tree.length > 0" class="mt-6">
-            <CategoryTree :nodes="tree" :container-ulid="container.ulid" :categories="categories" />
+            <CategoryTree
+                :nodes="tree"
+                :container-ulid="container.ulid"
+                :categories="categories"
+                :delete-error-ulid="deleteErrorUlid"
+                @delete="deleteErrorUlid = $event"
+            />
         </ul>
 
         <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.categories.empty') }}</p>

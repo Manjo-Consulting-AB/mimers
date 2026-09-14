@@ -15,18 +15,30 @@ import CategoryRow from './CategoryRow.vue';
  *
  * `categories` är hela den platta listan och skickas vidare oförändrad — varje
  * rad behöver den för sin föräldraväljare.
+ *
+ * `deleteErrorUlid` och `delete` färdas genom rekursionen på samma sätt: raden
+ * som nekades kan sitta på vilken nivå som helst, och sidan äger tillståndet.
  */
 defineProps({
     nodes: { type: Array, required: true },
     containerUlid: { type: String, required: true },
     categories: { type: Array, required: true },
+    deleteErrorUlid: { type: String, default: null },
 });
+
+const emit = defineEmits(['delete']);
 </script>
 
 <template>
     <ul class="flex flex-col gap-2">
         <li v-for="node in nodes" :key="node.ulid" class="flex flex-col gap-2">
-            <CategoryRow :container-ulid="containerUlid" :category="node" :categories="categories" />
+            <CategoryRow
+                :container-ulid="containerUlid"
+                :category="node"
+                :categories="categories"
+                :delete-error-ulid="deleteErrorUlid"
+                @delete="emit('delete', $event)"
+            />
 
             <CategoryTree
                 v-if="node.children.length > 0"
@@ -34,6 +46,8 @@ defineProps({
                 :nodes="node.children"
                 :container-ulid="containerUlid"
                 :categories="categories"
+                :delete-error-ulid="deleteErrorUlid"
+                @delete="emit('delete', $event)"
             />
         </li>
     </ul>
