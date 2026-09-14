@@ -18,7 +18,14 @@
  *
  * Issue 57 gör itemlistan till pärmens förstasida och lägger sin rad ovanför
  * den här.
+ *
+ * `sharing` kom med issue 55a § Beslut 1. Raden är allt som krävdes: layouten
+ * renderar navigationen ur den här listan, så en ny sektion är en ny rad här
+ * och ingen ändring i ContainerLayout. 55b lägger sin inbjudningsyta som en
+ * tredje SEKTION på samma sida, inte som en egen rad — den hör till
+ * delningen.
  */
 export const containerSections = [
+    { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
     { key: 'settings', href: (ulid) => `/containers/${ulid}/edit` },
 ];

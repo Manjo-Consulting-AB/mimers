@@ -90,6 +90,8 @@ return [
         'account-updated' => 'Kontouppgifterna är sparade.',
         'container-created' => 'Pärmen är skapad.',
         'container-updated' => 'Pärmen är sparad.',
+        'access-updated' => 'Åtkomsten är sparad.',
+        'access-revoked' => 'Åtkomsten är återkallad.',
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -110,6 +112,14 @@ return [
 
         'quota' => [
             'containers_exceeded' => 'Kontot har nått sitt tak för antal pärmar (:used av :limit).',
+        ],
+
+        // Issue 55a § Beslut 9: `PATCH` på en återkallad eller utgången rad
+        // svarar `container_access.revoked` på `/api` och den här meningen i
+        // webben. Samma kod, samma rad — se
+        // App\Http\Controllers\ContainerAccessController::update().
+        'container_access' => [
+            'revoked' => 'Åtkomsten är återkallad eller har gått ut och går inte att ändra.',
         ],
     ],
 
@@ -234,9 +244,10 @@ return [
 
     // Pärmen, se issue 54. `nav` är sidonavigationen, en nyckel per post i
     // resources/js/layouts/containerSections.js — samma `key` där som här.
-    // 55a (delning), 56a (kategorier och taggar), 57 (items), 62
-    // (papperskorg) och 63 (scheman) lägger sina rader i samma lista och sina
-    // texter i samma gren.
+    // 56a (kategorier och taggar), 57 (items), 62 (papperskorg) och 63
+    // (scheman) lägger sina rader i samma lista och sina texter i samma gren.
+    // 55a (delning) har en egen gren, `sharing` nedan, för sidan bär två
+    // sektioner och en egen vokabulär — se issue 55a § Beslut 4 och 5.
     'container' => [
         // `kind` styr presentation och bara presentation (issue 54 § Beslut
         // 8, [[ADR-0002 Konto äger container]]). Nycklarna är kolumnvärdena
@@ -251,6 +262,7 @@ return [
         ],
 
         'nav' => [
+            'sharing' => 'Delning',
             'settings' => 'Inställningar',
         ],
 
@@ -286,5 +298,124 @@ return [
 
             'submit' => 'Spara',
         ],
+    ],
+
+    // Delningssidan, se issue 55a. Sidan bär två sektioner med olika publik
+    // (§ Beslut 3): deltagarna ser varje deltagare, åtkomsterna ser bara
+    // ägarkontot. Texterna nedan följer samma uppdelning — `participants`
+    // beskriver identiteter, `accesses` och `level` beskriver vad en åtkomst
+    // ger.
+    'sharing' => [
+        'title' => 'Delning',
+        'heading' => 'Delning',
+
+        'participants' => [
+            'heading' => 'Deltagare',
+            'description' => 'Alla som har åtkomst till pärmen just nu. Ett konto räknas som en deltagare, aldrig som sina medlemmar.',
+        ],
+
+        // Rollen i deltagarlistan. Ägarkontot får `owner`, varje giltig
+        // åtkomstrad sin `kind` — se App\Actions\Access\ListParticipants.
+        // Etiketterna är kortare än `kind`-meningarna nedan: här är de en
+        // kolumn i en lista, där en förklaring av vad formen betyder.
+        'role' => [
+            'owner' => 'Ägare',
+            'member' => 'Medlem',
+            'managed' => 'Organisation',
+            'guest' => 'Gäst',
+        ],
+
+        'accesses' => [
+            'heading' => 'Åtkomster',
+            'description' => 'Allt som delats av pärmen, och historiken över det som återkallats eller gått ut.',
+
+            // Ingen nivå får radera pärmen, hantera åtkomster eller initiera
+            // ägarbyte. Meningen står EN gång på sidan och inte per rad, se
+            // issue 55a § Beslut 4.
+            'limits' => 'Ingen åtkomst ger rätt att radera pärmen, hantera åtkomster eller initiera ett ägarbyte. Det är alltid ägarkontots.',
+
+            'level' => 'Nivå',
+            'grantee' => 'Mottagare',
+            'granted_by' => 'Beviljad av',
+            'expires' => 'Går ut :date',
+
+            // Mottagaren och beviljaren visas med NAMN, aldrig med sin ULID —
+            // uppslagen skickas som egna propar och formuleras i
+            // resources/js/components/accessPresentation.js. Varken `User`
+            // eller `Account` använder SoftDeletes, så en rad kan faktiskt
+            // vara borta: då blir det den här meningen och inte ULID:en.
+            // Ingen e-postadress någonsin ([[Konton och åtkomst]]
+            // § Behörighetsregler, sista stycket).
+            'grantee_unknown' => 'Borttagen mottagare',
+            'granted_by_unknown' => 'Borttagen användare',
+
+            // Utgångsfältet renderas bara på en rad som REDAN har ett datum,
+            // och meningen nedan säger varför det inte går att ta bort
+            // (arkitektsvaret § 3): en gäst utan utgång motsäger Beslut 5, och
+            // vägen från gäst till permanent går genom `kind`, som är
+            // `prohibited` med flit.
+            'expires_at' => 'Giltig till',
+            'expires_fixed' => 'Utgången kan flyttas framåt men inte tas bort. En gäst som ska bli permanent återkallas och bjuds in på nytt som medlem.',
+
+            'save' => 'Spara nivå',
+            'revoke' => 'Återkalla',
+        ],
+
+        'history' => [
+            'heading' => 'Historik',
+            'revoked' => 'Återkallad :date',
+            'expired' => 'Gick ut :date',
+        ],
+
+        // Omfånget: `reach` kommer färdigt ur ContainerAccessResource och
+        // räknas aldrig om i vyn (issue 55a § Beslut 6). En containerbred rad
+        // bär inget `reach` alls — talet är `null` där med flit.
+        'scope' => [
+            'container' => 'Hela pärmen',
+            'item' => ':item når :reach items',
+        ],
+
+        // `kind` presenteras med sin konsekvens och går inte att ändra — den
+        // är `prohibited` i UpdateContainerAccessRequest (issue 55a
+        // § Beslut 5). Nycklarna är kolumnvärdena ur `container_access.kind`.
+        'kind' => [
+            'member' => 'En person — sambon eller delägaren.',
+            'managed' => 'En organisation med servicerelation, till exempel ett varv. Den äger inte pärmen, och det den skapar tillskrivs organisationen.',
+            'guest' => 'Tillfällig åtkomst med ett utgångsdatum.',
+        ],
+
+        // De fyra nivåerna, en etikett och en beskrivning var, formulerade ur
+        // regel 3 i [[Konton och åtkomst]] § Behörighetsregler. Nycklarna är
+        // kolumnvärdena ur AccessLevel::LADDER — samma lista som väljaren
+        // får som prop, så en nivå som saknar text syns som sin nyckel.
+        //
+        // Bara `read` och `write` visas som vanliga val; `create` och
+        // `delete` ligger bakom "Avancerat" (§ Beslut 4).
+        'level' => [
+            'read' => [
+                'label' => 'Läsa',
+                'description' => 'Läser. Rör ingenting.',
+            ],
+            'create' => [
+                'label' => 'Lägga till',
+                'description' => 'Lägger till bilagor, kostnader, scheman och nya underliggande items — men rör aldrig något som redan finns.',
+            ],
+            'write' => [
+                'label' => 'Ändra',
+                'description' => 'Ändrar därtill det som redan står i pärmen.',
+            ],
+            'delete' => [
+                'label' => 'Radera',
+                'description' => 'Mjukraderar och återställer ur papperskorgen.',
+            ],
+        ],
+
+        'advanced' => 'Avancerat',
+
+        // Ett `read_only`-ägarkonto får återkalla men inte ändra nivå —
+        // regel 4 undantar återkallandet uttryckligen. Vyn skriver ut det i
+        // stället för att låta användaren upptäcka det som ett 403
+        // (issue 55a § Beslut 9).
+        'frozen' => 'Kontot är fryst och kan inte ändra nivåer. Att återkalla en åtkomst går fortfarande.',
     ],
 ];

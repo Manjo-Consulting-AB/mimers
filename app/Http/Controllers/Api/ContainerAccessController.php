@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Access\ResolveItemScope;
-use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Access\ListContainerAccesses;
+use App\Actions\Access\RevokeContainerAccess;
+use App\Actions\Access\UpdateContainerAccess;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContainerAccess\StoreContainerAccessRequest;
 use App\Http\Requests\ContainerAccess\UpdateContainerAccessRequest;
 use App\Http\Resources\ContainerAccessResource;
 use App\Models\Account;
-use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
@@ -19,8 +19,6 @@ use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -34,6 +32,13 @@ use Illuminate\Support\Facades\Gate;
  * anropar bara `Gate::authorize()` och litar på svaret från
  * App\Policies\ContainerPolicy::viewAccesses()/manageAccess()/revokeAccess(),
  * se ADR-0024 och issue 9b § Beslut 2.
+ *
+ * INGA frågor bor här heller sedan issue 55a § Beslut 8: listningen och
+ * hydreringen ligger i App\Actions\Access\ListContainerAccesses,
+ * återkallandet i App\Actions\Access\RevokeContainerAccess och ändringen av
+ * en levande rad i App\Actions\Access\UpdateContainerAccess. Webben visar
+ * samma rader, ändrar samma två fält och återkallar på samma sätt, och en
+ * kopia här hade varit en andra sanning om vad en åtkomstrad är.
  *
  * `routes/api.php` nästlar {access} under {container} med
  * `->scopeBindings()` — en ULID från en annan container löser aldrig upp
@@ -59,18 +64,11 @@ class ContainerAccessController extends Controller
      * avsiktligt: alternativet vore att spara ett tal som var sant en gång,
      * och det vore en andra sanning om omfånget.
      */
-    public function index(Container $container, ResolveItemScope $scope): JsonResponse
+    public function index(Container $container, ListContainerAccesses $listAccesses): JsonResponse
     {
         Gate::authorize('viewAccesses', $container);
 
-        $accesses = $container->accesses()
-            ->orderByDesc('created_at')
-            ->get();
-
-        $this->hydrateGranteeUlids($accesses);
-        $this->hydrateItemScope($accesses, $container, $scope);
-
-        return ContainerAccessResource::collection($accesses)->response();
+        return ContainerAccessResource::collection($listAccesses->handle($container))->response();
     }
 
     /**
@@ -109,7 +107,7 @@ class ContainerAccessController extends Controller
      * Beslut regel 4: mottagaren får `read` på pärmen och `write` på
      * motorn, och upplösningen tar max.
      */
-    public function store(StoreContainerAccessRequest $request, Container $container, Entitlements $entitlements, ResolveItemScope $scope): JsonResponse
+    public function store(StoreContainerAccessRequest $request, Container $container, Entitlements $entitlements, ListContainerAccesses $listAccesses): JsonResponse
     {
         Gate::authorize('manageAccess', $container);
 
@@ -157,7 +155,7 @@ class ContainerAccessController extends Controller
         $access->setAttribute('grantee_ulid', $granteeModel->ulid);
         $access->setAttribute('granted_by_ulid', $request->user()->ulid);
 
-        $this->hydrateItemScope(collect([$access]), $container, $scope);
+        $listAccesses->hydrateItemScope($container, collect([$access]));
 
         return (new ContainerAccessResource($access))
             ->response()
@@ -179,24 +177,23 @@ class ContainerAccessController extends Controller
      *
      * En redan återkallad eller utgången rad nekas med 422
      * `container_access.revoked` — att höja nivån på en död rad är
-     * antingen ett misstag eller en väg runt återkallandet.
+     * antingen ett misstag eller en väg runt återkallandet. Sedan issue 55a
+     * § Beslut 8 bor både villkoret och skrivningen i
+     * App\Actions\Access\UpdateContainerAccess, som webbens `PATCH` anropar
+     * — villkoret är en domäninvariant och formuleras inte två gånger.
+     * Undantaget bubblar upp hit oförändrat och blir samma svar som förut.
      *
      * Dubblettspärren i store() prövas inte här: den gäller
      * `(container, item, mottagare)`, och PATCH rör inget av de tre.
      */
-    public function update(UpdateContainerAccessRequest $request, Container $container, ContainerAccess $access, ResolveItemScope $scope): JsonResponse
+    public function update(UpdateContainerAccessRequest $request, Container $container, ContainerAccess $access, ListContainerAccesses $listAccesses, UpdateContainerAccess $updateContainerAccess): JsonResponse
     {
         Gate::authorize('manageAccess', $container);
 
-        if ($access->revoked_at !== null || ($access->expires_at !== null && $access->expires_at->isPast())) {
-            throw ApiException::make('container_access.revoked', ['access' => $access->ulid], 422);
-        }
+        $updateContainerAccess->handle($container, $access, $request->safe()->only(['level', 'expires_at']));
 
-        $access->fill($request->safe()->only(['level', 'expires_at']));
-        $access->save();
-
-        $this->hydrateGranteeUlids(collect([$access]));
-        $this->hydrateItemScope(collect([$access]), $container, $scope);
+        $listAccesses->hydrateGranteeUlids(collect([$access]));
+        $listAccesses->hydrateItemScope($container, collect([$access]));
 
         return (new ContainerAccessResource($access))->response();
     }
@@ -212,159 +209,20 @@ class ContainerAccessController extends Controller
      * inte skriva om den. `ContainerAccess` använder inte `SoftDeletes`.
      *
      * Sedan issue 40 sker själva återkallningen och `access.revoked`-raden i
-     * audit_log i EN transaktion (Beslut 10) — en logg som skrevs utanför
-     * transaktionen kunde överleva ett rollback och beskriva en återkallelse
-     * som inte hände. Raden läses om och låses INNE i transaktionen
-     * (`lockForUpdate`): route-modellbindningens instans lästes innan
-     * transaktionen öppnades, och två samtidiga DELETE-anrop mot samma access
-     * skulle annars båda se `revoked_at === null` på sin egen instans och
-     * skriva var sin loggrad för samma återkallelse. En redan återkallad rad
-     * rörs inte och loggas inte en andra gång.
-     *
-     * Sedan issue 72 § Beslut 8 får `meta` ett fält till: `item`, grantens
-     * item-ULID eller `null` för en container-bred rad. Ingen ny `action` —
-     * `access.revoked` skrivs som förut, och att bevilja loggas fortfarande
-     * inte.
+     * audit_log i EN transaktion (Beslut 10). Sedan issue 55a § Beslut 8 bor
+     * den transaktionen i App\Actions\Access\RevokeContainerAccess, som
+     * webbens återkallning anropar — kroppen är oförändrad, och
+     * `meta`-fältet `item` (issue 72 § Beslut 8) hänger med dit.
      */
-    public function destroy(Request $request, Container $container, ContainerAccess $access): Response
+    public function destroy(Request $request, Container $container, ContainerAccess $access, RevokeContainerAccess $revokeContainerAccess): Response
     {
         Gate::authorize('revokeAccess', $container);
 
-        // ULID:erna till `meta.grantee` och `meta.item` löses upp i förväg —
-        // `ContainerAccess` har medvetet ingen `grantee()`-relation (se
-        // modellens docblock), så uppslagningen görs som platta frågor, samma
-        // teknik som hydrateGranteeUlids() nedan. Varken `grantee_id` eller
-        // `item_id` rörs av en återkallning, så uppslagningarna kan stå
-        // utanför transaktionen. `withTrashed()`: en grant på ett sedan
-        // länge mjukraderat item ska loggas med sitt item, inte som `null`.
-        $granteeUlid = $access->grantee_type === 'user'
-            ? User::query()->whereKey($access->grantee_id)->value('ulid')
-            : Account::query()->whereKey($access->grantee_id)->value('ulid');
+        /** @var User $actor */
+        $actor = $request->user();
 
-        $itemUlid = $access->item_id === null
-            ? null
-            : Item::withTrashed()->whereKey($access->item_id)->value('ulid');
-
-        DB::transaction(function () use ($request, $container, $access, $granteeUlid, $itemUlid): void {
-            $låstAccess = ContainerAccess::query()
-                ->whereKey($access->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if ($låstAccess->revoked_at === null) {
-                $låstAccess->revoked_at = now();
-                $låstAccess->save();
-
-                /** @var User $revoker */
-                $revoker = $request->user();
-
-                (new RecordAuditEvent)->handle(
-                    action: AuditLog::ACTION_ACCESS_REVOKED,
-                    account: $container->account,
-                    user: $revoker,
-                    container: $container,
-                    subjectType: 'container_access',
-                    subjectUlid: $låstAccess->ulid,
-                    meta: [
-                        'grantee_type' => $låstAccess->grantee_type,
-                        'grantee' => $granteeUlid,
-                        'item' => $itemUlid,
-                        'level' => $låstAccess->level,
-                        'kind' => $låstAccess->kind,
-                    ],
-                );
-            }
-        });
+        $revokeContainerAccess->handle($actor, $container, $access);
 
         return response()->noContent();
-    }
-
-    /**
-     * Löser upp mottagarens och beviljarens ULID i EN fråga vardera,
-     * oavsett antal rader (issue 9b § Beslut 11) — `ContainerAccess` har
-     * medvetet ingen `grantee()`-relation (se modellens docblock), så
-     * uppslagningen görs här i stället för i resursen. Sätts på varje
-     * modellinstans med `setAttribute()` innan `ContainerAccessResource`
-     * läser dem.
-     *
-     * @param  Collection<int, ContainerAccess>  $accesses
-     */
-    private function hydrateGranteeUlids(Collection $accesses): void
-    {
-        $userIds = $accesses->pluck('granted_by_user_id')
-            ->merge($accesses->where('grantee_type', 'user')->pluck('grantee_id'))
-            ->unique()
-            ->values()
-            ->all();
-
-        $accountIds = $accesses->where('grantee_type', 'account')
-            ->pluck('grantee_id')
-            ->unique()
-            ->values()
-            ->all();
-
-        $userUlids = User::query()->whereIn('id', $userIds)->pluck('ulid', 'id');
-        $accountUlids = Account::query()->whereIn('id', $accountIds)->pluck('ulid', 'id');
-
-        foreach ($accesses as $access) {
-            $access->setAttribute('granted_by_ulid', $userUlids->get($access->granted_by_user_id));
-            $access->setAttribute(
-                'grantee_ulid',
-                $access->grantee_type === 'user'
-                    ? $userUlids->get($access->grantee_id)
-                    : $accountUlids->get($access->grantee_id),
-            );
-        }
-    }
-
-    /**
-     * Sätter `item_ulid` och `reach` på varje rad — omfånget och hur långt
-     * det når, se App\Http\Resources\ContainerAccessResource och issue 72
-     * § Beslut 5.
-     *
-     * TVÅ frågor, oavsett antal rader: en `Item::withTrashed()` för alla
-     * ULID:er och ett anrop till App\Actions\Access\ResolveItemScope::reach()
-     * som laddar containerns `parent`-kanter i EN fråga. `withTrashed()` är
-     * inte en detalj: en grant på ett sedan länge mjukraderat item ska
-     * redovisas som sitt item, inte som `null` — `null` hade lästs som en
-     * container-bred grant.
-     *
-     * Finns inga itemrader alls kostas ingenting: båda nycklarna blir
-     * `null`, vilket är exakt vad en container-bred rad ska svara. Antalet
-     * frågor växer alltså inte med antalet rader, vilket är kravet från
-     * issue 9b § Beslut 11 som issue 72 § Beslut 5 upprepar.
-     *
-     * @param  Collection<int, ContainerAccess>  $accesses
-     */
-    private function hydrateItemScope(Collection $accesses, Container $container, ResolveItemScope $scope): void
-    {
-        $itemIds = $accesses->pluck('item_id')
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($itemIds === []) {
-            foreach ($accesses as $access) {
-                $access->setAttribute('item_ulid', null);
-                $access->setAttribute('reach', null);
-            }
-
-            return;
-        }
-
-        $itemUlids = Item::withTrashed()->whereIn('id', $itemIds)->pluck('ulid', 'id');
-        $reach = $scope->reach($container->id, $itemIds);
-
-        foreach ($accesses as $access) {
-            $access->setAttribute(
-                'item_ulid',
-                $access->item_id === null ? null : $itemUlids->get($access->item_id),
-            );
-            $access->setAttribute(
-                'reach',
-                $access->item_id === null ? null : ($reach[$access->item_id] ?? null),
-            );
-        }
     }
 }
