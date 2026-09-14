@@ -318,6 +318,18 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
             continue;
         }
 
+        // `data/` är undantaget, och det är det ENDA undantaget: de färdiga
+        // kategoriuppsättningarna (issue 56b) är användarvänd text som med
+        // flit bor i Vue-lagret i stället för i `lang/` — se [[ADR-0004 Fria
+        // taggar och kategorier]] § Konsekvenser och [[ADR-0021
+        // Frontendteknik]] § Konsekvenser ("som data i Vue-lagret, seedad per
+        // språk och containertyp"). Regeln nedan gäller fortfarande varje
+        // komponent och varje sidmodul; att katalogen inte får växa vaktas av
+        // testet strax nedanför.
+        if (str_starts_with($fil->getRelativePath(), 'data')) {
+            continue;
+        }
+
         // Kommentarer är svenska med flit (AGENTS.md § Språk i koden). Kvar
         // efter städningen finns bara kod och markup, och där får ingen
         // svensk text finnas alls — varken som strängliteral eller som text
@@ -339,6 +351,34 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
             ));
         }
     }
+});
+
+/*
+ * Undantaget för `data/` i testet ovan är inte en fribiljett, och det är det
+ * här testet som håller det i schack.
+ *
+ * Katalogen rymmer exakt EN fil: de färdiga kategoriuppsättningarna (issue 56b
+ * § Beslut 1 och 2). Att orden bor där i stället för i `lang/` är hela
+ * arkitekturen — servern får aldrig veta vad de betyder ([[ADR-0004 Fria
+ * taggar och kategorier]] § Konsekvenser) — men undantaget betyder att
+ * katalogen inte längre granskas av regeln ovan. Därför prövas katalogens
+ * omfång i stället: hamnar det en andra fil dit är det en komponent med
+ * användarvänd svensk text som gömmer sig undan `lang/`-regeln, och då ska
+ * det här testet falla.
+ *
+ * Att filen finns och bär tio uppsättningar prövas i
+ * tests/Feature/Frontend/KategoriuppsattningTest.php, mot samma modul klienten
+ * importerar. Här prövas bara att undantaget inte har vidgats.
+ */
+it('har bara kategoriuppsättningarna i js/data/', function () {
+    $katalog = resource_path('js/data');
+
+    expect(File::isDirectory($katalog))->toBeTrue(
+        'resources/js/data saknas — undantaget i testet ovan undantar en katalog som inte finns',
+    );
+
+    expect(array_map(fn ($fil): string => $fil->getRelativePathname(), File::allFiles($katalog)))
+        ->toBe(['categoryPresets.js']);
 });
 
 /*

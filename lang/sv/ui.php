@@ -99,6 +99,7 @@ return [
         'category-created' => 'Kategorin är skapad.',
         'category-updated' => 'Kategorin är sparad.',
         'category-deleted' => 'Kategorin är raderad.',
+        'category-preset-applied' => 'Kategorierna är tillagda. Ändra dem precis som du vill.',
         'tag-created' => 'Taggen är skapad.',
         'tag-updated' => 'Taggen är sparad.',
         'tag-deleted' => 'Taggen är raderad.',
@@ -364,6 +365,18 @@ return [
             'save' => 'Spara',
             'destroy' => 'Radera',
             'empty' => 'Inga kategorier än.',
+
+            // Förslaget på en tom pärm, se issue 56b § Beslut 4. Orden i
+            // själva uppsättningen finns INTE här och ska aldrig hit: de bor i
+            // resources/js/data/categoryPresets.js, per språk och typ.
+            // `preset_not_empty` är rutten svar på en pärm som redan har
+            // kategorier och hamnar på formulärnyckeln `categories` — en
+            // mening och inte en API-felkod, för rutten finns bara på webben.
+            'preset_heading' => 'Färdig uppsättning',
+            'preset_description' => 'Vi kan fylla pärmen med ett färdigt förslag på kategorier. Du kan döpa om, flytta och radera dem precis som vanliga kategorier efteråt.',
+            'preset_apply' => 'Lägg till uppsättningen',
+            'preset_dismiss' => 'Nej tack',
+            'preset_not_empty' => 'Pärmen har redan kategorier. En uppsättning går bara att lägga i en tom pärm.',
         ],
 
         // Tagglistan, se issue 56a § Beslut 6 och 8. `description` är den

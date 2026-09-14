@@ -218,17 +218,20 @@ it('skapar en pärm med namn, typ och konto och gör den aktiv', function () {
 
     [$konto, $anvandare] = containerKontext();
 
-    from('/containers/create')
+    $svar = from('/containers/create')
         ->actingAs($anvandare)
         ->post('/containers', [
             'name' => 'Vindil',
             'kind' => 'boat',
             'account' => $konto->ulid,
         ])
-        ->assertRedirect('/containers')
         ->assertSessionHas('status', 'container-created');
 
     $skapad = Container::query()->where('name', 'Vindil')->firstOrFail();
+
+    // Issue 56b § Beslut 5: målet är den nya pärmens kategoriyta, inte
+    // listan — den som just skapat en pärm möts av förslaget.
+    $svar->assertRedirect("/containers/{$skapad->ulid}/categories");
 
     expect($skapad->kind)->toBe('boat');
     expect($skapad->account_id)->toBe($konto->id);
@@ -300,10 +303,15 @@ it('ger ett läsbart kvotfel i stället för JSON när containertaket slår i', 
     // fyller kontot.
     [$konto, $anvandare] = containerKontext('owner', 'sv_SE');
 
-    from('/containers/create')
+    $förstaSvar = from('/containers/create')
         ->actingAs($anvandare)
-        ->post('/containers', ['name' => 'Första', 'kind' => 'boat', 'account' => $konto->ulid])
-        ->assertRedirect('/containers');
+        ->post('/containers', ['name' => 'Första', 'kind' => 'boat', 'account' => $konto->ulid]);
+
+    $första = Container::query()->where('name', 'Första')->firstOrFail();
+
+    // Den första pärmen skapas och landar på sin kategoriyta (issue 56b
+    // § Beslut 5); den andra är den som slår i taket.
+    $förstaSvar->assertRedirect("/containers/{$första->ulid}/categories");
 
     $svar = from('/containers/create')->actingAs($anvandare)->post('/containers', [
         'name' => 'Andra',
@@ -328,10 +336,13 @@ it('formulerar kvotfelet på engelska för en engelsktalande användare', functi
 
     [$konto, $anvandare] = containerKontext('owner', 'en_GB');
 
-    from('/containers/create')
+    $firstSvar = from('/containers/create')
         ->actingAs($anvandare)
-        ->post('/containers', ['name' => 'First', 'kind' => 'boat', 'account' => $konto->ulid])
-        ->assertRedirect('/containers');
+        ->post('/containers', ['name' => 'First', 'kind' => 'boat', 'account' => $konto->ulid]);
+
+    $first = Container::query()->where('name', 'First')->firstOrFail();
+
+    $firstSvar->assertRedirect("/containers/{$first->ulid}/categories");
 
     from('/containers/create')->actingAs($anvandare)->post('/containers', [
         'name' => 'Second',

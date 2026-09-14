@@ -119,7 +119,8 @@ class ContainerController extends Controller
     }
 
     /**
-     * POST /containers — skapar pärmen och gör den aktiv, 302 till listan.
+     * POST /containers — skapar pärmen och gör den aktiv, 302 till
+     * kategoriytan för den nya pärmen (issue 56b § Beslut 5).
      *
      * Ägarkontot kommer ur kroppen (`account`, ett konto-ULID), för servern
      * har inget begrepp "aktivt konto" (issue 8 § Beslut 8). Kontot måste
@@ -167,8 +168,12 @@ class ContainerController extends Controller
 
         $activeContainer->set($user, $container);
 
+        // Issue 56b § Beslut 5: den som just skapat en pärm möts av
+        // kategoriytan — och där, på en tom pärm, av den färdiga
+        // uppsättningen. Att landa i listan hon nyss stod i är att be henne
+        // leta upp pärmen igen.
         return redirect()
-            ->route('containers.index')
+            ->route('containers.categories', $container)
             ->with('status', 'container-created');
     }
 
