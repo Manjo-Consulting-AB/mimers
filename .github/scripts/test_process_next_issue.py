@@ -7,8 +7,8 @@ ett `if __name__ == "__main__"`-block som kör och rapporterar. Modulen är
 importerbar utan sidoeffekter - allt som faktiskt kör ett kommando ligger
 bakom `if __name__ == "__main__":` i process_next_issue.py - så den här filen
 importerar den direkt i stället för att mocka den. De tre funktioner som
-testas (`ska_eskalera_till_arkitekt`, `bygg_granskningsprompt`, `oppna_fragor`)
-är rena: inget `gh`-anrop att mocka bort.
+testas (`ska_eskalera_till_arkitekt`, `bygg_granskningsprompt`, `oppna_fragor`,
+`ar_arkitektsvar`) är rena: inget `gh`-anrop att mocka bort.
 
 Körs av CI (.github/workflows/ci.yml, steget "Pipelinens egna enhetstester")
 och lokalt med:
@@ -410,6 +410,68 @@ def test_testgrindens_avslag_backar_egen_commit():
     assert "        backa_trasig_egen_commit(" in kalla[start:start + 600], (
         "Ett varv som bröt sviten lämnar agentens egen commit kvar på grenen."
     )
+
+
+# =====================================================================
+# senaste_arkitektsvar() - vilken kommentar åtgärdsloopen kör på
+# =====================================================================
+
+def test_arkitektsvar_med_versal_rubrik_hittas():
+    """PR #310: arkitekten skrev '## Arkitektsvar på de tre frågorna' och
+    matchningen var skiftlägeskänslig - svaret låg i tråden, men banan avslog
+    och skyllde på att arkitekten inte hade svarat."""
+    assert p.ar_arkitektsvar("## Arkitektsvar på de tre frågorna\n\nBeslut 1: ...") is True
+
+
+def test_pipelinens_egna_rubriker_ar_inte_arkitektsvar():
+    """Notiserna ligger i samma tråd och innehåller ordet. Räknades någon av dem
+    skulle åtgärdsloopen köra pipelinens egen felnotis som fynd."""
+    for rubrik in p.PIPELINENS_ARKITEKTNOTISER:
+        assert p.ar_arkitektsvar(f"### {rubrik}\nBrödtext.") is False, rubrik
+
+
+def test_pipelinens_notisrubriker_postas_via_konstanterna():
+    """Vakt mot drift: filtret är värdelöst om en rubrik formuleras om på
+    postningsstället utan att konstanten följer med."""
+    kalla = _kalla()
+    for rubrik in p.PIPELINENS_ARKITEKTNOTISER:
+        assert f"### {rubrik}" not in kalla, (
+            f"Rubriken '{rubrik}' postas i klartext i stället för via konstanten - "
+            "formuleras den om slutar ar_arkitektsvar() att filtrera bort den."
+        )
+
+
+def test_opus_egna_rubriker_ar_arkitektsvar():
+    """Bägge banorna pipelinen själv postar svar på ska räknas."""
+    assert p.ar_arkitektsvar("### Opus 5 - arkitektsvar på din fråga\nSvar.") is True
+    assert p.ar_arkitektsvar("### Opus 5 - arkitektsvar på Frågor och antaganden\nSvar.") is True
+
+
+def test_vanlig_kommentar_ar_inte_arkitektsvar():
+    assert p.ar_arkitektsvar("Pipeline crashade. Verifiera att pr går att merga.") is False
+    assert p.ar_arkitektsvar("") is False
+    assert p.ar_arkitektsvar(None) is False
+
+
+def test_rubrik_efter_inledande_blankrad_hittas():
+    """GitHubs webbformulär lägger då och då dit en blankrad först."""
+    assert p.ar_arkitektsvar("\n\n## Arkitektsvar\nBrödtext.") is True
+
+
+def test_senaste_arkitektsvar_tar_svaret_och_inte_notisen():
+    """Tråden på PR #310 i miniatyr: fråga, svar, och pipelinens avslag sist.
+    Det är svaret som ska köras - inte avslaget, som ligger senare."""
+    trad = [
+        {"body": "Till arkitekt, gränssnittet ska vara intuitivt."},
+        {"body": "### Opus 5 - arkitektsvar på din fråga\nGammalt svar."},
+        {"body": "## Arkitektsvar på de tre frågorna\nNytt svar."},
+        {"body": f"### {p.NOTIS_INGET_ARKITEKTSVAR}\nPR:en bar etiketten ..."},
+    ]
+    assert p.senaste_arkitektsvar(trad) == "## Arkitektsvar på de tre frågorna\nNytt svar."
+
+
+def test_senaste_arkitektsvar_tom_trad():
+    assert p.senaste_arkitektsvar([]) == ""
 
 
 if __name__ == "__main__":

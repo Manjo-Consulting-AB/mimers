@@ -943,17 +943,67 @@ def ta_bort_label(pr_number, label):
             check=False, cwd=REPO_ROOT)
 
 
+# Rubrikerna på pipelinens EGNA notiser som råkar innehålla ordet "arkitektsvar".
+# De postas i samma tråd som svaret och får aldrig läsas som ett arkitektsvar -
+# annars kör åtgärdsloopen sin egen felnotis som fynd nästa gång etiketten sätts.
+# Konstanter i stället för strängar på postningsstället, så att en omformulerad
+# rubrik inte tyst slutar filtreras. test_process_next_issue.py vaktar kopplingen.
+NOTIS_INGET_ARKITEKTSVAR = "Hittade inget arkitektsvar"
+NOTIS_LOOPEN_STARTAD = "Åtgärdsloopen startad på arkitektsvaret"
+NOTIS_INTE_ATGARDAT = "Arkitektsvaret blev inte åtgärdat"
+NOTIS_MERGESPARR = "Mergespärren slog till efter arkitektsvar"
+PIPELINENS_ARKITEKTNOTISER = (
+    NOTIS_INGET_ARKITEKTSVAR,
+    NOTIS_LOOPEN_STARTAD,
+    NOTIS_INTE_ATGARDAT,
+    NOTIS_MERGESPARR,
+)
+
+# Vad som gör en rubrik till ett arkitektsvar. Medvetet bredare än den exakta
+# rubrik pipelinen själv skriver: arkitekten är ibland en människa eller en
+# Claude Code-session som formulerar sin egen rubrik ("## Arkitektsvar på de
+# tre frågorna" på PR #310). Matchningen är skiftlägesokänslig - det var just
+# versalen i "Arkitektsvar" som fällde PR #310.
+ARKITEKTSVAR_RUBRIK = re.compile(r"arkitektsvar|arkitektens svar|svar från arkitekt")
+
+
+def rubrikrad(body):
+    """Kommentarens rubrik: första icke-tomma raden, utan markdown-dekor och i
+    gemener. Tom sträng när kommentaren är tom.
+
+    Första *icke-tomma* raden, inte första raden: en kommentar som börjar med
+    en blankrad har en rubrik lika fullt, och GitHubs webbformulär lägger dit
+    en då och då.
+    """
+    for rad in (body or "").splitlines():
+        rad = rad.strip().lstrip("#*>").strip().strip("*").strip()
+        if rad:
+            return rad.lower()
+    return ""
+
+
+def ar_arkitektsvar(body):
+    """Är den här kommentaren ett arkitektsvar åtgärdsloopen ska köra på?
+
+    Ren funktion, testad direkt: hela beslutet ligger i rubriken, och det var
+    här PR #310 gick fel.
+    """
+    rubrik = rubrikrad(body)
+    if not rubrik or not ARKITEKTSVAR_RUBRIK.search(rubrik):
+        return False
+    return not any(rubrik.startswith(notis.lower()) for notis in PIPELINENS_ARKITEKTNOTISER)
+
+
 def senaste_arkitektsvar(comments):
-    """Den senast postade arkitektsvar-kommentaren i tråden - antingen från
-    ARKITEKT_LABEL-banan ("... arkitektsvar på din fråga") eller den äldre
-    eskaleringen av '## Frågor och antaganden' ("... arkitektsvar på Frågor
-    och antaganden"). Båda är samma roll (arkitekten) som svarar på en fråga;
-    vilken väg som ställde den spelar ingen roll för vad åtgärdsloopen ska
-    göra med svaret. Se atgarda_arkitektsvar().
+    """Den senast postade arkitektsvar-kommentaren i tråden - från
+    ARKITEKT_LABEL-banan ("... arkitektsvar på din fråga"), från eskaleringen av
+    '## Frågor och antaganden' ("... arkitektsvar på Frågor och antaganden"),
+    eller från en arkitekt som skrev sin egen rubrik. Alla är samma roll
+    (arkitekten) som svarar på en fråga; vilken väg som ställde den spelar ingen
+    roll för vad åtgärdsloopen ska göra med svaret. Se atgarda_arkitektsvar().
     """
     for c in reversed(comments):
-        rader = (c.get("body") or "").strip().splitlines()
-        if rader and "arkitektsvar" in rader[0]:
+        if ar_arkitektsvar(c.get("body")):
             return c["body"]
     return ""
 
@@ -1003,11 +1053,23 @@ def atgarda_arkitektsvar(pr_number):
 
     svar = senaste_arkitektsvar(pr["comments"])
     if not svar:
+        # Rubrikerna med i avslaget: utan dem säger notisen bara "hittade inget"
+        # och den som läser kan inte se VARFÖR svaret inte räknades. PR #310 stod
+        # en dag på ett avslag som såg ut att ljuga - svaret fanns, men rubriken
+        # hette "## Arkitektsvar ..." och matchningen var skiftlägeskänslig.
+        rubriker_lasta = "\n".join(
+            f"- `{(rubrikrad(c.get('body')) or '(tom kommentar)')[:120]}`"
+            for c in reversed(pr["comments"])
+        ) or "- (tråden är tom)"
         print(f"--> PR #{pr_number} bär {ATGARDA_LABEL} men har inget arkitektsvar i tråden.")
         run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                 f"### Hittade inget arkitektsvar\nPR:en bar `{ATGARDA_LABEL}`, men ingen kommentar i "
-                 f"tråden är ett arkitektsvar. Be arkitekten svara först med `{ARKITEKT_LABEL}`, sätt "
-                 f"sedan `{ATGARDA_LABEL}` igen."],
+                 f"### {NOTIS_INGET_ARKITEKTSVAR}\nPR:en bar `{ATGARDA_LABEL}`, men ingen kommentar i "
+                 f"tråden har en rubrik som säger att den är ett arkitektsvar. Rubriken (första "
+                 f"icke-tomma raden) måste innehålla *arkitektsvar*, *arkitektens svar* eller "
+                 f"*svar från arkitekt* - skiftläge spelar ingen roll.\n\nRubriker jag läste, "
+                 f"nyast först:\n{rubriker_lasta}\n\nÄr svaret redan postat: döp om rubriken och "
+                 f"sätt `{ATGARDA_LABEL}` igen. Saknas svaret: be arkitekten först med "
+                 f"`{ARKITEKT_LABEL}`."],
                 cwd=REPO_ROOT)
         send_pushover(f"❓ PR #{pr_number}: {ATGARDA_LABEL} satt, men inget arkitektsvar att köra på.")
         return
@@ -1020,7 +1082,7 @@ def atgarda_arkitektsvar(pr_number):
     # i sig svaret på "vad hände med min etikett?".
     satt_label(pr_number, PAGAR_LABEL)
     run_cmd(["gh", "pr", "comment", pr_number, "--body",
-             f"### Åtgärdsloopen startad på arkitektsvaret\n`{ATGARDA_LABEL}` plockad, "
+             f"### {NOTIS_LOOPEN_STARTAD}\n`{ATGARDA_LABEL}` plockad, "
              f"`{PAGAR_LABEL}` satt. Kör senaste arkitektsvaret som fynd genom fyra "
              f"åtgärdsvarv (DeepSeek x3, sedan Sonnet) och mergar automatiskt om CI blir "
              f"grönt. Tar normalt 20-40 minuter; nästa kommentar här är utfallet."],
@@ -1050,7 +1112,7 @@ def atgarda_arkitektsvar(pr_number):
 
         if not resolved:
             run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                     "### Arkitektsvaret blev inte åtgärdat\nFyra åtgärdsvarv räckte inte - "
+                     f"### {NOTIS_INTE_ATGARDAT}\nFyra åtgärdsvarv räckte inte - "
                      "issuet är märkt `needs-human`."], cwd=REPO_ROOT)
             eskalera(issue_num, pr_number, worktree_path, branch_name,
                       "Arkitektsvaret krävde en kodändring som inte blev löst inom åtgärdsloopen.")
@@ -1063,7 +1125,7 @@ def atgarda_arkitektsvar(pr_number):
             cleanup_worktree(worktree_path, branch_name)
         else:
             run_cmd(["gh", "pr", "comment", pr_number, "--body",
-                     "### Mergespärren slog till efter arkitektsvar\nÅtgärdsloopen löste fynden, men "
+                     f"### {NOTIS_MERGESPARR}\nÅtgärdsloopen löste fynden, men "
                      "antingen blev CI inte grönt eller så saknades `review:approved` vid "
                      "mergetillfället. Mergar inte automatiskt."], cwd=REPO_ROOT)
             eskalera(issue_num, pr_number, worktree_path, branch_name, "Åtgärdat men CI blev rött.")
