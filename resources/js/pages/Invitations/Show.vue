@@ -1,7 +1,6 @@
 <script setup>
 import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
-import VerifyEmailNotice from '../../components/VerifyEmailNotice.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
@@ -16,8 +15,11 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *   ready       — inloggad, verifierad mottagare. Accept- och avvisa-formulären.
  *   guest       — utloggad. Pärmens namn, inbjudaren och nivån, plus vägarna
  *                 till inloggning och registrering. Adressen visas aldrig.
- *   unverified  — inloggad med rätt adress men overifierad: samma
- *                 verifieringspåminnelse som bannern, samma komponent.
+ *   unverified  — inloggad med rätt adress men overifierad. Ingenting eget
+ *                 renderas: AppLayout visar redan verifieringspåminnelsen för
+ *                 varje overifierad användare utom på /email/verify, och två
+ *                 likadana knappar på samma sida är en bugg och inte en
+ *                 påminnelse. Kvar blir inbjudningskontexten ovanför.
  *   mismatch    — inloggad med en annan adress. Beskedet säger INTE vilken
  *                 adress inbjudan gäller.
  *   unavailable — utgången, redan besvarad eller okänt token. ETT tillstånd
@@ -119,9 +121,13 @@ function reject() {
             <Link href="/register" class="text-blue-700 hover:underline">{{ t('auth.register.heading') }}</Link>
         </div>
 
-        <div v-else-if="state === 'unverified'" class="mt-6 max-w-sm">
-            <VerifyEmailNotice />
-        </div>
+        <!--
+            `unverified` har inget eget innehåll: AppLayouts banner bär redan
+            verifieringsuppmaningen (se dess docblock). Grenen finns kvar bara
+            för att tillståndet inte ska falla vidare till `mismatch` eller
+            `unavailable` nedan.
+        -->
+        <template v-else-if="state === 'unverified'"></template>
 
         <div v-else-if="state === 'mismatch'" class="mt-6 max-w-sm">
             <p class="text-slate-700">{{ t('invitation.mismatch') }}</p>
