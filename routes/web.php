@@ -260,6 +260,14 @@ Route::middleware('auth')->group(function () {
      *
      * `{container}` och `{item}` binds båda på ULID via `#[RouteKey('ulid')]`
      * på App\Models\Container respektive App\Models\Item.
+     *
+     * **Filtren är querysträng på just den här rutten** — issue 59a § Beslut 1.
+     * `GET /containers/{container}?q=…&tags[]=…&category=…` är samma sida i ett
+     * filtrerat läge, och en filtrerad URL går att spara, dela och backa ur.
+     * Ingen egen sökväg: en andra lista att hålla i takt med den första är
+     * precis vad den här raden undviker, och en ny rutt hade varit den andra
+     * listan. Filtrens semantik bor i App\Http\Controllers\ItemController::
+     * index() och `filter()`; `routes/api.php` är orörd.
      */
     Route::get('/containers/{container}', [ItemController::class, 'index'])
         ->name('containers.show');
