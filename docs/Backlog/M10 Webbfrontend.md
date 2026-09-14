@@ -52,10 +52,12 @@ Lista med miniatyrer, detaljvy, skapa och redigera. Kategori, taggar, fritext.
 Ett item användaren bara har `read` på visas utan redigeringsytor, inte med knappar som ger felkod.
 **Läs:** [[Items och organisation]], [[ADR-0028 Åtkomst på itemnivå]]
 **Beror på:** 56, 13, 71
+**Byggd som:** 57a läsytorna — listan, som är pärmens förstasida, och detaljvyn, 57b skrivytorna — skapa, redigera och radera. **Miniatyrerna i listan byggs i 61**, inte här: en miniatyr förutsätter en bilaga att visa, och hela filytan i webben är 60 och 61. Att rita en väg till filoriginet innan [[ADR-0019 Filleverans]] fått sin yta är att bygga en andra väg som 61 sedan får riva.
 
 ### 58. Relationer mellan items
 Koppla ihop items och navigera relationerna från detaljvyn.
 En länk till ett item utanför användarens omfång visas inte alls — inte som ett namnlöst spöke.
+Här bor också **vägen att skapa ett item under ett annat**. `parent`/`child` bär behörighet ([[ADR-0028 Åtkomst på itemnivå]] regel 1), så ett barn-item är en relationsfråga och inte en formulärfråga — och det är den enda väg en mottagare med `create` på ett item har att lägga in sitt eget arbete som ett item.
 **Läs:** [[Items och organisation]] § item_link, [[ADR-0028 Åtkomst på itemnivå]]
 **Beror på:** 57, 14, 71
 
@@ -64,6 +66,7 @@ Fritextsök plus filtrering på kategori, tagg och container. Tomt resultat säg
 "Tomt resultat säger vad som filtrerades bort" gäller **användarens egna filter** — aldrig att träffar dolts av behörighet, se issue 73.
 **Läs:** [[ADR-0012 Sök]], [[Items och organisation]], [[ADR-0028 Åtkomst på itemnivå]]
 **Beror på:** 57, 15, 73
+**Byggd som:** 59a filterraden i pärmens itemlista — fritext, taggar och kategori som querysträng på samma sida, 59b den globala sökningen över alla pärmar användaren når. Den globala rutten tar bara `q`; tagg- och kategorifilter hör till en pärm.
 
 ### 60. Uppladdning
 Drag-drop, flera filer samtidigt, framdrift per fil, miniatyrer när de finns. Kvotfel visas som gräns och värde, inte som ett rått felmeddelande.
@@ -76,6 +79,7 @@ Visning av bilder och PDF:er, nedladdningslänkar mot filoriginet.
 **Läs:** [[ADR-0019 Filleverans]]
 **Klart när:** användarfiler serveras från `files.mimers.app` och inget innehåll därifrån kan köra skript i appens origin.
 **Beror på:** 60, 19
+Här ritas också **miniatyrerna i itemlistan**, som issue 57 lämnade hit — de hör ihop med leveransvägen, inte med listan.
 
 ### 62. Papperskorg
 Lista raderat innehåll, återställ, se hur lång tid som återstår.
