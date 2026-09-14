@@ -446,11 +446,50 @@ return [
         // aldrig att den kanske är det: en omfångsbegränsad mottagare ser bara
         // det hon når, och ett "inga träffar bland N" hade avslöjat hur många
         // rader som filtrerats bort (issue 73 § Beslut 6).
+        //
+        // Filterraden bor i resources/js/components/ItemFilterBar.vue och
+        // meningen i den tomma träfflistan i pages/Containers/Items/Index.vue,
+        // se issue 59a § Beslut 4, 5, 6 och 8. `filter_empty` räknar upp det
+        // användaren SJÄLV satt och ingenting annat: inget tal om hur många
+        // rader omfånget höll borta, ingen antydan om att svaret skulle vara
+        // ofullständigt. En omfångsbegränsad mottagare får därför samma mening
+        // som ägaren.
+        //
+        // Etiketterna i `filter_label_*` byggs i
+        // resources/js/components/itemFilter.js och används på två ställen:
+        // chipsen ovanför listan och meningen ovan. Taggarna har en egen form
+        // för uppräkningen (`filter_label_tags`), så "taggarna Motor,
+        // Impeller" står i stället för "taggen Motor, taggen Impeller".
         'index' => [
             'title' => 'Items',
             'heading' => 'Items',
             'create' => 'Nytt item',
             'empty' => 'Pärmen är tom.',
+
+            'filter_heading' => 'Filtrera',
+            'filter_q' => 'Sökord',
+            'filter_tags' => 'Taggar',
+            'filter_category' => 'Kategori',
+            'filter_category_all' => '— alla kategorier —',
+            'filter_submit' => 'Filtrera',
+            'filter_active' => 'Aktiva filter',
+            'filter_clear' => 'Rensa alla',
+            'filter_remove' => 'Ta bort :filter',
+
+            // Ett värde i länken som inte längre finns i mottagarens omfång —
+            // en raderad tagg, en kategori flyttad till en annan pärm. Raden är
+            // hela svaret: ingen 422, ingen redirect tillbaka till samma
+            // querysträng (Beslut 3).
+            'filter_dropped' => 'Ett filter i länken finns inte längre och har tagits bort.',
+
+            // Läget "filter, inga rader". Utan filter säger `empty` att pärmen
+            // är tom i stället.
+            'filter_empty' => 'Inga träffar med de här filtren: :filters.',
+
+            'filter_label_q' => 'sökordet ”:value”',
+            'filter_label_tag' => 'taggen :name',
+            'filter_label_tags' => 'taggarna :names',
+            'filter_label_category' => 'kategorin :name',
         ],
 
         // Detaljvyns fältetiketter. Bara itemets EGNA fält, kategorin och

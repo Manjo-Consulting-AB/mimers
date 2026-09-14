@@ -366,11 +366,49 @@ return [
     // The item pages, see issue 57a decision 10. Same split as `container`:
     // `index` is the list, `show` is the detail view.
     'item' => [
+        // The filter bar lives in resources/js/components/ItemFilterBar.vue
+        // and the empty-result sentence in pages/Containers/Items/Index.vue,
+        // see issue 59a decisions 4, 5, 6 and 8. `filter_empty` lists what the
+        // user set THEMSELVES and nothing else: no number of rows the scope
+        // kept back, no hint that the answer would be incomplete. A
+        // scope-limited recipient therefore gets the same sentence as the
+        // owner.
+        //
+        // The `filter_label_*` labels are built in
+        // resources/js/components/itemFilter.js and used in two places: the
+        // chips above the list and the sentence above. Tags have their own
+        // form for the listing (`filter_label_tags`), so "the tags Motor,
+        // Impeller" rather than "the tag Motor, the tag Impeller".
         'index' => [
             'title' => 'Items',
             'heading' => 'Items',
             'create' => 'New item',
             'empty' => 'The binder is empty.',
+
+            'filter_heading' => 'Filter',
+            'filter_q' => 'Search term',
+            'filter_tags' => 'Tags',
+            'filter_category' => 'Category',
+            'filter_category_all' => '— all categories —',
+            'filter_submit' => 'Filter',
+            'filter_active' => 'Active filters',
+            'filter_clear' => 'Clear all',
+            'filter_remove' => 'Remove :filter',
+
+            // A value in the link that is no longer in the recipient's scope —
+            // a deleted tag, a category moved to another binder. The row is
+            // the whole answer: no 422, no redirect back to the same query
+            // string (decision 3).
+            'filter_dropped' => 'A filter in the link no longer exists and has been removed.',
+
+            // The "filter, no rows" state. Without a filter `empty` says the
+            // binder is empty instead.
+            'filter_empty' => 'No hits with these filters: :filters.',
+
+            'filter_label_q' => 'the search term “:value”',
+            'filter_label_tag' => 'the tag :name',
+            'filter_label_tags' => 'the tags :names',
+            'filter_label_category' => 'the category :name',
         ],
 
         'show' => [

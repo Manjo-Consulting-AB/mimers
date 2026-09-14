@@ -89,18 +89,52 @@ use Inertia\Response;
 class ItemController extends Controller
 {
     /**
-     * GET /containers/{container} — pärmens itemlista, sorterad på namn.
+     * GET /containers/{container} — pärmens itemlista, sorterad på namn, med
+     * filtren ur querysträngen (issue 59a § Beslut 1–7).
      *
-     * **Omfånget filtrerar raderna, precis som i `/api`** (Beslut 4). Den som
-     * når pärmen når inte nödvändigtvis allt i den: en mottagare med en grant
-     * på motorn ser motorn och dess ättlingar, ingenting annat. Den här
-     * kontrollern anropar `ListItems` UTAN filter — filterraden är issue 59a.
+     * **Filtret är querysträng på den här sidan** (Beslut 1). Samma rutt,
+     * samma sida, samma `containers.show`; ett filtrerat läge är en LÄNK som
+     * går att spara, dela och backa ur. Ingen egen söksida och ingen ny rutt.
      *
-     * **Sidan får visa antalet rader den ritar** och ingenting mer. Ingen
-     * totalsumma, ingen "av N", ingen rad om att något dolts: ingenting i
-     * svaret får bära ett tal som avslöjar hur många rader som filtrerats
-     * bort (issue 73 § Beslut 6, Beslut 4). Är listan tom säger sidan att
-     * pärmen är tom.
+     * **Servern gör hela jobbet** (Beslut 2). `tags[]` kräver VARJE angiven
+     * tagg, `category` betyder kategorin och hela dess underträd, `q` är
+     * fritext — och allt tre kombineras med OCH ovanpå omfånget. Den här
+     * metoden räknar inte en rad själv: urvalet är `ListItems`, och vyn
+     * filtrerar ingenting.
+     *
+     * **Webben är inte en valideringssida** (Beslut 3). I `/api` är ett okänt
+     * filtervärde 422 (issue 15a § Beslut 7), och det kontraktet står orört —
+     * `Api\ItemController::index()` anropar `IndexItemRequest` som förut. Här
+     * är samma värde i stället en GAMMAL LÄNK: taggen är raderad sedan
+     * bokmärket sparades, eller kategorin flyttad till en annan pärm. En
+     * 422-sida hade varit fel svar på ett bokmärke, och en redirect tillbaka
+     * till samma querysträng en oändlig sådan. `filter()` nedan löser därför
+     * upp ULID:na mot de listor sidan ÄNDÅ hämtar — `ListTags` och
+     * `ListCategories`, båda omfångsfiltrerade — och skickar bara det som
+     * fanns kvar vidare. Det är en presentationsregel om en gammal URL och
+     * ingen andra filtreringsregel: vilka RADER som får synas avgör
+     * fortfarande bara `ListItems` (Beslut 2 och 3).
+     *
+     * **Omfånget filtrerar raderna, precis som i `/api`** (Beslut 5, issue 73
+     * § Beslut 2). Den som når pärmen når inte nödvändigtvis allt i den: en
+     * mottagare med en grant på motorn ser motorn och dess ättlingar, ingenting
+     * annat — och filterraden listar bara de taggar och kategorier hon når,
+     * eftersom de kommer ur samma två omfångsfiltrerade Actions. Att filtrera
+     * på en tagg hon inte ser är inte ett fel hon kan göra.
+     *
+     * **Sidan får visa antalet rader den ritar** och ingenting mer (Beslut 4).
+     * Ingen totalsumma, ingen "av N", ingen rad om att något dolts: ingenting
+     * i svaret får bära ett tal som avslöjar hur många rader som filtrerats
+     * bort (issue 73 § Beslut 6). Är listan tom UTAN filter säger sidan att
+     * pärmen är tom; är den tom MED filter räknar vyn upp de filter
+     * användaren själv satt — och en omfångsbegränsad mottagares tomma
+     * träfflista är ordagrant identisk med en ägares, för meningen vet
+     * ingenting om omfånget.
+     *
+     * **Två frågor, oavsett filter** (Beslut 7): `ListTags` och
+     * `ListCategories`. `ListItems` är konstant sedan issue 15a § Beslut 9, och
+     * inget filtervärde lägger till en fråga — uppslagen sker i minnet mot de
+     * redan hämtade listorna.
      *
      * `can.create` är `ContainerPolicy::createItem()` — samma grind som
      * `Api\ItemController::store()` prövar för ett toppnivå-item, och bara en
@@ -108,19 +142,48 @@ class ItemController extends Controller
      * `false`: hon skapar barn-items under det hon nått, och den ytan hör till
      * detaljvyn.
      */
-    public function index(Request $request, Container $container, ListItems $listItems): Response
-    {
+    public function index(
+        Request $request,
+        Container $container,
+        ListItems $listItems,
+        ListCategories $listCategories,
+        ListTags $listTags,
+    ): Response {
         Gate::authorize('view', $container);
 
         $container->loadMissing('account');
 
         $user = $request->user();
-        $items = $listItems->handle($user, $container);
+
+        // Listorna hämtas FÖRE filtren: de är både filterradens innehåll och
+        // det de inskickade ULID:na löses upp mot (Beslut 3 och 5). Två
+        // frågor, oavsett hur många filtervärden som skickas.
+        $tags = $listTags->handle($user, $container);
+        $categories = $listCategories->handle($user, $container);
+
+        [$filter, $dropped] = $this->filter($request, $tags, $categories);
+
+        $items = $listItems->handle($user, $container, [
+            'tags' => $filter['tags'],
+            'category' => $filter['category'],
+            'q' => $filter['q'],
+        ]);
 
         return Inertia::render('Containers/Items/Index', [
             'container' => ContainerResource::make($container)->resolve($request),
             'items' => ItemResource::collection($items)->resolve($request),
+            // `categories` är ULID → namn för RADERNA (57a § Beslut 1 och 6) —
+            // ett annat uppslag än `categoryTree` nedan, som är filterradens
+            // väljare och bär hela trädet.
             'categories' => $this->categoryNames($items),
+            'tags' => TagResource::collection($tags)->resolve($request),
+            'categoryTree' => CategoryResource::collection($categories)->resolve($request),
+            'filter' => [
+                'q' => $filter['q'],
+                'tags' => $filter['tags'],
+                'category' => $filter['category'],
+                'dropped' => $dropped,
+            ],
             'can' => [
                 'create' => Gate::forUser($user)->allows('createItem', $container),
             ],
@@ -471,6 +534,74 @@ class ItemController extends Controller
         $parent = $request->query('parent');
 
         return is_string($parent) ? $parent : null;
+    }
+
+    /**
+     * Filtren ur querysträngen, lösta mot pärmens EGNA taggar och kategorier —
+     * issue 59a § Beslut 3.
+     *
+     * **Ingen FormRequest och ingen ny regel.** `IndexItemRequest` äger
+     * reglerna och `/api` behåller dem orörda; här lånas bara FORMEN: `q` är
+     * en sträng, `tags` är en lista av ULID och `category` ett enskilt. Allt
+     * annat — `?q[]=…`, `?tags=x`, `?category[]=…` — läses som "inget
+     * filter", samma linje som `parentUlid()` ovan.
+     *
+     * **Trädet är `ListCategories`:s, alltså det omfångsfiltrerade.** En
+     * kategori mottagaren inte når finns inte i listan och blir därmed ett
+     * bortfallet filter, precis som en raderad tagg. Att lösa upp mot
+     * `container->categories()` i stället hade gett henne ett filter hon inte
+     * kan se — och därmed ett svar som ser ut som en bugg.
+     *
+     * **Ett värde som inte finns kvar är ett BORTFALLET filter, inte ett
+     * fel** (Beslut 3). Den som skickade länken är inte här, och svaret hon
+     * får är listan UTAN det filtret plus en rad om att ett föll bort. `q`
+     * trimmas som `IndexItemRequest::prepareForValidation()` gör, och en
+     * blank `q` är samma sak som ingen `q`; detsamma gäller en blank
+     * `category`, medan ett tomt taggvärde räknas som ett värde som inte
+     * finns. Längdregeln på `q` (255) upprätthålls INTE här: en för lång
+     * sökterm i ett gammalt bokmärke ska svara "inga träffar", inte en
+     * felsida.
+     *
+     * Ordningen på de behållna taggarna är den inskickade — vyn ritar dem i
+     * länkens ordning och inte i tagglistans.
+     *
+     * @param  Collection<int, Tag>  $tags  pärmens taggar inom omfånget
+     * @param  Collection<int, Category>  $categories  pärmens kategoriträd inom omfånget
+     * @return array{0: array{q: string|null, tags: list<string>, category: string|null}, 1: bool} filtret och huruvida något föll bort
+     */
+    private function filter(Request $request, Collection $tags, Collection $categories): array
+    {
+        $q = $request->query('q');
+        $q = is_string($q) ? trim($q) : null;
+
+        if ($q === '') {
+            $q = null;
+        }
+
+        $requestedTags = $request->query('tags');
+        $requestedTags = is_array($requestedTags)
+            ? array_values(array_filter($requestedTags, fn ($ulid) => is_string($ulid) && $ulid !== ''))
+            : [];
+
+        $visibleTags = $tags->pluck('ulid')->all();
+        $keptTags = array_values(array_intersect($requestedTags, $visibleTags));
+
+        $requestedCategory = $request->query('category');
+        $requestedCategory = is_string($requestedCategory) && $requestedCategory !== ''
+            ? $requestedCategory
+            : null;
+
+        $keptCategory = $requestedCategory !== null && $categories->contains('ulid', $requestedCategory)
+            ? $requestedCategory
+            : null;
+
+        $dropped = $keptTags !== $requestedTags
+            || ($requestedCategory !== null && $keptCategory === null);
+
+        return [
+            ['q' => $q, 'tags' => $keptTags, 'category' => $keptCategory],
+            $dropped,
+        ];
     }
 
     /**
