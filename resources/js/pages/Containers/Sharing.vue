@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerAccessRow from '../../components/ContainerAccessRow.vue';
-import { accessKindLabel, accessScopeLabel, formatDate } from '../../components/accessPresentation.js';
+import { accessKindLabel, accessScopeLabel, formatDate, granteeLabel } from '../../components/accessPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
@@ -40,6 +40,8 @@ const props = defineProps({
     participants: { type: Array, required: true },
     accesses: { type: Array, default: null },
     itemNames: { type: Object, required: true },
+    granteeNames: { type: Object, required: true },
+    grantedByNames: { type: Object, required: true },
     levels: { type: Array, required: true },
     can: { type: Object, required: true },
 });
@@ -106,6 +108,8 @@ const historyDate = (access) =>
                     :container-ulid="container.ulid"
                     :access="access"
                     :item-names="itemNames"
+                    :grantee-names="granteeNames"
+                    :granted-by-names="grantedByNames"
                     :levels="levels"
                 />
             </ul>
@@ -119,6 +123,10 @@ const historyDate = (access) =>
                         :key="access.ulid"
                         class="flex flex-col gap-1 rounded border border-slate-200 bg-slate-100 px-4 py-2 text-sm"
                     >
+                        <!-- Vems åtkomst som klipptes är hela skälet till att
+                             historiken finns — ett datum utan namn svarar
+                             inte på frågan. -->
+                        <span class="text-slate-700">{{ granteeLabel(t, granteeNames, access) }}</span>
                         <span class="text-slate-700">{{ accessKindLabel(t, access) }}</span>
                         <span class="text-slate-700">{{ accessScopeLabel(t, itemNames, access) }}</span>
                         <span class="text-xs text-slate-600">{{ historyDate(access) }}</span>

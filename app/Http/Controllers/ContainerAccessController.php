@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Access\RevokeContainerAccess;
+use App\Actions\Access\UpdateContainerAccess;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\ContainerAccess\UpdateContainerAccessRequest;
 use App\Models\Container;
@@ -50,42 +51,43 @@ class ContainerAccessController extends Controller
      *
      * Kroppen får bära `level` och `expires_at` och ingenting annat —
      * `UpdateContainerAccessRequest` nekar allt övrigt med 422. Vyn skickar
-     * bara `level`: `expires_at` redovisas på radan men redigeras inte här.
+     * `level` alltid och `expires_at` bara på en rad som redan har ett: en
+     * `member`-rad får ingen "sätt utgång"-yta, och webbytan erbjuder ingen
+     * väg att tömma ett befintligt datum (arkitektsvaret § 3). Ett datum i
+     * det förflutna fastnar på `after:now` och blir ett vanligt fältfel
+     * under `errors.expires_at` — ingen `ApiErrorTranslator`, det är ingen
+     * domänfelkod.
      *
      * `manageAccess()` auktoriserar, samma grind som `/api`:s `PATCH` och
      * samma grind som att bevilja — att ändra en åtkomst ÄR att hantera
      * åtkomster ([[Konton och åtkomst]] § Behörighetsregler regel 3). Ett
      * `read_only`-ägarkonto får 403 här och lyckas med `DELETE` nedan.
      *
-     * **En död rad blir ett formulärfel, inte en rå felkod.** `ApiException`
-     * implementerar `Responsable` och svarar `{"error":{"code":…}}` var den
-     * än kastas — också från en Inertia-kontroller, precis som kvotfelet i
-     * issue 54 § Beslut 4. Kontrollen nedan är samma tillståndsfel som
-     * `/api`:s `PATCH` prövar, och koden är densamma
-     * (`container_access.revoked`); det som skiljer är svaret, och
-     * App\Support\Frontend\ApiErrorTranslator formulerar meningen ur
-     * `lang/`. Nyckeln är `level` och inte ett eget fältnamn: felet hör
-     * till nivåformuläret, och det är där användaren ska se det.
-     *
-     * Att höja nivån på en återkallad eller utgången rad är antingen ett
-     * misstag eller en väg runt återkallandet, och båda ska nekas.
+     * **En död rad blir ett formulärfel, inte en rå felkod.** Villkoret bor
+     * i App\Actions\Access\UpdateContainerAccess, som `/api`:s `PATCH`
+     * anropar — "en död rad ändras inte" är en domäninvariant och ska inte
+     * formuleras två gånger. Det som skiljer ytorna är SVARET:
+     * `ApiException` implementerar `Responsable` och svarar
+     * `{"error":{"code":…}}` var den än kastas, också från en
+     * Inertia-kontroller, precis som kvotfelet i issue 54 § Beslut 4. Här
+     * fångas den och App\Support\Frontend\ApiErrorTranslator formulerar
+     * meningen ur `lang/`. Nyckeln är `level` och inte ett eget fältnamn:
+     * felet hör till nivåformuläret, och det är där användaren ska se det.
      */
     public function update(
         UpdateContainerAccessRequest $request,
         Container $container,
         ContainerAccess $access,
         ApiErrorTranslator $translator,
+        UpdateContainerAccess $updateContainerAccess,
     ): RedirectResponse {
         Gate::authorize('manageAccess', $container);
 
         try {
-            $this->assertEditable($access);
+            $updateContainerAccess->handle($container, $access, $request->safe()->only(['level', 'expires_at']));
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['level' => $translator->message($e)]);
         }
-
-        $access->fill($request->safe()->only(['level', 'expires_at']));
-        $access->save();
 
         return back()->with('status', 'access-updated');
     }
@@ -120,25 +122,5 @@ class ContainerAccessController extends Controller
         $revokeContainerAccess->handle($actor, $container, $access);
 
         return back()->with('status', 'access-revoked');
-    }
-
-    /**
-     * Är raden levande nog att ändra? Kastar `ApiException` med samma kod som
-     * `/api`:s `PATCH` — anroparen översätter den till sitt svar.
-     *
-     * Villkoret är detsamma som App\Http\Controllers\Api\ContainerAccessController::update()
-     * prövar. Det bor i två kontroller och inte i en delad Action därför att
-     * issue 55a § Beslut 8 räknar upp exakt tre utbrytningar — ingen av dem
-     * en uppdatering — och för att den delade delen här är FELKODEN och
-     * översättningen, inte formuleringen: `/api` svarar med koden,
-     * webben med en mening.
-     *
-     * @throws ApiException
-     */
-    private function assertEditable(ContainerAccess $access): void
-    {
-        if ($access->revoked_at !== null || ($access->expires_at !== null && $access->expires_at->isPast())) {
-            throw ApiException::make('container_access.revoked', ['access' => $access->ulid], 422);
-        }
     }
 }

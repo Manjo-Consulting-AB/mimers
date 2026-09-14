@@ -23,7 +23,7 @@ use function Pest\Laravel\withoutVite;
  * åtkomsterna och nivåerna. Se
  * App\Http\Controllers\ContainerSharingController,
  * App\Http\Controllers\ContainerAccessController,
- * App\Actions\Access\ListContainerAccesses/ListParticipants/RevokeContainerAccess,
+ * App\Actions\Access\ListContainerAccesses/ListParticipants/RevokeContainerAccess/UpdateContainerAccess,
  * resources/js/pages/Containers/Sharing.vue och
  * resources/js/components/AccessLevelField.vue.
  *
@@ -157,6 +157,10 @@ it('ger en read-guest deltagarlistan men skickar inte åtkomsterna alls', functi
             ->component('Containers/Sharing')
             ->where('accesses', null)
             ->where('itemNames', [])
+            // Namnuppslagen är förvaltningsdata om åtkomsterna och följer
+            // dem: ingen av dem bär ett namn när `accesses` är `null`.
+            ->where('granteeNames', [])
+            ->where('grantedByNames', [])
             ->has('participants', 2)
             // Grinden för sidan är `view`, och den har hon. Det är
             // `viewAccesses` — medlemskap i ägarkontot — som saknas.
@@ -355,6 +359,152 @@ it('redovisar ett mjukraderat item med sitt namn', function () {
 });
 
 /*
+ * Arkitektsvaret § 1: mottagaren och beviljaren visas med NAMN, ingen ULID.
+ * En rad som säger `Mottagare 01JKX7Q3F8Z2N6M4B9T0R5V1WQ` är oläsbar för den
+ * enda publik sektionen har.
+ *
+ * Namnet bor i ett eget uppslag och INTE i ContainerAccessResource, av samma
+ * skäl som itemnamnet (Beslut 6): `/api` har inte bett om det, och resursen är
+ * delad. Resursen bär alltså kvar sin ULID — den är nyckeln uppslaget slås upp
+ * på, precis som `access.item` är nyckeln för itemets namn.
+ */
+it('skickar mottagarens och beviljarens namn i egna uppslag', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = delningsKontext();
+    $mottagare = User::factory()->create(['name' => 'Sambon']);
+    $kontomottagare = Account::factory()->create(['name' => 'Varvet']);
+
+    $personrad = delningsAccess($container, $mottagare, 'write');
+    $kontorad = delningsAccess($container, $kontomottagare, 'read', createdAt: now()->subMinute());
+
+    // Samma beviljare på båda raderna: uppslaget är ett uppslag, och två
+    // nycklar hade gjort jämförelsen nedan en ordningsfråga.
+    $beviljare = User::factory()->create(['name' => 'Ägarens syster']);
+
+    foreach ([$personrad, $kontorad] as $rad) {
+        $rad->granted_by_user_id = $beviljare->id;
+        $rad->save();
+    }
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('accesses', 2)
+
+        // Båda mottagarslagen löses upp: en `User` och ett `Account`.
+        ->where('granteeNames', [
+            $mottagare->ulid => 'Sambon',
+            $kontomottagare->ulid => 'Varvet',
+        ])
+
+        // Beviljaren är alltid en `User`, och uppslaget är sitt eget — en
+        // `granteeNames` som i smyg också bar beviljarna vore en prop som
+        // ljuger om sitt namn.
+        ->where('grantedByNames', [$beviljare->ulid => 'Ägarens syster'])
+
+        // ULID:en finns kvar i raden som uppslagsnyckel, och resursen är
+        // oförändrad — inget namn har smygits in i den.
+        ->where('accesses.0.grantee', $mottagare->ulid)
+        ->missing('accesses.0.grantee_name')
+        ->missing('accesses.0.granted_by_name')
+    );
+});
+
+/*
+ * Klart när: en giltig åtkomstrad visar mottagarens och beviljarens namn.
+ * Raden renderar etiketterna ur accessPresentation.js och aldrig ULID:en
+ * själv — `access.grantee` är uppslagsnyckeln, inte texten.
+ */
+it('renderar namn i stället för ULID på en giltig rad', function () {
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+    $beskrivning = File::get(resource_path('js/components/accessPresentation.js'));
+
+    expect($rad)->toContain('granteeLabel(t, granteeNames, access)');
+    expect($rad)->toContain('grantedByLabel(t, grantedByNames, access)');
+    expect($rad)->not->toContain('{{ access.grantee }}');
+    expect($rad)->not->toContain('{{ access.granted_by }}');
+
+    expect($beskrivning)->toContain('export function granteeLabel');
+    expect($beskrivning)->toContain('export function grantedByLabel');
+    expect($beskrivning)->toContain("t('sharing.accesses.grantee_unknown')");
+    expect($beskrivning)->toContain("t('sharing.accesses.granted_by_unknown')");
+});
+
+/*
+ * Klart när: en historikrad visar mottagarens namn. Historiken är hela skälet
+ * till att uppslaget inte får återanvända deltagarlistan: den bär bara
+ * GILTIGA rader, och det är historikraderna och beviljarna som saknar namn.
+ */
+it('visar mottagarens namn också på en historikrad', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = delningsKontext();
+    $aterkallad = User::factory()->create(['name' => 'Förre delägaren']);
+
+    delningsAccess($container, $aterkallad, 'read', revokedAt: now()->subDay());
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('accesses', 1)
+        ->where('accesses.0.revoked_at', fn ($value) => $value !== null)
+
+        // Uppslaget täcker HELA listan, också den döda raden.
+        ->where('granteeNames', [$aterkallad->ulid => 'Förre delägaren'])
+    );
+
+    // Historikgrenen anropar samma etikett som den giltiga raden.
+    $vy = File::get(resource_path('js/pages/Containers/Sharing.vue'));
+    expect($vy)->toContain('granteeLabel(t, granteeNames, access)');
+});
+
+/*
+ * Klart när: en mottagare vars användare är borta redovisas med en översatt
+ * mening, inte med sin ULID.
+ *
+ * `grantee_id` har ingen främmandenyckel — den pekar polymorft på `User`
+ * eller `Account`, se App\Models\ContainerAccess — och varken `User` eller
+ * `Account` använder `SoftDeletes`, så en rad kan faktiskt peka på någon som
+ * är borta. Det är inte den fallback `ParticipantResource` förbjuder: den
+ * handlar om en `NOT NULL`-kolumn som aldrig är tom.
+ *
+ * Raden är ÅTERKALLAD, och det är inte en detalj: deltagarlistan läser
+ * `$grantee->ulid` på samma rad och hade kraschat på en giltig rad med en
+ * dito mottagare, medan den hoppar över döda rader. Historiken är alltså den
+ * yta där en försvunnen mottagare faktiskt når fram till vyn — och just
+ * historiken är den lista som annars inte visar någon identitet alls.
+ */
+it('redovisar en mottagare som inte längre finns med en mening', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = delningsKontext();
+
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'grantee_type' => 'user',
+        'grantee_id' => 99999999,
+        'level' => 'read',
+        'kind' => 'member',
+        'revoked_at' => now()->subDay(),
+        'granted_by_user_id' => $anvandare->id,
+    ]);
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('accesses', 1)
+        // Ingen ULID att slå upp, alltså ingen nyckel — vyn får sin mening.
+        ->where('accesses.0.grantee', null)
+        ->where('accesses.0.revoked_at', fn ($value) => $value !== null)
+        ->where('granteeNames', [])
+        ->where('grantedByNames', [$anvandare->ulid => $anvandare->name])
+    );
+
+    $sv = require lang_path('sv/ui.php');
+    $en = require lang_path('en/ui.php');
+
+    expect($sv['sharing']['accesses']['grantee_unknown'])->toBe('Borttagen mottagare');
+    expect($en['sharing']['accesses']['grantee_unknown'])->not->toBe('');
+    expect($sv['sharing']['accesses']['granted_by_unknown'])->not->toBe('');
+    expect($en['sharing']['accesses']['granted_by_unknown'])->not->toBe('');
+});
+
+/*
  * Sidan ärver frågekostnaden från de två utbrutna Actionerna (issue 9b
  * § Beslut 11, issue 72 § Beslut 5, issue 9c § Beslut 8): deltagarna kostar
  * tre frågor och åtkomsterna två för ULID:erna plus två för omfånget,
@@ -469,6 +619,124 @@ it('sparar nivån och visar den ändrad efteråt', function () {
     actingAs($anvandare)->get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $page) => $page
         ->where('accesses.0.level', 'write')
     );
+});
+
+/*
+ * Arkitektsvaret § 3: en gästrad kan få sin utgång flyttad framåt, och det
+ * nya datumet syns efteråt. Alternativet — att återkalla och bjuda in på nytt
+ * för att flytta ett datum en vecka — är precis det som gör ytan oanvändbar.
+ *
+ * `expires_at` skickas i SAMMA PATCH som `level`, och rutt och FormRequest
+ * kunde det redan: den delade UpdateContainerAccessRequest har fältet, och
+ * UpdateContainerAccess fyller båda.
+ */
+it('flyttar fram en gästrads utgång och visar det nya datumet efteråt', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = delningsKontext();
+    $access = delningsAccess(
+        $container,
+        User::factory()->create(),
+        'read',
+        'guest',
+        expiresAt: now()->addWeek(),
+    );
+
+    $nytt = now()->addMonth()->startOfDay();
+
+    actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}/accesses/{$access->ulid}", [
+            'level' => 'read',
+            'expires_at' => $nytt->toDateString(),
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('status', 'access-updated');
+
+    expect($access->refresh()->expires_at->toDateString())->toBe($nytt->toDateString());
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('accesses.0.expires_at', fn ($value) => str_starts_with($value, $nytt->toDateString()))
+    );
+});
+
+/*
+ * Klart när: webbytan erbjuder ingen väg att tömma `expires_at`.
+ *
+ * Den delade UpdateContainerAccessRequest tillåter `null` och rörs inte — den
+ * är `/api`:s också — men formuläret bär nyckeln BARA när raden redan har ett
+ * datum, så den kan aldrig skickas som `null`. Det är vad som skiljer fältet
+ * från en tömningsknapp: en `guest` utan utgång motsäger Beslut 5, och vägen
+ * från gäst till permanent går genom `kind`, som är `prohibited` med flit.
+ */
+it('erbjuder ingen väg att tömma utgången', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = delningsKontext();
+    $medlem = delningsAccess($container, User::factory()->create(), 'write');
+
+    // En medlemsrad har ingen utgång alls — och ingen yta som kan ge den en.
+    actingAs($anvandare)->get("/containers/{$container->ulid}/sharing")->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('accesses.0.expires_at', null)
+    );
+
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+
+    // Fältet renderas bara på en rad som REDAN har ett datum.
+    expect($rad)->toContain('const hasExpiry = props.access.expires_at !== null');
+    expect($rad)->toContain('v-if="hasExpiry"');
+
+    // Och formuläret bär nyckeln bara då. Ett `expires_at: null` i kroppen
+    // hade varit en tömning, och `nullable` hade tillåtit den.
+    expect($rad)->not->toContain('expires_at: null');
+    expect($rad)->not->toContain('expires_at:null');
+
+    // Meningen om varför står i vyn, i stället för att ägaren letar efter en
+    // knapp som inte finns.
+    $sv = require lang_path('sv/ui.php');
+    $en = require lang_path('en/ui.php');
+
+    expect($sv['sharing']['accesses']['expires_fixed'])->not->toBe('');
+    expect($en['sharing']['accesses']['expires_fixed'])->not->toBe('');
+    expect($rad)->toContain("t('sharing.accesses.expires_fixed')");
+
+    expect($medlem->refresh()->expires_at)->toBeNull();
+});
+
+/*
+ * Klart när: ett datum i det förflutna ger ett fältfel vid `expires_at`.
+ *
+ * `after:now` tolkar dagens datum som midnatt bakåt och avvisar det, så
+ * fältets `min` är i morgon och inte i dag. Felet är ett vanligt valideringsfel
+ * ur den delade FormRequesten — ingen `ApiErrorTranslator`, för det är ingen
+ * domänfelkod.
+ */
+it('ger ett fältfel vid expires_at för ett datum i det förflutna', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = delningsKontext();
+    $access = delningsAccess(
+        $container,
+        User::factory()->create(),
+        'read',
+        'guest',
+        expiresAt: now()->addWeek(),
+    );
+
+    $oforandrat = $access->expires_at->toDateString();
+
+    actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}/accesses/{$access->ulid}", [
+            'level' => 'read',
+            'expires_at' => now()->subDay()->toDateString(),
+        ])
+        ->assertSessionHasErrors('expires_at');
+
+    expect($access->refresh()->expires_at->toDateString())->toBe($oforandrat);
+
+    $rad = File::get(resource_path('js/components/ContainerAccessRow.vue'));
+
+    expect($rad)->toContain('form.errors.expires_at');
+    expect($rad)->toContain(':min="tomorrow"');
 });
 
 /*

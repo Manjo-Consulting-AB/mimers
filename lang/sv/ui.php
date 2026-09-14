@@ -339,6 +339,24 @@ return [
             'granted_by' => 'Beviljad av',
             'expires' => 'Går ut :date',
 
+            // Mottagaren och beviljaren visas med NAMN, aldrig med sin ULID —
+            // uppslagen skickas som egna propar och formuleras i
+            // resources/js/components/accessPresentation.js. Varken `User`
+            // eller `Account` använder SoftDeletes, så en rad kan faktiskt
+            // vara borta: då blir det den här meningen och inte ULID:en.
+            // Ingen e-postadress någonsin ([[Konton och åtkomst]]
+            // § Behörighetsregler, sista stycket).
+            'grantee_unknown' => 'Borttagen mottagare',
+            'granted_by_unknown' => 'Borttagen användare',
+
+            // Utgångsfältet renderas bara på en rad som REDAN har ett datum,
+            // och meningen nedan säger varför det inte går att ta bort
+            // (arkitektsvaret § 3): en gäst utan utgång motsäger Beslut 5, och
+            // vägen från gäst till permanent går genom `kind`, som är
+            // `prohibited` med flit.
+            'expires_at' => 'Giltig till',
+            'expires_fixed' => 'Utgången kan flyttas framåt men inte tas bort. En gäst som ska bli permanent återkallas och bjuds in på nytt som medlem.',
+
             'save' => 'Spara nivå',
             'revoke' => 'Återkalla',
         ],

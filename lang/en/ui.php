@@ -271,6 +271,22 @@ return [
             'granted_by' => 'Granted by',
             'expires' => 'Expires :date',
 
+            // The recipient and the granter are shown by NAME, never by ULID.
+            // Neither `User` nor `Account` uses SoftDeletes, so a row can in
+            // fact be gone: then it is this sentence and not the ULID. Never
+            // an email address ([[Konton och åtkomst]] § Behörighetsregler,
+            // last paragraph).
+            'grantee_unknown' => 'Removed recipient',
+            'granted_by_unknown' => 'Removed user',
+
+            // The expiry field is rendered only on a row that ALREADY has a
+            // date, and the sentence below says why it cannot be removed: a
+            // guest without an expiry contradicts Beslut 5, and the way from
+            // guest to permanent goes through `kind`, which is `prohibited`
+            // on purpose.
+            'expires_at' => 'Valid until',
+            'expires_fixed' => 'The expiry can be moved forward but not removed. A guest that should become permanent is revoked and invited again as a member.',
+
             'save' => 'Save level',
             'revoke' => 'Revoke',
         ],

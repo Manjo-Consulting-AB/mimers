@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Access\ListContainerAccesses;
 use App\Actions\Access\RevokeContainerAccess;
+use App\Actions\Access\UpdateContainerAccess;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContainerAccess\StoreContainerAccessRequest;
@@ -34,9 +35,10 @@ use Illuminate\Support\Facades\Gate;
  *
  * INGA frågor bor här heller sedan issue 55a § Beslut 8: listningen och
  * hydreringen ligger i App\Actions\Access\ListContainerAccesses,
- * återkallandet i App\Actions\Access\RevokeContainerAccess. Webben visar
- * samma rader och återkallar på samma sätt, och en kopia här hade varit en
- * andra sanning om vad en åtkomstrad är.
+ * återkallandet i App\Actions\Access\RevokeContainerAccess och ändringen av
+ * en levande rad i App\Actions\Access\UpdateContainerAccess. Webben visar
+ * samma rader, ändrar samma två fält och återkallar på samma sätt, och en
+ * kopia här hade varit en andra sanning om vad en åtkomstrad är.
  *
  * `routes/api.php` nästlar {access} under {container} med
  * `->scopeBindings()` — en ULID från en annan container löser aldrig upp
@@ -175,21 +177,20 @@ class ContainerAccessController extends Controller
      *
      * En redan återkallad eller utgången rad nekas med 422
      * `container_access.revoked` — att höja nivån på en död rad är
-     * antingen ett misstag eller en väg runt återkallandet.
+     * antingen ett misstag eller en väg runt återkallandet. Sedan issue 55a
+     * § Beslut 8 bor både villkoret och skrivningen i
+     * App\Actions\Access\UpdateContainerAccess, som webbens `PATCH` anropar
+     * — villkoret är en domäninvariant och formuleras inte två gånger.
+     * Undantaget bubblar upp hit oförändrat och blir samma svar som förut.
      *
      * Dubblettspärren i store() prövas inte här: den gäller
      * `(container, item, mottagare)`, och PATCH rör inget av de tre.
      */
-    public function update(UpdateContainerAccessRequest $request, Container $container, ContainerAccess $access, ListContainerAccesses $listAccesses): JsonResponse
+    public function update(UpdateContainerAccessRequest $request, Container $container, ContainerAccess $access, ListContainerAccesses $listAccesses, UpdateContainerAccess $updateContainerAccess): JsonResponse
     {
         Gate::authorize('manageAccess', $container);
 
-        if ($access->revoked_at !== null || ($access->expires_at !== null && $access->expires_at->isPast())) {
-            throw ApiException::make('container_access.revoked', ['access' => $access->ulid], 422);
-        }
-
-        $access->fill($request->safe()->only(['level', 'expires_at']));
-        $access->save();
+        $updateContainerAccess->handle($container, $access, $request->safe()->only(['level', 'expires_at']));
 
         $listAccesses->hydrateGranteeUlids(collect([$access]));
         $listAccesses->hydrateItemScope($container, collect([$access]));

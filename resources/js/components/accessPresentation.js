@@ -3,9 +3,9 @@
  *
  * Två ytor renderar samma rad: den giltiga raden i ContainerAccessRow.vue —
  * med nivåfältet och återkalla-knappen — och den historiska raden i
- * Sharing.vue, som bara redovisas. Beskrivningen av omfånget och av vad
- * `kind` betyder får inte formuleras två gånger: då kan de två listorna säga
- * olika saker om samma rad.
+ * Sharing.vue, som bara redovisas. Beskrivningen av omfånget, av vad `kind`
+ * betyder och av vem mottagaren och beviljaren är får inte formuleras två
+ * gånger: då kan de två listorna säga olika saker om samma rad.
  *
  * Filen är ren — den importerar varken Vue eller Inertia — och tar `t` som
  * argument, precis som resources/js/i18n/translate.js. Texten kommer alltså
@@ -48,6 +48,39 @@ export function accessScopeLabel(t, itemNames, access) {
  */
 export function accessKindLabel(t, access) {
     return t(`sharing.kind.${access.kind}`);
+}
+
+/*
+ * Mottagarens och beviljarens namn, se arkitektsvaret § 1.
+ *
+ * `ContainerAccessResource` bär ULID:er — `/api` har inte bett om namn — och
+ * `Mottagare 01JKX7Q3F8Z2N6M4B9T0R5V1WQ` är oläsbar för den enda publik
+ * åtkomstsektionen har. Kontrollern skickar därför två uppslag,
+ * `granteeNames` och `grantedByNames`, med samma form och samma läckageregel
+ * som `itemNames`: tomma när `accesses` är `null`.
+ *
+ * **ULID:en är nyckeln och aldrig texten.** Den ligger kvar i `access` för
+ * att den här uppslagningen ska gå att göra — precis som `access.item` ligger
+ * kvar för itemets namn — men den renderas inte någonstans.
+ *
+ * **Ett namn som saknas blir en mening, inte en ULID.** Varken `User` eller
+ * `Account` använder `SoftDeletes`, så en mottagare kan faktiskt vara borta;
+ * då finns ingen nyckel, och raden får `sharing.accesses.grantee_unknown`.
+ * Det är inte den fallback `ParticipantResource` förbjuder — den handlar om
+ * en kolumn som aldrig är tom, den här om en rad som inte längre finns.
+ *
+ * Ingen e-postadress någonsin: [[Konton och åtkomst]] § Behörighetsregler,
+ * sista stycket.
+ */
+
+/** Mottagarens namn — en `User` eller ett `Account`, samma prop. */
+export function granteeLabel(t, granteeNames, access) {
+    return granteeNames[access.grantee] ?? t('sharing.accesses.grantee_unknown');
+}
+
+/** Beviljarens namn — alltid en `User`. */
+export function grantedByLabel(t, grantedByNames, access) {
+    return grantedByNames[access.granted_by] ?? t('sharing.accesses.granted_by_unknown');
 }
 
 /**

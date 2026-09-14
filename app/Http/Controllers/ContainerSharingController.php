@@ -7,9 +7,11 @@ use App\Actions\Access\ListParticipants;
 use App\Http\Resources\ContainerAccessResource;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ParticipantResource;
+use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
+use App\Models\User;
 use App\Support\Access\AccessLevel;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -32,8 +34,10 @@ use Inertia\Response;
  * **`accesses` är `null` när svaret är nej** — inte en tom lista, och inte
  * en fylld lista som vyn låter bli att rendera. En prop som ligger i sidans
  * HTML är utlämnad oavsett vad Vue gör med den, och det är just den sortens
- * läckage som inte syns i någon vy. Samma sak gäller `itemNames`: det är
- * förvaltningsdata om åtkomsterna och följer dem.
+ * läckage som inte syns i någon vy. Samma sak gäller `itemNames`,
+ * `granteeNames` och `grantedByNames`: de är förvaltningsdata om
+ * åtkomsterna och följer dem — ingen av dem bär ett namn när `accesses` är
+ * `null`.
  *
  * **Ingen `POST`.** Webben beviljar aldrig en åtkomst direkt — all ny delning
  * går genom en inbjudan, se § Beslut 2. `POST
@@ -77,7 +81,14 @@ class ContainerSharingController extends Controller
      * en grant på ett mjukraderat item ska redovisas med sitt namn, precis
      * som resursen redan redovisar dess ULID.
      *
-     * Uppslaget castas till ett objekt och skickas aldrig som en tom PHP-lista:
+     * `granteeNames` och `grantedByNames` är samma slags uppslag och av
+     * samma skäl: resursen bär ULID:er, och en rad som säger
+     * `Mottagare 01JKX7Q3F8Z2N6M4B9T0R5V1WQ` är oläsbar för den enda publik
+     * sektionen har. `names()` nedan slår upp båda i två frågor och
+     * motiverar formen. Nycklarna är ULID:er och inte löpnummer, som för
+     * itemen: det är ULID:n resursen bär, och vyn slår upp på den.
+     *
+     * Uppslagen castas till objekt och skickas aldrig som en tom PHP-lista:
      * `[]` blir `[]` i JSON, och `{}` blir `{}`. Vyn slår upp på ULID, och en
      * prop vars form skiftar med innehållet är en form som måste prövas två
      * gånger på klientsidan.
@@ -99,6 +110,7 @@ class ContainerSharingController extends Controller
         $mayViewAccesses = Gate::allows('viewAccesses', $container);
 
         $accesses = $mayViewAccesses ? $listAccesses->handle($container) : null;
+        $names = $accesses === null ? null : $this->names($accesses);
 
         return Inertia::render('Containers/Sharing', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -107,6 +119,10 @@ class ContainerSharingController extends Controller
                 ? null
                 : ContainerAccessResource::collection($accesses)->resolve($request),
             'itemNames' => (object) ($accesses === null ? [] : $this->itemNames($accesses)),
+            // `null` och `{}` är samma sak för vyn, och båda betyder "du får
+            // inte se åtkomsterna alls" — se klassens docblock.
+            'granteeNames' => (object) ($names['grantee'] ?? []),
+            'grantedByNames' => (object) ($names['grantedBy'] ?? []),
             'levels' => AccessLevel::LADDER,
             'can' => [
                 'manage' => Gate::forUser($user)->allows('manageAccess', $container),
@@ -142,5 +158,88 @@ class ContainerSharingController extends Controller
             ->whereIn('id', $itemIds)
             ->pluck('name', 'ulid')
             ->all();
+    }
+
+    /**
+     * ULID → namn för mottagarna och beviljarna på åtkomstraderna, i två
+     * uppslag: `grantee` (en mottagare är antingen en `User` eller ett
+     * `Account`) och `grantedBy` (alltid en `User`).
+     *
+     * **Två frågor, inte tre.** Den ena `User`-frågan täcker både mottagarnas
+     * och beviljarnas ULID:er i samma svep — delningen i två propar sker i
+     * PHP efteråt, av läsbarhetsskäl: en `granteeNames` som i smyg också bar
+     * beviljarna vore en prop som ljuger om sitt namn. `Account`-frågan
+     * behövs bara när någon mottagare är ett konto.
+     *
+     * **Därför finns namnen här och inte i `ContainerAccessResource`**
+     * (§ Beslut 6 om itemnamnet, samma skäl): `/api` har inte bett om dem,
+     * och resursen är delad. Mottagarens ULID är oläslig för den publik
+     * sektionen har — och historiklistan, som bara redovisar ett datum,
+     * svarar inte på frågan den finns för: vems åtkomst som klipptes.
+     *
+     * **Ingen e-postadress, någonsin.** [[Konton och åtkomst]]
+     * § Behörighetsregler, sista stycket: den som läser något känsligt ska
+     * veta vem mer som kan, men inte vilka adresser som haft åtkomst. Att
+     * två personer kan heta likadant är en känd begränsning; blir den
+     * besvärande i praktiken är adress i förvaltningsvyn ett eget beslut på
+     * ADR-nivå, inte något som smygs in här.
+     *
+     * **Ett namn som inte går att slå upp får ingen nyckel.** Varken `User`
+     * eller `Account` använder `SoftDeletes`, så en rad kan faktiskt vara
+     * borta — och då saknas nyckeln, och vyn skriver sin översatta mening i
+     * stället för ULID:en (`sharing.accesses.grantee_unknown`). Det är inte
+     * den fallback `ParticipantResource` förbjuder: den handlar om en
+     * `NOT NULL`-kolumn som aldrig är tom, den här om en rad som inte längre
+     * finns.
+     *
+     * @param  Collection<int, ContainerAccess>  $accesses
+     * @return array{grantee: array<string, string>, grantedBy: array<string, string>}
+     */
+    private function names(Collection $accesses): array
+    {
+        $userUlids = $accesses->pluck('granted_by_ulid')
+            ->merge($accesses->where('grantee_type', 'user')->pluck('grantee_ulid'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $accountUlids = $accesses->where('grantee_type', 'account')
+            ->pluck('grantee_ulid')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $userNames = $userUlids === []
+            ? collect()
+            : User::query()->whereIn('ulid', $userUlids)->pluck('name', 'ulid');
+
+        $accountNames = $accountUlids === []
+            ? collect()
+            : Account::query()->whereIn('ulid', $accountUlids)->pluck('name', 'ulid');
+
+        $granteeNames = [];
+        $grantedByNames = [];
+
+        foreach ($accesses as $access) {
+            $granteeUlid = $access->getAttribute('grantee_ulid');
+            $granteeName = $access->grantee_type === 'user'
+                ? $userNames->get($granteeUlid)
+                : $accountNames->get($granteeUlid);
+
+            if ($granteeName !== null) {
+                $granteeNames[$granteeUlid] = $granteeName;
+            }
+
+            $grantedByUlid = $access->getAttribute('granted_by_ulid');
+            $grantedByName = $userNames->get($grantedByUlid);
+
+            if ($grantedByName !== null) {
+                $grantedByNames[$grantedByUlid] = $grantedByName;
+            }
+        }
+
+        return ['grantee' => $granteeNames, 'grantedBy' => $grantedByNames];
     }
 }
