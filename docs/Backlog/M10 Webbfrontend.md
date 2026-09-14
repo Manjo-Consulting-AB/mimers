@@ -38,12 +38,14 @@ Bjuda in, se och återkalla utestående inbjudningar, acceptflödet för mottaga
 **Fyra nivåer, två synliga.** [[ADR-0028 Åtkomst på itemnivå]] ersatte R/RW med ladder `read` < `create` < `write` < `delete`. Visa `read` och `write` som standard; `create` och `delete` hör hemma bakom "avancerat". Fyra val är för mycket för en ägare som bara delar med sambon. Här bor också delningen av **enskilda items**: ägaren måste se hur många items en grant faktiskt når, så att "motorn" inte tyst betyder fyra items.
 **Läs:** [[ADR-0003 Åtkomstmodell]], [[ADR-0028 Åtkomst på itemnivå]], [[Konton och åtkomst]] § invitation
 **Beror på:** 54, 9, 10, 72
+**Byggd som:** 55a förvaltningen — deltagarlistan, åtkomsterna och nivåerna, 55b inbjudningarna — avsändarytan, mejlets landningssida och acceptflödet. Webben beviljar aldrig en åtkomst direkt: all ny delning går genom en inbjudan, se 55a.
 
 ### 56. Kategorier och taggar
 CRUD för båda. **Färdiga kategoriuppsättningar** per språk och containertyp bor här, som frontenddata — API:et får aldrig veta vad orden betyder.
 **Läs:** [[ADR-0004 Fria taggar och kategorier]], [[Items och organisation]]
 **Klart när:** ett nyskapat konto erbjuds en uppsättning på sitt språk vid registrering och kan tacka nej utan att fastna.
 **Beror på:** 54, 11, 12
+**Byggd som:** 56a CRUD-ytorna för kategoriträdet och taggarna, 56b de färdiga uppsättningarna — frontenddatan och förslaget vid en ny pärm. Uppsättningen erbjuds vid den **första pärmen**, inte vid registreringen: registreringen skapar ingen container.
 
 ### 57. Itemvyer
 Lista med miniatyrer, detaljvy, skapa och redigera. Kategori, taggar, fritext.
