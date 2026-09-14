@@ -226,9 +226,12 @@ it('ger utgången, besvarad och okänt token samma neutrala besked', function ()
 
 /*
  * Klart när: en inloggad, overifierad mottagare ser verifieringsuppmaningen.
- * Samma komponent som bannern — inte en andra knapp, och inte en egen mening.
+ * EXAKT EN gång: AppLayouts banner bär den för varje overifierad användare
+ * utom på /email/verify, och /invitations är inget undantag. Renderade sidan
+ * sin egen kopia möttes mottagaren av två likadana knappar — därför finns
+ * komponenten i layouten och inte i vyn.
  */
-it('visar verifieringsuppmaningen för en overifierad mottagare', function () {
+it('visar verifieringsuppmaningen exakt en gång för en overifierad mottagare', function () {
     withoutVite();
 
     $container = mottagarParm();
@@ -247,6 +250,14 @@ it('visar verifieringsuppmaningen för en overifierad mottagare', function () {
             // tokenet har ingenstans att ta vägen här.
             ->where('token', null)
         );
+
+    // Inertia renderar komponenten i klienten, så dubbletten syns inte i
+    // svarskroppen — den syns i källan. Bannern äger uppmaningen; sidan får
+    // inte importera eller rendera en andra kopia.
+    $sida = File::get(resource_path('js/pages/Invitations/Show.vue'));
+
+    expect($sida)->not->toContain('VerifyEmailNotice')
+        ->and(File::get(resource_path('js/layouts/AppLayout.vue')))->toContain('<VerifyEmailNotice />');
 });
 
 /*
