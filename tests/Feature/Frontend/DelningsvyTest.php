@@ -970,6 +970,10 @@ it('lägger delningssidan i pärmens navigation', function () {
  * kategorier genom App\Actions\Category\CreateCategory och rör inga åtkomster
  * — den är alltså ytterligare ett exempel på motsatsen till en direkt
  * bevilning, inte ett undantag från regeln.
+ *
+ * Sedan issue 57b finns itemets POST här. Den skapar en item-rad och rör inga
+ * åtkomster; att få SKAPA i en pärm och att få BEVILJA åtkomst till den är två
+ * olika pinnar ([[ADR-0028 Åtkomst på itemnivå]] § Beslut).
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -977,9 +981,11 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Containerns eget skapande, inbjudan, kategorin, uppsättningen och taggen.
-    // Ingen /accesses.
+    // Itemet, containerns eget skapande, inbjudan, kategorin, uppsättningen
+    // och taggen. Ingen /accesses. Ordningen är registreringsordningen i
+    // routes/web.php — itemruten ligger ovanför `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
+        'containers/{container}/items',
         'containers',
         'containers/{container}/invitations',
         'containers/{container}/categories',

@@ -33,9 +33,12 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * [[ADR-0019 Filleverans]] fått sin yta. Rutan nedan lämnar platsen så att
  * issue 61 kan fylla den utan att raden byter form.
  *
- * `can.create` är presentationsflaggan för 57b:s skapayta. Den ritas inte här:
- * issuen lägger två GET-rutter och inga skrivande, och en knapp till en rutt
- * som inte finns är precis den knapp Beslut 7 förbjuder.
+ * **`can.create` ritar skapaknappen** (issue 57b § Beslut 2). Flaggan är
+ * `ContainerPolicy::createItem()` och sätts mot PÄRMEN, för det är grinden
+ * skapandet prövar — en omfångsbegränsad mottagare får `false` och ser ingen
+ * knapp: hon skapar barn-items under det hon nått, och den ytan är issue 58.
+ * Flaggan är presentation; ruttens `Gate::authorize()` gäller oavsett vad
+ * sidan visade.
  */
 defineProps({
     container: { type: Object, required: true },
@@ -53,6 +56,14 @@ const { t } = useTranslations();
         <Head :title="t('item.index.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('item.index.heading') }}</h1>
+
+        <Link
+            v-if="can.create"
+            :href="`/containers/${container.ulid}/items/create`"
+            class="mt-4 inline-block rounded bg-blue-700 px-4 py-2 font-medium text-white"
+        >
+            {{ t('item.index.create') }}
+        </Link>
 
         <p v-if="items.length === 0" class="mt-8 text-slate-700">{{ t('item.index.empty') }}</p>
 

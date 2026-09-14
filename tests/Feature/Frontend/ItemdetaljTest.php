@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
-use function Pest\Laravel\get;
 use function Pest\Laravel\withoutVite;
 
 /*
@@ -25,11 +24,12 @@ use function Pest\Laravel\withoutVite;
  * kod över tio kontrollrar (issue 73 § Beslut 3), och webben uppfinner inte en
  * elfte regel.
  *
- * Den andra är att flaggorna är PRESENTATION (Beslut 6 och 7). Issuen lägger
- * två GET-rutter och inga skrivande, så vyn ritar ingen redigerings-, raderings-
- * eller skapayta alls — en knapp till en rutt som inte finns är precis den
- * knapp Beslut 7 förbjuder. Det som prövas är därför `can`-värdena, som 57b
- * ritar sina ytor efter.
+ * Den andra är att flaggorna är PRESENTATION (Beslut 6 och 7). Sedan issue 57b
+ * ritar vyn skrivytor — redigera-länken och radera-knappen — och de sitter
+ * bakom `can.update` respektive `can.delete`: en yta användaren inte får
+ * använda ritas inte alls ([[M10 Webbfrontend]] § 57). Det som prövas här är
+ * därför `can`-värdena, och att mallen faktiskt villkorar ytorna med dem.
+ * Skrivningarnas egna grindar prövas i ItemformularTest.
  *
  * Hjälparna har prefixet `itemdetalj` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -233,13 +233,15 @@ it('ger en read-innehavare en detaljvy utan skrivytor', function () {
             ->where('can.create', false)
     );
 
-    // Ingen skrivyta i mallen: ingen metod-överstyrd länk, inget formulär.
+    // Skrivytorna ritas BARA bakom sina flaggor. Issue 57b lade dem i mallen
+    // (redigera-länken och radera-knappen), och regeln är att en yta
+    // användaren inte får använda inte ritas — [[M10 Webbfrontend]] § 57: "Ett
+    // item användaren bara har `read` på visas utan redigeringsytor, inte med
+    // knappar som ger felkod." Flaggorna är alltså hela villkoret.
     $vy = File::get(resource_path('js/pages/Containers/Items/Show.vue'));
 
-    expect($vy)->not->toContain('method="delete"');
-    expect($vy)->not->toContain('method="patch"');
-    expect($vy)->not->toContain('method="post"');
-    expect($vy)->not->toContain('<form');
+    expect($vy)->toContain('v-if="can.update"');
+    expect($vy)->toContain('v-if="can.delete"');
 });
 
 /*

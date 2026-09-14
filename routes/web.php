@@ -263,6 +263,51 @@ Route::middleware('auth')->group(function () {
     Route::get('/containers/{container}', [ItemController::class, 'index'])
         ->name('containers.show');
 
+    /*
+     * Issue 57b · Skrivytorna — skapa, redigera och radera ett item, se
+     * App\Http\Controllers\ItemController.
+     *
+     * Fem rutter (Beslut 1). Ingenting av `/api` byggs om: `StoreItemRequest`,
+     * `UpdateItemRequest`, `ItemResource`, `CategoryResource` och
+     * `TagResource` delas rakt av, och skrivningen är några rader i
+     * kontrollern — samma väg som App\Http\Controllers\Api\ItemController
+     * går, utan en ny Action.
+     *
+     * **`/items/create` ligger FÖRE `/items/{item}` i filen**, av exakt samma
+     * skäl som issue 57a § Beslut 1: annars binder `{item}` strängen `create`,
+     * och formuläret blir en 404.
+     *
+     * **`scopeBindings()` på de rutter som bär `{item}`**, av samma skäl som
+     * routes/api.php sätter det på sin grupp (issue 13a § Beslut 1): utan det
+     * löser en item-ULID från en annan pärm upp här, och ett item i pärm B går
+     * att ändra eller radera via pärm A:s rutt. En ULID från en annan pärm
+     * blir 404.
+     *
+     * `{container}` och `{item}` binds båda på ULID via `#[RouteKey('ulid')]`
+     * på App\Models\Container respektive App\Models\Item.
+     *
+     * Skrivningarna svarar 302 med en flash-kod — mönstret från issue 51
+     * § Beslut 5, `status` och ingenting annat. Efter skapande och ändring
+     * bär svaret det nya itemets detaljvy; efter radering pärmens förstasida.
+     */
+    Route::get('/containers/{container}/items/create', [ItemController::class, 'create'])
+        ->name('containers.items.create');
+
+    Route::get('/containers/{container}/items/{item}/edit', [ItemController::class, 'edit'])
+        ->scopeBindings()
+        ->name('containers.items.edit');
+
+    Route::post('/containers/{container}/items', [ItemController::class, 'store'])
+        ->name('containers.items.store');
+
+    Route::patch('/containers/{container}/items/{item}', [ItemController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.items.update');
+
+    Route::delete('/containers/{container}/items/{item}', [ItemController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.destroy');
+
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show'])
         ->scopeBindings()
         ->name('containers.items.show');

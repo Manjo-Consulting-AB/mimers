@@ -87,6 +87,9 @@ return [
         'tag-created' => 'The tag has been created.',
         'tag-updated' => 'The tag has been saved.',
         'tag-deleted' => 'The tag has been deleted.',
+        'item-created' => 'The item has been created.',
+        'item-updated' => 'The item has been saved.',
+        'item-deleted' => 'The item is in the trash. It can be restored within 30 days.',
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -338,6 +341,7 @@ return [
         'index' => [
             'title' => 'Items',
             'heading' => 'Items',
+            'create' => 'New item',
             'empty' => 'The binder is empty.',
         ],
 
@@ -351,6 +355,64 @@ return [
             'position_note' => 'Location',
             'category' => 'Category',
             'tags' => 'Tags',
+        ],
+
+        // The form's field labels, see issue 57b decision 9. The product's
+        // words and not the column names: *Purchased* and *Warranty until* is
+        // what the field asks, unlike the detail view's summarising *Purchase
+        // date*. Hence its own keys rather than reusing `show.*`.
+        'form' => [
+            'name' => 'Name',
+            'description' => 'Description',
+            'manufacturer' => 'Manufacturer',
+            'model' => 'Model',
+            'serial_number' => 'Serial number',
+            'purchased_at' => 'Purchased',
+            'warranty_until' => 'Warranty until',
+            'position_note' => 'Where it is',
+
+            // An item sits in AT MOST one category ([[ADR-0004 Fria taggar
+            // och kategorier]]). The top row of the selector is a choice, not
+            // an empty field.
+            'category' => 'Category',
+            'category_none' => '— no category —',
+            'categories_empty' => 'The binder has no categories yet.',
+            'categories_empty_link' => 'Create categories',
+
+            // The tags are checkboxes, one per tag in the binder. A new tag is
+            // created on the tags page and not here: one way to the same write
+            // in two places is two rules to keep in step (decision 5).
+            'tags' => 'Tags',
+            'tags_empty' => 'The binder has no tags yet.',
+            'tags_empty_link' => 'Create tags',
+
+            // The account the row is attributed to — the yard, not the
+            // employee. Only on creation: who created the row is history
+            // (decision 4).
+            'account' => 'Account',
+        ],
+
+        'create' => [
+            'title' => 'New item',
+            'heading' => 'New item',
+            'submit' => 'Create',
+        ],
+
+        // `action` is the link on the detail view; `title`/`heading`/`submit`
+        // are the page and the form.
+        'edit' => [
+            'action' => 'Edit',
+            'title' => 'Edit item',
+            'heading' => 'Edit item',
+            'submit' => 'Save',
+        ],
+
+        // The deletion is SOFT ([[ADR-0008 Soft delete och papperskorg]]), and
+        // `confirm` says so: the trash and the 30 days, never "deleted
+        // permanently", which would be untrue (decision 8).
+        'destroy' => [
+            'action' => 'Delete',
+            'confirm' => 'The item goes to the trash and can be restored within 30 days. Continue?',
         ],
     ],
 
