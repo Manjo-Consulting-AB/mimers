@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Exceptions\Api\ApiException;
+use App\Actions\Invitation\CreateInvitation;
+use App\Actions\Invitation\RevokeInvitation;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Invitation\StoreInvitationRequest;
 use App\Http\Resources\InvitationResource;
@@ -10,14 +11,10 @@ use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\User;
-use App\Notifications\InvitationNotification;
-use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
 
 /**
  * API-ytan för att bjuda in, lista och dra tillbaka inbjudningar till en
@@ -26,14 +23,18 @@ use Illuminate\Support\Str;
  * App\Policies\ContainerPolicy::viewAccesses()/manageAccess(), oförändrade
  * sedan 9b (issue 10a § Beslut 10) — se ADR-0024.
  *
- * Ingen Action, se issue 10a § Beslut 16 och
- * [[ADR-0024 Tunna controllers och actions]] § Konsekvenser: skapandet är
- * en `create()` med en duplikatspärr framför, och regeln värd ett eget
- * test kommer först i 10b vid accept.
+ * **Skapandet och tillbakadragandet bor i Actions sedan issue 55b**
+ * (§ Beslut 7): App\Actions\Invitation\CreateInvitation och
+ * App\Actions\Invitation\RevokeInvitation, med kropparna oförändrade.
+ * Webben fick sin egen väg in i 55b, och två kopior av duplikatspärren,
+ * kvotordningen och tokenhanteringen hade varit två formuleringar av samma
+ * svar — samma tröskel och samma skäl som 55a § Beslut 8. Kvar här är skalet
+ * [[ADR-0024 Tunna controllers och actions]] beskriver: behörigheten, och
+ * svarsformatet. Beteendet är oförändrat, och
+ * tests/Feature/Container/InbjudanTest.php är grönt utan en ändrad
+ * förväntan.
  *
- * `store()` skickar sedan 10b App\Notifications\InvitationNotification med
- * det klartexttoken som genereras där — den enda ändring 10b gör i den här
- * filen, se issue 10b § Beslut 2. Mottagarsidan (acceptera, avvisa) bor i
+ * Mottagarsidan (acceptera, avvisa) bor i
  * App\Http\Controllers\Api\InvitationResponseController.
  *
  * `routes/api.php` nästlar {invitation} under {container} med
@@ -43,13 +44,6 @@ use Illuminate\Support\Str;
  */
 class ContainerInvitationController extends Controller
 {
-    /**
-     * Längden på den slump som ska skickas i mejlets länk (tecken, inte
-     * bytes), samma som App\Support\Auth\MagicLinkBroker::TOKEN_LENGTH.
-     * `Str::random()` hämtar sin entropi från `random_bytes()`.
-     */
-    private const TOKEN_LENGTH = 64;
-
     /**
      * GET /api/containers/{container}/invitations — 200. Visar ALLA rader,
      * även tillbakadragna och utgångna (issue 10a § Beslut 14), sorterat
@@ -86,98 +80,32 @@ class ContainerInvitationController extends Controller
      * och en inbjudan är en åtkomst med fördröjning — issue 10a § Beslut
      * 10. Ingen ny policymetod har lagts till.
      *
-     * Adressen normaliseras med `mb_strtolower()` INNAN duplikatspärren
-     * frågar (§ Beslut 6 och § Att se upp med), exakt som
-     * App\Support\Auth\MagicLinkBroker::normalise() — annars slinker
-     * `Alice@x.se` förbi bredvid `alice@x.se` och 10b:s adressjämförelse
-     * hittar två rader.
+     * Skrivningen — normaliseringen, duplikatspärren, kvotordningen,
+     * token och mejlet — bor i App\Actions\Invitation\CreateInvitation sedan
+     * issue 55b § Beslut 7, med kroppen oförändrad. Kvar här är behörigheten,
+     * uppslaget av `item` och svarsformatet.
      *
-     * § Beslut 12: bara EN pending inbjudan per adress och container. En
-     * utgången, avvisad, accepterad eller tillbakadragen rad blockerar
-     * inget — att bjuda in igen efter ett nej ska gå. Utgång läses ur
-     * `expires_at` och inte ur `status`, för kolumnen flippas aldrig
-     * (§ Beslut 7). Hittas en spärrande rad: `ApiException`
-     * (`invitation.already_pending`, 422) med den befintliga radens ULID i
-     * `data.invitation` — ett tillståndsfel i domänen, inte ett fältfel,
-     * se issue 7 § Beslut 2 och samma mönster i
-     * ContainerAccessController::store().
-     *
-     * § Beslut 5: token genereras, hashas och kastas. Klartexten lagras
-     * aldrig, returneras aldrig och loggas aldrig.
-     *
-     * `container_id`, `token_hash`, `status` och `invited_by_user_id`
-     * sätts explicit på modellinstansen, aldrig via massildelning — se
-     * App\Models\Invitation och § Beslut 15.
+     * `item` speglar `container_access.item_id`, se [[Konton och åtkomst]]
+     * § invitation och issue 72 § Beslut 2 och 7.
      */
-    public function store(StoreInvitationRequest $request, Container $container, Entitlements $entitlements): JsonResponse
+    public function store(StoreInvitationRequest $request, Container $container, CreateInvitation $createInvitation): JsonResponse
     {
         Gate::authorize('manageAccess', $container);
 
-        $email = mb_strtolower($request->validated('email'));
-
-        $existing = $container->invitations()
-            ->where('email', $email)
-            ->outstanding()
-            ->first();
-
-        if ($existing instanceof Invitation) {
-            throw ApiException::make('invitation.already_pending', ['invitation' => $existing->ulid], 422);
-        }
-
-        // Kvotkontrollen kommer efter Gate (Beslut 3) och efter
-        // duplikatspärren: att bjuda in någon som redan har en pending
-        // inbjudan är inte en ny delning, så den ska svara already_pending,
-        // inte avslöja taket. Delningstaket följer ägarkontots plan och
-        // räknar även den här inbjudan när den ligger pending (issue 27 §
-        // Beslut 5).
-        $entitlements->assertCanShareContainer($container);
-
-        // Kontotaket kommer sist (issue 48 § Beslut 8): delningstaket är den
-        // gräns användaren kan göra något åt, och först när den är passerad
-        // är frågan om utskicksvolymen. Taket räknas på ägarkontot, som
-        // delningstaket ovan. Undantaget kastas före Str::random(), före
-        // save() och före Notification::route() — ett nekande lämnar inga
-        // spår, varken rad, token eller mejl (issue 48 § Beslut 9).
-        $entitlements->assertPendingInvitationsWithinLimit($container->account);
-
-        // `item` speglar container_access.item_id, se [[Konton och åtkomst]]
-        // § invitation och issue 72 § Beslut 2 och 7. ULID:en är redan
-        // bevisad finnas i DEN HÄR containern och vara levande av
-        // StoreInvitationRequest; `withTrashed()` behövs därför inte här.
+        // ULID:en är redan bevisad finnas i DEN HÄR containern och vara
+        // levande av StoreInvitationRequest; `withTrashed()` behövs därför
+        // inte här.
         $item = $request->validated('item') === null
             ? null
             : Item::where('ulid', $request->validated('item'))->firstOrFail();
 
-        // Klartexten är mejlets enda konsument — den skickas i länken
-        // nedan och lagras aldrig, se klassens docblock.
-        $rawToken = Str::random(self::TOKEN_LENGTH);
-
-        $invitation = new Invitation([
-            'email' => $email,
-            'level' => $request->validated('level'),
-        ]);
-        $invitation->container_id = $container->id;
-        // Kolumnen är medvetet inte #[Fillable] — den sätts explicit, som
-        // container_id och invited_by_user_id.
-        $invitation->item_id = $item?->id;
-        $invitation->token_hash = hash('sha256', $rawToken);
-        $invitation->status = 'pending';
-        $invitation->expires_at = now()->addDays(Invitation::TTL_DAYS);
-        $invitation->invited_by_user_id = $request->user()->id;
-        $invitation->save();
-
-        // Issue 10b § Beslut 2 och 3: mejlet skickas härifrån, direkt efter
-        // att raden skapats, med den klartext-token som genererades ovan.
-        // Mottagaren har inget konto och därmed ingen `User` att notifiera
-        // — on-demand-notifikation. Länken pekar på frontendens
-        // landningssida (issue 55, M10); URL:en byggs ur `config('app.url')`
-        // och inte med `URL::route()`, för accept kräver en inloggad,
-        // verifierad användare och en sida som kan be henne registrera sig
-        // först. Sökvägen `/invitations/{token}` är kontraktet issue 55 ska
-        // implementera.
-        $url = rtrim((string) config('app.url'), '/').'/invitations/'.$rawToken;
-
-        Notification::route('mail', $invitation->email)->notify(new InvitationNotification($url, $container));
+        $invitation = $createInvitation->handle(
+            $request->user(),
+            $container,
+            $request->validated('email'),
+            $request->validated('level'),
+            $item,
+        );
 
         $invitation->setAttribute('invited_by_ulid', $request->user()->ulid);
         $invitation->setAttribute('item_ulid', $item?->ulid);
@@ -192,30 +120,21 @@ class ContainerInvitationController extends Controller
      * ingen kropp. Sätter `status = 'revoked'`; raden raderas aldrig
      * (issue 10a § Beslut 13 och [[Konton och åtkomst]] § invitation).
      *
-     * Bara en `pending`-rad kan dras tillbaka. Är den redan `accepted`,
-     * `rejected` eller `revoked` svarar rutten 422
-     * `invitation.not_pending` — en accepterad inbjudan går inte att ångra
-     * härifrån, det gör man genom att återkalla åtkomsten (9b).
-     *
-     * En utgången `pending`-rad går däremot att dra tillbaka: kolumnen är
-     * fortfarande `pending` (§ Beslut 7) och att städa bort en glömd
-     * inbjudan ur listan är precis vad avsändaren vill kunna göra.
+     * Reglerna för vad som går att dra tillbaka bor i
+     * App\Actions\Invitation\RevokeInvitation sedan issue 55b § Beslut 7 —
+     * bara en `pending`-rad, också en utgången sådan, och allt annat är
+     * `invitation.not_pending` (422).
      *
      * `manageAccess()` auktoriserar, inte `revokeAccess()`: 9b:s
      * återkallningsgrind är regel 4:s undantag för att KLIPPA en befintlig
      * relation, medan en pending inbjudan aldrig blivit en relation — den
      * hör till samma yta som att bjuda in, se issue 10a § Beslut 10.
      */
-    public function destroy(Container $container, Invitation $invitation): Response
+    public function destroy(Container $container, Invitation $invitation, RevokeInvitation $revokeInvitation): Response
     {
         Gate::authorize('manageAccess', $container);
 
-        if ($invitation->status !== 'pending') {
-            throw ApiException::make('invitation.not_pending', ['invitation' => $invitation->ulid], 422);
-        }
-
-        $invitation->status = 'revoked';
-        $invitation->save();
+        $revokeInvitation->handle($container, $invitation);
 
         return response()->noContent();
     }

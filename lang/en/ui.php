@@ -76,6 +76,10 @@ return [
         'container-updated' => 'The binder has been saved.',
         'access-updated' => 'The access has been saved.',
         'access-revoked' => 'The access has been revoked.',
+        'invitation-sent' => 'The invitation has been sent.',
+        'invitation-revoked' => 'The invitation has been withdrawn.',
+        'invitation-accepted' => 'The invitation has been accepted. The binder is under Binders.',
+        'invitation-rejected' => 'The invitation has been declined.',
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -90,12 +94,25 @@ return [
 
         'quota' => [
             'containers_exceeded' => 'The account has reached its limit for the number of binders (:used of :limit).',
+            // Issue 55b decision 6: the two limits an invitation form can hit.
+            'shared_users_exceeded' => 'The sharing has reached the account limit (:used of :limit).',
+            'pending_invitations_exceeded' => 'The account has reached its limit for outstanding invitations (:used of :limit).',
         ],
 
         // Issue 55a decision 9: PATCH on a revoked or expired row answers
         // `container_access.revoked` on /api and this sentence in the web.
         'container_access' => [
             'revoked' => 'The access has been revoked or has expired and cannot be changed.',
+        ],
+
+        // Issue 55b: the invitation error codes. Never a raw JSON body in a
+        // browser, same rule as issue 54 decision 4.
+        'invitation' => [
+            'already_pending' => 'This address already has an invitation waiting for an answer.',
+            'not_pending' => 'The invitation has already been answered and cannot be withdrawn.',
+            'expired' => 'The invitation has expired.',
+            'email_mismatch' => 'The invitation is for a different email address than the one you are signed in with.',
+            'email_not_verified' => 'Verify your email address first, then try again.',
         ],
     ],
 
@@ -291,6 +308,38 @@ return [
             'revoke' => 'Revoke',
         ],
 
+        // The third section, see issue 55b decision 5. The list shows the
+        // address — that is the whole difference from the access list above,
+        // and it is the sender's own list of what she has sent. The gate is
+        // the same (`viewAccesses()`), and `invitations` is `null` for anyone
+        // who may not see it.
+        'invitations' => [
+            'heading' => 'Invitations',
+            'description' => 'Addresses that have been invited but have not answered yet. An invitation grants no access until it is accepted.',
+
+            'email' => 'Email',
+            'item' => 'Scope',
+            'item_container' => 'The whole binder',
+
+            'submit' => 'Invite',
+            'revoke' => 'Withdraw',
+            'expires' => 'Expires :date',
+            'invited_by' => 'Invited by',
+            'empty' => 'No invitations yet.',
+
+            // The status comes from App\Http\Resources\InvitationResource and
+            // is never read from the column: a `pending` row past its
+            // `expires_at` is reported as `expired` without the row changing
+            // (issue 10a decision 7).
+            'status' => [
+                'pending' => 'Waiting for an answer',
+                'expired' => 'Expired',
+                'accepted' => 'Accepted',
+                'rejected' => 'Declined',
+                'revoked' => 'Withdrawn',
+            ],
+        ],
+
         'history' => [
             'heading' => 'History',
             'revoked' => 'Revoked :date',
@@ -330,5 +379,37 @@ return [
         'advanced' => 'Advanced',
 
         'frozen' => 'The account is frozen and cannot change levels. Revoking an access still works.',
+    ],
+
+    // The landing page of the email, see issue 55b decisions 2, 3 and 4.
+    // App\Http\Controllers\InvitationResponseController renders exactly one of
+    // five states, and the texts below are one of the means of keeping them
+    // apart. `mismatch` and `unavailable` must be WORDED differently but
+    // INFORM equally little: `unavailable` never says whether the token
+    // exists, and `mismatch` never reveals which address the invitation is
+    // for.
+    'invitation' => [
+        'title' => 'Invitation',
+        'heading' => 'Invitation',
+
+        // The binder's name and the inviter's name are shown to a guest too.
+        // That is not new information: InvitationNotification prints the
+        // binder's name in both the subject line and the body, and whoever has
+        // the link has received the email. The address the invitation is for
+        // is never shown.
+        'intro' => ':inviter has invited you to the binder :container.',
+        'level' => 'Level: :level',
+
+        // A guest has no address to compare with and therefore no form to
+        // answer in — the way goes through signing in or registering, and the
+        // token stays in the session until then.
+        'guest' => 'Sign in or create an account with the address the invitation is for. Then you can answer.',
+
+        'mismatch' => 'This invitation is for a different email address than the one you are signed in with.',
+        'unavailable' => 'This invitation can no longer be used.',
+
+        'accept' => 'Accept',
+        'reject' => 'Decline',
+        'home' => 'Go to the home page',
     ],
 ];
