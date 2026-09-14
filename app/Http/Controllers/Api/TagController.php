@@ -2,15 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Access\ResolveItemScope;
+use App\Actions\Tag\CreateTag;
+use App\Actions\Tag\ListTags;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tag\StoreTagRequest;
 use App\Http\Requests\Tag\UpdateTagRequest;
 use App\Http\Resources\TagResource;
 use App\Models\Container;
-use App\Models\Item;
 use App\Models\Tag;
-use App\Support\Access\ItemScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -36,63 +35,21 @@ use Illuminate\Support\Facades\Gate;
 class TagController extends Controller
 {
     /**
-     * GET /api/containers/{container}/tags — 200. Sorterad `name`
-     * stigande, ingen paginering (issue 12 § Beslut 9). Ett konstant antal
-     * frågor oavsett antal taggar — inga relationer att ladda i förväg
-     * här, TagResource läser bara kolumner på raden själv.
+     * GET /api/containers/{container}/tags — 200. Sorterad `name` stigande,
+     * ingen paginering (issue 12 § Beslut 9), omfångsfiltrerad — se
+     * App\Actions\Tag\ListTags, som bär hela resonemanget och kroppen
+     * (issue 56a § Beslut 7). Ett konstant antal frågor oavsett antal taggar.
      *
-     * Issue 73 § Beslut 5: en OMFÅNGSBEGRÄNSAD mottagare ser bara taggar
-     * som sitter på minst ett item hon når — en tagg med noll synliga
-     * träffar visas inte alls. Namnet på en tagg ("Försäkringar",
-     * "Skilsmässa") är ofta mer avslöjande än itemet, så en tom träfflista
-     * är ett läckage i sig. Ett OMFATTANDE omfång (ägarkontots medlem,
-     * container-bred grant) är oförändrat: alla containerns taggar, även
-     * den ingen använt — ägaren ska se sin egen tomma tagg.
-     *
-     * Urvalet byggs av EN fråga till (`visibleTagIds()` nedan) — ett konstant
-     * antal frågor, oavsett antal taggar och items. SoftDeletes' globala
-     * scope gäller i båda leden: en mjukraderad tagg försvinner ur
-     * `$container->tags()`, och ett mjukraderat item räknas inte som träff
-     * eftersom `Item`-frågan filtrerar `deleted_at`.
-     *
-     * Ingen träffräknare byggs här — TagResource bär ingen, och räknaren
-     * hör till M10:s taggvy (issue 56). Den här issuen ser bara till att
-     * urvalet den ska räkna på redan är rätt.
+     * Träffräknaren byggs fortfarande INTE här. Den bor i `ListTags::counts()`
+     * och konsumeras bara av M10:s taggvy (issue 56a § Beslut 6) — `/api` har
+     * inte bett om den, och TagResource bär den därför inte. Den här rutten
+     * svarar exakt som förut, med samma antal frågor.
      */
-    public function index(Request $request, Container $container, ResolveItemScope $resolveItemScope): JsonResponse
+    public function index(Request $request, Container $container, ListTags $listTags): JsonResponse
     {
         Gate::authorize('view', $container);
 
-        $scope = $resolveItemScope->handle($request->user(), $container);
-
-        $tags = $container->tags()
-            ->when(
-                ! $scope->isUnrestricted(),
-                fn ($query) => $query->whereIn('tag.id', $this->visibleTagIds($scope)),
-            )
-            ->orderBy('name')
-            ->get();
-
-        return TagResource::collection($tags)->response();
-    }
-
-    /**
-     * Löpnumren för de taggar som sitter på minst ett item $scope når —
-     * issue 73 § Beslut 5. `inScope()` och inte en handskriven `whereIn`:
-     * formuleringen av "vad mottagaren når" bor i App\Models\Item
-     * (issue 73 § Beslut 1).
-     *
-     * @return list<int>
-     */
-    private function visibleTagIds(ItemScope $scope): array
-    {
-        return Item::query()
-            ->inScope($scope)
-            ->join('item_tag', 'item_tag.item_id', '=', 'item.id')
-            ->distinct()
-            ->pluck('item_tag.tag_id')
-            ->values()
-            ->all();
+        return TagResource::collection($listTags->handle($request->user(), $container))->response();
     }
 
     /**
@@ -101,29 +58,19 @@ class TagController extends Controller
      * (`Rule::unique` med `whereNull('deleted_at')`, issue 12 § Beslut 5)
      * innan kontrollern ens nås.
      *
-     * Issue 12 § Beslut 4 — återupplivningen, hela avvikelsen från en ren
-     * CRUD-controller (§ Beslut 8): finns en MJUKRADERAD tagg med samma
-     * namn i containern (`withTrashed()` — en vanlig fråga ser den inte,
-     * se issue 12 § Att se upp med) återställs DEN raden i stället för att
-     * en ny skapas. Samma ULID som före raderingen, `deleted_at`
-     * nollställs, `color` sätts till kroppens värde. Annars: skapa en ny
-     * rad.
+     * Skapandet — inklusive ÅTERUPPLIVNINGEN av en mjukraderad tagg med samma
+     * namn (issue 12 § Beslut 4) — bor i App\Actions\Tag\CreateTag
+     * (issue 56a § Beslut 7).
      */
-    public function store(StoreTagRequest $request, Container $container): JsonResponse
+    public function store(StoreTagRequest $request, Container $container, CreateTag $createTag): JsonResponse
     {
         Gate::authorize('update', $container);
 
-        $tag = $container->tags()->withTrashed()->where('name', $request->validated('name'))->first();
-
-        if ($tag !== null) {
-            $tag->restore();
-            $tag->color = $request->validated('color');
-            $tag->save();
-        } else {
-            $tag = new Tag($request->safe()->only(['name', 'color']));
-            $tag->container_id = $container->id;
-            $tag->save();
-        }
+        $tag = $createTag->handle(
+            $container,
+            $request->validated('name'),
+            $request->validated('color'),
+        );
 
         return (new TagResource($tag))
             ->response()

@@ -80,6 +80,12 @@ return [
         'invitation-revoked' => 'The invitation has been withdrawn.',
         'invitation-accepted' => 'The invitation has been accepted. The binder is under Binders.',
         'invitation-rejected' => 'The invitation has been declined.',
+        'category-created' => 'The category has been created.',
+        'category-updated' => 'The category has been saved.',
+        'category-deleted' => 'The category has been deleted.',
+        'tag-created' => 'The tag has been created.',
+        'tag-updated' => 'The tag has been saved.',
+        'tag-deleted' => 'The tag has been deleted.',
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -113,6 +119,17 @@ return [
             'expired' => 'The invitation has expired.',
             'email_mismatch' => 'The invitation is for a different email address than the one you are signed in with.',
             'email_not_verified' => 'Verify your email address first, then try again.',
+        ],
+
+        // The category error codes, see issue 56a decision 4. The first three
+        // belong to a MOVE and land on the `parent` field; the last two belong
+        // to a DELETION and land on the `category` form key.
+        'category' => [
+            'max_depth_exceeded' => 'A category can be at most :max_depth levels deep.',
+            'cycle' => 'A category cannot be moved into itself or into one of its own subcategories.',
+            'parent_not_in_container' => 'The chosen parent category is not in this binder.',
+            'has_children' => 'The category has :children subcategories and cannot be deleted.',
+            'has_items' => 'The category has :items items and cannot be deleted.',
         ],
     ],
 
@@ -219,6 +236,8 @@ return [
         ],
 
         'nav' => [
+            'categories' => 'Categories',
+            'tags' => 'Tags',
             'sharing' => 'Sharing',
             'settings' => 'Settings',
         ],
@@ -254,6 +273,45 @@ return [
             'kind' => 'Type',
 
             'submit' => 'Save',
+        ],
+
+        // The category tree, see issue 56a decisions 1, 2, 3 and 4.
+        'categories' => [
+            'title' => 'Categories',
+            'heading' => 'Categories',
+            'description' => 'Where things belong. An item sits in at most one category, and the categories form a tree of at most five levels.',
+
+            'name' => 'Name',
+            'parent' => 'Parent category',
+            'parent_root' => '— none, put it at the root —',
+            'position' => 'Position',
+
+            'create_heading' => 'New category',
+            'create' => 'Create',
+            'save' => 'Save',
+            'destroy' => 'Delete',
+            'empty' => 'No categories yet.',
+        ],
+
+        // The tag list, see issue 56a decisions 6 and 8.
+        'tags' => [
+            'title' => 'Tags',
+            'heading' => 'Tags',
+            'description' => 'Everything else you want to filter on. A tag is flat, sits alongside the category, and an item can carry any number of them.',
+
+            'name' => 'Name',
+            'color' => 'Colour',
+            'color_placeholder' => '#rrggbb',
+            // The colour is optional and `null` is an answer — no default
+            // colour is chosen for the user (decision 8).
+            'no_color' => 'No colour',
+            'item_count' => 'On :count items',
+
+            'create_heading' => 'New tag',
+            'create' => 'Create',
+            'save' => 'Save',
+            'destroy' => 'Delete',
+            'empty' => 'No tags yet.',
         ],
     ],
 

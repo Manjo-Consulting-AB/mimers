@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CalendarFeedDownloadController;
+use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\ContainerInvitationController;
@@ -21,6 +22,7 @@ use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\TagController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -334,6 +336,65 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/invitations/reject', [InvitationResponseController::class, 'reject'])
         ->name('invitations.reject');
+
+    /*
+     * Issue 56a · Kategoriträdet och tagglistan — den fria strukturen, se
+     * App\Http\Controllers\CategoryController och
+     * App\Http\Controllers\TagController.
+     *
+     * Åtta rutter, två sidor (Beslut 1). Ingenting av `/api` byggs om:
+     * `StoreCategoryRequest`, `UpdateCategoryRequest`, `StoreTagRequest`,
+     * `UpdateTagRequest` och resurserna delas rakt av, och läsningen och
+     * skapandet går genom App\Actions\Category\ListCategories/CreateCategory
+     * och App\Actions\Tag\ListTags/CreateTag — samma Actions som
+     * App\Http\Controllers\Api\CategoryController och Api\TagController
+     * anropar (Beslut 7).
+     *
+     * **`scopeBindings()` på de fyra nästlade skrivningarna**, av exakt samma
+     * skäl som routes/api.php gör det (issue 11 § Beslut 1, issue 9b
+     * § Beslut 1): utan det löser en kategori-ULID från en annan pärm upp här,
+     * och en kategori i pärm B går att flytta eller radera via pärm A:s rutt.
+     * En ULID från en annan pärm blir 404. Det sätts per rutt och inte på
+     * gruppen — de övriga containerrutterna ovan har bara ett rutt-parameter
+     * var, och en grupp hade flyttat dem också.
+     *
+     * `{container}`, `{category}` och `{tag}` binds alla på ULID via
+     * `#[RouteKey('ulid')]` på App\Models\Container, Category respektive Tag.
+     *
+     * **Sidorna har ingen `destroy()` på pärmen och ingen itemvy** — de hör
+     * till issue 62 respektive 57.
+     *
+     * Skrivningarna svarar `back()` med en flash-kod — mönstret från issue 51
+     * § Beslut 5, `status` och ingenting annat — och ett domänfel som ett
+     * formulärfel, aldrig som en JSON-kropp (Beslut 4).
+     */
+    Route::get('/containers/{container}/categories', [CategoryController::class, 'index'])
+        ->name('containers.categories');
+
+    Route::post('/containers/{container}/categories', [CategoryController::class, 'store'])
+        ->name('containers.categories.store');
+
+    Route::patch('/containers/{container}/categories/{category}', [CategoryController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.categories.update');
+
+    Route::delete('/containers/{container}/categories/{category}', [CategoryController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.categories.destroy');
+
+    Route::get('/containers/{container}/tags', [TagController::class, 'index'])
+        ->name('containers.tags');
+
+    Route::post('/containers/{container}/tags', [TagController::class, 'store'])
+        ->name('containers.tags.store');
+
+    Route::patch('/containers/{container}/tags/{tag}', [TagController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.tags.update');
+
+    Route::delete('/containers/{container}/tags/{tag}', [TagController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.tags.destroy');
 });
 
 /*
