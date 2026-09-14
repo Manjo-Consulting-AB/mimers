@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Container\CreateContainer;
 use App\Actions\Usage\AdjustUsage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Container\StoreContainerRequest;
@@ -9,7 +10,6 @@ use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
 use App\Models\Account;
 use App\Models\Container;
-use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -88,38 +88,26 @@ class ContainerController extends Controller
      * via massildelning (`Container::create()`) — kolumnen är medvetet
      * utelämnad ur App\Models\Container#[Fillable], se den klassens
      * docblock.
+     *
+     * Sedan issue 54 § Beslut 3 är skrivningen utbruten till
+     * App\Actions\Container\CreateContainer, som webben anropar på samma
+     * sätt. Det här är en REN utbrytning — samma 201, samma resurs, samma
+     * felkoder, samma antal frågor och samma ordning behörighet-före-kvot
+     * (issue 27 § Beslut 3). `Gate::authorize()` står kvar här, utanför
+     * actionen, så att API:ets 403 och webbens 403 kommer från samma ställe.
      */
-    public function store(StoreContainerRequest $request, AdjustUsage $adjustUsage, Entitlements $entitlements): JsonResponse
+    public function store(StoreContainerRequest $request, CreateContainer $createContainer): JsonResponse
     {
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 
         Gate::authorize('create', [Container::class, $account]);
 
-        // Behörighet först, kvot sedan (issue 27 § Beslut 3): en användare
-        // som inte får skapa åt kontot ska få auth.forbidden — inte veta hur
-        // många containers kontot har. Kvoten gäller det konto som anges i
-        // kroppen, samma konto som blir ägare och vars plan gäller (§
-        // Beslut 4).
-        $entitlements->assertCanCreateContainer($account);
-
-        $container = DB::transaction(function () use ($request, $account, $adjustUsage): Container {
-            $container = new Container($request->safe()->only(['name', 'kind']));
-            $container->account_id = $account->id;
-            $container->save();
-
-            // En levande container räknas mot ägarkontots containertak (issue
-            // 26a) — i samma transaktion som raden. Kontot är alltid ägaren;
-            // containerns räknare har inget "billed_account_id" att gå vilse i.
-            $adjustUsage->handle($account->id, containersDelta: 1);
-
-            return $container;
-        });
-
-        // $account är redan hämtad ovan (för Gate::authorize()) — sätt
-        // relationen direkt i stället för att låta ContainerResource
-        // trigga en ny fråga för samma rad, se index()-kommentaren om
-        // N+1 (PR #43-uppföljningen).
-        $container->setRelation('account', $account);
+        $container = $createContainer->handle(
+            $request->user(),
+            $account,
+            $request->validated('name'),
+            $request->validated('kind'),
+        );
 
         return (new ContainerResource($container))
             ->response()

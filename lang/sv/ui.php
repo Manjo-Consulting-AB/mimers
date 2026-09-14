@@ -20,6 +20,9 @@ return [
 
     'nav' => [
         'dashboard' => 'Översikt',
+        // Pärmen är produktens ord för containern, se [[ADR-0002 Konto äger
+        // container]] och Översikt. Länken kom med issue 54 § Beslut 7.
+        'containers' => 'Pärmar',
         'login' => 'Logga in',
     ],
 
@@ -85,6 +88,8 @@ return [
         'totp-disabled' => 'Tvåfaktorsinloggning är avstängd.',
         'profile-updated' => 'Profilen är sparad.',
         'account-updated' => 'Kontouppgifterna är sparade.',
+        'container-created' => 'Pärmen är skapad.',
+        'container-updated' => 'Pärmen är sparad.',
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -94,6 +99,18 @@ return [
         '404' => 'Sidan finns inte.',
         '429' => 'Du har gjort för många försök. Vänta en stund och försök igen.',
         '500' => 'Något gick fel hos oss. Försök igen om en stund.',
+
+        // Webbens översättning av API-felkoder, se issue 54 § Beslut 4 och
+        // App\Support\Frontend\ApiErrorTranslator. Under `error` ligger en
+        // gren per domän i koden — `quota.containers_exceeded` slås upp som
+        // `error.quota.containers_exceeded`. `generic` är reserven: en kod
+        // utan nyckel ska bli en begriplig mening, aldrig en rå kod på
+        // skärmen.
+        'generic' => 'Något gick fel. Försök igen om en stund.',
+
+        'quota' => [
+            'containers_exceeded' => 'Kontot har nått sitt tak för antal pärmar (:used av :limit).',
+        ],
     ],
 
     // Inställningarna, se issue 53b. `nav` är sidonavigationen, en nyckel per
@@ -212,6 +229,62 @@ return [
                 'disable_warning' => 'När du stänger av raderas återställningskoderna. Slår du på igen får du ett nytt ark.',
                 'disable_submit' => 'Stäng av tvåfaktorn',
             ],
+        ],
+    ],
+
+    // Pärmen, se issue 54. `nav` är sidonavigationen, en nyckel per post i
+    // resources/js/layouts/containerSections.js — samma `key` där som här.
+    // 55a (delning), 56a (kategorier och taggar), 57 (items), 62
+    // (papperskorg) och 63 (scheman) lägger sina rader i samma lista och sina
+    // texter i samma gren.
+    'container' => [
+        // `kind` styr presentation och bara presentation (issue 54 § Beslut
+        // 8, [[ADR-0002 Konto äger container]]). Nycklarna är kolumnvärdena
+        // ur App\Models\Container::KINDS, aldrig påhittade egna namn — samma
+        // regel som settings.locales.
+        'kind' => [
+            'boat' => 'Båt',
+            'caravan' => 'Husvagn',
+            'house' => 'Hus',
+            'car' => 'Bil',
+            'other' => 'Övrigt',
+        ],
+
+        'nav' => [
+            'settings' => 'Inställningar',
+        ],
+
+        'index' => [
+            'title' => 'Pärmar',
+            'heading' => 'Pärmar',
+            'create' => 'Ny pärm',
+            'empty' => 'Du har inga pärmar än.',
+            'shared' => 'Delad med dig',
+            'active' => 'Aktiv',
+            'make_active' => 'Gör aktiv',
+            'edit' => 'Redigera',
+        ],
+
+        'create' => [
+            'title' => 'Ny pärm',
+            'heading' => 'Ny pärm',
+
+            'name' => 'Namn',
+            'kind' => 'Typ',
+            'account' => 'Konto',
+            'account_choose' => 'Välj konto',
+
+            'submit' => 'Skapa',
+        ],
+
+        'edit' => [
+            'title' => 'Inställningar',
+            'heading' => 'Inställningar',
+
+            'name' => 'Namn',
+            'kind' => 'Typ',
+
+            'submit' => 'Spara',
         ],
     ],
 ];

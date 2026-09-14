@@ -15,6 +15,7 @@ return [
 
     'nav' => [
         'dashboard' => 'Dashboard',
+        'containers' => 'Binders',
         'login' => 'Log in',
     ],
 
@@ -71,6 +72,8 @@ return [
         'totp-disabled' => 'Two-factor authentication is off.',
         'profile-updated' => 'Your profile has been saved.',
         'account-updated' => 'The account details have been saved.',
+        'container-created' => 'The binder has been created.',
+        'container-updated' => 'The binder has been saved.',
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -80,6 +83,12 @@ return [
         '404' => 'This page does not exist.',
         '429' => 'Too many attempts. Wait a moment and try again.',
         '500' => 'Something went wrong on our side. Try again in a moment.',
+
+        'generic' => 'Something went wrong. Try again in a moment.',
+
+        'quota' => [
+            'containers_exceeded' => 'The account has reached its limit for the number of binders (:used of :limit).',
+        ],
     ],
 
     'settings' => [
@@ -172,6 +181,53 @@ return [
                 'disable_warning' => 'Turning it off deletes the recovery codes. Turning it on again gives you a new sheet.',
                 'disable_submit' => 'Turn off two-factor',
             ],
+        ],
+    ],
+
+    'container' => [
+        'kind' => [
+            'boat' => 'Boat',
+            'caravan' => 'Caravan',
+            'house' => 'House',
+            'car' => 'Car',
+            'other' => 'Other',
+        ],
+
+        'nav' => [
+            'settings' => 'Settings',
+        ],
+
+        'index' => [
+            'title' => 'Binders',
+            'heading' => 'Binders',
+            'create' => 'New binder',
+            'empty' => 'You have no binders yet.',
+            'shared' => 'Shared with you',
+            'active' => 'Active',
+            'make_active' => 'Make active',
+            'edit' => 'Edit',
+        ],
+
+        'create' => [
+            'title' => 'New binder',
+            'heading' => 'New binder',
+
+            'name' => 'Name',
+            'kind' => 'Type',
+            'account' => 'Account',
+            'account_choose' => 'Choose an account',
+
+            'submit' => 'Create',
+        ],
+
+        'edit' => [
+            'title' => 'Settings',
+            'heading' => 'Settings',
+
+            'name' => 'Name',
+            'kind' => 'Type',
+
+            'submit' => 'Save',
         ],
     ],
 ];
