@@ -11,7 +11,9 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CalendarFeedDownloadController;
+use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
+use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\Settings\AccountSettingsController;
@@ -252,6 +254,48 @@ Route::middleware('auth')->group(function () {
      */
     Route::put('/containers/{container}/active', ActiveContainerController::class)
         ->name('containers.active');
+
+    /*
+     * Issue 55a · Delningsytan — deltagarlistan och förvaltningen av
+     * åtkomsterna, se App\Http\Controllers\ContainerSharingController och
+     * App\Http\Controllers\ContainerAccessController.
+     *
+     * EN rutt för sidan och TVÅ för skrivningarna (Beslut 1). Sidan är en
+     * GET som renderar; nivån och återkallandet är de enda skrivningarna.
+     *
+     * **Ingen POST.** Webben beviljar aldrig en åtkomst direkt (Beslut 2):
+     * `POST /api/containers/{container}/accesses` tar en mottagar-ULID, och
+     * vägen från en e-postadress till en ULID är ett uppslag "har adressen
+     * ett konto?" — en kontoenumerering, precis den sortens yta
+     * [[ADR-0017 Missbruksvektorer]] finns till för att inte bygga av
+     * slarv. All ny delning i webben går genom en inbjudan, som fungerar
+     * både för den som har konto och den som inte har, och som ger samma
+     * `container_access`-rad. Inbjudningsytan är 55b.
+     *
+     * **`scopeBindings()` på de två skrivningarna**, av exakt samma skäl som
+     * `routes/api.php` gör det på gruppen där (issue 9b § Beslut 1): utan det
+     * löser `{access}` upp en ULID ur vilken container som helst, och en
+     * åtkomst i pärm B går att återkalla via pärm A:s rutt. Här sätts det per
+     * rutt i stället för på gruppen — de övriga containerrutterna ovan har
+     * bara ett rutt-parameter var, och en grupp hade flyttat dem också.
+     *
+     * `{container}` och `{access}` binds båda på ULID via `#[RouteKey('ulid')]`
+     * på App\Models\Container respektive App\Models\ContainerAccess.
+     *
+     * De två skrivningarna svarar `back()` med en flash-kod — mönstret från
+     * issue 51 § Beslut 5, `status` och ingenting annat. Texten formuleras på
+     * servern ur lang/{locale}/ui.php som all annan text i M10.
+     */
+    Route::get('/containers/{container}/sharing', [ContainerSharingController::class, 'show'])
+        ->name('containers.sharing');
+
+    Route::patch('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.accesses.update');
+
+    Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.accesses.destroy');
 });
 
 /*

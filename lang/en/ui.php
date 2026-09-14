@@ -74,6 +74,8 @@ return [
         'account-updated' => 'The account details have been saved.',
         'container-created' => 'The binder has been created.',
         'container-updated' => 'The binder has been saved.',
+        'access-updated' => 'The access has been saved.',
+        'access-revoked' => 'The access has been revoked.',
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -88,6 +90,12 @@ return [
 
         'quota' => [
             'containers_exceeded' => 'The account has reached its limit for the number of binders (:used of :limit).',
+        ],
+
+        // Issue 55a decision 9: PATCH on a revoked or expired row answers
+        // `container_access.revoked` on /api and this sentence in the web.
+        'container_access' => [
+            'revoked' => 'The access has been revoked or has expired and cannot be changed.',
         ],
     ],
 
@@ -194,6 +202,7 @@ return [
         ],
 
         'nav' => [
+            'sharing' => 'Sharing',
             'settings' => 'Settings',
         ],
 
@@ -229,5 +238,81 @@ return [
 
             'submit' => 'Save',
         ],
+    ],
+
+    // The sharing page, see issue 55a. Two sections with different audiences
+    // (decision 3), and the texts follow that split.
+    'sharing' => [
+        'title' => 'Sharing',
+        'heading' => 'Sharing',
+
+        'participants' => [
+            'heading' => 'Participants',
+            'description' => 'Everyone with access to the binder right now. An account counts as one participant, never as its members.',
+        ],
+
+        'role' => [
+            'owner' => 'Owner',
+            'member' => 'Member',
+            'managed' => 'Organisation',
+            'guest' => 'Guest',
+        ],
+
+        'accesses' => [
+            'heading' => 'Accesses',
+            'description' => 'Everything shared from the binder, and the history of what has been revoked or expired.',
+
+            // No level may delete the binder, manage accesses or start a
+            // transfer of ownership. Stated once on the page, not per row.
+            'limits' => 'No access grants the right to delete the binder, manage accesses or start a transfer of ownership. That is always the owner account.',
+
+            'level' => 'Level',
+            'grantee' => 'Recipient',
+            'granted_by' => 'Granted by',
+            'expires' => 'Expires :date',
+
+            'save' => 'Save level',
+            'revoke' => 'Revoke',
+        ],
+
+        'history' => [
+            'heading' => 'History',
+            'revoked' => 'Revoked :date',
+            'expired' => 'Expired :date',
+        ],
+
+        'scope' => [
+            'container' => 'The whole binder',
+            'item' => ':item reaches :reach items',
+        ],
+
+        'kind' => [
+            'member' => 'A person — a partner or a co-owner.',
+            'managed' => 'An organisation with a service relationship, typically a yard. It does not own the binder, and what it creates is attributed to the organisation.',
+            'guest' => 'Temporary access with an expiry date.',
+        ],
+
+        'level' => [
+            'read' => [
+                'label' => 'Read',
+                'description' => 'Reads. Touches nothing.',
+            ],
+            'create' => [
+                'label' => 'Add',
+                'description' => 'Adds attachments, costs, schedules and new child items — but never touches anything that already exists.',
+            ],
+            'write' => [
+                'label' => 'Change',
+                'description' => 'Also changes what is already in the binder.',
+            ],
+            'delete' => [
+                'label' => 'Delete',
+                'description' => 'Soft-deletes and restores from the bin.',
+            ],
+        ],
+
+        'advanced' => 'Advanced',
+
+        'frozen' => 'The account is frozen and cannot change levels. Revoking an access still works.',
     ],
 ];
