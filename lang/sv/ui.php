@@ -92,6 +92,10 @@ return [
         'container-updated' => 'Pärmen är sparad.',
         'access-updated' => 'Åtkomsten är sparad.',
         'access-revoked' => 'Åtkomsten är återkallad.',
+        'invitation-sent' => 'Inbjudan är skickad.',
+        'invitation-revoked' => 'Inbjudan är tillbakadragen.',
+        'invitation-accepted' => 'Inbjudan är accepterad. Pärmen ligger under Pärmar.',
+        'invitation-rejected' => 'Inbjudan är avvisad.',
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -112,6 +116,12 @@ return [
 
         'quota' => [
             'containers_exceeded' => 'Kontot har nått sitt tak för antal pärmar (:used av :limit).',
+            // Issue 55b § Beslut 6: de två gränserna ett inbjudningsformulär
+            // kan slå i. Delningstaket räknar mottagare och obesvarade
+            // inbjudningar, kontotaket räknar utskicken (issue 27 § Beslut 5,
+            // issue 48). Båda hamnar under `errors.quota` på webben.
+            'shared_users_exceeded' => 'Delningen har nått kontots tak (:used av :limit).',
+            'pending_invitations_exceeded' => 'Kontot har nått sitt tak för utestående inbjudningar (:used av :limit).',
         ],
 
         // Issue 55a § Beslut 9: `PATCH` på en återkallad eller utgången rad
@@ -120,6 +130,19 @@ return [
         // App\Http\Controllers\ContainerAccessController::update().
         'container_access' => [
             'revoked' => 'Åtkomsten är återkallad eller har gått ut och går inte att ändra.',
+        ],
+
+        // Issue 55b: inbjudningarnas felkoder. `already_pending` hamnar på
+        // fältet `email` och `not_pending` på formulärnyckeln `invitation`;
+        // resten blir det besked vyn visar för det tillståndet. Ingen av dem
+        // får någonsin bli en rå JSON-kropp i en webbläsare — samma regel som
+        // issue 54 § Beslut 4.
+        'invitation' => [
+            'already_pending' => 'Den här adressen har redan en inbjudan som väntar på svar.',
+            'not_pending' => 'Inbjudan är redan besvarad och går inte att dra tillbaka.',
+            'expired' => 'Inbjudan har gått ut.',
+            'email_mismatch' => 'Inbjudan gäller en annan e-postadress än den du är inloggad med.',
+            'email_not_verified' => 'Verifiera din e-postadress först, och försök sedan igen.',
         ],
     ],
 
@@ -361,6 +384,42 @@ return [
             'revoke' => 'Återkalla',
         ],
 
+        // Den tredje sektionen, se issue 55b § Beslut 5. Listan visar adressen
+        // — det är hela skillnaden mot åtkomstlistan ovan, och den är
+        // avsändarens egen lista över vad hon själv skickat. Grinden är
+        // densamma (`viewAccesses()`), och `invitations` är `null` för den som
+        // inte får se den.
+        'invitations' => [
+            'heading' => 'Inbjudningar',
+            'description' => 'Adresser som bjudits in men ännu inte svarat. En inbjudan ger ingen åtkomst förrän den accepterats.',
+
+            'email' => 'E-post',
+            // Omfånget i formuläret. Ett enskilt item är den enda ytan i M10
+            // där en itemavgränsad delning kan skapas, se [[ADR-0028 Åtkomst
+            // på itemnivå]] § Beslut ("`invitation` speglar omfånget").
+            'item' => 'Omfång',
+            'item_container' => 'Hela pärmen',
+
+            'submit' => 'Bjud in',
+            'revoke' => 'Dra tillbaka',
+            'expires' => 'Går ut :date',
+            'invited_by' => 'Inbjuden av',
+            'empty' => 'Inga inbjudningar än.',
+
+            // Statusen kommer ur App\Http\Resources\InvitationResource och
+            // läses aldrig ur kolumnen: en `pending`-rad som passerat sitt
+            // `expires_at` redovisas som `expired` utan att raden ändras
+            // (issue 10a § Beslut 7). Nycklarna är kolumnvärdena ur
+            // App\Models\Invitation::STATUSES.
+            'status' => [
+                'pending' => 'Väntar på svar',
+                'expired' => 'Utgången',
+                'accepted' => 'Accepterad',
+                'rejected' => 'Avvisad',
+                'revoked' => 'Tillbakadragen',
+            ],
+        ],
+
         'history' => [
             'heading' => 'Historik',
             'revoked' => 'Återkallad :date',
@@ -417,5 +476,36 @@ return [
         // stället för att låta användaren upptäcka det som ett 403
         // (issue 55a § Beslut 9).
         'frozen' => 'Kontot är fryst och kan inte ändra nivåer. Att återkalla en åtkomst går fortfarande.',
+    ],
+
+    // Mejlets landningssida, se issue 55b § Beslut 2, 3 och 4.
+    // App\Http\Controllers\InvitationResponseController renderar exakt ett av
+    // fem tillstånd, och texterna nedan är det ena ledet i att hålla dem
+    // åtskilda. `mismatch` och `unavailable` är de två som måste vara
+    // FORMULERADE olika men INFORMERA lika lite: `unavailable` säger aldrig om
+    // tokenet finns, och `mismatch` avslöjar aldrig vilken adress inbjudan
+    // gäller.
+    'invitation' => [
+        'title' => 'Inbjudan',
+        'heading' => 'Inbjudan',
+
+        // Pärmens namn och inbjudarens namn visas också för en gäst. Det är
+        // ingen ny uppgift: InvitationNotification skriver ut pärmens namn i
+        // både ämnesrad och brödtext, och den som har länken har fått mejlet.
+        // Adressen inbjudan gäller visas däremot aldrig.
+        'intro' => ':inviter har bjudit in dig till pärmen :container.',
+        'level' => 'Nivå: :level',
+
+        // Gästen har ingen adress att jämföra med och därför inget formulär
+        // att svara i — vägen går via inloggning eller registrering, och
+        // tokenet ligger kvar i sessionen till dess.
+        'guest' => 'Logga in eller skapa ett konto med adressen inbjudan gäller. Sedan kan du svara.',
+
+        'mismatch' => 'Den här inbjudan gäller en annan e-postadress än den du är inloggad med.',
+        'unavailable' => 'Den här inbjudan går inte längre att använda.',
+
+        'accept' => 'Acceptera',
+        'reject' => 'Avvisa',
+        'home' => 'Till startsidan',
     ],
 ];

@@ -13,9 +13,11 @@ use App\Http\Controllers\Auth\VerifyEmailController;
 use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
+use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\HeartbeatController;
+use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -296,7 +298,69 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/accesses/{access}', [ContainerAccessController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.accesses.destroy');
+
+    /*
+     * Issue 55b · Inbjudningarna — vägen in, se
+     * App\Http\Controllers\ContainerInvitationController och
+     * App\Http\Controllers\InvitationResponseController.
+     *
+     * Fyra av de sex rutterna ligger i den här gruppen (Beslut 1): de två
+     * skrivningarna mot pärmen, och mottagarens accept och avvisande.
+     *
+     * `{invitation}` nästlas under `{container}` med `->scopeBindings()`, av
+     * exakt samma skäl som routes/api.php gör det (issue 9b § Beslut 1) — utan
+     * det går en inbjudan i pärm B att dra tillbaka via pärm A:s rutt, och
+     * acceptensen är en behörighet. `{invitation}` binds på ULID via
+     * `#[RouteKey('ulid')]` på App\Models\Invitation.
+     *
+     * `manageAccess()` avgör båda, som i `/api` (issue 10a § Beslut 10): att
+     * bjuda in ÄR att hantera åtkomster, och en pending inbjudan är en åtkomst
+     * med fördröjning — regel 4:s undantag för återkallandet gäller en
+     * BEFINTLIG relation och inte den här.
+     *
+     * Båda svarar `back()` med en flash-kod (issue 51 § Beslut 5) och ett
+     * domänfel som ett formulärfel, aldrig som en JSON-kropp — samma mönster
+     * som 55a:s två skrivningar.
+     */
+    Route::post('/containers/{container}/invitations', [ContainerInvitationController::class, 'store'])
+        ->name('containers.invitations.store');
+
+    Route::delete('/containers/{container}/invitations/{invitation}', [ContainerInvitationController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.invitations.destroy');
+
+    Route::post('/invitations/accept', [InvitationResponseController::class, 'accept'])
+        ->name('invitations.accept');
+
+    Route::post('/invitations/reject', [InvitationResponseController::class, 'reject'])
+        ->name('invitations.reject');
 });
+
+/*
+ * Issue 55b § Beslut 1 och 2 · Mejlets landningssida, och den ENDA ytan i M10
+ * där en utloggad besökare ska mötas av något annat än inloggningssidan.
+ * Rutterna ligger därför medvetet UTANFÖR `auth`-gruppen — också den som
+ * renderar, för en gäst ska se vad inbjudan gäller och sedan logga in eller
+ * skapa konto.
+ *
+ * `GET /invitations/{token}` renderar INGENTING: den lägger tokenet i
+ * sessionen och omdirigerar till `/invitations` (Beslut 2). Ett token i en URL
+ * hamnar i webbläsarhistoriken, i `Referer` och i varje åtkomstlogg på vägen —
+ * mejlets länk kan inte undvika det, men sidan behöver inte behålla det. Ingen
+ * `throttle`: tokenet är 64 tecken ur `random_bytes()`, och entropin ÄR
+ * skyddet, samma avvägning som App\Support\Auth\MagicLinkBroker § Beslut 4 gör
+ * för mejllänken.
+ *
+ * Ingen `where()`-begränsning på `{token}`: formen kontrolleras i
+ * App\Http\Controllers\InvitationResponseController::open() i stället, av ett
+ * skäl som står där — en GET på `/invitations/accept` matchar den här rutten,
+ * och den får inte skriva över en inbjudan sessionen redan bär.
+ */
+Route::get('/invitations', [InvitationResponseController::class, 'show'])
+    ->name('invitations.show');
+
+Route::get('/invitations/{token}', [InvitationResponseController::class, 'open'])
+    ->name('invitations.open');
 
 /*
  * Issue 19a · Nedladdning av bilagor, se

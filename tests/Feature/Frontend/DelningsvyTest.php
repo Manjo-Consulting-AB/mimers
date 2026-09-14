@@ -953,9 +953,14 @@ it('lägger delningssidan i pärmens navigation', function () {
 });
 
 /*
- * Beslut 2: webben beviljar aldrig en åtkomst direkt. Ingen POST-rutt, ingen
- * mottagarväljare och inget adressuppslag — all ny delning går genom en
- * inbjudan, som är 55b.
+ * Beslut 2: webben beviljar aldrig en åtkomst direkt. Ingen POST-rutt mot
+ * `/accesses`, ingen mottagarväljare och inget adressuppslag — all ny delning
+ * går genom en inbjudan.
+ *
+ * Sedan issue 55b finns inbjudningsformulärets POST här, och den är just
+ * motsatsen till en direkt bevilning: den skapar en `pending`-rad som
+ * mottagaren själv måste acceptera, och den har inget med `/accesses` att göra.
+ * 55b:s egna tester ligger i tests/Feature/Frontend/InbjudningsvyTest.php.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -963,10 +968,19 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Bara containerns eget skapande. Ingen /accesses och ingen /invitations.
-    expect($poster->pluck('uri')->values()->all())->toBe(['containers']);
+    // Containerns eget skapande, och inbjudan. Ingen /accesses.
+    expect($poster->pluck('uri')->values()->all())->toBe([
+        'containers',
+        'containers/{container}/invitations',
+    ]);
 
-    foreach (['containers.sharing', 'containers.accesses.update', 'containers.accesses.destroy'] as $namn) {
+    foreach ([
+        'containers.sharing',
+        'containers.accesses.update',
+        'containers.accesses.destroy',
+        'containers.invitations.store',
+        'containers.invitations.destroy',
+    ] as $namn) {
         expect($rutter->first(fn ($rutt) => $rutt->getName() === $namn))->not->toBeNull();
     }
 });

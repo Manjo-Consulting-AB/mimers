@@ -1,8 +1,9 @@
 <script setup>
 import { computed } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerAccessRow from '../../components/ContainerAccessRow.vue';
+import InvitationForm from '../../components/InvitationForm.vue';
 import { accessKindLabel, accessScopeLabel, formatDate, granteeLabel } from '../../components/accessPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -30,18 +31,24 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * redan som två tidsstämplar, och en andra sanning om tillståndet är en
  * sanning som kan glida isär.
  *
- * **Ingen inbjudningsyta.** Listan över obesvarade inbjudningar,
- * inbjudningsformuläret och acceptflödet är 55b, som lägger sin tredje
- * sektion här. Webben beviljar aldrig en åtkomst direkt (Beslut 2) — all ny
- * delning går genom en inbjudan.
+ * **Tredje sektionen: Inbjudningar** (issue 55b § Beslut 5). Samma grind som
+ * åtkomsterna — `viewAccesses()`, alltså medlemskap i ägarkontot — och
+ * `invitations` är `null` för den som inte får se dem. En obesvarad inbjudan
+ * röjer en e-postadress, och listan är därför lika känslig som förvaltningsvyn;
+ * här visas adressen med flit, för det är avsändarens egen lista över vad hon
+ * skickat. Formuläret kräver `manageAccess()` (skrivningen) och ritas därför
+ * bara för `can.manage`, medan listan ritas ur `invitations`.
  */
 const props = defineProps({
     container: { type: Object, required: true },
     participants: { type: Array, required: true },
     accesses: { type: Array, default: null },
+    invitations: { type: Array, default: null },
     itemNames: { type: Object, required: true },
     granteeNames: { type: Object, required: true },
     grantedByNames: { type: Object, required: true },
+    invitedByNames: { type: Object, required: true },
+    items: { type: Array, required: true },
     levels: { type: Array, required: true },
     can: { type: Object, required: true },
 });
@@ -68,6 +75,30 @@ const historyDate = (access) =>
     access.revoked_at !== null
         ? t('sharing.history.revoked', { date: formatDate(access.revoked_at, page.props.locale) })
         : t('sharing.history.expired', { date: formatDate(access.expires_at, page.props.locale) });
+
+/*
+ * Vilka rader som bär en Dra tillbaka-knapp. `pending` är den väntande raden,
+ * och `expired` är samma rad efter att tiden gått ut — `status` i kolumnen står
+ * kvar på `pending` (issue 10a § Beslut 7), och det är resursen som redovisar
+ * den som `expired`. Alltså går båda att dra tillbaka, medan en accepterad,
+ * avvisad eller redan tillbakadragen rad inte gör det (422).
+ *
+ * Villkoret är presentation. Grinden är policyn: DELETE auktoriserar med
+ * `manageAccess()` oavsett vad knappen visade.
+ */
+const isWithdrawable = (invitation) => invitation.status === 'pending' || invitation.status === 'expired';
+
+/*
+ * Omfånget på en inbjudningsrad. Itemets namn kommer ur `itemNames`, samma
+ * uppslag som åtkomstlistan använder — kontrollern fyller det ur båda
+ * listorna, med `withTrashed()`, så en inbjudan till ett sedan länge
+ * mjukraderat item redovisas med sitt namn och inte som en tom rad.
+ */
+const invitationScope = (invitation) =>
+    invitation.item === null ? t('sharing.invitations.item_container') : props.itemNames[invitation.item];
+
+const invitationInviter = (invitation) =>
+    props.invitedByNames[invitation.invited_by] ?? t('sharing.accesses.granted_by_unknown');
 </script>
 
 <template>
@@ -133,6 +164,71 @@ const historyDate = (access) =>
                     </li>
                 </ul>
             </template>
+        </section>
+
+        <!--
+            Tredje sektionen, se issue 55b § Beslut 5. `invitations` är `null`
+            för en deltagare som inte är medlem i ägarkontot, och då ritas
+            ingenting — ingen v-if här är ett skydd, den är formatering.
+            Kontrollern skickar ingenting alls.
+        -->
+        <section v-if="invitations" class="mt-10">
+            <h2 class="text-lg font-semibold">{{ t('sharing.invitations.heading') }}</h2>
+            <p class="mt-1 text-sm text-slate-600">{{ t('sharing.invitations.description') }}</p>
+
+            <!--
+                Ett svar som inte går att dra tillbaka — en redan besvarad rad
+                — blir ett formulärfel på nyckeln `invitation`, inte en rå
+                felkod på skärmen. Det står här och inte per rad: raden felet
+                gäller är redan besvarad och bär ingen egen yta att sätta det
+                på.
+            -->
+            <p
+                v-if="page.props.errors.invitation"
+                role="alert"
+                class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            >
+                {{ page.props.errors.invitation }}
+            </p>
+
+            <InvitationForm
+                v-if="can.manage"
+                :container-ulid="container.ulid"
+                :levels="levels"
+                :items="items"
+            />
+
+            <ul v-if="invitations.length > 0" class="mt-4 flex flex-col gap-2">
+                <li
+                    v-for="invitation in invitations"
+                    :key="invitation.ulid"
+                    class="flex flex-col gap-1 rounded border border-slate-300 bg-white px-4 py-2 text-sm"
+                >
+                    <span class="font-medium text-slate-800">{{ invitation.email }}</span>
+                    <span class="text-slate-700">{{ t(`sharing.level.${invitation.level}.label`) }}</span>
+                    <span class="text-slate-700">{{ invitationScope(invitation) }}</span>
+                    <span class="text-slate-700">{{ t(`sharing.invitations.status.${invitation.status}`) }}</span>
+                    <span class="text-xs text-slate-600">
+                        {{ t('sharing.invitations.expires', { date: formatDate(invitation.expires_at, page.props.locale) }) }}
+                    </span>
+                    <span class="text-xs text-slate-600">
+                        {{ t('sharing.invitations.invited_by') }}: {{ invitationInviter(invitation) }}
+                    </span>
+
+                    <Link
+                        v-if="can.manage && isWithdrawable(invitation)"
+                        :href="`/containers/${container.ulid}/invitations/${invitation.ulid}`"
+                        method="delete"
+                        as="button"
+                        preserve-scroll
+                        class="self-start text-sm text-red-700 underline"
+                    >
+                        {{ t('sharing.invitations.revoke') }}
+                    </Link>
+                </li>
+            </ul>
+
+            <p v-else class="mt-4 text-sm text-slate-600">{{ t('sharing.invitations.empty') }}</p>
         </section>
     </ContainerLayout>
 </template>

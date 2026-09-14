@@ -6,10 +6,12 @@ use App\Actions\Access\ListContainerAccesses;
 use App\Actions\Access\ListParticipants;
 use App\Http\Resources\ContainerAccessResource;
 use App\Http\Resources\ContainerResource;
+use App\Http\Resources\InvitationResource;
 use App\Http\Resources\ParticipantResource;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
+use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Access\AccessLevel;
@@ -43,8 +45,23 @@ use Inertia\Response;
  * går genom en inbjudan, se § Beslut 2. `POST
  * /api/containers/{container}/accesses` tar en mottagar-ULID, och vägen från
  * en e-postadress till en ULID är ett uppslag "har adressen ett konto?", som
- * är en kontoenumerering. Inbjudningsformuläret och acceptflödet är 55b, och
- * den här sidan får sin tredje sektion där.
+ * är en kontoenumerering.
+ *
+ * **Den tredje sektionen — Inbjudningar — kom med issue 55b** (§ Beslut 5).
+ * Den har SAMMA grind som åtkomsterna, `viewAccesses()`, och skickar
+ * `invitations: null` till den som inte får se dem: en obesvarad inbjudan
+ * röjer en e-postadress, och listan är därför lika känslig som
+ * förvaltningsvyn — [[Konton och åtkomst]] § Behörighetsregler, sista
+ * stycket. Det som skiljer sektionerna är att listan VISAR adressen, medan
+ * förvaltningsvyn aldrig gör det: den här är avsändarens egen lista över vad
+ * hon själv skickat.
+ *
+ * `items` är pärmens levande items, bara för den som får bjuda in: det är
+ * valet av omfång i formuläret, och [[ADR-0028 Åtkomst på itemnivå]]
+ * § Beslut säger att `invitation` speglar omfånget. Utan listan finns
+ * itemavgränsad delning inte i produkten, och det här är den enda ytan i M10
+ * där den kan skapas — issue 57 lägger senare till vägen från itemets egen
+ * sida. Ingen sökning och ingen paginering.
  *
  * **Ingen behörighetslogik bor här.** Metoden anropar `Gate::authorize()`
  * respektive `Gate::allows()` och litar på App\Policies\ContainerPolicy,
@@ -112,17 +129,27 @@ class ContainerSharingController extends Controller
         $accesses = $mayViewAccesses ? $listAccesses->handle($container) : null;
         $names = $accesses === null ? null : $this->names($accesses);
 
+        // Samma grind som åtkomsterna: `invitations` är `null` för var och en
+        // som inte får se förvaltningsvyn, och då följer ingen av listans
+        // uppslag med — se klassens docblock och 55a § Beslut 3.
+        $invitations = $mayViewAccesses ? $this->invitations($container) : null;
+
         return Inertia::render('Containers/Sharing', [
             'container' => ContainerResource::make($container)->resolve($request),
             'participants' => ParticipantResource::collection($listParticipants->handle($container))->resolve($request),
             'accesses' => $accesses === null
                 ? null
                 : ContainerAccessResource::collection($accesses)->resolve($request),
-            'itemNames' => (object) ($accesses === null ? [] : $this->itemNames($accesses)),
+            'invitations' => $invitations === null
+                ? null
+                : InvitationResource::collection($invitations)->resolve($request),
+            'itemNames' => (object) ($accesses === null ? [] : $this->itemNames($accesses, $invitations)),
             // `null` och `{}` är samma sak för vyn, och båda betyder "du får
             // inte se åtkomsterna alls" — se klassens docblock.
             'granteeNames' => (object) ($names['grantee'] ?? []),
             'grantedByNames' => (object) ($names['grantedBy'] ?? []),
+            'invitedByNames' => (object) ($invitations === null ? [] : $this->invitedByNames($invitations)),
+            'items' => $mayViewAccesses ? $this->items($container) : [],
             'levels' => AccessLevel::LADDER,
             'can' => [
                 'manage' => Gate::forUser($user)->allows('manageAccess', $container),
@@ -132,19 +159,118 @@ class ContainerSharingController extends Controller
     }
 
     /**
-     * Item-ULID → itemets namn för de åtkomstrader som har ett item. EN
-     * fråga, oavsett antal rader, och `withTrashed()` av skälet i
-     * klassens docblock.
+     * Pärmens inbjudningar, hydrerade för App\Http\Resources\InvitationResource.
      *
-     * Nyckeln är ULID och inte löpnummer: det är ULID:n resursen bär i
+     * ALLA rader, oavsett status och i samma ordning som `/api`:s `index()`
+     * (issue 10a § Beslut 14): listan visar även tillbakadragna och utgångna,
+     * och statustexten kommer ur resursen — ingen status härleds här.
+     *
+     * Hydreringen är den i App\Http\Controllers\Api\ContainerInvitationController
+     * upprepad. Den borde ha brutits ut som App\Actions\Access\ListContainerAccesses
+     * gjorde i 55a, men issue 55b:s omfångsruta listar bara två nya Actions —
+     * se § Frågor och antaganden i PR:en.
+     *
+     * @return Collection<int, Invitation>
+     */
+    private function invitations(Container $container): Collection
+    {
+        $invitations = $container->invitations()
+            ->orderByDesc('created_at')
+            ->get();
+
+        $inviterIds = $invitations->pluck('invited_by_user_id')
+            ->unique()
+            ->values()
+            ->all();
+
+        $inviterUlids = User::query()->whereIn('id', $inviterIds)->pluck('ulid', 'id');
+
+        $itemIds = $invitations->pluck('item_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        $itemUlids = $itemIds === []
+            ? collect()
+            : Item::withTrashed()->whereIn('id', $itemIds)->pluck('ulid', 'id');
+
+        foreach ($invitations as $invitation) {
+            $invitation->setAttribute('invited_by_ulid', $inviterUlids->get($invitation->invited_by_user_id));
+            $invitation->setAttribute(
+                'item_ulid',
+                $invitation->item_id === null ? null : $itemUlids->get($invitation->item_id),
+            );
+        }
+
+        return $invitations;
+    }
+
+    /**
+     * ULID → namn för dem som bjudit in, i EN fråga. Ett eget uppslag och inte
+     * `grantedByNames`: de två listorna bär olika rader, och en prop som i
+     * smyg bar båda vore en prop som ljuger om sitt namn — samma skäl som
+     * 55a § Beslut 6 ger för `granteeNames` mot `grantedByNames`.
+     *
+     * @param  Collection<int, Invitation>  $invitations
+     * @return array<string, string>
+     */
+    private function invitedByNames(Collection $invitations): array
+    {
+        $ulids = $invitations->pluck('invited_by_ulid')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ulids === []) {
+            return [];
+        }
+
+        return User::query()->whereIn('ulid', $ulids)->pluck('name', 'ulid')->all();
+    }
+
+    /**
+     * Pärmens levande items — omfångsvalet i inbjudningsformuläret, som
+     * `{ulid, name}` och ingenting mer. EN fråga, ingen paginering och ingen
+     * sökning: listan är pärmens innehåll och plantaket sätter taket för hur
+     * lång den kan bli.
+     *
+     * Ingen `withTrashed()`: ett mjukraderat item går inte att bjuda in till,
+     * och `StoreInvitationRequest` avvisar det. Itemets EGEN rad i listan
+     * ovanför kan däremot mycket väl bära ett mjukraderat item — en inbjudan
+     * som redan skickats ska redovisas med sitt item, se `itemNames()`.
+     *
+     * @return list<array{ulid: string, name: string}>
+     */
+    private function items(Container $container): array
+    {
+        return $container->items()
+            ->orderBy('name')
+            ->get(['ulid', 'name'])
+            ->map(fn (Item $item): array => ['ulid' => $item->ulid, 'name' => $item->name])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Item-ULID → itemets namn för de åtkomstrader OCH inbjudningar som har
+     * ett item. EN fråga, oavsett antal rader, och `withTrashed()` av skälet i
+     * klassens docblock: en grant — och en inbjudan — på ett sedan länge
+     * mjukraderat item ska redovisas med sitt namn, inte som `null`, för
+     * `null` läses som "hela pärmen".
+     *
+     * Nyckeln är ULID och inte löpnummer: det är ULID:n resurserna bär i
      * `item`, och vyn slår upp på den utan att känna till något löpnummer.
      *
      * @param  Collection<int, ContainerAccess>  $accesses
+     * @param  Collection<int, Invitation>|null  $invitations
      * @return array<string, string>
      */
-    private function itemNames(Collection $accesses): array
+    private function itemNames(Collection $accesses, ?Collection $invitations = null): array
     {
         $itemIds = $accesses->pluck('item_id')
+            ->merge($invitations?->pluck('item_id') ?? collect())
             ->filter()
             ->unique()
             ->values()
