@@ -28,6 +28,9 @@ const props = defineProps({
     kinds: { type: Array, required: true },
 });
 
+const { t } = useTranslations();
+const { focusFirstError } = useErrorFocus();
+
 const form = useForm({
     name: props.container.name,
     kind: props.container.kind,
