@@ -87,6 +87,37 @@ export function descendantUlids(categories, ulid) {
 }
 
 /*
+ * Kategorierna som val i en `<select>`, i trädordning och indragna efter djup
+ * — se issue 57b § Beslut 5.
+ *
+ * Ett item ligger i HÖGST EN kategori ([[ADR-0004 Fria taggar och
+ * kategorier]]), till skillnad från taggarna som är kryssrutor, och indraget
+ * är det som gör trädet läsbart i en platt lista. Hårt mellanslag (U+00A0) och
+ * inte vanliga: ett `<option>` kollapsar ledande blanksteg i flera webbläsare.
+ *
+ * Byggd ur samma platta lista som buildCategoryTree(), så ordningen är
+ * serverns — syskonen står i `position`-ordning utan att den här funktionen
+ * sorterar om något.
+ *
+ * "Ingen kategori" är INTE med här: den posten bär `null` och inte en ULID,
+ * och vyn äger den raden precis som i föräldraväljaren.
+ */
+export function categoryOptions(categories) {
+    const options = [];
+
+    const walk = (nodes, depth) => {
+        for (const node of nodes) {
+            options.push({ ulid: node.ulid, name: '\u00A0\u00A0\u00A0'.repeat(depth) + node.name });
+            walk(node.children, depth + 1);
+        }
+    };
+
+    walk(buildCategoryTree(categories), 0);
+
+    return options;
+}
+
+/*
  * Valen i en föräldraväljare: pärmens kategorier utom $currentUlid och dess
  * ättlingar. `$currentUlid` är `null` när inget är valt — vid skapandet finns
  * ingen cykel att undvika, för den nya kategorin har inga ättlingar.

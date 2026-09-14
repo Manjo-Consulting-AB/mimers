@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import { itemFields } from '../../../components/itemPresentation.js';
@@ -25,12 +25,19 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * bygger datumet i lokal tid i stället för att tolka strängen som UTC — se
  * modulens docblock. De räknas aldrig om till en annan tidszon.
  *
- * **`can` ritas inte upp här** (Beslut 6). Flaggorna är presentation och styr
- * 57b:s ytor; issuen lägger två GET-rutter och inga skrivande, och en knapp
- * till en rutt som inte finns är precis den knapp Beslut 7 förbjuder. En
- * användare med bara `read` får `can.update`/`can.delete`/`can.create` falskt
- * och ser därför varken en redigerings-, raderings- eller skapayta — varken
- * nu eller i 57b.
+ * **`can` ritar skrivytorna** (Beslut 6 och issue 57b § Beslut 2 och 8). Varje
+ * flagga är sin egen grind: `can.update` är `ItemPolicy::update()` (`write`-
+ * pinnen), `can.delete` är `ItemPolicy::delete()` (`delete`-pinnen, en pinne
+ * högre) och `can.create` är `ItemPolicy::create()` på ITEMET, som ritar
+ * barn-itemets skapayta i issue 58. En användare med bara `read` får alla
+ * falska och ser ingen skrivyta alls; en `write`-mottagare ser redigeringen
+ * men inte raderingsknappen.
+ *
+ * **Raderingen bekräftas och säger vad som händer** (§ Beslut 8). Den är mjuk
+ * — `deleted_at` sätts och ingenting annat ([[ADR-0008 Soft delete och
+ * papperskorg]]) — så texten säger papperskorgen och de 30 dagarna, aldrig
+ * "raderas permanent", vilket vore osant. Ingen kaskadtext om bilagor, scheman
+ * eller kostnader: de följer itemet, och papperskorgen är issue 62.
  *
  * Kategorinamnet slås upp i `categories` (ULID → namn), byggd bredvid
  * resursen i kontrollern — se App\Http\Controllers\ItemController. ItemResource
@@ -62,6 +69,23 @@ const fields = computed(() =>
 );
 
 const categoryName = computed(() => props.categories[props.item.category] ?? null);
+
+/*
+ * Raderingen. Bekräftelsen är webbläsarens egen dialog med serverns mening ur
+ * `lang/` — ingen modal komponent och ingen sträng i JavaScript.
+ *
+ * `router.delete` och inte en <Link method="delete">: bekräftelsen måste
+ * kunna AVBRYTA navigeringen, och en knapp vars enda väg vidare är ett
+ * klick-handtag är lättare att läsa än en länk vars klick går att stoppa.
+ * CSRF-tokenet skickar Inertia åt oss.
+ */
+function destroy() {
+    if (! window.confirm(t('item.destroy.confirm'))) {
+        return;
+    }
+
+    router.delete(`/containers/${props.container.ulid}/items/${props.item.ulid}`);
+}
 </script>
 
 <template>
@@ -69,6 +93,25 @@ const categoryName = computed(() => props.categories[props.item.category] ?? nul
         <Head :title="item.name" />
 
         <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
+
+        <div class="mt-4 flex gap-4 text-sm">
+            <Link
+                v-if="can.update"
+                :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
+                class="font-medium text-blue-700 hover:underline"
+            >
+                {{ t('item.edit.action') }}
+            </Link>
+
+            <button
+                v-if="can.delete"
+                type="button"
+                class="font-medium text-red-700 hover:underline"
+                @click="destroy"
+            >
+                {{ t('item.destroy.action') }}
+            </button>
+        </div>
 
         <dl class="mt-8 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
             <div v-for="field in fields" :key="field.key">

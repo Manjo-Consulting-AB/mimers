@@ -103,6 +103,9 @@ return [
         'tag-created' => 'Taggen är skapad.',
         'tag-updated' => 'Taggen är sparad.',
         'tag-deleted' => 'Taggen är raderad.',
+        'item-created' => 'Itemet är skapat.',
+        'item-updated' => 'Itemet är sparat.',
+        'item-deleted' => 'Itemet ligger i papperskorgen. Det går att återställa i 30 dagar.',
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -406,9 +409,10 @@ return [
         ],
     ],
 
-    // Itemsidorna, se issue 57a § Beslut 10. Samma indelning som `container`:
-    // `index` är listan, `show` är detaljvyn. Miniatyrerna och skapaytan är
-    // issue 61 respektive 57b och har därför inga nycklar här än.
+    // Itemsidorna, se issue 57a § Beslut 10 och issue 57b § Beslut 9. Samma
+    // indelning som `container`: `index` är listan, `show` är detaljvyn,
+    // `create`/`edit`/`destroy` är skrivytorna och `form` är fältetiketterna de
+    // två formulären delar. Miniatyrerna är issue 61.
     'item' => [
         // Listan är pärmens förstasida. `empty` säger att PÄRMEN är tom och
         // aldrig att den kanske är det: en omfångsbegränsad mottagare ser bara
@@ -417,6 +421,7 @@ return [
         'index' => [
             'title' => 'Items',
             'heading' => 'Items',
+            'create' => 'Nytt item',
             'empty' => 'Pärmen är tom.',
         ],
 
@@ -433,6 +438,64 @@ return [
             'position_note' => 'Placering',
             'category' => 'Kategori',
             'tags' => 'Taggar',
+        ],
+
+        // Formulärets fältetiketter, se issue 57b § Beslut 9. Produktens ord
+        // och inte kolumnnamnen: *Inköpt* och *Garanti till och med* är vad
+        // fältet frågar efter, till skillnad från detaljvyns sammanfattande
+        // *Inköpsdatum* och *Garanti till*. Därför egna nycklar och inte
+        // `show.*` återanvända — två ytor med olika uppgift får två ord.
+        'form' => [
+            'name' => 'Namn',
+            'description' => 'Beskrivning',
+            'manufacturer' => 'Tillverkare',
+            'model' => 'Modell',
+            'serial_number' => 'Serienummer',
+            'purchased_at' => 'Inköpt',
+            'warranty_until' => 'Garanti till och med',
+            'position_note' => 'Var den finns',
+
+            // Ett item ligger i HÖGST en kategori ([[ADR-0004 Fria taggar och
+            // kategorier]]). Raden överst i väljaren är ett val och inte ett
+            // tomt fält.
+            'category' => 'Kategori',
+            'category_none' => '— ingen kategori —',
+            'categories_empty' => 'Pärmen har inga kategorier än.',
+            'categories_empty_link' => 'Skapa kategorier',
+
+            // Taggarna är kryssrutor, en per tagg i pärmen. En ny tagg skapas
+            // på taggsidan och inte här: en väg till samma skrivning på två
+            // ställen är två regler att hålla i takt (Beslut 5).
+            'tags' => 'Taggar',
+            'tags_empty' => 'Pärmen har inga taggar än.',
+            'tags_empty_link' => 'Skapa taggar',
+
+            // Kontot posten tillskrivs — varvet, inte den anställde. Bara vid
+            // skapandet: vem som skapade raden är historik (Beslut 4).
+            'account' => 'Konto',
+        ],
+
+        'create' => [
+            'title' => 'Nytt item',
+            'heading' => 'Nytt item',
+            'submit' => 'Skapa',
+        ],
+
+        // `action` är länken på detaljvyn; `title`/`heading`/`submit` är sidan
+        // och formuläret.
+        'edit' => [
+            'action' => 'Redigera',
+            'title' => 'Redigera item',
+            'heading' => 'Redigera item',
+            'submit' => 'Spara',
+        ],
+
+        // Raderingen är MJUK ([[ADR-0008 Soft delete och papperskorg]]), och
+        // `confirm` säger det: papperskorgen och de 30 dagarna, aldrig
+        // "raderas permanent", vilket vore osant (Beslut 8).
+        'destroy' => [
+            'action' => 'Radera',
+            'confirm' => 'Itemet hamnar i papperskorgen och går att återställa i 30 dagar. Vill du fortsätta?',
         ],
     ],
 
