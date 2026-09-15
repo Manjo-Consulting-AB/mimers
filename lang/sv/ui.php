@@ -668,6 +668,24 @@ return [
             'destroy' => 'Ta bort',
             'destroy_confirm' => 'Bilagan flyttas till papperskorgen och går att återställa i 30 dagar. Vill du fortsätta?',
 
+            // Issue 61b § Beslut 7: visningens fyra strängar. `alt` står inte
+            // här — det är filnamnet och kommer ur datan.
+            //
+            // `file_icon` är etiketten på den neutrala filikon som ritas i
+            // stället för en miniatyr (Beslut 1): en bilaga utan derivat, som
+            // en nyss uppladdad bild eller en PDF, får aldrig bli en trasig
+            // bild. Den säger vad läsaren ser, inte vad filen är — filnamnet
+            // står bredvid.
+            //
+            // `pdf_fallback` står under PDF-ramen (Beslut 4). Vyn kan inte
+            // veta om webbläsaren har en egen läsare, så meningen är där hela
+            // tiden och pekar på nedladdningslänken som varje rad har ändå
+            // (Beslut 5).
+            'viewer_heading' => 'Bildvisaren',
+            'viewer_close' => 'Stäng',
+            'file_icon' => 'Filen visas som ikon',
+            'pdf_fallback' => 'Går PDF:en inte att visa? Ladda ner den i stället.',
+
             'upload_heading' => 'Ladda upp filer',
             'billing_note' => 'Lagringen räknas mot kontot nedan, inte mot pärmens ägare.',
             'account' => 'Kontot som betalar',

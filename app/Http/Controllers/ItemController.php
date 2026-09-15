@@ -16,12 +16,14 @@ use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
 use App\Http\Resources\TagResource;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\Tag;
 use App\Models\User;
+use App\Support\Files\FileOrigin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -269,8 +271,11 @@ class ItemController extends Controller
         // AttachmentResource läser `mime_type`/`byte_size` respektive
         // `billed_account` därifrån: listan kostar ett konstant antal frågor
         // oavsett antalet bilagor, aldrig en fråga per rad (Beslut 10).
+        // `storedFile.derivatives` kom med issue 61b av samma skäl: vilka
+        // varianter som finns är `variants`-propen nedan, och den får inte
+        // kosta en fråga per rad.
         $attachments = $item->attachments()
-            ->with(['storedFile', 'billedAccount'])
+            ->with(['storedFile.derivatives', 'billedAccount'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
@@ -281,6 +286,19 @@ class ItemController extends Controller
             'categories' => $this->categoryNames([$item]),
             'attachments' => AttachmentResource::collection($attachments)->resolve($request),
             'maxUploadBytes' => (int) config('files.max_upload_bytes'),
+
+            // Bilagans ULID → de varianter som faktiskt finns (issue 61b
+            // § Beslut 1). Ligger BREDVID resursen och inte i den: vilka
+            // varianter som finns är vyens fråga, och AttachmentResource är
+            // `/api`:s format som den här issuen inte rör.
+            'variants' => $this->variants($attachments),
+
+            // Sant när användarfiler levereras från en egen origin (Beslut 2).
+            // Vyn ritar bildvisaren och PDF-ramen bara då; annars faller
+            // leveransen tillbaka på `attachment` och en <img> eller <iframe>
+            // mot samma URL vore i bästa fall tom. Flaggan räknas här och
+            // läses aldrig ur window.location i klienten.
+            'inlineEnabled' => FileOrigin::host() !== null,
             'links' => $this->groupLinks(ItemLinkResource::collection($links)->resolve($request)),
             'counterparts' => $this->counterparts($user, $container, $item, $links, $listItems),
             'can' => [
@@ -763,5 +781,46 @@ class ItemController extends Controller
         }
 
         return $names;
+    }
+
+    /**
+     * Bilagans ULID → de derivatvarianter som finns för dess stored_file,
+     * så som vyn behöver dem för att rita en miniatyr (issue 61b § Beslut 1).
+     *
+     * **Uppslaget är det som gör en `<img>` ärlig.** `?variant=thumb` mot en
+     * bilaga utan derivat svarar 404 (issue 19a § Beslut 5), och en `<img>`
+     * som pekar på en 404 är en trasig bild i vyn. Derivaten genereras
+     * dessutom i ett köat jobb (issue 18), så en bild som just laddats upp
+     * har ännu ingen miniatyr. Vyn ritar därför en miniatyr bara när `thumb`
+     * står i listan och en neutral filikon annars — ingen `onerror`-reparation
+     * i komponenten.
+     *
+     * Byggd ur de eager-laddade relationerna, precis som `categoryNames()`:
+     * noll extra frågor per rad, och uppslaget läcker ingenting — en bilaga
+     * användaren ser är hennes att se.
+     *
+     * En bilaga utan derivat får en tom lista och inte en utelämnad nyckel:
+     * vyns uppslag är detsamma för alla rader, och en nyckel som saknas hade
+     * tvingat fram en andra gren i komponenten.
+     *
+     * @param  iterable<Attachment>  $attachments
+     * @return array<string, list<string>>
+     */
+    private function variants(iterable $attachments): array
+    {
+        $variants = [];
+
+        foreach ($attachments as $attachment) {
+            // Sorterad: relationen har ingen egen ordning, och en prop vars
+            // innehåll byter plats mellan två anrop mot samma rad är brus i
+            // varje svar Inertia skickar.
+            $variants[$attachment->ulid] = $attachment->storedFile->derivatives
+                ->pluck('variant')
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        return $variants;
     }
 }

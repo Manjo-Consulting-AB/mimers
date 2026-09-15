@@ -595,6 +595,24 @@ return [
             'destroy' => 'Remove',
             'destroy_confirm' => 'The attachment moves to the trash and can be restored within 30 days. Continue?',
 
+            // Issue 61b decision 7: the four strings of the inline view. `alt`
+            // is not among them — it is the filename and comes from the data.
+            //
+            // `file_icon` labels the neutral file icon drawn in place of a
+            // thumbnail (decision 1): an attachment without derivatives, such
+            // as a freshly uploaded image or a PDF, must never become a broken
+            // image. It says what the reader sees, not what the file is — the
+            // filename sits next to it.
+            //
+            // `pdf_fallback` stands under the PDF frame (decision 4). The view
+            // cannot know whether the browser has a reader of its own, so the
+            // sentence is there the whole time and points at the download link
+            // every row has anyway (decision 5).
+            'viewer_heading' => 'Image viewer',
+            'viewer_close' => 'Close',
+            'file_icon' => 'The file is shown as an icon',
+            'pdf_fallback' => 'Cannot display the PDF? Download it instead.',
+
             'upload_heading' => 'Upload files',
             'billing_note' => 'Storage is charged to the account below, not to the binder owner.',
             'account' => 'The account that pays',
