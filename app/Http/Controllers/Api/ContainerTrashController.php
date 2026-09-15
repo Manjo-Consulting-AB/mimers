@@ -2,17 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Usage\AdjustUsage;
+use App\Actions\Trash\ListTrash;
+use App\Actions\Trash\ListTrashedContainers;
+use App\Actions\Trash\RestoreTrashedContainer;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Trash\RestoreContainerRequest;
 use App\Http\Resources\TrashEntryResource;
 use App\Models\Container;
-use Carbon\Carbon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -29,6 +28,15 @@ use Illuminate\Support\Facades\Gate;
  * retentionen, aldrig en lagrad kolumn), samma sortering på `deleted_at`
  * fallande utan paginering. En klient som ritar papperskorgen ska kunna
  * använda samma komponent för båda listorna.
+ *
+ * **Sedan issue 62b § Beslut 2 är båda metoderna utbrutna till Actions** som
+ * webben anropar på samma sätt och av samma skäl som 62a bröt ut sin lista:
+ * App\Actions\Trash\ListTrashedContainers bär frågan och
+ * App\Actions\Trash\RestoreTrashedContainer bär transaktionen, radlåset och
+ * `AdjustUsage`. Det här är en REN utbrytning — samma 200, samma kropp, samma
+ * felkoder och samma ordning uppslag-gate-utgång. Posten byggs av
+ * `ListTrash::entry()`, samma sex nycklar som förut, så de två byggarna av
+ * samma form inte kan glida isär.
  *
  * INGEN behörighetslogik bor här (ADR-0024, Beslut 2): index begränsas av
  * själva frågan — containers vars ägarkonto användaren är medlem i, samma
@@ -62,24 +70,16 @@ class ContainerTrashController extends Controller
      * Utgångna containers finns inte (Beslut 3): rader vars `deleted_at` är
      * äldre än retentionen listas inte, även om gallringsjobbet (20b/20c)
      * ännu inte hunnit köra — svaret får aldrig bero på cronjobbets tajmning.
+     *
+     * Frågan, gränsen och sorteringen bor i App\Actions\Trash\
+     * ListTrashedContainers (issue 62b § Beslut 2). Svaret läser bara
+     * `entries` och rör den andra halvan av actionens svar.
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, ListTrashedContainers $listTrashedContainers): JsonResponse
     {
-        $user = $request->user();
-        $retentionDays = (int) config('files.trash_retention_days');
-        $cutoff = now()->subDays($retentionDays);
+        $listan = $listTrashedContainers->handle($request->user());
 
-        $rows = [];
-
-        foreach (Container::onlyTrashed()
-            ->whereHas('account.users', fn (Builder $query) => $query->whereKey($user->id))
-            ->where('deleted_at', '>=', $cutoff)
-            ->orderByDesc('deleted_at')
-            ->get(['ulid', 'name', 'deleted_at']) as $container) {
-            $rows[] = $this->entry($container, $retentionDays);
-        }
-
-        return TrashEntryResource::collection($rows)->response();
+        return TrashEntryResource::collection($listan['entries'])->response();
     }
 
     /**
@@ -104,12 +104,17 @@ class ContainerTrashController extends Controller
      * nattjobbet hunnit gallra containern mellan valideringens
      * existensbevis och uppslaget här.
      *
-     * Själva återställningen är `restore()` på EN rad (Beslut 4), ingen
-     * kaskad och ingen genomgång av innehållet. Svaret bär posten med
-     * `deleted_at`/`expires_at` null — klienten kan ta bort den ur
-     * papperskorgsvyn utan en ny hämtning.
+     * Ordningen uppslag → grind → utgång är bindande och delas med webben
+     * (issue 62b § Beslut 2): en icke-medlem får 403 också för en utgången
+     * container, och en medlem får 404. Bara transaktionen är utbruten — den
+     * bor i App\Actions\Trash\RestoreTrashedContainer tillsammans med
+     * radlåset och `AdjustUsage`, medan grinden stannar här
+     * ([[ADR-0024 Tunna controllers och actions]]).
+     *
+     * Svaret bär posten med `deleted_at`/`expires_at` null — klienten kan ta
+     * bort den ur papperskorgsvyn utan en ny hämtning.
      */
-    public function restore(RestoreContainerRequest $request, AdjustUsage $adjustUsage): JsonResponse
+    public function restore(RestoreContainerRequest $request, RestoreTrashedContainer $restoreTrashedContainer): JsonResponse
     {
         $retentionDays = (int) config('files.trash_retention_days');
         $cutoff = now()->subDays($retentionDays);
@@ -128,55 +133,15 @@ class ContainerTrashController extends Controller
             throw ApiException::make('resource.not_found', [], 404);
         }
 
-        DB::transaction(function () use ($container, $adjustUsage): void {
-            // Återställningen och ökningen i en transaktion (issue 26a):
-            // containern blir levande igen och kommer tillbaka i ägarkontots
-            // räknare. Beslutet att öka grundas på radens tillstånd UNDER
-            // radlåset (granskningsfynd 1): två samtidiga återställningar av
-            // samma container skulle annars båda se en mjukraderad rad och öka
-            // räknaren två gånger. withTrashed — raden ligger i papperskorgen.
-            $rad = Container::withTrashed()
-                ->whereKey($container->getKey())
-                ->lockForUpdate()
-                ->first();
+        $restoreTrashedContainer->handle($container);
 
-            if ($rad === null) {
-                return;
-            }
-
-            $varMjukraderad = $rad->trashed();
-
-            // restore() på instansen även när en samtidig återställning redan
-            // hunnit först — en no-op i databasen som synkar instansens
-            // deleted_at, så svaret bär posten som levande.
-            $container->restore();
-
-            if ($varMjukraderad) {
-                $adjustUsage->handle($container->account_id, containersDelta: 1);
-            }
-        });
-
-        return (new TrashEntryResource($this->entry($container, $retentionDays)))->response();
-    }
-
-    /**
-     * Bygger en papperskorgspost för en container. `type` är alltid
-     * `container`, `context` alltid null — en container har ingen förälder
-     * att beskriva den med. `deleted_at` är en Carbon eller null (efter
-     * återställning) och `expires_at` härleds ur den plus retentionen —
-     * aldrig en lagrad kolumn (Beslut 3).
-     *
-     * @return array{type: string, ulid: string, label: string, context: null, deleted_at: Carbon|null, expires_at: Carbon|null}
-     */
-    private function entry(Container $container, int $retentionDays): array
-    {
-        return [
-            'type' => 'container',
-            'ulid' => $container->ulid,
-            'label' => $container->name,
-            'context' => null,
-            'deleted_at' => $container->deleted_at,
-            'expires_at' => $container->deleted_at?->copy()->addDays($retentionDays),
-        ];
+        return (new TrashEntryResource(ListTrash::entry(
+            'container',
+            $container->ulid,
+            $container->name,
+            null,
+            $container->deleted_at,
+            $retentionDays,
+        )))->response();
     }
 }

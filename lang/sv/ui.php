@@ -123,6 +123,13 @@ return [
         // innehåll och inte item (samma skäl som issue 20a § Beslut 1).
         'trash-restored' => 'Innehållet är återställt.',
 
+        // Issue 62b § Beslut 5 och 6. Raderingen landar på pärmlistan — och
+        // meningen pekar på papperskorgen, där länken ligger alldeles under.
+        // Återställningen säger att pärmen är tillbaka; den blir INTE aktiv av
+        // sig själv, för att välja pärm är användarens handling.
+        'container-trashed' => 'Pärmen ligger i papperskorgen.',
+        'container-restored' => 'Pärmen är återställd.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -414,6 +421,17 @@ return [
             'kind' => 'Typ',
 
             'submit' => 'Spara',
+        ],
+
+        // Raderingen, se issue 62b § Beslut 4 och 5. `confirm` bär pärmens
+        // namn: en bekräftelse som inte säger vad som försvinner är en
+        // bekräftelse man klickar bort. Den säger att allt följer med, att
+        // pärmen ligger kvar i papperskorgen i 30 dagar och att den går att
+        // återställa därifrån — och ALDRIG "raderas permanent", för
+        // raderingen är mjuk (issue 8) och det ordet vore osant.
+        'destroy' => [
+            'action' => 'Radera pärmen',
+            'confirm' => ':name och allt i den flyttas till papperskorgen. Där ligger den kvar i 30 dagar och går att återställa. Vill du fortsätta?',
         ],
 
         // Kategoriträdet, se issue 56a § Beslut 1, 2, 3 och 4. `description`
@@ -1006,12 +1024,15 @@ return [
         'deleted_at' => 'Raderat :date',
 
         // Nycklarna är `type`-värdena ur RestoreRequest::TYPES, aldrig
-        // påhittade egna namn — samma regel som container.kind.
+        // påhittade egna namn — samma regel som container.kind. `container`
+        // kom med issue 62b: en raderad pärm bär samma nyckel ur
+        // TrashEntryResource, och raden är samma komponent i båda listorna.
         'type' => [
             'item' => 'Item',
             'attachment' => 'Bilaga',
             'category' => 'Kategori',
             'tag' => 'Tagg',
+            'container' => 'Pärm',
         ],
 
         'expires' => [
@@ -1021,5 +1042,19 @@ return [
         ],
 
         'restore' => 'Återställ',
+
+        // Papperskorgen för raderade PÄRMAR, se issue 62b § Beslut 7 och 8.
+        // Den ligger på TOPPNIVÅ — en raderad pärm löses inte upp av
+        // ruttbindningen — och `link` är raden under pärmlistan, alltid
+        // synlig. Texten är konstant och räknar ingenting: ett tal hade varit
+        // en fråga per sidladdning (Beslut 8).
+        'containers' => [
+            'title' => 'Papperskorgen',
+            'heading' => 'Raderade pärmar',
+            'description' => 'Pärmar du raderat. Efter 30 dagar tas de bort för gott.',
+            'empty' => 'Inga raderade pärmar.',
+            'link' => 'Papperskorgen',
+            'back' => 'Till pärmarna',
+        ],
     ],
 ];

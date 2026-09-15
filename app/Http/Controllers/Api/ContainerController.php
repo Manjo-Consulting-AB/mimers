@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Container\CreateContainer;
-use App\Actions\Usage\AdjustUsage;
+use App\Actions\Container\TrashContainer;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
@@ -13,7 +13,6 @@ use App\Models\Container;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -158,32 +157,19 @@ class ContainerController extends Controller
      * radering: App\Models\Container använder SoftDeletes, så `delete()`
      * sätter bara `deleted_at`. Papperskorg, återställning och gallring är
      * issue 20, se issue 8 § Beslut 10.
+     *
+     * Sedan issue 62b § Beslut 2 är skrivningen utbruten till
+     * App\Actions\Container\TrashContainer, som webbens raderingsknapp
+     * anropar på samma sätt. Det här är en REN utbrytning — samma 204, samma
+     * antal frågor och samma radlås, och samma ordning grind-före-skrivning.
+     * `Gate::authorize()` står kvar här, utanför actionen, så att API:ets 403
+     * och webbens 403 kommer från samma ställe.
      */
-    public function destroy(Container $container, AdjustUsage $adjustUsage): Response
+    public function destroy(Container $container, TrashContainer $trashContainer): Response
     {
         Gate::authorize('delete', $container);
 
-        $accountId = $container->account_id;
-
-        DB::transaction(function () use ($container, $accountId, $adjustUsage): void {
-            // Beslutet att minska grundas på radens tillstånd UNDER radlåset
-            // (granskningsfynd 1): två samtidiga DELETE på samma container
-            // skulle annars båda se en levande rad och dra av en gång var.
-            $levande = Container::query()
-                ->whereKey($container->getKey())
-                ->lockForUpdate()
-                ->exists();
-
-            if (! $levande) {
-                return;
-            }
-
-            $container->delete();
-
-            // Mjukraderingen och minskningen i en transaktion (issue 26a) —
-            // containern slutar vara levande och lämnar ägarkontots räknare.
-            $adjustUsage->handle($accountId, containersDelta: -1);
-        });
+        $trashContainer->handle($container);
 
         return response()->noContent();
     }

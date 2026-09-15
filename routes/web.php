@@ -17,6 +17,7 @@ use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
+use App\Http\Controllers\ContainerTrashController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
@@ -252,8 +253,11 @@ Route::middleware('auth')->group(function () {
      * `{container}` binds på ULID via #[RouteKey('ulid')] på
      * App\Models\Container, som överallt annars.
      *
-     * **Ingen DELETE.** Papperskorgen som återställer en raderad pärm är
-     * issue 62, och ingen issue i M10 beställer en raderingsknapp innan dess.
+     * **DELETE kom med issue 62b § Beslut 4.** Raderingen står på pärmens
+     * INSTÄLLNINGSSIDA och aldrig i listan: en raderingsknapp bredvid *Gör
+     * aktiv* är en felklickning från att pärmen försvinner. Vägen tillbaka —
+     * papperskorgen på `/trash/containers` — byggdes i samma issue, för en
+     * raderingsknapp utan en väg tillbaka är en fälla.
      *
      * `/containers/create` ligger före `/containers/{container}/edit` i
      * filen för läsbarhetens skull — `create` är ett fast segment och
@@ -426,6 +430,17 @@ Route::middleware('auth')->group(function () {
         ->name('containers.update');
 
     /*
+     * Issue 62b § Beslut 4 · Raderingen. Mjuk, utan kaskad (issue 8), och bär
+     * ingen bekräftelseruta på servern: `window.confirm` i
+     * resources/js/pages/Containers/Edit.vue är klientens svar på "är du
+     * säker". Grinden är `ContainerPolicy::delete()` — bara ägarkontots egna
+     * medlemmar, aldrig ett fryst konto och aldrig en delegerad åtkomst, hur
+     * hög nivå den än har.
+     */
+    Route::delete('/containers/{container}', [ContainerController::class, 'destroy'])
+        ->name('containers.destroy');
+
+    /*
      * Den aktiva pärmen sätts på tre ställen (Beslut 6): här, i store() ovan,
      * och i App\Support\Frontend\ActiveContainer::set() som är den enda som
      * rör sessionsnyckeln. `view`-grinden och inte `update`: att välja vilken
@@ -536,8 +551,10 @@ Route::middleware('auth')->group(function () {
      * `{container}`, `{category}` och `{tag}` binds alla på ULID via
      * `#[RouteKey('ulid')]` på App\Models\Container, Category respektive Tag.
      *
-     * **Sidorna har ingen `destroy()` på pärmen** — den hör till issue 62.
-     * Itemvyn kom med issue 57a och ligger i sin egen grupp ovan.
+     * **Sidorna har ingen `destroy()` på pärmen.** Raderingen ligger på
+     * pärmens inställningssida sedan issue 62b § Beslut 4 — inte här, för det
+     * här är kategoriernas och taggarnas yta. Itemvyn kom med issue 57a och
+     * ligger i sin egen grupp ovan.
      *
      * Skrivningarna svarar `back()` med en flash-kod — mönstret från issue 51
      * § Beslut 5, `status` och ingenting annat — och ett domänfel som ett
@@ -604,7 +621,8 @@ Route::middleware('auth')->group(function () {
      * något att binda, men också fyra rutter och en andra form än `/api`:s.
      *
      * **Ingen DELETE och ingen tömning.** Gallringen är schemalagd (20b) och
-     * papperskorgen för raderade PÄRMAR är 62b — se TrashController.
+     * lever vid sidan av den här ytan i båda ändar. Papperskorgen för raderade
+     * PÄRMAR är 62b och ligger på toppnivå — se den egna gruppen nedan.
      *
      * Återställningen svarar `back()` med en flash-kod — mönstret från issue
      * 51 § Beslut 5, `status` och ingenting annat — och ett domänfel som ett
@@ -615,6 +633,39 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/containers/{container}/trash/restore', [TrashController::class, 'restore'])
         ->name('containers.trash.restore');
+
+    /*
+     * Issue 62b § Beslut 1, 2 och 3 · Papperskorgen för raderade PÄRMAR, se
+     * App\Http\Controllers\ContainerTrashController.
+     *
+     * Två rutter (Beslut 1), samma form som `/api` (issue 20c § Beslut 1):
+     * LISTAN är en GET, och återställningen tar ULID:en i KROPPEN och inte i
+     * URL:en. Skälet är bindande — en raderad pärm löses inte upp av
+     * ruttbindningen, för `{container}` ser bara levande rader. Att nästla
+     * rutterna under en pärm som inte finns går alltså inte, och därför ligger
+     * de på TOPPNIVÅ.
+     *
+     * **Ingen `scopeBindings()`** och ingen `{container}`-parameter: det finns
+     * ingenting att scope-binda mot. `RestoreContainerRequest` bevisar att
+     * ULID:en finns i `container`-tabellen OCH är mjukraderad — en ULID ur en
+     * annan användares konto passerar valideringen men faller på grinden, som
+     * prövar `ContainerPolicy::delete()` mot radens ägarkonto.
+     *
+     * **På toppnivå även i NAVIGERINGEN**: `/trash/containers` nås ur
+     * pärmlistan (Beslut 8), inte ur pärmens egen navigation — den som står i
+     * en raderad pärm har ingen pärm att navigera i. Länken på `/containers`
+     * är alltid synlig och räknar ingenting: en räknare hade varit en fråga
+     * per sidladdning.
+     *
+     * Återställningen svarar en omdirigering med en flash-kod — mönstret från
+     * issue 51 § Beslut 5, `status` och ingenting annat — och raderingen
+     * `container-trashed` på samma sätt, mot pärmlistan.
+     */
+    Route::get('/trash/containers', [ContainerTrashController::class, 'index'])
+        ->name('trash.containers');
+
+    Route::post('/trash/containers/restore', [ContainerTrashController::class, 'restore'])
+        ->name('trash.containers.restore');
 });
 
 /*
