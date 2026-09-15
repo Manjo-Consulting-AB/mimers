@@ -26,11 +26,34 @@ use function Pest\Laravel\get;
  * storage/files/ när sviten körs. config('files.internal_redirect') nollställs
  * i beforeEach: testerna för den sanna grenen sätter den i testet, och ett
  * läckage till nästa test skulle annars ge svitberoende (Beslut 6).
+ *
+ * Sedan issue 61a prövar filen också filoriginets gren, och den kräver att
+ * `files.deliver` finns. Rutten registreras vid appens uppstart och bara när
+ * filoriginet är satt, och appen byggs i Tests\TestCase::createApplication()
+ * — före varje beforeEach. Miljön sätts därför i beforeAll och tas bort i
+ * afterAll: hookarna kör före respektive efter den här filens appar och ingen
+ * annans, så varje annan fil i sviten möter miljön utan handpåläggning precis
+ * som förut. beforeEach nollställer `files.url`: appdomänens leverans är
+ * filens standard, och den sanna grenen sätter originet själv.
  */
+
+beforeAll(function () {
+    putenv('FILES_URL=https://files.test');
+    $_ENV['FILES_URL'] = 'https://files.test';
+    $_SERVER['FILES_URL'] = 'https://files.test';
+});
+
+afterAll(function () {
+    putenv('FILES_URL');
+    unset($_ENV['FILES_URL'], $_SERVER['FILES_URL']);
+});
 
 beforeEach(function () {
     Storage::fake('files');
-    config(['files.internal_redirect' => false]);
+    config([
+        'files.internal_redirect' => false,
+        'files.url' => null,
+    ]);
 });
 
 /**

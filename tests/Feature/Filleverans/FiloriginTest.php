@@ -28,21 +28,45 @@ use function Pest\Laravel\get;
  *   <app>/files/{ulid}          files.download   auth:sanctum  → 302
  *   <filorigin>/files/{ulid}    files.deliver    signed        → bytena
  *
- * Sviten kör med `FILES_URL=https://files.test` i phpunit.xml, eftersom
- * `files.deliver` registreras vid appens uppstart och bara när filoriginet är
- * satt. tests/Pest.php nollställer `files.url` för varje test — miljön utan
- * handpåläggning är svitens standard — så beforeEach här sätter tillbaka det.
- * Appdomänens gren prövas genom att nollställa det igen inne i testet.
+ * **Miljön sätts i `beforeAll`, inte i `beforeEach`.** `files.deliver`
+ * registreras vid appens uppstart och bara när filoriginet är satt (Beslut 2),
+ * och appen byggs i Tests\TestCase::createApplication() — före varje
+ * `beforeEach`, och innan ett enskilt test hinner sätta configen. Pests
+ * `beforeAll`/`afterAll` kör i setUpBeforeClass/tearDownAfterClass, alltså före
+ * respektive efter den här filens appar och ingen annans: miljön är orörd för
+ * varje annan fil i sviten, och `files.url` osatt — miljön utan handpåläggning
+ * — är fortfarande standarden där.
+ *
+ * Appdomänens gren prövas genom att nollställa `files.url` inne i testet, och
+ * den grenen levererar bytena själv oavsett vad miljön sa vid uppstarten —
+ * bara registreringen av rutten är bunden till uppstarten.
  *
  * Storage::fake('files') i beforeEach: inga bytes får hamna i den riktiga
  * storage/files/ när sviten körs.
  */
 
+/** Filoriginets bas-URL, den enda som får stå i miljön under den här filen. */
+function filoriginBas(): string
+{
+    return 'https://files.test';
+}
+
+beforeAll(function () {
+    putenv('FILES_URL='.filoriginBas());
+    $_ENV['FILES_URL'] = filoriginBas();
+    $_SERVER['FILES_URL'] = filoriginBas();
+});
+
+afterAll(function () {
+    putenv('FILES_URL');
+    unset($_ENV['FILES_URL'], $_SERVER['FILES_URL']);
+});
+
 beforeEach(function () {
     Storage::fake('files');
     config([
         'files.internal_redirect' => false,
-        'files.url' => 'https://files.test',
+        'files.url' => filoriginBas(),
     ]);
 });
 
@@ -97,7 +121,7 @@ function filoriginLänk(Attachment $attachment, ?string $variant = null, ?Carbon
  */
 function filoriginUrl(string $sökväg): string
 {
-    return 'https://files.test/'.ltrim($sökväg, '/');
+    return filoriginBas().'/'.ltrim($sökväg, '/');
 }
 
 /** En bilaga i en pärm som $user får läsa. */
@@ -496,7 +520,7 @@ it('präglingen lägger ingen fråga', function () {
 
 it('ruttcachen kan byggas med den domänbundna rutten', function () {
     // `route:cache` bootar en färsk applikation ur miljön — alltså med den
-    // FILES_URL phpunit.xml sätter — och serialiserar varje rutt. Den
+    // FILES_URL beforeAll sätter — och serialiserar varje rutt. Den
     // domänbundna rutten är det nya här, och en rutt som inte går att cacha
     // faller först på servern. Cachefilen städas i finally: ligger den kvar
     // läser nästa test en frusen ruttabell.

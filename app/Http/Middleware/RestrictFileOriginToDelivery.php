@@ -20,8 +20,9 @@ use Symfony\Component\HttpFoundation\Response;
  * Vakten sitter i `web`- och `api`-grupperna och inte globalt: den prövar den
  * **matchade rutten**, och en global middleware kör före routningen och har
  * ingen rutt att pröva. Båda grupperna behövs — `/api` ligger i `api`-gruppen
- * och är en av ytorna som inte ska finnas där. Anrop utanför båda grupperna
- * (`/up`) fångas inte; se PR:ens `Frågor och antaganden`.
+ * och är en av ytorna som inte ska finnas där. Ett anrop utanför båda grupperna
+ * fångas inte; det enda sådana är hälsokontrollen `/up` (bootstrap/app.php),
+ * som därför svarar 200 också på filoriginet. Den bär ingen data och ingen yta.
  *
  * Är `config('files.url')` osatt, eller pekar den på appen själv, är
  * FileOrigin::host() null och vakten gör ingenting — appen svarar som förut.
