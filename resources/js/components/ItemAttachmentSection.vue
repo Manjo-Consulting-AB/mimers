@@ -503,7 +503,21 @@ function destroy(attachment) {
                             class="h-1 w-full"
                         ></progress>
 
-                        <p v-if="entry.error" class="text-sm text-red-700">{{ entry.error }}</p>
+                        <!--
+                            Felraden bär sitt eget id och `role="alert"`: kön
+                            har inget FormField, så `focusFirstError` hittar
+                            inget `file-error` att flytta fokus till. Felet
+                            annonseras i stället när raden ritas, utan att
+                            fokus rycks in i en bakgrundsrad (issue 60b).
+                        -->
+                        <p
+                            v-if="entry.error"
+                            :id="`attachment-error-${entry.id}`"
+                            role="alert"
+                            class="text-sm text-red-700"
+                        >
+                            {{ entry.error }}
+                        </p>
                     </li>
                 </ul>
 

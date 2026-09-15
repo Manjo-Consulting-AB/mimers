@@ -410,6 +410,17 @@ it('lämnar inget halvt tillstånd när uppladdningen avbryts', function () {
     expect($vy)->toContain('entry.percentage = 0');
 });
 
+it('annonserar ett filfel i kön utan att fokus flyttas in i raden', function () {
+    // Kön har inget FormField, alltså inget `file-error` för focusFirstError
+    // att flytta fokus till — anropet blir en tyst no-op. Raden bär därför
+    // `role="alert"` och ett eget id, så att felet läses upp när det ritas i
+    // stället för att bara synas för den som ser skärmen.
+    $vy = File::get(resource_path('js/components/ItemAttachmentSection.vue'));
+
+    expect($vy)->toContain('role="alert"');
+    expect($vy)->toContain('attachment-error-');
+});
+
 it('har köns meningar på båda språken', function () {
     $nycklar = [
         'item.attachment.dropzone',
