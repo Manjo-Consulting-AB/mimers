@@ -66,6 +66,19 @@ const props = defineProps({
      */
     attachments: { type: Array, required: true },
     /*
+     * Bilagans ULID → de derivatvarianter som FINNS, byggd på servern bredvid
+     * AttachmentResource (issue 61b § Beslut 1). Vyn gissar aldrig: en
+     * `?variant=thumb` mot en bilaga utan derivat är 404, och en miniatyr
+     * ritas därför bara när varianten står i den här tabellen.
+     */
+    variants: { type: Object, required: true },
+    /*
+     * Sant när användarfiler levereras från en egen origin (issue 61b
+     * § Beslut 2). Är den falsk är allt `attachment`, och då ritas varken
+     * bildvisaren eller PDF-ramen — bilagesektionen ser ut som i 60a.
+     */
+    inlineEnabled: { type: Boolean, required: true },
+    /*
      * Det TEKNISKA taket på en fil, ur `config('files.max_upload_bytes')`
      * (issue 60b § Beslut 5). Bilagesektionen avvisar en för stor fil med
      * det här talet innan bytena skickas; servern prövar samma tak igen i
@@ -191,6 +204,8 @@ function destroy() {
             :container-ulid="container.ulid"
             :item-ulid="item.ulid"
             :attachments="attachments"
+            :variants="variants"
+            :inline-enabled="inlineEnabled"
             :max-upload-bytes="maxUploadBytes"
             :container-account="container.account"
             :can="can"
