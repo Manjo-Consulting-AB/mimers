@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ActiveContainerController;
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AttachmentDownloadController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
@@ -372,6 +373,45 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/items/{item}/links/{other}', [ItemLinkController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.items.links.destroy');
+
+    /*
+     * Issue 60 · Bilagorna på itemets detaljvy — uppladdning och mjuk
+     * radering, se App\Http\Controllers\AttachmentController.
+     *
+     * Två rutter och ingen sida (Beslut 1). Listningen har ingen egen rutt:
+     * bilagorna kommer med detaljvyns props ur
+     * App\Http\Controllers\ItemController::show(), av samma skäl som 58
+     * § Beslut 1 gav relationerna samma behandling — en andra väg till samma
+     * läsning är en andra sanning om sorteringen och om vad resursen bär
+     * (Beslut 2).
+     *
+     * **`scopeBindings()` på båda**, av samma skäl som varje annan nästlad
+     * skrivning i filen (issue 9b § Beslut 1): utan det löser `{item}` upp en
+     * item-ULID från en annan pärm, och `{attachment}` en bilaga på ett annat
+     * item — den senare blir 404 i stället för raderad. `{item}` binds genom
+     * containerns `items()`, `{attachment}` genom
+     * App\Models\Item::attachments(). Det sätts per rutt och inte på gruppen
+     * — containerrutterna ovan har bara ett rutt-parameter var, och en grupp
+     * hade flyttat dem också.
+     *
+     * **`throttle:uploads` på POST:en** — samma begränsare som `/api` redan
+     * använder (App\Providers\AppServiceProvider::configureUploadRateLimiting()),
+     * och den är nycklad på användaren och inte på rutten, så webben och
+     * API:et delar tak (Beslut 1).
+     *
+     * Båda svarar `back()` med en flash-kod — mönstret från issue 51
+     * § Beslut 5, `status` och ingenting annat — och ett kvot- eller
+     * storleksfel som ett fältfel på `file`, aldrig som en JSON-kropp
+     * (Beslut 5). Nedladdningen är `/files/{attachment}` från issue 19a.
+     */
+    Route::post('/containers/{container}/items/{item}/attachments', [AttachmentController::class, 'store'])
+        ->middleware('throttle:uploads')
+        ->scopeBindings()
+        ->name('containers.items.attachments.store');
+
+    Route::delete('/containers/{container}/items/{item}/attachments/{attachment}', [AttachmentController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.attachments.destroy');
 
     Route::post('/containers', [ContainerController::class, 'store'])
         ->name('containers.store');

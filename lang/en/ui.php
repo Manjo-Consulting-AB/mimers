@@ -94,6 +94,13 @@ return [
         // Unlinking removes the connection and nothing else — the row is
         // deleted hard (issue 14 decision 10), but both items remain.
         'item-link-removed' => 'The link is gone. Both items remain.',
+
+        // Issue 60 decision 9. The attachment is soft-deleted — `deleted_at`
+        // is set and the bytes stay until the trash purges them (ADR-0008) —
+        // so the sentence says the trash and the 30 days, never "deleted".
+        'attachment-uploaded' => 'The attachment has been uploaded.',
+        'attachment-deleted' => 'The attachment is in the trash. It can be restored within 30 days.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -111,6 +118,15 @@ return [
             // Issue 55b decision 6: the two limits an invitation form can hit.
             'shared_users_exceeded' => 'The sharing has reached the account limit (:used of :limit).',
             'pending_invitations_exceeded' => 'The account has reached its limit for outstanding invitations (:used of :limit).',
+
+            // Issue 60 decision 5: the two upload limits on the web.
+            // :limit_bytes, :used_bytes and :file_bytes are formatted into
+            // readable numbers by App\Support\Frontend\ApiErrorTranslator
+            // (decision 6) — a limit of "5368709120" is not a limit anyone
+            // understands. The sentences must use the numbers: a message that
+            // throws away `data` is worse than the error code it replaced.
+            'max_file_size_exceeded' => 'The file is too large. The limit is :limit_bytes, and this one is :file_bytes.',
+            'storage_exceeded' => 'The storage is full. The account has :used_bytes of :limit_bytes, and the file is :file_bytes.',
         ],
 
         // Issue 55a decision 9: PATCH on a revoked or expired row answers
@@ -538,6 +554,44 @@ return [
             'relation_note' => 'Sharing a parent item also reaches its child items — siblings share nothing.',
 
             'submit' => 'Link',
+        ],
+
+        // The attachment section on the detail view, see issue 60. It lives in
+        // resources/js/components/ItemAttachmentSection.vue: it carries its own
+        // form and its own errors, just as ItemLinkSection does for the
+        // relations, so a quota error on a file does not colour the rest of
+        // the page.
+        //
+        // The file's `kind` (`image` | `document` | `other`) is a domain value
+        // and not text — the words below are its three values, the same keys
+        // AttachmentResource carries for /api.
+        //
+        // `billing_note` says WHICH account pays before the file is chosen:
+        // the quota is counted on the uploading account and not on the binder
+        // owner ([[Filer och lagring]] § attachment, AGENTS.md § Sådant som är
+        // lätt att göra fel), and whoever uploads should know what it costs.
+        //
+        // `destroy_confirm` says the trash and the 30 days. The deletion is
+        // soft (decision 7), and "deleted permanently" would be untrue.
+        'attachment' => [
+            'heading' => 'Attachments',
+            'empty' => 'The item has no attachments.',
+
+            'kind' => [
+                'image' => 'Image',
+                'document' => 'Document',
+                'other' => 'Other',
+            ],
+
+            'download' => 'Download',
+            'destroy' => 'Remove',
+            'destroy_confirm' => 'The attachment moves to the trash and can be restored within 30 days. Continue?',
+
+            'upload_heading' => 'Upload a file',
+            'billing_note' => 'Storage is charged to the account below, not to the binder owner.',
+            'account' => 'The account that pays',
+            'file' => 'File',
+            'submit' => 'Upload',
         ],
     ],
 

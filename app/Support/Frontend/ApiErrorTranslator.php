@@ -4,6 +4,7 @@ namespace App\Support\Frontend;
 
 use App\Exceptions\Api\ApiException;
 use Illuminate\Support\Facades\Lang;
+use Illuminate\Support\Number;
 
 /**
  * Översätter en API-felkod till en färdig mening på webbsidans språk — se
@@ -62,6 +63,35 @@ final class ApiErrorTranslator
             return (string) trans(self::PREFIX.'generic');
         }
 
-        return (string) trans($key, $exception->data());
+        return (string) trans($key, $this->replacements($exception->data()));
+    }
+
+    /**
+     * Ersättningarna, med byten formaterade — issue 60 § Beslut 6.
+     *
+     * `:limit_bytes` som blev `5368709120` är inte en gräns någon förstår.
+     * Varje nyckel som slutar på `_bytes` görs därför läsbar med
+     * Illuminate\Support\Number::fileSize() (`5 GB`) innan ersättningen, och
+     * alla andra nycklar lämnas orörda — `:used`, `:relation`, `:feature` är
+     * tal och koder som redan betyder något för läsaren.
+     *
+     * Regeln ligger här och inte hos anroparen med flit: den gäller varje
+     * framtida kod som bär byten, och en formatering per anropsplats glider
+     * isär — samma fix på tre ställen är tre ställen att glömma (se
+     * [[Lärdomar]]). Ingen befintlig mening bär en `*_bytes`-nyckel, så ingen
+     * befintlig text ändras av den.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function replacements(array $data): array
+    {
+        foreach ($data as $nyckel => $varde) {
+            if (str_ends_with($nyckel, '_bytes') && is_numeric($varde)) {
+                $data[$nyckel] = Number::fileSize((int) $varde);
+            }
+        }
+
+        return $data;
     }
 }

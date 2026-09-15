@@ -110,6 +110,13 @@ return [
         // Upp-knytningen tar bort kopplingen och ingenting annat — raden i
         // länken är hård (issue 14 § Beslut 10), men båda itemen finns kvar.
         'item-link-removed' => 'Kopplingen är borta. Båda itemen finns kvar.',
+
+        // Issue 60 § Beslut 9. Bilagan är MJUK-raderad — `deleted_at` sätts
+        // och bytena ligger kvar tills papperskorgen gallrar dem (ADR-0008) —
+        // så texten säger papperskorgen och de 30 dagarna, aldrig "raderad".
+        'attachment-uploaded' => 'Bilagan är uppladdad.',
+        'attachment-deleted' => 'Bilagan ligger i papperskorgen. Det går att återställa den i 30 dagar.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -136,6 +143,15 @@ return [
             // issue 48). Båda hamnar under `errors.quota` på webben.
             'shared_users_exceeded' => 'Delningen har nått kontots tak (:used av :limit).',
             'pending_invitations_exceeded' => 'Kontot har nått sitt tak för utestående inbjudningar (:used av :limit).',
+
+            // Issue 60 § Beslut 5: uppladdningens två gränser på webben.
+            // :limit_bytes, :used_bytes och :file_bytes formateras till
+            // läsbara tal av App\Support\Frontend\ApiErrorTranslator (Beslut
+            // 6) — en gräns som "5368709120" är ingen gräns någon förstår.
+            // Meningarna SKA använda talen: ett meddelande som slänger bort
+            // `data` är sämre än felkoden det ersatte.
+            'max_file_size_exceeded' => 'Filen är för stor. Den får vara högst :limit_bytes, och den här är :file_bytes.',
+            'storage_exceeded' => 'Lagringen är full. Kontot har :used_bytes av :limit_bytes, och filen är :file_bytes.',
         ],
 
         // Issue 55a § Beslut 9: `PATCH` på en återkallad eller utgången rad
@@ -620,6 +636,43 @@ return [
             'relation_note' => 'Den som delar ett överordnat item når även dess underordnade — syskon delar ingenting.',
 
             'submit' => 'Knyt ihop',
+        ],
+
+        // Bilagesektionen på detaljvyn, se issue 60. Sektionen bor i
+        // resources/js/components/ItemAttachmentSection.vue: den bär sitt
+        // eget formulär och sina egna fel, precis som ItemLinkSection gör för
+        // relationerna, så ett kvotfel på en fil inte färgar resten av sidan.
+        //
+        // Filens `kind` (`image` | `document` | `other`) är ett domänvärde och
+        // inte text — orden nedan är dess tre värden, och samma nycklar finns
+        // i AttachmentResource för `/api`.
+        //
+        // `billing_note` säger VILKET konto som betalar innan filen väljs:
+        // kvoten räknas på det uppladdande kontot och inte på pärmens ägare
+        // ([[Filer och lagring]] § attachment, AGENTS.md § Sådant som är lätt
+        // att göra fel), och den som laddar upp ska veta vad den kostar.
+        //
+        // `destroy_confirm` säger papperskorgen och de 30 dagarna. Raderingen
+        // är mjuk (Beslut 7), och "raderas permanent" vore osant.
+        'attachment' => [
+            'heading' => 'Bilagor',
+            'empty' => 'Itemet har inga bilagor.',
+
+            'kind' => [
+                'image' => 'Bild',
+                'document' => 'Dokument',
+                'other' => 'Övrigt',
+            ],
+
+            'download' => 'Ladda ner',
+            'destroy' => 'Ta bort',
+            'destroy_confirm' => 'Bilagan flyttas till papperskorgen och går att återställa i 30 dagar. Vill du fortsätta?',
+
+            'upload_heading' => 'Ladda upp en fil',
+            'billing_note' => 'Lagringen räknas mot kontot nedan, inte mot pärmens ägare.',
+            'account' => 'Kontot som betalar',
+            'file' => 'Fil',
+            'submit' => 'Ladda upp',
         ],
     ],
 

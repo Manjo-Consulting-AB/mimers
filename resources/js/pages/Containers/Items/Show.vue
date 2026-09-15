@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
+import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import { itemFields } from '../../../components/itemPresentation.js';
@@ -13,12 +14,15 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
  * ur App\Http\Resources\ContainerResource.
  *
- * **Itemets egna fält, kategorin, taggarna och relationerna.** Bilagorna är
- * 60, schemana 63, kostnaderna 45–47 och utlåningen 67 — ingen av dem har en
- * yta här, och ingenting i den här filen läser `attachment`. Relationssektionen
- * bor i resources/js/components/ItemLinkSection.vue: den bär sitt eget
- * formulär och sina egna fel, precis som ContainerAccessRow gör för
- * åtkomsterna, så ett fältfel på en relation inte färgar resten av sidan.
+ * **Itemets egna fält, kategorin, taggarna, relationerna och bilagorna.**
+ * Bilagesektionen kom med issue 60 och bor i
+ * resources/js/components/ItemAttachmentSection.vue; listan kommer med
+ * detaljvyns props och har ingen egen rutt. Schemana är 63, kostnaderna 45–47
+ * och utlåningen 67 — ingen av dem har en yta här. Relationssektionen bor i
+ * resources/js/components/ItemLinkSection.vue: båda bär sitt eget formulär och
+ * sina egna fel, precis som ContainerAccessRow gör för åtkomsterna, så ett
+ * fältfel på en relation eller en fil inte färgar resten av sidan. Ordningen på
+ * ytorna är itemets egna uppgifter, sedan relationerna, sedan bilagorna.
  *
  * **Ett tomt fält utelämnas, aldrig påhittat** (Beslut 8). `fields` filtrerar
  * bort `null` och tomma strängar, så en rad utan beskrivning visar ingen
@@ -56,6 +60,11 @@ const props = defineProps({
     item: { type: Object, required: true },
     /* Kategori-ULID → namn; tom när itemet saknar kategori. */
     categories: { type: Object, required: true },
+    /*
+     * Itemets bilagor ur App\Http\Resources\AttachmentResource, nyast först —
+     * samma lista och samma ordning som `/api` ger (issue 60 § Beslut 2).
+     */
+    attachments: { type: Array, required: true },
     /*
      * Relationerna grupperade i överordnade, underordnade och syskon — redan
      * filtrerade per omfång av servern (issue 58 § Beslut 2 och 3).
@@ -165,6 +174,17 @@ function destroy() {
             :item-ulid="item.ulid"
             :links="links"
             :counterparts="counterparts"
+            :can="can"
+        />
+
+        <!-- Bilagorna under relationerna (issue 60 § Beslut 1): de är itemets
+             innehåll och inte en egen vy. `container.account` är pärmens
+             ägarkonto — sektionens förval när användaren är medlem i det. -->
+        <ItemAttachmentSection
+            :container-ulid="container.ulid"
+            :item-ulid="item.ulid"
+            :attachments="attachments"
+            :container-account="container.account"
             :can="can"
         />
     </ContainerLayout>
