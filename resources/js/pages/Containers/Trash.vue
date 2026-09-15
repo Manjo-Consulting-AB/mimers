@@ -28,11 +28,6 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * `trash` och inte ett fältnamn: felet handlar inte om vad användaren
  * skrev, och det gäller en rad som redan står i listan — samma mönster som
  * delningssidan valde för en obesvarad inbjudan.
- *
- * **Raden är `TrashRow`, samma komponent som 62b:s pärmlista använder**
- * (issue 62b § Beslut 7). Sedan dess tar den målet för återställningen in
- * utifrån i stället för att bygga URL:en själv — det är den enda skillnaden
- * mellan de två listorna, och den här sidan skickar in sitt eget par.
  */
 defineProps({
     container: { type: Object, required: true },
@@ -63,9 +58,8 @@ const page = usePage();
             <TrashRow
                 v-for="entry in entries"
                 :key="entry.ulid"
+                :container-ulid="container.ulid"
                 :entry="entry"
-                :restore-href="`/containers/${container.ulid}/trash/restore`"
-                :restore-data="{ type: entry.type, ulid: entry.ulid }"
                 :can-restore="canRestore[entry.ulid] === true"
             />
         </ul>

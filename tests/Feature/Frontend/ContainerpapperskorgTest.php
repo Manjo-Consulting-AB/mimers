@@ -618,9 +618,8 @@ it('länkar till papperskorgen från pärmlistan', function () {
  * Klart när: en tom papperskorg säger att den är tom, och flaggan följer
  * samma grind som rutten.
  *
- * Radkomponenten är 62a:s, och `Trash/Containers.vue` skickar in sitt eget
- * mål för återställningen — det är hela skillnaden mellan de två listorna
- * (Beslut 7, issue 20c § Beslut 3).
+ * Radkomponenten är 62a:s, och den härleder sitt mål ur `entry.type` — det
+ * är hela skillnaden mellan de två listorna (Beslut 7, issue 20c § Beslut 3).
  */
 it('säger att papperskorgen är tom och återanvänder raden från 62a', function () {
     withoutVite();
@@ -640,17 +639,25 @@ it('säger att papperskorgen är tom och återanvänder raden från 62a', functi
     expect($vy)->toContain("t('trash.containers.empty')");
     expect($vy)->toContain('entries.length > 0');
     expect($vy)->toContain("import TrashRow from '../../components/TrashRow.vue'");
-    expect($vy)->toContain('restore-href="/trash/containers/restore"');
-    expect($vy)->toContain(':restore-data="{ ulid: entry.ulid }"');
 
-    // Och innehållslistan skickar in sitt eget par — samma komponent, olika
-    // mål. `TrashRow` bygger ingen URL själv längre.
+    // Sidan skickar varken URL eller kropp — målet bor i raden, som härleder
+    // det ur `entry.type`. Pärmlistan och innehållslistan är därmed samma
+    // anrop: bara raderna skiljer sig.
+    expect($vy)->not->toContain('restore-href');
+    expect($vy)->not->toContain('restore-data');
+
     $rad = File::get(resource_path('js/components/TrashRow.vue'));
+
+    expect($rad)->toContain("props.entry.type === 'container'");
+    expect($rad)->toContain("'/trash/containers/restore'");
+    expect($rad)->toContain('`/containers/${props.containerUlid}/trash/restore`');
+
+    // Och samma rad anropas likadant från 62a:s pärmpapperskorg, vars sida
+    // alltså står orörd av den här issuen.
     $innehall = File::get(resource_path('js/pages/Containers/Trash.vue'));
 
-    expect($rad)->toContain(':href="restoreHref"');
-    expect($rad)->toContain(':data="restoreData"');
-    expect($innehall)->toContain(':restore-data="{ type: entry.type, ulid: entry.ulid }"');
+    expect($innehall)->toContain(':container-ulid="container.ulid"');
+    expect($innehall)->not->toContain('restore-href');
 
     $sv = require lang_path('sv/ui.php');
     $en = require lang_path('en/ui.php');

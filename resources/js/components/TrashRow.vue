@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { formatDate } from './accessPresentation.js';
 import { remainingLabel } from './trashPresentation.js';
@@ -12,12 +13,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * 62b de raderade pärmarna; formen är den samma — vad raden är, sitt
  * sammanhang, båda tiderna och en återställningsknapp — och 20c § Beslut 3
  * säger uttryckligen att en klient som ritar papperskorgen ska kunna använda
- * en och samma komponent. Därför kommer MÅLET för återställningen in
- * utifrån: `restoreHref` och `restoreData` i stället för en hårdkodad
- * `/containers/{ulid}/trash/restore`. De två listorna skiljer sig bara i
- * vilken URL knappen postar till och vad kroppen heter — innehållslistan
- * skickar `type` och `ulid` (fyra typer delar en lista, issue 20a § Beslut
- * 1), pärmlistan bara `ulid`.
+ * en och samma komponent. Raden får därför sitt mål ur `entry.type`, som är
+ * det fält som skiljer de två listorna åt: en raderad pärm löses inte upp av
+ * ruttbindningen och återställs på toppnivå med bara `ulid` i kroppen (62b
+ * § Beslut 1), medan innehållet postas till pärmens egen rutt med `type` och
+ * `ulid` (fyra typer delar en lista, issue 20a § Beslut 1). Innehållsraden
+ * behöver pärmen för sitt mål och får den som `containerUlid`; pärmraden har
+ * den i `entry.ulid` och behöver ingen.
  *
  * **Raden visar BÅDA tiderna** (62a § Beslut 4): när innehållet raderades och
  * hur länge det finns kvar. `expires_at` kommer ur `TrashEntryResource` — den
@@ -28,8 +30,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * taggens namn, pärmens namn), `entry.context` är bilagans item eller
  * underkategorins förälder — utan den är "faktura.pdf" i en lista med tjugo
  * poster obrukbart. Båda kommer färdiga ur resursen; vyn hittar inte på
- * något. `entry.type` är detsamma i båda listorna (`container` är ett av
- * värdena ur `TrashEntryResource`), och etiketten slås upp ur `lang/`.
+ * något. Etiketten slås upp ur `lang/`.
  *
  * **Återställningsknappen ritas ur `canRestore`**, som kontrollern räknar med
  * samma grind som rutten prövar. Flaggan är presentation: `POST`
@@ -39,12 +40,18 @@ import { useTranslations } from '../composables/useTranslations.js';
  * motsats — den lägger tillbaka något, och den går att ångra med en ny
  * radering.
  */
-defineProps({
+const props = defineProps({
     entry: { type: Object, required: true },
-    restoreHref: { type: String, required: true },
-    restoreData: { type: Object, required: true },
+    containerUlid: { type: String, default: null },
     canRestore: { type: Boolean, default: false },
 });
+
+const restoreTarget = computed(() => props.entry.type === 'container'
+    ? { href: '/trash/containers/restore', data: { ulid: props.entry.ulid } }
+    : {
+        href: `/containers/${props.containerUlid}/trash/restore`,
+        data: { type: props.entry.type, ulid: props.entry.ulid },
+    });
 
 const { t } = useTranslations();
 const page = usePage();
@@ -67,9 +74,9 @@ const page = usePage();
 
         <Link
             v-if="canRestore"
-            :href="restoreHref"
+            :href="restoreTarget.href"
             method="post"
-            :data="restoreData"
+            :data="restoreTarget.data"
             as="button"
             preserve-scroll
             class="self-start text-sm text-blue-700 underline"

@@ -21,9 +21,9 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * **Raden är `TrashRow`, samma komponent som 62a:s pärmpapperskorg använder**
  * (Beslut 7). 20c § Beslut 3 lovade att en klient som ritar papperskorgen
  * skulle kunna använda samma komponent för båda listorna, och det är den här
- * raden som infriar det: bara målet för återställningen skiljer sig —
- * `/trash/containers/restore` med `ulid` i kroppen, i stället för pärmens egen
- * återställningsrutt med `type` och `ulid`.
+ * raden som infriar det: bara målet för återställningen skiljer sig — och
+ * raden härleder det ur `entry.type`, som är `container` för varje post i den
+ * här listan. Sidan skickar alltså varken URL eller kropp; den ritar listan.
  *
  * **En tom lista säger att papperskorgen är tom** (Beslut 7) och räknar
  * ingenting. Listan är redan begränsad till ägarkontots medlemmar, så det
@@ -65,8 +65,6 @@ const page = usePage();
                 v-for="entry in entries"
                 :key="entry.ulid"
                 :entry="entry"
-                restore-href="/trash/containers/restore"
-                :restore-data="{ ulid: entry.ulid }"
                 :can-restore="canRestore[entry.ulid] === true"
             />
         </ul>
