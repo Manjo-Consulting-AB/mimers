@@ -28,6 +28,7 @@ use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\TagController;
+use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Files\FileOrigin;
@@ -585,6 +586,35 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/tags/{tag}', [TagController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.tags.destroy');
+
+    /*
+     * Issue 62a · Pärmens papperskorg — det mjukraderade innehållet,
+     * den återstående tiden och återställningen, se
+     * App\Http\Controllers\TrashController.
+     *
+     * Två rutter (Beslut 1), samma form som `/api`: LISTAN är en GET, och
+     * återställningen tar `type` och `ulid` i KROPPEN och inte i URL:en,
+     * eftersom fyra typer delar en lista (issue 20a § Beslut 1). En rutt per
+     * typ hade blivit fyra rutter mot samma skrivning.
+     *
+     * **Ingen `scopeBindings()`.** Rutterna bär bara `{container}`: ULID:n
+     * som ska återställas ligger i kroppen och `RestoreRequest` bevisar att
+     * den finns i DEN HÄR containern — en ULID ur en annan pärm är ett
+     * valideringsfel. Att flytta den till URL:en hade gett `scopeBindings()`
+     * något att binda, men också fyra rutter och en andra form än `/api`:s.
+     *
+     * **Ingen DELETE och ingen tömning.** Gallringen är schemalagd (20b) och
+     * papperskorgen för raderade PÄRMAR är 62b — se TrashController.
+     *
+     * Återställningen svarar `back()` med en flash-kod — mönstret från issue
+     * 51 § Beslut 5, `status` och ingenting annat — och ett domänfel som ett
+     * formulärfel, aldrig som en JSON-kropp (Beslut 7).
+     */
+    Route::get('/containers/{container}/trash', [TrashController::class, 'index'])
+        ->name('containers.trash');
+
+    Route::post('/containers/{container}/trash/restore', [TrashController::class, 'restore'])
+        ->name('containers.trash.restore');
 });
 
 /*

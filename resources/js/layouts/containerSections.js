@@ -31,6 +31,11 @@
  * De ligger före `sharing` därför att strukturen är det man arbetar i och
  * delningen det man ställer in — ordningen är hur en användare möter pärmen,
  * inte hur issues råkade bli klara.
+ *
+ * `trash` kom med issue 62a § Beslut 1 och ligger SIST, efter `settings`:
+ * papperskorgen är dit man går när något gått fel, inte en yta man arbetar
+ * i. Den är ändå en rad och ingen sidfot — en väg tillbaka som ingen hittar
+ * är samma sak som ingen väg tillbaka.
  */
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}` },
@@ -38,4 +43,5 @@ export const containerSections = [
     { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
     { key: 'settings', href: (ulid) => `/containers/${ulid}/edit` },
+    { key: 'trash', href: (ulid) => `/containers/${ulid}/trash` },
 ];

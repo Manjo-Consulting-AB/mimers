@@ -988,6 +988,14 @@ it('lägger delningssidan i pärmens navigation', function () {
  * rör inga åtkomster; grinden är `create` på ITEMET (issue 71 § Beslut 1), och
  * den som får lägga till en bilaga får varken se eller dela ut mer av pärmen.
  * Medlemsprövningen i kontrollern gäller betalkontot och skapar ingen åtkomst.
+ *
+ * Sedan issue 62a finns återställningens POST här. Den väcker innehåll till
+ * liv igen och rör inga åtkomster: grinden är per rad — `ItemPolicy::delete()`
+ * för ett item och för bilagans item, `ContainerPolicy::update()` för en
+ * kategori eller tagg (issue 74 § Beslut 2) — så ingen ny grant skapas och
+ * ingen mottagare läggs till. En `read`-deltagare ser papperskorgen men får
+ * 403 här, och en `write`-deltagare når sina items men varken raderar eller
+ * återställer (regel 3).
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -996,9 +1004,9 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
     // Itemet, relationen, bilagan, containerns eget skapande, inbjudan,
-    // kategorin, uppsättningen och taggen. Ingen /accesses. Ordningen är
-    // registreringsordningen i routes/web.php — itemrutterna ligger ovanför
-    // `POST /containers`.
+    // kategorin, uppsättningen, taggen och papperskorgen. Ingen /accesses.
+    // Ordningen är registreringsordningen i routes/web.php — itemrutterna
+    // ligger ovanför `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
         'containers/{container}/items/{item}/links',
@@ -1008,6 +1016,7 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/categories',
         'containers/{container}/categories/preset',
         'containers/{container}/tags',
+        'containers/{container}/trash/restore',
     ]);
 
     foreach ([

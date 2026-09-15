@@ -101,6 +101,12 @@ return [
         'attachment-uploaded' => 'The attachment has been uploaded.',
         'attachment-deleted' => 'The attachment is in the trash. It can be restored within 30 days.',
 
+        // Issue 62a decision 7. ONE code for all four types: the restore takes
+        // `type` in the body and shares one list, so the view has no reason to
+        // know which of them just came back — but the sentence says content,
+        // not item (same reason as issue 20a decision 1).
+        'trash-restored' => 'The content has been restored.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -133,6 +139,14 @@ return [
         // `container_access.revoked` on /api and this sentence in the web.
         'container_access' => [
             'revoked' => 'The access has been revoked or has expired and cannot be changed.',
+        ],
+
+        // Issue 62a decision 7: `RestoreContent` throws `trash.parent_deleted`
+        // when the parent is still in the trash — an attachment whose item is
+        // deleted, or a subcategory whose parent is. On the web the code
+        // becomes this sentence in a box above the list, never a JSON body.
+        'trash' => [
+            'parent_deleted' => 'It cannot be restored: what the content belongs to is still in the trash. Restore that first.',
         ],
 
         // Issue 55b: the invitation error codes. Never a raw JSON body in a
@@ -292,6 +306,9 @@ return [
             'tags' => 'Tags',
             'sharing' => 'Sharing',
             'settings' => 'Settings',
+            // Last, like the row in containerSections.js — the trash is where
+            // you go when something went wrong (issue 62a decision 1).
+            'trash' => 'Trash',
         ],
 
         'index' => [
@@ -831,5 +848,48 @@ return [
         'accept' => 'Accept',
         'reject' => 'Decline',
         'home' => 'Go to the home page',
+    ],
+
+    // The binder's trash, see issue 62a decisions 4, 5 and 9 and [[ADR-0008
+    // Soft delete och papperskorg]] § Retentionstiden i MVP. A branch of its
+    // own on the top level rather than under `container`: the trash is its own
+    // surface with its own vocabulary, like `sharing`.
+    //
+    // **Three keys for the remaining time, not one.** `t()` has no
+    // pluralisation (issue 52 decision 4), so the view picks on the number:
+    // the last day says `expires.today` and never "0 days", one day left says
+    // `expires.day` in the singular, and the rest `expires.days`.
+    //
+    // **`empty` says the trash is empty and nothing else** (decision 5, issue
+    // 74 decision 1 and issue 73 decision 6): no row counts rows, and a
+    // scope-restricted recipient gets exactly the same sentence as the owner.
+    // Expired content does not exist either — the view never says something
+    // disappeared.
+    'trash' => [
+        'title' => 'Trash',
+        'heading' => 'Trash',
+        'description' => 'What has been deleted in the binder. After 30 days it is removed for good.',
+        'empty' => 'The trash is empty.',
+
+        // `:date` is formatted on the client (formatDate), the words around it
+        // here.
+        'deleted_at' => 'Deleted :date',
+
+        // The keys are the `type` values from RestoreRequest::TYPES, never
+        // invented names of our own — same rule as container.kind.
+        'type' => [
+            'item' => 'Item',
+            'attachment' => 'Attachment',
+            'category' => 'Category',
+            'tag' => 'Tag',
+        ],
+
+        'expires' => [
+            'today' => 'Disappears today',
+            'day' => '1 day left',
+            'days' => ':days days left',
+        ],
+
+        'restore' => 'Restore',
     ],
 ];

@@ -117,6 +117,12 @@ return [
         'attachment-uploaded' => 'Bilagan är uppladdad.',
         'attachment-deleted' => 'Bilagan ligger i papperskorgen. Det går att återställa den i 30 dagar.',
 
+        // Issue 62a § Beslut 7. EN kod för alla fyra typerna: återställningen
+        // tar `type` i kroppen och delar en lista, så vyn har ingen anledning
+        // att veta vilken av dem som just kom tillbaka — meningen säger
+        // innehåll och inte item (samma skäl som issue 20a § Beslut 1).
+        'trash-restored' => 'Innehållet är återställt.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -160,6 +166,15 @@ return [
         // App\Http\Controllers\ContainerAccessController::update().
         'container_access' => [
             'revoked' => 'Åtkomsten är återkallad eller har gått ut och går inte att ändra.',
+        ],
+
+        // Issue 62a § Beslut 7: `RestoreContent` kastar `trash.parent_deleted`
+        // när föräldern fortfarande ligger i papperskorgen — en bilaga vars
+        // item är raderat, eller en underkategori vars förälder är det
+        // ([[ADR-0008 Soft delete och papperskorg]]). På webben blir koden
+        // den här meningen i en ruta ovanför listan, aldrig en JSON-kropp.
+        'trash' => [
+            'parent_deleted' => 'Det går inte att återställa: det som innehållet hör till ligger fortfarande i papperskorgen. Återställ det först.',
         ],
 
         // Issue 55b: inbjudningarnas felkoder. `already_pending` hamnar på
@@ -337,10 +352,11 @@ return [
 
     // Pärmen, se issue 54. `nav` är sidonavigationen, en nyckel per post i
     // resources/js/layouts/containerSections.js — samma `key` där som här.
-    // 56a (kategorier och taggar), 57 (items), 62 (papperskorg) och 63
-    // (scheman) lägger sina rader i samma lista och sina texter i samma gren.
-    // 55a (delning) har en egen gren, `sharing` nedan, för sidan bär två
-    // sektioner och en egen vokabulär — se issue 55a § Beslut 4 och 5.
+    // 56a (kategorier och taggar), 57 (items) och 63 (scheman) lägger sina
+    // rader i samma lista och sina texter i samma gren. 55a (delning) har en
+    // egen gren, `sharing` nedan, för sidan bär två sektioner och en egen
+    // vokabulär — se issue 55a § Beslut 4 och 5. 62a (papperskorgen) har en
+    // egen TOPPNIVÅgren, `trash`, av samma skäl.
     'container' => [
         // `kind` styr presentation och bara presentation (issue 54 § Beslut
         // 8, [[ADR-0002 Konto äger container]]). Nycklarna är kolumnvärdena
@@ -362,6 +378,9 @@ return [
             'tags' => 'Taggar',
             'sharing' => 'Delning',
             'settings' => 'Inställningar',
+            // Sist, som raden i containerSections.js — papperskorgen är dit
+            // man går när något gått fel (issue 62a § Beslut 1).
+            'trash' => 'Papperskorgen',
         ],
 
         'index' => [
@@ -960,5 +979,47 @@ return [
         'accept' => 'Acceptera',
         'reject' => 'Avvisa',
         'home' => 'Till startsidan',
+    ],
+
+    // Pärmens papperskorg, se issue 62a § Beslut 4, 5 och 9 och [[ADR-0008
+    // Soft delete och papperskorg]] § Retentionstiden i MVP. Egen gren på
+    // toppnivå och inte under `container`: papperskorgen är sin egen yta med
+    // sin egen vokabulär, som `sharing`.
+    //
+    // **Tre nycklar för den återstående tiden, inte en.** `t()` har ingen
+    // pluralisering (issue 52 § Beslut 4), så vyn väljer på talet: sista
+    // dygnet säger `expires.today` och aldrig "0 dagar", en dag kvar säger
+    // `expires.day` i singular, och resten `expires.days`.
+    //
+    // **`empty` säger att papperskorgen är tom och ingenting annat** (Beslut
+    // 5, issue 74 § Beslut 1 och issue 73 § Beslut 6): ingen rad räknar
+    // rader, och en omfångsbegränsad mottagare får exakt samma mening som
+    // ägaren. Ett utgånget innehåll finns inte heller — vyn säger aldrig att
+    // något försvunnit.
+    'trash' => [
+        'title' => 'Papperskorgen',
+        'heading' => 'Papperskorgen',
+        'description' => 'Det som raderats i pärmen. Efter 30 dagar tas det bort för gott.',
+        'empty' => 'Papperskorgen är tom.',
+
+        // `:date` formateras på klienten (formatDate), orden runt den här.
+        'deleted_at' => 'Raderat :date',
+
+        // Nycklarna är `type`-värdena ur RestoreRequest::TYPES, aldrig
+        // påhittade egna namn — samma regel som container.kind.
+        'type' => [
+            'item' => 'Item',
+            'attachment' => 'Bilaga',
+            'category' => 'Kategori',
+            'tag' => 'Tagg',
+        ],
+
+        'expires' => [
+            'today' => 'Försvinner idag',
+            'day' => '1 dag kvar',
+            'days' => ':days dagar kvar',
+        ],
+
+        'restore' => 'Återställ',
     ],
 ];
