@@ -26,6 +26,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Itemlistan har inga miniatyrer, och raden i backloggen står kvar.** [[Backlog]] M10 § 57 beskriver listan som *"lista med miniatyrer"*, men varken 57a eller 61b bygger någon: listan kommer ur `App\Actions\Item\ListItems`, som varken bär bilagor eller derivat, och att ge den ett sådant fält är en ändring i en Action som fem issues bygger på — inte ett tillägg i en vy. Frågan är både om miniatyren behövs i listan och hur den i så fall ska hämtas utan en fråga per rad: en `stored_file`-join på itemets första bildbilaga, ett denormaliserat `item.cover_attachment_id`, eller ingenting alls. Miniatyren i **bilagelistan** på detaljvyn finns sedan 61b. Restes när 61b skrevs, 2026-09-15.
 
+- **`schedule` mjukraderas men syns aldrig i papperskorgen.** [[ADR-0008 Soft delete och papperskorg]] § Retentionstiden i MVP räknar upp `schedule` bland det som omfattas av de 30 dagarna, men papperskorgen i issue 20a exponerar fyra typer: `item`, `attachment`, `category` och `tag`. Ett raderat schema går alltså inte att återställa ur någon yta, och webbvyn (62a) kan därför inte lova det. Frågan är vilken av de två som ska ändras: ska papperskorgen bära en femte typ — och i så fall vad som händer med dess förekomster vid en återställning — eller ska ADR:ens uppräkning skrivas om? Samma fråga gäller `loan` och `cost_entry`, som inte heller står i någondera listan. Restes när 63a skrevs, 2026-09-15.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.

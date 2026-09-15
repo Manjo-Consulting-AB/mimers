@@ -31,6 +31,7 @@ Ny `ItemPolicy` med `view`, `create`, `update` och `delete`. Issue 13a § Beslut
 **Läs:** [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser, [[Konton och åtkomst]] § Behörighetsregler
 **Klart när:** en `create`-mottagare kan ladda upp en bilaga och skapa ett barn-item men får `auth.forbidden` på `PATCH` av ett befintligt item; en `write`-mottagare nekas `DELETE`; och ett `read_only`-konto nekas allt skrivande oavsett nivå.
 **Beror på:** 70
+**Byggd som:** 71a items, bilagor och relationer, 71b itemets övriga beroenden — scheman, förekomster, beroenden, utlåningar och kostnadsrader. Rubriken här namnger bara de tre första, men [[ADR-0028 Åtkomst på itemnivå]] § Beslut säger att *"itemets beroenden följer itemet"*, och de fem övriga gatades fortfarande mot `ContainerPolicy`. GitHub-issuen var upplagd för två sessioner; bara den första landade, och 71b är den andra. Fram till dess kunde en omfångsbegränsad mottagare läsa scheman, utlåningar och kostnadsrader på **vilket item som helst** i pärmen, och inte skriva något på sitt eget.
 
 ### 72. Beviljande och inbjudan av itemåtkomst
 API för att bevilja, ändra och återkalla en åtkomst med `item_id` satt, och för att bjuda in till ett item. Bara ägarkontots medlemmar får göra det — regel 3 är oförändrad. Förvaltningsvyn listar itemåtkomster tillsammans med de container-breda och visar hur många items en grant faktiskt når, så att ägaren ser att "motorn" betyder fyra items. `audit_log` får raderna som förut.

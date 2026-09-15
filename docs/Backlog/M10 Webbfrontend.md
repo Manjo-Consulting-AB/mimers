@@ -94,6 +94,7 @@ Papperskorgen visar bara det användaren själv kunde se innan det raderades, se
 Skapa scheman på item, se förekomster, bocka av, hantera beroenden. Försenat visas som härlett tillstånd.
 **Läs:** [[Scheman och uppgifter]], [[ADR-0005 Schema och förekomst]]
 **Beror på:** 57, 21, 22, 23
+**Byggd som:** 63a schemat som regel — sektionen på itemet, formulären, pausen och raderingen, 63b förekomsten — den öppna uppgiften, avbockningen, historiken och det härledda försenat, 63c beroendena på båda nivåerna. Grinden ligger på pärmen och inte på itemet tills [[M11 Åtkomst på itemnivå]] § 71b landat; alla tre bygger mot `ItemPolicy`.
 
 ### 64. Todo-vyn
 Startsidan efter inloggning: förekomster över alla åtkomliga containers, filtrerad enligt dokumentet.
@@ -104,18 +105,22 @@ Startsidan efter inloggning: förekomster över alla åtkomliga containers, filt
 Kanalval, tysta timmar, ICS-länk att prenumerera på, webhooks för den som vill.
 **Läs:** [[Notiser]], [[ADR-0010 Notisarkitektur]]
 **Beror på:** 53, 31, 36, 37
+**Byggd som:** 65a det som hör till personen — kanalval per typ, veckosammanfattningen och tysta timmar, 65b de två utgångarna — kalenderlänken per pärm och webhookarna per konto. Båda i 65b ger ut en hemlighet en enda gång och går att återkalla; det är därför de hör ihop trots att de bor på olika nivåer.
 
 ### 66. Plan, förbrukning och gränser
 Visa aktuell plan, förbrukning mot gränser, och vad som händer vid nedgradering **innan** den sker.
 **Läs:** [[Planer och kvoter]], [[ADR-0009 Kvoter och livscykel]]
 **Beror på:** 53, 25, 26, 27, 28
+**Byggd som:** 66a planen och förbrukningen — gränserna, fristen och en konkret förhandsvisning av vad en nedgradering skulle kosta, 66b lagringsytan — bilagorna sorterade på storlek och valet användaren gör själv (nedgraderingens steg 2). Ingen av dem lägger en ny `/api`-yta: det finns ingen läsrutt för plan och förbrukning, och webben läser genom en Action.
 
 ### 67. Utlåning, ägarbyte och export
 De tre flödena i M6 som behöver en yta: markera utlånat med mottagare, initiera och acceptera ägarbyte, begära export.
 **Läs:** [[Items och organisation]] § utlåning, [[Konton och åtkomst]] § ownership_transfer
 **Beror på:** 57, 76, 39, 41, 74
+**Byggd som:** 67a utlåningen, 67b ägarbytet — avsändarens yta i pärmen och mottagarens inkorg, 67c exporten. Tre flöden, tre sessioner: de delar bara att de är M6:s ytor, inte kod.
 
 ### 68. Mobilanpassning och tillgänglighetsgenomgång
 En genomgång, inte en ny funktion: vyerna används på telefon i en hamn med dålig uppkoppling. Tangentbordsnavigering, fokusordning, kontrast, träffytor, och att långsamma svar syns som något annat än en död sida.
 **Klart när:** de fem vanligaste flödena — logga in, hitta ett item, ladda upp en fil, bocka av en uppgift, dela en container — går att genomföra på en telefon och med enbart tangentbord.
 **Beror på:** 64, 61
+**Byggd som:** 68a telefonen — layout, träffytor och det som syns medan man väntar, 68b tangentbordet och skärmläsaren — fokus, etiketter, kontrast och det som annonseras. Båda har `ambiguity: high` med flit: "går att använda" är en bedömning, och de fem flödena är det som avgör.
