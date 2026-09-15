@@ -37,12 +37,16 @@ it('kopierar protected.htaccess till shared/storage/files vid utrullning', funct
         ->toContain('mv -f "$APP/shared/storage/files/.htaccess.ny" "$APP/shared/storage/files/.htaccess"');
 });
 
-it('tillåter bara /files/{ulid} på ORG_REQ_URI och förbjuder indexering', function () {
+it('tillåter bara /files/{ulid} med eller utan querysträng, och förbjuder indexering', function () {
     $htaccess = file_get_contents(base_path('deploy/protected.htaccess'));
 
+    // `(\?.*)?` är det issue 61a § Beslut 7 lägger till: den signerade
+    // leveranslänken bär ?expires=…&signature=…, och utan tillägget nekar
+    // villkoret varje signerad nedladdning — ett fel som bara syns på
+    // servern. Ordalydelsen låses därför här, som förut.
     expect($htaccess)
         ->toContain('RewriteEngine On')
-        ->toContain('RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+$')
+        ->toContain('RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+(\?.*)?$')
         ->toContain('RewriteRule ^ - [F,L]')
         ->toContain('Options -Indexes');
 

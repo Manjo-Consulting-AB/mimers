@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\RestrictFileOriginToDelivery;
 use App\Http\Middleware\SetLocale;
 use App\Http\Middleware\UpdateLastActiveAt;
 use App\Support\Api\ApiError;
@@ -31,15 +32,26 @@ return Application::configure(basePath: dirname(__DIR__))
         // share() läser den locale som redan är satt. Bara i webbgruppen:
         // /api returnerar felkoder, aldrig meningar, och har inget språk att
         // välja (AGENTS.md § Felformat i API:et).
+        //
+        // Issue 61a: RestrictFileOriginToDelivery sist i båda grupperna.
+        // Filoriginets webbrot är samma katalog som appdomänens, så hela
+        // appen svarar annars på files.mimers.app. Vakten prövar den
+        // MATCHADE rutten och måste därför ligga i en grupp och inte globalt
+        // — en global middleware kör före routningen. Den ligger efter
+        // HandleInertiaRequests så att en 404 på filoriginet får samma
+        // felsida som allt annat, och i api-gruppen för att `/api` är en av
+        // ytorna som inte ska finnas där (Beslut 3).
         $middleware->web(append: [
             SetLocale::class,
             HandleInertiaRequests::class,
+            RestrictFileOriginToDelivery::class,
         ]);
 
         // Issue 3: last_active_at uppdateras av alla autentiserade
         // API-anrop, inte bara inloggning. Se App\Http\Middleware\UpdateLastActiveAt.
         $middleware->api(append: [
             UpdateLastActiveAt::class,
+            RestrictFileOriginToDelivery::class,
         ]);
 
         // Issue 4: appen körs bakom LiteSpeed hos inleed, se
