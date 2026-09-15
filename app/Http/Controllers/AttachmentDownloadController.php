@@ -3,34 +3,49 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attachment;
+use App\Support\Files\AttachmentDelivery;
+use App\Support\Files\FileOrigin;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\HeaderUtils;
+use Illuminate\Support\Facades\URL;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * GET /files/{attachment} — nedladdning av en bilagas byten, se issue 19a
- * och [[ADR-0019 Filleverans]]. En rutt på appdomänen, utanför /api: den
+ * GET /files/{attachment} på appdomänen — nedladdning av en bilagas byten,
+ * se issue 19a och [[ADR-0019 Filleverans]]. En rutt utanför /api: den
  * klickas i en webbläsare och lämnar inga JSON-fel (Beslut 1).
  *
- * Leveransen görs av webbservern via X-LiteSpeed-Location (Beslut 3 och 6)
- * när config('files.internal_redirect') är true. PHP skickar noll bytes;
- * LiteSpeed läser filen med sendfile() och håller ingen PHP-process upptagen
- * under överföringen. Lokalt och i testsviten (config false) strömmar appen
- * filen själv med Storage::response() — samma headers, riktiga bytes.
+ * **Rutten är appdomänens ingång till leveransen, oavsett var bytena kommer
+ * ifrån** (issue 61a § Beslut 1). Är `config('files.url')` satt — och
+ * värdnamnet där skiljer sig från appens — svarar den 302 till en kortlivad
+ * signerad URL på filoriginet och levererar ingenting själv; i annat fall
+ * levererar den bytena precis som förut (Beslut 2). Att appdomänens URL
+ * består som ingång är hela poängen: varje befintlig klient,
+ * deploy/verifiera-filleverans.sh, en kommande mobilapp och 60a:s
+ * nedladdningslänk fortsätter fungera oförändrade — en webbläsare och
+ * `curl -L` följer omdirigeringen, och en `<img src="/files/{ulid}?variant=thumb">`
+ * likaså.
  *
- * INGEN behörighetslogik bor här: efter att itemet visat sig inte vara
- * mjukraderat anropas bara Gate::authorize('view', ...) — sedan issue 71 mot
- * BILAGANS ITEM, App\Policies\ItemPolicy::view() (Beslut 5). Läsning räcker
- * för att ladda ner; det är aldrig `update` och aldrig containern. Det här är
- * filleverans, och en containergrind där itemets skulle stått är exakt det fel
- * [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser räknar upp: en
+ * **Sessionen är skälet till att det måste se ut så.** Sessionskakan gäller
+ * appens värdnamn, inte filoriginets; en rutt på `files.mimers.app` som
+ * frågade `auth:sanctum` hade nekat varje inloggad användare. Signaturen är
+ * därför inte ett extra lager ovanpå inloggningen — den ÄR autentiseringen på
+ * det originet, precis som tokenet är det för ICS-feeden (36a § Beslut 1) och
+ * den signerade länken för avanmälan (32b § Beslut 1).
+ *
+ * **Behörighetsprövningen sker här, och bara här** (§ Beslut 4). Den som har
+ * länken får hämta filen under länkens livstid, utan session — samma
+ * egenskap som en presignerad S3-URL har. Behörigheten prövades när länken
+ * präglades; på originet finns ingen användare att pröva den mot.
+ *
+ * INGEN behörighetslogik utöver det bor här: efter att itemet visat sig inte
+ * vara mjukraderat anropas bara Gate::authorize('view', ...) — sedan issue 71
+ * mot BILAGANS ITEM, App\Policies\ItemPolicy::view() (Beslut 5). Läsning
+ * räcker för att ladda ner; det är aldrig `update` och aldrig containern. Det
+ * här är filleverans, och en containergrind där itemets skulle stått är exakt
+ * det fel [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser räknar upp: en
  * omfångsbegränsad mottagare hade kunnat hämta en bilaga på ett item hon inte
- * ser. Rutten är i dag inte signerad eller tidsbegränsad — bara auth:sanctum.
- * Skulle en signatur läggas till senare ändrar det ingenting här: den skulle
- * säga vem som bad om länken, inte vad hon får se nu.
+ * ser.
  *
  * `{attachment}` binds på bilagans ULID via #[RouteKey('ulid')] — en
  * mjukraderad bilaga syns inte av bindningen och ger 404 (Beslut 7).
@@ -62,72 +77,53 @@ class AttachmentDownloadController extends Controller
 
         Gate::authorize('view', $attachment->item);
 
-        $storedFile = $attachment->storedFile;
-        $storagePath = $storedFile->storage_path;
-
         $variant = $request->query('variant');
+        $filorigin = FileOrigin::host();
 
-        if ($variant !== null) {
-            // Ett okänt värde är 404, inte 422 — det här är en webbrutt utan
-            // valideringshölje (Beslut 5). En saknad variant ger också 404,
-            // aldrig en tyst återgång till originalet.
-            if (! in_array($variant, ['thumb', 'medium'], true)) {
-                abort(404);
-            }
-
-            $derivative = $storedFile->derivatives()->where('variant', $variant)->first();
-
-            if ($derivative === null) {
-                abort(404);
-            }
-
-            $storagePath = $derivative->storage_path;
+        if ($filorigin !== null) {
+            return redirect()->to(self::signedDeliveryUrl($attachment, $variant));
         }
 
-        $headers = [
-            'Content-Type' => $storedFile->mime_type,
-            'Content-Disposition' => $this->disposition($attachment->filename),
-            'X-Content-Type-Options' => 'nosniff',
-        ];
-
-        if (config('files.internal_redirect')) {
-            // 200 med tom kropp, inte noContent (204): Symfony tar bort
-            // Content-Type ur ett 204-svar när det förbereds, och LiteSpeed
-            // sätter inte typen själv vid intern omdirigering (Beslut 3) —
-            // då hade typen aldrig nått webbservern. Med 200 följer headern
-            // med, och LiteSpeed ersätter kroppen med filens byten.
-            return response()->make('', 200, $headers + [
-                'X-LiteSpeed-Location' => '/_protected/'.$storagePath,
-            ]);
-        }
-
-        return Storage::disk('files')->response($storagePath, $attachment->filename, $headers);
+        // Ingen egen origin: leveransen ligger kvar på appdomänen och allt är
+        // attachment, utan undantag ([[ADR-0019 Filleverans]] § Uppföljning
+        // 2026-08-31, andra punkten).
+        return AttachmentDelivery::make($attachment, $variant, inline: false);
     }
 
     /**
-     * Content-Disposition-byggs alltid av Symfonys hjälpare (Beslut 4):
-     * `$filename` i `filename*=UTF-8''…` och en ASCII-fallback i `filename=`.
-     * Ett namn med citattecken, semikolon eller å-ä-ö sätts aldrig ihop för
-     * hand — en oescapad rad i en header är en headerinjektion.
+     * Den kortlivade signerade URL:en till filoriginet.
      *
-     * Blir fallbacken tom (namn helt utan ASCII-tecken, t.ex. `写真`) eller
-     * innehåller den tecken utanför det skrivbara ASCII-intervallet kastar
-     * Symfonys hjälpare InvalidArgumentException. Den kan inte användas som
-     * `filename=`, men `filename*=UTF-8''…` bär fortfarande det riktiga
-     * namnet — fallbacken faller tillbaka på `download`, inget går förlorat.
+     * Signaturen säger vilken fil länken gäller — bilagans ULID och eventuell
+     * variant — och aldrig vem som bad om den (Beslut 4). Den präglas över
+     * hela URL:en inklusive querysträngen, så byter någon ut ULID:n eller
+     * varianten i den färdiga länken slutar signaturen stämma och
+     * `signed`-middlewaren nekar.
+     *
+     * Livstiden är `config('files.signed_url_ttl_minutes')`, 15 minuter som
+     * standard: långt nog för att en stor PDF ska hinna laddas och en
+     * bläddring i ett bildgalleri ska hinna ske, kort nog för att en länk som
+     * hamnar i en logg eller ett `Referer`-huvud ska vara död när någon
+     * hittar den.
      */
-    private function disposition(string $filename): string
+    private static function signedDeliveryUrl(Attachment $attachment, mixed $variant): string
     {
-        $fallback = str_replace('%', '', Str::ascii($filename));
+        // Varianten valideras före präglingen: ett okänt värde eller en
+        // variant som saknas ger 404 redan här. Annars hade en signerad länk
+        // präglats och först på originet visat sig peka på ingenting — och
+        // den som fick länken hade fått en 404 i stället för ett svar på
+        // appdomänen, där felet hör hemma.
+        AttachmentDelivery::storagePath($attachment->storedFile, $variant);
 
-        if (! preg_match('/^[\x20-\x7e]+$/', $fallback)) {
-            $fallback = 'download';
+        $parameters = ['attachment' => $attachment->ulid];
+
+        if (is_string($variant)) {
+            $parameters['variant'] = $variant;
         }
 
-        return HeaderUtils::makeDisposition(
-            HeaderUtils::DISPOSITION_ATTACHMENT,
-            $filename,
-            $fallback,
+        return URL::temporarySignedRoute(
+            'files.deliver',
+            now()->addMinutes((int) config('files.signed_url_ttl_minutes')),
+            $parameters,
         );
     }
 }

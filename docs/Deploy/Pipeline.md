@@ -77,6 +77,17 @@ nano ~/mimers-staging/shared/.env
 mv ~/domains/mimers.app/public_html ~/domains/mimers.app/public_html.orig-placeholder
 ln -s /home/s174280/mimers/current/public ~/domains/mimers.app/public_html
 
+# filoriginet (issue 61a): samma app, samma katalog, ett annat värdnamn.
+# public_html pekas om till releasen precis som appdomänens, så symlänken
+# public/_protected och .htaccess-regeln gäller oförändrat på båda
+# värdnamnen — deploy.sh behöver ingen ny rad, en release är en katalog och
+# inte ett värdnamn. En per miljö, annars testas staging mot produktionens
+# filer. Se [[ADR-0019 Filleverans]] § Uppföljning 2026-09-15.
+mv ~/domains/files.mimers.app/public_html ~/domains/files.mimers.app/public_html.orig-placeholder
+ln -s /home/s174280/mimers/current/public ~/domains/files.mimers.app/public_html
+mv ~/domains/files.staging.mimers.app/public_html ~/domains/files.staging.mimers.app/public_html.orig-placeholder
+ln -s /home/s174280/mimers-staging/current/public ~/domains/files.staging.mimers.app/public_html
+
 # schemaläggaren, en rad per miljö
 crontab -e
 * * * * * cd /home/s174280/mimers/current && /usr/local/bin/php artisan schedule:run >> /dev/null 2>&1
@@ -566,7 +577,7 @@ Regeln är en tillåt-lista som nekar direkt åtkomst men tillåter intern omdir
 
 ```apache
 RewriteEngine On
-RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+$
+RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+(\?.*)?$
 RewriteRule ^ - [F,L]
 
 Options -Indexes
@@ -574,16 +585,25 @@ Options -Indexes
 
 `%{ORG_REQ_URI}` håller URI:n från det ursprungliga anropet och ändras inte av LiteSpeeds interna omdirigering: ett direkt anrop mot `/_protected/…` har inte formen `/files/{ulid}` och nekas, medan ett anrop mot `/files/{ulid}` behåller den sökvägen och passerar. Regeln är en tillåt-lista, inte en neka-lista på URI:ns textform — filuppslaget görs på en normaliserad sökväg, så en neka-lista på `^/_protected/` hade missat kringgångar som `//_protected/…` eller `/./_protected/…`. En ULID innehåller varken `/`, `.` eller `%`, så ingen sådan variant kan tillfredsställa villkoret. `Options -Indexes` är bältet utöver hängslet: skulle regeln sluta gälla ska en katalogförfrågan ändå inte räkna upp innehållet.
 
+`(\?.*)?` kom med issue 61a: den signerade leveranslänken bär `?expires=…&signature=…`, och innehåller `%{ORG_REQ_URI}` querysträngen nekar villkoret varje signerad nedladdning. Det felet syns bara på servern, aldrig i testsviten — därav att formen är tolerant och att verifieringsskriptet nedan körs för hand.
+
 `FILES_INTERNAL_REDIRECT=true` sätts av Tony i `shared/.env`, en gång per miljö — ingen kod sätter den. Utan den strömmar appen filerna genom PHP med samma headers: allting fungerar, och det enda som märks är att processpoolen tar slut den dag någon laddar ner mycket.
 
-Skyddet bevisas mot en utrullad miljö med `deploy/verifiera-filleverans.sh <bas-url> <ulid>`, som gör fyra anrop med `curl` och avslutar med kod 1 så fort något avviker:
+`FILES_URL=https://files.mimers.app` sätts på samma sätt, en gång per miljö, och är det som slår på filoriginet: den registrerar rutten `files.deliver` och gör att `files.download` svarar 302 i stället för att leverera bytena själv. Osatt är appen oförändrad och allt är `attachment`, se [[ADR-0019 Filleverans]] § Uppföljning 2026-09-15. Eftersom rutten registreras när ruttabellen byggs slår raden igenom först vid nästa utrullning — `deploy.sh` kör `config:cache` och `route:cache` i varje release.
 
-1. `GET /_protected/` → **403**
-2. `GET /_protected/ab/cd/<känd hash>` → **403**
-3. `GET //_protected/ab/cd/<känd hash>` → **403** (kringgångsform)
-4. `GET /files/{ulid}` med en giltig token → **200**, icke-tom kropp, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff` och ett `Content-Type` som inte är `text/html`
+Skyddet bevisas mot en utrullad miljö med `deploy/verifiera-filleverans.sh <app-url> <filorigin-url> <ulid-bild> <ulid-svg>`, som gör nio anrop med `curl` och avslutar med kod 1 så fort något avviker:
 
-De tre första anropen kräver ingen inloggning; det fjärde behöver en bilaga som kontot får läsa och ett sanctum personal access token. Bilagan ska inte vara HTML — `text/html` vore ett korrekt svar för en `.html`-bilaga men kan inte skiljas från appens standardsvar. Token sätts hellre i `FILES_TOKEN` än som argument: ett argument syns i `ps` på den delade servern och hamnar i skalhistoriken. Kört mot staging efter merge, med utdata klistrad i PR-tråden (issue 19b § Beslut 7).
+1. `GET <app>/_protected/` → **403**
+2. `GET <app>/_protected/ab/cd/<känd hash>` → **403**
+3. `GET <app>//_protected/ab/cd/<känd hash>` → **403** (kringgångsform)
+4. `GET <app>/files/{ulid-bild}` med en giltig token → **302** till filoriginet
+5. `GET <filorigin>/_protected/ab/cd/<känd hash>` → **403** (samma tillåt-lista där)
+6. `GET <filorigin>/login` → **404** (middlewaren som håller filoriginet till leveransen)
+7. den signerade länken för bilden → **200**, icke-tom kropp, `inline`, `X-Content-Type-Options: nosniff` och ett `Content-Type` som inte är `text/html`
+8. den signerade länken för svg:en → **200**, men `attachment` — en SVG får inte visas inline
+9. samma länk med ett förflutet `expires` → **403**
+
+De tre första anropen kräver ingen inloggning; de övriga behöver en bilaga som kontot får läsa och ett sanctum personal access token. Bilagan i fall 4–7 ska vara en bild vars typ står i tillåt-listan, och svg:en i fall 8 en riktig SVG. `text/html` vore ett korrekt svar för en `.html`-bilaga men kan inte skiljas från appens standardsvar, därav kravet att typen inte är den. Fall 9 vrids fram ur den giltiga länken genom att `expires` sätts till ett förflutet värde — signaturen täcker querysträngen, så den manipulerade länken är ogiltig både som förlängd och som utgången, och det är vad skriptet bevisar. Token sätts hellre i `FILES_TOKEN` än som argument: ett argument syns i `ps` på den delade servern och hamnar i skalhistoriken. Kört mot staging efter att filoriginet slagits på, med utdata klistrad i PR-tråden (issue 19b § Beslut 7).
 
 ## Rollback
 

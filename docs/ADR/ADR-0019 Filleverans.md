@@ -108,6 +108,33 @@ där `$APP` är `~/mimers` i produktion och `~/mimers-staging` på staging, och 
 
 **Filsubdomänen finns kvar och är fortfarande slutdestinationen.** Sajterna `files.mimers.app` och `files.staging.mimers.app` är uppsatta sedan 2026-08-23 (§ Konsekvenser) och katalogträdet i § Beslut står sig den dag leveransen flyttar dit — av issue 61 eller av annat skäl. Tills dess pekar trädet på fel webbrot för den kod som ligger i produktion.
 
+## Uppföljning 2026-09-15 — leveransen flyttar till filoriginet
+
+**Villkoret i uppföljningen 2026-08-31 är uppfyllt, och `attachment`-kravet är därmed lyft — men bara för den tillåt-lista som står här.** Villkoret var utskrivet: *"Egen origin blir nödvändig först när filer ska visas inline i webben, och det är issue 61."* Issue 61a flyttar leveransen till `files.mimers.app`. Från och med nu är det alltså inte `attachment` + `nosniff` som neutraliserar risken för skriptkörning i appens domän — det är originet, precis som § Motivering och § Konsekvenser hela tiden avsåg. Kravet "varje leverans är `Content-Disposition: attachment`, utan undantag" gäller därför inte längre på den originen; på appdomänen gäller det fortfarande, se näst sista stycket.
+
+**Tillåt-listan är fem MIME-typer och ligger i `config/files.php`.** `image/jpeg`, `image/png`, `image/gif`, `image/webp` och `application/pdf`; allt annat är `attachment`. **`image/svg+xml` står inte i listan** — en SVG är ett dokument som kan bära skript, och den hör till den origin som finns just för att sådant inte ska kunna köra i appens domän. Dispositionen bestäms av `stored_file.mime_type` och aldrig av URL:en eller filnamnet: ett `?disposition=inline` som klienten valde hade varit en väg att få en godtycklig fil renderad, och signaturen hade skyddat den valda dispositionen, inte den rätta.
+
+**Två rutter, och sessionen är skälet till att det måste se ut så.**
+
+```
+GET <app>/files/{attachment}        files.download   auth:sanctum   → 302
+GET files.mimers.app/files/{attachment}  files.deliver   signed     → bytena
+```
+
+Appdomänens rutt gör exakt det den gjorde förut — laddar bilagan, avvisar en mjukraderad rad eller ett raderat item med 404, och anropar `Gate::authorize('view', $attachment->item)` — och svarar sedan 302 till en kortlivad signerad URL i stället för att leverera själv. Att appdomänens URL består som ingång är hela poängen: varje befintlig klient, `deploy/verifiera-filleverans.sh`, en kommande mobilapp och nedladdningslänken i webben fortsätter fungera oförändrade.
+
+**Sessionen är skälet till att signaturen inte är ett extra lager ovanpå inloggningen — den ÄR autentiseringen på det originet.** Sessionskakan gäller appens värdnamn, inte filoriginets; en rutt på `files.mimers.app` som frågade `auth:sanctum` hade nekat varje inloggad användare. Samma konstruktion som tokenet i ICS-feeden (36a) och den signerade länken för avanmälan (32b).
+
+**Länken är bärarbaserad under sin livstid, och det är en avvägning som ska stå här.** Behörigheten prövades när länken präglades; på originet finns ingen användare att pröva den mot, så den som har länken kan hämta filen — samma egenskap som en presignerad S3-URL har. Livstiden är därför kort: `config('files.signed_url_ttl_minutes')`, **15 minuter** som standard. Långt nog för att en stor PDF ska hinna laddas och en bläddring i ett bildgalleri ska hinna ske, kort nog för att en länk som hamnar i en logg eller ett `Referer`-huvud ska vara död när någon hittar den. Signaturen säger vilken fil länken gäller — bilagans ULID och eventuell variant — och aldrig vem som bad om den. Byter någon ut ULID:n eller varianten i den färdiga länken slutar signaturen stämma.
+
+**`files.url` osatt betyder att uppföljningen 2026-08-31 gäller ordagrant.** Rutten `files.deliver` registreras då inte alls, `files.download` levererar bytena själv, och allt är `attachment` — de tre kompensationskraven från 2026-08-31 står kvar oförändrade i kraft. Ett värde vars värdnamn är appens eget räknas inte som en egen origin: en felkonfiguration ska bli en tråkigare leverans, aldrig en osäker. Det är därför issue 61a kan mergas och rullas ut innan servern är uppsatt.
+
+**Webbroten är densamma, bara ett annat värdnamn.** `~/domains/files.mimers.app/public_html` är en symlänk till `$APP/current/public`, precis som appdomänens webbrot redan är ([[Pipeline]] § Engångsuppsättning). Därmed gäller `public/_protected`-symlänken och `.htaccess`-regeln oförändrat för båda värdnamnen, och `deploy.sh` behöver ingen ny rad — en release är en katalog, inte ett värdnamn. Det ersätter formuleringen i § Konsekvenser om att filsubdomänen "behåller en riktig `public_html`": det var sant så länge subdomänen bara var slutdestination på papperet. Eftersom samma app då svarar på filoriginet avvisar en middleware varje anrop där som inte är `files.deliver`, med 404 — inloggningssidan, `/api` och Inertia-sidorna finns inte på det värdnamnet.
+
+**`.htaccess`-regeln måste tåla en querysträng.** Den signerade URL:en bär `?expires=…&signature=…`. Innehåller `%{ORG_REQ_URI}` querysträngen nekar dagens villkor `!^/files/[A-Za-z0-9]+$` **varje** signerad nedladdning, och felet syns först på servern — aldrig i testsviten. Regeln skrivs därför `!^/files/[A-Za-z0-9]+(\?.*)?$`: fortfarande en tillåt-lista, nu tolerant mot det som hänger på URL:en.
+
+**Svarshuvudena är fyra, i båda grenarna.** `Content-Type` explicit ur `stored_file.mime_type`, `Content-Disposition` enligt tillåt-listan, `X-Content-Type-Options: nosniff`, och `Content-Security-Policy: default-src 'none'; sandbox; frame-ancestors <appens origin>`. CSP:n stänger av allt en levererad HTML- eller SVG-fil skulle kunna dra in, och `frame-ancestors` säger att bara appen får rama in en PDF — vilket är vad 61b behöver för att visa den. Både den interna omdirigeringen och `Storage::disk('files')->response()` sätter samma huvuden: en miljöskillnad får aldrig bli en säkerhetsskillnad.
+
 ## Alternativ
 
 **Hashen som sökväg utan rewrite-skydd.** LiteSpeeds egen förstahandsrekommendation. Valdes bort — hashen är härledbar och åtkomstkontrollen hade varit verkningslös.

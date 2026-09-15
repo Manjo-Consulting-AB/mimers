@@ -105,16 +105,39 @@ it('Content-Type sätts explicit i båda lägena', function (bool $internalRedir
     'intern omdirigering' => [true],
 ]);
 
-it('Content-Disposition är alltid attachment — även för en bild', function (bool $internalRedirect) {
+/*
+ * Påståendet här var "Content-Disposition är ALLTID attachment — även för en
+ * bild", och det var sant så länge leveransen låg på appdomänen. Issue 61a
+ * lyfter precis det villkoret: på filoriginet får en bild ur tillåt-listan
+ * visas inline. Testet håller därför båda vägarna — attachment när originet är
+ * appens, inline för en bild när det inte är det (issue 61a § Beslut 5).
+ */
+it('en bild är attachment på appdomänen och inline på filoriginet', function (bool $internalRedirect) {
     config(['files.internal_redirect' => $internalRedirect]);
 
     [$account, $user] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     [, $attachment] = nedladdningFörberedelse($container, filnamn: 'foto.png', innehåll: 'bildbyten', mime: 'image/png');
 
+    // Ingen egen origin: appdomänen levererar bytena själv, och där är
+    // dispositionen attachment utan undantag. Det var hela påståendet före
+    // issue 61a, och det gäller fortfarande så länge leveransen ligger här.
     $response = actingAs($user)->get("/files/{$attachment->ulid}");
 
     expect($response->headers->get('content-disposition'))->toStartWith('attachment');
+
+    // Egen origin: appdomänen präglar en länk i stället för att leverera, och
+    // på originet får bilden visas inline. Det är villkoret som lyfts.
+    config(['files.url' => 'https://files.test']);
+
+    $omdirigerad = actingAs($user)->get("/files/{$attachment->ulid}");
+
+    $omdirigerad->assertRedirect();
+
+    $leverans = get($omdirigerad->headers->get('location'));
+
+    $leverans->assertOk();
+    expect($leverans->headers->get('content-disposition'))->toStartWith('inline');
 })->with([
     'strömning' => [false],
     'intern omdirigering' => [true],

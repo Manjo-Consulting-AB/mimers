@@ -26,6 +26,14 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
+        <!-- Filoriginet, issue 61a. Rutten files.deliver registreras bara när
+             files.url är satt (routes/web.php), och registreringen sker vid
+             appens uppstart — innan ett enskilt test hinner sätta configen.
+             Sviten kör därför med ett eget filorigin. tests/Pest.php
+             nollställer sedan files.url för varje test, så standardläget i
+             sviten är miljön utan handpåläggning; den som prövar originet
+             sätter den tillbaka själv. -->
+        <env name="FILES_URL" value="https://files.test"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

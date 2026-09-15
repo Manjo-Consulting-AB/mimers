@@ -10,8 +10,15 @@
 # som alla resolverar till samma fil utan att texten matchar. Tillåt-listan
 # nekar allt som inte redan har formen /files/{ulid}, och en ULID innehåller
 # varken /, . eller % — ingen av kringgångarna kan tillfredsställa villkoret.
+#
+# `(\?.*)?` är inte kosmetika: den signerade leveranslänken på filoriginet bär
+# ?expires=…&signature=…, och innehåller %{ORG_REQ_URI} querysträngen nekar
+# villkoret varje signerad nedladdning utan det tillägget. Felet syns aldrig i
+# testsviten, bara på servern — därav att formen skrivs tolerant och att
+# deploy/verifiera-filleverans.sh prövar den mot en utrullad miljö (issue 61a
+# § Beslut 7).
 RewriteEngine On
-RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+$
+RewriteCond %{ORG_REQ_URI} !^/files/[A-Za-z0-9]+(\?.*)?$
 RewriteRule ^ - [F,L]
 
 # Bälte utöver hängslet: skulle regeln någon gång sluta gälla ska en

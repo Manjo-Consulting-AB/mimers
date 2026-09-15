@@ -18,6 +18,7 @@ use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ExportDownloadController;
+use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
@@ -29,6 +30,7 @@ use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
+use App\Support\Files\FileOrigin;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -612,6 +614,45 @@ Route::get('/invitations/{token}', [InvitationResponseController::class, 'open']
     ->name('invitations.open');
 
 /*
+ * Issue 61a · Leveransen på filoriginet, se
+ * App\Http\Controllers\FileDeliveryController och [[ADR-0019 Filleverans]]
+ * § Uppföljning 2026-09-15.
+ *
+ * **Rutten finns bara när filoriginet finns.** Är `config('files.url')` osatt
+ * registreras den inte alls, och `files.download` nedan levererar bytena själv
+ * precis som förut (Beslut 2). Den är därför villkorad och inte bara
+ * middleware-skyddad: en rutt som finns men aldrig får användas är en yta
+ * någon till slut använder.
+ *
+ * **Registratorformen `Route::domain(...)->get(...)` är inte en stilfråga.**
+ * De två rutterna delar metod och sökväg och skiljs bara av värdnamnet. En
+ * rutt läggs i ruttabellens uppslag när den SKAPAS, så sätter man domänen
+ * efteråt (`Route::get(...)->domain(...)`) ligger den kvar under samma nyckel
+ * som `files.download` och skrivs tyst över av den — rutten finns då inte,
+ * och felet syns först som en 404 på filoriginet. Med registratorformen är
+ * domänen satt innan rutten skapas, och routern prövar de domänbundna
+ * rutterna före de värdnamnsoberoende.
+ *
+ * Samma skäl gör att rutten inte kan registreras med appens eget värdnamn:
+ * då hade den skuggat `files.download` helt.
+ *
+ * **`signed` är hela autentiseringen** (Beslut 1). Sessionskakan gäller appens
+ * värdnamn och följer inte med hit; signaturen säger vilken fil länken gäller
+ * och aldrig vem som bad om den (Beslut 4). Länken präglas av
+ * `files.download` efter behörighetsprövning och lever
+ * `config('files.signed_url_ttl_minutes')`.
+ *
+ * `{attachment}` binds på bilagans ULID via #[RouteKey('ulid')], som på
+ * appdomänen.
+ */
+if (($filorigin = FileOrigin::host()) !== null) {
+    Route::domain($filorigin)
+        ->get('/files/{attachment}', FileDeliveryController::class)
+        ->middleware('signed')
+        ->name('files.deliver');
+}
+
+/*
  * Issue 19a · Nedladdning av bilagor, se
  * App\Http\Controllers\AttachmentDownloadController och [[ADR-0019
  * Filleverans]]. En rutt på appdomänen utanför /api (Beslut 1) — den klickas
@@ -620,6 +661,10 @@ Route::get('/invitations/{token}', [InvitationResponseController::class, 'open']
  * och en Authorization: Bearer-token, så en kommande mobilapp får inte en
  * andra väg till samma bytes. `{attachment}` binds på bilagans ULID via
  * #[RouteKey('ulid')] — ingen nästling under container och item.
+ *
+ * Sedan issue 61a är rutten appdomänens INGÅNG till leveransen och inte
+ * nödvändigtvis leverantören: är filoriginet på svarar den 302 till en
+ * signerad URL på `files.deliver` i stället för att skicka bytena själv.
  */
 Route::get('/files/{attachment}', AttachmentDownloadController::class)
     ->middleware('auth:sanctum')
