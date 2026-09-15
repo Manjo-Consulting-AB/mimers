@@ -573,6 +573,14 @@ return [
         //
         // `destroy_confirm` says the trash and the 30 days. The deletion is
         // soft (decision 7), and "deleted permanently" would be untrue.
+        //
+        // The queue's own keys came with issue 60b: `upload_heading` and `file`
+        // became plural when one file became several (decision 1),
+        // `dropzone` is the drop target's text, `status` holds the queue's four
+        // states, `summary` counts what arrived, `throttled` is the rate
+        // limit's own sentence (decision 7 — the server answers a throttled
+        // upload with the login sentence on `email`, which would be a lie
+        // here), and `dismiss` closes a failed row (decision 4).
         'attachment' => [
             'heading' => 'Attachments',
             'empty' => 'The item has no attachments.',
@@ -587,10 +595,28 @@ return [
             'destroy' => 'Remove',
             'destroy_confirm' => 'The attachment moves to the trash and can be restored within 30 days. Continue?',
 
-            'upload_heading' => 'Upload a file',
+            'upload_heading' => 'Upload files',
             'billing_note' => 'Storage is charged to the account below, not to the binder owner.',
             'account' => 'The account that pays',
-            'file' => 'File',
+            'file' => 'Files',
+            'dropzone' => 'Drop the files here',
+
+            'status' => [
+                'waiting' => 'Waiting',
+                'uploading' => 'Uploading',
+                'done' => 'Done',
+                'failed' => 'Failed',
+            ],
+
+            // "Files uploaded: 3 of 4" rather than "3 of 4 files were
+            // uploaded" — the noun and the verb inflect in the singular, and
+            // translate.js has no pluralisation by design (issue 52 § Beslut
+            // 4). A single-file queue is the most common flow there is.
+            'summary' => 'Files uploaded: :uploaded of :total.',
+            'throttled' => 'Too many uploads. Wait a moment and continue.',
+            'interrupted' => 'The connection dropped. Check the list and try again.',
+            'dismiss' => 'Dismiss',
+
             'submit' => 'Upload',
         ],
     ],

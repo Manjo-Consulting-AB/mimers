@@ -66,6 +66,13 @@ const props = defineProps({
      */
     attachments: { type: Array, required: true },
     /*
+     * Det TEKNISKA taket på en fil, ur `config('files.max_upload_bytes')`
+     * (issue 60b § Beslut 5). Bilagesektionen avvisar en för stor fil med
+     * det här talet innan bytena skickas; servern prövar samma tak igen i
+     * StoreAttachmentRequest.
+     */
+    maxUploadBytes: { type: Number, required: true },
+    /*
      * Relationerna grupperade i överordnade, underordnade och syskon — redan
      * filtrerade per omfång av servern (issue 58 § Beslut 2 och 3).
      */
@@ -184,6 +191,7 @@ function destroy() {
             :container-ulid="container.ulid"
             :item-ulid="item.ulid"
             :attachments="attachments"
+            :max-upload-bytes="maxUploadBytes"
             :container-account="container.account"
             :can="can"
         />

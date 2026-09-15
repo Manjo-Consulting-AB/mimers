@@ -668,10 +668,55 @@ return [
             'destroy' => 'Ta bort',
             'destroy_confirm' => 'Bilagan flyttas till papperskorgen och går att återställa i 30 dagar. Vill du fortsätta?',
 
-            'upload_heading' => 'Ladda upp en fil',
+            'upload_heading' => 'Ladda upp filer',
             'billing_note' => 'Lagringen räknas mot kontot nedan, inte mot pärmens ägare.',
             'account' => 'Kontot som betalar',
-            'file' => 'Fil',
+            'file' => 'Filer',
+
+            // Issue 60b § Beslut 3: dropzonen är ett tillägg och filväljaren
+            // bredvid är den väg som fungerar med tangentbord, skärmläsare och
+            // på en telefon. Texten säger var filerna hamnar, inte hur.
+            'dropzone' => 'Släpp filerna här',
+
+            // Köns fyra tillstånd (Beslut 2 och 8). `failed` är en rad med ett
+            // fel under sig och inte en fil som försvunnit: fil 3 och 4 laddas
+            // upp ändå (Beslut 4).
+            'status' => [
+                'waiting' => 'Väntar',
+                'uploading' => 'Laddar upp',
+                'done' => 'Klar',
+                'failed' => 'Misslyckades',
+            ],
+
+            // Sammanfattningen efter kön (Beslut 4). Talen är två, aldrig ett:
+            // "3 av 4" säger både hur många som kom fram och hur många som
+            // försöktes, och en rad som bara säger 3 döljer de misslyckade.
+            //
+            // Formen är "Uppladdade filer: 3 av 4" och inte "3 av 4 filer
+            // laddades upp": substantivet och verbet böjs efter antalet, och
+            // translate.js har ingen pluralisering med flit (issue 52 § Beslut
+            // 4). Den bokstavliga meningen hade sagt "1 av 1 filer laddades
+            // upp" — och en fil i taget är det vanligaste flödet, det 60a
+            // byggde. Etiketten med talen är rätt i varje antal.
+            'summary' => 'Uppladdade filer: :uploaded av :total.',
+
+            // Takgränsen (Beslut 7). `throttle:uploads` svarar en
+            // omdirigering med inloggningens mening på fältet `email` (issue
+            // 53a § Beslut 6, bootstrap/app.php), och den meningen vore en
+            // lögn om en uppladdning — kön har sin egen.
+            'throttled' => 'För många uppladdningar. Vänta en stund och fortsätt.',
+
+            // En avbruten uppladdning (60 § Klart när, Beslut 6). Meningen
+            // lovar inte att filen INTE kom fram: anropet kan ha nått servern
+            // innan länken bröts, och det är listan som vet. Därför "kontrollera
+            // listan" och inte "försök igen" ensamt.
+            'interrupted' => 'Uppkopplingen bröts. Kontrollera listan och försök igen.',
+
+            // Stänger en misslyckad rad (Beslut 4). Den ligger i vyn tills
+            // användaren stänger den; valet att försöka igen är att välja
+            // filen på nytt.
+            'dismiss' => 'Stäng',
+
             'submit' => 'Ladda upp',
         ],
     ],

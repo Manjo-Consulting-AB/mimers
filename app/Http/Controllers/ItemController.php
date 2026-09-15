@@ -231,6 +231,16 @@ class ItemController extends Controller
      * ger — nyast först — och ett konstant antal frågor oavsett antal rader
      * (Beslut 10). Vyn ritar dem, `can.create` och `can.delete` styr ytorna,
      * och skrivningarna ligger i App\Http\Controllers\AttachmentController.
+     *
+     * **`max_upload_bytes` är det TEKNISKA taket och en prop** (issue 60b
+     * § Beslut 5). Det är samma tal som `StoreAttachmentRequest` prövar med
+     * `max:` — vyn avvisar en för stor fil innan bytena lämnar webbläsaren,
+     * så en 200 MB-fil inte reser över en mobil uppkoppling för att få 413 i
+     * andra änden. Plangränserna (`max_file_bytes`, `storage_bytes`) skickas
+     * INTE: de hör till det valda kontot, kontot går att byta i formuläret,
+     * och en siffra i vyn hade varit fel så fort väljaren rördes. De prövas
+     * där de hör hemma — på servern — och kommer tillbaka som fältfelet på
+     * `file`.
      */
     public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems): Response
     {
@@ -270,6 +280,7 @@ class ItemController extends Controller
             'item' => (new ItemResource($item))->resolve($request),
             'categories' => $this->categoryNames([$item]),
             'attachments' => AttachmentResource::collection($attachments)->resolve($request),
+            'maxUploadBytes' => (int) config('files.max_upload_bytes'),
             'links' => $this->groupLinks(ItemLinkResource::collection($links)->resolve($request)),
             'counterparts' => $this->counterparts($user, $container, $item, $links, $listItems),
             'can' => [
