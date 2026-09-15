@@ -31,7 +31,7 @@ use function Pest\Laravel\withoutVite;
  *    och detaljvyn kostar ett konstant antal frågor oavsett antal bilagor och
  *    derivat — relationen är eager-laddad, precis som `categoryNames()`.
  * 2. **Ytorna ritas bara när det finns ett filorigin** (Beslut 2).
- *    `inline_enabled` räknas på servern ur `files.url` och appens värdnamn,
+ *    `inlineEnabled` räknas på servern ur `files.url` och appens värdnamn,
  *    och är den falsk ser sektionen ut som i 60a.
  * 3. **Bilden och PDF:en avgörs av `attachmentPreview()`** (Beslut 1, 3 och
  *    4): `thumb` ger en miniatyr, `medium` bildvisarens källa med originalet
@@ -279,9 +279,9 @@ it('kostar ett konstant antal frågor oavsett antal bilagor och derivat', functi
     expect($medTio)->toBe($medEn);
 });
 
-// --- inline_enabled: flaggan räknas på servern (Beslut 2) ----------------
+// --- inlineEnabled: flaggan räknas på servern (Beslut 2) -----------------
 
-it('räknar inline_enabled ur files.url och appens värdnamn', function () {
+it('räknar inlineEnabled ur files.url och appens värdnamn', function () {
     withoutVite();
 
     [, $anvandare, $container, $item] = bilagevisningKontext();
@@ -292,21 +292,21 @@ it('räknar inline_enabled ur files.url och appens värdnamn', function () {
     config(['files.url' => null]);
 
     actingAs($anvandare)->get($url)->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->where('inline_enabled', false)
+        fn (AssertableInertia $page) => $page->where('inlineEnabled', false)
     );
 
     // Satt, men pekar på appen själv: ingen egen origin att rendera i.
     config(['files.url' => config('app.url')]);
 
     actingAs($anvandare)->get($url)->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->where('inline_enabled', false)
+        fn (AssertableInertia $page) => $page->where('inlineEnabled', false)
     );
 
     // Egen origin: `inline` är möjligt och PDF:en får ramas in av appen.
     config(['files.url' => 'https://files.test']);
 
     actingAs($anvandare)->get($url)->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->where('inline_enabled', true)
+        fn (AssertableInertia $page) => $page->where('inlineEnabled', true)
     );
 });
 

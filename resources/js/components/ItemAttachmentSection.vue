@@ -82,7 +82,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * **Visningen är tre ytor och en flagga** (issue 61b § Beslut 1–5):
  * miniatyren i raden, bildvisaren och PDF-ramen. Vilken rad som får vilken
  * avgörs av `attachmentPreview()` i attachmentPresentation.js — den läser
- * `variants` och `inline_enabled` och ingenting annat, så mallen grenar på
+ * `variants` och `inlineEnabled` och ingenting annat, så mallen grenar på
  * ett enda värde och komponenten gissar aldrig vad servern har.
  *
  * **Bildvisaren är webbläsarens `<dialog>`** (Beslut 3): Esc stänger, fokus

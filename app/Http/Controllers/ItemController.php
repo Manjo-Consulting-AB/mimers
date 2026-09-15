@@ -298,7 +298,7 @@ class ItemController extends Controller
             // leveransen tillbaka på `attachment` och en <img> eller <iframe>
             // mot samma URL vore i bästa fall tom. Flaggan räknas här och
             // läses aldrig ur window.location i klienten.
-            'inline_enabled' => FileOrigin::host() !== null,
+            'inlineEnabled' => FileOrigin::host() !== null,
             'links' => $this->groupLinks(ItemLinkResource::collection($links)->resolve($request)),
             'counterparts' => $this->counterparts($user, $container, $item, $links, $listItems),
             'can' => [
