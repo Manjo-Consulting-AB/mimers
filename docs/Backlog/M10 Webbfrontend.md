@@ -73,12 +73,14 @@ Drag-drop, flera filer samtidigt, framdrift per fil, miniatyrer när de finns. K
 **Läs:** [[Filer och lagring]], [[ADR-0006 Innehållsadresserad lagring]]
 **Klart när:** en avbruten uppladdning lämnar inget halvt tillstånd i vyn, och en kvotöverskridning förklaras med vilken gräns som slog i.
 **Beror på:** 57, 16, 18
+**Byggd som:** 60a bilagesektionen på itemets detaljvy — listan, en fil i taget, raderingen och kvotfelet som formulärfel, 60b drag-drop, kön och framdriften per fil. Miniatyrerna i raden flyttade till 61b: de kräver att leveransen ligger på ett eget origin.
 
 ### 61. Filvisning och nedladdning
 Visning av bilder och PDF:er, nedladdningslänkar mot filoriginet.
 **Läs:** [[ADR-0019 Filleverans]]
 **Klart när:** användarfiler serveras från `files.mimers.app` och inget innehåll därifrån kan köra skript i appens origin.
 **Beror på:** 60, 19
+**Byggd som:** 61a filoriginet — leveransen flyttar till `files.mimers.app` med kortlivade signerade länkar, och `inline` blir möjligt för en tillåt-lista av MIME-typer, 61b ytorna — miniatyren i bilagelistan, bildvisaren och PDF-rutan. Att slå på originet kräver en symlänk per miljö och `FILES_URL` i utrullningen; det är en egen handpåläggningsissue mellan de två. Uppföljningen av [[ADR-0019 Filleverans]] hör till 61a.
 Här ritas också **miniatyrerna i itemlistan**, som issue 57 lämnade hit — de hör ihop med leveransvägen, inte med listan.
 
 ### 62. Papperskorg
@@ -86,6 +88,7 @@ Lista raderat innehåll, återställ, se hur lång tid som återstår.
 Papperskorgen visar bara det användaren själv kunde se innan det raderades, se issue 74.
 **Läs:** [[ADR-0008 Soft delete och papperskorg]], [[ADR-0028 Åtkomst på itemnivå]]
 **Beror på:** 57, 20, 74
+**Byggd som:** 62a pärmens papperskorg — det mjukraderade innehållet, den återstående tiden och återställningen, 62b de raderade pärmarna — papperskorgen på toppnivå och raderingsknappen som fyller den. Knappen bor i 62b och inte i 54 av ett skäl: en radering utan en väg tillbaka är en fälla.
 
 ### 63. Scheman och uppgifter
 Skapa scheman på item, se förekomster, bocka av, hantera beroenden. Försenat visas som härlett tillstånd.

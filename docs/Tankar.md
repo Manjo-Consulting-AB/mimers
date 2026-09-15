@@ -24,6 +24,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Personradering är inte löst, och kontoraderingen rör den inte.** `DeleteAccount` raderar aldrig `user`-rader: en person kan vara medlem i andra konton, så raderingen av ett konto får inte ta med sig människan. Det är rätt avgränsning för issue 29b, men det betyder att det inte finns någon väg alls för en enskild person att bli raderad ur systemet — vilket är ett GDPR-krav och inte en teknisk detalj. Behöver en egen issue med egna krav; frågan är i vilken milstolpe. Restes i granskningen av issue 29b (PR #168), 2026-09-04.
 
+- **Itemlistan har inga miniatyrer, och raden i backloggen står kvar.** [[Backlog]] M10 § 57 beskriver listan som *"lista med miniatyrer"*, men varken 57a eller 61b bygger någon: listan kommer ur `App\Actions\Item\ListItems`, som varken bär bilagor eller derivat, och att ge den ett sådant fält är en ändring i en Action som fem issues bygger på — inte ett tillägg i en vy. Frågan är både om miniatyren behövs i listan och hur den i så fall ska hämtas utan en fråga per rad: en `stored_file`-join på itemets första bildbilaga, ett denormaliserat `item.cover_attachment_id`, eller ingenting alls. Miniatyren i **bilagelistan** på detaljvyn finns sedan 61b. Restes när 61b skrevs, 2026-09-15.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
