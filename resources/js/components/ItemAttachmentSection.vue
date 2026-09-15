@@ -60,8 +60,6 @@ const page = usePage();
 
 const fileInput = ref(null);
 
-const locale = computed(() => page.props.locale);
-
 /*
  * Kontolistan ur den delade propen `auth.accounts`, samma väg som ItemForm
  * tar (Beslut 4). Förvalet är pärmens ägarkonto när användaren är medlem i
@@ -78,10 +76,14 @@ const account = computed(() => {
 /* Ett enda konto ritas som en rad text i stället för en väljare (Beslut 4). */
 const singleAccount = computed(() => (accounts.value.length === 1 ? accounts.value[0] : null));
 
-/* Raderna: storleken formaterad och `kind` översatt till ett ord. */
+/*
+ * Raderna: storleken formaterad och `kind` översatt till ett ord. Storleken
+ * speglar serverns Number::fileSize() och är därför en-formaterad oavsett
+ * sidans språk — se attachmentPresentation.js.
+ */
 const rows = computed(() => props.attachments.map((attachment) => ({
     ...attachment,
-    size: formatByteSize(attachment.byte_size, locale.value),
+    size: formatByteSize(attachment.byte_size),
     kindLabel: t(`item.attachment.kind.${attachment.kind}`),
 })));
 

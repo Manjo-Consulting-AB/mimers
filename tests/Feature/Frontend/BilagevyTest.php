@@ -173,21 +173,24 @@ function bilagevyForbrukning(Account $konto): int
 
 // --- listan: detaljvyns props, nyast först ------------------------------
 
-it('formaterar storleken i steg om 1024 och med språkets decimaltecken', function () {
-    // Enheten väljs i steg om 1024 — samma bas som serverns
-    // Illuminate\Support\Number::fileSize() använder i kvotmeningarna, så
-    // samma fil visar samma storlek i listan och i ett felmeddelande.
-    expect(bilagevyKör("m.formatByteSize(2048, 'sv')"))->toBe('2 kB');
-    expect(bilagevyKör("m.formatByteSize(0, 'sv')"))->toBe('0 B');
-    expect(bilagevyKör("m.formatByteSize(5 * 1024 * 1024 * 1024, 'en')"))->toBe('5 GB');
+it('formaterar storleken byte-identiskt med serverns Number::fileSize()', function () {
+    // Sanningen är Illuminate\Support\Number::fileSize(), som
+    // App\Support\Frontend\ApiErrorTranslator använder i kvotmeningarna
+    // (Beslut 6). Samma tal ska bli samma sträng i listan och i meningen —
+    // annars tvivlar läsaren på vilket tal som är sant.
+    //
+    // 950 prövar tröskeln `> 0.9` (inte `>= 1024`), 2560 prövar half-even
+    // (2,5 KB blir `2 KB`, inte `3 KB`), och 5368709120 prövar enheten.
+    $byteStorlekar = [0, 1, 921, 950, 1023, 1024, 1536, 2048, 2560, 3584, 5 * 1024 * 1024 * 1024];
 
-    // Decimaltecknet följer språket, som datumet i itemPresentation.js.
-    expect(bilagevyKör("m.formatByteSize(1536, 'sv')"))->toBe('1,5 kB');
-    expect(bilagevyKör("m.formatByteSize(1536, 'en')"))->toBe('1.5 kB');
+    foreach ($byteStorlekar as $bytes) {
+        expect(bilagevyKör("m.formatByteSize({$bytes})"))
+            ->toBe(Number::fileSize($bytes), "byte_size {$bytes}");
+    }
 
     // Ett värde som inte är ett tal ger `null`, och vyn utelämnar raden i
     // stället för att visa påhittat innehåll — samma regel som `itemFields`.
-    expect(bilagevyKör('m.formatByteSize(null, "sv")'))->toBe('null');
+    expect(bilagevyKör('m.formatByteSize(null)'))->toBe('null');
 });
 
 it('listar bilagorna nyast först med filnamn, typ och storlek', function () {
