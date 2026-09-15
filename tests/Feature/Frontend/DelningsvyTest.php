@@ -983,6 +983,11 @@ it('lägger delningssidan i pärmens navigation', function () {
  * därför grinden är `update` i BÅDA ändarna (issue 71 § Beslut 4) och inte
  * en åtkomstskrivning: ingen ny grant skapas, ingen mottagare läggs till, och
  * ett delat item kan inte knytas ihop av någon som bara ser det.
+ *
+ * Sedan issue 60a finns bilagans POST här. Den skriver en `attachment`-rad och
+ * rör inga åtkomster; grinden är `create` på ITEMET (issue 71 § Beslut 1), och
+ * den som får lägga till en bilaga får varken se eller dela ut mer av pärmen.
+ * Medlemsprövningen i kontrollern gäller betalkontot och skapar ingen åtkomst.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -990,13 +995,14 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Itemet, relationen, containerns eget skapande, inbjudan, kategorin,
-    // uppsättningen och taggen. Ingen /accesses. Ordningen är
+    // Itemet, relationen, bilagan, containerns eget skapande, inbjudan,
+    // kategorin, uppsättningen och taggen. Ingen /accesses. Ordningen är
     // registreringsordningen i routes/web.php — itemrutterna ligger ovanför
     // `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
         'containers/{container}/items/{item}/links',
+        'containers/{container}/items/{item}/attachments',
         'containers',
         'containers/{container}/invitations',
         'containers/{container}/categories',

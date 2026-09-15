@@ -9,6 +9,7 @@ use App\Actions\Item\ListItems;
 use App\Actions\Tag\ListTags;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
+use App\Http\Resources\AttachmentResource;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ItemLinkResource;
@@ -203,9 +204,10 @@ class ItemController extends Controller
      * 404: "känd men utanför omfånget" har en kod över tio kontrollrar
      * (issue 73 § Beslut 3), och webben uppfinner inte en elfte regel.
      *
-     * **Bara itemets egna fält, kategorin, taggarna och relationerna**
-     * (Beslut 4 och 8, issue 58). Bilagorna är 60, schemana 63, kostnaderna
-     * 45–47 och utlåningen 67.
+     * **Itemets egna fält, kategorin, taggarna, relationerna och bilagorna**
+     * (Beslut 4 och 8, issue 58, issue 60 § Beslut 2). Bilagorna kommer med
+     * props — se `attachments` nedan — och har ingen egen rutt. Schemana är
+     * 63, kostnaderna 45–47 och utlåningen 67.
      *
      * `categories` bär kategorins NAMN bredvid resursen — se klassens
      * docblock. Ett item utan kategori får en tom uppslagstabell och vyn
@@ -222,6 +224,13 @@ class ItemController extends Controller
      * Motpartsväljaren bär bara `{ulid, name}` — samma form som
      * delningssidans omfångsväljare (issue 55b § Beslut 5), och den ritas bara
      * för `can.update`.
+     *
+     * **Bilagesektionen får en prop och ingen rutt** (issue 60 § Beslut 2).
+     * `attachments` är itemets bilagor genom `AttachmentResource`, med samma
+     * relationer och samma sortering som `Api\AttachmentController::index()`
+     * ger — nyast först — och ett konstant antal frågor oavsett antal rader
+     * (Beslut 10). Vyn ritar dem, `can.create` och `can.delete` styr ytorna,
+     * och skrivningarna ligger i App\Http\Controllers\AttachmentController.
      */
     public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems): Response
     {
@@ -238,10 +247,29 @@ class ItemController extends Controller
 
         $links = $listItemLinks->handle($user, $container, $item);
 
+        // Bilagorna kommer med detaljvyns props och aldrig ur ett eget anrop
+        // (issue 60 § Beslut 2). Relationerna och sorteringen är
+        // App\Http\Controllers\Api\AttachmentController::index()s egna —
+        // nyast först, `created_at` fallande med `id` fallande, så två
+        // bilagor uppladdade samma sekund ändå får en stabil ordning.
+        // Mjukraderade bilagor kommer aldrig med; SoftDeletes' globala scope
+        // sköter det.
+        //
+        // `storedFile` och `billedAccount` laddas eager eftersom
+        // AttachmentResource läser `mime_type`/`byte_size` respektive
+        // `billed_account` därifrån: listan kostar ett konstant antal frågor
+        // oavsett antalet bilagor, aldrig en fråga per rad (Beslut 10).
+        $attachments = $item->attachments()
+            ->with(['storedFile', 'billedAccount'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get();
+
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
             'categories' => $this->categoryNames([$item]),
+            'attachments' => AttachmentResource::collection($attachments)->resolve($request),
             'links' => $this->groupLinks(ItemLinkResource::collection($links)->resolve($request)),
             'counterparts' => $this->counterparts($user, $container, $item, $links, $listItems),
             'can' => [
