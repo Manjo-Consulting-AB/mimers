@@ -1,36 +1,57 @@
 <script setup>
+import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { formatDate } from './accessPresentation.js';
 import { remainingLabel } from './trashPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * En rad i papperskorgen, se issue 62a § Beslut 4, 6 och 9.
+ * En rad i papperskorgen, se issue 62a § Beslut 4, 6 och 9 och issue 62b
+ * § Beslut 7.
  *
- * **Raden visar BÅDA tiderna** (Beslut 4): när innehållet raderades och hur
- * länge det finns kvar. `expires_at` kommer ur `TrashEntryResource` — den
+ * **Samma komponent för båda listorna.** 62a ritade innehållet i en pärm,
+ * 62b de raderade pärmarna; formen är den samma — vad raden är, sitt
+ * sammanhang, båda tiderna och en återställningsknapp — och 20c § Beslut 3
+ * säger uttryckligen att en klient som ritar papperskorgen ska kunna använda
+ * en och samma komponent. Raden får därför sitt mål ur `entry.type`, som är
+ * det fält som skiljer de två listorna åt: en raderad pärm löses inte upp av
+ * ruttbindningen och återställs på toppnivå med bara `ulid` i kroppen (62b
+ * § Beslut 1), medan innehållet postas till pärmens egen rutt med `type` och
+ * `ulid` (fyra typer delar en lista, issue 20a § Beslut 1). Innehållsraden
+ * behöver pärmen för sitt mål och får den som `containerUlid`; pärmraden har
+ * den i `entry.ulid` och behöver ingen.
+ *
+ * **Raden visar BÅDA tiderna** (62a § Beslut 4): när innehållet raderades och
+ * hur länge det finns kvar. `expires_at` kommer ur `TrashEntryResource` — den
  * återstående tiden räknas alltså inte här, den formuleras här.
  *
  * **Vad raden är och vad den hör till.** `entry.label` är namnet
  * användaren känner igen saken på (itemets namn, filnamnet, kategorins namn,
- * taggens namn), `entry.context` är bilagans item eller underkategorins
- * förälder — utan den är "faktura.pdf" i en lista med tjugo poster
- * obrukbart. Båda kommer färdiga ur resursen; vyn hittar inte på något.
+ * taggens namn, pärmens namn), `entry.context` är bilagans item eller
+ * underkategorins förälder — utan den är "faktura.pdf" i en lista med tjugo
+ * poster obrukbart. Båda kommer färdiga ur resursen; vyn hittar inte på
+ * något. Etiketten slås upp ur `lang/`.
  *
- * **Återställningsknappen ritas ur `can_restore`** (Beslut 6), som
- * kontrollern räknar med samma grind som rutten prövar. Flaggan är
- * presentation: `POST` auktoriserar ändå, och en `read`-deltagare som
- * postar förbi vyn får 403.
+ * **Återställningsknappen ritas ur `canRestore`**, som kontrollern räknar med
+ * samma grind som rutten prövar. Flaggan är presentation: `POST`
+ * auktoriserar ändå, och den som postar förbi vyn får 403.
  *
  * Ingen bekräftelseruta: återställningen är den ogörliga handlingens
- * motsats — den lägger tillbaka något i pärmen, och den går att ångra med
- * en ny radering.
+ * motsats — den lägger tillbaka något, och den går att ångra med en ny
+ * radering.
  */
-defineProps({
-    containerUlid: { type: String, required: true },
+const props = defineProps({
     entry: { type: Object, required: true },
+    containerUlid: { type: String, default: null },
     canRestore: { type: Boolean, default: false },
 });
+
+const restoreTarget = computed(() => props.entry.type === 'container'
+    ? { href: '/trash/containers/restore', data: { ulid: props.entry.ulid } }
+    : {
+        href: `/containers/${props.containerUlid}/trash/restore`,
+        data: { type: props.entry.type, ulid: props.entry.ulid },
+    });
 
 const { t } = useTranslations();
 const page = usePage();
@@ -53,9 +74,9 @@ const page = usePage();
 
         <Link
             v-if="canRestore"
-            :href="`/containers/${containerUlid}/trash/restore`"
+            :href="restoreTarget.href"
             method="post"
-            :data="{ type: entry.type, ulid: entry.ulid }"
+            :data="restoreTarget.data"
             as="button"
             preserve-scroll
             class="self-start text-sm text-blue-700 underline"

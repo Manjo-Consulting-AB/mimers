@@ -110,5 +110,17 @@ const isShared = (container) => accountName(container) === null;
                 </Link>
             </li>
         </ul>
+
+        <!--
+            Vägen tillbaka, se issue 62b § Beslut 8. Raden ligger under listan
+            och är ALLTID synlig — också för en tom lista, för den som raderat
+            sin enda pärm är den som mest behöver den. Ingen räknare: ett tal
+            hade varit en fråga per sidladdning, och texten är konstant.
+        -->
+        <p class="mt-8 text-sm">
+            <Link href="/trash/containers" class="text-blue-700 hover:underline">
+                {{ t('trash.containers.link') }}
+            </Link>
+        </p>
     </AppLayout>
 </template>

@@ -107,6 +107,13 @@ return [
         // not item (same reason as issue 20a decision 1).
         'trash-restored' => 'The content has been restored.',
 
+        // Issue 62b decisions 5 and 6. The deletion lands on the binder list —
+        // and the sentence points at the trash, where the link sits right
+        // below. The restore says the binder is back; it does NOT become
+        // active on its own, because choosing a binder is the user's action.
+        'container-trashed' => 'The binder is in the trash.',
+        'container-restored' => 'The binder has been restored.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -342,6 +349,17 @@ return [
             'kind' => 'Type',
 
             'submit' => 'Save',
+        ],
+
+        // The deletion, see issue 62b decisions 4 and 5. `confirm` carries the
+        // binder's name: a confirmation that does not say what disappears is a
+        // confirmation people click away. It says that everything comes along,
+        // that the binder stays in the trash for 30 days and that it can be
+        // restored from there — and NEVER "deleted permanently", because the
+        // deletion is soft (issue 8) and that word would be untrue.
+        'destroy' => [
+            'action' => 'Delete the binder',
+            'confirm' => ':name and everything in it moves to the trash. It stays there for 30 days and can be restored from there. Do you want to continue?',
         ],
 
         // The category tree, see issue 56a decisions 1, 2, 3 and 4.
@@ -882,6 +900,10 @@ return [
             'attachment' => 'Attachment',
             'category' => 'Category',
             'tag' => 'Tag',
+            // Came with issue 62b: a deleted binder carries the same key out
+            // of TrashEntryResource, and the row is the same component in both
+            // lists.
+            'container' => 'Binder',
         ],
 
         'expires' => [
@@ -891,5 +913,19 @@ return [
         ],
 
         'restore' => 'Restore',
+
+        // The trash for deleted BINDERS, see issue 62b decisions 7 and 8. It
+        // sits at the TOP level — a deleted binder is not resolved by the
+        // route binding — and `link` is the row under the binder list, always
+        // visible. The text is constant and counts nothing: a number would be
+        // a query per page load (decision 8).
+        'containers' => [
+            'title' => 'Trash',
+            'heading' => 'Deleted binders',
+            'description' => 'Binders you have deleted. After 30 days they are removed for good.',
+            'empty' => 'No deleted binders.',
+            'link' => 'Trash',
+            'back' => 'Back to the binders',
+        ],
     ],
 ];

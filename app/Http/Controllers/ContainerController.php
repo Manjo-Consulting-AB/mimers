@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Container\CreateContainer;
+use App\Actions\Container\TrashContainer;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
@@ -42,9 +43,13 @@ use Inertia\Response;
  * ändå, och två sidor som slåss om samma URL är dyrare än en URL som ännu
  * inte finns.
  *
- * **Ingen `destroy()`.** `DELETE /api/containers/{container}` finns, men
- * papperskorgen som återställer raden är issue 62, och ingen issue i M10
- * beställer en raderingsknapp för pärmen innan dess.
+ * **`destroy()` kom med issue 62b**, tillsammans med papperskorgen som
+ * återställer raden — en raderingsknapp utan en väg tillbaka är en fälla, och
+ * vägen tillbaka byggs därför i samma issue som knappen (62b § Beslut 4, 5
+ * och 6). Skrivningen går genom App\Actions\Container\TrashContainer, samma
+ * action som `Api\ContainerController::destroy()` anropar, och den enda
+ * skillnaden mot `/api` är sessionen: den här kontrollern rensar den aktiva
+ * pärmen när den som raderas är den som ligger i sessionen.
  *
  * Rutterna ligger bakom `auth` (routes/web.php) — en utloggad besökare
  * skickas till /login av middlewaren och når aldrig de här metoderna.
@@ -192,6 +197,15 @@ class ContainerController extends Controller
      *
      * Sidpropen `container` ur `ContainerResource` är kontraktet varje sida
      * under ContainerLayout uppfyller, se resources/js/layouts/ContainerLayout.vue.
+     *
+     * **`can.delete` räknas med en policyfråga** (62b § Beslut 4), samma
+     * mönster som itemets tre flaggor (57a § Beslut 6): raderingsknappen ritas
+     * bara för den som får radera, och flaggan läggs BREDVID
+     * `ContainerResource` — den är presentation, och rutten auktoriserar ändå
+     * med `Gate::authorize()`. En `read`- eller `write`-deltagare kommer inte
+     * ens hit (grinden ovan är `update()`), men en `write`-deltagare som
+     * postar förbi vyn får 403 på `containers.destroy` — flaggan är ingen
+     * grind.
      */
     public function edit(Request $request, Container $container): Response
     {
@@ -199,12 +213,15 @@ class ContainerController extends Controller
 
         // En enda rad, men ladda ägarkontot uttryckligen ändå så resursen
         // aldrig kör en oplanerad lazy-load — samma resonemang som
-        // API-kontrollern.
+        // API-kontrollern. Policyn läser samma relation.
         $container->loadMissing('account');
 
         return Inertia::render('Containers/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),
             'kinds' => Container::KINDS,
+            'can' => [
+                'delete' => Gate::forUser($request->user())->allows('delete', $container),
+            ],
         ]);
     }
 
@@ -230,5 +247,54 @@ class ContainerController extends Controller
         return redirect()
             ->route('containers.edit', $container)
             ->with('status', 'container-updated');
+    }
+
+    /**
+     * DELETE /containers/{container} — raderar pärmen, 302 till pärmlistan
+     * med flashkoden `container-trashed` (62b § Beslut 4, 5 och 6).
+     *
+     * Kroppen kommer från `Edit.vue`s bekräftade knapp — ingen egen
+     * bekräftelseruta på servern, och ingen POST-vägran: `window.confirm` är
+     * klientens svar på "är du säker", och en klient som hoppar över den
+     * raderar sin egen pärm. Det är en destruktiv handling för användaren, men
+     * den går att ångra i papperskorgen i 30 dagar — det är därför knappen
+     * får finnas nu och inte i issue 54.
+     *
+     * Grinden är `delete()`, samma metod som `Api\ContainerController::
+     * destroy()` prövar: bara ägarkontots egna medlemmar, och aldrig ett fryst
+     * konto (regel 1 + regel 4). En delegerad `container_access` — även på
+     * `delete`-nivå — får 403 här.
+     *
+     * **Sessionen rensas när den raderade pärmen var den aktiva** (Beslut 6).
+     * Pärmen löses inte längre upp av `Container::scopeAccessibleBy()`, så
+     * varje efterföljande sida hade annars visat en aktiv pärm som inte finns.
+     * `App\Support\Frontend\ActiveContainer` är den enda som rör nyckeln, och
+     * den anropas HÄR och inte i actionen: en `/api`-radering har ingen
+     * session att röra. Jämförelsen görs FÖRE raderingen — `forUser()` svarar
+     * null för en redan raderad pärm, och efteråt hade svaret alltid varit
+     * falskt.
+     *
+     * Återställningen sätter INTE tillbaka pärmen som aktiv: att välja pärm är
+     * användarens handling (Beslut 6).
+     */
+    public function destroy(
+        Request $request,
+        Container $container,
+        TrashContainer $trashContainer,
+        ActiveContainer $activeContainer,
+    ): RedirectResponse {
+        Gate::authorize('delete', $container);
+
+        $varAktiv = $activeContainer->forUser($request->user()) === $container->ulid;
+
+        $trashContainer->handle($container);
+
+        if ($varAktiv) {
+            $activeContainer->forget();
+        }
+
+        return redirect()
+            ->route('containers.index')
+            ->with('status', 'container-trashed');
     }
 }

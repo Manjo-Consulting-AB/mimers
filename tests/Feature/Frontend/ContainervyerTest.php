@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\delete;
 use function Pest\Laravel\from;
 use function Pest\Laravel\get;
 use function Pest\Laravel\patch;
@@ -83,8 +84,12 @@ function containerGrant(Container $container, User $user, string $level, ?Item $
 /*
  * Beslut 1: sex rutter, alla bakom `auth`. En utloggad besökare skickas till
  * inloggningen och når aldrig en kontrollermetod.
+ *
+ * Raderingen kom med issue 62b § Beslut 4 och är den SJUNDE — den ligger i
+ * samma grupp och av samma skäl: raderingsknappen på inställningssidan får
+ * inte vara den enda vägen in i kontrollern som en gäst når.
  */
-it('skickar en utloggad besökare till inloggningen från alla sex rutterna', function () {
+it('skickar en utloggad besökare till inloggningen från alla sju rutterna', function () {
     withoutVite();
 
     [$konto] = containerKontext();
@@ -96,6 +101,7 @@ it('skickar en utloggad besökare till inloggningen från alla sex rutterna', fu
     get("/containers/{$container->ulid}/edit")->assertRedirect('/login');
     patch("/containers/{$container->ulid}", [])->assertRedirect('/login');
     put("/containers/{$container->ulid}/active")->assertRedirect('/login');
+    delete("/containers/{$container->ulid}")->assertRedirect('/login');
 });
 
 it('renderar Containers/Index för en inloggad användare', function () {
@@ -494,7 +500,13 @@ it('renderar redigeringssidan i ContainerLayout med pärmens namn', function () 
 
     actingAs($anvandare)
         ->get("/containers/{$container->ulid}/edit")
-        ->assertInertia(fn (AssertableInertia $page) => $page->component('Containers/Edit'));
+        // `can.delete` kom med issue 62b § Beslut 4 och bor i samma prop som
+        // sidan redan bar: flaggan är presentation, och raderingsknappen ritas
+        // bara när den är sann. Grinden är `containers.destroy`.
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Edit')
+            ->where('can.delete', true)
+        );
 
     $vy = File::get(resource_path('js/pages/Containers/Edit.vue'));
     $layout = File::get(resource_path('js/layouts/ContainerLayout.vue'));
@@ -525,11 +537,13 @@ it('har containerytans texter på båda språken och läser dem ur lang/', funct
         'container.create.submit',
         'container.edit.heading',
         'container.edit.submit',
+        'container.destroy.action',
         'container.nav.settings',
         'error.generic',
         'error.quota.containers_exceeded',
         'flash.container-created',
         'flash.container-updated',
+        'flash.container-trashed',
     ];
 
     foreach (['sv', 'en'] as $locale) {
