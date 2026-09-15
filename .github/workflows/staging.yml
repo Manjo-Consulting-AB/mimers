@@ -124,6 +124,7 @@ jobs:
           # `php artisan config:cache`, så en .env som uppdateras efteråt får
           # ingen effekt förrän nästa utrullning.
           printf '%s\n' \
+            "FILES_URL=https://files.staging.mimers.app" \
             "MAIL_MAILER=$MAIL_MAILER" \
             "MAIL_FROM_ADDRESS=$MAIL_FROM_ADDRESS" \
             "MAIL_FROM_NAME=$MAIL_FROM_NAME" \
