@@ -30,9 +30,18 @@ use Illuminate\Support\Facades\Gate;
  * issue 21 — `{schedule}` löses genom App\Models\Item::schedules() och
  * `{occurrence}` genom App\Models\Schedule::occurrences(). Ett schema på ett
  * annat item, eller en förekomst i ett annat schema, ger 404 — hela skyddet
- * mot en främmande ULID (issue 22 § Beslut 1). Grinden är den befintliga
- * `view` (index) respektive `update` (complete/skip) på
- * App\Policies\ContainerPolicy, ingen ny policymetod (issue 22b § Beslut 1).
+ * mot en främmande ULID (issue 22 § Beslut 1). Grinden är ITEMETS egen på
+ * App\Policies\ItemPolicy sedan issue 71 (andra halvan): `view` (index)
+ * respektive `update` (complete/skip), ingen ny policymetod (issue 22b
+ * § Beslut 1). Schemat hör till `{item}` genom bindningen, så `$schedule->item`
+ * är samma item — men grinden ställs mot det item schemat faktiskt hör till,
+ * aldrig mot containern, se issue 71 § Beslut 1.
+ *
+ * `complete` och `skip` kräver `update`, inte `create`: att bocka av ändrar
+ * en förekomst som redan finns (issue 71 § Beslut 5). Fram till dess krävdes
+ * en container-bred grant, vilket stängde ute varje omfångsbegränsad
+ * mottagare från att bocka av sin egen uppgift — och en `write`-mottagare
+ * kunde det för att grinden delades med containerns `update`.
  */
 class ScheduleOccurrenceController extends Controller
 {
@@ -52,7 +61,7 @@ class ScheduleOccurrenceController extends Controller
      */
     public function index(Container $container, Item $item, Schedule $schedule): JsonResponse
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $schedule->item);
 
         $occurrences = $schedule->occurrences()
             ->with('completedByAccount')
@@ -117,7 +126,7 @@ class ScheduleOccurrenceController extends Controller
      */
     private function close(CompleteOccurrenceRequest $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence, string $status): JsonResponse
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $schedule->item);
 
         $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
 

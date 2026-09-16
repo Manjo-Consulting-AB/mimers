@@ -21,11 +21,25 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * CRUD-ytan för kostnadsrader, se issue 45a. INGEN behörighetslogik bor här —
- * varje metod anropar bara `Gate::authorize()` mot de BEFINTLIGA grindarna
- * `view` (listning) och `update` (skapa/ändra/radera) på
- * App\Policies\ContainerPolicy, se issue 45a § Beslut 8. Ingen ny
- * policymetod, ingen CostEntryPolicy. Registrering är fri på alla
- * plannivåer — grinden sitter på RAPPORTEN och byggs i issue 46.
+ * de fyra itemnästlade metoderna anropar bara `Gate::authorize()` mot ITEMETS
+ * egna grindar på App\Policies\ItemPolicy sedan issue 71 (andra halvan):
+ * `view` (listning), `create` (POST), `update` (PATCH) och `delete` (DELETE).
+ * Laddern avgör, se [[ADR-0028 Åtkomst på itemnivå]] § Beslut och issue 71
+ * § Beslut 1 och 5. Ingen ny policymetod, ingen CostEntryPolicy — kostnaden
+ * följer itemet. Registrering är fri på alla plannivåer — grinden sitter på
+ * RAPPORTEN och byggs i issue 46.
+ *
+ * `suppliers()` ligger på CONTAINERN och behåller därför containerns `view`,
+ * oförändrad (issue 45b § Beslut 1, issue 74 § Beslut 6) — den rutten har
+ * ingen item-ULID att pröva en itemgrind mot, och urvalet filtreras per
+ * omfång i frågan i stället.
+ *
+ * Fram till dess var grinden containerns `view`/`update` i alla fyra: en
+ * omfångsbegränsad mottagare kunde läsa kostnaderna på vilket item som helst
+ * i pärmen men inte bokföra en på sitt eget, och en `write`-mottagare kunde
+ * radera en kostnadsrad. `Container $container` står kvar i signaturerna för
+ * att ImplicitRouteBinding löser barnbindningen mot den redan lösta
+ * föräldern; `store()` behöver den dessutom för attributedAccountId().
  *
  * routes/api.php nästlar `{item}` under `{container}` och `{cost}` under
  * `{item}` med gruppens `->scopeBindings()` — `{item}` löses genom
@@ -68,7 +82,7 @@ class CostEntryController extends Controller
      */
     public function index(Container $container, Item $item): JsonResponse
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $item);
 
         $costs = $item->costs()
             ->with('createdByAccount')
@@ -91,10 +105,13 @@ class CostEntryController extends Controller
      * revisionslogg (issue 45a Omfång). Därför ingen transaktion och ingen
      * Action — det finns ingen regel värd ett eget test att skydda
      * ([[ADR-0024 Tunna controllers och actions]]).
+     *
+     * Grinden är itemets `create` (issue 71 § Beslut 1 och 5): en kostnadsrad
+     * är ny information som läggs till itemet, inte en ändring av det.
      */
     public function store(StoreCostEntryRequest $request, Container $container, Item $item): JsonResponse
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('create', $item);
 
         $data = $request->validated();
         $amount = MinorUnits::parse($data['amount'], $data['currency']);
@@ -124,10 +141,12 @@ class CostEntryController extends Controller
      * Inga tvärfältsregler mot radens befintliga tillstånd, så ingen
      * validationData()-sammanslagning som UpdateLoanRequest behövde
      * (§ Beslut 12).
+     *
+     * Grinden är itemets `update` (issue 71 § Beslut 1 och 5).
      */
     public function update(UpdateCostEntryRequest $request, Container $container, Item $item, CostEntry $cost): CostEntryResource
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $item);
 
         $data = $request->validated();
 
@@ -155,10 +174,13 @@ class CostEntryController extends Controller
      * Beslut 3. Raderas itemet följer raderna med till papperskorgen genom
      * SoftDeletes på itemet och återställs med det — utan att den här metoden
      * eller RestoreContent behöver veta att tabellen finns.
+     *
+     * Grinden är itemets `delete` (issue 71 § Beslut 1 och 5): `write` ändrar
+     * en kostnadsrad men tar inte bort den.
      */
     public function destroy(Container $container, Item $item, CostEntry $cost): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('delete', $item);
 
         $cost->delete();
 

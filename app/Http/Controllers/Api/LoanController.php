@@ -17,9 +17,19 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * CRUD-ytan för utlåning, se issue 76. INGEN behörighetslogik bor här — varje
- * metod anropar bara `Gate::authorize()` mot de BEFINTLIGA grindarna `view`
- * (listning) och `update` (skapa/ändra/radera) på App\Policies\ContainerPolicy,
- * se issue 76 § Beslut 6. Ingen ny policymetod, ingen `LoanPolicy`.
+ * metod anropar bara `Gate::authorize()` mot ITEMETS egna grindar på
+ * App\Policies\ItemPolicy sedan issue 71 (andra halvan): `view` (listning),
+ * `create` (POST), `update` (PATCH) och `delete` (DELETE). Laddern avgör, se
+ * [[ADR-0028 Åtkomst på itemnivå]] § Beslut och issue 71 § Beslut 1 och 5.
+ * Ingen ny policymetod, ingen `LoanPolicy` — lånet följer itemet.
+ *
+ * Fram till dess var grinden containerns `view`/`update`: en
+ * omfångsbegränsad mottagare kunde läsa låntagarens namn på vilket item som
+ * helst i pärmen men inte registrera en utlåning på sitt eget, och en
+ * `write`-mottagare kunde radera ett lån. Återlämningen — `PATCH` med
+ * `returned_at` — är `update`, inte `create`: lånet finns redan.
+ * `Container $container` står kvar i signaturerna för att ImplicitRouteBinding
+ * löser barnbindningen mot den redan lösta föräldern.
  *
  * routes/api.php nästlar `{item}` under `{container}` och `{loan}` under
  * `{item}` med gruppens `->scopeBindings()` — `{item}` löses genom
@@ -57,7 +67,7 @@ class LoanController extends Controller
      */
     public function index(Container $container, Item $item): JsonResponse
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $item);
 
         $loans = $item->loans()
             ->orderByDesc('lent_at')
@@ -80,10 +90,13 @@ class LoanController extends Controller
      * på samma item serialiseras och den andra ser den förstas öppna lån.
      * Låset ligger aldrig på loan-tabellen — en tom mängd rader är ett gap
      * lock i MySQL (22a § Beslut 7).
+     *
+     * Grinden är itemets `create` (issue 71 § Beslut 1 och 5): en utlåning är
+     * ny information som läggs till itemet, inte en ändring av det.
      */
     public function store(StoreLoanRequest $request, Container $container, Item $item): JsonResponse
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('create', $item);
 
         $loan = DB::transaction(function () use ($request, $item): Loan {
             $lockedItem = $item->newQuery()
@@ -117,6 +130,10 @@ class LoanController extends Controller
      * annat lån är öppet avvisas (§ Beslut 4); att stänga (sätta
      * `returned_at`) eller röra andra fält på ett stängt lån rör ingen spärr.
      *
+     * Grinden är itemets `update` (issue 71 § Beslut 1 och 5) — att registrera
+     * en återlämning ändrar ett lån som redan finns, och en `create`-mottagare
+     * nekas den därför.
+     *
      * Spärrens check-then-act och skrivningen delar EN transaktion under
      * `lockForUpdate()` på ITEM-raden (granskningsfynd) — två samtidiga
      * PATCH som båda återöppnar ett stängt lån på samma item serialiseras,
@@ -127,7 +144,7 @@ class LoanController extends Controller
      */
     public function update(UpdateLoanRequest $request, Container $container, Item $item, Loan $loan): LoanResource
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $item);
 
         $loan = DB::transaction(function () use ($request, $item, $loan): Loan {
             $lockedItem = $item->newQuery()
@@ -171,10 +188,13 @@ class LoanController extends Controller
      * fyra typer och behåller fyra, se issue 76 § Beslut 3. Ett raderat lån
      * går alltså inte att ta tillbaka via API:et i MVP; ett medvetet glapp,
      * inte ett förbiseende.
+     *
+     * Grinden är itemets `delete` (issue 71 § Beslut 1 och 5): `write` ändrar
+     * ett lån men tar inte bort det.
      */
     public function destroy(Container $container, Item $item, Loan $loan): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('delete', $item);
 
         $loan->delete();
 

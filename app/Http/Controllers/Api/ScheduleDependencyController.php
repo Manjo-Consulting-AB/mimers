@@ -26,9 +26,25 @@ use Illuminate\Support\Facades\Gate;
  * Beslut 7, se issue 23 § Beslut 3).
  *
  * INGEN behörighetslogik bor här — varje metod anropar bara
- * `Gate::authorize()` mot de BEFINTLIGA grindarna `view` (GET) och `update`
- * (POST, DELETE) på App\Policies\ContainerPolicy (§ Beslut 3). Ingen ny
- * policymetod.
+ * `Gate::authorize()` mot ITEMETS egna grindar på App\Policies\ItemPolicy
+ * sedan issue 71 (andra halvan): `view` (GET) och `update` (POST, DELETE),
+ * aldrig `delete` — ett beroende tar inte bort något av schemana (§ Beslut 3,
+ * issue 71 § Beslut 1 och 5). Ingen ny policymetod.
+ *
+ * BÅDA ändarna auktoriseras, `update` i var och en, också vid skapande —
+ * exakt som App\Http\Controllers\Api\ItemLinkController gör sedan PR #283,
+ * och av samma skäl: [[ADR-0028 Åtkomst på itemnivå]] § Beslut säger att "att
+ * ändra `item_link` kräver `write` i båda ändar", och ett schemaberoende är
+ * samma sorts kant. Ordningen är `$schedule->item` FÖRST, motpartens item
+ * efter uppslaget, så att en mottagare som inte når det egna schemat får 403
+ * innan hon får veta något om motparten. Motparten bevisas mot containern
+ * redan i StoreScheduleDependencyRequest (422 på en okänd ULID) respektive
+ * uppslaget i destroy() (404), så en känd men onåbar motpart ger 403 — aldrig
+ * motpartens titel eller itemnamn i svaret.
+ *
+ * Fram till dess var grinden containerns `view`/`update`: en
+ * omfångsbegränsad mottagare kunde läsa vilket schema som helst och knyta
+ * beroenden till scheman utanför sitt omfång.
  *
  * Domänreglerna (samma container, inte sig själv, ingen cykel) ligger i
  * App\Actions\Schedule\DependSchedule, aldrig här — [[ADR-0024 Tunna
@@ -52,7 +68,7 @@ class ScheduleDependencyController extends Controller
      */
     public function index(Container $container, Item $item, Schedule $schedule): JsonResponse
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $schedule->item);
 
         $rows = ScheduleDependency::query()
             ->where('schedule_id', $schedule->id)
@@ -99,16 +115,21 @@ class ScheduleDependencyController extends Controller
      */
     public function store(StoreScheduleDependencyRequest $request, Container $container, Item $item, Schedule $schedule, DependSchedule $dependSchedule): JsonResponse
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $schedule->item);
 
         // `validated('depends_on')` är fortfarande klientens ULID —
         // StoreScheduleDependencyRequest lämnar fältets värde orört och låter
         // Rule::exists mot schedule.ulid göra existens- och containerkontrollen.
+        // `container_id` står i kolumnlistan för att ItemPolicy läser itemets
+        // container; utan den är relationen tom och grinden kastar.
         $other = Schedule::query()
             ->whereHas('item', fn ($query) => $query->where('container_id', $container->id))
             ->where('ulid', $request->validated('depends_on'))
-            ->with('item:id,ulid,name')
+            ->with('item:id,ulid,name,container_id')
             ->firstOrFail();
+
+        // Andra änden, efter uppslaget (issue 71 § Beslut 1 och 3).
+        Gate::authorize('update', $other->item);
 
         $dependency = $dependSchedule->handle($schedule, $other);
 
@@ -128,11 +149,17 @@ class ScheduleDependencyController extends Controller
      * Finns motparten inte i containern, eller finns ingen beroenderad mellan
      * paret: 404 `resource.not_found` — i destroy() är det uppslagets fel och
      * svaret är 404, till skillnad från store() där valideringen svarar 422
-     * (§ Att se upp med).
+     * (§ Att se upp med). Ordningen 403 före 404 är oförändrad sedan
+     * grindbytet: en ULID ur en annan pärm ger fortfarande 404 (issue 71
+     * § Beslut 4).
+     *
+     * Båda ändarna kräver `update`, precis som i store() (issue 71 § Beslut 1
+     * och 3). En motpart inom containern men utanför omfånget ger 403 utan att
+     * svaret röjer dess titel eller itemnamn.
      */
     public function destroy(Container $container, Item $item, Schedule $schedule, string $other): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $schedule->item);
 
         // `{other}` är motpartens ULID och binds INTE av scopeBindings() —
         // uppslaget inom containern här är hela skyddet mot ett schema i en
@@ -142,6 +169,8 @@ class ScheduleDependencyController extends Controller
             ->whereHas('item', fn ($query) => $query->where('container_id', $container->id))
             ->where('ulid', $other)
             ->firstOrFail();
+
+        Gate::authorize('update', $otherSchedule->item);
 
         $dependency = ScheduleDependency::query()
             ->where('schedule_id', $schedule->id)

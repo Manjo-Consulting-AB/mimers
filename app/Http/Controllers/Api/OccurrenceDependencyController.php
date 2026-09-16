@@ -28,9 +28,25 @@ use Illuminate\Support\Facades\Gate;
  * § Beslut 3, issue 14 § Beslut 7).
  *
  * INGEN behörighetslogik bor här — varje metod anropar bara
- * `Gate::authorize()` mot de BEFINTLIGA grindarna `view` (GET) och `update`
- * (POST, DELETE) på App\Policies\ContainerPolicy (§ Beslut 3). Ingen ny
- * policymetod.
+ * `Gate::authorize()` mot ITEMETS egna grindar på App\Policies\ItemPolicy
+ * sedan issue 71 (andra halvan): `view` (GET) och `update` (POST, DELETE),
+ * aldrig `delete` — ett beroende tar inte bort något av förekomsterna
+ * (§ Beslut 3, issue 71 § Beslut 1 och 5). Ingen ny policymetod.
+ *
+ * BÅDA ändarna auktoriseras, `update` i var och en, också vid skapande —
+ * exakt som App\Http\Controllers\Api\ItemLinkController gör sedan PR #283 och
+ * av samma skäl: [[ADR-0028 Åtkomst på itemnivå]] § Beslut kräver `write` i
+ * båda ändar för att ändra en kant. Itemet är `$occurrence->schedule->item`,
+ * aldrig containern. Ordningen är den egna änden FÖRST, motpartens item efter
+ * uppslaget, så att en mottagare som inte når den egna förekomsten får 403
+ * innan hon får veta något om motparten. Motparten bevisas mot containern
+ * redan i StoreOccurrenceDependencyRequest (422 på en okänd ULID) respektive
+ * uppslaget i destroy() (404), så en känd men onåbar motpart ger 403 — aldrig
+ * motpartens titel eller itemnamn i svaret.
+ *
+ * Fram till dess var grinden containerns `view`/`update`: en
+ * omfångsbegränsad mottagare kunde läsa vilken förekomst som helst och knyta
+ * beroenden till förekomster utanför sitt omfång.
  *
  * Domänreglerna (samma container, öppen väntande sida, inte sig själv, ingen
  * cykel) ligger i App\Actions\Schedule\DependOccurrence, aldrig här —
@@ -60,7 +76,7 @@ class OccurrenceDependencyController extends Controller
      */
     public function index(Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence): JsonResponse
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $occurrence->schedule->item);
 
         $rows = OccurrenceDependency::query()
             ->where('occurrence_id', $occurrence->id)
@@ -114,17 +130,22 @@ class OccurrenceDependencyController extends Controller
      */
     public function store(StoreOccurrenceDependencyRequest $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, DependOccurrence $dependOccurrence): JsonResponse
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $occurrence->schedule->item);
 
         // `validated('depends_on')` är fortfarande klientens ULID —
         // StoreOccurrenceDependencyRequest lämnar fältets värde orört och låter
         // Rule::exists mot schedule_occurrence.ulid göra existens- och
-        // containerkontrollen.
+        // containerkontrollen. `container_id` står i kolumnlistan för att
+        // ItemPolicy läser itemets container; utan den är relationen tom och
+        // grinden kastar.
         $other = ScheduleOccurrence::query()
             ->where('ulid', $request->validated('depends_on'))
             ->whereHas('schedule.item', fn ($query) => $query->where('container_id', $container->id))
-            ->with(['schedule:id,title,item_id', 'schedule.item:id,ulid,name'])
+            ->with(['schedule:id,title,item_id', 'schedule.item:id,ulid,name,container_id'])
             ->firstOrFail();
+
+        // Andra änden, efter uppslaget (issue 71 § Beslut 1 och 3).
+        Gate::authorize('update', $other->schedule->item);
 
         $dependency = $dependOccurrence->handle($occurrence, $other);
 
@@ -146,15 +167,24 @@ class OccurrenceDependencyController extends Controller
      * Finns motparten inte i containern, eller finns ingen beroenderad mellan
      * paret: 404 `resource.not_found` — i destroy() är det uppslagets fel och
      * svaret är 404, till skillnad från store() där valideringen svarar 422.
+     * Ordningen 403 före 404 är oförändrad sedan grindbytet: en ULID ur en
+     * annan pärm ger fortfarande 404 (issue 71 § Beslut 4).
+     *
+     * Båda ändarna kräver `update`, precis som i store() (issue 71 § Beslut 1
+     * och 3). En motpart inom containern men utanför omfånget ger 403 utan att
+     * svaret röjer dess titel eller itemnamn.
      */
     public function destroy(Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, string $other): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $occurrence->schedule->item);
 
         $otherOccurrence = ScheduleOccurrence::query()
             ->where('ulid', $other)
             ->whereHas('schedule.item', fn ($query) => $query->where('container_id', $container->id))
+            ->with('schedule.item')
             ->firstOrFail();
+
+        Gate::authorize('update', $otherOccurrence->schedule->item);
 
         $dependency = OccurrenceDependency::query()
             ->where('occurrence_id', $occurrence->id)
