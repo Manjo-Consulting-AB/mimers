@@ -100,10 +100,11 @@ function submit() {
  * AVBRYTA navigeringen.
  *
  * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): knappen är
- * stängd och byter ord medan servern svarar. En flagga delas av raderna — de
- * gör samma sorts anrop.
+ * stängd och byter ord medan servern svarar. Flaggan bär den anropade radens
+ * ULID och inte en boolean — listan ritar flera rader ur samma komponent, och
+ * bara knappen man tryckte på ska gå i vänteläge (Beslut 4).
  */
-const pending = ref(false);
+const pending = ref(null);
 
 function remove(row) {
     if (! window.confirm(title('remove_confirm'))) {
@@ -112,8 +113,8 @@ function remove(row) {
 
     router.delete(`${props.url}/${row.ulid}`, {
         preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
+        onStart: () => { pending.value = row.ulid; },
+        onFinish: () => { pending.value = null; },
     });
 }
 </script>
@@ -172,11 +173,11 @@ function remove(row) {
                     <button
                         v-if="can.update"
                         type="button"
-                        :disabled="pending"
+                        :disabled="pending === row.ulid"
                         class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                         @click="remove(row)"
                     >
-                        {{ pending ? t('common.pending.default') : t('item.schedule.dependency.remove') }}
+                        {{ pending === row.ulid ? t('common.pending.default') : t('item.schedule.dependency.remove') }}
                     </button>
                 </li>
             </ul>

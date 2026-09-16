@@ -164,10 +164,12 @@ function returnToday() {
  * AVBRYTA navigeringen.
  *
  * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): knappen är
- * stängd och byter ord medan servern svarar. En flagga delas av raderna —
- * de gör samma sorts anrop.
+ * stängd och byter ord medan servern svarar. Flaggan bär den anropade radens
+ * ULID och inte en boolean — den öppna raden och historikraderna ritas ur
+ * samma komponent, och bara knappen man tryckte på ska gå i vänteläge (Beslut
+ * 4).
  */
-const pending = ref(false);
+const pending = ref(null);
 
 function destroy(loan) {
     if (! window.confirm(t('item.loan.destroy_confirm'))) {
@@ -176,8 +178,8 @@ function destroy(loan) {
 
     router.delete(loanUrl(loan), {
         preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
+        onStart: () => { pending.value = loan.ulid; },
+        onFinish: () => { pending.value = null; },
     });
 }
 </script>
@@ -248,11 +250,11 @@ function destroy(loan) {
                 <button
                     v-if="can.delete"
                     type="button"
-                    :disabled="pending"
+                    :disabled="pending === openLoan.ulid"
                     class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                     @click="destroy(openLoan)"
                 >
-                    {{ pending ? t('common.pending.default') : t('item.loan.destroy') }}
+                    {{ pending === openLoan.ulid ? t('common.pending.default') : t('item.loan.destroy') }}
                 </button>
             </div>
 
@@ -442,11 +444,11 @@ function destroy(loan) {
                         <button
                             v-if="can.delete"
                             type="button"
-                            :disabled="pending"
+                            :disabled="pending === loan.ulid"
                             class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                             @click="destroy(loan)"
                         >
-                            {{ pending ? t('common.pending.default') : t('item.loan.destroy') }}
+                            {{ pending === loan.ulid ? t('common.pending.default') : t('item.loan.destroy') }}
                         </button>
                     </div>
 

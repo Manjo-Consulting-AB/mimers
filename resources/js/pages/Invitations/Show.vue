@@ -100,7 +100,7 @@ function reject() {
                     :disabled="acceptForm.processing"
                     class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                 >
-                    {{ acceptForm.processing ? t('common.pending.transfer') : t('invitation.accept') }}
+                    {{ acceptForm.processing ? t('common.pending.default') : t('invitation.accept') }}
                 </button>
             </form>
 

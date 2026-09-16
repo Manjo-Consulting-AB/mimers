@@ -96,10 +96,11 @@ function submit() {
  * kunna AVBRYTA navigeringen, samma val som raderingen på detaljvyn.
  *
  * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): knappen är
- * stängd och byter ord medan servern svarar. En flagga delas av alla rader —
- * de gör samma sorts anrop.
+ * stängd och byter ord medan servern svarar. Flaggan bär den anropade radens
+ * ULID och inte en boolean — listan ritar flera rader ur samma komponent, och
+ * bara knappen man tryckte på ska gå i vänteläge (Beslut 4).
  */
-const pending = ref(false);
+const pending = ref(null);
 
 function remove(counterpart) {
     if (! window.confirm(t('item.links.remove_confirm'))) {
@@ -107,8 +108,8 @@ function remove(counterpart) {
     }
 
     router.delete(`/containers/${props.containerUlid}/items/${props.itemUlid}/links/${counterpart.ulid}`, {
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
+        onStart: () => { pending.value = counterpart.ulid; },
+        onFinish: () => { pending.value = null; },
     });
 }
 </script>
@@ -141,11 +142,11 @@ function remove(counterpart) {
                             <button
                                 v-if="can.update"
                                 type="button"
-                                :disabled="pending"
+                                :disabled="pending === link.item.ulid"
                                 class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                                 @click="remove(link.item)"
                             >
-                                {{ pending ? t('common.pending.default') : t('item.links.remove') }}
+                                {{ pending === link.item.ulid ? t('common.pending.default') : t('item.links.remove') }}
                             </button>
                         </li>
                     </ul>

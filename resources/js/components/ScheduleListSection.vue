@@ -104,17 +104,18 @@ function editUrl(schedule) {
 
 /*
  * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): pausen och
- * raderingen är båda små mutationer i samma lista, och en enda flagga delas av
- * dem. Medan servern svarar är kontrollerna stängda och byter ord, så ett
- * långsamt svar inte ser ut som en död sida.
+ * raderingen är båda små mutationer i samma lista, och flaggan bär den
+ * anropade radens ULID — listan ritar flera scheman ur samma komponent, och
+ * bara knapparna på raden man tryckte på ska stängas och byta ord medan
+ * servern svarar (Beslut 4).
  */
-const pending = ref(false);
+const pending = ref(null);
 
 function toggle(schedule) {
     router.patch(url(schedule), { is_active: !schedule.is_active }, {
         preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
+        onStart: () => { pending.value = schedule.ulid; },
+        onFinish: () => { pending.value = null; },
     });
 }
 
@@ -136,8 +137,8 @@ function destroy(schedule) {
 
     router.delete(url(schedule), {
         preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
+        onStart: () => { pending.value = schedule.ulid; },
+        onFinish: () => { pending.value = null; },
     });
 }
 </script>
@@ -221,21 +222,21 @@ function destroy(schedule) {
                     <button
                         v-if="can.update"
                         type="button"
-                        :disabled="pending"
+                        :disabled="pending === schedule.ulid"
                         class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                         @click="toggle(schedule)"
                     >
-                        {{ pending ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
+                        {{ pending === schedule.ulid ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
                     </button>
 
                     <button
                         v-if="can.delete"
                         type="button"
-                        :disabled="pending"
+                        :disabled="pending === schedule.ulid"
                         class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
                         @click="destroy(schedule)"
                     >
-                        {{ pending ? t('common.pending.default') : t('item.schedule.destroy') }}
+                        {{ pending === schedule.ulid ? t('common.pending.default') : t('item.schedule.destroy') }}
                     </button>
                 </div>
 
