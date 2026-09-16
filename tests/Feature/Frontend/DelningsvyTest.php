@@ -1012,6 +1012,15 @@ it('lägger delningssidan i pärmens navigation', function () {
  * `read`-deltagare ser historiken och den öppna förekomsten men får 403 här; en
  * `create`-deltagare nekas av samma grind, för att bocka av ändrar en rad som
  * redan finns.
+ *
+ * Sedan issue 63c finns beroendenas två POST här, en per nivå. De skriver en
+ * `schedule_dependency`- respektive `occurrence_dependency`-rad genom
+ * App\Actions\Schedule\DependSchedule/DependOccurrence, men rör inga åtkomster:
+ * grinden är `update` på ITEMET i BÅDA ändar (issue 63c § Beslut 8,
+ * [[ADR-0028 Åtkomst på itemnivå]] § Beslut — att ändra en kant kräver `write` i
+ * båda ändar). En `read`-deltagare ser beroendena men får 403 här; en
+ * `write`-deltagare som saknar åtkomst till motparten får också 403, utan att
+ * motpartens namn syns i svaret.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -1031,6 +1040,8 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/items/{item}/schedules',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip',
+        'containers/{container}/items/{item}/schedules/{schedule}/dependencies',
+        'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies',
         'containers',
         'containers/{container}/invitations',
         'containers/{container}/categories',

@@ -133,6 +133,14 @@ return [
         'occurrence-completed' => 'The task has been checked off.',
         'occurrence-skipped' => 'The task was skipped and saved as such — not as done.',
 
+        // Issue 63c decision 7. `removed` says that nothing else disappeared:
+        // the row is hard-deleted (issue 23 decision 7) and what is lost is the
+        // link — both schedules and both occurrences remain.
+        'schedule-dependency-created' => 'The dependency has been added.',
+        'schedule-dependency-removed' => 'The dependency is gone. Both schedules remain.',
+        'occurrence-dependency-created' => 'The exception has been added.',
+        'occurrence-dependency-removed' => 'The exception is gone. Both schedules and both occurrences remain.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -233,10 +241,25 @@ return [
             'blocked' => 'This task cannot be checked off yet — these are not done:',
             'blocked_row' => '• :title — due :date',
             'not_open' => 'This occurrence is already closed and cannot be checked off again.',
+
+            // Issue 63c decision 6: the three error codes of the occurrence
+            // dependency, from App\Actions\Schedule\DependOccurrence. All land
+            // on the `depends_on` field. The cycle sentence uses `data`: the
+            // code carries the two ULIDs of the edge that was attempted, and
+            // the sentence names them with their schedule titles.
+            'dependency_self' => 'An occurrence cannot wait for itself.',
+            'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other occurrences.',
+            'dependency_not_in_container' => 'Dependencies only run between occurrences in the same binder.',
         ],
 
         'schedule' => [
             'inactive' => 'The schedule is paused, and checking off would open a new occurrence on a schedule nobody wants occurrences on. Resume the schedule first.',
+
+            // Issue 63c decision 6: the three error codes of the schedule
+            // dependency, from App\Actions\Schedule\DependSchedule.
+            'dependency_self' => 'A schedule cannot wait for itself.',
+            'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other schedules.',
+            'dependency_not_in_container' => 'Dependencies only run between schedules in the same binder.',
         ],
     ],
 
@@ -883,6 +906,43 @@ return [
 
                 'completed_at' => 'Closed :date',
                 'completed_by' => 'by :name',
+            ],
+
+            // The dependencies, see issue 63c decisions 2, 3, 4, 5, 7 and 9.
+            // The section lives in
+            // resources/js/components/ScheduleDependencySection.vue and is
+            // drawn TWICE on the schedule's page, once per level.
+            //
+            // Two levels, two headings (decision 2): `heading_schedule` is the
+            // RULE inherited by every new occurrence, `heading_occurrence` is
+            // the EXCEPTION that applies to this occurrence only ([[ADR-0005
+            // Schema och förekomst]]). The difference is in the words, not in a
+            // type column.
+            //
+            // `note_schedule` is the inheritance sentence: without it a rule
+            // looks like a one-off choice.
+            'dependency' => [
+                'heading_schedule' => 'Always waits for',
+                'heading_occurrence' => 'Waiting on this time',
+
+                'note_schedule' => 'A rule for this schedule. Every new occurrence is linked automatically to the counterpart’s then-open occurrence.',
+                'note_occurrence' => 'An exception that applies to this occurrence only.',
+
+                'empty_schedule' => 'The schedule is not waiting for anything.',
+                'empty_occurrence' => 'The occurrence is not waiting for anything.',
+                'occurrence_none' => 'No open occurrence, so there are no exceptions to show.',
+
+                'counterpart' => 'Counterpart',
+                'counterpart_none' => '— choose a schedule —',
+                'no_counterparts' => 'There are no other schedules to wait for.',
+
+                'submit' => 'Add',
+                'remove' => 'Remove',
+                'remove_confirm_schedule' => 'The dependency is removed. Both schedules remain. Continue?',
+                'remove_confirm_occurrence' => 'The exception is removed. Both schedules and both occurrences remain. Continue?',
+
+                'satisfied' => 'Done',
+                'blocking' => 'Blocking',
             ],
         ],
     ],

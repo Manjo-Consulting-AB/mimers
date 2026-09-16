@@ -150,6 +150,15 @@ return [
         'occurrence-completed' => 'Uppgiften är avbockad.',
         'occurrence-skipped' => 'Uppgiften är överhoppad och sparad som det — inte som utförd.',
 
+        // Issue 63c § Beslut 7. `removed` säger att ingenting annat försvann:
+        // raden är hård (issue 23 § Beslut 7) och det som går förlorat är
+        // kopplingen — både schemana och både förekomsterna finns kvar, precis
+        // som `item-link-removed` säger det för relationerna.
+        'schedule-dependency-created' => 'Beroendet är tillagt.',
+        'schedule-dependency-removed' => 'Beroendet är borttaget. Båda schemana finns kvar.',
+        'occurrence-dependency-created' => 'Undantaget är tillagt.',
+        'occurrence-dependency-removed' => 'Undantaget är borttaget. Både schemana och båda förekomsterna finns kvar.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -286,10 +295,32 @@ return [
             'blocked' => 'Uppgiften kan inte bockas av än — de här är inte klara:',
             'blocked_row' => '• :title — förfaller :date',
             'not_open' => 'Förekomsten är redan avslutad och går inte att bocka av igen.',
+
+            // Issue 63c § Beslut 6: förekomstberoendets tre egna felkoder, ur
+            // App\Actions\Schedule\DependOccurrence. Alla hamnar på fältet
+            // `depends_on` — varje regel handlar om vilken förekomst som
+            // valdes — och aldrig som en rå JSON-kropp mitt i en sida.
+            //
+            // **Cykelmeningen använder `data`.** Koden bär `data.occurrence`
+            // och `data.depends_on`, kanten som försöktes; meningen namnger
+            // dem med sina schematitlar i stället för med ULID:er, för
+            // "vilken kedja" är obegripligt som två strängar ur en databas.
+            // Ett meddelande som slänger bort `data` är sämre än felkoden det
+            // ersatte (issue 58 § Beslut 6, 56a § Beslut 4).
+            'dependency_self' => 'En förekomst kan inte vänta på sig själv.',
+            'dependency_cycle' => 'Riktningen skulle göra en cirkel: ":schedule" väntar redan på ":depends_on", direkt eller genom mellanled.',
+            'dependency_not_in_container' => 'Beroenden går bara mellan förekomster i samma pärm.',
         ],
 
         'schedule' => [
             'inactive' => 'Schemat är pausat, och en avbockning skulle öppna en ny förekomst på ett schema ingen vill ha förekomster på. Återuppta schemat först.',
+
+            // Issue 63c § Beslut 6: schemaberoendets tre egna felkoder, ur
+            // App\Actions\Schedule\DependSchedule. Samma form och samma fält
+            // som förekomstens ovan.
+            'dependency_self' => 'Ett schema kan inte vänta på sig självt.',
+            'dependency_cycle' => 'Riktningen skulle göra en cirkel: ":schedule" väntar redan på ":depends_on", direkt eller genom mellanled.',
+            'dependency_not_in_container' => 'Beroenden går bara mellan scheman i samma pärm.',
         ],
     ],
 
@@ -1033,6 +1064,58 @@ return [
 
                 'completed_at' => 'Avslutad :date',
                 'completed_by' => 'av :name',
+            ],
+
+            // Beroendena, se issue 63c § Beslut 2, 3, 4, 5, 7 och 9. Sektionen
+            // bor i resources/js/components/ScheduleDependencySection.vue och
+            // ritas TVÅ gånger på schemats sida, en gång per nivå
+            // (resources/js/pages/Containers/Items/Schedules/Show.vue).
+            //
+            // **Två nivåer, två rubriker** (Beslut 2). `heading_schedule` är
+            // REGELN som ärvs av varje ny förekomst, `heading_occurrence` är
+            // UNDANTAGET som bara gäller den här gången ([[ADR-0005 Schema och
+            // förekomst]]). Skillnaden står i orden och inte i en typkolumn:
+            // rubrikerna bär den, och en gemensam lista hade krävt att
+            // användaren först förstod modellen.
+            //
+            // **`note_schedule` är ärvsmeningen.** Utan den ser en regel ut
+            // som ett engångsval — den säger att varje ny förekomst kopplas till
+            // motpartens DÅ öppna förekomst (Beslut 2).
+            //
+            // Nycklarna väljs på nivånamn (`schedule` | `occurrence`), samma
+            // två ord som de två kontrollernas nivåer och som `level`-propen.
+            'dependency' => [
+                'heading_schedule' => 'Väntar alltid på',
+                'heading_occurrence' => 'Väntar den här gången på',
+
+                'note_schedule' => 'En regel för det här schemat. Varje ny förekomst kopplas automatiskt till motpartens då öppna förekomst.',
+                'note_occurrence' => 'Ett undantag som bara gäller den här förekomsten.',
+
+                'empty_schedule' => 'Schemat väntar inte på något.',
+                'empty_occurrence' => 'Förekomsten väntar inte på något.',
+                // Ett schema utan öppen förekomst har inga undantag att visa:
+                // det finns ingen omgång att göra ett undantag för.
+                'occurrence_none' => 'Ingen öppen förekomst, så det finns inga undantag att visa.',
+
+                // Motparten är alltid ett SCHEMA, också på förekomstnivån: det
+                // är motpartens öppna förekomst som väljs, men det användaren
+                // känner igen är schemats titel och dess item (Beslut 3).
+                'counterpart' => 'Motpart',
+                'counterpart_none' => '— välj schema —',
+                'no_counterparts' => 'Det finns inga andra scheman att vänta på.',
+
+                'submit' => 'Lägg till',
+                'remove' => 'Ta bort',
+                // Raderingen är hård och bryter kopplingen och ingenting annat
+                // (Beslut 7): både schemana och både förekomsterna finns kvar.
+                'remove_confirm_schedule' => 'Beroendet tas bort. Båda schemana finns kvar. Vill du fortsätta?',
+                'remove_confirm_occurrence' => 'Undantaget tas bort. Både schemana och båda förekomsterna finns kvar. Vill du fortsätta?',
+
+                // `satisfied` kommer från servern (Beslut 4): en uppfylld rad är
+                // avbockad och grå, en öppen rad är det som blockerar och syns
+                // som sådan innan användaren försöker bocka av.
+                'satisfied' => 'Klar',
+                'blocking' => 'Blockerar',
             ],
         ],
     ],

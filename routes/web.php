@@ -24,7 +24,9 @@ use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
+use App\Http\Controllers\OccurrenceDependencyController;
 use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\ScheduleDependencyController;
 use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Settings\AccountSettingsController;
@@ -523,6 +525,54 @@ Route::middleware('auth')->group(function () {
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip', [ScheduleOccurrenceController::class, 'skip'])
         ->scopeBindings()
         ->name('containers.items.schedules.occurrences.skip');
+
+    /*
+     * Issue 63c · Beroendena på båda nivåerna, se
+     * App\Http\Controllers\ScheduleDependencyController och
+     * App\Http\Controllers\OccurrenceDependencyController.
+     *
+     * **Fyra rutter och ingen GET** (Beslut 1). Båda listorna kommer med
+     * schemats sida som props — de byggs i
+     * App\Http\Controllers\ScheduleOccurrenceController::show() — av samma
+     * skäl som bilagorna (issue 60 § Beslut 2) och relationerna (issue 58
+     * § Beslut 1): en sida, ett svar, och ingen andra väg till samma läsning.
+     *
+     * **Två nivåer, två kontrollrar.** Ett schemaberoende är en regel som ärvs
+     * av varje ny förekomst; ett förekomstberoende är ett undantag för den
+     * här gången ([[ADR-0005 Schema och förekomst]]). Rutterna är nästlade
+     * under `{schedule}` respektive `{occurrence}` — den BEROENDE sidan är
+     * alltid den som väntar, exakt som i routes/api.php (issue 23 § Beslut 3,
+     * issue 23b § Beslut 3).
+     *
+     * **Ingenting av `/api` byggs om.** `StoreScheduleDependencyRequest` och
+     * `StoreOccurrenceDependencyRequest` delas rakt av, och reglerna —
+     * cykelkontrollen, arvet, de sex felkoderna — ligger orörda i
+     * App\Actions\Schedule\DependSchedule och DependOccurrence.
+     *
+     * **`{other}` binds INTE av `scopeBindings()`** (issue 23 § Beslut 3):
+     * motparten är en strängparameter och slås upp inom pärmen i destroy(),
+     * så en ULID ur en annan pärm blir 404. `{container}`, `{item}`,
+     * `{schedule}` och `{occurrence}` binds som i 63a och 63b.
+     *
+     * Båda svaren är 302 tillbaka med en flash-kod — mönstret från issue 51
+     * § Beslut 5 — och ett domänfel blir ett fältfel på `depends_on`, aldrig
+     * en JSON-kropp (Beslut 6).
+     */
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/dependencies', [ScheduleDependencyController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.dependencies.store');
+
+    Route::delete('/containers/{container}/items/{item}/schedules/{schedule}/dependencies/{other}', [ScheduleDependencyController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.dependencies.destroy');
+
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies', [OccurrenceDependencyController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.occurrences.dependencies.store');
+
+    Route::delete('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies/{other}', [OccurrenceDependencyController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.occurrences.dependencies.destroy');
 
     Route::post('/containers', [ContainerController::class, 'store'])
         ->name('containers.store');
