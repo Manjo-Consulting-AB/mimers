@@ -17,9 +17,18 @@ use Illuminate\Support\Facades\Gate;
 
 /**
  * CRUD-ytan för schema, se issue 21. INGEN behörighetslogik bor här — varje
- * metod anropar bara `Gate::authorize()` mot de BEFINTLIGA grindarna `view`
- * (listning) och `update` (skapa/ändra/radera) på App\Policies\ContainerPolicy,
- * se issue 21 § Beslut 2. Ingen ny policymetod, ingen `SchedulePolicy`.
+ * metod anropar bara `Gate::authorize()` mot ITEMETS egna grindar på
+ * App\Policies\ItemPolicy sedan issue 71 (andra halvan): `view` (listning),
+ * `create` (POST), `update` (PATCH) och `delete` (DELETE). Laddern avgör, se
+ * [[ADR-0028 Åtkomst på itemnivå]] § Beslut och issue 71 § Beslut 1 och 5.
+ * Ingen ny policymetod, ingen `SchedulePolicy` — schemat följer itemet.
+ *
+ * Fram till dess var grinden containerns `view`/`update`: en
+ * omfångsbegränsad mottagare kunde läsa vilket schema som helst i pärmen men
+ * inte skapa ett på sitt eget item, och en `write`-mottagare kunde radera ett
+ * schema. `Container $container` står kvar i signaturerna för att
+ * ImplicitRouteBinding löser barnbindningen mot den redan lösta föräldern,
+ * samma skäl som Api\AttachmentControllers docblock skriver ut.
  *
  * routes/api.php nästlar `{item}` under `{container}` och `{schedule}` under
  * `{item}` med gruppens `->scopeBindings()` — `{item}` löses genom
@@ -44,10 +53,12 @@ class ScheduleController extends Controller
      * `title` stigande, ingen paginering (issue 21 § Beslut 8). Ett konstant
      * antal frågor oavsett antal scheman — ScheduleResource läser bara
      * kolumner på raden själv, inga relationer att ladda i förväg.
+     *
+     * Grinden är itemets `view` (issue 71 § Beslut 1).
      */
     public function index(Container $container, Item $item): JsonResponse
     {
-        Gate::authorize('view', $container);
+        Gate::authorize('view', $item);
 
         $schedules = $item->schedules()
             ->orderBy('title')
@@ -69,10 +80,15 @@ class ScheduleController extends Controller
      * se eller laga. Kastar OpenNextOccurrence rullas schemat tillbaka. Ett
      * schema som skapas PAUSAT (`is_active: false`) får ingen förekomst —
      * den öppnas först när det aktiveras.
+     *
+     * Grinden är itemets `create` (issue 71 § Beslut 1 och 5): att lägga
+     * till ett schema är att lägga till, och en `create`-mottagare får göra
+     * det på sitt item utan att för den skull få ändra det som redan står
+     * där.
      */
     public function store(StoreScheduleRequest $request, Container $container, Item $item, OpenNextOccurrence $openNextOccurrence): JsonResponse
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('create', $item);
 
         $schedule = new Schedule($request->validated());
         $schedule->item_id = $item->id;
@@ -104,10 +120,12 @@ class ScheduleController extends Controller
      * raden ligger kvar, och en återaktivering skriver inte om historien. Ett
      * `recurrence_type: none` vars enda förekomst redan är stängd får ingen
      * ny vid återaktivering — engångsuppgiften är slut.
+     *
+     * Grinden är itemets `update` (issue 71 § Beslut 1 och 5).
      */
     public function update(UpdateScheduleRequest $request, Container $container, Item $item, Schedule $schedule, OpenNextOccurrence $openNextOccurrence): ScheduleResource
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('update', $item);
 
         $wasActive = $schedule->is_active;
 
@@ -138,10 +156,13 @@ class ScheduleController extends Controller
      * fyra typer och behåller fyra, se issue 21 § Beslut 9. Ett raderat
      * schema går alltså inte att ta tillbaka via API:et i MVP; ett medvetet
      * glapp, inte ett förbiseende.
+     *
+     * Grinden är itemets `delete` (issue 71 § Beslut 1 och 5): `write` ändrar
+     * ett schema men tar inte bort det.
      */
     public function destroy(Container $container, Item $item, Schedule $schedule): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('delete', $item);
 
         $schedule->delete();
 
