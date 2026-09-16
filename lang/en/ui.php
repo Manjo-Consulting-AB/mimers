@@ -166,6 +166,16 @@ return [
         'webhook-updated' => 'The webhook has been saved.',
         'webhook-destroyed' => 'The webhook is gone. The secret that belonged to it is gone too.',
 
+        // Issue 67b decisions 4 and 7. The first three belong to the sender —
+        // she sends, withdraws, and learns that the recipient declined — and
+        // the fourth to the recipient. `transfer-rejected` says what the
+        // decision means for HER (the binder is not hers), not what the server
+        // did, and `transfer-accepted` says that the binder is now in her list.
+        'transfer-created' => 'The transfer has been sent. The recipient sees it under Ownership transfers.',
+        'transfer-revoked' => 'The transfer has been withdrawn. The row stays in the history.',
+        'transfer-accepted' => 'The binder is yours. You will find it in the binder list.',
+        'transfer-rejected' => 'You have declined. The sender must send a new transfer if you change your mind.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -261,6 +271,24 @@ return [
             'already_open' => 'The item is already lent out. Register the return first.',
         ],
 
+        // The ownership transfer's domain errors on the web, see issue 67b
+        // decisions 3, 4, 6 and 9.
+        //
+        // **The branch is called `transfer`, not `ownership_transfer`**, even
+        // though the sentences belong to the ownership transfer: the API's
+        // error codes are `transfer.*` (39a and 39b), and
+        // App\Support\Frontend\ApiErrorTranslator looks a code up by replacing
+        // the first segment with `error.` — `transfer.expired` is looked up as
+        // `error.transfer.expired`. An `error.ownership_transfer.expired` would
+        // be a key nobody asks for, and every refused transfer would fall back
+        // to `error.generic`.
+        'transfer' => [
+            'already_pending' => 'The binder already has a transfer waiting for an answer. Withdraw it first if you want to change the recipient.',
+            'not_pending' => 'The transfer has already been answered or withdrawn and cannot be changed.',
+            'expired' => 'The transfer has expired. The sender must send a new one.',
+            'account_frozen' => 'Your account is frozen and cannot receive a binder right now.',
+        ],
+
         // The close flow's domain errors on the web, see issue 63b decision 6.
         // They arrive as App\Exceptions\Api\ApiException from
         // App\Actions\Schedule\CloseOccurrence and become a form error on the
@@ -318,6 +346,12 @@ return [
             'feature_unavailable' => ':feature requires the Pro plan.',
             'feature_name' => [
                 'webhooks' => 'Webhooks',
+                // Issue 67b decision 3: the ownership transfer's web surface
+                // reads the same gate, and `data.feature` is the code
+                // `ownership_transfer`. The name lives here and not in a
+                // sentence per surface — the question "which plan is needed"
+                // is answered in one place.
+                'ownership_transfer' => 'Ownership transfer',
             ],
         ],
 
@@ -918,6 +952,10 @@ return [
             // Last, like the row in containerSections.js — the trash is where
             // you go when something went wrong (issue 62a decision 1).
             'trash' => 'Trash',
+            // After the trash in both the list and the navigation: an
+            // ownership transfer is the most consequential action in the
+            // product and not something you do often (issue 67b decision 1).
+            'transfer' => 'Ownership transfer',
         ],
 
         'index' => [
@@ -1785,6 +1823,137 @@ return [
         'accept' => 'Accept',
         'reject' => 'Decline',
         'home' => 'Go to the home page',
+    ],
+
+    // The ownership transfer, see issue 67b decisions 1–9 and [[Konton och
+    // åtkomst]] § ownership_transfer. A branch of its own on the top level
+    // rather than under `container`: the recipient's inbox sits OUTSIDE the
+    // binder — she does not have it yet — and the sender's page is the other
+    // half of the same conversation. Same reason that makes `sharing` and
+    // `trash` branches of their own.
+    //
+    // Two pages in one branch: `form`/`excluded`/`retain`/`row`/`status`
+    // belong to the binder's page, `inbox`/`card` to the recipient's.
+    // `accept` and `reject` are shared and sit outermost.
+    'transfer' => [
+        'title' => 'Ownership transfer',
+        'heading' => 'Ownership transfer',
+        'intro' => 'The whole binder changes accounts. It covers the same thing whether a boatyard hands over to a customer, a broker to a buyer, or a boat is sold privately.',
+
+        // The link sits beside the plan box and not inside the sentence: the
+        // string is also delivered by the /api error envelope, and markup in a
+        // translation string becomes escaped text or `v-html` somewhere.
+        'plan_link' => 'Read about the plans',
+
+        'form' => [
+            'heading' => 'Hand over the binder',
+
+            // What the transfer covers, before it is sent (decision 2). Four
+            // things in one sentence, and they are the four that actually
+            // happen.
+            'notice' => 'All items follow along except the ones you exclude below. The space the binder uses moves to the recipient\'s account, accesses and open invitations are revoked — the new owner invites whomever she wants — and the recipient gets twelve months of Pro.',
+
+            // Two paths, exactly one to be filled in. The rule is tried by
+            // `prohibits` in StoreOwnershipTransferRequest and is not
+            // reworded here.
+            'recipient_heading' => 'Recipient',
+            'recipient_help' => 'Fill in one of the fields: the recipient\'s account ULID, or the address she has or creates an account with.',
+            'account' => 'Account ULID',
+            'email' => 'Email address',
+
+            'retain' => 'Your access afterwards',
+            'submit' => 'Send the transfer',
+        ],
+
+        // The exclusions are exceptions, not a selection of what is sent
+        // (decision 2). `following` writes out what actually happens as the
+        // user ticks — "everything else follows along" is a rule, ":following
+        // of :total follow along" is the answer.
+        'excluded' => [
+            'heading' => 'What you keep',
+            'help' => 'Tick what you want to keep — the purchase price, the insurance letter. Everything else follows along to the recipient.',
+            'following' => ':following of :total follow along, :excluded excluded.',
+        ],
+
+        // The levels the request allows are `read` and `write`; the names come
+        // from `sharing.level.*`, the same ladder and the same words. The key
+        // here is the third choice: no access at all.
+        'retain' => [
+            'none' => 'No access',
+        ],
+
+        'open' => [
+            'heading' => 'In progress',
+            'empty' => 'No transfer is waiting for an answer.',
+        ],
+
+        'history' => [
+            'heading' => 'Earlier',
+        ],
+
+        'row' => [
+            'created' => 'Sent :date',
+            'expires' => 'Expires :date',
+            'accepted' => 'Accepted :date',
+
+            'excluded' => ':count items excluded',
+            'excluded_none' => 'No excluded items',
+
+            'retain' => 'The sender keeps access: :level',
+            'retain_none' => 'The sender keeps no access',
+
+            'revoke' => 'Withdraw',
+        ],
+
+        // The status comes from App\Http\Resources\OwnershipTransferResource
+        // and is never read from the column: a `pending` row that has passed
+        // its lifetime is reported as `expired` without the row changing (39a
+        // decision 10). The keys are the column values from
+        // App\Models\OwnershipTransfer::STATUSES.
+        'status' => [
+            'pending' => 'Waiting for an answer',
+            'expired' => 'Expired',
+            'accepted' => 'Accepted',
+            'rejected' => 'Declined',
+            'revoked' => 'Withdrawn',
+        ],
+
+        // The recipient's inbox. The heading says whose they are — the page
+        // lists only her own, by identity and never by a link (decision 5).
+        'inbox' => [
+            'title' => 'Ownership transfers to you',
+            'heading' => 'Ownership transfers to you',
+            'intro' => 'Binders someone wants to hand over to you. You find them here when signed in, whether or not the email is still around.',
+            'empty' => 'No ownership transfers are waiting for you.',
+        ],
+
+        // The consequences stand before the button (decision 6): which binder,
+        // from which account, how many items follow along and are excluded,
+        // which access the sender keeps, and the twelve months of Pro.
+        'card' => [
+            'container' => 'The binder :container',
+            'from' => 'From the account :account',
+            'items' => ':following of :total follow along, :excluded excluded.',
+            'retain' => 'The sender keeps access: :level.',
+            'retain_none' => 'The sender keeps no access.',
+            'pro' => 'If you accept you get twelve months of Pro.',
+
+            // What happens to the space afterwards, and who owns it: whoever
+            // receives the binder takes over the usage too, and it is her
+            // quota that applies from then on.
+            'quota' => 'The space the binder uses moves to your account, and it is your quota that applies afterwards.',
+
+            'account' => 'Which account is taking over?',
+
+            // Both decisions are final (decision 7), and it is said before the
+            // buttons and once more in the confirmation dialog.
+            'final' => 'The decision cannot be undone. If you change your mind the sender must send a new transfer.',
+            'accept_confirm' => 'Take over the binder? The decision cannot be undone.',
+            'reject_confirm' => 'Decline? The decision cannot be undone.',
+        ],
+
+        'accept' => 'Accept',
+        'reject' => 'Decline',
     ],
 
     // The binder's trash, see issue 62a decisions 4, 5 and 9 and [[ADR-0008
