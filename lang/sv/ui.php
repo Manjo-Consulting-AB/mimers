@@ -198,6 +198,12 @@ return [
         'transfer-accepted' => 'Pärmen är din. Du hittar den i pärmlistan.',
         'transfer-rejected' => 'Du har tackat nej. Avsändaren måste skicka en ny överlåtelse om ni ändrar er.',
 
+        // Issue 67c § Beslut 3. Beställningen svarar omedelbart, och meningen
+        // säger vad som händer sedan — att raden redan ligger i listan och att
+        // den packas. Utan den hade ett klick sett ut att inte ha gjort
+        // någonting, för den nya raden är den enda synliga skillnaden.
+        'export-requested' => 'Exporten är beställd. Påsen packas och dyker upp här när den är klar.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -311,6 +317,17 @@ return [
         // klienten men meningen är användarens.
         'loan' => [
             'already_open' => 'Itemet är redan utlånat. Registrera återlämningen först.',
+        ],
+
+        // Exportens enda domänfel på webben, se issue 67c § Beslut 4.
+        // `export.already_running` bär den pågående radens ULID i
+        // `data.export` — den behålls för en API-klient men meningen är
+        // användarens, och en ULID säger henne ingenting. Vad hon behöver veta
+        // är att en påse redan packas och VAR den ligger: raden står i listan
+        // strax under knappen, med statusen "påsen packas". Samma avvägning som
+        // `error.loan.already_open` gjorde i 67a.
+        'export' => [
+            'already_running' => 'En export packas redan. Den ligger i listan nedan — vänta tills den är klar.',
         ],
 
         // Ägarbytets domänfel på webben, se issue 67b § Beslut 3, 4, 6 och 9.
@@ -1070,6 +1087,13 @@ return [
             // ligger efter inställningarna, före papperskorgen. Raden står på
             // samma plats i containerSections.js.
             'calendar' => 'Kalender',
+            // Issue 67c § Beslut 1: exporten är en UTGÅNG ur produkten, som
+            // kalenderlänken — men där länken för pärmens uppgifter ut i någon
+            // annans kalender, tar exporten hela pärmen ut i en fil. Raden står
+            // på samma plats i containerSections.js, och den ligger i
+            // NAVIGERINGEN och inte bakom en inställning: exporten är fri på
+            // alla planer med flit.
+            'export' => 'Export',
             // Sist, som raden i containerSections.js — papperskorgen är dit
             // man går när något gått fel (issue 62a § Beslut 1).
             'trash' => 'Papperskorgen',
@@ -1872,6 +1896,65 @@ return [
     // ägarkontot. Texterna nedan följer samma uppdelning — `participants`
     // beskriver identiteter, `accesses` och `level` beskriver vad en åtkomst
     // ger.
+    // Pärmens exportsida, se issue 67c § Beslut 1, 5, 6, 7 och 8.
+    //
+    // **`status` är kolumnvärdena ur App\Models\Export::STATUSES**, aldrig
+    // påhittade egna namn — samma regel som container.kind. `pending` och
+    // `running` får samma mening med flit: för den som väntar är de samma sak
+    // — påsen packas — och jobbet går genom båda på sin väg till `ready`.
+    // `expired` bärs också av en `ready` rad vars `expires_at` passerat innan
+    // gallringen hunnit sätta kolumnen, se exportStatus() i
+    // resources/js/components/exportPresentation.js.
+    'export' => [
+        'title' => 'Export',
+        'heading' => 'Export',
+
+        // Vad påsen innehåller, INNAN den beställs (Beslut 7). Meningen säger
+        // vad exporten omfattar och vad den INTE är — en påse man hämtar, inte
+        // ett arkiv man förvarar (config/files.php) — så att den som hoppas på
+        // något annat slipper vänta förgäves. Att den är fri på alla planer
+        // står här och inte bara i en planöversikt: det är produktlöftet, och
+        // den som letar efter en grind ska se att det inte finns någon.
+        'intro' => 'Exporten samlar hela pärmen i en ZIP-fil: items med kategorier och taggar, bilagorna och historiken. Den är fri på alla planer, och filen är en påse man hämtar — inte ett arkiv man förvarar.',
+        'create' => 'Beställ en export',
+
+        // Varför knappen är stängd, i ord (Beslut 4). En avstängd knapp utan
+        // förklaring är en återvändsgränd, och den här meningen säger samma sak
+        // som felet nedan: en export packas, raden ligger i listan.
+        'running_notice' => 'En export packas redan. Den ligger i listan nedan, och knappen öppnas när den är klar.',
+
+        'list_heading' => 'Beställda exporter',
+        'empty' => 'Ingen export är beställd än.',
+
+        // `:date` formateras på klienten (formatDate), orden runt den här.
+        'created_at' => 'Beställd :date',
+
+        // `:size` formateras på klienten (formatByteSize, som speglar serverns
+        // Number::fileSize()) och raden ritas inte alls när `byte_size` är
+        // null — aldrig som "0 B" (Beslut 6).
+        'size' => 'Storlek: :size',
+
+        'download' => 'Ladda ner',
+
+        'status' => [
+            'pending' => 'Påsen packas',
+            'running' => 'Påsen packas',
+            'ready' => 'Klar att hämta',
+            'failed' => 'Misslyckades',
+            'expired' => 'Utgången',
+        ],
+
+        // Samma två pluralnycklar som papperskorgen (issue 62a § Beslut 4),
+        // med exportens egna ord (Beslut 8: nycklarna bor under `export.*`).
+        // Trösklarna är desamma: mindre än ett dygn är "idag" och aldrig
+        // "0 dagar", exakt ett dygn är singular.
+        'expires' => [
+            'today' => 'Gallras idag',
+            'day' => '1 dag kvar',
+            'days' => ':days dagar kvar',
+        ],
+    ],
+
     'sharing' => [
         'title' => 'Delning',
         'heading' => 'Delning',

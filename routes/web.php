@@ -19,6 +19,7 @@ use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTrashController;
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
@@ -978,6 +979,41 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/transfers/{transfer}/reject', [OwnershipTransferController::class, 'reject'])
         ->name('transfers.reject');
+
+    /*
+     * Issue 67c · Exporten — knappen, väntan, nedladdningen och de sju
+     * dagarna, se App\Http\Controllers\ExportController.
+     *
+     * **Två rutter och en sida** (Beslut 1). Listan är en GET, beställningen
+     * en POST utan kropp, och båda grindas av `view` på pärmen — ingen
+     * ExportPolicy, ingen ny policymetod och ingen plangrind. Exporten är fri
+     * på alla nivåer med flit: den som får läsa pärmen får ta ut den, för en
+     * export bär exakt det innehåll en view-innehavare redan kan hämta bilaga
+     * för bilaga ([[Planer och kvoter]] § Gränserna i MVP, [[ADR-0014
+     * Prismodell]]).
+     *
+     * **Nedladdningen har ingen rutt här.** Den går till den befintliga
+     * `/exports/{export}/download` (41b) — ingen ny leveransrutt och ingen
+     * kopia av App\Http\Controllers\ExportDownloadController.
+     *
+     * **Ingenting av `/api` byggs om.** `ExportResource` delas rakt av, och
+     * `BuildContainerExport` rörs inte: jobbet packar påsen och sätter
+     * `expires_at`, och den här ytan köar det och läser raden.
+     *
+     * Sidan får en egen rad i resources/js/layouts/containerSections.js —
+     * navigationen renderas ur listan, och en yta ingen hittar är samma sak
+     * som en yta som inte finns (Beslut 2).
+     *
+     * Beställningen svarar en omdirigering med en flash-kod — mönstret från
+     * issue 51 § Beslut 5, `status` och ingenting annat — och ett domänfel
+     * (`export.already_running`) blir ett formulärfel på nyckeln `export`,
+     * aldrig en JSON-kropp (Beslut 4).
+     */
+    Route::get('/containers/{container}/export', [ExportController::class, 'index'])
+        ->name('containers.export');
+
+    Route::post('/containers/{container}/export', [ExportController::class, 'store'])
+        ->name('containers.export.store');
 
     /*
      * Issue 56a · Kategoriträdet och tagglistan — den fria strukturen, se
