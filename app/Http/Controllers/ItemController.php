@@ -14,6 +14,7 @@ use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
+use App\Http\Resources\ScheduleOccurrenceResource;
 use App\Http\Resources\ScheduleResource;
 use App\Http\Resources\TagResource;
 use App\Models\Account;
@@ -290,6 +291,11 @@ class ItemController extends Controller
         // nästa förfall bor på den öppna förekomsten och aldrig på schemat
         // (issue 21 § Beslut 8). Mjukraderade scheman faller ut genom
         // SoftDeletes' globala scope.
+        //
+        // Sedan issue 63b bär sektionen hela den öppna förekomsten och inte
+        // bara dess datum: avbockningen ska kunna ske från itemet på en
+        // knapptryckning, och den behöver förekomstens ULID, `overdue` och
+        // `visible_from` — inte bara `due_at`. Se `openOccurrences()`.
         $schedules = $item->schedules()
             ->with('openOccurrence')
             ->orderBy('title')
@@ -310,12 +316,18 @@ class ItemController extends Controller
 
             // Schemana ur App\Http\Resources\ScheduleResource — samma format
             // och samma sortering som `Api\ScheduleController::index()` — och
-            // den öppna förekomstens förfallodatum BREDVID resursen
-            // (`nextDue` nedan), samma linje som `categoryNames()` och
-            // `variants()`: resursen är `/api`:s format, och nästa förfall är
-            // vyens fråga (issue 63a § Beslut 1).
+            // den öppna förekomsten BREDVID resursen (`openOccurrences`
+            // nedan), samma linje som `categoryNames()` och `variants()`:
+            // resursen är `/api`:s format, och förekomsten är vyens fråga
+            // (issue 63a § Beslut 1).
+            //
+            // 63a skickade bara den öppna förekomstens DATUM här. 63b ersätter
+            // den med förekomsten själv: avbockningen från itemet behöver
+            // ULID:n att posta mot, `overdue` att märka raden med och
+            // `visible_from` att visa glappet med. Två propar ur samma
+            // relation hade varit två sanningar om samma rad.
             'schedules' => ScheduleResource::collection($schedules)->resolve($request),
-            'nextDue' => $this->nextDue($schedules),
+            'openOccurrences' => $this->openOccurrences($schedules, $request),
 
             // Sant när användarfiler levereras från en egen origin (Beslut 2).
             // Vyn ritar bildvisaren och PDF-ramen bara då; annars faller
@@ -849,9 +861,8 @@ class ItemController extends Controller
     }
 
     /**
-     * Schemats ULID → den öppna förekomstens förfallodatum ("2027-05-05"),
-     * eller `null` för ett schema som inte har någon öppen förekomst
-     * (issue 63a § Beslut 1).
+     * Schemats ULID → den öppna förekomsten, eller `null` för ett schema som
+     * inte har någon (issue 63a § Beslut 1, issue 63b § Beslut 2, 3 och 8).
      *
      * **Nästa förfall bor på förekomsten och aldrig på schemat.** Den öppna
      * raden är systemets bokföring av vad schemat faktiskt väntar på — för
@@ -860,25 +871,50 @@ class ItemController extends Controller
      * andra upplaga av App\Actions\Schedule\OpenNextOccurrence::dueAt(), och
      * de två hade glidit isär ([[ADR-0005 Schema och förekomst]]).
      *
+     * **Förekomsten och inte datumet** (63b § Beslut 2, 3 och 8). Sektionen
+     * bockar av från itemet, och den behöver ULID:n att posta mot, `overdue`
+     * att märka raden med och `visible_from` att visa glappet med. Alla tre
+     * är fält i App\Http\Resources\ScheduleOccurrenceResource, och `overdue`
+     * kommer därifrån och räknas aldrig i vyn: en klient med fel datum ska
+     * inte kunna färga en uppgift röd (Beslut 3).
+     *
      * Ett schema som skapats pausat, eller en `none`-uppgift vars enda
      * förekomst är stängd, har ingen öppen rad — nyckeln finns ändå, med
      * `null`, så vyns uppslag är detsamma för alla rader och slipper en andra
-     * gren (samma regel som `variants()`).
+     * gren (samma regel som `variants()`). `completedByAccount` behövs inte:
+     * en öppen förekomst har inget konto, och resursen läser ändå inte
+     * relationen förrän den är satt (jfr `Api\ScheduleOccurrenceController::
+     * close()`, som sätter den för hand av samma skäl).
      *
      * Byggd ur den eager-laddade `openOccurrence`-relationen: noll extra
      * frågor per rad (Beslut 9).
      *
      * @param  iterable<Schedule>  $schedules
-     * @return array<string, string|null>
+     * @return array<string, array<string, mixed>|null>
      */
-    private function nextDue(iterable $schedules): array
+    private function openOccurrences(iterable $schedules, Request $request): array
     {
-        $dates = [];
+        $occurrences = [];
 
         foreach ($schedules as $schedule) {
-            $dates[$schedule->ulid] = $schedule->openOccurrence?->due_at?->toDateString();
+            $occurrence = $schedule->openOccurrence;
+
+            if ($occurrence === null) {
+                $occurrences[$schedule->ulid] = null;
+
+                continue;
+            }
+
+            // En öppen förekomst har inget konto, och relationen sätts för
+            // hand av samma skäl som `Api\ScheduleOccurrenceController::
+            // close()` gör det: resursen läser `completedByAccount`, och en
+            // relation som inte är satt är en lazy-load i väntan på att
+            // inträffa. Här är den alltid null, och nu står det i koden.
+            $occurrence->setRelation('completedByAccount', null);
+
+            $occurrences[$schedule->ulid] = (new ScheduleOccurrenceResource($occurrence))->resolve($request);
         }
 
-        return $dates;
+        return $occurrences;
     }
 }

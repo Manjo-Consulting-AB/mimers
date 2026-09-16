@@ -142,6 +142,14 @@ return [
         'schedule-resumed' => 'Schemat är aktivt igen.',
         'schedule-deleted' => 'Schemat är borttaget.',
 
+        // Issue 63b § Beslut 5 och 8. Avbockningen och överhoppningen får
+        // var sin mening: de stänger samma rad men säger olika saker om
+        // jobbet, och en gemensam "förekomsten är stängd" hade gjort loggen
+        // omöjlig att läsa. Den nya förekomsten nämns inte i någon av dem —
+        // sidan ritas om ur serverns svar och visar det nya datumet själv.
+        'occurrence-completed' => 'Uppgiften är avbockad.',
+        'occurrence-skipped' => 'Uppgiften är överhoppad och sparad som det — inte som utförd.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -247,6 +255,41 @@ return [
                 'sibling' => 'syskon',
             ],
             'cycle' => 'Riktningen skulle göra en cirkel: det här itemet är redan överordnat motparten, direkt eller genom andra items.',
+        ],
+
+        // Avslutsflödets domänfel på webben, se issue 63b § Beslut 6. De
+        // kommer som App\Exceptions\Api\ApiException ur
+        // App\Actions\Schedule\CloseOccurrence och blir ett formulärfel på
+        // nyckeln `occurrence` i
+        // App\Http\Controllers\ScheduleOccurrenceController — aldrig en rå
+        // JSON-kropp mitt i en sida.
+        //
+        // **`blocked` är två nycklar och inte en.** `data.blocked_by` är en
+        // LISTA av `{ulid, title, due_at}`, och ApiErrorTranslator skickar
+        // `data` rakt in i `trans()` som ersättningar — en array som
+        // ersättning är i bästa fall en varning och i sämsta ett undantag
+        // mitt i felhanteringen. Kontrollern formulerar därför den ledande
+        // meningen själv och fogar en `blocked_row` per blockerare efter
+        // den, med titel och datum.
+        //
+        // **`not_open` säger varför utan att säga hur.** Koden bär
+        // `data.status` (`completed` | `skipped`) för en API-klient, men för
+        // användaren är svaret detsamma hur förekomsten stängdes: den är
+        // redan avslutad. Att skriva ut råvärdet hade gett "redan completed".
+        //
+        // **`schedule.inactive` pekar på pausen.** Spärren i CloseOccurrence
+        // (`! $schedule->is_active`) betyder "den här uppgiften gäller inte
+        // just nu", och pausen är reversibel och synlig — därför en mening
+        // som säger vad användaren kan göra åt saken, inte bara att det
+        // nekades.
+        'occurrence' => [
+            'blocked' => 'Uppgiften kan inte bockas av än — de här är inte klara:',
+            'blocked_row' => '• :title — förfaller :date',
+            'not_open' => 'Förekomsten är redan avslutad och går inte att bocka av igen.',
+        ],
+
+        'schedule' => [
+            'inactive' => 'Schemat är pausat, och en avbockning skulle öppna en ny förekomst på ett schema ingen vill ha förekomster på. Återuppta schemat först.',
         ],
     ],
 
@@ -922,6 +965,74 @@ return [
                 'title' => 'Redigera schema',
                 'heading' => 'Redigera schema',
                 'submit' => 'Spara',
+            ],
+
+            // Förekomsten — den enskilda gången, se issue 63b § Beslut 2–10.
+            // Meningarna används på BÅDA ytorna: sektionen på itemet
+            // (resources/js/components/ScheduleListSection.vue) och schemats
+            // egen sida (resources/js/pages/Containers/Items/Schedules/Show.vue),
+            // som delar formuläret resources/js/components/OpenOccurrence.vue.
+            //
+            // **Tre datum i rätt roll** (Beslut 2). `due` är förfallodagen,
+            // `visible_from` är när uppgiften dök upp, och `window` är tiden
+            // man har på sig — skillnaden dem emellan. Alla är DATE-kolumner
+            // och formateras av formatDateOnly() i vyn, aldrig omräknade till
+            // en annan tidszon (samma skäl som itemets datum, 57a).
+            //
+            // **Försenad är ett härlett tillstånd** (Beslut 3). Ordet nedan
+            // ritas bara när serverns `overdue` är sant; vyn jämför aldrig
+            // `due_at` mot klientens klocka.
+            'occurrence' => [
+                'heading' => 'Öppen förekomst',
+                'none' => 'Ingen öppen förekomst.',
+                'done' => 'Uppgiften är klar.',
+
+                // Vägen till schemats sida, där historiken bor (Beslut 1).
+                'view' => 'Förekomsterna',
+
+                'due' => 'Förfaller :date',
+                'visible_from' => 'Synlig sedan :date',
+                'window' => ':days dagar på dig',
+                'window_one' => '1 dag på dig',
+
+                'overdue' => 'Försenad',
+
+                // Kontot är varvet och inte den anställde
+                // ([[Scheman och uppgifter]] § schedule_occurrence). Är hon
+                // medlem i exakt ett konto ritas ingen väljare — ett val
+                // mellan ett alternativ är ingen fråga — och raden nedan
+                // visar i stället vilket konto som kommer att stå i loggen.
+                'account' => 'Konto',
+                'account_hint' => 'Kontot som står i loggen. Varvet, inte personen.',
+
+                // Anteckningen är valfri och hamnar i historiken: "bytte även
+                // termostaten" är precis den upplysning en logg är till för.
+                'note' => 'Anteckning',
+                'note_hint' => 'Valfri. Sparas i historiken.',
+
+                'complete' => 'Bocka av',
+                'skip' => 'Hoppa över',
+
+                // Överhoppningen frågar innan den stänger (Beslut 5): den
+                // öppnar nästa förekomst precis som en avbockning, men sparar
+                // raden som överhoppad. En knapp som ser ut som den andra och
+                // gör något annat i loggen ska inte gå att trycka fel på.
+                'skip_confirm' => 'Uppgiften stängs som överhoppad, inte som utförd, och nästa förekomst öppnas precis som vid en avbockning. Vill du fortsätta?',
+
+                // Historiken ÄR loggen (Beslut 7): avklarade och överhoppade
+                // förekomster, ingen separat historiktabell. De två raderna
+                // får inte se likadana ut — orden och färgen skiljer dem.
+                'history' => 'Historik',
+                'history_empty' => 'Inga avslutade förekomster än.',
+
+                'status' => [
+                    'open' => 'Öppen',
+                    'completed' => 'Avklarad',
+                    'skipped' => 'Överhoppad',
+                ],
+
+                'completed_at' => 'Avslutad :date',
+                'completed_by' => 'av :name',
             ],
         ],
     ],

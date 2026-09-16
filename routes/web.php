@@ -25,6 +25,7 @@ use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\ScheduleController;
+use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -475,6 +476,53 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.items.schedules.destroy');
+
+    /*
+     * Issue 63b · Förekomsten — den öppna uppgiften, avbockningen, historiken
+     * och det härledda försenat, se
+     * App\Http\Controllers\ScheduleOccurrenceController.
+     *
+     * Tre rutter och en sida (Beslut 1). 63a byggde regeln; de här svarar på
+     * den enskilda gången: schemats sida bär historiken, och avbockningen
+     * finns både där och i sektionen på itemet — det är produktens vanligaste
+     * skrivning och ska kosta minst.
+     *
+     * **`CloseOccurrence` rörs inte.** Den äger transaktionen — spärren mot
+     * öppna beroenden, stängningen, beräkningen av nästa `due_at` och
+     * avbrottet av oskickade notiser — och webben anropar den genom samma
+     * `CompleteOccurrenceRequest` som `/api` (issue 22b). Ingen ny
+     * FormRequest, ingen ny Action, ingen återöppning: en rutt som satte en
+     * förekomst tillbaka till `open` finns inte, med flit.
+     *
+     * **`/schedules/{schedule}` ligger EFTER `/schedules/create` i filen**, av
+     * samma skäl som `/items/create` gör det ovan: `create` är ett fast
+     * segment och `{schedule}` en parameter, och den först registrerade
+     * rutten vinner uppslaget.
+     *
+     * **`scopeBindings()` på alla tre**, av samma skäl som 63a:s fem: `{item}`
+     * löses genom containerns `items()`, `{schedule}` genom App\Models\Item::
+     * schedules() och `{occurrence}` genom App\Models\Schedule::occurrences().
+     * En förekomst i ett annat schema — eller ett schema på ett annat item —
+     * blir 404 i stället för stängd, och det är hela skyddet mot en främmande
+     * ULID (issue 22 § Beslut 1).
+     *
+     * Skrivningarna svarar `back()` med en flash-kod — mönstret från issue 51
+     * § Beslut 5, `status` och ingenting annat — och ett domänfel ur
+     * avslutsflödet som ett formulärfel, aldrig som en JSON-kropp: se
+     * App\Http\Controllers\ScheduleOccurrenceController::occurrenceMessage()
+     * och Beslut 6 om varför `occurrence.blocked` hanteras särskilt.
+     */
+    Route::get('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleOccurrenceController::class, 'show'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.show');
+
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete', [ScheduleOccurrenceController::class, 'complete'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.occurrences.complete');
+
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip', [ScheduleOccurrenceController::class, 'skip'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.occurrences.skip');
 
     Route::post('/containers', [ContainerController::class, 'store'])
         ->name('containers.store');
