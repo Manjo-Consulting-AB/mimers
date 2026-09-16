@@ -3,9 +3,10 @@ import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../../layouts/ContainerLayout.vue';
 import OpenOccurrence from '../../../../components/OpenOccurrence.vue';
+import ScheduleDependencySection from '../../../../components/ScheduleDependencySection.vue';
 import { formatDate } from '../../../../components/accessPresentation.js';
 import { formatDateOnly } from '../../../../components/itemPresentation.js';
-import { occurrenceStatusLabel } from '../../../../components/occurrencePresentation.js';
+import { occurrenceStatusLabel, scheduleUrl } from '../../../../components/occurrencePresentation.js';
 import { recurrenceLabel } from '../../../../components/schedulePresentation.js';
 import { useTranslations } from '../../../../composables/useTranslations.js';
 
@@ -48,6 +49,13 @@ const props = defineProps({
     schedule: { type: Object, required: true },
     /* Alla förekomster, den öppna inräknad, i serverns ordning. */
     occurrences: { type: Array, required: true },
+    /* Schemats beroenden — regeln (63c § Beslut 2). */
+    scheduleDependencies: { type: Array, required: true },
+    /* Den öppna förekomstens beroenden — undantaget (63c § Beslut 2). */
+    occurrenceDependencies: { type: Array, required: true },
+    hasOpenOccurrence: { type: Boolean, required: true },
+    /* Motparterna användaren får ändra, en lista per nivå (63c § Beslut 3). */
+    counterparts: { type: Object, required: true },
     can: { type: Object, required: true },
 });
 
@@ -77,6 +85,44 @@ const badgeClass = (occurrence) => (occurrence.status === 'completed'
     : 'bg-amber-100 text-amber-900');
 
 const date = (value) => formatDateOnly(value, locale.value);
+
+/*
+ * Beroenderadena, normaliserade till samma form för båda nivåerna (Beslut 1
+ * och 4). Servern svarar med `/api`:s två resurser — de skiljer sig åt på
+ * exakt två punkter: en förekomstmotpart har ett förfallodatum och ett
+ * `satisfied`, och dess `depends_on.ulid` pekar på en FÖREKOMST och inte på
+ * ett schema. Här blir båda samma rad, och sektionen behöver inte veta vilken
+ * nivå den ritar.
+ *
+ * `schedule_ulid` är därför det enda fältet vyn får utöver resursen: länken
+ * vidare ska gå till motpartens SCHEMA (Beslut 5), och på schemanivån är
+ * `depends_on.ulid` redan det.
+ */
+const scheduleRows = computed(() => props.scheduleDependencies.map((row) => ({
+    ulid: row.depends_on.ulid,
+    title: row.depends_on.title,
+    item: row.depends_on.item,
+    schedule_ulid: row.depends_on.ulid,
+    due: null,
+    satisfied: null,
+})));
+
+const occurrenceRows = computed(() => props.occurrenceDependencies.map((row) => ({
+    ulid: row.depends_on.ulid,
+    title: row.depends_on.title,
+    item: row.depends_on.item,
+    schedule_ulid: row.schedule_ulid,
+    due: row.depends_on.due_at,
+    satisfied: row.satisfied,
+})));
+
+const scheduleDependencyUrl = computed(
+    () => `${scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid)}/dependencies`,
+);
+
+const occurrenceDependencyUrl = computed(() => (open.value === null
+    ? ''
+    : `${scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid)}/occurrences/${open.value.ulid}/dependencies`));
 </script>
 
 <template>
@@ -168,5 +214,37 @@ const date = (value) => formatDateOnly(value, locale.value);
                 </li>
             </ul>
         </section>
+
+        <!--
+            Beroendena, i två sektioner och aldrig en (63c § Beslut 2).
+            Schemanivån är REGELN som ärvs av varje ny förekomst; förekomstnivån
+            är UNDANTAGET som bara gäller den här gången. Rubrikerna bär
+            skillnaden — en gemensam lista med en typkolumn hade krävt att
+            användaren först förstod modellen ([[ADR-0005 Schema och
+            förekomst]] § Motivering).
+
+            Båda listorna kom med sidan (63c § Beslut 1): ingen av dem har en
+            egen rutt, och ingen av dem hämtas av vyn.
+        -->
+        <ScheduleDependencySection
+            level="schedule"
+            :container-ulid="container.ulid"
+            :item-ulid="item.ulid"
+            :rows="scheduleRows"
+            :url="scheduleDependencyUrl"
+            :counterparts="counterparts.schedule"
+            :can="can"
+        />
+
+        <ScheduleDependencySection
+            level="occurrence"
+            :container-ulid="container.ulid"
+            :item-ulid="item.ulid"
+            :rows="occurrenceRows"
+            :url="occurrenceDependencyUrl"
+            :counterparts="counterparts.occurrence"
+            :active="hasOpenOccurrence"
+            :can="can"
+        />
     </ContainerLayout>
 </template>
