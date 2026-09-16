@@ -23,6 +23,10 @@ return [
         // Pärmen är produktens ord för containern, se [[ADR-0002 Konto äger
         // container]] och Översikt. Länken kom med issue 54 § Beslut 7.
         'containers' => 'Pärmar',
+        // Mottagarens inkorg för ägarbyten, se issue 67b § Beslut 5: vägen in
+        // är identitet, inte en länk i ett mejl, så raden står i navigationen
+        // och är ovillkorlig.
+        'transfers' => 'Ägarbyten',
         'login' => 'Logga in',
     ],
 
@@ -2073,7 +2077,7 @@ return [
 
             // Vad överlåtelsen omfattar, innan den skickas (Beslut 2). Fyra
             // saker i en mening, och de är de fyra som faktiskt händer.
-            'notice' => 'Alla items följer med utom de du undantar nedan. Utrymmet pärmen använder flyttas till mottagarens konto, åtkomster och öppna inbjudningar återkallas — den nya ägaren bjuder in vem hon vill — och mottagaren får tolv månader Pro.',
+            'notice' => 'Alla items följer med utom de du undantar nedan. Utrymmet pärmen använder flyttas till mottagarens konto, åtkomster och öppna inbjudningar återkallas — den nya ägaren bjuder in vem hon vill — och mottagaren får tolv månader Pro vid sitt första mottagna ägarbyte.',
 
             // Två vägar, exakt en ska fyllas i. Regeln prövas av `prohibits`
             // i StoreOwnershipTransferRequest och formuleras inte om här.
@@ -2157,7 +2161,7 @@ return [
             'items' => ':following av :total följer med, :excluded undantas.',
             'retain' => 'Avsändaren behåller åtkomsten: :level.',
             'retain_none' => 'Avsändaren behåller ingen åtkomst.',
-            'pro' => 'Accepterar du får du tolv månader Pro.',
+            'pro' => 'Tolv månader Pro ingår — en gång per konto, vid det första ägarbytet du tar emot.',
 
             // Vad som händer med utrymmet efteråt, och vem som äger det: den
             // som tar emot pärmen tar också över förbrukningen, och det är

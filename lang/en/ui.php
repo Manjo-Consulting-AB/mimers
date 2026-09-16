@@ -16,6 +16,7 @@ return [
     'nav' => [
         'dashboard' => 'Dashboard',
         'containers' => 'Binders',
+        'transfers' => 'Ownership transfers',
         'login' => 'Log in',
     ],
 
@@ -1851,7 +1852,7 @@ return [
             // What the transfer covers, before it is sent (decision 2). Four
             // things in one sentence, and they are the four that actually
             // happen.
-            'notice' => 'All items follow along except the ones you exclude below. The space the binder uses moves to the recipient\'s account, accesses and open invitations are revoked — the new owner invites whomever she wants — and the recipient gets twelve months of Pro.',
+            'notice' => 'All items follow along except the ones you exclude below. The space the binder uses moves to the recipient\'s account, accesses and open invitations are revoked — the new owner invites whomever she wants — and the recipient gets twelve months of Pro on their first received ownership transfer.',
 
             // Two paths, exactly one to be filled in. The rule is tried by
             // `prohibits` in StoreOwnershipTransferRequest and is not
@@ -1936,7 +1937,7 @@ return [
             'items' => ':following of :total follow along, :excluded excluded.',
             'retain' => 'The sender keeps access: :level.',
             'retain_none' => 'The sender keeps no access.',
-            'pro' => 'If you accept you get twelve months of Pro.',
+            'pro' => 'Twelve months of Pro are included — once per account, on the first ownership transfer you receive.',
 
             // What happens to the space afterwards, and who owns it: whoever
             // receives the binder takes over the usage too, and it is her

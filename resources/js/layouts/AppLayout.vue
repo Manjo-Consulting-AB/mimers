@@ -63,6 +63,7 @@ const showsVerificationNotice = computed(
                 <div class="flex items-center gap-4 text-sm">
                     <Link v-if="user" href="/dashboard" class="hover:underline">{{ t('nav.dashboard') }}</Link>
                     <Link v-if="user" href="/containers" class="hover:underline">{{ t('nav.containers') }}</Link>
+                    <Link v-if="user" href="/transfers" class="hover:underline">{{ t('nav.transfers') }}</Link>
                     <span v-if="user" class="text-slate-600">{{ user.name }}</span>
                     <Link
                         v-if="user"
