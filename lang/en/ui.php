@@ -147,6 +147,15 @@ return [
         'occurrence-dependency-created' => 'The exception has been added.',
         'occurrence-dependency-removed' => 'The exception is gone. Both schedules and both occurrences remain.',
 
+        // Issue 65b decisions 2, 3 and 4. Creating a feed and an endpoint has
+        // no code of its own: there the secret itself is the message, and a
+        // "created" line above it would only repeat it. Revoking and the two
+        // webhook writes get one sentence each — the one says the link is dead,
+        // the other that the row was saved.
+        'calendar-feed-revoked' => 'The calendar link has been revoked. It will stop updating in the calendar.',
+        'webhook-updated' => 'The webhook has been saved.',
+        'webhook-destroyed' => 'The webhook is gone. The secret that belonged to it is gone too.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -267,6 +276,51 @@ return [
             'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other schedules.',
             'dependency_not_in_container' => 'Dependencies only run between schedules in the same binder.',
         ],
+
+        // Issue 65b decision 5: the feature gate. `Entitlements::assertFeature()`
+        // throws `plan.feature_unavailable` with the feature name in
+        // `data.feature` — a CODE (`webhooks`), like `item_link.pair_exists`
+        // carries one — and App\Http\Controllers\WebhookEndpointController
+        // translates it in two steps: first to a name, then into the sentence.
+        // The sentence is the same on the page and in the field error, because
+        // it is written once and sent both as a prop and as an error.
+        //
+        // The plan is named because webhooks is the Pro feature: the server
+        // answers which feature is missing, not which plan applies, and Pro is
+        // the only plan that has it. If a second plan gets the feature, or a
+        // second feature gets a web surface, this is where the sentence becomes
+        // per-feature.
+        'plan' => [
+            // 66a: link the word "Pro" in the sentence below to `settings.plan`
+            // once the plan page exists. The sentence stands without a link
+            // until then — Ziggy throws on a route that does not exist, so a
+            // prepared link would be a broken page and not a broken link.
+            'feature_unavailable' => ':feature requires the Pro plan.',
+            'feature_name' => [
+                'webhooks' => 'Webhooks',
+            ],
+        ],
+
+        // Issue 65b decision 7: the SSRF answer on the web. `UrlSafetyValidator`
+        // answers `webhook.unsafe_url` with a REASON in `data.reason` — also a
+        // code (`reserved_ip`, `invalid_scheme`, …) — and the controller
+        // translates it in two steps just like above. The error lands on the
+        // `url` field: it is about what the user typed, and the server's
+        // sentence is what the user meets. The page runs no check of its own
+        // for private ranges, `localhost` or metadata services.
+        'webhook' => [
+            'unsafe_url' => 'The address cannot be used: :reason.',
+
+            'unsafe_reason' => [
+                'unparseable_url' => 'it cannot be read as an address',
+                'invalid_scheme' => 'it has to start with https://',
+                'userinfo' => 'it must not carry a user name or password',
+                'invalid_port' => 'the port is not allowed',
+                'reserved_hostname' => 'it points at the server itself',
+                'dns_lookup_failed' => 'the address cannot be looked up',
+                'reserved_ip' => 'it points at a private network',
+            ],
+        ],
     ],
 
     'settings' => [
@@ -276,6 +330,11 @@ return [
             'profile' => 'Profile',
             'accounts' => 'Accounts',
             'notifications' => 'Notifications',
+            // Issue 65b decision 1: the webhooks belong to the ACCOUNT and
+            // therefore live among the settings, after the notifications — both
+            // are about what leaves the system, but one is about the person and
+            // the other about the account.
+            'webhooks' => 'Webhooks',
             'security' => 'Security',
         ],
 
@@ -463,6 +522,153 @@ return [
         ],
     ],
 
+    // The binder's calendar link, see issue 65b decisions 2 and 4 and
+    // resources/js/pages/Containers/CalendarFeed.vue.
+    //
+    // The address is in practice a password to the binder's tasks ([[Notiser]]
+    // § ICS-kalenderfeed), and the texts say so in two places: `url_once` at
+    // the display and `revoke_confirm` at the revocation. Whoever lost the link
+    // has nothing to retrieve — the answer is to revoke and create a new one.
+    'calendar' => [
+        'title' => 'Calendar',
+        'heading' => 'Calendar',
+        'intro' => 'Subscribe to the binder\'s tasks in the calendar you already use. The link is personal and shows only what you can see yourself.',
+
+        'url_label' => 'The calendar address',
+        'url_description' => 'Add the address to your calendar app. It fetches the tasks itself and keeps itself up to date.',
+        'url_once' => 'This is the only time the address is shown. If you lose it, revoke the link and create a new one.',
+
+        'copy' => 'Copy the address',
+        'copied' => 'The address is copied',
+
+        'create' => 'Create a calendar link',
+
+        'list_heading' => 'Your links to this binder',
+        'empty' => 'You have no calendar links to this binder yet.',
+
+        'revoke' => 'Revoke',
+        'revoke_confirm' => 'Revoke the calendar link? The calendar stops updating, and the address cannot be retrieved.',
+
+        // A revoked row STAYS in the list (decision 4) and says when the link
+        // died — whoever wonders why the calendar stopped updating should see
+        // the answer rather than an empty list.
+        'row' => [
+            'created' => 'Created :date',
+            'last_fetched' => 'Last fetched :date',
+            'never_fetched' => 'Not fetched yet',
+            'revoked_badge' => 'Revoked',
+            'revoked_note' => 'The link was revoked :date and the calendar no longer updates.',
+        ],
+    ],
+
+    // The account's webhooks, see issue 65b decisions 1, 3, 5, 6, 7 and 8 and
+    // resources/js/pages/Settings/Webhooks.vue.
+    //
+    // Two secrets in the same shape: `secret_once` matches the calendar's
+    // `url_once` and for the same reason. `secret_description` explains what
+    // the secret is FOR — HMAC-SHA256 over the body — because a secret without
+    // an explanation is a string you paste somewhere and forget.
+    'webhook' => [
+        'title' => 'Webhooks',
+        'heading' => 'Webhooks',
+        'intro' => 'Send events to your own systems. Every delivery is signed, so the receiver can check that it comes from us.',
+
+        'account_label' => 'Account',
+
+        'secret_label' => 'The secret',
+        'secret_description' => 'Verify the signature with it: HMAC-SHA256 over the body, with the secret as the key. Without it our deliveries cannot be told apart from anyone else\'s.',
+        'secret_once' => 'This is the only time the secret is shown. If you lose it, remove the webhook and create a new one.',
+
+        'copy' => 'Copy the secret',
+        'copied' => 'The secret is copied',
+
+        'create_heading' => 'New webhook',
+
+        'url_label' => 'Address',
+        // The page runs no check of its own for private ranges, `localhost` or
+        // metadata services (decision 7) — but whoever types an address should
+        // know the rules before the server answers.
+        'url_hint' => 'A public https address. Addresses on your own network, on the server itself, or without https are rejected.',
+
+        'event_types_label' => 'Events',
+
+        // A name and a one-line explanation per type, like the notification
+        // types in issue 65a decision 7. The keys follow the type name in
+        // App\Models\WebhookEndpoint::EVENT_TYPES (`task.due` becomes
+        // `event_type.task.due`), so a new type puts its text here and nowhere
+        // else.
+        'event_type' => [
+            'task' => [
+                'due' => [
+                    'label' => 'Task falls due',
+                    'description' => 'When a scheduled task becomes visible or falls due.',
+                ],
+                'overdue' => [
+                    'label' => 'Task is overdue',
+                    'description' => 'When a task has passed its date without being checked off.',
+                ],
+            ],
+            'loan' => [
+                'due' => [
+                    'label' => 'Loan is due back',
+                    'description' => 'When a lent item approaches its return date.',
+                ],
+            ],
+            'quota' => [
+                'warning' => [
+                    'label' => 'Storage is running out',
+                    'description' => 'When a quota in the plan passes 80 or 100 percent.',
+                ],
+            ],
+            'invitation' => [
+                'received' => [
+                    'label' => 'Invitation to a binder',
+                    'description' => 'When someone invites a member to the account.',
+                ],
+            ],
+            'transfer' => [
+                'requested' => [
+                    'label' => 'Ownership transfer requested',
+                    'description' => 'When someone wants to take over an account.',
+                ],
+            ],
+            'account' => [
+                'inactive' => [
+                    'label' => 'The account is closed for inactivity',
+                    'description' => 'Before an account is closed because it has not been used.',
+                ],
+            ],
+        ],
+
+        'create' => 'Create webhook',
+
+        // Edit mode (decision 3): the SAME form as create, but PATCH instead
+        // of POST and without the secret — changing the address or adding an
+        // event type must not rotate the secret, because then the receiver
+        // would have to be reconfigured for a reason that is not the secret's.
+        'edit' => 'Edit',
+        'save' => 'Save',
+        'cancel' => 'Cancel',
+
+        'list_heading' => 'The account\'s webhooks',
+        'empty' => 'The account has no webhooks yet.',
+
+        'inactive_badge' => 'Disabled',
+
+        // The difference is the whole point of the flag from the server's
+        // answer (decision 8): a row that merely looked disabled would look as
+        // if the user had done it. The system sentence also says the counter
+        // starts over, because that is what reactivation does on the server.
+        'disabled_by_system' => 'The system disabled it after repeated delivery failures. Turn it back on once the address works — the count then starts over from zero.',
+        'disabled_by_user' => 'You disabled it. Turn it back on when you want the deliveries again.',
+
+        'deactivate' => 'Disable',
+        'activate' => 'Turn on',
+
+        'destroy' => 'Remove',
+        'destroy_confirm' => 'Remove the webhook? The secret goes with it, and a new webhook gets a new secret.',
+    ],
+
     'container' => [
         'kind' => [
             'boat' => 'Boat',
@@ -481,6 +687,11 @@ return [
             'tags' => 'Tags',
             'sharing' => 'Sharing',
             'settings' => 'Settings',
+            // Issue 65b decision 1: the calendar link is a WAY OUT of the
+            // product — the binder's tasks subscribed to from someone else's
+            // calendar — and sits after the settings, before the trash. The row
+            // is in the same place in containerSections.js.
+            'calendar' => 'Calendar',
             // Last, like the row in containerSections.js — the trash is where
             // you go when something went wrong (issue 62a decision 1).
             'trash' => 'Trash',

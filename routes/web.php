@@ -11,6 +11,7 @@ use App\Http\Controllers\Auth\RecoveryCodeController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\TotpController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\CalendarFeedController;
 use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ContainerAccessController;
@@ -37,6 +38,7 @@ use App\Http\Controllers\TagController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UnsubscribeController;
+use App\Http\Controllers\WebhookEndpointController;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Files\FileOrigin;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -289,6 +291,45 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/settings/notifications/quiet-hours', [NotificationSettingsController::class, 'updateQuietHours'])
         ->name('settings.notifications.quiet-hours');
+
+    /*
+     * Issue 65b § Beslut 1 · Webhookarna — kontots utgång till egna system, se
+     * App\Http\Controllers\WebhookEndpointController.
+     *
+     * **Här och inte i pärmen.** En webhook hör till KONTOT: kontot äger
+     * URL:en, betalar för funktionen och är det vars plan grinden läser. Den
+     * ligger därför bland inställningarna, med en egen rad i
+     * resources/js/layouts/settingsSections.js.
+     *
+     * **Ingen `{account}` i sökvägen.** `/api` tar kontot ur rutten
+     * (`/accounts/{account}/webhooks`); webben har en kontoväljare på sidan och
+     * skickar kontot som fältet `account`, eftersom en sida som byter konto
+     * inte ska behöva byta URL. Grinden `manageWebhooks` prövas mot DET kontot
+     * i kontrollern — aldrig mot användarens första.
+     *
+     * **`{webhook}` binds på ULID och prövas mot kontot i kontrollern.**
+     * `scopeBindings()` kan inte göra sitt jobb utan en `{account}`-parameter i
+     * rutten, så kontrollern jämför `account_id` och svarar 404 för en endpoint
+     * från ett annat konto — samma svar som `/api`:s nästlade bindning ger.
+     *
+     * **Ingen ny FormRequest** (omfångsrutan): StoreWebhookEndpointRequest och
+     * UpdateWebhookEndpointRequest delas rakt av, och plangrinden blir ett
+     * fältfel i kontrollern i stället för en rå JSON-kropp (Beslut 5).
+     *
+     * Fyra rutter, en sida. Namnen följer `settings.notifications`: sidan,
+     * sedan skrivningarna.
+     */
+    Route::get('/settings/webhooks', [WebhookEndpointController::class, 'index'])
+        ->name('settings.webhooks');
+
+    Route::post('/settings/webhooks', [WebhookEndpointController::class, 'store'])
+        ->name('settings.webhooks.store');
+
+    Route::patch('/settings/webhooks/{webhook}', [WebhookEndpointController::class, 'update'])
+        ->name('settings.webhooks.update');
+
+    Route::delete('/settings/webhooks/{webhook}', [WebhookEndpointController::class, 'destroy'])
+        ->name('settings.webhooks.destroy');
 
     /*
      * Issue 54 · Containerytan — listan, skapandet och redigeringen, se
@@ -656,6 +697,39 @@ Route::middleware('auth')->group(function () {
      */
     Route::put('/containers/{container}/active', ActiveContainerController::class)
         ->name('containers.active');
+
+    /*
+     * Issue 65b § Beslut 1 och 2 · Pärmens kalenderlänk, se
+     * App\Http\Controllers\CalendarFeedController.
+     *
+     * **Feeden bor i pärmen och inte i inställningarna.** Den visar pärmens
+     * uppgifter — för den inloggade användaren, för feeden visar bara det hon
+     * får se — och den som ska skapa en ny är redan i pärmen. Sidan får en rad
+     * i resources/js/layouts/containerSections.js.
+     *
+     * **`scopeBindings()` på raderingen**, som varje annan nästlad
+     * containerrutt: `{calendar_feed}` binds genom
+     * App\Models\Container::calendarFeeds(), så en ULID från en annan pärm
+     * löser aldrig upp här (36a § Beslut 3).
+     *
+     * **Sökvägen `/kalender/{token}.ics` rörs inte** — den ligger längre ner i
+     * den här filen och ägs av App\Http\Controllers\
+     * CalendarFeedDownloadController. Den är ett kontrakt i någons
+     * kalenderapp (36a § Beslut 6); det som byggs här är ytan som SKAPAR och
+     * ÅTERKALLAR tokenet.
+     *
+     * Grinden är `view` på alla tre — samma som `/api`, se kontrollerns
+     * docblock. Ingen ny FormRequest: POST har ingen kropp.
+     */
+    Route::get('/containers/{container}/calendar', [CalendarFeedController::class, 'index'])
+        ->name('containers.calendar');
+
+    Route::post('/containers/{container}/calendar', [CalendarFeedController::class, 'store'])
+        ->name('containers.calendar.store');
+
+    Route::delete('/containers/{container}/calendar/{calendar_feed}', [CalendarFeedController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.calendar.destroy');
 
     /*
      * Issue 55a · Delningsytan — deltagarlistan och förvaltningen av

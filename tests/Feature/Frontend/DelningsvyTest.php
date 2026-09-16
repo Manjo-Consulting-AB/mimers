@@ -1021,6 +1021,13 @@ it('lägger delningssidan i pärmens navigation', function () {
  * båda ändar). En `read`-deltagare ser beroendena men får 403 här; en
  * `write`-deltagare som saknar åtkomst till motparten får också 403, utan att
  * motpartens namn syns i svaret.
+ *
+ * Sedan issue 65b finns pärmens kalenderlänk här. Den skriver en
+ * `calendar_feed`-rad — användarens EGEN prenumeration på pärmen — men rör
+ * inga åtkomster: grinden är `view` på pärmen (issue 36a § Beslut 4, 65b
+ * § Beslut 2), så den som redan får läsa pärmen får en länk som visar exakt
+ * samma sak. Ingen ny läsare och ingen ny mottagare; raden pekar på den
+ * inloggade användaren själv.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -1029,8 +1036,8 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
     // Itemet, relationen, bilagan, schemat, förekomstens två avslut,
-    // containerns eget skapande, inbjudan, kategorin, uppsättningen, taggen
-    // och papperskorgen. Ingen /accesses. Ordningen är
+    // containerns eget skapande, kalenderlänken, inbjudan, kategorin,
+    // uppsättningen, taggen och papperskorgen. Ingen /accesses. Ordningen är
     // registreringsordningen i routes/web.php — itemrutterna ligger ovanför
     // `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
@@ -1043,6 +1050,7 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/items/{item}/schedules/{schedule}/dependencies',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies',
         'containers',
+        'containers/{container}/calendar',
         'containers/{container}/invitations',
         'containers/{container}/categories',
         'containers/{container}/categories/preset',

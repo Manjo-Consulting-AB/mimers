@@ -36,6 +36,12 @@
  * papperskorgen är dit man går när något gått fel, inte en yta man arbetar
  * i. Den är ändå en rad och ingen sidfot — en väg tillbaka som ingen hittar
  * är samma sak som ingen väg tillbaka.
+ *
+ * `calendar` kom med issue 65b § Beslut 1 och ligger efter `settings`, före
+ * `trash`: kalenderlänken är en UTGÅNG ur produkten och inte en yta man
+ * arbetar i — pärmens uppgifter prenumererade på ur någon annans kalender —
+ * men den hör till pärmens inställningar och inte till papperskorgen, som är
+ * dit man går när något gått fel.
  */
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}` },
@@ -43,5 +49,6 @@ export const containerSections = [
     { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
     { key: 'settings', href: (ulid) => `/containers/${ulid}/edit` },
+    { key: 'calendar', href: (ulid) => `/containers/${ulid}/calendar` },
     { key: 'trash', href: (ulid) => `/containers/${ulid}/trash` },
 ];
