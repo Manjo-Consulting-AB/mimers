@@ -72,7 +72,7 @@ const { t } = useTranslations();
                 <li v-for="result in results" :key="result.ulid" class="py-4">
                     <Link
                         :href="`/containers/${result.container.ulid}/items/${result.ulid}`"
-                        class="font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     >
                         {{ result.name }}
                     </Link>
@@ -82,7 +82,7 @@ const { t } = useTranslations();
 
                         <Link
                             :href="`/containers/${result.container.ulid}`"
-                            class="text-blue-700 hover:underline"
+                            class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
                         >
                             {{ result.container.name }}
                         </Link>

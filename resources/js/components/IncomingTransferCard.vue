@@ -131,19 +131,19 @@ function reject() {
             <button
                 type="button"
                 :disabled="form.processing"
-                class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                 @click="accept"
             >
-                {{ t('transfer.accept') }}
+                {{ form.processing ? t('common.pending.transfer') : t('transfer.accept') }}
             </button>
 
             <button
                 type="button"
                 :disabled="form.processing"
-                class="rounded border border-slate-300 bg-white px-4 py-2 font-medium text-slate-800 disabled:opacity-50"
+                class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
                 @click="reject"
             >
-                {{ t('transfer.reject') }}
+                {{ form.processing ? t('common.pending.default') : t('transfer.reject') }}
             </button>
         </div>
     </li>

@@ -48,7 +48,7 @@ const { t } = useTranslations();
                 @input="emit('update:modelValue', $event.target.value)"
             >
 
-            <label class="flex items-center gap-1 text-sm text-slate-700">
+            <label class="flex min-h-11 items-center gap-1 text-sm text-slate-700">
                 <input
                     type="checkbox"
                     :checked="modelValue === null"

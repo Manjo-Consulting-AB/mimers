@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -27,16 +27,27 @@ import { useTranslations } from '../composables/useTranslations.js';
  * SearchController med ett vanligt valideringsfel, och Inertia lägger det i
  * `errors` (Beslut 4). FormField ritar det, precis som i varje annat
  * webbformulär — ingen egen regel i JavaScript, ingen klientvalidering.
+ *
+ * **Knappen säger att den väntar** (issue 68a § Beslut 4). Formuläret är
+ * fortfarande en vanlig GET — transporten är orörd — men `pending` sätts i
+ * submit-händelsen, så knappen är inaktiverad och bär en väntetext från det
+ * att webbläsaren tar över tills den nya sidan ritas. Utan det står knappen
+ * still på en långsam uppkoppling, och den som inte ser att något händer
+ * trycker igen.
+ *
+ * 44 px träffyta på både fältet och knappen (issue 68a § Beslut 3): fältet
+ * sitter i toppnavigeringen och träffas med tummen.
  */
 const { t } = useTranslations();
 const page = usePage();
 
 const query = computed(() => page.props.q ?? '');
 const error = computed(() => page.props.errors?.q ?? null);
+const pending = ref(false);
 </script>
 
 <template>
-    <form method="get" action="/search" class="w-full max-w-xs">
+    <form method="get" action="/search" class="w-full max-w-xs" @submit="pending = true">
         <FormField v-slot="{ describedBy }" :label="t('search.field.label')" id="search-q" :error="error">
             <div class="flex gap-2">
                 <input
@@ -46,11 +57,15 @@ const error = computed(() => page.props.errors?.q ?? null);
                     :value="query"
                     :placeholder="t('search.field.placeholder')"
                     :aria-describedby="describedBy"
-                    class="w-full rounded border border-slate-300 px-2 py-1 text-sm"
+                    class="min-h-11 w-full rounded border border-slate-300 px-2 text-sm"
                 >
 
-                <button type="submit" class="rounded bg-blue-700 px-3 py-1 text-sm font-medium text-white">
-                    {{ t('search.field.submit') }}
+                <button
+                    type="submit"
+                    :disabled="pending"
+                    class="inline-flex min-h-11 items-center rounded bg-blue-700 px-3 text-sm font-medium text-white disabled:opacity-50"
+                >
+                    {{ pending ? t('common.pending.default') : t('search.field.submit') }}
                 </button>
             </div>
         </FormField>

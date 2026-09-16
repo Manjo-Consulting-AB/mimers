@@ -73,10 +73,10 @@ function apply() {
             <button
                 type="button"
                 :disabled="form.processing"
-                class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                 @click="apply"
             >
-                {{ t('container.categories.preset_apply') }}
+                {{ form.processing ? t('common.pending.default') : t('container.categories.preset_apply') }}
             </button>
 
             <Link
@@ -84,7 +84,7 @@ function apply() {
                 method="delete"
                 as="button"
                 preserve-scroll
-                class="text-sm text-slate-700 underline"
+                class="inline-flex min-h-11 items-center text-sm text-slate-700 underline"
             >
                 {{ t('container.categories.preset_dismiss') }}
             </Link>

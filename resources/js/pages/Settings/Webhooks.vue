@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import SecretOnce from '../../components/SecretOnce.vue';
@@ -72,6 +73,9 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
+/* Vänteläget på kontobytet: en GET mot samma sida är en ny sidvisning. */
+const pending = ref(false);
+
 /*
  * Kontobytet. En GET mot samma sida med `?account=` — servern faller tillbaka
  * på ett förval om ULID:n inte är användarens, så en handskriven adress kan
@@ -79,7 +83,11 @@ const { t } = useTranslations();
  * börja om när kontot byts, för det tillhör det gamla kontot.
  */
 function selectAccount(event) {
-    router.get('/settings/webhooks', { account: event.target.value }, { preserveScroll: true });
+    router.get('/settings/webhooks', { account: event.target.value }, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+    });
 }
 </script>
 
@@ -99,6 +107,7 @@ function selectAccount(event) {
             <select
                 id="account"
                 :value="props.account.ulid"
+                :disabled="pending"
                 class="self-start rounded border border-slate-300 bg-white px-3 py-2"
                 @change="selectAccount"
             >

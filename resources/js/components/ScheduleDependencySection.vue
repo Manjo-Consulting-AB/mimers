@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { formatDateOnly } from './itemPresentation.js';
 import { scheduleUrl } from './occurrencePresentation.js';
@@ -98,13 +98,23 @@ function submit() {
  *
  * `router.delete` och inte en <Link method="delete">: bekräftelsen måste kunna
  * AVBRYTA navigeringen.
+ *
+ * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): knappen är
+ * stängd och byter ord medan servern svarar. En flagga delas av raderna — de
+ * gör samma sorts anrop.
  */
+const pending = ref(false);
+
 function remove(row) {
     if (! window.confirm(title('remove_confirm'))) {
         return;
     }
 
-    router.delete(`${props.url}/${row.ulid}`, { preserveScroll: true });
+    router.delete(`${props.url}/${row.ulid}`, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+    });
 }
 </script>
 
@@ -133,7 +143,7 @@ function remove(row) {
                          motpartens eget schema (Beslut 5). -->
                     <Link
                         :href="scheduleUrl(containerUlid, itemUlid, row.schedule_ulid)"
-                        class="font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     >
                         {{ row.item.name }}
                     </Link>
@@ -162,10 +172,11 @@ function remove(row) {
                     <button
                         v-if="can.update"
                         type="button"
-                        class="text-sm text-red-700 hover:underline"
+                        :disabled="pending"
+                        class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                         @click="remove(row)"
                     >
-                        {{ t('item.schedule.dependency.remove') }}
+                        {{ pending ? t('common.pending.default') : t('item.schedule.dependency.remove') }}
                     </button>
                 </li>
             </ul>
@@ -214,9 +225,9 @@ function remove(row) {
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                        class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                     >
-                        {{ t('item.schedule.dependency.submit') }}
+                        {{ form.processing ? t('common.pending.default') : t('item.schedule.dependency.submit') }}
                     </button>
                 </form>
             </template>

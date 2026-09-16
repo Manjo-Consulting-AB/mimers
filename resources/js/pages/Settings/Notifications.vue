@@ -123,9 +123,9 @@ function submitPreferences() {
             <button
                 type="submit"
                 :disabled="form.processing || changed.length === 0"
-                class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
             >
-                {{ t('notifications.submit') }}
+                {{ form.processing ? t('common.pending.default') : t('notifications.submit') }}
             </button>
         </form>
 

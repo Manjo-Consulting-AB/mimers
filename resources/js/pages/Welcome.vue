@@ -33,7 +33,7 @@ const user = computed(() => usePage().props.auth.user);
             <Link
                 v-if="user"
                 href="/dashboard"
-                class="mt-8 inline-block rounded bg-blue-700 px-4 py-2 font-medium text-white"
+                class="mt-8 inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
             >
                 {{ t('common.to_dashboard') }}
             </Link>
@@ -41,14 +41,14 @@ const user = computed(() => usePage().props.auth.user);
             <template v-else>
                 <Link
                     href="/login"
-                    class="mt-8 inline-block rounded bg-blue-700 px-4 py-2 font-medium text-white"
+                    class="mt-8 inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
                 >
                     {{ t('nav.login') }}
                 </Link>
 
                 <div class="mt-6 flex flex-col items-center gap-2 text-sm">
-                    <Link href="/register" class="text-blue-700 hover:underline">{{ t('auth.register.link') }}</Link>
-                    <Link href="/login/magic-link" class="text-blue-700 hover:underline">
+                    <Link href="/register" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.register.link') }}</Link>
+                    <Link href="/login/magic-link" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
                         {{ t('auth.magic_link.link') }}
                     </Link>
                 </div>

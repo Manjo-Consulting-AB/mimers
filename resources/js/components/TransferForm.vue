@@ -146,7 +146,7 @@ function submit() {
                 {{ t('transfer.excluded.following', { following, total: items.length, excluded: form.excluded_items.length }) }}
             </p>
 
-            <label v-for="item in items" :key="item.ulid" :for="`transfer-excluded-${item.ulid}`" class="flex cursor-pointer gap-2">
+            <label v-for="item in items" :key="item.ulid" :for="`transfer-excluded-${item.ulid}`" class="flex min-h-11 cursor-pointer items-center gap-2">
                 <input
                     :id="`transfer-excluded-${item.ulid}`"
                     type="checkbox"
@@ -192,9 +192,9 @@ function submit() {
         <button
             type="submit"
             :disabled="form.processing"
-            class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+            class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
         >
-            {{ t('transfer.form.submit') }}
+            {{ form.processing ? t('common.pending.default') : t('transfer.form.submit') }}
         </button>
     </form>
 </template>

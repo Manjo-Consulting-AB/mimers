@@ -208,15 +208,15 @@ function action(name) {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                    class="inline-flex min-h-11 items-center rounded bg-slate-900 px-3 text-sm font-medium text-white disabled:opacity-50"
                 >
-                    {{ t('item.schedule.occurrence.complete') }}
+                    {{ form.processing ? t('common.pending.complete') : t('item.schedule.occurrence.complete') }}
                 </button>
 
                 <button
                     type="button"
                     :disabled="form.processing"
-                    class="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-800 disabled:opacity-50"
+                    class="inline-flex min-h-11 items-center rounded border border-slate-300 px-3 text-sm font-medium text-slate-800 disabled:opacity-50"
                     @click="skip"
                 >
                     {{ t('item.schedule.occurrence.skip') }}

@@ -85,7 +85,7 @@ const planHref = computed(() => `/settings/plan?account=${props.container.accoun
             class="mt-6 rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
         >
             <p>{{ planNotice }}</p>
-            <Link :href="planHref" class="mt-2 inline-block underline">{{ t('transfer.plan_link') }}</Link>
+            <Link :href="planHref" class="mt-2 inline-flex min-h-11 items-center underline">{{ t('transfer.plan_link') }}</Link>
         </div>
 
         <!--
@@ -142,7 +142,7 @@ const planHref = computed(() => `/settings/plan?account=${props.container.accoun
                         method="delete"
                         as="button"
                         preserve-scroll
-                        class="self-start text-sm text-red-700 underline"
+                        class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline"
                     >
                         {{ t('transfer.row.revoke') }}
                     </Link>

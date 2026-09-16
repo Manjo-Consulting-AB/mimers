@@ -66,6 +66,9 @@ const page = usePage();
 
 const selected = ref([]);
 
+/* Vänteläget på rensningen: en DELETE som är på väg ska säga det. */
+const pending = ref(false);
+
 /*
  * Raderna: storleken formaterad och `formatByteSize` — samma formatering som
  * serverns Number::fileSize(), samma modul som bilagelistan använder
@@ -120,6 +123,8 @@ function submit() {
     router.delete(`/settings/storage/${props.accountUlid}`, {
         data: { attachments: selected.value },
         preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
         onSuccess: () => {
             selected.value = [];
         },
@@ -145,7 +150,7 @@ function submit() {
                     :key="row.ulid"
                     class="rounded border border-slate-300 bg-white px-4 py-2"
                 >
-                    <label class="flex items-start gap-3">
+                    <label class="flex min-h-11 items-start gap-3">
                         <input
                             v-model="selected"
                             type="checkbox"
@@ -210,10 +215,10 @@ function submit() {
 
             <button
                 type="submit"
-                :disabled="selected.length === 0 || tooMany"
-                class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                :disabled="pending || selected.length === 0 || tooMany"
+                class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
             >
-                {{ t('storage.submit') }}
+                {{ pending ? t('common.pending.default') : t('storage.submit') }}
             </button>
         </form>
     </section>

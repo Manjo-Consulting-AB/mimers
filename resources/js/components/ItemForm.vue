@@ -109,6 +109,15 @@ const tagError = computed(() => {
     return key === undefined ? null : form.errors[key];
 });
 
+/*
+ * Knappens ord byter medan servern svarar (issue 68a § Beslut 4 och 5): en
+ * knapp vars etikett står still medan svaret är på väg ser ut som en död sida.
+ * Ordet "Skapa"/"Spara" kommer tillbaka när anropet är klart.
+ */
+const submitLabel = computed(() => (form.processing
+    ? t('common.pending.default')
+    : (props.item === null ? t('item.create.submit') : t('item.edit.submit'))));
+
 function submit() {
     const url = `/containers/${props.containerUlid}/items`;
 
@@ -299,7 +308,7 @@ function submit() {
             <label
                 v-for="tag in tags"
                 :key="tag.ulid"
-                class="flex items-center gap-2 text-sm text-slate-800"
+                class="flex min-h-11 min-w-11 items-center gap-2 text-sm text-slate-800"
             >
                 <input v-model="form.tags" type="checkbox" name="tags[]" :value="tag.ulid">
                 <span
@@ -352,9 +361,9 @@ function submit() {
         <button
             type="submit"
             :disabled="form.processing"
-            class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+            class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
         >
-            {{ item === null ? t('item.create.submit') : t('item.edit.submit') }}
+            {{ submitLabel }}
         </button>
     </form>
 </template>

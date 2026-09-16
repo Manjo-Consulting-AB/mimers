@@ -139,15 +139,15 @@ function submit() {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
             >
-                {{ t('auth.login.submit') }}
+                {{ form.processing ? t('common.pending.default') : t('auth.login.submit') }}
             </button>
         </form>
 
         <div class="mt-6 flex max-w-sm flex-col gap-2 text-sm">
-            <Link href="/login/magic-link" class="text-blue-700 hover:underline">{{ t('auth.magic_link.link') }}</Link>
-            <Link href="/register" class="text-blue-700 hover:underline">{{ t('auth.register.link') }}</Link>
+            <Link href="/login/magic-link" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.magic_link.link') }}</Link>
+            <Link href="/register" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.register.link') }}</Link>
         </div>
     </AppLayout>
 </template>

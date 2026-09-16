@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -67,13 +68,20 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
+/* Vänteläget på kontobytet: en GET mot samma sida är en ny sidvisning. */
+const pending = ref(false);
+
 /*
  * Kontobytet. En GET mot samma sida med `?account=` — servern faller tillbaka
  * på ett förval om ULID:n inte är användarens, så en handskriven adress kan
  * inte peka ut någon annans konto.
  */
 function selectAccount(event) {
-    router.get('/settings/plan', { account: event.target.value }, { preserveScroll: true });
+    router.get('/settings/plan', { account: event.target.value }, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+    });
 }
 
 /*
@@ -101,6 +109,7 @@ function graceLabel(days) {
             <select
                 id="account"
                 :value="props.account.ulid"
+                :disabled="pending"
                 class="self-start rounded border border-slate-300 bg-white px-3 py-2"
                 @change="selectAccount"
             >
@@ -127,16 +136,16 @@ function graceLabel(days) {
             <h2 class="text-lg font-semibold">{{ t('plan.current_heading') }}</h2>
 
             <dl class="mt-4 flex flex-col gap-1 text-sm">
-                <div class="flex gap-2">
-                    <dt class="w-40 shrink-0 text-slate-600">{{ t('plan.account_label') }}</dt>
+                <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                    <dt class="shrink-0 text-slate-600 md:w-40">{{ t('plan.account_label') }}</dt>
                     <dd>{{ props.account.name }}</dd>
                 </div>
-                <div class="flex gap-2">
-                    <dt class="w-40 shrink-0 text-slate-600">{{ t('plan.name_label') }}</dt>
+                <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                    <dt class="shrink-0 text-slate-600 md:w-40">{{ t('plan.name_label') }}</dt>
                     <dd>{{ t(`plan.names.${props.plan.code}`) }}</dd>
                 </div>
-                <div class="flex gap-2">
-                    <dt class="w-40 shrink-0 text-slate-600">{{ t('plan.price_label') }}</dt>
+                <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                    <dt class="shrink-0 text-slate-600 md:w-40">{{ t('plan.price_label') }}</dt>
                     <dd>{{ props.plan.price }} {{ t(`plan.period.${props.plan.period}`) }}</dd>
                 </div>
             </dl>

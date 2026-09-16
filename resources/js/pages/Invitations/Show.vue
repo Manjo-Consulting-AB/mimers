@@ -98,9 +98,9 @@ function reject() {
                 <button
                     type="submit"
                     :disabled="acceptForm.processing"
-                    class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                    class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                 >
-                    {{ t('invitation.accept') }}
+                    {{ acceptForm.processing ? t('common.pending.transfer') : t('invitation.accept') }}
                 </button>
             </form>
 
@@ -108,17 +108,17 @@ function reject() {
                 <button
                     type="submit"
                     :disabled="rejectForm.processing"
-                    class="rounded border border-slate-300 bg-white px-4 py-2 font-medium text-slate-800 disabled:opacity-50"
+                    class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
                 >
-                    {{ t('invitation.reject') }}
+                    {{ rejectForm.processing ? t('common.pending.default') : t('invitation.reject') }}
                 </button>
             </form>
         </div>
 
         <div v-else-if="state === 'guest'" class="mt-6 flex max-w-sm flex-col gap-2 text-sm">
             <p class="text-slate-700">{{ t('invitation.guest') }}</p>
-            <Link href="/login" class="text-blue-700 hover:underline">{{ t('nav.login') }}</Link>
-            <Link href="/register" class="text-blue-700 hover:underline">{{ t('auth.register.heading') }}</Link>
+            <Link href="/login" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('nav.login') }}</Link>
+            <Link href="/register" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.register.heading') }}</Link>
         </div>
 
         <!--
@@ -139,7 +139,7 @@ function reject() {
         -->
         <div v-else class="mt-6 flex max-w-sm flex-col gap-2 text-sm">
             <p class="text-slate-700">{{ t('invitation.unavailable') }}</p>
-            <Link href="/" class="text-blue-700 hover:underline">{{ t('invitation.home') }}</Link>
+            <Link href="/" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('invitation.home') }}</Link>
         </div>
     </AppLayout>
 </template>

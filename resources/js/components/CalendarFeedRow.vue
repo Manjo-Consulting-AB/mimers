@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import { formatDate } from './accessPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -45,6 +45,9 @@ const lastFetched = computed(() => (props.feed.last_fetched_at === null
     ? t('calendar.row.never_fetched')
     : t('calendar.row.last_fetched', { date: formatDate(props.feed.last_fetched_at, locale.value) })));
 
+/* Vänteläget: en rad vars återkallande är på väg ska säga det, inte stå still. */
+const pending = ref(false);
+
 /*
  * Återkallandet. Bekräftelsen är webbläsarens egen dialog med serverns mening
  * ur lang/ — ingen modal komponent och ingen sträng i JavaScript, samma
@@ -60,6 +63,8 @@ function revoke() {
 
     router.delete(`/containers/${props.containerUlid}/calendar/${props.feed.ulid}`, {
         preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
     });
 }
 </script>
@@ -92,10 +97,11 @@ function revoke() {
         <button
             v-else
             type="button"
-            class="self-start text-sm font-medium text-red-700 hover:underline"
+            :disabled="pending"
+            class="self-start inline-flex min-h-11 items-center text-sm font-medium text-red-700 hover:underline"
             @click="revoke"
         >
-            {{ t('calendar.revoke') }}
+            {{ pending ? t('common.pending.default') : t('calendar.revoke') }}
         </button>
     </li>
 </template>

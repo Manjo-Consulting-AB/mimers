@@ -56,7 +56,7 @@ const isShared = (container) => accountName(container) === null;
         <div class="flex items-center justify-between gap-4">
             <h1 class="text-2xl font-semibold">{{ t('container.index.heading') }}</h1>
 
-            <Link href="/containers/create" class="rounded bg-blue-700 px-4 py-2 text-sm font-medium text-white">
+            <Link href="/containers/create" class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 text-sm font-medium text-white">
                 {{ t('container.index.create') }}
             </Link>
         </div>
@@ -69,7 +69,7 @@ const isShared = (container) => accountName(container) === null;
             <li v-for="container in containers" :key="container.ulid" class="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
                 <Link
                     :href="`/containers/${container.ulid}`"
-                    class="font-medium text-blue-700 hover:underline"
+                    class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                 >
                     {{ container.name }}
                 </Link>
@@ -96,7 +96,7 @@ const isShared = (container) => accountName(container) === null;
                     v-else
                     method="put"
                     :href="`/containers/${container.ulid}/active`"
-                    class="text-sm text-blue-700 hover:underline"
+                    class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
                 >
                     {{ t('container.index.make_active') }}
                 </Link>
@@ -104,7 +104,7 @@ const isShared = (container) => accountName(container) === null;
                 <Link
                     v-if="container.can.update"
                     :href="`/containers/${container.ulid}/edit`"
-                    class="text-sm text-blue-700 hover:underline"
+                    class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
                 >
                     {{ t('container.index.edit') }}
                 </Link>
@@ -118,7 +118,7 @@ const isShared = (container) => accountName(container) === null;
             hade varit en fråga per sidladdning, och texten är konstant.
         -->
         <p class="mt-8 text-sm">
-            <Link href="/trash/containers" class="text-blue-700 hover:underline">
+            <Link href="/trash/containers" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
                 {{ t('trash.containers.link') }}
             </Link>
         </p>

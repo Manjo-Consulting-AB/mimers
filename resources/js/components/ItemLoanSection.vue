@@ -162,13 +162,23 @@ function returnToday() {
  *
  * `router.delete` och inte en <Link method="delete">: bekräftelsen måste kunna
  * AVBRYTA navigeringen.
+ *
+ * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): knappen är
+ * stängd och byter ord medan servern svarar. En flagga delas av raderna —
+ * de gör samma sorts anrop.
  */
+const pending = ref(false);
+
 function destroy(loan) {
     if (! window.confirm(t('item.loan.destroy_confirm'))) {
         return;
     }
 
-    router.delete(loanUrl(loan), { preserveScroll: true });
+    router.delete(loanUrl(loan), {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+    });
 }
 </script>
 
@@ -214,7 +224,7 @@ function destroy(loan) {
 
                     <button
                         type="button"
-                        class="text-sm font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
                         @click="copy(openLoan)"
                     >
                         {{ copied === openLoan.ulid ? t('item.loan.copied') : t('item.loan.copy') }}
@@ -229,7 +239,7 @@ function destroy(loan) {
                     v-if="can.update"
                     type="button"
                     :disabled="returnForm.processing"
-                    class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                    class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                     @click="returnToday"
                 >
                     {{ t('item.loan.return_today') }}
@@ -238,10 +248,11 @@ function destroy(loan) {
                 <button
                     v-if="can.delete"
                     type="button"
-                    class="text-sm text-red-700 hover:underline"
+                    :disabled="pending"
+                    class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                     @click="destroy(openLoan)"
                 >
-                    {{ t('item.loan.destroy') }}
+                    {{ pending ? t('common.pending.default') : t('item.loan.destroy') }}
                 </button>
             </div>
 
@@ -268,9 +279,9 @@ function destroy(loan) {
                 <button
                     type="submit"
                     :disabled="returnForm.processing"
-                    class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                 >
-                    {{ t('item.loan.return_submit') }}
+                    {{ returnForm.processing ? t('common.pending.default') : t('item.loan.return_submit') }}
                 </button>
             </form>
         </div>
@@ -393,9 +404,9 @@ function destroy(loan) {
                 <button
                     type="submit"
                     :disabled="loanForm.processing"
-                    class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                 >
-                    {{ t('item.loan.form_submit') }}
+                    {{ loanForm.processing ? t('common.pending.default') : t('item.loan.form_submit') }}
                 </button>
             </form>
         </template>
@@ -431,10 +442,11 @@ function destroy(loan) {
                         <button
                             v-if="can.delete"
                             type="button"
-                            class="text-sm text-red-700 hover:underline"
+                            :disabled="pending"
+                            class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                             @click="destroy(loan)"
                         >
-                            {{ t('item.loan.destroy') }}
+                            {{ pending ? t('common.pending.default') : t('item.loan.destroy') }}
                         </button>
                     </div>
 

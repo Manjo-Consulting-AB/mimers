@@ -93,6 +93,14 @@ const anchorDateLabel = computed(() => (form.recurrence_type === 'fixed'
     ? t('item.schedule.form.anchor_date_fixed')
     : t('item.schedule.form.anchor_date')));
 
+/*
+ * Knappens ord byter medan servern svarar (issue 68a § Beslut 4 och 5): en
+ * knapp vars etikett står still medan svaret är på väg ser ut som en död sida.
+ */
+const submitLabel = computed(() => (form.processing
+    ? t('common.pending.default')
+    : (props.schedule === null ? t('item.schedule.create.submit') : t('item.schedule.update.submit'))));
+
 function submit() {
     const url = `/containers/${props.containerUlid}/items/${props.itemUlid}/schedules`;
 
@@ -262,9 +270,9 @@ function submit() {
         <button
             type="submit"
             :disabled="form.processing"
-            class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+            class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
         >
-            {{ schedule === null ? t('item.schedule.create.submit') : t('item.schedule.update.submit') }}
+            {{ submitLabel }}
         </button>
     </form>
 </template>

@@ -72,7 +72,7 @@ const page = usePage();
         <p v-else class="mt-6 text-sm text-slate-600">{{ t('trash.containers.empty') }}</p>
 
         <p class="mt-8 text-sm">
-            <Link href="/containers" class="text-blue-700 hover:underline">
+            <Link href="/containers" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
                 {{ t('trash.containers.back') }}
             </Link>
         </p>

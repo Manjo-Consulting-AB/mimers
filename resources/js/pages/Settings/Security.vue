@@ -123,9 +123,9 @@ function generateRecoveryCodes() {
                     <button
                         type="submit"
                         :disabled="setupForm.processing"
-                        class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                        class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                     >
-                        {{ t('settings.security.totp.enable') }}
+                        {{ setupForm.processing ? t('common.pending.default') : t('settings.security.totp.enable') }}
                     </button>
                 </form>
             </template>
@@ -136,10 +136,10 @@ function generateRecoveryCodes() {
 
                 <div class="flex flex-col gap-1">
                     <p class="text-sm font-medium text-slate-800">{{ t('settings.security.totp.uri_label') }}</p>
-                    <code class="block overflow-x-auto rounded border border-slate-300 bg-white px-3 py-2 text-xs">{{ props.totpUri }}</code>
+                    <code class="block break-all rounded border border-slate-300 bg-white px-3 py-2 text-xs">{{ props.totpUri }}</code>
                     <button
                         type="button"
-                        class="self-start text-sm text-blue-700 hover:underline"
+                        class="self-start inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
                         @click="copyUri"
                     >
                         {{ copied ? t('settings.security.totp.copied') : t('settings.security.totp.copy') }}
@@ -173,9 +173,9 @@ function generateRecoveryCodes() {
                     <button
                         type="submit"
                         :disabled="confirmForm.processing"
-                        class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                        class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                     >
-                        {{ t('settings.security.totp.confirm') }}
+                        {{ confirmForm.processing ? t('common.pending.default') : t('settings.security.totp.confirm') }}
                     </button>
                 </form>
             </template>
@@ -203,9 +203,9 @@ function generateRecoveryCodes() {
                         <button
                             type="submit"
                             :disabled="recoveryForm.processing"
-                            class="rounded border border-slate-400 bg-white px-4 py-2 font-medium disabled:opacity-50"
+                            class="inline-flex min-h-11 items-center rounded border border-slate-400 bg-white px-4 font-medium disabled:opacity-50"
                         >
-                            {{ t('settings.security.totp.recovery_generate') }}
+                            {{ recoveryForm.processing ? t('common.pending.default') : t('settings.security.totp.recovery_generate') }}
                         </button>
                     </form>
 
@@ -247,9 +247,9 @@ function generateRecoveryCodes() {
                         <button
                             type="submit"
                             :disabled="disableForm.processing"
-                            class="self-start rounded bg-red-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                            class="self-start inline-flex min-h-11 items-center rounded bg-red-700 px-4 font-medium text-white disabled:opacity-50"
                         >
-                            {{ t('settings.security.totp.disable_submit') }}
+                            {{ disableForm.processing ? t('common.pending.default') : t('settings.security.totp.disable_submit') }}
                         </button>
                     </form>
                 </div>

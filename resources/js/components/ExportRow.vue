@@ -70,7 +70,7 @@ const showRemaining = computed(() => props.row.status === 'ready' && ! isExpired
         <a
             v-if="downloadable"
             :href="`/exports/${row.ulid}/download`"
-            class="self-start font-medium text-blue-700 hover:underline"
+            class="inline-flex min-h-11 items-center self-start font-medium text-blue-700 hover:underline"
         >
             {{ t('export.download') }}
         </a>

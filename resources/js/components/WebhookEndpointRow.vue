@@ -58,6 +58,12 @@ const { t } = useTranslations();
 
 const editing = ref(false);
 
+/*
+ * Vänteläget delas av aktivera/inaktivera och radera: båda är router-anrop,
+ * och en knapp som väntar på servern ska vara inaktiverad och säga det.
+ */
+const pending = ref(false);
+
 const url = computed(() => `/settings/webhooks/${props.endpoint.ulid}`);
 
 const eventTypes = computed(() => props.endpoint.event_types
@@ -70,6 +76,8 @@ function toggle() {
         is_active: ! props.endpoint.is_active,
     }, {
         preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
     });
 }
 
@@ -80,6 +88,8 @@ function destroy() {
 
     router.delete(`${url.value}?account=${props.accountUlid}`, {
         preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
     });
 }
 </script>
@@ -99,7 +109,7 @@ function destroy() {
 
             <button
                 type="button"
-                class="self-start text-sm font-medium text-slate-700 hover:underline"
+                class="self-start inline-flex min-h-11 items-center text-sm font-medium text-slate-700 hover:underline"
                 @click="editing = false"
             >
                 {{ t('webhook.cancel') }}
@@ -131,7 +141,7 @@ function destroy() {
             <div class="flex flex-wrap gap-4 text-sm">
                 <button
                     type="button"
-                    class="font-medium text-blue-700 hover:underline"
+                    class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     @click="editing = true"
                 >
                     {{ t('webhook.edit') }}
@@ -139,18 +149,20 @@ function destroy() {
 
                 <button
                     type="button"
-                    class="font-medium text-blue-700 hover:underline"
+                    :disabled="pending"
+                    class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     @click="toggle"
                 >
-                    {{ endpoint.is_active ? t('webhook.deactivate') : t('webhook.activate') }}
+                    {{ pending ? t('common.pending.default') : (endpoint.is_active ? t('webhook.deactivate') : t('webhook.activate')) }}
                 </button>
 
                 <button
                     type="button"
-                    class="font-medium text-red-700 hover:underline"
+                    :disabled="pending"
+                    class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
                     @click="destroy"
                 >
-                    {{ t('webhook.destroy') }}
+                    {{ pending ? t('common.pending.default') : t('webhook.destroy') }}
                 </button>
             </div>
         </template>

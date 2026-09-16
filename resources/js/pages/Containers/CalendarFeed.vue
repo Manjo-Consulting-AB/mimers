@@ -78,9 +78,9 @@ function create() {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
             >
-                {{ t('calendar.create') }}
+                {{ form.processing ? t('common.pending.default') : t('calendar.create') }}
             </button>
         </form>
 

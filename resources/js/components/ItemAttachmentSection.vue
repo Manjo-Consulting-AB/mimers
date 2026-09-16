@@ -414,7 +414,14 @@ function dismiss(entry) {
  *
  * `router.delete` och inte en <Link method="delete">: bekräftelsen måste kunna
  * AVBRYTA navigeringen.
+ *
+ * `pending` är raderingens vänteläge (issue 68a § Beslut 4 och 5): knappen är
+ * stängd och byter ord medan servern svarar. Uppladdningen har sin egen flagga
+ * i köns `running` — de två flödena har olika varaktighet och delar därför
+ * inte vänteläge.
  */
+const pending = ref(false);
+
 function destroy(attachment) {
     if (! window.confirm(t('item.attachment.destroy_confirm'))) {
         return;
@@ -422,6 +429,8 @@ function destroy(attachment) {
 
     router.delete(`${itemUrl()}/attachments/${attachment.ulid}`, {
         preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
     });
 }
 </script>
@@ -472,7 +481,7 @@ function destroy(attachment) {
                     <button
                         v-if="attachment.preview.display === 'thumb'"
                         type="button"
-                        class="shrink-0 rounded border border-slate-300"
+                        class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded border border-slate-300"
                         @click="openViewer(attachment, $event)"
                     >
                         <img
@@ -522,7 +531,7 @@ function destroy(attachment) {
                     -->
                     <a
                         :href="`/files/${attachment.ulid}`"
-                        class="font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     >
                         {{ t('item.attachment.download') }}
                     </a>
@@ -530,10 +539,11 @@ function destroy(attachment) {
                     <button
                         v-if="can.delete"
                         type="button"
-                        class="text-sm text-red-700 hover:underline"
+                        :disabled="pending"
+                        class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                         @click="destroy(attachment)"
                     >
-                        {{ t('item.attachment.destroy') }}
+                        {{ pending ? t('common.pending.default') : t('item.attachment.destroy') }}
                     </button>
                 </div>
             </li>
@@ -564,14 +574,14 @@ function destroy(attachment) {
 
                     <a
                         :href="`/files/${viewer.ulid}`"
-                        class="font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     >
                         {{ t('item.attachment.download') }}
                     </a>
 
                     <button
                         type="button"
-                        class="ml-auto text-sm font-medium text-slate-700 hover:underline"
+                        class="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-slate-700 hover:underline"
                         @click="closeViewer"
                     >
                         {{ t('item.attachment.viewer_close') }}
@@ -667,7 +677,7 @@ function destroy(attachment) {
                             <button
                                 v-if="entry.status === 'failed'"
                                 type="button"
-                                class="text-sm text-red-700 hover:underline"
+                                class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                                 @click="dismiss(entry)"
                             >
                                 {{ t('item.attachment.dismiss') }}
@@ -715,9 +725,9 @@ function destroy(attachment) {
                 <button
                     type="submit"
                     :disabled="running || !hasWaiting"
-                    class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                 >
-                    {{ t('item.attachment.submit') }}
+                    {{ running ? t('common.pending.upload') : t('item.attachment.submit') }}
                 </button>
             </form>
         </template>
