@@ -48,6 +48,15 @@
  * byter konto — och det är inte något man gör ofta. Raden är ändå en rad: en
  * yta ingen hittar är samma sak som en yta som inte finns, och den som ska
  * överlåta en båt står i pärmen när hon bestämmer sig.
+ *
+ * `export` kom med issue 67c § Beslut 1 och ligger efter `calendar`, före
+ * `trash`: exporten är en UTGÅNG ur produkten, precis som kalenderlänken —
+ * där länken för pärmens uppgifter ut i någon annans kalender, tar exporten
+ * hela pärmen ut i en fil — men den hör inte till papperskorgen, som är dit
+ * man går när något gått fel. Den är fri på alla plannivåer med flit
+ * ([[Planer och kvoter]] § Gränserna i MVP): *"påminnelserna skapar vanan,
+ * exporten skapar förtroendet"*. Raden ligger därför i NAVIGERINGEN och inte
+ * bakom en inställning — en utgång ingen hittar är samma sak som en inlåsning.
  */
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}` },
@@ -56,6 +65,7 @@ export const containerSections = [
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
     { key: 'settings', href: (ulid) => `/containers/${ulid}/edit` },
     { key: 'calendar', href: (ulid) => `/containers/${ulid}/calendar` },
+    { key: 'export', href: (ulid) => `/containers/${ulid}/export` },
     { key: 'trash', href: (ulid) => `/containers/${ulid}/trash` },
     { key: 'transfer', href: (ulid) => `/containers/${ulid}/transfer` },
 ];

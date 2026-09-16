@@ -1048,6 +1048,17 @@ it('lägger delningssidan i pärmens navigation', function () {
  * och acceptrutten ligger på toppnivå (`/transfers`, utanför `containers/`).
  * Ingen ny läsare läggs alltså till här: en pågående överlåtelse ger mottagaren
  * ingenting förrän hon svarar.
+ *
+ * Sedan issue 67c finns exportens POST här. Den skriver en `export`-rad — en
+ * beställning om att packa pärmen i en fil — och rör inga
+ * `container_access`-rader alls: grinden är `view` på pärmen (issue 41a
+ * § Beslut 3, issue 67c § Beslut 2), alltså exakt den grind som redan avgör
+ * vem som får LÄSA pärmen. Ingen ny läsare och ingen ny mottagare läggs
+ * till: den som kan se innehållet kan redan hämta det bilaga för bilaga, och
+ * exporten är fri på alla plannivåer med flit ([[Planer och kvoter]]
+ * § Gränserna i MVP). Raden den skriver är beställarens EGET ärende —
+ * jobbet packar det hon själv når (issue 74 § Beslut 8) — och resultatet
+ * delas med ingen.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -1057,7 +1068,8 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
 
     // Itemet, utlåningen, relationen, bilagan, schemat, förekomstens två
     // avslut, containerns eget skapande, kalenderlänken, inbjudan, ägarbytet,
-    // kategorin, uppsättningen, taggen och papperskorgen. Ingen /accesses.
+    // exporten, kategorin, uppsättningen, taggen och papperskorgen. Ingen
+    // /accesses.
     // Ordningen är registreringsordningen i routes/web.php — itemrutterna
     // ligger ovanför `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
@@ -1074,6 +1086,7 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/calendar',
         'containers/{container}/invitations',
         'containers/{container}/transfer',
+        'containers/{container}/export',
         'containers/{container}/categories',
         'containers/{container}/categories/preset',
         'containers/{container}/tags',

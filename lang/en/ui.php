@@ -177,6 +177,12 @@ return [
         'transfer-accepted' => 'The binder is yours. You will find it in the binder list.',
         'transfer-rejected' => 'You have declined. The sender must send a new transfer if you change your mind.',
 
+        // Issue 67c decision 3. The order answers immediately, and the
+        // sentence says what happens next — that the row is already in the
+        // list and that it is being packed. Without it a click would look like
+        // it did nothing, because the new row is the only visible change.
+        'export-requested' => 'The export has been ordered. The bag is being packed and shows up here when it is done.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -270,6 +276,17 @@ return [
         // the client, but the sentence is the user's.
         'loan' => [
             'already_open' => 'The item is already lent out. Register the return first.',
+        ],
+
+        // The export's only domain error on the web, see issue 67c decision 4.
+        // `export.already_running` carries the ULID of the running row in
+        // `data.export` — it is kept for an API client, but the sentence is
+        // the user's and a ULID tells her nothing. What she needs to know is
+        // that a bag is already being packed and WHERE it is: the row sits in
+        // the list just below the button, with the status "the bag is being
+        // packed". The same trade-off `error.loan.already_open` made in 67a.
+        'export' => [
+            'already_running' => 'An export is already being packed. It is in the list below — wait until it is done.',
         ],
 
         // The ownership transfer's domain errors on the web, see issue 67b
@@ -950,6 +967,13 @@ return [
             // calendar — and sits after the settings, before the trash. The row
             // is in the same place in containerSections.js.
             'calendar' => 'Calendar',
+            // Issue 67c decision 1: the export is a WAY OUT of the product,
+            // like the calendar link — but where the link feeds the binder's
+            // tasks into someone else's calendar, the export takes the whole
+            // binder out in a file. The row is in the same place in
+            // containerSections.js, and it sits in the NAVIGATION and not
+            // behind a setting: the export is free on every plan on purpose.
+            'export' => 'Export',
             // Last, like the row in containerSections.js — the trash is where
             // you go when something went wrong (issue 62a decision 1).
             'trash' => 'Trash',
@@ -1672,6 +1696,68 @@ return [
 
     // The sharing page, see issue 55a. Two sections with different audiences
     // (decision 3), and the texts follow that split.
+    // The binder's export page, see issue 67c decisions 1, 5, 6, 7 and 8.
+    //
+    // **`status` holds the column values from App\Models\Export::STATUSES**,
+    // never invented names of our own — same rule as container.kind. `pending`
+    // and `running` deliberately share a sentence: to someone waiting they are
+    // the same thing — the bag is being packed — and the job passes through
+    // both on its way to `ready`. `expired` is also carried by a `ready` row
+    // whose `expires_at` has passed before the purge has set the column, see
+    // exportStatus() in resources/js/components/exportPresentation.js.
+    'export' => [
+        'title' => 'Export',
+        'heading' => 'Export',
+
+        // What the bag contains, BEFORE it is ordered (decision 7). The
+        // sentence says what the export covers and what it is NOT — a bag you
+        // fetch, not an archive you keep (config/files.php) — so that whoever
+        // hoped for something else does not wait in vain. That it is free on
+        // every plan is stated here and not only in a plan overview: it is the
+        // product promise, and whoever looks for a gate should see that there
+        // is none.
+        'intro' => 'The export gathers the whole binder in a ZIP file: items with categories and tags, the attachments and the history. It is free on every plan, and the file is a bag you fetch — not an archive you keep.',
+        'create' => 'Order an export',
+
+        // Why the button is closed, in words (decision 4). A disabled button
+        // without an explanation is a dead end, and this sentence says the
+        // same thing as the error below: an export is being packed, the row is
+        // in the list.
+        'running_notice' => 'An export is already being packed. It is in the list below, and the button opens when it is done.',
+
+        'list_heading' => 'Ordered exports',
+        'empty' => 'No export has been ordered yet.',
+
+        // `:date` is formatted on the client (formatDate), the words around it
+        // here.
+        'created_at' => 'Ordered :date',
+
+        // `:size` is formatted on the client (formatByteSize, which mirrors the
+        // server's Number::fileSize()) and the row is not drawn at all when
+        // `byte_size` is null — never as "0 B" (decision 6).
+        'size' => 'Size: :size',
+
+        'download' => 'Download',
+
+        'status' => [
+            'pending' => 'The bag is being packed',
+            'running' => 'The bag is being packed',
+            'ready' => 'Ready to fetch',
+            'failed' => 'Failed',
+            'expired' => 'Expired',
+        ],
+
+        // The same two plural keys as the trash (issue 62a decision 4), with
+        // the export's own words (decision 8: the keys live under `export.*`).
+        // The thresholds are the same: less than a day is "today" and never
+        // "0 days", exactly one day is singular.
+        'expires' => [
+            'today' => 'Purged today',
+            'day' => '1 day left',
+            'days' => ':days days left',
+        ],
+    ],
+
     'sharing' => [
         'title' => 'Sharing',
         'heading' => 'Sharing',
