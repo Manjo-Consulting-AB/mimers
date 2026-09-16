@@ -33,6 +33,7 @@ use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\TagController;
+use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Support\Auth\LoginRateLimiter;
@@ -48,11 +49,14 @@ use Inertia\Inertia;
  * kontraktet: app.js löser upp det mot import.meta.glob över pages/, så en
  * omdöpning bryter varje Inertia::render() som pekar på det.
  *
- * Den skyddade exempvyn. Avsiktligt tom på innehåll — issue 64 ersätter
- * den med todo-vyn — och därför en closure i stället för en controller
- * som ändå ska bort.
+ * **Startsidan är todo-vyn sedan issue 64**, se
+ * App\Http\Controllers\TodoController. Closuren som issue 51 lämnade efter
+ * sig — avsiktligt tom, med en kommentar om att issue 64 ersätter den — är
+ * bytt mot kontrollern, och URL:en är oförändrad: den heter `dashboard`, och
+ * ramverket skickar en nyinloggad användare hit (Beslut 1). Att lägga todo på
+ * `/todo` och låta `/dashboard` omdirigera vore två URL:er för en sida.
  */
-Route::get('/dashboard', fn () => Inertia::render('Dashboard'))
+Route::get('/dashboard', [TodoController::class, 'index'])
     ->middleware('auth')
     ->name('dashboard');
 
