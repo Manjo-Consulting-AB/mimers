@@ -432,9 +432,6 @@ class OwnershipTransferController extends Controller
 
         $transfer->save();
 
-        $transfer->setRelation('container', $container);
-        $transfer->load('toAccount');
-
         // Mottagarvägen avgör notifieringen (39a § Beslut 12).
         if ($toAccount instanceof Account) {
             $this->notifyAccountMembers($transfer, $toAccount, $container);
