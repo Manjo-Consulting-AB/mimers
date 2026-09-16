@@ -675,6 +675,103 @@ it('ger ett fältfel för en motpart i en annan pärm', function () {
 });
 
 /*
+ * Klart när: ett schema som väntar på sig självt ger ett fältfel, ingen
+ * JSON-kropp (Beslut 6) — samma gren på FÖREKOMSTNIVÅN.
+ *
+ * `occurrence.dependency_self` kastas ur App\Actions\Schedule\DependOccurrence
+ * och fångas i App\Http\Controllers\OccurrenceDependencyController::store()
+ * som ett fältfel på `depends_on`. Utan fångsten hade användaren fått rå JSON
+ * mitt i en sida — koden svarar `{"error":{"code":…}}` var den än kastas.
+ */
+it('ger ett fältfel när en förekomst väntar på sig själv', function () {
+    [$konto, $anvandare, $container, $item] = beroendeKontext();
+
+    $eget = beroendeSchema($item, ['title' => 'Byt impeller']);
+    $egenRad = beroendeRad($eget, '2027-05-05');
+
+    $svar = actingAs($anvandare)->from(beroendeSidaUrl($container, $item, $eget))
+        ->post(beroendeForekomstUrl($container, $item, $eget, $egenRad), ['depends_on' => $egenRad->ulid]);
+
+    $svar->assertSessionHasErrors('depends_on');
+
+    $mening = session('errors')->getBag('default')->first('depends_on');
+
+    expect($mening)->toBe(Lang::get('ui.error.occurrence.dependency_self', [], 'sv'));
+    expect($mening)->not->toContain('{"error"');
+    expect(OccurrenceDependency::query()->count())->toBe(0);
+});
+
+/*
+ * Klart när: en cykel ger ett fältfel som säger VILKEN kedja som skulle
+ * uppstå, ur `data` (Beslut 6) — samma gren på förekomstnivån.
+ *
+ * `occurrence.dependency_cycle` bär `data.occurrence` och `data.depends_on`,
+ * alltså de två förekomsterna på den kant som försöktes. Meningen namnger dem
+ * med sina SCHEMATITLAR: "vilken kedja" är obegripligt som två ULID:er.
+ */
+it('ger ett fältfel som namnger kedjan när en förekomstcykel skulle uppstå', function () {
+    [$konto, $anvandare, $container, $item] = beroendeKontext();
+
+    $motpartItem = beroendeItem($container, $anvandare, $konto, 'Impellern');
+    $motpart = beroendeSchema($motpartItem, ['title' => 'Serva motorn']);
+    $motpartRad = beroendeRad($motpart, '2027-04-01');
+
+    $eget = beroendeSchema($item, ['title' => 'Byt impeller']);
+    $egenRad = beroendeRad($eget, '2027-05-05');
+
+    // Motorn väntar redan på impellern.
+    OccurrenceDependency::factory()->create([
+        'occurrence_id' => $egenRad->id,
+        'depends_on_occurrence_id' => $motpartRad->id,
+    ]);
+
+    // ...och nu skulle impellern vänta på motorn. Ringen sluts.
+    $svar = actingAs($anvandare)->from(beroendeSidaUrl($container, $motpartItem, $motpart))
+        ->post(beroendeForekomstUrl($container, $motpartItem, $motpart, $motpartRad), ['depends_on' => $egenRad->ulid]);
+
+    $svar->assertSessionHasErrors('depends_on');
+
+    $mening = session('errors')->getBag('default')->first('depends_on');
+
+    expect($mening)->toContain('cirkel');
+    expect($mening)->toContain('Serva motorn');
+    expect($mening)->toContain('Byt impeller');
+    expect($mening)->not->toContain('{"error"');
+
+    // Ingen rad skrevs.
+    expect(OccurrenceDependency::query()->count())->toBe(1);
+});
+
+/*
+ * Klart när: en motpart i en annan pärm ger ett fältfel (Beslut 6) — samma
+ * gren på förekomstnivån.
+ *
+ * `StoreOccurrenceDependencyRequest`s `Rule::exists` binder motparten till
+ * samma pärm och är halva skyddet: en främmande ULID är ett VALIDERINGSFEL på
+ * `depends_on`, inte en 404 och inte en tyst "hittade inget" (issue 23b
+ * § Beslut 3).
+ */
+it('ger ett fältfel för en förekomst i en annan pärm', function () {
+    [$konto, $anvandare, $container, $item] = beroendeKontext();
+
+    $annanParm = Container::factory()->for($konto, 'account')->create();
+    $frammandeItem = beroendeItem($annanParm, $anvandare, $konto, 'Trailern');
+    $frammande = beroendeSchema($frammandeItem, ['title' => 'Besiktiga trailern']);
+    $frammandeRad = beroendeRad($frammande, '2027-04-01');
+
+    $eget = beroendeSchema($item, ['title' => 'Byt impeller']);
+    $egenRad = beroendeRad($eget, '2027-05-05');
+
+    $svar = actingAs($anvandare)->from(beroendeSidaUrl($container, $item, $eget))
+        ->post(beroendeForekomstUrl($container, $item, $eget, $egenRad), ['depends_on' => $frammandeRad->ulid]);
+
+    $svar->assertSessionHasErrors('depends_on');
+    $svar->assertStatus(302);
+
+    expect(OccurrenceDependency::query()->count())->toBe(0);
+});
+
+/*
  * Klart när: ett beroende på en stängd förekomst nekas med en begriplig mening
  * (Beslut 6).
  */
