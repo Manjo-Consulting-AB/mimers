@@ -218,6 +218,58 @@ it('sparar ett ändrat läge och ger inga rader för de typer som inte ändrats'
 });
 
 /*
+ * Beslut 3, ordagrant: "en typ som sätts till samma värde som förvalet får
+ * ändå en rad: användaren har uttryckt en åsikt, och ett framtida ändrat
+ * förval ska inte köra över den."
+ *
+ * Kroppen här är EXAKT uppgiftspåminnelsens förval (enabled + digest ur
+ * koden, inga rader i tabellen): vyn jämför rört mot orört och aldrig värdet
+ * mot förvalet, och servern får inte dedupa bort en rad som ser ut som
+ * förvalet. Utan raden finns ingen åsikt att skydda den dag förvalet ändras,
+ * och märkningen "standard" fortsätter påstå att användaren inget valt.
+ */
+it('skapar en rad även när valet är samma som förvalet', function () {
+    withoutVite();
+
+    $anvandare = User::factory()->create();
+    $forval = app(NotificationPreferences::class);
+
+    $enabled = $forval->isEnabled($anvandare, Notification::TYPE_TASK_DUE, NotificationDelivery::CHANNEL_EMAIL);
+    $digest = $forval->digest($anvandare, Notification::TYPE_TASK_DUE, NotificationDelivery::CHANNEL_EMAIL);
+
+    expect($enabled)->toBeTrue();
+    expect($digest)->toBeTrue();
+
+    actingAs($anvandare);
+
+    from('/settings/notifications')
+        ->put('/settings/notifications', [
+            'preferences' => [[
+                'type' => Notification::TYPE_TASK_DUE,
+                'channel' => NotificationDelivery::CHANNEL_EMAIL,
+                'enabled' => $enabled,
+                'digest' => $digest,
+            ]],
+        ])
+        ->assertRedirect('/settings/notifications')
+        ->assertSessionHas('status', 'notification-preferences-updated');
+
+    $rader = notisRader($anvandare);
+
+    expect(array_keys($rader))->toBe([Notification::TYPE_TASK_DUE]);
+    expect($rader[Notification::TYPE_TASK_DUE]->enabled)->toBeTrue();
+    expect($rader[Notification::TYPE_TASK_DUE]->digest)->toBeTrue();
+
+    // Värdet är nu användarens och inte kodens: standardmärkningen ska bort.
+    actingAs($anvandare->fresh())
+        ->get('/settings/notifications')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('preferences', fn ($rader) => collect($rader)
+                ->firstWhere('type', Notification::TYPE_TASK_DUE)['is_default'] === false)
+        );
+});
+
+/*
  * 31b § Beslut 4, ordagrant: samma kropp två gånger ger samma rader och samma
  * svar. Utan upserten hade den andra sparningen skapat en dubblett eller
  * fallit på UNIQUE (user_id, type, channel).

@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { MODES, modeOf } from './notificationPresentation.js';
+import { MODES } from './notificationPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -14,9 +14,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **"Standard" betyder att användaren inte har uttryckt någon åsikt.** Raden
  * märks ur `preference.is_default`, som kommer ur serverns svar (31b
- * § Beslut 2) och aldrig räknas om här — men bara så länge läget står kvar på
- * det serverade värdet. Den som just klickat i ett annat läge HAR uttryckt en
- * åsikt, och en märkning som satt kvar då hade påstått motsatsen.
+ * § Beslut 2) och aldrig räknas om här — men bara så länge användaren inte
+ * rört raden. Den som valt ett läge HAR uttryckt en åsikt, även när läget
+ * råkar vara förvalet, och en märkning som satt kvar då hade påstått
+ * motsatsen. `touched` kommer därför ur förälderns uppsättning av rörda
+ * typer (Beslut 3) — aldrig ur en jämförelse mot `modeOf()`.
  *
  * **Namn och förklaring ur lang/.** `notifications.type.<typ>.label` och
  * `.description` — en rad som heter `schedule_occurrence_due` är en rad ingen
@@ -30,6 +32,7 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     preference: { type: Object, required: true },
     mode: { type: String, required: true },
+    touched: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:mode']);
@@ -42,7 +45,14 @@ const fieldId = computed(() => `notification-${props.preference.type.replace(/\.
 
 const inputId = (mode) => `${fieldId.value}-${mode}`;
 
-const edited = computed(() => props.mode !== modeOf(props.preference));
+/*
+ * `click` OCH `change`, med flit: `change` bär tangentbordets piltangeter
+ * genom gruppen, men en radio som redan är vald fyrar inget `change` när den
+ * klickas — och just det klicket är ett val (förvalet) som ska sparas
+ * (Beslut 3). Ett dubbelt anrop för samma klick är ofarligt: `setMode` sätter
+ * samma läge igen.
+ */
+const choose = (option) => emit('update:mode', option);
 </script>
 
 <template>
@@ -53,7 +63,7 @@ const edited = computed(() => props.mode !== modeOf(props.preference));
             </span>
 
             <span
-                v-if="preference.is_default && !edited"
+                v-if="preference.is_default && !touched"
                 class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
             >
                 {{ t('notifications.default_badge') }}
@@ -78,7 +88,8 @@ const edited = computed(() => props.mode !== modeOf(props.preference));
                     :value="option"
                     :checked="mode === option"
                     class="mt-0.5"
-                    @change="emit('update:mode', option)"
+                    @click="choose(option)"
+                    @change="choose(option)"
                 >
                 <span class="flex flex-col">
                     <span class="text-sm">{{ t(`notifications.mode.${option}.label`) }}</span>

@@ -23,12 +23,20 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * effektiva värdet och `is_default`. Vyn känner inte till förvalen, den
  * visar dem (31b § Beslut 2, 65a § Beslut 3).
  *
- * **Bara de typer användaren ändrat skickas** (Beslut 3). `edits` är tom från
- * början och fylls på när en radio ändras; en typ som ingen rört får ingen
- * rad i databasen, och en saknad rad fortsätter betyda förvalet i kod (31a
+ * **Bara de typer användaren rört skickas** (Beslut 3). `edits` är tom från
+ * början och fylls på när en radio väljs; en typ som ingen rört får ingen rad
+ * i databasen, och en saknad rad fortsätter betyda förvalet i kod (31a
  * § Beslut 2). En omdirigering från PUT är en ny sidvisning, så `edits` töms
  * av sig själv — därför finns ingen "återställ"-knapp och ingen kopia av
  * serverns lista i klienten.
+ *
+ * **Rört, inte ändrat** — skillnaden är hela Beslut 3. Väljer användaren det
+ * läge som redan är förvalet har hon uttryckt en åsikt, och den ska bli en rad:
+ * annars kan ett framtida ändrat förval tysta köra över valet, och servern kan
+ * inte se skillnad på "valde samma värde som koden" och "har ingen åsikt" —
+ * bara en rad kan. En jämförelse mot `modeOf()` skulle dessutom lämna
+ * Spara-knappen avstängd, så att valet varken sparades eller kunde tvingas
+ * fram. Därför räknas `changed` ur `edits` nycklar och aldrig ur värdet.
  *
  * **Veckosammanfattningen och varför**, i en mening ur lang/ (Beslut 3):
  * förvalet är inte en detalj i en tabell, och den som inte förstår varför
@@ -49,9 +57,10 @@ const edits = ref({});
 
 const modeFor = (preference) => edits.value[preference.type] ?? modeOf(preference);
 
-const changed = computed(() => props.preferences.filter(
-    (preference) => modeFor(preference) !== modeOf(preference),
-));
+/* Rörd = användaren har valt ett läge för typen, oavsett vilket. */
+const touched = (preference) => Object.prototype.hasOwnProperty.call(edits.value, preference.type);
+
+const changed = computed(() => props.preferences.filter(touched));
 
 function setMode(type, mode) {
     edits.value = { ...edits.value, [type]: mode };
@@ -103,6 +112,7 @@ function submitPreferences() {
                 :key="preference.type"
                 :preference="preference"
                 :mode="modeFor(preference)"
+                :touched="touched(preference)"
                 @update:mode="setMode(preference.type, $event)"
             />
 
