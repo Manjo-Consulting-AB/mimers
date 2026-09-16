@@ -11,9 +11,18 @@ return [
         'tagline' => 'The binder for the boat, the caravan, the house and the car.',
         'to_dashboard' => 'Go to the dashboard',
         'home' => 'Back to the start page',
+        'pending' => [
+            'default' => 'Working…',
+            'upload' => 'Uploading…',
+            'export' => 'Preparing the export…',
+            'complete' => 'Checking off…',
+            'transfer' => 'Taking over the binder…',
+        ],
     ],
 
     'nav' => [
+        'menu' => 'Menu',
+        'menu_close' => 'Close the menu',
         'dashboard' => 'Dashboard',
         'containers' => 'Binders',
         'transfers' => 'Ownership transfers',

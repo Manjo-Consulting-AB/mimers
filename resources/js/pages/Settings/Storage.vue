@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import StorageCleanupSection from '../../components/StorageCleanupSection.vue';
@@ -60,13 +61,20 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
+/* Vänteläget på kontobytet: en GET mot samma sida är en ny sidvisning. */
+const pending = ref(false);
+
 /*
  * Kontobytet. En GET mot samma sida med `?account=` — servern faller tillbaka
  * på ett förval om ULID:n inte är användarens, och grinden prövas mot det
  * valda kontot.
  */
 function selectAccount(event) {
-    router.get('/settings/storage', { account: event.target.value }, { preserveScroll: true });
+    router.get('/settings/storage', { account: event.target.value }, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+    });
 }
 </script>
 
@@ -83,6 +91,7 @@ function selectAccount(event) {
             <select
                 id="account"
                 :value="props.account.ulid"
+                :disabled="pending"
                 class="self-start rounded border border-slate-300 bg-white px-3 py-2"
                 @change="selectAccount"
             >
@@ -114,12 +123,12 @@ function selectAccount(event) {
             <h2 class="text-lg font-semibold">{{ t('storage.usage_heading') }}</h2>
 
             <dl class="mt-4 flex flex-col gap-1 text-sm">
-                <div class="flex gap-2">
-                    <dt class="w-40 shrink-0 text-slate-600">{{ t('storage.account_label') }}</dt>
+                <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                    <dt class="shrink-0 text-slate-600 md:w-40">{{ t('storage.account_label') }}</dt>
                     <dd>{{ props.account.name }}</dd>
                 </div>
-                <div class="flex gap-2">
-                    <dt class="w-40 shrink-0 text-slate-600">{{ t('plan.limits.storage_bytes') }}</dt>
+                <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                    <dt class="shrink-0 text-slate-600 md:w-40">{{ t('plan.limits.storage_bytes') }}</dt>
                     <dd>
                         {{ props.usage.limitBytes === null
                             ? t('plan.of_unlimited', { used: props.usage.usedLabel })

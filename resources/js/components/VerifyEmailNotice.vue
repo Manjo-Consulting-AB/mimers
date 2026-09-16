@@ -34,10 +34,10 @@ function send() {
         <button
             type="button"
             :disabled="form.processing"
-            class="rounded border border-amber-400 bg-white px-3 py-1 text-sm font-medium text-amber-900 disabled:opacity-50"
+            class="inline-flex min-h-11 items-center rounded border border-amber-400 bg-white px-3 text-sm font-medium text-amber-900 disabled:opacity-50"
             @click="send"
         >
-            {{ t('auth.verify.send') }}
+            {{ form.processing ? t('common.pending.default') : t('auth.verify.send') }}
         </button>
     </div>
 </template>

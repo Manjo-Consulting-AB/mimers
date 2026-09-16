@@ -39,7 +39,7 @@ const { t } = useTranslations();
 
         <Link
             :href="`/containers/${container.ulid}/items/${item.ulid}`"
-            class="mt-2 inline-block text-sm font-medium text-blue-700 hover:underline"
+            class="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
         >
             {{ t('item.schedule.back') }}
         </Link>

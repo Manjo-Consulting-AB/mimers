@@ -60,6 +60,14 @@ const q = ref('');
 const selectedTags = ref([]);
 const category = ref(null);
 
+/*
+ * Vänteläget för hela filterraden (issue 68a § Beslut 4 och 5): submit,
+ * chipkryssen och "rensa" gör alla samma sorts anrop — en GET — så en enda
+ * flagga räcker. Medan svaret är på väg är kontrollerna stängda och säger att
+ * något händer i stället för att se döda ut.
+ */
+const pending = ref(false);
+
 watch(
     () => props.filter,
     (filter) => {
@@ -101,6 +109,8 @@ function apply(overrides = {}) {
     router.get(`/containers/${props.containerUlid}`, params, {
         preserveState: true,
         preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
     });
 }
 
@@ -164,7 +174,7 @@ function remove(entry) {
                 <label
                     v-for="tag in tags"
                     :key="tag.ulid"
-                    class="flex items-center gap-2 text-sm font-normal text-slate-800"
+                    class="flex min-h-11 min-w-11 items-center gap-2 text-sm font-normal text-slate-800"
                 >
                     <input v-model="selectedTags" type="checkbox" name="tags[]" :value="tag.ulid">
                     <span
@@ -179,9 +189,10 @@ function remove(entry) {
 
         <button
             type="submit"
-            class="rounded bg-blue-700 px-4 py-2 font-medium text-white"
+            :disabled="pending"
+            class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
         >
-            {{ t('item.index.filter_submit') }}
+            {{ pending ? t('common.pending.default') : t('item.index.filter_submit') }}
         </button>
     </form>
 
@@ -200,8 +211,9 @@ function remove(entry) {
             {{ entry.label }}
             <button
                 type="button"
+                :disabled="pending"
                 :aria-label="t('item.index.filter_remove', { filter: entry.label })"
-                class="font-medium text-slate-700"
+                class="inline-flex min-h-11 min-w-11 items-center justify-center font-medium text-slate-700"
                 @click="remove(entry)"
             >
                 &times;
@@ -210,10 +222,11 @@ function remove(entry) {
 
         <button
             type="button"
-            class="text-sm text-blue-700 underline"
+            :disabled="pending"
+            class="inline-flex min-h-11 items-center text-sm text-blue-700 underline"
             @click="apply({ q: '', tags: [], category: null })"
         >
-            {{ t('item.index.filter_clear') }}
+            {{ pending ? t('common.pending.default') : t('item.index.filter_clear') }}
         </button>
     </div>
 </template>

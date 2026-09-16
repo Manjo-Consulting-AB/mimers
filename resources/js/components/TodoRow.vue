@@ -73,18 +73,18 @@ function complete() {
 <template>
     <li class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-4">
         <div>
-            <Link :href="itemUrl" class="font-medium text-blue-700 hover:underline">
+            <Link :href="itemUrl" class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline">
                 {{ entry.item.name }}
             </Link>
 
             <p class="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-600">
-                <Link :href="scheduleHref" class="text-blue-700 hover:underline">
+                <Link :href="scheduleHref" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
                     {{ entry.schedule.title }}
                 </Link>
 
                 <span aria-hidden="true">·</span>
 
-                <Link :href="`/containers/${entry.container.ulid}`" class="text-blue-700 hover:underline">
+                <Link :href="`/containers/${entry.container.ulid}`" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
                     {{ entry.container.name }}
                 </Link>
 
@@ -108,9 +108,9 @@ function complete() {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="rounded bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                class="inline-flex min-h-11 items-center rounded bg-slate-900 px-3 text-sm font-medium text-white disabled:opacity-50"
             >
-                {{ t('todo.complete') }}
+                {{ form.processing ? t('common.pending.complete') : t('todo.complete') }}
             </button>
         </form>
     </li>

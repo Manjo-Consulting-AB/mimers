@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
@@ -162,13 +162,22 @@ const categoryName = computed(() => props.categories[props.item.category] ?? nul
  * kunna AVBRYTA navigeringen, och en knapp vars enda väg vidare är ett
  * klick-handtag är lättare att läsa än en länk vars klick går att stoppa.
  * CSRF-tokenet skickar Inertia åt oss.
+ *
+ * `pending` är radens eget vänteläge (issue 68a § Beslut 4 och 5): knappen är
+ * stängd och byter ord medan servern svarar, så ett långsamt svar inte ser ut
+ * som en död sida.
  */
+const pending = ref(false);
+
 function destroy() {
     if (! window.confirm(t('item.destroy.confirm'))) {
         return;
     }
 
-    router.delete(`/containers/${props.container.ulid}/items/${props.item.ulid}`);
+    router.delete(`/containers/${props.container.ulid}/items/${props.item.ulid}`, {
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+    });
 }
 </script>
 
@@ -178,11 +187,11 @@ function destroy() {
 
         <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
 
-        <div class="mt-4 flex gap-4 text-sm">
+        <div class="mt-4 flex flex-wrap gap-4 text-sm">
             <Link
                 v-if="can.update"
                 :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
-                class="font-medium text-blue-700 hover:underline"
+                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
             >
                 {{ t('item.edit.action') }}
             </Link>
@@ -190,10 +199,11 @@ function destroy() {
             <button
                 v-if="can.delete"
                 type="button"
-                class="font-medium text-red-700 hover:underline"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
                 @click="destroy"
             >
-                {{ t('item.destroy.action') }}
+                {{ pending ? t('common.pending.default') : t('item.destroy.action') }}
             </button>
 
             <!--
@@ -205,13 +215,13 @@ function destroy() {
             <Link
                 v-if="can.create"
                 :href="`/containers/${container.ulid}/items/create?parent=${item.ulid}`"
-                class="font-medium text-blue-700 hover:underline"
+                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
             >
                 {{ t('item.links.create_child.action') }}
             </Link>
         </div>
 
-        <dl class="mt-8 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
+        <dl class="mt-8 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <div v-for="field in fields" :key="field.key">
                 <dt class="text-sm font-medium text-slate-600">{{ field.label }}</dt>
                 <dd class="mt-1 whitespace-pre-line text-slate-900">{{ field.value }}</dd>

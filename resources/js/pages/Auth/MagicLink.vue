@@ -61,14 +61,14 @@ function submit() {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
             >
-                {{ t('auth.magic_link.submit') }}
+                {{ form.processing ? t('common.pending.default') : t('auth.magic_link.submit') }}
             </button>
         </form>
 
         <p class="mt-6 max-w-sm text-sm">
-            <Link href="/login" class="text-blue-700 hover:underline">{{ t('auth.magic_link.login') }}</Link>
+            <Link href="/login" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.magic_link.login') }}</Link>
         </p>
     </AppLayout>
 </template>

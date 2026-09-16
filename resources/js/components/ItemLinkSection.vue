@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
@@ -94,13 +94,23 @@ function submit() {
  *
  * `router.delete` och inte en <Link method="delete">: bekräftelsen måste
  * kunna AVBRYTA navigeringen, samma val som raderingen på detaljvyn.
+ *
+ * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): knappen är
+ * stängd och byter ord medan servern svarar. Flaggan bär den anropade radens
+ * ULID och inte en boolean — listan ritar flera rader ur samma komponent, och
+ * bara knappen man tryckte på ska gå i vänteläge (Beslut 4).
  */
+const pending = ref(null);
+
 function remove(counterpart) {
     if (! window.confirm(t('item.links.remove_confirm'))) {
         return;
     }
 
-    router.delete(`/containers/${props.containerUlid}/items/${props.itemUlid}/links/${counterpart.ulid}`);
+    router.delete(`/containers/${props.containerUlid}/items/${props.itemUlid}/links/${counterpart.ulid}`, {
+        onStart: () => { pending.value = counterpart.ulid; },
+        onFinish: () => { pending.value = null; },
+    });
 }
 </script>
 
@@ -120,11 +130,11 @@ function remove(counterpart) {
                         <li
                             v-for="link in links[group]"
                             :key="link.item.ulid"
-                            class="flex items-center gap-3 rounded border border-slate-300 bg-white px-4 py-2"
+                            class="flex flex-wrap items-center gap-3 rounded border border-slate-300 bg-white px-4 py-2"
                         >
                             <Link
                                 :href="`/containers/${containerUlid}/items/${link.item.ulid}`"
-                                class="font-medium text-blue-700 hover:underline"
+                                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                             >
                                 {{ link.item.name }}
                             </Link>
@@ -132,10 +142,11 @@ function remove(counterpart) {
                             <button
                                 v-if="can.update"
                                 type="button"
-                                class="text-sm text-red-700 hover:underline"
+                                :disabled="pending === link.item.ulid"
+                                class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                                 @click="remove(link.item)"
                             >
-                                {{ t('item.links.remove') }}
+                                {{ pending === link.item.ulid ? t('common.pending.default') : t('item.links.remove') }}
                             </button>
                         </li>
                     </ul>
@@ -212,9 +223,9 @@ function remove(counterpart) {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                 >
-                    {{ t('item.links.submit') }}
+                    {{ form.processing ? t('common.pending.default') : t('item.links.submit') }}
                 </button>
             </form>
         </template>

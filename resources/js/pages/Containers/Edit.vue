@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import FormField from '../../components/FormField.vue';
@@ -52,16 +53,31 @@ const form = useForm({
     kind: props.container.kind,
 });
 
+// Raderingen är ett router.anrop och inte ett useForm-formulär, så vänteläget
+// bärs av en egen flagga (issue 68a § Beslut 5).
+const pending = ref(false);
+
 function submit() {
     form.patch(`/containers/${props.container.ulid}`, { onError: focusFirstError });
 }
 
-function destroy() {
+// `await` i en try/finally i stället för Inertias `onStart`/`onFinish`:
+// anropet är låst till formen `router.delete(url)` av
+// ContainerpapperskorgTest, och ett options-objekt hade tvingat fram en
+// uppluckring av det testet (Beslut 7). Flaggan sätts när anropet lämnar
+// klienten och nollställs när svaret kommit, fel eller ej — samma sak.
+async function destroy() {
     if (! window.confirm(t('container.destroy.confirm', { name: props.container.name }))) {
         return;
     }
 
-    router.delete(`/containers/${props.container.ulid}`);
+    pending.value = true;
+
+    try {
+        await router.delete(`/containers/${props.container.ulid}`);
+    } finally {
+        pending.value = false;
+    }
 }
 </script>
 
@@ -111,19 +127,20 @@ function destroy() {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+                class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
             >
-                {{ t('container.edit.submit') }}
+                {{ form.processing ? t('common.pending.default') : t('container.edit.submit') }}
             </button>
         </form>
 
         <div v-if="can.delete" class="mt-12 border-t border-slate-200 pt-6">
             <button
                 type="button"
-                class="rounded border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center rounded border border-red-300 px-4 text-sm font-medium text-red-700 hover:bg-red-50"
                 @click="destroy"
             >
-                {{ t('container.destroy.action') }}
+                {{ pending ? t('common.pending.default') : t('container.destroy.action') }}
             </button>
         </div>
     </ContainerLayout>

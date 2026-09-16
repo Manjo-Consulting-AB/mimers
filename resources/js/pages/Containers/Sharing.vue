@@ -221,7 +221,7 @@ const invitationInviter = (invitation) =>
                         method="delete"
                         as="button"
                         preserve-scroll
-                        class="self-start text-sm text-red-700 underline"
+                        class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline"
                     >
                         {{ t('sharing.invitations.revoke') }}
                     </Link>

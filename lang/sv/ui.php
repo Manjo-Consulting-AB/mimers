@@ -16,9 +16,28 @@ return [
         'tagline' => 'Pärmen för båten, husvagnen, huset och bilen.',
         'to_dashboard' => 'Till översikten',
         'home' => 'Till startsidan',
+
+        // Väntetexterna, se issue 68a § Beslut 4 och 5. En knapp som väntar
+        // på servern är inaktiverad och bär en text som säger att något
+        // händer: en knapp vars etikett står still medan svaret är på väg ser
+        // ut som en död sida, och den som inte ser att något händer trycker
+        // igen. `default` bär varje formulär; de fyra flödena som tar mer än
+        // ett ögonblick har sin egen.
+        'pending' => [
+            'default' => 'Arbetar…',
+            'upload' => 'Laddar upp…',
+            'export' => 'Förbereder exporten…',
+            'complete' => 'Bockar av…',
+            'transfer' => 'Tar över pärmen…',
+        ],
     ],
 
     'nav' => [
+        // Menyknappen i toppnavigeringen, se issue 68a § Beslut 2: under
+        // `md:` fälls länkarna ihop bakom den här knappen i stället för att
+        // radbrytas till oigenkännlighet.
+        'menu' => 'Meny',
+        'menu_close' => 'Stäng menyn',
         'dashboard' => 'Översikt',
         // Pärmen är produktens ord för containern, se [[ADR-0002 Konto äger
         // container]] och Översikt. Länken kom med issue 54 § Beslut 7.

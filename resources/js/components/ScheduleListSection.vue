@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import OpenOccurrence from './OpenOccurrence.vue';
 import { formatDateOnly } from './itemPresentation.js';
@@ -102,8 +102,21 @@ function editUrl(schedule) {
     return `${url(schedule)}/edit`;
 }
 
+/*
+ * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): pausen och
+ * raderingen är båda små mutationer i samma lista, och flaggan bär den
+ * anropade radens ULID — listan ritar flera scheman ur samma komponent, och
+ * bara knapparna på raden man tryckte på ska stängas och byta ord medan
+ * servern svarar (Beslut 4).
+ */
+const pending = ref(null);
+
 function toggle(schedule) {
-    router.patch(url(schedule), { is_active: !schedule.is_active }, { preserveScroll: true });
+    router.patch(url(schedule), { is_active: !schedule.is_active }, {
+        preserveScroll: true,
+        onStart: () => { pending.value = schedule.ulid; },
+        onFinish: () => { pending.value = null; },
+    });
 }
 
 /*
@@ -122,7 +135,11 @@ function destroy(schedule) {
         return;
     }
 
-    router.delete(url(schedule), { preserveScroll: true });
+    router.delete(url(schedule), {
+        preserveScroll: true,
+        onStart: () => { pending.value = schedule.ulid; },
+        onFinish: () => { pending.value = null; },
+    });
 }
 </script>
 
@@ -134,7 +151,7 @@ function destroy(schedule) {
             <Link
                 v-if="can.create"
                 :href="`/containers/${containerUlid}/items/${itemUlid}/schedules/create`"
-                class="text-sm font-medium text-blue-700 hover:underline"
+                class="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
             >
                 {{ t('item.schedule.add') }}
             </Link>
@@ -189,7 +206,7 @@ function destroy(schedule) {
                          schemat. -->
                     <Link
                         :href="url(schedule)"
-                        class="font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     >
                         {{ t('item.schedule.occurrence.view') }}
                     </Link>
@@ -197,7 +214,7 @@ function destroy(schedule) {
                     <Link
                         v-if="can.update"
                         :href="editUrl(schedule)"
-                        class="font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     >
                         {{ t('item.schedule.edit') }}
                     </Link>
@@ -205,19 +222,21 @@ function destroy(schedule) {
                     <button
                         v-if="can.update"
                         type="button"
-                        class="font-medium text-blue-700 hover:underline"
+                        :disabled="pending === schedule.ulid"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                         @click="toggle(schedule)"
                     >
-                        {{ schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume') }}
+                        {{ pending === schedule.ulid ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
                     </button>
 
                     <button
                         v-if="can.delete"
                         type="button"
-                        class="font-medium text-red-700 hover:underline"
+                        :disabled="pending === schedule.ulid"
+                        class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
                         @click="destroy(schedule)"
                     >
-                        {{ t('item.schedule.destroy') }}
+                        {{ pending === schedule.ulid ? t('common.pending.default') : t('item.schedule.destroy') }}
                     </button>
                 </div>
 

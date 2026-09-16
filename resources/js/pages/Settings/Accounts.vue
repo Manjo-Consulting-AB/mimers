@@ -72,20 +72,20 @@ const { t } = useTranslations();
                     <p class="text-sm text-slate-600">{{ t('settings.accounts.read_only') }}</p>
 
                     <dl class="flex flex-col gap-1 text-sm">
-                        <div class="flex gap-2">
-                            <dt class="w-40 shrink-0 text-slate-600">{{ t('settings.profile.name') }}</dt>
+                        <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                            <dt class="shrink-0 text-slate-600 md:w-40">{{ t('settings.profile.name') }}</dt>
                             <dd>{{ account.name }}</dd>
                         </div>
-                        <div class="flex gap-2">
-                            <dt class="w-40 shrink-0 text-slate-600">{{ t('settings.profile.locale') }}</dt>
+                        <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                            <dt class="shrink-0 text-slate-600 md:w-40">{{ t('settings.profile.locale') }}</dt>
                             <dd>{{ t(`settings.locales.${account.locale}`) }}</dd>
                         </div>
-                        <div class="flex gap-2">
-                            <dt class="w-40 shrink-0 text-slate-600">{{ t('settings.profile.timezone') }}</dt>
+                        <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                            <dt class="shrink-0 text-slate-600 md:w-40">{{ t('settings.profile.timezone') }}</dt>
                             <dd>{{ account.timezone }}</dd>
                         </div>
-                        <div class="flex gap-2">
-                            <dt class="w-40 shrink-0 text-slate-600">{{ t('settings.profile.unit_system') }}</dt>
+                        <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                            <dt class="shrink-0 text-slate-600 md:w-40">{{ t('settings.profile.unit_system') }}</dt>
                             <dd>{{ t(`settings.units.${account.unitSystem}`) }}</dd>
                         </div>
                     </dl>

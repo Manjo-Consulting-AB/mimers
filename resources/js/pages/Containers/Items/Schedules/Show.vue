@@ -138,7 +138,7 @@ const occurrenceDependencyUrl = computed(() => (open.value === null
         <div class="mt-4 flex flex-wrap gap-4 text-sm">
             <Link
                 :href="`/containers/${container.ulid}/items/${item.ulid}`"
-                class="font-medium text-blue-700 hover:underline"
+                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
             >
                 {{ t('item.schedule.back') }}
             </Link>
@@ -146,7 +146,7 @@ const occurrenceDependencyUrl = computed(() => (open.value === null
             <Link
                 v-if="can.update"
                 :href="`/containers/${container.ulid}/items/${item.ulid}/schedules/${schedule.ulid}/edit`"
-                class="font-medium text-blue-700 hover:underline"
+                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
             >
                 {{ t('item.schedule.edit') }}
             </Link>

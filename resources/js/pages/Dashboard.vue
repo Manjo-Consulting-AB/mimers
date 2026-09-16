@@ -62,7 +62,7 @@ const isEmpty = computed(() => Object.values(props.groups).every((entries) => en
 
                 <template v-else>
                     {{ t('todo.empty.no_containers') }}
-                    <Link href="/containers/create" class="text-blue-700 hover:underline">
+                    <Link href="/containers/create" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
                         {{ t('todo.empty.create') }}
                     </Link>
                 </template>

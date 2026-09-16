@@ -65,7 +65,7 @@ const errorId = computed(() => `${props.id}-error`);
             v-for="level in common"
             :key="level"
             :for="inputId(level)"
-            class="flex cursor-pointer gap-2 rounded border border-slate-300 bg-white p-2"
+            class="flex min-h-11 cursor-pointer gap-2 rounded border border-slate-300 bg-white p-2"
         >
             <input
                 :id="inputId(level)"
@@ -90,7 +90,7 @@ const errorId = computed(() => `${props.id}-error`);
                     v-for="level in advanced"
                     :key="level"
                     :for="inputId(level)"
-                    class="flex cursor-pointer gap-2"
+                    class="flex min-h-11 cursor-pointer items-center gap-2"
                 >
                     <input
                         :id="inputId(level)"

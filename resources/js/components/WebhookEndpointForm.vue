@@ -77,6 +77,15 @@ const form = useForm({
 const planError = computed(() => form.errors.plan ?? null);
 
 /*
+ * Knappens etikett: väntetexten medan servern svarar, annars skapande- eller
+ * sparandetexten beroende på läge — etiketten byter medan knappen väntar,
+ * annars ser en stillastående knapp ut som en död sida (Beslut 4).
+ */
+const submitLabel = computed(() => (form.processing
+    ? t('common.pending.default')
+    : (props.endpoint === null ? t('webhook.create') : t('webhook.save'))));
+
+/*
  * Formulärets id:n får ett suffix i redigeringsläget. Skapandeformuläret och
  * en rads redigeringsformulär kan stå på samma sida, och två element med samma
  * id hade gjort labelns `for` och fältets `aria-describedby` tvetydiga — den
@@ -140,9 +149,9 @@ function submit() {
         <button
             type="submit"
             :disabled="form.processing"
-            class="self-start rounded bg-blue-700 px-4 py-2 font-medium text-white disabled:opacity-50"
+            class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
         >
-            {{ endpoint === null ? t('webhook.create') : t('webhook.save') }}
+            {{ submitLabel }}
         </button>
     </form>
 </template>

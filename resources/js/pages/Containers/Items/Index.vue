@@ -96,7 +96,7 @@ const summary = computed(() => filterSummary(activeFilters(props.filter, props.t
         <Link
             v-if="can.create"
             :href="`/containers/${container.ulid}/items/create`"
-            class="mt-4 inline-block rounded bg-blue-700 px-4 py-2 font-medium text-white"
+            class="mt-4 inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
         >
             {{ t('item.index.create') }}
         </Link>
@@ -126,7 +126,7 @@ const summary = computed(() => filterSummary(activeFilters(props.filter, props.t
                 <div class="min-w-0 flex-1">
                     <Link
                         :href="`/containers/${container.ulid}/items/${item.ulid}`"
-                        class="font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                     >
                         {{ item.name }}
                     </Link>
