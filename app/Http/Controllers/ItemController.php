@@ -14,6 +14,7 @@ use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
+use App\Http\Resources\ScheduleResource;
 use App\Http\Resources\TagResource;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -21,6 +22,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\Schedule;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Files\FileOrigin;
@@ -208,8 +210,9 @@ class ItemController extends Controller
      *
      * **Itemets egna fält, kategorin, taggarna, relationerna och bilagorna**
      * (Beslut 4 och 8, issue 58, issue 60 § Beslut 2). Bilagorna kommer med
-     * props — se `attachments` nedan — och har ingen egen rutt. Schemana är
-     * 63, kostnaderna 45–47 och utlåningen 67.
+     * props — se `attachments` nedan — och har ingen egen rutt. Schemana
+     * gjorde detsamma i issue 63a, se `schedules` och `nextDue` nedan.
+     * Kostnaderna 45–47 och utlåningen 67 har fortfarande ingen yta här.
      *
      * `categories` bär kategorins NAMN bredvid resursen — se klassens
      * docblock. Ett item utan kategori får en tom uppslagstabell och vyn
@@ -280,6 +283,18 @@ class ItemController extends Controller
             ->orderByDesc('id')
             ->get();
 
+        // Schemana kommer med detaljvyns props och aldrig ur ett eget anrop
+        // (issue 63a § Beslut 1 och 9). Sorteringen är `title` stigande — den
+        // `Api\ScheduleController::index()` använder — och `openOccurrence`
+        // laddas eager, så tio scheman kostar samma antal frågor som noll:
+        // nästa förfall bor på den öppna förekomsten och aldrig på schemat
+        // (issue 21 § Beslut 8). Mjukraderade scheman faller ut genom
+        // SoftDeletes' globala scope.
+        $schedules = $item->schedules()
+            ->with('openOccurrence')
+            ->orderBy('title')
+            ->get();
+
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
@@ -292,6 +307,15 @@ class ItemController extends Controller
             // varianter som finns är vyens fråga, och AttachmentResource är
             // `/api`:s format som den här issuen inte rör.
             'variants' => $this->variants($attachments),
+
+            // Schemana ur App\Http\Resources\ScheduleResource — samma format
+            // och samma sortering som `Api\ScheduleController::index()` — och
+            // den öppna förekomstens förfallodatum BREDVID resursen
+            // (`nextDue` nedan), samma linje som `categoryNames()` och
+            // `variants()`: resursen är `/api`:s format, och nästa förfall är
+            // vyens fråga (issue 63a § Beslut 1).
+            'schedules' => ScheduleResource::collection($schedules)->resolve($request),
+            'nextDue' => $this->nextDue($schedules),
 
             // Sant när användarfiler levereras från en egen origin (Beslut 2).
             // Vyn ritar bildvisaren och PDF-ramen bara då; annars faller
@@ -822,5 +846,39 @@ class ItemController extends Controller
         }
 
         return $variants;
+    }
+
+    /**
+     * Schemats ULID → den öppna förekomstens förfallodatum ("2027-05-05"),
+     * eller `null` för ett schema som inte har någon öppen förekomst
+     * (issue 63a § Beslut 1).
+     *
+     * **Nästa förfall bor på förekomsten och aldrig på schemat.** Den öppna
+     * raden är systemets bokföring av vad schemat faktiskt väntar på — för
+     * `fixed` det framflyttade kalenderdatumet, för en pausad rad det datum
+     * som står kvar tills den stängs. Att räkna om det här hade varit en
+     * andra upplaga av App\Actions\Schedule\OpenNextOccurrence::dueAt(), och
+     * de två hade glidit isär ([[ADR-0005 Schema och förekomst]]).
+     *
+     * Ett schema som skapats pausat, eller en `none`-uppgift vars enda
+     * förekomst är stängd, har ingen öppen rad — nyckeln finns ändå, med
+     * `null`, så vyns uppslag är detsamma för alla rader och slipper en andra
+     * gren (samma regel som `variants()`).
+     *
+     * Byggd ur den eager-laddade `openOccurrence`-relationen: noll extra
+     * frågor per rad (Beslut 9).
+     *
+     * @param  iterable<Schedule>  $schedules
+     * @return array<string, string|null>
+     */
+    private function nextDue(iterable $schedules): array
+    {
+        $dates = [];
+
+        foreach ($schedules as $schedule) {
+            $dates[$schedule->ulid] = $schedule->openOccurrence?->due_at?->toDateString();
+        }
+
+        return $dates;
     }
 }

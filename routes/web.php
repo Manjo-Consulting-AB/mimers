@@ -24,6 +24,7 @@ use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
+use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
@@ -419,6 +420,61 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/items/{item}/attachments/{attachment}', [AttachmentController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.items.attachments.destroy');
+
+    /*
+     * Issue 63a · Schemat som regel — formulären, pausen och raderingen, se
+     * App\Http\Controllers\ScheduleController.
+     *
+     * Fem rutter och ingen sida för listan (Beslut 1): listan bor på itemets
+     * detaljvy och kommer med dess props, precis som bilagorna (issue 60
+     * § Beslut 2) och relationerna (issue 58 § Beslut 1). Formulären har
+     * däremot egna sidor — ett schema har åtta fält och två beroende par, och
+     * det ryms inte i en rad som expanderar.
+     *
+     * **Ingenting av `/api` byggs om.** `StoreScheduleRequest` och
+     * `UpdateScheduleRequest` delas rakt av, och `OpenNextOccurrence` öppnar
+     * den första förekomsten i samma transaktion som schemat (issue 22
+     * § Beslut 3 och 9).
+     *
+     * **`/schedules/create` ligger FÖRE `/schedules/{schedule}/edit` i
+     * filen**, av samma skäl som `/items/create` gör det ovan: `create` är
+     * ett fast segment och `{schedule}` en parameter, men regeln är billigare
+     * att följa än att komma ihåg vilka par som kolliderar.
+     *
+     * **`scopeBindings()` på alla fem**, av samma skäl som itemrutterna ovan
+     * och routes/api.php (issue 9b § Beslut 1): `{item}` löses genom
+     * containerns `items()` och `{schedule}` genom App\Models\Item::
+     * schedules(), så en ULID ur en annan pärm — eller ett schema på ett
+     * annat item — blir 404 i stället för rättad eller raderad.
+     *
+     * `{container}` binds på ULID via `#[RouteKey('ulid')]` på
+     * App\Models\Container, `{item}` genom App\Models\Item och `{schedule}`
+     * genom App\Models\Schedule.
+     *
+     * Skrivningarna svarar 302 till itemets detaljvy med en flash-kod —
+     * mönstret från issue 51 § Beslut 5, `status` och ingenting annat.
+     * Pausen går genom `update` och inte genom en egen rutt: en `PATCH` som
+     * bär bara `is_active` är samma skrivning som en ändrad titel (Beslut 6).
+     */
+    Route::get('/containers/{container}/items/{item}/schedules/create', [ScheduleController::class, 'create'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.create');
+
+    Route::get('/containers/{container}/items/{item}/schedules/{schedule}/edit', [ScheduleController::class, 'edit'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.edit');
+
+    Route::post('/containers/{container}/items/{item}/schedules', [ScheduleController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.store');
+
+    Route::patch('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.update');
+
+    Route::delete('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.destroy');
 
     Route::post('/containers', [ContainerController::class, 'store'])
         ->name('containers.store');

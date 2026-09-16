@@ -5,6 +5,7 @@ import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
+import ScheduleListSection from '../../../components/ScheduleListSection.vue';
 import { itemFields } from '../../../components/itemPresentation.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
 
@@ -14,15 +15,17 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
  * ur App\Http\Resources\ContainerResource.
  *
- * **Itemets egna fält, kategorin, taggarna, relationerna och bilagorna.**
- * Bilagesektionen kom med issue 60 och bor i
+ * **Itemets egna fält, kategorin, taggarna, relationerna, schemana och
+ * bilagorna.** Bilagesektionen kom med issue 60 och bor i
  * resources/js/components/ItemAttachmentSection.vue; listan kommer med
- * detaljvyns props och har ingen egen rutt. Schemana är 63, kostnaderna 45–47
- * och utlåningen 67 — ingen av dem har en yta här. Relationssektionen bor i
- * resources/js/components/ItemLinkSection.vue: båda bär sitt eget formulär och
- * sina egna fel, precis som ContainerAccessRow gör för åtkomsterna, så ett
- * fältfel på en relation eller en fil inte färgar resten av sidan. Ordningen på
- * ytorna är itemets egna uppgifter, sedan relationerna, sedan bilagorna.
+ * detaljvyns props och har ingen egen rutt. Schemana kom med issue 63a och
+ * gör detsamma — ScheduleListSection.vue, proparna `schedules` och `nextDue`.
+ * Kostnaderna 45–47 och utlåningen 67 har fortfarande ingen yta här.
+ * Relationssektionen bor i resources/js/components/ItemLinkSection.vue: alla
+ * tre bär sitt eget formulär och sina egna fel, precis som ContainerAccessRow
+ * gör för åtkomsterna, så ett fältfel på en relation, ett schema eller en fil
+ * inte färgar resten av sidan. Ordningen på ytorna är itemets egna uppgifter,
+ * sedan relationerna, sedan schemana, sedan bilagorna.
  *
  * **Ett tomt fält utelämnas, aldrig påhittat** (Beslut 8). `fields` filtrerar
  * bort `null` och tomma strängar, så en rad utan beskrivning visar ingen
@@ -92,6 +95,19 @@ const props = defineProps({
     links: { type: Object, required: true },
     /* Items användaren får ändra och som inte redan är kopplade. */
     counterparts: { type: Array, required: true },
+    /*
+     * Itemets scheman ur App\Http\Resources\ScheduleResource, sorterade på
+     * titel — samma lista och samma ordning som `/api` ger (issue 63a
+     * § Beslut 1). Schemat är REGELN; förekomsterna är 63b och bor inte här.
+     */
+    schedules: { type: Array, required: true },
+    /*
+     * Schemats ULID → den öppna förekomstens förfallodatum, byggd på servern
+     * bredvid ScheduleResource (issue 63a § Beslut 1). Resursen bär inget
+     * `next_due_at` med flit — nästa förfall bor på förekomsten, aldrig på
+     * schemat — så uppslaget kommer som en egen prop.
+     */
+    nextDue: { type: Object, required: true },
     can: { type: Object, required: true },
 });
 
@@ -194,6 +210,19 @@ function destroy() {
             :item-ulid="item.ulid"
             :links="links"
             :counterparts="counterparts"
+            :can="can"
+        />
+
+        <!--
+            Schemana under relationerna (issue 63a § Beslut 1): de är itemets
+            egna uppgifter och inte en egen vy. Förekomsterna, avbockningen
+            och beroendena är 63b och 63c och har ingen yta här.
+        -->
+        <ScheduleListSection
+            :container-ulid="container.ulid"
+            :item-ulid="item.ulid"
+            :schedules="schedules"
+            :next-due="nextDue"
             :can="can"
         />
 
