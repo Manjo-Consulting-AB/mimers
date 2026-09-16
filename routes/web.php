@@ -489,6 +489,12 @@ Route::middleware('auth')->group(function () {
      * finns både där och i sektionen på itemet — det är produktens vanligaste
      * skrivning och ska kosta minst.
      *
+     * **Sidan ritas sedan issue 63c av App\Http\Controllers\ScheduleController
+     * ::show()**, eftersom beroendena kommer med samma svar (issue 63c
+     * § Beslut 1). Rutten nedan pekar därför dit, och den anropar `show()` här
+     * oförändrad: basen — regeln, förekomsterna och historiken — är fortfarande
+     * den här kontrollerns.
+     *
      * **`CloseOccurrence` rörs inte.** Den äger transaktionen — spärren mot
      * öppna beroenden, stängningen, beräkningen av nästa `due_at` och
      * avbrottet av oskickade notiser — och webben anropar den genom samma
@@ -514,7 +520,7 @@ Route::middleware('auth')->group(function () {
      * App\Http\Controllers\ScheduleOccurrenceController::occurrenceMessage()
      * och Beslut 6 om varför `occurrence.blocked` hanteras särskilt.
      */
-    Route::get('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleOccurrenceController::class, 'show'])
+    Route::get('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'show'])
         ->scopeBindings()
         ->name('containers.items.schedules.show');
 
@@ -533,7 +539,7 @@ Route::middleware('auth')->group(function () {
      *
      * **Fyra rutter och ingen GET** (Beslut 1). Båda listorna kommer med
      * schemats sida som props — de byggs i
-     * App\Http\Controllers\ScheduleOccurrenceController::show() — av samma
+     * App\Http\Controllers\ScheduleController::show() — av samma
      * skäl som bilagorna (issue 60 § Beslut 2) och relationerna (issue 58
      * § Beslut 1): en sida, ett svar, och ingen andra väg till samma läsning.
      *

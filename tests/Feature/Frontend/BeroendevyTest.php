@@ -25,7 +25,7 @@ use function Pest\Laravel\withoutVite;
  * Issue 63c · Beroendena på båda nivåerna. Se
  * App\Http\Controllers\ScheduleDependencyController,
  * App\Http\Controllers\OccurrenceDependencyController,
- * App\Http\Controllers\ScheduleOccurrenceController::show(),
+ * App\Http\Controllers\ScheduleController::show(),
  * resources/js/components/ScheduleDependencySection.vue,
  * resources/js/pages/Containers/Items/Schedules/Show.vue och routes/web.php.
  *

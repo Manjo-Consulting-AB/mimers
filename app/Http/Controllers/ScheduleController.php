@@ -6,10 +6,15 @@ use App\Actions\Schedule\OpenNextOccurrence;
 use App\Http\Requests\Schedule\StoreScheduleRequest;
 use App\Http\Requests\Schedule\UpdateScheduleRequest;
 use App\Http\Resources\ContainerResource;
+use App\Http\Resources\OccurrenceDependencyResource;
+use App\Http\Resources\ScheduleDependencyResource;
 use App\Http\Resources\ScheduleResource;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
+use App\Models\ScheduleDependency;
+use App\Models\ScheduleOccurrence;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,8 +23,9 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Webbens schemaytor — formulären, pausen och raderingen, se issue 63a
- * § Beslut 1, 6, 7 och 8.
+ * Webbens schemaytor — formulären, pausen, raderingen och, sedan issue 63c,
+ * schemats sida med beroendena på båda nivåerna, se issue 63a § Beslut 1, 6, 7
+ * och 8 och issue 63c § Beslut 1–9.
  *
  * **Ingenting av `/api` görs om.** `StoreScheduleRequest` och
  * `UpdateScheduleRequest` delas rakt av — inklusive deras
@@ -57,9 +63,69 @@ use Inertia\Response;
  * Bekräftelsetexten i vyn säger det som är sant — att schemat och dess
  * kommande förekomster tas bort — och nämner varken 30 dagar eller
  * papperskorgen.
+ *
+ * **Beroendena ritas på schemats sida och byggs här** (issue 63c § Beslut 1
+ * och 2). `show()` nedan anropar 63b:s `ScheduleOccurrenceController::show()`
+ * oförändrad och fogar till 63c:s fyra props — se docblocket för `show()` för
+ * varför rutten pekar hit.
  */
 class ScheduleController extends Controller
 {
+    /**
+     * GET /containers/{container}/items/{item}/schedules/{schedule} — schemats
+     * sida: regeln, den öppna förekomsten, historiken och BEROENDENA på båda
+     * nivåerna (issue 63c § Beslut 1–5).
+     *
+     * **Basen är 63b:s och byggs fortfarande av den.** Regeln, förekomsterna
+     * och historiken kommer ur App\Http\Controllers\ScheduleOccurrenceController
+     * ::show(), som anropas OFÖRÄNDRAD — 63c:s omfångsruta namnger den här
+     * filen och rör inte den. En andra kopia av samma props vore en andra
+     * sanning om sorteringen, om `overdue` och om vilken förekomst som är
+     * öppen, och en utbrytning ur 63b:s sida ligger utanför den här issuen.
+     * Rutten pekar därför hit, och det här svaret är basen plus 63c:s fyra
+     * props: en sida, ett svar.
+     *
+     * **Grinden är ITEMETS `view`, och den prövas i basen** — innan en enda
+     * beroenderad läses. En `read`-mottagare ser beroendena men ingen
+     * skrivyta (Beslut 8): `can.update` är samma pinne som 63a och 63b bar.
+     *
+     * **Beroendena kommer med sidan och har ingen egen rutt** (Beslut 1), av
+     * samma skäl som bilagorna (issue 60 § Beslut 2) och relationerna (issue
+     * 58 § Beslut 1): en sida, ett svar, och ingen andra väg till samma
+     * läsning. Formen är `/api`:s — samma två Resource-klasser som
+     * Api\ScheduleDependencyController::index() och
+     * Api\OccurrenceDependencyController::index() bygger.
+     */
+    public function show(
+        Request $request,
+        Container $container,
+        Item $item,
+        Schedule $schedule,
+        ScheduleOccurrenceController $base,
+    ): Response {
+        $page = $base->show($request, $container, $item, $schedule);
+
+        $scheduleDependencies = $this->scheduleDependencies($schedule, $request);
+
+        // Undantagen hör till den ÖPPNA förekomsten — den enda som går att
+        // lägga ett beroende på, och den enda frågan "vad väntar jag på just
+        // nu" har ett svar för (Beslut 2). Samma definition av öppen som
+        // basens lista räknar med: App\Models\Schedule::openOccurrence().
+        $open = $schedule->openOccurrence()->first();
+
+        $occurrenceDependencies = $this->occurrenceDependencies($open, $request);
+
+        // Motparterna användaren får ändra, i samma pärm (Beslut 3) — en per
+        // nivå, för ett schema utan öppen förekomst kan inte väljas på
+        // förekomstnivån.
+        return $page->with([
+            'scheduleDependencies' => $scheduleDependencies,
+            'occurrenceDependencies' => $occurrenceDependencies,
+            'hasOpenOccurrence' => $open !== null,
+            'counterparts' => $this->counterparts($request, $container, $schedule, $scheduleDependencies, $occurrenceDependencies),
+        ]);
+    }
+
     /**
      * GET /containers/{container}/items/{item}/schedules/create — formuläret,
      * se issue 63a § Beslut 3, 4 och 5.
@@ -232,5 +298,217 @@ class ScheduleController extends Controller
         return redirect()
             ->route('containers.items.show', [$container, $item])
             ->with('status', 'schedule-deleted');
+    }
+
+    /**
+     * Schemats beroenden — REGELN som ärvs av varje ny förekomst (Beslut 2).
+     *
+     * Samma uppslag och samma form som
+     * App\Http\Controllers\Api\ScheduleDependencyController::index(): raderna,
+     * motparternas scheman och motparternas items i tre frågor, aldrig en per
+     * rad, och motparter vars schema eller item är mjukraderat filtreras bort
+     * medan raden ligger kvar i tabellen. Sorterat på motpartens titel.
+     *
+     * Logiken är `/api`:s och den är kopierad med flit och inte delad — samma
+     * linje som ScheduleController::update(): `/api`-kontrollern svarar med en
+     * JsonResponse och en utbrytning till en delad Action ligger utanför den
+     * här issuen. Ändras den ena ska den andra ändras.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function scheduleDependencies(Schedule $schedule, Request $request): array
+    {
+        $rows = ScheduleDependency::query()
+            ->where('schedule_id', $schedule->id)
+            ->get();
+
+        $schedulesById = Schedule::query()
+            ->whereIn('id', $rows->pluck('depends_on_schedule_id')->unique()->values()->all())
+            ->get(['id', 'ulid', 'title', 'item_id'])
+            ->keyBy('id');
+
+        $itemsById = Item::query()
+            ->whereIn('id', $schedulesById->pluck('item_id')->unique()->values()->all())
+            ->get(['id', 'ulid', 'name'])
+            ->keyBy('id');
+
+        $visible = $rows->filter(function (ScheduleDependency $row) use ($schedulesById, $itemsById): bool {
+            $counterpart = $schedulesById->get($row->depends_on_schedule_id);
+
+            return $counterpart !== null && $itemsById->has($counterpart->item_id);
+        });
+
+        $visible->each(function (ScheduleDependency $row) use ($schedulesById, $itemsById): void {
+            $counterpart = $schedulesById->get($row->depends_on_schedule_id);
+            $counterpartItem = $itemsById->get($counterpart->item_id);
+
+            $row->setAttribute('counterpart_ulid', $counterpart->ulid);
+            $row->setAttribute('counterpart_title', $counterpart->title);
+            $row->setAttribute('counterpart_item_ulid', $counterpartItem->ulid);
+            $row->setAttribute('counterpart_item_name', $counterpartItem->name);
+        });
+
+        return ScheduleDependencyResource::collection($visible->sortBy('counterpart_title')->values())->resolve($request);
+    }
+
+    /**
+     * Den öppna förekomstens beroenden — UNDANTAGET som bara gäller den här
+     * gången (Beslut 2).
+     *
+     * Samma uppslag och samma form som
+     * App\Http\Controllers\Api\OccurrenceDependencyController::index(): `satisfied`
+     * är härlett ur motpartens status, sorteringen är ouppfyllda först och
+     * därefter `due_at` stigande, och en motpart under ett mjukraderat schema
+     * eller item filtreras bort.
+     *
+     * **`schedule_ulid` läggs bredvid resursens fält.** Vyn länkar varje
+     * motpart vidare till sitt eget schema (Beslut 5), och motparten här är en
+     * FÖREKOMST: `depends_on.ulid` pekar på en förekomst och går inte att
+     * navigera med. Resursen är `/api`:s form (issue 23b § Beslut 8) och rörs
+     * inte, så den här kontrollern fogar till det enda fält vyn behöver utöver
+     * den — raden är ändå självständig för sin läsare.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function occurrenceDependencies(?ScheduleOccurrence $open, Request $request): array
+    {
+        if ($open === null) {
+            return [];
+        }
+
+        $rows = OccurrenceDependency::query()
+            ->where('occurrence_id', $open->id)
+            ->get();
+
+        $counterpartsById = ScheduleOccurrence::query()
+            ->whereIn('id', $rows->pluck('depends_on_occurrence_id')->unique()->values()->all())
+            ->with(['schedule:id,title,item_id,ulid', 'schedule.item:id,ulid,name'])
+            ->get()
+            ->keyBy('id');
+
+        $visible = $rows->filter(function (OccurrenceDependency $row) use ($counterpartsById): bool {
+            $counterpart = $counterpartsById->get($row->depends_on_occurrence_id);
+
+            return $counterpart !== null
+                && $counterpart->schedule !== null
+                && $counterpart->schedule->item !== null;
+        });
+
+        $visible->each(function (OccurrenceDependency $row) use ($counterpartsById): void {
+            $counterpart = $counterpartsById->get($row->depends_on_occurrence_id);
+            $counterpartSchedule = $counterpart->schedule;
+            $counterpartItem = $counterpartSchedule->item;
+
+            $row->setAttribute('counterpart_ulid', $counterpart->ulid);
+            $row->setAttribute('counterpart_title', $counterpartSchedule->title);
+            $row->setAttribute('counterpart_due_at', $counterpart->due_at->toDateString());
+            $row->setAttribute('counterpart_status', $counterpart->status);
+            $row->setAttribute('counterpart_item_ulid', $counterpartItem->ulid);
+            $row->setAttribute('counterpart_item_name', $counterpartItem->name);
+            $row->setAttribute('counterpart_schedule_ulid', $counterpartSchedule->ulid);
+            $row->setAttribute('satisfied', $counterpart->status !== ScheduleOccurrence::STATUS_OPEN);
+        });
+
+        $ordered = $visible->sortBy(fn (OccurrenceDependency $row): array => [
+            $row->getAttribute('satisfied') ? 1 : 0,
+            $row->getAttribute('counterpart_due_at'),
+        ])->values();
+
+        return array_map(
+            fn (array $row, OccurrenceDependency $model): array => $row + [
+                'schedule_ulid' => $model->getAttribute('counterpart_schedule_ulid'),
+            ],
+            OccurrenceDependencyResource::collection($ordered)->resolve($request),
+            $ordered->all(),
+        );
+    }
+
+    /**
+     * Motparterna användaren får välja, en lista per nivå (Beslut 3).
+     *
+     * Samma regel som issue 58 § Beslut 3 och samma bygge som
+     * App\Http\Controllers\ItemController::counterparts(): pärmens scheman,
+     * filtrerade med ITEMETS `update` — en motpart utanför omfånget visas inte
+     * alls, inte som ett namnlöst spöke — och sorterade på itemets namn och
+     * därefter schemats titel. Ett schema heter "Byt impeller" och betyder
+     * ingenting utan sitt item.
+     *
+     * **Filtret är artighet och inte skydd.** Grinden i
+     * App\Http\Controllers\ScheduleDependencyController::store() är den som
+     * gäller, och den prövar samma sak igen — en kandidat som slinker igenom
+     * här nekas där.
+     *
+     * **Fyra frågor och inga fler:** kandidaterna med sina items, schemats
+     * egna beroenden (som redan är hämtade) och de öppna förekomsterna.
+     * App\Actions\Access\ResolveItemScope är memoiserad per `{user}:{container}`,
+     * så `update`-prövningen per kandidat kostar inga grant-frågor.
+     *
+     * @param  list<array<string, mixed>>  $scheduleDependencies
+     * @param  list<array<string, mixed>>  $occurrenceDependencies
+     * @return array{schedule: list<array<string, mixed>>, occurrence: list<array<string, mixed>>}
+     */
+    private function counterparts(
+        Request $request,
+        Container $container,
+        Schedule $schedule,
+        array $scheduleDependencies,
+        array $occurrenceDependencies,
+    ): array {
+        // $user är nollbar därför att Request::user() är det; rutten ligger
+        // bakom `auth`, så i drift är svaret aldrig tomt av den anledningen.
+        $user = $request->user();
+
+        if ($user === null) {
+            return ['schedule' => [], 'occurrence' => []];
+        }
+
+        // Scheman som redan står i listan erbjuds inte igen — dubbletten är ett
+        // valideringsfel, inte en tyst no-op (issue 23 § Beslut 9). De synliga
+        // raderna räcker som underlag: en motpart vyn inte visar är heller inte
+        // en kandidat här.
+        $dependedOn = array_column(array_column($scheduleDependencies, 'depends_on'), 'ulid');
+        $dependedOnOccurrences = array_column(array_column($occurrenceDependencies, 'depends_on'), 'ulid');
+
+        $writable = Schedule::query()
+            ->whereKeyNot($schedule->id)
+            ->whereHas('item', fn ($query) => $query->where('container_id', $container->id))
+            ->with('item:id,ulid,name,container_id')
+            ->get()
+            ->each(fn (Schedule $candidate) => $candidate->item->setRelation('container', $container))
+            ->filter(fn (Schedule $candidate): bool => Gate::forUser($user)->allows('update', $candidate->item))
+            ->sortBy(fn (Schedule $candidate): array => [$candidate->item->name, $candidate->title])
+            ->values();
+
+        $openByScheduleId = ScheduleOccurrence::query()
+            ->whereIn('schedule_id', $writable->pluck('id')->all())
+            ->where('status', ScheduleOccurrence::STATUS_OPEN)
+            ->get(['id', 'ulid', 'schedule_id', 'due_at'])
+            ->keyBy('schedule_id');
+
+        $labels = fn (Schedule $candidate): array => [
+            'title' => $candidate->title,
+            'item' => ['ulid' => $candidate->item->ulid, 'name' => $candidate->item->name],
+        ];
+
+        return [
+            'schedule' => $writable
+                ->reject(fn (Schedule $candidate): bool => in_array($candidate->ulid, $dependedOn, true))
+                ->map(fn (Schedule $candidate): array => ['ulid' => $candidate->ulid] + $labels($candidate))
+                ->values()
+                ->all(),
+
+            // Bara scheman med en ÖPPEN förekomst kan väljas här: `depends_on`
+            // är en förekomst-ULID, och en stängd motpart är inget undantag
+            // någon väljer i förväg.
+            'occurrence' => $writable
+                ->filter(fn (Schedule $candidate): bool => $openByScheduleId->has($candidate->id))
+                ->reject(fn (Schedule $candidate): bool => in_array($openByScheduleId->get($candidate->id)->ulid, $dependedOnOccurrences, true))
+                ->map(fn (Schedule $candidate): array => [
+                    'ulid' => $openByScheduleId->get($candidate->id)->ulid,
+                    'due_at' => $openByScheduleId->get($candidate->id)->due_at->toDateString(),
+                ] + $labels($candidate))
+                ->values()
+                ->all(),
+        ];
     }
 }
