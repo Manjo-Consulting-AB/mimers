@@ -33,10 +33,12 @@ use function Pest\Laravel\withoutVite;
  * tests/Feature/Notis/WebhookleveransTest.php (37b), som är gröna utan en
  * enda ändrad förväntan. Den här filen prövar SIDAN ovanpå registret.
  *
- * Filen prövar tre saker som bara webben har: att hemligheten visas en gång
- * och inte går att se igen, att plangrinden blir ett FÄLTLAG och aldrig en rå
- * JSON-kropp (Beslut 5), och att kontot kommer ur fältet `account` och prövas
- * mot policyn — aldrig mot användarens första konto (Beslut 1).
+ * Filen prövar fyra saker som bara webben har: att hemligheten visas en gång
+ * och inte går att se igen, att adress och händelsetyper går att ändra EFTERÅT
+ * utan att hemligheten roteras (Beslut 3), att plangrinden blir ett FÄLTLAG
+ * och aldrig en rå JSON-kropp (Beslut 5), och att kontot kommer ur fältet
+ * `account` och prövas mot policyn — aldrig mot användarens första konto
+ * (Beslut 1).
  *
  * "Klart när" i issuen motsvaras var sitt test nedan, med undantag för
  * "ingen svensk sträng står kvar i en .vue-fil; varje ny nyckel finns på sv
@@ -246,6 +248,107 @@ it('bär aldrig hemligheten i listan och ändrar den inte av PATCH', function ()
 
     expect($rad->is_active)->toBeFalse()
         ->and($rad->secret)->toBe($hemlighet);
+});
+
+/*
+ * Klart när: adressen och händelsetyperna går att ändra EFTERÅT, utan att
+ * hemligheten rörs (Beslut 3).
+ *
+ * Redigeringen finns för hemlighetens skull: en ny endpoint är den enda vägen
+ * till en ny hemlighet, så "ta bort och skapa ny" hade tvingat mottagarsidan
+ * (n8n, Zapier, en egen mottagare) att konfigureras om för en ändring som
+ * `PATCH` redan stöder. Båda fälten prövas i samma anrop — det är så webbens
+ * redigeringsformulär skickar dem — och `secret` läses tillbaka genom modellen
+ * för att bevisa att den står still.
+ */
+it('ändrar adress och händelsetyper utan att röra hemligheten', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = webhookvyProKonto();
+    $rad = webhookvyRad($konto);
+    $hemlighet = $rad->secret;
+
+    $sida = "/settings/webhooks?account={$konto->ulid}";
+
+    from($sida)->actingAs($anvandare)
+        ->patch("/settings/webhooks/{$rad->ulid}", [
+            'account' => $konto->ulid,
+            'url' => 'https://example.org/ny-adress',
+            'event_types' => [Notification::TYPE_LOAN_DUE, Notification::TYPE_QUOTA_WARNING],
+        ])
+        ->assertRedirect($sida);
+
+    $rad->refresh();
+
+    expect($rad->url)->toBe('https://example.org/ny-adress')
+        ->and($rad->event_types)->toBe([Notification::TYPE_LOAN_DUE, Notification::TYPE_QUOTA_WARNING])
+        ->and($rad->secret)->toBe($hemlighet);
+
+    // Listan visar det nya värdet och bär fortfarande ingen hemlighet.
+    $props = webhookvyProps($anvandare, $konto);
+
+    expect($props['endpoints'][0]['url'])->toBe('https://example.org/ny-adress')
+        ->and($props['endpoints'][0]['event_types'])->toBe([Notification::TYPE_LOAN_DUE, Notification::TYPE_QUOTA_WARNING])
+        ->and(json_encode($props, JSON_THROW_ON_ERROR))->not->toContain($hemlighet);
+});
+
+/*
+ * Klart när: `event_types` kräver minst en — även vid uppdatering.
+ *
+ * Regeln är UpdateWebhookEndpointRequest:s `min:1`, samma gräns som
+ * StoreWebhookEndpointRequest bär, och vyn har ingen egen: felet ska komma
+ * från samma ställe i båda lägena (Beslut 6). Att anropet nekas i sin helhet —
+ * och inte bara fältet — bevisas av att adressen står kvar oförändrad.
+ */
+it('kräver minst en händelsetyp även vid uppdatering', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = webhookvyProKonto();
+    $rad = webhookvyRad($konto);
+
+    $sida = "/settings/webhooks?account={$konto->ulid}";
+
+    from($sida)->actingAs($anvandare)
+        ->patch("/settings/webhooks/{$rad->ulid}", [
+            'account' => $konto->ulid,
+            'url' => 'https://example.org/ny-adress',
+            'event_types' => [],
+        ])
+        ->assertSessionHasErrors('event_types');
+
+    $rad->refresh();
+
+    expect($rad->url)->toBe('https://example.com/notiser')
+        ->and($rad->event_types)->toBe([Notification::TYPE_TASK_DUE]);
+});
+
+/*
+ * Klart när: en URL som servern avvisar ger ett fältfel på `url` med serverns
+ * mening — också i redigeringsläget (Beslut 7).
+ *
+ * `UpdateWebhookEndpointRequest` prövar inte SSRF; den här kontrollern anropar
+ * samma UrlSafetyValidator som vid skapandet, och samma kod översätts till
+ * samma mening. `127.0.0.1` är en IP-literal, så testet frågar aldrig nätet.
+ */
+it('ger ett fältfel på url för en osäker adress även vid uppdatering', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = webhookvyProKonto();
+    $rad = webhookvyRad($konto);
+
+    $sida = "/settings/webhooks?account={$konto->ulid}";
+
+    from($sida)->actingAs($anvandare)
+        ->patch("/settings/webhooks/{$rad->ulid}", [
+            'account' => $konto->ulid,
+            'url' => 'https://127.0.0.1/notiser',
+            'event_types' => [Notification::TYPE_TASK_DUE],
+        ])
+        ->assertSessionHasErrors([
+            'url' => 'Adressen går inte att använda: den pekar på ett internt nät.',
+        ]);
+
+    expect($rad->refresh()->url)->toBe('https://example.com/notiser');
 });
 
 /*

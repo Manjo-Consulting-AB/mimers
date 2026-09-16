@@ -291,6 +291,10 @@ return [
         // second feature gets a web surface, this is where the sentence becomes
         // per-feature.
         'plan' => [
+            // 66a: link the word "Pro" in the sentence below to `settings.plan`
+            // once the plan page exists. The sentence stands without a link
+            // until then — Ziggy throws on a route that does not exist, so a
+            // prepared link would be a broken page and not a broken link.
             'feature_unavailable' => ':feature requires the Pro plan.',
             'feature_name' => [
                 'webhooks' => 'Webhooks',
@@ -637,6 +641,14 @@ return [
         ],
 
         'create' => 'Create webhook',
+
+        // Edit mode (decision 3): the SAME form as create, but PATCH instead
+        // of POST and without the secret — changing the address or adding an
+        // event type must not rotate the secret, because then the receiver
+        // would have to be reconfigured for a reason that is not the secret's.
+        'edit' => 'Edit',
+        'save' => 'Save',
+        'cancel' => 'Cancel',
 
         'list_heading' => 'The account\'s webhooks',
         'empty' => 'The account has no webhooks yet.',

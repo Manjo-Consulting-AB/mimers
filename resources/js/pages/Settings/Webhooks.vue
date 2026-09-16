@@ -40,6 +40,12 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * Listan visar kontots endpoints som de kom ur servern; att en avstängd rad
  * förklarar VEM som stängde av den är WebhookEndpointRow, och flaggan räknas
  * på servern (Beslut 8).
+ *
+ * **Raden kan redigeras på plats** (Beslut 3). Sidan skickar händelsetyperna
+ * vidare till raden av samma skäl som till skapandeformuläret — listan kommer
+ * ur App\Models\WebhookEndpoint::EVENT_TYPES och skrivs inte av i JavaScript —
+ * och raden avgör själv om den visar sig eller sitt formulär. Ett redigeringsläge
+ * i taget behövs inte: formulären får sina id:n per endpoint.
  */
 const props = defineProps({
     /* Användarens konton, `{ulid, name}`, sorterade på namn. */
@@ -140,6 +146,7 @@ function selectAccount(event) {
                     :key="endpoint.ulid"
                     :endpoint="endpoint"
                     :account-ulid="props.account.ulid"
+                    :types="props.eventTypes"
                 />
             </ul>
         </section>

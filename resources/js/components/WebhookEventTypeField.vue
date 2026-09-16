@@ -33,17 +33,29 @@ const props = defineProps({
 
     /* Serverns fel för fältet, ur form.errors.event_types. */
     error: { type: String, default: null },
+
+    /*
+     * Suffix för gruppens id:n. Tomt i skapandeläget och endpointens ULID i
+     * redigeringsläget: WebhookEndpointForm kan stå två gånger på samma sida,
+     * och ett `for` eller `aria-describedby` som pekar på det ANDRA
+     * formulärets ruta är en etikett som fokuserar fel fält.
+     */
+    idSuffix: { type: String, default: '' },
 });
 
 const emit = defineEmits(['update:modelValue']);
 
 const { t } = useTranslations();
 
-const describedBy = computed(() => (props.error ? 'event-types-error' : undefined));
+const suffix = () => (props.idSuffix === '' ? '' : `-${props.idSuffix}`);
 
 /* Punkt i typnamnet (`task.due`) blir bindestreck i id:t — en punkt i ett id
    är tillåtet men gör `#task.due` till två selektorer för varje läsare. */
-const inputId = (type) => `event-type-${type.replace(/\./g, '-')}`;
+const inputId = (type) => `event-type-${type.replace(/\./g, '-')}${suffix()}`;
+
+const errorId = computed(() => `event-types-error${suffix()}`);
+
+const describedBy = computed(() => (props.error ? errorId.value : undefined));
 
 function toggle(type, checked) {
     emit('update:modelValue', checked
@@ -76,7 +88,7 @@ function toggle(type, checked) {
             </span>
         </label>
 
-        <p v-if="error" id="event-types-error" tabindex="-1" class="text-sm text-red-700 outline-none">
+        <p v-if="error" :id="errorId" tabindex="-1" class="text-sm text-red-700 outline-none">
             {{ error }}
         </p>
     </fieldset>

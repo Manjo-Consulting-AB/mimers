@@ -352,6 +352,10 @@ return [
         // andra plan funktionen, eller en andra funktion en webbyta, är det
         // här meningen ska bli per funktion.
         'plan' => [
+            // 66a: länka ordet "Pro" i meningen nedan till `settings.plan` när
+            // planvyn finns. Meningen står utan länk tills dess — Ziggy kastar
+            // på en rutt som inte finns, så en förberedd länk vore en trasig
+            // sida och inte en trasig länk.
             'feature_unavailable' => ':feature kräver planen Pro.',
             'feature_name' => [
                 'webhooks' => 'Webhooks',
@@ -741,6 +745,16 @@ return [
         ],
 
         'create' => 'Skapa webhook',
+
+        // Redigeringsläget (Beslut 3): SAMMA formulär som skapandet, men
+        // PATCH i stället för POST och utan hemlighet — den som byter adress
+        // eller lägger till en händelsetyp ska inte behöva rotera hemligheten,
+        // för då måste mottagarsidan konfigureras om av ett skäl som inte är
+        // hemlighetens. `edit` är radens knapp, `save` formulärets och
+        // `cancel` vägen tillbaka utan att något skrivs.
+        'edit' => 'Redigera',
+        'save' => 'Spara',
+        'cancel' => 'Avbryt',
 
         'list_heading' => 'Kontots webhooks',
         'empty' => 'Kontot har inga webhooks än.',
