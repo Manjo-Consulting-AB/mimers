@@ -212,7 +212,7 @@ class ItemController extends Controller
      * **Itemets egna fält, kategorin, taggarna, relationerna och bilagorna**
      * (Beslut 4 och 8, issue 58, issue 60 § Beslut 2). Bilagorna kommer med
      * props — se `attachments` nedan — och har ingen egen rutt. Schemana
-     * gjorde detsamma i issue 63a, se `schedules` och `nextDue` nedan.
+     * gjorde detsamma i issue 63a, se `schedules` och `openOccurrences` nedan.
      * Kostnaderna 45–47 och utlåningen 67 har fortfarande ingen yta här.
      *
      * `categories` bär kategorins NAMN bredvid resursen — se klassens
