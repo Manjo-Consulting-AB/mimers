@@ -291,10 +291,12 @@ return [
         // second feature gets a web surface, this is where the sentence becomes
         // per-feature.
         'plan' => [
-            // 66a: link the word "Pro" in the sentence below to `settings.plan`
-            // once the plan page exists. The sentence stands without a link
-            // until then — Ziggy throws on a route that does not exist, so a
-            // prepared link would be a broken page and not a broken link.
+            // The sentence deliberately carries no link, also now that the plan page
+            // exists (66a). The string is also delivered inside the API error envelope,
+            // and markup in a translation string becomes either escaped text for an API
+            // client or `v-html` in the view. If someone wants a link to the plan it is
+            // a separate key and a separate link beside the error box in Webhooks.vue,
+            // not an `<a>` in here.
             'feature_unavailable' => ':feature requires the Pro plan.',
             'feature_name' => [
                 'webhooks' => 'Webhooks',

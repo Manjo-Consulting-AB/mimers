@@ -352,10 +352,11 @@ return [
         // andra plan funktionen, eller en andra funktion en webbyta, är det
         // här meningen ska bli per funktion.
         'plan' => [
-            // 66a: länka ordet "Pro" i meningen nedan till `settings.plan` när
-            // planvyn finns. Meningen står utan länk tills dess — Ziggy kastar
-            // på en rutt som inte finns, så en förberedd länk vore en trasig
-            // sida och inte en trasig länk.
+            // Meningen står utan länk med flit, också nu när planvyn finns (66a).
+            // Strängen levereras även i API:ets felhölje, och markup i en
+            // översättningssträng blir antingen escapad text hos API-klienten eller
+            // `v-html` i vyn. Vill någon länka till planen är det en egen nyckel och
+            // en egen länk bredvid felrutan i Webhooks.vue, inte en `<a>` här inne.
             'feature_unavailable' => ':feature kräver planen Pro.',
             'feature_name' => [
                 'webhooks' => 'Webhooks',
