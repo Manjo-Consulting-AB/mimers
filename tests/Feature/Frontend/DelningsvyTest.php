@@ -996,6 +996,14 @@ it('lägger delningssidan i pärmens navigation', function () {
  * ingen mottagare läggs till. En `read`-deltagare ser papperskorgen men får
  * 403 här, och en `write`-deltagare når sina items men varken raderar eller
  * återställer (regel 3).
+ *
+ * Sedan issue 63a finns schemats POST här. Den skriver en `schedule`-rad — och
+ * i samma transaktion dess första förekomst genom
+ * App\Actions\Schedule\OpenNextOccurrence — men rör inga åtkomster: grinden är
+ * `create` på ITEMET (issue 71b § Beslut 1, issue 63a § Beslut 7), så den som
+ * får lägga till en uppgift på sitt item får varken se eller dela ut mer av
+ * pärmen. En `read`-deltagare ser schemalistan och får 403 här; en
+ * `create`-deltagare lägger till men ändrar och raderar inget befintligt.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -1003,14 +1011,15 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Itemet, relationen, bilagan, containerns eget skapande, inbjudan,
-    // kategorin, uppsättningen, taggen och papperskorgen. Ingen /accesses.
-    // Ordningen är registreringsordningen i routes/web.php — itemrutterna
-    // ligger ovanför `POST /containers`.
+    // Itemet, relationen, bilagan, schemat, containerns eget skapande,
+    // inbjudan, kategorin, uppsättningen, taggen och papperskorgen. Ingen
+    // /accesses. Ordningen är registreringsordningen i routes/web.php —
+    // itemrutterna ligger ovanför `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
         'containers/{container}/items/{item}/links',
         'containers/{container}/items/{item}/attachments',
+        'containers/{container}/items/{item}/schedules',
         'containers',
         'containers/{container}/invitations',
         'containers/{container}/categories',

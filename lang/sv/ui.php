@@ -130,6 +130,18 @@ return [
         'container-trashed' => 'Pärmen ligger i papperskorgen.',
         'container-restored' => 'Pärmen är återställd.',
 
+        // Issue 63a § Beslut 6 och 8. Pausen är samma skrivning som en ändrad
+        // titel och får därför sin egen mening: "sparat" hade varit sant men
+        // inte svarat på vad som hände. `schedule-deleted` nämner varken
+        // papperskorgen eller 30 dagar — schemat går inte att återställa ur
+        // en vy (issue 20a § Beslut 3), och en återställning som inte finns
+        // får inte utlovas i en flash.
+        'schedule-created' => 'Schemat är skapat.',
+        'schedule-updated' => 'Schemat är sparat.',
+        'schedule-paused' => 'Schemat är pausat. Det öppnar inga nya förekomster förrän du återupptar det.',
+        'schedule-resumed' => 'Schemat är aktivt igen.',
+        'schedule-deleted' => 'Schemat är borttaget.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -773,6 +785,144 @@ return [
             'dismiss' => 'Stäng',
 
             'submit' => 'Ladda upp',
+        ],
+
+        // Schemat som regel — sektionen på detaljvyn och de två
+        // formulärsidorna, se issue 63a § Beslut 2–8. Sektionen bor i
+        // resources/js/components/ScheduleListSection.vue och formuläret i
+        // ScheduleForm.vue; meningarna kommer ur den här filen och aldrig ur
+        // en sträng i JavaScript.
+        //
+        // **Återkommandet är en mening och tre kolumner** (Beslut 2).
+        // `recurrence_type` + `interval_unit` + `interval_count` betyder "Var
+        // tolfte månad, räknat från senast utfört", och vyn skriver aldrig
+        // kolumnvärdena. `t()` har ingen pluralisering (issue 52 § Beslut 4),
+        // så varje enhet har TVÅ nycklar — en för `1` och en för `:count` —
+        // och resources/js/components/schedulePresentation.js väljer på
+        // talet, samma regel som 62a:s dagar i trashPresentation.js.
+        //
+        // Skillnaden mellan `fixed` och `interval` ligger i sista ledet:
+        // kalendern mot senast utfört ([[Scheman och uppgifter]] § De två
+        // återkommandetyperna). Den är hela poängen med två typer.
+        //
+        // **Skillnaden förklaras med exempel i formuläret, inte med ordet**
+        // (Beslut 3). Meningarna i `form.recurrence_*` är [[ADR-0005 Schema
+        // och förekomst]]:s egna exempel: ett val mellan tre ord utan
+        // förklaring blir ett val någon gör fel en gång och sedan aldrig
+        // ändrar.
+        'schedule' => [
+            'heading' => 'Scheman',
+            'empty' => 'Itemet har inga scheman.',
+            'add' => 'Nytt schema',
+            'back' => 'Tillbaka till itemet',
+
+            // Nästa förfall är den ÖPPNA förekomstens datum (Beslut 1). Ett
+            // schema utan öppen förekomst — ett pausat, eller en
+            // engångsuppgift som redan är klar — säger det i stället för att
+            // visa ett tomt fält.
+            'next_due' => 'Nästa förfall: :date',
+            'no_next_due' => 'Ingen öppen förekomst.',
+
+            'edit' => 'Redigera',
+            'pause' => 'Pausa',
+            'resume' => 'Återuppta',
+
+            // Pausen är reversibel och synlig (Beslut 6): raden ligger kvar i
+            // listan, gråtonad, med den här meningen. Förekomsterna rörs inte
+            // — en pausad förekomst blockerar fortfarande de uppgifter som
+            // beror på den, se issue 63c.
+            'paused' => 'Pausad',
+            'paused_note' => 'Schemat öppnar inga nya förekomster så länge det är pausat.',
+
+            // Raderingen är mjuk, men papperskorgen listar fyra typer och
+            // `schedule` är inte en av dem (issue 20a § Beslut 3). Texten
+            // säger därför vad som försvinner och nämner varken 30 dagar
+            // eller papperskorgen — att lova en väg tillbaka som inte finns är
+            // värre än att inte lova någon (Beslut 8).
+            'destroy' => 'Radera',
+            'destroy_confirm' => 'Schemat och dess kommande förekomster tas bort. Vill du fortsätta?',
+
+            'recurrence' => [
+                'none' => 'En gång',
+
+                'fixed' => [
+                    'day' => 'Varje dag enligt kalendern',
+                    'day_count' => 'Var :count:e dag enligt kalendern',
+                    'week' => 'Varje vecka enligt kalendern',
+                    'week_count' => 'Var :count:e vecka enligt kalendern',
+                    'month' => 'Varje månad enligt kalendern',
+                    'month_count' => 'Var :count:e månad enligt kalendern',
+                    'year' => 'Varje år enligt kalendern',
+                    'year_count' => 'Var :count:e år enligt kalendern',
+                ],
+
+                'interval' => [
+                    'day' => 'Varje dag, räknat från senast utfört',
+                    'day_count' => 'Var :count:e dag, räknat från senast utfört',
+                    'week' => 'Varje vecka, räknat från senast utfört',
+                    'week_count' => 'Var :count:e vecka, räknat från senast utfört',
+                    'month' => 'Varje månad, räknat från senast utfört',
+                    'month_count' => 'Var :count:e månad, räknat från senast utfört',
+                    'year' => 'Varje år, räknat från senast utfört',
+                    'year_count' => 'Var :count:e år, räknat från senast utfört',
+                ],
+            ],
+
+            'form' => [
+                'title' => 'Titel',
+                'notes' => 'Anteckningar',
+                'recurrence_type' => 'Återkommer',
+
+                // Typnamnen är korta nog att rymmas i väljaren; förklaringen
+                // nedanför bär skillnaden (Beslut 3).
+                'type' => [
+                    'none' => 'En gång',
+                    'fixed' => 'Fast datum i kalendern',
+                    'interval' => 'Intervall från senast utfört',
+                ],
+
+                'recurrence_none' => 'En gång. Uppgiften försvinner när den är klar.',
+                'recurrence_fixed' => 'Återkommer på kalendern. Försäkringen förnyas 1 januari även om du betalade för sent.',
+                'recurrence_interval' => 'Räknas från senast utfört. Oljebyte tolv månader efter förra bytet.',
+
+                // Enheterna står i singular: de kombineras med ett antal, och
+                // meningen ovan böjer ordet efter talet (Beslut 2).
+                'unit' => 'Enhet',
+                'units' => [
+                    'day' => 'dag',
+                    'week' => 'vecka',
+                    'month' => 'månad',
+                    'year' => 'år',
+                ],
+                'unit_none' => '— välj enhet —',
+                'interval_count' => 'Antal',
+
+                // `anchor_date` frågas för ALLA tre typerna (Beslut 4):
+                // StoreScheduleRequest kräver den även för `interval` och
+                // `none`, där den är seriens startpunkt och det första
+                // förfallodatumet. Bara rubriken byter — ett obligatoriskt
+                // fält som ser valfritt ut är ett 422 användaren inte
+                // förstår.
+                'anchor_date' => 'Första förfallodatum',
+                'anchor_date_fixed' => 'Startpunkt i serien',
+
+                // `lead_days` förklaras med vad den GÖR (Beslut 5): det är
+                // `visible_from`, och utan meningen är fältet obegripligt.
+                'lead_days' => 'Dagar innan förfall',
+                'lead_days_hint' => 'Uppgiften dyker upp i todo-listan så här många dagar innan förfall.',
+            ],
+
+            'create' => [
+                'title' => 'Nytt schema',
+                'heading' => 'Nytt schema',
+                'submit' => 'Skapa',
+            ],
+
+            'update' => [
+                'title' => 'Redigera schema',
+                'heading' => 'Redigera schema',
+                'submit' => 'Spara',
+            ],
         ],
     ],
 

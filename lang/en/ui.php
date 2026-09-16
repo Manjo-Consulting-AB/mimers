@@ -114,6 +114,18 @@ return [
         'container-trashed' => 'The binder is in the trash.',
         'container-restored' => 'The binder has been restored.',
 
+        // Issue 63a decisions 6 and 8. The pause is the same write as a
+        // changed title and therefore gets its own sentence: "saved" would
+        // have been true but would not have answered what happened.
+        // `schedule-deleted` mentions neither the trash nor 30 days — the
+        // schedule cannot be restored from a view (issue 20a decision 3), and
+        // a restore that does not exist must not be promised in a flash.
+        'schedule-created' => 'The schedule has been created.',
+        'schedule-updated' => 'The schedule has been saved.',
+        'schedule-paused' => 'The schedule is paused. It opens no new occurrences until you resume it.',
+        'schedule-resumed' => 'The schedule is active again.',
+        'schedule-deleted' => 'The schedule has been removed.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -671,6 +683,128 @@ return [
             'dismiss' => 'Dismiss',
 
             'submit' => 'Upload',
+        ],
+
+        // The schedule as a rule — the section on the detail view and the two
+        // form pages, see issue 63a decisions 2–8. The section lives in
+        // resources/js/components/ScheduleListSection.vue and the form in
+        // ScheduleForm.vue; the sentences come from this file and never from a
+        // string in JavaScript.
+        //
+        // The recurrence is one sentence built from three columns (decision
+        // 2). `t()` has no pluralisation (issue 52 decision 4), so every unit
+        // has TWO keys — one for `1` and one for `:count` — and
+        // resources/js/components/schedulePresentation.js picks by the number,
+        // the same rule as the days in 62a.
+        'schedule' => [
+            'heading' => 'Schedules',
+            'empty' => 'The item has no schedules.',
+            'add' => 'New schedule',
+            'back' => 'Back to the item',
+
+            // The next due date is the date of the OPEN occurrence (decision
+            // 1). A schedule without an open occurrence — a paused one, or a
+            // one-off already done — says so instead of showing an empty
+            // field.
+            'next_due' => 'Next due: :date',
+            'no_next_due' => 'No open occurrence.',
+
+            'edit' => 'Edit',
+            'pause' => 'Pause',
+            'resume' => 'Resume',
+
+            // The pause is reversible and visible (decision 6): the row stays
+            // in the list, greyed out, with this sentence.
+            'paused' => 'Paused',
+            'paused_note' => 'The schedule opens no new occurrences while it is paused.',
+
+            // The deletion is soft, but the trash lists four types and
+            // `schedule` is not one of them (issue 20a decision 3). The text
+            // therefore says what goes away and mentions neither 30 days nor
+            // the trash — promising a way back that does not exist is worse
+            // than promising none (decision 8).
+            'destroy' => 'Delete',
+            'destroy_confirm' => 'The schedule and its upcoming occurrences are removed. Continue?',
+
+            'recurrence' => [
+                'none' => 'Once',
+
+                'fixed' => [
+                    'day' => 'Every day according to the calendar',
+                    'day_count' => 'Every :count days according to the calendar',
+                    'week' => 'Every week according to the calendar',
+                    'week_count' => 'Every :count weeks according to the calendar',
+                    'month' => 'Every month according to the calendar',
+                    'month_count' => 'Every :count months according to the calendar',
+                    'year' => 'Every year according to the calendar',
+                    'year_count' => 'Every :count years according to the calendar',
+                ],
+
+                'interval' => [
+                    'day' => 'Every day, counted from last done',
+                    'day_count' => 'Every :count days, counted from last done',
+                    'week' => 'Every week, counted from last done',
+                    'week_count' => 'Every :count weeks, counted from last done',
+                    'month' => 'Every month, counted from last done',
+                    'month_count' => 'Every :count months, counted from last done',
+                    'year' => 'Every year, counted from last done',
+                    'year_count' => 'Every :count years, counted from last done',
+                ],
+            ],
+
+            'form' => [
+                'title' => 'Title',
+                'notes' => 'Notes',
+                'recurrence_type' => 'Repeats',
+
+                'type' => [
+                    'none' => 'Once',
+                    'fixed' => 'Fixed date on the calendar',
+                    'interval' => 'Interval from last done',
+                ],
+
+                'recurrence_none' => 'Once. The task disappears when it is done.',
+                'recurrence_fixed' => 'Repeats on the calendar. The insurance renews on 1 January even if you paid late.',
+                'recurrence_interval' => 'Counted from last done. An oil change twelve months after the previous one.',
+
+                // The units are singular: they combine with a count, and the
+                // sentence above inflects the word by the number (decision 2).
+                'unit' => 'Unit',
+                'units' => [
+                    'day' => 'day',
+                    'week' => 'week',
+                    'month' => 'month',
+                    'year' => 'year',
+                ],
+                'unit_none' => '— pick a unit —',
+                'interval_count' => 'Count',
+
+                // `anchor_date` is asked for ALL three types (decision 4):
+                // StoreScheduleRequest requires it for `interval` and `none`
+                // too, where it is the start of the series and the first due
+                // date. Only the label changes — a required field that looks
+                // optional is a 422 the user does not understand.
+                'anchor_date' => 'First due date',
+                'anchor_date_fixed' => 'Start of the series',
+
+                // `lead_days` is explained by what it DOES (decision 5): it is
+                // `visible_from`, and without the sentence the field is
+                // incomprehensible.
+                'lead_days' => 'Days before due',
+                'lead_days_hint' => 'The task shows up in the to-do list this many days before it is due.',
+            ],
+
+            'create' => [
+                'title' => 'New schedule',
+                'heading' => 'New schedule',
+                'submit' => 'Create',
+            ],
+
+            'update' => [
+                'title' => 'Edit schedule',
+                'heading' => 'Edit schedule',
+                'submit' => 'Save',
+            ],
         ],
     ],
 
