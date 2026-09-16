@@ -1037,6 +1037,17 @@ it('lägger delningssidan i pärmens navigation', function () {
  * till en rad men ändrar och raderar inget befintligt. Ingen ny läsare och
  * ingen ny mottagare: `borrower_email` är en kontaktuppgift och systemet mejlar
  * aldrig låntagaren ([[ADR-0017 Missbruksvektorer]] § 7).
+ *
+ * Sedan issue 67b finns ägarbytets POST här. Den skriver en
+ * `ownership_transfer`-rad — en avsikt, ännu ingen åtkomst — och rör inga
+ * `container_access`-rader alls. Grinden är `transfer()` (ägarkontots
+ * medlemmar, och aldrig ett fryst konto), alltså strängare än både `create` på
+ * itemet och `manageAccess()`. Den kvarhållna åtkomsten skapas först vid
+ * ACCEPT, av App\Actions\OwnershipTransfer\AcceptOwnershipTransfer, och det är
+ * den AVGIVANDE sidans konto som behåller den — ingen tredje part får något,
+ * och acceptrutten ligger på toppnivå (`/transfers`, utanför `containers/`).
+ * Ingen ny läsare läggs alltså till här: en pågående överlåtelse ger mottagaren
+ * ingenting förrän hon svarar.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -1045,10 +1056,10 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
     // Itemet, utlåningen, relationen, bilagan, schemat, förekomstens två
-    // avslut, containerns eget skapande, kalenderlänken, inbjudan, kategorin,
-    // uppsättningen, taggen och papperskorgen. Ingen /accesses. Ordningen är
-    // registreringsordningen i routes/web.php — itemrutterna ligger ovanför
-    // `POST /containers`.
+    // avslut, containerns eget skapande, kalenderlänken, inbjudan, ägarbytet,
+    // kategorin, uppsättningen, taggen och papperskorgen. Ingen /accesses.
+    // Ordningen är registreringsordningen i routes/web.php — itemrutterna
+    // ligger ovanför `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
         'containers/{container}/items/{item}/loans',
@@ -1062,6 +1073,7 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers',
         'containers/{container}/calendar',
         'containers/{container}/invitations',
+        'containers/{container}/transfer',
         'containers/{container}/categories',
         'containers/{container}/categories/preset',
         'containers/{container}/tags',

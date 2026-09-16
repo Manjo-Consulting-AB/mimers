@@ -27,6 +27,7 @@ use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\OccurrenceDependencyController;
+use App\Http\Controllers\OwnershipTransferController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ScheduleDependencyController;
 use App\Http\Controllers\ScheduleOccurrenceController;
@@ -912,6 +913,71 @@ Route::middleware('auth')->group(function () {
 
     Route::post('/invitations/reject', [InvitationResponseController::class, 'reject'])
         ->name('invitations.reject');
+
+    /*
+     * Issue 67b · Ägarbytet — avsändarens sida i pärmen och mottagarens
+     * inkorg, se App\Http\Controllers\OwnershipTransferController.
+     *
+     * **Två nivåer, och det är hela skillnaden mot inbjudningarna.** De tre
+     * första rutterna ligger UNDER pärmen: avsändaren står i den. Mottagarens
+     * tre ligger på TOPPNIVÅ, för hon har inte pärmen ännu — den är inte
+     * hennes att navigera i, och en sida under `{container}` hade krävt att
+     * hon först fick den.
+     *
+     * **Ingen `{token}`, ingen session och ingen mellanlandning.** 55b löser
+     * inbjudan med ett token i en URL som läggs i sessionen och glöms
+     * (InvitationResponseController § Beslut 2). Här finns ingen motsvarande
+     * rutt med flit: en inbjudan ger läsrätt till en pärm, ett ägarbyte
+     * överlåter hela pärmen, och en bärartoken i ett mejl till en overifierad
+     * adress vore en kapabilitet att ta emot någon annans pärm. Mejlet
+     * (App\Notifications\OwnershipTransferNotification) pekar på den statiska
+     * sökvägen `/transfers`, och mottagaren hittar sin begäran på identitet —
+     * sitt konto, eller sin verifierade adress — prövad i kontrollern.
+     *
+     * **`scopeBindings()` på den nästlade skrivningen**, av exakt samma skäl
+     * som varje annan nästlad containerrutt i filen (issue 9b § Beslut 1):
+     * `{transfer}` löses genom App\Models\Container::transfers(), så en
+     * transfer-ULID från en annan pärm blir 404 i stället för tillbakadragen.
+     * `{container}` och `{transfer}` binds båda på ULID via #[RouteKey('ulid')]
+     * på App\Models\Container respektive App\Models\OwnershipTransfer.
+     *
+     * De tre mottagarrutterna har **ingen scopeBindings och ingen grind**:
+     * urvalet — vilka rader som ÄR den inloggade användarens — prövas i
+     * kontrollern, och en rad som inte pekar på henne ger 404, aldrig 403
+     * (Beslut 8). Att auktorisera mot raden vore att svara olika på "finns
+     * inte" och "är inte din", och det svaret bekräftar att raden finns.
+     *
+     * **Ingen ny FormRequest** (omfångsrutan): StoreOwnershipTransferRequest
+     * och AcceptOwnershipTransferRequest delas rakt av med `/api`, inklusive
+     * `prohibits` mellan de två mottagarvägarna och de två tillåtna nivåerna i
+     * `retain_access_level`. Den senare har olika regler beroende på om raden
+     * bär `to_account_id` eller `to_email`, och den logiken är dess.
+     *
+     * Skrivningarna svarar med en omdirigering och en flash-kod — mönstret
+     * från issue 51 § Beslut 5, `status` och ingenting annat — och ett
+     * domänfel blir ett formulärfel, aldrig en JSON-kropp (Beslut 9).
+     *
+     * Sidan får en egen rad i resources/js/layouts/containerSections.js,
+     * SIST: ett ägarbyte är inte något man gör ofta.
+     */
+    Route::get('/containers/{container}/transfer', [OwnershipTransferController::class, 'show'])
+        ->name('containers.transfer');
+
+    Route::post('/containers/{container}/transfer', [OwnershipTransferController::class, 'store'])
+        ->name('containers.transfer.store');
+
+    Route::delete('/containers/{container}/transfer/{transfer}', [OwnershipTransferController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.transfer.destroy');
+
+    Route::get('/transfers', [OwnershipTransferController::class, 'incoming'])
+        ->name('transfers.index');
+
+    Route::post('/transfers/{transfer}/accept', [OwnershipTransferController::class, 'accept'])
+        ->name('transfers.accept');
+
+    Route::post('/transfers/{transfer}/reject', [OwnershipTransferController::class, 'reject'])
+        ->name('transfers.reject');
 
     /*
      * Issue 56a · Kategoriträdet och tagglistan — den fria strukturen, se

@@ -42,6 +42,12 @@
  * arbetar i — pärmens uppgifter prenumererade på ur någon annans kalender —
  * men den hör till pärmens inställningar och inte till papperskorgen, som är
  * dit man går när något gått fel.
+ *
+ * `transfer` kom med issue 67b § Beslut 1 och ligger SIST, efter `trash`: ett
+ * ägarbyte är den mest konsekvensrika handlingen i produkten — hela pärmen
+ * byter konto — och det är inte något man gör ofta. Raden är ändå en rad: en
+ * yta ingen hittar är samma sak som en yta som inte finns, och den som ska
+ * överlåta en båt står i pärmen när hon bestämmer sig.
  */
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}` },
@@ -51,4 +57,5 @@ export const containerSections = [
     { key: 'settings', href: (ulid) => `/containers/${ulid}/edit` },
     { key: 'calendar', href: (ulid) => `/containers/${ulid}/calendar` },
     { key: 'trash', href: (ulid) => `/containers/${ulid}/trash` },
+    { key: 'transfer', href: (ulid) => `/containers/${ulid}/transfer` },
 ];

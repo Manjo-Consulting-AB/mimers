@@ -23,6 +23,10 @@ return [
         // Pärmen är produktens ord för containern, se [[ADR-0002 Konto äger
         // container]] och Översikt. Länken kom med issue 54 § Beslut 7.
         'containers' => 'Pärmar',
+        // Mottagarens inkorg för ägarbyten, se issue 67b § Beslut 5: vägen in
+        // är identitet, inte en länk i ett mejl, så raden står i navigationen
+        // och är ovillkorlig.
+        'transfers' => 'Ägarbyten',
         'login' => 'Logga in',
     ],
 
@@ -184,6 +188,16 @@ return [
         'webhook-updated' => 'Webhooken är sparad.',
         'webhook-destroyed' => 'Webhooken är borttagen. Hemligheten som hörde till är det också.',
 
+        // Issue 67b § Beslut 4 och 7. De tre första är avsändarens — hon
+        // skickar, ångrar och får veta att mottagaren sagt nej — och den
+        // fjärde är mottagarens. `transfer-rejected` säger vad beslutet
+        // innebär för HENNE (pärmen är inte hennes), inte vad servern gjorde,
+        // och `transfer-accepted` att pärmen nu finns i hennes lista.
+        'transfer-created' => 'Överlåtelsen är skickad. Mottagaren ser den under Ägarbyten.',
+        'transfer-revoked' => 'Överlåtelsen är tillbakadragen. Raden står kvar i historiken.',
+        'transfer-accepted' => 'Pärmen är din. Du hittar den i pärmlistan.',
+        'transfer-rejected' => 'Du har tackat nej. Avsändaren måste skicka en ny överlåtelse om ni ändrar er.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -299,6 +313,30 @@ return [
             'already_open' => 'Itemet är redan utlånat. Registrera återlämningen först.',
         ],
 
+        // Ägarbytets domänfel på webben, se issue 67b § Beslut 3, 4, 6 och 9.
+        //
+        // **Grenen heter `transfer` och inte `ownership_transfer`**, fast
+        // meningen hör till ägarbytet: felkoderna i API:et är `transfer.*`
+        // (39a och 39b), och App\Support\Frontend\ApiErrorTranslator slår upp
+        // en kod genom att byta ut första ledet mot `error.` — koden
+        // `transfer.expired` letas upp som `error.transfer.expired`. Ett
+        // `error.ownership_transfer.expired` hade varit en nyckel ingen
+        // frågar efter, och varje nekad överlåtelse hade fallit tillbaka på
+        // `error.generic`.
+        //
+        // `already_pending` hamnar på formulärnyckeln `transfer` (pärmens
+        // tillstånd, inte ett fält), `not_pending` på samma nyckel från båda
+        // sidor — avsändaren som drar tillbaka och mottagaren som svarar för
+        // sent — och `expired` och `account_frozen` på acceptens eller
+        // avslagets väg. Ingen av dem får någonsin bli en rå JSON-kropp i en
+        // webbläsare.
+        'transfer' => [
+            'already_pending' => 'Pärmen har redan en överlåtelse som väntar på svar. Dra tillbaka den först om du vill byta mottagare.',
+            'not_pending' => 'Överlåtelsen är redan besvarad eller tillbakadragen och går inte att ändra.',
+            'expired' => 'Överlåtelsen har gått ut. Avsändaren måste skicka en ny.',
+            'account_frozen' => 'Ditt konto är fryst och kan inte ta emot en pärm just nu.',
+        ],
+
         // Avslutsflödets domänfel på webben, se issue 63b § Beslut 6. De
         // kommer som App\Exceptions\Api\ApiException ur
         // App\Actions\Schedule\CloseOccurrence och blir ett formulärfel på
@@ -378,6 +416,11 @@ return [
             'feature_unavailable' => ':feature kräver planen Pro.',
             'feature_name' => [
                 'webhooks' => 'Webhooks',
+                // Issue 67b § Beslut 3: ägarbytets menyta på webben läser
+                // samma grind, och `data.feature` är koden
+                // `ownership_transfer`. Namnet står här och inte i en mening
+                // per yta — frågan "vilken plan krävs" besvaras på ett ställe.
+                'ownership_transfer' => 'Ägarbyte',
             ],
         ],
 
@@ -1030,6 +1073,10 @@ return [
             // Sist, som raden i containerSections.js — papperskorgen är dit
             // man går när något gått fel (issue 62a § Beslut 1).
             'trash' => 'Papperskorgen',
+            // Efter papperskorgen i både listan och navigationen: ett
+            // ägarbyte är den mest konsekvensrika handlingen i produkten och
+            // inte något man gör ofta (issue 67b § Beslut 1).
+            'transfer' => 'Ägarbyte',
         ],
 
         'index' => [
@@ -2004,6 +2051,134 @@ return [
         'accept' => 'Acceptera',
         'reject' => 'Avvisa',
         'home' => 'Till startsidan',
+    ],
+
+    // Ägarbytet, se issue 67b § Beslut 1–9 och [[Konton och åtkomst]]
+    // § ownership_transfer. Egen gren på toppnivå och inte under `container`:
+    // mottagarens inkorg ligger UTANFÖR pärmen — hon har den inte ännu — och
+    // avsändarens sida är den andra halvan av samma samtal. Samma skäl som gör
+    // `sharing` och `trash` till egna grenar.
+    //
+    // Två sidor i en gren: `form`/`excluded`/`retain`/`row`/`status` hör till
+    // pärmens sida, `inbox`/`card` till mottagarens. `accept` och `reject` är
+    // gemensamma och ligger ytterst.
+    'transfer' => [
+        'title' => 'Ägarbyte',
+        'heading' => 'Ägarbyte',
+        'intro' => 'Hela pärmen byter konto. Det täcker samma sak vare sig det är ett varv som lämnar över till en kund, en mäklare till en köpare, eller en båt som säljs privat.',
+
+        // Länken står bredvid planrutan och inte inuti meningen: strängen
+        // levereras också av /api:ets felhölje, och markup i en
+        // översättningssträng blir escapad text eller `v-html` någonstans.
+        'plan_link' => 'Läs om planerna',
+
+        'form' => [
+            'heading' => 'Överlåt pärmen',
+
+            // Vad överlåtelsen omfattar, innan den skickas (Beslut 2). Fyra
+            // saker i en mening, och de är de fyra som faktiskt händer.
+            'notice' => 'Alla items följer med utom de du undantar nedan. Utrymmet pärmen använder flyttas till mottagarens konto, åtkomster och öppna inbjudningar återkallas — den nya ägaren bjuder in vem hon vill — och mottagaren får tolv månader Pro vid sitt första mottagna ägarbyte.',
+
+            // Två vägar, exakt en ska fyllas i. Regeln prövas av `prohibits`
+            // i StoreOwnershipTransferRequest och formuleras inte om här.
+            'recipient_heading' => 'Mottagare',
+            'recipient_help' => 'Fyll i ett av fälten: mottagarens konto-ULID, eller adressen hon har eller skaffar ett konto med.',
+            'account' => 'Konto-ULID',
+            'email' => 'E-postadress',
+
+            'retain' => 'Din åtkomst efteråt',
+            'submit' => 'Skicka överlåtelsen',
+        ],
+
+        // Undantagen är undantag, inte ett urval av vad som skickas (Beslut 2).
+        // `following` skriver ut vad som faktiskt händer medan användaren
+        // kryssar — "allt annat följer med" är en regel, ":following av :total
+        // följer med" är svaret.
+        'excluded' => [
+            'heading' => 'Det du behåller',
+            'help' => 'Markera det du vill behålla — inköpspriset, försäkringsbrevet. Allt annat följer med till mottagaren.',
+            'following' => ':following av :total följer med, :excluded undantas.',
+        ],
+
+        // Nivåerna requesten tillåter är `read` och `write`; namnen kommer ur
+        // `sharing.level.*`, samma ladder och samma ord. Nyckeln här är det
+        // tredje valet: ingen åtkomst alls.
+        'retain' => [
+            'none' => 'Ingen åtkomst',
+        ],
+
+        'open' => [
+            'heading' => 'Pågående',
+            'empty' => 'Ingen överlåtelse väntar på svar.',
+        ],
+
+        'history' => [
+            'heading' => 'Tidigare',
+        ],
+
+        'row' => [
+            'created' => 'Skickad :date',
+            'expires' => 'Går ut :date',
+            'accepted' => 'Accepterad :date',
+
+            'excluded' => ':count items undantas',
+            'excluded_none' => 'Inga undantagna items',
+
+            'retain' => 'Avsändaren behåller åtkomsten: :level',
+            'retain_none' => 'Avsändaren behåller ingen åtkomst',
+
+            'revoke' => 'Dra tillbaka',
+        ],
+
+        // Statusen kommer ur App\Http\Resources\OwnershipTransferResource och
+        // läses aldrig ur kolumnen: en `pending`-rad som passerat sin
+        // levnadstid redovisas som `expired` utan att raden ändras (39a
+        // § Beslut 10). Nycklarna är kolumnvärdena ur
+        // App\Models\OwnershipTransfer::STATUSES.
+        'status' => [
+            'pending' => 'Väntar på svar',
+            'expired' => 'Utgången',
+            'accepted' => 'Accepterad',
+            'rejected' => 'Avvisad',
+            'revoked' => 'Tillbakadragen',
+        ],
+
+        // Mottagarens inkorg. Rubriken säger vems de är — sidan listar bara
+        // hennes egna, på identitet och aldrig på en länk (Beslut 5).
+        'inbox' => [
+            'title' => 'Ägarbyten till dig',
+            'heading' => 'Ägarbyten till dig',
+            'intro' => 'Pärmar någon vill överlåta till dig. Du hittar dem här när du är inloggad, oavsett om mejlet ligger kvar.',
+            'empty' => 'Inga ägarbyten väntar på dig.',
+        ],
+
+        // Konsekvenserna står före knappen (Beslut 6): vilken pärm, från
+        // vilket konto, hur många items som följer med och undantas, vilken
+        // åtkomst avsändaren behåller, och de tolv månaderna Pro.
+        'card' => [
+            'container' => 'Pärmen :container',
+            'from' => 'Från kontot :account',
+            'items' => ':following av :total följer med, :excluded undantas.',
+            'retain' => 'Avsändaren behåller åtkomsten: :level.',
+            'retain_none' => 'Avsändaren behåller ingen åtkomst.',
+            'pro' => 'Tolv månader Pro ingår — en gång per konto, vid det första ägarbytet du tar emot.',
+
+            // Vad som händer med utrymmet efteråt, och vem som äger det: den
+            // som tar emot pärmen tar också över förbrukningen, och det är
+            // hennes kvot som gäller sedan.
+            'quota' => 'Utrymmet pärmen använder flyttas till ditt konto, och det är din kvot som gäller efteråt.',
+
+            'account' => 'Vilket konto ska ta över?',
+
+            // Båda besluten är slutgiltiga (Beslut 7), och det sägs före
+            // knapparna och en gång till i bekräftelserutan.
+            'final' => 'Beslutet går inte att ångra. Ångrar ni er måste avsändaren skicka en ny överlåtelse.',
+            'accept_confirm' => 'Ta över pärmen? Beslutet går inte att ångra.',
+            'reject_confirm' => 'Tacka nej? Beslutet går inte att ångra.',
+        ],
+
+        'accept' => 'Acceptera',
+        'reject' => 'Tacka nej',
     ],
 
     // Pärmens papperskorg, se issue 62a § Beslut 4, 5 och 9 och [[ADR-0008
