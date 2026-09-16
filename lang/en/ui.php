@@ -107,6 +107,16 @@ return [
         'attachment-uploaded' => 'The attachment has been uploaded.',
         'attachment-deleted' => 'The attachment is in the trash. It can be restored within 30 days.',
 
+        // Issue 67a decision 1. Three codes and not one: the three buttons do
+        // three different things, and "saved" without saying what would have
+        // been true but not an answer to what happened. `loan-deleted` says the
+        // ROW is gone and never that the thing is back — the row is
+        // soft-deleted and does not enter the trash (issue 76 decision 3), so
+        // the sentence promises no restore.
+        'loan-created' => 'The loan has been registered.',
+        'loan-updated' => 'The loan has been saved.',
+        'loan-deleted' => 'The loan row is gone.',
+
         // Issue 62a decision 7. ONE code for all four types: the restore takes
         // `type` in the body and shares one list, so the view has no reason to
         // know which of them just came back — but the sentence says content,
@@ -241,6 +251,14 @@ return [
                 'sibling' => 'a sibling',
             ],
             'cycle' => 'That direction would make a circle: this item is already above the counterpart, directly or through other items.',
+        ],
+
+        // The loan domain error on the web, see issue 67a decision 6 and issue
+        // 76 decision 4. The code comes from App\Exceptions\Api\ApiException
+        // and `data.loan` carries the ULID of the blocking row — it is kept for
+        // the client, but the sentence is the user's.
+        'loan' => [
+            'already_open' => 'The item is already lent out. Register the return first.',
         ],
 
         // The close flow's domain errors on the web, see issue 63b decision 6.
@@ -1255,6 +1273,82 @@ return [
             'dismiss' => 'Dismiss',
 
             'submit' => 'Upload',
+        ],
+
+        // The loan section on the detail view, see issue 67a decisions 2–8. The
+        // section lives in resources/js/components/ItemLoanSection.vue: it
+        // carries its own form and its own errors, just as ItemLinkSection does
+        // for the relations and ItemAttachmentSection for the attachments, so a
+        // field error on a date does not colour the rest of the page.
+        //
+        // `borrowed_by`, `lent_at`, `due_at` and `returned_at` are whole
+        // sentences built from a date and a name — the template joins them, and
+        // the date is already formatted by formatDateOnly() (decisions 3, 5).
+        'loan' => [
+            'heading' => 'Loans',
+            'description' => 'Who has the thing, and when it is due back.',
+
+            // The open loan sits on top and the history below (decision 2).
+            // `returned_at IS NULL` is the open one, and which row that is
+            // arrives pre-computed from the server.
+            'open_heading' => 'Lent out',
+            'not_lent' => 'The item is not lent out.',
+
+            'borrowed_by' => 'Lent to :name',
+            'lent_at' => 'Lent out :date',
+            'due_at' => 'Due back :date',
+            'no_due_at' => 'No return date set',
+
+            // Overdue is derived on the server's date (decision 5). The view
+            // never compares `due_at` against its own clock — it reads the
+            // `openLoanOverdue` flag from the response.
+            'overdue' => 'Overdue',
+
+            // The address is a contact detail and never a recipient address
+            // (decision 4, [[ADR-0017 Missbruksvektorer]] § 7). It is shown as text
+            // with the option to copy, and `email_note` says why the field
+            // exists: the system never emails the borrower, the reminder goes
+            // to the lender. No `mailto:` link, no reminder button and no
+            // sharing — the sentence is the whole answer to why the address is
+            // there.
+            'contact' => 'Contact details',
+            'copy' => 'Copy the address',
+            'copied' => 'The address is copied',
+            'email_note' => 'The address is never used for mailings. The system does not email the borrower — the reminder goes to you.',
+
+            // A return is a button and not a date field you have to
+            // understand (decision 3). The button sets today's date — the
+            // server's, from the `today` prop — and the custom date lives in
+            // the form next to it. `after_or_equal:lent_at` applies to both
+            // paths, so a date before the loan becomes a field error.
+            'return_today' => 'Back today',
+            'return_heading' => 'Register the return',
+            'return_date' => 'Return date',
+            'return_submit' => 'Register',
+
+            'history_heading' => 'Earlier loans',
+            'returned_at' => 'Back :date',
+
+            // Removing the row is NOT returning (decision 7). One erases a
+            // mistaken registration, the other records that the thing came
+            // back — and `destroy_confirm` says both, so the two buttons cannot
+            // be confused. The deletion is soft and the row does not enter the
+            // trash (issue 76 decision 3), so the sentence promises no restore.
+            'destroy' => 'Remove the row',
+            'destroy_confirm' => 'The row is removed. This is not a return — the thing is still lent out, and the return is registered with the other button. Continue?',
+
+            // The form. `lent_at` defaults to today's date (decision 3), and
+            // the four dates are `<input type="date">`: the browser sends
+            // `Y-m-d`, exactly what the `date` rule in the shared FormRequest
+            // accepts — no date parsing of our own in JavaScript.
+            'form_heading' => 'Lend out',
+            'form_name' => 'Lent to',
+            'form_email' => 'Email address',
+            'form_lent_at' => 'Lent out',
+            'form_due_at' => 'Due back',
+            'form_returned_at' => 'Returned',
+            'form_note' => 'Note',
+            'form_submit' => 'Lend out',
         ],
 
         // The schedule as a rule — the section on the detail view and the two
