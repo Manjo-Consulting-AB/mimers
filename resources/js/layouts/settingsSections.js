@@ -6,6 +6,11 @@
  * Säkerhet; issue 53c lade till Profil och Konton, och issue 65a Notiser.
  * Issue 66 Plan lägger sin rad här den också.
  *
+ * `plan` kom med issue 66a och ligger efter `accounts`: båda handlar om
+ * KONTOT — vad det heter och vad det får — och planen är svaret på den andra
+ * frågan. Notiserna och webhookarna under den handlar om vad som lämnar
+ * systemet.
+ *
  * Profil ligger först: `/settings` omdirigerar dit (routes/web.php), så den
  * posten är inställningarnas förstasida och ska stå överst i listan.
  *
@@ -23,6 +28,7 @@
 export const settingsSections = [
     { key: 'profile', href: '/settings/profile' },
     { key: 'accounts', href: '/settings/accounts' },
+    { key: 'plan', href: '/settings/plan' },
     { key: 'notifications', href: '/settings/notifications' },
     { key: 'webhooks', href: '/settings/webhooks' },
     { key: 'security', href: '/settings/security' },

@@ -32,6 +32,7 @@ use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\NotificationSettingsController;
+use App\Http\Controllers\Settings\PlanController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\TagController;
@@ -248,6 +249,33 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/settings/accounts/{account}', [AccountSettingsController::class, 'update'])
         ->name('settings.accounts.update');
+
+    /*
+     * Issue 66a · Plansidan — det valda kontots plan, förbrukningen mot
+     * gränserna och nedgraderingens pris, se
+     * App\Http\Controllers\Settings\PlanController.
+     *
+     * **EN rutt, ett konto i taget** (Beslut 1). Ingen `{account}` i sökvägen:
+     * kontot väljs i sidans väljare och följer med som `?account=`, precis som
+     * webhookarnas fyra rutter gör (65b § Beslut 1). Grinden
+     * `viewStorage` prövas mot det VALDA kontot — aldrig mot användarens
+     * första — och ett konto hon inte är medlem i ger 403.
+     *
+     * **Ingen `{account}`-parameter och ingen skrivrutin.** Sidan läser bara:
+     * nedgraderingen startas av ett betalflöde som inte finns i MVP (28
+     * § Beslut 1), och 66b bygger städningsytan som förhandsvisningen pekar
+     * på. Att lägga en POST här hade varit att bygga elfte steget först.
+     *
+     * **Ingen ny `/api`-rutt** (Beslut 1 och omfångsrutan): det finns ingen
+     * läsyta för plan och förbrukning i `/api`, och den här issuen bygger
+     * ingen. Webben läser genom App\Actions\Plan\ReadPlanUsage.
+     *
+     * Sidan får en egen rad i resources/js/layouts/settingsSections.js —
+     * navigationen renderas ur listan, och en sida ingen kan navigera till är
+     * en sida ingen hittar.
+     */
+    Route::get('/settings/plan', [PlanController::class, 'index'])
+        ->name('settings.plan');
 
     /*
      * Issue 65a · Notisinställningarna — personens kanalval, veckosammanfattning
