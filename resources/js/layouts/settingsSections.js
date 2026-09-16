@@ -9,6 +9,12 @@
  * Profil ligger först: `/settings` omdirigerar dit (routes/web.php), så den
  * posten är inställningarnas förstasida och ska stå överst i listan.
  *
+ * `webhooks` kom med issue 65b § Beslut 1 och ligger efter `notifications`:
+ * båda handlar om vad som lämnar systemet, men webhookarna hör till KONTOT
+ * och inte till personen — de är kontots utgång till egna system, och den
+ * som förvaltar dem måste vara `owner` eller `admin`
+ * (App\Policies\AccountPolicy::manageWebhooks()).
+ *
  * `key` är både React-nyckeln och sista ledet i översättningsnyckeln
  * (`settings.nav.<key>` i lang/{locale}/ui.php). Ingen färdig mening här:
  * texten formuleras på servern och slås bara upp på klienten, se
@@ -18,5 +24,6 @@ export const settingsSections = [
     { key: 'profile', href: '/settings/profile' },
     { key: 'accounts', href: '/settings/accounts' },
     { key: 'notifications', href: '/settings/notifications' },
+    { key: 'webhooks', href: '/settings/webhooks' },
     { key: 'security', href: '/settings/security' },
 ];

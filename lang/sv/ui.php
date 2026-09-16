@@ -165,6 +165,15 @@ return [
         'occurrence-dependency-created' => 'Undantaget är tillagt.',
         'occurrence-dependency-removed' => 'Undantaget är borttaget. Både schemana och båda förekomsterna finns kvar.',
 
+        // Issue 65b § Beslut 2, 3 och 4. Skapandet av en feed och en endpoint
+        // har ingen egen kod: där är det hemligheten själv som är beskedet, och
+        // en "skapat"-rad ovanför den hade bara upprepat den. Återkallandet och
+        // webhookens två skrivningar får däremot var sin mening — den ena säger
+        // att länken är död, den andra att raden sparades.
+        'calendar-feed-revoked' => 'Kalenderlänken är återkallad. Den slutar uppdateras i kalendern.',
+        'webhook-updated' => 'Webhooken är sparad.',
+        'webhook-destroyed' => 'Webhooken är borttagen. Hemligheten som hörde till är det också.',
+
         'session-expired' => 'Din session hann gå ut. Försök igen.',
     ],
 
@@ -328,6 +337,48 @@ return [
             'dependency_cycle' => 'Riktningen skulle göra en cirkel: ":schedule" väntar redan på ":depends_on", direkt eller genom mellanled.',
             'dependency_not_in_container' => 'Beroenden går bara mellan scheman i samma pärm.',
         ],
+
+        // Issue 65b § Beslut 5 · funktionsgrinden. `Entitlements::assertFeature()`
+        // kastar `plan.feature_unavailable` med funktionens namn i
+        // `data.feature` — en KOD (`webhooks`), precis som `item_link.pair_exists`
+        // bär en — och App\Http\Controllers\WebhookEndpointController
+        // översätter den i två steg: först till ett namn, sedan in i meningen.
+        // Meningen är densamma på sidan och i fältfelet, för den formuleras en
+        // gång och skickas både som prop och som fel.
+        //
+        // Planen namnges därför att webhooks är Pro-funktionen: servern svarar
+        // vilken funktion som saknas, inte vilken plan som gäller, och "Pro" är
+        // den enda planen som har den (migrationen som sår planerna). Får en
+        // andra plan funktionen, eller en andra funktion en webbyta, är det
+        // här meningen ska bli per funktion.
+        'plan' => [
+            'feature_unavailable' => ':feature kräver planen Pro.',
+            'feature_name' => [
+                'webhooks' => 'Webhooks',
+            ],
+        ],
+
+        // Issue 65b § Beslut 7 · URL:ens SSRF-svar på webben.
+        // `UrlSafetyValidator` svarar `webhook.unsafe_url` med en ORSAK i
+        // `data.reason` — också den en kod (`reserved_ip`, `invalid_scheme`,
+        // …) — och kontrollern översätter den i två steg på samma sätt som
+        // ovan. Felet hamnar på fältet `url`: det handlar om vad användaren
+        // skrev, och serverns mening är den användaren möter. Sidan gör ingen
+        // egen kontroll av privata intervall, `localhost` eller
+        // metadatatjänster.
+        'webhook' => [
+            'unsafe_url' => 'Adressen går inte att använda: :reason.',
+
+            'unsafe_reason' => [
+                'unparseable_url' => 'den går inte att tolka som en adress',
+                'invalid_scheme' => 'den måste börja med https://',
+                'userinfo' => 'den får inte bära användarnamn eller lösenord',
+                'invalid_port' => 'porten är inte tillåten',
+                'reserved_hostname' => 'den pekar på servern själv',
+                'dns_lookup_failed' => 'adressen går inte att slå upp',
+                'reserved_ip' => 'den pekar på ett internt nät',
+            ],
+        ],
     ],
 
     // Inställningarna, se issue 53b. `nav` är sidonavigationen, en nyckel per
@@ -341,6 +392,11 @@ return [
             'profile' => 'Profil',
             'accounts' => 'Konton',
             'notifications' => 'Notiser',
+            // Issue 65b § Beslut 1: webhookarna hör till KONTOT och ligger
+            // därför bland inställningarna, efter notiserna — båda handlar om
+            // vad som lämnar systemet, men den ena om personen och den andra
+            // om kontot.
+            'webhooks' => 'Webhooks',
             'security' => 'Säkerhet',
         ],
 
@@ -563,6 +619,148 @@ return [
         ],
     ],
 
+    // Pärmens kalenderlänk, se issue 65b § Beslut 2 och 4 och
+    // resources/js/pages/Containers/CalendarFeed.vue.
+    //
+    // Adressen är i praktiken ett lösenord till pärmens uppgifter
+    // ([[Notiser]] § ICS-kalenderfeed), och texterna säger det på två ställen:
+    // `url_once` vid visningen och `revoke_confirm` vid återkallandet. Den som
+    // tappat bort länken har inget att hämta — svaret är att återkalla och
+    // skapa en ny.
+    'calendar' => [
+        'title' => 'Kalender',
+        'heading' => 'Kalender',
+        'intro' => 'Prenumerera på pärmens uppgifter i kalendern du redan använder. Länken är personlig och visar bara det du själv får se.',
+
+        // Texten till SecretOnce. `url_description` säger vad adressen är till
+        // för, `url_once` att den inte går att se igen — båda behövs, och de
+        // formuleras här och inte i komponenten.
+        'url_label' => 'Kalenderadressen',
+        'url_description' => 'Lägg in adressen i din kalenderapp. Den hämtar uppgifterna själv och håller sig uppdaterad.',
+        'url_once' => 'Det här är enda gången adressen visas. Tappar du bort den återkallar du länken och skapar en ny.',
+
+        'copy' => 'Kopiera adressen',
+        'copied' => 'Adressen är kopierad',
+
+        'create' => 'Skapa en kalenderlänk',
+
+        'list_heading' => 'Dina länkar till den här pärmen',
+        'empty' => 'Du har inga kalenderlänkar till den här pärmen än.',
+
+        'revoke' => 'Återkalla',
+        'revoke_confirm' => 'Återkalla kalenderlänken? Kalendern slutar uppdateras, och adressen går inte att få tillbaka.',
+
+        // En återkallad rad ligger KVAR i listan (Beslut 4) och säger när
+        // länken dog — den som undrar varför kalendern slutade uppdateras ska
+        // se svaret i stället för en tom lista.
+        'row' => [
+            'created' => 'Skapad :date',
+            'last_fetched' => 'Senast hämtad :date',
+            'never_fetched' => 'Inte hämtad än',
+            'revoked_badge' => 'Återkallad',
+            'revoked_note' => 'Länken återkallades :date och kalendern uppdateras inte längre.',
+        ],
+    ],
+
+    // Kontots webhooks, se issue 65b § Beslut 1, 3, 5, 6, 7 och 8 och
+    // resources/js/pages/Settings/Webhooks.vue.
+    //
+    // Två hemligheter i samma form: `secret_once` motsvarar kalenderns
+    // `url_once` och av samma skäl. `secret_description` förklarar vad
+    // hemligheten används TILL — HMAC-SHA256 över kroppen — för en hemlighet
+    // utan förklaring är en sträng man klistrar in någonstans och glömmer.
+    'webhook' => [
+        'title' => 'Webhooks',
+        'heading' => 'Webhooks',
+        'intro' => 'Skicka händelser till dina egna system. Varje leverans signeras, så mottagaren kan kontrollera att den kommer från oss.',
+
+        'account_label' => 'Konto',
+
+        'secret_label' => 'Hemligheten',
+        'secret_description' => 'Verifiera signaturen med den: HMAC-SHA256 över kroppen, med hemligheten som nyckel. Utan den går våra leveranser inte att skilja från någon annans.',
+        'secret_once' => 'Det här är enda gången hemligheten visas. Tappar du bort den tar du bort webhooken och skapar en ny.',
+
+        'copy' => 'Kopiera hemligheten',
+        'copied' => 'Hemligheten är kopierad',
+
+        'create_heading' => 'Ny webhook',
+
+        'url_label' => 'Adress',
+        // Sidan gör ingen egen kontroll av privata intervall, `localhost`
+        // eller metadatatjänster (Beslut 7) — men den som skriver en adress
+        // ska veta vad som gäller innan servern svarar.
+        'url_hint' => 'En publik https-adress. Adresser på det egna nätet, på servern själv eller utan https avvisas.',
+
+        'event_types_label' => 'Händelser',
+
+        // Namn och en rads förklaring per typ, som notistyperna i 65a § Beslut
+        // 7. Nycklarna följer typnamnet i App\Models\WebhookEndpoint::
+        // EVENT_TYPES (`task.due` blir `event_type.task.due`), så en ny typ
+        // lägger sin text här och ingenstans annars.
+        'event_type' => [
+            'task' => [
+                'due' => [
+                    'label' => 'Uppgift förfaller',
+                    'description' => 'När en schemalagd uppgift blir synlig eller förfaller.',
+                ],
+                'overdue' => [
+                    'label' => 'Uppgift är försenad',
+                    'description' => 'När en uppgift passerat sitt datum utan att bockas av.',
+                ],
+            ],
+            'loan' => [
+                'due' => [
+                    'label' => 'Utlåning ska tillbaka',
+                    'description' => 'När ett utlånat item närmar sig återlämningsdagen.',
+                ],
+            ],
+            'quota' => [
+                'warning' => [
+                    'label' => 'Lagringsutrymmet börjar ta slut',
+                    'description' => 'När en kvot i planen passerar 80 eller 100 procent.',
+                ],
+            ],
+            'invitation' => [
+                'received' => [
+                    'label' => 'Inbjudan till en pärm',
+                    'description' => 'När någon bjuder in en medlem till kontot.',
+                ],
+            ],
+            'transfer' => [
+                'requested' => [
+                    'label' => 'Ägarbyte begärt',
+                    'description' => 'När någon vill ta över ett konto.',
+                ],
+            ],
+            'account' => [
+                'inactive' => [
+                    'label' => 'Kontot stängs av inaktivitet',
+                    'description' => 'Innan ett konto stängs för att det inte har använts.',
+                ],
+            ],
+        ],
+
+        'create' => 'Skapa webhook',
+
+        'list_heading' => 'Kontots webhooks',
+        'empty' => 'Kontot har inga webhooks än.',
+
+        'inactive_badge' => 'Avstängd',
+
+        // Skillnaden är hela poängen med flaggan ur serverns svar (Beslut 8):
+        // en rad som bara såg avstängd ut hade sett ut som om användaren själv
+        // gjort det. Systemmeningen säger också att räknaren börjar om, för
+        // det är vad återaktiveringen gör på servern.
+        'disabled_by_system' => 'Systemet stängde av den efter upprepade leveransfel. Slå på den igen när adressen fungerar — då börjar räkningen om från noll.',
+        'disabled_by_user' => 'Du har stängt av den. Slå på den igen när du vill ha leveranserna tillbaka.',
+
+        'deactivate' => 'Stäng av',
+        'activate' => 'Slå på',
+
+        'destroy' => 'Ta bort',
+        'destroy_confirm' => 'Ta bort webhooken? Hemligheten försvinner med den, och en ny webhook får en ny hemlighet.',
+    ],
+
     // Pärmen, se issue 54. `nav` är sidonavigationen, en nyckel per post i
     // resources/js/layouts/containerSections.js — samma `key` där som här.
     // 56a (kategorier och taggar), 57 (items) och 63 (scheman) lägger sina
@@ -591,6 +789,11 @@ return [
             'tags' => 'Taggar',
             'sharing' => 'Delning',
             'settings' => 'Inställningar',
+            // Issue 65b § Beslut 1: kalenderlänken är en UTGÅNG ur produkten —
+            // pärmens uppgifter prenumererade på ur någon annans kalender — och
+            // ligger efter inställningarna, före papperskorgen. Raden står på
+            // samma plats i containerSections.js.
+            'calendar' => 'Kalender',
             // Sist, som raden i containerSections.js — papperskorgen är dit
             // man går när något gått fel (issue 62a § Beslut 1).
             'trash' => 'Papperskorgen',
