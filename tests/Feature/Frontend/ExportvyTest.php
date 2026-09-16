@@ -333,6 +333,15 @@ it('låter en read-deltagare beställa och ladda ner', function () {
 
     $svar->assertOk();
     expect($svar->streamedContent())->toBe('zip-byten');
+
+    // Anropet ovan bevisar att rutten svarar; mallen bevisar att sidan pekar
+    // dit. Länken är en vanlig `<a>` mot `/exports/{ulid}/download`, grindad
+    // på `downloadable` — rätt rad får den, en utgången eller misslyckad får
+    // den inte (Beslut 5).
+    $rad = File::get(resource_path('js/components/ExportRow.vue'));
+
+    expect($rad)->toContain('v-if="downloadable"');
+    expect($rad)->toContain('`/exports/${row.ulid}/download`');
 });
 
 /*
