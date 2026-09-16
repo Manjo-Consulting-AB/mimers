@@ -199,6 +199,7 @@ function remove(row) {
                         <select
                             :id="fieldId"
                             v-model="form.depends_on"
+                            :aria-describedby="form.errors.depends_on ? `${fieldId}-error` : undefined"
                             name="depends_on"
                             required
                             class="self-start rounded border border-slate-300 bg-white px-3 py-2"
@@ -218,7 +219,12 @@ function remove(row) {
                              `dependency_not_in_container` och `not_open`
                              handlar om vilket schema eller vilken förekomst
                              som valdes. -->
-                        <p v-if="form.errors.depends_on" class="text-sm text-red-700">
+                        <p
+                            v-if="form.errors.depends_on"
+                            :id="`${fieldId}-error`"
+                            role="alert"
+                            class="text-sm text-red-700"
+                        >
                             {{ form.errors.depends_on }}
                         </p>
                     </div>

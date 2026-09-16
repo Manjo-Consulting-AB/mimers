@@ -32,7 +32,7 @@ const text = computed(() => t(`error.${props.status}`));
         <Head :title="t('error.title', { status })" />
 
         <div class="py-12 text-center">
-            <p class="font-mono text-sm text-slate-500">{{ status }}</p>
+            <p class="font-mono text-sm text-slate-600">{{ status }}</p>
             <h1 class="mt-2 text-2xl font-semibold">{{ text }}</h1>
 
             <Link href="/" class="mt-6 inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('common.home') }}</Link>

@@ -97,7 +97,7 @@ function destroy() {
 <template>
     <li
         class="flex flex-col gap-2 rounded border border-slate-300 bg-white px-4 py-3"
-        :class="editing || endpoint.is_active ? null : 'text-slate-500'"
+        :class="editing || endpoint.is_active ? null : 'text-slate-600'"
     >
         <template v-if="editing">
             <WebhookEndpointForm

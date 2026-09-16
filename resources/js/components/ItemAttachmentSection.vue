@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import { attachmentPreview, formatByteSize } from './attachmentPresentation.js';
@@ -170,9 +170,15 @@ const viewer = ref(null);
 const viewerTrigger = ref(null);
 const viewerElement = ref(null);
 
-function openViewer(attachment, event) {
+async function openViewer(attachment, event) {
     viewer.value = attachment;
     viewerTrigger.value = event.currentTarget;
+
+    // Innehållet är `v-if="viewer"` och finns alltså inte i DOM:en förrän Vue
+    // har patchat. `autofocus` läses av `showModal()`, inte av webbläsaren
+    // senare, så utan väntan landar första fokus på nedladdningslänken.
+    await nextTick();
+
     viewerElement.value?.showModal();
 }
 
@@ -502,7 +508,7 @@ function destroy(attachment) {
                         v-else-if="attachment.preview.display === 'file'"
                         role="img"
                         :aria-label="t('item.attachment.file_icon')"
-                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-500"
+                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-600"
                     >
                         <svg
                             viewBox="0 0 24 24"
@@ -580,8 +586,15 @@ function destroy(attachment) {
                         {{ t('item.attachment.download') }}
                     </a>
 
+                    <!--
+                        Stängningen är returvägen ut och det minst ingripande
+                        elementet i ytan. Utan `autofocus` landar första fokus
+                        på nedladdningslänken, och första Enter startar en
+                        nedladdning användaren inte bad om.
+                    -->
                     <button
                         type="button"
+                        autofocus
                         class="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-slate-700 hover:underline"
                         @click="closeViewer"
                     >

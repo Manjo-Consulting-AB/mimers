@@ -63,7 +63,7 @@ function apply() {
         <ul class="mt-3 flex flex-col gap-1 text-sm">
             <li v-for="category in preset" :key="category.name">
                 {{ category.name }}
-                <span v-if="category.children" class="text-slate-500">
+                <span v-if="category.children" class="text-slate-600">
                     — {{ category.children.join(', ') }}
                 </span>
             </li>

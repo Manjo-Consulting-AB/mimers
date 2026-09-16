@@ -61,7 +61,13 @@ function submit() {
 
         <h1 class="text-2xl font-semibold">{{ t('container.create.heading') }}</h1>
 
-        <p v-if="form.errors.quota" id="quota-error" tabindex="-1" class="mt-6 max-w-lg rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 outline-none">
+        <p
+            v-if="form.errors.quota"
+            id="quota-error"
+            role="alert"
+            tabindex="-1"
+            class="mt-6 max-w-lg rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 outline-none"
+        >
             {{ form.errors.quota }}
         </p>
 

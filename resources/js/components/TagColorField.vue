@@ -32,7 +32,7 @@ const { t } = useTranslations();
         <div class="flex flex-wrap items-center gap-2">
             <span
                 aria-hidden="true"
-                class="inline-block h-5 w-5 shrink-0 rounded-full border border-slate-300"
+                class="inline-block h-5 w-5 shrink-0 rounded-full border border-slate-500"
                 :style="modelValue ? { backgroundColor: modelValue } : null"
             />
 
@@ -48,8 +48,9 @@ const { t } = useTranslations();
                 @input="emit('update:modelValue', $event.target.value)"
             >
 
-            <label class="flex min-h-11 items-center gap-1 text-sm text-slate-700">
+            <label :for="`${id}-none`" class="flex min-h-11 items-center gap-1 text-sm text-slate-700">
                 <input
+                    :id="`${id}-none`"
                     type="checkbox"
                     :checked="modelValue === null"
                     @change="emit('update:modelValue', $event.target.checked ? null : '')"

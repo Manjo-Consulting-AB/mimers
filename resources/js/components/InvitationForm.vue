@@ -103,6 +103,7 @@ function submit() {
             <select
                 id="invitation-item"
                 v-model="form.item"
+                :aria-describedby="form.errors.item ? 'invitation-item-error' : undefined"
                 name="item"
                 class="self-start rounded border border-slate-300 bg-white px-3 py-2"
             >
@@ -110,7 +111,9 @@ function submit() {
                 <option v-for="item in items" :key="item.ulid" :value="item.ulid">{{ item.name }}</option>
             </select>
 
-            <p v-if="form.errors.item" class="text-sm text-red-700">{{ form.errors.item }}</p>
+            <p v-if="form.errors.item" id="invitation-item-error" role="alert" class="text-sm text-red-700">
+                {{ form.errors.item }}
+            </p>
         </div>
 
         <button

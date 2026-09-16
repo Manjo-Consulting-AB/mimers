@@ -66,7 +66,7 @@ function submit() {
         <p class="flex items-center gap-2 text-sm font-medium text-slate-800">
             <span
                 aria-hidden="true"
-                class="inline-block h-4 w-4 shrink-0 rounded-full border border-slate-300"
+                class="inline-block h-4 w-4 shrink-0 rounded-full border border-slate-500"
                 :style="tag.color ? { backgroundColor: tag.color } : null"
             />
             <span>{{ tag.name }}</span>

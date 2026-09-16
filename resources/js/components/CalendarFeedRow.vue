@@ -72,7 +72,7 @@ function revoke() {
 <template>
     <li
         class="flex flex-col gap-2 rounded border border-slate-300 bg-white px-4 py-3"
-        :class="revoked ? 'text-slate-500' : null"
+        :class="revoked ? 'text-slate-600' : null"
     >
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span>{{ t('calendar.row.created', { date: formatDate(props.feed.created_at, locale) }) }}</span>
