@@ -97,6 +97,7 @@ function complete() {
                  aldrig som en JSON-kropp — samma mönster som OpenOccurrence. -->
             <p
                 v-if="form.errors.occurrence"
+                role="alert"
                 tabindex="-1"
                 class="mt-2 whitespace-pre-line rounded bg-red-50 px-3 py-2 text-sm text-red-800 outline-none"
             >

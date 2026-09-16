@@ -133,7 +133,10 @@ function submit() {
             </FormField>
         </fieldset>
 
-        <fieldset class="flex flex-col gap-3">
+        <fieldset
+            class="flex flex-col gap-3"
+            :aria-describedby="form.errors.excluded_items ? 'transfer-excluded-error' : undefined"
+        >
             <legend class="text-sm font-medium text-slate-800">{{ t('transfer.excluded.heading') }}</legend>
             <p class="text-sm text-slate-600">{{ t('transfer.excluded.help') }}</p>
 
@@ -157,7 +160,13 @@ function submit() {
                 <span class="text-sm">{{ item.name }}</span>
             </label>
 
-            <p v-if="form.errors.excluded_items" tabindex="-1" class="text-sm text-red-700 outline-none">
+            <p
+                v-if="form.errors.excluded_items"
+                id="transfer-excluded-error"
+                role="alert"
+                tabindex="-1"
+                class="text-sm text-red-700 outline-none"
+            >
                 {{ form.errors.excluded_items }}
             </p>
         </fieldset>
@@ -175,6 +184,7 @@ function submit() {
             <select
                 id="transfer-retain"
                 v-model="form.retain_access_level"
+                :aria-describedby="form.errors.retain_access_level ? 'transfer-retain-error' : undefined"
                 name="retain_access_level"
                 class="self-start rounded border border-slate-300 bg-white px-3 py-2"
             >
@@ -184,7 +194,7 @@ function submit() {
                 </option>
             </select>
 
-            <p v-if="form.errors.retain_access_level" class="text-sm text-red-700">
+            <p v-if="form.errors.retain_access_level" id="transfer-retain-error" role="alert" class="text-sm text-red-700">
                 {{ form.errors.retain_access_level }}
             </p>
         </div>

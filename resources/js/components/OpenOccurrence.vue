@@ -173,7 +173,7 @@ function action(name) {
                 </select>
             </FormField>
 
-            <p class="text-xs text-slate-500">{{ t('item.schedule.occurrence.account_hint') }}</p>
+            <p class="text-xs text-slate-600">{{ t('item.schedule.occurrence.account_hint') }}</p>
 
             <FormField
                 :label="t('item.schedule.occurrence.note')"
@@ -188,7 +188,7 @@ function action(name) {
                 >
             </FormField>
 
-            <p class="text-xs text-slate-500">{{ t('item.schedule.occurrence.note_hint') }}</p>
+            <p class="text-xs text-slate-600">{{ t('item.schedule.occurrence.note_hint') }}</p>
 
             <!-- Domänfelet ur avslutsflödet (Beslut 6). `occurrence.blocked`
                  bär hela blockerarlistan som färdiga rader, en per uppgift
@@ -198,6 +198,7 @@ function action(name) {
             <p
                 v-if="form.errors.occurrence"
                 :id="errorId"
+                role="alert"
                 tabindex="-1"
                 class="whitespace-pre-line rounded bg-red-50 px-3 py-2 text-sm text-red-800 outline-none"
             >

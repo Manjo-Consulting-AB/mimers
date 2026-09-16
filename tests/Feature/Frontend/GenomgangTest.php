@@ -334,3 +334,247 @@ it('läser varje fil under resources/js', function () {
 
     expect(genomgangKod())->toHaveCount(count($relevanta));
 });
+
+/*
+ * ---------------------------------------------------------------------------
+ * Issue 68b · Tangentbordet och skärmläsaren.
+ *
+ * Samma sorts källkodsprov som ovan och av samma skäl: det som går att avgöra
+ * ur markupen prövas här, det som kräver en webbläsare — de fem flödena, den
+ * faktiska kontrasten, att tangentbordet når fram — står i PR-kroppen.
+ * ---------------------------------------------------------------------------
+ */
+
+/**
+ * Varje öppningstag av en sort i en fil, som rå markup.
+ *
+ * Attributvärdena matchas med citattecken runt om, så ett `>` inuti ett värde
+ * inte avslutar taggen i förtid. Det behövs för `:disabled="a === b"` och för
+ * `:class="menuOpen ? 'flex' : 'hidden'"`, som båda står i repot.
+ *
+ * @return array<int, array{rad: int, markup: string}>
+ */
+function genomgangTaggar(string $kod, string $tag): array
+{
+    preg_match_all(
+        '/<'.$tag.'\b((?:"[^"]*"|\'[^\']*\'|[^>"\'])*?)>/s',
+        $kod,
+        $träffar,
+        PREG_OFFSET_CAPTURE,
+    );
+
+    return array_map(fn (array $träff): array => [
+        'rad' => substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
+        'markup' => $träff[0],
+    ], $träffar[0]);
+}
+
+it('håller fokusordningen i dokumentordningen — ingen positiv tabindex', function () {
+    // Beslut 4. Ett `tabindex="1"` flyttar hela sidans ordning och går sönder
+    // nästa gång någon lägger till ett fält; bara 0 och -1 är tillåtna. Provet
+    // läser literala värden — ett bundet värde är 0 i PHP och faller igenom,
+    // vilket är rätt: `:tabindex="-1"` är tillåtet.
+    $granskade = 0;
+
+    foreach (genomgangKod() as $sokvag => $kod) {
+        preg_match_all('/:?tabindex="([^"]*)"/', $kod, $träffar, PREG_OFFSET_CAPTURE);
+
+        foreach ($träffar[1] as $träff) {
+            $granskade++;
+
+            expect((int) $träff[0])->toBeLessThanOrEqual(0, sprintf(
+                '%s:%d sätter tabindex="%s" — bara 0 och -1 är tillåtna',
+                $sokvag,
+                substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
+                $träff[0],
+            ));
+        }
+    }
+
+    expect($granskade)->toBeGreaterThan(10);
+});
+
+it('gör varje klickbar yta till en knapp, en länk eller ett inmatningsfält', function () {
+    // Beslut 1. En `<div>` med `@click` är en knapp ingen kan nå med tabb.
+    // `<input>` står med för radioknappens `@click` i
+    // NotificationPreferenceRow, som kompletterar `@change` — fältet är
+    // tabbbart och tangentbordet äger det.
+    $tillåtna = ['button', 'a', 'Link', 'summary', 'input'];
+
+    $granskade = 0;
+
+    foreach (genomgangKod() as $sokvag => $kod) {
+        preg_match_all('/@click[\w.]*=|v-on:click[\w.]*=/', $kod, $träffar, PREG_OFFSET_CAPTURE);
+
+        foreach ($träffar[0] as $träff) {
+            $start = strrpos(substr($kod, 0, $träff[1]), '<');
+
+            expect($start)->not->toBeFalse("{$sokvag}: ett @click utanför en tagg");
+
+            preg_match('/^<([a-zA-Z][\w-]*)/', (string) substr($kod, (int) $start), $namn);
+
+            $granskade++;
+
+            expect(in_array($namn[1] ?? '', $tillåtna, true))->toBeTrue(sprintf(
+                '%s:%d har @click på en <%s> — den går inte att nå med tabb',
+                $sokvag,
+                substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
+                $namn[1] ?? '?',
+            ));
+        }
+    }
+
+    expect($granskade)->toBeGreaterThan(20);
+});
+
+it('ger varje bild en alt-text', function () {
+    // Beslut 8. `alt=""` är tillåtet och rätt för det som bara är pynt; en
+    // `<img>` helt utan `alt` läser skärmläsaren upp som "bild".
+    $granskade = 0;
+
+    foreach (genomgangKod() as $sokvag => $kod) {
+        foreach (genomgangTaggar($kod, 'img') as $bild) {
+            $granskade++;
+
+            expect($bild['markup'])->toMatch('/\b:?alt=/', sprintf(
+                '%s:%d är en <img> utan alt',
+                $sokvag,
+                $bild['rad'],
+            ));
+        }
+    }
+
+    expect($granskade)->toBeGreaterThan(0);
+});
+
+it('knyter varje etikett till sitt fält med for och id', function () {
+    // Beslut 3. En `<label>` utan `for` och ett fält utan `id` hör inte ihop:
+    // skärmläsaren får ett namnlöst fält och en lös rad text.
+    $etiketter = 0;
+    $fält = 0;
+
+    foreach (genomgangKod() as $sokvag => $kod) {
+        foreach (genomgangTaggar($kod, 'label') as $etikett) {
+            $etiketter++;
+
+            expect($etikett['markup'])->toMatch('/(^|\s):?for="/', sprintf(
+                '%s:%d är en <label> utan for',
+                $sokvag,
+                $etikett['rad'],
+            ));
+        }
+
+        foreach (['input', 'select', 'textarea'] as $tag) {
+            foreach (genomgangTaggar($kod, $tag) as $kontroll) {
+                $fält++;
+
+                expect($kontroll['markup'])->toMatch('/(^|\s):?id="/', sprintf(
+                    '%s:%d är ett <%s> utan id',
+                    $sokvag,
+                    $kontroll['rad'],
+                    $tag,
+                ));
+            }
+        }
+    }
+
+    expect($etiketter)->toBeGreaterThan(20);
+    expect($fält)->toBeGreaterThan(30);
+});
+
+it('ger varje sida exakt en h1', function () {
+    // Beslut 5. `<h1>` är den som säger var man är, och två av dem säger
+    // ingenting. Att rubriknivåerna inte hoppar över kontrolleras för hand i
+    // PR:en — det kräver att komponenterna räknas in i sidan de ritas i.
+    $sidor = genomgangSidor();
+
+    expect($sidor)->not->toBeEmpty();
+
+    foreach ($sidor as $sokvag => $kod) {
+        expect(preg_match_all('/<h1\b/', $kod))->toBe(1, "{$sokvag} har inte exakt en <h1>");
+    }
+});
+
+it('annonserar flashmeddelanden och felsummeringar', function () {
+    // Beslut 6. Ett "sparat" som bara syns är inget besked för den som inte
+    // tittar på skärmen. Varje felrad bär antingen `role="alert"` — den
+    // fristående summeringen — eller ett id som fältet pekar på med
+    // `aria-describedby`, vilket är FormFields väg.
+    $flash = genomgangKod()['components/FlashMessage.vue'] ?? null;
+
+    expect($flash)->not->toBeNull()->toContain('role="status"');
+
+    $granskade = 0;
+
+    foreach (genomgangKod() as $sokvag => $kod) {
+        foreach (genomgangTaggar($kod, 'p') as $rad) {
+            if (stripos($rad['markup'], 'error') === false) {
+                continue;
+            }
+
+            $granskade++;
+
+            $harRoll = str_contains($rad['markup'], 'role="alert"');
+            $harId = preg_match('/(^|\s):?id="/', $rad['markup']) === 1;
+            $harBindning = str_contains($kod, 'aria-describedby') || str_contains($kod, 'describedBy');
+
+            expect($harRoll || ($harId && $harBindning))->toBeTrue(sprintf(
+                '%s:%d bär ett fel utan role="alert" och utan ett id ett fält kan peka på',
+                $sokvag,
+                $rad['rad'],
+            ));
+        }
+    }
+
+    expect($granskade)->toBeGreaterThan(10);
+});
+
+it('låter webbläsaren äga fokusfällan i varje overlay', function () {
+    // Beslut 2. `<dialog>` fångar tabben medan den är öppen och släpper den
+    // när den stängs — det är webbläsarens fokusfälla, inte vår. Ett eget
+    // `aria-modal` eller en egen tabbhanterare är den fälla som fastnar.
+    foreach (genomgangKod() as $sokvag => $kod) {
+        expect($kod)->not->toContain('aria-modal', "{$sokvag} bygger en egen modal");
+
+        expect($kod)->not->toMatch('/@keydown\.(tab|esc)/', "{$sokvag} hanterar tangentbordet i en egen fälla");
+    }
+});
+
+it('stänger bildvisaren med Esc och lämnar fokus tillbaka till miniatyren', function () {
+    $kod = genomgangKod()['components/ItemAttachmentSection.vue'] ?? null;
+
+    expect($kod)->not->toBeNull()
+        ->toContain('<dialog')
+        ->toContain('@close=')
+        ->toContain('showModal()')
+        ->toContain('?.focus()');
+});
+
+it('förmedlar pausat, försenat och återkallat med ett ord och inte bara en nyans', function () {
+    // Beslut 7:s andra stycke. Färgen får bära tillståndet bara tillsammans
+    // med ett ord — den som inte ser nyansen ska ändå kunna läsa raden.
+    $ord = [
+        'components/ScheduleListSection.vue' => 'item.schedule.paused',
+        'components/OpenOccurrence.vue' => 'item.schedule.occurrence.overdue',
+        'components/ItemLoanSection.vue' => 'item.loan.overdue',
+        'components/CalendarFeedRow.vue' => 'calendar.row.revoked_badge',
+        'components/WebhookEndpointRow.vue' => 'webhook.activate',
+        'components/NotificationPreferenceRow.vue' => 'notifications.mode.',
+    ];
+
+    foreach ($ord as $fil => $nyckel) {
+        expect(genomgangKod()[$fil] ?? null)->not->toBeNull("{$fil} saknas")->toContain($nyckel);
+    }
+});
+
+it('sätter html lang ur den delade locale-propen även vid klientnavigering', function () {
+    // Beslut 9. Rotvyn sätter attributet vid den första laddningen
+    // (resources/views/app.blade.php, prövat i SprakTest); app.js håller det
+    // färskt när språket byts med en Inertia-visit, vilket är vad
+    // profilsidans locale-väljare gör.
+    $kod = File::get(resource_path('js/app.js'));
+
+    expect($kod)->toContain('document.documentElement.lang')
+        ->toContain("'inertia:navigate'")
+        ->toContain('props.locale');
+});

@@ -141,7 +141,7 @@ const showsVerificationNotice = computed(
             <slot />
         </main>
 
-        <footer class="border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+        <footer class="border-t border-slate-200 py-4 text-center text-xs text-slate-600">
             {{ t('common.brand') }}
         </footer>
     </div>

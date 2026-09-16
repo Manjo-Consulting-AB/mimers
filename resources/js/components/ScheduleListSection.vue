@@ -172,7 +172,7 @@ function destroy(schedule) {
                 v-for="schedule in rows"
                 :key="schedule.ulid"
                 class="flex flex-col gap-2 rounded border border-slate-300 bg-white px-4 py-3"
-                :class="schedule.is_active ? null : 'text-slate-500'"
+                :class="schedule.is_active ? null : 'text-slate-600'"
             >
                 <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <span class="font-medium">{{ schedule.title }}</span>

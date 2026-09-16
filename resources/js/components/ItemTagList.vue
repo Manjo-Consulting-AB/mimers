@@ -27,7 +27,7 @@ defineProps({
         >
             <span
                 aria-hidden="true"
-                class="inline-block h-3 w-3 shrink-0 rounded-full border border-slate-300"
+                class="inline-block h-3 w-3 shrink-0 rounded-full border border-slate-500"
                 :style="tag.color ? { backgroundColor: tag.color } : null"
             />
             <span>{{ tag.name }}</span>

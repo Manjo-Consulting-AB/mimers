@@ -302,24 +302,35 @@ function submit() {
         </p>
 
         <!-- Taggarna: kryssrutor med sin färgprick, en per tagg i pärmen. -->
-        <fieldset v-if="tags.length > 0" class="flex flex-col gap-2">
+        <fieldset
+            v-if="tags.length > 0"
+            class="flex flex-col gap-2"
+            :aria-describedby="tagError ? 'tags-error' : undefined"
+        >
             <legend class="text-sm font-medium text-slate-800">{{ t('item.form.tags') }}</legend>
 
             <label
                 v-for="tag in tags"
                 :key="tag.ulid"
+                :for="`item-tag-${tag.ulid}`"
                 class="flex min-h-11 min-w-11 items-center gap-2 text-sm text-slate-800"
             >
-                <input v-model="form.tags" type="checkbox" name="tags[]" :value="tag.ulid">
+                <input
+                    :id="`item-tag-${tag.ulid}`"
+                    v-model="form.tags"
+                    type="checkbox"
+                    name="tags[]"
+                    :value="tag.ulid"
+                >
                 <span
                     aria-hidden="true"
-                    class="inline-block h-3 w-3 shrink-0 rounded-full border border-slate-300"
+                    class="inline-block h-3 w-3 shrink-0 rounded-full border border-slate-500"
                     :style="tag.color ? { backgroundColor: tag.color } : null"
                 />
                 {{ tag.name }}
             </label>
 
-            <p v-if="tagError" id="tags-error" tabindex="-1" class="text-sm text-red-700 outline-none">
+            <p v-if="tagError" id="tags-error" role="alert" tabindex="-1" class="text-sm text-red-700 outline-none">
                 {{ tagError }}
             </p>
         </fieldset>

@@ -502,7 +502,7 @@ function destroy(attachment) {
                         v-else-if="attachment.preview.display === 'file'"
                         role="img"
                         :aria-label="t('item.attachment.file_icon')"
-                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-500"
+                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-600"
                     >
                         <svg
                             viewBox="0 0 24 24"

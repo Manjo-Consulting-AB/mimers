@@ -137,6 +137,7 @@ function submit() {
                 <input
                     :id="field('expires_at')"
                     v-model="form.expires_at"
+                    :aria-describedby="form.errors.expires_at ? `${field('expires_at')}-error` : undefined"
                     type="date"
                     :min="tomorrow"
                     class="self-start rounded border border-slate-300 px-2 py-1"
@@ -144,7 +145,12 @@ function submit() {
 
                 <p class="text-xs text-slate-600">{{ t('sharing.accesses.expires_fixed') }}</p>
 
-                <p v-if="form.errors.expires_at" class="text-sm text-red-700">
+                <p
+                    v-if="form.errors.expires_at"
+                    :id="`${field('expires_at')}-error`"
+                    role="alert"
+                    class="text-sm text-red-700"
+                >
                     {{ form.errors.expires_at }}
                 </p>
             </div>

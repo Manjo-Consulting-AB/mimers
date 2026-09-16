@@ -150,8 +150,9 @@ function submit() {
                     :key="row.ulid"
                     class="rounded border border-slate-300 bg-white px-4 py-2"
                 >
-                    <label class="flex min-h-11 items-start gap-3">
+                    <label :for="`storage-${row.ulid}`" class="flex min-h-11 items-start gap-3">
                         <input
+                            :id="`storage-${row.ulid}`"
                             v-model="selected"
                             type="checkbox"
                             :value="row.ulid"

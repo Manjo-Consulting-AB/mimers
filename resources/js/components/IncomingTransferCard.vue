@@ -108,6 +108,7 @@ function reject() {
             <select
                 :id="accountId"
                 v-model="form.to_account"
+                :aria-describedby="form.errors.to_account ? `${accountId}-error` : undefined"
                 class="self-start rounded border border-slate-300 bg-white px-3 py-2"
             >
                 <option v-for="option in accounts" :key="option.ulid" :value="option.ulid">
@@ -121,7 +122,12 @@ function reject() {
             ett konto användaren inte är med i avvisas på servern, och felet
             hamnar här. Ingen klientregel upprepar den kontrollen.
         -->
-        <p v-if="form.errors.to_account" class="text-sm text-red-700 outline-none">
+        <p
+            v-if="form.errors.to_account"
+            :id="`${accountId}-error`"
+            role="alert"
+            class="text-sm text-red-700 outline-none"
+        >
             {{ form.errors.to_account }}
         </p>
 

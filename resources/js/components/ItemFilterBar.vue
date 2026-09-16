@@ -139,9 +139,10 @@ function remove(entry) {
         :aria-label="t('item.index.filter_heading')"
         @submit.prevent="apply()"
     >
-        <label class="flex flex-col gap-1 text-sm font-medium text-slate-800">
+        <label for="item-filter-q" class="flex flex-col gap-1 text-sm font-medium text-slate-800">
             {{ t('item.index.filter_q') }}
             <input
+                id="item-filter-q"
                 v-model="q"
                 type="text"
                 name="q"
@@ -151,9 +152,14 @@ function remove(entry) {
 
         <!-- Kategorin: samma trädväljare som 57b:s formulär, byggd ur samma
              flata lista. Ingen kategori i pärmen, inget fält. -->
-        <label v-if="options.length > 0" class="flex flex-col gap-1 text-sm font-medium text-slate-800">
+        <label
+            v-if="options.length > 0"
+            for="item-filter-category"
+            class="flex flex-col gap-1 text-sm font-medium text-slate-800"
+        >
             {{ t('item.index.filter_category') }}
             <select
+                id="item-filter-category"
                 v-model="category"
                 name="category"
                 class="rounded border border-slate-300 bg-white px-3 py-2 font-normal"
@@ -174,12 +180,19 @@ function remove(entry) {
                 <label
                     v-for="tag in tags"
                     :key="tag.ulid"
+                    :for="`item-filter-tag-${tag.ulid}`"
                     class="flex min-h-11 min-w-11 items-center gap-2 text-sm font-normal text-slate-800"
                 >
-                    <input v-model="selectedTags" type="checkbox" name="tags[]" :value="tag.ulid">
+                    <input
+                        :id="`item-filter-tag-${tag.ulid}`"
+                        v-model="selectedTags"
+                        type="checkbox"
+                        name="tags[]"
+                        :value="tag.ulid"
+                    >
                     <span
                         aria-hidden="true"
-                        class="inline-block h-3 w-3 shrink-0 rounded-full border border-slate-300"
+                        class="inline-block h-3 w-3 shrink-0 rounded-full border border-slate-500"
                         :style="tag.color ? { backgroundColor: tag.color } : null"
                     />
                     {{ tag.name }}

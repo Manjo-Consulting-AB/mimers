@@ -181,6 +181,7 @@ function remove(counterpart) {
                     <select
                         id="item-link-counterpart"
                         v-model="form.item"
+                        :aria-describedby="form.errors.item ? 'item-link-counterpart-error' : undefined"
                         name="item"
                         required
                         class="self-start rounded border border-slate-300 bg-white px-3 py-2"
@@ -191,7 +192,9 @@ function remove(counterpart) {
                         </option>
                     </select>
 
-                    <p v-if="form.errors.item" class="text-sm text-red-700">{{ form.errors.item }}</p>
+                    <p v-if="form.errors.item" id="item-link-counterpart-error" role="alert" class="text-sm text-red-700">
+                        {{ form.errors.item }}
+                    </p>
                 </div>
 
                 <div class="flex flex-col gap-1">
@@ -202,6 +205,7 @@ function remove(counterpart) {
                     <select
                         id="item-link-relation"
                         v-model="form.relation"
+                        :aria-describedby="form.errors.relation ? 'item-link-relation-error' : undefined"
                         name="relation"
                         required
                         class="self-start rounded border border-slate-300 bg-white px-3 py-2"
@@ -217,7 +221,9 @@ function remove(counterpart) {
                     <!-- Riktningen och inte motparten: en cykel handlar om
                          vilket håll kanten går åt, och `item_link.cycle` läggs
                          därför på den här nyckeln (Beslut 6). -->
-                    <p v-if="form.errors.relation" class="text-sm text-red-700">{{ form.errors.relation }}</p>
+                    <p v-if="form.errors.relation" id="item-link-relation-error" role="alert" class="text-sm text-red-700">
+                        {{ form.errors.relation }}
+                    </p>
                 </div>
 
                 <button
