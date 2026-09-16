@@ -1291,7 +1291,6 @@ return [
             // The open loan sits on top and the history below (decision 2).
             // `returned_at IS NULL` is the open one, and which row that is
             // arrives pre-computed from the server.
-            'open_heading' => 'Lent out',
             'not_lent' => 'The item is not lent out.',
 
             'borrowed_by' => 'Lent to :name',
@@ -1322,7 +1321,6 @@ return [
             // the form next to it. `after_or_equal:lent_at` applies to both
             // paths, so a date before the loan becomes a field error.
             'return_today' => 'Back today',
-            'return_heading' => 'Register the return',
             'return_date' => 'Return date',
             'return_submit' => 'Register',
 

@@ -1433,7 +1433,6 @@ return [
             // Den öppna utlåningen står överst och historiken under
             // (Beslut 2). `returned_at IS NULL` är den öppna, och vilken rad
             // det är kommer färdigräknad från servern.
-            'open_heading' => 'Utlånad',
             'not_lent' => 'Itemet är inte utlånat.',
 
             'borrowed_by' => 'Lånad av :name',
@@ -1464,7 +1463,6 @@ return [
             // `after_or_equal:lent_at` gäller båda vägarna, så ett datum före
             // utlåningen blir ett fältfel.
             'return_today' => 'Tillbaka idag',
-            'return_heading' => 'Registrera återlämningen',
             'return_date' => 'Återlämningsdatum',
             'return_submit' => 'Registrera',
 
