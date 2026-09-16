@@ -985,6 +985,37 @@ return [
         ],
     ],
 
+    // The to-do view, see issue 64. The landing page after sign-in: the open
+    // occurrences across every binder the user can reach.
+    //
+    // The two empty sentences differ on purpose (decision 6): one says the
+    // user has no binder at all and carries a link to create one, the other
+    // that there is nothing to do. Neither mentions a number or hints that
+    // anything was hidden — a scope-limited recipient with an empty list gets
+    // the exact same sentence as an owner whose tasks are done.
+    'todo' => [
+        'title' => 'To do',
+        'heading' => 'To do',
+
+        'due' => 'Due :date',
+        'complete' => 'Check off',
+
+        // The section headings. The key is the group's name, the same three
+        // words the controller sorts the rows into — no separate list in
+        // JavaScript that could drift from the server's.
+        'group' => [
+            'overdue' => 'Overdue',
+            'today' => 'Today',
+            'upcoming' => 'Upcoming',
+        ],
+
+        'empty' => [
+            'no_containers' => 'You have no binders yet.',
+            'create' => 'Create a binder',
+            'nothing' => 'Nothing to do right now.',
+        ],
+    ],
+
     // The sharing page, see issue 55a. Two sections with different audiences
     // (decision 3), and the texts follow that split.
     'sharing' => [

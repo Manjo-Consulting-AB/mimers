@@ -1157,6 +1157,38 @@ return [
         ],
     ],
 
+    // Todo-vyn, se issue 64. Startsidan efter inloggning — de öppna
+    // förekomsterna över alla pärmar användaren når.
+    //
+    // De två tomma meningarna är olika med flit (Beslut 6): den ena säger att
+    // användaren inte har någon pärm alls och bär en länk till att skapa en,
+    // den andra att det inte finns något att göra. Ingen av dem nämner ett
+    // antal eller antyder att något dolts — en omfångsbegränsad mottagare med
+    // tom lista får ordagrant samma mening som en ägare vars uppgifter är
+    // gjorda.
+    'todo' => [
+        'title' => 'Att göra',
+        'heading' => 'Att göra',
+
+        'due' => 'Förfaller :date',
+        'complete' => 'Bocka av',
+
+        // Sektionernas rubriker. Nyckeln är gruppens namn, samma tre ord som
+        // kontrollern sorterar raderna i — ingen egen uppräkning i JavaScript
+        // som kan glida ifrån serverns.
+        'group' => [
+            'overdue' => 'Försenat',
+            'today' => 'Idag',
+            'upcoming' => 'Kommande',
+        ],
+
+        'empty' => [
+            'no_containers' => 'Du har inga pärmar än.',
+            'create' => 'Skapa en pärm',
+            'nothing' => 'Inget att göra just nu.',
+        ],
+    ],
+
     // Delningssidan, se issue 55a. Sidan bär två sektioner med olika publik
     // (§ Beslut 3): deltagarna ser varje deltagare, åtkomsterna ser bara
     // ägarkontot. Texterna nedan följer samma uppdelning — `participants`
