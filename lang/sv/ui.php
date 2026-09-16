@@ -352,10 +352,11 @@ return [
         // andra plan funktionen, eller en andra funktion en webbyta, är det
         // här meningen ska bli per funktion.
         'plan' => [
-            // 66a: länka ordet "Pro" i meningen nedan till `settings.plan` när
-            // planvyn finns. Meningen står utan länk tills dess — Ziggy kastar
-            // på en rutt som inte finns, så en förberedd länk vore en trasig
-            // sida och inte en trasig länk.
+            // Meningen står utan länk med flit, också nu när planvyn finns (66a).
+            // Strängen levereras även i API:ets felhölje, och markup i en
+            // översättningssträng blir antingen escapad text hos API-klienten eller
+            // `v-html` i vyn. Vill någon länka till planen är det en egen nyckel och
+            // en egen länk bredvid felrutan i Webhooks.vue, inte en `<a>` här inne.
             'feature_unavailable' => ':feature kräver planen Pro.',
             'feature_name' => [
                 'webhooks' => 'Webhooks',
@@ -395,6 +396,9 @@ return [
         'nav' => [
             'profile' => 'Profil',
             'accounts' => 'Konton',
+            // Issue 66a § Beslut 1: plansidan ligger efter kontona — båda
+            // handlar om KONTOT, och planen är svaret på vad det får.
+            'plan' => 'Plan',
             'notifications' => 'Notiser',
             // Issue 65b § Beslut 1: webhookarna hör till KONTOT och ligger
             // därför bland inställningarna, efter notiserna — båda handlar om
@@ -782,6 +786,128 @@ return [
     // egen gren, `sharing` nedan, för sidan bär två sektioner och en egen
     // vokabulär — se issue 55a § Beslut 4 och 5. 62a (papperskorgen) har en
     // egen TOPPNIVÅgren, `trash`, av samma skäl.
+    // Plansidan, se issue 66a § Beslut 4–9 och [[Planer och kvoter]].
+    //
+    // **Egen gren på toppnivå**, som `trash` och `sharing`: plansidan är sin
+    // egen yta med sin egen vokabulär, och nycklarna ligger under `plan.*` och
+    // ingen annanstans (Beslut 9). Ingen sträng i en .vue-fil — texten
+    // formuleras på servern ur den här filen, och klienten slår bara upp den
+    // ([[ADR-0021 Frontendteknik]]).
+    'plan' => [
+        'title' => 'Plan och förbrukning',
+        'heading' => 'Plan och förbrukning',
+        'intro' => 'Vad kontot har, hur mycket av varje gräns som är förbrukat, och vad en nedgradering skulle innebära.',
+
+        'account_label' => 'Konto',
+        'name_label' => 'Plan',
+        'price_label' => 'Pris',
+        'current_heading' => 'Aktuell plan',
+
+        // Plannamnen per `code` (Beslut 9). Nycklarna är kolumnvärdet i
+        // `plan.code`, aldrig plannamnet ur databasen: en översättning per kod
+        // ger svaret på svenska, och en plan vars kod saknas syns som
+        // `plan.names.…` i stället för att tyst bli engelsk.
+        'names' => [
+            'free' => 'Free',
+            'pro' => 'Pro',
+            'broker' => 'Broker',
+            'yard' => 'Yard',
+            'charter' => 'Charter',
+        ],
+
+        // Gratisplanens pris är noll, och "0 EUR" är rätt tal och fel mening.
+        'price_free' => 'Kostnadsfritt',
+        'period' => [
+            'year' => 'per år',
+            'month' => 'per månad',
+        ],
+
+        // Kontots status står överst och inte nedgrävd (Beslut 5). Nycklarna är
+        // värdena i `account.read_only_reason` — en kod, precis som
+        // `container.kind` — så en ny orsak är en ny rad här och ingen `if` i
+        // vyn. Ett `active` konto har ingen orsak och får ingen ruta.
+        //
+        // Dagarna formulerar sidan med 62a:s två pluralnycklar
+        // (`trash.expires.day` och `trash.expires.days`), se Plan.vue: samma
+        // mening om samma sak, och `t()` har ingen pluralisering (issue 52
+        // § Beslut 4).
+        'status' => [
+            'payment_failed' => 'Kontot är fryst: en betalning har uteblivit.',
+            'over_quota' => 'Kontot är fryst: det ligger över gränsen för sin plan.',
+            'inactivity' => 'Kontot är fryst: det har inte använts på länge.',
+            'grace' => 'Fristen går ut:',
+        ],
+
+        'usage_heading' => 'Förbrukning och gränser',
+
+        // De fyra numeriska gränserna (Beslut 4). Nycklarna är nycklarna i
+        // `plan.limits`, aldrig påhittade egna namn.
+        'limits' => [
+            'containers' => 'Pärmar',
+            'storage_bytes' => 'Lagringsutrymme',
+            'max_file_bytes' => 'Största filstorlek',
+            'shared_users_per_container' => 'Delade användare per pärm',
+        ],
+
+        // `:used` och `:limit` är färdigformaterade av servern — bytena med
+        // Number::fileSize(), samma formatering som kvotfelmeningarna i 60a.
+        'of' => ':used av :limit',
+        'of_unlimited' => ':used av obegränsat',
+        'per_container' => ':limit per pärm',
+
+        // `null` är obegränsat och skrivs som ett ord, aldrig som noll och
+        // aldrig som en full stapel (Beslut 4).
+        'unlimited' => 'Obegränsat',
+        'storage_bar' => ':percent procent av taket använt',
+
+        // Funktionstabellen: en rad per nyckel i ReadPlanUsage::FEATURES
+        // (Beslut 9).
+        'features_heading' => 'Funktioner',
+        'features' => [
+            'webhooks' => 'Webhooks',
+            'pdf_binder' => 'PDF-pärm',
+            'ownership_transfer' => 'Ägarbyte',
+            'loan_reminders' => 'Utlåningspåminnelser',
+            'cost_reports' => 'Kostnadsrapporter',
+        ],
+        'included' => 'Ingår',
+        'not_included' => 'Ingår inte',
+
+        // Nedgraderingens fem steg, ordagrant ur [[Planer och kvoter]]
+        // § Nedgradering (Beslut 6) — och det som INTE händer, som är det
+        // viktigaste på hela sidan: items raderas aldrig, kostnadsrader
+        // raderas aldrig.
+        'downgrade' => [
+            'heading' => 'Om du nedgraderar',
+            'intro' => 'Items raderas aldrig — bara bilagor. Så går det till:',
+
+            'steps' => [
+                'freeze' => 'Betalningen uteblir och kontot blir fryst. Ingenting raderas.',
+                'choose' => 'Du får dina bilagor listade och väljer själv vad som ska bort — du vet vilka fyrtio semesterbilder som kan gå och vilken besiktningsrapport som inte kan det.',
+                'grace' => 'Du har tre månader på dig att betala eller exportera.',
+                'purge' => 'Händer inget raderas bilagorna automatiskt, nyast först, tills kontot ryms i Free.',
+                'restore' => 'Kontot återgår till aktivt på gratisnivån.',
+            ],
+
+            'kept' => [
+                'items' => 'Dina items raderas aldrig.',
+                'costs' => 'Kostnadsrader raderas aldrig. Kvittona kan försvinna med bilagorna — siffrorna står kvar.',
+            ],
+
+            // Förhandsvisningen (Beslut 7). Konkret när kontot ligger över
+            // gratisgränsen, och "allt ryms" utan siffror om radering när det
+            // inte gör det. `remove_one`/`remove_many` är två nycklar av samma
+            // skäl som `trash.expires.day`/`days`: `t()` pluraliserar inte.
+            'preview' => [
+                'over' => 'Kontot ligger :over över :free.',
+                'remove_one' => 'En bilaga skulle tas bort, nyast först.',
+                'remove_many' => ':count bilagor skulle tas bort, nyast först.',
+                'fits' => 'Allt ryms i Free.',
+                'cleanup_link' => 'Välj själv vad som ska bort',
+            ],
+        ],
+    ],
+
     'container' => [
         // `kind` styr presentation och bara presentation (issue 54 § Beslut
         // 8, [[ADR-0002 Konto äger container]]). Nycklarna är kolumnvärdena

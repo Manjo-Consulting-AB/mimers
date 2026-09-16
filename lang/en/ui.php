@@ -291,10 +291,12 @@ return [
         // second feature gets a web surface, this is where the sentence becomes
         // per-feature.
         'plan' => [
-            // 66a: link the word "Pro" in the sentence below to `settings.plan`
-            // once the plan page exists. The sentence stands without a link
-            // until then — Ziggy throws on a route that does not exist, so a
-            // prepared link would be a broken page and not a broken link.
+            // The sentence deliberately carries no link, also now that the plan page
+            // exists (66a). The string is also delivered inside the API error envelope,
+            // and markup in a translation string becomes either escaped text for an API
+            // client or `v-html` in the view. If someone wants a link to the plan it is
+            // a separate key and a separate link beside the error box in Webhooks.vue,
+            // not an `<a>` in here.
             'feature_unavailable' => ':feature requires the Pro plan.',
             'feature_name' => [
                 'webhooks' => 'Webhooks',
@@ -329,6 +331,10 @@ return [
         'nav' => [
             'profile' => 'Profile',
             'accounts' => 'Accounts',
+            // Issue 66a decision 1: the plan page sits after the accounts —
+            // both are about the ACCOUNT, and the plan is the answer to what it
+            // may do.
+            'plan' => 'Plan',
             'notifications' => 'Notifications',
             // Issue 65b decision 1: the webhooks belong to the ACCOUNT and
             // therefore live among the settings, after the notifications — both
@@ -667,6 +673,129 @@ return [
 
         'destroy' => 'Remove',
         'destroy_confirm' => 'Remove the webhook? The secret goes with it, and a new webhook gets a new secret.',
+    ],
+
+    // The plan page, see issue 66a decisions 4–9 and [[Planer och kvoter]].
+    //
+    // A branch of its own at the top level, like `trash` and `sharing`: the
+    // plan page is a surface with a vocabulary of its own, and the keys live
+    // under `plan.*` and nowhere else (decision 9).
+    'plan' => [
+        'title' => 'Plan and usage',
+        'heading' => 'Plan and usage',
+        'intro' => 'What the account has, how much of each limit is used, and what a downgrade would mean.',
+
+        'account_label' => 'Account',
+        'name_label' => 'Plan',
+        'price_label' => 'Price',
+        'current_heading' => 'Current plan',
+
+        // Plan names per `code` (decision 9). The keys are the value of the
+        // `plan.code` column, never the plan name from the database: a
+        // translation per code gives the answer in the reader's language, and
+        // a plan whose code is missing shows up as `plan.names.…` instead of
+        // silently turning English.
+        'names' => [
+            'free' => 'Free',
+            'pro' => 'Pro',
+            'broker' => 'Broker',
+            'yard' => 'Yard',
+            'charter' => 'Charter',
+        ],
+
+        'price_free' => 'Free of charge',
+        'period' => [
+            'year' => 'per year',
+            'month' => 'per month',
+        ],
+
+        // The status of the account stands at the top and is not buried
+        // (decision 5). The keys are the values of `account.read_only_reason`
+        // — a code, like `container.kind` — so a new reason is a new line here
+        // and no `if` in the view. An `active` account has no reason and gets
+        // no box.
+        //
+        // The days are phrased with 62a's two plural keys
+        // (`trash.expires.day` and `trash.expires.days`), see Plan.vue: the
+        // same sentence about the same thing, and `t()` has no pluralisation
+        // (issue 52 decision 4).
+        'status' => [
+            'payment_failed' => 'The account is frozen: a payment has not gone through.',
+            'over_quota' => 'The account is frozen: it is over the limit for its plan.',
+            'inactivity' => 'The account is frozen: it has not been used for a long time.',
+            'grace' => 'The grace period ends:',
+        ],
+
+        'usage_heading' => 'Usage and limits',
+
+        // The four numeric limits (decision 4). The keys are the keys of
+        // `plan.limits`, never names of our own making.
+        'limits' => [
+            'containers' => 'Binders',
+            'storage_bytes' => 'Storage',
+            'max_file_bytes' => 'Largest file size',
+            'shared_users_per_container' => 'Shared users per binder',
+        ],
+
+        // `:used` and `:limit` are formatted by the server — the bytes with
+        // Number::fileSize(), the same formatting as the quota sentences in
+        // 60a.
+        'of' => ':used of :limit',
+        'of_unlimited' => ':used of unlimited',
+        'per_container' => ':limit per binder',
+
+        // `null` is unlimited and is written as a word, never as zero and
+        // never as a full bar (decision 4).
+        'unlimited' => 'Unlimited',
+        'storage_bar' => ':percent percent of the limit used',
+
+        // The feature table: one row per key in ReadPlanUsage::FEATURES
+        // (decision 9).
+        'features_heading' => 'Features',
+        'features' => [
+            'webhooks' => 'Webhooks',
+            'pdf_binder' => 'PDF binder',
+            'ownership_transfer' => 'Ownership transfer',
+            'loan_reminders' => 'Loan reminders',
+            'cost_reports' => 'Cost reports',
+        ],
+        'included' => 'Included',
+        'not_included' => 'Not included',
+
+        // The five steps of the downgrade, word for word from [[Planer och
+        // kvoter]] § Nedgradering (decision 6) — and what does NOT happen,
+        // which is the most important thing on the page: items are never
+        // deleted, cost rows are never deleted.
+        'downgrade' => [
+            'heading' => 'If you downgrade',
+            'intro' => 'Your items are never deleted — only attachments are. It works like this:',
+
+            'steps' => [
+                'freeze' => 'The payment fails and the account is frozen. Nothing is deleted.',
+                'choose' => 'You get your attachments listed and choose yourself what has to go — you know which forty holiday photos can go and which inspection report cannot.',
+                'grace' => 'You have three months to pay or export.',
+                'purge' => 'If nothing happens, the attachments are deleted automatically, newest first, until the account fits within Free.',
+                'restore' => 'The account returns to active on the free level.',
+            ],
+
+            'kept' => [
+                'items' => 'Your items are never deleted.',
+                'costs' => 'Cost rows are never deleted. The receipts may go with the attachments — the numbers stay.',
+            ],
+
+            // The preview (decision 7). Concrete when the account is over the
+            // free limit, and "everything fits" with no numbers about deletion
+            // when it is not. `remove_one`/`remove_many` are two keys for the
+            // same reason as `trash.expires.day`/`days`: `t()` does not
+            // pluralise.
+            'preview' => [
+                'over' => 'The account is :over over :free.',
+                'remove_one' => 'One attachment would be deleted, newest first.',
+                'remove_many' => ':count attachments would be deleted, newest first.',
+                'fits' => 'Everything fits within Free.',
+                'cleanup_link' => 'Choose yourself what has to go',
+            ],
+        ],
     ],
 
     'container' => [
