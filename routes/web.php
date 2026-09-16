@@ -35,6 +35,7 @@ use App\Http\Controllers\Settings\NotificationSettingsController;
 use App\Http\Controllers\Settings\PlanController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\StorageController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
@@ -276,6 +277,38 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/settings/plan', [PlanController::class, 'index'])
         ->name('settings.plan');
+
+    /*
+     * Issue 66b · Lagringsytan — nedgraderingens steg 2: bilagorna sorterade
+     * på storlek och valet användaren gör själv, se
+     * App\Http\Controllers\Settings\StorageController och
+     * [[Planer och kvoter]] § Nedgradering.
+     *
+     * **Två rutter, och kontot i rutten på den skrivande.** Listningen väljer
+     * konto i sidan och följer med som `?account=`, precis som plansidan
+     * (66a § Beslut 1). Rensningen har kontot i SÖKVÄGEN och inte i kroppen
+     * därför att App\Http\Requests\Account\RemoveStorageRequest delas rakt av
+     * med `/api` och läser kontot ur `$this->route('account')` — den ligger
+     * utanför omfångsrutan, och en ny FormRequest vore en andra sanning om
+     * samma regler (taket på 100 ULID:er inräknat). Att objektet kommer ur
+     * rutten är regeln i den här appen, se `/settings/accounts/{account}`
+     * (53c § Beslut 1).
+     *
+     * **Ingen ny `/api`-rutt** (omfångsrutan): storage-ytan finns i API:et
+     * sedan issue 29a, och den här issuen lägger ingen andra väg till samma
+     * data. Ingen POST och ingen automatisk radering: steg 4 är ett jobb, inte
+     * en knapp, och den fysiska raderingen sker i papperskorgens gallring
+     * ([[ADR-0008 Soft delete och papperskorg]]).
+     *
+     * Sidan får en egen rad i resources/js/layouts/settingsSections.js —
+     * navigationen renderas ur listan, och en sida ingen kan navigera till är
+     * en sida ingen hittar.
+     */
+    Route::get('/settings/storage', [StorageController::class, 'index'])
+        ->name('settings.storage');
+
+    Route::delete('/settings/storage/{account}', [StorageController::class, 'destroy'])
+        ->name('settings.storage.destroy');
 
     /*
      * Issue 65a · Notisinställningarna — personens kanalval, veckosammanfattning

@@ -399,6 +399,10 @@ return [
             // Issue 66a § Beslut 1: plansidan ligger efter kontona — båda
             // handlar om KONTOT, och planen är svaret på vad det får.
             'plan' => 'Plan',
+            // Issue 66b § Beslut 1: lagringsytan ligger direkt efter planen —
+            // den är nedgraderingens steg 2 och svaret på planens egen
+            // uppmaning, och plansidan länkar hit.
+            'storage' => 'Lagring',
             'notifications' => 'Notiser',
             // Issue 65b § Beslut 1: webhookarna hör till KONTOT och ligger
             // därför bland inställningarna, efter notiserna — båda handlar om
@@ -905,6 +909,77 @@ return [
                 'fits' => 'Allt ryms i Free.',
                 'cleanup_link' => 'Välj själv vad som ska bort',
             ],
+        ],
+    ],
+
+    // Lagringsytan, se issue 66b § Beslut 1–9 och [[Planer och kvoter]]
+    // § Nedgradering. **Egen gren på toppnivå**, som `plan` och `trash`:
+    // städningen är nedgraderingens steg 2, och nycklarna ligger under
+    // `storage.*` och ingen annanstans. Ingen sträng i en .vue-fil.
+    //
+    // Två nycklar för samma mening där talet böjs (`preview.one`/`many`,
+    // `confirm.one`/`many`, `result.one`/`many`/`none`): `t()` har ingen
+    // pluralisering (issue 52 § Beslut 4), så talet väljer nyckel. `none` är
+    // ett eget fall och inte en nolla i en pluralform — en rensning där alla
+    // valda rader redan hunnit raderas är ingen rensning, och meningen ska
+    // säga det i stället för att räkna upp noll filer.
+    //
+    // Meningsbyggnaden är hämtad ur dokumentets egen: "Hon vet vilka fyrtio
+    // semesterbilder som kan gå och vilken besiktningsrapport som inte kan
+    // det." Texten pekar på papperskorgen och de 30 dagarna (62a) och säger
+    // aldrig "raderas permanent" — bilagorna mjukraderas ([[ADR-0008 Soft
+    // delete och papperskorg]]).
+    'storage' => [
+        'title' => 'Lagring',
+        'heading' => 'Lagring',
+        'intro' => 'Välj själv vad som ska bort. Bilagorna flyttas till papperskorgen och kan återställas där i 30 dagar.',
+
+        'account_label' => 'Konto',
+        'usage_heading' => 'Lagringsutrymme',
+
+        'list_heading' => 'Bilagor',
+        'list_intro' => 'Störst först. Kryssa för det som kan gå — de fyrtio semesterbilderna kan det, besiktningsrapporten kan det inte.',
+        'empty' => 'Kontot har inga bilagor.',
+
+        // Pärm och item per rad, i den ordningen: sammanhanget är det som gör
+        // valet möjligt. Skiljetecknet ligger i meningen och inte i mallen.
+        'row' => [
+            'location' => ':container — :item',
+            // En bilaga vars item eller pärm ligger i papperskorgen räknas
+            // fortfarande mot kontot och ska synas (Beslut 3).
+            'trashed' => 'Pärmen eller itemet ligger i papperskorgen. Bilagan räknas ändå mot kontot.',
+        ],
+
+        // Urvalets förhandsvisning (Beslut 4): räknad i klienten ur
+        // `byte_size` på de valda raderna. Det är ett urval och inte
+        // förbrukningen — förbrukningen efter en rensning kommer ur serverns
+        // svar.
+        'preview' => [
+            'one' => 'En bilaga vald: :freed frigörs och :remaining återstår.',
+            'many' => ':count bilagor valda: :freed frigörs och :remaining återstår.',
+        ],
+
+        // Taket på 100 ULID:er per anrop (Beslut 5). Meningen säger både
+        // taket och vad hon har valt, så hon vet hur mycket som ska bort.
+        'limit_exceeded' => 'Du kan rensa högst :max bilagor i taget, och du har valt :count.',
+
+        // Bekräftelsen (Beslut 6): antalet filer, det frigjorda utrymmet,
+        // papperskorgen och de 30 dagarna.
+        'confirm' => [
+            'one' => 'En bilaga flyttas till papperskorgen och kan återställas där i 30 dagar. :freed frigörs nu. Vill du fortsätta?',
+            'many' => ':count bilagor flyttas till papperskorgen och kan återställas där i 30 dagar. :freed frigörs nu. Vill du fortsätta?',
+        ],
+
+        'submit' => 'Flytta till papperskorgen',
+
+        // Svaret efter en rensning (Beslut 8). `usage` bär serverns
+        // förbrukning EFTER rensningen, formaterad med Number::fileSize() —
+        // aldrig klientens subtraktion.
+        'result' => [
+            'one' => 'En bilaga ligger i papperskorgen och kan återställas där i 30 dagar.',
+            'many' => ':count bilagor ligger i papperskorgen och kan återställas där i 30 dagar.',
+            'none' => 'Inga bilagor togs bort — de var redan borta.',
+            'usage' => 'Förbrukningen är nu :used.',
         ],
     ],
 
