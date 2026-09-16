@@ -88,6 +88,12 @@ return [
         'totp-disabled' => 'Tvåfaktorsinloggning är avstängd.',
         'profile-updated' => 'Profilen är sparad.',
         'account-updated' => 'Kontouppgifterna är sparade.',
+
+        // Issue 65a § Beslut 6. Två koder och inte en: sidan har två
+        // formulär, och "sparat" utan att säga vad hade varit sant men inte
+        // svarat på vad som hände.
+        'notification-preferences-updated' => 'Notisinställningarna är sparade.',
+        'quiet-hours-updated' => 'Tysta timmar är sparade.',
         'container-created' => 'Pärmen är skapad.',
         'container-updated' => 'Pärmen är sparad.',
         'access-updated' => 'Åtkomsten är sparad.',
@@ -334,6 +340,7 @@ return [
         'nav' => [
             'profile' => 'Profil',
             'accounts' => 'Konton',
+            'notifications' => 'Notiser',
             'security' => 'Säkerhet',
         ],
 
@@ -440,6 +447,119 @@ return [
                 'disable_warning' => 'När du stänger av raderas återställningskoderna. Slår du på igen får du ett nytt ark.',
                 'disable_submit' => 'Stäng av tvåfaktorn',
             ],
+        ],
+    ],
+
+    // Notiserna, se issue 65a. Sidan svarar på "när och hur vill jag bli
+    // störd?" — vilka typer hon vill ha, direkt eller i
+    // veckosammanfattningen, och när hon inte vill bli störd.
+    //
+    // Typnycklarna är kolumnvärdena i `notification.type` (`task.due`),
+    // och de ligger NÄSTLADE under `type` med flit: nyckeln
+    // `notifications.type.<typ>.label` är den form issuen föreskriver, och
+    // punkten i typnamnet är samma punkt som skiljer leden i en
+    // översättningsnyckel. En rad som hette `schedule_occurrence_due` vore
+    // en rad ingen ställer in (Beslut 7).
+    'notifications' => [
+        'title' => 'Notiser',
+        'heading' => 'Notiser',
+        'intro' => 'Välj vad du vill få mejl om, och när du inte vill bli störd.',
+
+        'types_heading' => 'Vad du vill få mejl om',
+
+        // Förvalet OCH skälet till det (Beslut 3). Här är den enda plats
+        // säsongen förklaras för användaren, och den är skälet att valet
+        // går att förstå i stället för bara att göra.
+        'digest_default' => 'Veckosammanfattning är standard för uppgiftspåminnelser. I april förfaller allting samtidigt, och tjugo separata mejl på en förmiddag är svårare att läsa än ett samlat.',
+
+        // Märkningen på en typ användaren aldrig rört. Värdet kommer ur
+        // `is_default` i serverns svar (31b § Beslut 2) och räknas aldrig
+        // om i vyn.
+        'default_badge' => 'Standard',
+
+        'type' => [
+            'task' => [
+                'due' => [
+                    'label' => 'Uppgift förfaller',
+                    'description' => 'Dagen en schemalagd uppgift ska göras.',
+                ],
+                'overdue' => [
+                    'label' => 'Uppgift är försenad',
+                    'description' => 'När en uppgift har passerat sitt datum utan att bli avbockad.',
+                ],
+            ],
+            'loan' => [
+                'due' => [
+                    'label' => 'Utlåning ska tillbaka',
+                    'description' => 'När ett item du lånat ut närmar sig återlämningsdagen.',
+                ],
+            ],
+            'quota' => [
+                'warning' => [
+                    'label' => 'Lagringsutrymmet börjar ta slut',
+                    'description' => 'När en kvot i planen närmar sig sin gräns.',
+                ],
+            ],
+            'invitation' => [
+                'received' => [
+                    'label' => 'Inbjudan till en pärm',
+                    'description' => 'När någon bjuder in dig till en pärm.',
+                ],
+            ],
+            'transfer' => [
+                'requested' => [
+                    'label' => 'Någon vill ta över ett konto',
+                    'description' => 'När en begäran om ägarbyte väntar på dig.',
+                ],
+            ],
+            'account' => [
+                'inactive' => [
+                    'label' => 'Kontot stängs av inaktivitet',
+                    'description' => 'Innan ett konto du är med i stängs för att det inte har använts.',
+                ],
+            ],
+        ],
+
+        // De tre lägena, se Beslut 2. Beskrivningen säger vad läget gör
+        // för användaren, inte vad kolumnerna heter.
+        'mode' => [
+            'direct' => [
+                'label' => 'Direkt',
+                'description' => 'Ett mejl när det händer.',
+            ],
+            'digest' => [
+                'label' => 'I veckosammanfattningen',
+                'description' => 'Samlat i ett mejl i veckan.',
+            ],
+            'never' => [
+                'label' => 'Aldrig',
+                'description' => 'Inget mejl för den här sorten.',
+            ],
+        ],
+
+        'submit' => 'Spara',
+
+        'quiet_hours' => [
+            'heading' => 'Tysta timmar',
+            'intro' => 'Under de här timmarna skickas inga mejl.',
+
+            'start' => 'Från',
+            'end' => 'Till',
+
+            // Tomt är ett svar, inte ett saknat värde (Beslut 4).
+            'empty_note' => 'Tomma fält betyder inga tysta timmar. Fyll i båda om du vill ha ett fönster.',
+            // Midnatt är avsikten, inte ett fel (Beslut 4).
+            'midnight_note' => 'Fönstret får gå över midnatt: 22:00 till 07:00 betyder kväll till morgon.',
+
+            // Fördröjningen, inte borttagningen (Beslut 5).
+            'delays_note' => 'En notis som infaller i det tysta fönstret kommer efteråt i stället — den försvinner inte.',
+
+            // Tidszonen visas här och ändras på profilen (Beslut 4).
+            'timezone' => 'Timmarna gäller i tidszonen :timezone.',
+            'timezone_follows_account' => 'Timmarna gäller i kontots tidszon.',
+            'timezone_link' => 'Ändra tidszonen på profilen.',
+
+            'submit' => 'Spara tysta timmar',
         ],
     ],
 

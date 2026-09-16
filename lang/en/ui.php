@@ -72,6 +72,12 @@ return [
         'totp-disabled' => 'Two-factor authentication is off.',
         'profile-updated' => 'Your profile has been saved.',
         'account-updated' => 'The account details have been saved.',
+
+        // Issue 65a § Decision 6. Two codes and not one: the page has two
+        // forms, and "saved" without saying what had been true but not an
+        // answer to what happened.
+        'notification-preferences-updated' => 'The notification settings have been saved.',
+        'quiet-hours-updated' => 'The quiet hours have been saved.',
         'container-created' => 'The binder has been created.',
         'container-updated' => 'The binder has been saved.',
         'access-updated' => 'The access has been saved.',
@@ -269,6 +275,7 @@ return [
         'nav' => [
             'profile' => 'Profile',
             'accounts' => 'Accounts',
+            'notifications' => 'Notifications',
             'security' => 'Security',
         ],
 
@@ -353,6 +360,106 @@ return [
                 'disable_warning' => 'Turning it off deletes the recovery codes. Turning it on again gives you a new sheet.',
                 'disable_submit' => 'Turn off two-factor',
             ],
+        ],
+    ],
+
+    // Notification settings, see issue 65a. The type keys are the values
+    // of `notification.type` (`task.due`) and are nested under `type`:
+    // the key form is `notifications.type.<type>.label`, and the dot in
+    // the type name is the same dot that separates the parts of a
+    // translation key.
+    'notifications' => [
+        'title' => 'Notifications',
+        'heading' => 'Notifications',
+        'intro' => 'Choose what you want email about, and when you do not want to be disturbed.',
+
+        'types_heading' => 'What you want email about',
+
+        // The default and the reason for it (Decision 3).
+        'digest_default' => 'The weekly summary is the default for task reminders. In April everything falls due at once, and twenty separate emails in one morning are harder to read than one collected.',
+
+        // The mark on a type the user has never touched. The value comes
+        // from `is_default` in the server response (31b § Decision 2).
+        'default_badge' => 'Default',
+
+        'type' => [
+            'task' => [
+                'due' => [
+                    'label' => 'Task falls due',
+                    'description' => 'The day a scheduled task is to be done.',
+                ],
+                'overdue' => [
+                    'label' => 'Task is overdue',
+                    'description' => 'When a task has passed its date without being ticked off.',
+                ],
+            ],
+            'loan' => [
+                'due' => [
+                    'label' => 'Loan is due back',
+                    'description' => 'When an item you have lent out nears its return date.',
+                ],
+            ],
+            'quota' => [
+                'warning' => [
+                    'label' => 'Storage is running out',
+                    'description' => 'When a quota in your plan nears its limit.',
+                ],
+            ],
+            'invitation' => [
+                'received' => [
+                    'label' => 'Invitation to a binder',
+                    'description' => 'When someone invites you to a binder.',
+                ],
+            ],
+            'transfer' => [
+                'requested' => [
+                    'label' => 'Someone wants to take over an account',
+                    'description' => 'When a request for a change of owner is waiting for you.',
+                ],
+            ],
+            'account' => [
+                'inactive' => [
+                    'label' => 'Account closes from inactivity',
+                    'description' => 'Before an account you are a member of closes because it has not been used.',
+                ],
+            ],
+        ],
+
+        // The three modes, see Decision 2.
+        'mode' => [
+            'direct' => [
+                'label' => 'Straight away',
+                'description' => 'An email when it happens.',
+            ],
+            'digest' => [
+                'label' => 'In the weekly summary',
+                'description' => 'Collected in one email a week.',
+            ],
+            'never' => [
+                'label' => 'Never',
+                'description' => 'No email of this kind.',
+            ],
+        ],
+
+        'submit' => 'Save',
+
+        'quiet_hours' => [
+            'heading' => 'Quiet hours',
+            'intro' => 'No email is sent during these hours.',
+
+            'start' => 'From',
+            'end' => 'To',
+
+            'empty_note' => 'Empty fields mean no quiet hours. Fill in both if you want a window.',
+            'midnight_note' => 'The window may cross midnight: 22:00 to 07:00 means evening to morning.',
+
+            'delays_note' => 'A notification that falls inside the quiet window arrives afterwards instead — it is not lost.',
+
+            'timezone' => 'The hours apply in the time zone :timezone.',
+            'timezone_follows_account' => 'The hours apply in the account time zone.',
+            'timezone_link' => 'Change the time zone on your profile.',
+
+            'submit' => 'Save quiet hours',
         ],
     ],
 
