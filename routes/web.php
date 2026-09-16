@@ -30,6 +30,7 @@ use App\Http\Controllers\ScheduleDependencyController;
 use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Settings\AccountSettingsController;
+use App\Http\Controllers\Settings\NotificationSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\TagController;
@@ -245,6 +246,49 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/settings/accounts/{account}', [AccountSettingsController::class, 'update'])
         ->name('settings.accounts.update');
+
+    /*
+     * Issue 65a · Notisinställningarna — personens kanalval, veckosammanfattning
+     * och tysta timmar, se
+     * App\Http\Controllers\Settings\NotificationSettingsController.
+     *
+     * Tre rutter, EN sida (Beslut 1). Preferenserna och de tysta timmarna är
+     * två olika skrivningar mot två olika `/api`-rutter (PUT
+     * /api/me/notification-preferences och PATCH /api/me/quiet-hours) och
+     * behåller den uppdelningen här: ett gemensamt formulär hade behövt slå
+     * ihop två requests och två felmängder. De ligger på samma SIDA eftersom
+     * de besvarar samma fråga — "när och hur vill jag bli störd?".
+     *
+     * **Två skrivrutter och inte en.** En PATCH på /settings/notifications med
+     * två olika kroppar hade varit två rutter som ruttabellen inte kan skilja
+     * åt; de tysta timmarna får därför en egen sökväg. Namnen följer
+     * `settings.profile.update`: sidan, sedan skrivningen, sedan undantaget.
+     *
+     * **Ingenting av `/api` byggs om.** UpdateNotificationPreferencesRequest
+     * och UpdateQuietHoursRequest delas rakt av, och skrivningen är de rader
+     * kontrollern gör — samma väg som `/api` går, utan en ny Action. Ingen ny
+     * FormRequest: den här sidan har inget eget fält att validera.
+     *
+     * Båda skrivningarna svarar `back()` med en flash-kod — mönstret från
+     * issue 51 § Beslut 5, `status` och ingenting annat — och ett
+     * valideringsfel hamnar på sitt eget fält, så en felaktig tid inte
+     * nollställer preferenserna på samma sida (Beslut 6).
+     *
+     * Sidan får en egen rad i resources/js/layouts/settingsSections.js.
+     * Navigationen renderas ur listan, och en sida ingen kan navigera till är
+     * en sida ingen hittar.
+     *
+     * 65b lägger kalenderlänken per pärm och webhookarna per konto — ingendera
+     * hör hit: de svarar inte på frågan om när och hur HON vill bli störd.
+     */
+    Route::get('/settings/notifications', [NotificationSettingsController::class, 'edit'])
+        ->name('settings.notifications');
+
+    Route::put('/settings/notifications', [NotificationSettingsController::class, 'update'])
+        ->name('settings.notifications.update');
+
+    Route::patch('/settings/notifications/quiet-hours', [NotificationSettingsController::class, 'updateQuietHours'])
+        ->name('settings.notifications.quiet-hours');
 
     /*
      * Issue 54 · Containerytan — listan, skapandet och redigeringen, se
