@@ -399,7 +399,17 @@ it('gör varje klickbar yta till en knapp, en länk eller ett inmatningsfält', 
     // `<input>` står med för radioknappens `@click` i
     // NotificationPreferenceRow, som kompletterar `@change` — fältet är
     // tabbbart och tangentbordet äger det.
-    $tillåtna = ['button', 'a', 'Link', 'summary', 'input'];
+    //
+    // Listan är elementtypad med flit: bara webbläsarens egna element, aldrig
+    // ett komponentnamn. Annars ärver en `<NotificationPreferenceRow>`-tagg
+    // tillåtelsen den dag någon lägger `@click` på den, och en komponents
+    // rot-element är precis den `<div>` regeln handlar om.
+    $tillåtna = ['button', 'a', 'summary', 'input', 'label', 'select', 'textarea'];
+
+    // Ett enda komponentnamn står utanför listan: Inertias `<Link>`, som alltid
+    // renderar ett `<a href>` och därför är tabbbart. Undantaget är namngivet
+    // och motiverat för att det ska vara svårt att utöka i förbigående.
+    $tillåtnaKomponenter = ['Link'];
 
     $granskade = 0;
 
@@ -415,11 +425,14 @@ it('gör varje klickbar yta till en knapp, en länk eller ett inmatningsfält', 
 
             $granskade++;
 
-            expect(in_array($namn[1] ?? '', $tillåtna, true))->toBeTrue(sprintf(
+            $tagg = $namn[1] ?? '?';
+            $tillaten = in_array($tagg, $tillåtna, true) || in_array($tagg, $tillåtnaKomponenter, true);
+
+            expect($tillaten)->toBeTrue(sprintf(
                 '%s:%d har @click på en <%s> — den går inte att nå med tabb',
                 $sokvag,
                 substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
-                $namn[1] ?? '?',
+                $tagg,
             ));
         }
     }
