@@ -11,6 +11,10 @@
  * frågan. Notiserna och webhookarna under den handlar om vad som lämnar
  * systemet.
  *
+ * `storage` kom med issue 66b och ligger direkt efter `plan`: den är
+ * nedgraderingens steg 2 och svaret på planens egen uppmaning — plansidan
+ * länkar hit, och en sida som hör ihop med raden ovanför står under den.
+ *
  * Profil ligger först: `/settings` omdirigerar dit (routes/web.php), så den
  * posten är inställningarnas förstasida och ska stå överst i listan.
  *
@@ -29,6 +33,7 @@ export const settingsSections = [
     { key: 'profile', href: '/settings/profile' },
     { key: 'accounts', href: '/settings/accounts' },
     { key: 'plan', href: '/settings/plan' },
+    { key: 'storage', href: '/settings/storage' },
     { key: 'notifications', href: '/settings/notifications' },
     { key: 'webhooks', href: '/settings/webhooks' },
     { key: 'security', href: '/settings/security' },

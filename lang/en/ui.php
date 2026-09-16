@@ -335,6 +335,10 @@ return [
             // both are about the ACCOUNT, and the plan is the answer to what it
             // may do.
             'plan' => 'Plan',
+            // Issue 66b decision 1: the storage page sits directly after the
+            // plan — it is step 2 of the downgrade and the answer to the
+            // plan's own prompt, and the plan page links here.
+            'storage' => 'Storage',
             'notifications' => 'Notifications',
             // Issue 65b decision 1: the webhooks belong to the ACCOUNT and
             // therefore live among the settings, after the notifications — both
@@ -795,6 +799,78 @@ return [
                 'fits' => 'Everything fits within Free.',
                 'cleanup_link' => 'Choose yourself what has to go',
             ],
+        ],
+    ],
+
+    // The storage page, see issue 66b decisions 1–9 and [[Planer och kvoter]]
+    // § Nedgradering. **A branch of its own at the top level**, like `plan`
+    // and `trash`: the cleanup is step 2 of the downgrade, and the keys live
+    // under `storage.*` and nowhere else. No string in a .vue file.
+    //
+    // Two keys for the same sentence where the number inflects
+    // (`preview.one`/`many`, `confirm.one`/`many`, `result.one`/`many`/`none`):
+    // `t()` does not pluralise (issue 52 decision 4), so the number picks the
+    // key. `none` is a case of its own and not a zero in a plural form — a
+    // cleanup where every selected row had already gone is no cleanup, and the
+    // sentence should say so rather than count zero files.
+    //
+    // The wording comes from the document's own: "you know which forty holiday
+    // photos can go and which inspection report cannot." The text points at
+    // the trash and the 30 days (62a) and never says "deleted permanently" —
+    // the attachments are soft-deleted ([[ADR-0008 Soft delete och
+    // papperskorg]]).
+    'storage' => [
+        'title' => 'Storage',
+        'heading' => 'Storage',
+        'intro' => 'Choose yourself what has to go. The attachments move to the trash and can be restored there within 30 days.',
+
+        'account_label' => 'Account',
+        'usage_heading' => 'Storage space',
+
+        'list_heading' => 'Attachments',
+        'list_intro' => 'Largest first. Tick what can go — the forty holiday photos can, the inspection report cannot.',
+        'empty' => 'The account has no attachments.',
+
+        // Binder and item per row, in that order: the context is what makes
+        // the choice possible. The separator lives in the sentence and not in
+        // the template.
+        'row' => [
+            'location' => ':container — :item',
+            // An attachment whose item or binder is in the trash still counts
+            // against the account and must be visible (decision 3).
+            'trashed' => 'The binder or the item is in the trash. The attachment still counts against the account.',
+        ],
+
+        // The selection preview (decision 4): computed on the client from
+        // `byte_size` of the selected rows. It is a selection and not the
+        // usage — the usage after a cleanup comes from the server's answer.
+        'preview' => [
+            'one' => 'One attachment selected: :freed will be freed and :remaining remains.',
+            'many' => ':count attachments selected: :freed will be freed and :remaining remains.',
+        ],
+
+        // The ceiling of 100 ULIDs per request (decision 5). The sentence
+        // states both the ceiling and what she has selected, so she knows how
+        // much has to go.
+        'limit_exceeded' => 'You can clear at most :max attachments at a time, and you have selected :count.',
+
+        // The confirmation (decision 6): the number of files, the space
+        // freed, the trash and the 30 days.
+        'confirm' => [
+            'one' => 'One attachment moves to the trash and can be restored there within 30 days. :freed is freed now. Do you want to continue?',
+            'many' => ':count attachments move to the trash and can be restored there within 30 days. :freed is freed now. Do you want to continue?',
+        ],
+
+        'submit' => 'Move to the trash',
+
+        // The answer after a cleanup (decision 8). `usage` carries the
+        // server's usage AFTER the cleanup, formatted with
+        // Number::fileSize() — never the client's subtraction.
+        'result' => [
+            'one' => 'One attachment is in the trash and can be restored there within 30 days.',
+            'many' => ':count attachments are in the trash and can be restored there within 30 days.',
+            'none' => 'No attachments were removed — they were already gone.',
+            'usage' => 'Usage is now :used.',
         ],
     ],
 
