@@ -651,6 +651,93 @@ def test_granska_och_merga_utan_pushed_sha_vantar_inte_in_head():
     assert "if pushed_sha and not wait_for_pr_head(pr_number, pushed_sha, worktree_path):" in kalla
 
 
+# =====================================================================
+# Objektlagrets underhåll - NFS-hängningen i issue 71b
+# =====================================================================
+
+def test_run_cmd_har_inget_forvalt_tak():
+    """Agentkörningarna går genom run_cmd och tar lagligen 20-40 minuter.
+    Ett förvalt timeout hade dödat dem mitt i; taket ska vara opt-in."""
+    import inspect
+    sig = inspect.signature(p.run_cmd)
+    assert sig.parameters["timeout"].default is None
+
+
+def test_run_cmd_reser_timeouterror_i_stallet_for_att_hanga():
+    """En tyst blockering ska bli ett fel med kommandot i texten, inte en
+    körning som håller flock:en för evigt."""
+    try:
+        p.run_cmd(["sleep", "5"], timeout=0.2)
+    except TimeoutError as e:
+        assert "sleep 5" in str(e), str(e)
+    else:
+        assert False, "run_cmd tog inte timeout"
+
+
+def test_taket_ar_lagre_an_gits_eget_auto_gc():
+    """Gits gc.auto går på 6700 och hann aldrig slå till under 70 issues.
+    Vårt tak måste ligga under det för att göra någon skillnad alls."""
+    assert p.LOSA_OBJEKT_TAK < 6700
+
+
+def test_rakna_losa_objekt_laser_en_enda_katalog():
+    """Heuristiken ska kosta en katalogläsning, inte ett find över hela
+    objektlagret - det är just den NFS-kostnaden vi undviker."""
+    kalla = _kalla()
+    kropp = kalla.split("def rakna_losa_objekt(")[1].split("\ndef ")[0]
+    assert "os.listdir(" in kropp
+    assert "256" in kropp
+    assert "walk" not in kropp and "glob" not in kropp
+
+
+def test_gc_kan_inte_falla_korningen():
+    """Ett misslyckat underhåll gör pushen långsam, inte omöjlig. Därför
+    check=False - en rest som kastar hade tagit hela cron-körningen."""
+    kalla = _kalla()
+    kropp = kalla.split("def underhall_objektlagret(")[1].split("\ndef ")[0]
+    assert "check=False" in kropp
+
+
+def test_underhallet_anropas_pa_en_enda_plats():
+    """Varje bana i __main__ drabbas av ett svällt objektlager. Kontrollen
+    ska ligga på den plats de delar, inte kopierad in i varje gren - samma
+    fälla som PR #163 gick i."""
+    kalla = _kalla()
+    anrop = [r.strip() for r in kalla.splitlines()
+             if "underhall_objektlagret()" in r and not r.strip().startswith("#")]
+    assert anrop == ["underhall_objektlagret()"], anrop
+
+
+def test_alla_pushar_gar_genom_git_natverk():
+    """Tripwire: en `git push` utan tak kan blockera tyst för evigt på
+    NFS-mounten (issue 71b). Nya pushar ska inte smyga förbi git_natverk()."""
+    kalla = _kalla()
+    rader = [r.strip() for r in kalla.splitlines()
+             if '"git", "push"' in r and "git_natverk(" not in r
+             and not r.strip().startswith("#")]
+    assert rader == [], f"push utanför git_natverk(): {rader}"
+
+
+def test_ingen_no_verify_i_skriptet():
+    """Repot har inga egna hooks (bara .git/hooks/*.sample), så --no-verify
+    botar ingenting - den skulle bara stänga av framtida hooks tyst. Den
+    riktiga orsaken till hängningen var objektlagret, och flaggan får inte
+    smyga in som en "fix" nästa gång en push känns långsam.
+
+    Söker på argumentformen, inte på ordet: prosan ovan förklarar just varför
+    flaggan är fel och ska inte fälla sitt eget test."""
+    rader = [r.strip() for r in _kalla().splitlines()
+             if '"--no-verify"' in r]
+    assert rader == [], f"--no-verify används: {rader}"
+
+
+def test_omforsoket_packar_forst():
+    """Omförsöket ska åtgärda orsaken, inte bara hoppas på bättre tur."""
+    kalla = _kalla()
+    kropp = kalla.split("def git_natverk(")[1].split("\ndef ")[0]
+    assert "underhall_objektlagret(tvinga=True)" in kropp
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())

@@ -144,12 +144,19 @@ def send_pushover(message):
 MAX_ARG_STRLEN = 128 * 1024
 
 
-def run_cmd(args, check=True, capture_output=True, cwd=None, env=None, input=None):
+def run_cmd(args, check=True, capture_output=True, cwd=None, env=None, input=None,
+            timeout=None):
     """Kör terminalkommandon säkert (utan shell=True).
 
     `input` skickas på processens stdin i stället för som argument. Det är enda
     vägen för text som kan bli stor (prompter med hela PR-diffen i): argv har en
     hård längdgräns per argument, stdin har ingen.
+
+    `timeout` är opt-in, aldrig förvalt. De flesta anropen här är agentkörningar
+    som lagligen tar 20-40 minuter, och ett globalt tak hade dödat dem mitt i.
+    Taket sätts därför bara av git_natverk() på de git-kommandon som rör
+    objektlagret eller nätet - de enda som kan blockera tyst för evigt (se
+    GIT_NATVERK_TIMEOUT).
     """
     for arg in args:
         if len(arg) > MAX_ARG_STRLEN:
@@ -158,12 +165,106 @@ def run_cmd(args, check=True, capture_output=True, cwd=None, env=None, input=Non
                 f"gräns på {MAX_ARG_STRLEN}. Skicka texten på stdin via run_cmd(..., "
                 f"input=...) i stället. Argumentets början: {arg[:200]!r}"
             )
-    result = subprocess.run(args, text=True, capture_output=capture_output,
-                            cwd=cwd, env=env, input=input)
+    try:
+        result = subprocess.run(args, text=True, capture_output=capture_output,
+                                cwd=cwd, env=env, input=input, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # subprocess.run() dödar barnet innan den reser det här, så inget
+        # git-kommando lever kvar och håller objektlagrets lås.
+        raise TimeoutError(
+            f"Kommando tog över {timeout} s och dödades: {' '.join(args)}"
+        )
     if check and result.returncode != 0:
         cmd_str = " ".join(args)
         raise Exception(f"Kommando misslyckades: {cmd_str}\nFEL: {result.stderr}")
     return result
+
+
+# =====================================================================
+# OBJEKTLAGRETS UNDERHÅLL
+# =====================================================================
+# Repot ligger på en NFS-mount från NAS:en (192.168.1.16:/volume1/tonygit),
+# monterad `hard`. Två konsekvenser styr koden nedan:
+#
+#   1. Varje LÖST git-objekt är en egen filöppning över nätet. `git push` läser
+#      hela objektlagret i `pack-objects` INNAN den skriver ut "Counting
+#      objects", så kostnaden är linjär i antalet lösa objekt - och osynlig i
+#      terminalen medan den pågår.
+#   2. `hard` betyder att en trög NAS aldrig ger ett fel. Git blockerar och
+#      återförsöker i stället, utan utskrift och utan bortre gräns.
+#
+# Tillsammans gav de issue 71b:s hängning. Gits egen auto-gc går först vid 6700
+# lösa objekt (gc.auto) och hann aldrig slå till: 70 issues byggde 4781 lösa
+# objekt utan att en enda gc körts sedan klonen 2026-08-29, och pushen tog
+# ~600 s. En `git gc` packade ihop dem till 480 och tog pushen till 0,7 s.
+#
+# Taket är satt långt under gits eget: en gc här kostar ~100 s och behöver
+# därför köras ofta och billigt, inte sällan och dyrt.
+LOSA_OBJEKT_TAK = 1200
+
+# Bortre gräns för de git-kommandon som rör nätet eller objektlagret. Tilltaget
+# att rymma en normal push med marginal - det är den tysta blockeringen som ska
+# fångas, inte en långsam men framåtskridande överföring.
+GIT_NATVERK_TIMEOUT = 300
+
+
+def rakna_losa_objekt():
+    """Uppskattar antalet lösa objekt i objektlagret.
+
+    Samma heuristik som gits egen auto-gc: räkna EN fanout-katalog och
+    multiplicera med 256. Ett fullständigt `find` över .git/objects kostar
+    tusentals stat()-anrop över NFS - just den kostnad vi är här för att
+    undvika - medan det här är en enda katalogläsning.
+    """
+    fanout = os.path.join(REPO_ROOT, ".git", "objects", "17")
+    try:
+        return len(os.listdir(fanout)) * 256
+    except OSError:
+        return 0
+
+
+def underhall_objektlagret(tvinga=False):
+    """Packar ihop lösa objekt så att nästa `git push` inte hänger sig.
+
+    Körs medan låset hålls och innan någon worktree finns, alltså utan
+    samtidiga git-processer. `git gc` utan `--prune=now` behåller
+    onåbara objekt i två veckor och räknar alla worktrees HEAD som rötter,
+    så pågående arbete i .claude/worktrees/ kan inte skadas.
+    """
+    losa = rakna_losa_objekt()
+    if not tvinga and losa < LOSA_OBJEKT_TAK:
+        return False
+    print(f"--> Packar ihop objektlagret (~{losa} lösa objekt)...")
+    res = run_cmd(["git", "gc", "--quiet"], check=False, cwd=REPO_ROOT,
+                  timeout=GIT_NATVERK_TIMEOUT)
+    if res.returncode != 0:
+        # Underhåll får aldrig fälla körningen: en misslyckad gc gör pushen
+        # långsam, inte omöjlig.
+        print(f"  ⚠ `git gc` misslyckades ({res.returncode}): {res.stderr.strip()}")
+        return False
+    print(f"  ✓ Objektlagret packat (~{rakna_losa_objekt()} lösa objekt kvar).")
+    return True
+
+
+def git_natverk(args, cwd, check=True):
+    """Kör ett git-kommando som rör nätet/objektlagret med tak och ETT omförsök.
+
+    Timeoutar det första försöket är den överlägset vanligaste orsaken att
+    objektlagret svällt med lösa objekt (se LOSA_OBJEKT_TAK). Omförsöket
+    föregås därför av en gc - det åtgärdar orsaken i stället för att bara
+    hoppas på bättre tur, och gör pipelinen självläkande utan Tony.
+
+    Noteras bör att `--no-verify` INTE hör hit: repot har inga egna hooks
+    (bara .git/hooks/*.sample), så flaggan döljer ingenting utan skulle bara
+    stänga av framtida hooks tyst.
+    """
+    try:
+        return run_cmd(args, check=check, cwd=cwd, timeout=GIT_NATVERK_TIMEOUT)
+    except TimeoutError as e:
+        print(f"  ⚠ {e}")
+        print("  ↻ Troligen ett svällt objektlager på NFS-mounten - packar och försöker igen.")
+        underhall_objektlagret(tvinga=True)
+        return run_cmd(args, check=check, cwd=cwd, timeout=GIT_NATVERK_TIMEOUT)
 
 
 # Markören omfangsruta.py letar efter i arkitektsvaren. Speglad här i stället för
@@ -500,9 +601,9 @@ def backa_trasig_egen_commit(worktree_path, branch_name, head_fore, head_efter, 
         return
 
     print(f"  ↩ Commiten hann till origin - backar även {branch_name} på PR:en.")
-    res = run_cmd(["git", "push", "--force-with-lease", "origin",
-                   f"{head_fore}:refs/heads/{branch_name}"],
-                  check=False, cwd=worktree_path)
+    res = git_natverk(["git", "push", "--force-with-lease", "origin",
+                       f"{head_fore}:refs/heads/{branch_name}"],
+                      check=False, cwd=worktree_path)
     if res.returncode != 0:
         print(f"  ⚠ Kunde inte backa {branch_name} på origin: {res.stderr}")
 
@@ -590,7 +691,7 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         staged = run_cmd(["git", "diff", "--cached", "--name-only"], cwd=worktree_path).stdout.strip()
         if staged:
             run_cmd(["git", "commit", "-m", f"Åtgärda granskningsfynd, varv {round_num} ({agent_namn})"], cwd=worktree_path)
-        run_cmd(["git", "push", "origin", branch_name], cwd=worktree_path)
+        git_natverk(["git", "push", "origin", branch_name], cwd=worktree_path)
         pushed_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
         if not wait_for_pr_head(pr_number, pushed_sha, worktree_path):
             print(f"  ⚠ PR:ens head hann inte synka mot commit {pushed_sha[:8]} - läser diffen ändå.")
@@ -1449,7 +1550,7 @@ def eskalera(issue_num, pr_number, worktree_path, branch_name, skal, exit_code=1
 def setup_worktree(branch_name):
     os.makedirs(WORKTREE_BASE, exist_ok=True)
     worktree_path = os.path.join(WORKTREE_BASE, branch_name.replace("/", "-"))
-    run_cmd(["git", "fetch", "origin", "main"], cwd=REPO_ROOT)
+    git_natverk(["git", "fetch", "origin", "main"], cwd=REPO_ROOT)
     if os.path.isdir(worktree_path):
         run_cmd(["git", "worktree", "remove", "--force", worktree_path], check=False, cwd=REPO_ROOT)
     run_cmd(["git", "branch", "-D", branch_name], check=False, cwd=REPO_ROOT)
@@ -1462,7 +1563,7 @@ def setup_worktree_for_existing_branch(branch_name):
     HEAD) i stället för att grena en ny från origin/main. Används av --resume-pr."""
     os.makedirs(WORKTREE_BASE, exist_ok=True)
     worktree_path = os.path.join(WORKTREE_BASE, branch_name.replace("/", "-"))
-    run_cmd(["git", "fetch", "origin", branch_name], cwd=REPO_ROOT)
+    git_natverk(["git", "fetch", "origin", branch_name], cwd=REPO_ROOT)
     if os.path.isdir(worktree_path):
         run_cmd(["git", "worktree", "remove", "--force", worktree_path], check=False, cwd=REPO_ROOT)
     run_cmd(["git", "branch", "-D", branch_name], check=False, cwd=REPO_ROOT)
@@ -1921,7 +2022,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     if status:
         run_cmd(["git", "add", "."], cwd=worktree_path)
         run_cmd(["git", "commit", "-m", f"Fix #{issue_num}: {issue_title}"], cwd=worktree_path)
-    run_cmd(["git", "push", "origin", branch_name, "--force"], cwd=worktree_path)
+    git_natverk(["git", "push", "origin", branch_name, "--force"], cwd=worktree_path)
     pushed_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
 
     # Agenten kan ha öppnat PR:en själv redan (samma bypassPermissions-åtkomst
@@ -2335,6 +2436,13 @@ def resume_question(pr_number):
 if __name__ == "__main__":
     lock_fd = acquire_lock()
     try:
+        # Före allt annat, och för varje läge: ett svällt objektlager drabbar
+        # varenda bana här nedan (alla pushar, alla worktrees). Kontrollen hör
+        # därför hemma på den enda plats de delar - inte kopierad in i varje
+        # gren, där en framtida fix skulle träffa en av dem och missa resten.
+        # Kostar en katalogläsning när det inte behövs.
+        underhall_objektlagret()
+
         if len(sys.argv) >= 3 and sys.argv[1] == "--resume-pr":
             avbryt_vid_peak()
             resume_pr(sys.argv[2])
