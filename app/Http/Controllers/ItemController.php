@@ -14,6 +14,7 @@ use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
+use App\Http\Resources\LoanResource;
 use App\Http\Resources\ScheduleOccurrenceResource;
 use App\Http\Resources\ScheduleResource;
 use App\Http\Resources\TagResource;
@@ -23,12 +24,14 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Files\FileOrigin;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -209,11 +212,13 @@ class ItemController extends Controller
      * 404: "känd men utanför omfånget" har en kod över tio kontrollrar
      * (issue 73 § Beslut 3), och webben uppfinner inte en elfte regel.
      *
-     * **Itemets egna fält, kategorin, taggarna, relationerna och bilagorna**
-     * (Beslut 4 och 8, issue 58, issue 60 § Beslut 2). Bilagorna kommer med
-     * props — se `attachments` nedan — och har ingen egen rutt. Schemana
-     * gjorde detsamma i issue 63a, se `schedules` och `openOccurrences` nedan.
-     * Kostnaderna 45–47 och utlåningen 67 har fortfarande ingen yta här.
+     * **Itemets egna fält, kategorin, taggarna, relationerna, bilagorna,
+     * schemana och utlåningen** (Beslut 4 och 8, issue 58, issue 60
+     * § Beslut 2). Bilagorna kommer med props — se `attachments` nedan — och
+     * har ingen egen rutt. Schemana gjorde detsamma i issue 63a, se
+     * `schedules` och `openOccurrences` nedan, och utlåningen i issue 67a, se
+     * `openLoan`, `loanHistory` och `openLoanOverdue`. Kostnaderna 45–47 har
+     * fortfarande ingen yta här.
      *
      * `categories` bär kategorins NAMN bredvid resursen — se klassens
      * docblock. Ett item utan kategori får en tom uppslagstabell och vyn
@@ -301,6 +306,26 @@ class ItemController extends Controller
             ->orderBy('title')
             ->get();
 
+        // Utlåningen kommer med detaljvyns props och aldrig ur ett eget anrop
+        // (issue 67a § Beslut 1). Sorteringen är `Api\LoanController::index()`s
+        // egna — `lent_at` fallande med `id` fallande, så det som lånades ut
+        // senast står först och två lån med samma datum ändå får en stabil
+        // ordning — och listan delas i den ÖPPNA och historiken här, inte i
+        // vyn: `returned_at IS NULL` är den öppna (Beslut 2), och vilken rad
+        // som är det är en domänfråga.
+        //
+        // Ett konstant antal frågor oavsett antal lån (Beslut 1):
+        // LoanResource läser bara kolumner på raden själv, inga relationer att
+        // ladda i förväg. Mjukraderade lån faller ut genom SoftDeletes'
+        // globala scope.
+        $loans = $item->loans()
+            ->orderByDesc('lent_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $openLoan = $loans->first(fn (Loan $loan): bool => $loan->returned_at === null);
+        $history = $loans->reject(fn (Loan $loan): bool => $loan->returned_at === null)->values();
+
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
@@ -328,6 +353,34 @@ class ItemController extends Controller
             // relation hade varit två sanningar om samma rad.
             'schedules' => ScheduleResource::collection($schedules)->resolve($request),
             'openOccurrences' => $this->openOccurrences($schedules, $request),
+
+            // Utlåningen (issue 67a § Beslut 1 och 2). `openLoan` är den rad
+            // som `returned_at IS NULL` — itemets enda status en annan medlem
+            // behöver se på en sekund — och `loanHistory` är de stängda
+            // raderna, i samma ordning som `/api` ger dem. Båda ur
+            // App\Http\Resources\LoanResource, samma format som
+            // `Api\LoanController::index()` svarar med.
+            'openLoan' => $openLoan === null
+                ? null
+                : (new LoanResource($openLoan))->resolve($request),
+            'loanHistory' => LoanResource::collection($history)->resolve($request),
+
+            // Försenad är härledd och räknas här, aldrig i vyn (Beslut 5,
+            // samma regel som `overdue` i issue 63b § Beslut 3): en klient med
+            // fel klocka ska inte kunna färga en utlåning röd, och en kolumn
+            // hade krävt ett jobb som förr eller senare missar en körning
+            // ([[ADR-0005 Schema och förekomst]]). Flaggan ligger BREDVID
+            // resursen och inte i den: `app/Http/Resources/**` är `/api`:s
+            // format och rörs inte av den här issuen — samma linje som
+            // `variants()` och `openOccurrences()` ovan.
+            'openLoanOverdue' => $openLoan !== null && $this->isOverdue($openLoan),
+
+            // Serverns datum, av samma skäl: "Tillbaka idag" (Beslut 3) sätter
+            // `returned_at` till dagens datum, och vilken dag det är får
+            // komma ur samma klocka som avgör vad som är försenat. Annars
+            // kunde en klient med fel datum registrera en återlämning före
+            // utlåningen och få ett fältfel hon inte förstår.
+            'today' => Carbon::today()->toDateString(),
 
             // Sant när användarfiler levereras från en egen origin (Beslut 2).
             // Vyn ritar bildvisaren och PDF-ramen bara då; annars faller
@@ -817,6 +870,25 @@ class ItemController extends Controller
         }
 
         return $names;
+    }
+
+    /**
+     * Är utlåningen försenad? Sant när `due_at` ligger i det förflutna och
+     * raden fortfarande är öppen (issue 67a § Beslut 5).
+     *
+     * **Beräknad, aldrig lagrad** — samma regel som `overdue` i
+     * App\Http\Resources\ScheduleOccurrenceResource: ett tillstånd klockan
+     * ändrar kräver annars ett jobb som förr eller senare missar en körning.
+     * Jämförelsen görs mot `Carbon::today()`, alltså serverns datum, och
+     * aldrig mot klientens — en telefon med fel datum ska inte kunna färga en
+     * utlåning röd.
+     *
+     * En öppen utlåning utan `due_at` är inte försenad: ingen har sagt när
+     * den skulle tillbaka.
+     */
+    private function isOverdue(Loan $loan): bool
+    {
+        return $loan->due_at !== null && $loan->due_at->lessThan(Carbon::today());
     }
 
     /**

@@ -123,6 +123,16 @@ return [
         'attachment-uploaded' => 'Bilagan är uppladdad.',
         'attachment-deleted' => 'Bilagan ligger i papperskorgen. Det går att återställa den i 30 dagar.',
 
+        // Issue 67a § Beslut 1. Tre koder och inte en: de tre knapparna gör tre
+        // olika saker, och "sparat" utan att säga vad hade varit sant men inte
+        // svarat på vad som hände. `loan-deleted` säger att RADEN är borta och
+        // aldrig att prylen är tillbaka — den är mjukraderad och hamnar inte i
+        // papperskorgen (issue 76 § Beslut 3), så texten lovar ingen
+        // återställning.
+        'loan-created' => 'Utlåningen är registrerad.',
+        'loan-updated' => 'Utlåningen är sparad.',
+        'loan-deleted' => 'Utlåningsraden är borta.',
+
         // Issue 62a § Beslut 7. EN kod för alla fyra typerna: återställningen
         // tar `type` i kroppen och delar en lista, så vyn har ingen anledning
         // att veta vilken av dem som just kom tillbaka — meningen säger
@@ -279,6 +289,14 @@ return [
                 'sibling' => 'syskon',
             ],
             'cycle' => 'Riktningen skulle göra en cirkel: det här itemet är redan överordnat motparten, direkt eller genom andra items.',
+        ],
+
+        // Utlåningens domänfel på webben, se issue 67a § Beslut 6 och issue 76
+        // § Beslut 4. Koden kommer ur App\Exceptions\Api\ApiException och
+        // `data.loan` bär den blockerande radens ULID — den behålls för
+        // klienten men meningen är användarens.
+        'loan' => [
+            'already_open' => 'Itemet är redan utlånat. Registrera återlämningen först.',
         ],
 
         // Avslutsflödets domänfel på webben, se issue 63b § Beslut 6. De
@@ -1397,6 +1415,81 @@ return [
             'dismiss' => 'Stäng',
 
             'submit' => 'Ladda upp',
+        ],
+
+        // Utlåningssektionen på detaljvyn, se issue 67a § Beslut 2–8. Sektionen
+        // bor i resources/js/components/ItemLoanSection.vue: den bär sitt eget
+        // formulär och sina egna fel, precis som ItemLinkSection gör för
+        // relationerna och ItemAttachmentSection för bilagorna, så ett fältfel
+        // på ett datum inte färgar resten av sidan.
+        //
+        // `borrowed_by`, `lent_at`, `due_at` och `returned_at` är hela
+        // meningar byggda ur ett datum och ett namn — mallen sätter ihop dem,
+        // och datumet är redan formaterat av formatDateOnly() (Beslut 3, 5).
+        'loan' => [
+            'heading' => 'Utlåning',
+            'description' => 'Vem som har prylen, och när den ska tillbaka.',
+
+            // Den öppna utlåningen står överst och historiken under
+            // (Beslut 2). `returned_at IS NULL` är den öppna, och vilken rad
+            // det är kommer färdigräknad från servern.
+            'not_lent' => 'Itemet är inte utlånat.',
+
+            'borrowed_by' => 'Lånad av :name',
+            'lent_at' => 'Utlånad :date',
+            'due_at' => 'Ska tillbaka :date',
+            'no_due_at' => 'Ingen återlämningsdag satt',
+
+            // Försenad är härledd på serverns datum (Beslut 5). Vyn jämför
+            // aldrig `due_at` mot sin egen klocka — den läser flaggan
+            // `openLoanOverdue` ur svaret.
+            'overdue' => 'Försenad',
+
+            // Adressen är en kontaktuppgift och aldrig en mottagaradress
+            // (Beslut 4, [[ADR-0017 Missbruksvektorer]] § 7). Den visas som
+            // text med möjlighet att kopiera, och `email_note` säger varför
+            // fältet finns: systemet mejlar aldrig låntagaren, påminnelsen går
+            // till den som lånat ut. Ingen `mailto:`-länk, ingen
+            // påminnelseknapp och ingen delning — texten är hela svaret på
+            // varför adressen står där.
+            'contact' => 'Kontaktuppgift',
+            'copy' => 'Kopiera adressen',
+            'copied' => 'Adressen är kopierad',
+            'email_note' => 'Adressen används aldrig för utskick. Systemet mejlar inte låntagaren — påminnelsen går till dig.',
+
+            // Återlämning är en knapp och inte ett datumfält man måste förstå
+            // (Beslut 3). Knappen sätter dagens datum — serverns, ur propen
+            // `today` — och det egna datumet finns i formuläret bredvid.
+            // `after_or_equal:lent_at` gäller båda vägarna, så ett datum före
+            // utlåningen blir ett fältfel.
+            'return_today' => 'Tillbaka idag',
+            'return_date' => 'Återlämningsdatum',
+            'return_submit' => 'Registrera',
+
+            'history_heading' => 'Tidigare utlåningar',
+            'returned_at' => 'Tillbaka :date',
+
+            // Att ta bort raden är INTE att återlämna (Beslut 7). Den ena
+            // suddar en felaktig registrering, den andra registrerar att
+            // prylen kommit tillbaka — och `destroy_confirm` säger båda, så de
+            // två knapparna inte går att förväxla. Raderingen är mjuk och
+            // raden hamnar inte i papperskorgen (issue 76 § Beslut 3), så
+            // texten lovar ingen återställning.
+            'destroy' => 'Ta bort raden',
+            'destroy_confirm' => 'Raden tas bort. Det här är inte en återlämning — prylen är fortfarande utlånad, och återlämningen registreras med den andra knappen. Vill du fortsätta?',
+
+            // Formuläret. `lent_at` är förvalt till dagens datum (Beslut 3),
+            // och de fyra datumen är `<input type="date">`: webbläsaren skickar
+            // `Y-m-d`, exakt vad `date`-regeln i den delade FormRequesten tar
+            // emot — ingen egen datumtolkning i JavaScript.
+            'form_heading' => 'Låna ut',
+            'form_name' => 'Lånad av',
+            'form_email' => 'E-postadress',
+            'form_lent_at' => 'Utlånad',
+            'form_due_at' => 'Ska tillbaka',
+            'form_returned_at' => 'Återlämnad',
+            'form_note' => 'Anteckning',
+            'form_submit' => 'Låna ut',
         ],
 
         // Schemat som regel — sektionen på detaljvyn och de två

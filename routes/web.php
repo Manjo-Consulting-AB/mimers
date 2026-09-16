@@ -25,6 +25,7 @@ use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
+use App\Http\Controllers\LoanController;
 use App\Http\Controllers\OccurrenceDependencyController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\ScheduleDependencyController;
@@ -505,6 +506,48 @@ Route::middleware('auth')->group(function () {
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show'])
         ->scopeBindings()
         ->name('containers.items.show');
+
+    /*
+     * Issue 67a · Utlåningen — markera utlånat, ändra och registrera
+     * återlämning, se App\Http\Controllers\LoanController.
+     *
+     * **Tre rutter och ingen sida** (Beslut 1). Listan — den öppna utlåningen
+     * och historiken — kommer med detaljvyns props, precis som bilagorna
+     * (issue 60 § Beslut 2), relationerna (issue 58 § Beslut 1) och schemana
+     * (issue 63a § Beslut 1). En egen GET hade varit en andra väg till samma
+     * läsning och en andra sanning om sorteringen.
+     *
+     * **`scopeBindings()` på alla tre**, av samma skäl som varje annan nästlad
+     * skrivning i filen (issue 9b § Beslut 1): `{item}` löses genom
+     * containerns `items()` och `{loan}` genom App\Models\Item::loans(), så en
+     * item-ULID ur en annan pärm — eller ett lån på ett annat item — blir 404
+     * i stället för ändrad. Det är hela skyddet, och samma form som
+     * routes/api.php ger samma tre rutter (issue 76 § Beslut 5).
+     *
+     * **Ingenting av `/api` byggs om.** `StoreLoanRequest` och
+     * `UpdateLoanRequest` delas rakt av, inklusive `after_or_equal:lent_at`,
+     * och `LoanResource` är samma resurs detaljvyns props byggs ur. Ingen ny
+     * FormRequest: den här ytan har inget eget fält.
+     *
+     * Grindarna är ITEMETS, en pinne per handling (Beslut 6): `view` för
+     * listan (i ItemController::show()), `create` för POST, `update` för PATCH
+     * och `delete` för DELETE. En `write`-mottagare registrerar en
+     * återlämning men tar inte bort raden.
+     *
+     * Skrivningarna svarar 302 till itemets detaljvy med en flash-kod —
+     * mönstret från issue 51 § Beslut 5, `status` och ingenting annat.
+     */
+    Route::post('/containers/{container}/items/{item}/loans', [LoanController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.loans.store');
+
+    Route::patch('/containers/{container}/items/{item}/loans/{loan}', [LoanController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.items.loans.update');
+
+    Route::delete('/containers/{container}/items/{item}/loans/{loan}', [LoanController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.loans.destroy');
 
     /*
      * Issue 58 · Relationerna — knyta och knyta upp, se

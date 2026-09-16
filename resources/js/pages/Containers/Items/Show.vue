@@ -4,6 +4,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
+import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import ScheduleListSection from '../../../components/ScheduleListSection.vue';
 import { itemFields } from '../../../components/itemPresentation.js';
@@ -15,18 +16,20 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
  * ur App\Http\Resources\ContainerResource.
  *
- * **Itemets egna fält, kategorin, taggarna, relationerna, schemana och
- * bilagorna.** Bilagesektionen kom med issue 60 och bor i
+ * **Itemets egna fält, kategorin, taggarna, relationerna, utlåningen,
+ * schemana och bilagorna.** Bilagesektionen kom med issue 60 och bor i
  * resources/js/components/ItemAttachmentSection.vue; listan kommer med
  * detaljvyns props och har ingen egen rutt. Schemana kom med issue 63a och
  * gör detsamma — ScheduleListSection.vue, proparna `schedules` och
- * `openOccurrences`.
- * Kostnaderna 45–47 och utlåningen 67 har fortfarande ingen yta här.
+ * `openOccurrences`. Utlåningen kom med issue 67a och gör detsamma —
+ * ItemLoanSection.vue, proparna `openLoan`, `loanHistory`, `openLoanOverdue`
+ * och `today`.
+ * Kostnaderna 45–47 har fortfarande ingen yta här.
  * Relationssektionen bor i resources/js/components/ItemLinkSection.vue: alla
  * tre bär sitt eget formulär och sina egna fel, precis som ContainerAccessRow
  * gör för åtkomsterna, så ett fältfel på en relation, ett schema eller en fil
  * inte färgar resten av sidan. Ordningen på ytorna är itemets egna uppgifter,
- * sedan relationerna, sedan schemana, sedan bilagorna.
+ * sedan relationerna, sedan utlåningen, sedan schemana, sedan bilagorna.
  *
  * **Ett tomt fält utelämnas, aldrig påhittat** (Beslut 8). `fields` filtrerar
  * bort `null` och tomma strängar, så en rad utan beskrivning visar ingen
@@ -112,6 +115,23 @@ const props = defineProps({
      * `overdue` att märka raden med och `visible_from` att visa glappet med.
      */
     openOccurrences: { type: Object, required: true },
+    /*
+     * Den öppna utlåningen ur App\Http\Resources\LoanResource, eller `null`
+     * (issue 67a § Beslut 2). Itemets enda status en annan medlem behöver se
+     * på en sekund, och den kommer färdigräknad från servern: `returned_at IS
+     * NULL` är den öppna.
+     */
+    openLoan: { type: Object, default: null },
+    /*
+     * Är den öppna utlåningen försenad? Räknat på serverns datum (Beslut 5) —
+     * samma regel som `overdue` i ScheduleOccurrenceResource, så en klient med
+     * fel klocka inte kan färga en utlåning röd.
+     */
+    openLoanOverdue: { type: Boolean, required: true },
+    /* De avslutade utlåningarna, i samma ordning som `/api` ger dem. */
+    loanHistory: { type: Array, required: true },
+    /* Serverns datum, `Y-m-d` — "Tillbaka idag" sätter det (Beslut 3). */
+    today: { type: String, required: true },
     can: { type: Object, required: true },
 });
 
@@ -214,6 +234,22 @@ function destroy() {
             :item-ulid="item.ulid"
             :links="links"
             :counterparts="counterparts"
+            :can="can"
+        />
+
+        <!--
+            Utlåningen (issue 67a § Beslut 2): den öppna utlåningen överst,
+            historiken under. Sektionen får `today` — serverns datum — och
+            `openLoanOverdue` från detaljvyns props och jämför aldrig något
+            datum själv; se ItemLoanSection.vue.
+        -->
+        <ItemLoanSection
+            :container-ulid="container.ulid"
+            :item-ulid="item.ulid"
+            :open-loan="openLoan"
+            :open-loan-overdue="openLoanOverdue"
+            :loan-history="loanHistory"
+            :today="today"
             :can="can"
         />
 

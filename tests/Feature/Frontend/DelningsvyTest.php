@@ -1028,6 +1028,15 @@ it('lägger delningssidan i pärmens navigation', function () {
  * § Beslut 2), så den som redan får läsa pärmen får en länk som visar exakt
  * samma sak. Ingen ny läsare och ingen ny mottagare; raden pekar på den
  * inloggade användaren själv.
+ *
+ * Sedan issue 67a finns utlåningens POST här. Den skriver en `loan`-rad — vem
+ * som har prylen och när den ska tillbaka — men rör inga åtkomster: grinden är
+ * `create` på ITEMET (issue 67a § Beslut 6, issue 71b § Beslut 1), så den som
+ * får låna ut sitt item får varken se eller dela ut mer av pärmen. En
+ * `read`-deltagare ser utlåningen och får 403 här; en `create`-deltagare lägger
+ * till en rad men ändrar och raderar inget befintligt. Ingen ny läsare och
+ * ingen ny mottagare: `borrower_email` är en kontaktuppgift och systemet mejlar
+ * aldrig låntagaren ([[ADR-0017 Missbruksvektorer]] § 7).
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -1035,13 +1044,14 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Itemet, relationen, bilagan, schemat, förekomstens två avslut,
-    // containerns eget skapande, kalenderlänken, inbjudan, kategorin,
+    // Itemet, utlåningen, relationen, bilagan, schemat, förekomstens två
+    // avslut, containerns eget skapande, kalenderlänken, inbjudan, kategorin,
     // uppsättningen, taggen och papperskorgen. Ingen /accesses. Ordningen är
     // registreringsordningen i routes/web.php — itemrutterna ligger ovanför
     // `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
+        'containers/{container}/items/{item}/loans',
         'containers/{container}/items/{item}/links',
         'containers/{container}/items/{item}/attachments',
         'containers/{container}/items/{item}/schedules',
