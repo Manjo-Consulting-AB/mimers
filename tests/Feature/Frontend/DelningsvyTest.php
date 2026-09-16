@@ -1004,6 +1004,14 @@ it('lägger delningssidan i pärmens navigation', function () {
  * får lägga till en uppgift på sitt item får varken se eller dela ut mer av
  * pärmen. En `read`-deltagare ser schemalistan och får 403 här; en
  * `create`-deltagare lägger till men ändrar och raderar inget befintligt.
+ *
+ * Sedan issue 63b finns förekomstens två POST här. De stänger en `open`-rad och
+ * öppnar nästa genom App\Actions\Schedule\CloseOccurrence, men rör inga
+ * åtkomster: grinden är `update` på ITEMET (issue 71 § Beslut 5), så den som
+ * får bocka av sin egen uppgift får varken se eller dela ut mer av pärmen. En
+ * `read`-deltagare ser historiken och den öppna förekomsten men får 403 här; en
+ * `create`-deltagare nekas av samma grind, för att bocka av ändrar en rad som
+ * redan finns.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -1011,15 +1019,18 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Itemet, relationen, bilagan, schemat, containerns eget skapande,
-    // inbjudan, kategorin, uppsättningen, taggen och papperskorgen. Ingen
-    // /accesses. Ordningen är registreringsordningen i routes/web.php —
-    // itemrutterna ligger ovanför `POST /containers`.
+    // Itemet, relationen, bilagan, schemat, förekomstens två avslut,
+    // containerns eget skapande, inbjudan, kategorin, uppsättningen, taggen
+    // och papperskorgen. Ingen /accesses. Ordningen är
+    // registreringsordningen i routes/web.php — itemrutterna ligger ovanför
+    // `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
         'containers/{container}/items/{item}/links',
         'containers/{container}/items/{item}/attachments',
         'containers/{container}/items/{item}/schedules',
+        'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete',
+        'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip',
         'containers',
         'containers/{container}/invitations',
         'containers/{container}/categories',

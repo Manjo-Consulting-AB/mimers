@@ -126,6 +126,13 @@ return [
         'schedule-resumed' => 'The schedule is active again.',
         'schedule-deleted' => 'The schedule has been removed.',
 
+        // Issue 63b decisions 5 and 8. Checking off and skipping get one
+        // sentence each: they close the same row but say different things
+        // about the work, and a shared "the occurrence is closed" would make
+        // the log unreadable.
+        'occurrence-completed' => 'The task has been checked off.',
+        'occurrence-skipped' => 'The task was skipped and saved as such — not as done.',
+
         'session-expired' => 'Your session expired. Please try again.',
     ],
 
@@ -211,6 +218,25 @@ return [
                 'sibling' => 'a sibling',
             ],
             'cycle' => 'That direction would make a circle: this item is already above the counterpart, directly or through other items.',
+        ],
+
+        // The close flow's domain errors on the web, see issue 63b decision 6.
+        // They arrive as App\Exceptions\Api\ApiException from
+        // App\Actions\Schedule\CloseOccurrence and become a form error on the
+        // `occurrence` key — never a raw JSON body in the middle of a page.
+        //
+        // `blocked` is two keys, not one: `data.blocked_by` is a LIST, and
+        // ApiErrorTranslator passes `data` straight into `trans()` as
+        // replacements. The controller writes the leading sentence itself and
+        // appends one `blocked_row` per blocker after it.
+        'occurrence' => [
+            'blocked' => 'This task cannot be checked off yet — these are not done:',
+            'blocked_row' => '• :title — due :date',
+            'not_open' => 'This occurrence is already closed and cannot be checked off again.',
+        ],
+
+        'schedule' => [
+            'inactive' => 'The schedule is paused, and checking off would open a new occurrence on a schedule nobody wants occurrences on. Resume the schedule first.',
         ],
     ],
 
@@ -804,6 +830,59 @@ return [
                 'title' => 'Edit schedule',
                 'heading' => 'Edit schedule',
                 'submit' => 'Save',
+            ],
+
+            // The occurrence — the single time, see issue 63b decisions 2–10.
+            // The sentences are used on BOTH surfaces: the section on the item
+            // (resources/js/components/ScheduleListSection.vue) and the
+            // schedule's own page
+            // (resources/js/pages/Containers/Items/Schedules/Show.vue), which
+            // share the form resources/js/components/OpenOccurrence.vue.
+            //
+            // Three dates in the right role (decision 2): `due` is the due
+            // date, `visible_from` is when the task appeared, and `window` is
+            // the time you have — the difference between them. All are DATE
+            // columns and are formatted by formatDateOnly(), never converted
+            // to another time zone.
+            //
+            // Overdue is a derived state (decision 3): the word below is drawn
+            // only when the server's `overdue` is true.
+            'occurrence' => [
+                'heading' => 'Open occurrence',
+                'none' => 'No open occurrence.',
+                'done' => 'The task is done.',
+
+                'view' => 'Occurrences',
+
+                'due' => 'Due :date',
+                'visible_from' => 'Visible since :date',
+                'window' => ':days days to spare',
+                'window_one' => '1 day to spare',
+
+                'overdue' => 'Overdue',
+
+                'account' => 'Account',
+                'account_hint' => 'The account that goes in the log. The vessel, not the person.',
+
+                'note' => 'Note',
+                'note_hint' => 'Optional. Saved in the history.',
+
+                'complete' => 'Check off',
+                'skip' => 'Skip',
+
+                'skip_confirm' => 'The task is closed as skipped, not as done, and the next occurrence opens just as it would after a check-off. Continue?',
+
+                'history' => 'History',
+                'history_empty' => 'No finished occurrences yet.',
+
+                'status' => [
+                    'open' => 'Open',
+                    'completed' => 'Done',
+                    'skipped' => 'Skipped',
+                ],
+
+                'completed_at' => 'Closed :date',
+                'completed_by' => 'by :name',
             ],
         ],
     ],

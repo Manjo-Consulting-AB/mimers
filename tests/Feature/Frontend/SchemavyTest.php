@@ -223,10 +223,14 @@ it('visar nästa förfall ur den öppna förekomsten och inget påhittat datum',
             ->where('schedules.0.is_active', false)
             ->where('schedules.1.title', 'Byt olja')
             ->where('schedules.1.is_active', true)
-            ->where("nextDue.{$oljebyte->ulid}", '2027-05-05')
+            // Sedan issue 63b är det den öppna FÖREKOMSTEN och inte dess
+            // datum som ligger i propen — avbockningen behöver ULID:n,
+            // `overdue` och `visible_from`, och `due_at` är ett av dess fält
+            // (issue 63b § Beslut 2). Nästa förfall är fortfarande samma rad.
+            ->where("openOccurrences.{$oljebyte->ulid}.due_at", '2027-05-05')
             // Nyckeln finns med `null` och är inte utelämnad: vyns uppslag är
             // detsamma för alla rader och slipper en andra gren.
-            ->where("nextDue.{$pausat->ulid}", null)
+            ->where("openOccurrences.{$pausat->ulid}", null)
     );
 });
 

@@ -19,7 +19,8 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * bilagorna.** Bilagesektionen kom med issue 60 och bor i
  * resources/js/components/ItemAttachmentSection.vue; listan kommer med
  * detaljvyns props och har ingen egen rutt. Schemana kom med issue 63a och
- * gör detsamma — ScheduleListSection.vue, proparna `schedules` och `nextDue`.
+ * gör detsamma — ScheduleListSection.vue, proparna `schedules` och
+ * `openOccurrences`.
  * Kostnaderna 45–47 och utlåningen 67 har fortfarande ingen yta här.
  * Relationssektionen bor i resources/js/components/ItemLinkSection.vue: alla
  * tre bär sitt eget formulär och sina egna fel, precis som ContainerAccessRow
@@ -102,12 +103,15 @@ const props = defineProps({
      */
     schedules: { type: Array, required: true },
     /*
-     * Schemats ULID → den öppna förekomstens förfallodatum, byggd på servern
-     * bredvid ScheduleResource (issue 63a § Beslut 1). Resursen bär inget
-     * `next_due_at` med flit — nästa förfall bor på förekomsten, aldrig på
-     * schemat — så uppslaget kommer som en egen prop.
+     * Schemats ULID → den öppna förekomsten ur ScheduleOccurrenceResource,
+     * eller `null`, byggd på servern bredvid ScheduleResource (issue 63a
+     * § Beslut 1, issue 63b § Beslut 1). Resursen bär inget `next_due_at` med
+     * flit — nästa förfall bor på förekomsten, aldrig på schemat — så
+     * uppslaget kommer som en egen prop. Sedan 63b är det förekomsten och
+     * inte datumet: avbockningen från sektionen behöver ULID:n att posta mot,
+     * `overdue` att märka raden med och `visible_from` att visa glappet med.
      */
-    nextDue: { type: Object, required: true },
+    openOccurrences: { type: Object, required: true },
     can: { type: Object, required: true },
 });
 
@@ -215,14 +219,19 @@ function destroy() {
 
         <!--
             Schemana under relationerna (issue 63a § Beslut 1): de är itemets
-            egna uppgifter och inte en egen vy. Förekomsterna, avbockningen
-            och beroendena är 63b och 63c och har ingen yta här.
+            egna uppgifter och inte en egen vy. Sedan issue 63b bär sektionen
+            också den öppna förekomsten och avbockningen — det är produktens
+            vanligaste skrivning och ska kosta en knapptryckning från itemet.
+            Historiken ligger på schemats egen sida; beroendena är 63c och har
+            ingen yta här. `container.account` är pärmens ägarkonto och
+            avbockningens förval när användaren är medlem i det.
         -->
         <ScheduleListSection
             :container-ulid="container.ulid"
             :item-ulid="item.ulid"
             :schedules="schedules"
-            :next-due="nextDue"
+            :open-occurrences="openOccurrences"
+            :container-account="container.account"
             :can="can"
         />
 

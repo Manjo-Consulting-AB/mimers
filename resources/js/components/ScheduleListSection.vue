@@ -1,47 +1,67 @@
 <script setup>
 import { computed } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import OpenOccurrence from './OpenOccurrence.vue';
 import { formatDateOnly } from './itemPresentation.js';
+import { scheduleUrl } from './occurrencePresentation.js';
 import { recurrenceLabel } from './schedulePresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Schemana på itemets detaljvy, se issue 63a § Beslut 1, 2, 6, 7 och 8.
+ * Schemana på itemets detaljvy, se issue 63a § Beslut 1, 2, 6, 7 och 8, och
+ * issue 63b § Beslut 1, 2 och 4.
  *
  * **Schemat är regeln och förekomsten den enskilda gången** ([[ADR-0005
  * Schema och förekomst]]). Den här sektionen listar REGLERNA — titeln,
- * återkommandet, nästa förfall och en markering för pausade. Förekomsterna,
- * avbockningen och historiken är 63b och bor inte här.
+ * återkommandet, nästa förfall och en markering för pausade — och bär sedan
+ * 63b:s avbockning: den öppna förekomstens tre datum och de två handlingar
+ * som stänger den. Historiken bor på schemats egen sida, dit raden länkar
+ * (Beslut 1).
+ *
+ * **Avbockningen ligger här med flit** (Beslut 1). Det är produktens
+ * vanligaste skrivning, och den ska kosta en knapptryckning från itemet —
+ * inte en navigering. Formuläret är resources/js/components/OpenOccurrence.vue,
+ * samma komponent som schemats sida ritar: två avskrifter av samma
+ * skrivning hade glidit isär.
  *
  * **Nästa förfall är den öppna förekomstens datum** och räknas aldrig om i
- * vyn: servern skickar `nextDue` (schemanas ULID → datum) byggd ur den
- * eager-laddade relationen, och ett schema utan öppen förekomst får sin egen
- * mening i stället för ett tomt fält (Beslut 1).
+ * vyn: servern skickar `openOccurrences` (schemanas ULID → förekomsten, eller
+ * `null`) byggd ur den eager-laddade relationen, och ett schema utan öppen
+ * förekomst får sin egen mening i stället för ett tomt fält (63a § Beslut 1).
+ * Sedan 63b är det förekomsten och inte datumet — avbockningen behöver
+ * ULID:n, `overdue` och `visible_from`, och `due_at` är ett av dess fält.
  *
  * **Egen komponent och inte rader i Show.vue**, av samma skäl som
  * ItemAttachmentSection och ItemLinkSection ligger här: sektionen bär sina
- * egna skrivningar och sina egna fel, så en nekad paus inte färgar resten av
- * sidan.
+ * egna skrivningar och sina egna fel, så en nekad avbockning inte färgar
+ * resten av sidan.
  *
- * **`can` är presentation** (Beslut 7). Varje knapp ritas efter samma grind
- * som kontrollern prövar — `create` för att lägga till, `update` för att
- * ändra OCH pausa, `delete` för att radera — men det som avgör är
- * `Gate::authorize()` i App\Http\Controllers\ScheduleController. En
- * användare med bara `read` ser ingen skrivyta alls; en `create`-mottagare
- * ser *Nytt schema* men ingen radåtgärd; en `write`-mottagare ser pausen men
- * inte raderingen.
+ * **`can` är presentation** (63a § Beslut 7). Varje knapp ritas efter samma
+ * grind som kontrollern prövar — `create` för att lägga till, `update` för
+ * att ändra, pausa OCH bocka av, `delete` för att radera — men det som
+ * avgör är `Gate::authorize()` i App\Http\Controllers\ScheduleController och
+ * App\Http\Controllers\ScheduleOccurrenceController. En användare med bara
+ * `read` ser ingen skrivyta alls; en `create`-mottagare ser *Nytt schema* men
+ * ingen radåtgärd; en `write`-mottagare ser pausen och avbockningen men inte
+ * raderingen.
  *
- * **Pausen är en PATCH som bär bara `is_active`** (Beslut 6), och raderingen
- * en DELETE. Båda går mot samma rutt som redigeringen, och båda behåller
- * scrolläget: en paus är en liten ändring i en lista man står mitt i.
+ * **Pausen är en PATCH som bär bara `is_active`** (63a § Beslut 6), och
+ * raderingen en DELETE. Båda går mot samma rutt som redigeringen, och båda
+ * behåller scrolläget: en paus är en liten ändring i en lista man står mitt
+ * i.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
     itemUlid: { type: String, required: true },
     /* Schemana ur App\Http\Resources\ScheduleResource, sorterade på titel. */
     schedules: { type: Array, required: true },
-    /* Schemats ULID → den öppna förekomstens förfallodatum, eller null. */
-    nextDue: { type: Object, required: true },
+    /*
+     * Schemats ULID → den öppna förekomsten ur ScheduleOccurrenceResource,
+     * eller `null` för ett schema som inte har någon (issue 63b § Beslut 1).
+     */
+    openOccurrences: { type: Object, required: true },
+    /* Pärmens ägarkonto — avbockningens förval när användaren är medlem. */
+    containerAccount: { type: String, default: '' },
     can: { type: Object, required: true },
 });
 
@@ -51,19 +71,31 @@ const page = usePage();
 const locale = computed(() => page.props.locale);
 
 /*
- * Raderna: återkommandet formulerat i ord och datumet formaterat utan att
- * flyttas över en tidszon — `due_at` är en DATE-kolumn ([[Scheman och
- * uppgifter]] § schedule_occurrence), och `formatDateOnly()` bygger datumet i
- * lokal tid i stället för att tolka strängen som UTC.
+ * Raderna: återkommandet formulerat i ord, den öppna förekomsten som den kom
+ * från servern, och dess datum formaterat utan att flyttas över en tidszon —
+ * `due_at` är en DATE-kolumn ([[Scheman och uppgifter]] §
+ * schedule_occurrence), och `formatDateOnly()` bygger datumet i lokal tid i
+ * stället för att tolka strängen som UTC.
+ *
+ * `done` är `none`-uppgiftens sista tillstånd (Beslut 8 och "Klart när"): en
+ * engångsuppgift vars förekomst är stängd öppnar ingen ny, och raden ska säga
+ * att uppgiften är klar i stället för att visa ett tomt förfallodatum. En
+ * PAUSAD rad har redan sin egen mening och förväxlas inte med den.
  */
-const rows = computed(() => props.schedules.map((schedule) => ({
-    ...schedule,
-    recurrence: recurrenceLabel(t, schedule),
-    due: formatDateOnly(props.nextDue[schedule.ulid] ?? null, locale.value),
-})));
+const rows = computed(() => props.schedules.map((schedule) => {
+    const occurrence = props.openOccurrences[schedule.ulid] ?? null;
+
+    return {
+        ...schedule,
+        recurrence: recurrenceLabel(t, schedule),
+        occurrence,
+        due: formatDateOnly(occurrence?.due_at ?? null, locale.value),
+        done: occurrence === null && schedule.recurrence_type === 'none' && schedule.is_active,
+    };
+}));
 
 function url(schedule) {
-    return `/containers/${props.containerUlid}/items/${props.itemUlid}/schedules/${schedule.ulid}`;
+    return scheduleUrl(props.containerUlid, props.itemUlid, schedule.ulid);
 }
 
 function editUrl(schedule) {
@@ -133,7 +165,9 @@ function destroy(schedule) {
                     <span class="text-sm">
                         {{ schedule.due
                             ? t('item.schedule.next_due', { date: schedule.due })
-                            : t('item.schedule.no_next_due') }}
+                            : schedule.done
+                                ? t('item.schedule.occurrence.done')
+                                : t('item.schedule.no_next_due') }}
                     </span>
 
                     <span
@@ -149,6 +183,17 @@ function destroy(schedule) {
                 </p>
 
                 <div class="flex flex-wrap gap-4 text-sm">
+                    <!-- Historiken och förekomsterna bor på schemats egen sida
+                         (Beslut 1). Länken ritas för alla som får se raden —
+                         att läsa historiken är samma grind som att läsa
+                         schemat. -->
+                    <Link
+                        :href="url(schedule)"
+                        class="font-medium text-blue-700 hover:underline"
+                    >
+                        {{ t('item.schedule.occurrence.view') }}
+                    </Link>
+
                     <Link
                         v-if="can.update"
                         :href="editUrl(schedule)"
@@ -175,6 +220,19 @@ function destroy(schedule) {
                         {{ t('item.schedule.destroy') }}
                     </button>
                 </div>
+
+                <!-- Den öppna förekomsten med avbockningen (Beslut 1). Ritas
+                     bara när det finns en rad att stänga; en stängd
+                     engångsuppgift säger det i raden ovan i stället. -->
+                <OpenOccurrence
+                    v-if="schedule.occurrence"
+                    :container-ulid="containerUlid"
+                    :item-ulid="itemUlid"
+                    :schedule-ulid="schedule.ulid"
+                    :occurrence="schedule.occurrence"
+                    :container-account="containerAccount"
+                    :can="can"
+                />
             </li>
         </ul>
     </section>
