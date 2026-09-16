@@ -416,11 +416,12 @@ function dismiss(entry) {
  * AVBRYTA navigeringen.
  *
  * `pending` är raderingens vänteläge (issue 68a § Beslut 4 och 5): knappen är
- * stängd och byter ord medan servern svarar. Uppladdningen har sin egen flagga
- * i köns `running` — de två flödena har olika varaktighet och delar därför
- * inte vänteläge.
+ * stängd och byter ord medan servern svarar. Den bär den klickade radens ULID,
+ * inte en delad boolean — annars stänger en rad alla listans rader. Uppladdningen
+ * har sin egen flagga i köns `running` — de två flödena har olika varaktighet
+ * och delar därför inte vänteläge.
  */
-const pending = ref(false);
+const pending = ref(null);
 
 function destroy(attachment) {
     if (! window.confirm(t('item.attachment.destroy_confirm'))) {
@@ -429,8 +430,8 @@ function destroy(attachment) {
 
     router.delete(`${itemUrl()}/attachments/${attachment.ulid}`, {
         preserveScroll: true,
-        onStart: () => { pending.value = true; },
-        onFinish: () => { pending.value = false; },
+        onStart: () => { pending.value = attachment.ulid; },
+        onFinish: () => { pending.value = null; },
     });
 }
 </script>
@@ -539,11 +540,11 @@ function destroy(attachment) {
                     <button
                         v-if="can.delete"
                         type="button"
-                        :disabled="pending"
+                        :disabled="pending === attachment.ulid"
                         class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
                         @click="destroy(attachment)"
                     >
-                        {{ pending ? t('common.pending.default') : t('item.attachment.destroy') }}
+                        {{ pending === attachment.ulid ? t('common.pending.default') : t('item.attachment.destroy') }}
                     </button>
                 </div>
             </li>
