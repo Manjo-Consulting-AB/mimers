@@ -467,3 +467,49 @@ it('röjer inte tvåfaktorn för en ogiltig länk — samma fel med och utan bek
     expect($utanKod->json('error.code'))->toBe('auth.magic_link_invalid');
     expect($medKod->json('error.code'))->toBe('auth.magic_link_invalid');
 });
+
+/*
+ * Takgränsens nyckel på `/api` (kodgranskningsfyndet, punkt 4): rutten
+ * nycklas på kroppens `email`, och det är bara ofarligt så länge ett token
+ * vars adressbindning inte stämmer avvisas INNAN koden bedöms. Annars kunde
+ * den som har länken men inte tvåfaktorsenheten rotera `email` och få en
+ * orörd hink för varje gissning. Bindningen prövas i
+ * App\Support\Auth\MagicLinkBroker::findToken() (§ Beslut 2), som
+ * App\Http\Controllers\Api\Auth\MagicLinkLoginController::store() kör först
+ * av allt — före både koden och `consume()`.
+ *
+ * Att samma token med rätt adress och samma kod fungerar direkt efteråt
+ * bevisar att varken länken eller tidsluckan förbrukades av det avvisade
+ * försöket.
+ */
+it('avvisar ett token vars adress inte stämmer innan koden bedöms — ingen token, ingen förbrukad kod', function () {
+    [$user, $secret] = användareMedBekräftadTotp();
+    $parametrar = tvafaktorParametrar(tvafaktorLank($user->email));
+    $kod = totpKodFör($secret);
+
+    // En annan adress som ÄVEN DEN har ett konto: annars fälldes anropet
+    // redan av att användaruppslaget i resolve() inte hittade någon, och
+    // testet mätte inte adressbindningen. Utan bindningen i findToken()
+    // hade det här försöket löst in länken för fel konto.
+    $annatKonto = User::factory()->create();
+
+    $avvisad = postJson('/api/login/magic-link/consume', [
+        'email' => $annatKonto->email,
+        'token' => $parametrar['token'],
+        'code' => $kod,
+    ]);
+
+    $avvisad->assertStatus(422);
+    expect($avvisad->json('error.code'))->toBe('auth.magic_link_invalid');
+    expect($user->tokens()->count())->toBe(0);
+    expect($annatKonto->tokens()->count())->toBe(0);
+
+    $rätt = postJson('/api/login/magic-link/consume', [
+        'email' => $user->email,
+        'token' => $parametrar['token'],
+        'code' => $kod,
+    ]);
+
+    $rätt->assertOk();
+    $rätt->assertJsonStructure(['token']);
+});

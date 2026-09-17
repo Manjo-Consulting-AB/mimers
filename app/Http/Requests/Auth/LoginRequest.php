@@ -3,10 +3,9 @@
 namespace App\Http\Requests\Auth;
 
 use App\Models\User;
-use App\Support\Auth\RecoveryCodeBroker;
-use App\Support\Auth\TotpBroker;
 use App\Support\Auth\TotpInvalidException;
 use App\Support\Auth\TotpRequiredException;
+use App\Support\Auth\TwoFactorChallenge;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
@@ -61,27 +60,25 @@ class LoginRequest extends FormRequest
      * och 2: EFTER att lösenordet är kontrollerat (aldrig före — fel
      * lösenord ska aldrig avslöja om kontot har tvåfaktor påslagen)
      * kontrolleras om kontot har en BEKRÄFTAD TOTP (`totp_confirmed_at`
-     * satt). En hemlighet utan bekräftelse (halvfärdig aktivering, se
-     * App\Support\Auth\TotpBroker::generate()) kräver ingen kod — annars
-     * skulle en avbruten aktivering låsa ute användaren. Saknas koden
-     * kastas TotpRequiredException; är den fel eller en redan förbrukad
-     * tidslucka kastas TotpInvalidException från
-     * App\Support\Auth\TotpBroker::verifyLoginCode() — se den metodens
-     * docblock för repris-skyddet. Båda ytornas kontroller
+     * satt), och i så fall prövas `$code`.
+     *
+     * Själva kontrollen — villkoret för när en kod alls krävs, ordningen
+     * mellan engångskod och återställningskod (issue 6c), och undantagen —
+     * bor sedan issue 80 i App\Support\Auth\TwoFactorChallenge, samma
+     * kontroll som magic link-vägen går genom. Den här metoden anropar den
+     * oförändrad: en hemlighet utan bekräftelse kräver ingen kod (en
+     * avbruten aktivering får inte låsa ute någon), saknas koden kastas
+     * TotpRequiredException, och en fel kod eller en redan förbrukad
+     * tidslucka blir TotpInvalidException — se den klassens docblock.
+     *
+     * Ordningen — lösenord före kod — är däremot den här metodens: den hör
+     * till inloggningen, och lösenordssteget nedanför är det som bevisar
+     * att kontot finns. Båda ytornas kontroller
      * (App\Http\Controllers\Auth\AuthenticatedSessionController,
      * App\Http\Controllers\Api\Auth\AuthenticatedTokenController) fångar
-     * de här två undantagen och översätter dem till sitt eget format,
-     * samma mönster som ValidationException nedan redan följer.
-     *
-     * Issue 6c · Återställningskoder: en TOTP-kod som inte verifierar
-     * provas INTE direkt som ett fel — `$code` kan lika gärna vara en
-     * återställningskod (appen är borta, se
-     * App\Support\Auth\RecoveryCodeBroker). Bara om
-     * App\Support\Auth\RecoveryCodeBroker::consume() också misslyckas
-     * (ingen sådan kod, redan förbrukad) kastas den ursprungliga
-     * TotpInvalidException vidare — samma svar oavsett vilket av de två
-     * som var fel, ingen sidokanal avslöjar vilketdera användaren
-     * försökte.
+     * TotpRequiredException och TotpInvalidException och översätter dem
+     * till sitt eget format, samma mönster som ValidationException nedan
+     * redan följer.
      *
      * @throws ValidationException
      * @throws TotpRequiredException
@@ -100,25 +97,12 @@ class LoginRequest extends FormRequest
         // ingen behörighetskontroll.
         $user = User::query()->where('email', $this->string('email'))->firstOrFail();
 
-        if ($user->totp_confirmed_at !== null) {
-            $code = $this->string('code')->toString();
-
-            if ($code === '') {
-                throw new TotpRequiredException;
-            }
-
-            try {
-                // Kastar TotpInvalidException vid fel kod ELLER en redan
-                // förbrukad tidslucka.
-                TotpBroker::verifyLoginCode($user, $code);
-            } catch (TotpInvalidException $exception) {
-                // Issue 6c: provar samma inskickade värde som en
-                // återställningskod innan felet ges vidare — se den här
-                // metodens docblock.
-                if (! RecoveryCodeBroker::consume($user, $code)) {
-                    throw $exception;
-                }
-            }
+        // Villkoret, kodordningen och återställningskoden som fallback bor i
+        // App\Support\Auth\TwoFactorChallenge — samma kontroll som
+        // magic link-vägen går genom, så regeln finns på ett ställe. Se den
+        // klassens docblock.
+        if (TwoFactorChallenge::isRequired($user)) {
+            TwoFactorChallenge::verify($user, $this->string('code')->toString());
         }
 
         return $user;
