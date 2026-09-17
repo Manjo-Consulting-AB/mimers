@@ -1,5 +1,10 @@
 <?php
 
+// rott-pa-basen: issue 82a — testfölje till att lang/sv utgår, ingen ändring av
+// vad filen prövar; raden påstår samma engelska ord (`Settings`) som basens
+// katalog bär, så filen kan inte falla utan språkbytet. Katalogen själv prövas i
+// tests/Feature/Frontend/SprakTest.php.
+
 use App\Models\Account;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;

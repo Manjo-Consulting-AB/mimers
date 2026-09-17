@@ -1,5 +1,10 @@
 <?php
 
+// rott-pa-basen: issue 82a — testfölje till att lang/sv utgår, ingen ändring av
+// vad filen prövar; påståendena är relativa (nyckeln löses ur katalogen, raden
+// är inte tom) och gäller därför även basens katalog. Att sv är borta prövas i
+// tests/Feature/Frontend/SprakTest.php.
+
 use App\Models\Notification;
 use App\Models\NotificationDelivery;
 use App\Models\NotificationPreference;
