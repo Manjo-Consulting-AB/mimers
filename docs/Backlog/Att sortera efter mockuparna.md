@@ -2,25 +2,57 @@
 
 Del av [[Backlog]]. **Det här är ingen milstolpe.** Det är en hållplats för arbete som är identifierat men ännu inte inplacerat, i väntan på genomgången av mockuparna.
 
-Listan kommer ur genomgången av MVP:n 2026-09-17. Tre av punkterna kan visa sig vara överflödiga när designen är känd, och minst en kan visa sig vara större än den ser ut — därför ligger de här i stället för i en milstolpe som påstår sig veta ordningen.
+Listan kommer ur genomgången av MVP:n 2026-09-17. Första omgången mockuper gicks igenom samma dag och avgjorde issue 83 och de fyra besluten nedan; resten av posterna väntar fortfarande på designen. Flera av dem kan visa sig vara överflödiga när den är känd, och minst en kan visa sig vara större än den ser ut — därför ligger de här i stället för i en milstolpe som påstår sig veta ordningen.
 
-**En post lämnar den här filen när den blir en issue i en milstolpe.** Står något kvar här som redan är byggt blir filen värdelös, precis som [[Tankar]] § Öppet.
+**En post lämnar den här filen när den blir en issue i en milstolpe** — eller, för ett beslut, när det står i en ADR. Står något kvar här som redan är byggt blir filen värdelös, precis som [[Tankar]] § Öppet.
 
 ---
 
-### 83. Den aktiva containern gör ingenting
-Att "göra en container aktiv" har en hel mekanism bakom sig och ingen synlig verkan. `App\Support\Frontend\ActiveContainer` äger en sessionsnyckel som sätts på fyra ställen — när en container skapas, när en inbjudan antas, när ett ägarbyte tas emot, och av `ActiveContainerController` bakom `PUT /containers/{container}/active`. `HandleInertiaRequests` delar ut ULID:t som propen `activeContainer`. Sedan tar det slut: den enda konsumenten är `resources/js/pages/Containers/Index.vue`, som sätter en markering på raden. `ContainerLayout` läser den avsiktligt inte, och `AppLayout` har ingen containerväljare.
+### 83. Containerkontexten sätts av navigeringen
 
-Användaren möter alltså en knapp som ändrar en markering i en lista och ingenting annat. Att inte förstå vad den gör är rätt slutsats.
+Systemet behöver veta vilken container användaren arbetar i — det är därför `App\Support\Frontend\ActiveContainer` finns. Men det är bokföring, och bokföring ska inte ha en knapp. I dag möter användaren "gör aktiv" i containerlistan, trycker på den och ser en markering flytta sig i samma lista. Vad knappen bokför syns ingenstans, och att inte förstå vad den gör är rätt slutsats.
 
-**Frågan är inte om den ska bort, utan om den ska få en uppgift.** Mekanismen är precis det en containerväljare i navigeringen skulle vila på — issue 51 § Beslut 4 införde den för det ändamålet, och issue 55 valde bort väljaren med hänvisning till att `/containers` är ytan där man byter. Har mockuparna en väljare i navigeringen är borttagningen en återuppbyggnad om två veckor. Har de det inte, är städningen självklar.
+**Avgjort vid mockupgenomgången 2026-09-17: mekanismen stannar, knappen försvinner.** Kontexten sätts av att användaren öppnar en container. Markeringen i navigeringen — den mockuparna visar under *Mina containers* — blir en effekt av var användaren befinner sig, inte en inställning hon gör.
 
-**Därför ligger den här och inte i en milstolpe.** Avgörs vid mockupgenomgången, byggs inte före den.
+**Det här ändras**
 
-Städningen, om det blir den, rör `App\Support\Frontend\ActiveContainer`, `App\Http\Controllers\ActiveContainerController`, rutten `containers.active`, den delade propen i `HandleInertiaRequests`, anropen till `set()` i `ContainerController`, `InvitationResponseController` och `OwnershipTransferController`, markeringen i `Containers/Index.vue` — och fem testfiler som påstår något om beteendet: `AktivContainerTest`, `DeladePropsTest`, `ContainervyerTest`, `ContainerpapperskorgTest` och `InbjudanMottagareTest`. Det är `blast_radius: cross-module`: den delade propen är något andra issues byggt på.
+- `App\Http\Controllers\ActiveContainerController` och rutten `containers.active` utgår. Det finns inget att skicka en `PUT` till när kontexten inte längre är ett val.
+- Knappen i `resources/js/pages/Containers/Index.vue` och markeringen som är dess enda verkan utgår.
+- `ActiveContainer::set()` anropas när en container öppnas, utöver de tre befintliga ställena: skapad container, antagen inbjudan, mottaget ägarbyte.
+- `AktivContainerTest` prövar i dag att rutten sätter nyckeln. Den ska pröva att navigeringen gör det.
+
+**Det här ändras inte**
+
+- `App\Support\Frontend\ActiveContainer` och sessionsnyckeln. De är hela poängen.
+- Propen `activeContainer` i `HandleInertiaRequests`. Den är vad navigeringens markering kommer att läsa när navigeringen byggs, och den delas ut som i dag.
+- Kontrollen i `forUser()` mot `Container::scopeAccessibleBy()`. Att kontexten sätts implicit gör åtkomstkontrollen viktigare, inte mindre viktig — en container användaren mist åtkomsten till får aldrig ligga kvar som kontext.
+
+**Klart när**
+
+- [ ] `PUT /containers/{container}/active` finns inte längre.
+- [ ] Att öppna en container sätter sessionsnyckeln till containerns ULID.
+- [ ] Att öppna en container användaren saknar åtkomst till lämnar kontexten orörd.
+- [ ] Propen `activeContainer` delas fortfarande ut och bär ULID:t för den senast öppnade containern.
+- [ ] Containerlistan har ingen knapp som sätter kontexten.
+
+**Axlar:** `ambiguity: low` · `blast_radius: cross-module` — den delade propen är något andra issues byggt på · `risk_class: none`
 
 **Läs:** `app/Support/Frontend/ActiveContainer.php`, issue 51 § Beslut 4 och issue 55 i [[M10 Webbfrontend]]
-**Beror på:** mockupgenomgången
+**Beror på:** -
+
+---
+
+## Avgjort vid mockupgenomgången — saknar ADR
+
+Fyra beslut fattades 2026-09-17 och har ännu ingen ADR. **Ett beslut som bara står här är inte fattat.** Den här filen är en hållplats, inte ett beslutsregister, och posterna nedan ska skrivas ut på riktigt innan något byggs på dem.
+
+**Relationen `sibling` byter namn till `related`.** `item_link.relation` tillåter i dag `parent`, `child` och `sibling`. Namnet påstår en delad förälder, men relationen är i själva verket en avsiktlig länk mellan två items utan hierarki — precis det mockuparna kallar *Relaterad*. Grafens legend blir *Förälder · Barn · Relaterad*, och den fjärde sorten mockuparna visar är en dubblett som utgår. Värdet i databasen byter namn, inte bara etiketten, av skälet i [[ADR-0032 Produktens ord]]: ett ordförråd. Korsande containrar är en senare fråga och blockeras av åtkomsten, inte av schemat — `item_link` har med flit ingen `container_id`.
+
+**`container.kind` blir fritt.** CHECK-villkoret `kind IN ('boat', 'caravan', 'house', 'car', 'other')` bygger in domänen i schemat och står i konflikt med [[ADR-0033 Produktens omfång]]. Fältet blir fritt med autocomplete på vad kontot redan använt, och navigeringen grupperar på det — men först när en kind bär minst två containrar, annars blir navet en lista med rubriker över ett objekt var.
+
+**Valutan sätts per container, inte per kostnadsrad.** [[ADR-0016 Kostnadsregistrering]] gör valutan obligatorisk per rad och summerar per valuta. Beslutet är att användaren i stället sätter ett valutaprefix på containern och själv räknar om det hon betalat i annan valuta. Implementationen är inte avgjord — se anteckningen i genomgången om att behålla kolumnen och fylla den från containern i stället för att ta bort den.
+
+**Skalen.** Trepanelsvyn är vad användaren ser när ett objekt öppnas. Dashboarden är vad som möter henne efter inloggning. Containervyn ligger mellan dem.
 
 ---
 
