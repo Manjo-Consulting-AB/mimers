@@ -66,6 +66,17 @@ return [
             'intro' => 'We will send a login link to your email address. The link can be used once and is valid for fifteen minutes.',
             'submit' => 'Send the link',
             'login' => 'Back to the login',
+
+            // Steg två, se issue 80 § Beslut 2 och
+            // resources/js/pages/Auth/MagicLinkCode.vue — samma nycklar som
+            // lang/sv/ui.php.
+            'code' => [
+                'title' => 'Enter your code',
+                'heading' => 'Enter your code',
+                'intro' => 'The link has been used. Enter the code from your authenticator app, or a recovery code, to log in.',
+                'submit' => 'Log in',
+            ],
+            'request_again' => 'Ask for a new link',
         ],
 
         'verify' => [

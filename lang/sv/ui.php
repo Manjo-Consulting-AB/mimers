@@ -89,6 +89,20 @@ return [
             'intro' => 'Vi skickar en inloggningslänk till din e-postadress. Länken går att använda en gång och gäller i en kvart.',
             'submit' => 'Skicka länken',
             'login' => 'Tillbaka till inloggningen',
+
+            // Steg två, se issue 80 § Beslut 2 och
+            // resources/js/pages/Auth/MagicLinkCode.vue. "Länken har använts"
+            // är bokstavligt sant — länken förbrukas vid klicket, innan koden
+            // ens efterfrågas — och är just därför formuleringen: den som
+            // avbryter här ska förstå att hon behöver en ny länk, inte leta
+            // efter en knapp som tar tillbaka klicket.
+            'code' => [
+                'title' => 'Ange din kod',
+                'heading' => 'Ange din kod',
+                'intro' => 'Länken har använts. Ange koden från din autentiseringsapp, eller en återställningskod, för att logga in.',
+                'submit' => 'Logga in',
+            ],
+            'request_again' => 'Be om en ny länk',
         ],
 
         // Verifieringstexten renderas både i bannern på varje inloggad sida

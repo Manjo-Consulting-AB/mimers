@@ -134,6 +134,27 @@ Route::middleware('guest')->group(function () {
 
     Route::get('/login/magic-link/consume', MagicLinkLoginController::class)
         ->name('magic-link.consume');
+
+    /*
+     * Issue 80 · Steg två: engångskoden (eller återställningskoden) för det
+     * konto som väntar i sessionen, se
+     * App\Http\Controllers\Auth\MagicLinkLoginController::store() och
+     * App\Support\Auth\PendingMagicLinkLogin.
+     *
+     * Samma sökväg som GET-rutten och skilda åt av metoden — steg två är
+     * samma försök, inte en andra rutt att hålla i takt. Rutten ligger kvar
+     * i `guest`-gruppen: den som redan loggat in ska inte kunna byta konto
+     * genom att skriva en kod.
+     *
+     * `throttle:login` — kodförsöken bär samma takgräns som inloggningen,
+     * så steg två inte blir en oskyddad orakelyta (issue 80 § Beslut 2).
+     * Begränsaren nycklas på `email`, som formuläret skickar med av det
+     * skälet och inget annat — se
+     * App\Http\Requests\Auth\ConsumeMagicLinkCodeRequest.
+     */
+    Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store'])
+        ->middleware('throttle:'.LoginRateLimiter::NAME)
+        ->name('magic-link.consume.code');
 });
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])

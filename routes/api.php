@@ -62,7 +62,16 @@ Route::post('/login', [AuthenticatedTokenController::class, 'store'])
 Route::post('/login/magic-link', [MagicLinkRequestController::class, 'store'])
     ->middleware('throttle:'.LoginRateLimiter::NAME);
 
-Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store']);
+/*
+ * Issue 80 · Sedan den här issuen bär rutten samma takgräns som
+ * inloggningen (`throttle:login`) och som webbens steg två, se
+ * routes/web.php: ett konto med bekräftad tvåfaktor svarar
+ * `auth.totp_required`/`auth.totp_invalid` här, och en kodkontroll utan tak
+ * är en gissningsyta. Nyckeln `email` finns i kroppen redan för tokenets
+ * skull, se App\Http\Requests\Auth\ConsumeMagicLinkRequest.
+ */
+Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store'])
+    ->middleware('throttle:'.LoginRateLimiter::NAME);
 
 /*
  * Issue 38b · Mailguns webhook för studsar, spamanmälningar och
