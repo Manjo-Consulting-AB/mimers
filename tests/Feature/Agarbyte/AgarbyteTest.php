@@ -512,6 +512,6 @@ it('en write-access kan inte lista ägarbytena', function () {
 });
 
 it('Lang::has transfer_requested är sant för både sv och en', function () {
-    expect(Lang::has('notiser.transfer_requested', 'en'))->toBeTrue();
+    expect(Lang::has('notiser.transfer_requested', 'sv'))->toBeTrue();
     expect(Lang::has('notiser.transfer_requested', 'en'))->toBeTrue();
 });
