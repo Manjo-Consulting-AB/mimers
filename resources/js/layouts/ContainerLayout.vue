@@ -67,7 +67,7 @@ const heading = computed(() => props.container.name);
                 <button
                     type="button"
                     class="inline-flex min-h-11 w-full items-center rounded border border-slate-300 px-3 text-sm font-medium md:hidden"
-                    aria-controls="container-sections"
+                    aria-controls="parmens-sektioner"
                     :aria-expanded="sectionsOpen"
                     @click="sectionsOpen = !sectionsOpen"
                 >
@@ -75,7 +75,7 @@ const heading = computed(() => props.container.name);
                 </button>
 
                 <ul
-                    id="container-sections"
+                    id="parmens-sektioner"
                     class="flex-col gap-1 text-sm"
                     :class="sectionsOpen ? 'flex' : 'hidden md:flex'"
                 >
