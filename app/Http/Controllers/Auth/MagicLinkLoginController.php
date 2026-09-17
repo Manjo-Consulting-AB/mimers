@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Auth\ConsumeMagicLinkCodeRequest;
 use App\Http\Requests\Auth\ConsumeMagicLinkRequest;
 use App\Models\User;
+use App\Support\Auth\ConsumeMagicLinkCodeRequest;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Auth\MagicLinkExpiredException;
 use App\Support\Auth\MagicLinkInvalidException;
@@ -69,11 +69,11 @@ class MagicLinkLoginController extends Controller
 
         PendingMagicLinkLogin::start($request, $user);
 
-        // `email` är till för `throttle:login`s nyckel i steg två, aldrig
-        // för identiteten — se App\Http\Requests\Auth\ConsumeMagicLinkCodeRequest.
-        return Inertia::render('Auth/MagicLinkCode', [
-            'email' => $user->email,
-        ]);
+        // Inga props: kontot försöket gäller bor i väntetillståndet i
+        // sessionen, och steg två skickar bara sin kod — `email` sätts på
+        // requesten av App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin,
+        // för takgränsens räkning och inget annat.
+        return Inertia::render('Auth/MagicLinkCode');
     }
 
     /**
@@ -90,6 +90,10 @@ class MagicLinkLoginController extends Controller
      * App\Http\Controllers\Auth\AuthenticatedSessionController. AGENTS.md
      * § Felformat i API:et gäller `/api`, inte webben, så det maskinläsbara
      * höljet används inte här.
+     *
+     * Requesten bär bara `code`; vilket konto takgränsen räknar mot sätts på
+     * den av App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin innan
+     * den här metoden körs, se det middlewarets docblock.
      */
     public function store(ConsumeMagicLinkCodeRequest $request): RedirectResponse
     {

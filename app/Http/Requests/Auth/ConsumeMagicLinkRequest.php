@@ -27,7 +27,7 @@ use Illuminate\Foundation\Http\FormRequest;
  * kan inte — en webbläsare kan inte skicka koden i samma request som klicket
  * på mejllänken — och frågar i stället i ett andra steg, se
  * App\Support\Auth\PendingMagicLinkLogin och
- * App\Http\Requests\Auth\ConsumeMagicLinkCodeRequest.
+ * App\Support\Auth\ConsumeMagicLinkCodeRequest.
  */
 class ConsumeMagicLinkRequest extends FormRequest
 {

@@ -8,17 +8,22 @@ use App\Models\User;
  * Avgör om ett konto kräver en andra faktor, och prövar i så fall koden —
  * issue 80 · "En magic link går förbi bekräftad tvåfaktor".
  *
- * Klassen är den enda platsen den kontrollen bor på: ordningen mellan
- * lösenord, engångskod och återställningskod, och villkoret för när en kod
- * alls krävs, får inte finnas i två kopior som kan glida isär. Anropare:
+ * Klassen bär kontrollen åt magic link-vägen, som inte hade någon:
+ * villkoret för när en kod alls krävs, ordningen mellan engångskod och
+ * återställningskod, och undantagen de två ytorna översätter. Anropare:
  *
- * - App\Http\Requests\Auth\LoginRequest::authenticate() — efter att
- *   lösenordet redan är kontrollerat, se den metodens docblock för varför
- *   ordningen är den är.
  * - App\Http\Controllers\Auth\MagicLinkLoginController::store() och
  *   App\Http\Controllers\Api\Auth\MagicLinkLoginController::store() — efter
  *   att magic link-token är löst (webben) respektive prövad utan att
  *   förbrukas (API:et), se issue 80 § Beslut 2 och 3.
+ *
+ * Lösenordsinloggningen har samma kontroll i
+ * App\Http\Requests\Auth\LoginRequest::authenticate(), orörd av den här
+ * issuen — den filen ligger utanför omfångsrutan, och "ändra den inte" är
+ * uttryckligt. Att samla de två kopiorna till en är därför en egen uppgift
+ * och inte gjord här; fram till dess är den här klassens docblock och
+ * LoginRequests den ena beskrivningen av samma regel, och de ska säga
+ * samma sak.
  *
  * **Villkoret är `totp_confirmed_at`, aldrig enbart en genererad hemlighet**
  * (issue 80 § Beslut 6, samma villkor som LoginRequest alltid har haft). En

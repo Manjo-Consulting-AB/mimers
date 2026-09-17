@@ -44,6 +44,7 @@ use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\WebhookEndpointController;
+use App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Files\FileOrigin;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -146,14 +147,16 @@ Route::middleware('guest')->group(function () {
      * i `guest`-gruppen: den som redan loggat in ska inte kunna byta konto
      * genom att skriva en kod.
      *
-     * `throttle:login` — kodförsöken bär samma takgräns som inloggningen,
-     * så steg två inte blir en oskyddad orakelyta (issue 80 § Beslut 2).
-     * Begränsaren nycklas på `email`, som formuläret skickar med av det
-     * skälet och inget annat — se
-     * App\Http\Requests\Auth\ConsumeMagicLinkCodeRequest.
+     * `BindsMagicLinkCodeThrottleToPendingLogin` i stället för
+     * `throttle:login` rakt av — kodförsöken bär samma takgräns som
+     * inloggningen (issue 80 § Beslut 2), men begränsaren nycklas på det
+     * konto som väntar i sessionen och inte på ett `email`-fält ur kroppen,
+     * som den som har ett väntetillstånd hade kunnat byta ut mot en ny hink
+     * för varje försök. Middlewaret anropar samma begränsare; se dess
+     * docblock.
      */
     Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store'])
-        ->middleware('throttle:'.LoginRateLimiter::NAME)
+        ->middleware(BindsMagicLinkCodeThrottleToPendingLogin::class)
         ->name('magic-link.consume.code');
 });
 

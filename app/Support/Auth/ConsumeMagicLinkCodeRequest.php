@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Requests\Auth;
+namespace App\Support\Auth;
 
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -9,21 +9,25 @@ use Illuminate\Foundation\Http\FormRequest;
  * (eller återställningskoden) efter att mejllänken redan är förbrukad, se
  * issue 80 § Beslut 2 och App\Support\Auth\PendingMagicLinkLogin.
  *
- * **Ingen `token` och ingen `email` ur sessionen.** Vem försöket gäller
- * läses ur väntetillståndet i sessionen — aldrig ur requesten — så en
- * manipulerad kropp kan inte byta ut användaren. `email` finns i reglerna
- * ändå, av ett enda skäl: `throttle:login` (App\Support\Auth\LoginRateLimiter
- * och App\Providers\AppServiceProvider::configureLoginRateLimiting()) nycklar
- * sin e-postgräns på just det fältet. Utan det hade nyckeln blivit tom och
- * alla användares kodförsök delat en enda budget på fem i minuten — en
- * takgräns som slår mot fel person. Värdet används alltså till att räkna,
- * aldrig till att identifiera; sidan fyller i det ur en prop.
+ * **Ingen `token` och ingen `email`.** Vem försöket gäller läses ur
+ * väntetillståndet i sessionen — aldrig ur requesten — så en manipulerad
+ * kropp kan inte byta ut användaren. Klienten skickar därför bara `code`;
+ * `email` sätts på requesten av
+ * App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin, av ett enda
+ * skäl: `throttle:login` (App\Support\Auth\LoginRateLimiter och
+ * App\Providers\AppServiceProvider::configureLoginRateLimiting()) nycklar
+ * sin e-postgräns på det fältet. Middlewaredelen är hela poängen: kommer
+ * fältet från kroppen är det klientstyrt, och den som har ett
+ * väntetillstånd för offrets konto kan byta ut det mot en ny, orörd hink
+ * för varje försök — se det middlewarets docblock.
+ *
+ * Klassen ligger här och inte bland de andra FormRequests: den hör till
+ * magic link-flödet, och det är i den här katalogen flödets delar bor.
  *
  * Varför en egen FormRequest i stället för ConsumeMagicLinkRequest: de två
  * stegen tar olika kroppar (steg ett `email` + `token` ur mejllänken, steg
- * två `email` + `code`), och att göra `token` valfritt i den gemensamma
- * klassen hade tystat ett saknat token i steg ett i stället för att avvisa
- * det.
+ * två `code`), och att göra `token` valfritt i den gemensamma klassen hade
+ * tystat ett saknat token i steg ett i stället för att avvisa det.
  */
 class ConsumeMagicLinkCodeRequest extends FormRequest
 {
@@ -38,10 +42,6 @@ class ConsumeMagicLinkCodeRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // Bara takgränsens nyckel, se klassens docblock — aldrig
-            // identiteten. Formen valideras för att en skräpkropp ska
-            // avvisas som ett fältfel och inte tyst ge en delad nyckel.
-            'email' => ['required', 'string', 'email'],
             // Samma form som App\Http\Requests\Auth\LoginRequest::rules():
             // `code` är inte `required`, eftersom ett tomt värde är precis
             // vad TwoFactorChallenge översätter till `auth.totp_required`

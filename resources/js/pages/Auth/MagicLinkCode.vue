@@ -25,23 +25,17 @@ import { useErrorFocus } from './useErrorFocus.js';
  * appen" och gömde återställningskoden bakom en egen länk skulle återinföra
  * en skillnad servern med flit raderat.
  *
- * `email` skickas med i anropet och är INTE identiteten — den kommer ur
- * väntetillståndet i sessionen på servern. Fältet finns för att
- * `throttle:login` nycklar sin gräns på det, se
- * App\Http\Requests\Auth\ConsumeMagicLinkCodeRequest.
+ * Anropet bär bara koden. Vem försöket gäller — och därmed vad
+ * takgränsen räknas mot — kommer ur väntetillståndet i sessionen på
+ * servern, se App\Support\Auth\ConsumeMagicLinkCodeRequest och
+ * App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin. Ett
+ * `email`-fält i det här anropet hade varit klientstyrt och gått att byta
+ * ut mot en ny, orörd hink för varje försök.
  */
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
 
-const props = defineProps({
-    email: {
-        type: String,
-        required: true,
-    },
-});
-
 const form = useForm({
-    email: props.email,
     code: '',
 });
 

@@ -99,7 +99,9 @@ final class PendingMagicLinkLogin
      *
      * Ett misslyckat kodförsök rensar INTE: koden får skrivas fel och göras
      * om inom de fem minuterna, precis som i inloggningsformuläret.
-     * Takgränsen på försöken är `throttle:login` på rutten, se
+     * Takgränsen på försöken är `throttle:login`, kopplad till det här
+     * tillståndet av
+     * App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin, se
      * routes/web.php.
      */
     public static function clear(Request $request): void

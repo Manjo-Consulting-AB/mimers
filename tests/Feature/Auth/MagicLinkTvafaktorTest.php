@@ -24,8 +24,8 @@ use function Pest\Laravel\withoutVite;
  * Se App\Http\Controllers\Auth\MagicLinkLoginController (två steg på
  * webben), App\Http\Controllers\Api\Auth\MagicLinkLoginController (koden
  * med i samma request), App\Support\Auth\PendingMagicLinkLogin (webbens
- * väntetillstånd), App\Support\Auth\TwoFactorChallenge (kontrollen som nu är
- * gemensam med lösenordsinloggningen) och App\Support\Auth\MagicLinkBroker
+ * väntetillstånd), App\Support\Auth\TwoFactorChallenge (kontrollen, samma
+ * regel som lösenordsinloggningens) och App\Support\Auth\MagicLinkBroker
  * (resolve(), som prövar ett token utan att förbruka det).
  *
  * Ett test per punkt i "Klart när", plus den sidokanal som API-ets ordning
@@ -290,6 +290,46 @@ it('begränsar kodförsöken i steg två med samma takgräns som inloggningen', 
     $blockerad->assertSessionDoesntHaveErrors('code');
 
     assertGuest();
+});
+
+it('räknar kodförsöken mot kontot i sessionen, inte mot ett e-postfält i kroppen', function () {
+    [$user] = användareMedBekräftadTotp();
+
+    get(tvafaktorLank($user->email));
+
+    // Ett nytt påhittat email i varje försök. Vore gränsen nycklad på
+    // kroppens fält hade varje rad fått en egen, orörd hink på fem i
+    // minuten — och gissningsskyddet varit borta. Identiteten kommer i
+    // stället ur väntetillståndet, se
+    // App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin.
+    for ($i = 0; $i < 5; $i++) {
+        post('/login/magic-link/consume', [
+            'email' => "påhittad{$i}@example.test",
+            'code' => '000000',
+        ])->assertSessionHasErrors('code');
+    }
+
+    $blockerad = from('/login/magic-link/consume')->post('/login/magic-link/consume', [
+        'email' => 'ännu-en-påhittad@example.test',
+        'code' => '000000',
+    ]);
+
+    $blockerad->assertRedirect('/login/magic-link/consume');
+    $blockerad->assertSessionHasErrors('email');
+    $blockerad->assertSessionDoesntHaveErrors('code');
+
+    assertGuest();
+});
+
+it('tar emot steg två utan e-postfält — klienten skickar bara koden', function () {
+    [$user, $secret] = användareMedBekräftadTotp();
+
+    get(tvafaktorLank($user->email));
+
+    post('/login/magic-link/consume', ['code' => totpKodFör($secret)])
+        ->assertRedirect('/dashboard');
+
+    assertAuthenticatedAs($user);
 });
 
 it('loggar in ett konto utan bekräftad tvåfaktor i exakt samma antal steg som förut', function () {
