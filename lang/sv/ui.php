@@ -13,7 +13,7 @@
 return [
     'common' => [
         'brand' => 'Mimers',
-        'tagline' => 'Pärmen för båten, husvagnen, huset och bilen.',
+        'tagline' => 'Containern för båten, husvagnen, huset och bilen.',
         'to_dashboard' => 'Till översikten',
         'home' => 'Till startsidan',
 
@@ -28,7 +28,7 @@ return [
             'upload' => 'Laddar upp…',
             'export' => 'Förbereder exporten…',
             'complete' => 'Bockar av…',
-            'transfer' => 'Tar över pärmen…',
+            'transfer' => 'Tar över containern…',
         ],
     ],
 
@@ -39,9 +39,10 @@ return [
         'menu' => 'Meny',
         'menu_close' => 'Stäng menyn',
         'dashboard' => 'Översikt',
-        // Pärmen är produktens ord för containern, se [[ADR-0002 Konto äger
-        // container]] och Översikt. Länken kom med issue 54 § Beslut 7.
-        'containers' => 'Pärmar',
+        // Ordet är produktens eget, se [[ADR-0032 Produktens ord]]: containern
+        // heter container, och [[ADR-0002 Konto äger container]] gäller
+        // fortfarande. Länken kom med issue 54 § Beslut 7.
+        'containers' => 'Containers',
         // Mottagarens inkorg för ägarbyten, se issue 67b § Beslut 5: vägen in
         // är identitet, inte en länk i ett mejl, så raden står i navigationen
         // och är ovillkorlig.
@@ -117,13 +118,13 @@ return [
         // svarat på vad som hände.
         'notification-preferences-updated' => 'Notisinställningarna är sparade.',
         'quiet-hours-updated' => 'Tysta timmar är sparade.',
-        'container-created' => 'Pärmen är skapad.',
-        'container-updated' => 'Pärmen är sparad.',
+        'container-created' => 'Containern är skapad.',
+        'container-updated' => 'Containern är sparad.',
         'access-updated' => 'Åtkomsten är sparad.',
         'access-revoked' => 'Åtkomsten är återkallad.',
         'invitation-sent' => 'Inbjudan är skickad.',
         'invitation-revoked' => 'Inbjudan är tillbakadragen.',
-        'invitation-accepted' => 'Inbjudan är accepterad. Pärmen ligger under Pärmar.',
+        'invitation-accepted' => 'Inbjudan är accepterad. Containern ligger under Containers.',
         'invitation-rejected' => 'Inbjudan är avvisad.',
         'category-created' => 'Kategorin är skapad.',
         'category-updated' => 'Kategorin är sparad.',
@@ -132,13 +133,13 @@ return [
         'tag-created' => 'Taggen är skapad.',
         'tag-updated' => 'Taggen är sparad.',
         'tag-deleted' => 'Taggen är raderad.',
-        'item-created' => 'Itemet är skapat.',
-        'item-updated' => 'Itemet är sparat.',
-        'item-deleted' => 'Itemet ligger i papperskorgen. Det går att återställa i 30 dagar.',
+        'item-created' => 'Objektet är skapat.',
+        'item-updated' => 'Objektet är sparat.',
+        'item-deleted' => 'Objektet ligger i papperskorgen. Det går att återställa i 30 dagar.',
         'item-link-created' => 'Relationen är skapad.',
         // Upp-knytningen tar bort kopplingen och ingenting annat — raden i
         // länken är hård (issue 14 § Beslut 10), men båda itemen finns kvar.
-        'item-link-removed' => 'Kopplingen är borta. Båda itemen finns kvar.',
+        'item-link-removed' => 'Kopplingen är borta. Båda objekten finns kvar.',
 
         // Issue 60 § Beslut 9. Bilagan är MJUK-raderad — `deleted_at` sätts
         // och bytena ligger kvar tills papperskorgen gallrar dem (ADR-0008) —
@@ -166,8 +167,8 @@ return [
         // meningen pekar på papperskorgen, där länken ligger alldeles under.
         // Återställningen säger att pärmen är tillbaka; den blir INTE aktiv av
         // sig själv, för att välja pärm är användarens handling.
-        'container-trashed' => 'Pärmen ligger i papperskorgen.',
-        'container-restored' => 'Pärmen är återställd.',
+        'container-trashed' => 'Containern ligger i papperskorgen.',
+        'container-restored' => 'Containern är återställd.',
 
         // Issue 63a § Beslut 6 och 8. Pausen är samma skrivning som en ändrad
         // titel och får därför sin egen mening: "sparat" hade varit sant men
@@ -214,7 +215,7 @@ return [
         // och `transfer-accepted` att pärmen nu finns i hennes lista.
         'transfer-created' => 'Överlåtelsen är skickad. Mottagaren ser den under Ägarbyten.',
         'transfer-revoked' => 'Överlåtelsen är tillbakadragen. Raden står kvar i historiken.',
-        'transfer-accepted' => 'Pärmen är din. Du hittar den i pärmlistan.',
+        'transfer-accepted' => 'Containern är din. Du hittar den i containerlistan.',
         'transfer-rejected' => 'Du har tackat nej. Avsändaren måste skicka en ny överlåtelse om ni ändrar er.',
 
         // Issue 67c § Beslut 3. Beställningen svarar omedelbart, och meningen
@@ -242,7 +243,7 @@ return [
         'generic' => 'Något gick fel. Försök igen om en stund.',
 
         'quota' => [
-            'containers_exceeded' => 'Kontot har nått sitt tak för antal pärmar (:used av :limit).',
+            'containers_exceeded' => 'Kontot har nått sitt tak för antal containers (:used av :limit).',
             // Issue 55b § Beslut 6: de två gränserna ett inbjudningsformulär
             // kan slå i. Delningstaket räknar mottagare och obesvarade
             // inbjudningar, kontotaket räknar utskicken (issue 27 § Beslut 5,
@@ -301,9 +302,9 @@ return [
         'category' => [
             'max_depth_exceeded' => 'En kategori får ligga på högst :max_depth nivåer.',
             'cycle' => 'En kategori kan inte flyttas in i sig själv eller in i en av sina egna underkategorier.',
-            'parent_not_in_container' => 'Den valda överordnade kategorin ligger inte i den här pärmen.',
+            'parent_not_in_container' => 'Den valda överordnade kategorin ligger inte i den här containern.',
             'has_children' => 'Kategorin har :children underkategorier och kan inte raderas.',
-            'has_items' => 'Kategorin har :items items och kan inte raderas.',
+            'has_items' => 'Kategorin har :items objekt och kan inte raderas.',
         ],
 
         // Relationsformulärets fyra domänfel, se issue 58 § Beslut 6. De
@@ -319,15 +320,15 @@ return [
         // översatt till ett adjektiv, och ett meddelande som slänger bort
         // `data` är sämre än felkoden det ersatte.
         'item_link' => [
-            'self' => 'Ett item kan inte kopplas till sig självt.',
-            'cross_container' => 'Relationer går bara mellan items i samma pärm.',
+            'self' => 'Ett objekt kan inte kopplas till sig självt.',
+            'cross_container' => 'Relationer går bara mellan objekt i samma container.',
             'pair_exists' => 'De två är redan kopplade: motparten är :relation.',
             'relation_word' => [
                 'parent' => 'överordnad',
                 'child' => 'underordnad',
                 'sibling' => 'syskon',
             ],
-            'cycle' => 'Riktningen skulle göra en cirkel: det här itemet är redan överordnat motparten, direkt eller genom andra items.',
+            'cycle' => 'Riktningen skulle göra en cirkel: det här objektet är redan överordnat motparten, direkt eller genom andra objekt.',
         ],
 
         // Utlåningens domänfel på webben, se issue 67a § Beslut 6 och issue 76
@@ -335,7 +336,7 @@ return [
         // `data.loan` bär den blockerande radens ULID — den behålls för
         // klienten men meningen är användarens.
         'loan' => [
-            'already_open' => 'Itemet är redan utlånat. Registrera återlämningen först.',
+            'already_open' => 'Objektet är redan utlånat. Registrera återlämningen först.',
         ],
 
         // Exportens enda domänfel på webben, se issue 67c § Beslut 4.
@@ -367,10 +368,10 @@ return [
         // avslagets väg. Ingen av dem får någonsin bli en rå JSON-kropp i en
         // webbläsare.
         'transfer' => [
-            'already_pending' => 'Pärmen har redan en överlåtelse som väntar på svar. Dra tillbaka den först om du vill byta mottagare.',
+            'already_pending' => 'Containern har redan en överlåtelse som väntar på svar. Dra tillbaka den först om du vill byta mottagare.',
             'not_pending' => 'Överlåtelsen är redan besvarad eller tillbakadragen och går inte att ändra.',
             'expired' => 'Överlåtelsen har gått ut. Avsändaren måste skicka en ny.',
-            'account_frozen' => 'Ditt konto är fryst och kan inte ta emot en pärm just nu.',
+            'account_frozen' => 'Ditt konto är fryst och kan inte ta emot en container just nu.',
         ],
 
         // Avslutsflödets domänfel på webben, se issue 63b § Beslut 6. De
@@ -416,7 +417,7 @@ return [
             // ersatte (issue 58 § Beslut 6, 56a § Beslut 4).
             'dependency_self' => 'En förekomst kan inte vänta på sig själv.',
             'dependency_cycle' => 'Riktningen skulle göra en cirkel: ":schedule" väntar redan på ":depends_on", direkt eller genom mellanled.',
-            'dependency_not_in_container' => 'Beroenden går bara mellan förekomster i samma pärm.',
+            'dependency_not_in_container' => 'Beroenden går bara mellan förekomster i samma container.',
         ],
 
         'schedule' => [
@@ -427,7 +428,7 @@ return [
             // som förekomstens ovan.
             'dependency_self' => 'Ett schema kan inte vänta på sig självt.',
             'dependency_cycle' => 'Riktningen skulle göra en cirkel: ":schedule" väntar redan på ":depends_on", direkt eller genom mellanled.',
-            'dependency_not_in_container' => 'Beroenden går bara mellan scheman i samma pärm.',
+            'dependency_not_in_container' => 'Beroenden går bara mellan scheman i samma container.',
         ],
 
         // Issue 65b § Beslut 5 · funktionsgrinden. `Entitlements::assertFeature()`
@@ -656,7 +657,7 @@ return [
             'loan' => [
                 'due' => [
                     'label' => 'Utlåning ska tillbaka',
-                    'description' => 'När ett item du lånat ut närmar sig återlämningsdagen.',
+                    'description' => 'När ett objekt du lånat ut närmar sig återlämningsdagen.',
                 ],
             ],
             'quota' => [
@@ -667,8 +668,8 @@ return [
             ],
             'invitation' => [
                 'received' => [
-                    'label' => 'Inbjudan till en pärm',
-                    'description' => 'När någon bjuder in dig till en pärm.',
+                    'label' => 'Inbjudan till en container',
+                    'description' => 'När någon bjuder in dig till en container.',
                 ],
             ],
             'transfer' => [
@@ -739,7 +740,7 @@ return [
     'calendar' => [
         'title' => 'Kalender',
         'heading' => 'Kalender',
-        'intro' => 'Prenumerera på pärmens uppgifter i kalendern du redan använder. Länken är personlig och visar bara det du själv får se.',
+        'intro' => 'Prenumerera på containerns uppgifter i kalendern du redan använder. Länken är personlig och visar bara det du själv får se.',
 
         // Texten till SecretOnce. `url_description` säger vad adressen är till
         // för, `url_once` att den inte går att se igen — båda behövs, och de
@@ -753,8 +754,8 @@ return [
 
         'create' => 'Skapa en kalenderlänk',
 
-        'list_heading' => 'Dina länkar till den här pärmen',
-        'empty' => 'Du har inga kalenderlänkar till den här pärmen än.',
+        'list_heading' => 'Dina länkar till den här containern',
+        'empty' => 'Du har inga kalenderlänkar till den här containern än.',
 
         'revoke' => 'Återkalla',
         'revoke_confirm' => 'Återkalla kalenderlänken? Kalendern slutar uppdateras, och adressen går inte att få tillbaka.',
@@ -820,7 +821,7 @@ return [
             'loan' => [
                 'due' => [
                     'label' => 'Utlåning ska tillbaka',
-                    'description' => 'När ett utlånat item närmar sig återlämningsdagen.',
+                    'description' => 'När ett utlånat objekt närmar sig återlämningsdagen.',
                 ],
             ],
             'quota' => [
@@ -831,7 +832,7 @@ return [
             ],
             'invitation' => [
                 'received' => [
-                    'label' => 'Inbjudan till en pärm',
+                    'label' => 'Inbjudan till en container',
                     'description' => 'När någon bjuder in en medlem till kontot.',
                 ],
             ],
@@ -944,17 +945,17 @@ return [
         // De fyra numeriska gränserna (Beslut 4). Nycklarna är nycklarna i
         // `plan.limits`, aldrig påhittade egna namn.
         'limits' => [
-            'containers' => 'Pärmar',
+            'containers' => 'Containers',
             'storage_bytes' => 'Lagringsutrymme',
             'max_file_bytes' => 'Största filstorlek',
-            'shared_users_per_container' => 'Delade användare per pärm',
+            'shared_users_per_container' => 'Delade användare per container',
         ],
 
         // `:used` och `:limit` är färdigformaterade av servern — bytena med
         // Number::fileSize(), samma formatering som kvotfelmeningarna i 60a.
         'of' => ':used av :limit',
         'of_unlimited' => ':used av obegränsat',
-        'per_container' => ':limit per pärm',
+        'per_container' => ':limit per container',
 
         // `null` är obegränsat och skrivs som ett ord, aldrig som noll och
         // aldrig som en full stapel (Beslut 4).
@@ -980,7 +981,7 @@ return [
         // raderas aldrig.
         'downgrade' => [
             'heading' => 'Om du nedgraderar',
-            'intro' => 'Items raderas aldrig — bara bilagor. Så går det till:',
+            'intro' => 'Objekt raderas aldrig — bara bilagor. Så går det till:',
 
             'steps' => [
                 'freeze' => 'Betalningen uteblir och kontot blir fryst. Ingenting raderas.',
@@ -991,7 +992,7 @@ return [
             ],
 
             'kept' => [
-                'items' => 'Dina items raderas aldrig.',
+                'items' => 'Dina objekt raderas aldrig.',
                 'costs' => 'Kostnadsrader raderas aldrig. Kvittona kan försvinna med bilagorna — siffrorna står kvar.',
             ],
 
@@ -1044,7 +1045,7 @@ return [
             'location' => ':container — :item',
             // En bilaga vars item eller pärm ligger i papperskorgen räknas
             // fortfarande mot kontot och ska synas (Beslut 3).
-            'trashed' => 'Pärmen eller itemet ligger i papperskorgen. Bilagan räknas ändå mot kontot.',
+            'trashed' => 'Containern eller objektet ligger i papperskorgen. Bilagan räknas ändå mot kontot.',
         ],
 
         // Urvalets förhandsvisning (Beslut 4): räknad i klienten ur
@@ -1096,7 +1097,7 @@ return [
         'nav' => [
             // `items` ligger först, som raden i containerSections.js: itemen är
             // pärmen, kategorierna och taggarna är hur den är ordnad.
-            'items' => 'Items',
+            'items' => 'Objekt',
             'categories' => 'Kategorier',
             'tags' => 'Taggar',
             'sharing' => 'Delning',
@@ -1123,10 +1124,10 @@ return [
         ],
 
         'index' => [
-            'title' => 'Pärmar',
-            'heading' => 'Pärmar',
-            'create' => 'Ny pärm',
-            'empty' => 'Du har inga pärmar än.',
+            'title' => 'Containers',
+            'heading' => 'Containers',
+            'create' => 'Ny container',
+            'empty' => 'Du har inga containers än.',
             'shared' => 'Delad med dig',
             'active' => 'Aktiv',
             'make_active' => 'Gör aktiv',
@@ -1134,8 +1135,8 @@ return [
         ],
 
         'create' => [
-            'title' => 'Ny pärm',
-            'heading' => 'Ny pärm',
+            'title' => 'Ny container',
+            'heading' => 'Ny container',
 
             'name' => 'Namn',
             'kind' => 'Typ',
@@ -1162,7 +1163,7 @@ return [
         // återställa därifrån — och ALDRIG "raderas permanent", för
         // raderingen är mjuk (issue 8) och det ordet vore osant.
         'destroy' => [
-            'action' => 'Radera pärmen',
+            'action' => 'Radera containern',
             'confirm' => ':name och allt i den flyttas till papperskorgen. Där ligger den kvar i 30 dagar och går att återställa. Vill du fortsätta?',
         ],
 
@@ -1172,7 +1173,7 @@ return [
         'categories' => [
             'title' => 'Kategorier',
             'heading' => 'Kategorier',
-            'description' => 'Var sakerna hör hemma. Ett item ligger i högst en kategori, och kategorierna bildar ett träd på högst fem nivåer.',
+            'description' => 'Var sakerna hör hemma. Ett objekt ligger i högst en kategori, och kategorierna bildar ett träd på högst fem nivåer.',
 
             'name' => 'Namn',
             'parent' => 'Överordnad kategori',
@@ -1192,10 +1193,10 @@ return [
             // kategorier och hamnar på formulärnyckeln `categories` — en
             // mening och inte en API-felkod, för rutten finns bara på webben.
             'preset_heading' => 'Färdig uppsättning',
-            'preset_description' => 'Vi kan fylla pärmen med ett färdigt förslag på kategorier. Du kan döpa om, flytta och radera dem precis som vanliga kategorier efteråt.',
+            'preset_description' => 'Vi kan fylla containern med ett färdigt förslag på kategorier. Du kan döpa om, flytta och radera dem precis som vanliga kategorier efteråt.',
             'preset_apply' => 'Lägg till uppsättningen',
             'preset_dismiss' => 'Nej tack',
-            'preset_not_empty' => 'Pärmen har redan kategorier. En uppsättning går bara att lägga i en tom pärm.',
+            'preset_not_empty' => 'Containern har redan kategorier. En uppsättning går bara att lägga i en tom container.',
         ],
 
         // Tagglistan, se issue 56a § Beslut 6 och 8. `description` är den
@@ -1204,7 +1205,7 @@ return [
         'tags' => [
             'title' => 'Taggar',
             'heading' => 'Taggar',
-            'description' => 'Allt annat man vill kunna filtrera på. En tagg är platt, ligger utanpå kategorin och ett item kan bära hur många som helst.',
+            'description' => 'Allt annat man vill kunna filtrera på. En tagg är platt, ligger utanpå kategorin och ett objekt kan bära hur många som helst.',
 
             'name' => 'Namn',
             'color' => 'Färg',
@@ -1212,7 +1213,7 @@ return [
             // Färgen är valfri, och `null` är ett svar — ingen standardfärg
             // väljs åt användaren (Beslut 8).
             'no_color' => 'Ingen färg',
-            'item_count' => 'Sitter på :count items',
+            'item_count' => 'Sitter på :count objekt',
 
             'create_heading' => 'Ny tagg',
             'create' => 'Skapa',
@@ -1246,10 +1247,10 @@ return [
         // för uppräkningen (`filter_label_tags`), så "taggarna Motor,
         // Impeller" står i stället för "taggen Motor, taggen Impeller".
         'index' => [
-            'title' => 'Items',
-            'heading' => 'Items',
-            'create' => 'Nytt item',
-            'empty' => 'Pärmen är tom.',
+            'title' => 'Objekt',
+            'heading' => 'Objekt',
+            'create' => 'Nytt objekt',
+            'empty' => 'Containern är tom.',
 
             'filter_heading' => 'Filtrera',
             'filter_q' => 'Sökord',
@@ -1312,14 +1313,14 @@ return [
             // tomt fält.
             'category' => 'Kategori',
             'category_none' => '— ingen kategori —',
-            'categories_empty' => 'Pärmen har inga kategorier än.',
+            'categories_empty' => 'Containern har inga kategorier än.',
             'categories_empty_link' => 'Skapa kategorier',
 
             // Taggarna är kryssrutor, en per tagg i pärmen. En ny tagg skapas
             // på taggsidan och inte här: en väg till samma skrivning på två
             // ställen är två regler att hålla i takt (Beslut 5).
             'tags' => 'Taggar',
-            'tags_empty' => 'Pärmen har inga taggar än.',
+            'tags_empty' => 'Containern har inga taggar än.',
             'tags_empty_link' => 'Skapa taggar',
 
             // Kontot posten tillskrivs — varvet, inte den anställde. Bara vid
@@ -1333,8 +1334,8 @@ return [
         ],
 
         'create' => [
-            'title' => 'Nytt item',
-            'heading' => 'Nytt item',
+            'title' => 'Nytt objekt',
+            'heading' => 'Nytt objekt',
             'submit' => 'Skapa',
         ],
 
@@ -1342,8 +1343,8 @@ return [
         // och formuläret.
         'edit' => [
             'action' => 'Redigera',
-            'title' => 'Redigera item',
-            'heading' => 'Redigera item',
+            'title' => 'Redigera objekt',
+            'heading' => 'Redigera objekt',
             'submit' => 'Spara',
         ],
 
@@ -1352,7 +1353,7 @@ return [
         // "raderas permanent", vilket vore osant (Beslut 8).
         'destroy' => [
             'action' => 'Radera',
-            'confirm' => 'Itemet hamnar i papperskorgen och går att återställa i 30 dagar. Vill du fortsätta?',
+            'confirm' => 'Objektet hamnar i papperskorgen och går att återställa i 30 dagar. Vill du fortsätta?',
         ],
 
         // Relationssektionen, se issue 58 § Beslut 3, 4, 8, 9 och 10.
@@ -1365,7 +1366,7 @@ return [
         // rad som beskriver något dolt vore själva läckaget.
         'links' => [
             'heading' => 'Relationer',
-            'description' => 'Vad det här itemet hör till, och vad som hör till det.',
+            'description' => 'Vad det här objektet hör till, och vad som hör till det.',
 
             'group' => [
                 'parent' => 'Överordnade',
@@ -1373,28 +1374,28 @@ return [
                 'sibling' => 'Syskon',
             ],
 
-            'empty' => 'Itemet är inte kopplat till något.',
+            'empty' => 'Objektet är inte kopplat till något.',
             'remove' => 'Knyt upp',
             // Raderingen av en länk är hård (issue 14 § Beslut 10) och har
             // ingen papperskorg — det som försvinner är kopplingen, aldrig
             // itemen.
-            'remove_confirm' => 'Bara kopplingen tas bort. Båda itemen finns kvar. Vill du fortsätta?',
+            'remove_confirm' => 'Bara kopplingen tas bort. Båda objekten finns kvar. Vill du fortsätta?',
 
             // Vägen till barn-itemet (Beslut 7).
             'create_child' => [
-                'action' => 'Nytt item under det här',
+                'action' => 'Nytt objekt under det här',
             ],
 
-            'form_heading' => 'Knyt ihop med ett annat item',
-            'counterpart' => 'Item',
-            'counterpart_none' => '— välj item —',
-            'no_counterparts' => 'Det finns inga andra items att koppla till.',
+            'form_heading' => 'Knyt ihop med ett annat objekt',
+            'counterpart' => 'Objekt',
+            'counterpart_none' => '— välj objekt —',
+            'no_counterparts' => 'Det finns inga andra objekt att koppla till.',
 
             'relation' => [
                 'label' => 'Motparten är',
                 'none' => '— välj riktning —',
-                'parent' => 'Överordnat item',
-                'child' => 'Underordnat item',
+                'parent' => 'Överordnat objekt',
+                'child' => 'Underordnat objekt',
                 'sibling' => 'Syskon',
             ],
 
@@ -1402,7 +1403,7 @@ return [
             // Ingen beräkning — ingen fråga om vilka grants som finns och
             // ingen räknare. Den siffran hör till delningsvyn (55a), och en
             // andra sanning om omfånget är en sanning som kan glida isär.
-            'relation_note' => 'Den som delar ett överordnat item når även dess underordnade — syskon delar ingenting.',
+            'relation_note' => 'Den som delar ett överordnat objekt når även dess underordnade — syskon delar ingenting.',
 
             'submit' => 'Knyt ihop',
         ],
@@ -1425,7 +1426,7 @@ return [
         // är mjuk (Beslut 7), och "raderas permanent" vore osant.
         'attachment' => [
             'heading' => 'Bilagor',
-            'empty' => 'Itemet har inga bilagor.',
+            'empty' => 'Objektet har inga bilagor.',
 
             'kind' => [
                 'image' => 'Bild',
@@ -1456,7 +1457,7 @@ return [
             'pdf_fallback' => 'Går PDF:en inte att visa? Ladda ner den i stället.',
 
             'upload_heading' => 'Ladda upp filer',
-            'billing_note' => 'Lagringen räknas mot kontot nedan, inte mot pärmens ägare.',
+            'billing_note' => 'Lagringen räknas mot kontot nedan, inte mot containerns ägare.',
             'account' => 'Kontot som betalar',
             'file' => 'Filer',
 
@@ -1523,7 +1524,7 @@ return [
             // Den öppna utlåningen står överst och historiken under
             // (Beslut 2). `returned_at IS NULL` är den öppna, och vilken rad
             // det är kommer färdigräknad från servern.
-            'not_lent' => 'Itemet är inte utlånat.',
+            'not_lent' => 'Objektet är inte utlånat.',
 
             'borrowed_by' => 'Lånad av :name',
             'lent_at' => 'Utlånad :date',
@@ -1607,9 +1608,9 @@ return [
         // ändrar.
         'schedule' => [
             'heading' => 'Scheman',
-            'empty' => 'Itemet har inga scheman.',
+            'empty' => 'Objektet har inga scheman.',
             'add' => 'Nytt schema',
-            'back' => 'Tillbaka till itemet',
+            'back' => 'Tillbaka till objektet',
 
             // Nästa förfall är den ÖPPNA förekomstens datum (Beslut 1). Ett
             // schema utan öppen förekomst — ett pausat, eller en
@@ -1866,13 +1867,13 @@ return [
         'title' => 'Sök',
         'heading' => 'Sök',
 
-        'intro' => 'Söker i namn, beskrivning, tillverkare, modell och serienummer — i alla pärmar du når.',
+        'intro' => 'Söker i namn, beskrivning, tillverkare, modell och serienummer — i alla containers du når.',
         'whole_words' => 'Sökningen matchar hela ord: ”batteri” hittar inte ”batterier”.',
         'empty' => 'Inga träffar på ”:q”.',
         'in_container' => 'i',
 
         'field' => [
-            'label' => 'Sök i alla pärmar',
+            'label' => 'Sök i alla containers',
             'placeholder' => 'Sökord',
             'submit' => 'Sök',
         ],
@@ -1904,8 +1905,8 @@ return [
         ],
 
         'empty' => [
-            'no_containers' => 'Du har inga pärmar än.',
-            'create' => 'Skapa en pärm',
+            'no_containers' => 'Du har inga containers än.',
+            'create' => 'Skapa en container',
             'nothing' => 'Inget att göra just nu.',
         ],
     ],
@@ -1934,7 +1935,7 @@ return [
         // något annat slipper vänta förgäves. Att den är fri på alla planer
         // står här och inte bara i en planöversikt: det är produktlöftet, och
         // den som letar efter en grind ska se att det inte finns någon.
-        'intro' => 'Exporten samlar hela pärmen i en ZIP-fil: items med kategorier och taggar, bilagorna och historiken. Den är fri på alla planer, och filen är en påse man hämtar — inte ett arkiv man förvarar.',
+        'intro' => 'Exporten samlar hela containern i en ZIP-fil: objekt med kategorier och taggar, bilagorna och historiken. Den är fri på alla planer, och filen är en påse man hämtar — inte ett arkiv man förvarar.',
         'create' => 'Beställ en export',
 
         // Varför knappen är stängd, i ord (Beslut 4). En avstängd knapp utan
@@ -1980,7 +1981,7 @@ return [
 
         'participants' => [
             'heading' => 'Deltagare',
-            'description' => 'Alla som har åtkomst till pärmen just nu. Ett konto räknas som en deltagare, aldrig som sina medlemmar.',
+            'description' => 'Alla som har åtkomst till containern just nu. Ett konto räknas som en deltagare, aldrig som sina medlemmar.',
         ],
 
         // Rollen i deltagarlistan. Ägarkontot får `owner`, varje giltig
@@ -1996,12 +1997,12 @@ return [
 
         'accesses' => [
             'heading' => 'Åtkomster',
-            'description' => 'Allt som delats av pärmen, och historiken över det som återkallats eller gått ut.',
+            'description' => 'Allt som delats av containern, och historiken över det som återkallats eller gått ut.',
 
             // Ingen nivå får radera pärmen, hantera åtkomster eller initiera
             // ägarbyte. Meningen står EN gång på sidan och inte per rad, se
             // issue 55a § Beslut 4.
-            'limits' => 'Ingen åtkomst ger rätt att radera pärmen, hantera åtkomster eller initiera ett ägarbyte. Det är alltid ägarkontots.',
+            'limits' => 'Ingen åtkomst ger rätt att radera containern, hantera åtkomster eller initiera ett ägarbyte. Det är alltid ägarkontots.',
 
             'level' => 'Nivå',
             'grantee' => 'Mottagare',
@@ -2044,7 +2045,7 @@ return [
             // där en itemavgränsad delning kan skapas, se [[ADR-0028 Åtkomst
             // på itemnivå]] § Beslut ("`invitation` speglar omfånget").
             'item' => 'Omfång',
-            'item_container' => 'Hela pärmen',
+            'item_container' => 'Hela containern',
 
             'submit' => 'Bjud in',
             'revoke' => 'Dra tillbaka',
@@ -2076,8 +2077,8 @@ return [
         // räknas aldrig om i vyn (issue 55a § Beslut 6). En containerbred rad
         // bär inget `reach` alls — talet är `null` där med flit.
         'scope' => [
-            'container' => 'Hela pärmen',
-            'item' => ':item når :reach items',
+            'container' => 'Hela containern',
+            'item' => ':item når :reach objekt',
         ],
 
         // `kind` presenteras med sin konsekvens och går inte att ändra — den
@@ -2085,7 +2086,7 @@ return [
         // § Beslut 5). Nycklarna är kolumnvärdena ur `container_access.kind`.
         'kind' => [
             'member' => 'En person — sambon eller delägaren.',
-            'managed' => 'En organisation med servicerelation, till exempel ett varv. Den äger inte pärmen, och det den skapar tillskrivs organisationen.',
+            'managed' => 'En organisation med servicerelation, till exempel ett varv. Den äger inte containern, och det den skapar tillskrivs organisationen.',
             'guest' => 'Tillfällig åtkomst med ett utgångsdatum.',
         ],
 
@@ -2103,11 +2104,11 @@ return [
             ],
             'create' => [
                 'label' => 'Lägga till',
-                'description' => 'Lägger till bilagor, kostnader, scheman och nya underliggande items — men rör aldrig något som redan finns.',
+                'description' => 'Lägger till bilagor, kostnader, scheman och nya underliggande objekt — men rör aldrig något som redan finns.',
             ],
             'write' => [
                 'label' => 'Ändra',
-                'description' => 'Ändrar därtill det som redan står i pärmen.',
+                'description' => 'Ändrar därtill det som redan står i containern.',
             ],
             'delete' => [
                 'label' => 'Radera',
@@ -2139,7 +2140,7 @@ return [
         // ingen ny uppgift: InvitationNotification skriver ut pärmens namn i
         // både ämnesrad och brödtext, och den som har länken har fått mejlet.
         // Adressen inbjudan gäller visas däremot aldrig.
-        'intro' => ':inviter har bjudit in dig till pärmen :container.',
+        'intro' => ':inviter har bjudit in dig till containern :container.',
         'level' => 'Nivå: :level',
 
         // Gästen har ingen adress att jämföra med och därför inget formulär
@@ -2167,7 +2168,7 @@ return [
     'transfer' => [
         'title' => 'Ägarbyte',
         'heading' => 'Ägarbyte',
-        'intro' => 'Hela pärmen byter konto. Det täcker samma sak vare sig det är ett varv som lämnar över till en kund, en mäklare till en köpare, eller en båt som säljs privat.',
+        'intro' => 'Hela containern byter konto. Det täcker samma sak vare sig det är ett varv som lämnar över till en kund, en mäklare till en köpare, eller en båt som säljs privat.',
 
         // Länken står bredvid planrutan och inte inuti meningen: strängen
         // levereras också av /api:ets felhölje, och markup i en
@@ -2175,11 +2176,11 @@ return [
         'plan_link' => 'Läs om planerna',
 
         'form' => [
-            'heading' => 'Överlåt pärmen',
+            'heading' => 'Överlåt containern',
 
             // Vad överlåtelsen omfattar, innan den skickas (Beslut 2). Fyra
             // saker i en mening, och de är de fyra som faktiskt händer.
-            'notice' => 'Alla items följer med utom de du undantar nedan. Utrymmet pärmen använder flyttas till mottagarens konto, åtkomster och öppna inbjudningar återkallas — den nya ägaren bjuder in vem hon vill — och mottagaren får tolv månader Pro vid sitt första mottagna ägarbyte.',
+            'notice' => 'Alla objekt följer med utom de du undantar nedan. Utrymmet containern använder flyttas till mottagarens konto, åtkomster och öppna inbjudningar återkallas — den nya ägaren bjuder in vem hon vill — och mottagaren får tolv månader Pro vid sitt första mottagna ägarbyte.',
 
             // Två vägar, exakt en ska fyllas i. Regeln prövas av `prohibits`
             // i StoreOwnershipTransferRequest och formuleras inte om här.
@@ -2223,8 +2224,8 @@ return [
             'expires' => 'Går ut :date',
             'accepted' => 'Accepterad :date',
 
-            'excluded' => ':count items undantas',
-            'excluded_none' => 'Inga undantagna items',
+            'excluded' => ':count objekt undantas',
+            'excluded_none' => 'Inga undantagna objekt',
 
             'retain' => 'Avsändaren behåller åtkomsten: :level',
             'retain_none' => 'Avsändaren behåller ingen åtkomst',
@@ -2250,7 +2251,7 @@ return [
         'inbox' => [
             'title' => 'Ägarbyten till dig',
             'heading' => 'Ägarbyten till dig',
-            'intro' => 'Pärmar någon vill överlåta till dig. Du hittar dem här när du är inloggad, oavsett om mejlet ligger kvar.',
+            'intro' => 'Containers någon vill överlåta till dig. Du hittar dem här när du är inloggad, oavsett om mejlet ligger kvar.',
             'empty' => 'Inga ägarbyten väntar på dig.',
         ],
 
@@ -2258,7 +2259,7 @@ return [
         // vilket konto, hur många items som följer med och undantas, vilken
         // åtkomst avsändaren behåller, och de tolv månaderna Pro.
         'card' => [
-            'container' => 'Pärmen :container',
+            'container' => 'Containern :container',
             'from' => 'Från kontot :account',
             'items' => ':following av :total följer med, :excluded undantas.',
             'retain' => 'Avsändaren behåller åtkomsten: :level.',
@@ -2268,14 +2269,14 @@ return [
             // Vad som händer med utrymmet efteråt, och vem som äger det: den
             // som tar emot pärmen tar också över förbrukningen, och det är
             // hennes kvot som gäller sedan.
-            'quota' => 'Utrymmet pärmen använder flyttas till ditt konto, och det är din kvot som gäller efteråt.',
+            'quota' => 'Utrymmet containern använder flyttas till ditt konto, och det är din kvot som gäller efteråt.',
 
             'account' => 'Vilket konto ska ta över?',
 
             // Båda besluten är slutgiltiga (Beslut 7), och det sägs före
             // knapparna och en gång till i bekräftelserutan.
             'final' => 'Beslutet går inte att ångra. Ångrar ni er måste avsändaren skicka en ny överlåtelse.',
-            'accept_confirm' => 'Ta över pärmen? Beslutet går inte att ångra.',
+            'accept_confirm' => 'Ta över containern? Beslutet går inte att ångra.',
             'reject_confirm' => 'Tacka nej? Beslutet går inte att ångra.',
         ],
 
@@ -2301,7 +2302,7 @@ return [
     'trash' => [
         'title' => 'Papperskorgen',
         'heading' => 'Papperskorgen',
-        'description' => 'Det som raderats i pärmen. Efter 30 dagar tas det bort för gott.',
+        'description' => 'Det som raderats i containern. Efter 30 dagar tas det bort för gott.',
         'empty' => 'Papperskorgen är tom.',
 
         // `:date` formateras på klienten (formatDate), orden runt den här.
@@ -2312,11 +2313,11 @@ return [
         // kom med issue 62b: en raderad pärm bär samma nyckel ur
         // TrashEntryResource, och raden är samma komponent i båda listorna.
         'type' => [
-            'item' => 'Item',
+            'item' => 'Objekt',
             'attachment' => 'Bilaga',
             'category' => 'Kategori',
             'tag' => 'Tagg',
-            'container' => 'Pärm',
+            'container' => 'Container',
         ],
 
         'expires' => [
@@ -2334,11 +2335,11 @@ return [
         // en fråga per sidladdning (Beslut 8).
         'containers' => [
             'title' => 'Papperskorgen',
-            'heading' => 'Raderade pärmar',
-            'description' => 'Pärmar du raderat. Efter 30 dagar tas de bort för gott.',
-            'empty' => 'Inga raderade pärmar.',
+            'heading' => 'Raderade containers',
+            'description' => 'Containers du raderat. Efter 30 dagar tas de bort för gott.',
+            'empty' => 'Inga raderade containers.',
             'link' => 'Papperskorgen',
-            'back' => 'Till pärmarna',
+            'back' => 'Tillbaka till dina containers',
         ],
     ],
 ];

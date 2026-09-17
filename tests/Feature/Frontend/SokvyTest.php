@@ -522,7 +522,7 @@ it('ritar sökfältet i layouten för en inloggad användare och inte för en g�
     // Varje inloggad sida renderar layouten — översikten och söksidan är två
     // av dem, och båda bär nycklarna som fältet läser.
     actingAs($anvandare)->get('/dashboard')->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->where('translations.search.field.label', 'Sök i alla pärmar')
+        fn (AssertableInertia $page) => $page->where('translations.search.field.label', 'Sök i alla containers')
     );
 
     actingAs($anvandare)->get('/search')->assertOk()->assertInertia(

@@ -327,7 +327,7 @@ it('skiljer en containerbred rad från en itemrad med omfång och reach', functi
     // accessPresentation.js — EN gång, för både den giltiga och den
     // historiska listan.
     $sv = require lang_path('sv/ui.php');
-    expect($sv['sharing']['scope']['container'])->toBe('Hela pärmen');
+    expect($sv['sharing']['scope']['container'])->toBe('Hela containern');
     expect($sv['sharing']['scope']['item'])->toContain(':item')->toContain(':reach');
 
     $beskrivning = File::get(resource_path('js/components/accessPresentation.js'));
