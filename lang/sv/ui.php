@@ -138,7 +138,7 @@ return [
         'item-deleted' => 'Objektet ligger i papperskorgen. Det går att återställa i 30 dagar.',
         'item-link-created' => 'Relationen är skapad.',
         // Upp-knytningen tar bort kopplingen och ingenting annat — raden i
-        // länken är hård (issue 14 § Beslut 10), men båda objekten finns kvar.
+        // länken är hård (issue 14 § Beslut 10), men båda itemen finns kvar.
         'item-link-removed' => 'Kopplingen är borta. Båda objekten finns kvar.',
 
         // Issue 60 § Beslut 9. Bilagan är MJUK-raderad — `deleted_at` sätts
@@ -160,13 +160,13 @@ return [
         // Issue 62a § Beslut 7. EN kod för alla fyra typerna: återställningen
         // tar `type` i kroppen och delar en lista, så vyn har ingen anledning
         // att veta vilken av dem som just kom tillbaka — meningen säger
-        // innehåll och inte objekt (samma skäl som issue 20a § Beslut 1).
+        // innehåll och inte item (samma skäl som issue 20a § Beslut 1).
         'trash-restored' => 'Innehållet är återställt.',
 
-        // Issue 62b § Beslut 5 och 6. Raderingen landar på containerlistan — och
+        // Issue 62b § Beslut 5 och 6. Raderingen landar på pärmlistan — och
         // meningen pekar på papperskorgen, där länken ligger alldeles under.
-        // Återställningen säger att containern är tillbaka; den blir INTE aktiv av
-        // sig själv, för att välja container är användarens handling.
+        // Återställningen säger att pärmen är tillbaka; den blir INTE aktiv av
+        // sig själv, för att välja pärm är användarens handling.
         'container-trashed' => 'Containern ligger i papperskorgen.',
         'container-restored' => 'Containern är återställd.',
 
@@ -211,8 +211,8 @@ return [
         // Issue 67b § Beslut 4 och 7. De tre första är avsändarens — hon
         // skickar, ångrar och får veta att mottagaren sagt nej — och den
         // fjärde är mottagarens. `transfer-rejected` säger vad beslutet
-        // innebär för HENNE (containern är inte hennes), inte vad servern gjorde,
-        // och `transfer-accepted` att containern nu finns i hennes lista.
+        // innebär för HENNE (pärmen är inte hennes), inte vad servern gjorde,
+        // och `transfer-accepted` att pärmen nu finns i hennes lista.
         'transfer-created' => 'Överlåtelsen är skickad. Mottagaren ser den under Ägarbyten.',
         'transfer-revoked' => 'Överlåtelsen är tillbakadragen. Raden står kvar i historiken.',
         'transfer-accepted' => 'Containern är din. Du hittar den i containerlistan.',
@@ -271,7 +271,7 @@ return [
 
         // Issue 62a § Beslut 7: `RestoreContent` kastar `trash.parent_deleted`
         // när föräldern fortfarande ligger i papperskorgen — en bilaga vars
-        // objekt är raderat, eller en underkategori vars förälder är det
+        // item är raderat, eller en underkategori vars förälder är det
         // ([[ADR-0008 Soft delete och papperskorg]]). På webben blir koden
         // den här meningen i en ruta ovanför listan, aldrig en JSON-kropp.
         'trash' => [
@@ -314,7 +314,7 @@ return [
         // mitt i en sida.
         //
         // `self`, `cross_container` och `pair_exists` hör till fältet `item`
-        // (vilket objekt som valdes), `cycle` till `relation` (vilken riktning
+        // (vilket item som valdes), `cycle` till `relation` (vilken riktning
         // som valdes). `pair_exists` bär den befintliga relationen i
         // `data.relation` och meningen SKA säga den — orden nedan är koden
         // översatt till ett adjektiv, och ett meddelande som slänger bort
@@ -361,7 +361,7 @@ return [
         // frågar efter, och varje nekad överlåtelse hade fallit tillbaka på
         // `error.generic`.
         //
-        // `already_pending` hamnar på formulärnyckeln `transfer` (containerns
+        // `already_pending` hamnar på formulärnyckeln `transfer` (pärmens
         // tillstånd, inte ett fält), `not_pending` på samma nyckel från båda
         // sidor — avsändaren som drar tillbaka och mottagaren som svarar för
         // sent — och `expired` och `account_frozen` på acceptens eller
@@ -729,10 +729,10 @@ return [
         ],
     ],
 
-    // Containerns kalenderlänk, se issue 65b § Beslut 2 och 4 och
+    // Pärmens kalenderlänk, se issue 65b § Beslut 2 och 4 och
     // resources/js/pages/Containers/CalendarFeed.vue.
     //
-    // Adressen är i praktiken ett lösenord till containerns uppgifter
+    // Adressen är i praktiken ett lösenord till pärmens uppgifter
     // ([[Notiser]] § ICS-kalenderfeed), och texterna säger det på två ställen:
     // `url_once` vid visningen och `revoke_confirm` vid återkallandet. Den som
     // tappat bort länken har inget att hämta — svaret är att återkalla och
@@ -881,9 +881,9 @@ return [
         'destroy_confirm' => 'Ta bort webhooken? Hemligheten försvinner med den, och en ny webhook får en ny hemlighet.',
     ],
 
-    // Containern, se issue 54. `nav` är sidonavigationen, en nyckel per post i
+    // Pärmen, se issue 54. `nav` är sidonavigationen, en nyckel per post i
     // resources/js/layouts/containerSections.js — samma `key` där som här.
-    // 56a (kategorier och taggar), 57 (objekt) och 63 (scheman) lägger sina
+    // 56a (kategorier och taggar), 57 (items) och 63 (scheman) lägger sina
     // rader i samma lista och sina texter i samma gren. 55a (delning) har en
     // egen gren, `sharing` nedan, för sidan bär två sektioner och en egen
     // vokabulär — se issue 55a § Beslut 4 och 5. 62a (papperskorgen) har en
@@ -977,7 +977,7 @@ return [
 
         // Nedgraderingens fem steg, ordagrant ur [[Planer och kvoter]]
         // § Nedgradering (Beslut 6) — och det som INTE händer, som är det
-        // viktigaste på hela sidan: objekt raderas aldrig, kostnadsrader
+        // viktigaste på hela sidan: items raderas aldrig, kostnadsrader
         // raderas aldrig.
         'downgrade' => [
             'heading' => 'Om du nedgraderar',
@@ -1039,11 +1039,11 @@ return [
         'list_intro' => 'Störst först. Kryssa för det som kan gå — de fyrtio semesterbilderna kan det, besiktningsrapporten kan det inte.',
         'empty' => 'Kontot har inga bilagor.',
 
-        // Container och objekt per rad, i den ordningen: sammanhanget är det som gör
+        // Pärm och item per rad, i den ordningen: sammanhanget är det som gör
         // valet möjligt. Skiljetecknet ligger i meningen och inte i mallen.
         'row' => [
             'location' => ':container — :item',
-            // En bilaga vars objekt eller container ligger i papperskorgen räknas
+            // En bilaga vars item eller pärm ligger i papperskorgen räknas
             // fortfarande mot kontot och ska synas (Beslut 3).
             'trashed' => 'Containern eller objektet ligger i papperskorgen. Bilagan räknas ändå mot kontot.',
         ],
@@ -1095,21 +1095,21 @@ return [
         ],
 
         'nav' => [
-            // `items` ligger först, som raden i containerSections.js: objekten är
-            // containern, kategorierna och taggarna är hur den är ordnad.
+            // `items` ligger först, som raden i containerSections.js: itemen är
+            // pärmen, kategorierna och taggarna är hur den är ordnad.
             'items' => 'Objekt',
             'categories' => 'Kategorier',
             'tags' => 'Taggar',
             'sharing' => 'Delning',
             'settings' => 'Inställningar',
             // Issue 65b § Beslut 1: kalenderlänken är en UTGÅNG ur produkten —
-            // containerns uppgifter prenumererade på ur någon annans kalender — och
+            // pärmens uppgifter prenumererade på ur någon annans kalender — och
             // ligger efter inställningarna, före papperskorgen. Raden står på
             // samma plats i containerSections.js.
             'calendar' => 'Kalender',
             // Issue 67c § Beslut 1: exporten är en UTGÅNG ur produkten, som
-            // kalenderlänken — men där länken för containerns uppgifter ut i någon
-            // annans kalender, tar exporten hela containern ut i en fil. Raden står
+            // kalenderlänken — men där länken för pärmens uppgifter ut i någon
+            // annans kalender, tar exporten hela pärmen ut i en fil. Raden står
             // på samma plats i containerSections.js, och den ligger i
             // NAVIGERINGEN och inte bakom en inställning: exporten är fri på
             // alla planer med flit.
@@ -1156,10 +1156,10 @@ return [
             'submit' => 'Spara',
         ],
 
-        // Raderingen, se issue 62b § Beslut 4 och 5. `confirm` bär containerns
+        // Raderingen, se issue 62b § Beslut 4 och 5. `confirm` bär pärmens
         // namn: en bekräftelse som inte säger vad som försvinner är en
         // bekräftelse man klickar bort. Den säger att allt följer med, att
-        // containern ligger kvar i papperskorgen i 30 dagar och att den går att
+        // pärmen ligger kvar i papperskorgen i 30 dagar och att den går att
         // återställa därifrån — och ALDRIG "raderas permanent", för
         // raderingen är mjuk (issue 8) och det ordet vore osant.
         'destroy' => [
@@ -1186,10 +1186,10 @@ return [
             'destroy' => 'Radera',
             'empty' => 'Inga kategorier än.',
 
-            // Förslaget på en tom container, se issue 56b § Beslut 4. Orden i
+            // Förslaget på en tom pärm, se issue 56b § Beslut 4. Orden i
             // själva uppsättningen finns INTE här och ska aldrig hit: de bor i
             // resources/js/data/categoryPresets.js, per språk och typ.
-            // `preset_not_empty` är rutten svar på en container som redan har
+            // `preset_not_empty` är rutten svar på en pärm som redan har
             // kategorier och hamnar på formulärnyckeln `categories` — en
             // mening och inte en API-felkod, för rutten finns bara på webben.
             'preset_heading' => 'Färdig uppsättning',
@@ -1201,7 +1201,7 @@ return [
 
         // Tagglistan, se issue 56a § Beslut 6 och 8. `description` är den
         // andra halvan av ADR-0004:s skillnad. `item_count` bär träffräknaren,
-        // som är per omfång och aldrig per container.
+        // som är per omfång och aldrig per pärm.
         'tags' => [
             'title' => 'Taggar',
             'heading' => 'Taggar',
@@ -1223,12 +1223,12 @@ return [
         ],
     ],
 
-    // Objektsidorna, se issue 57a § Beslut 10 och issue 57b § Beslut 9. Samma
+    // Itemsidorna, se issue 57a § Beslut 10 och issue 57b § Beslut 9. Samma
     // indelning som `container`: `index` är listan, `show` är detaljvyn,
     // `create`/`edit`/`destroy` är skrivytorna och `form` är fältetiketterna de
     // två formulären delar. Miniatyrerna är issue 61.
     'item' => [
-        // Listan är containerns förstasida. `empty` säger att CONTAINERN är tom och
+        // Listan är pärmens förstasida. `empty` säger att PÄRMEN är tom och
         // aldrig att den kanske är det: en omfångsbegränsad mottagare ser bara
         // det hon når, och ett "inga träffar bland N" hade avslöjat hur många
         // rader som filtrerats bort (issue 73 § Beslut 6).
@@ -1263,12 +1263,12 @@ return [
             'filter_remove' => 'Ta bort :filter',
 
             // Ett värde i länken som inte längre finns i mottagarens omfång —
-            // en raderad tagg, en kategori flyttad till en annan container. Raden är
+            // en raderad tagg, en kategori flyttad till en annan pärm. Raden är
             // hela svaret: ingen 422, ingen redirect tillbaka till samma
             // querysträng (Beslut 3).
             'filter_dropped' => 'Ett filter i länken finns inte längre och har tagits bort.',
 
-            // Läget "filter, inga rader". Utan filter säger `empty` att containern
+            // Läget "filter, inga rader". Utan filter säger `empty` att pärmen
             // är tom i stället.
             'filter_empty' => 'Inga träffar med de här filtren: :filters.',
 
@@ -1278,7 +1278,7 @@ return [
             'filter_label_category' => 'kategorin :name',
         ],
 
-        // Detaljvyns fältetiketter. Bara objektets EGNA fält, kategorin och
+        // Detaljvyns fältetiketter. Bara itemets EGNA fält, kategorin och
         // taggarna — relationer, bilagor, scheman, kostnader och utlåning är
         // issue 58, 60, 63, 45–47 och 67 och har inga nycklar här.
         'show' => [
@@ -1308,7 +1308,7 @@ return [
             'warranty_until' => 'Garanti till och med',
             'position_note' => 'Var den finns',
 
-            // Ett objekt ligger i HÖGST en kategori ([[ADR-0004 Fria taggar och
+            // Ett item ligger i HÖGST en kategori ([[ADR-0004 Fria taggar och
             // kategorier]]). Raden överst i väljaren är ett val och inte ett
             // tomt fält.
             'category' => 'Kategori',
@@ -1316,7 +1316,7 @@ return [
             'categories_empty' => 'Containern har inga kategorier än.',
             'categories_empty_link' => 'Skapa kategorier',
 
-            // Taggarna är kryssrutor, en per tagg i containern. En ny tagg skapas
+            // Taggarna är kryssrutor, en per tagg i pärmen. En ny tagg skapas
             // på taggsidan och inte här: en väg till samma skrivning på två
             // ställen är två regler att hålla i takt (Beslut 5).
             'tags' => 'Taggar',
@@ -1327,7 +1327,7 @@ return [
             // skapandet: vem som skapade raden är historik (Beslut 4).
             'account' => 'Konto',
 
-            // Föräldern, när barnobjektet skapas ur detaljvyns länk (issue 58
+            // Föräldern, när barn-itemet skapas ur detaljvyns länk (issue 58
             // § Beslut 7). En rad text och inte en väljare: länken har redan
             // besvarat frågan, och `parent` skickas bara i skapandeläget.
             'parent' => 'Skapas under: :name',
@@ -1378,10 +1378,10 @@ return [
             'remove' => 'Knyt upp',
             // Raderingen av en länk är hård (issue 14 § Beslut 10) och har
             // ingen papperskorg — det som försvinner är kopplingen, aldrig
-            // objekten.
+            // itemen.
             'remove_confirm' => 'Bara kopplingen tas bort. Båda objekten finns kvar. Vill du fortsätta?',
 
-            // Vägen till barnobjektet (Beslut 7).
+            // Vägen till barn-itemet (Beslut 7).
             'create_child' => [
                 'action' => 'Nytt objekt under det här',
             ],
@@ -1418,7 +1418,7 @@ return [
         // i AttachmentResource för `/api`.
         //
         // `billing_note` säger VILKET konto som betalar innan filen väljs:
-        // kvoten räknas på det uppladdande kontot och inte på containerns ägare
+        // kvoten räknas på det uppladdande kontot och inte på pärmens ägare
         // ([[Filer och lagring]] § attachment, AGENTS.md § Sådant som är lätt
         // att göra fel), och den som laddar upp ska veta vad den kostar.
         //
@@ -1721,7 +1721,7 @@ return [
             ],
 
             // Förekomsten — den enskilda gången, se issue 63b § Beslut 2–10.
-            // Meningarna används på BÅDA ytorna: sektionen på objektet
+            // Meningarna används på BÅDA ytorna: sektionen på itemet
             // (resources/js/components/ScheduleListSection.vue) och schemats
             // egen sida (resources/js/pages/Containers/Items/Schedules/Show.vue),
             // som delar formuläret resources/js/components/OpenOccurrence.vue.
@@ -1730,7 +1730,7 @@ return [
             // `visible_from` är när uppgiften dök upp, och `window` är tiden
             // man har på sig — skillnaden dem emellan. Alla är DATE-kolumner
             // och formateras av formatDateOnly() i vyn, aldrig omräknade till
-            // en annan tidszon (samma skäl som objektets datum, 57a).
+            // en annan tidszon (samma skäl som itemets datum, 57a).
             //
             // **Försenad är ett härlett tillstånd** (Beslut 3). Ordet nedan
             // ritas bara när serverns `overdue` är sant; vyn jämför aldrig
@@ -1821,7 +1821,7 @@ return [
 
                 // Motparten är alltid ett SCHEMA, också på förekomstnivån: det
                 // är motpartens öppna förekomst som väljs, men det användaren
-                // känner igen är schemats titel och dess objekt (Beslut 3).
+                // känner igen är schemats titel och dess item (Beslut 3).
                 'counterpart' => 'Motpart',
                 'counterpart_none' => '— välj schema —',
                 'no_counterparts' => 'Det finns inga andra scheman att vänta på.',
@@ -1849,7 +1849,7 @@ return [
     //
     // `empty` nämner sökordet och slutar där (Beslut 6): inget tal om hur
     // många rader som fanns, ingen antydan om att något dolts, ingen
-    // uppräkning av vilka containers som genomsöktes — vilka containers som helst är
+    // uppräkning av vilka pärmar som genomsöktes — vilka pärmar som helst är
     // i sig en upplysning. En användare utan åtkomst till någonting alls får
     // ordagrant samma mening som en vars sökord inte matchar, för meningen
     // vet ingenting om omfånget.
@@ -1860,8 +1860,8 @@ return [
     // och ingen kompensation byggs i vyn — ingen stamning i JavaScript, ingen
     // andra sökning med trunkerat ord. En rad är hela svaret.
     //
-    // `in_container` är prefixet före containernamnet, och bara prefixet: namnet är
-    // en egen länk till containerns förstasida (Beslut 3), så orden kan inte
+    // `in_container` är prefixet före pärmnamnet, och bara prefixet: namnet är
+    // en egen länk till pärmens förstasida (Beslut 3), så orden kan inte
     // ligga i samma sträng.
     'search' => [
         'title' => 'Sök',
@@ -1880,10 +1880,10 @@ return [
     ],
 
     // Todo-vyn, se issue 64. Startsidan efter inloggning — de öppna
-    // förekomsterna över alla containers användaren når.
+    // förekomsterna över alla pärmar användaren når.
     //
     // De två tomma meningarna är olika med flit (Beslut 6): den ena säger att
-    // användaren inte har någon container alls och bär en länk till att skapa en,
+    // användaren inte har någon pärm alls och bär en länk till att skapa en,
     // den andra att det inte finns något att göra. Ingen av dem nämner ett
     // antal eller antyder att något dolts — en omfångsbegränsad mottagare med
     // tom lista får ordagrant samma mening som en ägare vars uppgifter är
@@ -1916,7 +1916,7 @@ return [
     // ägarkontot. Texterna nedan följer samma uppdelning — `participants`
     // beskriver identiteter, `accesses` och `level` beskriver vad en åtkomst
     // ger.
-    // Containerns exportsida, se issue 67c § Beslut 1, 5, 6, 7 och 8.
+    // Pärmens exportsida, se issue 67c § Beslut 1, 5, 6, 7 och 8.
     //
     // **`status` är kolumnvärdena ur App\Models\Export::STATUSES**, aldrig
     // påhittade egna namn — samma regel som container.kind. `pending` och
@@ -1999,7 +1999,7 @@ return [
             'heading' => 'Åtkomster',
             'description' => 'Allt som delats av containern, och historiken över det som återkallats eller gått ut.',
 
-            // Ingen nivå får radera containern, hantera åtkomster eller initiera
+            // Ingen nivå får radera pärmen, hantera åtkomster eller initiera
             // ägarbyte. Meningen står EN gång på sidan och inte per rad, se
             // issue 55a § Beslut 4.
             'limits' => 'Ingen åtkomst ger rätt att radera containern, hantera åtkomster eller initiera ett ägarbyte. Det är alltid ägarkontots.',
@@ -2041,8 +2041,8 @@ return [
             'description' => 'Adresser som bjudits in men ännu inte svarat. En inbjudan ger ingen åtkomst förrän den accepterats.',
 
             'email' => 'E-post',
-            // Omfånget i formuläret. Ett enskilt objekt är den enda ytan i M10
-            // där en objektavgränsad delning kan skapas, se [[ADR-0028 Åtkomst
+            // Omfånget i formuläret. Ett enskilt item är den enda ytan i M10
+            // där en itemavgränsad delning kan skapas, se [[ADR-0028 Åtkomst
             // på itemnivå]] § Beslut ("`invitation` speglar omfånget").
             'item' => 'Omfång',
             'item_container' => 'Hela containern',
@@ -2136,8 +2136,8 @@ return [
         'title' => 'Inbjudan',
         'heading' => 'Inbjudan',
 
-        // Containerns namn och inbjudarens namn visas också för en gäst. Det är
-        // ingen ny uppgift: InvitationNotification skriver ut containerns namn i
+        // Pärmens namn och inbjudarens namn visas också för en gäst. Det är
+        // ingen ny uppgift: InvitationNotification skriver ut pärmens namn i
         // både ämnesrad och brödtext, och den som har länken har fått mejlet.
         // Adressen inbjudan gäller visas däremot aldrig.
         'intro' => ':inviter har bjudit in dig till containern :container.',
@@ -2158,12 +2158,12 @@ return [
 
     // Ägarbytet, se issue 67b § Beslut 1–9 och [[Konton och åtkomst]]
     // § ownership_transfer. Egen gren på toppnivå och inte under `container`:
-    // mottagarens inkorg ligger UTANFÖR containern — hon har den inte ännu — och
+    // mottagarens inkorg ligger UTANFÖR pärmen — hon har den inte ännu — och
     // avsändarens sida är den andra halvan av samma samtal. Samma skäl som gör
     // `sharing` och `trash` till egna grenar.
     //
     // Två sidor i en gren: `form`/`excluded`/`retain`/`row`/`status` hör till
-    // containerns sida, `inbox`/`card` till mottagarens. `accept` och `reject` är
+    // pärmens sida, `inbox`/`card` till mottagarens. `accept` och `reject` är
     // gemensamma och ligger ytterst.
     'transfer' => [
         'title' => 'Ägarbyte',
@@ -2255,8 +2255,8 @@ return [
             'empty' => 'Inga ägarbyten väntar på dig.',
         ],
 
-        // Konsekvenserna står före knappen (Beslut 6): vilken container, från
-        // vilket konto, hur många objekt som följer med och undantas, vilken
+        // Konsekvenserna står före knappen (Beslut 6): vilken pärm, från
+        // vilket konto, hur många items som följer med och undantas, vilken
         // åtkomst avsändaren behåller, och de tolv månaderna Pro.
         'card' => [
             'container' => 'Containern :container',
@@ -2267,7 +2267,7 @@ return [
             'pro' => 'Tolv månader Pro ingår — en gång per konto, vid det första ägarbytet du tar emot.',
 
             // Vad som händer med utrymmet efteråt, och vem som äger det: den
-            // som tar emot containern tar också över förbrukningen, och det är
+            // som tar emot pärmen tar också över förbrukningen, och det är
             // hennes kvot som gäller sedan.
             'quota' => 'Utrymmet containern använder flyttas till ditt konto, och det är din kvot som gäller efteråt.',
 
@@ -2284,7 +2284,7 @@ return [
         'reject' => 'Tacka nej',
     ],
 
-    // Containerns papperskorg, se issue 62a § Beslut 4, 5 och 9 och [[ADR-0008
+    // Pärmens papperskorg, se issue 62a § Beslut 4, 5 och 9 och [[ADR-0008
     // Soft delete och papperskorg]] § Retentionstiden i MVP. Egen gren på
     // toppnivå och inte under `container`: papperskorgen är sin egen yta med
     // sin egen vokabulär, som `sharing`.
@@ -2310,7 +2310,7 @@ return [
 
         // Nycklarna är `type`-värdena ur RestoreRequest::TYPES, aldrig
         // påhittade egna namn — samma regel som container.kind. `container`
-        // kom med issue 62b: en raderad container bär samma nyckel ur
+        // kom med issue 62b: en raderad pärm bär samma nyckel ur
         // TrashEntryResource, och raden är samma komponent i båda listorna.
         'type' => [
             'item' => 'Objekt',
@@ -2328,9 +2328,9 @@ return [
 
         'restore' => 'Återställ',
 
-        // Papperskorgen för raderade CONTAINERS, se issue 62b § Beslut 7 och 8.
-        // Den ligger på TOPPNIVÅ — en raderad container löses inte upp av
-        // ruttbindningen — och `link` är raden under containerlistan, alltid
+        // Papperskorgen för raderade PÄRMAR, se issue 62b § Beslut 7 och 8.
+        // Den ligger på TOPPNIVÅ — en raderad pärm löses inte upp av
+        // ruttbindningen — och `link` är raden under pärmlistan, alltid
         // synlig. Texten är konstant och räknar ingenting: ett tal hade varit
         // en fråga per sidladdning (Beslut 8).
         'containers' => [
