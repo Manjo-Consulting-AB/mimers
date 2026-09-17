@@ -44,6 +44,7 @@ use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\WebhookEndpointController;
+use App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Files\FileOrigin;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -134,6 +135,29 @@ Route::middleware('guest')->group(function () {
 
     Route::get('/login/magic-link/consume', MagicLinkLoginController::class)
         ->name('magic-link.consume');
+
+    /*
+     * Issue 80 · Steg två: engångskoden (eller återställningskoden) för det
+     * konto som väntar i sessionen, se
+     * App\Http\Controllers\Auth\MagicLinkLoginController::store() och
+     * App\Support\Auth\PendingMagicLinkLogin.
+     *
+     * Samma sökväg som GET-rutten och skilda åt av metoden — steg två är
+     * samma försök, inte en andra rutt att hålla i takt. Rutten ligger kvar
+     * i `guest`-gruppen: den som redan loggat in ska inte kunna byta konto
+     * genom att skriva en kod.
+     *
+     * `BindsMagicLinkCodeThrottleToPendingLogin` i stället för
+     * `throttle:login` rakt av — kodförsöken bär samma takgräns som
+     * inloggningen (issue 80 § Beslut 2), men begränsaren nycklas på det
+     * konto som väntar i sessionen och inte på ett `email`-fält ur kroppen,
+     * som den som har ett väntetillstånd hade kunnat byta ut mot en ny hink
+     * för varje försök. Middlewaret anropar samma begränsare; se dess
+     * docblock.
+     */
+    Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store'])
+        ->middleware(BindsMagicLinkCodeThrottleToPendingLogin::class)
+        ->name('magic-link.consume.code');
 });
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])

@@ -46,12 +46,21 @@ use Illuminate\Support\Str;
  * (routes/web.php, routes/api.php) precis som lösenordsinloggningen, se
  * App\Providers\AppServiceProvider::configureLoginRateLimiting() som
  * uttryckligen namnger magic link som en tilltänkt återanvändare.
- * `LoginRateLimiter::clear()` anropas **inte** vid en lyckad `issue()`
- * eller `consume()` — att bara rensa när en användare faktiskt hittades
- * (issue()) eller ett token faktiskt var giltigt (consume()) vore i sig en
- * sidokanal som avslöjar utfallet, tvärtemot beslut 6. Begränsaren töms
- * i stället bara av tidsfönstret, precis som vilken annan begränsad
- * klient som helst.
+ * `LoginRateLimiter::clear()` anropas **inte** här — varken vid en lyckad
+ * `issue()` eller `consume()`. För `issue()` är det hela poängen: att bara
+ * rensa när en användare faktiskt hittades vore i sig en sidokanal som
+ * avslöjar utfallet, tvärtemot beslut 6 — svaret ska vara identiskt för en
+ * adress som finns och en som inte finns.
+ *
+ * **Ändrat i issue 80:** konsumtionsrutterna är sedan den issuen
+ * `throttle:login`-begränsade också (kodförsöket i steg två är annars en
+ * gissningsyta), och efter en SLUTFÖRD inloggning rensar kontrollerna
+ * begränsaren — App\Http\Controllers\Auth\MagicLinkLoginController::completeLogin()
+ * och App\Http\Controllers\Api\Auth\MagicLinkLoginController::store(). Det är
+ * samma uppföljning som issue 7 gjorde för lösenordsinloggningen, och det
+ * rör inte den här klassens metoder: en lyckad `consume()` säger redan
+ * utfallet i sitt svar, så en rensning där läcker ingenting. `issue()`
+ * förblir orensad, se stycket ovan.
  *
  * **Beslut 6 — röjer inte om adressen finns.** `issue()` returnerar tyst
  * (ingen rad skapas, inget mejl skickas) när ingen användare har adressen.
@@ -102,6 +111,48 @@ final class MagicLinkBroker
     }
 
     /**
+     * Prövar `$rawToken` för `$email` och returnerar användaren UTAN att
+     * förbruka token — issue 80 · "En magic link går förbi bekräftad
+     * tvåfaktor", § Beslut 3.
+     *
+     * Finns för att API:et måste kunna avgöra om kontot kräver en
+     * engångskod innan token brinner: ett anrop utan `code` ska svara
+     * `auth.totp_required` och lämna token orörd, så klienten kan skicka om
+     * SAMMA token med koden. Kontrollen är identisk med `consume()`s — det
+     * är samma `findToken()` — så det finns bara en sanning om vad ett
+     * giltigt token är; skillnaden är att den här metoden inte skriver.
+     *
+     * Att i stället slå upp användaren på e-postadressen före tokenkontrollen
+     * vore en sidokanal: svaret skulle avslöja för vem som helst som känner
+     * till en adress om kontot har tvåfaktor påslagen, utan att inneha
+     * länken — precis den sidokanal issue 6b förbjuder på
+     * lösenordsinloggningen genom att kontrollera lösenordet före koden.
+     *
+     * @throws MagicLinkInvalidException Token finns inte, hör till en
+     *                                   annan adress, eller är redan
+     *                                   förbrukat.
+     * @throws MagicLinkExpiredException Token är i övrigt giltigt men
+     *                                   `expires_at` har passerat.
+     */
+    public static function resolve(string $email, string $rawToken): User
+    {
+        $email = self::normalise($email);
+
+        self::findToken($email, $rawToken);
+
+        $user = User::query()->where('email', $email)->first();
+
+        if (! $user instanceof User) {
+            // Användaren hann tas bort mellan utfärdande och inlösen.
+            // Inget i dokumentationen beskriver kontoradering ännu — se
+            // PR:ens "Frågor och antaganden".
+            throw new MagicLinkInvalidException;
+        }
+
+        return $user;
+    }
+
+    /**
      * Löser in `$rawToken` för `$email` och returnerar användaren.
      *
      * @throws MagicLinkInvalidException Token finns inte, hör till en
@@ -114,23 +165,7 @@ final class MagicLinkBroker
     {
         $email = self::normalise($email);
 
-        $token = MagicLinkToken::query()
-            ->where('token_hash', self::hash($rawToken))
-            ->first();
-
-        // Beslut 2: adressen jämförs som ett eget steg, inte bara som en
-        // del av uppslaget ovan.
-        if (! $token instanceof MagicLinkToken || $token->email !== $email) {
-            throw new MagicLinkInvalidException;
-        }
-
-        if ($token->isUsed()) {
-            throw new MagicLinkInvalidException;
-        }
-
-        if ($token->isExpired()) {
-            throw new MagicLinkExpiredException;
-        }
+        $token = self::findToken($email, $rawToken);
 
         // Villkorad UPDATE, se klassens docblock om beslut 3 — förhindrar
         // att två samtidiga förfrågningar med samma token båda lyckas.
@@ -153,6 +188,37 @@ final class MagicLinkBroker
         }
 
         return $user;
+    }
+
+    /**
+     * Raden bakom ett giltigt token, med klassens alla villkor prövade —
+     * det enda stället de bor på. Skriver ingenting; `consume()` gör
+     * förbrukningen efteråt.
+     *
+     * @throws MagicLinkInvalidException
+     * @throws MagicLinkExpiredException
+     */
+    private static function findToken(string $email, string $rawToken): MagicLinkToken
+    {
+        $token = MagicLinkToken::query()
+            ->where('token_hash', self::hash($rawToken))
+            ->first();
+
+        // Beslut 2: adressen jämförs som ett eget steg, inte bara som en
+        // del av uppslaget ovan.
+        if (! $token instanceof MagicLinkToken || $token->email !== $email) {
+            throw new MagicLinkInvalidException;
+        }
+
+        if ($token->isUsed()) {
+            throw new MagicLinkInvalidException;
+        }
+
+        if ($token->isExpired()) {
+            throw new MagicLinkExpiredException;
+        }
+
+        return $token;
     }
 
     private static function normalise(string $email): string
