@@ -30,6 +30,12 @@ return [
         // in the header is not enough of a way in — someone who does not
         // already know the search exists looks for a row in the menu.
         'search' => 'Search',
+        // The way into the settings, see issue 79 decision 1: the section list
+        // only renders once you are already on a settings page, so without
+        // this row the security page — and two-factor — was reachable only by
+        // someone already standing there. The link points at /settings, which
+        // redirects to the profile (issue 53c).
+        'settings' => 'Settings',
         'login' => 'Log in',
     ],
 
