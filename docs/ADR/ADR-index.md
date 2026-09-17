@@ -1,6 +1,6 @@
 # ADR-index
 
-Trettiofyra beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Trettiosju beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -40,6 +40,9 @@ Tillbaka till [[00 Index]].
 | [[ADR-0032 Produktens ord]] | Container och objekt i gränssnittet, pärmen utgår | Allt |
 | [[ADR-0033 Produktens omfång]] | Generell plats för det du äger, använder eller arbetar med — inte ett båtverktyg | Allt |
 | [[ADR-0034 Engelska vid lansering]] | Engelska enda levererade språk, maskineriet för fler kvar och testat | Allt |
+| [[ADR-0035 Relationen mellan objekt]] | `sibling` heter `related`, tre relationer och inte fyra | [[Items och organisation]] |
+| [[ADR-0036 Containerns art]] | `kind` är fritt med autocomplete, CHECK-villkoret utgår | [[Konton och åtkomst]], [[Items och organisation]] |
+| [[ADR-0037 Valutans arv]] | Konto → container → rad, ändrat förval rör aldrig gamla poster | [[Items och organisation]] |
 
 ## Om att ändra ett beslut
 

@@ -42,17 +42,17 @@ Systemet behöver veta vilken container användaren arbetar i — det är därf�
 
 ---
 
-## Avgjort vid mockupgenomgången — saknar ADR
+## Avgjort vid mockupgenomgången
 
-Fyra beslut fattades 2026-09-17 och har ännu ingen ADR. **Ett beslut som bara står här är inte fattat.** Den här filen är en hållplats, inte ett beslutsregister, och posterna nedan ska skrivas ut på riktigt innan något byggs på dem.
+Tre beslut fattades 2026-09-17 och är utskrivna:
 
-**Relationen `sibling` byter namn till `related`.** `item_link.relation` tillåter i dag `parent`, `child` och `sibling`. Namnet påstår en delad förälder, men relationen är i själva verket en avsiktlig länk mellan två items utan hierarki — precis det mockuparna kallar *Relaterad*. Grafens legend blir *Förälder · Barn · Relaterad*, och den fjärde sorten mockuparna visar är en dubblett som utgår. Värdet i databasen byter namn, inte bara etiketten, av skälet i [[ADR-0032 Produktens ord]]: ett ordförråd. Korsande containrar är en senare fråga och blockeras av åtkomsten, inte av schemat — `item_link` har med flit ingen `container_id`.
+- [[ADR-0035 Relationen mellan objekt]] — `sibling` heter `related`. Tre relationer, inte fyra. Namnbytet går i databasen, inte bara i etiketten, och ska ligga **efter** omskrivningen av `lang/` i [[M13 Omskrivningen]].
+- [[ADR-0036 Containerns art]] — `kind` blir fritt med autocomplete, CHECK-villkoret utgår, navigeringen grupperar vid minst två. Kategorimallarna tappar sin nyckel och hör därmed ihop med mallvalet i [[ADR-0033 Produktens omfång]].
+- [[ADR-0037 Valutans arv]] — konto → container → rad, med omval på varje nivå. Ett ändrat förval rör aldrig gamla poster.
 
-**`container.kind` blir fritt.** CHECK-villkoret `kind IN ('boat', 'caravan', 'house', 'car', 'other')` bygger in domänen i schemat och står i konflikt med [[ADR-0033 Produktens omfång]]. Fältet blir fritt med autocomplete på vad kontot redan använt, och navigeringen grupperar på det — men först när en kind bär minst två containrar, annars blir navet en lista med rubriker över ett objekt var.
+Ingen av dem har en issue ännu.
 
-**Valutan ärvs nedåt och kan skrivas över på varje nivå.** Kontot bär valutan. Containern ärver den och kan ange en egen. Kostnadsformuläret föreslår containerns och låter användaren välja en annan för den enskilda raden. **Ett ändrat standardval gäller bara nya poster — befintliga rader märks aldrig om.** Valutan står alltså kvar per rad, som i dag, och [[ADR-0016 Kostnadsregistrering]] ersätts inte: dess *"summering sker per valuta, ingen omräkning görs"* är fortfarande svaret, och det nya beslutet säger bara varifrån förslaget kommer. Schemat får en kolumn på `account` och en nullbar på `container`; `cost_entry` rörs inte, och ingen valuta hamnar på `item` — itemet är bara där formuläret öppnas. Att presentera blandade valutor i en summa är ett känt och medvetet uppskjutet problem; det syns först i dashboardens totalsumma och i containerns kostnadsdonut, och det är en presentationsfråga, inte en datafråga.
-
-**Skalen.** Trepanelsvyn är vad användaren ser när ett objekt öppnas. Dashboarden är vad som möter henne efter inloggning. Containervyn ligger mellan dem.
+**Skalen**, som inte är ett beslut utan en läsning av mockuparna: trepanelsvyn är vad användaren ser när ett objekt öppnas, dashboarden är vad som möter henne efter inloggning, containervyn ligger mellan dem.
 
 ---
 
