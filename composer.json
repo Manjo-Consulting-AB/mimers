@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "manjo/mimers",
     "type": "project",
-    "description": "Mimers — dokumentationsvalv för båtar, husvagnar, stugor och bilar.",
+    "description": "Mimers — en plats för information om sådant du äger, använder eller arbetar med.",
     "keywords": [
         "laravel",
         "mimers"
