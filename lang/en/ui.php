@@ -26,6 +26,10 @@ return [
         'dashboard' => 'Dashboard',
         'containers' => 'Containers',
         'transfers' => 'Ownership transfers',
+        // The way into the global search, see issue 78 decision 2: the field
+        // in the header is not enough of a way in — someone who does not
+        // already know the search exists looks for a row in the menu.
+        'search' => 'Search',
         'login' => 'Log in',
     ],
 
@@ -1646,12 +1650,16 @@ return [
     // sentence as a user whose term matches nothing, because the sentence
     // knows nothing about scope.
     //
-    // `intro` and `whole_words` are the starting state, i.e. the state where
-    // no query ran at all (decisions 4 and 7). The last line says the search
-    // matches whole words: Swedish stemming does not exist in the MVP
-    // ([[ADR-0012 Sök]]), and no compensation is built in the view — no
-    // stemming in JavaScript, no second search on a truncated word. One line
-    // is the whole answer.
+    // `intro` and `match_rule` are the starting state, i.e. the state where
+    // no query ran at all (decisions 4 and 7). The last line says what the
+    // query actually does: the driver formulates `LIKE '%term%'`, so a
+    // substring in the middle of a word hits (issue 78 decision 5). It
+    // therefore does NOT describe the FULLTEXT branch of [[ADR-0012 Sök]],
+    // which is switched off until CI runs against MariaDB. No compensation is
+    // built in the view in either direction — no stemming in JavaScript, no
+    // second search on a truncated word. One line is the whole answer. The key
+    // was named `whole_words` until issue 78: the name carried the claim, and
+    // the claim was false.
     //
     // `in_container` is the prefix before the binder name, and only the
     // prefix: the name is its own link to the binder's front page (decision
@@ -1661,7 +1669,7 @@ return [
         'heading' => 'Search',
 
         'intro' => 'Searches name, description, manufacturer, model and serial number — in every container you can reach.',
-        'whole_words' => 'The search matches whole words: “battery” does not find “batteries”.',
+        'match_rule' => 'The search matches part of a word: “battery” also finds “battery charger”.',
         'empty' => 'No hits for “:q”.',
         'in_container' => 'in',
 
