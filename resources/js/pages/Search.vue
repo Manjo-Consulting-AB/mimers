@@ -13,8 +13,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Tre lägen, och bara ett av dem körde en fråga** (Beslut 4):
  *
- *   - `q` är null             → utgångsläget: vad man kan söka på, och att
- *                               sökningen matchar hela ord
+ *   - `q` är null             → utgångsläget: vad man kan söka på, och vad
+ *                               sökningen matchar
  *   - `q` finns, inga träffar → meningen som nämner sökordet och slutar där
  *   - `q` finns, träffar      → listan
  *
@@ -40,7 +40,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Ingen "menade du"-rad** (Beslut 7). Svensk stemming finns inte i MVP
  * ([[ADR-0012 Sök]]), och ingen kompensation byggs här: en klientomskrivning
  * av sökordet är en andra sökmotor och blir kvar långt efter att den riktiga
- * bytts ut. Utgångsläget säger i stället att sökningen matchar hela ord.
+ * bytts ut. Utgångsläget säger i stället vad frågan faktiskt gör — att den
+ * matchar en del av ett ord (issue 78 § Beslut 5). Den gamla meningen lovade
+ * hela ord, vilket är FULLTEXT-grenens regel och inte den här körda frågans.
+ *
+ * **Vägen hit står i layouten** (issue 78 § Beslut 2): `nav.search` länkar
+ * hit från navigeringen. Sidan själv ritar ingen andra väg in.
  */
 defineProps({
     /* Sökordet servern ställde frågan med, eller null när ingen fråga kördes. */
@@ -60,7 +65,7 @@ const { t } = useTranslations();
 
         <template v-if="q === null">
             <p class="mt-4 text-slate-700">{{ t('search.intro') }}</p>
-            <p class="mt-2 text-sm text-slate-600">{{ t('search.whole_words') }}</p>
+            <p class="mt-2 text-sm text-slate-600">{{ t('search.match_rule') }}</p>
         </template>
 
         <template v-else>

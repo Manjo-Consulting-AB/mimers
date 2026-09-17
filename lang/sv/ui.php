@@ -47,6 +47,10 @@ return [
         // är identitet, inte en länk i ett mejl, så raden står i navigationen
         // och är ovillkorlig.
         'transfers' => 'Ägarbyten',
+        // Vägen in i den globala sökningen, se issue 78 § Beslut 2: fältet i
+        // headern räcker inte som väg in — den som inte redan vet att
+        // sökningen finns letar efter en rad i menyn.
+        'search' => 'Sök',
         'login' => 'Logga in',
     ],
 
@@ -1854,11 +1858,15 @@ return [
     // ordagrant samma mening som en vars sökord inte matchar, för meningen
     // vet ingenting om omfånget.
     //
-    // `intro` och `whole_words` är utgångsläget, alltså läget när ingen fråga
-    // kördes alls (Beslut 4 och 7). Den sista raden säger att sökningen
-    // matchar hela ord: svensk stemming finns inte i MVP ([[ADR-0012 Sök]]),
-    // och ingen kompensation byggs i vyn — ingen stamning i JavaScript, ingen
-    // andra sökning med trunkerat ord. En rad är hela svaret.
+    // `intro` och `match_rule` är utgångsläget, alltså läget när ingen fråga
+    // kördes alls (Beslut 4 och 7). Den sista raden säger vad frågan faktiskt
+    // gör: drivrutinen formulerar `LIKE '%ord%'`, så en delsträng mitt i ett
+    // ord träffar (issue 78 § Beslut 5). Den beskriver därmed INTE
+    // FULLTEXT-grenen i [[ADR-0012 Sök]], som är avstängd tills CI kör mot
+    // MariaDB. Ingen kompensation byggs i vyn i någon riktning — ingen
+    // stamning i JavaScript, ingen andra sökning med trunkerat ord. En rad är
+    // hela svaret. Nyckeln hette `whole_words` fram till issue 78: namnet bar
+    // påståendet, och påståendet var falskt.
     //
     // `in_container` är prefixet före pärmnamnet, och bara prefixet: namnet är
     // en egen länk till pärmens förstasida (Beslut 3), så orden kan inte
@@ -1868,7 +1876,7 @@ return [
         'heading' => 'Sök',
 
         'intro' => 'Söker i namn, beskrivning, tillverkare, modell och serienummer — i alla containers du når.',
-        'whole_words' => 'Sökningen matchar hela ord: ”batteri” hittar inte ”batterier”.',
+        'match_rule' => 'Sökningen matchar en del av ett ord: ”batteri” hittar även ”batteriladdare”.',
         'empty' => 'Inga träffar på ”:q”.',
         'in_container' => 'i',
 
