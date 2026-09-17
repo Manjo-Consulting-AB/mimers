@@ -154,8 +154,10 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
 
     // Och nyckeln följer med i de delade propsen till varje sida layouten
     // renderar, alltså är raden läsbar överallt och inte bara på en sida.
-    // Användarens locale är oberoende av katalogens standardspråk, och
-    // fabriken ger `en_GB` — därför det engelska ordet.
+    // Användarens locale är oberoende av katalogens standardspråk: fabriken
+    // sätter ingen `locale`, och en användare utan locale och utan entydigt
+    // konto faller rakt igenom till `'en'` i LocaleResolver::forUser() — därför
+    // det engelska ordet.
     actingAs(User::factory()->create())->get('/dashboard')->assertInertia(
         fn (AssertableInertia $page) => $page->where('locale', 'en')
             ->where('translations.nav.settings', 'Settings')
