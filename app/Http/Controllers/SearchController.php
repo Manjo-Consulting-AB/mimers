@@ -13,8 +13,8 @@ use Inertia\Response;
  * Webbens globala sökning, `GET /search?q=...` — issue 59b § Beslut 1–8.
  *
  * **Frågan är global med flit.** Sidan ligger på toppnivå och inte under en
- * pärm: "var la jag den där?" är en fråga över allt användaren har åtkomst
- * till, inte inom en pärm hon redan valt (issue 15b § Beslut 5). Den är
+ * container: "var la jag den där?" är en fråga över allt användaren har åtkomst
+ * till, inte inom en container hon redan valt (issue 15b § Beslut 5). Den är
  * syster till `GET /api/items?q=...` och frågar med SAMMA villkor — urvalet
  * är App\Actions\Item\SearchAccessibleItems, som `Api\ItemSearchController::
  * index()` också anropar (Beslut 2). Ingen andra formulering av åtkomstfiltret
@@ -34,21 +34,21 @@ use Inertia\Response;
  * `IndexItemRequest::prepareForValidation()` gör, och en enbart blank `q` är
  * samma sak som ingen.
  *
- * **Varje träff säger vilken pärm den ligger i** (Beslut 3). `ItemResource`
+ * **Varje träff säger vilken container den ligger i** (Beslut 3). `ItemResource`
  * bär ingen `container`-nyckel med flit — rutten bär den redan — och den får
- * den inte heller: `/api` har inte bett om pärmnamnet
+ * den inte heller: `/api` har inte bett om containernamnet
  * ([[ADR-0021 Frontendteknik]] § Konsekvenser om drift mellan webbens behov
- * och API:ets kontrakt). Pärmens ULID, namn och `kind` läggs därför BREDVID
+ * och API:ets kontrakt). Containerns ULID, namn och `kind` läggs därför BREDVID
  * resursen, i samma form som `can` läggs bredvid `ContainerResource` i
  * App\Http\Controllers\ContainerController::index(). Actionen laddar INTE
  * containern — `/api` bad aldrig om den — så sidan laddar den själv, riktat,
  * efter anropet: en enda extra fråga, konstant över antalet träffar.
  *
  * **Tomt resultat säger vad som söktes — ingenting annat** (Beslut 6). Sidan
- * spänner över flera pärmar med olika omfång i var och en, och texten nämner
+ * spänner över flera containers med olika omfång i var och en, och texten nämner
  * sökordet och slutar där: aldrig ett tal om hur många rader som fanns,
  * aldrig en antydan om att det kan finnas mer, aldrig en uppräkning av vilka
- * pärmar som genomsöktes. En användare utan åtkomst till någonting alls får
+ * containers som genomsöktes. En användare utan åtkomst till någonting alls får
  * därför ordagrant samma tomma svar som en vars sökord inte matchar; ingen av
  * texterna vet om omfånget.
  *
@@ -89,8 +89,8 @@ class SearchController extends Controller
         $items = $searchAccessibleItems->handle($request->user(), $q);
 
         // Riktad eager load HÄR, inte i actionens delade with([...]): /api
-        // bad aldrig om pärmen och ska svara med samma antal frågor som förut
-        // (Beslut 2, Klart när). Webbsidan får sin pärm i en enda extra fråga,
+        // bad aldrig om containern och ska svara med samma antal frågor som förut
+        // (Beslut 2, Klart när). Webbsidan får sin container i en enda extra fråga,
         // konstant över antalet träffar.
         $items->loadMissing('container');
 

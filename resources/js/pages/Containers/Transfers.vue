@@ -7,7 +7,7 @@ import { formatDate } from '../../components/accessPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
- * Pärmens ägarbytessida, se issue 67b § Beslut 1, 2, 3 och 4.
+ * Containerns ägarbytessida, se issue 67b § Beslut 1, 2, 3 och 4.
  *
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
  * ur App\Http\Resources\ContainerResource.
@@ -89,10 +89,10 @@ const planHref = computed(() => `/settings/plan?account=${props.container.accoun
         </div>
 
         <!--
-            Domänfelet ur en postning — pärmen har redan en överlåtelse som
+            Domänfelet ur en postning — containern har redan en överlåtelse som
             väntar — blir en ruta ovanför formuläret och inte en rå felkod:
             App\Support\Frontend\ApiErrorTranslator formulerar meningen ur
-            `lang/`, och nyckeln är `transfer` eftersom felet gäller pärmens
+            `lang/`, och nyckeln är `transfer` eftersom felet gäller containerns
             tillstånd och inte ett fält.
         -->
         <p

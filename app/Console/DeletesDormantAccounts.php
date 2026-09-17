@@ -40,7 +40,7 @@ use Throwable;
  *   är förbjuden: inte heller de containers som saknar medlemmar rörs.
  * - Bilagor kontot betalar för i andras containers blockerar (Beslut 5):
  *   de är kundens innehåll, och FK:n tillåter inte att kontot raderas medan
- *   de finns kvar. Radera aldrig i en främmande pärm — hoppa över kontot
+ *   de finns kvar. Radera aldrig i en främmande container — hoppa över kontot
  *   och lämna frågan om vad som ska hända med innehållet till [[Tankar]]
  *   (se Frågor och antaganden i PR:n för 29b).
  *
@@ -200,9 +200,9 @@ class DeletesDormantAccounts
     /**
      * Har kontot lämnat en RESTRICT-referens i en container det inte äger: en
      * bilaga det betalar för (Beslut 5) — kundens innehåll i en främmande
-     * pärm. Den kan inte raderas av den här raderingen men hindrar
+     * container. Den kan inte raderas av den här raderingen men hindrar
      * account-raden från att försvinna. Svaret är att hoppa över kontot,
-     * aldrig att städa i främmande pärmar.
+     * aldrig att städa i främmande containers.
      *
      * Under implementeringen hittades ytterligare två RESTRICT-referenser av
      * samma sort — `item.created_by_account_id` och

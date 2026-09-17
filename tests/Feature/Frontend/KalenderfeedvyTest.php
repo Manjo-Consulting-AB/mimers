@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\CalendarFeed;
 use App\Models\Container;
@@ -17,7 +19,7 @@ use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 65b · Pärmens kalenderlänk — ytan som skapar, visar och återkallar de
+ * Issue 65b · Containerns kalenderlänk — ytan som skapar, visar och återkallar de
  * hemliga ICS-adresserna. Se
  * App\Http\Controllers\CalendarFeedController,
  * resources/js/pages/Containers/CalendarFeed.vue,
@@ -49,7 +51,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en ägare och en pärm ägd av kontot.
+ * Ett konto med en ägare och en container ägd av kontot.
  *
  * @param  array<string, mixed>  $kontoAttribut
  * @return array{0: Account, 1: User, 2: Container}
@@ -119,12 +121,12 @@ it('skickar en utloggad besökare till inloggningen från kalenderrutterna', fun
 });
 
 /*
- * Klart när: `/containers/{c}/calendar` visar pärmens feeds för den
+ * Klart när: `/containers/{c}/calendar` visar containerns feeds för den
  * inloggade användaren.
  *
  * Bara hennes EGNA: en feed visar det den användaren får se, och en annan
  * medlems länkar är varken hennes eller något hon ska se (36a § Beslut 4).
- * Den andra medlemmen här har samma behörighet till pärmen — skillnaden är
+ * Den andra medlemmen här har samma behörighet till containern — skillnaden är
  * vems feed det är.
  */
 it('listar den inloggade användarens egna länkar och ingen annans', function () {
@@ -288,12 +290,12 @@ it('listar en återkallad länk som återkallad', function () {
 });
 
 /*
- * Klart när: en användare utan `view` på pärmen får 403 på alla tre rutterna.
+ * Klart när: en användare utan `view` på containern får 403 på alla tre rutterna.
  *
  * Grinden är ContainerPolicy::view() och inget annat — samma som `/api`:s
- * CalendarFeedController, av samma skäl: den som får läsa pärmen får
+ * CalendarFeedController, av samma skäl: den som får läsa containern får
  * prenumerera på dess kalender (36a § Beslut 4). En främling har ingen rad i
- * pärmen alls.
+ * containern alls.
  */
 it('ger 403 på alla tre rutterna för en användare utan view', function () {
     withoutVite();
@@ -314,10 +316,10 @@ it('ger 403 på alla tre rutterna för en användare utan view', function () {
 
 /*
  * Beslut 1: `{calendar_feed}` nästlas under `{container}` med
- * `scopeBindings()`, som allt annat. En ULID från en annan pärm löser aldrig
+ * `scopeBindings()`, som allt annat. En ULID från en annan container löser aldrig
  * upp här — den finns inte, och svaret är 404 och inte 403 (36a § Beslut 3).
  */
-it('svarar 404 för en feed som hör till en annan pärm', function () {
+it('svarar 404 för en feed som hör till en annan container', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = feedvyKontext();

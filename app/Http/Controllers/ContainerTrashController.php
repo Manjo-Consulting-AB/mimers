@@ -15,7 +15,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Webbens papperskorg för raderade PÄRMAR — listan på toppnivå och
+ * Webbens papperskorg för raderade CONTAINERS — listan på toppnivå och
  * återställningen, se issue 62b § Beslut 1, 2, 3 och 7.
  *
  * **Ingenting av `/api` görs om.** Listan är App\Actions\Trash\
@@ -26,14 +26,14 @@ use Inertia\Response;
  * av.
  *
  * **Listan och återställningen ligger på TOPPNIVÅ**, inte under
- * `{container}` (§ Beslut 1): en raderad pärm löses inte upp av
+ * `{container}` (§ Beslut 1): en raderad container löses inte upp av
  * ruttbindningen — SoftDeletes' globala scope ser bara levande rader — så
  * ULID:en kommer i kroppen, exakt samma form och samma skäl som `/api`
  * (issue 20c § Beslut 1). Det är också därför sidan inte kan bo i
- * ContainerLayout: pärmen finns ju inte längre.
+ * ContainerLayout: containern finns ju inte längre.
  *
  * **Grinden stannar här** ([[ADR-0024 Tunna controllers och actions]]).
- * Listan är en FRÅGA — frågan om vilka raderade pärmar som finns i
+ * Listan är en FRÅGA — frågan om vilka raderade containers som finns i
  * användarens konton bor i actionen, och den kontrollen är samma villkor som
  * `ContainerPolicy::delete()` uttrycker: bara ägarkontots egna medlemmar. En
  * delegerad `container_access` räcker alltså inte, varken för att se listan
@@ -55,7 +55,7 @@ class ContainerTrashController extends Controller
     /**
      * GET /trash/containers.
      *
-     * Raderade pärmar i konton användaren är medlem i, senast raderad först,
+     * Raderade containers i konton användaren är medlem i, senast raderad först,
      * med den återstående tiden. Utgångna rader listas inte (§ Beslut 7):
      * svaret får aldrig bero på om gallringsjobbet hunnit köra.
      *
@@ -85,7 +85,7 @@ class ContainerTrashController extends Controller
      * ([[ADR-0020 Plattformsidentitet och frontendgräns]] § Konsekvenser).
      *
      * **Ordningen uppslag → grind → utgång är bindande** (§ Beslut 3, samma
-     * ordning som `/api`): en icke-medlem får 403 också för en utgången pärm,
+     * ordning som `/api`): en icke-medlem får 403 också för en utgången container,
      * och en medlem får 404. Uppslaget och utgångsprövningen stannar därför
      * här och inte i actionen, som bär transaktionen, radlåset och
      * `AdjustUsage` — paret som inte får ligga i två filer.
@@ -94,8 +94,8 @@ class ContainerTrashController extends Controller
      * retentionen, och hittar det inget finns raden inte — varken i listan
      * eller som en återställning (§ Beslut 7).
      *
-     * **Återställningen sätter inte pärmen som aktiv** (§ Beslut 6): att välja
-     * pärm är användarens handling, och `ActiveContainer` rörs därför inte
+     * **Återställningen sätter inte containern som aktiv** (§ Beslut 6): att välja
+     * container är användarens handling, och `ActiveContainer` rörs därför inte
      * här.
      */
     public function restore(
@@ -130,7 +130,7 @@ class ContainerTrashController extends Controller
      * (`isMemberOfOwnerAccount()`) plus regel 4 mot ägarkontot, som actionen
      * redan eager-laddat. Att räkna flaggan per rad är samma avvägning som
      * App\Http\Controllers\ContainerController::index() gör för `can.update`:
-     * listan är inte paginerad och antalet raderade pärmar är taket i kontots
+     * listan är inte paginerad och antalet raderade containers är taket i kontots
      * plan. **Pagineras listan en dag ska det här talet räknas om.**
      *
      * @param  array<string, Container>  $containers

@@ -7,7 +7,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
 /*
  * Mottagarens inkorg, se issue 67b § Beslut 1, 5 och 6.
  *
- * **Sidan ligger på TOPPNIVÅ, utanför pärmen.** Mottagaren har den inte ännu
+ * **Sidan ligger på TOPPNIVÅ, utanför containern.** Mottagaren har den inte ännu
  * — den är inte hennes att navigera i — så sidan ritas i AppLayout och inte i
  * ContainerLayout, och den har ingen `container`-prop. Det är samma skäl som
  * gör att rutten är `/transfers` och inte `/containers/{container}/transfers`.
@@ -17,8 +17,8 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * sidan frågar servern vilka rader som är hennes — konton hon är medlem i,
  * eller hennes verifierade adress. Det är hela skillnaden mot
  * Invitations/Show.vue, och den är avsiktlig: en inbjudan ger läsrätt till en
- * pärm, ett ägarbyte överlåter hela pärmen, och en bärartoken i ett mejl till
- * en overifierad adress vore en kapabilitet att ta emot någon annans pärm.
+ * container, ett ägarbyte överlåter hela containern, och en bärartoken i ett mejl till
+ * en overifierad adress vore en kapabilitet att ta emot någon annans container.
  * Mejlet (App\Notifications\OwnershipTransferNotification) pekar därför på
  * just den här sökvägen och ingenting annat.
  *
@@ -28,7 +28,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *
  * Domänfelet ur en accept eller ett avslag (`transfer`) ritas EN gång här och
  * inte per kort: felet gäller hela begäran — till exempel att mottagarkontots
- * plan inte rymmer pärmen — och en ruta inuti ett av flera kort hade pekat ut
+ * plan inte rymmer containern — och en ruta inuti ett av flera kort hade pekat ut
  * fel kort.
  */
 defineProps({

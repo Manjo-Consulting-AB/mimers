@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Två anropare gör EXAKT samma sak: `DELETE /api/containers/{container}`
  * (App\Http\Controllers\Api\ContainerController::destroy) och webbens
- * raderingsknapp på pärmens inställningssida
+ * raderingsknapp på containerns inställningssida
  * (App\Http\Controllers\ContainerController::destroy). Hade paret legat i två
  * filer skulle de glida isär första gången någon ändrar den ena.
  *

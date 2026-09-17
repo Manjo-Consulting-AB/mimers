@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Actions\Plan\ReadPlanUsage;
 use App\Actions\Plan\StartDowngrade;
 use App\Models\Account;
@@ -58,7 +60,7 @@ function planvyKonto(string $roll = 'owner'): array
 }
 
 /**
- * Samma konto, men på Pro — 25 GB utrymme, obegränsat antal pärmar och
+ * Samma konto, men på Pro — 25 GB utrymme, obegränsat antal containers och
  * funktionerna på (issue 25 § Beslut 2).
  */
 function planvyPro(Account $konto): Account
@@ -86,7 +88,7 @@ function planvyRaknare(Account $konto, int $storageBytes, int $containers = 0): 
 }
 
 /**
- * En bilaga på ett item i kontots pärm, med en stored_file av exakt storlek
+ * En bilaga på ett item i kontots container, med en stored_file av exakt storlek
  * och en given skapartid — förhandsvisningen sorterar på `created_at`
  * fallande, så testerna måste kunna styra ordningen.
  */
@@ -247,7 +249,7 @@ it('visar de fyra numeriska gränserna och de fem funktionerna', function () {
  * stapel (Beslut 4).
  *
  * `null` betyder obegränsat, och den enda buggen som spelar roll på den här
- * sidan är att göra det till ett tal. Pro:s tak för pärmar och delade
+ * sidan är att göra det till ett tal. Pro:s tak för containers och delade
  * användare är `null`; ett tak som saknas ger ingen andel och därmed ingen
  * stapel — en full stapel mot en gräns som inte finns vore påhittad.
  *

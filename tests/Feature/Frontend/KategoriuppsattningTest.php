@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Http\Controllers\CategoryController;
 use App\Http\Requests\Category\StoreCategoryPresetRequest;
 use App\Models\Account;
@@ -41,7 +43,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en ägare, och en pärm av given typ. Ägarens locale styr den
+ * Ett konto med en ägare, och en container av given typ. Ägarens locale styr den
  * delade propen `locale` och därmed vilken uppsättning klienten väljer.
  *
  * @param  array<string, mixed>  $kontoAttribut
@@ -161,14 +163,14 @@ it('skickar en utloggad besökare till inloggningen från uppsättningsrutten', 
 });
 
 /*
- * Klart när: en tom pärm visar förslaget, och servern har inte skickat orden.
+ * Klart när: en tom container visar förslaget, och servern har inte skickat orden.
  *
  * Att kortet ritas är presentationslogik och prövas i källfilerna; det som
  * prövas HÄR är att servern bara säger sitt om nej:et (Beslut 2 och 4) och att
  * uppsättningens ord inte finns i svaret — servern får aldrig veta vad de
  * betyder.
  */
-it('visar förslaget på en tom pärm och skickar aldrig orden till webbläsaren', function () {
+it('visar förslaget på en tom container och skickar aldrig orden till webbläsaren', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE');
@@ -282,13 +284,13 @@ it('lägger in uppsättningen i ordning, med rätt föräldrar och positioner', 
 });
 
 /*
- * Klart när: ett andra anrop mot `preset` på en pärm som redan har kategorier
+ * Klart när: ett andra anrop mot `preset` på en container som redan har kategorier
  * ger 422 och skapar ingenting.
  *
  * Utan den kontrollen är rutten ett sätt att fördubbla trädet med en knapp som
  * ser ut som ett förslag (Beslut 3).
  */
-it('vägrar en uppsättning i en pärm som redan har kategorier och skapar ingenting', function () {
+it('vägrar en uppsättning i en container som redan har kategorier och skapar ingenting', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
@@ -316,11 +318,11 @@ it('vägrar en uppsättning i en pärm som redan har kategorier och skapar ingen
 });
 
 /*
- * Klart när: en pärm vars enda kategorier är mjukraderade är TOM. Villkoret är
+ * Klart när: en container vars enda kategorier är mjukraderade är TOM. Villkoret är
  * "minst en levande kategori", alltså Eloquents SoftDeletes-scope och inte en
  * rå `count()`.
  */
-it('räknar en pärm med bara mjukraderade kategorier som tom', function () {
+it('räknar en container med bara mjukraderade kategorier som tom', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
@@ -421,7 +423,7 @@ it('avvisar ett namn längre än 255 tecken på rätt fält', function () {
 });
 
 /*
- * Klart när: *Nej tack* döljer förslaget för den pärmen under sessionen, och
+ * Klart när: *Nej tack* döljer förslaget för den containern under sessionen, och
  * sidans övriga formulär fungerar oförändrat.
  */
 it('döljer förslaget i sessionen och lämnar skapa-formuläret orört', function () {
@@ -445,7 +447,7 @@ it('döljer förslaget i sessionen och lämnar skapa-formuläret orört', functi
             ->where('can.manage', true)
     );
 
-    // Att tacka nej är ingen skrivning i pärmen, och sidans eget formulär
+    // Att tacka nej är ingen skrivning i containern, och sidans eget formulär
     // fungerar precis som förut — det är vad "kan tacka nej utan att fastna"
     // betyder.
     expect(session(CategoryController::PRESET_DISMISSED_SESSION_KEY))->toBe([$container->ulid]);
@@ -460,11 +462,11 @@ it('döljer förslaget i sessionen och lämnar skapa-formuläret orört', functi
 });
 
 /*
- * Klart när: *Nej tack* på en pärm döljer inte förslaget på en ANNAN tom pärm.
+ * Klart när: *Nej tack* på en container döljer inte förslaget på en ANNAN tom container.
  *
- * Nej:et är per pärm — en lista av ULID:n, inte en enda flagga för användaren.
+ * Nej:et är per container — en lista av ULID:n, inte en enda flagga för användaren.
  */
-it('döljer inte förslaget på en annan tom pärm', function () {
+it('döljer inte förslaget på en annan tom container', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = uppsattningKontext('sv_SE');
@@ -483,7 +485,7 @@ it('döljer inte förslaget på en annan tom pärm', function () {
 });
 
 /*
- * Klart när: en användare med `read` på pärmen får 403 på `preset`, och ett
+ * Klart när: en användare med `read` på containern får 403 på `preset`, och ett
  * `read_only`-ägarkonto likaså.
  *
  * Grinden är `ContainerPolicy::update()` — samma som att skapa en kategori för
@@ -512,7 +514,7 @@ it('nekar en read-innehavare och ett fryst ägarkonto uppsättningsrutten', func
 
     actingAs($läsare)->delete("/containers/{$container->ulid}/categories/preset")->assertForbidden();
 
-    // Läsaren ser trädet och den tomma pärmen, men ingen skrivyta.
+    // Läsaren ser trädet och den tomma containern, men ingen skrivyta.
     actingAs($läsare)->get("/containers/{$container->ulid}/categories")->assertInertia(
         fn (AssertableInertia $page) => $page->where('can.manage', false)
     );
@@ -528,7 +530,7 @@ it('nekar en read-innehavare och ett fryst ägarkonto uppsättningsrutten', func
 });
 
 /*
- * Klart när: en pärm i en annan användares konto går inte att fylla via rutten
+ * Klart när: en container i en annan användares konto går inte att fylla via rutten
  * (403).
  */
 it('nekar en främling både uppsättningen och ett nej', function () {
@@ -548,13 +550,13 @@ it('nekar en främling både uppsättningen och ett nej', function () {
 
 /*
  * Klart när: en svensk användare får den svenska uppsättningen, en användare
- * med `en_GB` den engelska — samma pärm, olika ord.
+ * med `en_GB` den engelska — samma container, olika ord.
  *
- * Valet görs av den delade propen `locale` och pärmens `kind` (Beslut 2), och
+ * Valet görs av den delade propen `locale` och containerns `kind` (Beslut 2), och
  * prövas därför med klientens egen väljare på den locale servern faktiskt
  * skickade.
  */
-it('ger svenska och engelska användare var sin uppsättning för samma pärm', function () {
+it('ger svenska och engelska användare var sin uppsättning för samma container', function () {
     withoutVite();
 
     [, $svensk, $container] = uppsattningKontext('sv_SE', 'boat');
@@ -576,7 +578,7 @@ it('ger svenska och engelska användare var sin uppsättning för samma pärm', 
 });
 
 /*
- * Klart när: en pärm med `kind = 'other'` och en med ett okänt `kind` får
+ * Klart när: en container med `kind = 'other'` och en med ett okänt `kind` får
  * båda uppsättningen för `other` utan fel.
  *
  * Ett okänt `kind` kan inte finnas i databasen — kolumnen har en CHECK mot
@@ -689,7 +691,7 @@ it('har inga kategorinamn i lang/, config/ eller någon PHP-fil', function () {
 
 /*
  * Beslut 4: förslaget är ett kort och ingen modal. Det ritas i stället för
- * tomtexten på en tom pärm, och sidans eget formulär finns kvar oavsett.
+ * tomtexten på en tom container, och sidans eget formulär finns kvar oavsett.
  */
 it('renderar förslaget som ett kort ovanför trädet', function () {
     $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));

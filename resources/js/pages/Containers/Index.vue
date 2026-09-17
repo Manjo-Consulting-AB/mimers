@@ -5,30 +5,30 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
- * Pärmlistan, se issue 54 § Beslut 6, 9 och 10.
+ * Containerlistan, se issue 54 § Beslut 6, 9 och 10.
  *
  * Sorteringen och urvalet kommer från servern — den här vyn filtrerar
  * ingenting. Det som avgörs HÄR är presentationen, och två saker härleds ur
  * de delade propsen i stället för ur ett eget serverfält (Beslut 10):
  *
- *   - Är pärmen delad med mig? `ContainerResource` bär ägarkontots ULID i
+ *   - Är containern delad med mig? `ContainerResource` bär ägarkontots ULID i
  *     `account`. Är den ULID:n inte ett av mina konton (`auth.accounts`) är
- *     pärmen någon annans. Ett `shared`-fält i `/api` som bara webben
+ *     containern någon annans. Ett `shared`-fält i `/api` som bara webben
  *     behöver är precis den drift [[ADR-0021 Frontendteknik]] § Konsekvenser
  *     varnar för.
  *   - Ägarkontots namn visas bara när användaren är med i MER än ett konto.
  *     Med ett enda konto är namnet brus.
  *
  * Den aktiva raden bär `aria-current` och en synlig etikett, och har ingen
- * knapp — den är redan vald (Beslut 6). Den aktiva pärmen läses ur den
+ * knapp — den är redan vald (Beslut 6). Den aktiva containern läses ur den
  * delade propen `activeContainer`, som bär ULID:t och ingenting annat.
  *
  * Redigeringslänken visas efter `can.update`, som kontrollern räknat med
  * policyn (Beslut 9). Flaggan är presentation; rutten auktoriserar ändå.
  *
- * Pärmnamnet är en länk till pärmens EGEN sida — itemlistan, se issue 57a
+ * Containernamnet är en länk till containerns EGEN sida — itemlistan, se issue 57a
  * § Beslut 1. Det är den enda ändringen i den här filen; knapparna för aktiv
- * pärm och redigering står kvar som de är.
+ * container och redigering står kvar som de är.
  */
 defineProps({
     containers: { type: Array, required: true },
@@ -114,7 +114,7 @@ const isShared = (container) => accountName(container) === null;
         <!--
             Vägen tillbaka, se issue 62b § Beslut 8. Raden ligger under listan
             och är ALLTID synlig — också för en tom lista, för den som raderat
-            sin enda pärm är den som mest behöver den. Ingen räknare: ett tal
+            sin enda container är den som mest behöver den. Ingen räknare: ett tal
             hade varit en fråga per sidladdning, och texten är konstant.
         -->
         <p class="mt-8 text-sm">

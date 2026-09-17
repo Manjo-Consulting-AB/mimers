@@ -14,12 +14,12 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Pärmens kalenderlänk — den hemliga ICS-adressen en kalenderapp hämtar
+ * Containerns kalenderlänk — den hemliga ICS-adressen en kalenderapp hämtar
  * själv, se issue 65b § Beslut 1, 2 och 4.
  *
- * **Feeden bor i PÄRMEN och inte i inställningarna.** Den visar pärmens
+ * **Feeden bor i CONTAINERN och inte i inställningarna.** Den visar containerns
  * uppgifter för den inloggade användaren, och den som ska skapa en ny är
- * redan i pärmen (Beslut 1). Sidan får därför en egen rad i
+ * redan i containern (Beslut 1). Sidan får därför en egen rad i
  * resources/js/layouts/containerSections.js, och den ritas under
  * App\Http\Resources\ContainerResource som varje annan sida under
  * ContainerLayout.
@@ -48,7 +48,7 @@ use Inertia\Response;
  * **Ingen behörighetslogik bor här.** Alla tre metoderna anropar bara
  * `Gate::authorize('view', $container)` och litar på
  * App\Policies\ContainerPolicy::view() — samma grind som API-kontrollern och
- * av samma skäl: den som får läsa pärmen får prenumerera på dess kalender,
+ * av samma skäl: den som får läsa containern får prenumerera på dess kalender,
  * för feeden visar per definition inget hon inte redan kan se (36a § Beslut
  * 4). Att återkalla är att MINSKA exponeringen, och den som får skapa en feed
  * får klippa den.
@@ -77,7 +77,7 @@ class CalendarFeedController extends Controller
     private const URL_SESSION_KEY = 'calendar_feed_url';
 
     /**
-     * GET /containers/{container}/calendar — pärmens kalenderlänkar.
+     * GET /containers/{container}/calendar — containerns kalenderlänkar.
      *
      * Listan är den INLOGGADE användarens egna feeds, precis som
      * API-kontrollerns index(): en feed visar bara det den användaren får se,
@@ -113,7 +113,7 @@ class CalendarFeedController extends Controller
      * Ingen request-body och ingen FormRequest (Beslut 2): feeden är bara
      * (container, användare, token), och `/api` har redan samma form. Ingen
      * duplikatspärr heller — en användare får ha flera feeder till samma
-     * pärm, det är hela poängen med `revoked_at` (36a § Beslut 2).
+     * container, det är hela poängen med `revoked_at` (36a § Beslut 2).
      *
      * `container_id`, `user_id` och `token_hash` sätts explicit på
      * modellinstansen, aldrig via massildelning:
@@ -147,7 +147,7 @@ class CalendarFeedController extends Controller
      *
      * `{calendar_feed}` binds inom `{container}` av routes/web.php:s
      * `scopeBindings()` genom App\Models\Container::calendarFeeds(): en ULID
-     * från en annan pärm löser aldrig upp här, och en okänd ULID blir
+     * från en annan container löser aldrig upp här, och en okänd ULID blir
      * felsidan för 404.
      *
      * Raden raderas aldrig och `revoked_at` skrivs bara om den är null —

@@ -19,7 +19,7 @@ use Illuminate\Validation\ValidationException;
  * ny förekomst — se issue 63c § Beslut 1, 3, 6, 7, 8 och 9.
  *
  * **Ingenting av `/api` görs om.** `StoreScheduleDependencyRequest` delas rakt
- * av — dess `Rule::exists` binder motparten till samma pärm och är halva
+ * av — dess `Rule::exists` binder motparten till samma container och är halva
  * skyddet — och reglerna (samma container, inte sig själv, ingen cykel) ligger
  * orörda i App\Actions\Schedule\DependSchedule sedan issue 23 § Beslut 5.
  * Ingen cykelkontroll skrivs i vyn och ingen i den här kontrollern: den som
@@ -27,13 +27,13 @@ use Illuminate\Validation\ValidationException;
  *
  * **`{other}` binds INTE av `scopeBindings()`** (issue 23 § Beslut 3).
  * Motparten slås upp för hand INOM containern, exakt som
- * App\Http\Controllers\ItemLinkController gör, och en ULID från en annan pärm
+ * App\Http\Controllers\ItemLinkController gör, och en ULID från en annan container
  * blir därför 404.
  *
  * **Två grindar, `update` i båda ändar** (Beslut 8, issue 71 § Beslut 1 och
  * 3). Ordningen är `$schedule->item` FÖRST, motpartens item efter uppslaget —
  * så att en mottagare som inte når det egna schemat får 403 innan hon får
- * veta något om motparten. En motpart inom pärmen men utanför omfånget ger
+ * veta något om motparten. En motpart inom containern men utanför omfånget ger
  * också 403, utan att svaret röjer dess titel eller itemnamn. Aldrig `delete`:
  * ett beroende tar inte bort något av schemana (Beslut 7).
  *
@@ -51,7 +51,7 @@ class ScheduleDependencyController extends Controller
      *
      * `StoreScheduleDependencyRequest` har redan bevisat att motpartens ULID
      * finns i DEN HÄR containern och inte är mjukraderad — en ULID från en
-     * annan pärm är ett fältfel på `depends_on`, aldrig en 404 och aldrig en
+     * annan container är ett fältfel på `depends_on`, aldrig en 404 och aldrig en
      * behörighetsfråga. Här slås motparten bara upp, och `update` krävs i båda
      * ändarna.
      */

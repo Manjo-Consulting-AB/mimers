@@ -43,7 +43,7 @@ use Throwable;
  * `Entitlements::assertFeature()` — den kastar ApiException med 403, rätt i
  * en kontroller, fel i en cron där det blir ett fångat undantag i loggen i
  * stället för ett hoppat konto. Grinden gäller ägarkontots plan, inte
- * mottagarens: det är pärmens ägare som betalar.
+ * mottagarens: det är containerns ägare som betalar.
  *
  * `dedupe_key` bär lån och mottagare, utan datumdel (Beslut 3): jobbet körs
  * dagligen och skulle annars skapa en rad om dagen så länge lånet är öppet —

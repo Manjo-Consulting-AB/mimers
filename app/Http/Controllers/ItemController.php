@@ -42,7 +42,7 @@ use Inertia\Response;
  * Webbens itemytor — listan och detaljvyn (issue 57a § Beslut 1, 2, 4, 5 och
  * 6), skapandet, redigeringen och raderingen (issue 57b § Beslut 1–9).
  *
- * **Pärmens förstasida.** `GET /containers/{container}` är itemlistan, och
+ * **Containerns förstasida.** `GET /containers/{container}` är itemlistan, och
  * det är den URL:en App\Http\Controllers\ContainerController:s docblock
  * lämnade öppen i issue 54 § Beslut 2. Sidan bärs av den här kontrollern och
  * inte av ContainerController: den senare har ingen `show()` med flit, och
@@ -60,7 +60,7 @@ use Inertia\Response;
  * andra kopia av `Api\ItemController`s — se PR:ens Frågor och antaganden.
  *
  * **Tre grindar, en per metod** (57b § Beslut 2). `store()` frågar
- * `ContainerPolicy::createItem()` på PÄRMEN — ett toppnivå-item har ingen
+ * `ContainerPolicy::createItem()` på CONTAINERN — ett toppnivå-item har ingen
  * förälder att auktorisera mot. `update()` och `destroy()` frågar ITEMETS
  * `update` respektive `delete`, två skilda pinnar på laddern
  * ([[ADR-0028 Åtkomst på itemnivå]] § Beslut): en `write`-mottagare ändrar
@@ -76,7 +76,7 @@ use Inertia\Response;
  * **`can` är presentation.** Flaggorna räknas med `Gate::forUser()->allows()`
  * och styr om ytorna ritas; varje skrivande rutt auktoriserar ändå med
  * `Gate::authorize()` oavsett vad sidan visade. Detaljvyns tre flaggor ställs
- * mot ITEMET (Beslut 6), listans mot pärmen. Kostnaden är noll extra frågor
+ * mot ITEMET (Beslut 6), listans mot containern. Kostnaden är noll extra frågor
  * per rad — App\Actions\Access\ResolveItemScope är registrerad `scoped` och
  * memoiserar per `{user}:{container}`, se dess docblock.
  *
@@ -98,7 +98,7 @@ use Inertia\Response;
 class ItemController extends Controller
 {
     /**
-     * GET /containers/{container} — pärmens itemlista, sorterad på namn, med
+     * GET /containers/{container} — containerns itemlista, sorterad på namn, med
      * filtren ur querysträngen (issue 59a § Beslut 1–7).
      *
      * **Filtret är querysträng på den här sidan** (Beslut 1). Samma rutt,
@@ -115,7 +115,7 @@ class ItemController extends Controller
      * filtervärde 422 (issue 15a § Beslut 7), och det kontraktet står orört —
      * `Api\ItemController::index()` anropar `IndexItemRequest` som förut. Här
      * är samma värde i stället en GAMMAL LÄNK: taggen är raderad sedan
-     * bokmärket sparades, eller kategorin flyttad till en annan pärm. En
+     * bokmärket sparades, eller kategorin flyttad till en annan container. En
      * 422-sida hade varit fel svar på ett bokmärke, och en redirect tillbaka
      * till samma querysträng en oändlig sådan. `filter()` nedan löser därför
      * upp ULID:na mot de listor sidan ÄNDÅ hämtar — `ListTags` och
@@ -125,7 +125,7 @@ class ItemController extends Controller
      * fortfarande bara `ListItems` (Beslut 2 och 3).
      *
      * **Omfånget filtrerar raderna, precis som i `/api`** (Beslut 5, issue 73
-     * § Beslut 2). Den som når pärmen når inte nödvändigtvis allt i den: en
+     * § Beslut 2). Den som når containern når inte nödvändigtvis allt i den: en
      * mottagare med en grant på motorn ser motorn och dess ättlingar, ingenting
      * annat — och filterraden listar bara de taggar och kategorier hon når,
      * eftersom de kommer ur samma två omfångsfiltrerade Actions. Att filtrera
@@ -135,7 +135,7 @@ class ItemController extends Controller
      * Ingen totalsumma, ingen "av N", ingen rad om att något dolts: ingenting
      * i svaret får bära ett tal som avslöjar hur många rader som filtrerats
      * bort (issue 73 § Beslut 6). Är listan tom UTAN filter säger sidan att
-     * pärmen är tom; är den tom MED filter räknar vyn upp de filter
+     * containern är tom; är den tom MED filter räknar vyn upp de filter
      * användaren själv satt — och en omfångsbegränsad mottagares tomma
      * träfflista är ordagrant identisk med en ägares, för meningen vet
      * ingenting om omfånget.
@@ -204,11 +204,11 @@ class ItemController extends Controller
      *
      * `{item}` binds på ULID via `#[RouteKey('ulid')]` på App\Models\Item och
      * löses genom `scopeBindings()` mot containerns `items()`-relation — en
-     * item-ULID från en annan pärm blir 404, och en mjukraderad rad löser
+     * item-ULID från en annan container blir 404, och en mjukraderad rad löser
      * aldrig upp.
      *
      * **Grinden är ITEMETS `view`, inte containerns** (Beslut 5). Ett item som
-     * finns i pärmen men ligger utanför anroparens omfång ger **403**, inte
+     * finns i containern men ligger utanför anroparens omfång ger **403**, inte
      * 404: "känd men utanför omfånget" har en kod över tio kontrollrar
      * (issue 73 § Beslut 3), och webben uppfinner inte en elfte regel.
      *
@@ -403,18 +403,18 @@ class ItemController extends Controller
      * § Beslut 1, 4 och 5, och issue 58 § Beslut 1 och 7.
      *
      * **Två vägar in, och grinden följer vägen.** Utan `?parent` är grinden
-     * `ContainerPolicy::createItem()` på PÄRMEN — samma grind som `store()`
+     * `ContainerPolicy::createItem()` på CONTAINERN — samma grind som `store()`
      * prövar och samma flagga listan ritar sin skapaknapp efter. Med
      * `?parent={ulid}` är grinden `ItemPolicy::create()` på FÖRÄLDERN, och
      * det är den enda väg en omfångsbegränsad mottagare har hit: hon når
-     * ingen rot i pärmen och får 403 på den första vägen, men hon får lägga
+     * ingen rot i containern och får 403 på den första vägen, men hon får lägga
      * in "impellerbyte 2026" under det hon redan nått ([[ADR-0028 Åtkomst på
      * itemnivå]] § Beslut: "create får skapa både inuti itemet och nya
      * barn-items"). Samma två grindar, i samma ordning, som `store()` prövar
      * — väljer någon olika svarar formuläret 200 och postningen 403.
      *
-     * Föräldern slås upp INOM pärmen, precis som `store()` gör: en ULID ur en
-     * annan pärm är 404, och en mjukraderad rad löser aldrig upp. Den skickas
+     * Föräldern slås upp INOM containern, precis som `store()` gör: en ULID ur en
+     * annan container är 404, och en mjukraderad rad löser aldrig upp. Den skickas
      * som `{ulid, name}` och ritas som en rad text — föräldern kommer ur
      * länken och är inget val (§ Beslut 7).
      *
@@ -427,7 +427,7 @@ class ItemController extends Controller
      * **Kontolistan skickas INTE härifrån** (§ Beslut 4, samma linje som
      * issue 54 § Beslut 5). Den finns redan i den delade propen
      * `auth.accounts`, och en egen fråga för samma lista är en fråga för
-     * mycket. Sidan förvalt pärmens ägarkonto ur `container.account` när
+     * mycket. Sidan förvalt containerns ägarkonto ur `container.account` när
      * användaren är medlem i det, annars hennes första konto.
      */
     public function create(Request $request, Container $container, ListCategories $listCategories, ListTags $listTags): Response
@@ -456,7 +456,7 @@ class ItemController extends Controller
      * POST /containers/{container}/items — 302 till det nya itemets detaljvy.
      *
      * `StoreItemRequest` delas rakt av med `/api` och har redan bevisat att
-     * `account` finns, att `category` (om någon) hör till DEN HÄR pärmen och
+     * `account` finns, att `category` (om någon) hör till DEN HÄR containern och
      * inte är mjukraderad, och samma sak för varje tagg-ULID och för
      * `parent`. `parent` filtreras bort ur `safe()` tillsammans med `account`,
      * `category` och `tags` — ingen av dem är en kolumn (App\Models\Item
@@ -465,12 +465,12 @@ class ItemController extends Controller
      * **Två grindar, en per väg** (issue 58 § Beslut 7, samma par och samma
      * ordning som `Api\ItemController::store()` sedan issue 71 § Beslut 2).
      * Utan `parent` landar itemet på toppnivån och grinden är
-     * `ContainerPolicy::createItem()` på PÄRMEN — ett toppnivå-item har ingen
+     * `ContainerPolicy::createItem()` på CONTAINERN — ett toppnivå-item har ingen
      * förälder att auktorisera mot, och en omfångsbegränsad mottagare når
      * ingen rot. Med `parent` är grinden `ItemPolicy::create()` på
-     * FÖRÄLDERN, och den som har `createItem` på pärmen men inte `create` på
+     * FÖRÄLDERN, och den som har `createItem` på containern men inte `create` på
      * föräldern får 403. Att blanda ihop dem ger en itemgrant rätt att lägga
-     * en rot i pärmen.
+     * en rot i containern.
      *
      * **Länkningen går genom `LinkItems`, i SAMMA transaktion som
      * skrivningen** (§ Beslut 7) — aldrig en handskriven `ItemLink`-rad, så
@@ -541,11 +541,11 @@ class ItemController extends Controller
      * GET /containers/{container}/items/{item}/edit — formuläret, se issue
      * 57b § Beslut 1, 4, 5 och 6.
      *
-     * Grinden är ITEMETS `update`, inte pärmens: en `create`-mottagare lägger
+     * Grinden är ITEMETS `update`, inte containerns: en `create`-mottagare lägger
      * till, men rör aldrig något som redan står där (§ Beslut 2).
      *
      * **Samma två väljare som create(), och samma Actions.** Redigeringsytan
-     * byter kategori och taggar, och listorna är pärmens — hämtade, inte
+     * byter kategori och taggar, och listorna är containerns — hämtade, inte
      * omskrivna.
      *
      * **Inget `account` här** (§ Beslut 4). `UpdateItemRequest` tar inte emot
@@ -614,7 +614,7 @@ class ItemController extends Controller
     }
 
     /**
-     * DELETE /containers/{container}/items/{item} — 302 till pärmens
+     * DELETE /containers/{container}/items/{item} — 302 till containerns
      * förstasida.
      *
      * **Grinden är ITEMETS `delete`, en egen pinne** (§ Beslut 2): en
@@ -640,10 +640,10 @@ class ItemController extends Controller
     }
 
     /**
-     * Kategorin ur en ULID, uppslagen INOM pärmen — samma uppslag som `/api`
+     * Kategorin ur en ULID, uppslagen INOM containern — samma uppslag som `/api`
      * gör. `scopeBindings()` skyddar `{item}`, men `category` kommer ur
      * kroppen och StoreItemRequest/UpdateItemRequest har redan bevisat att
-     * ULID:en finns i DEN HÄR pärmen och inte är mjukraderad.
+     * ULID:en finns i DEN HÄR containern och inte är mjukraderad.
      */
     private function category(Container $container, ?string $categoryUlid): ?Category
     {
@@ -653,10 +653,10 @@ class ItemController extends Controller
     }
 
     /**
-     * Föräldern ur en ULID, uppslagen INOM pärmen — samma uppslag och samma
+     * Föräldern ur en ULID, uppslagen INOM containern — samma uppslag och samma
      * skäl som `category()` ovan, och samma som `Api\ItemController::store()`
      * gör. `StoreItemRequest` har redan bevisat att ULID:en finns i DEN HÄR
-     * pärmen och inte är mjukraderad; uppslaget här är vad som ger 404 i
+     * containern och inte är mjukraderad; uppslaget här är vad som ger 404 i
      * stället för 422 om raden hinner försvinna mellan de två.
      */
     private function parent(Container $container, ?string $parentUlid): ?Item
@@ -683,7 +683,7 @@ class ItemController extends Controller
     }
 
     /**
-     * Filtren ur querysträngen, lösta mot pärmens EGNA taggar och kategorier —
+     * Filtren ur querysträngen, lösta mot containerns EGNA taggar och kategorier —
      * issue 59a § Beslut 3.
      *
      * **Ingen FormRequest och ingen ny regel.** `IndexItemRequest` äger
@@ -711,8 +711,8 @@ class ItemController extends Controller
      * Ordningen på de behållna taggarna är den inskickade — vyn ritar dem i
      * länkens ordning och inte i tagglistans.
      *
-     * @param  Collection<int, Tag>  $tags  pärmens taggar inom omfånget
-     * @param  Collection<int, Category>  $categories  pärmens kategoriträd inom omfånget
+     * @param  Collection<int, Tag>  $tags  containerns taggar inom omfånget
+     * @param  Collection<int, Category>  $categories  containerns kategoriträd inom omfånget
      * @return array{0: array{q: string|null, tags: list<string>, category: string|null}, 1: bool} filtret och huruvida något föll bort
      */
     private function filter(Request $request, Collection $tags, Collection $categories): array
@@ -773,7 +773,7 @@ class ItemController extends Controller
 
     /**
      * Motparterna som går att knyta det här itemet till (§ Beslut 5).
-     * Kandidaterna är pärmens items INOM användarens omfång — ListItems äger
+     * Kandidaterna är containerns items INOM användarens omfång — ListItems äger
      * det filtret och den här kontrollern formulerar inget eget — minus
      * itemet självt och de som redan är kopplade. Varje kandidat prövas
      * dessutom med `update`, för en relation kräver `write` i BÅDA ändar
@@ -785,7 +785,7 @@ class ItemController extends Controller
      * nekas där.
      *
      * **Noll extra frågor per kandidat.** `container` sätts ur den redan
-     * hämtade pärmen, så ItemPolicy slipper slå upp den per rad, och
+     * hämtade containern, så ItemPolicy slipper slå upp den per rad, och
      * App\Actions\Access\ResolveItemScope är memoiserad per
      * `{user}:{container}` — samma resonemang som `can`-flaggorna i klassen.
      *

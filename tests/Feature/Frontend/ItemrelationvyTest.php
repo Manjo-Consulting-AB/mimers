@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -52,7 +54,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem, och en pärm ägd av kontot. Båda på svenska, så
+ * Ett konto med en medlem, och en container ägd av kontot. Båda på svenska, så
  * meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
  *
  * @return array{0: Account, 1: User, 2: Container}
@@ -68,7 +70,7 @@ function itemrelationKontext(): array
 }
 
 /**
- * Ett item i pärmen med sammanhängande `created_by_*`.
+ * Ett item i containern med sammanhängande `created_by_*`.
  *
  * @param  array<string, mixed>  $attribut
  */
@@ -106,7 +108,7 @@ function itemrelationMottagare(Container $container, ?Item $item, string $niva, 
 /**
  * Ett konto mottagaren äger själv, för `account`-fältet i StoreItemRequest:
  * medlemsprövningen i `ItemController::store()` gäller det anropade kontot,
- * inte pärmens.
+ * inte containerns.
  */
 function itemrelationEgetKonto(User $mottagare): Account
 {
@@ -374,7 +376,7 @@ it('knyter upp och lämnar båda itemen kvar', function () {
     expect(Item::query()->whereKey([$motorn->id, $impellern->id])->count())->toBe(2);
 });
 
-it('ger 404 för en motpart i en annan pärm', function () {
+it('ger 404 för en motpart i en annan container', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemrelationKontext();
@@ -503,7 +505,7 @@ it('gör item_link.cycle till ett fältfel på relation', function () {
     ]);
 });
 
-it('avvisar en motpart i en annan pärm redan i valideringen', function () {
+it('avvisar en motpart i en annan container redan i valideringen', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemrelationKontext();
@@ -535,7 +537,7 @@ it('skapar ett barn-item ur detaljvyns länk, i samma transaktion som kopplingen
     $motorn = itemrelationItem($container, 'Motorn');
 
     // En mottagare med `create` på motorn och ingenting annat: hon når ingen
-    // rot i pärmen, men hon får lägga in "impellerbyte 2026" under det hon
+    // rot i containern, men hon får lägga in "impellerbyte 2026" under det hon
     // fått ([[ADR-0028 Åtkomst på itemnivå]] § Beslut).
     $mottagare = itemrelationMottagare($container, $motorn, 'create');
     $hennesKonto = itemrelationEgetKonto($mottagare);
@@ -584,7 +586,7 @@ it('skapar ett barn-item ur detaljvyns länk, i samma transaktion som kopplingen
     actingAs($mottagare)->get(itemrelationUrl($container, $nytt))->assertOk();
 });
 
-it('prövar förälderns grind när parent finns och pärmens grind när det saknas', function () {
+it('prövar förälderns grind när parent finns och containerns grind när det saknas', function () {
     withoutVite();
 
     [, , $container] = itemrelationKontext();
@@ -625,7 +627,7 @@ it('prövar förälderns grind när parent finns och pärmens grind när det sak
     expect(Item::query()->where('name', 'Rot')->exists())->toBeFalse();
 });
 
-it('ger 404 när föräldern i länken ligger i en annan pärm', function () {
+it('ger 404 när föräldern i länken ligger i en annan container', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemrelationKontext();
@@ -678,7 +680,7 @@ it('kostar ett konstant antal frågor oavsett antal relationer', function () {
     // Motpartsuppslaget är EN fråga, omfånget ligger i SAMMA fråga, och
     // motpartsväljarens `update`-prövning per kandidat kostar ingenting:
     // ResolveItemScope är memoiserad och `container` sätts ur den redan
-    // hämtade pärmen (Beslut 5).
+    // hämtade containern (Beslut 5).
     expect($medTre)->toBe($medEn);
 });
 

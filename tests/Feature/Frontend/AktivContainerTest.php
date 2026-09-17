@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\User;
@@ -13,7 +15,7 @@ use function Pest\Laravel\put;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 54 · Den aktiva pärmen över webben — sessionen och den delade propen.
+ * Issue 54 · Den aktiva containern över webben — sessionen och den delade propen.
  * Se App\Http\Controllers\ActiveContainerController,
  * App\Http\Controllers\ContainerController::store() och
  * App\Support\Frontend\ActiveContainer.
@@ -26,7 +28,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem och en pärm i kontot.
+ * Ett konto med en medlem och en container i kontot.
  *
  * @return array{0: User, 1: Container}
  */
@@ -41,11 +43,11 @@ function aktivContainerKontext(): array
 }
 
 /*
- * Beslut 6: PUT gör pärmen aktiv, och den delade propen bär dess ULID på
+ * Beslut 6: PUT gör containern aktiv, och den delade propen bär dess ULID på
  * nästa sidvisning. Svaret är `back()` — anroparen står i listan och stannar
  * där.
  */
-it('gör en pärm aktiv och delar dess ulid på nästa sidvisning', function () {
+it('gör en container aktiv och delar dess ulid på nästa sidvisning', function () {
     withoutVite();
 
     [$anvandare, $container] = aktivContainerKontext();
@@ -65,10 +67,10 @@ it('gör en pärm aktiv och delar dess ulid på nästa sidvisning', function () 
 /*
  * Den delade propen bär ULID:t och INGENTING annat — issue 51 § Beslut 4
  * satte formen med flit, och den delas på varje webbanrop. En sida som
- * behöver pärmens namn får det som sin egen `container`-prop, se
+ * behöver containerns namn får det som sin egen `container`-prop, se
  * resources/js/layouts/ContainerLayout.vue.
  */
-it('utökar inte den delade propen med pärmens namn eller typ', function () {
+it('utökar inte den delade propen med containerns namn eller typ', function () {
     withoutVite();
 
     [$anvandare, $container] = aktivContainerKontext();
@@ -83,10 +85,10 @@ it('utökar inte den delade propen med pärmens namn eller typ', function () {
 });
 
 /*
- * Beslut 6: `view`-grinden, inte `update`. Att välja vilken pärm man arbetar
- * i är att läsa — en `read`-innehavare ska kunna göra pärmen aktiv.
+ * Beslut 6: `view`-grinden, inte `update`. Att välja vilken container man arbetar
+ * i är att läsa — en `read`-innehavare ska kunna göra containern aktiv.
  */
-it('låter en read-innehavare göra pärmen aktiv', function () {
+it('låter en read-innehavare göra containern aktiv', function () {
     withoutVite();
 
     [, $container] = aktivContainerKontext();
@@ -100,11 +102,11 @@ it('låter en read-innehavare göra pärmen aktiv', function () {
 });
 
 /*
- * En pärm användaren inte når går inte att göra aktiv: 403, och sessionen är
+ * En container användaren inte når går inte att göra aktiv: 403, och sessionen är
  * oförändrad efteråt. `ActiveContainer::set()` glömmer dessutom nyckeln i
  * stället för att skriva den om svaret skulle vara nej.
  */
-it('nekar en pärm användaren inte når och lämnar sessionen oförändrad', function () {
+it('nekar en container användaren inte når och lämnar sessionen oförändrad', function () {
     withoutVite();
 
     [, $container] = aktivContainerKontext();
@@ -116,7 +118,7 @@ it('nekar en pärm användaren inte når och lämnar sessionen oförändrad', fu
     $svar->assertForbidden();
     expect(session(ActiveContainer::SESSION_KEY))->toBeNull();
 
-    // Och den som redan hade en aktiv pärm behåller den — ett nekat byte rör
+    // Och den som redan hade en aktiv container behåller den — ett nekat byte rör
     // inte sessionen.
     [$anvandare, $egen] = aktivContainerKontext();
     from('/containers')->actingAs($anvandare)->put("/containers/{$egen->ulid}/active");
@@ -132,7 +134,7 @@ it('nekar en pärm användaren inte når och lämnar sessionen oförändrad', fu
  * inte systemets. Här bevisat genom webbens egen väg: sätt den aktiv, återkalla
  * delningen, läs sidan.
  */
-it('glömmer den aktiva pärmen när åtkomsten återkallas', function () {
+it('glömmer den aktiva containern när åtkomsten återkallas', function () {
     withoutVite();
 
     [, $container] = aktivContainerKontext();

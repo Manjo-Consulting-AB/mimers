@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Jobs\BuildContainerExport;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -401,7 +403,7 @@ it('en kostnadspost på ett dolt item påverkar varken grupp eller total, i någ
         expect($svar->json('data.totals'))->toBe($total);
 
         // Gruppnamnen är det tysta läckaget: en grupp som heter "Advokatbyrån
-        // Ek & Partners" säger något om pärmen även utan belopp.
+        // Ek & Partners" säger något om containern även utan belopp.
         expect($svar->getContent())->not->toContain('Advokatbyrån');
         expect($svar->getContent())->not->toContain('Skilsmässa');
         expect($svar->getContent())->not->toContain('Rigg');
@@ -494,7 +496,7 @@ it('leverantörslistan för en omfångsbegränsad mottagare joins mot item', fun
     $logg = collect(DB::getQueryLog())->pluck('query');
     DB::disableQueryLog();
 
-    // Joinen MÅSTE finnas här — utan den läcker hela pärmens
+    // Joinen MÅSTE finnas här — utan den läcker hela containerns
     // leverantörshistorik (issue 74 § Beslut 6).
     $supplierFrågan = $logg->first(fn (string $sql): bool => str_contains($sql, 'from "cost_entry"'));
     expect($supplierFrågan)->not->toBeNull();
@@ -541,7 +543,7 @@ it('todo-listan listar ingenting ur en container hon inte når', function () {
         aggregatUppgift($motor, 'Byt impeller', '2026-09-02');
         aggregatGrant($minContainer, $mottagare, $motor);
 
-        // En främmande pärm med en egen öppen förekomst — hon har ingen
+        // En främmande container med en egen öppen förekomst — hon har ingen
         // åtkomst till den alls.
         [$annatKonto] = kontoMedMedlem();
         $främmande = Container::factory()->for($annatKonto, 'account')->create();
@@ -741,7 +743,7 @@ it('en export beställd av ägaren är oförändrad — samma items, kategorier,
         ->toBe(['Båten', 'Impellern', 'Masten', 'Motorn']);
 
     // Även den oanvända taggen och den tomma kategorin följer med: ägaren ser
-    // sin egen pärm, precis som före issuen.
+    // sin egen container, precis som före issuen.
     expect(collect($payload['categories'])->pluck('name')->all())->toBe(['Rigg']);
     expect(collect($payload['tags'])->pluck('name')->sort()->values()->all())->toBe(['Motor', 'Skilsmässa']);
 

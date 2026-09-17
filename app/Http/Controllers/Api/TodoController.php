@@ -13,12 +13,12 @@ use Illuminate\Http\Request;
  * vid sidan av "var la jag den där?". Precis som fritextsökningen (issue 15b)
  * är den en TOPPNIVÅrutt, `GET /api/todo`: frågan är global per definition —
  * alla öppna förekomster över ALLA containers användaren har åtkomst till —
- * inte inom en pärm hon redan valt (Beslut 1).
+ * inte inom en container hon redan valt (Beslut 1).
  *
  * Issuens tyngdpunkt: listan läser förekomster över containergränser och bär
  * sitt eget åtkomstfilter i stället för rutt-nästlingens grind. En glömd
  * `where` ger inget fel, inget larm och ett svar som ser rätt ut, bara med
- * rader ur andras pärmar. Filtret är därför utbrutet till
+ * rader ur andras containers. Filtret är därför utbrutet till
  * App\Models\ScheduleOccurrence::scopeTodoFor() (Beslut 2 och 3) — som
  * formulerar åtkomstvillkoret på Container-modellen genom relationskedjan
  * förekomst → schema → item → container, aldrig som en

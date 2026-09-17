@@ -5,7 +5,7 @@ import { formatDate } from './accessPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * En rad i pärmens kalenderlista, se issue 65b § Beslut 2 och 4.
+ * En rad i containerns kalenderlista, se issue 65b § Beslut 2 och 4.
  *
  * **Adressen står ALDRIG här.** App\Http\Resources\CalendarFeedResource bär
  * varken tokenet eller hashen — klartexten finns bara i svaret på skapandet

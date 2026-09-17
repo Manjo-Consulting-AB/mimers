@@ -19,9 +19,9 @@ use Illuminate\Notifications\Notification;
  * `AnonymousNotifiable`, aldrig en modell.
  *
  * Till skillnad från inbjudningsmejlet bär det här mejlet INGEN token och
- * INGEN länk med hemlighet — ett ägarbyte överlåter hela pärmen, och en
+ * INGEN länk med hemlighet — ett ägarbyte överlåter hela containern, och en
  * bärartoken i ett mejl till en overifierad adress vore en kapabilitet att ta
- * emot någon annans båtpärm (Beslut 11). I stället gäller
+ * emot någon annans båtcontainer (Beslut 11). I stället gäller
  * [[ADR-0003 Åtkomstmodell]]:s regel — mottagaren måste ha konto och
  * verifierad adress — och mejlet ber henne skapa ett konto med just den
  * adressen. Sökvägen `{app.url}/transfers` är kontraktet issue 67 (M10) ska

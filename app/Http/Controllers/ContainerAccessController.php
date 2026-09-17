@@ -34,8 +34,8 @@ use Illuminate\Validation\ValidationException;
  *
  * `{access}` nästlas under `{container}` med `->scopeBindings()` i
  * routes/web.php, av exakt samma skäl som `routes/api.php` gör det (issue 9b
- * § Beslut 1): utan det går en åtkomst i pärm B att återkalla via pärm A:s
- * rutt. En ULID från en annan pärm blir 404.
+ * § Beslut 1): utan det går en åtkomst i container B att återkalla via container A:s
+ * rutt. En ULID från en annan container blir 404.
  *
  * **Ingen behörighetslogik bor här.** Båda metoderna anropar bara
  * `Gate::authorize()` och litar på App\Policies\ContainerPolicy. Skillnaden

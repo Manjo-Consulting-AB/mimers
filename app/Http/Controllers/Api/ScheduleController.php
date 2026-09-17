@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Gate;
  * Ingen ny policymetod, ingen `SchedulePolicy` — schemat följer itemet.
  *
  * Fram till dess var grinden containerns `view`/`update`: en
- * omfångsbegränsad mottagare kunde läsa vilket schema som helst i pärmen men
+ * omfångsbegränsad mottagare kunde läsa vilket schema som helst i containern men
  * inte skapa ett på sitt eget item, och en `write`-mottagare kunde radera ett
  * schema. `Container $container` står kvar i signaturerna för att
  * ImplicitRouteBinding löser barnbindningen mot den redan lösta föräldern,

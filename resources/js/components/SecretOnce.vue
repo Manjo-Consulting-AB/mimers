@@ -5,7 +5,7 @@ import { ref } from 'vue';
  * En hemlighet som visas EN gång, se issue 65b § Beslut 2 och 3.
  *
  * Båda utgångarna ur systemet ger ut en hemlighet på samma sätt: en
- * kalenderadress som i praktiken är ett lösenord till pärmens uppgifter, och
+ * kalenderadress som i praktiken är ett lösenord till containerns uppgifter, och
  * en webhook-hemlighet som signerar varje leverans. Servern har dem bara i
  * klartext i svaret på skapandet (App\Models\CalendarFeed sparar en hash,
  * App\Models\WebhookEndpoint en krypterad kolumn som aldrig lämnar ut sig),

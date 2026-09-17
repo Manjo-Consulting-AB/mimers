@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -26,7 +28,7 @@ use function Pest\Laravel\postJson;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 67b · Ägarbytets två ytor: avsändarens sida i pärmen och mottagarens
+ * Issue 67b · Ägarbytets två ytor: avsändarens sida i containern och mottagarens
  * inkorg. Se App\Http\Controllers\OwnershipTransferController,
  * resources/js/pages/Containers/Transfers.vue,
  * resources/js/pages/Transfers/Index.vue,
@@ -34,7 +36,7 @@ use function Pest\Laravel\withoutVite;
  *
  * Filen bevisar de sex gränserna issuen är byggd kring:
  *
- * 1. **Två nivåer** (Beslut 1): avsändarens sida under pärmen, mottagarens på
+ * 1. **Två nivåer** (Beslut 1): avsändarens sida under containern, mottagarens på
  *    toppnivå — och mottagarens lista innehåller bara rader som är hennes.
  * 2. **Fyra val och inget femte** (Beslut 2): mottagare (konto ELLER adress),
  *    undantagna items, kvarhållen åtkomst — och bara de nivåer requesten
@@ -45,7 +47,7 @@ use function Pest\Laravel\withoutVite;
  *    kvar, och en utgången rad redovisas som utgången.
  * 5. **Identitet, aldrig en länk** (Beslut 5): ingen `{token}`-rutt finns, och
  *    en overifierad adress ger ingen träff.
- * 6. **Konsekvenserna före knappen** (Beslut 6 och 7): pärm, avsändare, antal
+ * 6. **Konsekvenserna före knappen** (Beslut 6 och 7): container, avsändare, antal
  *    items, kvarhållen åtkomst och de tolv månaderna Pro, och ett kvotfel som
  *    en mening med gräns och värde — utan att något flyttas.
  *
@@ -71,7 +73,7 @@ function agarbytesvyProKonto(Account $account): void
 }
 
 /**
- * Ett ägarkonto med Pro, en medlem och en pärm — avsändarens utgångsläge.
+ * Ett ägarkonto med Pro, en medlem och en container — avsändarens utgångsläge.
  *
  * @return array{0: Account, 1: User, 2: Container}
  */
@@ -107,7 +109,7 @@ function agarbytesvyUrl(Container $container): string
 }
 
 /**
- * Ett item i pärmen, med skaparen satt — fabrikens egna default-skapare hade
+ * Ett item i containern, med skaparen satt — fabrikens egna default-skapare hade
  * annars skapat ovidkommande konton per item.
  */
 function agarbytesvyItem(Container $container, Account $konto, User $anvandare, string $namn): Item
@@ -238,8 +240,8 @@ it('kan initieras mot ett konto-ULID eller en e-postadress', function () {
     expect($motKonto->status)->toBe('pending');
 
     // En adress normaliseras till gemener innan den lagras, som
-    // inbjudningarna (39a § Beslut 6). En EGEN pärm: den första raden väntar
-    // fortfarande, och dubblettspärren hade nekat en andra på samma pärm.
+    // inbjudningarna (39a § Beslut 6). En EGEN container: den första raden väntar
+    // fortfarande, och dubblettspärren hade nekat en andra på samma container.
     $annan = Container::factory()->for($container->account, 'account')->create();
 
     actingAs($anvandare)
@@ -395,7 +397,7 @@ it('länkar till plansidan bredvid planmeningen', function () {
 
 // --- behörigheten -------------------------------------------------------
 
-it('ger 403 för en användare som inte får överlåta pärmen', function () {
+it('ger 403 för en användare som inte får överlåta containern', function () {
     withoutVite();
 
     [, , $container] = agarbytesvySaljare();
@@ -603,7 +605,7 @@ it('visar konsekvenserna innan knappen', function () {
     [, , $container] = agarbytesvySaljare();
     [$mottagare, $mottagarkonto] = agarbytesvyMottagare();
 
-    // Fem items i pärmen, två av dem undantagna — alltså tre som följer med.
+    // Fem items i containern, två av dem undantagna — alltså tre som följer med.
     for ($i = 1; $i <= 3; $i++) {
         Item::factory()->for($container, 'container')->create(['name' => "Följer med {$i}"]);
     }
@@ -636,7 +638,7 @@ it('visar konsekvenserna innan knappen', function () {
     expect($kort)->toContain('transfer.card.final');
 });
 
-it('räknar bara undantag som fortfarande finns i pärmen', function () {
+it('räknar bara undantag som fortfarande finns i containern', function () {
     withoutVite();
 
     [, , $container] = agarbytesvySaljare();
@@ -662,7 +664,7 @@ it('räknar bara undantag som fortfarande finns i pärmen', function () {
     );
 });
 
-it('flyttar pärmen vid accept och låter mottagaren se den i pärmlistan', function () {
+it('flyttar containern vid accept och låter mottagaren se den i containerlistan', function () {
     withoutVite();
 
     [, , $container] = agarbytesvySaljare();
@@ -712,7 +714,7 @@ it('nekar en accept som spränger mottagarens plan och flyttar ingenting', funct
     [, , $container] = agarbytesvySaljare();
     [$mottagare, $mottagarkonto] = agarbytesvyMottagare();
 
-    // Gratisplanen rymmer EN pärm, och mottagaren har redan en: kvotkontrollen
+    // Gratisplanen rymmer EN container, och mottagaren har redan en: kvotkontrollen
     // i AcceptOwnershipTransfer slår i mot hennes NUVARANDE plan, före
     // Pro-bonusen.
     Container::factory()->for($mottagarkonto, 'account')->create();
@@ -821,8 +823,8 @@ it('lämnar /api:s avsändarrutter oförändrade', function () {
         ->assertStatus(422)
         ->assertJsonPath('error.code', 'transfer.already_pending');
 
-    // En EGEN pärm för raden som ska dras tillbaka: den första väntar
-    // fortfarande, och dubblettspärren gäller per pärm.
+    // En EGEN container för raden som ska dras tillbaka: den första väntar
+    // fortfarande, och dubblettspärren gäller per container.
     $ny = Container::factory()->for($saljarkonto, 'account')->create();
     $nyUrl = "/api/containers/{$ny->ulid}/transfers";
 

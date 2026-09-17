@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
@@ -27,9 +29,9 @@ use function Pest\Laravel\withoutVite;
  * resources/js/components/ItemForm.vue.
  *
  * Den viktigaste gränsen i filen är DE TRE GRINDARNA (§ Beslut 2). Det är tre
- * skilda pinnar på laddern — `createItem` på PÄRMEN, `update` på itemet och
+ * skilda pinnar på laddern — `createItem` på CONTAINERN, `update` på itemet och
  * `delete` på itemet — och den som blandar ihop dem ger en itemgrant en rot i
- * pärmen, eller en `write`-mottagare rätt att radera. Varje pinne har minst
+ * containern, eller en `write`-mottagare rätt att radera. Varje pinne har minst
  * ett test som bevisar att den nekande grannen nekas.
  *
  * Den andra är att `category` och `tags` skickas ALLTID (§ Beslut 6). Webben
@@ -47,7 +49,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem i angiven roll, och en pärm ägd av kontot.
+ * Ett konto med en medlem i angiven roll, och en container ägd av kontot.
  *
  * @param  array<string, mixed>  $kontoAttribut
  * @return array{0: Account, 1: User, 2: Container}
@@ -63,7 +65,7 @@ function itemformKontext(array $kontoAttribut = []): array
 }
 
 /**
- * Ett item i pärmen med sammanhängande `created_by_*`.
+ * Ett item i containern med sammanhängande `created_by_*`.
  *
  * @param  array<string, mixed>  $attribut
  */
@@ -259,7 +261,7 @@ it('ritar inget kontoval för en medlem i exakt ett konto', function () {
 
     expect($create)->toContain('page.props.auth?.accounts')
         ->toContain(':accounts="accounts"')
-        // Pärmens ägarkonto förvalt när användaren är medlem i det.
+        // Containerns ägarkonto förvalt när användaren är medlem i det.
         ->toContain('props.container.account');
 });
 
@@ -267,8 +269,8 @@ it('ritar inget kontoval för en medlem i exakt ett konto', function () {
  * Klart när: ett konto användaren inte är medlem i ger 403, inte ett sparat
  * item.
  *
- * Medlemsprövningen är INTE en policyfråga om pärmen (§ Beslut 2) — att svara
- * i ett kontos namn är en annan fråga än att få skriva i pärmen — så den
+ * Medlemsprövningen är INTE en policyfråga om containern (§ Beslut 2) — att svara
+ * i ett kontos namn är en annan fråga än att få skriva i containern — så den
  * ligger i kontrollern och ger 403, precis som i `Api\ItemController::store()`.
  * Att ingenting skrivs är halva kravet: ett 403 efter en sparad rad vore
  * värre än inget 403 alls.
@@ -478,7 +480,7 @@ it('mjukraderar itemet på delete-pinnen och tar bort det ur listan', function (
  * ett item utanför sitt omfång.
  *
  * Itemet hon NÅR svarar 302 i samma test — annars hade 403:an kunnat vara en
- * trasig rutt. Itemets egen pinne är grinden, inte pärmens (Beslut 2), och
+ * trasig rutt. Itemets egen pinne är grinden, inte containerns (Beslut 2), och
  * omfånget kommer ur App\Actions\Access\ResolveItemScope.
  */
 it('ger en omfångsbegränsad mottagare 403 utanför sitt omfång', function () {
@@ -544,14 +546,14 @@ it('nekar ett fryst ägarkonto allt skrivande men tillåter läsning', function 
 });
 
 /*
- * Klart när: ett item i en annan pärm går inte att ändra via den här pärmens
+ * Klart när: ett item i en annan container går inte att ändra via den här containerns
  * rutter (404).
  *
  * `scopeBindings()` löser `{item}` genom containerns `items()`-relation
  * (Beslut 1) — samma skydd som routes/api.php sätter på sin grupp. En ULID från
- * en annan pärm är därför 404 och inte 403: den finns inte i DEN HÄR pärmen.
+ * en annan container är därför 404 och inte 403: den finns inte i DEN HÄR containern.
  */
-it('ger 404 för ett item ur en annan pärm på alla tre skrivrutterna', function () {
+it('ger 404 för ett item ur en annan container på alla tre skrivrutterna', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemformKontext();
@@ -570,16 +572,16 @@ it('ger 404 för ett item ur en annan pärm på alla tre skrivrutterna', functio
 });
 
 /*
- * Klart när: en kategori eller tagg ur en annan pärm avvisas som
+ * Klart när: en kategori eller tagg ur en annan container avvisas som
  * valideringsfel, inte som en tyst nollning.
  *
- * `StoreItemRequest`/`UpdateItemRequest` löser båda inom DEN HÄR pärmen
+ * `StoreItemRequest`/`UpdateItemRequest` löser båda inom DEN HÄR containern
  * (issue 13a § Beslut 7, issue 13b § Beslut 5) — en främmande tagg hade läckt
- * sitt namn genom itemresursen till var och en som ser pärmen. Att ingenting
+ * sitt namn genom itemresursen till var och en som ser containern. Att ingenting
  * skrivs är halva kravet: "tyst nollning" är just att raden sparas utan det
  * användaren valde.
  */
-it('avvisar en kategori och en tagg ur en annan pärm som valideringsfel', function () {
+it('avvisar en kategori och en tagg ur en annan container som valideringsfel', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemformKontext();

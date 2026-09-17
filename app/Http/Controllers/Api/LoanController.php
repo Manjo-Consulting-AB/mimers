@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Gate;
  *
  * Fram till dess var grinden containerns `view`/`update`: en
  * omfångsbegränsad mottagare kunde läsa låntagarens namn på vilket item som
- * helst i pärmen men inte registrera en utlåning på sitt eget, och en
+ * helst i containern men inte registrera en utlåning på sitt eget, och en
  * `write`-mottagare kunde radera ett lån. Återlämningen — `PATCH` med
  * `returned_at` — är `update`, inte `create`: lånet finns redan.
  * `Container $container` står kvar i signaturerna för att ImplicitRouteBinding

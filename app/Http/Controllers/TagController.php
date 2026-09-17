@@ -40,7 +40,7 @@ use Inertia\Response;
  *
  * **Ingen behörighetslogik bor här.** Grindarna är `ContainerPolicy::view()`
  * (listning) och `update()` (skapa, ändra, radera) — **aldrig `delete()`**,
- * som betyder "får radera pärmen" och skulle låsa ute en `write`-deltagare
+ * som betyder "får radera containern" och skulle låsa ute en `write`-deltagare
  * från att städa bland sina egna taggar.
  */
 class TagController extends Controller
@@ -58,7 +58,7 @@ class TagController extends Controller
      * prövas två gånger på klientsidan (samma resonemang som
      * ContainerSharingController § Beslut 6).
      *
-     * **Talet är per OMFÅNG, inte per pärm** (Beslut 6): en mottagare som bara
+     * **Talet är per OMFÅNG, inte per container** (Beslut 6): en mottagare som bara
      * når fyra items ska se att taggen sitter på två av dem, inte att den
      * sitter på nittio. Det räknas av `ListTags::counts()` i en fråga, delad
      * med det svep som avgör vilka taggar som syns — antalet frågor är

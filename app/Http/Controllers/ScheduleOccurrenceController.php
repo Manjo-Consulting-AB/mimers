@@ -108,7 +108,7 @@ class ScheduleOccurrenceController extends Controller
      *
      * `{occurrence}` binds av rutternas `scopeBindings()` genom
      * App\Models\Schedule::occurrences(): en förekomst i ett annat schema ger
-     * 404, och därmed också en ULID ur en annan pärm. Det är samma skydd som
+     * 404, och därmed också en ULID ur en annan container. Det är samma skydd som
      * `/api` har (issue 22 § Beslut 1) och det enda som behövs — rutten bär
      * hela kedjan container → item → schema → förekomst.
      */

@@ -25,17 +25,17 @@ use Illuminate\Validation\ValidationException;
  * förekomst]]). Båda syns på schemats sida, under var sin rubrik.
  *
  * **Ingenting av `/api` görs om.** `StoreOccurrenceDependencyRequest` delas
- * rakt av — dess `Rule::exists` binder motparten till samma pärm och är halva
+ * rakt av — dess `Rule::exists` binder motparten till samma container och är halva
  * skyddet — och reglerna (samma container, öppen väntande sida, inte sig
  * själv, ingen cykel) ligger orörda i App\Actions\Schedule\DependOccurrence
  * sedan issue 23b § Beslut 7.
  *
  * **`{other}` binds INTE av `scopeBindings()`** (issue 23b § Beslut 3).
- * Motparten slås upp för hand INOM containern, och en ULID från en annan pärm
+ * Motparten slås upp för hand INOM containern, och en ULID från en annan container
  * blir därför 404. Itemet är `$occurrence->schedule->item`, aldrig containern.
  *
  * **Två grindar, `update` i båda ändar** (Beslut 8). Ordningen är den egna
- * änden FÖRST, motpartens item efter uppslaget. En motpart inom pärmen men
+ * änden FÖRST, motpartens item efter uppslaget. En motpart inom containern men
  * utanför omfånget ger 403 utan att svaret röjer dess titel eller itemnamn.
  *
  * **De sex domänfelen blir fältfel, aldrig JSON-kroppar** (Beslut 6), alla på

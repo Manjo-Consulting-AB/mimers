@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
@@ -50,7 +52,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem och en pärm ägd av kontot.
+ * Ett konto med en medlem och en container ägd av kontot.
  *
  * @param  array<string, mixed>  $kontoAttribut
  * @return array{0: Account, 1: User, 2: Container}
@@ -284,7 +286,7 @@ it('håller återkallade och utgångna åtkomster borta från deltagarna men kva
 });
 
 /*
- * Klart när: en containerbred rad är "Hela pärmen" utan `reach`, och en
+ * Klart när: en containerbred rad är "Hela containern" utan `reach`, och en
  * itemrad bär itemets ULID och `reach` (Beslut 6). `reach` räknas av
  * ResolveItemScope och rörs inte av den här issuen.
  */
@@ -316,13 +318,13 @@ it('skiljer en containerbred rad från en itemrad med omfång och reach', functi
         ->where('accesses.0.reach', 2)
         ->where('accesses.1.item', null)
         // Containerbred rad: `reach` är `null` med flit, och vyn visar det
-        // aldrig — "Hela pärmen" behöver inget tal.
+        // aldrig — "Hela containern" behöver inget tal.
         ->where('accesses.1.reach', null)
 
         ->where('itemNames', [$motorn->ulid => 'Motorn'])
     );
 
-    // Texten: "Hela pärmen" för den breda raden, och itemets namn plus talet
+    // Texten: "Hela containern" för den breda raden, och itemets namn plus talet
     // för itemraden. Formuleringen bor i lang/, och valet av nyckel bor i
     // accessPresentation.js — EN gång, för både den giltiga och den
     // historiska listan.
@@ -338,7 +340,7 @@ it('skiljer en containerbred rad från en itemrad med omfång och reach', functi
 
 /*
  * Klart när: en itemrad vars item är mjukraderat visar itemets namn, inte
- * "Hela pärmen". Uppslagningen sker med `withTrashed()` (Beslut 6) — utan
+ * "Hela containern". Uppslagningen sker med `withTrashed()` (Beslut 6) — utan
  * den hade ULID:n fallit bort och raden lästs som en containerbred grant.
  */
 it('redovisar ett mjukraderat item med sitt namn', function () {
@@ -917,11 +919,11 @@ it('nekar en icke-medlem både PATCH och DELETE', function () {
 });
 
 /*
- * Klart när: en åtkomst i en annan pärm går inte att nå via den här pärmens
+ * Klart när: en åtkomst i en annan container går inte att nå via den här containerns
  * rutt (404). `scopeBindings()` på de två skrivningarna, av samma skäl som
  * routes/api.php gör det (issue 9b § Beslut 1).
  */
-it('når inte en åtkomst i en annan pärm via den här pärmens rutt', function () {
+it('når inte en åtkomst i en annan container via den här containerns rutt', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = delningsKontext();
@@ -945,7 +947,7 @@ it('når inte en åtkomst i en annan pärm via den här pärmens rutt', function
  * Beslut 1: sektionsraden. Navigationen renderas ur containerSections, så en
  * ny sida är en ny rad där och ingen ändring i ContainerLayout.
  */
-it('lägger delningssidan i pärmens navigation', function () {
+it('lägger delningssidan i containerns navigation', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'sharing'");
@@ -963,7 +965,7 @@ it('lägger delningssidan i pärmens navigation', function () {
  * 55b:s egna tester ligger i tests/Feature/Frontend/InbjudningsvyTest.php.
  *
  * Sedan issue 56a finns också kategorins och taggens POST här. Ingen av dem rör
- * åtkomster — den här listan är hela uppräkningen av POST-rutter under en pärm,
+ * åtkomster — den här listan är hela uppräkningen av POST-rutter under en container,
  * och det är hela poängen: den ska behöva ändras när en ny yta lägger till en.
  *
  * Sedan issue 56b finns även uppsättningens POST här. Den skapar vanliga
@@ -972,7 +974,7 @@ it('lägger delningssidan i pärmens navigation', function () {
  * bevilning, inte ett undantag från regeln.
  *
  * Sedan issue 57b finns itemets POST här. Den skapar en item-rad och rör inga
- * åtkomster; att få SKAPA i en pärm och att få BEVILJA åtkomst till den är två
+ * åtkomster; att få SKAPA i en container och att få BEVILJA åtkomst till den är två
  * olika pinnar ([[ADR-0028 Åtkomst på itemnivå]] § Beslut).
  *
  * Sedan issue 58 finns relationens POST här. Den skriver en `item_link`-rad
@@ -986,7 +988,7 @@ it('lägger delningssidan i pärmens navigation', function () {
  *
  * Sedan issue 60a finns bilagans POST här. Den skriver en `attachment`-rad och
  * rör inga åtkomster; grinden är `create` på ITEMET (issue 71 § Beslut 1), och
- * den som får lägga till en bilaga får varken se eller dela ut mer av pärmen.
+ * den som får lägga till en bilaga får varken se eller dela ut mer av containern.
  * Medlemsprövningen i kontrollern gäller betalkontot och skapar ingen åtkomst.
  *
  * Sedan issue 62a finns återställningens POST här. Den väcker innehåll till
@@ -1002,13 +1004,13 @@ it('lägger delningssidan i pärmens navigation', function () {
  * App\Actions\Schedule\OpenNextOccurrence — men rör inga åtkomster: grinden är
  * `create` på ITEMET (issue 71b § Beslut 1, issue 63a § Beslut 7), så den som
  * får lägga till en uppgift på sitt item får varken se eller dela ut mer av
- * pärmen. En `read`-deltagare ser schemalistan och får 403 här; en
+ * containern. En `read`-deltagare ser schemalistan och får 403 här; en
  * `create`-deltagare lägger till men ändrar och raderar inget befintligt.
  *
  * Sedan issue 63b finns förekomstens två POST här. De stänger en `open`-rad och
  * öppnar nästa genom App\Actions\Schedule\CloseOccurrence, men rör inga
  * åtkomster: grinden är `update` på ITEMET (issue 71 § Beslut 5), så den som
- * får bocka av sin egen uppgift får varken se eller dela ut mer av pärmen. En
+ * får bocka av sin egen uppgift får varken se eller dela ut mer av containern. En
  * `read`-deltagare ser historiken och den öppna förekomsten men får 403 här; en
  * `create`-deltagare nekas av samma grind, för att bocka av ändrar en rad som
  * redan finns.
@@ -1022,17 +1024,17 @@ it('lägger delningssidan i pärmens navigation', function () {
  * `write`-deltagare som saknar åtkomst till motparten får också 403, utan att
  * motpartens namn syns i svaret.
  *
- * Sedan issue 65b finns pärmens kalenderlänk här. Den skriver en
- * `calendar_feed`-rad — användarens EGEN prenumeration på pärmen — men rör
- * inga åtkomster: grinden är `view` på pärmen (issue 36a § Beslut 4, 65b
- * § Beslut 2), så den som redan får läsa pärmen får en länk som visar exakt
+ * Sedan issue 65b finns containerns kalenderlänk här. Den skriver en
+ * `calendar_feed`-rad — användarens EGEN prenumeration på containern — men rör
+ * inga åtkomster: grinden är `view` på containern (issue 36a § Beslut 4, 65b
+ * § Beslut 2), så den som redan får läsa containern får en länk som visar exakt
  * samma sak. Ingen ny läsare och ingen ny mottagare; raden pekar på den
  * inloggade användaren själv.
  *
  * Sedan issue 67a finns utlåningens POST här. Den skriver en `loan`-rad — vem
  * som har prylen och när den ska tillbaka — men rör inga åtkomster: grinden är
  * `create` på ITEMET (issue 67a § Beslut 6, issue 71b § Beslut 1), så den som
- * får låna ut sitt item får varken se eller dela ut mer av pärmen. En
+ * får låna ut sitt item får varken se eller dela ut mer av containern. En
  * `read`-deltagare ser utlåningen och får 403 här; en `create`-deltagare lägger
  * till en rad men ändrar och raderar inget befintligt. Ingen ny läsare och
  * ingen ny mottagare: `borrower_email` är en kontaktuppgift och systemet mejlar
@@ -1050,10 +1052,10 @@ it('lägger delningssidan i pärmens navigation', function () {
  * ingenting förrän hon svarar.
  *
  * Sedan issue 67c finns exportens POST här. Den skriver en `export`-rad — en
- * beställning om att packa pärmen i en fil — och rör inga
- * `container_access`-rader alls: grinden är `view` på pärmen (issue 41a
+ * beställning om att packa containern i en fil — och rör inga
+ * `container_access`-rader alls: grinden är `view` på containern (issue 41a
  * § Beslut 3, issue 67c § Beslut 2), alltså exakt den grind som redan avgör
- * vem som får LÄSA pärmen. Ingen ny läsare och ingen ny mottagare läggs
+ * vem som får LÄSA containern. Ingen ny läsare och ingen ny mottagare läggs
  * till: den som kan se innehållet kan redan hämta det bilaga för bilaga, och
  * exporten är fri på alla plannivåer med flit ([[Planer och kvoter]]
  * § Gränserna i MVP). Raden den skriver är beställarens EGET ärende —

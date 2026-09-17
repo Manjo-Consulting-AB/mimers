@@ -8,7 +8,7 @@ import { activeFilters, filterSummary } from '../../../components/itemFilter.js'
 import { useTranslations } from '../../../composables/useTranslations.js';
 
 /*
- * Pärmens itemlista — pärmens förstasida, se issue 57a § Beslut 1, 4, 6, 8
+ * Containerns itemlista — containerns förstasida, se issue 57a § Beslut 1, 4, 6, 8
  * och 9, och issue 59a § Beslut 1–8.
  *
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
@@ -25,7 +25,7 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * **Tre lägen i den tomma listan, och inget av dem vet om omfånget**
  * (59a § Beslut 4, issue 73 § Beslut 6):
  *
- *   - inga filter, inga rader  → pärmen är tom
+ *   - inga filter, inga rader  → containern är tom
  *   - filter, inga rader       → de filter ANVÄNDAREN satt, uppräknade
  *   - filter, några rader      → ingenting extra
  *
@@ -54,7 +54,7 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * issue 61 kan fylla den utan att raden byter form.
  *
  * **`can.create` ritar skapaknappen** (issue 57b § Beslut 2). Flaggan är
- * `ContainerPolicy::createItem()` och sätts mot PÄRMEN, för det är grinden
+ * `ContainerPolicy::createItem()` och sätts mot CONTAINERN, för det är grinden
  * skapandet prövar — en omfångsbegränsad mottagare får `false` och ser ingen
  * knapp: hon skapar barn-items under det hon nått, och den ytan är issue 58.
  * Flaggan är presentation; ruttens `Gate::authorize()` gäller oavsett vad
@@ -65,9 +65,9 @@ const props = defineProps({
     items: { type: Array, required: true },
     /* Kategori-ULID → namn, för de kategorier raderna pekar på. */
     categories: { type: Object, required: true },
-    /* Pärmens taggar inom omfånget, ur ListTags — filterradens kryssrutor. */
+    /* Containerns taggar inom omfånget, ur ListTags — filterradens kryssrutor. */
     tags: { type: Array, required: true },
-    /* Pärmens kategoriträd inom omfånget, ur ListCategories — filterradens väljare. */
+    /* Containerns kategoriträd inom omfånget, ur ListCategories — filterradens väljare. */
     categoryTree: { type: Array, required: true },
     /* Filtret som servern tillämpade: { q, tags, category, dropped }. */
     filter: { type: Object, required: true },

@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -71,7 +73,7 @@ beforeEach(function () {
 });
 
 /**
- * Ett konto med en medlem, och en pärm med ett item under kontot. Båda på
+ * Ett konto med en medlem, och en container med ett item under kontot. Båda på
  * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}

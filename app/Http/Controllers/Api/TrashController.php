@@ -146,7 +146,7 @@ class TrashController extends Controller
      * `item` grindas mot sitt eget item, `attachment` mot itemet den hänger
      * på — det är samma item användaren måste ha `delete` på för att ha fått
      * radera bilagan. De två containervida typerna grindas mot containern,
-     * precis som före issuen: en tagg eller kategori är pärmens organisation
+     * precis som före issuen: en tagg eller kategori är containerns organisation
      * och inte någons item, så en omfångsbegränsad mottagare får 403 här.
      *
      * Föräldern slås upp med `withTrashed()` och inte genom relationen

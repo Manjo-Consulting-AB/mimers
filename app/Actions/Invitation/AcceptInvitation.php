@@ -77,7 +77,7 @@ class AcceptInvitation
             // fick, av samma skäl: utan det kan en itemsinbjudan inte
             // accepteras av någon som redan har en container-bred rad — och
             // det är just kombinationen ADR-0028 § Beslut regel 4 finns till
-            // för ("read på pärmen, write på motorn").
+            // för ("read på containern, write på motorn").
             $harRedanAtkomst = ContainerAccess::query()
                 ->where('container_id', $container->id)
                 ->where('item_id', $invitation->item_id)

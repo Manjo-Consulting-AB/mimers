@@ -60,7 +60,7 @@ const props = defineProps({
     tags: { type: Array, required: true },
     /* Kontolistan ur den delade propen `auth.accounts`; tom i redigeringsläget. */
     accounts: { type: Array, default: () => [] },
-    /* Det förvalda kontot — pärmens ägarkonto när användaren är medlem i det. */
+    /* Det förvalda kontot — containerns ägarkonto när användaren är medlem i det. */
     account: { type: String, default: '' },
     /* Itemet som redigeras, eller null när ett nytt item skapas. */
     item: { type: Object, default: null },
@@ -290,7 +290,7 @@ function submit() {
             </select>
         </FormField>
 
-        <!-- Tom pärm: en rad som pekar på kategorisidan, aldrig en tom väljare. -->
+        <!-- Tom container: en rad som pekar på kategorisidan, aldrig en tom väljare. -->
         <p v-else class="text-sm text-slate-600">
             {{ t('item.form.categories_empty') }}
             <Link
@@ -301,7 +301,7 @@ function submit() {
             </Link>
         </p>
 
-        <!-- Taggarna: kryssrutor med sin färgprick, en per tagg i pärmen. -->
+        <!-- Taggarna: kryssrutor med sin färgprick, en per tagg i containern. -->
         <fieldset
             v-if="tags.length > 0"
             class="flex flex-col gap-2"

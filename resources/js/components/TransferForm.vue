@@ -20,7 +20,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * ULID och fastnar i `ulid`-regeln), och servern svarar med fältfel på båda
  * när ingen eller båda är ifyllda. Samma mönster som InvitationForm:s `item`.
  *
- * **Undantagen är undantag, inte ett urval.** Kryssrutorna listar pärmens
+ * **Undantagen är undantag, inte ett urval.** Kryssrutorna listar containerns
  * items, men det som skickas är de markerade — allt annat följer med, och
  * raden ovanför säger det med antalet utskrivet, så en avsändare som kryssar
  * fel ser vad som faktiskt händer. Det är hela skillnaden mot en "välj vad som
@@ -30,12 +30,12 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * äger sitt eget tillstånd, sin egen postning och sina egna fel, precis som
  * InvitationForm gör på delningssidan: annars färgar ett fältfel på
  * mottagaren varje rad i listan röd. Domänfelet (`transfer`) hör däremot till
- * sidan och ritas där — det gäller pärmens tillstånd och inte ett fält.
+ * sidan och ritas där — det gäller containerns tillstånd och inte ett fält.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
 
-    /* Pärmens levande items, ur kontrollern — `{ulid, name}`. */
+    /* Containerns levande items, ur kontrollern — `{ulid, name}`. */
     items: { type: Array, required: true },
 
     /* De nivåer requesten tillåter, ur kontrollern. */
@@ -88,7 +88,7 @@ function submit() {
 
         <!--
             Vad överlåtelsen omfattar, innan den skickas (Beslut 2). Fyra
-            meningar i en: hela pärmen följer med utom undantagen,
+            meningar i en: hela containern följer med utom undantagen,
             förbrukningen flyttar till mottagarens konto, åtkomsterna
             återkallas, och mottagaren får tolv månader Pro.
         -->

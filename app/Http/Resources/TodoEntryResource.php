@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 /**
  * En post i todo-listan, se issue 24 § Beslut 5. Beskriver en förekomst med
  * hela kontexten — schemat, itemet och containern — för utan `item` och
- * `container` är "Byt impeller" i en lista över fyra pärmar obrukbart (samma
+ * `container` är "Byt impeller" i en lista över fyra containers obrukbart (samma
  * resonemang som `context` i issue 20a § Beslut 4). Varje nyckel är ALLTID
  * närvarande: en förekomst har alltid ett schema, och en rad i listan har per
  * definition ett levande schema, item och container (Beslut 3) — objekten

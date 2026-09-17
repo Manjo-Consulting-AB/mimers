@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -30,7 +32,7 @@ use function Pest\Laravel\postJson;
  * kostnadsrader. Grundfelet session 1 lämnade efter sig är tvåfaldigt:
  * ContainerPolicy::view() kräver INTE en container-bred grant, så en
  * omfångsbegränsad mottagare kunde läsa servicehistoriken, låntagarens namn
- * och kostnaderna för allt i pärmen — och ContainerPolicy::update() kräver
+ * och kostnaderna för allt i containern — och ContainerPolicy::update() kräver
  * det, så samma mottagare kunde ingenting göra på sitt EGET item medan en
  * `write`-mottagare kunde radera.
  *
@@ -626,7 +628,7 @@ it('ett read_only-ägarkonto nekar allt skrivande på alla sex ytor och läser f
 
 // --- ordningen 403 före 404 är oförändrad -------------------------------
 
-it('en ULID ur en annan pärm ger fortfarande 404, inte 403', function () {
+it('en ULID ur en annan container ger fortfarande 404, inte 403', function () {
     [$container, , $motor] = beroendeFixture();
     [, $mottagare, $headers] = kontoMedMedlem();
 
@@ -640,12 +642,12 @@ it('en ULID ur en annan pärm ger fortfarande 404, inte 403', function () {
     $annatLån = beroendeLan($annatItem);
     $annatKostnad = beroendeKostnad($annatItem);
 
-    // `{item}` ur en annan pärm: bindningen ger 404 innan grinden prövas.
+    // `{item}` ur en annan container: bindningen ger 404 innan grinden prövas.
     getJson(beroendeSchedulesUrl($container, $annatItem), $headers)->assertStatus(404);
     getJson(beroendeLanUrl($container, $annatItem), $headers)->assertStatus(404);
     getJson(beroendeKostnadUrl($container, $annatItem), $headers)->assertStatus(404);
 
-    // `{schedule}`, `{occurrence}`, `{loan}` och `{cost}` ur en annan pärm:
+    // `{schedule}`, `{occurrence}`, `{loan}` och `{cost}` ur en annan container:
     // samma sak, de binds genom sitt item.
     $utanför = getJson(beroendeOccurrencesUrl($container, $motor, $annatSchema), $headers);
     $utanför->assertStatus(404);

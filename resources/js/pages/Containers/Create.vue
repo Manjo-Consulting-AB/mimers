@@ -7,7 +7,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
 /*
- * Skapa en pärm, se issue 54 § Beslut 5 och 8.
+ * Skapa en container, se issue 54 § Beslut 5 och 8.
  *
  * TRE fält: `name`, `kind` och `account`. Ägarkontot måste väljas, för
  * servern har inget begrepp "aktivt konto" (issue 8 § Beslut 8) — det är

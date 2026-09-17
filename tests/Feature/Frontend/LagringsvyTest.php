@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
@@ -57,10 +59,10 @@ function lagringsvyKonto(string $roll = 'owner'): array
 }
 
 /**
- * En pärm, ett item och en bilaga av exakt storlek.
+ * En container, ett item och en bilaga av exakt storlek.
  *
  * `$konto` är kontot som BELASTAS (`billed_account_id`) — precis som på
- * `/api` kan pärmen tillhöra någon annan (28 § Beslut 2), och då skickas den
+ * `/api` kan containern tillhöra någon annan (28 § Beslut 2), och då skickas den
  * in. Listan sorterar på `stored_file.byte_size`, så testerna måste kunna
  * styra den.
  *
@@ -180,7 +182,7 @@ it('skickar en utloggad besökare till inloggningen från lagringsytan', functio
 
 /*
  * Klart när: `/settings/storage` listar det valda kontots levande bilagor,
- * störst först, och varje rad visar filnamn, storlek, pärm och item
+ * störst först, och varje rad visar filnamn, storlek, container och item
  * (Beslut 2).
  *
  * Två bilagor delar byte_size med flit: sorteringen är `byte_size` fallande med
@@ -188,7 +190,7 @@ it('skickar en utloggad besökare till inloggningen från lagringsytan', functio
  * svarar med, och den ordning som gör valet snabbast. Vid lika storlek står
  * alltså den SIST skapade raden först.
  */
-it('listar kontots levande bilagor störst först med filnamn, storlek, pärm och item', function () {
+it('listar kontots levande bilagor störst först med filnamn, storlek, container och item', function () {
     withoutVite();
 
     [$konto, $anvandare] = lagringsvyKonto();
@@ -241,15 +243,15 @@ it('visar inte mjukraderade bilagor', function () {
 });
 
 /*
- * Klart när: en bilaga vars item eller pärm ligger i papperskorgen syns,
+ * Klart när: en bilaga vars item eller container ligger i papperskorgen syns,
  * markerad som sådan (Beslut 3).
  *
- * Item-mjukraderingen rör INTE bilagan (issue 26a), och en pärm i
+ * Item-mjukraderingen rör INTE bilagan (issue 26a), och en container i
  * papperskorgen tar inte bort det som ligger i den — bilagan belastar kontot
  * tills den själv lämnar papperskorgen. Utan markeringen ser summan ut att
  * vara fel, och därför är `inTrash` ett fält vyn får ur kontrollern.
  */
-it('visar och markerar en bilaga vars item eller pärm ligger i papperskorgen', function () {
+it('visar och markerar en bilaga vars item eller container ligger i papperskorgen', function () {
     withoutVite();
 
     [$konto, $anvandare] = lagringsvyKonto();
@@ -279,15 +281,15 @@ it('visar och markerar en bilaga vars item eller pärm ligger i papperskorgen', 
 });
 
 /*
- * Klart när: listan visar bilagor i pärmar kontot inte äger, så länge kontot
+ * Klart när: listan visar bilagor i containers kontot inte äger, så länge kontot
  * belastas för dem (Beslut 2).
  *
- * Båda riktningarna prövas: en bilaga som BELASTAR kontot syns även om pärmen
+ * Båda riktningarna prövas: en bilaga som BELASTAR kontot syns även om containern
  * är någon annans, och en bilaga som belastar ett ANNAT konto syns inte ens om
- * den ligger i en av kontots pärmar. `attachment.billed_account_id` är det som
+ * den ligger i en av kontots containers. `attachment.billed_account_id` är det som
  * avgör.
  */
-it('visar bilagor i pärmar kontot inte äger men belastas för, och inga andra', function () {
+it('visar bilagor i containers kontot inte äger men belastas för, och inga andra', function () {
     withoutVite();
 
     [$konto, $anvandare] = lagringsvyKonto();
@@ -591,7 +593,7 @@ it('avvisar en ULID som tillhör ett annat konto och raderar ingenting', functio
  * Klart när: bekräftelsen nämner papperskorgen och de 30 dagarna, inte
  * permanent radering (Beslut 6), och svaret efteråt gör detsamma (Beslut 8).
  *
- * Bilagorna mjukraderas och kan återställas ur pärmens papperskorg (62a);
+ * Bilagorna mjukraderas och kan återställas ur containerns papperskorg (62a);
  * bytena frigörs direkt, och det säger bekräftelsen med antalet filer och det
  * frigjorda utrymmet.
  */

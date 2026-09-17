@@ -168,7 +168,7 @@ class OccurrenceDependencyController extends Controller
      * paret: 404 `resource.not_found` — i destroy() är det uppslagets fel och
      * svaret är 404, till skillnad från store() där valideringen svarar 422.
      * Ordningen 403 före 404 är oförändrad sedan grindbytet: en ULID ur en
-     * annan pärm ger fortfarande 404 (issue 71 § Beslut 4).
+     * annan container ger fortfarande 404 (issue 71 § Beslut 4).
      *
      * Båda ändarna kräver `update`, precis som i store() (issue 71 § Beslut 1
      * och 3). En motpart inom containern men utanför omfånget ger 403 utan att

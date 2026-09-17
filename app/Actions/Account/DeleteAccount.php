@@ -90,7 +90,7 @@ class DeleteAccount
             // calendar_feed behöver ingen egen rad här (issue 36a § Beslut
             // 7): feederna på kontots EGNA containers togs av PurgeContainer
             // ovan, och en feed på någon ANNANS container — en medlem som
-            // prenumererat på en pärm kontot inte äger — hänger på `user_id`.
+            // prenumererat på en container kontot inte äger — hänger på `user_id`.
             // Användare raderas aldrig av den här actionen (29b § Beslut 6),
             // så den raden blir aldrig en främmandenyckel som blockerar.
 

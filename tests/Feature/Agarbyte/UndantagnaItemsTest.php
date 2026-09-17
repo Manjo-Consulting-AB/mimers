@@ -38,7 +38,7 @@ use function Pest\Laravel\postJson;
 
 /**
  * Grundscenariot för session 2: en säljare med en container och en köpare,
- * båda med räknarrader. Säljarens räknare säger container_count = 1 (pärmen
+ * båda med räknarrader. Säljarens räknare säger container_count = 1 (containern
  * skapades en gång, issue 26a), köparens 0.
  *
  * Returnerar [$säljarkonto, $säljarUser, $container, $köparkonto, $köparHeaders].
@@ -130,7 +130,7 @@ it('efter en accept med två undantagna items ligger de i en ny container ägd a
     undantagAcceptera($container, $köparkonto, $köparHeaders, [$e1->ulid, $e2->ulid]);
 
     // Den ursprungliga containern har bytt ägare; säljarens enda kvarvarande
-    // container är den nya "behållna poster"-pärmen.
+    // container är den nya "behållna poster"-containern.
     expect($container->fresh()->account_id)->toBe($köparkonto->id);
 
     $behallna = Container::query()->where('account_id', $säljarkonto->id)->sole();
@@ -177,7 +177,7 @@ it('de undantagna itemens bilagor, scheman och utlåningar följer med, och byte
         ->first();
     expect($kvarvarandeBilaga->billed_account_id)->toBe($köparkonto->id);
 
-    // Schemat och utlåningen följde itemet till den nya pärmen.
+    // Schemat och utlåningen följde itemet till den nya containern.
     expect(Schedule::query()->where('item_id', $e1->id)->count())->toBe(1);
     expect(Loan::query()->where('item_id', $e1->id)->count())->toBe(1);
     expect($schema->fresh()->item_id)->toBe($e1->id);

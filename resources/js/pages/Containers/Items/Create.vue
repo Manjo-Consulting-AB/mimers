@@ -17,13 +17,13 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * **Kontolistan kommer ur den delade propen `auth.accounts`** (§ Beslut 4) och
  * inte ur en egen sidprop: en fråga för samma lista är en fråga för mycket,
  * samma linje som issue 54 § Beslut 5. Är användaren medlem i EXAKT ett konto
- * förvalt det; annars förvalts pärmens ägarkonto när hon är medlem i det, och
+ * förvalt det; annars förvalts containerns ägarkonto när hon är medlem i det, och
  * hennes första konto annars. Ett påhittat förval hade blivit fel hälften av
  * gångerna, och att lämna fältet tomt hade varit ett krav servern ställer utan
  * att vyn svarar på det. Serverns svar på ett konto hon inte är medlem i är
  * 403, och vyn gissar sig inte förbi det.
  *
- * `categories` och `tags` är pärmens egna, hämtade med `ListCategories` och
+ * `categories` och `tags` är containerns egna, hämtade med `ListCategories` och
  * `ListTags` i kontrollern — samma Actions som kategorisidan och taggsidan
  * anropar. Är någon av dem tom pekar ItemForm på respektive sida i stället för
  * att rita en tom väljare.
@@ -47,7 +47,7 @@ const page = usePage();
 
 const accounts = computed(() => page.props.auth?.accounts ?? []);
 
-/* Pärmens ägarkonto förvalt när användaren är medlem i det (Beslut 4). */
+/* Containerns ägarkonto förvalt när användaren är medlem i det (Beslut 4). */
 const account = computed(() => {
     const owner = accounts.value.find((candidate) => candidate.ulid === props.container.account);
 

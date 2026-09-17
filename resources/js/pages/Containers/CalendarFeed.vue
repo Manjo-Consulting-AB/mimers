@@ -7,9 +7,9 @@ import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
 /*
- * Pärmens kalenderlänk, se issue 65b § Beslut 1, 2 och 4.
+ * Containerns kalenderlänk, se issue 65b § Beslut 1, 2 och 4.
  *
- * Sidan svarar på EN fråga — "hur får jag pärmens uppgifter in i kalendern
+ * Sidan svarar på EN fråga — "hur får jag containerns uppgifter in i kalendern
  * jag redan tittar i?" — och har tre delar i den ordningen en användare möter
  * dem: adressen om den just skapades, knappen som skapar en ny, och listan
  * över de länkar som finns.
@@ -25,17 +25,17 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * **Listan visar aldrig adressen**, bara att länken finns: när den skapades,
  * när den senast hämtades och om den är återkallad (CalendarFeedRow).
  *
- * **Ingen behörighetsflagga.** Alla tre rutterna grindas av `view` på pärmen —
+ * **Ingen behörighetsflagga.** Alla tre rutterna grindas av `view` på containern —
  * den som ser sidan får skapa och återkalla, för feeden visar inget hon inte
  * redan kan se (36a § Beslut 4) — så det finns inget svar att rita olika för
  * två användare.
  *
  * Knappen är en POST utan kropp, precis som `/api`:s store(): feeden är bara
- * (pärm, användare, token). Ingen klientvalidering och inget eget felmeddelande
+ * (container, användare, token). Ingen klientvalidering och inget eget felmeddelande
  * — det finns inget fält att fylla i fel.
  */
 const props = defineProps({
-    /* Pärmen ur App\Http\Resources\ContainerResource. */
+    /* Containern ur App\Http\Resources\ContainerResource. */
     container: { type: Object, required: true },
 
     /* Användarens egna feeder, ur App\Http\Resources\CalendarFeedResource. */

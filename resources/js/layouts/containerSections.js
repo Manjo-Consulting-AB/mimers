@@ -1,23 +1,23 @@
 /*
- * Pärmens sektioner, se issue 54 § Beslut 7.
+ * Containerns sektioner, se issue 54 § Beslut 7.
  *
  * Samma konstruktion som settingsSections.js och av samma skäl: 55a
  * (delning), 56a (kategorier och taggar), 57 (items), 62 (papperskorg) och 63
- * (scheman) får alla en sida per pärm, och uppfinner var och en sin egen
+ * (scheman) får alla en sida per container, och uppfinner var och en sin egen
  * undernavigering blir det fem. En ny sida är en ny rad HÄR och ingen ändring
  * i ContainerLayout.
  *
- * `href` är en FUNKTION av pärmens ULID, till skillnad från
+ * `href` är en FUNKTION av containerns ULID, till skillnad från
  * settingsSections konstanta strängar — det är hela skillnaden mot förlagan.
- * Sektionerna ligger under en pärm, och vilken pärm det är vet bara anroparen.
+ * Sektionerna ligger under en container, och vilken container det är vet bara anroparen.
  *
  * `key` är både Vue-nyckeln och sista ledet i översättningsnyckeln
  * (`container.nav.<key>` i lang/{locale}/ui.php). Ingen färdig mening här:
  * texten formuleras på servern och slås bara upp på klienten, se
  * [[ADR-0021 Frontendteknik]] och resources/js/composables/useTranslations.js.
  *
- * `items` kom med issue 57a § Beslut 1 och ligger FÖRST: itemen är pärmen,
- * och kategorierna och taggarna är hur den är ordnad. `href` pekar på pärmens
+ * `items` kom med issue 57a § Beslut 1 och ligger FÖRST: itemen är containern,
+ * och kategorierna och taggarna är hur den är ordnad. `href` pekar på containerns
  * EGEN URL — `/containers/{ulid}` är förstasidan och inte en undersida, och
  * den raden är därför den enda vars href är ett prefix till de andra.
  *
@@ -29,7 +29,7 @@
  *
  * `categories` och `tags` kom med issue 56a § Beslut 1: två sidor, två rader.
  * De ligger före `sharing` därför att strukturen är det man arbetar i och
- * delningen det man ställer in — ordningen är hur en användare möter pärmen,
+ * delningen det man ställer in — ordningen är hur en användare möter containern,
  * inte hur issues råkade bli klara.
  *
  * `trash` kom med issue 62a § Beslut 1 och ligger SIST, efter `settings`:
@@ -39,20 +39,20 @@
  *
  * `calendar` kom med issue 65b § Beslut 1 och ligger efter `settings`, före
  * `trash`: kalenderlänken är en UTGÅNG ur produkten och inte en yta man
- * arbetar i — pärmens uppgifter prenumererade på ur någon annans kalender —
- * men den hör till pärmens inställningar och inte till papperskorgen, som är
+ * arbetar i — containerns uppgifter prenumererade på ur någon annans kalender —
+ * men den hör till containerns inställningar och inte till papperskorgen, som är
  * dit man går när något gått fel.
  *
  * `transfer` kom med issue 67b § Beslut 1 och ligger SIST, efter `trash`: ett
- * ägarbyte är den mest konsekvensrika handlingen i produkten — hela pärmen
+ * ägarbyte är den mest konsekvensrika handlingen i produkten — hela containern
  * byter konto — och det är inte något man gör ofta. Raden är ändå en rad: en
  * yta ingen hittar är samma sak som en yta som inte finns, och den som ska
- * överlåta en båt står i pärmen när hon bestämmer sig.
+ * överlåta en båt står i containern när hon bestämmer sig.
  *
  * `export` kom med issue 67c § Beslut 1 och ligger efter `calendar`, före
  * `trash`: exporten är en UTGÅNG ur produkten, precis som kalenderlänken —
- * där länken för pärmens uppgifter ut i någon annans kalender, tar exporten
- * hela pärmen ut i en fil — men den hör inte till papperskorgen, som är dit
+ * där länken för containerns uppgifter ut i någon annans kalender, tar exporten
+ * hela containern ut i en fil — men den hör inte till papperskorgen, som är dit
  * man går när något gått fel. Den är fri på alla plannivåer med flit
  * ([[Planer och kvoter]] § Gränserna i MVP): *"påminnelserna skapar vanan,
  * exporten skapar förtroendet"*. Raden ligger därför i NAVIGERINGEN och inte

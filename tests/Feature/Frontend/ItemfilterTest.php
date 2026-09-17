@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
@@ -18,7 +20,7 @@ use function Pest\Laravel\getJson;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 59a · Filterraden i pärmens itemlista. Se
+ * Issue 59a · Filterraden i containerns itemlista. Se
  * App\Http\Controllers\ItemController::index() och `filter()`,
  * resources/js/components/ItemFilterBar.vue,
  * resources/js/components/itemFilter.js och
@@ -40,7 +42,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Pärmen, med ett kategoriträd, två taggar och fyra items:
+ * Containern, med ett kategoriträd, två taggar och fyra items:
  *
  *   Framdrivning          Motorn     Framdrivning  [Motor, Försäkring]
  *   └── Impeller          Impellern  Impeller      [Motor]
@@ -111,7 +113,7 @@ function itemfilterPärm(): array
 }
 
 /**
- * Ett item i pärmen. `created_by_*` sätts sammanhängande — fabrikens egna
+ * Ett item i containern. `created_by_*` sätts sammanhängande — fabrikens egna
  * default-skapare hade annars blivit två ovidkommande rader per item.
  *
  * @param  array<string, mixed>  $attribut
@@ -148,7 +150,7 @@ function itemfilterMottagare(Container $container, ?Item $item = null, string $n
 }
 
 /**
- * Pärmens URL med filtret i querysträngen — samma form vyn skickar, se
+ * Containerns URL med filtret i querysträngen — samma form vyn skickar, se
  * App\Http\Controllers\ItemController::index() § Beslut 1.
  *
  * @param  array<string, mixed>  $query
@@ -203,7 +205,7 @@ function itemfilterFrågor(Closure $värm, Closure $anrop): int
  *
  * Termen ligger i EN kolumn per item, så ett filter som bara såg `name` hade
  * gett ett svar — ett kortare. Kontrollitemet utan termen bevisar att
- * filtret inte svarar med hela pärmen.
+ * filtret inte svarar med hela containern.
  */
 it('filtrerar på fritext över de fem sökbara kolumnerna', function () {
     withoutVite();
@@ -233,7 +235,7 @@ it('filtrerar på fritext över de fem sökbara kolumnerna', function () {
 
     expect(itemfilterNamn($svar))->not->toContain('Kontrollen');
 
-    // En blank `q` är samma sak som ingen `q` (Beslut 3) — hela pärmen, tio
+    // En blank `q` är samma sak som ingen `q` (Beslut 3) — hela containern, tio
     // rader, inte noll.
     $blank = actingAs($anvandare)->get(itemfilterUrl($container, ['q' => '   ']))->assertOk();
 
@@ -381,8 +383,8 @@ it('visar aldrig en rad utanför omfånget, med eller utan filter', function () 
  * listan visas med resten, och sidan säger att ett filter föll bort — ingen
  * 422, ingen redirectloop.
  *
- * Två bortfall prövas: en mjukraderad tagg i SAMMA pärm, och en kategori ur en
- * ANNAN pärm. Båda är "en gammal länk" och inte "en fråga som är fel ställd"
+ * Två bortfall prövas: en mjukraderad tagg i SAMMA container, och en kategori ur en
+ * ANNAN container. Båda är "en gammal länk" och inte "en fråga som är fel ställd"
  * (Beslut 3) — till skillnad från `/api`, som prövas längre ner.
  */
 it('tar bort ett filtervärde som inte längre finns och säger till', function () {
@@ -430,13 +432,13 @@ it('tar bort ett filtervärde som inte längre finns och säger till', function 
 });
 
 /*
- * Klart när: tom lista utan filter säger att pärmen är tom; tom lista med
+ * Klart när: tom lista utan filter säger att containern är tom; tom lista med
  * filter räknar upp de aktiva filtren.
  *
  * Två lägen, två texter (Beslut 4). Vyn väljer mellan dem på om användaren har
  * ett filter PÅ — `hasFilter` — och inte på om listan råkade bli tom.
  */
-it('säger att pärmen är tom utan filter och räknar upp filtren med', function () {
+it('säger att containern är tom utan filter och räknar upp filtren med', function () {
     withoutVite();
 
     ['container' => $container, 'anvandare' => $anvandare] = itemfilterPärm();

@@ -9,16 +9,16 @@ import { useTranslations } from '../composables/useTranslations.js';
  * En rad i papperskorgen, se issue 62a § Beslut 4, 6 och 9 och issue 62b
  * § Beslut 7.
  *
- * **Samma komponent för båda listorna.** 62a ritade innehållet i en pärm,
- * 62b de raderade pärmarna; formen är den samma — vad raden är, sitt
+ * **Samma komponent för båda listorna.** 62a ritade innehållet i en container,
+ * 62b de raderade containerna; formen är den samma — vad raden är, sitt
  * sammanhang, båda tiderna och en återställningsknapp — och 20c § Beslut 3
  * säger uttryckligen att en klient som ritar papperskorgen ska kunna använda
  * en och samma komponent. Raden får därför sitt mål ur `entry.type`, som är
- * det fält som skiljer de två listorna åt: en raderad pärm löses inte upp av
+ * det fält som skiljer de två listorna åt: en raderad container löses inte upp av
  * ruttbindningen och återställs på toppnivå med bara `ulid` i kroppen (62b
- * § Beslut 1), medan innehållet postas till pärmens egen rutt med `type` och
+ * § Beslut 1), medan innehållet postas till containerns egen rutt med `type` och
  * `ulid` (fyra typer delar en lista, issue 20a § Beslut 1). Innehållsraden
- * behöver pärmen för sitt mål och får den som `containerUlid`; pärmraden har
+ * behöver containern för sitt mål och får den som `containerUlid`; containerraden har
  * den i `entry.ulid` och behöver ingen.
  *
  * **Raden visar BÅDA tiderna** (62a § Beslut 4): när innehållet raderades och
@@ -27,7 +27,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Vad raden är och vad den hör till.** `entry.label` är namnet
  * användaren känner igen saken på (itemets namn, filnamnet, kategorins namn,
- * taggens namn, pärmens namn), `entry.context` är bilagans item eller
+ * taggens namn, containerns namn), `entry.context` är bilagans item eller
  * underkategorins förälder — utan den är "faktura.pdf" i en lista med tjugo
  * poster obrukbart. Båda kommer färdiga ur resursen; vyn hittar inte på
  * något. Etiketten slås upp ur `lang/`.

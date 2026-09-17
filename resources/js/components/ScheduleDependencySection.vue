@@ -61,7 +61,7 @@ const props = defineProps({
     rows: { type: Array, required: true },
     /* Insamlings-URL:en; raderingen är samma URL plus motpartens ULID. */
     url: { type: String, required: true },
-    /* Motparterna användaren får ändra, i samma pärm (§ Beslut 3). */
+    /* Motparterna användaren får ändra, i samma container (§ Beslut 3). */
     counterparts: { type: Array, required: true },
     /* Falskt när schemat saknar öppen förekomst: då finns inga undantag. */
     active: { type: Boolean, default: true },

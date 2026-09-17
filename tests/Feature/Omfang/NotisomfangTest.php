@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Actions\Access\ResolveItemScope;
 use App\Console\GeneratesLoanNotifications;
 use App\Console\GeneratesQuotaWarnings;
@@ -377,7 +379,7 @@ it('en omfångsbegränsad mottagare får ingen kvotvarning', function () {
 
     app(GeneratesQuotaWarnings::class)->handle();
 
-    // Kvoten är kontots, inte pärmens (Beslut 3): mottagarna är ägarkontots
+    // Kvoten är kontots, inte containerns (Beslut 3): mottagarna är ägarkontots
     // owner/admin, och en delegerad mottagare är per definition inte medlem
     // i det kontot. Ingen rad till henne, oavsett omfång.
     expect(Notification::query()->where('user_id', $mottagare->id)->count())->toBe(0);

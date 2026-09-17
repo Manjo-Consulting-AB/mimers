@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
@@ -124,7 +126,7 @@ function filoriginUrl(string $sökväg): string
     return filoriginBas().'/'.ltrim($sökväg, '/');
 }
 
-/** En bilaga i en pärm som $user får läsa. */
+/** En bilaga i en container som $user får läsa. */
 function filoriginÅtkomst(): array
 {
     [$account, $user] = kontoMedMedlem();
@@ -221,7 +223,7 @@ it('en bilaga vars item är mjukraderat ger 404 på appdomänen', function () {
     actingAs($user)->get("/files/{$attachment->ulid}")->assertNotFound();
 });
 
-it('en bilaga i en mjukraderad pärm ger 404 på appdomänen', function () {
+it('en bilaga i en mjukraderad container ger 404 på appdomänen', function () {
     [$user, $container] = filoriginÅtkomst();
     [, $attachment] = filoriginBilaga($container);
     $container->delete();

@@ -5,11 +5,11 @@ import TrashRow from '../../components/TrashRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
- * Papperskorgen för raderade pärmar, se issue 62b § Beslut 1, 3, 7 och 8.
+ * Papperskorgen för raderade containers, se issue 62b § Beslut 1, 3, 7 och 8.
  *
  * **Toppnivå och AppLayout, inte ContainerLayout.** Sidan kan inte ligga i en
- * pärm: pärmen är raderad, och en layout som kräver propen `container` hade
- * krävt en pärm som inte finns. Det är samma skäl som gör att rutten ligger
+ * container: containern är raderad, och en layout som kräver propen `container` hade
+ * krävt en container som inte finns. Det är samma skäl som gör att rutten ligger
  * på `/trash/containers` och inte under `{container}` (Beslut 1).
  *
  * **`entries` är `TrashEntryResource`-rader**, samma sex nycklar som `/api`
@@ -18,7 +18,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * raderna (Beslut 3): flaggan bor utanför `TrashEntryResource`, som är delad
  * med `/api`.
  *
- * **Raden är `TrashRow`, samma komponent som 62a:s pärmpapperskorg använder**
+ * **Raden är `TrashRow`, samma komponent som 62a:s containerpapperskorg använder**
  * (Beslut 7). 20c § Beslut 3 lovade att en klient som ritar papperskorgen
  * skulle kunna använda samma komponent för båda listorna, och det är den här
  * raden som infriar det: bara målet för återställningen skiljer sig — och
@@ -28,7 +28,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * **En tom lista säger att papperskorgen är tom** (Beslut 7) och räknar
  * ingenting. Listan är redan begränsad till ägarkontots medlemmar, så det
  * finns inget dolt att antyda något om — till skillnad från 62a, där en
- * omfångsbegränsad mottagare kunde se en tom lista över en pärm som inte var
+ * omfångsbegränsad mottagare kunde se en tom lista över en container som inte var
  * tom.
  *
  * Ett valideringsfel på `ulid` visas som en ruta: `RestoreContainerRequest`

@@ -50,7 +50,7 @@ use ZipArchive;
  *
  * Mjukraderat innehåll följer inte med: SoftDeletes' globala scope gäller
  * automatiskt genom relationerna för item, kategori, tagg, schema, lån och
- * bilaga. Papperskorgen är inte pärmen (Beslut 9).
+ * bilaga. Papperskorgen är inte containern (Beslut 9).
  *
  * Issue 74 § Beslut 8: exporten tar med exakt det BESTÄLLAREN når.
  * Omfånget är `$export->requested_by_user_id` — raden som redan finns på
