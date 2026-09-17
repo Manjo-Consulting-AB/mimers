@@ -31,7 +31,8 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M11 Åtkomst på itemnivå]] | **69–75** | ladder och migrering, omfångsupplösning, grindar, beviljande, filtrering av listning/sök/rapporter, notiser · **byggs före M10** |
 | [[M10 Webbfrontend]] | **51–68** | frontendskal, språk i frontenden, inloggnings- och kontovyer, containervyer, delning och inbjudningar, kategorier och taggar, … |
 | [[M12 Ordet och de första fynden]] | **77–80** | container och objekt i stället för pärm, sökfältet, vägen till inställningarna, magic link och tvåfaktorn |
-| [[M13 Omskrivningen]] | **81** | valvets prosa följer ADR-0033 och ADR-0034, sedan strängarna användaren möter |
+| [[M13 Omskrivningen]] | **81–82** | valvets prosa följer ADR-0033 och ADR-0034, sedan strängarna användaren möter |
+| [[Att sortera efter mockuparna]] | **83** | identifierat arbete som väntar på mockupgenomgången — ingen milstolpe |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 
-Totalt 82 issuerubriker under `docs/Backlog/`, numrerade 0–81. Issue 6 är delad i 6a, 6b och 6c. **Nummer 38 bar två olika issues fram till 2026-09-07** — *Byt e-postleverantör till Mailgun* i M5 och *Utlåning* i M6. Mailgun var redan byggd som 38a/38b och behöll numret; Utlåning är sedan dess **76**, och `Beror på`-raden i M10 § 67 följde med. Se [[Tankar]] § Avgjort och flyttat. **M11 står sist i numret men grindar sex issues i M10** — 55, 57, 58, 59, 62 och 67 bygger på behörighetsmodellen den ändrar. Beroendena i issuerna är det som gäller, precis som M10:s egen ingress säger.
+Totalt 84 issuerubriker under `docs/Backlog/`, numrerade 0–83. Issue 6 är delad i 6a, 6b och 6c. **Nummer 38 bar två olika issues fram till 2026-09-07** — *Byt e-postleverantör till Mailgun* i M5 och *Utlåning* i M6. Mailgun var redan byggd som 38a/38b och behöll numret; Utlåning är sedan dess **76**, och `Beror på`-raden i M10 § 67 följde med. Se [[Tankar]] § Avgjort och flyttat. **M11 står sist i numret men grindar sex issues i M10** — 55, 57, 58, 59, 62 och 67 bygger på behörighetsmodellen den ändrar. Beroendena i issuerna är det som gäller, precis som M10:s egen ingress säger.
