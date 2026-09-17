@@ -4,9 +4,9 @@ Startpunkt för hela projektet. **Läs inte allt.** Varje issue i [[Backlog]] pe
 
 ## Vad är det här
 
-API-först system där ägaren av en båt, husvagn, stuga eller bil samlar all dokumentation om objektet: prylar, manualer, kvitton, serienummer, servicehistorik och återkommande underhåll. En blandning av Evernote och OmniFocus, byggd för en nisch.
+API-först system för att samla information om sådant du äger, använder eller arbetar med: en båt, en bil, en fastighet, en kund eller ett projekt. Sammanhanget kallas **container**, innehållet består av **objekt** — manualer, kvitton, serienummer, filer, historik och återkommande underhåll. En blandning av Evernote och OmniFocus.
 
-Systemet heter **Mimers** och bor på `mimers.app`. Namnet syftar på Mimer i nordisk mytologi, som vaktar brunnen där visdomen finns: produkten är den brunn där båtens, husets eller bilens historik, kunskap och underhåll samlas. Produkten är fristående och står på egna ben — se [[ADR-0020 Plattformsidentitet och frontendgräns]].
+Systemet heter **Mimers** och bor på `mimers.app`. Namnet syftar på Mimer i nordisk mytologi, som vaktar brunnen där visdomen finns: produkten är den brunn där historiken, kunskapen och underhållet kring det du äger, använder eller arbetar med samlas. Produkten är fristående och står på egna ben — se [[ADR-0020 Plattformsidentitet och frontendgräns]].
 
 ## Var hittar jag vad
 
