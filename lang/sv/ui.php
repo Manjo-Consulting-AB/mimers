@@ -51,6 +51,11 @@ return [
         // headern räcker inte som väg in — den som inte redan vet att
         // sökningen finns letar efter en rad i menyn.
         'search' => 'Sök',
+        // Vägen in i inställningarna, se issue 79 § Beslut 1: sektionslistan
+        // syns först på en inställningssida, så utan den här raden nådde bara
+        // den som redan stod där säkerhetssidan — och tvåfaktorn. Länken pekar
+        // på /settings, som omdirigerar till profilen (issue 53c).
+        'settings' => 'Inställningar',
         'login' => 'Logga in',
     ],
 
