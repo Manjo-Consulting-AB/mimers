@@ -362,10 +362,10 @@ it('säger att containern är tom och aldrig att den kanske är det', function (
         ->where('can.create', true)
     );
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
-    expect($sv['item']['index']['empty'])->toBe('Containern är tom.');
+    expect($en['item']['index']['empty'])->toBe('The container is empty.');
     expect($en['item']['index']['empty'])->not->toBe('');
 
     // Ingen totalsumma i vyn — raden är hela sidans svar på en tom container.
@@ -382,15 +382,15 @@ it('säger att containern är tom och aldrig att den kanske är det', function (
  * Den första halvan vaktas av SprakTest (som läser varje fil under
  * resources/js). Här prövas den andra: nyckelparen, nyckel för nyckel.
  */
-it('har varje item-nyckel på båda språken', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har varje item-nyckel', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['index', 'show'] as $grupp) {
         expect(array_keys($en['item'][$grupp]))->toBe(array_keys($sv['item'][$grupp]));
 
         foreach ($sv['item'][$grupp] as $nyckel => $varde) {
-            expect(trim($varde))->not->toBe('', "item.{$grupp}.{$nyckel} är tom på sv");
+            expect(trim($varde))->not->toBe('', "item.{$grupp}.{$nyckel} är");
             expect(trim($en['item'][$grupp][$nyckel]))->not->toBe('', "item.{$grupp}.{$nyckel} är tom på en");
         }
     }

@@ -200,7 +200,7 @@ it('ger ett läsbart fel på fältet email för en andra inbjudan till samma adr
     [, $anvandare, $container] = inbjudningsKontext();
     $befintlig = bjudInRad($container, 'ny@exempel.se');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
 
     $svar = actingAs($anvandare)->post("/containers/{$container->ulid}/invitations", [
         'email' => 'NY@Exempel.se',
@@ -232,7 +232,7 @@ it('lägger ett passerat delningstak under errors.quota', function () {
 
     sättPlangräns('free', 'shared_users_per_container', 1);
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
 
     $svar = actingAs($anvandare)->post("/containers/{$container->ulid}/invitations", [
         'email' => 'ny@exempel.se',
@@ -240,7 +240,7 @@ it('lägger ett passerat delningstak under errors.quota', function () {
     ]);
 
     $svar->assertSessionHasErrors('quota');
-    expect(session('errors')->first('quota'))->toStartWith('Delningen har nått kontots tak')
+    expect(session('errors')->first('quota'))->toStartWith('The sharing has reached the account limit')
         ->and($sv['error']['quota']['shared_users_exceeded'])->not->toBe('quota.shared_users_exceeded');
 });
 
@@ -264,7 +264,7 @@ it('lägger ett passerat inbjudningstak under errors.quota', function () {
     ]);
 
     $svar->assertSessionHasErrors('quota');
-    expect(session('errors')->first('quota'))->toStartWith('Kontot har nått sitt tak för utestående inbjudningar');
+    expect(session('errors')->first('quota'))->toStartWith('The account has reached its limit for outstanding invitations');
 
     expect(Invitation::query()->count())->toBe(1);
 });
@@ -290,7 +290,7 @@ it('prövar kontotaket efter delningstaket', function () {
     ]);
 
     $svar->assertSessionHasErrors('quota');
-    expect(session('errors')->first('quota'))->toStartWith('Delningen har nått kontots tak');
+    expect(session('errors')->first('quota'))->toStartWith('The sharing has reached the account limit');
 });
 
 /*
@@ -369,7 +369,7 @@ it('drar tillbaka en pending och en utgången inbjudan, men inte en besvarad', f
     $utgangen = bjudInRad($container, 'utgangen@exempel.se', expiresAt: now()->subDay());
     $besvarad = bjudInRad($container, 'besvarad@exempel.se', status: 'accepted');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
 
     foreach ([$vantande, $utgangen] as $rad) {
         from(inbjudningsSida($container))
@@ -610,8 +610,8 @@ it('har inbjudningsformuläret som tredje sektion på delningssidan', function (
  * lang/ och aldrig i en .vue-fil — den grinden ägs av SprakTest, som läser
  * hela resources/js.
  */
-it('har inbjudningstexterna på båda språken', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har inbjudningstexterna', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['heading', 'description', 'email', 'item', 'item_container', 'submit', 'revoke', 'expires', 'invited_by', 'empty'] as $nyckel) {

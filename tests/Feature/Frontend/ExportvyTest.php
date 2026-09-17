@@ -32,11 +32,11 @@ use function Pest\Laravel\withoutVite;
  * BuildContainerExport, så den filen är grön utan en enda ändrad förväntan)
  * och nedladdningens egen grind (tests/Feature/Export/ExportNedladdningTest.php,
  * som redan prövar att en `read`-deltagare kan ladda ner och att en främling
- * får 403). "Ingen svensk sträng står kvar i en .vue-fil; varje ny nyckel finns
- * på sv och en" ägs av tests/Feature/Frontend/SprakTest.php § "har inga
- * användarvända strängar kvar i Vue-komponenterna" och § "har samma nycklar på
- * båda språken". Den här filen prövar i stället exportytans EGNA nycklar och
- * att grinden är densamma på sidan och på beställningen.
+ * får 403). "Ingen svensk sträng står kvar i en .vue-fil; varje nyckel finns i
+ * katalogen" ägs av tests/Feature/Frontend/SprakTest.php § "har inga
+ * användarvända strängar kvar i Vue-komponenterna". Den här filen prövar i
+ * stället exportytans EGNA nycklar och att grinden är densamma på sidan och på
+ * beställningen.
  *
  * **Pollningen prövas som kod och inte som beteende.** Sviten kör ingen
  * webbläsare, så det som går att pröva är att vyn ber om rätt sak: en
@@ -476,7 +476,7 @@ it('väljer mening på den återstående tiden och säger vad påsen innehåller
     expect($modul)->toContain('days < 1');
     expect($modul)->toContain('days === 1');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['today', 'day', 'days'] as $nyckel) {
@@ -496,7 +496,7 @@ it('väljer mening på den återstående tiden och säger vad påsen innehåller
 
     expect($sida)->toContain("t('export.intro')");
 
-    // Varje status kolumnen kan ha har en mening på båda språken — annars
+    // Varje status kolumnen kan ha har en mening — annars
     // visar listan en rå status för någon.
     foreach (['pending', 'running', 'ready', 'failed', 'expired'] as $status) {
         expect($sv['export']['status'][$status])->not->toBe('');
@@ -513,12 +513,12 @@ it('väljer mening på den återstående tiden och säger vad påsen innehåller
  * är fri på alla planer, och en utgång ingen hittar är samma sak som en
  * inlåsning.
  */
-it('har en rad i containerns navigering på båda språken', function () {
+it('har en rad i containerns navigering', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("{ key: 'export', href: (ulid) => `/containers/\${ulid}/export` }");
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['container']['nav']['export'])->not->toBe('');

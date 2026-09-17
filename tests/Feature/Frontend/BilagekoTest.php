@@ -27,7 +27,7 @@ use function Pest\Laravel\withoutVite;
  * Issue 60b · Bilagesektionens kö — flera filer, en i taget, med framdrift
  * per fil. Se resources/js/components/ItemAttachmentSection.vue,
  * App\Http\Controllers\AttachmentController,
- * App\Http\Controllers\ItemController::show() och `lang/{sv,en}/ui.php`.
+ * App\Http\Controllers\ItemController::show() och `lang/en/ui.php`.
  *
  * 60a byggde sektionen, rutterna och kvotfelet för EN fil. Den här filen
  * prövar det som blev flera, och de fyra gränserna issuen vilar på:
@@ -60,7 +60,7 @@ use function Pest\Laravel\withoutVite;
  * prövas i tests/Feature/Attachment/UppladdningTest.php.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js och jämför `lang/sv` mot `lang/en`.
  *
  * Hjälparna har prefixet `bilageko` — Pest lägger alla testfiler i samma
@@ -74,7 +74,7 @@ beforeEach(function () {
 
 /**
  * Ett konto med en medlem, och en container med ett item under kontot. Båda på
- * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -245,7 +245,7 @@ it('låter en fil spränga kvoten medan de andra går igenom', function () {
         'limit_bytes' => Number::fileSize(3000),
         'used_bytes' => Number::fileSize(1000),
         'file_bytes' => Number::fileSize(2500),
-    ], 'sv'));
+    ], 'en'));
 
     // Kön fortsätter: fil 3 och 4 laddas upp ändå, och räknaren rör sig bara
     // med de filer som kom fram.
@@ -423,7 +423,7 @@ it('annonserar ett filfel i kön utan att fokus flyttas in i raden', function ()
     expect($vy)->toContain('attachment-error-');
 });
 
-it('har köns meningar på båda språken', function () {
+it('har köns meningar', function () {
     $nycklar = [
         'item.attachment.dropzone',
         'item.attachment.status.waiting',
@@ -436,14 +436,13 @@ it('har köns meningar på båda språken', function () {
         'item.attachment.dismiss',
     ];
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach ($nycklar as $nyckel) {
-            $mening = Lang::get("ui.{$nyckel}", [], $locale);
+    foreach ($nycklar as $nyckel) {
+        $mening = Lang::get("ui.{$nyckel}", [], 'en');
 
-            // En saknad nyckel ger nyckeln själv tillbaka — samma regel som
-            // resources/js/i18n/translate.js, och ett fel som ska synas här.
-            expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på {$locale}");
-            expect(trim($mening))->not->toBe('');
-        }
+        // En saknad nyckel ger nyckeln själv tillbaka — samma regel som
+        // resources/js/i18n/translate.js, och ett fel som ska synas här.
+        expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+        expect(trim($mening))->not->toBe('');
     }
+
 });

@@ -52,7 +52,7 @@ use function Pest\Laravel\withoutVite;
  * 9. **Frågekostnaden är konstant** (Beslut 3 och 4), mätt med `DB::listen`.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js; den sista testen här binder de NYA
  * nycklarna och de NYA filerna till just det testet.
  *
@@ -448,8 +448,8 @@ it('skiljer en uppfylld rad från en som blockerar, ur serverns satisfied', func
     expect($sektion)->toContain("t('item.schedule.dependency.satisfied')");
     expect($sektion)->toContain("t('item.schedule.dependency.blocking')");
 
-    expect(Lang::get('ui.item.schedule.dependency.satisfied', [], 'sv'))->toBe('Klar');
-    expect(Lang::get('ui.item.schedule.dependency.blocking', [], 'sv'))->toBe('Blockerar');
+    expect(Lang::get('ui.item.schedule.dependency.satisfied', [], 'en'))->toBe('Done');
+    expect(Lang::get('ui.item.schedule.dependency.blocking', [], 'en'))->toBe('Blocking');
 });
 
 // --- motpartsväljaren -------------------------------------------------------
@@ -607,7 +607,7 @@ it('ger ett fältfel när ett schema väntar på sig självt', function () {
 
     $mening = session('errors')->getBag('default')->first('depends_on');
 
-    expect($mening)->toBe(Lang::get('ui.error.schedule.dependency_self', [], 'sv'));
+    expect($mening)->toBe(Lang::get('ui.error.schedule.dependency_self', [], 'en'));
     expect($mening)->not->toContain('{"error"');
     expect(ScheduleDependency::query()->count())->toBe(0);
 });
@@ -642,7 +642,7 @@ it('ger ett fältfel som namnger kedjan när en cykel skulle uppstå', function 
 
     $mening = session('errors')->getBag('default')->first('depends_on');
 
-    expect($mening)->toContain('cirkel');
+    expect($mening)->toContain('circle');
     expect($mening)->toContain('Serva motorn');
     expect($mening)->toContain('Byt impeller');
     expect($mening)->not->toContain('{"error"');
@@ -698,7 +698,7 @@ it('ger ett fältfel när en förekomst väntar på sig själv', function () {
 
     $mening = session('errors')->getBag('default')->first('depends_on');
 
-    expect($mening)->toBe(Lang::get('ui.error.occurrence.dependency_self', [], 'sv'));
+    expect($mening)->toBe(Lang::get('ui.error.occurrence.dependency_self', [], 'en'));
     expect($mening)->not->toContain('{"error"');
     expect(OccurrenceDependency::query()->count())->toBe(0);
 });
@@ -735,7 +735,7 @@ it('ger ett fältfel som namnger kedjan när en förekomstcykel skulle uppstå',
 
     $mening = session('errors')->getBag('default')->first('depends_on');
 
-    expect($mening)->toContain('cirkel');
+    expect($mening)->toContain('circle');
     expect($mening)->toContain('Serva motorn');
     expect($mening)->toContain('Byt impeller');
     expect($mening)->not->toContain('{"error"');
@@ -798,18 +798,18 @@ it('nekar ett beroende som läggs på en stängd förekomst', function () {
 
     $mening = session('errors')->getBag('default')->first('depends_on');
 
-    expect($mening)->toBe(Lang::get('ui.error.occurrence.not_open', [], 'sv'));
-    expect($mening)->toContain('redan avslutad');
+    expect($mening)->toBe(Lang::get('ui.error.occurrence.not_open', [], 'en'));
+    expect($mening)->toContain('already closed');
     expect($mening)->not->toContain('{"error"');
 
     expect(OccurrenceDependency::query()->count())->toBe(0);
 });
 
 /*
- * Klart när: alla sex felkoder finns på båda språken och blir fältfel på
+ * Klart när: alla sex felkoder finns och blir fältfel på
  * `depends_on`, aldrig JSON-kroppar.
  */
-it('har alla sex felkoder på båda språken och lägger dem på depends_on', function () {
+it('har alla sex felkoder och lägger dem på depends_on', function () {
     $nycklar = [
         'error.schedule.dependency_self',
         'error.schedule.dependency_cycle',
@@ -821,7 +821,7 @@ it('har alla sex felkoder på båda språken och lägger dem på depends_on', fu
     ];
 
     foreach ($nycklar as $nyckel) {
-        expect(Lang::get("ui.{$nyckel}", [], 'sv'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på svenska");
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på svenska");
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på engelska");
     }
 
@@ -1007,14 +1007,14 @@ it('kostar ett konstant antal frågor oavsett antal beroenden', function () {
 
 /*
  * Klart när: ingen svensk sträng står kvar i en .vue-fil; varje ny nyckel
- * finns på sv och en.
+ * finns.
  *
  * Den GLOBALA svepet över resources/js ägs av
  * tests/Feature/Frontend/SprakTest.php. Här binds de NYA nycklarna och de NYA
  * filerna: en nyckel som bara finns på svenska hade fallit där, men den här
  * filen pekar ut vilka nycklar 63c lade till.
  */
-it('har varje ny beroendenyckel på båda språken och ingen svensk sträng i vyn', function () {
+it('har varje ny beroendenyckel och ingen svensk sträng i vyn', function () {
     $nycklar = [
         'item.schedule.dependency.heading_schedule',
         'item.schedule.dependency.heading_occurrence',
@@ -1039,27 +1039,24 @@ it('har varje ny beroendenyckel på båda språken och ingen svensk sträng i vy
     ];
 
     foreach ($nycklar as $nyckel) {
-        $sv = Lang::get("ui.{$nyckel}", [], 'sv');
-        $en = Lang::get("ui.{$nyckel}", [], 'en');
-
-        expect($sv)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på svenska");
-        expect($en)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på engelska");
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))
+            ->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
     }
 
     // De två rubrikerna bär skillnaden mellan nivåerna (Beslut 2), och
     // ärvsmeningen säger vad en regel gör utan att användaren frågar.
-    expect(Lang::get('ui.item.schedule.dependency.heading_schedule', [], 'sv'))
-        ->toBe('Väntar alltid på');
-    expect(Lang::get('ui.item.schedule.dependency.heading_occurrence', [], 'sv'))
-        ->toBe('Väntar den här gången på');
-    expect(Lang::get('ui.item.schedule.dependency.note_schedule', [], 'sv'))
-        ->toContain('Varje ny förekomst');
+    expect(Lang::get('ui.item.schedule.dependency.heading_schedule', [], 'en'))
+        ->toBe('Always waits for');
+    expect(Lang::get('ui.item.schedule.dependency.heading_occurrence', [], 'en'))
+        ->toBe('Waiting on this time');
+    expect(Lang::get('ui.item.schedule.dependency.note_schedule', [], 'en'))
+        ->toContain('Every new occurrence');
 
     // Och borttagningen säger att ingenting annat försvann (Beslut 7).
-    expect(Lang::get('ui.flash.schedule-dependency-removed', [], 'sv'))
-        ->toBe('Beroendet är borttaget. Båda schemana finns kvar.');
-    expect(Lang::get('ui.flash.occurrence-dependency-removed', [], 'sv'))
-        ->toContain('båda förekomsterna');
+    expect(Lang::get('ui.flash.schedule-dependency-removed', [], 'en'))
+        ->toBe('The dependency is gone. Both schedules remain.');
+    expect(Lang::get('ui.flash.occurrence-dependency-removed', [], 'en'))
+        ->toContain('both occurrences');
 
     // De nya vyerna bär ingen svensk sträng utanför kommentarerna — samma
     // regel som SprakTest kör över hela resources/js.

@@ -71,7 +71,7 @@ it('en adress utan undertryckningsrad levereras', function () {
 
     $mail = Mail::sent(NotificationMail::class)->first();
     expect($mail)->not->toBeNull();
-    expect(mejletsÄmne($mail))->toBe('Byt impeller förfaller 2026-09-20');
+    expect(mejletsÄmne($mail))->toBe('Byt impeller is due on 2026-09-20');
 });
 
 it('undertryckningen är skiftlägesokänslig', function () {

@@ -442,8 +442,8 @@ class ContainerExportBuilder
      * Renderar index.html — en enda självständig fil utan externa resurser
      * (Beslut 11). Språket väljs från den beställande användarens locale,
      * samma regel som mejlen (AGENTS.md § Serverrenderat innehåll). Texterna
-     * ligger i lang/{sv,en}/export.php, samma form som mejlen mot
-     * lang/{sv,en}/notiser.php.
+     * ligger i lang/en/export.php, samma form som mejlen mot
+     * lang/en/notiser.php.
      *
      * Appens locale sätts runt renderingen och återställs i finally — jobbet
      * kör i en kö där appens locale är processens, inte den beställande

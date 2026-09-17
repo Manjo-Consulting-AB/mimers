@@ -34,9 +34,9 @@ use function Pest\Laravel\withoutVite;
  * TakgransTest.php (53a) — alla gröna utan en enda ändrad förväntan.
  *
  * "Klart när" i issuen motsvaras var sitt test nedan, med undantag för "ingen
- * svensk sträng står kvar i en .vue-fil; varje ny nyckel finns på sv och en",
- * som vaktas av tests/Feature/Frontend/SprakTest.php — den läser varje fil
- * under resources/js/ och jämför språkfilerna nyckel för nyckel.
+ * svensk sträng står kvar i en .vue-fil; varje nyckel finns i katalogen", som
+ * vaktas av tests/Feature/Frontend/SprakTest.php — den läser varje fil under
+ * resources/js/.
  *
  * Hjälparna har prefixet `planvy` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs, och tests/Feature/Plan har redan
@@ -136,18 +136,16 @@ function planvyGb(float $antal): int
 }
 
 /**
- * En nyckel finns på båda språken och är inte tom. Samma kontroll som
+ * En nyckel finns och är inte tom. Samma kontroll som
  * WebhookvyTest gör för händelsetyperna, och skälet är detsamma: en nyckel som
- * bara finns på svenska syns som en nyckel i den engelska vyn.
+ * saknas i katalogen syns som en nyckel i vyn.
  */
 function planvyNyckel(string $nyckel): void
 {
-    foreach (['sv', 'en'] as $locale) {
-        $mening = trans($nyckel, [], $locale);
+    $mening = trans($nyckel, [], 'en');
 
-        expect($mening)->not->toBe($nyckel, "{$nyckel} saknas på {$locale}");
-        expect(trim((string) $mening))->not->toBe('', "{$nyckel} är tom på {$locale}");
-    }
+    expect($mening)->not->toBe($nyckel, "{$nyckel} saknas");
+    expect(trim((string) $mening))->not->toBe('', "{$nyckel} är tom");
 }
 
 /*
@@ -176,7 +174,7 @@ it('visar det valda kontots plan med namn, pris och period', function () {
 
     expect($props['plan']['code'])->toBe('free')
         ->and($props['plan']['period'])->toBe('year')
-        ->and($props['plan']['price'])->toBe(trans('ui.plan.price_free', [], 'sv'));
+        ->and($props['plan']['price'])->toBe(trans('ui.plan.price_free', [], 'en'));
 
     planvyNyckel('ui.plan.names.free');
     planvyNyckel('ui.plan.price_free');
@@ -197,7 +195,7 @@ it('visar det valda kontots plan med namn, pris och period', function () {
  *
  * Fyra numeriska nycklar läses ur planen, och de fem funktionerna frågas
  * genom `Entitlements::assertFeature()` — samma metod grinden nekar med. Varje
- * nyckel har en etikett på båda språken, och en ny rad i planens JSON som
+ * nyckel har en etikett, och en ny rad i planens JSON som
  * glöms i språkfilen faller här i stället för att synas som en nyckel.
  */
 it('visar de fyra numeriska gränserna och de fem funktionerna', function () {
@@ -508,7 +506,7 @@ it('förklarar nedgraderingens fem steg och att items och kostnadsrader aldrig r
 
     // Nyast först står i texten om steg 4 — det är ordningen raderingen
     // faktiskt använder, och förhandsvisningen räknar i samma ordning.
-    expect(trans('ui.plan.downgrade.steps.purge', [], 'sv'))->toContain('nyast först');
+    expect(trans('ui.plan.downgrade.steps.purge', [], 'en'))->toContain('newest first');
 });
 
 /*

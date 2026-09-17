@@ -411,7 +411,7 @@ it('avvisar en cykel med en mening på fältet parent och lämnar trädet orört
     // Ingen rå felkod och ingen JSON-kropp i webbläsaren (Beslut 4).
     expect($svar->getContent())->not->toContain('error.code');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['error']['category']['cycle'])->not->toBe('');
@@ -510,8 +510,8 @@ it('nekas radera en kategori med barn eller items, med talet i meddelandet', fun
     // Ingen tyst nollning av `category_id` — items ligger kvar där de låg.
     expect(Item::query()->where('category_id', $medItems->id)->count())->toBe(3);
 
-    // Meningarna finns på båda språken och ritar talet.
-    $sv = require lang_path('sv/ui.php');
+    // Meningarna finns och ritar talet.
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['has_children', 'has_items'] as $nyckel) {

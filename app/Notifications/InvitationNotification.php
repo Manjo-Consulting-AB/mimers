@@ -24,10 +24,11 @@ use Illuminate\Notifications\Notification;
  * redan är konfigurerad (`MAIL_MAILER` i .env, `config/mail.php` rörs
  * inte här), Postmark och studshantering kopplas in i M5 (issue 32).
  *
- * Ingen i18n: ingen `lang/`-fil finns ännu och ingen `__()` används, exakt
- * som App\Notifications\MagicLinkNotification och av samma skäl — se den
- * klassens docblock. En on-demand-notifikation har dessutom ingen
- * `locale` att välja språk från; mottagaren finns inte som användare.
+ * Texten ligger i `lang/en/notiser.php` ([[ADR-0034 Engelska vid lansering]]
+ * § Beslut: ingen användarvänd sträng utanför `lang/`), se
+ * App\Notifications\MagicLinkNotification. Ingen locale sätts: en
+ * on-demand-notifikation har ingen `locale` att välja från — mottagaren finns
+ * inte som användare — och `en` är den enda katalogen.
  */
 class InvitationNotification extends Notification
 {
@@ -55,10 +56,10 @@ class InvitationNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Du har blivit inbjuden till '.$this->container->name)
-            ->line('Du har blivit inbjuden att dela "'.$this->container->name.'".')
-            ->line('För att komma åt den behöver du skapa ett konto med den här e-postadressen och verifiera adressen — alla som läser något i systemet ska vara identifierade.')
-            ->action('Öppna inbjudan', $this->url)
-            ->line('Inbjudan går ut om '.Invitation::TTL_DAYS.' dagar.');
+            ->subject(trans('notiser.invitation.subject', ['container' => $this->container->name]))
+            ->line(trans('notiser.invitation.line', ['container' => $this->container->name]))
+            ->line(trans('notiser.invitation.line_verify'))
+            ->action(trans('notiser.invitation.action'), $this->url)
+            ->line(trans('notiser.invitation.expires', ['days' => Invitation::TTL_DAYS]));
     }
 }

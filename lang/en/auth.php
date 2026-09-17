@@ -5,7 +5,9 @@
  * både ramverkets lang/-katalog och appens och slår ihop dem med
  * array_replace_recursive där appens vinner — `failed`, `password` och
  * `throttle` kommer alltså från vendor och ska inte kopieras in här.
- * Lang/sv/auth.php är däremot komplett: ramverket har ingen svensk katalog.
+ *
+ * Det här är den enda katalogen: engelska är enda levererade språket, se
+ * [[ADR-0034 Engelska vid lansering]].
  *
  * Nycklarna sätts av App\Http\Requests\Auth\LoginRequest och
  * App\Http\Controllers\Auth\TotpController och renderades före den här filen

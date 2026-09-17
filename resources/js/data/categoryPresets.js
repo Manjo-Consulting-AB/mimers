@@ -7,75 +7,31 @@
  * [[ADR-0021 Frontendteknik]] § Konsekvenser preciserar var: "som data i
  * Vue-lagret, seedad per språk och containertyp."
  *
- * **ORDEN ÄR INTE ÖVERSÄTTNINGAR AV VARANDRA.** En svensk uppsättning för
- * `boat` och en engelsk är förslag på var sitt språk, inte en sträng med två
- * former; de får gärna skilja sig. Ingen ska därför försöka slå ihop dem till
- * `lang/` — servern får aldrig veta vad orden betyder. Den här filen är det
- * ENDA stället i resources/js som bär användarvänd svensk text, och
+ * **ORDEN ÄR INTE ÖVERSÄTTNINGAR AV VARANDRA.** En uppsättning per språk är
+ * förslag på sitt språk, inte en sträng med två former; de får gärna skilja
+ * sig. Ingen ska därför försöka slå ihop dem till `lang/` — servern får
+ * aldrig veta vad orden betyder. Den här filen är det ENDA stället i
+ * resources/js som bär användarvänd text utanför `lang/`, och
  * tests/Feature/Frontend/SprakTest.php undantar katalogen `data/` av det
  * skälet.
  *
- * Tio uppsättningar: `App\Models\Container::KINDS` (`boat`, `caravan`, `house`,
- * `car`, `other`) gånger `sv` och `en` — ingen saknad kombination. Två nivåer,
- * aldrig fler, och sex till tolv rotkategorier per uppsättning (Beslut 1): en
- * uppsättning ska gå att överblicka i en lista, och en container som möts av trettio
- * tomma fack är lika avskräckande som en tom. Den som vill djupare bygger det
- * själv med kategorisidans flyttyta.
+ * **Bara engelska.** `en` är enda levererade språket ([[ADR-0034 Engelska vid
+ * lansering]]), så katalogen bär en enda uppsättning per typ och
+ * `presetFor()` faller tillbaka på den för varje annan locale. En svensk
+ * uppsättning hade varit svensk text i ett engelskt gränssnitt — exakt det
+ * blandade språk beslutet finns för att ta bort. Den som lägger till ett
+ * språk lägger till sin uppsättning här, vid sidan av `en`.
+ *
+ * Fem uppsättningar: `App\Models\Container::KINDS` (`boat`, `caravan`, `house`,
+ * `car`, `other`). Två nivåer, aldrig fler, och sex till tolv rotkategorier
+ * per uppsättning (Beslut 1): en uppsättning ska gå att överblicka i en lista,
+ * och en container som möts av trettio tomma fack är lika avskräckande som en
+ * tom. Den som vill djupare bygger det själv med kategorisidans flyttyta.
  *
  * `children` är valfritt — en rotkategori utan barn är det vanliga, och bara
  * `boat`/`car` visar två nivåer i förslaget.
  */
 export const categoryPresets = {
-    sv: {
-        boat: [
-            { name: 'Motor', children: ['Drivlina', 'Kylsystem'] },
-            { name: 'Rigg och segel' },
-            { name: 'Elsystem ombord' },
-            { name: 'Försäkring och papper' },
-            { name: 'Däck och skrov' },
-            { name: 'Säkerhet ombord' },
-            { name: 'Kök och förvaring' },
-            { name: 'Vinterförvaring' },
-        ],
-        caravan: [
-            { name: 'Fordon och chassi' },
-            { name: 'El och batteri' },
-            { name: 'Vatten och avlopp' },
-            { name: 'Gasol' },
-            { name: 'Inredning' },
-            { name: 'Förtält och tillbehör' },
-            { name: 'Försäkring och papper' },
-            { name: 'Vinterförvaring' },
-        ],
-        house: [
-            { name: 'Grund och stomme' },
-            { name: 'Tak och hängrännor' },
-            { name: 'Fasad och fönster' },
-            { name: 'Värme och ventilation' },
-            { name: 'El och belysning' },
-            { name: 'Vatten och avlopp' },
-            { name: 'Trädgård' },
-            { name: 'Dokument och försäkring' },
-        ],
-        car: [
-            { name: 'Motor och drivlina', children: ['Kamrem', 'Olja och filter'] },
-            { name: 'Bromsar' },
-            { name: 'Däck och hjul' },
-            { name: 'El och belysning' },
-            { name: 'Kaross och lack' },
-            { name: 'Service och besiktning' },
-            { name: 'Papper och försäkring' },
-            { name: 'Tillbehör' },
-        ],
-        other: [
-            { name: 'Dokument' },
-            { name: 'Förvaring' },
-            { name: 'Verktyg' },
-            { name: 'Underhåll' },
-            { name: 'Kvitton och garantier' },
-            { name: 'Osorterat' },
-        ],
-    },
     en: {
         boat: [
             { name: 'Engine', children: ['Drive train', 'Cooling'] },
@@ -129,11 +85,12 @@ export const categoryPresets = {
 };
 
 /**
- * Reserven när localen inte har någon uppsättning. `sv` och inte `en`: de
- * svenska uppsättningarna är de som är skrivna för produkten först, och
- * `config('app.locale')` är `sv` för en inloggad användare (issue 52).
+ * Reserven när localen inte har någon uppsättning. `en` är den enda som
+ * finns: engelska är enda levererade språket ([[ADR-0034 Engelska vid
+ * lansering]]), och en locale utan uppsättning ska mötas av engelska och inte
+ * av en tom lista.
  */
-const FALLBACK_LOCALE = 'sv';
+const FALLBACK_LOCALE = 'en';
 
 /** Reserven när containerns `kind` är okänd — `Container::KINDS` sista post. */
 const FALLBACK_KIND = 'other';

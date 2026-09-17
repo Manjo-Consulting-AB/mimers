@@ -565,7 +565,7 @@ it('lämnar /api-rutterna oförändrade', function () {
 /*
  * Navigationen växer i listan, inte i layouten (den strukturella kontrollen
  * ligger i SakerhetsvyTest). Här prövas att den nya posten finns och att dess
- * etikett är formulerad på båda språken — en sida ingen kan navigera till är
+ * etikett är formulerad — en sida ingen kan navigera till är
  * en sida ingen hittar (Beslut 1).
  */
 it('har Notiser i inställningsnavigationen', function () {
@@ -573,12 +573,11 @@ it('har Notiser i inställningsnavigationen', function () {
 
     expect($sektioner)->toContain("href: '/settings/notifications'");
 
-    foreach (['sv', 'en'] as $locale) {
-        $mening = trans('ui.settings.nav.notifications', [], $locale);
+    $mening = trans('ui.settings.nav.notifications', [], 'en');
 
-        expect($mening)->not->toBe('ui.settings.nav.notifications', "settings.nav.notifications saknas på {$locale}");
-        expect(trim($mening))->not->toBe('');
-    }
+    expect($mening)->not->toBe('ui.settings.nav.notifications', 'settings.nav.notifications saknas');
+    expect(trim($mening))->not->toBe('');
+
 });
 
 /*
@@ -587,27 +586,26 @@ it('har Notiser i inställningsnavigationen', function () {
  * `schedule_occurrence_due` är en rad ingen ställer in. Saknas en nyckel syns
  * nyckeln själv, aldrig en tom rad (issue 52 § Beslut 4).
  */
-it('har ett läsbart namn och en förklaring för varje typ, på båda språken', function () {
+it('har ett läsbart namn och en förklaring för varje typ', function () {
     foreach (app(NotificationPreferences::class)->types() as $typ) {
         foreach (['label', 'description'] as $nyckel) {
-            foreach (['sv', 'en'] as $locale) {
-                $mening = trans("ui.notifications.type.{$typ}.{$nyckel}", [], $locale);
+            $mening = trans("ui.notifications.type.{$typ}.{$nyckel}", [], 'en');
 
-                expect($mening)->not->toBe(
-                    "ui.notifications.type.{$typ}.{$nyckel}",
-                    "notifications.type.{$typ}.{$nyckel} saknas på {$locale}",
-                );
-                expect(trim($mening))->not->toBe('');
-            }
+            expect($mening)->not->toBe(
+                "ui.notifications.type.{$typ}.{$nyckel}",
+                "notifications.type.{$typ}.{$nyckel} saknas",
+            );
+            expect(trim($mening))->not->toBe('');
         }
     }
 
-    // Den engelska texten är en översättning, inte en kopia.
-    expect(trans('ui.notifications.type.'.Notification::TYPE_TASK_DUE.'.label', [], 'sv'))
-        ->not->toBe(trans('ui.notifications.type.'.Notification::TYPE_TASK_DUE.'.label', [], 'en'));
+    // Etiketten och förklaringen är inte samma mening — en nyckel som pekar på
+    // fel text är en förklaring som säger fel sak.
+    expect(trans('ui.notifications.type.'.Notification::TYPE_TASK_DUE.'.label', [], 'en'))
+        ->not->toBe(trans('ui.notifications.type.'.Notification::TYPE_TASK_DUE.'.description', [], 'en'));
 });
 
-it('har sidans texter på båda språken och läser dem ur lang/', function () {
+it('har sidans texter och läser dem ur lang/', function () {
     $nycklar = [
         'notifications.heading',
         'notifications.intro',
@@ -632,13 +630,11 @@ it('har sidans texter på båda språken och läser dem ur lang/', function () {
         'flash.quiet-hours-updated',
     ];
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach ($nycklar as $nyckel) {
-            $mening = trans("ui.{$nyckel}", [], $locale);
+    foreach ($nycklar as $nyckel) {
+        $mening = trans("ui.{$nyckel}", [], 'en');
 
-            expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på {$locale}");
-            expect(trim($mening))->not->toBe('');
-        }
+        expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+        expect(trim($mening))->not->toBe('');
     }
 
     // Vyns enda väg till text går genom t(); en nyckel som finns men inte
@@ -668,13 +664,11 @@ it('har sidans texter på båda språken och läser dem ur lang/', function () {
  * intill: de två svarar på olika frågor.
  */
 it('säger att tysta timmar fördröjer notisen i stället för att ta bort den', function () {
-    foreach (['sv', 'en'] as $locale) {
-        $forsening = trans('ui.notifications.quiet_hours.delays_note', [], $locale);
-        $tomt = trans('ui.notifications.quiet_hours.empty_note', [], $locale);
+    $forsening = trans('ui.notifications.quiet_hours.delays_note', [], 'en');
+    $tomt = trans('ui.notifications.quiet_hours.empty_note', [], 'en');
 
-        expect($forsening)->not->toBe($tomt);
-        expect(trim($forsening))->not->toBe('');
-    }
+    expect($forsening)->not->toBe($tomt);
+    expect(trim($forsening))->not->toBe('');
 
     expect(File::get(resource_path('js/components/QuietHoursForm.vue')))
         ->toContain('notifications.quiet_hours.delays_note');

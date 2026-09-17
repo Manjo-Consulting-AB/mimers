@@ -332,7 +332,7 @@ it('ger ett läsbart kvotfel i stället för JSON när containertaket slår i', 
 
     $mening = session('errors')->get('quota')[0];
 
-    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'sv'));
+    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'en'));
     expect($mening)->not->toBe('quota.containers_exceeded');
     expect($svar->headers->get('content-type'))->toContain('text/html');
 
@@ -518,12 +518,12 @@ it('renderar redigeringssidan i ContainerLayout med containerns namn', function 
 });
 
 /*
- * Nycklarna finns på båda språken och vyn läser dem. En nyckel som finns men
+ * Nycklarna finns och vyn läser dem. En nyckel som finns men
  * inte används är en text ingen ser, och en svensk sträng i en .vue-fil blir
  * aldrig engelsk — SprakTest fäller den bredare varianten, den här kontrollerar
  * att just de här texterna kom med.
  */
-it('har containerytans texter på båda språken och läser dem ur lang/', function () {
+it('har containerytans texter och läser dem ur lang/', function () {
     $nycklar = [
         'nav.containers',
         'container.index.heading',
@@ -548,25 +548,22 @@ it('har containerytans texter på båda språken och läser dem ur lang/', funct
         'flash.container-trashed',
     ];
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach ($nycklar as $nyckel) {
-            $mening = trans("ui.{$nyckel}", [], $locale);
+    foreach ($nycklar as $nyckel) {
+        $mening = trans("ui.{$nyckel}", [], 'en');
 
-            expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på {$locale}");
-            expect(trim($mening))->not->toBe('');
-        }
+        expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+        expect(trim($mening))->not->toBe('');
     }
 
-    // `kind` är en etikett per värde i Container::KINDS, på båda språken.
-    foreach (['sv', 'en'] as $locale) {
-        foreach (Container::KINDS as $kind) {
-            expect(trans("ui.container.kind.{$kind}", [], $locale))
-                ->not->toBe("ui.container.kind.{$kind}", "kind.{$kind} saknas på {$locale}");
-        }
+    // `kind` är en etikett per värde i Container::KINDS.
+    foreach (Container::KINDS as $kind) {
+        expect(trans("ui.container.kind.{$kind}", [], 'en'))
+            ->not->toBe("ui.container.kind.{$kind}", "kind.{$kind} saknas");
     }
 
-    expect(trans('ui.error.quota.containers_exceeded', [], 'sv'))
-        ->not->toBe(trans('ui.error.quota.containers_exceeded', [], 'en'));
+    // Kvotmeningen bär gränsen och värdet, och är en mening och inte nyckeln.
+    expect(trans('ui.error.quota.containers_exceeded', ['used' => 1, 'limit' => 1], 'en'))
+        ->toBe('The account has reached its limit for the number of containers (1 of 1).');
 
     $index = File::get(resource_path('js/pages/Containers/Index.vue'));
 

@@ -324,13 +324,13 @@ it('skiljer en containerbred rad från en itemrad med omfång och reach', functi
         ->where('itemNames', [$motorn->ulid => 'Motorn'])
     );
 
-    // Texten: "Hela containern" för den breda raden, och itemets namn plus talet
-    // för itemraden. Formuleringen bor i lang/, och valet av nyckel bor i
+    // Texten: "The whole container" för den breda raden, och itemets namn plus
+    // talet för itemraden. Formuleringen bor i lang/, och valet av nyckel bor i
     // accessPresentation.js — EN gång, för både den giltiga och den
     // historiska listan.
-    $sv = require lang_path('sv/ui.php');
-    expect($sv['sharing']['scope']['container'])->toBe('Hela containern');
-    expect($sv['sharing']['scope']['item'])->toContain(':item')->toContain(':reach');
+    $en = require lang_path('en/ui.php');
+    expect($en['sharing']['scope']['container'])->toBe('The whole container');
+    expect($en['sharing']['scope']['item'])->toContain(':item')->toContain(':reach');
 
     $beskrivning = File::get(resource_path('js/components/accessPresentation.js'));
     expect($beskrivning)->toContain("t('sharing.scope.container')");
@@ -497,12 +497,9 @@ it('redovisar en mottagare som inte längre finns med en mening', function () {
         ->where('grantedByNames', [$anvandare->ulid => $anvandare->name])
     );
 
-    $sv = require lang_path('sv/ui.php');
     $en = require lang_path('en/ui.php');
 
-    expect($sv['sharing']['accesses']['grantee_unknown'])->toBe('Borttagen mottagare');
-    expect($en['sharing']['accesses']['grantee_unknown'])->not->toBe('');
-    expect($sv['sharing']['accesses']['granted_by_unknown'])->not->toBe('');
+    expect($en['sharing']['accesses']['grantee_unknown'])->toBe('Removed recipient');
     expect($en['sharing']['accesses']['granted_by_unknown'])->not->toBe('');
 });
 
@@ -586,19 +583,17 @@ it('lägger create och delete bakom Avancerat utan att gömma dem', function () 
     expect($falt)->toContain('t(`sharing.level.${level}.description`)');
 });
 
-it('visar nivåerna och deras beskrivningar på båda språken', function () {
-    $sv = require lang_path('sv/ui.php');
+it('visar nivåerna och deras beskrivningar', function () {
     $en = require lang_path('en/ui.php');
 
     foreach (['read', 'create', 'write', 'delete'] as $niva) {
         foreach (['label', 'description'] as $falt) {
-            expect($sv['sharing']['level'][$niva][$falt])->not->toBe('');
             expect($en['sharing']['level'][$niva][$falt])->not->toBe('');
         }
     }
 
     // Meningen om vad ingen nivå får göra står EN gång på sidan (Beslut 4).
-    expect($sv['sharing']['accesses']['limits'])->toContain('ägarbyte');
+    expect($en['sharing']['accesses']['limits'])->toContain('transfer of ownership');
 });
 
 /*
@@ -694,10 +689,8 @@ it('erbjuder ingen väg att tömma utgången', function () {
 
     // Meningen om varför står i vyn, i stället för att ägaren letar efter en
     // knapp som inte finns.
-    $sv = require lang_path('sv/ui.php');
     $en = require lang_path('en/ui.php');
 
-    expect($sv['sharing']['accesses']['expires_fixed'])->not->toBe('');
     expect($en['sharing']['accesses']['expires_fixed'])->not->toBe('');
     expect($rad)->toContain("t('sharing.accesses.expires_fixed')");
 
@@ -776,9 +769,9 @@ it('ger ett läsbart formulärfel i stället för JSON på en död rad', functio
     $aterkallad = delningsAccess($container, User::factory()->create(), 'read', revokedAt: now()->subDay());
     $utgangen = delningsAccess($container, User::factory()->create(), 'read', 'guest', expiresAt: now()->subDay());
 
-    // Meningen finns på båda språken, och är inte felkoden själv.
-    $sv = require lang_path('sv/ui.php');
-    expect($sv['error']['container_access']['revoked'])->not->toBe('container_access.revoked');
+    // Meningen finns i katalogen, och är inte felkoden själv.
+    $en = require lang_path('en/ui.php');
+    expect($en['error']['container_access']['revoked'])->not->toBe('container_access.revoked');
 
     foreach ([$aterkallad, $utgangen] as $access) {
         $svar = from("/containers/{$container->ulid}/sharing")
