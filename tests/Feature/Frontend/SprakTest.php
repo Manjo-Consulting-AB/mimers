@@ -318,6 +318,59 @@ it('har inga tomma strängar i ui.php', function () {
     }
 });
 
+/*
+ * [[ADR-0033 Produktens omfång]] § Beslut: containern är ett sammanhang för
+ * allt man äger, använder eller arbetar med — inte ett fordon eller ett
+ * fritidshus. Det generiska svaret issue 81 lämnade efter sig är
+ * `common.tagline`, och den prövas ordagrant: den är den första meningen en
+ * ny användare möter.
+ *
+ * Fordonsorden prövas mot varje VÄRDE i filen, inte mot råtexten. Kommentarer
+ * får nämna vad som helst (och gör det — "carries" står i ett tjugotal rader),
+ * men copyn får bära ett fordon bara som etikett för en containertyp:
+ * `container.kind.*` är datamodellens namn och ingen mening användaren möts
+ * av. Ett tomt tillstånd som ber om en båt är felet ADR-0033 § Beslut finns
+ * för att förhindra, och det är svårast att upptäcka i efterhand.
+ */
+it('beskriver produkten generiskt, utan fordon i copyn', function () {
+    $ui = sprakLov(sprakFil('en'));
+
+    expect($ui['common.tagline'])->toBe('The place for everything you own, use or work with.');
+
+    foreach ($ui as $nyckel => $varde) {
+        if (preg_match('/\b(boat|car|caravan|vessel|vehicle)\b/i', $varde) !== 1) {
+            continue;
+        }
+
+        expect($nyckel)->toStartWith('container.kind.', "ui.{$nyckel} namnger ett fordon: {$varde}");
+    }
+});
+
+/*
+ * `lang/en/ui.php` sade *binder* i ett tjugotal kommentarer efter issue 77b,
+ * som tog prosan i koden men missade den filen. Städningen är gjord — det här
+ * är regeln som håller den kvar, och den läser råtexten just därför att
+ * kommentarerna är osynliga för sprakLov(): en kommentar som smyger tillbaka
+ * hade annars passerat obesedd.
+ *
+ * `pdf_binder` är undantaget och det enda — [[ADR-0032 Produktens ord]]
+ * § Konsekvenser håller namnet tills PDF-pärmen byggs. Raden bär ordet i både
+ * nyckeln och värdet ('PDF binder'), och det är samma undantag.
+ */
+it('säger inte binder någon annanstans än i pdf_binder', function () {
+    $rader = preg_split('/\R/', File::get(lang_path('en/ui.php'))) ?: [];
+
+    $fel = [];
+
+    foreach ($rader as $nummer => $rad) {
+        if (stripos($rad, 'binder') !== false && ! str_contains($rad, 'pdf_binder')) {
+            $fel[] = sprintf('rad %d: %s', $nummer + 1, trim($rad));
+        }
+    }
+
+    expect($fel)->toBe([]);
+});
+
 it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
     $filer = File::allFiles(resource_path('js'));
 
