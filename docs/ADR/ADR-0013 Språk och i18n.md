@@ -1,6 +1,6 @@
 # ADR-0013 Språk och i18n
 
-**Status:** Antagen 2026-08-03 · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Språkuppsättningen ersatt av [[ADR-0034 Engelska vid lansering]]; övriga beslut gäller · [[ADR-index]]
 
 ## Kontext
 

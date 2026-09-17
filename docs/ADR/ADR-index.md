@@ -1,6 +1,6 @@
 # ADR-index
 
-Trettiotvå beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Trettiofyra beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -18,7 +18,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0010 Notisarkitektur]] | Outbox med utbytbara kanaler | [[Notiser]] |
 | [[ADR-0011 Autentisering]] | Sanctum, lösenord plus magic link | [[Konton och åtkomst]] |
 | [[ADR-0012 Sök]] | Scout med databasdrivern tills vidare | [[Items och organisation]] |
-| [[ADR-0013 Språk och i18n]] | Svenska och engelska, felkoder aldrig meningar | Allt |
+| [[ADR-0013 Språk och i18n]] | *Språkuppsättningen ersatt av ADR-0034.* Svenska och engelska, felkoder aldrig meningar | Allt |
 | [[ADR-0014 Prismodell]] | Gratis, Pro 39–49 €/år, tre B2B-spår | [[Planer och kvoter]] |
 | [[ADR-0015 Backup]] | Tre nivåer, off-site från inleed | Drift |
 | [[ADR-0016 Kostnadsregistrering]] | Kostnadsrader per item, rapport bakom Pro | [[Items och organisation]] |
@@ -38,6 +38,8 @@ Tillbaka till [[00 Index]].
 | [[ADR-0030 Miljövariabler ur GitHubs secrets]] | Utrullningen upsertar miljöns secrets i `shared/.env` före `config:cache` | Drift, [[Pipeline]] |
 | [[ADR-0031 Köarbetaren körs av schemaläggaren]] | Schemalagd `queue:work --stop-when-empty` sist i `routes/console.php`, ingen daemon | Drift, [[Pipeline]] |
 | [[ADR-0032 Produktens ord]] | Container och objekt i gränssnittet, pärmen utgår | Allt |
+| [[ADR-0033 Produktens omfång]] | Generell plats för det du äger, använder eller arbetar med — inte ett båtverktyg | Allt |
+| [[ADR-0034 Engelska vid lansering]] | Engelska enda levererade språk, maskineriet för fler kvar och testat | Allt |
 
 ## Om att ändra ett beslut
 
