@@ -363,7 +363,7 @@ it('säger att pärmen är tom och aldrig att den kanske är det', function () {
     $sv = require lang_path('sv/ui.php');
     $en = require lang_path('en/ui.php');
 
-    expect($sv['item']['index']['empty'])->toBe('Pärmen är tom.');
+    expect($sv['item']['index']['empty'])->toBe('Containern är tom.');
     expect($en['item']['index']['empty'])->not->toBe('');
 
     // Ingen totalsumma i vyn — raden är hela sidans svar på en tom pärm.

@@ -667,12 +667,17 @@ it('säger att papperskorgen är tom och återanvänder raden från 62a', functi
         expect($en['trash']['containers'][$nyckel])->not->toBe('');
     }
 
-    // Typetiketten för en raderad pärm, i samma uppslag som de fyra andra
-    // typerna: raden läser `trash.type.<type>` och `container` är ett värde ur
-    // TrashEntryResource.
-    expect($sv['trash']['type']['container'])->not->toBe('');
-    expect($en['trash']['type']['container'])->not->toBe('');
-    expect($sv['trash']['type']['container'])->not->toBe($en['trash']['type']['container']);
+    // Typetiketten för en raderad container, i samma uppslag som de fyra
+    // andra typerna: raden läser `trash.type.<type>` och `container` är ett
+    // värde ur TrashEntryResource.
+    //
+    // **Etiketten är den enda som är likadan på båda språken, och det är
+    // avsiktligt** — se [[ADR-0032 Produktens ord]]: containern heter
+    // container, och den engelska filen lånar ordet i stället för att
+    // översätta det. Här stod tidigare ett påstående om att de två skilde
+    // sig; det var sant så länge engelskan sa *binder*, och det är falskt nu.
+    expect($sv['trash']['type']['container'])->toBe('Container');
+    expect($en['trash']['type']['container'])->toBe('Container');
 });
 
 /*

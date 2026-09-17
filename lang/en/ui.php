@@ -8,7 +8,7 @@
 return [
     'common' => [
         'brand' => 'Mimers',
-        'tagline' => 'The binder for the boat, the caravan, the house and the car.',
+        'tagline' => 'The container for the boat, the caravan, the house and the car.',
         'to_dashboard' => 'Go to the dashboard',
         'home' => 'Back to the start page',
         'pending' => [
@@ -16,7 +16,7 @@ return [
             'upload' => 'Uploading…',
             'export' => 'Preparing the export…',
             'complete' => 'Checking off…',
-            'transfer' => 'Taking over the binder…',
+            'transfer' => 'Taking over the container…',
         ],
     ],
 
@@ -24,7 +24,7 @@ return [
         'menu' => 'Menu',
         'menu_close' => 'Close the menu',
         'dashboard' => 'Dashboard',
-        'containers' => 'Binders',
+        'containers' => 'Containers',
         'transfers' => 'Ownership transfers',
         'login' => 'Log in',
     ],
@@ -88,13 +88,13 @@ return [
         // answer to what happened.
         'notification-preferences-updated' => 'The notification settings have been saved.',
         'quiet-hours-updated' => 'The quiet hours have been saved.',
-        'container-created' => 'The binder has been created.',
-        'container-updated' => 'The binder has been saved.',
+        'container-created' => 'The container has been created.',
+        'container-updated' => 'The container has been saved.',
         'access-updated' => 'The access has been saved.',
         'access-revoked' => 'The access has been revoked.',
         'invitation-sent' => 'The invitation has been sent.',
         'invitation-revoked' => 'The invitation has been withdrawn.',
-        'invitation-accepted' => 'The invitation has been accepted. The binder is under Binders.',
+        'invitation-accepted' => 'The invitation has been accepted. The container is under Containers.',
         'invitation-rejected' => 'The invitation has been declined.',
         'category-created' => 'The category has been created.',
         'category-updated' => 'The category has been saved.',
@@ -133,12 +133,12 @@ return [
         // not item (same reason as issue 20a decision 1).
         'trash-restored' => 'The content has been restored.',
 
-        // Issue 62b decisions 5 and 6. The deletion lands on the binder list —
+        // Issue 62b decisions 5 and 6. The deletion lands on the container list —
         // and the sentence points at the trash, where the link sits right
-        // below. The restore says the binder is back; it does NOT become
-        // active on its own, because choosing a binder is the user's action.
-        'container-trashed' => 'The binder is in the trash.',
-        'container-restored' => 'The binder has been restored.',
+        // below. The restore says the container is back; it does NOT become
+        // active on its own, because choosing a container is the user's action.
+        'container-trashed' => 'The container is in the trash.',
+        'container-restored' => 'The container has been restored.',
 
         // Issue 63a decisions 6 and 8. The pause is the same write as a
         // changed title and therefore gets its own sentence: "saved" would
@@ -179,11 +179,11 @@ return [
         // Issue 67b decisions 4 and 7. The first three belong to the sender —
         // she sends, withdraws, and learns that the recipient declined — and
         // the fourth to the recipient. `transfer-rejected` says what the
-        // decision means for HER (the binder is not hers), not what the server
-        // did, and `transfer-accepted` says that the binder is now in her list.
+        // decision means for HER (the container is not hers), not what the server
+        // did, and `transfer-accepted` says that the container is now in her list.
         'transfer-created' => 'The transfer has been sent. The recipient sees it under Ownership transfers.',
         'transfer-revoked' => 'The transfer has been withdrawn. The row stays in the history.',
-        'transfer-accepted' => 'The binder is yours. You will find it in the binder list.',
+        'transfer-accepted' => 'The container is yours. You will find it in the container list.',
         'transfer-rejected' => 'You have declined. The sender must send a new transfer if you change your mind.',
 
         // Issue 67c decision 3. The order answers immediately, and the
@@ -205,7 +205,7 @@ return [
         'generic' => 'Something went wrong. Try again in a moment.',
 
         'quota' => [
-            'containers_exceeded' => 'The account has reached its limit for the number of binders (:used of :limit).',
+            'containers_exceeded' => 'The account has reached its limit for the number of containers (:used of :limit).',
             // Issue 55b decision 6: the two limits an invitation form can hit.
             'shared_users_exceeded' => 'The sharing has reached the account limit (:used of :limit).',
             'pending_invitations_exceeded' => 'The account has reached its limit for outstanding invitations (:used of :limit).',
@@ -250,7 +250,7 @@ return [
         'category' => [
             'max_depth_exceeded' => 'A category can be at most :max_depth levels deep.',
             'cycle' => 'A category cannot be moved into itself or into one of its own subcategories.',
-            'parent_not_in_container' => 'The chosen parent category is not in this binder.',
+            'parent_not_in_container' => 'The chosen parent category is not in this container.',
             'has_children' => 'The category has :children subcategories and cannot be deleted.',
             'has_items' => 'The category has :items items and cannot be deleted.',
         ],
@@ -269,7 +269,7 @@ return [
         // `data` away is worse than the error code it replaced.
         'item_link' => [
             'self' => 'An item cannot be linked to itself.',
-            'cross_container' => 'Relations only go between items in the same binder.',
+            'cross_container' => 'Relations only go between items in the same container.',
             'pair_exists' => 'The two are already linked: the counterpart is :relation.',
             'relation_word' => [
                 'parent' => 'a parent',
@@ -310,10 +310,10 @@ return [
         // be a key nobody asks for, and every refused transfer would fall back
         // to `error.generic`.
         'transfer' => [
-            'already_pending' => 'The binder already has a transfer waiting for an answer. Withdraw it first if you want to change the recipient.',
+            'already_pending' => 'The container already has a transfer waiting for an answer. Withdraw it first if you want to change the recipient.',
             'not_pending' => 'The transfer has already been answered or withdrawn and cannot be changed.',
             'expired' => 'The transfer has expired. The sender must send a new one.',
-            'account_frozen' => 'Your account is frozen and cannot receive a binder right now.',
+            'account_frozen' => 'Your account is frozen and cannot receive a container right now.',
         ],
 
         // The close flow's domain errors on the web, see issue 63b decision 6.
@@ -337,7 +337,7 @@ return [
             // the sentence names them with their schedule titles.
             'dependency_self' => 'An occurrence cannot wait for itself.',
             'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other occurrences.',
-            'dependency_not_in_container' => 'Dependencies only run between occurrences in the same binder.',
+            'dependency_not_in_container' => 'Dependencies only run between occurrences in the same container.',
         ],
 
         'schedule' => [
@@ -347,7 +347,7 @@ return [
             // dependency, from App\Actions\Schedule\DependSchedule.
             'dependency_self' => 'A schedule cannot wait for itself.',
             'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other schedules.',
-            'dependency_not_in_container' => 'Dependencies only run between schedules in the same binder.',
+            'dependency_not_in_container' => 'Dependencies only run between schedules in the same container.',
         ],
 
         // Issue 65b decision 5: the feature gate. `Entitlements::assertFeature()`
@@ -555,8 +555,8 @@ return [
             ],
             'invitation' => [
                 'received' => [
-                    'label' => 'Invitation to a binder',
-                    'description' => 'When someone invites you to a binder.',
+                    'label' => 'Invitation to a container',
+                    'description' => 'When someone invites you to a container.',
                 ],
             ],
             'transfer' => [
@@ -611,17 +611,17 @@ return [
         ],
     ],
 
-    // The binder's calendar link, see issue 65b decisions 2 and 4 and
+    // The container's calendar link, see issue 65b decisions 2 and 4 and
     // resources/js/pages/Containers/CalendarFeed.vue.
     //
-    // The address is in practice a password to the binder's tasks ([[Notiser]]
+    // The address is in practice a password to the container's tasks ([[Notiser]]
     // § ICS-kalenderfeed), and the texts say so in two places: `url_once` at
     // the display and `revoke_confirm` at the revocation. Whoever lost the link
     // has nothing to retrieve — the answer is to revoke and create a new one.
     'calendar' => [
         'title' => 'Calendar',
         'heading' => 'Calendar',
-        'intro' => 'Subscribe to the binder\'s tasks in the calendar you already use. The link is personal and shows only what you can see yourself.',
+        'intro' => 'Subscribe to the container\'s tasks in the calendar you already use. The link is personal and shows only what you can see yourself.',
 
         'url_label' => 'The calendar address',
         'url_description' => 'Add the address to your calendar app. It fetches the tasks itself and keeps itself up to date.',
@@ -632,8 +632,8 @@ return [
 
         'create' => 'Create a calendar link',
 
-        'list_heading' => 'Your links to this binder',
-        'empty' => 'You have no calendar links to this binder yet.',
+        'list_heading' => 'Your links to this container',
+        'empty' => 'You have no calendar links to this container yet.',
 
         'revoke' => 'Revoke',
         'revoke_confirm' => 'Revoke the calendar link? The calendar stops updating, and the address cannot be retrieved.',
@@ -711,7 +711,7 @@ return [
             ],
             'invitation' => [
                 'received' => [
-                    'label' => 'Invitation to a binder',
+                    'label' => 'Invitation to a container',
                     'description' => 'When someone invites a member to the account.',
                 ],
             ],
@@ -814,10 +814,10 @@ return [
         // The four numeric limits (decision 4). The keys are the keys of
         // `plan.limits`, never names of our own making.
         'limits' => [
-            'containers' => 'Binders',
+            'containers' => 'Containers',
             'storage_bytes' => 'Storage',
             'max_file_bytes' => 'Largest file size',
-            'shared_users_per_container' => 'Shared users per binder',
+            'shared_users_per_container' => 'Shared users per container',
         ],
 
         // `:used` and `:limit` are formatted by the server — the bytes with
@@ -825,7 +825,7 @@ return [
         // 60a.
         'of' => ':used of :limit',
         'of_unlimited' => ':used of unlimited',
-        'per_container' => ':limit per binder',
+        'per_container' => ':limit per container',
 
         // `null` is unlimited and is written as a word, never as zero and
         // never as a full bar (decision 4).
@@ -910,14 +910,14 @@ return [
         'list_intro' => 'Largest first. Tick what can go — the forty holiday photos can, the inspection report cannot.',
         'empty' => 'The account has no attachments.',
 
-        // Binder and item per row, in that order: the context is what makes
+        // Container and item per row, in that order: the context is what makes
         // the choice possible. The separator lives in the sentence and not in
         // the template.
         'row' => [
             'location' => ':container — :item',
-            // An attachment whose item or binder is in the trash still counts
+            // An attachment whose item or container is in the trash still counts
             // against the account and must be visible (decision 3).
-            'trashed' => 'The binder or the item is in the trash. The attachment still counts against the account.',
+            'trashed' => 'The container or the item is in the trash. The attachment still counts against the account.',
         ],
 
         // The selection preview (decision 4): computed on the client from
@@ -964,7 +964,7 @@ return [
 
         'nav' => [
             // `items` comes first, like the row in containerSections.js: the
-            // items are the binder, the categories and tags are how it is
+            // items are the container, the categories and tags are how it is
             // organised.
             'items' => 'Items',
             'categories' => 'Categories',
@@ -972,14 +972,14 @@ return [
             'sharing' => 'Sharing',
             'settings' => 'Settings',
             // Issue 65b decision 1: the calendar link is a WAY OUT of the
-            // product — the binder's tasks subscribed to from someone else's
+            // product — the container's tasks subscribed to from someone else's
             // calendar — and sits after the settings, before the trash. The row
             // is in the same place in containerSections.js.
             'calendar' => 'Calendar',
             // Issue 67c decision 1: the export is a WAY OUT of the product,
-            // like the calendar link — but where the link feeds the binder's
+            // like the calendar link — but where the link feeds the container's
             // tasks into someone else's calendar, the export takes the whole
-            // binder out in a file. The row is in the same place in
+            // container out in a file. The row is in the same place in
             // containerSections.js, and it sits in the NAVIGATION and not
             // behind a setting: the export is free on every plan on purpose.
             'export' => 'Export',
@@ -993,10 +993,10 @@ return [
         ],
 
         'index' => [
-            'title' => 'Binders',
-            'heading' => 'Binders',
-            'create' => 'New binder',
-            'empty' => 'You have no binders yet.',
+            'title' => 'Containers',
+            'heading' => 'Containers',
+            'create' => 'New container',
+            'empty' => 'You have no containers yet.',
             'shared' => 'Shared with you',
             'active' => 'Active',
             'make_active' => 'Make active',
@@ -1004,8 +1004,8 @@ return [
         ],
 
         'create' => [
-            'title' => 'New binder',
-            'heading' => 'New binder',
+            'title' => 'New container',
+            'heading' => 'New container',
 
             'name' => 'Name',
             'kind' => 'Type',
@@ -1026,13 +1026,13 @@ return [
         ],
 
         // The deletion, see issue 62b decisions 4 and 5. `confirm` carries the
-        // binder's name: a confirmation that does not say what disappears is a
+        // container's name: a confirmation that does not say what disappears is a
         // confirmation people click away. It says that everything comes along,
-        // that the binder stays in the trash for 30 days and that it can be
+        // that the container stays in the trash for 30 days and that it can be
         // restored from there — and NEVER "deleted permanently", because the
         // deletion is soft (issue 8) and that word would be untrue.
         'destroy' => [
-            'action' => 'Delete the binder',
+            'action' => 'Delete the container',
             'confirm' => ':name and everything in it moves to the trash. It stays there for 30 days and can be restored from there. Do you want to continue?',
         ],
 
@@ -1053,17 +1053,17 @@ return [
             'destroy' => 'Delete',
             'empty' => 'No categories yet.',
 
-            // The suggestion on an empty binder, see issue 56b decision 4. The
+            // The suggestion on an empty container, see issue 56b decision 4. The
             // words in the set itself are NOT here and never will be: they live
             // in resources/js/data/categoryPresets.js, per language and kind.
-            // `preset_not_empty` is the route's answer on a binder that already
+            // `preset_not_empty` is the route's answer on a container that already
             // has categories and lands on the `categories` form key — a
             // sentence, not an API error code, since the route is web-only.
             'preset_heading' => 'Ready-made set',
-            'preset_description' => 'We can fill the binder with a ready-made suggestion of categories. You can rename, move and delete them just like any other category afterwards.',
+            'preset_description' => 'We can fill the container with a ready-made suggestion of categories. You can rename, move and delete them just like any other category afterwards.',
             'preset_apply' => 'Add the set',
             'preset_dismiss' => 'No thanks',
-            'preset_not_empty' => 'The binder already has categories. A set can only be added to an empty binder.',
+            'preset_not_empty' => 'The container already has categories. A set can only be added to an empty container.',
         ],
 
         // The tag list, see issue 56a decisions 6 and 8.
@@ -1108,7 +1108,7 @@ return [
             'title' => 'Items',
             'heading' => 'Items',
             'create' => 'New item',
-            'empty' => 'The binder is empty.',
+            'empty' => 'The container is empty.',
 
             'filter_heading' => 'Filter',
             'filter_q' => 'Search term',
@@ -1121,13 +1121,13 @@ return [
             'filter_remove' => 'Remove :filter',
 
             // A value in the link that is no longer in the recipient's scope —
-            // a deleted tag, a category moved to another binder. The row is
+            // a deleted tag, a category moved to another container. The row is
             // the whole answer: no 422, no redirect back to the same query
             // string (decision 3).
             'filter_dropped' => 'A filter in the link no longer exists and has been removed.',
 
             // The "filter, no rows" state. Without a filter `empty` says the
-            // binder is empty instead.
+            // container is empty instead.
             'filter_empty' => 'No hits with these filters: :filters.',
 
             'filter_label_q' => 'the search term “:value”',
@@ -1167,14 +1167,14 @@ return [
             // an empty field.
             'category' => 'Category',
             'category_none' => '— no category —',
-            'categories_empty' => 'The binder has no categories yet.',
+            'categories_empty' => 'The container has no categories yet.',
             'categories_empty_link' => 'Create categories',
 
-            // The tags are checkboxes, one per tag in the binder. A new tag is
+            // The tags are checkboxes, one per tag in the container. A new tag is
             // created on the tags page and not here: one way to the same write
             // in two places is two rules to keep in step (decision 5).
             'tags' => 'Tags',
-            'tags_empty' => 'The binder has no tags yet.',
+            'tags_empty' => 'The container has no tags yet.',
             'tags_empty_link' => 'Create tags',
 
             // The account the row is attributed to — the yard, not the
@@ -1276,7 +1276,7 @@ return [
         // AttachmentResource carries for /api.
         //
         // `billing_note` says WHICH account pays before the file is chosen:
-        // the quota is counted on the uploading account and not on the binder
+        // the quota is counted on the uploading account and not on the container
         // owner ([[Filer och lagring]] § attachment, AGENTS.md § Sådant som är
         // lätt att göra fel), and whoever uploads should know what it costs.
         //
@@ -1323,7 +1323,7 @@ return [
             'pdf_fallback' => 'Cannot display the PDF? Download it instead.',
 
             'upload_heading' => 'Upload files',
-            'billing_note' => 'Storage is charged to the account below, not to the binder owner.',
+            'billing_note' => 'Storage is charged to the account below, not to the container owner.',
             'account' => 'The account that pays',
             'file' => 'Files',
             'dropzone' => 'Drop the files here',
@@ -1641,7 +1641,7 @@ return [
     //
     // `empty` names the search term and stops there (decision 6): no number of
     // rows that existed, no hint that something was held back, no listing of
-    // which binders were searched — which binders at all is information in
+    // which containers were searched — which containers at all is information in
     // itself. A user with access to nothing gets word for word the same
     // sentence as a user whose term matches nothing, because the sentence
     // knows nothing about scope.
@@ -1653,30 +1653,30 @@ return [
     // stemming in JavaScript, no second search on a truncated word. One line
     // is the whole answer.
     //
-    // `in_container` is the prefix before the binder name, and only the
-    // prefix: the name is its own link to the binder's front page (decision
+    // `in_container` is the prefix before the container name, and only the
+    // prefix: the name is its own link to the container's front page (decision
     // 3), so the words cannot live in one string.
     'search' => [
         'title' => 'Search',
         'heading' => 'Search',
 
-        'intro' => 'Searches name, description, manufacturer, model and serial number — in every binder you can reach.',
+        'intro' => 'Searches name, description, manufacturer, model and serial number — in every container you can reach.',
         'whole_words' => 'The search matches whole words: “battery” does not find “batteries”.',
         'empty' => 'No hits for “:q”.',
         'in_container' => 'in',
 
         'field' => [
-            'label' => 'Search all binders',
+            'label' => 'Search all containers',
             'placeholder' => 'Search term',
             'submit' => 'Search',
         ],
     ],
 
     // The to-do view, see issue 64. The landing page after sign-in: the open
-    // occurrences across every binder the user can reach.
+    // occurrences across every container the user can reach.
     //
     // The two empty sentences differ on purpose (decision 6): one says the
-    // user has no binder at all and carries a link to create one, the other
+    // user has no container at all and carries a link to create one, the other
     // that there is nothing to do. Neither mentions a number or hints that
     // anything was hidden — a scope-limited recipient with an empty list gets
     // the exact same sentence as an owner whose tasks are done.
@@ -1697,15 +1697,15 @@ return [
         ],
 
         'empty' => [
-            'no_containers' => 'You have no binders yet.',
-            'create' => 'Create a binder',
+            'no_containers' => 'You have no containers yet.',
+            'create' => 'Create a container',
             'nothing' => 'Nothing to do right now.',
         ],
     ],
 
     // The sharing page, see issue 55a. Two sections with different audiences
     // (decision 3), and the texts follow that split.
-    // The binder's export page, see issue 67c decisions 1, 5, 6, 7 and 8.
+    // The container's export page, see issue 67c decisions 1, 5, 6, 7 and 8.
     //
     // **`status` holds the column values from App\Models\Export::STATUSES**,
     // never invented names of our own — same rule as container.kind. `pending`
@@ -1725,7 +1725,7 @@ return [
         // every plan is stated here and not only in a plan overview: it is the
         // product promise, and whoever looks for a gate should see that there
         // is none.
-        'intro' => 'The export gathers the whole binder in a ZIP file: items with categories and tags, the attachments and the history. It is free on every plan, and the file is a bag you fetch — not an archive you keep.',
+        'intro' => 'The export gathers the whole container in a ZIP file: items with categories and tags, the attachments and the history. It is free on every plan, and the file is a bag you fetch — not an archive you keep.',
         'create' => 'Order an export',
 
         // Why the button is closed, in words (decision 4). A disabled button
@@ -1773,7 +1773,7 @@ return [
 
         'participants' => [
             'heading' => 'Participants',
-            'description' => 'Everyone with access to the binder right now. An account counts as one participant, never as its members.',
+            'description' => 'Everyone with access to the container right now. An account counts as one participant, never as its members.',
         ],
 
         'role' => [
@@ -1785,11 +1785,11 @@ return [
 
         'accesses' => [
             'heading' => 'Accesses',
-            'description' => 'Everything shared from the binder, and the history of what has been revoked or expired.',
+            'description' => 'Everything shared from the container, and the history of what has been revoked or expired.',
 
-            // No level may delete the binder, manage accesses or start a
+            // No level may delete the container, manage accesses or start a
             // transfer of ownership. Stated once on the page, not per row.
-            'limits' => 'No access grants the right to delete the binder, manage accesses or start a transfer of ownership. That is always the owner account.',
+            'limits' => 'No access grants the right to delete the container, manage accesses or start a transfer of ownership. That is always the owner account.',
 
             'level' => 'Level',
             'grantee' => 'Recipient',
@@ -1827,7 +1827,7 @@ return [
 
             'email' => 'Email',
             'item' => 'Scope',
-            'item_container' => 'The whole binder',
+            'item_container' => 'The whole container',
 
             'submit' => 'Invite',
             'revoke' => 'Withdraw',
@@ -1855,13 +1855,13 @@ return [
         ],
 
         'scope' => [
-            'container' => 'The whole binder',
+            'container' => 'The whole container',
             'item' => ':item reaches :reach items',
         ],
 
         'kind' => [
             'member' => 'A person — a partner or a co-owner.',
-            'managed' => 'An organisation with a service relationship, typically a yard. It does not own the binder, and what it creates is attributed to the organisation.',
+            'managed' => 'An organisation with a service relationship, typically a yard. It does not own the container, and what it creates is attributed to the organisation.',
             'guest' => 'Temporary access with an expiry date.',
         ],
 
@@ -1876,7 +1876,7 @@ return [
             ],
             'write' => [
                 'label' => 'Change',
-                'description' => 'Also changes what is already in the binder.',
+                'description' => 'Also changes what is already in the container.',
             ],
             'delete' => [
                 'label' => 'Delete',
@@ -1900,12 +1900,12 @@ return [
         'title' => 'Invitation',
         'heading' => 'Invitation',
 
-        // The binder's name and the inviter's name are shown to a guest too.
+        // The container's name and the inviter's name are shown to a guest too.
         // That is not new information: InvitationNotification prints the
-        // binder's name in both the subject line and the body, and whoever has
+        // container's name in both the subject line and the body, and whoever has
         // the link has received the email. The address the invitation is for
         // is never shown.
-        'intro' => ':inviter has invited you to the binder :container.',
+        'intro' => ':inviter has invited you to the container :container.',
         'level' => 'Level: :level',
 
         // A guest has no address to compare with and therefore no form to
@@ -1924,17 +1924,17 @@ return [
     // The ownership transfer, see issue 67b decisions 1–9 and [[Konton och
     // åtkomst]] § ownership_transfer. A branch of its own on the top level
     // rather than under `container`: the recipient's inbox sits OUTSIDE the
-    // binder — she does not have it yet — and the sender's page is the other
+    // container — she does not have it yet — and the sender's page is the other
     // half of the same conversation. Same reason that makes `sharing` and
     // `trash` branches of their own.
     //
     // Two pages in one branch: `form`/`excluded`/`retain`/`row`/`status`
-    // belong to the binder's page, `inbox`/`card` to the recipient's.
+    // belong to the container's page, `inbox`/`card` to the recipient's.
     // `accept` and `reject` are shared and sit outermost.
     'transfer' => [
         'title' => 'Ownership transfer',
         'heading' => 'Ownership transfer',
-        'intro' => 'The whole binder changes accounts. It covers the same thing whether a boatyard hands over to a customer, a broker to a buyer, or a boat is sold privately.',
+        'intro' => 'The whole container changes accounts. It covers the same thing whether a boatyard hands over to a customer, a broker to a buyer, or a boat is sold privately.',
 
         // The link sits beside the plan box and not inside the sentence: the
         // string is also delivered by the /api error envelope, and markup in a
@@ -1942,12 +1942,12 @@ return [
         'plan_link' => 'Read about the plans',
 
         'form' => [
-            'heading' => 'Hand over the binder',
+            'heading' => 'Hand over the container',
 
             // What the transfer covers, before it is sent (decision 2). Four
             // things in one sentence, and they are the four that actually
             // happen.
-            'notice' => 'All items follow along except the ones you exclude below. The space the binder uses moves to the recipient\'s account, accesses and open invitations are revoked — the new owner invites whomever she wants — and the recipient gets twelve months of Pro on their first received ownership transfer.',
+            'notice' => 'All items follow along except the ones you exclude below. The space the container uses moves to the recipient\'s account, accesses and open invitations are revoked — the new owner invites whomever she wants — and the recipient gets twelve months of Pro on their first received ownership transfer.',
 
             // Two paths, exactly one to be filled in. The rule is tried by
             // `prohibits` in StoreOwnershipTransferRequest and is not
@@ -2019,15 +2019,15 @@ return [
         'inbox' => [
             'title' => 'Ownership transfers to you',
             'heading' => 'Ownership transfers to you',
-            'intro' => 'Binders someone wants to hand over to you. You find them here when signed in, whether or not the email is still around.',
+            'intro' => 'Containers someone wants to hand over to you. You find them here when signed in, whether or not the email is still around.',
             'empty' => 'No ownership transfers are waiting for you.',
         ],
 
-        // The consequences stand before the button (decision 6): which binder,
+        // The consequences stand before the button (decision 6): which container,
         // from which account, how many items follow along and are excluded,
         // which access the sender keeps, and the twelve months of Pro.
         'card' => [
-            'container' => 'The binder :container',
+            'container' => 'The container :container',
             'from' => 'From the account :account',
             'items' => ':following of :total follow along, :excluded excluded.',
             'retain' => 'The sender keeps access: :level.',
@@ -2035,16 +2035,16 @@ return [
             'pro' => 'Twelve months of Pro are included — once per account, on the first ownership transfer you receive.',
 
             // What happens to the space afterwards, and who owns it: whoever
-            // receives the binder takes over the usage too, and it is her
+            // receives the container takes over the usage too, and it is her
             // quota that applies from then on.
-            'quota' => 'The space the binder uses moves to your account, and it is your quota that applies afterwards.',
+            'quota' => 'The space the container uses moves to your account, and it is your quota that applies afterwards.',
 
             'account' => 'Which account is taking over?',
 
             // Both decisions are final (decision 7), and it is said before the
             // buttons and once more in the confirmation dialog.
             'final' => 'The decision cannot be undone. If you change your mind the sender must send a new transfer.',
-            'accept_confirm' => 'Take over the binder? The decision cannot be undone.',
+            'accept_confirm' => 'Take over the container? The decision cannot be undone.',
             'reject_confirm' => 'Decline? The decision cannot be undone.',
         ],
 
@@ -2052,7 +2052,7 @@ return [
         'reject' => 'Decline',
     ],
 
-    // The binder's trash, see issue 62a decisions 4, 5 and 9 and [[ADR-0008
+    // The container's trash, see issue 62a decisions 4, 5 and 9 and [[ADR-0008
     // Soft delete och papperskorg]] § Retentionstiden i MVP. A branch of its
     // own on the top level rather than under `container`: the trash is its own
     // surface with its own vocabulary, like `sharing`.
@@ -2070,7 +2070,7 @@ return [
     'trash' => [
         'title' => 'Trash',
         'heading' => 'Trash',
-        'description' => 'What has been deleted in the binder. After 30 days it is removed for good.',
+        'description' => 'What has been deleted in the container. After 30 days it is removed for good.',
         'empty' => 'The trash is empty.',
 
         // `:date` is formatted on the client (formatDate), the words around it
@@ -2084,10 +2084,10 @@ return [
             'attachment' => 'Attachment',
             'category' => 'Category',
             'tag' => 'Tag',
-            // Came with issue 62b: a deleted binder carries the same key out
+            // Came with issue 62b: a deleted container carries the same key out
             // of TrashEntryResource, and the row is the same component in both
             // lists.
-            'container' => 'Binder',
+            'container' => 'Container',
         ],
 
         'expires' => [
@@ -2098,18 +2098,18 @@ return [
 
         'restore' => 'Restore',
 
-        // The trash for deleted BINDERS, see issue 62b decisions 7 and 8. It
-        // sits at the TOP level — a deleted binder is not resolved by the
-        // route binding — and `link` is the row under the binder list, always
+        // The trash for deleted CONTAINERS, see issue 62b decisions 7 and 8. It
+        // sits at the TOP level — a deleted container is not resolved by the
+        // route binding — and `link` is the row under the container list, always
         // visible. The text is constant and counts nothing: a number would be
         // a query per page load (decision 8).
         'containers' => [
             'title' => 'Trash',
-            'heading' => 'Deleted binders',
-            'description' => 'Binders you have deleted. After 30 days they are removed for good.',
-            'empty' => 'No deleted binders.',
+            'heading' => 'Deleted containers',
+            'description' => 'Containers you have deleted. After 30 days they are removed for good.',
+            'empty' => 'No deleted containers.',
             'link' => 'Trash',
-            'back' => 'Back to the binders',
+            'back' => 'Back to the containers',
         ],
     ],
 ];

@@ -4,13 +4,13 @@ return [
     'task_due' => [
         'subject' => ':title förfaller :date',
         'greeting' => 'Hej!',
-        'line' => 'Uppgiften ":title" på ":item" i pärmen ":container" förfaller :date.',
+        'line' => 'Uppgiften ":title" på ":item" i containern ":container" förfaller :date.',
         'action' => 'Öppna uppgiften',
     ],
     'task_overdue' => [
         'subject' => ':title förföll :date',
         'greeting' => 'Hej!',
-        'line' => 'Uppgiften ":title" på ":item" i pärmen ":container" förföll :date och är nu försenad.',
+        'line' => 'Uppgiften ":title" på ":item" i containern ":container" förföll :date och är nu försenad.',
         'action' => 'Öppna uppgiften',
     ],
     'loan_due' => [
@@ -32,9 +32,9 @@ return [
         'action' => 'Logga in',
     ],
     'transfer_requested' => [
-        'subject' => 'Någon vill ta över pärmen ":container"',
+        'subject' => 'Någon vill ta över containern ":container"',
         'greeting' => 'Hej!',
-        'line' => 'En begäran om ägarbyte väntar på pärmen ":container". Logga in för att se den under Ägarbyte.',
+        'line' => 'En begäran om ägarbyte väntar på containern ":container". Logga in för att se den under Ägarbyte.',
         'action' => 'Visa ägarbyte',
     ],
     'digest' => [
@@ -54,7 +54,7 @@ return [
             'task_overdue' => 'varningar om försenade uppgifter',
             'loan_due' => 'påminnelser om utlåning',
             'quota_warning' => 'varningar om lagringsutrymmet',
-            'invitation_received' => 'inbjudningar till pärmar',
+            'invitation_received' => 'inbjudningar till containers',
             'transfer_requested' => 'förfrågningar om ägarbyte',
             'account_inactive' => 'varningar om inaktiva konton',
         ],
