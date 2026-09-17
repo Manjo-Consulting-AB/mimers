@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -14,7 +16,7 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 57a · Pärmens itemlista — pärmens förstasida. Se
+ * Issue 57a · Containerns itemlista — containerns förstasida. Se
  * App\Http\Controllers\ItemController::index(),
  * App\Actions\Item\ListItems och
  * resources/js/pages/Containers/Items/Index.vue.
@@ -38,7 +40,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem i angiven roll, och en pärm ägd av kontot.
+ * Ett konto med en medlem i angiven roll, och en container ägd av kontot.
  *
  * @param  array<string, mixed>  $kontoAttribut
  * @return array{0: Account, 1: User, 2: Container}
@@ -54,7 +56,7 @@ function itemlistaKontext(array $kontoAttribut = []): array
 }
 
 /**
- * Ett item i pärmen. `created_by_*` sätts sammanhängande — fabrikens egna
+ * Ett item i containern. `created_by_*` sätts sammanhängande — fabrikens egna
  * default-skapare hade annars blivit två ovidkommande rader per item.
  */
 function itemlistaItem(Container $container, string $namn, ?User $skapare = null): Item
@@ -157,7 +159,7 @@ it('renderar itemlistan sorterad på namn för en medlem i ägarkontot', functio
 
 /*
  * Klart när: `/containers/create` når fortfarande formuläret — rutten för
- * pärmens förstasida skuggar den inte.
+ * containerns förstasida skuggar den inte.
  *
  * Det är hela skälet att `GET /containers/{container}` har en plats i filen
  * och inte bara en rutt (Beslut 1).
@@ -173,12 +175,12 @@ it('når fortfarande skapaformuläret på /containers/create', function () {
 });
 
 /*
- * Klart när: pärmnamnet i `/containers` länkar till pärmens förstasida.
+ * Klart när: containernamnet i `/containers` länkar till containerns förstasida.
  *
  * Länken prövas mot den href ruttnamnet faktiskt ger — en vy som länkar till
  * en påhittad adress hade annars sett rätt ut i en strukturell kontroll.
  */
-it('länkar pärmnamnet i pärmlistan till pärmens förstasida', function () {
+it('länkar containernamnet i containerlistan till containerns förstasida', function () {
     [, , $container] = itemlistaKontext();
 
     expect(route('containers.show', $container, false))->toBe("/containers/{$container->ulid}");
@@ -190,12 +192,12 @@ it('länkar pärmnamnet i pärmlistan till pärmens förstasida', function () {
 });
 
 /*
- * Klart när: `items` är den första raden i pärmens undernavigering.
+ * Klart när: `items` är den första raden i containerns undernavigering.
  *
  * Navigationen renderas ur containerSections, så raden är beviset — och
  * ordningen ligger i listan, inte i layouten.
  */
-it('lägger itemlistan först i pärmens navigation', function () {
+it('lägger itemlistan först i containerns navigation', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'items'")
@@ -206,7 +208,7 @@ it('lägger itemlistan först i pärmens navigation', function () {
 });
 
 /*
- * Klart när: en användare utan åtkomst till pärmen får 403 på listan.
+ * Klart när: en användare utan åtkomst till containern får 403 på listan.
  */
 it('nekar en främling listan med 403', function () {
     withoutVite();
@@ -320,7 +322,7 @@ it('låter ett fryst ägarkonto lista men ger can.create falskt', function () {
  * Klart när: en container-bred `create`-innehavare får `can.create` sant, och
  * en omfångsbegränsad mottagare falskt.
  *
- * En itemgrant ger aldrig en rot i pärmen — hon skapar barn-items under det
+ * En itemgrant ger aldrig en rot i containern — hon skapar barn-items under det
  * hon nått, och den ytan hör till detaljvyn (ContainerPolicy::createItem()).
  */
 it('ger can.create efter container-bred create och aldrig efter en itemgrant', function () {
@@ -342,13 +344,13 @@ it('ger can.create efter container-bred create och aldrig efter en itemgrant', f
 });
 
 /*
- * Klart när: en tom pärm säger att den är tom — inte att den kanske är det.
+ * Klart när: en tom container säger att den är tom — inte att den kanske är det.
  *
  * Meningen ligger i `lang/`, aldrig i vyn (Beslut 10), och den får inte
  * antyda att rader dolts: en omfångsbegränsad mottagare med noll items ser
  * samma mening, och "inga träffar bland N" hade avslöjat N.
  */
-it('säger att pärmen är tom och aldrig att den kanske är det', function () {
+it('säger att containern är tom och aldrig att den kanske är det', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemlistaKontext();
@@ -366,7 +368,7 @@ it('säger att pärmen är tom och aldrig att den kanske är det', function () {
     expect($sv['item']['index']['empty'])->toBe('Containern är tom.');
     expect($en['item']['index']['empty'])->not->toBe('');
 
-    // Ingen totalsumma i vyn — raden är hela sidans svar på en tom pärm.
+    // Ingen totalsumma i vyn — raden är hela sidans svar på en tom container.
     $vy = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
 
     expect($vy)->toContain("t('item.index.empty')");

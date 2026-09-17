@@ -6,7 +6,7 @@ import { activeFilters } from './itemFilter.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Filterraden i pärmens itemlista — issue 59a § Beslut 1, 2, 5, 6 och 8.
+ * Filterraden i containerns itemlista — issue 59a § Beslut 1, 2, 5, 6 och 8.
  *
  * **Filtret är querysträng, och formuläret submittar med GET** (Beslut 1).
  * `router.get` mot SAMMA rutt som sidan ligger på, med `preserveState` så att
@@ -17,7 +17,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * servern och ritar det svar den får tillbaka; ingen rad sållas här, och ingen
  * klientmatchning sker på `name`. Servern äger urvalet.
  *
- * **Den ritar bara det pärmen och omfånget har** (Beslut 5). `tags` och
+ * **Den ritar bara det containern och omfånget har** (Beslut 5). `tags` och
  * `categories` kommer ur `ListTags` och `ListCategories` — anropade i
  * kontrollern, aldrig omskrivna här. Är den ena listan tom ritas dess fält
  * inte alls: ett filter utan alternativ är brus. En mottagare ser därmed bara
@@ -43,9 +43,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
-    /* Pärmens taggar inom omfånget, ur ListTags. */
+    /* Containerns taggar inom omfånget, ur ListTags. */
     tags: { type: Array, required: true },
-    /* Pärmens kategoriträd inom omfånget, ur ListCategories. */
+    /* Containerns kategoriträd inom omfånget, ur ListCategories. */
     categories: { type: Array, required: true },
     /* Filtret så som servern tillämpade det: { q, tags, category, dropped }. */
     filter: { type: Object, required: true },
@@ -151,7 +151,7 @@ function remove(entry) {
         </label>
 
         <!-- Kategorin: samma trädväljare som 57b:s formulär, byggd ur samma
-             flata lista. Ingen kategori i pärmen, inget fält. -->
+             flata lista. Ingen kategori i containern, inget fält. -->
         <label
             v-if="options.length > 0"
             for="item-filter-category"

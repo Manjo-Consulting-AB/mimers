@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Trash\ListTrash;
 use App\Models\Account;
@@ -22,7 +24,7 @@ use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 62a · Pärmens papperskorg: det mjukraderade innehållet, den
+ * Issue 62a · Containerns papperskorg: det mjukraderade innehållet, den
  * återstående tiden och återställningen. Se
  * App\Http\Controllers\TrashController,
  * App\Actions\Trash\ListTrash, App\Actions\Trash\FindTrashedInContainer,
@@ -49,7 +51,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en ägare och en pärm.
+ * Ett konto med en ägare och en container.
  *
  * @return array{0: Account, 1: User, 2: Container}
  */
@@ -287,7 +289,7 @@ it('svarar 404 för ett utgånget innehåll i stället för att återställa det
  * bilagor — aldrig en kategori och aldrig en tagg (issue 74 § Beslut 1).
  *
  * Skälet står i ListTrash: en raderad tagg som heter "Skilsmässa" är en
- * upplysning om pärmen, inte om itemet hon når.
+ * upplysning om containern, inte om itemet hon når.
  */
 it('visar en omfångsbegränsad mottagare bara sina items och deras bilagor', function () {
     withoutVite();
@@ -356,7 +358,7 @@ it('ger en tom papperskorg samma svar för mottagaren som för ägaren', functio
     $kategori = Category::factory()->for($container, 'container')->create(['name' => 'Skilsmässa']);
     papperskorgsvyRaderad($kategori);
 
-    // Ägarens andra pärm, där ingenting alls raderats.
+    // Ägarens andra container, där ingenting alls raderats.
     $tomContainer = Container::factory()->for($konto, 'account')->create();
 
     $ägarsvar = actingAs($ägare)->get("/containers/{$tomContainer->ulid}/trash");
@@ -386,10 +388,10 @@ it('ger en tom papperskorg samma svar för mottagaren som för ägaren', functio
 });
 
 /*
- * Klart när: ett item återställs ur vyn och dyker upp i pärmens itemlista
+ * Klart när: ett item återställs ur vyn och dyker upp i containerns itemlista
  * igen, med flashkoden `trash-restored` (Beslut 7).
  */
-it('återställer ett item ur vyn och visar det i pärmens itemlista igen', function () {
+it('återställer ett item ur vyn och visar det i containerns itemlista igen', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = papperskorgsvyKontext();
@@ -621,7 +623,7 @@ it('låter en omfångsbegränsad mottagare återställa sitt item men inte en ka
 });
 
 /*
- * Klart när: en ULID ur en annan pärm är 422, ett utgånget innehåll 404.
+ * Klart när: en ULID ur en annan container är 422, ett utgånget innehåll 404.
  *
  * Den delade RestoreRequest ger 422 `validation.failed` på `/api`
  * (PapperskorgTest § "en ulid ur en annan container avvisas"). På webben är
@@ -629,7 +631,7 @@ it('låter en omfångsbegränsad mottagare återställa sitt item men inte en ka
  * behåller Laravels vanliga valideringsfel och har inget felkodshölje
  * ([[ADR-0020 Plattformsidentitet och frontendgräns]] § Konsekvenser).
  */
-it('avvisar en ulid ur en annan pärm som ett valideringsfel', function () {
+it('avvisar en ulid ur en annan container som ett valideringsfel', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = papperskorgsvyKontext();
@@ -650,12 +652,12 @@ it('avvisar en ulid ur en annan pärm som ett valideringsfel', function () {
 });
 
 /*
- * Klart när: papperskorgen syns i pärmens navigering (Beslut 1). Raden
+ * Klart när: papperskorgen syns i containerns navigering (Beslut 1). Raden
  * ligger SIST — papperskorgen är dit man går när något gått fel, inte en yta
  * man arbetar i. Texten kommer ur `container.nav.trash`, aldrig ur en
  * sträng i JavaScript.
  */
-it('lägger papperskorgen i pärmens navigation, sist', function () {
+it('lägger papperskorgen i containerns navigation, sist', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'trash'");

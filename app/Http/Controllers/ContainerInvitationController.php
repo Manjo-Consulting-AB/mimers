@@ -38,8 +38,8 @@ use Illuminate\Validation\ValidationException;
  *
  * `{invitation}` nästlas under `{container}` med `->scopeBindings()` i
  * routes/web.php, av exakt samma skäl som `routes/api.php` gör det (issue 9b
- * § Beslut 1): utan det går en inbjudan i pärm B att dra tillbaka via pärm
- * A:s rutt. En ULID från en annan pärm blir 404.
+ * § Beslut 1): utan det går en inbjudan i container B att dra tillbaka via container
+ * A:s rutt. En ULID från en annan container blir 404.
  *
  * **Ingen behörighetslogik bor här.** Båda metoderna anropar bara
  * `Gate::authorize()` och litar på App\Policies\ContainerPolicy — samma

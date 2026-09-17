@@ -39,7 +39,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * policyn, och varje skrivning auktoriserar med `Gate::authorize()` oavsett
  * vad sidan visade.
  *
- * **Förslaget på en tom pärm** kom med issue 56b § Beslut 4:
+ * **Förslaget på en tom container** kom med issue 56b § Beslut 4:
  * resources/js/components/CategoryPresetCard.vue ritas i stället för
  * tomtexten när trädet är tomt, användaren får skriva och hon inte redan tackat
  * nej i den här sessionen (`presetDismissed`, den enda prop servern skickar om
@@ -50,7 +50,7 @@ const props = defineProps({
     container: { type: Object, required: true },
     categories: { type: Array, required: true },
     can: { type: Object, required: true },
-    /* Sant när användaren tackat nej till förslaget för den här pärmen i den
+    /* Sant när användaren tackat nej till förslaget för den här containern i den
        här sessionen — se App\Http\Controllers\CategoryController. */
     presetDismissed: { type: Boolean, required: true },
 });
@@ -68,10 +68,10 @@ const tree = computed(() => buildCategoryTree(props.categories));
 const deleteErrorUlid = ref(null);
 
 /*
- * Den färdiga uppsättningen visas bara på en TOM pärm (Beslut 4) — den frågan
+ * Den färdiga uppsättningen visas bara på en TOM container (Beslut 4) — den frågan
  * är redan ställd av listan — och bara för den som får skriva. Servern har
  * bara sagt sitt om nej:et; uppsättningen själv väljs i klienten av
- * CategoryPresetCard, ur localen och pärmens `kind`.
+ * CategoryPresetCard, ur localen och containerns `kind`.
  */
 const showsPreset = computed(
     () => props.can.manage && props.categories.length === 0 && !props.presetDismissed,

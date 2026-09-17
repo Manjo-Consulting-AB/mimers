@@ -50,7 +50,7 @@ use Symfony\Component\HttpFoundation\Response;
  * containervy som räknar per container, och den är den enda av dem som
  * LÄMNAR systemet och fortsätter uppdateras av sig själv. En feed-URL som en
  * omfångsbegränsad mottagare hämtat prenumererar alltså annars på hela
- * pärmens underhållsplan, i hennes egen kalender, för alltid — med itemets
+ * containerns underhållsplan, i hennes egen kalender, för alltid — med itemets
  * namn i SUMMARY.
  *
  * Omfånget är FEEDENS användare (`$feed->user`), samma resonemang som

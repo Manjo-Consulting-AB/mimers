@@ -52,7 +52,7 @@ use Inertia\Response;
  *
  * **Ingen behörighetslogik bor här.** Grindarna är `ContainerPolicy::view()`
  * (listning) och `update()` (skapa, ändra, radera) — **aldrig `delete()`**,
- * som betyder "får radera pärmen" och skulle låsa ute en `write`-deltagare
+ * som betyder "får radera containern" och skulle låsa ute en `write`-deltagare
  * från att städa bland sina egna kategorier. Ett nekat svar kastar
  * `AuthorizationException`, som bootstrap/app.php renderar som 403-sidan.
  *
@@ -65,7 +65,7 @@ use Inertia\Response;
 class CategoryController extends Controller
 {
     /**
-     * Sessionsnyckeln för de pärmar vars förslag tackats nej till, se issue
+     * Sessionsnyckeln för de containers vars förslag tackats nej till, se issue
      * 56b § Beslut 4. En lista av containerns ULID:n, ingenting annat — nej:et
      * är ett sessionsbegrepp och får aldrig bli en kolumn (Beslut 4: "en
      * kolumn för att minnas ett nej vore en migration för ett nej").
@@ -89,8 +89,8 @@ class CategoryController extends Controller
      *
      * `presetDismissed` är det enda servern vet om det färdiga förslaget (issue
      * 56b § Beslut 2 och 4): att användaren tackat nej till det för DEN HÄR
-     * pärmen i DEN HÄR sessionen. **Uppsättningen själv skickas aldrig som
-     * prop.** Vilka ord förslaget innehåller beror på localen och pärmens
+     * containern i DEN HÄR sessionen. **Uppsättningen själv skickas aldrig som
+     * prop.** Vilka ord förslaget innehåller beror på localen och containerns
      * `kind`, och den väljaren bor i `resources/js/data/categoryPresets.js` —
      * servern får aldrig veta vad orden betyder ([[ADR-0004 Fria taggar och
      * kategorier]]). Att tomheten avgör om kortet ritas är sidans sak: den
@@ -146,7 +146,7 @@ class CategoryController extends Controller
      * ingen egen räkning här, för då hade två sanningar om syskonordningen
      * funnits.
      *
-     * **Bara en TOM pärm.** Har containern minst en levande kategori är svaret
+     * **Bara en TOM container.** Har containern minst en levande kategori är svaret
      * 422 på formulärnyckeln `categories` och ingenting skrivs. Utan den
      * kontrollen är rutten ett sätt att fördubbla trädet med en knapp som ser
      * ut som ett förslag. Det är också hela idempotensen: när raderna finns är
@@ -155,7 +155,7 @@ class CategoryController extends Controller
      *
      * **Kontrollen och skrivningen är samma kritiska sektion.** Låg tomhets-
      * kontrollen före transaktionen kunde två samtidiga anrop mot samma tomma
-     * pärm bägge passera den innan någon av dem hunnit skriva, och trädet hade
+     * container bägge passera den innan någon av dem hunnit skriva, och trädet hade
      * fördubblats — precis det Beslut 3 kallar "inte en smaksak". Låset sitter
      * därför på CONTAINERRADEN (`lockForUpdate()`), inte på `exists()`-frågan:
      * mot en tabell som per definition är tom låser en sådan fråga ingenting
@@ -198,12 +198,12 @@ class CategoryController extends Controller
     /**
      * DELETE /containers/{container}/categories/preset — 302 tillbaka.
      *
-     * "Nej tack", se issue 56b § Beslut 4. Pärmens ULID hamnar i en lista i
+     * "Nej tack", se issue 56b § Beslut 4. Containerns ULID hamnar i en lista i
      * sessionen och sidan renderar om utan förslaget. Ingen flagga i
      * databasen, ingen kolumn, ingen ny tabell.
      *
      * Att nej:et inte överlever en ny session är ett medvetet val: kombinationen
-     * "tom pärm" och "ny session" är sällsynt, och en påminnelse där är
+     * "tom container" och "ny session" är sällsynt, och en påminnelse där är
      * hjälpsam snarare än tjatig.
      *
      * Grinden är `update()` — samma som för att lägga in uppsättningen. Bara
@@ -234,7 +234,7 @@ class CategoryController extends Controller
     }
 
     /**
-     * ULID:n för de pärmar sessionen tackat nej till. En trasig eller saknad
+     * ULID:n för de containers sessionen tackat nej till. En trasig eller saknad
      * sessionspost blir en tom lista — sessionen är användarens, och ett nej
      * som tappats ska visa förslaget igen, inte krascha sidan (samma linje som
      * App\Support\Frontend\ActiveContainer::forUser()).

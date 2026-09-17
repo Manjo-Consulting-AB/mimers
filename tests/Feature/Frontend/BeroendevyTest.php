@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -36,7 +38,7 @@ use function Pest\Laravel\withoutVite;
  *    för den här gången ([[ADR-0005 Schema och förekomst]] § Motivering).
  * 2. **Motparten följer med sin item** (Beslut 3) — ett schema betyder
  *    ingenting utan sitt item, och väljaren visar bara det användaren får
- *    ändra, bara i samma pärm.
+ *    ändra, bara i samma container.
  * 3. **`satisfied` kommer från servern** (Beslut 4) — en uppfylld rad ritas
  *    annorlunda än en som blockerar, innan användaren möter spärren.
  * 4. **Arvet** — en ny förekomst kopplas automatiskt till motpartens då öppna
@@ -59,7 +61,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem och en pärm med ett item under kontot.
+ * Ett konto med en medlem och en container med ett item under kontot.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -80,8 +82,8 @@ function beroendeKontext(): array
 }
 
 /**
- * Ännu ett item i samma pärm — motpartens sida av ett beroende korsar items
- * men aldrig pärmar (issue 23 § Beslut 5).
+ * Ännu ett item i samma container — motpartens sida av ett beroende korsar items
+ * men aldrig containers (issue 23 § Beslut 5).
  */
 function beroendeItem(Container $container, User $skapare, Account $konto, string $namn): Item
 {
@@ -453,13 +455,13 @@ it('skiljer en uppfylld rad från en som blockerar, ur serverns satisfied', func
 // --- motpartsväljaren -------------------------------------------------------
 
 /*
- * Klart när: motpartsväljaren listar bara scheman i samma pärm som användaren
+ * Klart när: motpartsväljaren listar bara scheman i samma container som användaren
  * får ändra (Beslut 3).
  *
  * En motpart utanför omfånget visas inte alls — inte som ett namnlöst spöke.
  * Samma regel som issue 58 § Beslut 3.
  */
-it('visar bara motparter i samma pärm som användaren får ändra', function () {
+it('visar bara motparter i samma container som användaren får ändra', function () {
     withoutVite();
 
     [$konto, $anvandare, $container, $item] = beroendeKontext();
@@ -473,7 +475,7 @@ it('visar bara motparter i samma pärm som användaren får ändra', function ()
     $lasbar = beroendeSchema($lasbarItem, ['title' => 'Byt vajer']);
     beroendeRad($lasbar, '2027-06-01');
 
-    // Och en i en ANNAN pärm, som aldrig får synas.
+    // Och en i en ANNAN container, som aldrig får synas.
     $annanParm = Container::factory()->for($konto, 'account')->create();
     $frammandeItem = beroendeItem($annanParm, $anvandare, $konto, 'Trailern');
     $frammande = beroendeSchema($frammandeItem, ['title' => 'Besiktiga trailern']);
@@ -650,13 +652,13 @@ it('ger ett fältfel som namnger kedjan när en cykel skulle uppstå', function 
 });
 
 /*
- * Klart när: en motpart i en annan pärm ger ett fältfel (Beslut 6).
+ * Klart när: en motpart i en annan container ger ett fältfel (Beslut 6).
  *
  * `StoreScheduleDependencyRequest`s `Rule::exists` binder motparten till
- * samma pärm och är halva skyddet — en främmande ULID är ett VALIDERINGSFEL,
+ * samma container och är halva skyddet — en främmande ULID är ett VALIDERINGSFEL,
  * inte en 404 och inte en tyst "hittade inget" (issue 23 § Beslut 4).
  */
-it('ger ett fältfel för en motpart i en annan pärm', function () {
+it('ger ett fältfel för en motpart i en annan container', function () {
     [$konto, $anvandare, $container, $item] = beroendeKontext();
 
     $annanParm = Container::factory()->for($konto, 'account')->create();
@@ -743,15 +745,15 @@ it('ger ett fältfel som namnger kedjan när en förekomstcykel skulle uppstå',
 });
 
 /*
- * Klart när: en motpart i en annan pärm ger ett fältfel (Beslut 6) — samma
+ * Klart när: en motpart i en annan container ger ett fältfel (Beslut 6) — samma
  * gren på förekomstnivån.
  *
  * `StoreOccurrenceDependencyRequest`s `Rule::exists` binder motparten till
- * samma pärm och är halva skyddet: en främmande ULID är ett VALIDERINGSFEL på
+ * samma container och är halva skyddet: en främmande ULID är ett VALIDERINGSFEL på
  * `depends_on`, inte en 404 och inte en tyst "hittade inget" (issue 23b
  * § Beslut 3).
  */
-it('ger ett fältfel för en förekomst i en annan pärm', function () {
+it('ger ett fältfel för en förekomst i en annan container', function () {
     [$konto, $anvandare, $container, $item] = beroendeKontext();
 
     $annanParm = Container::factory()->for($konto, 'account')->create();

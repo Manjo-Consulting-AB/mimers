@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -131,7 +133,7 @@ it('kan accepteras av någon som redan har en container-bred åtkomst', function
 
     postJson('/api/invitations/accept', ['token' => $rawToken], $mottagarHeaders)->assertOk();
 
-    // Regel 4 i ADR-0028: read på pärmen OCH write på motorn — två rader.
+    // Regel 4 i ADR-0028: read på containern OCH write på motorn — två rader.
     expect(ContainerAccess::query()
         ->where('grantee_id', $mottagare->id)
         ->where('item_id', $motor->id)

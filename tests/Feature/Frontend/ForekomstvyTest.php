@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -62,7 +64,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem, och en pärm med ett item under kontot. Båda på
+ * Ett konto med en medlem, och en container med ett item under kontot. Båda på
  * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
@@ -810,7 +812,7 @@ it('nekar en create-mottagare och släpper igenom en write-mottagare', function 
     $skrivarensSchema = forekomstSchema($item, ['title' => 'Byt impeller', 'anchor_date' => '2027-06-01']);
     $skrivarensRad = forekomstRad($skrivarensSchema, '2027-06-01');
 
-    // En `write`-mottagare klarar den. Kontot är pärmens ägarkonto, som hon
+    // En `write`-mottagare klarar den. Kontot är containerns ägarkonto, som hon
     // inte är medlem i — därför skickas kontot hon ÄR medlem i, och det är
     // samma prövning som `/api` gör (403 för ett konto hon inte tillhör).
     $hennesKonto = Account::factory()->create(['locale' => 'sv_SE']);

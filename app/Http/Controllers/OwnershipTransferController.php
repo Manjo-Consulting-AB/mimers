@@ -30,25 +30,25 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Webbens ägarbytesyta — avsändarens sida i pärmen och mottagarens inkorg, se
+ * Webbens ägarbytesyta — avsändarens sida i containern och mottagarens inkorg, se
  * issue 67b § Beslut 1–9. API-motsvarigheten är
  * App\Http\Controllers\Api\OwnershipTransferController; den transaktion som
  * flyttar containern, förbrukningen, åtkomsterna och planen rörs inte här —
  * den anropar App\Actions\OwnershipTransfer\AcceptOwnershipTransfer oförändrad
  * (Beslut 5 i omfångsrutan).
  *
- * **Två sidor på två nivåer** (Beslut 1). Avsändarens sida ligger UNDER pärmen
+ * **Två sidor på två nivåer** (Beslut 1). Avsändarens sida ligger UNDER containern
  * (`/containers/{container}/transfer`), för hon står i den. Mottagarens ligger
  * på TOPPNIVÅ (`/transfers`), för hon har den inte ännu — den är inte hennes
- * att navigera i, och en sida under pärmen hade krävt att hon först fick
- * pärmen.
+ * att navigera i, och en sida under containern hade krävt att hon först fick
+ * containern.
  *
  * **Ingen token, ingen `{token}`-rutt och ingen session** (Beslut 5). Det här
  * är den medvetna skillnaden mot inbjudningarna
  * (App\Http\Controllers\InvitationResponseController § Beslut 2): en inbjudan
- * ger läsrätt till en pärm, ett ägarbyte överlåter hela pärmen, och en
+ * ger läsrätt till en container, ett ägarbyte överlåter hela containern, och en
  * bärartoken i ett mejl till en overifierad adress vore en kapabilitet att ta
- * emot någon annans pärm. App\Notifications\OwnershipTransferNotification
+ * emot någon annans container. App\Notifications\OwnershipTransferNotification
  * pekar därför på den statiska sökvägen `/transfers`, och mottagaren hittar
  * sin begäran på IDENTITET — sitt konto, eller sin verifierade adress.
  *
@@ -110,7 +110,7 @@ class OwnershipTransferController extends Controller
      * säga olika saker. Att dölja ytan vore att dölja funktionen man ska
      * kunna köpa.
      *
-     * `items` är pärmens levande items och är undantagsvalet i formuläret —
+     * `items` är containerns levande items och är undantagsvalet i formuläret —
      * det är hela skillnaden mellan "skicka allt" och "behåll inköpspriset".
      * `retainLevels` är de två nivåerna ovan.
      */
@@ -164,7 +164,7 @@ class OwnershipTransferController extends Controller
      * `ApiException` svarar `{"error":{"code":…}}` var den än kastas, också
      * från en Inertia-kontroller, så dubblettspärren fångas och formuleras av
      * App\Support\Frontend\ApiErrorTranslator. Nyckeln är `transfer` och inte
-     * ett fältnamn: felet handlar om pärmens tillstånd och inte om vad
+     * ett fältnamn: felet handlar om containerns tillstånd och inte om vad
      * användaren skrev.
      */
     public function store(
@@ -206,7 +206,7 @@ class OwnershipTransferController extends Controller
      * precis vad avsändaren vill kunna göra.
      *
      * `{transfer}` löses av `scopeBindings()` i routes/web.php, så en ULID ur
-     * en annan pärm blir 404 innan den här metoden körs.
+     * en annan container blir 404 innan den här metoden körs.
      */
     public function destroy(
         Container $container,
@@ -282,7 +282,7 @@ class OwnershipTransferController extends Controller
     }
 
     /**
-     * POST /transfers/{transfer}/accept — 302 till pärmlistan.
+     * POST /transfers/{transfer}/accept — 302 till containerlistan.
      *
      * Urvalet är `recipientQuery()` UTAN status- och tidsvillkor, exakt som
      * `/api`:s accept (39b § Beslut 1): en rad som väl är mottagarens men inte
@@ -302,8 +302,8 @@ class OwnershipTransferController extends Controller
      * (60a § Beslut 5 och 6). Ingenting flyttas när den kastar: hela
      * transaktionen rullas tillbaka.
      *
-     * Den nya pärmen blir aktiv, av samma skäl som efter en accepterad inbjudan
-     * (55b § Beslut 4): att just ha fått en pärm ska innebära att landa i den.
+     * Den nya containern blir aktiv, av samma skäl som efter en accepterad inbjudan
+     * (55b § Beslut 4): att just ha fått en container ska innebära att landa i den.
      */
     public function accept(
         AcceptOwnershipTransferRequest $request,
@@ -504,7 +504,7 @@ class OwnershipTransferController extends Controller
      * Mottagarens inkorg — den ENDA formuleringen av "vad som är inkommande
      * för den här användaren" i den här kontrollern, delad av `incoming` och
      * `reject`. Villkoren: `status = 'pending'`, inte utgången, och containern
-     * lever (SoftDeletes — en mjukraderad pärm ska inte erbjudas till övertag).
+     * lever (SoftDeletes — en mjukraderad container ska inte erbjudas till övertag).
      *
      * @return Builder<OwnershipTransfer>
      */
@@ -592,9 +592,9 @@ class OwnershipTransferController extends Controller
     }
 
     /**
-     * Pärmens levande items — undantagsvalet i formuläret, som `{ulid, name}`
+     * Containerns levande items — undantagsvalet i formuläret, som `{ulid, name}`
      * och ingenting mer. EN fråga, ingen paginering och ingen sökning: listan
-     * är pärmens innehåll och plantaket sätter taket för hur lång den kan bli.
+     * är containerns innehåll och plantaket sätter taket för hur lång den kan bli.
      *
      * Ingen `withTrashed()`: ett mjukraderat item kan inte undantas, och
      * `StoreOwnershipTransferRequest` avvisar det — samma lista och samma
@@ -648,7 +648,7 @@ class OwnershipTransferController extends Controller
      * Unionen av ULID:erna är liten: det är de poster avsändaren valde bort.
      * `Item::query()` bär SoftDeletes' globala scope, så den raderade faller
      * bort av sig själv. Utan den här kontrollen hade `item_count` (levande
-     * items i pärmen) och `excluded_count` (listans längd) kunnat beskriva
+     * items i containern) och `excluded_count` (listans längd) kunnat beskriva
      * olika mängder, och kortets "följer med" blivit ett negativt tal — på en
      * sida vars hela uppgift är att visa konsekvenserna.
      *

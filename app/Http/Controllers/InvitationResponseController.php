@@ -86,7 +86,7 @@ class InvitationResponseController extends Controller
      * GET /invitations — landningssidan, som renderar EXAKT ett av fem
      * tillstånd (§ Beslut 3):
      *
-     * - `guest`       — utloggad, och tokenet är giltigt. Pärmens namn, vem
+     * - `guest`       — utloggad, och tokenet är giltigt. Containerns namn, vem
      *                   som bjöd in och nivån, plus vägarna till inloggning
      *                   och registrering.
      * - `unverified`  — inloggad mottagare med overifierad adress.
@@ -148,8 +148,8 @@ class InvitationResponseController extends Controller
      * bevisat att tokenet hör till den inloggade adressen, och den som bär
      * ett giltigt token för sin egen adress ÄR behörig.
      *
-     * Att just ha fått en pärm ska innebära att landa i den, så den nya
-     * pärmen blir aktiv (§ Beslut 4) — samma tre steg som issue 54 § Beslut 6
+     * Att just ha fått en container ska innebära att landa i den, så den nya
+     * containern blir aktiv (§ Beslut 4) — samma tre steg som issue 54 § Beslut 6
      * räknar upp, genom App\Support\Frontend\ActiveContainer::set().
      *
      * `ApiException` får aldrig nå webbläsaren som JSON, vare sig den kommer
@@ -225,7 +225,7 @@ class InvitationResponseController extends Controller
      * **Gästen är ett eget fall.** Adressjämförelsen är den SISTA kontrollen
      * i den delade kedjan, och en utloggad besökare har ingen adress att
      * jämföra med — kontrollen faller alltid ut som `email_mismatch`. Att nå
-     * hit med den koden betyder alltså att allt före den passerade: pärmen
+     * hit med den koden betyder alltså att allt före den passerade: containern
      * finns, raden är `pending` och tiden har inte gått ut. Det är precis vad
      * förhandsvisningen får byggas på.
      *
@@ -266,12 +266,12 @@ class InvitationResponseController extends Controller
     }
 
     /**
-     * Det förhandsvisningen får visa: pärmens namn, vem som bjöd in och
+     * Det förhandsvisningen får visa: containerns namn, vem som bjöd in och
      * nivån.
      *
-     * Pärmens namn och inbjudarens namn visas OCKSÅ för en gäst, och det är
+     * Containerns namn och inbjudarens namn visas OCKSÅ för en gäst, och det är
      * ingen ny uppgift: App\Notifications\InvitationNotification skriver ut
-     * pärmens namn i både ämnesrad och brödtext, och den som har länken har
+     * containerns namn i både ämnesrad och brödtext, och den som har länken har
      * fått mejlet. **Adressen inbjudan gäller visas däremot aldrig** — den vet
      * mottagaren redan, och en bärare som inte är mottagaren ska inte få veta
      * den.

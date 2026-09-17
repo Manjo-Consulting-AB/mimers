@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Category;
@@ -24,7 +26,7 @@ use function Pest\Laravel\postJson;
  * Läckageytan, del två: issue 73 stängde de fyra listningarna, den här filen
  * stänger de vyer som SAMMANFATTAR i stället för att lista. Papperskorgen är
  * den första av dem — en containervy som annars är ett fönster in i allt som
- * någon gång raderats i pärmen.
+ * någon gång raderats i containern.
  *
  * Fixturen är omfångsupplösningens (issue 70):
  *
@@ -182,7 +184,7 @@ it('samma papperskorg bär inga kategorier och inga taggar', function () {
     expect(collect($svar->json('data'))->pluck('type')->all())->toBe(['item']);
 
     // Namnen i sig är avslöjandet: en raderad tagg som heter "Skilsmässa" är
-    // en upplysning om pärmen, inte om motorn (issue 74 § Beslut 1).
+    // en upplysning om containern, inte om motorn (issue 74 § Beslut 1).
     expect($svar->getContent())->not->toContain('Skilsmässa');
     expect($svar->getContent())->not->toContain('Rigg');
     expect($svar->getContent())->not->toContain($kategori->ulid);

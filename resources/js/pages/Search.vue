@@ -5,7 +5,7 @@ import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Den globala sökningen, se issue 59b § Beslut 1, 3, 4, 6 och 8. Sidan
- * ligger under AppLayout och på toppnivå: frågan spänner över alla pärmar
+ * ligger under AppLayout och på toppnivå: frågan spänner över alla containers
  * användaren når, och det är därför den har en egen URL.
  *
  * **Sökrutan ritas inte här.** Den bor i AppLayout (SearchField) och syns på
@@ -21,11 +21,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Utgångsläget är inte ett fel: `/search` utan `q` betyder att någon klickat
  * på sökfältet, och servern har då inte ställt någon fråga alls.
  *
- * **Varje träff bär sin pärm** (Beslut 3). `container` ligger BREDVID
- * ItemResource — resursen bär ingen pärm med flit, för `/api` har inte bett om
+ * **Varje träff bär sin container** (Beslut 3). `container` ligger BREDVID
+ * ItemResource — resursen bär ingen container med flit, för `/api` har inte bett om
  * den, och ett fält som bara webben behöver hör inte inuti den
  * ([[ADR-0021 Frontendteknik]] § Konsekvenser). Itemets namn länkar till
- * detaljvyn; pärmens namn till pärmens förstasida.
+ * detaljvyn; containerns namn till containerns förstasida.
  *
  * **Sorteringen är serverns** (`orderBy('name')` i
  * App\Actions\Item\SearchAccessibleItems) — vyn sorterar aldrig om, och den
@@ -33,7 +33,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Den tomma träfflistan vet ingenting om omfånget** (Beslut 6). Meningen
  * nämner sökordet och ingenting annat: inget tal om hur många rader som
- * fanns, ingen antydan om att något dolts, ingen uppräkning av vilka pärmar
+ * fanns, ingen antydan om att något dolts, ingen uppräkning av vilka containers
  * som genomsöktes. En användare utan åtkomst till någonting alls får
  * ordagrant samma mening som en vars sökord inte matchar.
  *
@@ -45,7 +45,7 @@ import { useTranslations } from '../composables/useTranslations.js';
 defineProps({
     /* Sökordet servern ställde frågan med, eller null när ingen fråga kördes. */
     q: { type: String, default: null },
-    /* ItemResource per träff, med pärmens { ulid, name, kind } bredvid. */
+    /* ItemResource per träff, med containerns { ulid, name, kind } bredvid. */
     results: { type: Array, required: true },
 });
 

@@ -115,7 +115,7 @@ class ScheduleController extends Controller
 
         $occurrenceDependencies = $this->occurrenceDependencies($open, $request);
 
-        // Motparterna användaren får ändra, i samma pärm (Beslut 3) — en per
+        // Motparterna användaren får ändra, i samma container (Beslut 3) — en per
         // nivå, för ett schema utan öppen förekomst kan inte väljas på
         // förekomstnivån.
         return $page->with([
@@ -134,7 +134,7 @@ class ScheduleController extends Controller
      * till, och en `create`-mottagare får göra det på sitt item utan att för
      * den skull få ändra det som redan står där.
      *
-     * Sidan bär bara pärmen och itemet. Inga valutor och inga listor: ett
+     * Sidan bär bara containern och itemet. Inga valutor och inga listor: ett
      * schema har inga relationer att välja ur, och de tre återkommandetyperna
      * är `Schedule::RECURRENCE_TYPES` — ett domänvärde, inte en lista ur
      * databasen.
@@ -198,7 +198,7 @@ class ScheduleController extends Controller
      *
      * `{schedule}` binds av rutternas `scopeBindings()` genom
      * App\Models\Item::schedules(): ett schema på ett annat item, eller ett
-     * item i en annan pärm, ger 404 (issue 21 § Beslut 1).
+     * item i en annan container, ger 404 (issue 21 § Beslut 1).
      */
     public function edit(Request $request, Container $container, Item $item, Schedule $schedule): Response
     {
@@ -427,7 +427,7 @@ class ScheduleController extends Controller
      * Motparterna användaren får välja, en lista per nivå (Beslut 3).
      *
      * Samma regel som issue 58 § Beslut 3 och samma bygge som
-     * App\Http\Controllers\ItemController::counterparts(): pärmens scheman,
+     * App\Http\Controllers\ItemController::counterparts(): containerns scheman,
      * filtrerade med ITEMETS `update` — en motpart utanför omfånget visas inte
      * alls, inte som ett namnlöst spöke — och sorterade på itemets namn och
      * därefter schemats titel. Ett schema heter "Byt impeller" och betyder

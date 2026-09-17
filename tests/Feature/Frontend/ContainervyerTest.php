@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\Container;
@@ -31,7 +33,7 @@ use function Pest\Laravel\withoutVite;
  *
  * Den här filen prövar SIDORNA och skrivningarna: att rutterna renderar rätt
  * komponent, att urvalet och `can.update` kommer ur samma frågor som `/api`
- * ställer, att en pärm blir aktiv av skapandet, och att kvotgränsen blir ett
+ * ställer, att en container blir aktiv av skapandet, och att kvotgränsen blir ett
  * FORMULÄRFEL i stället för en rå JSON-kropp (Beslut 4) — det sista är hela
  * skälet till att App\Support\Frontend\ApiErrorTranslator finns.
  *
@@ -117,12 +119,12 @@ it('renderar Containers/Index för en inloggad användare', function () {
 
 /*
  * Urvalet är samma fråga som API:ets index() ställer —
- * Container::scopeAccessibleBy() — så en pärm i ett främmande konto utan
- * container_access syns inte, och en pärm med en giltig access gör det.
+ * Container::scopeAccessibleBy() — så en container i ett främmande konto utan
+ * container_access syns inte, och en container med en giltig access gör det.
  * "Delad med dig" härleds i vyn ur `account`-ULID:n mot `auth.accounts`
  * (Beslut 10), så serverns halva är att `account` bär ÄGARKONTOT.
  */
-it('listar egna och delade pärmar sorterade på namn, och ingenting annat', function () {
+it('listar egna och delade containers sorterade på namn, och ingenting annat', function () {
     withoutVite();
 
     // Kontot och medlemmen byggs för hand i stället för med containerKontext():
@@ -153,7 +155,7 @@ it('listar egna och delade pärmar sorterade på namn, och ingenting annat', fun
     );
 });
 
-it('märker en delad pärm som delad och en egen som egen i vyn', function () {
+it('märker en delad container som delad och en egen som egen i vyn', function () {
     // Härledningen bor i vyn (Beslut 10), och det enda en serverhalva kan
     // bevisa är att den läser rätt fält: `account` mot `auth.accounts`.
     $vy = File::get(resource_path('js/pages/Containers/Index.vue'));
@@ -216,10 +218,10 @@ it('skickar ingen egen kontolista till skapaformuläret', function () {
 
 /*
  * Beslut 3 och 5: POST skapar med name, kind och det valda kontot, gör den
- * nya pärmen aktiv och ökar ägarkontots räknare med ett — allt genom samma
+ * nya containern aktiv och ökar ägarkontots räknare med ett — allt genom samma
  * action som /api anropar.
  */
-it('skapar en pärm med namn, typ och konto och gör den aktiv', function () {
+it('skapar en container med namn, typ och konto och gör den aktiv', function () {
     withoutVite();
 
     [$konto, $anvandare] = containerKontext();
@@ -235,8 +237,8 @@ it('skapar en pärm med namn, typ och konto och gör den aktiv', function () {
 
     $skapad = Container::query()->where('name', 'Vindil')->firstOrFail();
 
-    // Issue 56b § Beslut 5: målet är den nya pärmens kategoriyta, inte
-    // listan — den som just skapat en pärm möts av förslaget.
+    // Issue 56b § Beslut 5: målet är den nya containerns kategoriyta, inte
+    // listan — den som just skapat en container möts av förslaget.
     $svar->assertRedirect("/containers/{$skapad->ulid}/categories");
 
     expect($skapad->kind)->toBe('boat');
@@ -247,7 +249,7 @@ it('skapar en pärm med namn, typ och konto och gör den aktiv', function () {
     // aldrig — räknaren hålls i takt av skrivvägarna, inte av databasen.
     expect((int) UsageCounter::query()->where('account_id', $konto->id)->value('container_count'))->toBe(1);
 
-    // Den som just skapat en pärm vill arbeta i den (Beslut 6).
+    // Den som just skapat en container vill arbeta i den (Beslut 6).
     actingAs($anvandare)->get('/containers')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('activeContainer', $skapad->ulid)
     );
@@ -305,7 +307,7 @@ it('nekar skapande i ett read_only-konto', function () {
 it('ger ett läsbart kvotfel i stället för JSON när containertaket slår i', function () {
     withoutVite();
 
-    // Gratisplanen har `containers => 1` (issue 27), så den andra pärmen
+    // Gratisplanen har `containers => 1` (issue 27), så den andra containern
     // fyller kontot.
     [$konto, $anvandare] = containerKontext('owner', 'sv_SE');
 
@@ -315,7 +317,7 @@ it('ger ett läsbart kvotfel i stället för JSON när containertaket slår i', 
 
     $första = Container::query()->where('name', 'Första')->firstOrFail();
 
-    // Den första pärmen skapas och landar på sin kategoriyta (issue 56b
+    // Den första containern skapas och landar på sin kategoriyta (issue 56b
     // § Beslut 5); den andra är den som slår i taket.
     $förstaSvar->assertRedirect("/containers/{$första->ulid}/categories");
 
@@ -469,10 +471,10 @@ it('låter en containerbred write-access redigera men nekar en read', function (
 
 /*
  * Issue 70: ContainerPolicy::update() kräver en CONTAINERBRED rad. En
- * itemåtkomst på `write` får inte byta namn på pärmen — annars hade en
+ * itemåtkomst på `write` får inte byta namn på containern — annars hade en
  * itemgrant blivit en ContainerPolicy::create() i smyg.
  */
-it('nekar en itemåtkomst på write att redigera pärmen', function () {
+it('nekar en itemåtkomst på write att redigera containern', function () {
     withoutVite();
 
     [, , $container] = containerKontext();
@@ -493,7 +495,7 @@ it('nekar en itemåtkomst på write att redigera pärmen', function () {
  * Layouten är skalet fem issues fyller (Beslut 7), och redigeringssidan är
  * den första som bor i den. Sidpropen `container` är kontraktet.
  */
-it('renderar redigeringssidan i ContainerLayout med pärmens namn', function () {
+it('renderar redigeringssidan i ContainerLayout med containerns namn', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerKontext();

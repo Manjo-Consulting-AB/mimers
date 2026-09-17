@@ -25,7 +25,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Webbens papperskorg — det mjukraderade innehållet i en levande pärm,
+ * Webbens papperskorg — det mjukraderade innehållet i en levande container,
  * den återstående tiden och återställningen, se issue 62a § Beslut 1–9.
  *
  * **Ingenting av `/api` görs om.** Listan och uppslaget av en enskild rad
@@ -35,7 +35,7 @@ use Inertia\Response;
  * återställningen är App\Actions\Trash\RestoreContent, orörd (§ Beslut 2).
  * `RestoreRequest` och `TrashEntryResource` delas rakt av.
  *
- * **Papperskorgen för raderade PÄRMAR är 62b.** Här finns ingen rad för en
+ * **Papperskorgen för raderade CONTAINERS är 62b.** Här finns ingen rad för en
  * mjukraderad container (den når aldrig fram: SoftDeletes' globala scope
  * löser inte upp `{container}`), ingen raderingsknapp och ingen tömning.
  * Gallringen är schemalagd och ska inte gå att framkalla ur en vy
@@ -105,7 +105,7 @@ class TrashController extends Controller
      *
      * Kroppen är `/api`:s: `type` och `ulid`, inte en URL per typ, eftersom
      * fyra typer delar en lista (issue 20a § Beslut 1). `RestoreRequest` är
-     * delad och svarar på samma sätt: en ULID ur en annan pärm eller en
+     * delad och svarar på samma sätt: en ULID ur en annan container eller en
      * levande rad är ett valideringsfel, och på webben blir det ett fältfel
      * på `ulid` i stället för en 422-kropp ([[ADR-0020 Plattformsidentitet
      * och frontendgräns]] § Konsekvenser).
@@ -154,7 +154,7 @@ class TrashController extends Controller
      *
      * `item` grindas mot sitt eget item, `attachment` mot itemet den hänger
      * på, och de två containervida typerna mot containern: en tagg eller
-     * kategori är pärmens organisation och inte någons item, så en
+     * kategori är containerns organisation och inte någons item, så en
      * omfångsbegränsad mottagare får 403 här.
      */
     private function authorizeRestore(Container $container, Item|Attachment|Category|Tag $model): void

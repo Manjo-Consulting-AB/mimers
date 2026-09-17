@@ -60,7 +60,7 @@ const props = defineProps({
      * eller `null` för ett schema som inte har någon (issue 63b § Beslut 1).
      */
     openOccurrences: { type: Object, required: true },
-    /* Pärmens ägarkonto — avbockningens förval när användaren är medlem. */
+    /* Containerns ägarkonto — avbockningens förval när användaren är medlem. */
     containerAccount: { type: String, default: '' },
     can: { type: Object, required: true },
 });

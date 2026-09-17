@@ -54,7 +54,7 @@ use Inertia\Response;
  * läses ur `usage_counter` — aldrig som en egen SUM, av samma skäl som
  * ReadPlanUsage anger.
  *
- * **Listningen är kontots, inte pärmens** (28 § Beslut 2):
+ * **Listningen är kontots, inte containerns** (28 § Beslut 2):
  * `attachment.billed_account_id` avgör, och bilagor kan ligga i containers
  * kontot inte äger och belastar det ändå. Frågan är `/api`:s fråga ordagrant —
  * samma join, samma sortering, samma `withTrashed()` — och den står här i
@@ -84,7 +84,7 @@ class StorageController extends Controller
      *
      * `attachments` byggs ur App\Http\Resources\StorageEntryResource — samma
      * resurs som `/api` svarar med — med ETT fält lagt bredvid, `inTrash`:
-     * det hör inte i `/api` (en bilaga vars item eller pärm ligger i
+     * det hör inte i `/api` (en bilaga vars item eller container ligger i
      * papperskorgen räknas fortfarande mot kontot och ska gå att rensa bort),
      * men vyn måste kunna MARKERA raden, annars ser summan ut att vara fel.
      * Fältet läggs i kontrollern, samma mönster som `disabledBySystem` i

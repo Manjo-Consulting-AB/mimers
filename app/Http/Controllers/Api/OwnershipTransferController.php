@@ -336,7 +336,7 @@ class OwnershipTransferController extends Controller
      *
      * Villkoren: `status = 'pending'`, inte utgången (`created_at` +
      * TTL_DAYS i framtiden), och containern lever (SoftDeletes — en
-     * mjukraderad pärm ska inte erbjudas till övertag, och resursen läser
+     * mjukraderad container ska inte erbjudas till övertag, och resursen läser
      * dess namn). Själva mottagarvägen — vilka rader som ÄR användarens — är
      * utbruten i recipientQuery() nedan, som accept använder utan status-
      * och tidsvillkoren (39b § Beslut 1 och 5).

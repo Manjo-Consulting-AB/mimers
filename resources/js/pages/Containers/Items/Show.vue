@@ -269,7 +269,7 @@ function destroy() {
             också den öppna förekomsten och avbockningen — det är produktens
             vanligaste skrivning och ska kosta en knapptryckning från itemet.
             Historiken ligger på schemats egen sida; beroendena är 63c och har
-            ingen yta här. `container.account` är pärmens ägarkonto och
+            ingen yta här. `container.account` är containerns ägarkonto och
             avbockningens förval när användaren är medlem i det.
         -->
         <ScheduleListSection
@@ -282,7 +282,7 @@ function destroy() {
         />
 
         <!-- Bilagorna under relationerna (issue 60 § Beslut 1): de är itemets
-             innehåll och inte en egen vy. `container.account` är pärmens
+             innehåll och inte en egen vy. `container.account` är containerns
              ägarkonto — sektionens förval när användaren är medlem i det. -->
         <ItemAttachmentSection
             :container-ulid="container.ulid"

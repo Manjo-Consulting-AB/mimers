@@ -15,7 +15,7 @@ use Illuminate\Database\Eloquent\Collection;
  * oförändrad (issue 59b § Beslut 2).
  *
  * Frågan är global med flit: "var la jag den där?" är en fråga över allt
- * användaren har åtkomst till, inte inom en pärm hon redan valt (issue 15b
+ * användaren har åtkomst till, inte inom en container hon redan valt (issue 15b
  * § Beslut 5). Det gör den till den enda ytan där en fråga går över alla
  * containers samtidigt, med olika omfång i var och en — och därför bär den
  * sitt eget åtkomstfilter i stället för rutt-nästlingens grind.
@@ -33,10 +33,10 @@ use Illuminate\Database\Eloquent\Collection;
  * Item::toSearchableArray()s fem kolumner (issue 15b § Beslut 3), ingen
  * relevansordning utan `name` stigande (Beslut 7), taggarna laddas i förväg
  * så 13b § Beslut 10:s N+1-skydd inte förloras (Beslut 9). `container` laddas
- * däremot INTE här: `/api` bad aldrig om pärmen, och att ladda den i den
+ * däremot INTE här: `/api` bad aldrig om containern, och att ladda den i den
  * delade `with([...])` är en extra fråga på en rutt som ska svara exakt som
- * förut (issue 59b Klart när). Behöver en anropare pärmen — webbens sida gör
- * det, varje träff ska kunna säga vilken pärm den ligger i (Beslut 3) — laddar
+ * förut (issue 59b Klart när). Behöver en anropare containern — webbens sida gör
+ * det, varje träff ska kunna säga vilken container den ligger i (Beslut 3) — laddar
  * den den själv, riktat, efter anropet.
  *
  * Åtkomstvillkoret är utbrutet till `Container::scopeAccessibleBy()`

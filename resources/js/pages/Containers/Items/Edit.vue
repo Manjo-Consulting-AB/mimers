@@ -16,7 +16,7 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * skillnaden mot Create.vue, och därför skickas varken `accounts` eller
  * `account` vidare till formuläret.
  *
- * `categories` och `tags` är pärmens egna, hämtade med `ListCategories` och
+ * `categories` och `tags` är containerns egna, hämtade med `ListCategories` och
  * `ListTags` i kontrollern. `item.category` är kategorins ULID och
  * `item.tags` är itemets taggar — formuläret förvalt dem, och PATCH skickar
  * alltid tillbaka båda fälten (§ Beslut 6).

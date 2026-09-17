@@ -18,7 +18,7 @@
  * Tio uppsättningar: `App\Models\Container::KINDS` (`boat`, `caravan`, `house`,
  * `car`, `other`) gånger `sv` och `en` — ingen saknad kombination. Två nivåer,
  * aldrig fler, och sex till tolv rotkategorier per uppsättning (Beslut 1): en
- * uppsättning ska gå att överblicka i en lista, och en pärm som möts av trettio
+ * uppsättning ska gå att överblicka i en lista, och en container som möts av trettio
  * tomma fack är lika avskräckande som en tom. Den som vill djupare bygger det
  * själv med kategorisidans flyttyta.
  *
@@ -135,7 +135,7 @@ export const categoryPresets = {
  */
 const FALLBACK_LOCALE = 'sv';
 
-/** Reserven när pärmens `kind` är okänd — `Container::KINDS` sista post. */
+/** Reserven när containerns `kind` är okänd — `Container::KINDS` sista post. */
 const FALLBACK_KIND = 'other';
 
 /**
@@ -143,7 +143,7 @@ const FALLBACK_KIND = 'other';
  *
  * Bägge uppslagen faller tillbaka TYST: en locale utan uppsättning på `sv`,
  * en okänd `kind` på `other`. Det här är ett förslag och inte en funktion som
- * får krascha — en pärm med ett `kind` från en nyare version av servern ska
+ * får krascha — en container med ett `kind` från en nyare version av servern ska
  * mötas av ett förslag, inte av en trasig sida.
  *
  * Valet görs HÄR, i klienten. Servern får aldrig veta vilket språk eller

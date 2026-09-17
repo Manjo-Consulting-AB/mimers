@@ -9,7 +9,7 @@ import { presetFor } from '../data/categoryPresets.js';
  * issue 56b § Beslut 1, 2 och 4.
  *
  * **Vilken uppsättning som visas avgörs HÄR, i klienten** (Beslut 2). Localen
- * kommer ur den delade propen `locale` (issue 52) och typen ur pärmens `kind`;
+ * kommer ur den delade propen `locale` (issue 52) och typen ur containerns `kind`;
  * `presetFor()` i resources/js/data/categoryPresets.js väljer, med tysta
  * reservval för en okänd locale och en okänd typ. Servern får aldrig veta
  * vilket språk eller vilken typ orden kom ifrån — den tar emot en lista med
@@ -33,7 +33,7 @@ import { presetFor } from '../data/categoryPresets.js';
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
-    /** Pärmens `kind` — ett värde ur App\Models\Container::KINDS, eller vad servern nu skickade. */
+    /** Containerns `kind` — ett värde ur App\Models\Container::KINDS, eller vad servern nu skickade. */
     kind: { type: String, required: true },
 });
 
@@ -90,7 +90,7 @@ function apply() {
             </Link>
         </div>
 
-        <!-- Ett nej på en pärm som hann få kategorier emellan, eller ett dubbelklick:
+        <!-- Ett nej på en container som hann få kategorier emellan, eller ett dubbelklick:
              servern svarar 422 på nyckeln `categories` och meningen ritas här. -->
         <p
             v-if="form.errors.categories"

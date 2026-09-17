@@ -18,13 +18,13 @@
  */
 
 /**
- * Omfånget: hela pärmen när `item` är null, annars itemets namn plus hur
+ * Omfånget: hela containern när `item` är null, annars itemets namn plus hur
  * många items granten faktiskt når.
  *
  * `reach` kommer FÄRDIGT ur App\Http\Resources\ContainerAccessResource och
  * räknas aldrig om här (Beslut 6). Talet är `null` för en containerbred rad —
  * med flit, och därför visas det inte alls där: en containerbred rad är
- * "Hela pärmen" och ingenting mer.
+ * "Hela containern" och ingenting mer.
  *
  * Namnet slås upp i `itemNames`, som kontrollern skickar som ett eget
  * uppslag (`{ ulid: namn }`) ur EN fråga med `withTrashed()` — en grant på
@@ -44,7 +44,7 @@ export function accessScopeLabel(t, itemNames, access) {
 /**
  * `kind` med sin konsekvens, inte som ett rått ord (Beslut 5): `member` är
  * en person, `managed` är en organisation med servicerelation som inte äger
- * pärmen, `guest` är tillfällig och bär ett utgångsdatum.
+ * containern, `guest` är tillfällig och bär ett utgångsdatum.
  */
 export function accessKindLabel(t, access) {
     return t(`sharing.kind.${access.kind}`);

@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Actions\Account\DeleteAccount;
 use App\Actions\Attachment\PurgeAttachment;
 use App\Actions\Trash\PurgeContainer;
@@ -279,7 +281,7 @@ it('ett konto med bilagor betalda i en främmande container raderas inte', funct
     $annatKonto = Account::factory()->create();
     $container = kontoraderingContainer($annatKonto);
 
-    // Varvet har laddat upp manualer i kundens pärm: itemet tillskrivs
+    // Varvet har laddat upp manualer i kundens container: itemet tillskrivs
     // kontot och bilagan debiteras kontot — men båda ligger i en container
     // kontot inte äger (Beslut 5).
     $item = Item::factory()->for($container, 'container')->create([

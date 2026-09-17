@@ -88,7 +88,7 @@ class ContainerPolicy
      * § Beslut 9.
      *
      * Sedan issue 70 krävs att raden är CONTAINER-BRED (`item_id IS NULL`,
-     * `containerWideOnly`). Att byta namn på pärmen är en containervid
+     * `containerWideOnly`). Att byta namn på containern är en containervid
      * handling, och en `write` på ett enskilt item får inte ge den — annars
      * hade en itemgrant blivit en ContainerPolicy::create() i smyg. Det här
      * är den ENDA platsen i systemet där `item_id IS NULL` står som villkor:

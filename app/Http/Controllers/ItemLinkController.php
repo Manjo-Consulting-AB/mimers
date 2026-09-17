@@ -42,7 +42,7 @@ use Illuminate\Validation\ValidationException;
  *
  * **`{other}` binds INTE av `scopeBindings()`** (issue 14 § Beslut 1 och 7).
  * Bara `{container}` och `{item}` gör det; motparten slås upp för hand INOM
- * containern, och en ULID från en annan pärm blir därför 404. Missar man det
+ * containern, och en ULID från en annan container blir därför 404. Missar man det
  * går det att knyta upp över containergränsen.
  *
  * **Fyra domänfel blir fältfel, inte JSON.** `LinkItems` kastar
@@ -60,7 +60,7 @@ class ItemLinkController extends Controller
      *
      * `StoreItemLinkRequest` har redan bevisat att motpartens ULID finns i
      * DEN HÄR containern och inte är mjukraderad — en ULID från en annan
-     * pärm är ett fältfel på `item`, aldrig en 404 och aldrig en
+     * container är ett fältfel på `item`, aldrig en 404 och aldrig en
      * behörighetsfråga. Här slås motparten bara upp, och `update` krävs i
      * båda ändarna.
      */

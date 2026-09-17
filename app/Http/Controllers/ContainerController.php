@@ -38,7 +38,7 @@ use Inertia\Response;
  * `AuthorizationException`, som bootstrap/app.php renderar som felsidan för
  * 403 på webben.
  *
- * **Ingen `show()`.** Pärmens egen sida är itemlistan och den är issue 57 —
+ * **Ingen `show()`.** Containerns egen sida är itemlistan och den är issue 57 —
  * se issue 54 § Beslut 2. En tom detaljvy nu blir en sida 57 skriver om
  * ändå, och två sidor som slåss om samma URL är dyrare än en URL som ännu
  * inte finns.
@@ -49,7 +49,7 @@ use Inertia\Response;
  * och 6). Skrivningen går genom App\Actions\Container\TrashContainer, samma
  * action som `Api\ContainerController::destroy()` anropar, och den enda
  * skillnaden mot `/api` är sessionen: den här kontrollern rensar den aktiva
- * pärmen när den som raderas är den som ligger i sessionen.
+ * containern när den som raderas är den som ligger i sessionen.
  *
  * Rutterna ligger bakom `auth` (routes/web.php) — en utloggad besökare
  * skickas till /login av middlewaren och når aldrig de här metoderna.
@@ -57,7 +57,7 @@ use Inertia\Response;
 class ContainerController extends Controller
 {
     /**
-     * GET /containers — alla pärmar användaren når, sorterade på namn.
+     * GET /containers — alla containers användaren når, sorterade på namn.
      *
      * Urvalet är `Container::scopeAccessibleBy()` — exakt samma villkor som
      * App\Http\Controllers\Api\ContainerController::index() ställer och som
@@ -72,8 +72,8 @@ class ContainerController extends Controller
      * glider isär, och det är precis vad App\Policies\ContainerPolicy
      * docblock varnar för.
      *
-     * Kostnaden är en fråga per pärm, och det är accepterat: listan är inte
-     * paginerad och antalet pärmar är taket i kontots plan (`containers`,
+     * Kostnaden är en fråga per container, och det är accepterat: listan är inte
+     * paginerad och antalet containers är taket i kontots plan (`containers`,
      * issue 26a — gratiskontot har en). **Pagineras listan en dag ska det
      * här talet räknas om** — policyfrågan är då inte längre begränsad av
      * plantaket.
@@ -124,8 +124,8 @@ class ContainerController extends Controller
     }
 
     /**
-     * POST /containers — skapar pärmen och gör den aktiv, 302 till
-     * kategoriytan för den nya pärmen (issue 56b § Beslut 5).
+     * POST /containers — skapar containern och gör den aktiv, 302 till
+     * kategoriytan för den nya containern (issue 56b § Beslut 5).
      *
      * Ägarkontot kommer ur kroppen (`account`, ett konto-ULID), för servern
      * har inget begrepp "aktivt konto" (issue 8 § Beslut 8). Kontot måste
@@ -145,9 +145,9 @@ class ContainerController extends Controller
      * handlar inte om vad användaren skrev, och vyn renderar `errors.quota`
      * som en ruta ovanför formuläret.
      *
-     * Den nya pärmen blir aktiv — den som just skapat en pärm vill arbeta i
+     * Den nya containern blir aktiv — den som just skapat en container vill arbeta i
      * den (Beslut 6). Det är en av de tre platser som sätter den aktiva
-     * pärmen; `ActiveContainer` äger sessionen.
+     * containern; `ActiveContainer` äger sessionen.
      */
     public function store(
         StoreContainerRequest $request,
@@ -173,20 +173,20 @@ class ContainerController extends Controller
 
         $activeContainer->set($user, $container);
 
-        // Issue 56b § Beslut 5: den som just skapat en pärm möts av
-        // kategoriytan — och där, på en tom pärm, av den färdiga
+        // Issue 56b § Beslut 5: den som just skapat en container möts av
+        // kategoriytan — och där, på en tom container, av den färdiga
         // uppsättningen. Att landa i listan hon nyss stod i är att be henne
-        // leta upp pärmen igen.
+        // leta upp containern igen.
         return redirect()
             ->route('containers.categories', $container)
             ->with('status', 'container-created');
     }
 
     /**
-     * GET /containers/{container}/edit — pärmens inställningar.
+     * GET /containers/{container}/edit — containerns inställningar.
      *
      * `{container}` binds på ULID via `#[RouteKey('ulid')]` på
-     * App\Models\Container, som överallt annars. En mjukraderad pärm löser
+     * App\Models\Container, som överallt annars. En mjukraderad container löser
      * aldrig upp (SoftDeletes' globala scope) och en okänd ULID blir
      * felsidan för 404.
      *
@@ -250,13 +250,13 @@ class ContainerController extends Controller
     }
 
     /**
-     * DELETE /containers/{container} — raderar pärmen, 302 till pärmlistan
+     * DELETE /containers/{container} — raderar containern, 302 till containerlistan
      * med flashkoden `container-trashed` (62b § Beslut 4, 5 och 6).
      *
      * Kroppen kommer från `Edit.vue`s bekräftade knapp — ingen egen
      * bekräftelseruta på servern, och ingen POST-vägran: `window.confirm` är
      * klientens svar på "är du säker", och en klient som hoppar över den
-     * raderar sin egen pärm. Det är en destruktiv handling för användaren, men
+     * raderar sin egen container. Det är en destruktiv handling för användaren, men
      * den går att ångra i papperskorgen i 30 dagar — det är därför knappen
      * får finnas nu och inte i issue 54.
      *
@@ -265,16 +265,16 @@ class ContainerController extends Controller
      * konto (regel 1 + regel 4). En delegerad `container_access` — även på
      * `delete`-nivå — får 403 här.
      *
-     * **Sessionen rensas när den raderade pärmen var den aktiva** (Beslut 6).
-     * Pärmen löses inte längre upp av `Container::scopeAccessibleBy()`, så
-     * varje efterföljande sida hade annars visat en aktiv pärm som inte finns.
+     * **Sessionen rensas när den raderade containern var den aktiva** (Beslut 6).
+     * Containern löses inte längre upp av `Container::scopeAccessibleBy()`, så
+     * varje efterföljande sida hade annars visat en aktiv container som inte finns.
      * `App\Support\Frontend\ActiveContainer` är den enda som rör nyckeln, och
      * den anropas HÄR och inte i actionen: en `/api`-radering har ingen
      * session att röra. Jämförelsen görs FÖRE raderingen — `forUser()` svarar
-     * null för en redan raderad pärm, och efteråt hade svaret alltid varit
+     * null för en redan raderad container, och efteråt hade svaret alltid varit
      * falskt.
      *
-     * Återställningen sätter INTE tillbaka pärmen som aktiv: att välja pärm är
+     * Återställningen sätter INTE tillbaka containern som aktiv: att välja container är
      * användarens handling (Beslut 6).
      */
     public function destroy(

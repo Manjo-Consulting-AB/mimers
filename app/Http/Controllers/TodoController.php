@@ -44,18 +44,18 @@ use Inertia\Response;
  * Rutten auktoriserar ändå; en postad avbockning utan rätt blir 403.
  *
  * **Kontots förval räknas här** (Beslut 4, 63b § Beslut 4).
- * `CompleteOccurrenceRequest` kräver `account`, och regeln är 63b:s: pärmens
+ * `CompleteOccurrenceRequest` kräver `account`, och regeln är 63b:s: containerns
  * ägarkonto när användaren är medlem i det, annars hennes första konto. Vyn
  * skickar bara tillbaka det ULID den fick — den väljer inget själv, och en
- * mottagare utanför ägarkontot får sitt eget konto och inte pärmens.
+ * mottagare utanför ägarkontot får sitt eget konto och inte containerns.
  *
  * **Frågekostnaden är konstant** (Beslut 8). Förekomsterna hämtas med
  * `with(['schedule.item.container.account'])` — samma eager load som `/api`,
  * plus `account`, som `ItemPolicy::update()` läser för kontospärren (regel 4)
  * och som annars hade blivit ett uppslag per rad. Omfånget värms i ETT anrop
- * för de pärmar listan faktiskt bär: `ResolveItemScope` memoiserar per
+ * för de containers listan faktiskt bär: `ResolveItemScope` memoiserar per
  * `{user, container}`, så utan värmningen hade `can`-flaggan kostat en
- * upplösning per pärm och listan vuxit i frågor med antalet pärmar i stället
+ * upplösning per container och listan vuxit i frågor med antalet containers i stället
  * för att vara konstant (issue 70 § Beslut 2, samma grepp som
  * `App\Actions\Item\SearchAccessibleItems`).
  */
@@ -86,8 +86,8 @@ class TodoController extends Controller
      * hundra rader i stället för att tyst klippa listan.
      *
      * `hasContainers` skiljer de två ärliga tomma lägena åt (Beslut 6): den
-     * som inte har någon pärm alls får en länk till att skapa en, den som har
-     * pärmar utan öppna uppgifter får "inget att göra just nu". Ingen av
+     * som inte har någon container alls får en länk till att skapa en, den som har
+     * containers utan öppna uppgifter får "inget att göra just nu". Ingen av
      * meningarna vet om något filtrerats bort, och ingen bär ett tal.
      */
     public function index(Request $request): Response
@@ -95,7 +95,7 @@ class TodoController extends Controller
         $user = $request->user();
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
-        // Pärmarna användaren når, i EN fråga — underlaget för `hasContainers`
+        // Containerna användaren når, i EN fråga — underlaget för `hasContainers`
         // och ingenting annat. Urvalet av rader ställs inte här: `todoFor()`
         // nedan formulerar åtkomsten själv, och en andra lista hade varit en
         // andra sanning om omfånget (Beslut 2).
@@ -111,7 +111,7 @@ class TodoController extends Controller
             ->orderBy('ulid')
             ->get();
 
-        // Värm omfånget för de pärmar listan bär, i ETT anrop. `forContainers`
+        // Värm omfånget för de containers listan bär, i ETT anrop. `forContainers`
         // med en tom lista ställer inga frågor alls, så en tom todo-vy kostar
         // ingenting extra.
         app(ResolveItemScope::class)->forContainers(
@@ -134,7 +134,7 @@ class TodoController extends Controller
             $groups[$this->group($occurrence->due_at, $today)][] = [
                 // Resursen, med allt den bär, och de tre nycklarna BREDVID
                 // den — samma mönster som App\Http\Controllers\
-                // SearchController lägger pärmen bredvid ItemResource: ett
+                // SearchController lägger containern bredvid ItemResource: ett
                 // fält som bara webben behöver hör inte inuti `/api`:s svar.
                 ...TodoEntryResource::make($occurrence)->resolve($request),
                 'account' => $this->account($item->container->account->ulid, $accountUlids),
@@ -165,7 +165,7 @@ class TodoController extends Controller
 
     /**
      * Kontot avbockningen tillskrivs om användaren klickar direkt i listan:
-     * pärmens ägarkonto när hon är medlem i det, annars hennes första konto —
+     * containerns ägarkonto när hon är medlem i det, annars hennes första konto —
      * 63b § Beslut 4, samma förval som formuläret på schemats sida.
      *
      * @param  list<string>  $accountUlids

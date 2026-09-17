@@ -56,7 +56,7 @@ use Inertia\Response;
  * förvaltningsvyn aldrig gör det: den här är avsändarens egen lista över vad
  * hon själv skickat.
  *
- * `items` är pärmens levande items, bara för den som får bjuda in: det är
+ * `items` är containerns levande items, bara för den som får bjuda in: det är
  * valet av omfång i formuläret, och [[ADR-0028 Åtkomst på itemnivå]]
  * § Beslut säger att `invitation` speglar omfånget. Utan listan finns
  * itemavgränsad delning inte i produkten, och det här är den enda ytan i M10
@@ -159,7 +159,7 @@ class ContainerSharingController extends Controller
     }
 
     /**
-     * Pärmens inbjudningar, hydrerade för App\Http\Resources\InvitationResource.
+     * Containerns inbjudningar, hydrerade för App\Http\Resources\InvitationResource.
      *
      * ALLA rader, oavsett status och i samma ordning som `/api`:s `index()`
      * (issue 10a § Beslut 14): listan visar även tillbakadragna och utgångna,
@@ -231,9 +231,9 @@ class ContainerSharingController extends Controller
     }
 
     /**
-     * Pärmens levande items — omfångsvalet i inbjudningsformuläret, som
+     * Containerns levande items — omfångsvalet i inbjudningsformuläret, som
      * `{ulid, name}` och ingenting mer. EN fråga, ingen paginering och ingen
-     * sökning: listan är pärmens innehåll och plantaket sätter taket för hur
+     * sökning: listan är containerns innehåll och plantaket sätter taket för hur
      * lång den kan bli.
      *
      * Ingen `withTrashed()`: ett mjukraderat item går inte att bjuda in till,
@@ -258,7 +258,7 @@ class ContainerSharingController extends Controller
      * ett item. EN fråga, oavsett antal rader, och `withTrashed()` av skälet i
      * klassens docblock: en grant — och en inbjudan — på ett sedan länge
      * mjukraderat item ska redovisas med sitt namn, inte som `null`, för
-     * `null` läses som "hela pärmen".
+     * `null` läses som "hela containern".
      *
      * Nyckeln är ULID och inte löpnummer: det är ULID:n resurserna bär i
      * `item`, och vyn slår upp på den utan att känna till något löpnummer.

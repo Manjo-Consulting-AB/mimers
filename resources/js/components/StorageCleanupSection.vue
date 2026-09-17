@@ -14,7 +14,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * kommer ur sidans props, redan sorterade på storlek fallande av
  * App\Http\Controllers\Settings\StorageController, och den här filen lägger
  * ingenting ovanpå: ingen egen `fetch`, ingen omsortering, ingen paginering.
- * Varje rad bär filnamn, storlek i läsbar form, pärm och item — utan
+ * Varje rad bär filnamn, storlek i läsbar form, container och item — utan
  * sammanhanget går valet inte att göra, och "de fyrtio semesterbilderna" sitter
  * på samma item.
  *
@@ -34,9 +34,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * ingen modal komponent och ingen sträng i JavaScript. Texten säger antalet
  * filer och det frigjorda utrymmet, pekar på papperskorgen och de 30 dagarna —
  * och säger aldrig "raderas permanent", för bilagorna mjukraderas och kan
- * återställas ur pärmens papperskorg (62a).
+ * återställas ur containerns papperskorg (62a).
  *
- * **Bilagor vars item eller pärm ligger i papperskorgen syns och är
+ * **Bilagor vars item eller container ligger i papperskorgen syns och är
  * markerade** (Beslut 3): de räknas fortfarande mot kontot och ska gå att
  * rensa bort. Utan markeringen ser summan ut att vara fel.
  *
@@ -72,7 +72,7 @@ const pending = ref(false);
 /*
  * Raderna: storleken formaterad och `formatByteSize` — samma formatering som
  * serverns Number::fileSize(), samma modul som bilagelistan använder
- * (attachmentPresentation.js). Raden visar pärm och item med en nyckel och
+ * (attachmentPresentation.js). Raden visar container och item med en nyckel och
  * inte med ett skiljetecken i mallen, så ordningen går att översätta.
  */
 const rows = computed(() => props.attachments.map((attachment) => ({
@@ -169,7 +169,7 @@ function submit() {
                             </span>
 
                             <!-- Bilagan räknas fortfarande mot kontot när itemet
-                                 eller pärmen ligger i papperskorgen (Beslut 3),
+                                 eller containern ligger i papperskorgen (Beslut 3),
                                  och raden ska säga det — annars ser summan ut
                                  att vara fel. -->
                             <span v-if="row.inTrash" class="text-sm text-amber-800">

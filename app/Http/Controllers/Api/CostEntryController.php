@@ -36,7 +36,7 @@ use Illuminate\Support\Facades\Gate;
  *
  * Fram till dess var grinden containerns `view`/`update` i alla fyra: en
  * omfångsbegränsad mottagare kunde läsa kostnaderna på vilket item som helst
- * i pärmen men inte bokföra en på sitt eget, och en `write`-mottagare kunde
+ * i containern men inte bokföra en på sitt eget, och en `write`-mottagare kunde
  * radera en kostnadsrad. `Container $container` står kvar i signaturerna för
  * att ImplicitRouteBinding löser barnbindningen mot den redan lösta
  * föräldern; `store()` behöver den dessutom för attributedAccountId().
@@ -212,7 +212,7 @@ class CostEntryController extends Controller
      *
      * Issue 74 § Beslut 6: ytan står kvar på containergrinden, men den
      * LÄCKER — en lista med "Advokatbyrån Ek & Partners" säger något om
-     * pärmen som mottagaren av motorn inte ska veta. För en OMFÅNGSBEGRÄNSAD
+     * containern som mottagaren av motorn inte ska veta. För en OMFÅNGSBEGRÄNSAD
      * mottagare joinas därför `item` in och omfånget styr raderna. För ett
      * OMFATTANDE omfång läggs ingen join till: den befintliga frågan mot
      * bara `cost_entry` är billigare (indexet från 45a), och de två fallen
@@ -285,7 +285,7 @@ class CostEntryController extends Controller
      *    användarens EGET konto gäller: `type = 'personal'` bland hens
      *    medlemskap, och saknas ett sådant, medlemskapet med lägst
      *    `account_id`. En privatperson som bjudits in tillskrivs sig själv,
-     *    inte pärmens ägare.
+     *    inte containerns ägare.
      *
      * Att fältet aldrig tas ur kroppen står fast (§ Beslut 2–3) — en
      * `managed`-skribent kan inte välja vilket av sina konton posten hamnar

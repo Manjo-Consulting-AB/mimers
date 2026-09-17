@@ -115,7 +115,7 @@ const props = defineProps({
     inlineEnabled: { type: Boolean, required: true },
     /* Det tekniska taket på en fil, ur `config('files.max_upload_bytes')`. */
     maxUploadBytes: { type: Number, required: true },
-    /* Pärmens ägarkonto — förvalet när användaren är medlem i det. */
+    /* Containerns ägarkonto — förvalet när användaren är medlem i det. */
     containerAccount: { type: String, default: '' },
     can: { type: Object, required: true },
 });
@@ -128,7 +128,7 @@ const fileInput = ref(null);
 
 /*
  * Kontolistan ur den delade propen `auth.accounts`, samma väg som ItemForm
- * tar (60 Beslut 4). Förvalet är pärmens ägarkonto när användaren är medlem i
+ * tar (60 Beslut 4). Förvalet är containerns ägarkonto när användaren är medlem i
  * det, annars hennes första konto.
  */
 const accounts = computed(() => page.props.auth?.accounts ?? []);
@@ -446,7 +446,7 @@ function destroy(attachment) {
     <section class="mt-10">
         <h2 class="text-lg font-semibold">{{ t('item.attachment.heading') }}</h2>
 
-        <!-- En tom pärm och ett item utan bilagor säger samma sak: det finns
+        <!-- En tom container och ett item utan bilagor säger samma sak: det finns
              ingen rad att visa, och vyn hittar inte på en. -->
         <p v-if="rows.length === 0" class="mt-2 text-sm text-slate-600">
             {{ t('item.attachment.empty') }}

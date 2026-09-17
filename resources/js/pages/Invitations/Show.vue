@@ -13,7 +13,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * tillstånd hade en postning nekats av servern oavsett vad sidan visade.
  *
  *   ready       — inloggad, verifierad mottagare. Accept- och avvisa-formulären.
- *   guest       — utloggad. Pärmens namn, inbjudaren och nivån, plus vägarna
+ *   guest       — utloggad. Containerns namn, inbjudaren och nivån, plus vägarna
  *                 till inloggning och registrering. Adressen visas aldrig.
  *   unverified  — inloggad med rätt adress men overifierad. Ingenting eget
  *                 renderas: AppLayout visar redan verifieringspåminnelsen för
@@ -49,7 +49,7 @@ const page = usePage();
 const acceptForm = useForm({ token: props.token });
 const rejectForm = useForm({ token: props.token });
 
-/* Avvisa går till startsidan, accept till pärmlistan — se kontrollern. */
+/* Avvisa går till startsidan, accept till containerlistan — se kontrollern. */
 function accept() {
     acceptForm.post('/invitations/accept');
 }
@@ -66,8 +66,8 @@ function reject() {
         <h1 class="text-2xl font-semibold">{{ t('invitation.heading') }}</h1>
 
         <!--
-            Förhandsvisningen — pärmens namn, inbjudaren och nivån — visas för
-            både en gäst och en inloggad mottagare. Pärmens namn står redan i
+            Förhandsvisningen — containerns namn, inbjudaren och nivån — visas för
+            både en gäst och en inloggad mottagare. Containerns namn står redan i
             mejlet (InvitationNotification), så den som har länken har fått
             det. Adressen inbjudan gäller finns inte i propen alls.
         -->

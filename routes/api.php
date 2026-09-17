@@ -287,7 +287,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
 
     // Issue 15b · Fritextsök — den ENDA toppnivårutten som rör items, och
     // den enda som finns just för att frågan är global: en sökning över ALLT
-    // användaren har åtkomst till, inte inom en pärm hon redan valt (issue
+    // användaren har åtkomst till, inte inom en container hon redan valt (issue
     // 15b § Beslut 5). Rutten bär sitt eget åtkomstfilter (Container::scopeAccessibleBy(),
     // Beslut 4) i stället för rutt-nästlingens grind — och det är därför den
     // är issuens riskyta. Bara `q`, inga tagg-/kategorifilter (Beslut 6).
