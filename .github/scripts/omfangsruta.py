@@ -28,7 +28,9 @@ Läser:
     HEAD_REF           PR:ens grennamn, för att avgöra om referensen är obligatorisk
     GITHUB_REPOSITORY  ägare/repo
     GITHUB_TOKEN       för att hämta issuen, och för GraphQL-anropet nedan
-    BASE_SHA           commit att diffa mot
+    BASE_SHA           commit att diffa mot när HEAD inte är en merge-ref; på en
+                        merge-ref (det actions/checkout ger vid pull_request) går
+                        diffen mot HEAD^1 i stället, se main()
     PR_CREATED_AT      PR:ens skapelsetid, för att avgöra vilka redigeringar av
                         issuekroppen som hann ske innan PR:en öppnades
     GITHUB_EVENT_PATH  sätts av Actions själv i varje steg; ger PR-numret som
@@ -642,6 +644,31 @@ def main() -> int:
         )
         return 0
 
+    # Vad som diffas mot är inte självklart, och fel svar ger fantomöverträdelser.
+    # `actions/checkout@v4` checkar vid en pull_request-händelse ut refs/pull/N/merge,
+    # alltså PR:ens head redan mergad med mains NUVARANDE spets, medan BASE_SHA är
+    # pull_request.base.sha från när PR:en öppnades. Allt main hunnit få under tiden
+    # ligger därför i `bas...HEAD`, och trepunktsformen hjälper inte - basen är
+    # förfader till merge-commiten, så merge-basen ÄR basen. PR #310 fälldes på två
+    # filer ur PR #311 och PR #312 på exakt PR #313:s tre; båda mergades röda, och
+    # PR #287 (M11) på fyra docs-filer som redan låg i main. Se docs/Process/
+    # Lärdomar.md § Bekräftat.
+    #
+    # På en merge-ref är HEAD^1 mains spets och HEAD^2 PR:ens head, alltså är
+    # `HEAD^1 HEAD` exakt det PR:en tillför utöver main just nu. Finns ingen andra
+    # förälder - lokal körning, eller en checkout av head i stället för merge-refen -
+    # faller kontrollen tillbaka på BASE_SHA, som då är rätt bas.
+    if subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", "HEAD^2"],
+        capture_output=True,
+        text=True,
+    ).returncode == 0:
+        diffbas = "HEAD^1"
+        tvapunkt = True
+    else:
+        diffbas = bas
+        tvapunkt = False
+
     # -z, inte radbrytningar: valvets filnamn bär både mellanslag ("docs/00 Index.md")
     # och å/ä/ö, och utan -z styckar en whitespace-split de förra medan git C-citerar
     # de senare ("docs/Process/L\303\244rdomar.md"). Båda ger filer som inte matchar
@@ -650,7 +677,8 @@ def main() -> int:
     andrade = [
         f
         for f in subprocess.run(
-            ["git", "diff", "--name-only", "-z", f"{bas}...HEAD"],
+            ["git", "diff", "--name-only", "-z"]
+            + ([diffbas, "HEAD"] if tvapunkt else [f"{diffbas}...HEAD"]),
             capture_output=True,
             text=True,
             check=True,
