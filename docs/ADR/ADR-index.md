@@ -1,6 +1,6 @@
 # ADR-index
 
-Trettio beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Trettiotvå beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -37,6 +37,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0029 Agentens läsåtkomst till servern]] | Nyckel låst till ett läsande skript med `command=`, aldrig ett skal | Drift, [[Pipeline]] |
 | [[ADR-0030 Miljövariabler ur GitHubs secrets]] | Utrullningen upsertar miljöns secrets i `shared/.env` före `config:cache` | Drift, [[Pipeline]] |
 | [[ADR-0031 Köarbetaren körs av schemaläggaren]] | Schemalagd `queue:work --stop-when-empty` sist i `routes/console.php`, ingen daemon | Drift, [[Pipeline]] |
+| [[ADR-0032 Produktens ord]] | Container och objekt i gränssnittet, pärmen utgår | Allt |
 
 ## Om att ändra ett beslut
 
