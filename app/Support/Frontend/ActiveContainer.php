@@ -8,8 +8,14 @@ use App\Models\User;
 /**
  * Den aktiva containern — ett sessionsbegrepp, se issue 51 § Beslut 4.
  *
- * Klassen äger sessionsnyckeln och är det enda stället den stavas: vyn som
- * byter container (issue 54) anropar set(), allt annat läser forUser().
+ * Klassen äger sessionsnyckeln och är det enda stället den stavas: den som
+ * gör en container till kontext anropar set(), allt annat läser forUser().
+ * Sedan issue 83 sätts kontexten av att containern ÖPPNAS — se
+ * App\Http\Controllers\ItemController::index() — och det finns ingen rutt
+ * och ingen knapp som gör det för hand. Kvar som egna anropare står de tre
+ * tillfällen då användaren just FÅTT en container: skapandet
+ * (App\Http\Controllers\ContainerController::store()), en antagen inbjudan
+ * och ett mottaget ägarbyte.
  * Servern har inget "aktivt konto" (issue 8 § Beslut 8) och följaktligen
  * ingen aktiv container utanför sessionen — nyckeln är hela tillståndet.
  *

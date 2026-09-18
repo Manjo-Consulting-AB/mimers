@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\ActiveContainerController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AttachmentDownloadController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -421,8 +420,7 @@ Route::middleware('auth')->group(function () {
 
     /*
      * Issue 54 · Containerytan — listan, skapandet och redigeringen, se
-     * App\Http\Controllers\ContainerController och
-     * App\Http\Controllers\ActiveContainerController.
+     * App\Http\Controllers\ContainerController.
      *
      * Sex rutter, och den första webbytan mot en domänresurs `/api` redan
      * äger. Ingenting av API:et byggs om: StoreContainerRequest,
@@ -435,10 +433,10 @@ Route::middleware('auth')->group(function () {
      * App\Models\Container, som överallt annars.
      *
      * **DELETE kom med issue 62b § Beslut 4.** Raderingen står på containerns
-     * INSTÄLLNINGSSIDA och aldrig i listan: en raderingsknapp bredvid *Gör
-     * aktiv* är en felklickning från att containern försvinner. Vägen tillbaka —
-     * papperskorgen på `/trash/containers` — byggdes i samma issue, för en
-     * raderingsknapp utan en väg tillbaka är en fälla.
+     * INSTÄLLNINGSSIDA och aldrig i listan: en raderingsknapp i en lista där
+     * man byter container är en felklickning från att containern försvinner.
+     * Vägen tillbaka — papperskorgen på `/trash/containers` — byggdes i samma
+     * issue, för en raderingsknapp utan en väg tillbaka är en fälla.
      *
      * `/containers/create` ligger före `/containers/{container}/edit` i
      * filen för läsbarhetens skull — `create` är ett fast segment och
@@ -456,6 +454,12 @@ Route::middleware('auth')->group(function () {
      *
      * Två GET-rutter och ingenting annat (Beslut 1). Skapandet och
      * redigeringen är 57b, och den här issuen lägger ingen skrivande rutt.
+     *
+     * **`GET /containers/{container}` sätter den aktiva containern** (issue 83):
+     * att öppna en container är den handling som gör den till sessionens
+     * kontext, se App\Http\Controllers\ItemController::index(). Rutten är den
+     * enda som gör det. Det finns ingen rutt som gör det för hand längre:
+     * `PUT /containers/{container}/active` togs bort i samma issue.
      *
      * **`GET /containers/{container}` måste registreras EFTER
      * `GET /containers/create`** — annars matchar `{container}` strängen
@@ -818,15 +822,6 @@ Route::middleware('auth')->group(function () {
      */
     Route::delete('/containers/{container}', [ContainerController::class, 'destroy'])
         ->name('containers.destroy');
-
-    /*
-     * Den aktiva containern sätts på tre ställen (Beslut 6): här, i store() ovan,
-     * och i App\Support\Frontend\ActiveContainer::set() som är den enda som
-     * rör sessionsnyckeln. `view`-grinden och inte `update`: att välja vilken
-     * container man arbetar i är att läsa.
-     */
-    Route::put('/containers/{container}/active', ActiveContainerController::class)
-        ->name('containers.active');
 
     /*
      * Issue 65b § Beslut 1 och 2 · Containerns kalenderlänk, se

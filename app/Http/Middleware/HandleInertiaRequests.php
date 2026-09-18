@@ -37,6 +37,13 @@ use Inertia\Middleware;
  * `errors` delas medvetet INTE här. Inertia lägger redan sessionens
  * valideringsfel i propsen (Inertia\Middleware::share()), och en egen
  * version skuggar den — se issue 51 § Beslut 9.
+ *
+ * Middlewaren bara LÄSER kontexten och delar ut den (issue 83). Den som gör
+ * en container till kontext är den kontroller som ÖPPNAR den —
+ * App\Http\Controllers\ItemController::index(). Att skriva sessionstillstånd
+ * här hade gjort utdelningen ordningsberoende och tvingat skalet att känna
+ * igen ett ruttnamn, och då hade en framtida rutt in i containern satt
+ * kontexten tyst utan att något test i närheten blev rött.
  */
 class HandleInertiaRequests extends Middleware
 {

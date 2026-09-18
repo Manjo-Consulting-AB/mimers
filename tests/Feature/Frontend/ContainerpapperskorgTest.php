@@ -1,6 +1,6 @@
 <?php
 
-// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+// rott-pa-basen: issue 77b och 83 — ordbyte i prosa (kommentar och testnamn), ingen ändring av applikationskoden; bas och head delar den.
 
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
@@ -558,8 +558,9 @@ it('återställer containern, ökar förbrukningen och lämnar innehållet kvar'
 /*
  * Klart när: återställningen sätter inte containern som aktiv (Beslut 6).
  *
- * Att välja container är användarens handling, och `ActiveContainer` rörs därför
- * inte av återställningen.
+ * Att ÖPPNA en container är användarens handling (issue 83), och
+ * återställningen öppnar den inte: svaret är en omdirigering till
+ * papperskorgen, och `ActiveContainer` rörs därför inte.
  */
 it('sätter inte den återställda containern som aktiv', function () {
     withoutVite();
