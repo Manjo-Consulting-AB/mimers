@@ -1,6 +1,6 @@
 # ADR-index
 
-Trettiosju beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Trettioåtta beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -21,7 +21,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0013 Språk och i18n]] | *Språkuppsättningen ersatt av ADR-0034.* Svenska och engelska, felkoder aldrig meningar | Allt |
 | [[ADR-0014 Prismodell]] | Gratis, Pro 39–49 €/år, tre B2B-spår | [[Planer och kvoter]] |
 | [[ADR-0015 Backup]] | Tre nivåer, off-site från inleed | Drift |
-| [[ADR-0016 Kostnadsregistrering]] | Kostnadsrader per item, rapport bakom Pro | [[Items och organisation]] |
+| [[ADR-0016 Kostnadsregistrering]] | *Pro-gränsen ersatt av ADR-0038.* Kostnadsrader per item, rapport bakom Pro | [[Items och organisation]] |
 | [[ADR-0017 Missbruksvektorer]] | Detektera och prissätt, spärra inte i förväg | [[Planer och kvoter]], Drift |
 | [[ADR-0018 Utvecklingsprocess och deploy]] | Gren per issue, tagg till produktion, bygg en gång | [[Backlog]], Drift |
 | [[ADR-0019 Filleverans]] | Intern omdirigering under webbroten, engångslänk som fallback | [[Filer och lagring]] |
@@ -43,6 +43,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0035 Relationen mellan objekt]] | `sibling` heter `related`, tre relationer och inte fyra | [[Items och organisation]] |
 | [[ADR-0036 Containerns art]] | `kind` är fritt med autocomplete, CHECK-villkoret utgår | [[Konton och åtkomst]], [[Items och organisation]] |
 | [[ADR-0037 Valutans arv]] | Konto → container → rad, ändrat förval rör aldrig gamla poster | [[Items och organisation]] |
+| [[ADR-0038 Gränsen för Pro i kostnaderna]] | Fast summering fri, allt frågbart är Pro | [[Planer och kvoter]], [[Items och organisation]] |
 
 ## Om att ändra ett beslut
 
