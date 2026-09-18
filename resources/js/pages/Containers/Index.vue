@@ -79,7 +79,15 @@ const isShared = (container) => accountName(container) === null;
                     {{ container.name }}
                 </Link>
 
-                <span class="text-sm text-slate-600">{{ t(`container.kind.${container.kind}`) }}</span>
+                <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
+                     Containerns art]]). Ingen översättningsnyckel byggs ur
+                     värdet: `t()` returnerar nyckeln själv när uppslaget
+                     misslyckas, så den gamla raden hade skrivit
+                     `container.kind.Segelbåt` på skärmen första gången någon
+                     skrev en egen art. Ingen spärr runt raden heller — fältet
+                     är frivilligt, och en container utan art visar en tom rad i
+                     stället för att raden försvann. -->
+                <span class="text-sm text-slate-600">{{ container.kind }}</span>
 
                 <span v-if="showsAccountName && !isShared(container)" class="text-sm text-slate-600">
                     {{ accountName(container) }}

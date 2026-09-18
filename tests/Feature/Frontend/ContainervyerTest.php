@@ -163,26 +163,41 @@ it('märker en delad container som delad och en egen som egen i vyn', function (
 });
 
 /*
- * Beslut 8: `kind` är presentation. Väljarlistan kommer ur
- * Container::KINDS som en prop — samma teknik som 53c:s tidszoner — så
- * listan aldrig skrivs av i JavaScript.
+ * Beslut 8 och issue 84 · [[ADR-0036 Containerns art]]: `kind` är
+ * presentation och ett FRITT fält. Propen bär de arter kontot redan använt —
+ * underlaget för autocomplete, samma mönster som leverantörsfältet i
+ * [[ADR-0016 Kostnadsregistrering]] — och aldrig en fast mängd. Den är
+ * sorterad och utan dubbletter, och den är kontots: en annan kontos arter
+ * hör inte hit.
  */
-it('skickar kind-listan ur Container::KINDS till båda formulären', function () {
+it('skickar kontots redan använda arter till båda formulären', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = containerKontext();
 
+    // Kontextens container bär fabrikens ord — byt den så listan blir läsbar.
+    $container->update(['kind' => 'Segelbåt']);
+
+    Container::factory()->for($konto, 'account')->create(['kind' => 'Husvagn']);
+    Container::factory()->for($konto, 'account')->create(['kind' => 'Husvagn']);
+
+    // En container utan art ger inget förslag, och ett annat kontos arter är
+    // inte användarens.
+    Container::factory()->for($konto, 'account')->create(['kind' => '']);
+    $annat = Account::factory()->create();
+    Container::factory()->for($annat, 'account')->create(['kind' => 'Främmande art']);
+
     actingAs($anvandare)->get('/containers/create')->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Create')
-        ->where('kinds', Container::KINDS)
+        ->where('kinds', ['Husvagn', 'Segelbåt'])
     );
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/edit")->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Edit')
-        ->where('kinds', Container::KINDS)
+        ->where('kinds', ['Husvagn', 'Segelbåt'])
         ->where('container.ulid', $container->ulid)
         ->where('container.name', $container->name)
-        ->where('container.kind', $container->kind)
+        ->where('container.kind', 'Segelbåt')
         ->where('container.account', $konto->ulid)
     );
 
@@ -190,6 +205,99 @@ it('skickar kind-listan ur Container::KINDS till båda formulären', function ()
         ->toContain('containerSections');
     expect(File::get(resource_path('js/layouts/ContainerLayout.vue')))
         ->toContain('v-for="section in containerSections"');
+});
+
+/*
+ * Klart när: en container kan skapas UTAN art (issue 84).
+ *
+ * Propen ovan är ett förslag; fältet självt är fritt. En ny användare som ännu
+ * inte vet vad hennes container är ska kunna lämna rutan tom — ingen förvald
+ * art ärvs, och ingen art angiven lagras som den tomma strängen.
+ */
+it('skapar en container utan art', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'Utan art',
+        'account' => $konto->ulid,
+    ])->assertSessionHasNoErrors();
+
+    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBe('');
+});
+
+/*
+ * Klart när: en container kan sparas med en art utanför den gamla listan.
+ *
+ * `Segelbåt` är lika giltig som `boat`: valideringen är längd och format,
+ * aldrig medlemskap i en mängd ([[ADR-0036 Containerns art]]).
+ */
+it('tar emot en egenskriven art', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'Egenskriven',
+        'kind' => 'Segelbåt',
+        'account' => $konto->ulid,
+    ])->assertSessionHasNoErrors();
+
+    expect(Container::query()->where('name', 'Egenskriven')->firstOrFail()->kind)->toBe('Segelbåt');
+});
+
+/*
+ * Klart när: en container med en egenskriven art visas med arten ORDAGRANT i
+ * containerlistan, och aldrig som en översättningsnyckel (issue 84).
+ *
+ * `t()` returnerar nyckeln själv när uppslaget misslyckas, så den gamla raden
+ * `t('container.kind.' + värdet)` hade skrivit `container.kind.Segelbåt` på
+ * skärmen. Provet är tvådelat: värdet går ORÖRAT genom API-lagret och står
+ * ordagrant i listans prop, och vyn bygger ingen nyckel ur det — de fem
+ * nycklarna under `container.kind` finns inte kvar i `lang/`.
+ */
+it('skriver ut arten ordagrant i listan', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+    $container->refresh()->update(['kind' => 'Segelbåt']);
+
+    actingAs($anvandare)->get('/containers')->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('Containers/Index')
+        ->where('containers.0.kind', 'Segelbåt')
+    );
+
+    $index = File::get(resource_path('js/pages/Containers/Index.vue'));
+
+    // Ingen nyckel byggs ur värdet — mönstret `t(`container.kind...`)` är
+    // precis det som gav `container.kind.Segelbåt` på skärmen.
+    expect($index)->toContain('{{ container.kind }}');
+    expect(str_contains($index, 't(`container.kind'))->toBeFalse();
+
+    expect(array_key_exists('kind', trans('ui.container', [], 'en')))->toBeFalse();
+});
+
+/*
+ * Ett för långt värde avvisas: `max:40` är kolumnens bredd, och regeln är
+ * densamma i både skapa- och redigeringsformuläret (issue 84).
+ */
+it('avvisar en art längre än kolumnen', function () {
+    withoutVite();
+
+    [$konto, $anvandare, $container] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'För lång',
+        'kind' => str_repeat('a', 41),
+        'account' => $konto->ulid,
+    ])->assertSessionHasErrors('kind');
+
+    expect(Container::query()->where('name', 'För lång')->exists())->toBeFalse();
+
+    from("/containers/{$container->ulid}/edit")->actingAs($anvandare)->patch("/containers/{$container->ulid}", [
+        'kind' => str_repeat('a', 41),
+    ])->assertSessionHasErrors('kind');
 });
 
 /*
@@ -377,30 +485,28 @@ it('ger den generiska meningen för en okänd felkod i stället för att kasta',
         ->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 3, 'used' => 3]));
 });
 
-it('avvisar ett tomt namn och en okänd typ på respektive fält', function () {
+/*
+ * Namnet är det enda fältet som måste vara ifyllt. En art är det inte längre
+ * (issue 84), och en art utanför den gamla listan är inget fel — den sidan av
+ * gamla provet bor numera i `skapar en container utan art` och
+ * `tar emot en egenskriven art` ovan.
+ */
+it('avvisar ett tomt namn', function () {
     withoutVite();
 
     [$konto, $anvandare] = containerKontext();
 
-    $tomtNamn = from('/containers/create')->actingAs($anvandare)->post('/containers', [
+    $svar = from('/containers/create')->actingAs($anvandare)->post('/containers', [
         'name' => '',
         'kind' => 'boat',
         'account' => $konto->ulid,
     ]);
 
-    $tomtNamn->assertRedirect('/containers/create');
-    $tomtNamn->assertSessionHasErrors('name');
+    $svar->assertRedirect('/containers/create');
+    $svar->assertSessionHasErrors('name');
 
-    $okandTyp = from('/containers/create')->actingAs($anvandare)->post('/containers', [
-        'name' => 'Rymdskepp',
-        'kind' => 'spaceship',
-        'account' => $konto->ulid,
-    ]);
-
-    $okandTyp->assertRedirect('/containers/create');
-    $okandTyp->assertSessionHasErrors('kind');
-
-    expect(Container::query()->where('name', 'Rymdskepp')->exists())->toBeFalse();
+    // Bara kontextens container finns kvar.
+    expect(Container::query()->count())->toBe(1);
 });
 
 /*
@@ -551,11 +657,9 @@ it('har containerytans texter och läser dem ur lang/', function () {
         expect(trim($mening))->not->toBe('');
     }
 
-    // `kind` är en etikett per värde i Container::KINDS.
-    foreach (Container::KINDS as $kind) {
-        expect(trans("ui.container.kind.{$kind}", [], 'en'))
-            ->not->toBe("ui.container.kind.{$kind}", "kind.{$kind} saknas");
-    }
+    // Ingen etikett per art sedan issue 84: fältet är fritt, och vyn skriver
+    // ut värdet användaren matat in ([[ADR-0036 Containerns art]]).
+    expect(trans('ui.container', [], 'en'))->not->toHaveKey('kind');
 
     // Kvotmeningen bär gränsen och värdet, och är en mening och inte nyckeln.
     expect(trans('ui.error.quota.containers_exceeded', ['used' => 1, 'limit' => 1], 'en'))

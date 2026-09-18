@@ -822,7 +822,7 @@ return [
 
         // The status of the account stands at the top and is not buried
         // (decision 5). The keys are the values of `account.read_only_reason`
-        // — a code, like `container.kind` — so a new reason is a new line here
+        // — a code, like `attachment.kind` — so a new reason is a new line here
         // and no `if` in the view. An `active` account has no reason and gets
         // no box.
         //
@@ -982,13 +982,11 @@ return [
     ],
 
     'container' => [
-        'kind' => [
-            'boat' => 'Boat',
-            'caravan' => 'Caravan',
-            'house' => 'House',
-            'car' => 'Car',
-            'other' => 'Other',
-        ],
+        // Ingen `kind`-etikett sedan issue 84 · [[ADR-0036 Containerns art]]:
+        // arten är ett fritt textfält, och vyn skriver ut strängen användaren
+        // matat in. `t()` returnerar nyckeln själv när uppslaget misslyckas, så
+        // en etikett per värde hade gett `container.kind.Segelbåt` på skärmen
+        // första gången någon skrev en egen art.
 
         'nav' => [
             // `items` comes first, like the row in containerSections.js: the
@@ -1083,12 +1081,18 @@ return [
 
             // The suggestion on an empty container, see issue 56b decision 4. The
             // words in the set itself are NOT here and never will be: they live
-            // in resources/js/data/categoryPresets.js, per language and kind.
+            // in resources/js/data/categoryPresets.js, per language. Since issue
+            // 84 nothing is looked up in that catalog by the container's art —
+            // the user picks a set, and `preset_choose`/`preset_pick` are the
+            // picker's own words. The names the picker lists are the catalog's
+            // own keys, so no set name is repeated here.
             // `preset_not_empty` is the route's answer on a container that already
             // has categories and lands on the `categories` form key — a
             // sentence, not an API error code, since the route is web-only.
             'preset_heading' => 'Ready-made set',
             'preset_description' => 'We can fill the container with a ready-made suggestion of categories. You can rename, move and delete them just like any other category afterwards.',
+            'preset_choose' => 'Choose a set',
+            'preset_pick' => '— pick one —',
             'preset_apply' => 'Add the set',
             'preset_dismiss' => 'No thanks',
             'preset_not_empty' => 'The container already has categories. A set can only be added to an empty container.',
@@ -1740,7 +1744,7 @@ return [
     // The container's export page, see issue 67c decisions 1, 5, 6, 7 and 8.
     //
     // **`status` holds the column values from App\Models\Export::STATUSES**,
-    // never invented names of our own — same rule as container.kind. `pending`
+    // never invented names of our own — same rule as attachment.kind. `pending`
     // and `running` deliberately share a sentence: to someone waiting they are
     // the same thing — the bag is being packed — and the job passes through
     // both on its way to `ready`. `expired` is also carried by a `ready` row
@@ -2110,7 +2114,7 @@ return [
         'deleted_at' => 'Deleted :date',
 
         // The keys are the `type` values from RestoreRequest::TYPES, never
-        // invented names of our own — same rule as container.kind.
+        // invented names of our own — same rule as attachment.kind.
         'type' => [
             'item' => 'Item',
             'attachment' => 'Attachment',

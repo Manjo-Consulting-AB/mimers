@@ -283,6 +283,37 @@ it('bär varje träffs container bredvid resursen', function () {
 });
 
 /*
+ * Klart när: samma sak i sökträffen — en egenskriven art visas ORDAGRANT och
+ * aldrig som en översättningsnyckel (issue 84 · [[ADR-0036 Containerns art]]).
+ *
+ * Före issue 84 stod `t('container.kind.' + värdet)` här, och `t()` returnerar
+ * nyckeln själv när uppslaget misslyckas: första gången någon skrev en egen
+ * art hade träffen läst `container.kind.Segelbåt`. Fältet är fritt nu, så
+ * värdet går oförändrat genom API-lagret och vyn bygger ingen nyckel alls.
+ */
+it('visar containerns art ordagrant i träffen', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = sokvyKonto();
+    $pärm = sokvyPärm($konto);
+    $pärm->update(['kind' => 'Segelbåt']);
+    sokvyItem($pärm, 'Impellern', $anvandare);
+
+    $svar = actingAs($anvandare)->get(sokvyUrl('Impeller'));
+
+    $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('results.0.container.kind', 'Segelbåt')
+    );
+
+    expect(str_contains($svar->getContent(), 'container.kind.'))->toBeFalse();
+
+    $vy = File::get(resource_path('js/pages/Search.vue'));
+
+    expect($vy)->toContain('{{ result.container.kind }}');
+    expect(str_contains($vy, 't(`container.kind'))->toBeFalse();
+});
+
+/*
  * Klart när: träffens namn länkar till itemets detaljvy och containernamnet till
  * containerns förstasida.
  *

@@ -92,7 +92,12 @@ const { t } = useTranslations();
                             {{ result.container.name }}
                         </Link>
 
-                        <span>{{ t(`container.kind.${result.container.kind}`) }}</span>
+                        <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
+                             Containerns art]]): fältet är fritt, och `t()`
+                             returnerar nyckeln själv när uppslaget misslyckas,
+                             så ingen nyckel får byggas ur värdet. Ingen spärr
+                             runt raden: fältet grenar aldrig. -->
+                        <span>{{ result.container.kind }}</span>
                     </p>
                 </li>
             </ul>
