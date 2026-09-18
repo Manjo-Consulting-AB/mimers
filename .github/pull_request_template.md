@@ -33,11 +33,26 @@ En PR utan test per kriterium mergas inte.
 
 ## Omfångsrutan
 
-- [ ] Alla ändrade filer ligger inom issuens `In scope`
+- [ ] Alla ändrade filer ligger inom issuens `In scope` — eller är deklarerade nedan
 - [ ] Inget under `Out of scope` är rört
 - [ ] Ställning som ett `install`-kommando genererade men issuen inte bad om är borttagen
 
-<!-- Ligger en fil utanför rutan: skriv vilken och varför, och vänta på svar. -->
+<!--
+Står issuen i omfångsläget `spårad` och bär en fil utanför `In scope` en av dess
+"Klart när"-punkter: deklarera filen här och bygg vidare. Markören och kodblocket
+läses maskinellt av .github/scripts/omfangsruta.py — skriv dem exakt så, en sökväg
+per rad, och motiveringen som prosa under blocket. Lämna avsnittet tomt annars.
+
+Står issuen i läget `fast` vidgar en deklaration ingenting: skriv i stället vilken
+fil det gäller och varför under `## Frågor och antaganden`, och vänta på svar.
+`Out of scope` gäller i båda lägena och går aldrig att deklarera sig förbi.
+
+Utanför rutan:
+```
+app/Http/Controllers/ItemController.php
+```
+Rutten bakom skärmen bärs av `ItemController::index()`; utan den går "Klart när"-punkten om X inte att uppfylla.
+-->
 
 ## Kontroller
 

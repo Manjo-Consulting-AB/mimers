@@ -117,7 +117,9 @@ jobs:
 
       - name: Pipelinens egna enhetstester
         if: ${{ !cancelled() }}
-        run: python3 .github/scripts/test_process_next_issue.py
+        run: |
+          python3 .github/scripts/test_process_next_issue.py
+          python3 .github/scripts/test_omfangsruta.py
 
       # Budgeten gäller den som ändrar filen, inte den som råkar öppna en PR
       # medan den ligger över. I M4 tog PR #156 filen till 1944 ord, och de fem
