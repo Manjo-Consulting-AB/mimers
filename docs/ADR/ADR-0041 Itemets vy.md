@@ -10,7 +10,7 @@ Två mockuper visar samma sida på två sätt. Den ena ritar tre paneler samtidi
 
 Det mesta de visar finns redan. **Flera föräldrar är inte en önskan utan byggt kod**, och `App\Actions\Item\LinkItems` säger det i sin egen docblock: *"Flera föräldrar är tillåtet, så sökningen följer ALLA föräldrakanter, inte bara den första — grafen är en DAG, inte ett träd."* Cykelskyddet finns, unikhetsvillkoret hindrar dubbletter, och `App\Actions\Item\ListItemLinks` ger redan de tre grupperna mockupen ritar — föräldrar, barn och relaterade — med omfångsfiltret i samma fråga. Sex av mockupens sju flikar ligger dessutom redan som propar i `Containers/Items/Show`: fälten, relationerna, bilagorna, schemana och utlåningen renderas i dag på en enda lång sida.
 
-Fyra saker i mockuparna har ingen data bakom sig. **Anteckningar** finns som en rad i navigeringen, en knapp i snabbåtkomsten och en sökväg i relationslistan, men det finns ingen entitet. **Favoriter** finns som en hel sektion och ingen tabell. **"Aktiv"** står som ett märke på itemet, och `item`-migreringens kommentar räknar upp `status` vid namn bland det som med flit saknas. **Historik** är en flik, och `audit_log` skriver två händelsetyper från två anropsställen och har inget index på `(subject_type, subject_id)` — fliken vore tom och en full scan på samma gång.
+Fyra saker i mockuparna har ingen data bakom sig. **Anteckningar** finns som en rad i navigeringen, en knapp i snabbåtkomsten och en sökväg i relationslistan, men det finns varken entitet eller fält — `item.description` är det närmaste, och den är något annat. **Favoriter** finns som en hel sektion och ingen tabell. **"Aktiv"** står som ett märke på itemet, och `item`-migreringens kommentar räknar upp `status` vid namn bland det som med flit saknas. **Historik** är en flik, och `audit_log` skriver två händelsetyper från två anropsställen och har inget index på `(subject_type, subject_id)` — fliken vore tom och en full scan på samma gång.
 
 Två fält i detaljrutan finns inte heller: **leverantör**, som bor på kostnadsraden och inte på itemet, och **artikelnummer**, som inte finns alls.
 
@@ -26,7 +26,9 @@ Regeln om rötterna är också en åtkomstregel, och den är exakt en mening: **
 
 **Ett item kan förekomma på flera ställen, och vilken plats som är den aktuella är en fråga om hur användaren kom dit.** Ingen kolumn pekar ut en huvudplats. Vägen står i querysträngen, som filtret i issue 59a § Beslut 1 och av samma skäl: en delbar länk. En väg som inte längre finns — trädet har byggts om, ett led har raderats — **ignoreras och ersätts av den första i ordningen**. Den svarar aldrig 404: en delad länk som slutar fungera för att någon flyttat ett item är en fälla, inte ett fel.
 
-**Anteckningen är itemets egen text.** Ingen entitet, ingen ny kolumn: `item.description` *är* anteckningsfältet, fritext och ostrukturerad, och den visas som vyns ledande stycke i stället för som en rad bland tillverkare och modell. Skulle produkten senare vilja ha många daterade anteckningar per item är det en tabell och ett nytt beslut, inte en tolkning av det här.
+**Anteckningen är ett eget fält på itemet, skilt från beskrivningen.** De två svarar på olika frågor. `description` säger **vad itemet är** — meningen en annan människa behöver för att veta vad hon tittar på, och den som redan står i FULLTEXT-indexet och i sökningens kolumnlista. Anteckningen är **vad användaren vet om det**: ett fritt informationsfält som växer med tiden, Evernotes textruta och inte en rubrik. `item` får därför en nullbar `notes` vid sidan av `description`.
+
+**Ett fält, inte många daterade rader.** Ingen entitet, ingen tabell, ingen tidsstämpel per stycke. Vill produkten senare ha en ström av daterade anteckningar är det en tabell och ett nytt beslut, inte en tolkning av det här.
 
 **Itemets bild är en vald bilaga, och valet har en regel som gör det frivilligt.** `item` får en nullbar pekare till en bilaga. Upplösningen sker på servern, aldrig i vyn, i den här ordningen: den valda bilagan om den finns kvar, hör till itemet och är en bild; annars itemets **äldsta** bild; annars ingen bild. Regeln gör det användaren bad om — finns bara en bild används den — utan att kräva ett val av den som har två och inte bryr sig, och den låter inte itemets ansikte byta skepnad varje gång någon laddar upp ett foto.
 
@@ -60,6 +62,7 @@ Resten av ADR-0040 står oförändrad. Underträdssumman är vad den var, `Resol
 - **Rotregeln är samma mening på båda ställena.** Trädets rötter och vägarnas startpunkter är samma sak sedd från två håll, och en av dem får aldrig råka bli generösare än den andra. De två issuerna binds därför till samma formulering.
 - **Ingen räknare över det som fallit bort.** Varken trädet eller förekomstlistan får berätta att något dolts — issue 73 § Beslut 6, och en omfångsbegränsad mottagares träd ska vara ordagrant det hon hade sett om resten inte fanns.
 - **Bilagans radering får aldrig blockeras av omslagspekaren.** Pekaren är en preferens, inte data, så den nollställs när bilagan försvinner i stället för att hindra gallringen — en avvikelse från husets `onDelete('restrict')`, och den ska motiveras i migreringen.
+- **Anteckningsfältet går med i sökningen.** `Item::toSearchableArray()` räknar fem kolumner och är dokumenterad som en spegel av FULLTEXT-indexet från issue 13a § Beslut 4. En anteckning är precis vad någon söker efter — *bytte impeller 2024* står ingen annanstans — så `notes` läggs till i **båda** listorna, i samma migrering. Att lägga till kolumnen nu och indexet senare är dyrare på en full tabell, vilket `item`-migreringen själv anför som skäl till att indexet skapades i förväg.
 - **Flikraden och trepanelslayouten byggs inte här.** De väntar på designsystemet, precis som containerns flikrad i [[ADR-0039 Containerns översikt]]. Det som byggs nu är det vars form datamodellen bestämmer.
 - **Fokuskartan väntar med dem.** Den ritar `ListItemLinks` som noder och behöver ingen ny fråga, men den behöver en layout, och teckenförklaringen ska vara tre sorter — *Parent · Child · Related* — enligt [[ADR-0035 Relationen mellan objekt]].
 - **Containerns hela karta är ett eget projekt.** En graf över hundratals noder är en layoutalgoritm och inte en vy.
@@ -69,6 +72,8 @@ Resten av ADR-0040 står oförändrad. Underträdssumman är vad den var, `Resol
 ## Alternativ
 
 **Bygga den globala navigeringen ur den treställda mockupen.** Hem, Items, Struktur, Karta, Uppgifter, Dokument, Kostnader som egna rader. Valdes bort — containern upphör då att vara ett rum, varje vy måste själv säga vilken container den handlar om, och [[ADR-0039 Containerns översikt]] hade behövt rivas upp två dagar efter att den antogs.
+
+**Låta `description` vara anteckningsfältet.** Ingen ny kolumn, och fältet finns redan. Valdes bort — beskrivningen säger vad itemet är och anteckningen vad användaren vet om det, och slås de ihop blir beskrivningen antingen en uppsats eller anteckningen en rubrik. Ett fält som bär två syften får förr eller senare två format.
 
 **Låta en anteckning vara ett eget item.** Hade följt mockupens sökväg *"Serviceintervall — Anteckningar"* bokstavligt. Valdes bort — en anteckning hör till ett objekt, den är inte ett objekt, och varje anteckning som item hade fått egna uppgifter, egna kostnader och en plats i trädet den inte förtjänar.
 
