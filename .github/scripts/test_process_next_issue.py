@@ -735,6 +735,39 @@ def test_ingen_no_verify_i_skriptet():
     assert rader == [], f"--no-verify används: {rader}"
 
 
+def test_omfangslinten_nar_bada_implementationsprompterna():
+    """Linten är värdelös om dess fynd inte når den som bygger. Båda banorna -
+    DeepSeeks tre försök och Sonnet-eskaleringen - ska bära notisen."""
+    kropp = _funktionskropp("_process_in_worktree")
+    assert "omfangsnotis = kor_omfangslint(" in kropp
+    assert kropp.count("{omfangsnotis}") == 2, "notisen når inte båda prompterna"
+
+
+def test_omfangslinten_backar_ett_smutsat_arbetstrad():
+    """Modellanropet går genom en agent med skrivrätt. Prompten ber om en lista,
+    men PR #163 visar att en agent gör vad den vill - alltså mäts trädet."""
+    kropp = _funktionskropp("kor_omfangslint")
+    assert 'run_cmd(["git", "reset", "--hard", head_fore]' in kropp
+    assert '"clean", "-fd"' in kropp
+
+
+def test_omfangslinten_stoppar_aldrig_kon():
+    """Fail-open i varje led: ett falskt positivt utfall som stoppar arbetet
+    kostar mer än linten sparar."""
+    kropp = _funktionskropp("kor_omfangslint")
+    assert kropp.count("except Exception") == 2
+    assert "sys.exit" not in kropp and "eskalera(" not in kropp
+
+
+def test_omfangslintens_instruktion_sager_att_rutan_galler():
+    """Notisen får aldrig läsas som ett tillstånd att vidga rutan."""
+    kalla = _kalla()
+    block = kalla.split("OMFANGSLINT_INSTRUKTION = (")[1].split(")\n")[0]
+    assert "inte ett tillstånd" in block
+    assert "fortfarande bindande" in block
+    assert "Utanför rutan:" in block
+
+
 def test_omforsoket_packar_forst():
     """Omförsöket ska åtgärda orsaken, inte bara hoppas på bättre tur."""
     kalla = _kalla()
