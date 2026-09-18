@@ -108,24 +108,49 @@ def klassfil(fqcn: str) -> str:
     return os.path.join("app", *delar[1:]) + ".php"
 
 
-def inertiasidor(controllerfil: str, rot: str) -> list[str]:
-    """Sidkomponenterna kontrollern renderar, som sökvägar under resources/js/pages.
+METODHUVUD = re.compile(r"^\s*(?:public|protected|private)\s+function\s+(\w+)\s*\(", re.MULTILINE)
+
+
+def inertiasidor(controllerfil: str, rot: str) -> dict[str, list[str]]:
+    """Sidkomponenterna per METOD i kontrollern, som sökvägar under
+    resources/js/pages.
 
     Sidnamnet är kontraktet mellan rutten och komponenten (routes/web.php säger
     det själv i sin ingress), så en issue som ändrar vad en skärm visar rör
     nästan alltid båda - och rutan behöver därför nämna båda.
+
+    Per metod och inte per fil: `ItemController` renderar fem olika sidor, och
+    knöts de alla till var och en av dess rutter blev utfallet brus. Mätt på
+    issue 89:s ruta gav filnivån fem fynd, varav noll äkta - `Items/Show.vue`,
+    `Items/Create.vue` och `Items/Edit.vue` hängdes på `GET /containers/{container}`,
+    som bara renderar `Items/Index.vue`. En lint som pekar på fel fil fem gånger
+    läses inte den sjätte, precis som en grind som är röd på allt slutar betyda
+    något (se ci.yml om ordbudgeten).
+
+    Styckningen är en heuristik: källan delas på metodhuvudena, alltså ligger
+    varje `Inertia::render()` hos den metod vars huvud står närmast före den.
+    Det håller för repots kontrollers, som är tunna enligt ADR-0024. En metod
+    som kallar en privat hjälpare som renderar åt den tappas - fyndet uteblir
+    då, vilket är rätt håll att fela åt för en lint som inte fäller.
     """
     absolut = os.path.join(rot, controllerfil)
     if not os.path.exists(absolut):
-        return []
+        return {}
     with open(absolut, encoding="utf-8") as f:
         innehall = f.read()
-    sidor = []
-    for namn in dict.fromkeys(INERTIA.findall(innehall)):
-        sokvag = f"resources/js/pages/{namn}.vue"
-        if os.path.exists(os.path.join(rot, sokvag)):
-            sidor.append(sokvag)
-    return sidor
+
+    huvuden = list(METODHUVUD.finditer(innehall))
+    per_metod: dict[str, list[str]] = {}
+    for index, huvud in enumerate(huvuden):
+        slut = huvuden[index + 1].start() if index + 1 < len(huvuden) else len(innehall)
+        sidor = []
+        for namn in dict.fromkeys(INERTIA.findall(innehall[huvud.end():slut])):
+            sokvag = f"resources/js/pages/{namn}.vue"
+            if os.path.exists(os.path.join(rot, sokvag)):
+                sidor.append(sokvag)
+        if sidor:
+            per_metod[huvud.group(1)] = sidor
+    return per_metod
 
 
 def rutter(rot: str = REPO_ROOT) -> list[Rutt]:
@@ -145,7 +170,7 @@ def rutter(rot: str = REPO_ROOT) -> list[Rutt]:
             kalla = f.read()
 
         importer = {fqcn.split("\\")[-1]: fqcn for fqcn in IMPORT.findall(kalla)}
-        sidcache: dict[str, list[str]] = {}
+        sidcache: dict[str, dict[str, list[str]]] = {}
 
         for traff in RUTTRAD.finditer(kalla):
             klass = traff.group("klass") or traff.group("invokerbar")
@@ -155,6 +180,7 @@ def rutter(rot: str = REPO_ROOT) -> list[Rutt]:
             fil = klassfil(fqcn)
             if fil not in sidcache:
                 sidcache[fil] = inertiasidor(fil, rot)
+            action = traff.group("action") or "__invoke"
 
             # Namnet står på samma sats, alltså före nästa Route::-anrop.
             svans = kalla[traff.end():traff.end() + 400]
@@ -173,7 +199,7 @@ def rutter(rot: str = REPO_ROOT) -> list[Rutt]:
                 action=traff.group("action"),
                 namn=namntraff.group(1) if namntraff else None,
                 fil=fil,
-                sidor=sidcache[fil],
+                sidor=sidcache[fil].get(action, []),
             ))
     return tabell
 

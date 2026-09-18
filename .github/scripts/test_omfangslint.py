@@ -90,10 +90,21 @@ def test_api_rutter_far_sitt_prefix():
     assert any(r.uri.startswith("/api/") for r in tabell)
 
 
-def test_inertiasidor_kopplas_till_kontrollern():
+def test_inertiasidor_kopplas_till_ruttens_egen_metod():
+    """Per metod, inte per fil. ItemController renderar fem sidor; knöts de alla
+    till var och en av dess rutter gav issue 89:s ruta fem fynd varav noll äkta."""
     tabell = l.rutter(ROT)
-    traff = [r for r in tabell if r.fil == "app/Http/Controllers/ItemController.php"]
-    assert any(s.startswith("resources/js/pages/Containers/Items/") for r in traff for s in r.sidor)
+    index = [r for r in tabell if r.fil == "app/Http/Controllers/ItemController.php"
+             and r.action == "index" and l._nyckel(r.uri) == "/containers/{}"]
+    assert index, "GET /containers/{container} saknas"
+    assert index[0].sidor == ["resources/js/pages/Containers/Items/Index.vue"], index[0].sidor
+
+
+def test_ingen_sida_hangs_pa_en_rutt_som_inte_renderar_den():
+    tabell = l.rutter(ROT)
+    for rutt in tabell:
+        if rutt.metod in ("post", "patch", "put", "delete"):
+            assert rutt.sidor == [], f"{rutt} bär sidor trots att den inte renderar någon"
 
 
 # =====================================================================
