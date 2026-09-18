@@ -109,17 +109,28 @@ class ContainerController extends Controller
      * GET /containers/create — formuläret.
      *
      * `kinds` skickas som PROP, samma teknik som 53c:s tidszonslista och av
-     * samma skäl (Beslut 8): listan finns i `Container::KINDS` och ska inte
-     * skrivas av i JavaScript. Två listor blir två sanningar.
+     * samma skäl (Beslut 8): listan ska inte skrivas av i JavaScript. Två
+     * listor blir två sanningar.
+     *
+     * Sedan issue 84 · [[ADR-0036 Containerns art]] bär propen **de arter
+     * kontot redan använt** och inte en fast mängd — fältet är fritt, och
+     * listan är autocomplete, samma mönster och samma motivering som
+     * leverantörsfältet i [[ADR-0016 Kostnadsregistrering]]: det som går
+     * sönder är stavningsvarianter, och de löses vid inmatningen.
+     *
+     * Formuläret skriver åt ETT konto, men vilket är användarens val och
+     * först känt när hon gjort det. Propen spänner därför över alla konton
+     * hon är med i — de värden hon möter är hennes egna, och ett förslag hon
+     * känner igen är bättre än ett tomt fält.
      *
      * Kontolistan skickas INTE härifrån — den finns redan i den delade propen
      * `auth.accounts`, och en egen fråga för samma lista är en fråga för
      * mycket (Beslut 5).
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         return Inertia::render('Containers/Create', [
-            'kinds' => Container::KINDS,
+            'kinds' => $this->kindsUsedBy($request->user()->accounts->pluck('id')->all()),
         ]);
     }
 
@@ -132,6 +143,9 @@ class ContainerController extends Controller
      * finnas — annars är det ett valideringsfel som `StoreContainerRequest`
      * redan fångat — men att användaren inte är MEDLEM i det är ett
      * behörighetsfel (403) som avgörs här av policyn.
+     *
+     * `kind` är frivilligt (issue 84): `validated('kind')` är `null` när
+     * fältet utelämnats, och `null` är vad containern sparas med.
      *
      * **Behörighet först, kvot sedan** (issue 27 § Beslut 3): en användare
      * som inte får skapa åt kontot ska få 403, inte veta hur många containers
@@ -220,7 +234,10 @@ class ContainerController extends Controller
 
         return Inertia::render('Containers/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),
-            'kinds' => Container::KINDS,
+            // Ägarkontots arter, inte användarens: inställningarna handlar om
+            // den här containern, och förslagen ska komma ur samma sammanhang
+            // som de andra containrarna i kontot (issue 84).
+            'kinds' => $this->kindsUsedBy([$container->account_id]),
             'can' => [
                 'delete' => Gate::forUser($request->user())->allows('delete', $container),
             ],
@@ -298,5 +315,33 @@ class ContainerController extends Controller
         return redirect()
             ->route('containers.index')
             ->with('status', 'container-trashed');
+    }
+
+    /**
+     * De arter konton i `$accountIds` redan använt, utan dubbletter och
+     * sorterade — underlaget för autocomplete i skapa- och redigeringsvyn
+     * (issue 84 · [[ADR-0036 Containerns art]]).
+     *
+     * Det här är den ENDA formuleringen av frågan. Skriv den inte en andra
+     * gång i en action eller i en scopes-metod: två listor blir två
+     * sanningar, samma skäl som `Container::scopeAccessibleBy()` bär.
+     *
+     * Containrar utan art (fältet är frivilligt) hoppas över — `null` är
+     * inget förslag — och mjukraderade likaså: listan beskriver vad kontot
+     * HAR, inte vad det har haft. Sorteringen är på värdet, för den som
+     * skriver i fältet möter en bokstavsordning och inte en tidslinje.
+     *
+     * @param  list<int>  $accountIds  löpnummer, inte ULID:er
+     * @return list<string>
+     */
+    private function kindsUsedBy(array $accountIds): array
+    {
+        return Container::query()
+            ->whereIn('account_id', $accountIds)
+            ->whereNotNull('kind')
+            ->distinct()
+            ->orderBy('kind')
+            ->pluck('kind')
+            ->all();
     }
 }

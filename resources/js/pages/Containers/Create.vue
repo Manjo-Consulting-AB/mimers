@@ -11,7 +11,10 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  *
  * TRE fält: `name`, `kind` och `account`. Ägarkontot måste väljas, för
  * servern har inget begrepp "aktivt konto" (issue 8 § Beslut 8) — det är
- * därför `StoreContainerRequest` kräver `account` som konto-ULID.
+ * därför `StoreContainerRequest` kräver `account` som konto-ULID. `kind` är
+ * FRIVILLIGT (issue 84 · [[ADR-0036 Containerns art]]): att tvinga fram en
+ * art vid skapandet är att ställa en fråga användaren ännu inte kan svara
+ * på.
  *
  * Kontolistan kommer ur den DELADE propen `auth.accounts` och inte ur en
  * egen sidprop (Beslut 5): en fråga för samma lista är en fråga för mycket.
@@ -23,16 +26,21 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * gångerna. Väljaren listar alla hennes konton — även ett fryst; är kontot
  * `read_only` svarar policyn 403, och vyn ska inte gissa sig förbi det.
  *
- * Typ-listan kommer som prop ur `Container::KINDS` (Beslut 8), samma teknik
- * som 53c:s tidszonslista. Ingen egen lista i JavaScript: två listor blir två
- * sanningar. `kind` är presentation och bara presentation — ingenting i den
- * här vyn grenar på värdet.
+ * Typ-listan kommer som prop (Beslut 8), samma teknik som 53c:s tidszonslista.
+ * Ingen egen lista i JavaScript: två listor blir två sanningar. Sedan issue
+ * 84 bär propen de arter kontot REDAN ANVÄNT och inte en fast mängd — den är
+ * autocomplete på ett fritt fält, samma mönster som leverantörsfältet i
+ * [[ADR-0016 Kostnadsregistrering]], och `datalist` låter användaren både
+ * välja ett känt värde och skriva ett eget. `kind` är presentation och bara
+ * presentation — ingenting i den här vyn grenar på värdet.
  *
  * `errors.quota` renderas som en ruta OVANFÖR formuläret, inte under ett
  * fält (Beslut 4): ett kvotfel handlar inte om vad användaren skrev. Servern
  * lägger meningen där när containertaket slår i.
  */
 const props = defineProps({
+    /* De arter kontot redan använt — underlag för autocomplete, inte en
+       tillåten mängd. Fältet är fritt och får lämnas tomt. */
     kinds: { type: Array, required: true },
 });
 
@@ -46,7 +54,7 @@ const singleAccount = computed(() => (accounts.value.length === 1 ? accounts.val
 
 const form = useForm({
     name: '',
-    kind: props.kinds[0] ?? 'other',
+    kind: '',
     account: singleAccount.value?.ulid ?? '',
 });
 
@@ -95,17 +103,21 @@ function submit() {
                 id="kind"
                 :error="form.errors.kind"
             >
-                <select
+                <!-- Fritext med autocomplete, inte en väljare: värdet är
+                     användarens eget, och de arter kontot redan använt är
+                     förslag. Tomt fält är ett giltigt svar. -->
+                <input
                     id="kind"
                     v-model="form.kind"
                     :aria-describedby="describedBy"
+                    type="text"
                     name="kind"
+                    list="container-kinds"
                     class="rounded border border-slate-300 bg-white px-3 py-2"
                 >
-                    <option v-for="kind in kinds" :key="kind" :value="kind">
-                        {{ t(`container.kind.${kind}`) }}
-                    </option>
-                </select>
+                <datalist id="container-kinds">
+                    <option v-for="kind in kinds" :key="kind" :value="kind" />
+                </datalist>
             </FormField>
 
             <!-- Ett enda konto: värdet är förvalt och visas som text. Ingen

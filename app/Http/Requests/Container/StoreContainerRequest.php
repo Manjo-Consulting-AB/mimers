@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests\Container;
 
-use App\Models\Container;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -10,6 +9,12 @@ use Illuminate\Validation\Rule;
  * POST /api/containers, se issue 8 § Beslut 8: kroppen är
  * `{"name", "kind", "account"}` där `account` är ett konto-ULID, inte
  * kontots löpnummer.
+ *
+ * `kind` är FRIVILLIGT sedan issue 84 · [[ADR-0036 Containerns art]]: att
+ * tvinga fram en art vid skapandet är att ställa en fråga användaren ännu
+ * inte kan svara på. Reglerna är längd och format — `max:40` är kolumnens
+ * bredd — och aldrig medlemskap i en lista. Ett fritt fält som valideras mot
+ * en sluten mängd vore samma domän i koden som CHECK-villkoret var.
  *
  * Ett `account`-ULID som inte finns i det hela taget är ett VALIDERINGSFEL
  * (422 `validation.failed`, `exists`-regeln nedan) — skiljer sig från ett
@@ -41,7 +46,7 @@ class StoreContainerRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'kind' => ['required', 'string', Rule::in(Container::KINDS)],
+            'kind' => ['nullable', 'string', 'max:40'],
             'account' => ['required', 'string', Rule::exists('account', 'ulid')],
         ];
     }

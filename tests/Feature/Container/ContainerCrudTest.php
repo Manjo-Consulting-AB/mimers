@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Container;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
@@ -26,7 +27,7 @@ use function Pest\Laravel\postJson;
  * - template_source_id kan inte sättas via API:et
  * - radering är mjuk
  * - en mjukraderad container ger 404 resource.not_found
- * - ett ogiltigt kind avvisas med validation.failed
+ * - en art utanför den gamla listan tas emot, och `kind` får utelämnas
  *
  * Behörighet (App\Policies\ContainerPolicy) testas separat i
  * tests/Feature/Container/ContainerBehorighetTest.php — här används
@@ -149,18 +150,92 @@ it('en mjukraderad container ger 404 resource.not_found', function () {
     expect($response->json('error.code'))->toBe('resource.not_found');
 });
 
-it('ett ogiltigt kind avvisas med validation.failed', function () {
+/*
+ * Klart när: en art utanför den gamla listan tas emot, och CHECK-villkoret på
+ * `container.kind` finns inte längre (issue 84 · [[ADR-0036 Containerns art]]).
+ *
+ * Provet på själva villkoret är ett prov på MIGRERINGEN och inte på databasen:
+ * testsviten kör sqlite, och villkoret lades bara på mysql — sqlite saknar
+ * ALTER TABLE ... ADD CONSTRAINT, se skapandemigreringen. Att raden går att
+ * spara med `spaceship` bevisar att ingen grind står i vägen på vägen dit; att
+ * villkoret är släppt bevisas i källan, för det är den enda platsen där
+ * drivrutinen som kör provet kan se skillnad.
+ */
+it('släpper CHECK-villkoret och tar emot en art utanför den gamla listan', function () {
     [$account, , $headers] = kontoMedMedlem();
 
     $response = postJson('/api/containers', [
-        'name' => 'Vindil',
+        'name' => 'Rymdskepp',
         'kind' => 'spaceship',
         'account' => $account->ulid,
     ], $headers);
 
-    $response->assertStatus(422);
-    expect($response->json('error.code'))->toBe('validation.failed');
-    expect($response->json('error.data.fields.kind'))->not->toBeNull();
+    $response->assertCreated();
+    $response->assertJson(['data' => ['name' => 'Rymdskepp', 'kind' => 'spaceship']]);
+
+    $migreringar = [];
+
+    foreach (File::allFiles(database_path('migrations')) as $fil) {
+        $migreringar[] = $fil->getContents();
+    }
+
+    expect(implode("\n", $migreringar))->toContain('DROP CHECK container_kind_check');
+});
+
+/*
+ * Klart när: `kind` får utelämnas vid skapande av en container (issue 84).
+ *
+ * Fältet är frivilligt — att tvinga fram en art är att ställa en fråga
+ * användaren ännu inte kan svara på — och det som sparas är `null` och inte en
+ * tom sträng.
+ */
+it('skapar en container utan kind', function () {
+    [$account, , $headers] = kontoMedMedlem();
+
+    $response = postJson('/api/containers', [
+        'name' => 'Utan art',
+        'account' => $account->ulid,
+    ], $headers);
+
+    $response->assertCreated();
+    expect($response->json('data.kind'))->toBeNull();
+    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBeNull();
+});
+
+/*
+ * Klart när: ingen `match` eller `if` på containerns `kind` finns i `app/`
+ * eller `resources/js/` (issue 84).
+ *
+ * Regeln står i App\Models\Container:s klasskommentar och skärps av issue 84:
+ * ett FRITT fält som styr logik är värre än en sluten lista som gör det.
+ * Provet läser källan, för regeln gäller kodformen — ingen körning kan se en
+ * gren som ingen använt ännu.
+ *
+ * Bara CONTAINERNS kind prövas. `container_access.kind` och
+ * `attachment.kind` är andra kolumner med egna regler; deras grenar är deras.
+ */
+it('grenar aldrig på containerns kind', function () {
+    $träffar = [];
+
+    $filer = [...File::allFiles(app_path()), ...File::allFiles(resource_path('js'))];
+
+    foreach ($filer as $fil) {
+        if (! in_array($fil->getExtension(), ['php', 'js', 'vue'], true)) {
+            continue;
+        }
+
+        foreach (preg_split('/\R/', $fil->getContents()) as $rad) {
+            if (preg_match('/\b(if|match|switch)\b/', $rad) !== 1) {
+                continue;
+            }
+
+            if (preg_match('/container(?:->|\.)kind\b/i', $rad) === 1) {
+                $träffar[] = $fil->getRelativePathname().': '.trim($rad);
+            }
+        }
+    }
+
+    expect($träffar)->toBe([]);
 });
 
 /*

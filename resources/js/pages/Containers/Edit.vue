@@ -21,9 +21,11 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * Ingen egen ägarkontouppgift i vyn: den här sidan handlar om containern, och
  * delningsstatus hör till listan.
  *
- * Typ-listan kommer som prop ur `Container::KINDS` (Beslut 8) — samma lista
- * som validerar, aldrig en avskrift i JavaScript. `kind` är presentation och
- * bara presentation: ingen gren i den här vyn läser värdet.
+ * Typ-listan kommer som prop (Beslut 8), aldrig en avskrift i JavaScript.
+ * Sedan issue 84 · [[ADR-0036 Containerns art]] bär den ägarkontots REDAN
+ * ANVÄNDA arter och inte en fast mängd: fältet är fritt, `datalist` ger
+ * autocomplete, och den som vill tömma det får det. `kind` är presentation
+ * och bara presentation: ingen gren i den här vyn läser värdet.
  *
  * **Raderingsknappen kom med 62b § Beslut 4 och bor HÄR, aldrig i listan.**
  * Det här är sidan där man ändrar containern, och därför också där man tar bort
@@ -41,6 +43,8 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  */
 const props = defineProps({
     container: { type: Object, required: true },
+    /* Ägarkontots redan använda arter — underlag för autocomplete, inte en
+       tillåten mängd. Fältet är fritt och får tömmas. */
     kinds: { type: Array, required: true },
     can: { type: Object, required: true },
 });
@@ -50,7 +54,9 @@ const { focusFirstError } = useErrorFocus();
 
 const form = useForm({
     name: props.container.name,
-    kind: props.container.kind,
+    // En container skapad utan art bär `null`; rutan ska vara tom, inte visa
+    // ordet "null" (issue 84).
+    kind: props.container.kind ?? '',
 });
 
 // Raderingen är ett router.anrop och inte ett useForm-formulär, så vänteläget
@@ -111,17 +117,21 @@ async function destroy() {
                 id="kind"
                 :error="form.errors.kind"
             >
-                <select
+                <!-- Fritext med autocomplete, inte en väljare: värdet är
+                     användarens eget, och kontots arter är förslag. Att
+                     tömma fältet är ett giltigt svar. -->
+                <input
                     id="kind"
                     v-model="form.kind"
                     :aria-describedby="describedBy"
+                    type="text"
                     name="kind"
+                    list="container-kinds"
                     class="rounded border border-slate-300 bg-white px-3 py-2"
                 >
-                    <option v-for="kind in kinds" :key="kind" :value="kind">
-                        {{ t(`container.kind.${kind}`) }}
-                    </option>
-                </select>
+                <datalist id="container-kinds">
+                    <option v-for="kind in kinds" :key="kind" :value="kind" />
+                </datalist>
             </FormField>
 
             <button
