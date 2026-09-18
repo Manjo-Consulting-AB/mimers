@@ -54,8 +54,8 @@ const { focusFirstError } = useErrorFocus();
 
 const form = useForm({
     name: props.container.name,
-    // En container skapad utan art bär `null`; rutan ska vara tom, inte visa
-    // ordet "null" (issue 84).
+    // En container skapad utan art bär den tomma strängen, och rutan ska vara
+    // tom (issue 84).
     kind: props.container.kind ?? '',
 });
 

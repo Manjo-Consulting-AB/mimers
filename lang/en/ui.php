@@ -1082,8 +1082,10 @@ return [
             // The suggestion on an empty container, see issue 56b decision 4. The
             // words in the set itself are NOT here and never will be: they live
             // in resources/js/data/categoryPresets.js, per language. Since issue
-            // 84 the sets hang off no container field at all — the user picks
-            // one, and `preset_choose`/`preset_pick` are the picker's own words.
+            // 84 nothing is looked up in that catalog by the container's art —
+            // the user picks a set, and `preset_choose`/`preset_pick` are the
+            // picker's own words. The names the picker lists are the catalog's
+            // own keys, so no set name is repeated here.
             // `preset_not_empty` is the route's answer on a container that already
             // has categories and lands on the `categories` form key — a
             // sentence, not an API error code, since the route is web-only.

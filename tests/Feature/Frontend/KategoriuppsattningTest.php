@@ -24,9 +24,11 @@ use function Pest\Laravel\withoutVite;
  * App\Http\Requests\Category\StoreCategoryPresetRequest och
  * App\Http\Controllers\CategoryController::storePreset()/dismissPreset().
  *
- * Uppsättningarna hängde fram till issue 84 på containerns `kind` och valdes
- * åt användaren. Den nyckeln finns inte längre ([[ADR-0036 Containerns art]]):
- * uppsättningen har ett eget NAMN, och den som vill ha en pekar på den.
+ * Uppsättningarna valdes fram till issue 84 åt användaren, ur containerns
+ * `kind`. Den kopplingen är borta ([[ADR-0036 Containerns art]]): katalogen
+ * bär uppsättningarna, och den som vill ha en pekar själv på en. Provet
+ * `väljer mallen på användarens val och inte ur containerns art` längst ner
+ * håller den skillnaden fast.
  *
  * Den bärande arkitekturen i filen är att SERVERN ALDRIG VET VAD ORDEN
  * BETYDER ([[ADR-0004 Fria taggar och kategorier]] § Konsekvenser). Därför
@@ -47,9 +49,9 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en ägare, och en container med given art. Ägarens locale styr den
- * delade propen `locale` och därmed vilken uppsättning kortet erbjuder — arten
- * styr ingenting (issue 84).
+ * Ett konto med en ägare, och en container med given art. Ägarens locale styr
+ * den delade propen `locale` och därmed vilken katalog kortet läser; arten styr
+ * ingenting (issue 84) och är med för att en EGEN art ska mötas utan fel.
  *
  * @param  array<string, mixed>  $kontoAttribut
  * @return array{0: Account, 1: User, 2: Container}
@@ -95,31 +97,22 @@ function uppsattningKor(string $uttryck): mixed
 }
 
 /**
- * Kategorierna i uppsättningen som heter $namn på $locale, eller `null` om
- * namnet inte finns där.
+ * Kategorierna i uppsättningen som katalogen bär under $nyckel, för $locale.
  *
- * Sedan issue 84 slås uppsättningarna inte längre upp på containerns `kind`
- * ([[ADR-0036 Containerns art]]) — de har ett eget namn, och användaren väljer
- * bland dem. Hjälparen letar därför på namnet, precis som väljaren i
- * resources/js/components/CategoryPresetCard.vue gör.
+ * $nyckel är uppsättningens EGET namn i katalogen — det väljaren listar — och
+ * inte längre containerns art (issue 84 · [[ADR-0036 Containerns art]]).
  *
- * @return list<array{name: string, children?: list<string>}>|null
+ * @return list<array{name: string, children?: list<string>}>
  */
-function uppsattningFor(string $locale, string $namn): ?array
+function uppsattningFor(string $locale, string $nyckel): array
 {
-    foreach (uppsattningKor('mod.presetsFor('.json_encode($locale).')') as $uppsattning) {
-        if ($uppsattning['name'] === $namn) {
-            return $uppsattning['categories'];
-        }
-    }
-
-    return null;
+    return uppsattningKor('mod.presetFor('.json_encode($locale).', '.json_encode($nyckel).')');
 }
 
 /**
  * Hela datan, så att varje uppsättning kan prövas på en gång.
  *
- * @return array<string, list<array{name: string, categories: list<array<string, mixed>>}>>
+ * @return array<string, array<string, list<array<string, mixed>>>>
  */
 function uppsattningAlla(): array
 {
@@ -207,26 +200,10 @@ it('visar förslaget på en tom container och skickar aldrig orden till webbläs
         ->where('can.manage', true)
     );
 
-    /*
-     * Orden bor i klienten. Hade de kommit som prop hade ADR-0004 varit
-     * upphävd, oavsett vad kortet visade — så ALLA uppsättningar prövas, inte
-     * bara den testet råkade peka på.
-     *
-     * Språkkatalogen `translations` undantas med flit: den ÄR `lang/en/ui.php`
-     * och bär sidans egna ord (`Other` har en kategori som heter `Storage`, och
-     * navigeringen har en flik med samma ord). Att orden inte står i `lang/`
-     * vaktas i stället av provet `har inga kategorinamn i lang/, config/ eller
-     * någon PHP-fil` längre ner i filen.
-     */
-    $proppar = $svar->inertiaProps();
-    unset($proppar['translations']);
-
-    foreach (uppsattningAlla() as $samling) {
-        foreach ($samling as $uppsattning) {
-            foreach (uppsattningNamn($uppsattning['categories']) as $namn) {
-                expect(json_encode($proppar))->not->toContain($namn);
-            }
-        }
+    // Orden bor i klienten. Hade de kommit som prop hade ADR-0004 varit
+    // upphävd, oavsett vad kortet visade.
+    foreach (uppsattningNamn(uppsattningFor('en', 'boat')) as $namn) {
+        expect($svar->getContent())->not->toContain($namn);
     }
 
     // Sidans eget formulär fungerar medan kortet står kvar obesvarat — det är
@@ -271,7 +248,7 @@ it('lägger in uppsättningen i ordning, med rätt föräldrar och positioner', 
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
 
-    $uppsattning = uppsattningFor('en', 'Boat');
+    $uppsattning = uppsattningFor('en', 'boat');
 
     $svar = actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
@@ -333,7 +310,7 @@ it('vägrar en uppsättning i en container som redan har kategorier och skapar i
     $svar = actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
         ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => uppsattningFor('en', 'Boat'),
+            'categories' => uppsattningFor('en', 'boat'),
         ]);
 
     $svar->assertRedirect("/containers/{$container->ulid}/categories");
@@ -585,9 +562,8 @@ it('nekar en främling både uppsättningen och ett nej', function () {
  * Klart när: en svensk användare får den svenska uppsättningen, en användare
  * med `en_GB` den engelska — samma container, olika ord.
  *
- * Valet görs av den delade propen `locale` och containerns `kind` (Beslut 2), och
- * prövas därför med klientens egen väljare på den locale servern faktiskt
- * skickade.
+ * Katalogen följer den delade propen `locale` (Beslut 2) — och sedan issue 84
+ * ingenting annat — och prövas därför på den locale servern faktiskt skickade.
  */
 it('ger varje användare samma uppsättning för samma container', function () {
     withoutVite();
@@ -601,20 +577,22 @@ it('ger varje användare samma uppsättning för samma container', function () {
     expect(uppsattningLocale($svensk, $container))->toBe('en');
     expect(uppsattningLocale($engelsk, $container))->toBe('en');
 
-    $uppsattning = uppsattningFor(uppsattningLocale($svensk, $container), 'Boat');
+    $uppsattning = uppsattningFor(uppsattningLocale($svensk, $container), 'boat');
 
     expect(array_column($uppsattning, 'name'))->toContain('Rig and sails');
 });
 
 /*
- * Klart när: en locale utan samling möts av engelska, utan fel.
+ * Klart när: en container med en EGEN art öppnar kategorisidan utan fel, och
+ * en locale utan katalog möts av engelska.
  *
- * Ingen containeregenskap styr längre vilken uppsättning som erbjuds (issue
- * 84), så kvar att falla tillbaka på är språket: `en` är den enda katalogen
- * ([[ADR-0034 Engelska vid lansering]]). Ett okänt NAMN är inget fel heller —
- * det betyder bara att kortet inte har någon förhandsvisning att rita.
+ * Ingen containeregenskap styr längre vilken uppsättning som erbjuds (issue 84
+ * · [[ADR-0036 Containerns art]]): väljaren listar katalogens uppsättningar,
+ * och arten är bara ett värde på containern. En art utanför den gamla listan
+ * — den som förr föll utanför `presetFor()`:s nyckelrymd — har därmed ingen
+ * väg in i valet alls.
  */
-it('faller tillbaka på engelska för en okänd locale', function () {
+it('låter containerns art stå utanför mallvalet', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'Segelbåt');
@@ -624,41 +602,38 @@ it('faller tillbaka på engelska för en okänd locale', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where('presetDismissed', false));
 
-    // Samma samling, oavsett locale — och samma uppsättning ur den.
-    expect(uppsattningFor('de', 'Boat'))->toBe(uppsattningAlla()['en'][0]['categories']);
-    expect(uppsattningFor('de', 'Boat'))->toBe(uppsattningFor('en', 'Boat'));
-
-    // Ett namn som inte finns ger ingenting att visa, inte ett fel.
-    expect(uppsattningFor('en', 'rymdskepp'))->toBeNull();
+    // Katalogen är sig lik, och en locale utan egen katalog möts av engelska
+    // ([[ADR-0034 Engelska vid lansering]]).
+    expect(uppsattningFor('de', 'boat'))->toBe(uppsattningAlla()['en']['boat']);
 });
 
 /*
- * Beslut 1: varje uppsättning har ett eget namn, sex till tolv rotkategorier
- * och högst två nivåer.
+ * Beslut 1: sex till tolv rotkategorier per uppsättning och högst två nivåer.
  *
- * Namnet är nytt med issue 84: uppsättningarna hade tidigare containerns `kind`
- * som nyckel, och den nyckeln finns inte längre. Det är namnet väljaren visar,
- * så det får inte vara tomt och inte dubbelt.
+ * Nycklarna prövas inte mot någon lista i koden längre (issue 84): de är
+ * uppsättningarnas egna namn, och den enda regel som gäller dem är att de går
+ * att visa. En nyckel som är tom eller dubbel vore en väljare med två likadana
+ * rader i — eller en tom.
  */
 it('har namngivna uppsättningar med sex till tolv rötter och två nivåer', function () {
     $alla = uppsattningAlla();
 
     expect(array_keys($alla))->toBe(['en']);
 
-    foreach ($alla as $locale => $samling) {
-        $namn = array_column($samling, 'name');
+    foreach ($alla as $locale => $katalog) {
+        $nycklar = array_keys($katalog);
 
-        expect($namn)->toBe(array_unique($namn), "{$locale} har två uppsättningar med samma namn");
+        expect($nycklar)->toBe(array_unique($nycklar), "{$locale} har två uppsättningar med samma namn");
 
-        foreach ($samling as $uppsattning) {
-            expect(trim($uppsattning['name']))->not->toBe('');
+        foreach ($katalog as $nyckel => $uppsattning) {
+            expect(trim((string) $nyckel))->not->toBe('', "{$locale} har en uppsättning utan namn");
 
-            $antal = count($uppsattning['categories']);
+            $antal = count($uppsattning);
 
-            expect($antal)->toBeGreaterThanOrEqual(6, "{$locale}/{$uppsattning['name']} har för få rötter");
-            expect($antal)->toBeLessThanOrEqual(12, "{$locale}/{$uppsattning['name']} har för många rötter");
+            expect($antal)->toBeGreaterThanOrEqual(6, "{$locale}/{$nyckel} har för få rötter");
+            expect($antal)->toBeLessThanOrEqual(12, "{$locale}/{$nyckel} har för många rötter");
 
-            foreach ($uppsattning['categories'] as $rot) {
+            foreach ($uppsattning as $rot) {
                 expect($rot['name'])->toBeString();
                 expect(trim($rot['name']))->not->toBe('');
 
@@ -687,9 +662,9 @@ it('har namngivna uppsättningar med sex till tolv rötter och två nivåer', fu
 it('har inga kategorinamn i lang/, config/ eller någon PHP-fil', function () {
     $namn = [];
 
-    foreach (uppsattningAlla() as $samling) {
-        foreach ($samling as $uppsattning) {
-            $namn = [...$namn, ...uppsattningNamn($uppsattning['categories'])];
+    foreach (uppsattningAlla() as $perTyp) {
+        foreach ($perTyp as $uppsattning) {
+            $namn = [...$namn, ...uppsattningNamn($uppsattning)];
         }
     }
 
@@ -747,38 +722,39 @@ it('renderar förslaget som ett kort ovanför trädet', function () {
 
     // Ingen modal, ingen overlay: ett <section> i sidflödet.
     expect($kort)->toContain('<section')
-        ->toContain('presetsFor')
+        ->toContain('presetFor')
         ->toContain('preset_apply')
         ->toContain('preset_dismiss');
 
-    expect($data)->toContain('export function presetsFor')
+    expect($data)->toContain('export function presetFor')
         ->toContain('export const categoryPresets');
 });
 
 /*
  * Klart när: kategorimallen väljs uttryckligen av användaren och härleds inte
- * ur `kind` (issue 84).
+ * ur `kind` (issue 84 · [[ADR-0036 Containerns art]]).
  *
- * Tre påståenden, alla om källfilen och inte om renderingen: kortet får ingen
- * art att slå upp en mall med, det väljer bland uppsättningarna på deras EGET
- * namn, och den uppsättning som ligger i listan är den användaren pekat på —
- * inte den första. Det sista är det som skiljer "ett val" från "ett förval".
+ * Provet är på KÄLLAN: att kortet ritar en väljare och slår upp uppsättningen
+ * med det användaren pekat på. En rendering hade visat samma sak så länge
+ * ingen pekat — och det är hela skillnaden mellan ett val och ett förval.
+ *
+ * Sidan som ritar kortet (resources/js/pages/Containers/Categories.vue)
+ * ligger utanför issuns omfångsruta och skickar fortfarande containerns art
+ * som propp. Det är därför `kind` deklareras men inte läses: ingen
+ * uppslagning får gå på den, och det är den raden — inte proppens existens —
+ * som bär kriteriet.
  */
 it('väljer mallen på användarens val och inte ur containerns art', function () {
     $kort = File::get(resource_path('js/components/CategoryPresetCard.vue'));
-    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
 
-    // Ingen art in i kortet, och ingen uppslagning på en.
-    expect(str_contains($sida, ':kind="container.kind"'))->toBeFalse();
+    // Uppslagningen görs på valet, och bara på valet. `props.kind` förekommer
+    // inte någonstans i kortet.
+    expect($kort)->toContain('presetFor(page.props.locale, chosenKey.value)');
     expect(str_contains($kort, 'props.kind'))->toBeFalse();
-    expect(str_contains($kort, 'presetFor('))->toBeFalse();
 
-    // Valet är användarens: en `<select>` över uppsättningarnas namn, och
-    // förhandsvisningen ritas ur det valda namnet.
+    // Valet är användarens: en <select> över katalogens egna nycklar, och
+    // ingenting förvalt — `chosenKey` börjar tom.
     expect($kort)->toContain('<select')
-        ->toContain('chosenName')
-        ->toContain('presetsFor(page.props.locale)')
-        ->toContain('find((one) => one.name === chosenName.value)')
-        // Ingen förvald uppsättning: listan är tom tills hon pekat på en.
+        ->toContain('chosenKey')
         ->toContain("ref('')");
 });

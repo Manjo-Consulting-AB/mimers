@@ -1,7 +1,6 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -9,13 +8,17 @@ use Illuminate\Support\Facades\Schema;
  * Issue 84 · Containerns art blir fri. Se [[ADR-0036 Containerns art]] och
  * [[ADR-0033 Produktens omfång]] § Beslut.
  *
- * Två saker frigörs, och båda rör samma kolumn:
+ * EN sak ändras: CHECK-villkoret `kind IN ('boat', 'caravan', 'house',
+ * 'car', 'other')` släpps. Det är en gräns som tas bort, inte data — de fem
+ * värdena är fortfarande giltiga strängar, och ingen rad skrivs om.
  *
- * - CHECK-villkoret `kind IN ('boat', 'caravan', 'house', 'car', 'other')`
- *   släpps. Det är en gräns som tas bort, inte data: de fem värdena är
- *   fortfarande giltiga strängar, och ingen rad skrivs om.
- * - Kolumnen blir NULLBAR. Fältet är frivilligt, och "ingen art angiven" ska
- *   lagras som tomt och inte som en tom sträng.
+ * Kolumnen förblir NOT NULL. Fältet är frivilligt, och "ingen art angiven"
+ * lagras som den tomma strängen — samma värde en tom ruta i ett formulär
+ * alltid burit i den här kolumnen. Att i stället göra kolumnen nullbar hade
+ * krävt att App\Actions\Container\CreateContainer::handle() tog `?string`,
+ * och den filen ligger utanför den här issuns omfångsruta; se `Frågor och
+ * antaganden` i PR:en. Schemaändringen hålls därför till den enda raden
+ * issuen pekar ut.
  *
  * Villkoret skapades i 2026_08_25_010000_create_container_table.php och lades
  * bara på mysql — sqlite saknar ALTER TABLE ... DROP CHECK. Samma
@@ -31,10 +34,6 @@ return new class extends Migration
         if (Schema::getConnection()->getDriverName() === 'mysql') {
             DB::statement('ALTER TABLE container DROP CHECK container_kind_check');
         }
-
-        Schema::table('container', function (Blueprint $table) {
-            $table->string('kind', 40)->nullable()->change();
-        });
     }
 
     /**
@@ -50,9 +49,5 @@ return new class extends Migration
         if (Schema::getConnection()->getDriverName() === 'mysql') {
             DB::statement("ALTER TABLE container ADD CONSTRAINT container_kind_check CHECK (kind IN ('boat', 'caravan', 'house', 'car', 'other'))");
         }
-
-        Schema::table('container', function (Blueprint $table) {
-            $table->string('kind', 40)->nullable(false)->change();
-        });
     }
 };

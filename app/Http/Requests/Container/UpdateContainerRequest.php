@@ -13,8 +13,13 @@ use Illuminate\Foundation\Http\FormRequest;
  *
  * `kind` är fritt och frivilligt sedan issue 84 · [[ADR-0036 Containerns
  * art]]: reglerna är längd och format, aldrig medlemskap i en lista.
- * `nullable` behövs för den som tömmer fältet — `ConvertEmptyStringsToNull`
- * gör en tom ruta till `null` innan reglerna körs.
+ *
+ * **Den som tömmer fältet skriver den tomma strängen, inte `null`.**
+ * `ConvertEmptyStringsToNull` gör en tom ruta till `null` innan reglerna
+ * körs, och kolumnen är NOT NULL — normaliseringen nedan vänder tillbaka
+ * den till `''` så att `validated()` bär samma värde som skapandet sparar
+ * (se StoreContainerRequest). Nyckeln som SAKNAS rörs inte: `sometimes` ska
+ * fortsätta betyda "ändra inte arten".
  */
 class UpdateContainerRequest extends FormRequest
 {
@@ -26,13 +31,25 @@ class UpdateContainerRequest extends FormRequest
     }
 
     /**
+     * En nyckel som FINNS men är `null` betyder "användaren tömde rutan" —
+     * den blir den tomma strängen. En nyckel som saknas lämnas orörd, så
+     * `sometimes` fortfarande skiljer "töm" från "rör inte".
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('kind') && $this->input('kind') === null) {
+            $this->merge(['kind' => '']);
+        }
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function rules(): array
     {
         return [
             'name' => ['sometimes', 'string', 'max:255'],
-            'kind' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'kind' => ['sometimes', 'string', 'max:40'],
         ];
     }
 }

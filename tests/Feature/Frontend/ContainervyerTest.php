@@ -183,7 +183,7 @@ it('skickar kontots redan använda arter till båda formulären', function () {
 
     // En container utan art ger inget förslag, och ett annat kontos arter är
     // inte användarens.
-    Container::factory()->for($konto, 'account')->create(['kind' => null]);
+    Container::factory()->for($konto, 'account')->create(['kind' => '']);
     $annat = Account::factory()->create();
     Container::factory()->for($annat, 'account')->create(['kind' => 'Främmande art']);
 
@@ -212,7 +212,7 @@ it('skickar kontots redan använda arter till båda formulären', function () {
  *
  * Propen ovan är ett förslag; fältet självt är fritt. En ny användare som ännu
  * inte vet vad hennes container är ska kunna lämna rutan tom — ingen förvald
- * art ärvs, och `null` är vad som sparas.
+ * art ärvs, och ingen art angiven lagras som den tomma strängen.
  */
 it('skapar en container utan art', function () {
     withoutVite();
@@ -224,7 +224,7 @@ it('skapar en container utan art', function () {
         'account' => $konto->ulid,
     ])->assertSessionHasNoErrors();
 
-    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBeNull();
+    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBe('');
 });
 
 /*
@@ -253,14 +253,20 @@ it('tar emot en egenskriven art', function () {
  *
  * `t()` returnerar nyckeln själv när uppslaget misslyckas, så den gamla raden
  * `t('container.kind.' + värdet)` hade skrivit `container.kind.Segelbåt` på
- * skärmen. Provet är på KÄLLAN: vyn får inte bygga en nyckel alls, och de fem
+ * skärmen. Provet är tvådelat: värdet går ORÖRAT genom API-lagret och står
+ * ordagrant i listans prop, och vyn bygger ingen nyckel ur det — de fem
  * nycklarna under `container.kind` finns inte kvar i `lang/`.
  */
 it('skriver ut arten ordagrant i listan', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerKontext();
-    $container->update(['kind' => 'Segelbåt']);
+    $container->refresh()->update(['kind' => 'Segelbåt']);
+
+    actingAs($anvandare)->get('/containers')->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('Containers/Index')
+        ->where('containers.0.kind', 'Segelbåt')
+    );
 
     $index = File::get(resource_path('js/pages/Containers/Index.vue'));
 

@@ -144,8 +144,10 @@ class ContainerController extends Controller
      * redan fångat — men att användaren inte är MEDLEM i det är ett
      * behörighetsfel (403) som avgörs här av policyn.
      *
-     * `kind` är frivilligt (issue 84): `validated('kind')` är `null` när
-     * fältet utelämnats, och `null` är vad containern sparas med.
+     * `kind` är frivilligt (issue 84): `StoreContainerRequest` normaliserar
+     * ett utelämnat fält till den tomma strängen, så `validated('kind')` är
+     * alltid en sträng här och `CreateContainer::handle()` behöver ingen
+     * nullbar signatur.
      *
      * **Behörighet först, kvot sedan** (issue 27 § Beslut 3): en användare
      * som inte får skapa åt kontot ska få 403, inte veta hur många containers
@@ -326,10 +328,11 @@ class ContainerController extends Controller
      * gång i en action eller i en scopes-metod: två listor blir två
      * sanningar, samma skäl som `Container::scopeAccessibleBy()` bär.
      *
-     * Containrar utan art (fältet är frivilligt) hoppas över — `null` är
-     * inget förslag — och mjukraderade likaså: listan beskriver vad kontot
-     * HAR, inte vad det har haft. Sorteringen är på värdet, för den som
-     * skriver i fältet möter en bokstavsordning och inte en tidslinje.
+     * Containrar utan art (fältet är frivilligt) hoppas över — den tomma
+     * strängen är inget förslag — och mjukraderade likaså: listan beskriver
+     * vad kontot HAR, inte vad det har haft. Sorteringen är på värdet, för
+     * den som skriver i fältet möter en bokstavsordning och inte en
+     * tidslinje.
      *
      * @param  list<int>  $accountIds  löpnummer, inte ULID:er
      * @return list<string>
@@ -338,7 +341,7 @@ class ContainerController extends Controller
     {
         return Container::query()
             ->whereIn('account_id', $accountIds)
-            ->whereNotNull('kind')
+            ->where('kind', '!=', '')
             ->distinct()
             ->orderBy('kind')
             ->pluck('kind')

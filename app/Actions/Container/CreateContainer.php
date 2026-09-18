@@ -47,14 +47,10 @@ final class CreateContainer
      * anroparen har användaren till hands och för att signaturen ska kunna
      * utökas utan att röra båda kontrollerna den dag skapandet ska spåras.
      *
-     * `$kind` är frivillig sedan issue 84 · [[ADR-0036 Containerns art]]:
-     * containern får skapas utan art, och `null` är det ärliga värdet för
-     * "användaren har inte svarat än" — inte en tom sträng.
-     *
      * @throws ApiException 403 `quota.containers_exceeded`
      *                      när ägarkontots containertak är nått.
      */
-    public function handle(User $creator, Account $account, string $name, ?string $kind): Container
+    public function handle(User $creator, Account $account, string $name, string $kind): Container
     {
         // Taket gäller det konto som anges av anroparen — samma konto som blir
         // ägare och vars plan gäller (issue 27 § Beslut 4).

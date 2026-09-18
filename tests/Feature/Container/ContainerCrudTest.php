@@ -258,8 +258,9 @@ it('har ingen sluten lista kvar för containerns kind', function () {
  * Klart när: `kind` får utelämnas vid skapande av en container (issue 84).
  *
  * Fältet är frivilligt — att tvinga fram en art är att ställa en fråga
- * användaren ännu inte kan svara på — och det som sparas är `null` och inte en
- * tom sträng.
+ * användaren ännu inte kan svara på — och ingen art angiven lagras som den
+ * tomma strängen: kolumnen är NOT NULL, och `StoreContainerRequest`
+ * normaliserar ett utelämnat fält innan `validated()` läses.
  */
 it('skapar en container utan kind', function () {
     [$account, , $headers] = kontoMedMedlem();
@@ -270,8 +271,37 @@ it('skapar en container utan kind', function () {
     ], $headers);
 
     $response->assertCreated();
-    expect($response->json('data.kind'))->toBeNull();
-    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBeNull();
+    expect($response->json('data.kind'))->toBe('');
+    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBe('');
+});
+
+/*
+ * Klart när: `kind` får utelämnas vid skapande av en container (issue 84).
+ *
+ * Den andra halvan av samma fält: en container som HAR en art ska gå att
+ * TÖMMA. `ConvertEmptyStringsToNull` gör en tom ruta till `null` innan
+ * reglerna körs, och kolumnen är NOT NULL — `UpdateContainerRequest` vänder
+ * tillbaka den till `''`, och en nyckel som inte skickas alls ska fortfarande
+ * betyda "rör inte arten" (`sometimes`).
+ */
+it('tömmer kind utan att röra en art som inte skickas', function () {
+    [$account, , $headers] = kontoMedMedlem();
+
+    $container = Container::factory()->for($account, 'account')->create(['kind' => 'Segelbåt']);
+
+    patchJson("/api/containers/{$container->ulid}", ['kind' => ''], $headers)
+        ->assertOk();
+
+    expect($container->fresh()->kind)->toBe('');
+
+    // Modellinstansen bär fortfarande den gamla arten i minnet; utan refresh
+    // ser Eloquent ingen ändring och skriver ingenting.
+    $container->refresh()->update(['kind' => 'Segelbåt']);
+
+    patchJson("/api/containers/{$container->ulid}", ['name' => 'Nytt namn'], $headers)
+        ->assertOk();
+
+    expect($container->fresh()->kind)->toBe('Segelbåt');
 });
 
 /*

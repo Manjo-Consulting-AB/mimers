@@ -2,26 +2,41 @@
 import { computed, ref } from 'vue';
 import { Link, useForm, usePage } from '@inertiajs/vue3';
 import { useTranslations } from '../composables/useTranslations.js';
-import { presetsFor } from '../data/categoryPresets.js';
+import { categoryPresets, presetFor } from '../data/categoryPresets.js';
 
 /*
  * Den färdiga kategoriuppsättningen, som ett kort överst på kategorisidan — se
- * issue 56b § Beslut 1, 2 och 4, och issue 84 § [[ADR-0036 Containerns art]].
+ * issue 56b § Beslut 1, 2 och 4, och issue 84 · [[ADR-0036 Containerns art]].
  *
  * **Vilka uppsättningar som erbjuds avgörs HÄR, i klienten** (Beslut 2).
  * Localen kommer ur den delade propen `locale` (issue 52);
- * `presetsFor()` i resources/js/data/categoryPresets.js ger samlingen. Servern
- * får aldrig veta vilket språk orden kom ifrån — den tar emot en lista med
- * namn och sparar dem. Därför finns ingen `preset`-prop: hade servern skickat
- * orden hade [[ADR-0004 Fria taggar och kategorier]] varit upphävd.
+ * resources/js/data/categoryPresets.js bär katalogen. Servern får aldrig veta
+ * vilket språk orden kom ifrån — den tar emot en lista med namn och sparar
+ * dem. Därför finns ingen `preset`-prop: hade servern skickat orden hade
+ * [[ADR-0004 Fria taggar och kategorier]] varit upphävd.
  *
  * **VILKEN uppsättning som används väljer användaren, och det är issue 84.**
- * Före den slogs uppsättningen upp på containerns `kind` — ett fält som
- * [[ADR-0036 Containerns art]] gör fritt, och en fri art pekar inte ut någon
- * mall. [[ADR-0033 Produktens omfång]] § Beslut säger samma sak: mallarna
- * "får finnas kvar som en genväg användaren aktivt väljer, aldrig som en
- * förvald struktur systemet antar". Ingen förvald uppsättning, alltså: listan
- * är tom tills hon pekat på en, och knappen är avstängd till dess.
+ * Före den valdes den av containerns `kind` — ett fält som [[ADR-0036
+ * Containerns art]] gör fritt, och en fri art pekar inte ut någon mall.
+ * [[ADR-0033 Produktens omfång]] § Beslut säger samma sak: mallarna "får
+ * finnas kvar som en genväg användaren aktivt väljer, aldrig som en förvald
+ * struktur systemet antar". Ingen förvald uppsättning, alltså: valet är tomt
+ * tills hon pekat på en, och knappen är avstängd till dess.
+ *
+ * **Katalogens nycklar är uppsättningarnas identitet**, inte något systemet
+ * slår upp ur containern — `presetFor()` nedan anropas med det val användaren
+ * gjort, och etiketten i listan är nyckelns eget ord. Att flytta namnen in i
+ * datafilen hade varit en omskrivning av resources/js/data/categoryPresets.js,
+ * som ligger utanför den här issuns omfångsruta; se `Frågor och antaganden` i
+ * PR:en. Den som vill ha namnen där i stället gör det i en egen issue.
+ *
+ * **`kind` tas emot men läses inte.** Sidan som ritar kortet skickar
+ * containerns art; den proppen togs bort i det första försöket, men
+ * resources/js/pages/Containers/Categories.vue ligger utanför rutan och
+ * skickar den fortfarande — utan deklarationen hade värdet blivit ett
+ * DOM-attribut på `<section>`. Att mallen inte längre härleds ur arten är
+ * hela poängen med issue 84: proppen bärs för att sidan bär den, och inget
+ * här grenar på den.
  *
  * **Kortet blockerar ingenting** (Beslut 4). Ingen modal, ingen overlay, inget
  * som måste besvaras — det är ett `<section>` ovanför trädet, och sidans
@@ -40,22 +55,38 @@ import { presetsFor } from '../data/categoryPresets.js';
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
+    /** Containerns art. Läses inte — se klasskommentaren. */
+    kind: { type: String, required: true },
 });
 
 const { t } = useTranslations();
 const page = usePage();
 
-/** Uppsättningarna på användarens språk. Bara `en` finns, se datafilen. */
-const presets = computed(() => presetsFor(page.props.locale));
+/*
+ * Uppsättningarna på användarens språk. Bara `en` finns, se datafilen; reserven
+ * för en locale utan katalog är samma `en` som `presetFor()` faller tillbaka
+ * på, och den står här bara för att LISTAN över uppsättningar behöver
+ * nycklarna — själva innehållet hämtas alltid med `presetFor()`.
+ */
+const presets = computed(() => {
+    const catalog = categoryPresets[page.props.locale] ?? categoryPresets.en;
+
+    return Object.keys(catalog).map((key) => ({
+        key,
+        label: key.charAt(0).toUpperCase() + key.slice(1),
+        categories: catalog[key],
+    }));
+});
 
 /*
  * Användarens val — klientstate, för det är hennes val och ingenting servern
- * vet om. Det finns ingen koppling till containerns art att ärva det ur
- * (issue 84), och den tomma strängen betyder "ingenting valt än".
+ * vet om. Den tomma strängen betyder "ingenting valt än".
  */
-const chosenName = ref('');
+const chosenKey = ref('');
 
-const preset = computed(() => presets.value.find((one) => one.name === chosenName.value) ?? null);
+const preset = computed(() =>
+    chosenKey.value === '' ? null : presetFor(page.props.locale, chosenKey.value),
+);
 
 const form = useForm({ categories: [] });
 
@@ -64,7 +95,7 @@ function apply() {
         return;
     }
 
-    form.transform(() => ({ categories: preset.value.categories }));
+    form.transform(() => ({ categories: preset.value }));
 
     form.post(`/containers/${props.containerUlid}/categories/preset`, {
         preserveScroll: true,
@@ -83,18 +114,18 @@ function apply() {
 
         <select
             id="category-preset"
-            v-model="chosenName"
+            v-model="chosenKey"
             class="mt-1 rounded border border-slate-300 bg-white px-3 py-2"
         >
             <option value="" disabled>{{ t('container.categories.preset_pick') }}</option>
-            <option v-for="one in presets" :key="one.name" :value="one.name">{{ one.name }}</option>
+            <option v-for="one in presets" :key="one.key" :value="one.key">{{ one.label }}</option>
         </select>
 
         <!-- Förslaget i sin helhet, två nivåer. Den som vill se trädet innan
              hon trycker ska inte behöva gissa vad knappen gör. Ingenting
              förhandsvisas förrän hon valt: ingen mall är förvald. -->
         <ul v-if="preset" class="mt-3 flex flex-col gap-1 text-sm">
-            <li v-for="category in preset.categories" :key="category.name">
+            <li v-for="category in preset" :key="category.name">
                 {{ category.name }}
                 <span v-if="category.children" class="text-slate-600">
                     — {{ category.children.join(', ') }}
