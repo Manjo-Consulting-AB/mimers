@@ -4,7 +4,7 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 
 Tillagd 2026-09-18, efter genomgången av itemmockuparna. Besluten står i [[ADR-0041 Itemets vy]]; den här milstolpen bygger det av dem som **inte väntar på designen** — samma linje som [[M15 Containerns översikt]] drog för containern.
 
-Det är därför en liten milstolpe med en stor ADR bakom sig. Det mesta mockuparna visar finns redan: flera föräldrar är byggt, relationerna kommer ur `ListItemLinks`, och sex av mockupens sju flikar ligger redan som propar i `Containers/Items/Show`. Det som verkligen saknas är två upplösningar — strukturen nedåt och vägarna uppåt — och ett fält.
+Det är därför en liten milstolpe med en stor ADR bakom sig. Det mesta mockuparna visar finns redan: flera föräldrar är byggt, relationerna kommer ur `ListItemLinks`, och sex av mockupens sju flikar ligger redan som propar i `Containers/Items/Show`. Det som verkligen saknas är två upplösningar — strukturen nedåt och vägarna uppåt — och två fält.
 
 **Detta ingår inte, och det är med flit:** flikraden, trepanelslayouten, fokuskartan, containerns hela karta, historikfliken och favoriterna. De tre första väntar på designsystemet; containerkartan är ett eget projekt; historiken väntar på att applikationen instrumenteras (se [[Att sortera efter mockuparna]] § Händelseinstrumenteringen); favoriterna har ingen tabell och inget beslut. Itemets kostnadsflik kräver ingen ny ändpunkt — issue 91 bygger redan summeringen med itemet som startpunkt, och det som saknas är ytan.
 
@@ -56,3 +56,18 @@ Ordningen är namnen längs vägen, så förekomstlistan och brödsmulan alltid 
 **Läs:** [[ADR-0041 Itemets vy]] § Beslut, [[M16 Itemets vy]] § 94 (rotregeln), [[M10 Webbfrontend]] § 59a (Beslut 1), [[M11 Åtkomst på itemnivå]] § 73 (Beslut 6), [[ADR-0028 Åtkomst på itemnivå]] § Beslut (regel 3)
 **Klart när:** itemets vy bär alla vägar från en rot till itemet; ett item med två föräldrar får två förekomster; en väg som passerar ett item utanför omfånget finns inte i svaret; rotregeln är ordagrant issue 94:s; querysträngen väljer vilken förekomst som är den aktuella; en väg som inte längre finns ignoreras och den första i ordningen används i stället, aldrig ett fel; utan querysträng används den första i ordningen; ordningen är stabil för samma användare; en cykel avslutar vandringen; antalet frågor är konstant oavsett antalet vägar; `ItemResource` har inget nytt fält; hela testsviten är grön.
 **Beror på:** 94
+
+### 96. Itemet får ett anteckningsfält
+Itemmockupen har en knapp *Ny anteckning* i snabbåtkomsten och en rad *Anteckningar* i navigeringen. Det finns varken entitet eller fält bakom dem. `item.description` är det närmaste och är något annat.
+
+[[ADR-0041 Itemets vy]] skiljer de två åt, och skillnaden är hela issuen. **`description` säger vad itemet är** — meningen en annan människa behöver för att veta vad hon tittar på. **Anteckningen säger vad användaren vet om det** — ett fritt informationsfält som växer med tiden, Evernotes textruta och inte en rubrik. Slås de ihop blir beskrivningen antingen en uppsats eller anteckningen en rubrik, och ett fält som bär två syften får förr eller senare två format.
+
+Kolumnen är nullbar text vid sidan av `description`. **Ett fält, inte många daterade rader**: ingen tabell, ingen tidsstämpel per stycke. Vill produkten senare ha en ström av daterade anteckningar är det en tabell och ett nytt beslut.
+
+**Fältet går med i sökningen, och i båda listorna.** `Item::toSearchableArray()` räknar fem kolumner och är dokumenterad som en spegel av FULLTEXT-indexet från issue 13a § Beslut 4. En anteckning är precis vad någon söker efter — *bytte impeller 2024* står ingen annanstans. `notes` läggs till i båda, i **samma migrering**: att lägga till kolumnen nu och indexet senare är dyrare på en full tabell, vilket `item`-migreringen själv anför som skäl till att indexet skapades i förväg.
+
+`#[SearchUsingFullText]` sätts fortfarande **inte** — sqlite i testsviten klarar inte `whereFullText()`, och issue 15b § Beslut 3 gäller oförändrat. Indexet står redo och används när CI kör mot MariaDB.
+
+**Läs:** [[ADR-0041 Itemets vy]] § Beslut och § Konsekvenser, [[Items och organisation]] § item, [[ADR-0012 Sök]], [[M1 Kärnmodell]] § 13a (Beslut 4 och 5), [[M1 Kärnmodell]] § 15b (Beslut 3), [[M16 Itemets vy]] § 96
+**Klart när:** `item` har en nullbar textkolumn för anteckningen, skild från `description`; fältet går att sätta, ändra och tömma i itemets formulär; `description` betyder fortfarande detsamma och ingen kod flyttar text mellan de två; `notes` finns i `Item::toSearchableArray()`; `notes` finns i FULLTEXT-indexet, lagt i samma migrering som kolumnen; en sökning på ett ord som bara står i anteckningen hittar itemet; `#[SearchUsingFullText]` är fortfarande inte satt och testsviten kör på sqlite; ingen ny tabell; hela testsviten är grön.
+**Beror på:** -

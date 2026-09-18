@@ -28,9 +28,9 @@ Den del av de två som inte väntar på designen har issues i [[M15 Containerns 
 
 Itemmockuparna gicks igenom 2026-09-18 och gav en till:
 
-- [[ADR-0041 Itemets vy]] — itemet bor i containern och inte i en global navigering. Strukturens rötter är de items användaren når som saknar nåbar förälder, ett item får förekomma på flera ställen, och den aktuella platsen står i querysträngen. Anteckningen är itemets egen text, omslagsbilden en vald bilaga med en regel som gör valet frivilligt. **Rättar tårtbitarnas indelning i [[ADR-0040 Underträdets summor]]**: de är de items som bär kostnadsraderna, inte underträdets toppnivå, eftersom ett item under två föräldrar annars hamnar i två bitar.
+- [[ADR-0041 Itemets vy]] — itemet bor i containern och inte i en global navigering. Strukturens rötter är de items användaren når som saknar nåbar förälder, ett item får förekomma på flera ställen, och den aktuella platsen står i querysträngen. Anteckningen är ett eget fält skilt från beskrivningen, omslagsbilden en vald bilaga med en regel som gör valet frivilligt. **Rättar tårtbitarnas indelning i [[ADR-0040 Underträdets summor]]**: de är de items som bär kostnadsraderna, inte underträdets toppnivå, eftersom ett item under två föräldrar annars hamnar i två bitar.
 
-Den del som inte väntar på designen har issues i [[M16 Itemets vy]] — 93 till 95.
+Den del som inte väntar på designen har issues i [[M16 Itemets vy]] — 93 till 96.
 
 **Skalen**, som inte är ett beslut utan en läsning av mockuparna: trepanelsvyn är vad användaren ser när ett objekt öppnas, dashboarden är vad som möter henne efter inloggning, containervyn ligger mellan dem.
 
@@ -76,7 +76,7 @@ Genomgången av containermockupen mot datamodellen. Det som blev beslut står i 
 
 **Detta finns däremot redan:** `attachment.kind` är `image`, `document` eller `other`, så dokumentfliken och bildpanelen behöver inget nytt fält. Historikfliken är indexerad på `(container_id, created_at)`, vilket är precis dess fråga. Informationsrutan är dashboardens, med samma fyra krav.
 
-**"Lägg till i denna container" nämner en anteckning.** Något sådant finns inte; `item.description` är det närmaste. Antingen stryks ordet eller så är det en egen fråga.
+**"Lägg till i denna container" nämner en anteckning.** Avgjord 2026-09-18 i [[ADR-0041 Itemets vy]]: itemet får ett eget anteckningsfält vid sidan av beskrivningen, och issuen är [[M16 Itemets vy]] § 96. På **containern** finns fortfarande inget sådant fält, och frågan om det behövs ett är inte ställd.
 
 ---
 
@@ -98,7 +98,9 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 
 **Strukna ur mockupen:** leverantör och artikelnummer i detaljrutan. Leverantören bor på `cost_entry`, där den redan är indexerad och har en autocomplete; artikelnumret finns inte, och `serial_number` är inte det — ett serienummer identifierar exemplaret, ett artikelnummer modellen. Skulle de behövas är det ett beslut, inte två fält.
 
-**"Anteckning" är avgjord sedan containerrundan.** Frågan stod kvar ovan efter containermockupen; [[ADR-0041 Itemets vy]] svarar att `item.description` *är* anteckningsfältet. Många daterade anteckningar per item vore en tabell och ett nytt beslut.
+**Anteckningen är ett eget fält, inte beskrivningen.** Frågan stod kvar ovan efter containermockupen. [[ADR-0041 Itemets vy]] svarar att de två är skilda: `description` säger vad itemet är, anteckningen vad användaren vet om det. Ett fält, inte många daterade rader — en ström av daterade anteckningar vore en tabell och ett nytt beslut. Issuen är [[M16 Itemets vy]] § 96.
+
+**Rättelse 2026-09-18:** [[ADR-0041 Itemets vy]] skrev först att `item.description` *var* anteckningsfältet. Det var en feltolkning av svaret i genomgången och rättades samma dag, innan någon issue byggts på den.
 
 ---
 
