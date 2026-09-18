@@ -258,9 +258,9 @@ it('har ingen sluten lista kvar för containerns kind', function () {
  * Klart när: `kind` får utelämnas vid skapande av en container (issue 84).
  *
  * Fältet är frivilligt — att tvinga fram en art är att ställa en fråga
- * användaren ännu inte kan svara på — och ingen art angiven lagras som den
- * tomma strängen: kolumnen är NOT NULL, och `StoreContainerRequest`
- * normaliserar ett utelämnat fält innan `validated()` läses.
+ * användaren ännu inte kan svara på — och det som sparas är `null` och inte en
+ * tom sträng. Kolumnen är nullbar, och en tom sträng hade varit just den
+ * sentinel [[ADR-0004 Fria taggar och kategorier]] vill undvika.
  */
 it('skapar en container utan kind', function () {
     [$account, , $headers] = kontoMedMedlem();
@@ -271,8 +271,8 @@ it('skapar en container utan kind', function () {
     ], $headers);
 
     $response->assertCreated();
-    expect($response->json('data.kind'))->toBe('');
-    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBe('');
+    expect($response->json('data.kind'))->toBeNull();
+    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBeNull();
 });
 
 /*
@@ -280,9 +280,8 @@ it('skapar en container utan kind', function () {
  *
  * Den andra halvan av samma fält: en container som HAR en art ska gå att
  * TÖMMA. `ConvertEmptyStringsToNull` gör en tom ruta till `null` innan
- * reglerna körs, och kolumnen är NOT NULL — `UpdateContainerRequest` vänder
- * tillbaka den till `''`, och en nyckel som inte skickas alls ska fortfarande
- * betyda "rör inte arten" (`sometimes`).
+ * reglerna körs, `UpdateContainerRequest` lämnar den som `null`, och en nyckel
+ * som inte skickas alls ska fortfarande betyda "rör inte arten" (`sometimes`).
  */
 it('tömmer kind utan att röra en art som inte skickas', function () {
     [$account, , $headers] = kontoMedMedlem();
@@ -292,7 +291,7 @@ it('tömmer kind utan att röra en art som inte skickas', function () {
     patchJson("/api/containers/{$container->ulid}", ['kind' => ''], $headers)
         ->assertOk();
 
-    expect($container->fresh()->kind)->toBe('');
+    expect($container->fresh()->kind)->toBeNull();
 
     // Modellinstansen bär fortfarande den gamla arten i minnet; utan refresh
     // ser Eloquent ingen ändring och skriver ingenting.
@@ -302,6 +301,35 @@ it('tömmer kind utan att röra en art som inte skickas', function () {
         ->assertOk();
 
     expect($container->fresh()->kind)->toBe('Segelbåt');
+});
+
+/*
+ * Klart när: `kind` får utelämnas vid skapande av en container (issue 84).
+ *
+ * Blanksteg trimmas bort vid inmatningen ([[ADR-0016 Kostnadsregistrering]]
+ * § Motivering: stavningsvarianter löses när de skrivs, inte i schemat), och
+ * ett fält som bara var blanksteg är ingen art — det blir `null`. I övrigt
+ * lagras värdet ORDAGRANT: ingen skiftlägesnormalisering, ingen hopslagning.
+ */
+it('trimmar kind men ändrar den inte i övrigt', function () {
+    [$account, , $headers] = kontoMedMedlem();
+
+    $container = Container::factory()->for($account, 'account')->create(['kind' => 'Segelbåt']);
+
+    patchJson("/api/containers/{$container->ulid}", ['kind' => '  Segelbåt  '], $headers)
+        ->assertOk();
+
+    expect($container->fresh()->kind)->toBe('Segelbåt');
+
+    patchJson("/api/containers/{$container->ulid}", ['kind' => '   '], $headers)
+        ->assertOk();
+
+    expect($container->fresh()->kind)->toBeNull();
+
+    patchJson("/api/containers/{$container->ulid}", ['kind' => 'segelbåt'], $headers)
+        ->assertOk();
+
+    expect($container->fresh()->kind)->toBe('segelbåt');
 });
 
 /*
@@ -315,6 +343,11 @@ it('tömmer kind utan att röra en art som inte skickas', function () {
  *
  * Bara CONTAINERNS kind prövas. `container_access.kind` och
  * `attachment.kind` är andra kolumner med egna regler; deras grenar är deras.
+ *
+ * **En NÄRVAROKONTROLL fälls inte.** `v-if="container.kind"` frågar om fältet
+ * är SATT — samma behandling som varje annat nullbart fält får — och inte
+ * VILKEN art det är; granskningen av issue 84 beviljar den uttryckligen. Kvar
+ * som brott står jämförelsen mot ett värde och uppslaget i `match`/`switch`.
  */
 it('grenar aldrig på containerns kind', function () {
     $träffar = [];
@@ -331,7 +364,14 @@ it('grenar aldrig på containerns kind', function () {
                 continue;
             }
 
-            if (preg_match('/container(?:->|\.)kind\b/i', $rad) === 1) {
+            if (preg_match('/container(?:->|\.)kind\b/i', $rad) !== 1) {
+                continue;
+            }
+
+            $jamforelse = preg_match('/container(?:->|\.)kind\b\s*(===|!==|==|!=|<=|>=|<|>)/i', $rad) === 1;
+            $uppslag = preg_match('/\b(match|switch)\s*\([^)]*container(?:->|\.)kind/i', $rad) === 1;
+
+            if ($jamforelse || $uppslag) {
                 $träffar[] = $fil->getRelativePathname().': '.trim($rad);
             }
         }

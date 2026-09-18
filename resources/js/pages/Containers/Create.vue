@@ -28,8 +28,8 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  *
  * Typ-listan kommer som prop (Beslut 8), samma teknik som 53c:s tidszonslista.
  * Ingen egen lista i JavaScript: två listor blir två sanningar. Sedan issue
- * 84 bär propen de arter kontot REDAN ANVÄNT och inte en fast mängd — den är
- * autocomplete på ett fritt fält, samma mönster som leverantörsfältet i
+ * 84 bär propen de arter ANVÄNDAREN redan använt och inte en fast mängd — den
+ * är autocomplete på ett fritt fält, samma mönster som leverantörsfältet i
  * [[ADR-0016 Kostnadsregistrering]], och `datalist` låter användaren både
  * välja ett känt värde och skriva ett eget. `kind` är presentation och bara
  * presentation — ingenting i den här vyn grenar på värdet.
@@ -39,7 +39,7 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * lägger meningen där när containertaket slår i.
  */
 const props = defineProps({
-    /* De arter kontot redan använt — underlag för autocomplete, inte en
+    /* De arter användaren redan använt — underlag för autocomplete, inte en
        tillåten mängd. Fältet är fritt och får lämnas tomt. */
     kinds: { type: Array, required: true },
 });
@@ -104,7 +104,7 @@ function submit() {
                 :error="form.errors.kind"
             >
                 <!-- Fritext med autocomplete, inte en väljare: värdet är
-                     användarens eget, och de arter kontot redan använt är
+                     användarens eget, och de arter hon redan använt är
                      förslag. Tomt fält är ett giltigt svar. -->
                 <input
                     id="kind"

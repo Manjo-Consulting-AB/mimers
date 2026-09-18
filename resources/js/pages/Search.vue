@@ -95,9 +95,11 @@ const { t } = useTranslations();
                         <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
                              Containerns art]]): fältet är fritt, och `t()`
                              returnerar nyckeln själv när uppslaget misslyckas,
-                             så ingen nyckel får byggas ur värdet. Ingen spärr
-                             runt raden: fältet grenar aldrig. -->
-                        <span>{{ result.container.kind }}</span>
+                             så ingen nyckel får byggas ur värdet. Spärren
+                             frågar om fältet är SATT och aldrig vilket värde
+                             det bär — en sökträff i en container utan art
+                             visar ingen art, inte en tom fläck. -->
+                        <span v-if="result.container.kind">{{ result.container.kind }}</span>
                     </p>
                 </li>
             </ul>

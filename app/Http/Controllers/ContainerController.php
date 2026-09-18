@@ -10,6 +10,7 @@ use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
@@ -113,15 +114,13 @@ class ContainerController extends Controller
      * listor blir två sanningar.
      *
      * Sedan issue 84 · [[ADR-0036 Containerns art]] bär propen **de arter
-     * kontot redan använt** och inte en fast mängd — fältet är fritt, och
+     * användaren redan använt** och inte en fast mängd — fältet är fritt, och
      * listan är autocomplete, samma mönster och samma motivering som
      * leverantörsfältet i [[ADR-0016 Kostnadsregistrering]]: det som går
      * sönder är stavningsvarianter, och de löses vid inmatningen.
      *
-     * Formuläret skriver åt ETT konto, men vilket är användarens val och
-     * först känt när hon gjort det. Propen spänner därför över alla konton
-     * hon är med i — de värden hon möter är hennes egna, och ett förslag hon
-     * känner igen är bättre än ett tomt fält.
+     * Vilka containers listan spänner över står i `kindsUsedBy()` — och det är
+     * användarens, inte kontots, av skälet som står där.
      *
      * Kontolistan skickas INTE härifrån — den finns redan i den delade propen
      * `auth.accounts`, och en egen fråga för samma lista är en fråga för
@@ -130,7 +129,7 @@ class ContainerController extends Controller
     public function create(Request $request): Response
     {
         return Inertia::render('Containers/Create', [
-            'kinds' => $this->kindsUsedBy($request->user()->accounts->pluck('id')->all()),
+            'kinds' => $this->kindsUsedBy($request->user()),
         ]);
     }
 
@@ -144,10 +143,10 @@ class ContainerController extends Controller
      * redan fångat — men att användaren inte är MEDLEM i det är ett
      * behörighetsfel (403) som avgörs här av policyn.
      *
-     * `kind` är frivilligt (issue 84): `StoreContainerRequest` normaliserar
-     * ett utelämnat fält till den tomma strängen, så `validated('kind')` är
-     * alltid en sträng här och `CreateContainer::handle()` behöver ingen
-     * nullbar signatur.
+     * `kind` är frivilligt (issue 84): `validated('kind')` är `null` när
+     * fältet utelämnats eller tömts, och `null` är vad containern sparas med —
+     * kolumnen är nullbar och [[ADR-0004 Fria taggar och kategorier]] vill
+     * ingen tom sträng som sentinel.
      *
      * **Behörighet först, kvot sedan** (issue 27 § Beslut 3): en användare
      * som inte får skapa åt kontot ska få 403, inte veta hur många containers
@@ -236,10 +235,8 @@ class ContainerController extends Controller
 
         return Inertia::render('Containers/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),
-            // Ägarkontots arter, inte användarens: inställningarna handlar om
-            // den här containern, och förslagen ska komma ur samma sammanhang
-            // som de andra containrarna i kontot (issue 84).
-            'kinds' => $this->kindsUsedBy([$container->account_id]),
+            // Samma lista som skapavyn får — en metod, en prop (issue 84).
+            'kinds' => $this->kindsUsedBy($request->user()),
             'can' => [
                 'delete' => Gate::forUser($request->user())->allows('delete', $container),
             ],
@@ -320,27 +317,42 @@ class ContainerController extends Controller
     }
 
     /**
-     * De arter konton i `$accountIds` redan använt, utan dubbletter och
-     * sorterade — underlaget för autocomplete i skapa- och redigeringsvyn
-     * (issue 84 · [[ADR-0036 Containerns art]]).
+     * De arter $user redan använt, utan dubbletter och sorterade — underlaget
+     * för autocomplete i skapa- och redigeringsvyn (issue 84 · [[ADR-0036
+     * Containerns art]]).
      *
-     * Det här är den ENDA formuleringen av frågan. Skriv den inte en andra
-     * gång i en action eller i en scopes-metod: två listor blir två
-     * sanningar, samma skäl som `Container::scopeAccessibleBy()` bär.
+     * **Mängden är användarens containers, inte hennes konton.** Urvalet är
+     * `Container::scopeAccessibleBy()` — samma villkor som listan, sökningen
+     * och den aktiva containern ställer — och det av ett skäl som är
+     * sakligt och inte symmetriskt: `container_access` ger åtkomst per
+     * container ([[Konton och åtkomst]] § container_access), så en container
+     * som delats direkt med henne ligger utanför "konton hon är med i" men
+     * innanför hennes containerlista. Föreslog vi ur en snävare mängd än den
+     * navigeringen grupperar över ([[ADR-0036 Containerns art]]) skulle
+     * autocomplete själv producera de stavningsvarianter den finns för att
+     * förhindra. Skapavyn har inget aktivt konto att gå på — den behöver
+     * heller inget; scopet är användaren.
      *
-     * Containrar utan art (fältet är frivilligt) hoppas över — den tomma
-     * strängen är inget förslag — och mjukraderade likaså: listan beskriver
-     * vad kontot HAR, inte vad det har haft. Sorteringen är på värdet, för
-     * den som skriver i fältet möter en bokstavsordning och inte en
-     * tidslinje.
+     * Det här är den ENDA formuleringen av frågan, och BÅDA vyerna får sin
+     * lista härifrån. Skriv den inte en andra gång i en action eller i en
+     * scopes-metod: två listor blir två sanningar, samma skäl som
+     * `Container::scopeAccessibleBy()` bär.
      *
-     * @param  list<int>  $accountIds  löpnummer, inte ULID:er
+     * Containrar utan art (fältet är frivilligt) hoppas över — `null` är
+     * inget förslag, och en tom sträng från äldre data är det inte heller —
+     * och mjukraderade likaså: listan beskriver vad användaren HAR, inte vad
+     * hon har haft. Sorteringen är på värdet, för den som skriver i fältet
+     * möter en bokstavsordning och inte en tidslinje.
+     *
      * @return list<string>
      */
-    private function kindsUsedBy(array $accountIds): array
+    private function kindsUsedBy(User $user): array
     {
+        $accountIds = $user->accounts->pluck('id')->values()->all();
+
         return Container::query()
-            ->whereIn('account_id', $accountIds)
+            ->accessibleBy($user, $accountIds)
+            ->whereNotNull('kind')
             ->where('kind', '!=', '')
             ->distinct()
             ->orderBy('kind')

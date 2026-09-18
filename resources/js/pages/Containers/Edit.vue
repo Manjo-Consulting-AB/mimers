@@ -22,10 +22,11 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * delningsstatus hör till listan.
  *
  * Typ-listan kommer som prop (Beslut 8), aldrig en avskrift i JavaScript.
- * Sedan issue 84 · [[ADR-0036 Containerns art]] bär den ägarkontots REDAN
+ * Sedan issue 84 · [[ADR-0036 Containerns art]] bär den användarens REDAN
  * ANVÄNDA arter och inte en fast mängd: fältet är fritt, `datalist` ger
- * autocomplete, och den som vill tömma det får det. `kind` är presentation
- * och bara presentation: ingen gren i den här vyn läser värdet.
+ * autocomplete, och den som vill tömma det får det. SAMMA lista som skapavyn
+ * får, ur samma servermetod. `kind` är presentation och bara presentation:
+ * ingen gren i den här vyn läser värdet.
  *
  * **Raderingsknappen kom med 62b § Beslut 4 och bor HÄR, aldrig i listan.**
  * Det här är sidan där man ändrar containern, och därför också där man tar bort
@@ -43,7 +44,7 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  */
 const props = defineProps({
     container: { type: Object, required: true },
-    /* Ägarkontots redan använda arter — underlag för autocomplete, inte en
+    /* Användarens redan använda arter — underlag för autocomplete, inte en
        tillåten mängd. Fältet är fritt och får tömmas. */
     kinds: { type: Array, required: true },
     can: { type: Object, required: true },
@@ -54,8 +55,8 @@ const { focusFirstError } = useErrorFocus();
 
 const form = useForm({
     name: props.container.name,
-    // En container skapad utan art bär den tomma strängen, och rutan ska vara
-    // tom (issue 84).
+    // En container skapad utan art bär `null`; rutan ska vara tom, inte visa
+    // ordet "null" (issue 84).
     kind: props.container.kind ?? '',
 });
 
