@@ -148,8 +148,8 @@ class ContainerController extends Controller
      * Den nya containern blir aktiv — den som just skapat en container vill arbeta i
      * den (Beslut 6). Mekanismen har fyra anropare sedan issue 83: skapandet
      * här, en antagen inbjudan, ett mottaget ägarbyte — och att ÖPPNA en
-     * container (App\Http\Controllers\ItemController::index()), som är den
-     * väg kontexten sätts på i vardagen. `ActiveContainer` äger sessionen.
+     * container (App\Http\Middleware\HandleInertiaRequests), som är den väg
+     * kontexten sätts på i vardagen. `ActiveContainer` äger sessionen.
      */
     public function store(
         StoreContainerRequest $request,

@@ -5,11 +5,15 @@ namespace App\Http\Middleware;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
+use App\Models\Container;
 use App\Support\Frontend\ActiveContainer;
+use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Lang;
 use Inertia\Middleware;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * De delade propsen — det enda som når varje webbsida, se issue 51
@@ -37,6 +41,11 @@ use Inertia\Middleware;
  * `errors` delas medvetet INTE här. Inertia lägger redan sessionens
  * valideringsfel i propsen (Inertia\Middleware::share()), och en egen
  * version skuggar den — se issue 51 § Beslut 9.
+ *
+ * Sedan issue 83 sätter den här middlewaren också den aktiva containern:
+ * `activeContainer` är bokföringen över vilken container användaren arbetar
+ * i, och bokföringen sköter sig själv — den sätts av att containern ÖPPNAS.
+ * Se setActiveContainer().
  */
 class HandleInertiaRequests extends Middleware
 {
@@ -59,6 +68,61 @@ class HandleInertiaRequests extends Middleware
     public function version(Request $request): ?string
     {
         return parent::version($request);
+    }
+
+    /**
+     * Navigationen sätter containerkontexten (issue 83).
+     *
+     * Anropet ligger FÖRE `$next`, och ordningen är bindande på två sätt.
+     * Dels hinner kontexten sättas för den sida som öppnade den: `share()`
+     * bygger sina props som closures (se ovan), och `activeContainer` läses
+     * först när kontrollern svarat och sidan renderas. Dels ligger
+     * åtkomstkontrollen före skrivningen — samma grind som
+     * App\Http\Controllers\ItemController::index() ställer med
+     * `Gate::authorize()` — så en container användaren inte når rör aldrig
+     * sessionen.
+     */
+    public function handle(Request $request, Closure $next): Response
+    {
+        $this->setActiveContainer($request);
+
+        return parent::handle($request, $next);
+    }
+
+    /**
+     * Gör containern i URL:en till sessionens kontext, när det är en
+     * container som ÖPPNAS.
+     *
+     * Bara `containers.show` — containerns egen sida, itemlistan — räknas som
+     * att öppna den. Att redigera ett item eller tömma papperskorgen i en
+     * container är inte samma handling, och `ActiveContainer::set()` glömmer
+     * nyckeln när åtkomsten saknas: den får därför bara anropas efter att
+     * grinden sagt ja, annars hade ett nekat anrop tömt en kontext användaren
+     * redan hade.
+     *
+     * Ingen egen rutt och ingen knapp gör det här för hand —
+     * `PUT /containers/{container}/active` togs bort i samma issue.
+     */
+    private function setActiveContainer(Request $request): void
+    {
+        $user = $request->user();
+        $route = $request->route();
+
+        if ($user === null || $route?->getName() !== 'containers.show') {
+            return;
+        }
+
+        $container = $route->parameter('container');
+
+        if (! $container instanceof Container) {
+            return;
+        }
+
+        if (! Gate::forUser($user)->allows('view', $container)) {
+            return;
+        }
+
+        $this->activeContainer->set($user, $container);
     }
 
     /**
