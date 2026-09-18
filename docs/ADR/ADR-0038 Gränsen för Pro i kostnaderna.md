@@ -1,6 +1,6 @@
 # ADR-0038 Gränsen för Pro i kostnaderna
 
-**Status:** Antagen 2026-09-18 · Ersätter Pro-gränsen i [[ADR-0016 Kostnadsregistrering]]; övriga beslut gäller · [[ADR-index]]
+**Status:** Antagen 2026-09-18 · Ersätter Pro-gränsen i [[ADR-0016 Kostnadsregistrering]]; övriga beslut gäller · Donutens indelning och Pro-ingången förtydligade samma dag av [[ADR-0039 Containerns översikt]] och [[ADR-0040 Underträdets summor]] · [[ADR-index]]
 
 Fattat vid genomgången av dashboardmockupen. [[ADR-0016 Kostnadsregistrering]] drog gränsen vid *summering*. Den här ADR:n flyttar den till *frågan*.
 
@@ -30,7 +30,9 @@ Därav:
 | Dashboardens totalsumma för innevarande månad | fri |
 | Dashboardens donut, nedbruten per container | fri |
 | Containerns kostnadssumma | fri |
-| Containerns donut, nedbruten per kategori | fri |
+| Containerns donut, nedbruten per item | fri |
+| En fast period — *i år*, *denna månad* — som användaren inte kan byta | fri |
+| Jämförelse mot en annan period, *+12 % mot i fjol* | **Pro** |
 | Rapportvyn: period, kategori, tagg, leverantör, gruppering | **Pro** |
 | Export av kostnadsrader | fri, enligt [[ADR-0014 Prismodell]] |
 
@@ -39,6 +41,10 @@ Därav:
 **Rättighetskontrollen sitter kvar i API:et**, inte i klienten. Det ändras inte heller — bara vilken ändpunkt som bär grinden. De fasta summeringarna behöver ingen; rapportändpunkten behöver den lika mycket som förut.
 
 **"Visa mer" är grinden.** Länken ur en fast summering in i rapportvyn är där gratisanvändaren möter Pro, och den är märkt som sådan innan hon klickar.
+
+**Den fasta summeringen är själv ingången.** Donuten är klickbar, och klicket leder till rapportvyn — alltså till Pro. Det är samma mönster som dashboardens "Visa mer" och inte ett andra: talet är synligt och gratis, vägen vidare är märkt och betald.
+
+**Jämförelsetalet hör till rapporten, inte till summan.** *+12 % mot i fjol* är parameterlöst och alltså fast enligt bokstaven, men det är rapportfunktionen och inte summeringen — det är där jämförelser hör hemma. Det visas när användaren har Pro och utelämnas annars. Gränsen mellan fast och frågbart står kvar oförändrad för allt annat; det här är en placering, inte ett undantag.
 
 ## Motivering
 
@@ -59,6 +65,7 @@ Det bevarar också motdraget mot flera gratiskonton i ADR-0014 § Motivering. De
 - **De fasta summeringarna behöver en egen ändpunkt** som inte tar emot parametrar. Tar den emot en period är den inte längre fast, och grinden har flyttat sig utan att någon beslutat det. Det är testbart: en `risk_class: elevated`-issue vars test bevisar att ändpunkten ignorerar okända parametrar.
 - **Valutan gäller här också.** En fast summering över blandade valutor ska grupperas, inte summeras — se [[ADR-0016 Kostnadsregistrering]] och [[ADR-0037 Valutans arv]].
 - **Nedgradering rör ingenting.** Kostnadsrader raderas aldrig vid nedgradering, och de fasta summeringarna fortsätter fungera. Det som försvinner är rapportvyn, och det var sant förut också.
+- **Donutens indelning avgörs av [[ADR-0040 Underträdets summor]]:** per item och över underträdet, eftersom `cost_entry` inte har någon kategorikolumn. Tabellen ovan sa *per kategori* när den skrevs; det var en läsning av mockupen och inte av schemat.
 - **Märkningen av "Visa mer" är en gränssnittssträng** och hör till `lang/`, alltså efter [[M13 Omskrivningen]].
 
 ## Alternativ

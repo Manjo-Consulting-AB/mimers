@@ -30,6 +30,8 @@ CHECK-villkoret släpps och `Container::KINDS` utgår, och med den `Rule::in(Con
 
 De två `kinds`-proparna byter innebörd, från *de tillåtna värdena* till *de värden kontot redan använt*, för autocomplete. Mönstret och motiveringen är leverantörsfältets i [[ADR-0016 Kostnadsregistrering]]: stavningsvarianter löses vid inmatningen, inte i schemat.
 
+**Etiketterna slås inte längre upp.** Fyra vyer skriver i dag `t('container.kind.' + värdet)` — `Containers/Index.vue`, `Search.vue` och optionslistorna i `Create.vue` och `Edit.vue`. `translate()` returnerar med flit nyckeln själv när den saknas, så första gången någon skriver en egen art står det `container.kind.Segelbåt` i containerlistan och i sökträffarna. Alla fyra skriver i stället ut strängen användaren matat in, och de fem nycklarna under `container.kind` i `lang/en/ui.php` utgår. Det är den synliga regressionen i den här issuen och den enda som når en användare.
+
 **Kategorimallarna följer med i samma issue.** `CategoryPresetCard.vue` och `KategoriuppsattningTest` slår i dag upp presetarna på `kind`, och den nyckeln finns inte längre. Mallen blir ett val användaren gör, vilket [[ADR-0033 Produktens omfång]] § Konsekvenser redan kräver — de två går inte att skilja åt.
 
 Kommentarerna i `Invitation` och `Schedule` pekar på `Container::KINDS` som mönster för en delad lista. De byter förlaga, inte beteende. **Fältet får fortfarande aldrig styra beteende:** ingen `match` eller `if` på `kind` någonstans, som `Container`s klasskommentar redan kräver. Ett fritt fält som styr logik är värre än en sluten lista som gör det.
@@ -37,7 +39,7 @@ Kommentarerna i `Invitation` och `Schedule` pekar på `Container::KINDS` som mö
 Navigeringens gruppering — minst två containrar per art — hör till designarbetet och ingår **inte** här.
 
 **Läs:** [[ADR-0036 Containerns art]], [[ADR-0033 Produktens omfång]] § Beslut, issue 8 § Beslut 5 i [[M1 Kärnmodell]]
-**Klart när:** CHECK-villkoret på `container.kind` finns inte längre och en container kan sparas med en art utanför den gamla listan; `Container::KINDS` finns inte längre i koden; `kind` får utelämnas vid skapande; de två proparna bär de arter kontot redan använt, inte en fast lista; kategorimallen väljs uttryckligen och härleds inte ur `kind`; ingen `match` eller `if` på `kind` finns i `app/` eller `resources/js/`; de fem befintliga värdena är oförändrade i databasen efter migreringen; hela testsviten är grön.
+**Klart när:** CHECK-villkoret på `container.kind` finns inte längre och en container kan sparas med en art utanför den gamla listan; `Container::KINDS` finns inte längre i koden; `kind` får utelämnas vid skapande; de två proparna bär de arter kontot redan använt, inte en fast lista; en egen art visas ordagrant i containerlistan och i sökträffarna, aldrig som en översättningsnyckel; nycklarna under `container.kind` finns inte längre i `lang/en/ui.php`; kategorimallen väljs uttryckligen och härleds inte ur `kind`; ingen `match` eller `if` på `kind` finns i `app/` eller `resources/js/`; de fem befintliga värdena är oförändrade i databasen efter migreringen; hela testsviten är grön.
 **Beror på:** 82
 
 ### 85. Valutan ärvs nedåt
