@@ -1,6 +1,6 @@
 <?php
 
-// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+// rott-pa-basen: issue 77b och 83 — ordbyte i prosa (kommentar och testnamn) och en struken rad för den borttagna rutten, ingen ändring av applikationskoden; bas och head delar den.
 
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
@@ -19,13 +19,11 @@ use function Pest\Laravel\from;
 use function Pest\Laravel\get;
 use function Pest\Laravel\patch;
 use function Pest\Laravel\post;
-use function Pest\Laravel\put;
 use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 54 · Containerytan i webben — listan, skapandet och redigeringen.
  * Se App\Http\Controllers\ContainerController,
- * App\Http\Controllers\ActiveContainerController,
  * App\Actions\Container\CreateContainer,
  * resources/js/layouts/ContainerLayout.vue,
  * resources/js/layouts/containerSections.js och
@@ -91,7 +89,7 @@ function containerGrant(Container $container, User $user, string $level, ?Item $
  * samma grupp och av samma skäl: raderingsknappen på inställningssidan får
  * inte vara den enda vägen in i kontrollern som en gäst når.
  */
-it('skickar en utloggad besökare till inloggningen från alla sju rutterna', function () {
+it('skickar en utloggad besökare till inloggningen från alla sex rutterna', function () {
     withoutVite();
 
     [$konto] = containerKontext();
@@ -102,7 +100,6 @@ it('skickar en utloggad besökare till inloggningen från alla sju rutterna', fu
     post('/containers', [])->assertRedirect('/login');
     get("/containers/{$container->ulid}/edit")->assertRedirect('/login');
     patch("/containers/{$container->ulid}", [])->assertRedirect('/login');
-    put("/containers/{$container->ulid}/active")->assertRedirect('/login');
     delete("/containers/{$container->ulid}")->assertRedirect('/login');
 });
 
@@ -531,7 +528,6 @@ it('har containerytans texter och läser dem ur lang/', function () {
         'container.index.empty',
         'container.index.shared',
         'container.index.active',
-        'container.index.make_active',
         'container.index.edit',
         'container.create.heading',
         'container.create.account',

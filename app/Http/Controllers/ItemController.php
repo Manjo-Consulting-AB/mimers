@@ -29,6 +29,7 @@ use App\Models\Schedule;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Files\FileOrigin;
+use App\Support\Frontend\ActiveContainer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -150,6 +151,18 @@ class ItemController extends Controller
      * presentationsflagga för 57b:s knapp. En omfångsbegränsad mottagare får
      * `false`: hon skapar barn-items under det hon nått, och den ytan hör till
      * detaljvyn.
+     *
+     * **Att öppna containern sätter den aktiva containern** (issue 83).
+     * `ActiveContainer` är bokföringen över vilken container användaren arbetar
+     * i, och den bokföringen sköter sig själv: den som öppnar en container
+     * arbetar i den. Ingen knapp, ingen egen rutt — `PUT
+     * /containers/{container}/active` togs bort i samma issue.
+     *
+     * Anropet ligger EFTER `Gate::authorize()` och det är bindande: en
+     * container användaren inte når blir aldrig aktiv, och den kontext hon
+     * redan har står orörd. `ActiveContainer::set()` prövar åtkomsten en gång
+     * till och glömmer nyckeln i stället för att skriva den — samma svar som
+     * `forUser()` ger för en nyckel som inte längre håller.
      */
     public function index(
         Request $request,
@@ -157,12 +170,15 @@ class ItemController extends Controller
         ListItems $listItems,
         ListCategories $listCategories,
         ListTags $listTags,
+        ActiveContainer $activeContainer,
     ): Response {
         Gate::authorize('view', $container);
 
         $container->loadMissing('account');
 
         $user = $request->user();
+
+        $activeContainer->set($user, $container);
 
         // Listorna hämtas FÖRE filtren: de är både filterradens innehåll och
         // det de inskickade ULID:na löses upp mot (Beslut 3 och 5). Två
