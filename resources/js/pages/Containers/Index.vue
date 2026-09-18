@@ -19,16 +19,21 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *   - Ägarkontots namn visas bara när användaren är med i MER än ett konto.
  *     Med ett enda konto är namnet brus.
  *
- * Den aktiva raden bär `aria-current` och en synlig etikett, och har ingen
- * knapp — den är redan vald (Beslut 6). Den aktiva containern läses ur den
- * delade propen `activeContainer`, som bär ULID:t och ingenting annat.
+ * Den aktiva raden bär `aria-current` och en synlig etikett. Den aktiva
+ * containern läses ur den delade propen `activeContainer`, som bär ULID:t och
+ * ingenting annat.
+ *
+ * **Ingen knapp sätter kontexten** (issue 83). Kontexten är bokföring över
+ * vilken container användaren arbetar i, och bokföringen sköter sig själv: den
+ * sätts av att containern ÖPPNAS — namnet här är länken dit — och knappen som
+ * gjorde det för hand finns inte längre. Markeringen står kvar och visar
+ * vilken container som senast öppnades.
  *
  * Redigeringslänken visas efter `can.update`, som kontrollern räknat med
  * policyn (Beslut 9). Flaggan är presentation; rutten auktoriserar ändå.
  *
  * Containernamnet är en länk till containerns EGEN sida — itemlistan, se issue 57a
- * § Beslut 1. Det är den enda ändringen i den här filen; knapparna för aktiv
- * container och redigering står kvar som de är.
+ * § Beslut 1.
  */
 defineProps({
     containers: { type: Array, required: true },
@@ -91,15 +96,6 @@ const isShared = (container) => accountName(container) === null;
                 >
                     {{ t('container.index.active') }}
                 </span>
-
-                <Link
-                    v-else
-                    method="put"
-                    :href="`/containers/${container.ulid}/active`"
-                    class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
-                >
-                    {{ t('container.index.make_active') }}
-                </Link>
 
                 <Link
                     v-if="container.can.update"

@@ -4,13 +4,15 @@ Produkten på fem minuter. Tillbaka till [[00 Index]].
 
 ## Kärnidén
 
-En **container** är ett ägt ting: en båt, husvagn, stuga eller bil. I containern lägger ägaren **objekt** — allt från en MPPT-regulator till en garderob. Varje objekt kan ha bilder, text, filer, en kategori, taggar, relationer till andra objekt och ett eller flera **scheman** för återkommande underhåll.
+En **container** är ett sammanhang: en båt, en bil, en fastighet, en kund eller ett projekt. I containern lägger ägaren **objekt** — allt från en MPPT-regulator till en garderob. Varje objekt kan ha bilder, text, filer, en kategori, taggar, relationer till andra objekt och ett eller flera **scheman** för återkommande underhåll.
 
 Orden användaren möter — container, objekt, relationer, uppgifter, historik — står i [[ADR-0032 Produktens ord]]. I koden heter objektet `item`, som det alltid gjort.
 
-Systemet vet ingenting om båtar. Taggar och kategorier är ett blankt papper som användaren fyller själv, vilket är det som gör produkten lika användbar för en husvagn. Se [[ADR-0004 Fria taggar och kategorier]].
+Systemet vet ingenting om båtar, bilar eller fastigheter. Taggar och kategorier är ett blankt papper som användaren fyller själv, vilket är det som gör samma produkt användbar för en fastighet eller ett projekt. Se [[ADR-0004 Fria taggar och kategorier]].
 
 ## Vem betalar
+
+Segmenten nedan är den första marknaden — inte produktens definition. Containern bär vilket sammanhang som helst.
 
 | Segment | Äger containern | Betalar för |
 |---|---|---|
@@ -37,7 +39,7 @@ Webben byggs med Inertia och Vue i samma Laravel-app och konsumerar alltså inte
 ### Ingår i MVP
 
 - Konton, containers, delning med R/RW, inbjudningar
-- Items med kategorier, taggar, relationer, bilder och filer
+- Objekt med kategorier, taggar, relationer, bilder och filer
 - Scheman och uppgifter med förekomster och beroenden
 - Fil-dedup via innehållshash
 - Planer och kvoter med förbrukningsräkning — **även om betalning inte byggs**
@@ -45,7 +47,7 @@ Webben byggs med Inertia och Vue i samma Laravel-app och konsumerar alltså inte
 - Kostnadsregistrering per item, med rapporten bakom Pro — se [[ADR-0016 Kostnadsregistrering]]
 - Soft delete och papperskorg
 - Sök och filtrering
-- Svenska och engelska
+- Engelska
 
 ### Ingår inte i MVP
 

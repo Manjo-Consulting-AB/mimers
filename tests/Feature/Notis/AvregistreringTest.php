@@ -97,8 +97,8 @@ it('notismejlet bär en avregistreringslänk i sidfoten', function () {
     $mail = Mail::sent(NotificationMail::class)->first();
     $html = $mail->render();
 
-    expect($html)->toContain('Vill du inte ha den här sortens notiser?');
-    expect($html)->toContain('>Avregistrera</a>');
+    expect($html)->toContain('Do not want this kind of notification?');
+    expect($html)->toContain('>Unsubscribe</a>');
     expect($html)->toContain('/notifications/unsubscribe/'.$user->ulid.'/'.Notification::TYPE_TASK_DUE);
 });
 
@@ -137,7 +137,7 @@ it('notismejlet bär List-Unsubscribe-headern', function () {
     expect($listUnsubscribePost?->getBody())->toBe('List-Unsubscribe=One-Click');
 });
 
-it('sidfoten följer mottagarens språk', function () {
+it('sidfoten är engelsk för varje mottagare', function () {
     Mail::fake();
 
     [$svKonto, $svAnvandare] = avregistreringsKontext('sv_SE', 'sv_SE');
@@ -151,13 +151,12 @@ it('sidfoten följer mottagarens språk', function () {
     $mejl = Mail::sent(NotificationMail::class);
     expect($mejl)->toHaveCount(2);
 
-    $svHtml = $mejl->get(0)->render();
-    $enHtml = $mejl->get(1)->render();
-
-    expect($svHtml)->toContain('Vill du inte ha den här sortens notiser?');
-    expect($svHtml)->toContain('>Avregistrera</a>');
-    expect($enHtml)->toContain('Do not want this kind of notification?');
-    expect($enHtml)->toContain('>Unsubscribe</a>');
+    // `en` är den enda katalogen ([[ADR-0034 Engelska vid lansering]]): de
+    // två mottagarna får samma sidfot hur olika deras locale än är.
+    expect($mejl->get(0)->render())->toContain('Do not want this kind of notification?');
+    expect($mejl->get(0)->render())->toContain('>Unsubscribe</a>');
+    expect($mejl->get(1)->render())->toContain('Do not want this kind of notification?');
+    expect($mejl->get(1)->render())->toContain('>Unsubscribe</a>');
 });
 
 it('en GET på länken ändrar ingenting', function () {
@@ -165,7 +164,7 @@ it('en GET på länken ändrar ingenting', function () {
 
     get(avregistreringsUrl($user, Notification::TYPE_TASK_DUE))
         ->assertOk()
-        ->assertSee('Sluta ta emot påminnelser om uppgifter?');
+        ->assertSee('Stop receiving task reminders?');
 
     expect(NotificationPreference::query()->count())->toBe(0);
 });

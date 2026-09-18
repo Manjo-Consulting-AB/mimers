@@ -100,7 +100,7 @@ function uppsattningFor(string $locale, string $kind): array
 }
 
 /**
- * Hela datan, så att alla tio kombinationerna kan prövas på en gång.
+ * Hela datan, så att varje kombination av locale och typ kan prövas på en gång.
  *
  * @return array<string, array<string, list<array<string, mixed>>>>
  */
@@ -192,7 +192,7 @@ it('visar förslaget på en tom container och skickar aldrig orden till webbläs
 
     // Orden bor i klienten. Hade de kommit som prop hade ADR-0004 varit
     // upphävd, oavsett vad kortet visade.
-    foreach (uppsattningNamn(uppsattningFor('sv', 'boat')) as $namn) {
+    foreach (uppsattningNamn(uppsattningFor('en', 'boat')) as $namn) {
         expect($svar->getContent())->not->toContain($namn);
     }
 
@@ -238,7 +238,7 @@ it('lägger in uppsättningen i ordning, med rätt föräldrar och positioner', 
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
 
-    $uppsattning = uppsattningFor('sv', 'boat');
+    $uppsattning = uppsattningFor('en', 'boat');
 
     $svar = actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
@@ -259,21 +259,21 @@ it('lägger in uppsättningen i ordning, med rätt föräldrar och positioner', 
     expect($rotter->pluck('position')->all())->toBe(range(1, count($rotnamn)));
 
     // Barnen ligger under sin rot, i uppsättningens ordning.
-    $motor = $rotter->firstWhere('name', 'Motor');
+    $motor = $rotter->firstWhere('name', 'Engine');
 
     $barn = Category::query()
         ->where('parent_id', $motor->id)
         ->orderBy('position')
         ->get();
 
-    expect($barn->pluck('name')->all())->toBe(['Drivlina', 'Kylsystem']);
+    expect($barn->pluck('name')->all())->toBe(['Drive train', 'Cooling']);
     expect($barn->pluck('position')->all())->toBe([1, 2]);
     expect($barn->pluck('container_id')->unique()->all())->toBe([$container->id]);
 
     // Ingen märkning: raderna ÄR vanliga kategorier (Beslut 6). Lövet går att
     // radera med 56a:s yta, och ingenting i systemet minns att det kom från
     // ett förslag.
-    $drivlina = $barn->firstWhere('name', 'Drivlina');
+    $drivlina = $barn->firstWhere('name', 'Drive train');
 
     actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
@@ -300,7 +300,7 @@ it('vägrar en uppsättning i en container som redan har kategorier och skapar i
     $svar = actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
         ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => uppsattningFor('sv', 'boat'),
+            'categories' => uppsattningFor('en', 'boat'),
         ]);
 
     $svar->assertRedirect("/containers/{$container->ulid}/categories");
@@ -310,7 +310,7 @@ it('vägrar en uppsättning i en container som redan har kategorier och skapar i
     // språk — rutten finns bara på webben.
     $mening = session('errors')->get('categories')[0];
 
-    expect($mening)->toBe(trans('ui.container.categories.preset_not_empty', [], 'sv'));
+    expect($mening)->toBe(trans('ui.container.categories.preset_not_empty', [], 'en'));
     expect($mening)->not->toBe('preset_not_empty');
 
     expect(Category::query()->where('container_id', $container->id)->count())->toBe(1);
@@ -333,12 +333,12 @@ it('räknar en container med bara mjukraderade kategorier som tom', function () 
     actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
         ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => [['name' => 'Rigg och segel']],
+            'categories' => [['name' => 'Rig and sails']],
         ])
         ->assertSessionHas('status', 'category-preset-applied');
 
     expect(Category::query()->where('container_id', $container->id)->pluck('name')->all())
-        ->toBe(['Rigg och segel']);
+        ->toBe(['Rig and sails']);
 });
 
 /*
@@ -454,11 +454,11 @@ it('döljer förslaget i sessionen och lämnar skapa-formuläret orört', functi
 
     actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories", ['name' => 'Rigg och segel'])
+        ->post("/containers/{$container->ulid}/categories", ['name' => 'Rig and sails'])
         ->assertSessionHas('status', 'category-created');
 
     expect(Category::query()->where('container_id', $container->id)->pluck('name')->all())
-        ->toBe(['Rigg och segel']);
+        ->toBe(['Rig and sails']);
 });
 
 /*
@@ -556,25 +556,21 @@ it('nekar en främling både uppsättningen och ett nej', function () {
  * prövas därför med klientens egen väljare på den locale servern faktiskt
  * skickade.
  */
-it('ger svenska och engelska användare var sin uppsättning för samma container', function () {
+it('ger varje användare samma uppsättning för samma container', function () {
     withoutVite();
 
     [, $svensk, $container] = uppsattningKontext('sv_SE', 'boat');
     $engelsk = User::factory()->create(['locale' => 'en_GB']);
     $container->account->users()->attach($engelsk, ['role' => 'member']);
 
-    $sv = uppsattningFor(uppsattningLocale($svensk, $container), 'boat');
-    $en = uppsattningFor(uppsattningLocale($engelsk, $container), 'boat');
-
-    expect(uppsattningLocale($svensk, $container))->toBe('sv');
+    // Propen `locale` är `en` för båda: `en` är den enda katalogen
+    // ([[ADR-0034 Engelska vid lansering]]), och klientens väljare följer den.
+    expect(uppsattningLocale($svensk, $container))->toBe('en');
     expect(uppsattningLocale($engelsk, $container))->toBe('en');
 
-    expect(array_column($sv, 'name'))->toContain('Rigg och segel');
-    expect(array_column($en, 'name'))->toContain('Rig and sails');
+    $uppsattning = uppsattningFor(uppsattningLocale($svensk, $container), 'boat');
 
-    // Förslag på var sitt språk, inte en sträng med två former: de SKA skilja
-    // sig, och ingen får försöka slå ihop dem till `lang/`.
-    expect(array_column($sv, 'name'))->not->toBe(array_column($en, 'name'));
+    expect(array_column($uppsattning, 'name'))->toContain('Rig and sails');
 });
 
 /*
@@ -585,7 +581,7 @@ it('ger svenska och engelska användare var sin uppsättning för samma containe
  * Container::KINDS — men klienten kan möta ett värde från en nyare server, och
  * då ska förslaget falla tillbaka tyst i stället för att krascha sidan.
  */
-it('faller tillbaka på other och sv utan fel', function () {
+it('faller tillbaka på other och en utan fel', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'other');
@@ -595,22 +591,22 @@ it('faller tillbaka på other och sv utan fel', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where('presetDismissed', false));
 
-    expect(uppsattningFor('sv', 'other'))->toBe(uppsattningAlla()['sv']['other']);
+    expect(uppsattningFor('en', 'other'))->toBe(uppsattningAlla()['en']['other']);
 
-    // Okänd typ: `other` i samma språk. Okänd locale: `sv`, sedan `other`.
-    expect(uppsattningFor('sv', 'rymdskepp'))->toBe(uppsattningAlla()['sv']['other']);
-    expect(uppsattningFor('de', 'boat'))->toBe(uppsattningAlla()['sv']['boat']);
-    expect(uppsattningFor('de', 'rymdskepp'))->toBe(uppsattningAlla()['sv']['other']);
+    // Okänd typ: `other`. Okänd locale: `en`, sedan `other`.
+    expect(uppsattningFor('en', 'rymdskepp'))->toBe(uppsattningAlla()['en']['other']);
+    expect(uppsattningFor('de', 'boat'))->toBe(uppsattningAlla()['en']['boat']);
+    expect(uppsattningFor('de', 'rymdskepp'))->toBe(uppsattningAlla()['en']['other']);
 });
 
 /*
- * Beslut 1: tio uppsättningar, ingen saknad kombination, sex till tolv
- * rotkategorier och högst två nivåer.
+ * Beslut 1: en uppsättning per containertyp, ingen saknad kombination, sex till
+ * tolv rotkategorier och högst två nivåer.
  */
-it('har en uppsättning för varje typ och språk, med sex till tolv rötter och två nivåer', function () {
+it('har en uppsättning för varje typ, med sex till tolv rötter och två nivåer', function () {
     $alla = uppsattningAlla();
 
-    expect(array_keys($alla))->toBe(['sv', 'en']);
+    expect(array_keys($alla))->toBe(['en']);
 
     foreach ($alla as $locale => $perTyp) {
         expect(array_keys($perTyp))->toBe(Container::KINDS);

@@ -52,7 +52,7 @@ use function Pest\Laravel\withoutVite;
  *    en mening med gräns och värde — utan att något flyttas.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js och jämför ui.php nyckel för nyckel. De
  * nya nycklarna prövas dessutom i sista testet här.
  *
@@ -364,7 +364,7 @@ it('ritar ytan för ett gratiskonto med en mening om planen och ger fältfel vid
     [, $anvandare, $container] = agarbytesvyGratiskonto();
     [, $mottagarkonto] = agarbytesvyMottagare();
 
-    $mening = (string) trans('ui.error.plan.feature_unavailable', ['feature' => 'Ägarbyte'], 'sv');
+    $mening = (string) trans('ui.error.plan.feature_unavailable', ['feature' => 'Ownership transfer'], 'en');
 
     actingAs($anvandare)->get(agarbytesvyUrl($container))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
@@ -391,7 +391,6 @@ it('länkar till plansidan bredvid planmeningen', function () {
     expect($sida)->toContain('transfer.plan_link');
     expect($sida)->toContain('/settings/plan?account=');
 
-    expect(Lang::has('ui.error.plan.feature_name.ownership_transfer', 'sv'))->toBeTrue();
     expect(Lang::has('ui.error.plan.feature_name.ownership_transfer', 'en'))->toBeTrue();
 });
 
@@ -734,7 +733,7 @@ it('nekar en accept som spränger mottagarens plan och flyttar ingenting', funct
     // Meningen bär gränsen och värdet, som varje annat kvotfel på webben.
     $mening = session('errors')->get('transfer')[0];
 
-    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'sv'));
+    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'en'));
     expect($mening)->toContain('1');
 
     // Och ingenting flyttades: hela transaktionen rullades tillbaka.
@@ -857,7 +856,7 @@ it('lämnar /api:s mottagarrutter oförändrade', function () {
 
 // --- språknycklarna -----------------------------------------------------
 
-it('har ägarbytets nycklar på båda språken och med olika text', function () {
+it('har ägarbytets nycklar och läser dem ur lang/', function () {
     $nycklar = [
         'transfer.heading',
         'transfer.intro',
@@ -886,15 +885,15 @@ it('har ägarbytets nycklar på båda språken och med olika text', function () 
         'error.plan.feature_name.ownership_transfer',
     ];
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach ($nycklar as $nyckel) {
-            expect(Lang::has("ui.{$nyckel}", $locale))->toBeTrue("ui.{$nyckel} saknas på {$locale}");
-            expect(trim((string) trans("ui.{$nyckel}", [], $locale)))->not->toBe('');
-        }
+    foreach ($nycklar as $nyckel) {
+        expect(Lang::has("ui.{$nyckel}", 'en'))->toBeTrue("ui.{$nyckel} saknas");
+        expect(trim((string) trans("ui.{$nyckel}", [], 'en')))->not->toBe('');
     }
 
     // Felkoden `transfer.expired` slås upp som `error.transfer.expired` av
     // App\Support\Frontend\ApiErrorTranslator — grenen kan inte heta något
-    // annat, hur gärna meningen än hör till ägarbytet.
-    expect(trans('ui.error.transfer.expired', [], 'sv'))->not->toBe(trans('ui.error.transfer.expired', [], 'en'));
+    // annat, hur gärna meningen än hör till ägarbytet. Meningen är en mening
+    // och inte nyckeln själv.
+    expect(trans('ui.error.transfer.expired', [], 'en'))
+        ->toBe('The transfer has expired. The sender must send a new one.');
 });

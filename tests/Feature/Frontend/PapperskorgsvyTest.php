@@ -40,9 +40,8 @@ use function Pest\Laravel\withoutVite;
  *
  * **Två acceptanskriterier prövas inte här**, därför att de redan har en
  * ägare: `/api`:s fyra frågor och bitvis identiska svar (PapperskorgTest)
- * och "ingen svensk sträng i en .vue-fil, samma nycklar på sv och en"
- * (SprakTest § "har inga användarvända strängar kvar i Vue-komponenterna"
- * och § "har samma nycklar på båda språken"). Den här filen prövar i stället
+ * och "ingen svensk sträng i en .vue-fil" (SprakTest § "har inga
+ * användarvända strängar kvar i Vue-komponenterna"). Den här filen prövar i stället
  * att papperskorgens EGNA nycklar finns, och att flaggan följer samma grind
  * som rutten.
  *
@@ -207,7 +206,7 @@ it('väljer mening på den återstående tiden, i singular, plural och sista dyg
     expect($modul)->toContain('days < 1');
     expect($modul)->toContain('days === 1');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['today', 'day', 'days'] as $nyckel) {
@@ -480,7 +479,7 @@ it('ger ett formulärfel i stället för JSON när föräldern ligger kvar i pap
     $svar->assertSessionHasErrors('trash');
 
     // Meningen, inte koden — på något av de två språken.
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect([
@@ -664,26 +663,19 @@ it('lägger papperskorgen i containerns navigation, sist', function () {
     expect($sektioner)->toContain('/containers/${ulid}/trash');
     expect(strpos($sektioner, "key: 'trash'"))->toBeGreaterThan(strpos($sektioner, "key: 'settings'"));
 
-    $sv = require lang_path('sv/ui.php');
     $en = require lang_path('en/ui.php');
 
-    expect($sv['container']['nav']['trash'])->not->toBe('');
     expect($en['container']['nav']['trash'])->not->toBe('');
 
-    // Nycklarna papperskorgen äger, på båda språken. Att de inte är tomma
-    // och att sv och en har exakt samma uppsättning prövas dessutom av
-    // SprakTest § "har samma nycklar på båda språken".
+    // Nycklarna papperskorgen äger. Att ingen av dem är tom prövas dessutom av
+    // SprakTest § "har inga tomma strängar i ui.php".
     foreach (['title', 'heading', 'description', 'empty', 'deleted_at', 'restore'] as $nyckel) {
-        expect($sv['trash'][$nyckel])->not->toBe('');
         expect($en['trash'][$nyckel])->not->toBe('');
     }
 
     foreach (['item', 'attachment', 'category', 'tag'] as $typ) {
-        expect($sv['trash']['type'][$typ])->not->toBe('');
         expect($en['trash']['type'][$typ])->not->toBe('');
     }
-
-    expect($sv['container']['nav']['trash'])->not->toBe($en['container']['nav']['trash']);
 });
 
 /*

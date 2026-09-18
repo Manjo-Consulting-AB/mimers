@@ -34,6 +34,10 @@ sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import omfangslint  # noqa: E402  - samma katalog, ingen paketstruktur
+
+
 def is_peak_hour() -> bool:
     """Sant under DeepSeeks peak hours (UTC, vardagar) - vi vill inte köra mot
     dem då. Två fönster: 01:00-03:59 och 06:00-09:59 UTC, måndag-fredag."""
@@ -486,6 +490,19 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_nu
     `uppfoljning` styr slutvarvet efter en åtgärdsloop: samma underlag, men
     uttryckligen en ny granskning i stället för en efterlevnadskontroll.
 
+    Punkt 3 om omfångsrutan säger sedan issue 83 (PR #392) uttryckligen att
+    granskaren inte äger rutan. Där gjorde granskningen allt rätt - prickade av
+    alla sju "Klart när"-punkter mot namngivna tester, verifierade de fyra
+    bindande besluten, hittade inget i säkerhet eller samtidighet - och höll
+    ändå inne `review:approved` på en enda sak: en fil utanför rutan, som
+    `omfangsruta.py` redan hade fällt maskinellt. Utlåtandet var alltså en dyr
+    omskrivning av ett skriptutfall, och eftersom godkännandet uteblev kostade
+    beslutet ett helt nytt granskningsvarv över samma diff efter att arkitekten
+    svarat. De två utfallen är olika frågor: etiketten säger att KODEN är rätt,
+    grinden att RUTAN är det, och `pr_far_mergas()` kräver båda - ingen PR med
+    röd ruta kan mergas på ett godkännande. Att låta granskaren avstå
+    godkännandet för rutans skull köper alltså ingen säkerhet, bara ett varv.
+
     `fragor` är PR-kroppens '## Frågor och antaganden' (oppna_fragor()) - tom
     sträng när avsnittet saknas eller bara var "Inga." Är den satt bjuds
     granskaren, som redan har issuen och läslistan framför sig, in att triagera
@@ -557,11 +574,15 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_nu
         f"det är den enda kontrollen av att inget missats.\n"
         f"2. Kontrollera att issuens numrerade beslut faktiskt följs, och att varje "
         f"avvikelse är motiverad i PR-kroppen.\n"
-        f"3. Håll dig till issuens omfångsruta. Ligger en ändrad fil utanför 'In scope' "
-        f"är det ett fynd. Beställ ALDRIG en ändring i en fil som ligger utanför rutan - "
-        f"be i så fall om att den bryts ut till en egen issue. Rutan kontrolleras även "
-        f"maskinellt av .github/scripts/omfangsruta.py, så en sådan beställning gör bara "
-        f"PR:en röd.\n"
+        f"3. Omfångsrutan ägs av .github/scripts/omfangsruta.py, inte av dig. Ligger en "
+        f"ändrad fil utanför 'In scope' skriver du EN rad om vilken fil det är och om "
+        f"ändringen i sig är riktig - och håller ALDRIG inne review:approved för rutans "
+        f"skull. Etiketten säger att koden är rätt; grinden säger att rutan är rätt, och "
+        f"mergespärren kräver båda, så en PR med röd ruta mergas inte för att du "
+        f"godkände koden. Är ändringen utanför rutan dessutom sakligt fel är den ett "
+        f"vanligt fynd som vilket annat. Beställ ALDRIG en ändring i en fil som ligger "
+        f"utanför rutan - be i så fall om att den bryts ut till en egen issue, eftersom "
+        f"en sådan beställning bara gör PR:en röd.\n"
         f"4. Sedan det vanliga: säkerhet, samtidighet, felhantering, datamodell.\n\n"
         f"Har du fynd, skriv dem som en numrerad lista - konkret nog att en annan "
         f"implementerare kan åtgärda dem utan att fråga dig något mer."
@@ -1848,6 +1869,66 @@ def process_next_issue(issue_number=None):
         sys.exit(1)
 
 
+OMFANGSLINT_INSTRUKTION = (
+    "\n\nLinten ovan är en UPPLYSNING, inte ett tillstånd. Omfångsrutan är "
+    "fortfarande bindande, och grinden kontrollerar den. Står issuen i läget "
+    "`fast` och du behöver en av filerna: lämna den orörd och skriv frågan "
+    "under '## Frågor och antaganden'. Står den i läget `spårad`: ändra filen "
+    "och deklarera den i PR-kroppen under 'Utanför rutan:', med en rad om "
+    "vilken 'Klart när'-punkt som kräver den.\n"
+)
+
+
+def kor_omfangslint(issue_num, issue_body, worktree_path):
+    """Läser issuen mot ruttabellen INNAN sessionen startar, och returnerar det
+    som ska läggas till implementationsprompten (tom sträng när rutan ser hel ut).
+
+    Steg 3 i svaret på issue 83 (PR #392): de två första stegen gör en trasig
+    ruta billigare att leva med, det här steget försöker låta bli att skriva
+    den. Hela motiveringen står i omfangslint.py.
+
+    Fail-open i varje led. Kan ruttabellen inte läsas, kan modellen inte nås,
+    eller svarar den något oläsbart, så fortsätter kön som förut - linten är en
+    besparing, inte en grind, och ett falskt positivt utfall som stoppar arbetet
+    kostar mer än det den ska spara.
+
+    Modellanropet går genom call_deepseek, alltså en agent som HAR skrivrätt i
+    worktreen trots att prompten bara ber om en lista. Därför mäts trädet före
+    och efter: har något ändrats backas det, och linten säger ifrån. Att lita på
+    att en agent avstår är samma sorts antagande som den här filen redan betalat
+    för en gång (PR #163, agenten som committade och pushade själv).
+    """
+    try:
+        mekaniska, fraga, innanfor, lage = omfangslint.analysera(issue_body, worktree_path)
+    except Exception as fel:
+        print(f"!! Omfångslinten kunde inte läsa ruttabellen: {fel}. Fortsätter utan den.")
+        return ""
+
+    modellfynd = []
+    if fraga:
+        head_fore = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
+        try:
+            svar = call_deepseek(fraga, cwd=worktree_path)
+            modellfynd = omfangslint.fynd_ur_modellsvar(svar, innanfor, worktree_path)
+        except Exception as fel:
+            print(f"!! Omfångslintens modellanrop misslyckades: {fel}. Kör vidare på den mekaniska halvan.")
+        smutsigt = run_cmd(["git", "status", "--porcelain"], cwd=worktree_path).stdout.strip()
+        head_efter = run_cmd(["git", "rev-parse", "HEAD"], cwd=worktree_path).stdout.strip()
+        if smutsigt or head_efter != head_fore:
+            print("!! Omfångslinten skulle inte röra arbetsträdet men gjorde det - backar.")
+            run_cmd(["git", "reset", "--hard", head_fore], check=False, cwd=worktree_path)
+            run_cmd(["git", "clean", "-fd"], check=False, cwd=worktree_path)
+
+    text = omfangslint.rapport(mekaniska, modellfynd, lage)
+    if not text:
+        print("--> Omfångslinten: rutan täcker det issuen beskriver.")
+        return ""
+
+    print(f"--> Omfångslinten hittade {len(mekaniska) + len(modellfynd)} möjlig(a) lucka(or) i rutan.")
+    run_cmd(["gh", "issue", "comment", issue_num, "--body", text], check=False, cwd=REPO_ROOT)
+    return f"\n\n=== OMFÅNGSLINTEN, körd innan du fick uppgiften ===\n{text}{OMFANGSLINT_INSTRUKTION}"
+
+
 def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class, branch_name, worktree_path):
     # -----------------------------------------------------------------
     # STEG 2: DEEPSEEK V4 FLASH (MAX 3 FÖRSÖK)
@@ -1874,11 +1955,13 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     )
     agent_summary = ""
 
+    omfangsnotis = kor_omfangslint(issue_num, issue_body, worktree_path)
+
     print("[FAS 1] Kodgenerering med DeepSeek V4 Flash (Max 3 försök)...")
     for attempt in range(1, 4):
         print(f" -> DeepSeek Försök {attempt}/3...")
 
-        prompt = f"Lös följande issue för vårt projekt:\n\n{issue_body}{summary_instruction}"
+        prompt = f"Lös följande issue för vårt projekt:\n\n{issue_body}{omfangsnotis}{summary_instruction}"
         if error_history:
             prompt += (
                 f"\n\nTidigare kodförsök misslyckades i testerna med följande fel:\n"
@@ -1945,7 +2028,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         run_cmd(["git", "clean", "-fd"], cwd=worktree_path)
 
         sonnet_prompt = (
-            f"Lös följande issue:\n{issue_body}\n\n"
+            f"Lös följande issue:\n{issue_body}{omfangsnotis}\n\n"
             f"DeepSeek misslyckades tidigare med detta testfel:\n```\n{last_error_output}\n```\n\n"
             f"Analysera problemet och genomför lösningen.{summary_instruction}"
         )

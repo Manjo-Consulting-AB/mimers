@@ -458,7 +458,7 @@ it('säger att containern är tom utan filter och räknar upp filtren med', func
         fn (AssertableInertia $page) => $page->has('items', 0)->where('filter.q', 'Ingenting alls')
     );
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
 
     expect($sv['item']['index']['empty'])->not->toContain(':filters')
         ->and($sv['item']['index']['filter_empty'])->toContain(':filters');
@@ -497,7 +497,7 @@ it('nämner aldrig ett tal om dolda rader och ger mottagaren ägarens mening', f
 
     // Ingen av de två tomma texterna bär ett tal, och den dolda raden finns
     // inte i mottagarens svar.
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['item']['index']['empty'])->not->toMatch('/\d/')
@@ -571,7 +571,7 @@ it('gör aktiva filter rensbara ett i taget och alla på en gång', function () 
     // Ett filter tas bort ur den MÄNGD som redan är vald — resten behålls.
     expect($rad)->toContain('selectedTags.value.filter((ulid) => ulid !== entry.value)');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['item']['index']['filter_clear'])->not->toBe('')
@@ -706,8 +706,8 @@ it('lämnar /api orört, inklusive 422 på ett okänt filtervärde', function ()
  * nyckel för nyckel — och att modulen som bygger etiketterna inte bär en enda
  * sträng (Beslut 8).
  */
-it('har varje filter-nyckel på båda språken och ingen svensk sträng i vyn', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har varje filter-nyckel och ingen svensk sträng i vyn', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     $filterNycklar = fn (array $fil): array => array_values(array_filter(
@@ -721,7 +721,7 @@ it('har varje filter-nyckel på båda språken och ingen svensk sträng i vyn', 
     expect($svNycklar)->not->toBe([])->and($enNycklar)->toBe($svNycklar);
 
     foreach ($svNycklar as $nyckel) {
-        expect(trim($sv['item']['index'][$nyckel]))->not->toBe('', "item.index.{$nyckel} är tom på sv")
+        expect(trim($sv['item']['index'][$nyckel]))->not->toBe('', "item.index.{$nyckel} är")
             ->and(trim($en['item']['index'][$nyckel]))->not->toBe('', "item.index.{$nyckel} är tom på en");
     }
 

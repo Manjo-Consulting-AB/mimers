@@ -607,10 +607,10 @@ it('ställer ett konstant antal frågor på api-listan, oavsett antal taggar', f
 
 /*
  * Beslut 8: skillnaden mellan tagg och kategori står i gränssnittet — två
- * rubriker och en mening under var sin, på båda språken.
+ * rubriker och en mening under var sin,.
  */
-it('skiljer taggen från kategorin med en mening på båda språken', function () {
-    $sv = require lang_path('sv/ui.php');
+it('skiljer taggen från kategorin med en mening', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['container']['tags']['description'])->not->toBe('');

@@ -76,6 +76,10 @@ return [
     | by Laravel's translation / localization methods. This option can be
     | set to any locale for which you plan to have translation strings.
     |
+    | Engelskans ställning här är ett beslut och inte en default: `en` är
+    | enda levererade språket vid lansering, oavsett `Accept-Language`, och
+    | `lang/en/` är den enda katalogen. Se [[ADR-0034 Engelska vid lansering]].
+    |
     */
 
     'locale' => env('APP_LOCALE', 'en'),

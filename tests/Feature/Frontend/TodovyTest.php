@@ -49,7 +49,7 @@ use function Pest\Laravel\withoutVite;
  * tidsberoende — den hade fallit i morgon och klarat sig i dag.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att nycklarna finns
- * på båda språken prövas också av tests/Feature/Frontend/SprakTest.php, som
+ * prövas också av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js; den sista testen här binder de NYA
  * nycklarna och de NYA filerna till just det testet.
  *
@@ -677,7 +677,7 @@ it('skiljer en tom lista utan containers från en tom lista utan uppgifter', fun
         ->toContain("t('todo.empty.no_containers')")
         ->toContain('href="/containers/create"');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['todo']['empty']['no_containers'])->not->toBe($sv['todo']['empty']['nothing'])
@@ -722,7 +722,7 @@ it('ger en mottagare utan synliga uppgifter samma tomma svar som en färdig äga
 
     // Och meningarna bär varken ett tal eller en parameter — ingenting att
     // räkna ut omfånget ur.
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach ([$sv, $en] as $fil) {
@@ -828,8 +828,8 @@ it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', func
  * resources/js. Här prövas den andra: nycklarna under `todo`, nyckel för
  * nyckel, och att gruppnycklarna är desamma som kontrollerns grupper.
  */
-it('har varje todo-nyckel på båda språken och ingen svensk sträng i vyn', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har varje todo-nyckel och ingen svensk sträng i vyn', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect(array_keys($en['todo']))->toBe(array_keys($sv['todo']))
@@ -841,7 +841,7 @@ it('har varje todo-nyckel på båda språken och ingen svensk sträng i vyn', fu
             continue;
         }
 
-        expect(trim($varde))->not->toBe('', "todo.{$nyckel} är tom på sv")
+        expect(trim($varde))->not->toBe('', "todo.{$nyckel} är")
             ->and(trim($en['todo'][$nyckel]))->not->toBe('', "todo.{$nyckel} är tom på en");
     }
 

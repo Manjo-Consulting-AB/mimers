@@ -146,8 +146,10 @@ class ContainerController extends Controller
      * som en ruta ovanför formuläret.
      *
      * Den nya containern blir aktiv — den som just skapat en container vill arbeta i
-     * den (Beslut 6). Det är en av de tre platser som sätter den aktiva
-     * containern; `ActiveContainer` äger sessionen.
+     * den (Beslut 6). Mekanismen har fyra anropare sedan issue 83: skapandet
+     * här, en antagen inbjudan, ett mottaget ägarbyte — och att ÖPPNA en
+     * container (App\Http\Controllers\ItemController::index()), som är den väg
+     * kontexten sätts på i vardagen. `ActiveContainer` äger sessionen.
      */
     public function store(
         StoreContainerRequest $request,
@@ -274,8 +276,8 @@ class ContainerController extends Controller
      * null för en redan raderad container, och efteråt hade svaret alltid varit
      * falskt.
      *
-     * Återställningen sätter INTE tillbaka containern som aktiv: att välja container är
-     * användarens handling (Beslut 6).
+     * Återställningen sätter INTE tillbaka containern som aktiv: att öppna en
+     * container är användarens handling (Beslut 6, issue 83).
      */
     public function destroy(
         Request $request,

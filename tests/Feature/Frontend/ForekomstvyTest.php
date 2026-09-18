@@ -55,7 +55,7 @@ use function Pest\Laravel\withoutVite;
  * 9. **Frågekostnaden är konstant** (Beslut 9), mätt med `DB::listen`.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js; den sista testen här binder de NYA
  * nycklarna och de NYA filerna till just det testet.
  *
@@ -65,7 +65,7 @@ use function Pest\Laravel\withoutVite;
 
 /**
  * Ett konto med en medlem, och en container med ett item under kontot. Båda på
- * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -491,7 +491,7 @@ it('öppnar ingen ny förekomst för ett none-schema och säger att uppgiften ä
     expect($sektion)->toContain('schedule.done');
     expect($sektion)->toContain("t('item.schedule.occurrence.done')");
 
-    expect(Lang::get('ui.item.schedule.occurrence.done', [], 'sv'))->toBe('Uppgiften är klar.');
+    expect(Lang::get('ui.item.schedule.occurrence.done', [], 'en'))->toBe('The task is done.');
     expect(Lang::get('ui.item.schedule.occurrence.done', [], 'en'))->not->toBe('ui.item.schedule.occurrence.done');
 });
 
@@ -529,7 +529,7 @@ it('sparar kontot på avbockningen och visar det i historiken', function () {
     // Och kontot RITAS i historiken — en prop ingen vy läser är ingen yta.
     expect(File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue')))
         ->toContain('completed_by_account');
-    expect(Lang::get('ui.item.schedule.occurrence.completed_by', ['name' => 'Varvet'], 'sv'))->toBe('av Varvet');
+    expect(Lang::get('ui.item.schedule.occurrence.completed_by', ['name' => 'Varvet'], 'en'))->toBe('by Varvet');
 });
 
 /*
@@ -609,8 +609,8 @@ it('stänger förekomsten vid skip och skiljer raden från en avklarad', functio
     expect(forekomstKör('console.log(m.occurrenceStatusLabel(t, { status: "skipped" }));'))
         ->toBe('item.schedule.occurrence.status.skipped');
 
-    expect(Lang::get('ui.item.schedule.occurrence.status.completed', [], 'sv'))->toBe('Avklarad');
-    expect(Lang::get('ui.item.schedule.occurrence.status.skipped', [], 'sv'))->toBe('Överhoppad');
+    expect(Lang::get('ui.item.schedule.occurrence.status.completed', [], 'en'))->toBe('Done');
+    expect(Lang::get('ui.item.schedule.occurrence.status.skipped', [], 'en'))->toBe('Skipped');
 
     $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
 
@@ -620,8 +620,8 @@ it('stänger förekomsten vid skip och skiljer raden från en avklarad', functio
     // Och bekräftelsen säger vad som händer med nästa förekomst.
     expect(File::get(resource_path('js/components/OpenOccurrence.vue')))
         ->toContain("t('item.schedule.occurrence.skip_confirm')");
-    expect(Lang::get('ui.item.schedule.occurrence.skip_confirm', [], 'sv'))
-        ->toContain('nästa förekomst');
+    expect(Lang::get('ui.item.schedule.occurrence.skip_confirm', [], 'en'))
+        ->toContain('the next occurrence');
 });
 
 // --- domänfelen: blockerade, pausade och redan stängda ----------------------
@@ -662,9 +662,9 @@ it('visar vilka uppgifter som blockerar, med titel och datum', function () {
     // och datum. Hela listan, inte den första: annars bockar användaren av
     // en, får samma fel igen och lär sig att systemet ljuger om vad som
     // återstår (issue 23b § Beslut 4).
-    expect($mening)->toContain(Lang::get('ui.error.occurrence.blocked', [], 'sv'));
+    expect($mening)->toContain(Lang::get('ui.error.occurrence.blocked', [], 'en'));
     expect($mening)->toContain('Byt impeller');
-    expect($mening)->toContain('5 maj 2027');
+    expect($mening)->toContain('5 May 2027');
     expect(substr_count($mening, "\n"))->toBe(1);
 
     // Ingen "Array to string conversion" och ingen JSON-kropp — felet är en
@@ -699,8 +699,8 @@ it('säger att schemat är pausat när pausen nekar avbockningen', function () {
 
     $mening = session('errors')->getBag('default')->first('occurrence');
 
-    expect($mening)->toBe(Lang::get('ui.error.schedule.inactive', [], 'sv'));
-    expect($mening)->toContain('pausat');
+    expect($mening)->toBe(Lang::get('ui.error.schedule.inactive', [], 'en'));
+    expect($mening)->toContain('paused');
 
     expect($öppen->fresh()->status)->toBe('open');
     expect($schema->occurrences()->count())->toBe(1);
@@ -731,8 +731,8 @@ it('vägrar bocka av en redan stängd förekomst och säger varför', function (
 
     $mening = session('errors')->getBag('default')->first('occurrence');
 
-    expect($mening)->toBe(Lang::get('ui.error.occurrence.not_open', [], 'sv'));
-    expect($mening)->toContain('redan avslutad');
+    expect($mening)->toBe(Lang::get('ui.error.occurrence.not_open', [], 'en'));
+    expect($mening)->toContain('already closed');
 
     // Serien har inte hoppat ett steg: fortfarande exakt en öppen förekomst.
     expect($schema->openOccurrence()->count())->toBe(1);
@@ -898,14 +898,14 @@ it('kostar ett konstant antal frågor oavsett antal förekomster', function () {
 
 /*
  * Klart när: ingen svensk sträng står kvar i en .vue-fil; varje ny nyckel
- * finns på sv och en.
+ * finns.
  *
  * Den GLOBALA svepet över resources/js ägs av
  * tests/Feature/Frontend/SprakTest.php. Här binds de NYA nycklarna och de NYA
  * filerna: en nyckel som bara finns på svenska hade fallit där, men den här
  * filen pekar ut vilka nycklar 63b lade till.
  */
-it('har varje ny förekomstnyckel på båda språken och ingen svensk sträng i vyerna', function () {
+it('har varje ny förekomstnyckel och ingen svensk sträng i vyerna', function () {
     $nycklar = [
         'item.schedule.occurrence.heading',
         'item.schedule.occurrence.none',
@@ -940,7 +940,7 @@ it('har varje ny förekomstnyckel på båda språken och ingen svensk sträng i 
     }
 
     foreach ($nycklar as $nyckel) {
-        $sv = Lang::get("ui.{$nyckel}", [], 'sv');
+        $sv = Lang::get("ui.{$nyckel}", [], 'en');
         $en = Lang::get("ui.{$nyckel}", [], 'en');
 
         expect($sv)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på svenska");

@@ -568,7 +568,7 @@ it('ritar sökfältet i layouten för en inloggad användare och inte för en g�
     // Varje inloggad sida renderar layouten — översikten och söksidan är två
     // av dem, och båda bär nycklarna som fältet läser.
     actingAs($anvandare)->get('/dashboard')->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->where('translations.search.field.label', 'Sök i alla containers')
+        fn (AssertableInertia $page) => $page->where('translations.search.field.label', 'Search all containers')
     );
 
     actingAs($anvandare)->get('/search')->assertOk()->assertInertia(
@@ -606,15 +606,14 @@ it('har en väg till sökningen i navigeringen för en inloggad och ingen för e
 
     expect($menyn)->toContain("t('nav.search')");
 
-    // Nyckeln finns på båda språken, med olika ord (Beslut 8).
-    expect(trans('ui.nav.search', [], 'sv'))->toBe('Sök')
-        ->and(trans('ui.nav.search', [], 'en'))->toBe('Search');
+    // Nyckeln finns, med ordet ur katalogen (Beslut 8).
+    expect(trans('ui.nav.search', [], 'en'))->toBe('Search');
 
     // Villkoret är den inloggade användaren ur den delade propen — inte en
     // egen fråga och inte en egen flagga. En gäst har ingen användare, och
     // får därför ingen rad.
     actingAs($anvandare)->get('/dashboard')->assertInertia(
-        fn (AssertableInertia $page) => $page->where('translations.nav.search', 'Sök')
+        fn (AssertableInertia $page) => $page->where('translations.nav.search', 'Search')
     );
 });
 
@@ -669,8 +668,8 @@ it('kostar ett konstant antal frågor oavsett antal containers och träffar', fu
  * resources/js). Här prövas den andra: nycklarna under `search`, nyckel för
  * nyckel — och att den tomma meningen inte bär ett tal (Beslut 6 och 8).
  */
-it('har varje sök-nyckel på båda språken och ingen svensk sträng i vyn', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har varje sök-nyckel och ingen svensk sträng i vyn', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect(array_keys($en['search']))->toBe(array_keys($sv['search']))
@@ -681,7 +680,7 @@ it('har varje sök-nyckel på båda språken och ingen svensk sträng i vyn', fu
             continue;
         }
 
-        expect(trim($varde))->not->toBe('', "search.{$nyckel} är tom på sv")
+        expect(trim($varde))->not->toBe('', "search.{$nyckel} är")
             ->and(trim($en['search'][$nyckel]))->not->toBe('', "search.{$nyckel} är tom på en");
     }
 

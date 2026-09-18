@@ -292,9 +292,9 @@ it('svarar engelska på nästa anrop efter att locale sparats som en_GB', functi
     $anvandare = User::factory()->create(['locale' => 'sv_SE']);
 
     actingAs($anvandare)->get('/settings/profile')->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('locale', 'sv')
+        ->where('locale', 'en')
         ->where('userLocale', 'sv_SE')
-        ->where('translations.settings.nav.profile', 'Profil')
+        ->where('translations.settings.nav.profile', 'Profile')
     );
 
     from('/settings/profile')
@@ -320,7 +320,7 @@ it('ger engelska vyer när kontot byter till en_GB och användaren saknar egen l
     [$konto, $anvandare] = installningKonto('sv_SE', null, 'owner');
 
     actingAs($anvandare)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('locale', 'sv')
+        ->where('locale', 'en')
     );
 
     from('/settings/accounts')
@@ -347,7 +347,7 @@ it('ger engelska vyer när kontot byter till en_GB och användaren saknar egen l
 /*
  * Navigationen växer i listan, inte i layouten (se SakerhetsvyTest för den
  * strukturella kontrollen). Här prövas att de två nya posterna finns och att
- * deras etiketter är formulerade på båda språken.
+ * deras etiketter är formulerade.
  */
 it('har Profil och Konton i inställningsnavigationen', function () {
     $sektioner = File::get(resource_path('js/layouts/settingsSections.js'));
@@ -355,22 +355,20 @@ it('har Profil och Konton i inställningsnavigationen', function () {
     expect($sektioner)->toContain("href: '/settings/profile'");
     expect($sektioner)->toContain("href: '/settings/accounts'");
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach (['profile', 'accounts'] as $nyckel) {
-            expect(trans("ui.settings.nav.{$nyckel}", [], $locale))
-                ->not->toBe("ui.settings.nav.{$nyckel}", "settings.nav.{$nyckel} saknas på {$locale}");
-        }
+    foreach (['profile', 'accounts'] as $nyckel) {
+        expect(trans("ui.settings.nav.{$nyckel}", [], 'en'))
+            ->not->toBe("ui.settings.nav.{$nyckel}", "settings.nav.{$nyckel} saknas");
     }
+
 });
 
 /*
- * Nycklarna finns på båda språken och vyn läser dem — en nyckel som finns men
- * inte används är en text ingen ser. Den här kontrollen är den smala
- * varianten av SprakTest:s "samma nycklar på båda språken"; den fångar att
- * just de här texterna kom med, och att den namngivna formen skiljer sig
- * mellan språken (annars vore översättningen en kopia).
+ * Nycklarna finns och vyn läser dem — en nyckel som finns men
+ * inte används är en text ingen ser. Att ingen av dem är tom prövas dessutom av
+ * SprakTest § "har inga tomma strängar i ui.php"; den här kontrollen fångar att
+ * just de här texterna kom med.
  */
-it('har profilens och kontots texter på båda språken och läser dem ur lang/', function () {
+it('har profilens och kontots texter och läser dem ur lang/', function () {
     $nycklar = [
         'settings.profile.heading',
         'settings.profile.email_no_change',
@@ -390,17 +388,16 @@ it('har profilens och kontots texter på båda språken och läser dem ur lang/'
         'flash.account-updated',
     ];
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach ($nycklar as $nyckel) {
-            $mening = trans("ui.{$nyckel}", [], $locale);
+    foreach ($nycklar as $nyckel) {
+        $mening = trans("ui.{$nyckel}", [], 'en');
 
-            expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på {$locale}");
-            expect(trim($mening))->not->toBe('');
-        }
+        expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+        expect(trim($mening))->not->toBe('');
     }
 
-    expect(trans('ui.settings.profile.locale_follow', [], 'sv'))
-        ->not->toBe(trans('ui.settings.profile.locale_follow', [], 'en'));
+    // Texten lovar att följa kontots språk, och nämner kontot vid namn.
+    expect(trans('ui.settings.profile.locale_follow', [], 'en'))
+        ->toContain(':account');
 
     // Vyns enda väg till text går genom t(); står nycklarna inte i filerna är
     // de döda.

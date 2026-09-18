@@ -312,11 +312,11 @@ it('posterna renderas med typmallarna', function () {
     expect($html)->not->toContain(':container');
     expect($html)->not->toContain(':date');
     expect($html)->toContain('Byt impeller');
-    expect($html)->toContain('förfaller');
-    expect($html)->toContain('förföll');
+    expect($html)->toContain('is due on');
+    expect($html)->toContain('was due on');
 });
 
-it('sammanfattningen följer mottagarens språk', function () {
+it('sammanfattningen är engelsk för varje mottagare', function () {
     Mail::fake();
     [$svensktKonto, $svensk] = veckoKontext('sv_SE', 'sv_SE');
     [$engelsktKonto, $engelsk] = veckoKontext('en_GB', 'en_GB');
@@ -327,13 +327,12 @@ it('sammanfattningen följer mottagarens språk', function () {
 
     Mail::assertSent(WeeklyDigestMail::class, 2);
 
-    // Locale sätts på varje mejl för sig och återställs mellan mottagarna
-    // (32a § Beslut 3) — båda språken ska finnas, inte bara det första.
+    // `en` är den enda katalogen ([[ADR-0034 Engelska vid lansering]]), så
+    // båda mottagarna får samma text hur olika deras locale än är.
     $ämnen = Mail::sent(WeeklyDigestMail::class)
         ->map(fn (WeeklyDigestMail $mail): string => veckoÄmne($mail));
 
-    expect($ämnen)->toContain('Din vecka i Mimers: 1 påminnelser');
-    expect($ämnen)->toContain('Your week in Mimers: 1 reminders');
+    expect($ämnen)->each->toBe('Your week in Mimers: 1 reminders');
 
     // Renderingsspråket har inte läckt ut ur jobbet — appens locale står kvar
     // efter att båda mottagarna behandlats.
@@ -377,13 +376,13 @@ it('listan kapas vid max_items och alla plockade rader bokförs', function () {
 
     // Ämnesraden räknar de BOKFÖRDA raderna, inte de listade (arkitektsvar på
     // issue 203, punkt 1): tre rader skickas, två visas.
-    expect(veckoÄmne($mail))->toBe('Din vecka i Mimers: 3 påminnelser');
+    expect(veckoÄmne($mail))->toBe('Your week in Mimers: 3 reminders');
 
     $html = $mail->render();
     expect($html)->toContain('Äldst');
     expect($html)->toContain('Mellan');
     expect($html)->not->toContain('Nyast');
-    expect($html)->toContain('Och 1 till.');
+    expect($html)->toContain('And 1 more.');
 
     // Alla plockade rader bokförs som skickade — även den som inte rymdes i
     // mejlet får inte ligga kvar och dyka upp igen nästa vecka.

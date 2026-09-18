@@ -3,6 +3,7 @@
 use App\Models\Account;
 use App\Models\Notification;
 use App\Models\User;
+use App\Support\Notification\LocaleResolver;
 use App\Support\Notification\UnsubscribeLink;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -20,10 +21,16 @@ use function Pest\Laravel\withoutVite;
  * Issue 52 · Språk i frontenden, se [[ADR-0013 Språk och i18n]],
  * App\Http\Middleware\SetLocale och App\Http\Middleware\HandleInertiaRequests.
  *
- * Filen bevisar de tre reglerna i ADR-0013 § Konsekvenser: användarens
- * `locale` åsidosätter kontots, språket kommer aldrig ur requestens
- * `Accept-Language`, och frontenden får sin text ur `lang/` — bara ur
- * ui.php, aldrig ur notiser.php eller export.php.
+ * Filen bevisar reglerna i ADR-0013 § Konsekvenser — användarens `locale`
+ * åsidosätter kontots, språket kommer aldrig ur requestens `Accept-Language`,
+ * och frontenden får sin text ur `lang/`, bara ur ui.php — och de regler
+ * [[ADR-0034 Engelska vid lansering]] ändrade: `en` är den ENDA levererade
+ * katalogen, ingen väljare byggs, och ett språk till läggs genom att lägga en
+ * katalog under `lang/`.
+ *
+ * Kontona och användarna i filen har svensk locale med flit. Det är hela
+ * beviset: locale-kolumnen står kvar enligt ADR-0013, men en svensk locale
+ * möts av engelska därför att katalogen inte finns.
  */
 
 /**
@@ -55,8 +62,8 @@ function sprakEgenskaper(User $anvandare): array
 }
 
 /**
- * En språkfil som en platt lista punktnycklar → värde, så att två språk kan
- * jämföras nyckel för nyckel.
+ * En språkfil som en platt lista punktnycklar → värde, så att varje nyckel kan
+ * prövas för sig.
  *
  * @param  array<mixed>  $gren
  * @return array<string, string>
@@ -98,8 +105,8 @@ function korTranslate(string $anrop): string
         'const { translate } = await import(pathToFileURL('
             .json_encode(resource_path('js/i18n/translate.js'), JSON_UNESCAPED_SLASHES).').href);',
         'const translations = '.json_encode([
-            'nav' => ['dashboard' => 'Översikt'],
-            'error' => ['title' => 'Fel :status'],
+            'nav' => ['dashboard' => 'Dashboard'],
+            'error' => ['title' => 'Error :status'],
         ], JSON_UNESCAPED_UNICODE).';',
         "process.stdout.write(String(translate(translations, {$anrop})));",
     ]);
@@ -129,16 +136,38 @@ it('delar locale och översättningar på varje webbsida', function () {
 
     foreach (['/', '/dashboard'] as $url) {
         actingAs($anvandare)->get($url)->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('locale', 'sv')
+            ->where('locale', 'en')
             ->has('translations.nav')
         );
     }
 });
 
-it('ger en engelsktalande medlem i ett svenskt konto engelska vyer', function () {
+it('har en enda språkkatalog, och den heter en', function () {
+    expect(array_map(fn (string $sokvag): string => basename($sokvag), File::directories(lang_path())))
+        ->toBe(['en']);
+});
+
+/*
+ * LocaleResolver äger valet av katalog, och regeln är katalogen och inte
+ * språklistan: en användare vars locale pekar på en katalog som inte finns får
+ * `en`. Utan den regeln valde leveransloopen `sv` åt en svensk mottagare,
+ * `Lang::has(…, 'sv', false)` svarade nej, och varje mejl blev `failed` i
+ * stället för skickat — se EmailChannel.
+ */
+it('väljer aldrig en locale som saknar katalog', function () {
+    $resolver = app(LocaleResolver::class);
+
+    $svensk = User::factory()->create(['locale' => 'sv_SE']);
+
+    expect($resolver->forUser($svensk))->toBe('en');
+    expect($resolver->forUser(null))->toBe('en');
+    expect($resolver->forUser(User::factory()->create(['locale' => null])))->toBe('en');
+});
+
+it('ger engelska åt en medlem med svensk locale', function () {
     withoutVite();
 
-    [, $medlem] = sprakKontext('sv_SE', 'en_GB');
+    [, $medlem] = sprakKontext('sv_SE', 'sv_SE');
 
     actingAs($medlem)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('locale', 'en')
@@ -146,14 +175,14 @@ it('ger en engelsktalande medlem i ett svenskt konto engelska vyer', function ()
     );
 });
 
-it('ger svenska när användaren saknar egen locale och kontot är svenskt', function () {
+it('ger engelska när användaren saknar egen locale och kontot är svenskt', function () {
     withoutVite();
 
     [, $medlem] = sprakKontext('sv_SE', null);
 
     actingAs($medlem)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
-        ->where('locale', 'sv')
-        ->where('translations.nav.dashboard', 'Översikt')
+        ->where('locale', 'en')
+        ->where('translations.nav.dashboard', 'Dashboard')
     );
 });
 
@@ -182,28 +211,34 @@ it('renderar ett gästanrop på appens standardspråk', function () {
     );
 });
 
+/*
+ * Accept-Language läses aldrig, och det finns inget att välja emellan: samma
+ * svenska konto möts av engelska oavsett vad webbläsaren ber om. Rubriken står
+ * kvar från issue 52 — regeln är äldre än ADR-0034, som gjorde svaret
+ * entydigt i stället för beroende av vilken locale användaren hade.
+ */
 it('läser aldrig requestens Accept-Language', function () {
     withoutVite();
 
-    [, $medlem] = sprakKontext('sv_SE', null);
+    [, $medlem] = sprakKontext('sv_SE', 'sv_SE');
 
-    withHeaders(['Accept-Language' => 'en-US,en;q=0.9'])
-        ->actingAs($medlem)
-        ->get('/dashboard')
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('locale', 'sv')
-            ->where('translations.nav.dashboard', 'Översikt')
-        );
+    foreach (['sv-SE,sv;q=0.9', 'en-US,en;q=0.9'] as $huvud) {
+        withHeaders(['Accept-Language' => $huvud])
+            ->actingAs($medlem)
+            ->get('/dashboard')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('locale', 'en')
+                ->where('translations.nav.dashboard', 'Dashboard')
+            );
+    }
 });
 
-it('sätter html-attributet lang efter den valda localen', function () {
+it('sätter html-attributet lang till en', function () {
     withoutVite();
 
     [, $svensk] = sprakKontext('sv_SE', 'sv_SE');
-    [, $engelsk] = sprakKontext('sv_SE', 'en_GB');
 
-    actingAs($svensk)->get('/dashboard')->assertSee('lang="sv"', false);
-    actingAs($engelsk)->get('/dashboard')->assertSee('lang="en"', false);
+    actingAs($svensk)->get('/dashboard')->assertSee('lang="en"', false);
 });
 
 it('delar bara nycklarna ur ui.php med frontenden', function () {
@@ -226,23 +261,26 @@ it('returnerar nyckeln själv när översättningen saknas', function () {
 });
 
 it('byter ut :param mot det skickade värdet', function () {
-    expect(korTranslate("'error.title', { status: 404 }"))->toBe('Fel 404');
+    expect(korTranslate("'error.title', { status: 404 }"))->toBe('Error 404');
 });
 
-it('resolvar auth.totp_required och auth.totp_invalid på båda språken', function () {
-    foreach (['sv', 'en'] as $locale) {
-        foreach (['totp_required', 'totp_invalid'] as $nyckel) {
-            $mening = trans("auth.{$nyckel}", [], $locale);
+it('resolvar auth.totp_required och auth.totp_invalid', function () {
+    foreach (['totp_required', 'totp_invalid'] as $nyckel) {
+        $mening = trans("auth.{$nyckel}", [], 'en');
 
-            expect($mening)->not->toBe("auth.{$nyckel}", "auth.{$nyckel} saknas på {$locale}");
-            expect($mening)->not->toBe('');
-        }
+        expect($mening)->not->toBe("auth.{$nyckel}", "auth.{$nyckel} saknas");
+        expect($mening)->not->toBe('');
     }
-
-    expect(trans('auth.totp_invalid', [], 'sv'))->not->toBe(trans('auth.totp_invalid', [], 'en'));
 });
 
-it('renderar valideringsfel på användarens språk', function () {
+/*
+ * Valideringsmeningarna kommer ur `validation.php`, och `en`-katalogen har
+ * ingen egen fil för den: nycklarna löses ur ramverkets katalog, som FileLoader
+ * läser vid sidan av appens (se lang/en/auth.php). Att både en svensk och en
+ * engelsk användare får engelska prövar att reserven fungerar för en locale
+ * som inte längre har en fil.
+ */
+it('renderar valideringsfel på engelska för varje användare', function () {
     withoutVite();
 
     Route::middleware('web')->post('/test-validering', function (Request $request): void {
@@ -252,19 +290,18 @@ it('renderar valideringsfel på användarens språk', function () {
     [, $svensk] = sprakKontext('sv_SE', 'sv_SE');
     [, $engelsk] = sprakKontext('sv_SE', 'en_GB');
 
-    actingAs($svensk)->post('/test-validering', ['email' => ''])->assertSessionHasErrors('email');
-    expect(session('errors')->get('email')[0])->toContain('obligatoriskt');
+    foreach ([$svensk, $engelsk] as $anvandare) {
+        actingAs($anvandare)->post('/test-validering', ['email' => ''])->assertSessionHasErrors('email');
 
-    actingAs($engelsk)->post('/test-validering', ['email' => ''])->assertSessionHasErrors('email');
-    expect(session('errors')->get('email')[0])->toContain('required');
+        expect(session('errors')->get('email')[0])->toContain('required');
+    }
 });
 
 /*
  * Inloggningens POST sker av en GÄST — anroparen är inte autentiserad, så
  * SetLocale har ingen användare att läsa locale ur och språket blir appens
- * standard (`config('app.locale')`). Det är samma regel som för ett
- * gästanrop till `/`, och den motsäger "svenska för en svensk användare" i
- * issuens kriterielista — se PR:ens `## Frågor och antaganden`.
+ * standard (`config('app.locale')`). Det är samma regel som för ett gästanrop
+ * till `/`.
  */
 it('renderar gästens POST /login-validering på appens standardspråk', function () {
     withoutVite();
@@ -275,37 +312,63 @@ it('renderar gästens POST /login-validering på appens standardspråk', functio
         ->toBe(trans('validation.required', ['attribute' => 'email'], config('app.locale')));
 });
 
-it('ger olika text på svenska och engelska — minst tre nycklar', function () {
-    withoutVite();
-
-    [, $svensk] = sprakKontext('sv_SE', 'sv_SE');
-    [, $engelsk] = sprakKontext('sv_SE', 'en_GB');
-
-    $sv = sprakLov(sprakEgenskaper($svensk)['translations']);
-    $en = sprakLov(sprakEgenskaper($engelsk)['translations']);
-
-    expect(array_keys($sv))->toBe(array_keys($en));
-
-    $olika = array_keys(array_filter(
-        $sv,
-        fn (string $varde, string $nyckel): bool => ($en[$nyckel] ?? null) !== $varde,
-        ARRAY_FILTER_USE_BOTH,
-    ));
-
-    expect(count($olika))->toBeGreaterThanOrEqual(3);
+it('har inga tomma strängar i ui.php', function () {
+    foreach (sprakLov(sprakFil('en')) as $nyckel => $varde) {
+        expect(trim($varde))->not->toBe('', "ui.{$nyckel} är tom");
+    }
 });
 
-it('har samma nycklar på båda språken och inga tomma strängar', function () {
-    $sv = sprakLov(sprakFil('sv'));
-    $en = sprakLov(sprakFil('en'));
+/*
+ * [[ADR-0033 Produktens omfång]] § Beslut: containern är ett sammanhang för
+ * allt man äger, använder eller arbetar med — inte ett fordon eller ett
+ * fritidshus. Det generiska svaret issue 81 lämnade efter sig är
+ * `common.tagline`, och den prövas ordagrant: den är den första meningen en
+ * ny användare möter.
+ *
+ * Fordonsorden prövas mot varje VÄRDE i filen, inte mot råtexten. Kommentarer
+ * får nämna vad som helst (och gör det — "carries" står i ett tjugotal rader),
+ * men copyn får bära ett fordon bara som etikett för en containertyp:
+ * `container.kind.*` är datamodellens namn och ingen mening användaren möts
+ * av. Ett tomt tillstånd som ber om en båt är felet ADR-0033 § Beslut finns
+ * för att förhindra, och det är svårast att upptäcka i efterhand.
+ */
+it('beskriver produkten generiskt, utan fordon i copyn', function () {
+    $ui = sprakLov(sprakFil('en'));
 
-    expect(array_keys($en))->toBe(array_keys($sv));
+    expect($ui['common.tagline'])->toBe('The place for everything you own, use or work with.');
 
-    foreach (['sv' => $sv, 'en' => $en] as $locale => $lov) {
-        foreach ($lov as $nyckel => $varde) {
-            expect(trim($varde))->not->toBe('', "ui.{$nyckel} är tom på {$locale}");
+    foreach ($ui as $nyckel => $varde) {
+        if (preg_match('/\b(boat|car|caravan|vessel|vehicle)\b/i', $varde) !== 1) {
+            continue;
+        }
+
+        expect($nyckel)->toStartWith('container.kind.', "ui.{$nyckel} namnger ett fordon: {$varde}");
+    }
+});
+
+/*
+ * `lang/en/ui.php` sade *binder* i ett tjugotal kommentarer efter issue 77b,
+ * som tog prosan i koden men missade den filen. Städningen är gjord — det här
+ * är regeln som håller den kvar, och den läser råtexten just därför att
+ * kommentarerna är osynliga för sprakLov(): en kommentar som smyger tillbaka
+ * hade annars passerat obesedd.
+ *
+ * `pdf_binder` är undantaget och det enda — [[ADR-0032 Produktens ord]]
+ * § Konsekvenser håller namnet tills PDF-pärmen byggs. Raden bär ordet i både
+ * nyckeln och värdet ('PDF binder'), och det är samma undantag.
+ */
+it('säger inte binder någon annanstans än i pdf_binder', function () {
+    $rader = preg_split('/\R/', File::get(lang_path('en/ui.php'))) ?: [];
+
+    $fel = [];
+
+    foreach ($rader as $nummer => $rad) {
+        if (stripos($rad, 'binder') !== false && ! str_contains($rad, 'pdf_binder')) {
+            $fel[] = sprintf('rad %d: %s', $nummer + 1, trim($rad));
         }
     }
+
+    expect($fel)->toBe([]);
 });
 
 it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
@@ -363,10 +426,10 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
  * taggar och kategorier]] § Konsekvenser) — men undantaget betyder att
  * katalogen inte längre granskas av regeln ovan. Därför prövas katalogens
  * omfång i stället: hamnar det en andra fil dit är det en komponent med
- * användarvänd svensk text som gömmer sig undan `lang/`-regeln, och då ska
- * det här testet falla.
+ * användarvänd text som gömmer sig undan `lang/`-regeln, och då ska det här
+ * testet falla.
  *
- * Att filen finns och bär tio uppsättningar prövas i
+ * Att filen finns och bär en uppsättning per containertyp prövas i
  * tests/Feature/Frontend/KategoriuppsattningTest.php, mot samma modul klienten
  * importerar. Här prövas bara att undantaget inte har vidgats.
  */
@@ -393,8 +456,8 @@ it('låter kontrollerns egen App::setLocale() vinna över middlewaren', function
     $url = app(UnsubscribeLink::class)->for($mottagare, Notification::TYPE_TASK_DUE);
 
     $rubrik = trans('notiser.unsubscribe.confirm_heading', [
-        'type' => trans('notiser.unsubscribe.types.task_due', [], 'sv'),
-    ], 'sv');
+        'type' => trans('notiser.unsubscribe.types.task_due', [], 'en'),
+    ], 'en');
 
     get($url)->assertOk()->assertSee($rubrik, false);
 });

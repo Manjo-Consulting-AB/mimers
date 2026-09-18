@@ -46,7 +46,7 @@ use function Pest\Laravel\withoutVite;
  * på båda ställena.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js.
  *
  * Hjälparna har prefixet `itemrelation` — Pest lägger alla testfiler i samma
@@ -55,7 +55,7 @@ use function Pest\Laravel\withoutVite;
 
 /**
  * Ett konto med en medlem, och en container ägd av kontot. Båda på svenska, så
- * meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container}
  */
@@ -438,7 +438,7 @@ it('gör item_link.self till ett fältfel på item', function () {
     ]);
 
     $svar->assertSessionHasErrors([
-        'item' => Lang::get('ui.error.item_link.self', [], 'sv'),
+        'item' => Lang::get('ui.error.item_link.self', [], 'en'),
     ]);
 });
 
@@ -471,10 +471,10 @@ it('gör item_link.pair_exists till ett fältfel som säger vilken relation pare
     // ersatte (Beslut 6).
     expect($meddelande)->toBe(
         Lang::get('ui.error.item_link.pair_exists', [
-            'relation' => Lang::get('ui.error.item_link.relation_word.child', [], 'sv'),
-        ], 'sv')
+            'relation' => Lang::get('ui.error.item_link.relation_word.child', [], 'en'),
+        ], 'en')
     );
-    expect($meddelande)->toContain('underordnad');
+    expect($meddelande)->toContain('child');
 });
 
 it('gör item_link.cycle till ett fältfel på relation', function () {
@@ -501,7 +501,7 @@ it('gör item_link.cycle till ett fältfel på relation', function () {
     ]);
 
     $svar->assertSessionHasErrors([
-        'relation' => Lang::get('ui.error.item_link.cycle', [], 'sv'),
+        'relation' => Lang::get('ui.error.item_link.cycle', [], 'en'),
     ]);
 });
 

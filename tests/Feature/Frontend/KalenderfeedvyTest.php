@@ -39,11 +39,10 @@ use function Pest\Laravel\withoutVite;
  * av samma sak här hade bevisat noll.
  *
  * "Klart när" i issuen motsvaras var sitt test nedan, med undantag för
- * "ingen svensk sträng står kvar i en .vue-fil; varje ny nyckel finns på sv
- * och en" — den vaktas av tests/Feature/Frontend/SprakTest.php, som läser
- * varje fil under resources/js/ och jämför de två språkfilerna nyckel för
- * nyckel. Den här issuen lägger inga strängar i Vue-lagret och inga nycklar
- * på bara ett språk, så de två testerna är gröna utan ändring.
+ * "ingen svensk sträng står kvar i en .vue-fil; varje nyckel finns i
+ * katalogen" — den vaktas av tests/Feature/Frontend/SprakTest.php, som läser
+ * varje fil under resources/js/. Den här issuen lägger inga strängar i
+ * Vue-lagret, så det testet är grönt utan ändring.
  *
  * Hjälparna har prefixet `feedvy` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs, och tests/Feature/Notis/KalenderfeedTest.php

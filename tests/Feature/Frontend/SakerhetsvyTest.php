@@ -147,7 +147,7 @@ it('visar fältfelet som en färdig mening när bekräftelsekoden är fel', func
 
     // Meningen, inte nyckeln: `auth.totp_invalid` var det råa som syntes i
     // formuläret innan nycklarna fanns (se lang/en/auth.php).
-    expect(session('errors')->get('code')[0])->toBe(trans('auth.totp_invalid', [], 'sv'));
+    expect(session('errors')->get('code')[0])->toBe(trans('auth.totp_invalid', [], 'en'));
     expect(session('errors')->get('code')[0])->not->toBe('auth.totp_invalid');
 
     expect($user->fresh()->totp_confirmed_at)->toBeNull();
@@ -278,19 +278,17 @@ it('ändrar ingenting när avstängningen får fel kod — felet hamnar på fäl
     expect(TotpRecoveryCode::query()->where('user_id', $user->id)->count())->toBe(10);
 });
 
-it('bär båda varningarna som text, på båda språken', function () {
-    foreach (['sv', 'en'] as $locale) {
-        foreach (['recovery_warning', 'disable_warning'] as $nyckel) {
-            $mening = trans("ui.settings.security.totp.{$nyckel}", [], $locale);
+it('bär båda varningarna som text', function () {
+    foreach (['recovery_warning', 'disable_warning'] as $nyckel) {
+        $mening = trans("ui.settings.security.totp.{$nyckel}", [], 'en');
 
-            expect($mening)->not->toBe("ui.settings.security.totp.{$nyckel}", "{$nyckel} saknas på {$locale}");
-            expect(trim($mening))->not->toBe('');
-        }
+        expect($mening)->not->toBe("ui.settings.security.totp.{$nyckel}", "{$nyckel} saknas");
+        expect(trim($mening))->not->toBe('');
     }
 
-    expect(trans('ui.settings.security.totp.recovery_warning', [], 'sv'))
-        ->not->toBe(trans('ui.settings.security.totp.recovery_warning', [], 'en'));
-    expect(trans('ui.settings.security.totp.disable_warning', [], 'sv'))
+    // De två varningarna är inte samma mening — en nyckel som pekar på fel
+    // text är en varning som säger fel sak.
+    expect(trans('ui.settings.security.totp.recovery_warning', [], 'en'))
         ->not->toBe(trans('ui.settings.security.totp.disable_warning', [], 'en'));
 
     // Och att vyn faktiskt använder dem: en nyckel som finns men inte läses
@@ -319,8 +317,7 @@ it('renderar inställningsnavigationen ur en lista', function () {
     // Och att säkerhetssidan är en av dem som renderas i skalet.
     expect(File::get(resource_path('js/pages/Settings/Security.vue')))->toContain('<SettingsLayout>');
 
-    foreach (['sv', 'en'] as $locale) {
-        expect(trans('ui.settings.nav.security', [], $locale))
-            ->not->toBe('ui.settings.nav.security');
-    }
+    expect(trans('ui.settings.nav.security', [], 'en'))
+        ->not->toBe('ui.settings.nav.security');
+
 });

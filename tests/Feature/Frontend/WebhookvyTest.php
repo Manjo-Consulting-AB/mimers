@@ -41,9 +41,9 @@ use function Pest\Laravel\withoutVite;
  * (Beslut 1).
  *
  * "Klart när" i issuen motsvaras var sitt test nedan, med undantag för
- * "ingen svensk sträng står kvar i en .vue-fil; varje ny nyckel finns på sv
- * och en" — den vaktas av tests/Feature/Frontend/SprakTest.php, som läser
- * varje fil under resources/js/ och jämför språkfilerna nyckel för nyckel.
+ * "ingen svensk sträng står kvar i en .vue-fil; varje nyckel finns i
+ * katalogen" — den vaktas av tests/Feature/Frontend/SprakTest.php, som läser
+ * varje fil under resources/js/.
  * Att hemligheten renderas som text och aldrig i en `<a href>` prövas dessutom
  * mot komponenten i tests/Feature/Frontend/KalenderfeedvyTest.php, som delar
  * resources/js/components/SecretOnce.vue med den här sidan.
@@ -345,7 +345,7 @@ it('ger ett fältfel på url för en osäker adress även vid uppdatering', func
             'event_types' => [Notification::TYPE_TASK_DUE],
         ])
         ->assertSessionHasErrors([
-            'url' => 'Adressen går inte att använda: den pekar på ett internt nät.',
+            'url' => 'The address cannot be used: it points at a private network.',
         ]);
 
     expect($rad->refresh()->url)->toBe('https://example.com/notiser');
@@ -369,7 +369,7 @@ it('ritar ytan för ett gratiskonto och svarar med ett fältfel på plan', funct
 
     $props = webhookvyProps($anvandare, $konto);
 
-    expect($props['planNotice'])->toBe('Webhooks kräver planen Pro.')
+    expect($props['planNotice'])->toBe('Webhooks requires the Pro plan.')
         ->and($props['eventTypes'])->toBe(WebhookEndpoint::EVENT_TYPES)
         ->and($props['endpoints'])->toHaveCount(1);
 
@@ -382,7 +382,7 @@ it('ritar ytan för ett gratiskonto och svarar med ett fältfel på plan', funct
     ]);
 
     $svar->assertRedirect($sida)
-        ->assertSessionHasErrors(['plan' => 'Webhooks kräver planen Pro.']);
+        ->assertSessionHasErrors(['plan' => 'Webhooks requires the Pro plan.']);
 
     expect(WebhookEndpoint::query()->count())->toBe(1);
 
@@ -395,7 +395,7 @@ it('ritar ytan för ett gratiskonto och svarar med ett fältfel på plan', funct
             'is_active' => false,
         ])
         ->assertRedirect($sida)
-        ->assertSessionHasErrors(['plan' => 'Webhooks kräver planen Pro.']);
+        ->assertSessionHasErrors(['plan' => 'Webhooks requires the Pro plan.']);
 
     expect($rad->refresh()->is_active)->toBeTrue();
 });
@@ -501,7 +501,7 @@ it('svarar 404 för en endpoint som hör till ett annat konto', function () {
  * Kravet är serverns — `min:1` i StoreWebhookEndpointRequest — och meningen är
  * den användaren möter; vyn har ingen egen regel (Beslut 6). Namnen och
  * förklaringarna ligger i `lang/` under nycklar som följer typnamnet, och
- * testet prövar att VARJE typ i konstanten har båda på båda språken: en ny typ
+ * testet prövar att VARJE typ i konstanten har båda: en ny typ
  * som glöms i språkfilen ska falla här i stället för att synas som
  * `webhook.event_type.…` i gränssnittet.
  */
@@ -518,13 +518,11 @@ it('kräver minst en händelsetyp och har läsbara namn för varje typ', functio
 
     expect(WebhookEndpoint::query()->count())->toBe(0);
 
-    foreach (['sv', 'en'] as $locale) {
-        App::setLocale($locale);
+    App::setLocale('en');
 
-        foreach (WebhookEndpoint::EVENT_TYPES as $typ) {
-            expect(Lang::has("ui.webhook.event_type.{$typ}.label"))->toBeTrue("label saknas för {$typ} på {$locale}")
-                ->and(Lang::has("ui.webhook.event_type.{$typ}.description"))->toBeTrue("description saknas för {$typ} på {$locale}");
-        }
+    foreach (WebhookEndpoint::EVENT_TYPES as $typ) {
+        expect(Lang::has("ui.webhook.event_type.{$typ}.label"))->toBeTrue("label saknas för {$typ}")
+            ->and(Lang::has("ui.webhook.event_type.{$typ}.description"))->toBeTrue("description saknas för {$typ}");
     }
 });
 
@@ -548,7 +546,7 @@ it('ger ett fältfel på url med serverns mening för en osäker adress', functi
         'url' => 'https://127.0.0.1/notiser',
         'event_types' => [Notification::TYPE_TASK_DUE],
     ])->assertSessionHasErrors([
-        'url' => 'Adressen går inte att använda: den pekar på ett internt nät.',
+        'url' => 'The address cannot be used: it points at a private network.',
     ]);
 
     expect(WebhookEndpoint::query()->count())->toBe(0);

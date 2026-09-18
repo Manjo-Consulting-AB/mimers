@@ -15,15 +15,16 @@ use Illuminate\Notifications\Notification;
  * som i sin tur bara anropas när en användare med adressen redan finns —
  * se issue #18 § Beslut som redan är fattade punkt 6.
  *
- * Serverrenderat innehåll väljer språk från mottagarens `locale`, inte
- * requestens `Accept-Language` — se AGENTS.md § Sådant som är lätt att
- * göra fel. `User::locale` kan vara NULL (kontots värde gäller då i
- * stället, se App\Models\User), men den här notifikationen känner bara
- * till e-postadressen som skickades in, inte kontots inställningar — att
- * slå upp rätt locale hör inte till den här issuen (ingen i18n-fil finns
- * ännu, se AGENTS.md § Dokumentationen om att inte bygga i förväg det som
- * inte behövs). `MailMessage` renderar med Laravels standardspråk tills
- * i18n för mejl byggs.
+ * Texten ligger i `lang/en/notiser.php` och inte i klassen ([[ADR-0034
+ * Engelska vid lansering]] § Beslut: ingen användarvänd sträng utanför
+ * `lang/`). Den låg här som hårdkodad svenska fram till M13, och mötte då
+ * Laravels engelska ramverkstext i samma utskick — det blandade
+ * inloggningsmejl ADR-0034 nämner som beviset för att två språk inte hålls i
+ * synk.
+ *
+ * Ingen locale sätts på mailet: `en` är enda katalogen, och en mottagare utan
+ * konto har ingen `locale` att välja ur. Leveransloopens mottagare har en, och
+ * den ägs av App\Support\Notification\LocaleResolver (ADR-0034).
  */
 class MagicLinkNotification extends Notification
 {
@@ -44,9 +45,9 @@ class MagicLinkNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Din inloggningslänk')
-            ->line('Klicka på länken nedan för att logga in.')
-            ->action('Logga in', $this->url)
-            ->line('Länken slutar fungera om '.MagicLinkBroker::TTL_MINUTES.' minuter, och kan bara användas en gång.');
+            ->subject(trans('notiser.magic_link.subject'))
+            ->line(trans('notiser.magic_link.line'))
+            ->action(trans('notiser.magic_link.action'), $this->url)
+            ->line(trans('notiser.magic_link.expires', ['minutes' => MagicLinkBroker::TTL_MINUTES]));
     }
 }

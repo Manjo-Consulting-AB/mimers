@@ -35,9 +35,9 @@ use function Pest\Laravel\withoutVite;
  * samma action.
  *
  * "Klart när" i issuen motsvaras var sitt test nedan, med undantag för "ingen
- * svensk sträng står kvar i en .vue-fil; varje ny nyckel finns på sv och en",
- * som vaktas av tests/Feature/Frontend/SprakTest.php — den läser varje fil
- * under resources/js/ och jämför språkfilerna nyckel för nyckel.
+ * svensk sträng står kvar i en .vue-fil; varje nyckel finns i katalogen", som
+ * vaktas av tests/Feature/Frontend/SprakTest.php — den läser varje fil under
+ * resources/js/.
  *
  * Hjälparna har prefixet `lagringsvy` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs, och tests/Feature/Frontend/PlanvyTest.php har
@@ -157,18 +157,15 @@ function lagringsvyKor(string $anrop): string
 }
 
 /**
- * En nyckel finns på båda språken och är inte tom — samma kontroll som
- * planvyNyckel() i PlanvyTest gör: en nyckel som bara finns på svenska syns
- * som en nyckel i den engelska vyn.
+ * En nyckel finns och är inte tom — samma kontroll som planvyNyckel() i
+ * PlanvyTest gör: en nyckel som saknas i katalogen syns som en nyckel i vyn.
  */
 function lagringsvyNyckel(string $nyckel): void
 {
-    foreach (['sv', 'en'] as $locale) {
-        $mening = trans($nyckel, [], $locale);
+    $mening = trans($nyckel, [], 'en');
 
-        expect($mening)->not->toBe($nyckel, "{$nyckel} saknas på {$locale}");
-        expect(trim((string) $mening))->not->toBe('', "{$nyckel} är tom på {$locale}");
-    }
+    expect($mening)->not->toBe($nyckel, "{$nyckel} saknas");
+    expect(trim((string) $mening))->not->toBe('', "{$nyckel} är tom");
 }
 
 /*
@@ -606,13 +603,11 @@ it('säger papperskorgen och de 30 dagarna, aldrig permanent radering', function
         lagringsvyNyckel("ui.storage.result.{$form}");
     }
 
-    foreach (['sv' => 'sv', 'en' => 'en'] as $locale) {
-        foreach (['confirm.one', 'confirm.many', 'result.one', 'result.many'] as $nyckel) {
-            $mening = (string) trans("ui.storage.{$nyckel}", [], $locale);
+    foreach (['confirm.one', 'confirm.many', 'result.one', 'result.many'] as $nyckel) {
+        $mening = (string) trans("ui.storage.{$nyckel}", [], 'en');
 
-            expect($mening)->toContain($locale === 'sv' ? '30 dagar' : '30 days')
-                ->and(mb_strtolower($mening))->not->toContain('permanent');
-        }
+        expect($mening)->toContain('30 days')
+            ->and(mb_strtolower($mening))->not->toContain('permanent');
     }
 
     // Och vyn läser dem: bekräftelsen är webbläsarens egen dialog, och raden
@@ -651,7 +646,7 @@ it('syns i inställningsnavigationen och länkas från plansidan', function () {
  * etikett. Att ingen svensk sträng står kvar i en .vue-fil vaktas av
  * SprakTest.
  */
-it('har varje ny nyckel på båda språken och läser dem i vyn', function () {
+it('har varje ny nyckel och läser dem i vyn', function () {
     foreach ([
         'title', 'heading', 'intro', 'account_label', 'usage_heading',
         'list_heading', 'list_intro', 'empty', 'row.location', 'row.trashed',

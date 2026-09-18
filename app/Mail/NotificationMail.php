@@ -13,7 +13,7 @@ use Illuminate\Mail\Mailables\Headers;
  * Mejlet App\Support\Notification\EmailChannel skickar för en notis, se issue
  * 32a § Beslut 3–5 och 32b § Beslut 4–5. Mailet bär notistypen och dess
  * `payload` vidare till markdown-vyn `mail/notification`, som översätter
- * brödtexten ur `lang/{sv,en}/notiser.php`; ämnesraden översätts här i
+ * brödtexten ur `lang/en/notiser.php`; ämnesraden översätts här i
  * `envelope()`.
  *
  * Sedan 32b känner mailet även mottagaren och bär avregistreringslänken: dels

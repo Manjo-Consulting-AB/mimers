@@ -43,7 +43,8 @@ body:
     attributes:
       label: In scope
       description: >
-        Globbar, en per rad. Detta är de enda filer som får ändras.
+        Globbar, en per rad. Detta är de enda filer som får ändras - i läget spårad
+        de enda som får ändras utan att deklareras i PR-kroppen.
         Formatet läses maskinellt vid granskning och retro - skriv globbar, inte prosa.
         Ta med de BEFINTLIGA testfiler vars förväntan den här issuen gör felaktig -
         en tripwire en tidigare issue lämnade, eller ett test på en yta issuen ändrar.
@@ -63,12 +64,33 @@ body:
     attributes:
       label: Out of scope
       description: >
-        Globbar, en per rad. Bindande även om det ser trasigt ut.
+        Globbar, en per rad. Bindande även om det ser trasigt ut, och i båda
+        omfångslägena - den här halvan är ett beslut, inte en gissning om
+        implementationen, och går inte att deklarera sig förbi.
         Skriv särskilt ut det som frestar - det är den halvan som gör nytta.
       placeholder: |
         app/Http/Controllers/**
         config/**
       render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: omfangslage
+    attributes:
+      label: Omfångsläge
+      description: >
+        fast betyder att In scope-rutan gäller som skriven - normalfallet, och det som
+        gäller om fältet lämnas tomt. Välj spårad när rutan skrivs innan någon vet vilken
+        fil som bär beteendet: issues som börjar i en skärm eller i ett fynd ur en
+        genomgång, där vägen från gränssnitt till kod upptäcks under arbetet. Då får
+        implementeraren ändra en fil utanför In scope om hon deklarerar den i PR-kroppen
+        under `Utanför rutan:`. Out of scope gäller oförändrat i båda lägena, och en
+        odeklarerad fil är röd i båda. Issue 83 är fallet regeln kommer ur: rutan listade
+        ContainerController, men rutten bakom skärmen bärs av ItemController.
+      options:
+        - fast
+        - spårad
     validations:
       required: true
 

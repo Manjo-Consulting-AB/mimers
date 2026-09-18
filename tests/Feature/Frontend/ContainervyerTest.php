@@ -1,6 +1,6 @@
 <?php
 
-// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+// rott-pa-basen: issue 77b och 83 — ordbyte i prosa (kommentar och testnamn) och en struken rad för den borttagna rutten, ingen ändring av applikationskoden; bas och head delar den.
 
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
@@ -19,13 +19,11 @@ use function Pest\Laravel\from;
 use function Pest\Laravel\get;
 use function Pest\Laravel\patch;
 use function Pest\Laravel\post;
-use function Pest\Laravel\put;
 use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 54 · Containerytan i webben — listan, skapandet och redigeringen.
  * Se App\Http\Controllers\ContainerController,
- * App\Http\Controllers\ActiveContainerController,
  * App\Actions\Container\CreateContainer,
  * resources/js/layouts/ContainerLayout.vue,
  * resources/js/layouts/containerSections.js och
@@ -91,7 +89,7 @@ function containerGrant(Container $container, User $user, string $level, ?Item $
  * samma grupp och av samma skäl: raderingsknappen på inställningssidan får
  * inte vara den enda vägen in i kontrollern som en gäst når.
  */
-it('skickar en utloggad besökare till inloggningen från alla sju rutterna', function () {
+it('skickar en utloggad besökare till inloggningen från alla sex rutterna', function () {
     withoutVite();
 
     [$konto] = containerKontext();
@@ -102,7 +100,6 @@ it('skickar en utloggad besökare till inloggningen från alla sju rutterna', fu
     post('/containers', [])->assertRedirect('/login');
     get("/containers/{$container->ulid}/edit")->assertRedirect('/login');
     patch("/containers/{$container->ulid}", [])->assertRedirect('/login');
-    put("/containers/{$container->ulid}/active")->assertRedirect('/login');
     delete("/containers/{$container->ulid}")->assertRedirect('/login');
 });
 
@@ -332,7 +329,7 @@ it('ger ett läsbart kvotfel i stället för JSON när containertaket slår i', 
 
     $mening = session('errors')->get('quota')[0];
 
-    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'sv'));
+    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'en'));
     expect($mening)->not->toBe('quota.containers_exceeded');
     expect($svar->headers->get('content-type'))->toContain('text/html');
 
@@ -518,12 +515,12 @@ it('renderar redigeringssidan i ContainerLayout med containerns namn', function 
 });
 
 /*
- * Nycklarna finns på båda språken och vyn läser dem. En nyckel som finns men
+ * Nycklarna finns och vyn läser dem. En nyckel som finns men
  * inte används är en text ingen ser, och en svensk sträng i en .vue-fil blir
  * aldrig engelsk — SprakTest fäller den bredare varianten, den här kontrollerar
  * att just de här texterna kom med.
  */
-it('har containerytans texter på båda språken och läser dem ur lang/', function () {
+it('har containerytans texter och läser dem ur lang/', function () {
     $nycklar = [
         'nav.containers',
         'container.index.heading',
@@ -531,7 +528,6 @@ it('har containerytans texter på båda språken och läser dem ur lang/', funct
         'container.index.empty',
         'container.index.shared',
         'container.index.active',
-        'container.index.make_active',
         'container.index.edit',
         'container.create.heading',
         'container.create.account',
@@ -548,25 +544,22 @@ it('har containerytans texter på båda språken och läser dem ur lang/', funct
         'flash.container-trashed',
     ];
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach ($nycklar as $nyckel) {
-            $mening = trans("ui.{$nyckel}", [], $locale);
+    foreach ($nycklar as $nyckel) {
+        $mening = trans("ui.{$nyckel}", [], 'en');
 
-            expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på {$locale}");
-            expect(trim($mening))->not->toBe('');
-        }
+        expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+        expect(trim($mening))->not->toBe('');
     }
 
-    // `kind` är en etikett per värde i Container::KINDS, på båda språken.
-    foreach (['sv', 'en'] as $locale) {
-        foreach (Container::KINDS as $kind) {
-            expect(trans("ui.container.kind.{$kind}", [], $locale))
-                ->not->toBe("ui.container.kind.{$kind}", "kind.{$kind} saknas på {$locale}");
-        }
+    // `kind` är en etikett per värde i Container::KINDS.
+    foreach (Container::KINDS as $kind) {
+        expect(trans("ui.container.kind.{$kind}", [], 'en'))
+            ->not->toBe("ui.container.kind.{$kind}", "kind.{$kind} saknas");
     }
 
-    expect(trans('ui.error.quota.containers_exceeded', [], 'sv'))
-        ->not->toBe(trans('ui.error.quota.containers_exceeded', [], 'en'));
+    // Kvotmeningen bär gränsen och värdet, och är en mening och inte nyckeln.
+    expect(trans('ui.error.quota.containers_exceeded', ['used' => 1, 'limit' => 1], 'en'))
+        ->toBe('The account has reached its limit for the number of containers (1 of 1).');
 
     $index = File::get(resource_path('js/pages/Containers/Index.vue'));
 
