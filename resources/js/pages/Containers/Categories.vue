@@ -71,7 +71,8 @@ const deleteErrorUlid = ref(null);
  * Den färdiga uppsättningen visas bara på en TOM container (Beslut 4) — den frågan
  * är redan ställd av listan — och bara för den som får skriva. Servern har
  * bara sagt sitt om nej:et; uppsättningen själv väljs i klienten av
- * CategoryPresetCard, ur localen och containerns `kind`.
+ * CategoryPresetCard, ur localen och användarens eget val (issue 84).
+ * Containerns art skickas INTE med: den är fri och pekar inte ut någon mall.
  */
 const showsPreset = computed(
     () => props.can.manage && props.categories.length === 0 && !props.presetDismissed,
@@ -106,7 +107,6 @@ const showsPreset = computed(
         <CategoryPresetCard
             v-else-if="showsPreset"
             :container-ulid="container.ulid"
-            :kind="container.kind"
         />
 
         <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.categories.empty') }}</p>

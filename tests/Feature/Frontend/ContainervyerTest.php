@@ -164,13 +164,24 @@ it('märker en delad container som delad och en egen som egen i vyn', function (
 
 /*
  * Beslut 8 och issue 84 · [[ADR-0036 Containerns art]]: `kind` är
- * presentation och ett FRITT fält. Propen bär de arter kontot redan använt —
- * underlaget för autocomplete, samma mönster som leverantörsfältet i
+ * presentation och ett FRITT fält. Propen bär de arter ANVÄNDAREN redan
+ * använt — underlaget för autocomplete, samma mönster som leverantörsfältet i
  * [[ADR-0016 Kostnadsregistrering]] — och aldrig en fast mängd. Den är
- * sorterad och utan dubbletter, och den är kontots: en annan kontos arter
- * hör inte hit.
+ * sorterad och utan dubbletter.
+ *
+ * **Mängden är användarens containers, inte hennes konton.** En container som
+ * delats DIREKT med henne ligger utanför "konton hon är med i" men innanför
+ * hennes containerlista ([[Konton och åtkomst]] § container_access), och
+ * navigeringen grupperar på `kind` över just den listan ([[ADR-0036
+ * Containerns art]]) — föreslog vi ur en snävare mängd skulle autocomplete
+ * själv producera de stavningsvarianter den finns för att förhindra. Ett
+ * annat kontos container, som hon varken är medlem i eller har en access
+ * till, hör däremot inte hit.
+ *
+ * SAMMA lista går till båda formulären, ur samma servermetod: en metod, en
+ * prop.
  */
-it('skickar kontots redan använda arter till båda formulären', function () {
+it('skickar användarens redan använda arter till båda formulären', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = containerKontext();
@@ -181,20 +192,26 @@ it('skickar kontots redan använda arter till båda formulären', function () {
     Container::factory()->for($konto, 'account')->create(['kind' => 'Husvagn']);
     Container::factory()->for($konto, 'account')->create(['kind' => 'Husvagn']);
 
-    // En container utan art ger inget förslag, och ett annat kontos arter är
-    // inte användarens.
-    Container::factory()->for($konto, 'account')->create(['kind' => '']);
+    // En container utan art ger inget förslag — fältet är frivilligt.
+    Container::factory()->for($konto, 'account')->create(['kind' => null]);
+
+    // Delad direkt med henne: i hennes containerlista, men inte i hennes konto.
+    $delad = Container::factory()->for(Account::factory()->create(), 'account')->create(['kind' => 'Delad art']);
+    containerGrant($delad, $anvandare, 'read');
+
+    // Ett annat kontos container, utan access: varken hennes lista eller
+    // hennes förslag.
     $annat = Account::factory()->create();
     Container::factory()->for($annat, 'account')->create(['kind' => 'Främmande art']);
 
     actingAs($anvandare)->get('/containers/create')->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Create')
-        ->where('kinds', ['Husvagn', 'Segelbåt'])
+        ->where('kinds', ['Delad art', 'Husvagn', 'Segelbåt'])
     );
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/edit")->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Edit')
-        ->where('kinds', ['Husvagn', 'Segelbåt'])
+        ->where('kinds', ['Delad art', 'Husvagn', 'Segelbåt'])
         ->where('container.ulid', $container->ulid)
         ->where('container.name', $container->name)
         ->where('container.kind', 'Segelbåt')
@@ -212,7 +229,9 @@ it('skickar kontots redan använda arter till båda formulären', function () {
  *
  * Propen ovan är ett förslag; fältet självt är fritt. En ny användare som ännu
  * inte vet vad hennes container är ska kunna lämna rutan tom — ingen förvald
- * art ärvs, och ingen art angiven lagras som den tomma strängen.
+ * art ärvs, och `null` är vad som sparas. Kolumnen är nullbar, för en tom
+ * sträng är just den sentinel [[ADR-0004 Fria taggar och kategorier]] vill
+ * undvika.
  */
 it('skapar en container utan art', function () {
     withoutVite();
@@ -224,7 +243,7 @@ it('skapar en container utan art', function () {
         'account' => $konto->ulid,
     ])->assertSessionHasNoErrors();
 
-    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBe('');
+    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBeNull();
 });
 
 /*
@@ -274,6 +293,11 @@ it('skriver ut arten ordagrant i listan', function () {
     // precis det som gav `container.kind.Segelbåt` på skärmen.
     expect($index)->toContain('{{ container.kind }}');
     expect(str_contains($index, 't(`container.kind'))->toBeFalse();
+
+    // En container utan art visar ingen art alls: elementet döljs i stället för
+    // att ritas tomt. Närvarokontrollen frågar om fältet är SATT och aldrig
+    // VILKET värde det bär — den grenar inte på arten.
+    expect($index)->toContain('v-if="container.kind"');
 
     expect(array_key_exists('kind', trans('ui.container', [], 'en')))->toBeFalse();
 });

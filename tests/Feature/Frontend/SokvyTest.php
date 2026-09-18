@@ -311,6 +311,11 @@ it('visar containerns art ordagrant i träffen', function () {
 
     expect($vy)->toContain('{{ result.container.kind }}');
     expect(str_contains($vy, 't(`container.kind'))->toBeFalse();
+
+    // En träff i en container utan art visar ingen art alls: elementet döljs i
+    // stället för att ritas tomt. Närvarokontrollen frågar om fältet är SATT
+    // och aldrig VILKET värde det bär — den grenar inte på arten.
+    expect($vy)->toContain('v-if="result.container.kind"');
 });
 
 /*

@@ -84,10 +84,14 @@ const isShared = (container) => accountName(container) === null;
                      värdet: `t()` returnerar nyckeln själv när uppslaget
                      misslyckas, så den gamla raden hade skrivit
                      `container.kind.Segelbåt` på skärmen första gången någon
-                     skrev en egen art. Ingen spärr runt raden heller — fältet
-                     är frivilligt, och en container utan art visar en tom rad i
-                     stället för att raden försvann. -->
-                <span class="text-sm text-slate-600">{{ container.kind }}</span>
+                     skrev en egen art.
+                     Spärren frågar om fältet är SATT, aldrig vilket värde det
+                     bär — samma behandling som varje annat nullbart fält
+                     (`description`), och den domänlogik regeln stänger ute är
+                     en förgrening på VILKEN art det är. En rad med en tom art
+                     vore ett synligt fel, och "ingen art angiven" är ett
+                     tillstånd [[ADR-0036]] § Konsekvenser pekar ut. -->
+                <span v-if="container.kind" class="text-sm text-slate-600">{{ container.kind }}</span>
 
                 <span v-if="showsAccountName && !isShared(container)" class="text-sm text-slate-600">
                     {{ accountName(container) }}
