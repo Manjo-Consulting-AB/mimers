@@ -26,11 +26,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * när fältet blev fritt: en sluten lista som styr logik är illa, ett fritt
  * fält som gör det är värre.
  *
- * Fältet är FRIVILLIGT. Ingen art angiven lagras som den tomma strängen —
- * kolumnen är NOT NULL, och en tom ruta är samma värde den alltid burit.
- * App\Http\Requests\Container\StoreContainerRequest normaliserar ett
- * utelämnat fält till `''` innan `validated()` läses, så ingen anropare
- * behöver skicka en sentinel.
+ * Fältet är FRIVILLIGT, och kolumnen är nullbar: ingen art angiven lagras som
+ * `null` och aldrig som en tom sträng, som är just den sentinel
+ * [[ADR-0004 Fria taggar och kategorier]] vill undvika. Ett värde som bara är
+ * blanksteg blir `null` vid inmatningen (App\Http\Requests\Container) och
+ * lagras i övrigt ordagrant — ingen skiftlägesnormalisering, ingen hopslagning
+ * av stavningsvarianter ([[ADR-0016 Kostnadsregistrering]] § Motivering).
  *
  * `account_id` och `template_source_id` är medvetet UTESLUTNA ur
  * `#[Fillable]`: `account_id` kan bara sättas vid skapande (issue 8 §

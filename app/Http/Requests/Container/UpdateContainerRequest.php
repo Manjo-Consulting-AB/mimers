@@ -14,12 +14,12 @@ use Illuminate\Foundation\Http\FormRequest;
  * `kind` är fritt och frivilligt sedan issue 84 · [[ADR-0036 Containerns
  * art]]: reglerna är längd och format, aldrig medlemskap i en lista.
  *
- * **Den som tömmer fältet skriver den tomma strängen, inte `null`.**
- * `ConvertEmptyStringsToNull` gör en tom ruta till `null` innan reglerna
- * körs, och kolumnen är NOT NULL — normaliseringen nedan vänder tillbaka
- * den till `''` så att `validated()` bär samma värde som skapandet sparar
- * (se StoreContainerRequest). Nyckeln som SAKNAS rörs inte: `sometimes` ska
- * fortsätta betyda "ändra inte arten".
+ * **Den som tömmer fältet lagrar `null`** — `ConvertEmptyStringsToNull` gör en
+ * tom ruta till `null` innan reglerna körs, och kolumnen är nullbar sedan issue
+ * 84, så `validated()` bär samma värde som skapandet sparar (se
+ * StoreContainerRequest). Blanksteg trimmas bort vid inmatningen; ett fält som
+ * bara var blanksteg blir därmed också `null`. Nyckeln som SAKNAS rörs inte:
+ * `sometimes` ska fortsätta betyda "ändra inte arten".
  */
 class UpdateContainerRequest extends FormRequest
 {
@@ -31,14 +31,22 @@ class UpdateContainerRequest extends FormRequest
     }
 
     /**
-     * En nyckel som FINNS men är `null` betyder "användaren tömde rutan" —
-     * den blir den tomma strängen. En nyckel som saknas lämnas orörd, så
-     * `sometimes` fortfarande skiljer "töm" från "rör inte".
+     * Blanksteg trimmas och ett tomt värde blir `null` — se
+     * klassdokumentationen. En nyckel som SAKNAS lämnas orörd, så `sometimes`
+     * fortfarande skiljer "töm arten" från "rör den inte".
      */
     protected function prepareForValidation(): void
     {
-        if ($this->has('kind') && $this->input('kind') === null) {
-            $this->merge(['kind' => '']);
+        if (! $this->has('kind')) {
+            return;
+        }
+
+        $kind = $this->input('kind');
+
+        if (is_string($kind)) {
+            $kind = trim($kind);
+
+            $this->merge(['kind' => $kind === '' ? null : $kind]);
         }
     }
 
@@ -49,7 +57,7 @@ class UpdateContainerRequest extends FormRequest
     {
         return [
             'name' => ['sometimes', 'string', 'max:255'],
-            'kind' => ['sometimes', 'string', 'max:40'],
+            'kind' => ['sometimes', 'nullable', 'string', 'max:40'],
         ];
     }
 }
