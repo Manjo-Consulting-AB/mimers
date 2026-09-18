@@ -24,6 +24,8 @@ Containermockupen gicks igenom 2026-09-18 och gav två till, som ännu inte har 
 - [[ADR-0039 Containerns översikt]] — containerns förstasida blir en översikt och itemlistan en flik. Varje tal räknar det användaren själv når. Containern får en beskrivning. Ersätter issue 57a § Beslut 1 och exportens placering i issue 67c § Beslut 1.
 - [[ADR-0040 Underträdets summor]] — status och kostnad räknas över itemet och dess ättlingar. Donuten grupperar per item och drar samma data på varje nivå. Ingen kategorikolumn på `cost_entry`.
 
+Den del av de två som inte väntar på designen har issues i [[M15 Containerns översikt]] — 88 till 92. Resten står kvar nedan.
+
 **Skalen**, som inte är ett beslut utan en läsning av mockuparna: trepanelsvyn är vad användaren ser när ett objekt öppnas, dashboarden är vad som möter henne efter inloggning, containervyn ligger mellan dem.
 
 ---
@@ -55,6 +57,8 @@ Genomgången av dashboardmockupen mot datamodellen. Punkterna nedan är avgjorda
 ## Containervyn — avgjort 2026-09-18
 
 Genomgången av containermockupen mot datamodellen. Det som blev beslut står i [[ADR-0039 Containerns översikt]] och [[ADR-0040 Underträdets summor]]; punkterna nedan är avgjorda men har varken ADR eller issue.
+
+**Väntar på designen:** flikradens indelning, exportens flytt in under inställningarna, dokumentfliken, bildpanelen och containerns hjältebild. Översiktens skelett, beskrivningen, ättlingsupplösningen, kostnadsnedbrytningen och OK-statusen ligger i [[M15 Containerns översikt]].
 
 **Flikraden ersätter sektionsmenyn, och ingen rad får försvinna.** `containerSections.js` har nio rader; mockupen har sju flikar. Kategorier, taggar, delning, kalender, export, papperskorg och överlåtelse får inte plats bland flikarna och samlas på inställningssidan. Fördelningen är designarbete. Kravet är att var och en går att nå — en yta ingen hittar är samma sak som en yta som inte finns, vilket är issue 62a:s och 67c:s egen motivering.
 
