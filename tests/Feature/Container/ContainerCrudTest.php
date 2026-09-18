@@ -7,6 +7,7 @@ use App\Models\Container;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Finder\SplFileInfo;
 
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
@@ -183,6 +184,77 @@ it('släpper CHECK-villkoret och tar emot en art utanför den gamla listan', fun
 });
 
 /*
+ * Klart när: de fem befintliga värdena är oförändrade i databasen efter
+ * migreringen (issue 84).
+ *
+ * Migreringen SLÄPPER ett villkor; den skriver inte om en rad. Provet läser
+ * källan för att bevisa att ingen skrivning finns där — samma sorts källprov
+ * som CHECK-villkoret får ovan, och av samma skäl: sviten kör sqlite mot en
+ * databas som byggts upp av migreringarna själva, så en rad som "överlevt" en
+ * migrering kan den aldrig ha haft. De fem värdena prövas dessutom mot
+ * databasen, för "oförändrade" förutsätter att de fortfarande går att spara.
+ */
+it('lämnar de fem befintliga arterna orörda genom migreringen', function () {
+    $migrering = File::get(database_path('migrations/2026_09_18_000000_free_container_kind.php'));
+
+    expect($migrering)->not->toMatch('/\b(UPDATE|DELETE|TRUNCATE)\b/');
+    expect($migrering)->not->toMatch('/->(update|delete|insert|truncate)\(/');
+
+    [$account] = kontoMedMedlem();
+
+    // Raderna läggs direkt på modellen: provet gäller kolumnen efter
+    // migreringen, inte containertaket, och gratisplanen har plats för en.
+    foreach (['boat', 'caravan', 'house', 'car', 'other'] as $kind) {
+        $container = Container::factory()->for($account, 'account')->create([
+            'name' => "Arv {$kind}",
+            'kind' => $kind,
+        ]);
+
+        expect($container->fresh()->kind)->toBe($kind);
+    }
+});
+
+/*
+ * Klart när: `Container::KINDS` finns inte längre i koden, och ingen `Rule::in`
+ * validerar `kind` mot en fast lista (issue 84 · [[ADR-0036 Containerns art]]).
+ *
+ * Provet läser KÄLLAN, för det är formen regeln gäller: en konstant som ingen
+ * definierat kan ingen körning leta efter. Kommentarer räknas inte — fem filer
+ * pekar fortfarande på konstanten som mönster för en delad lista, och det är
+ * döda referenser som issuen uttryckligen vill ha rapporterade i PR:en i
+ * stället för rättade.
+ */
+it('har ingen sluten lista kvar för containerns kind', function () {
+    $träffar = [];
+
+    $filer = [
+        ...File::allFiles(app_path()),
+        ...File::allFiles(resource_path('js')),
+        ...File::allFiles(database_path()),
+    ];
+
+    foreach ($filer as $fil) {
+        if (! in_array($fil->getExtension(), ['php', 'js', 'vue'], true)) {
+            continue;
+        }
+
+        if (preg_match('/\bKINDS\b/', kallaUtanKommentarer($fil)) === 1) {
+            $träffar[] = $fil->getRelativePathname();
+        }
+    }
+
+    expect($träffar)->toBe([]);
+
+    // Reglerna för `kind` är längd och format — aldrig medlemskap i en mängd.
+    foreach (['StoreContainerRequest', 'UpdateContainerRequest'] as $klass) {
+        $kalla = File::get(app_path("Http/Requests/Container/{$klass}.php"));
+
+        expect($kalla)->not->toContain('Rule::in');
+        expect($kalla)->toContain("'kind'");
+    }
+});
+
+/*
  * Klart när: `kind` får utelämnas vid skapande av en container (issue 84).
  *
  * Fältet är frivilligt — att tvinga fram en art är att ställa en fråga
@@ -237,6 +309,38 @@ it('grenar aldrig på containerns kind', function () {
 
     expect($träffar)->toBe([]);
 });
+
+/**
+ * Källkoden i $fil med kommentarer och docblock borttagna.
+ *
+ * PHP läses med `token_get_all()`, för en regex hade fällt på `//` inuti en
+ * sträng. JS och Vue får nöja sig med block-, rad- och HTML-kommentarer.
+ */
+function kallaUtanKommentarer(SplFileInfo $fil): string
+{
+    $kalla = $fil->getContents();
+
+    if ($fil->getExtension() === 'php') {
+        $bitar = '';
+
+        foreach (token_get_all($kalla) as $token) {
+            if (! is_array($token)) {
+                $bitar .= $token;
+
+                continue;
+            }
+
+            $bitar .= in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true) ? '' : $token[1];
+        }
+
+        return $bitar;
+    }
+
+    $kalla = (string) preg_replace('#/\*.*?\*/#s', '', $kalla);
+    $kalla = (string) preg_replace('#<!--.*?-->#s', '', $kalla);
+
+    return (string) preg_replace('#^[ \t]*//.*$#m', '', $kalla);
+}
 
 /*
  * Uppföljning på granskningen av PR #43: ContainerResource::toArray()
