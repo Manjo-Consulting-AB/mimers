@@ -26,6 +26,12 @@ Containermockupen gicks igenom 2026-09-18 och gav två till, som ännu inte har 
 
 Den del av de två som inte väntar på designen har issues i [[M15 Containerns översikt]] — 88 till 92. Resten står kvar nedan.
 
+Itemmockuparna gicks igenom 2026-09-18 och gav en till:
+
+- [[ADR-0041 Itemets vy]] — itemet bor i containern och inte i en global navigering. Strukturens rötter är de items användaren når som saknar nåbar förälder, ett item får förekomma på flera ställen, och den aktuella platsen står i querysträngen. Anteckningen är itemets egen text, omslagsbilden en vald bilaga med en regel som gör valet frivilligt. **Rättar tårtbitarnas indelning i [[ADR-0040 Underträdets summor]]**: de är de items som bär kostnadsraderna, inte underträdets toppnivå, eftersom ett item under två föräldrar annars hamnar i två bitar.
+
+Den del som inte väntar på designen har issues i [[M16 Itemets vy]] — 93 till 95.
+
 **Skalen**, som inte är ett beslut utan en läsning av mockuparna: trepanelsvyn är vad användaren ser när ett objekt öppnas, dashboarden är vad som möter henne efter inloggning, containervyn ligger mellan dem.
 
 ---
@@ -74,9 +80,35 @@ Genomgången av containermockupen mot datamodellen. Det som blev beslut står i 
 
 ---
 
+## Itemvyn — avgjort 2026-09-18
+
+Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut står i [[ADR-0041 Itemets vy]]; punkterna nedan är avgjorda men har varken ADR eller issue.
+
+**Väntar på designen:** flikraden på itemet, trepanelslayouten, fokuskartan och itemets kostnadsflik. Omslagsbilden, strukturupplösningen och förekomsterna ligger i [[M16 Itemets vy]].
+
+**Flikraden är billig när den väl ritas.** Sex av mockupens sju flikar — fälten, relationerna, bilagorna, schemana, utlåningen och taggarna — ligger redan som propar i `Containers/Items/Show` och renderas i dag på en enda lång sida. Flikraden är en omfördelning av det som redan hämtas, inte nya ändpunkter. **Utlåningen har ingen flik i mockupen** och måste ändå få en plats: samma krav som containerns sektionsmeny ställde, ingen rad får försvinna.
+
+**Fokuskartan behöver ingen ny fråga.** `ListItemLinks` ger redan motparterna med relationen sedd från itemet och med omfångsfiltret i samma fråga — en graf över närmaste relationer är den listan ritad som noder. Det som kostar är layouten. Teckenförklaringen ska vara tre sorter, *Parent · Child · Related*, enligt [[ADR-0035 Relationen mellan objekt]]; den ena mockupen säger fortfarande *Syskon*.
+
+**Containerns hela karta är ett eget projekt.** En graf över hundratals noder är en layoutalgoritm, inte en vy, och den hör inte ihop med fokuskartan mer än till namnet.
+
+**Itemets historikflik har det sämre än containerns.** `audit_log` är indexerad på `(container_id, created_at)` — precis containerfliken behöver — men det finns **inget index på `(subject_type, subject_id)`**, som är itemhistorikens fråga. Fliken vore alltså tom *och* en full scan. Den ritas inte, och indexet hör till händelseinstrumenteringen nedan.
+
+**Datumen i itempanelerna har samma blandning som containerns underhållspanel.** Samma regel löser båda, och den avgörs en gång.
+
+**Strukna ur mockupen:** leverantör och artikelnummer i detaljrutan. Leverantören bor på `cost_entry`, där den redan är indexerad och har en autocomplete; artikelnumret finns inte, och `serial_number` är inte det — ett serienummer identifierar exemplaret, ett artikelnummer modellen. Skulle de behövas är det ett beslut, inte två fält.
+
+**"Anteckning" är avgjord sedan containerrundan.** Frågan stod kvar ovan efter containermockupen; [[ADR-0041 Itemets vy]] svarar att `item.description` *är* anteckningsfältet. Många daterade anteckningar per item vore en tabell och ett nytt beslut.
+
+---
+
 ## Ännu inte issues
 
 **Händelseinstrumenteringen.** `audit_log` har tabellen, indexet, en resurs och en API-kontroller — men skrivs bara av `RevokeContainerAccess` och `AcceptOwnershipTransfer`. Varje händelse mockuparna visar, på både dashboarden och containersidan, är oregistrerad: dokument tillagt, kostnad registrerad, uppgift slutförd, bild uppladdad, schema ändrat. Det är ett eget arbete med egna beslut — vilka handlingar som loggas, vad som hamnar i `meta`, hur länge raderna sparas, vem som får läsa dem — och det ska inte smygas in i en vy-issue. Ytorna byggs som reserverad plats tills det finns.
+
+**Favoriter.** Mockupens vänsterspalt har en hel sektion för dem och det finns ingen tabell, inget beslut och ingen issue. Frågan är inte bara var raderna lagras utan vad en favorit är — ett item, en container, en sparad sökning — och den är därför ett eget litet beslut och inte en kolumn.
+
+**Containerns karta.** En graf över containerns alla items och deras relationer. Datat finns; layouten över hundratals noder är arbetet, och den delar ingenting med fokuskartan på itemet utom namnet.
 
 **Luckorna i kontot.** Byta lösenord. Byta e-post — egen issue och `risk_class: elevated`, för med tvingande tvåfaktor blir ett e-postbyte utan kodkrav en väg runt andra faktorn, samma klass av hål som issue 80 stängde. Inbjudningar syns i dag bara som mejl och inte när användaren loggar in.
 

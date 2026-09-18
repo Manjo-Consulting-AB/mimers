@@ -1,6 +1,6 @@
 # ADR-0040 Underträdets summor
 
-**Status:** Antagen 2026-09-18 · Kompletterar [[ADR-0035 Relationen mellan objekt]] och [[ADR-0038 Gränsen för Pro i kostnaderna]] · [[ADR-index]]
+**Status:** Antagen 2026-09-18 · Kompletterar [[ADR-0035 Relationen mellan objekt]] och [[ADR-0038 Gränsen för Pro i kostnaderna]] · Tårtbitarnas indelning rättad samma dag av [[ADR-0041 Itemets vy]] · [[ADR-index]]
 
 Fattat vid genomgången av containermockupen. [[ADR-0039 Containerns översikt]] avgjorde vilken sida som visar talen. Den här avgör hur de räknas.
 
@@ -22,7 +22,7 @@ Båda talen pekar åt samma håll. Ett item ärver uppåt: motorn har en impelle
 
 **OK betyder noll kvarvarande uppgifter i underträdet.** Ingen ny kolumn: statusen härleds ur `schedule_occurrence` för itemet och allt under det. Har något där förfallit är itemet inte OK, och användaren behöver inte öppna sextio items för att hitta det som brinner.
 
-**Kostnadsdonuten grupperar per item.** En komponent, en regel: *summera kostnaderna i det aktuella underträdet, grupperat per item*. På containerns översikt är underträdet hela containern och tårtbitarna är dess toppnivåitems; på ett item är underträdet itemet plus dess ättlingar. Samma kod, samma svar, olika startpunkt.
+**Kostnadsdonuten grupperar per item.** En komponent, en regel: *summera kostnaderna i det aktuella underträdet, grupperat per item*. På containerns översikt är underträdet hela containern; på ett item är underträdet itemet plus dess ättlingar. **Tårtbitarna är de items som bär kostnadsraderna** — varje `cost_entry` har exakt ett `item_id`, så varje rad hamnar i exakt en bit och bitarna summerar alltid precis till underträdets total. Samma kod, samma svar, olika startpunkt.
 
 **Ingen kategori införs på `cost_entry`.** Fältet hade hetat *kategori* bredvid itemens kategoriträd, vilket är ett ord med två betydelser ([[ADR-0032 Produktens ord]]), och det hade varit ännu en värdelista som påstår vad världen består av ([[ADR-0033 Produktens omfång]]).
 
@@ -46,6 +46,7 @@ Båda talen pekar åt samma håll. Ett item ärver uppåt: motorn har en impelle
 - **Valutan gäller.** En summa över ett underträd med flera valutor grupperas per valuta och summeras aldrig över dem — [[ADR-0016 Kostnadsregistrering]] och [[ADR-0037 Valutans arv]]. En donut kan alltså behöva ritas en gång per valuta, och det är rätt svar.
 - **Mjukraderade items räknas inte.** Varken deras kostnader eller deras uppgifter, och de bryter inte kedjan: ett barnbarn under ett raderat barn faller bort med det, precis som i åtkomstvandringen.
 - **`cost_entry` ändras inte.** Ingen kolumn läggs till och ingen tas bort, vilket också är vad [[M14 Besluten ur mockupgenomgången]] issue 85 kräver av valutaarbetet.
+- **Rättelse 2026-09-18.** Beslutet sade när det skrevs att containerns tårtbitar var *dess toppnivåitems*. Det håller i ett träd och går sönder i den DAG `LinkItems` faktiskt tillåter: ett item under två föräldrar hamnar i två bitar, och bitarna summerar till mer än totalen som står bredvid dem. [[ADR-0041 Itemets vy]] § Rättelsen av ADR-0040 skriver om meningen. Underträdssumman själv är oförändrad — ättlingsmängden är en **mängd**, och ett item som nås längs två vägar räknas en gång.
 - **Donuten är fortsatt fri.** Den är parameterlös och därmed fast enligt [[ADR-0038 Gränsen för Pro i kostnaderna]]. Vägen vidare in i donuten leder till rapportvyn och är Pro.
 
 ## Alternativ

@@ -60,14 +60,16 @@ Issue 86 ger containern och kontot en fast totalsumma. [[ADR-0040 Underträdets 
 
 `cost_entry` har ingen kategorikolumn, och den får inte heller en. Ordet hade krockat med itemens kategoriträd ([[ADR-0032 Produktens ord]]) och listan hade varit ännu ett påstående om vad världen består av ([[ADR-0033 Produktens omfång]]). Itemet är dessutom den axel användaren redan är tvungen att välja — `cost_entry.item_id` är `NOT NULL` — så indelningen kräver ingen ny disciplin av henne.
 
-**En regel, två startpunkter.** På containern är underträdet hela containern och tårtbitarna dess toppnivåitems. På ett item är underträdet itemet plus dess ättlingar. Samma kod, samma svar, olika ingång.
+**En regel, två startpunkter.** På containern är underträdet hela containern; på ett item är underträdet itemet plus dess ättlingar. Samma kod, samma svar, olika ingång.
+
+**Tårtbitarna är de items som bär kostnadsraderna**, inte underträdets toppnivå. Varje `cost_entry` har exakt ett `item_id`, så varje rad hamnar i exakt en bit och bitarna summerar alltid precis till totalen. Skrivningen ändrades 2026-09-18: den tidigare — *per toppnivåitem* — håller i ett träd och går sönder i den DAG `LinkItems` faktiskt tillåter, där ett item under två föräldrar hamnar i två bitar och bitarna summerar till mer än totalen bredvid. Se [[ADR-0041 Itemets vy]] § Rättelsen av ADR-0040. Frågan *vad kostar motorn* besvaras av **talet på motorn**, som fortfarande är summan över underträdet.
 
 **Blandade valutor grupperas, de summeras aldrig över.** En nedbrytning kan alltså behöva svara med en uppsättning per valuta, och det är rätt svar ([[ADR-0016 Kostnadsregistrering]], [[ADR-0037 Valutans arv]]).
 
 Ändpunkterna är fortsatt **parameterlösa och fria**. Tar de emot en period är de inte längre fasta och grinden har flyttat sig utan att någon beslutat det ([[ADR-0038 Gränsen för Pro i kostnaderna]]). Jämförelsetal mot en annan period hör till rapportvyn och ingår inte. `CostReportController` rörs inte.
 
 **Läs:** [[ADR-0040 Underträdets summor]], [[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut, [[ADR-0016 Kostnadsregistrering]] § Konsekvenser, [[M14 Besluten ur mockupgenomgången]] § 86, [[M8 Kostnadsregistrering]] § 46 (Beslut 2)
-**Klart när:** containerns fasta summering bär en nedbrytning per toppnivåitem; itemets summering bär itemet plus dess ättlingar; ett barns kostnad räknas in i förälderns tal; en `related`-länk drar aldrig in en kostnad; en nedbrytning över blandade valutor grupperas per valuta och summeras aldrig över dem; ändpunkterna tar fortfarande inga parametrar och ger identiskt utfall med och utan okända sådana; ingen rad från ett item användaren inte når räknas in; `cost_entry` har ingen ny kolumn; `CostReportController` är oförändrad; hela testsviten är grön.
+**Klart när:** containerns fasta summering bär en nedbrytning där varje tårtbit är ett item som bär kostnadsrader, och bitarna summerar exakt till totalen; itemets summering bär itemet plus dess ättlingar; ett barns kostnad räknas in i förälderns tal; en `related`-länk drar aldrig in en kostnad; en nedbrytning över blandade valutor grupperas per valuta och summeras aldrig över dem; ändpunkterna tar fortfarande inga parametrar och ger identiskt utfall med och utan okända sådana; ingen rad från ett item användaren inte når räknas in; `cost_entry` har ingen ny kolumn; `CostReportController` är oförändrad; hela testsviten är grön.
 **Beror på:** 86, 90
 
 ### 92. Itemets status räknas ur underträdet
