@@ -2,43 +2,9 @@
 
 Del av [[Backlog]]. **Det här är ingen milstolpe.** Det är en hållplats för arbete som är identifierat men ännu inte inplacerat, i väntan på genomgången av mockuparna.
 
-Listan kommer ur genomgången av MVP:n 2026-09-17. Första omgången mockuper gicks igenom samma dag och avgjorde issue 83 och de fyra besluten nedan; resten av posterna väntar fortfarande på designen. Flera av dem kan visa sig vara överflödiga när den är känd, och minst en kan visa sig vara större än den ser ut — därför ligger de här i stället för i en milstolpe som påstår sig veta ordningen.
+Listan kommer ur genomgången av MVP:n 2026-09-17. Första omgången mockuper gicks igenom 2026-09-17 och 18; det som avgjordes där har flyttat till [[M14 Besluten ur mockupgenomgången]], och det som står kvar här väntar fortfarande på designen. Flera av dem kan visa sig vara överflödiga när den är känd, och minst en kan visa sig vara större än den ser ut — därför ligger de här i stället för i en milstolpe som påstår sig veta ordningen.
 
 **En post lämnar den här filen när den blir en issue i en milstolpe** — eller, för ett beslut, när det står i en ADR. Står något kvar här som redan är byggt blir filen värdelös, precis som [[Tankar]] § Öppet.
-
----
-
-### 83. Containerkontexten sätts av navigeringen
-
-Systemet behöver veta vilken container användaren arbetar i — det är därför `App\Support\Frontend\ActiveContainer` finns. Men det är bokföring, och bokföring ska inte ha en knapp. I dag möter användaren "gör aktiv" i containerlistan, trycker på den och ser en markering flytta sig i samma lista. Vad knappen bokför syns ingenstans, och att inte förstå vad den gör är rätt slutsats.
-
-**Avgjort vid mockupgenomgången 2026-09-17: mekanismen stannar, knappen försvinner.** Kontexten sätts av att användaren öppnar en container. Markeringen i navigeringen — den mockuparna visar under *Mina containers* — blir en effekt av var användaren befinner sig, inte en inställning hon gör.
-
-**Det här ändras**
-
-- `App\Http\Controllers\ActiveContainerController` och rutten `containers.active` utgår. Det finns inget att skicka en `PUT` till när kontexten inte längre är ett val.
-- Knappen i `resources/js/pages/Containers/Index.vue` och markeringen som är dess enda verkan utgår.
-- `ActiveContainer::set()` anropas när en container öppnas, utöver de tre befintliga ställena: skapad container, antagen inbjudan, mottaget ägarbyte.
-- `AktivContainerTest` prövar i dag att rutten sätter nyckeln. Den ska pröva att navigeringen gör det.
-
-**Det här ändras inte**
-
-- `App\Support\Frontend\ActiveContainer` och sessionsnyckeln. De är hela poängen.
-- Propen `activeContainer` i `HandleInertiaRequests`. Den är vad navigeringens markering kommer att läsa när navigeringen byggs, och den delas ut som i dag.
-- Kontrollen i `forUser()` mot `Container::scopeAccessibleBy()`. Att kontexten sätts implicit gör åtkomstkontrollen viktigare, inte mindre viktig — en container användaren mist åtkomsten till får aldrig ligga kvar som kontext.
-
-**Klart när**
-
-- [ ] `PUT /containers/{container}/active` finns inte längre.
-- [ ] Att öppna en container sätter sessionsnyckeln till containerns ULID.
-- [ ] Att öppna en container användaren saknar åtkomst till lämnar kontexten orörd.
-- [ ] Propen `activeContainer` delas fortfarande ut och bär ULID:t för den senast öppnade containern.
-- [ ] Containerlistan har ingen knapp som sätter kontexten.
-
-**Axlar:** `ambiguity: low` · `blast_radius: cross-module` — den delade propen är något andra issues byggt på · `risk_class: none`
-
-**Läs:** `app/Support/Frontend/ActiveContainer.php`, issue 51 § Beslut 4 och issue 55 i [[M10 Webbfrontend]]
-**Beror på:** -
 
 ---
 
@@ -51,7 +17,7 @@ Tre beslut fattades 2026-09-17 och är utskrivna:
 - [[ADR-0037 Valutans arv]] — konto → container → rad, med omval på varje nivå. Ett ändrat förval rör aldrig gamla poster.
 - [[ADR-0038 Gränsen för Pro i kostnaderna]] — en fast summering är fri, allt frågbart är Pro. Ersätter en rad i [[ADR-0016 Kostnadsregistrering]].
 
-Ingen av dem har en issue ännu.
+Alla fem har nu issues i [[M14 Besluten ur mockupgenomgången]] — 83 till 87.
 
 **Skalen**, som inte är ett beslut utan en läsning av mockuparna: trepanelsvyn är vad användaren ser när ett objekt öppnas, dashboarden är vad som möter henne efter inloggning, containervyn ligger mellan dem.
 
