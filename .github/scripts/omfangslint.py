@@ -30,7 +30,12 @@ Två halvor, med olika säkerhet:
    filen bygger frågan (`bygg_modellfraga`) och verifierar svaret
    (`fynd_ur_modellsvar`); själva anropet görs av process_next_issue.py, som
    äger modellanropen. Modellen föreslår, skriptet kontrollerar: en fil som
-   inte finns på disk eller som redan täcks av rutan kastas.
+   inte finns på disk eller som redan täcks av rutan kastas. Frågan binder inte
+   modellen till ruttabellen, och det är med flit: PR #398 (issue 84) föll på tre
+   filer, varav två — `app/Actions/Container/CreateContainer.php` och
+   `resources/js/data/categoryPresets.js` — inte serverar någon URL och alltså
+   inte står i tabellen. Precisionen kommer ur att svaret verifieras mot
+   filsystemet, inte ur att frågan är snäv.
 
 Linten blockerar aldrig kön. Ett falskt positivt utfall som stoppar arbetet är
 dyrare än det den ska spara, och rutan är fortfarande bindande — den som skriver
@@ -269,9 +274,11 @@ def bygg_modellfraga(kropp: str, innanfor: list[str], tabell: list[Rutt]) -> str
         "Svara med enbart rader på formen\n"
         "SAKNAS: <sökväg> — punkt <nummer>\n"
         "en per fil, eller ordet INGA om varje punkt täcks av rutan. Ingen annan text.\n"
-        "Gissa aldrig en sökväg: skriv bara filer du ser i ruttabellen ovan. Är du det "
-        "minsta osäker på en punkt, hoppa över den - en falsk träff kostar mer än en "
-        "missad, eftersom rutan ändå gäller och grinden ändå kontrollerar den."
+        "Ruttabellen är din utgångspunkt, inte din gräns: bär punkten en fil som inte "
+        "serverar en URL - en Action, en delad datamodul, en komponent - så skriv den, "
+        "men bara om du är säker på att den redan finns i repot. Gissa aldrig en sökväg. "
+        "Är du osäker på en punkt, hoppa över den: rutan gäller ändå, och grinden "
+        "kontrollerar den ändå."
     )
 
 

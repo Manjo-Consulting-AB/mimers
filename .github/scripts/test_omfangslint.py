@@ -172,6 +172,23 @@ def test_modellsvar_som_pekar_in_i_rutan_kastas():
     assert l.fynd_ur_modellsvar(svar, innanfor, ROT) == []
 
 
+def test_fil_utanfor_ruttabellen_overlever_om_den_finns():
+    """PR #398 (issue 84) är fallet: punkten "kategorimallen väljs uttryckligen"
+    bärs av `resources/js/data/categoryPresets.js`, som inte serverar någon URL
+    och alltså inte står i ruttabellen. En instruktion som band modellen till
+    tabellen hade gjort just den punkten omöjlig att rapportera - och
+    existenskontrollen nedan är ändå det som stoppar en påhittad sökväg."""
+    _, _, innanfor, _ = _analys(ISSUE_83)
+    svar = "SAKNAS: resources/js/data/categoryPresets.js — punkt 2\n"
+    fynd = l.fynd_ur_modellsvar(svar, innanfor, ROT)
+    assert len(fynd) == 1 and "categoryPresets" in fynd[0], fynd
+
+
+def test_modellfragan_binder_inte_modellen_till_ruttabellen():
+    _, fraga, _, _ = _analys(ISSUE_83)
+    assert "inte din gräns" in fraga
+
+
 def test_pahittad_sokvag_kastas():
     """Modellen föreslår, filsystemet avgör."""
     _, _, innanfor, _ = _analys(ISSUE_83)
