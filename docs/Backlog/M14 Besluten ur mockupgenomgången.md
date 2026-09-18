@@ -4,7 +4,9 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 
 Tillagd 2026-09-18, efter genomgången av den första omgången mockuper. Fem beslut fattades där och fick varsin ADR eller en anteckning; den här milstolpen är deras mottagare. **Ingen av issuerna bygger en ny yta.** De rättar fyra ställen där koden säger något annat än ett skrivet beslut, plus en knapp som aldrig borde ha funnits.
 
-Ordningen styrs av `lang/`. Tre av issuerna rör strängar och måste därför ligga **efter issue 82**, annars skrivs samma rader två gånger. De två som inte rör strängar — 83 och 86 — har inga beroenden alls och kan tas när som helst.
+Tre av issuerna rör strängar och förutsätter att `lang/` skrivits om en gång, annars skrivs samma rader två gånger. **Issue 82 mergades 2026-09-18**, så villkoret är uppfyllt och alla fem är obundna. `Beror på`-raderna står kvar som ordningsfakta, inte som spärrar.
+
+Ingen av issuerna får köras parallellt med en annan som rör `lang/en/ui.php` — 84, 85 och 87 rör alla den filen.
 
 ### 83. Containerkontexten sätts av navigeringen
 Systemet behöver veta vilken container användaren arbetar i — det är därför `App\Support\Frontend\ActiveContainer` finns. Men det är bokföring, och bokföring ska inte ha en knapp. I dag möter användaren "gör aktiv" i containerlistan, trycker på den och ser en markering flytta sig i samma lista. Vad knappen bokför syns ingenstans.
