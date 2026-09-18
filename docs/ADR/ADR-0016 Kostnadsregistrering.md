@@ -1,6 +1,6 @@
 # ADR-0016 Kostnadsregistrering
 
-**Status:** Antagen 2026-08-04 · [[ADR-index]]
+**Status:** Antagen 2026-08-04 · Pro-gränsen ersatt av [[ADR-0038 Gränsen för Pro i kostnaderna]]; övriga beslut gäller · [[ADR-index]]
 
 ## Kontext
 
@@ -19,7 +19,7 @@ Rapportdimensionerna hämtas från den organisation användaren redan gjort. Kos
 - Datum, belopp, valuta och beskrivning är obligatoriska. Leverantör är frivillig fritext.
 - Beloppet lagras i minsta valutaenhet enligt husets penningkonvention. Decimaler tillåts vid inmatning men krävs inte.
 - Leverantörsfältet är filtrerbart och summerbart, med autocomplete från containerns befintliga värden.
-- **Registrering är fri på alla nivåer. Summering och rapportvy kräver Pro.**
+- **Registrering är fri på alla nivåer. Summering och rapportvy kräver Pro.** *Gränsen är omdragen av [[ADR-0038 Gränsen för Pro i kostnaderna]]: fasta summeringar är fria, det frågbara är Pro.*
 
 ### Vad som medvetet utelämnas
 
