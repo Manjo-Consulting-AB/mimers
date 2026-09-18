@@ -256,11 +256,10 @@ it('en användare med bara giltig container_access får ingen utlåningsnotis', 
     expect(Notification::query()->where('user_id', $ägare->id)->count())->toBe(1);
 });
 
-it('loan_due finns i båda språkfilerna och e-postkanalen renderar notisen utan att kasta', function () {
+it('loan_due finns i språkfilen och e-postkanalen renderar notisen utan att kasta', function () {
     // Beslut 4: EmailChannel slår upp notiser.loan_due och kastar om nyckeln
     // saknas i mottagarens språk — en generator som skapar rader utan mall
     // ger en tyst kö av trasiga leveranser.
-    expect(Lang::has('notiser.loan_due', 'sv', false))->toBeTrue();
     expect(Lang::has('notiser.loan_due', 'en', false))->toBeTrue();
 
     Mail::fake();
@@ -276,7 +275,7 @@ it('loan_due finns i båda språkfilerna och e-postkanalen renderar notisen utan
 
     $mail = Mail::sent(NotificationMail::class)->first();
     expect($mail)->not->toBeNull();
-    expect(mejletsÄmne($mail))->toBe('Impeller ska tillbaka 2026-09-07');
+    expect(mejletsÄmne($mail))->toBe('Impeller is due back 2026-09-07');
 });
 
 it('jobbet är schemalagt dagligen med call, inte command eller runInBackground', function () {

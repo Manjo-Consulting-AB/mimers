@@ -1,14 +1,21 @@
 <?php
 
 /*
- * The interface text, se issue 52 § Beslut 4 och 5. Samma nycklar som
- * lang/sv/ui.php — en nyckel utan engelskt värde är en bugg, inte en
+ * The interface text, se issue 52 § Beslut 4 och 5. Engelska är enda
+ * levererade språket ([[ADR-0034 Engelska vid lansering]]) och det här är
+ * den enda katalogen: en nyckel utan värde är en bugg, inte en
  * "tills vidare"-platshållare (Beslut 6).
+ *
+ * Copyn beskriver produkten enligt [[ADR-0033 Produktens omfång]] § Beslut:
+ * containern är ett sammanhang — en båt, en bil, en fastighet, en kund eller
+ * ett projekt — och exemplen spänner över bredden. Den som skriver en ny
+ * sträng ska läsa det beslutet först; den smala formuleringen kröp in en
+ * sträng i taget och var svår att upptäcka i efterhand.
  */
 return [
     'common' => [
         'brand' => 'Mimers',
-        'tagline' => 'The container for the boat, the caravan, the house and the car.',
+        'tagline' => 'The place for everything you own, use or work with.',
         'to_dashboard' => 'Go to the dashboard',
         'home' => 'Back to the start page',
         'pending' => [
@@ -154,10 +161,10 @@ return [
         // not item (same reason as issue 20a decision 1).
         'trash-restored' => 'The content has been restored.',
 
-        // Issue 62b decisions 5 and 6. The deletion lands on the binder list —
+        // Issue 62b decisions 5 and 6. The deletion lands on the container list —
         // and the sentence points at the trash, where the link sits right
-        // below. The restore says the binder is back; it does NOT become
-        // active on its own, because choosing a binder is the user's action.
+        // below. The restore says the container is back; it does NOT become
+        // active on its own, because choosing a container is the user's action.
         'container-trashed' => 'The container is in the trash.',
         'container-restored' => 'The container has been restored.',
 
@@ -200,8 +207,8 @@ return [
         // Issue 67b decisions 4 and 7. The first three belong to the sender —
         // she sends, withdraws, and learns that the recipient declined — and
         // the fourth to the recipient. `transfer-rejected` says what the
-        // decision means for HER (the binder is not hers), not what the server
-        // did, and `transfer-accepted` says that the binder is now in her list.
+        // decision means for HER (the container is not hers), not what the server
+        // did, and `transfer-accepted` says that the container is now in her list.
         'transfer-created' => 'The transfer has been sent. The recipient sees it under Ownership transfers.',
         'transfer-revoked' => 'The transfer has been withdrawn. The row stays in the history.',
         'transfer-accepted' => 'The container is yours. You will find it in the container list.',
@@ -632,10 +639,10 @@ return [
         ],
     ],
 
-    // The binder's calendar link, see issue 65b decisions 2 and 4 and
+    // The container's calendar link, see issue 65b decisions 2 and 4 and
     // resources/js/pages/Containers/CalendarFeed.vue.
     //
-    // The address is in practice a password to the binder's tasks ([[Notiser]]
+    // The address is in practice a password to the container's tasks ([[Notiser]]
     // § ICS-kalenderfeed), and the texts say so in two places: `url_once` at
     // the display and `revoke_confirm` at the revocation. Whoever lost the link
     // has nothing to retrieve — the answer is to revoke and create a new one.
@@ -931,12 +938,12 @@ return [
         'list_intro' => 'Largest first. Tick what can go — the forty holiday photos can, the inspection report cannot.',
         'empty' => 'The account has no attachments.',
 
-        // Binder and item per row, in that order: the context is what makes
+        // Container and item per row, in that order: the context is what makes
         // the choice possible. The separator lives in the sentence and not in
         // the template.
         'row' => [
             'location' => ':container — :item',
-            // An attachment whose item or binder is in the trash still counts
+            // An attachment whose item or container is in the trash still counts
             // against the account and must be visible (decision 3).
             'trashed' => 'The container or the item is in the trash. The attachment still counts against the account.',
         ],
@@ -985,7 +992,7 @@ return [
 
         'nav' => [
             // `items` comes first, like the row in containerSections.js: the
-            // items are the binder, the categories and tags are how it is
+            // items are the container, the categories and tags are how it is
             // organised.
             'items' => 'Items',
             'categories' => 'Categories',
@@ -993,14 +1000,14 @@ return [
             'sharing' => 'Sharing',
             'settings' => 'Settings',
             // Issue 65b decision 1: the calendar link is a WAY OUT of the
-            // product — the binder's tasks subscribed to from someone else's
+            // product — the container's tasks subscribed to from someone else's
             // calendar — and sits after the settings, before the trash. The row
             // is in the same place in containerSections.js.
             'calendar' => 'Calendar',
             // Issue 67c decision 1: the export is a WAY OUT of the product,
-            // like the calendar link — but where the link feeds the binder's
+            // like the calendar link — but where the link feeds the container's
             // tasks into someone else's calendar, the export takes the whole
-            // binder out in a file. The row is in the same place in
+            // container out in a file. The row is in the same place in
             // containerSections.js, and it sits in the NAVIGATION and not
             // behind a setting: the export is free on every plan on purpose.
             'export' => 'Export',
@@ -1047,9 +1054,9 @@ return [
         ],
 
         // The deletion, see issue 62b decisions 4 and 5. `confirm` carries the
-        // binder's name: a confirmation that does not say what disappears is a
+        // container's name: a confirmation that does not say what disappears is a
         // confirmation people click away. It says that everything comes along,
-        // that the binder stays in the trash for 30 days and that it can be
+        // that the container stays in the trash for 30 days and that it can be
         // restored from there — and NEVER "deleted permanently", because the
         // deletion is soft (issue 8) and that word would be untrue.
         'destroy' => [
@@ -1074,10 +1081,10 @@ return [
             'destroy' => 'Delete',
             'empty' => 'No categories yet.',
 
-            // The suggestion on an empty binder, see issue 56b decision 4. The
+            // The suggestion on an empty container, see issue 56b decision 4. The
             // words in the set itself are NOT here and never will be: they live
             // in resources/js/data/categoryPresets.js, per language and kind.
-            // `preset_not_empty` is the route's answer on a binder that already
+            // `preset_not_empty` is the route's answer on a container that already
             // has categories and lands on the `categories` form key — a
             // sentence, not an API error code, since the route is web-only.
             'preset_heading' => 'Ready-made set',
@@ -1142,13 +1149,13 @@ return [
             'filter_remove' => 'Remove :filter',
 
             // A value in the link that is no longer in the recipient's scope —
-            // a deleted tag, a category moved to another binder. The row is
+            // a deleted tag, a category moved to another container. The row is
             // the whole answer: no 422, no redirect back to the same query
             // string (decision 3).
             'filter_dropped' => 'A filter in the link no longer exists and has been removed.',
 
             // The "filter, no rows" state. Without a filter `empty` says the
-            // binder is empty instead.
+            // container is empty instead.
             'filter_empty' => 'No hits with these filters: :filters.',
 
             'filter_label_q' => 'the search term “:value”',
@@ -1191,7 +1198,7 @@ return [
             'categories_empty' => 'The container has no categories yet.',
             'categories_empty_link' => 'Create categories',
 
-            // The tags are checkboxes, one per tag in the binder. A new tag is
+            // The tags are checkboxes, one per tag in the container. A new tag is
             // created on the tags page and not here: one way to the same write
             // in two places is two rules to keep in step (decision 5).
             'tags' => 'Tags',
@@ -1297,7 +1304,7 @@ return [
         // AttachmentResource carries for /api.
         //
         // `billing_note` says WHICH account pays before the file is chosen:
-        // the quota is counted on the uploading account and not on the binder
+        // the quota is counted on the uploading account and not on the container
         // owner ([[Filer och lagring]] § attachment, AGENTS.md § Sådant som är
         // lätt att göra fel), and whoever uploads should know what it costs.
         //
@@ -1522,7 +1529,7 @@ return [
 
                 'recurrence_none' => 'Once. The task disappears when it is done.',
                 'recurrence_fixed' => 'Repeats on the calendar. The insurance renews on 1 January even if you paid late.',
-                'recurrence_interval' => 'Counted from last done. An oil change twelve months after the previous one.',
+                'recurrence_interval' => 'Counted from last done. A service twelve months after the previous one.',
 
                 // The units are singular: they combine with a count, and the
                 // sentence above inflects the word by the number (decision 2).
@@ -1593,7 +1600,7 @@ return [
                 'overdue' => 'Overdue',
 
                 'account' => 'Account',
-                'account_hint' => 'The account that goes in the log. The vessel, not the person.',
+                'account_hint' => 'The account that goes in the log. The organisation, not the person.',
 
                 'note' => 'Note',
                 'note_hint' => 'Optional. Saved in the history.',
@@ -1662,7 +1669,7 @@ return [
     //
     // `empty` names the search term and stops there (decision 6): no number of
     // rows that existed, no hint that something was held back, no listing of
-    // which binders were searched — which binders at all is information in
+    // which containers were searched — which containers at all is information in
     // itself. A user with access to nothing gets word for word the same
     // sentence as a user whose term matches nothing, because the sentence
     // knows nothing about scope.
@@ -1678,8 +1685,8 @@ return [
     // was named `whole_words` until issue 78: the name carried the claim, and
     // the claim was false.
     //
-    // `in_container` is the prefix before the binder name, and only the
-    // prefix: the name is its own link to the binder's front page (decision
+    // `in_container` is the prefix before the container name, and only the
+    // prefix: the name is its own link to the container's front page (decision
     // 3), so the words cannot live in one string.
     'search' => [
         'title' => 'Search',
@@ -1698,10 +1705,10 @@ return [
     ],
 
     // The to-do view, see issue 64. The landing page after sign-in: the open
-    // occurrences across every binder the user can reach.
+    // occurrences across every container the user can reach.
     //
     // The two empty sentences differ on purpose (decision 6): one says the
-    // user has no binder at all and carries a link to create one, the other
+    // user has no container at all and carries a link to create one, the other
     // that there is nothing to do. Neither mentions a number or hints that
     // anything was hidden — a scope-limited recipient with an empty list gets
     // the exact same sentence as an owner whose tasks are done.
@@ -1730,7 +1737,7 @@ return [
 
     // The sharing page, see issue 55a. Two sections with different audiences
     // (decision 3), and the texts follow that split.
-    // The binder's export page, see issue 67c decisions 1, 5, 6, 7 and 8.
+    // The container's export page, see issue 67c decisions 1, 5, 6, 7 and 8.
     //
     // **`status` holds the column values from App\Models\Export::STATUSES**,
     // never invented names of our own — same rule as container.kind. `pending`
@@ -1812,7 +1819,7 @@ return [
             'heading' => 'Accesses',
             'description' => 'Everything shared from the container, and the history of what has been revoked or expired.',
 
-            // No level may delete the binder, manage accesses or start a
+            // No level may delete the container, manage accesses or start a
             // transfer of ownership. Stated once on the page, not per row.
             'limits' => 'No access grants the right to delete the container, manage accesses or start a transfer of ownership. That is always the owner account.',
 
@@ -1886,7 +1893,7 @@ return [
 
         'kind' => [
             'member' => 'A person — a partner or a co-owner.',
-            'managed' => 'An organisation with a service relationship, typically a yard. It does not own the container, and what it creates is attributed to the organisation.',
+            'managed' => 'An organisation with a service relationship — a workshop, a contractor or an agent. It does not own the container, and what it creates is attributed to the organisation.',
             'guest' => 'Temporary access with an expiry date.',
         ],
 
@@ -1925,9 +1932,9 @@ return [
         'title' => 'Invitation',
         'heading' => 'Invitation',
 
-        // The binder's name and the inviter's name are shown to a guest too.
+        // The container's name and the inviter's name are shown to a guest too.
         // That is not new information: InvitationNotification prints the
-        // binder's name in both the subject line and the body, and whoever has
+        // container's name in both the subject line and the body, and whoever has
         // the link has received the email. The address the invitation is for
         // is never shown.
         'intro' => ':inviter has invited you to the container :container.',
@@ -1949,17 +1956,17 @@ return [
     // The ownership transfer, see issue 67b decisions 1–9 and [[Konton och
     // åtkomst]] § ownership_transfer. A branch of its own on the top level
     // rather than under `container`: the recipient's inbox sits OUTSIDE the
-    // binder — she does not have it yet — and the sender's page is the other
+    // container — she does not have it yet — and the sender's page is the other
     // half of the same conversation. Same reason that makes `sharing` and
     // `trash` branches of their own.
     //
     // Two pages in one branch: `form`/`excluded`/`retain`/`row`/`status`
-    // belong to the binder's page, `inbox`/`card` to the recipient's.
+    // belong to the container's page, `inbox`/`card` to the recipient's.
     // `accept` and `reject` are shared and sit outermost.
     'transfer' => [
         'title' => 'Ownership transfer',
         'heading' => 'Ownership transfer',
-        'intro' => 'The whole container changes accounts. It covers the same thing whether a boatyard hands over to a customer, a broker to a buyer, or a boat is sold privately.',
+        'intro' => 'The whole container changes accounts. It covers the same thing whether a workshop hands over to a customer, an agency to a new owner, or something you own is sold on.',
 
         // The link sits beside the plan box and not inside the sentence: the
         // string is also delivered by the /api error envelope, and markup in a
@@ -2048,7 +2055,7 @@ return [
             'empty' => 'No ownership transfers are waiting for you.',
         ],
 
-        // The consequences stand before the button (decision 6): which binder,
+        // The consequences stand before the button (decision 6): which container,
         // from which account, how many items follow along and are excluded,
         // which access the sender keeps, and the twelve months of Pro.
         'card' => [
@@ -2060,7 +2067,7 @@ return [
             'pro' => 'Twelve months of Pro are included — once per account, on the first ownership transfer you receive.',
 
             // What happens to the space afterwards, and who owns it: whoever
-            // receives the binder takes over the usage too, and it is her
+            // receives the container takes over the usage too, and it is her
             // quota that applies from then on.
             'quota' => 'The space the container uses moves to your account, and it is your quota that applies afterwards.',
 
@@ -2077,7 +2084,7 @@ return [
         'reject' => 'Decline',
     ],
 
-    // The binder's trash, see issue 62a decisions 4, 5 and 9 and [[ADR-0008
+    // The container's trash, see issue 62a decisions 4, 5 and 9 and [[ADR-0008
     // Soft delete och papperskorg]] § Retentionstiden i MVP. A branch of its
     // own on the top level rather than under `container`: the trash is its own
     // surface with its own vocabulary, like `sharing`.
@@ -2109,7 +2116,7 @@ return [
             'attachment' => 'Attachment',
             'category' => 'Category',
             'tag' => 'Tag',
-            // Came with issue 62b: a deleted binder carries the same key out
+            // Came with issue 62b: a deleted container carries the same key out
             // of TrashEntryResource, and the row is the same component in both
             // lists.
             'container' => 'Container',
@@ -2123,9 +2130,9 @@ return [
 
         'restore' => 'Restore',
 
-        // The trash for deleted BINDERS, see issue 62b decisions 7 and 8. It
-        // sits at the TOP level — a deleted binder is not resolved by the
-        // route binding — and `link` is the row under the binder list, always
+        // The trash for deleted CONTAINERS, see issue 62b decisions 7 and 8. It
+        // sits at the TOP level — a deleted container is not resolved by the
+        // route binding — and `link` is the row under the container list, always
         // visible. The text is constant and counts nothing: a number would be
         // a query per page load (decision 8).
         'containers' => [

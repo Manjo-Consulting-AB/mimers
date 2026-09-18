@@ -44,7 +44,7 @@ use function Pest\Laravel\withoutVite;
  *    (Beslut 7).
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js och jämför ui.php nyckel för nyckel.
  * Att `/api`:s fyra utlåningsrutter svarar exakt som förut prövas i sista
  * testet här.
@@ -55,7 +55,7 @@ use function Pest\Laravel\withoutVite;
 
 /**
  * Ett konto med en medlem, och en container med ett item under kontot. Båda på
- * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -311,7 +311,7 @@ it('gör en andra öppen utlåning till ett fältfel i stället för en JSON-kro
 
     $mening = session('errors')->get('borrower_name')[0];
 
-    expect($mening)->toBe(Lang::get('ui.error.loan.already_open', [], 'sv'));
+    expect($mening)->toBe(Lang::get('ui.error.loan.already_open', [], 'en'));
     expect(Loan::query()->count())->toBe(1);
 });
 
@@ -470,18 +470,13 @@ it('förklarar att systemet aldrig mejlar låntagaren', function () {
 
     utlaningsvyLan($item, ['borrower_email' => 'granne@example.com']);
 
-    // Meningen står på båda språken och säger regeln: adressen används aldrig
-    // för utskick, och påminnelsen går till den som lånat ut.
-    $svensk = (string) Lang::get('ui.item.loan.email_note', [], 'sv');
+    // Meningen säger regeln: adressen används aldrig för utskick, och
+    // påminnelsen går till den som lånat ut.
+    $mening = (string) Lang::get('ui.item.loan.email_note', [], 'en');
 
-    expect($svensk)->toContain('aldrig för utskick');
-    expect($svensk)->toContain('mejlar inte låntagaren');
-    expect($svensk)->toContain('påminnelsen går till dig');
-
-    $engelsk = (string) Lang::get('ui.item.loan.email_note', [], 'en');
-
-    expect($engelsk)->toContain('never used for mailings');
-    expect($engelsk)->toContain('does not email the borrower');
+    expect($mening)->toContain('never used for mailings');
+    expect($mening)->toContain('does not email the borrower');
+    expect($mening)->toContain('the reminder goes to you');
 
     // Och formulärets adressfält bär raden, så ett e-postfält utan förklaring
     // aldrig ritas (Beslut 4).
@@ -534,10 +529,10 @@ it('tar bort en utlåningsrad och skiljer bekräftelsen från återlämning', fu
     // Bekräftelsen säger BÅDA sakerna (Beslut 7): raden försvinner, och det är
     // inte en återlämning — prylen är fortfarande utlånad. Återlämningen har
     // ingen bekräftelse alls; den är en knapp.
-    $bekraftelse = (string) Lang::get('ui.item.loan.destroy_confirm', [], 'sv');
+    $bekraftelse = (string) Lang::get('ui.item.loan.destroy_confirm', [], 'en');
 
-    expect($bekraftelse)->toContain('inte en återlämning');
-    expect($bekraftelse)->toContain('fortfarande utlånad');
+    expect($bekraftelse)->toContain('This is not a return');
+    expect($bekraftelse)->toContain('still lent out');
 
     expect(utlaningsvyKomponent())->toContain("window.confirm(t('item.loan.destroy_confirm'))");
 });

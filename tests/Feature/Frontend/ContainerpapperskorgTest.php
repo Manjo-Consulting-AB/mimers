@@ -45,9 +45,8 @@ use function Pest\Laravel\withoutVite;
  *
  * **Två acceptanskriterier prövas inte här**, därför att de redan har en
  * ägare: `/api`:s tre svar (ContainerPapperskorgTest) och "ingen svensk
- * sträng i en .vue-fil, samma nycklar på sv och en" (SprakTest § "har inga
- * användarvända strängar kvar i Vue-komponenterna" och § "har samma nycklar
- * på båda språken").
+ * sträng i en .vue-fil" (SprakTest § "har inga användarvända strängar kvar i
+ * Vue-komponenterna").
  *
  * Hjälparna har prefixet `containerpapperskorg` — Pest lägger alla testfiler i
  * samma namnrymd när hela sviten körs.
@@ -196,29 +195,23 @@ it('bekräftar raderingen med containerns namn, papperskorgen och de 30 dagarna'
     expect($vy)->toContain('router.delete(`/containers/${props.container.ulid}`)');
     expect($vy)->toContain('window.confirm(');
 
-    $sv = require lang_path('sv/ui.php');
-    $en = require lang_path('en/ui.php');
+    $fil = require lang_path('en/ui.php');
 
-    foreach (['sv' => $sv, 'en' => $en] as $locale => $fil) {
-        $mening = $fil['container']['destroy']['confirm'];
+    $mening = $fil['container']['destroy']['confirm'];
 
-        expect($mening)->toContain(':name');
-        expect($mening)->toContain('30');
+    expect($mening)->toContain(':name');
+    expect($mening)->toContain('30');
 
-        // Papperskorgen och återställningen nämns — orden är olika på de två
-        // språken, så de prövas per språk i stället för mot en gemensam sträng.
-        expect($mening)->toContain($locale === 'sv' ? 'papperskorgen' : 'trash');
-        expect($mening)->toContain($locale === 'sv' ? 'återställa' : 'restored');
+    // Papperskorgen och återställningen nämns, med de engelska orden.
+    expect($mening)->toContain('trash');
+    expect($mening)->toContain('restored');
 
-        // Och aldrig det osanna ordet.
-        expect($mening)->not->toContain('permanent');
+    // Och aldrig det osanna ordet.
+    expect($mening)->not->toContain('permanent');
 
-        expect($fil['container']['destroy']['action'])->not->toBe('');
-        expect($fil['flash']['container-trashed'])->not->toBe('');
-        expect($fil['flash']['container-restored'])->not->toBe('');
-    }
-
-    expect($sv['container']['destroy']['confirm'])->not->toBe($en['container']['destroy']['confirm']);
+    expect($fil['container']['destroy']['action'])->not->toBe('');
+    expect($fil['flash']['container-trashed'])->not->toBe('');
+    expect($fil['flash']['container-restored'])->not->toBe('');
 });
 
 /*
@@ -606,14 +599,7 @@ it('länkar till papperskorgen från containerlistan', function () {
     // den. Låg den innanför `v-else`-grenen hade den försvunnit precis då.
     expect(strpos($index, 'href="/trash/containers"'))->toBeGreaterThan(strpos($index, '</ul>'));
 
-    foreach (['sv', 'en'] as $locale) {
-        expect(trans('ui.trash.containers.link', [], $locale))->not->toBe('');
-    }
-
-    $sv = require lang_path('sv/ui.php');
-    $en = require lang_path('en/ui.php');
-
-    expect($sv['trash']['containers']['link'])->not->toBe($en['trash']['containers']['link']);
+    expect(trans('ui.trash.containers.link', [], 'en'))->not->toBe('');
 });
 
 /*
@@ -661,24 +647,17 @@ it('säger att papperskorgen är tom och återanvänder raden från 62a', functi
     expect($innehall)->toContain(':container-ulid="container.ulid"');
     expect($innehall)->not->toContain('restore-href');
 
-    $sv = require lang_path('sv/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['title', 'heading', 'description', 'empty', 'link', 'back'] as $nyckel) {
-        expect($sv['trash']['containers'][$nyckel])->not->toBe('');
         expect($en['trash']['containers'][$nyckel])->not->toBe('');
     }
 
     // Typetiketten för en raderad container, i samma uppslag som de fyra
     // andra typerna: raden läser `trash.type.<type>` och `container` är ett
-    // värde ur TrashEntryResource.
-    //
-    // **Etiketten är den enda som är likadan på båda språken, och det är
-    // avsiktligt** — se [[ADR-0032 Produktens ord]]: containern heter
-    // container, och den engelska filen lånar ordet i stället för att
-    // översätta det. Här stod tidigare ett påstående om att de två skilde
-    // sig; det var sant så länge engelskan sa *binder*, och det är falskt nu.
-    expect($sv['trash']['type']['container'])->toBe('Container');
+    // värde ur TrashEntryResource. Se [[ADR-0032 Produktens ord]]: containern
+    // heter container, och den engelska filen lånar ordet i stället för att
+    // översätta det — den är därför likadan som den svenska var.
     expect($en['trash']['type']['container'])->toBe('Container');
 });
 

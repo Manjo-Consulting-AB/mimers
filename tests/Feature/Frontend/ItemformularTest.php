@@ -657,15 +657,15 @@ it('lämnar /api-skrivningarna oförändrade', function () {
  * resources/js). Här prövas nyckelparen, nyckel för nyckel, för de grupper
  * 57b lägger till.
  */
-it('har varje item-nyckel på båda språken', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har varje item-nyckel', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['index', 'show', 'form', 'create', 'edit', 'destroy'] as $grupp) {
         expect(array_keys($en['item'][$grupp]))->toBe(array_keys($sv['item'][$grupp]));
 
         foreach ($sv['item'][$grupp] as $nyckel => $varde) {
-            expect(trim($varde))->not->toBe('', "item.{$grupp}.{$nyckel} är tom på sv");
+            expect(trim($varde))->not->toBe('', "item.{$grupp}.{$nyckel} är");
             expect(trim($en['item'][$grupp][$nyckel]))->not->toBe('', "item.{$grupp}.{$nyckel} är tom på en");
         }
     }

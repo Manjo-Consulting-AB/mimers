@@ -27,9 +27,11 @@ use Illuminate\Notifications\Notification;
  * adressen. Sökvägen `{app.url}/transfers` är kontraktet issue 67 (M10) ska
  * implementera.
  *
- * Ingen i18n: en on-demand-notifikation har ingen `locale` att välja språk
- * från — mottagaren finns inte som användare — så texten är svensk, exakt
- * som App\Notifications\InvitationNotification och av samma skäl.
+ * Texten ligger i `lang/en/notiser.php` ([[ADR-0034 Engelska vid lansering]]
+ * § Beslut: ingen användarvänd sträng utanför `lang/`). Ingen locale sätts:
+ * en on-demand-notifikation har ingen `locale` att välja från — mottagaren
+ * finns inte som användare — och `en` är den enda katalogen. Se
+ * App\Notifications\InvitationNotification.
  */
 class OwnershipTransferNotification extends Notification
 {
@@ -57,9 +59,9 @@ class OwnershipTransferNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Någon vill ta över pärmen "'.$this->container->name.'"')
-            ->line('Någon vill överlåta pärmen "'.$this->container->name.'" till dig.')
-            ->line('Skapa ett konto med den här e-postadressen och verifiera adressen — alla som läser något i systemet ska vara identifierade. Logga sedan in och gå till fliken för ägarbyte för att se begäran.')
-            ->action('Visa ägarbyte', $this->url);
+            ->subject(trans('notiser.ownership_transfer.subject', ['container' => $this->container->name]))
+            ->line(trans('notiser.ownership_transfer.line', ['container' => $this->container->name]))
+            ->line(trans('notiser.ownership_transfer.line_verify'))
+            ->action(trans('notiser.ownership_transfer.action'), $this->url);
     }
 }

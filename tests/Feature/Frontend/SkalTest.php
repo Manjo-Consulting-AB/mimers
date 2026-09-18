@@ -1,5 +1,10 @@
 <?php
 
+// rott-pa-basen: issue 82a — testfölje till att lang/sv utgår, ingen ändring av
+// vad filen prövar; raden påstår samma engelska ord (`Settings`) som basens
+// katalog bär, så filen kan inte falla utan språkbytet. Katalogen själv prövas i
+// tests/Feature/Frontend/SprakTest.php.
+
 use App\Models\Account;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
@@ -147,10 +152,8 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
     expect(strpos($menyn, "t('nav.settings')"))->toBeLessThan(strpos($menyn, "t('auth.logout')"))
         ->and($menyn)->toContain('href="/settings" class="inline-flex min-h-11 items-center');
 
-    // Texten bor i lang/ på båda språken (Beslut 5), och orden är olika —
-    // annars vore den ena översättningen en kopia.
-    expect(trans('ui.nav.settings', [], 'sv'))->toBe('Inställningar')
-        ->and(trans('ui.nav.settings', [], 'en'))->toBe('Settings');
+    // Texten bor i lang/ (Beslut 5).
+    expect(trans('ui.nav.settings', [], 'en'))->toBe('Settings');
 
     // Och nyckeln följer med i de delade propsen till varje sida layouten
     // renderar, alltså är raden läsbar överallt och inte bara på en sida.

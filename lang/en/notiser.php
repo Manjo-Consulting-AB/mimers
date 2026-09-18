@@ -59,6 +59,34 @@ return [
             'account_inactive' => 'inactive account warnings',
         ],
     ],
+    /*
+     * Mejlen som skickas av en Notification-klass direkt och inte genom
+     * leveransloopen (app/Notifications/). De står här och inte i en egen fil
+     * därför att de är samma slags text som resten: serverrenderat innehåll på
+     * mottagarens språk. Nycklarna delar inget med typerna ovan — mejlet till
+     * en mottagare som ännu inte har ett konto kan inte gå genom en
+     * leveransrad, eftersom raden kräver en `User`.
+     */
+    'magic_link' => [
+        'subject' => 'Your login link',
+        'line' => 'Click the link below to log in.',
+        'action' => 'Log in',
+        'expires' => 'The link stops working in :minutes minutes and can only be used once.',
+    ],
+    'invitation' => [
+        'subject' => 'You have been invited to :container',
+        'line' => 'You have been invited to share ":container".',
+        'line_verify' => 'To get access you need to create an account with this email address and verify it — everyone who reads anything in the system must be identified.',
+        'action' => 'Open the invitation',
+        'expires' => 'The invitation expires in :days days.',
+    ],
+    'ownership_transfer' => [
+        'subject' => 'Someone wants to take over the container ":container"',
+        'line' => 'Someone wants to transfer the container ":container" to you.',
+        'line_verify' => 'Create an account with this email address and verify it — everyone who reads anything in the system must be identified. Then log in and open the transfers tab to see the request.',
+        'action' => 'View ownership transfer',
+    ],
+
     'calendar' => [
         'name' => 'Maintenance: :container',
         'overdue_prefix' => 'Overdue: ',

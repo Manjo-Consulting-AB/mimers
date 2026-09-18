@@ -31,8 +31,9 @@
             $tagsByUlid = collect($payload['tags'])->keyBy('ulid');
             $categoriesByUlid = collect($payload['categories'])->keyBy('ulid');
 
-            // Etiketterna läses ur lang/{sv,en}/export.php, samma form som
-            // mejlen mot notiser.php. `$label` bygger nyckeln för de värden
+            // Etiketterna läses ur lang/en/export.php — den enda katalogen,
+            // se [[ADR-0034 Engelska vid lansering]] — samma form som mejlen
+            // mot notiser.php. `$label` bygger nyckeln för de värden
             // som kommer ur databasen (recurrence_type, status, relation) och
             // faller tillbaka på råvärdet om nyckeln saknas — en intern kod
             // ska aldrig visas som en översättningsnyckel.

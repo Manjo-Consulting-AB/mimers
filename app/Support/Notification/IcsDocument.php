@@ -58,7 +58,10 @@ final class IcsDocument
         $rader = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//Mimers//Kalenderfeed//SV',
+            // Produktidentifieraren är engelsk som resten av dokumentet:
+            // `SV` och "Kalenderfeed" var svenskt i en fil vars övriga rader
+            // kommer ur `lang/en/` ([[ADR-0034 Engelska vid lansering]]).
+            'PRODID:-//Mimers//Calendar feed//EN',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
             'X-WR-CALNAME:'.$this->escape($this->calendarName),

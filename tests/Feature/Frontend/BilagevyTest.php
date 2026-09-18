@@ -55,7 +55,7 @@ use function Pest\Laravel\withoutVite;
  *
  * Att `/api`:s tre bilagerutter svarar exakt som förut prövas i sista testet.
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js.
  *
  * Hjälparna har prefixet `bilagevy` — Pest lägger alla testfiler i samma
@@ -68,7 +68,7 @@ beforeEach(function () {
 
 /**
  * Ett konto med en medlem, och en container med ett item under kontot. Båda på
- * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -511,7 +511,7 @@ it('gör en för stor fil till ett fältfel med gräns och filstorlek', function
     expect($mening)->toBe(Lang::get('ui.error.quota.max_file_size_exceeded', [
         'limit_bytes' => Number::fileSize(1024),
         'file_bytes' => Number::fileSize(2048),
-    ], 'sv'));
+    ], 'en'));
 
     expect($mening)->toContain(Number::fileSize(1024));
     expect($mening)->toContain(Number::fileSize(2048));
@@ -548,7 +548,7 @@ it('gör en sprängd totalkvot till ett fältfel med gräns, förbrukning och fi
         'limit_bytes' => Number::fileSize(3000),
         'used_bytes' => Number::fileSize(2000),
         'file_bytes' => Number::fileSize(2000),
-    ], 'sv'));
+    ], 'en'));
 
     expect($mening)->toContain(Number::fileSize(3000));
 
