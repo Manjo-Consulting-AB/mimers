@@ -16,7 +16,7 @@ use function Pest\Laravel\withoutVite;
 /*
  * Issue 83 · Containerkontexten sätts av att containern öppnas.
  * Se App\Support\Frontend\ActiveContainer,
- * App\Http\Middleware\HandleInertiaRequests::setActiveContainer() och
+ * App\Http\Controllers\ItemController::index() och
  * App\Http\Controllers\ContainerController::store().
  *
  * Klassens mekanism är issue 51:s (§ Beslut 4) och ändras inte här —
@@ -119,10 +119,10 @@ it('utökar inte den delade propen med containerns namn eller typ', function () 
 
 /*
  * Klart när: att öppna en container användaren saknar åtkomst till lämnar
- * kontexten orörd. Middlewaren prövar `view` innan den rör sessionen, så
- * `set()` anropas aldrig för en container användaren inte når — och svaret
- * blir 403. Både den som saknar kontext och den som redan har en behåller
- * sitt läge.
+ * kontexten orörd. `Gate::authorize('view', …)` i ItemController::index()
+ * faller innan `set()` nås, så en container användaren inte når rör aldrig
+ * sessionen — och svaret blir 403. Både den som saknar kontext och den som
+ * redan har en behåller sitt läge.
  */
 it('lämnar kontexten orörd när en container utan åtkomst öppnas', function () {
     withoutVite();

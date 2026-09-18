@@ -29,6 +29,7 @@ use App\Models\Schedule;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Files\FileOrigin;
+use App\Support\Frontend\ActiveContainer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -150,6 +151,16 @@ class ItemController extends Controller
      * presentationsflagga för 57b:s knapp. En omfångsbegränsad mottagare får
      * `false`: hon skapar barn-items under det hon nått, och den ytan hör till
      * detaljvyn.
+     *
+     * **Att öppna containern gör den till sessionens kontext** (issue 83).
+     * `ActiveContainer::set()` har fyra anropare, och den här är den fjärde:
+     * de tre andra är de tillfällen användaren just FÅTT en container, den här
+     * är den väg kontexten sätts på i vardagen. Anropet ligger efter
+     * `Gate::authorize()` och det är bindande — `set()` glömmer nyckeln när
+     * åtkomsten saknas, så ett nekat anrop får aldrig nå hit: 403:an lämnar en
+     * kontext användaren redan hade orörd. Det finns ingen rutt och ingen
+     * knapp som sätter kontexten för hand; `PUT /containers/{container}/active`
+     * togs bort i samma issue.
      */
     public function index(
         Request $request,
@@ -157,12 +168,15 @@ class ItemController extends Controller
         ListItems $listItems,
         ListCategories $listCategories,
         ListTags $listTags,
+        ActiveContainer $activeContainer,
     ): Response {
         Gate::authorize('view', $container);
 
         $container->loadMissing('account');
 
         $user = $request->user();
+
+        $activeContainer->set($user, $container);
 
         // Listorna hämtas FÖRE filtren: de är både filterradens innehåll och
         // det de inskickade ULID:na löses upp mot (Beslut 3 och 5). Två

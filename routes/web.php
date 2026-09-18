@@ -457,12 +457,9 @@ Route::middleware('auth')->group(function () {
      *
      * **`GET /containers/{container}` sätter den aktiva containern** (issue 83):
      * att öppna en container är den handling som gör den till sessionens
-     * kontext, se
-     * App\Http\Middleware\HandleInertiaRequests::setActiveContainer(). Rutten
-     * är den enda som gör det — den bär namnet `containers.show`, och det är
-     * namnet middlewaren känner igen. Det finns ingen rutt som gör det för
-     * hand längre: `PUT /containers/{container}/active` togs bort i samma
-     * issue.
+     * kontext, se App\Http\Controllers\ItemController::index(). Rutten är den
+     * enda som gör det. Det finns ingen rutt som gör det för hand längre:
+     * `PUT /containers/{container}/active` togs bort i samma issue.
      *
      * **`GET /containers/{container}` måste registreras EFTER
      * `GET /containers/create`** — annars matchar `{container}` strängen
