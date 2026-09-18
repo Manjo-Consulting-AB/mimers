@@ -486,6 +486,19 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_nu
     `uppfoljning` styr slutvarvet efter en åtgärdsloop: samma underlag, men
     uttryckligen en ny granskning i stället för en efterlevnadskontroll.
 
+    Punkt 3 om omfångsrutan säger sedan issue 83 (PR #392) uttryckligen att
+    granskaren inte äger rutan. Där gjorde granskningen allt rätt - prickade av
+    alla sju "Klart när"-punkter mot namngivna tester, verifierade de fyra
+    bindande besluten, hittade inget i säkerhet eller samtidighet - och höll
+    ändå inne `review:approved` på en enda sak: en fil utanför rutan, som
+    `omfangsruta.py` redan hade fällt maskinellt. Utlåtandet var alltså en dyr
+    omskrivning av ett skriptutfall, och eftersom godkännandet uteblev kostade
+    beslutet ett helt nytt granskningsvarv över samma diff efter att arkitekten
+    svarat. De två utfallen är olika frågor: etiketten säger att KODEN är rätt,
+    grinden att RUTAN är det, och `pr_far_mergas()` kräver båda - ingen PR med
+    röd ruta kan mergas på ett godkännande. Att låta granskaren avstå
+    godkännandet för rutans skull köper alltså ingen säkerhet, bara ett varv.
+
     `fragor` är PR-kroppens '## Frågor och antaganden' (oppna_fragor()) - tom
     sträng när avsnittet saknas eller bara var "Inga." Är den satt bjuds
     granskaren, som redan har issuen och läslistan framför sig, in att triagera
@@ -557,11 +570,15 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_nu
         f"det är den enda kontrollen av att inget missats.\n"
         f"2. Kontrollera att issuens numrerade beslut faktiskt följs, och att varje "
         f"avvikelse är motiverad i PR-kroppen.\n"
-        f"3. Håll dig till issuens omfångsruta. Ligger en ändrad fil utanför 'In scope' "
-        f"är det ett fynd. Beställ ALDRIG en ändring i en fil som ligger utanför rutan - "
-        f"be i så fall om att den bryts ut till en egen issue. Rutan kontrolleras även "
-        f"maskinellt av .github/scripts/omfangsruta.py, så en sådan beställning gör bara "
-        f"PR:en röd.\n"
+        f"3. Omfångsrutan ägs av .github/scripts/omfangsruta.py, inte av dig. Ligger en "
+        f"ändrad fil utanför 'In scope' skriver du EN rad om vilken fil det är och om "
+        f"ändringen i sig är riktig - och håller ALDRIG inne review:approved för rutans "
+        f"skull. Etiketten säger att koden är rätt; grinden säger att rutan är rätt, och "
+        f"mergespärren kräver båda, så en PR med röd ruta mergas inte för att du "
+        f"godkände koden. Är ändringen utanför rutan dessutom sakligt fel är den ett "
+        f"vanligt fynd som vilket annat. Beställ ALDRIG en ändring i en fil som ligger "
+        f"utanför rutan - be i så fall om att den bryts ut till en egen issue, eftersom "
+        f"en sådan beställning bara gör PR:en röd.\n"
         f"4. Sedan det vanliga: säkerhet, samtidighet, felhantering, datamodell.\n\n"
         f"Har du fynd, skriv dem som en numrerad lista - konkret nog att en annan "
         f"implementerare kan åtgärda dem utan att fråga dig något mer."
