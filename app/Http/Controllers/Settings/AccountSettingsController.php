@@ -74,6 +74,11 @@ class AccountSettingsController extends Controller
                 'locale' => $account->locale,
                 'timezone' => $account->timezone,
                 'unitSystem' => $account->unit_system,
+                // Kontots valuta (issue 85 · [[ADR-0037 Valutans arv]]): botten
+                // i arvet, och det värde en container utan egen valuta faller
+                // tillbaka på. Kortet visar den med formulär eller som text,
+                // som de fyra andra fälten.
+                'currency' => $account->currency,
                 'canUpdate' => Gate::allows('update', $account),
             ])->all(),
 
@@ -82,7 +87,8 @@ class AccountSettingsController extends Controller
     }
 
     /**
-     * PATCH /settings/accounts/{account} — skriver kontots fyra fält.
+     * PATCH /settings/accounts/{account} — skriver kontots fält, sedan issue
+     * 85 även `currency`.
      *
      * Auktoriseringen är första raden, före varje skrivning: är svaret nej
      * kastas `AuthorizationException` och `update()` nås aldrig. Ett
@@ -90,6 +96,12 @@ class AccountSettingsController extends Controller
      * regel 4 undantar bara att återkalla en åtkomst och att rensa lagring,
      * och ett namnbyte är ingendera. Se [[Konton och åtkomst]]
      * § Behörighetsregler regel 4 och AccountPolicy::update().
+     *
+     * **Skrivningen når bara `account`-raden.** Ett byte av kontots valuta
+     * märker aldrig om en skriven `cost_entry`-rad — det som står i en rad är
+     * vad som betalades, och det nya värdet gäller bara containrar som ärver
+     * och rader som skrivs härefter ([[ADR-0037 Valutans arv]] § Beslut,
+     * App\Models\Container::effectiveCurrency()).
      */
     public function update(UpdateAccountSettingsRequest $request, Account $account): RedirectResponse
     {

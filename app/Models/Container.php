@@ -40,8 +40,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * sättas via massildelning, vare sig från en request eller ett API-anrop.
  * `App\Http\Controllers\Api\ContainerController::store()` sätter
  * `account_id` explicit efter att `ContainerPolicy::create()` godkänt det.
+ *
+ * `currency` är containerns EGEN valuta, och den är NULLBAR: en container
+ * utan egen valuta följer kontots. Se effectiveCurrency() nedan —
+ * arvsregeln formuleras där och ingen annanstans.
  */
-#[Fillable(['name', 'kind'])]
+#[Fillable(['name', 'kind', 'currency'])]
 #[RouteKey('ulid')]
 class Container extends Model
 {
@@ -61,6 +65,33 @@ class Container extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    /**
+     * Valutan en ny kostnadsrad i den här containern föreslås — containerns
+     * egen om den har en, annars kontots. Se [[ADR-0037 Valutans arv]] och
+     * issue 85.
+     *
+     * **Det här är arvsregeln, och den formuleras bara här.** Containern är
+     * nivån som ärver; kontot är botten, och itemet är inte en nivå alls —
+     * det är bara stället där formuläret öppnas ([[ADR-0037 Valutans arv]]).
+     * En andra `?? $container->account->currency` i en kontroller, en resurs
+     * eller en Vue-sida vore en andra sanning om samma sak, och de två
+     * kunde glida isär utan att något test faller.
+     *
+     * Värdet är ett FÖRSLAG, aldrig ett tvång: raden bär sin egen valuta,
+     * obligatorisk, och användaren får välja en annan ([[ADR-0016
+     * Kostnadsregistrering]] § Vad som ingår). Metoden läser kontot genom
+     * relationen — är den inte laddad gör Eloquent en fråga, vilket är
+     * billigare än att varje anropare själv ska komma ihåg `with('account')`.
+     *
+     * Ändras containerns eller kontots valuta ändras svaret härifrån, men
+     * aldrig en redan skriven `cost_entry`-rad: det som står i en rad är vad
+     * som betalades ([[ADR-0037 Valutans arv]] § Beslut).
+     */
+    public function effectiveCurrency(): string
+    {
+        return $this->currency ?? $this->account->currency;
     }
 
     /**
