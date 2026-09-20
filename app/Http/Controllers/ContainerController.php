@@ -229,11 +229,18 @@ class ContainerController extends Controller
      * betyder att den ärver, medan `accountCurrency` är ägarkontots värde och
      * det vyn visar som "ärver kontots valuta (SEK)". Proparna läggs bredvid
      * `ContainerResource` och inte inuti den, av samma skäl som `can.delete`
-     * ovan: `ContainerResource` är `/api`:ets format, och `accountCurrency` är
-     * en upplysning bara den här vyn behöver — API-klienten ser kontots valuta
-     * genom kontots egen yta. Arvsregeln skrivs INTE av här; vyn får båda
-     * värdena och frågar `App\Models\Container::effectiveCurrency()` om den
-     * behöver svaret.
+     * ovan: `ContainerResource` är `/api`:ets format, och de här två värdena
+     * är en upplysning bara den här vyn behöver. Arvsregeln skrivs INTE av
+     * här; vyn får båda värdena och frågar
+     * `App\Models\Container::effectiveCurrency()` om den behöver svaret.
+     *
+     * **`/api` kan i dag SKRIVA valutan men inte LÄSA den.** Den här rutten
+     * och `PATCH /api/containers/{container}` delar `UpdateContainerRequest`,
+     * så en API-klient kan sätta containerns `currency` — men varken
+     * `ContainerResource` eller `AccountResource` exponerar någon valuta, så
+     * svaret går inte att läsa tillbaka. Skriv- och läspariteten hör till en
+     * egen issue: båda resurserna ligger utanför issue 85:s ruta, och att
+     * bredda `/api`:ets format är ett beslut om kontraktet, inte om arvet.
      */
     public function edit(Request $request, Container $container): Response
     {
@@ -260,13 +267,22 @@ class ContainerController extends Controller
     }
 
     /**
-     * PATCH /containers/{container} — skriver `name` och `kind`, 302 till
-     * redigeringssidan.
+     * PATCH /containers/{container} — skriver `name`, `kind` och `currency`,
+     * 302 till redigeringssidan.
      *
-     * `UpdateContainerRequest` delas med `/api` och tar bara emot `name` och
-     * `kind`, båda valfria. `account`/`account_id` finns inte i dess regler
-     * och är därför aldrig med i `validated()` — ett klientskickat sådant
-     * fält ändrar aldrig ägaren (ägarbyte är issue 39).
+     * `UpdateContainerRequest` delas med `/api` och tar bara emot `name`,
+     * `kind` och — sedan issue 85 · [[ADR-0037 Valutans arv]] — `currency`,
+     * alla valfria. `account`/`account_id` finns inte i dess regler och är
+     * därför aldrig med i `validated()` — ett klientskickat sådant fält
+     * ändrar aldrig ägaren (ägarbyte är issue 39).
+     *
+     * **Valutan som skrivs här märker aldrig om en skriven kostnadsrad.**
+     * `cost_entry.currency` rörs inte av den här metoden, av requesten eller
+     * av någon migration i issue 85: det som står i en rad är vad som
+     * betalades ([[ADR-0037 Valutans arv]] § Beslut). En tömd ruta lagrar
+     * `null`, och containern ÄRVER då kontots valuta igen
+     * (App\Models\Container::effectiveCurrency()) — det nya värdet gäller
+     * bara rader som skrivs härefter.
      *
      * `Gate::authorize()` FRÅGAS oavsett vad listan visade: flaggan i listan
      * är presentation, grinden är policyn (Beslut 9).
