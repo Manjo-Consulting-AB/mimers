@@ -17,12 +17,21 @@ use function Pest\Laravel\postJson;
  * Den här filen prövar KOSTNADSRADENS del av arvet, och den handlar mindre om
  * vad som händer än om vad som INTE får hända:
  *
- * - en ny rad får containerns valuta som förifyllt värde — arvsregeln
- *   App\Models\Container::effectiveCurrency(), som formuläret läser,
- * - användaren kan välja en annan valuta på den enskilda raden och den sparas,
- * - ett byte av containerns eller kontots valuta lämnar befintliga rader
- *   OFÖRÄNDRADE. Det är issuens viktigaste acceptanskriterium: det som står i
- *   en rad är vad som betalades, inte vad containern för närvarande föreslår.
+ * - en ny rad får containerns valuta som förval — arvsregeln
+ *   App\Models\Container::effectiveCurrency(), som kontrollern fyller
+ *   tomrummet med när kroppen inte skickar någon valuta. Det är så
+ *   "kostnadsformuläret föreslår containerns" blir prövbart i dag: den
+ *   Vue-yta som visar värdet för användaren byggs i den issue som bygger
+ *   kostnadsytan, och formuläret skickar då antingen det visade värdet eller
+ *   ingenting — båda vägarna prövas här.
+ * - användaren kan välja en annan valuta på den enskilda raden och den sparas;
+ *   ett skickat värde vinner alltid över förvalet,
+ * - ett byte av containerns valuta lämnar befintliga rader OFÖRÄNDRADE.
+ *
+ * Att ett byte av KONTOTS valuta lämnar raden orörd prövas i
+ * tests/Feature/Konto/KontovalutaTest.php, genom inställningsändpunkten — det
+ * är ytan användaren kan skriva på, och en invariant som bara prövas mot
+ * modellen säger ingenting om vad formuläret gör.
  *
  * `cost_entry` ändras inte av issuen: ingen kolumn läggs till och ingen tas
  * bort, och tabellen prövas mot sin exakta kolumnlista just därför. `item`
@@ -58,29 +67,42 @@ function valutansArvKontext(string $kontovaluta = 'SEK', ?string $containerValut
 }
 
 /**
- * Kroppen för POST /costs, med valutan som enda variabel.
+ * Kroppen för POST /costs, med valutan som enda variabel. Utan argument
+ * UTELÄMNAS `currency` helt — det är den väg en klient går som låter
+ * containern föreslå, och den prövas separat från den som skickar ett värde.
  *
  * @return array<string, mixed>
  */
-function valutansArvKropp(string $valuta): array
+function valutansArvKropp(?string $valuta = null): array
 {
-    return [
+    $kropp = [
         'incurred_on' => '2026-04-12',
         'amount' => '1200,50',
-        'currency' => $valuta,
         'description' => 'Impeller',
         'supplier' => null,
     ];
+
+    if ($valuta !== null) {
+        $kropp['currency'] = $valuta;
+    }
+
+    return $kropp;
 }
 
-it('föreslår containerns egen valuta för en ny kostnadsrad', function () {
+/*
+ * Förvalet. `currency` är valfri i kroppen sedan issue 85: servern skriver
+ * containerns App\Models\Container::effectiveCurrency(), som är samma värde
+ * formuläret visar. Kolumnen är ändå `NOT NULL` — det finns ingen väg genom
+ * store() som skapar en rad utan valuta.
+ */
+it('föreslår containerns egen valuta när kroppen inte skickar någon', function () {
     [$account, $user, $headers, $container, $item] = valutansArvKontext('SEK', 'EUR');
 
     expect($container->effectiveCurrency())->toBe('EUR');
 
     $response = postJson(
         "/api/containers/{$container->ulid}/items/{$item->ulid}/costs",
-        valutansArvKropp($container->effectiveCurrency()),
+        valutansArvKropp(),
         $headers,
     );
 
@@ -99,12 +121,50 @@ it('föreslår kontots valuta när containern saknar en egen', function () {
 
     $response = postJson(
         "/api/containers/{$container->ulid}/items/{$item->ulid}/costs",
-        valutansArvKropp($container->effectiveCurrency()),
+        valutansArvKropp(),
         $headers,
     );
 
     $response->assertCreated();
     expect($response->json('data.currency'))->toBe('NOK');
+
+    $kostnad = CostEntry::query()->where('item_id', $item->id)->firstOrFail();
+    expect($kostnad->currency)->toBe('NOK');
+});
+
+it('föreslår containerns valuta också när valutan skickas som en tom ruta', function () {
+    [, , $headers, $container, $item] = valutansArvKontext('SEK', 'EUR');
+
+    // ConvertEmptyStringsToNull gör rutan till `null` innan reglerna körs.
+    // Tomt värde och saknad nyckel betyder samma sak — annars blev "lämna
+    // fältet tomt" en tredje väg med ett eget svar.
+    $response = postJson(
+        "/api/containers/{$container->ulid}/items/{$item->ulid}/costs",
+        valutansArvKropp(''),
+        $headers,
+    );
+
+    $response->assertCreated();
+    expect($response->json('data.currency'))->toBe('EUR');
+});
+
+/*
+ * Och formen prövas så fort ett värde ÄR där: valfritt betyder inte
+ * ovaliderat. `alpha|size:3` är samma regel som före issue 85.
+ */
+it('avvisar en skickad valuta som inte är tre bokstäver', function () {
+    [, , $headers, $container, $item] = valutansArvKontext('SEK', 'EUR');
+    $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/costs";
+
+    postJson($url, valutansArvKropp('SE1'), $headers)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'validation.failed');
+
+    postJson($url, valutansArvKropp('KRONOR'), $headers)
+        ->assertStatus(422)
+        ->assertJsonPath('error.code', 'validation.failed');
+
+    expect(CostEntry::query()->where('item_id', $item->id)->count())->toBe(0);
 });
 
 it('låter användaren välja en annan valuta på den enskilda raden och sparar den', function () {
@@ -153,28 +213,6 @@ it('lämnar befintliga kostnadsrader oförändrade när containerns valuta byts'
     expect($container->fresh()->currency)->toBeNull();
     expect($container->fresh()->effectiveCurrency())->toBe('SEK');
     expect($kostnad->fresh()->currency)->toBe('EUR');
-});
-
-it('lämnar befintliga kostnadsrader oförändrade när kontots valuta byts', function () {
-    [$account, $user, $headers, $container, $item] = valutansArvKontext('SEK', null);
-
-    $kostnad = CostEntry::factory()->for($item, 'item')->create([
-        'currency' => 'SEK',
-        'created_by_user_id' => $user->id,
-        'created_by_account_id' => $account->id,
-    ]);
-
-    // Bytet sker på modellen och inte genom PATCH /settings/accounts: den
-    // skrivvägen ligger i app/Http/Requests/Settings/**, utanför issue 85:s
-    // ruta. Invarianten som prövas är kontots valuta kontra radens, och den
-    // är oberoende av vilken yta som skrev kontot.
-    $account->update(['currency' => 'EUR']);
-
-    expect($account->fresh()->currency)->toBe('EUR');
-    // Containern ärver det nya värdet — för NYA poster.
-    expect($container->fresh()->effectiveCurrency())->toBe('EUR');
-    // Raden står kvar: det som står i en rad är vad som betalades.
-    expect($kostnad->fresh()->currency)->toBe('SEK');
 });
 
 it('har varken lagt till eller tagit bort en kolumn i cost_entry', function () {

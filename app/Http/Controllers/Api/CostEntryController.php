@@ -95,10 +95,28 @@ class CostEntryController extends Controller
 
     /**
      * POST /api/containers/{container}/items/{item}/costs — 201.
-     * StoreCostEntryRequest har bevisat att fälten finns och att `amount` är
-     * en sträng; själva beloppstolkningen ligger HÄR, i kontrollern, genom
-     * MinorUnits::parse() — den kastar `cost.amount_invalid`/
-     * `cost.amount_decimals` innan en rad skapas (§ Beslut 4–5).
+     * StoreCostEntryRequest har bevisat att `amount` är en sträng; själva
+     * beloppstolkningen ligger HÄR, i kontrollern, genom MinorUnits::parse()
+     * — den kastar `cost.amount_invalid`/`cost.amount_decimals` innan en rad
+     * skapas (§ Beslut 4–5).
+     *
+     * **Valutan är valfri i kroppen sedan issue 85 · [[ADR-0037 Valutans
+     * arv]], och den enda raden här som fyller ett tomrum.** Skickar klienten
+     * ingen valuta skriver servern containerns
+     * `App\Models\Container::effectiveCurrency()` — containerns egen om den
+     * har en, annars ägarkontots. Det är samma värde formuläret visar som
+     * förval, och det är därför arvsregeln är prövbar i dag: den Vue-yta som
+     * visar värdet för användaren byggs i den issue som bygger kostnadsytan.
+     *
+     * Skickas en valuta vinner den ALLTID och sparas ordagrant
+     * (versalnormaliserad av requesten). Arvet är ett förslag, aldrig ett
+     * tvång — och kolumnen är oförändrat `NOT NULL`: det finns ingen väg
+     * genom den här metoden som skapar en rad utan valuta. Fallet ligger
+     * före `MinorUnits::parse()`, som behöver valutan för att veta antalet
+     * decimaler.
+     *
+     * Containern är den som redan denormaliseras ur itemet på raden nedan;
+     * ingen ny uppslagning görs och itemet är fortfarande ingen nivå i arvet.
      *
      * Inga domänregler utöver det: registrering är fri på alla plannivåer,
      * kostnadsrader är metadata (räknas inte mot kvoten) och bär ingen
@@ -114,6 +132,13 @@ class CostEntryController extends Controller
         Gate::authorize('create', $item);
 
         $data = $request->validated();
+
+        // `??=` och inte en `if`: en nyckel som saknas OCH en nyckel som kom
+        // in som `null` (tom ruta, ConvertEmptyStringsToNull) betyder samma
+        // sak — containern föreslår. Se klassdokumentationen i
+        // StoreCostEntryRequest.
+        $data['currency'] ??= $container->effectiveCurrency();
+
         $amount = MinorUnits::parse($data['amount'], $data['currency']);
         unset($data['amount']);
 

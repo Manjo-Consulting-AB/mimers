@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * POST /api/containers/{container}/items/{item}/costs, se issue 45a § Beslut
- * 5 och 11. Kroppen är `{"incurred_on", "amount", "currency", "description",
+ * 5 och 11. Kroppen är `{"incurred_on", "amount", "currency"?, "description",
  * "supplier"?}`.
  *
  * `amount` är en STRÄNG i huvudenhet och valideras bara som `present|string`
@@ -17,6 +17,16 @@ use Illuminate\Foundation\Http\FormRequest;
  * MinorUnits och bli `cost.amount_invalid` (Klart när), medan ett helt
  * saknat fält är ett formfel. En klient som skickar `amount` som JSON-tal
  * (1200.50 i stället för "1200.50") faller på `validation.string`.
+ *
+ * **`currency` är VALFRI i kroppen sedan issue 85 · [[ADR-0037 Valutans
+ * arv]], men förblir OBLIGATORISK i datan** — till skillnad från `supplier`,
+ * som är valfri i båda. Kolumnen är oförändrat `NOT NULL` ([[ADR-0016
+ * Kostnadsregistrering]]): det är kontrollern som fyller tomrummet med
+ * containerns `effectiveCurrency()`, vilket är precis det formuläret gör när
+ * det visar containerns valuta som förval. Ett värde som SKICKAS vinner
+ * alltid och sparas ordagrant (versalnormaliserat) — arvet är ett förslag,
+ * aldrig ett tvång. Ett tomt värde och en saknad nyckel betyder samma sak;
+ * `alpha|size:3` gäller så fort ett värde är där.
  *
  * `item_id`, `container_id` och `created_by_*` accepteras ALDRIG här — de
  * sätts av kontrollern (§ Beslut 2 och 3). `currency` normaliseras till
@@ -63,7 +73,12 @@ class StoreCostEntryRequest extends FormRequest
         return [
             'incurred_on' => ['required', 'date'],
             'amount' => ['present', 'string'],
-            'currency' => ['required', 'string', 'alpha', 'size:3'],
+            // `nullable` och inte `sometimes|required`: ett tomt värde och en
+            // saknad nyckel betyder samma sak — "föreslå containerns" — och
+            // valet ligger i kontrollern. Formen prövas så fort ett värde är
+            // där, så en rad kan aldrig lagras med något annat än tre
+            // bokstäver.
+            'currency' => ['nullable', 'string', 'alpha', 'size:3'],
             'description' => ['required', 'string', 'max:255'],
             'supplier' => ['nullable', 'string', 'max:255'],
         ];
