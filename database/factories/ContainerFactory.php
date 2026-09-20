@@ -28,6 +28,11 @@ class ContainerFactory extends Factory
             'account_id' => Account::factory(),
             'name' => fake()->words(2, true),
             'kind' => fake()->word(),
+            // Ingen egen valuta: containern följer kontot, och `null` är vad
+            // en container skapad utan egen valuta bär (issue 85 ·
+            // [[ADR-0037 Valutans arv]]). Den som vill pröva en egen valuta
+            // sätter den uttryckligen.
+            'currency' => null,
         ];
     }
 }

@@ -1048,6 +1048,15 @@ return [
             'name' => 'Name',
             'kind' => 'Type',
 
+            // The container's own currency, see issue 85 · [[ADR-0037 Valutans
+            // arv]]. The field is prefilled with the container's own value and
+            // is EMPTY when the container inherits — an empty box is the answer
+            // "follow the account", not a missing value, and `currency_hint`
+            // names the account's currency instead of saying "the account's":
+            // what the container falls back on has to be readable on the page.
+            'currency' => 'Currency',
+            'currency_hint' => 'Three letters, for example SEK. Leave the field empty and the container uses the account\'s currency (:currency).',
+
             'submit' => 'Save',
         ],
 

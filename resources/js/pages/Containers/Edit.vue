@@ -13,10 +13,11 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver:
  * `container` ur App\Http\Resources\ContainerResource.
  *
- * EN PATCH mot /containers/{ulid}, och bara `name` och `kind` —
- * `UpdateContainerRequest` tar inte emot något annat, så ett `account`-fält
- * här hade varit en yta som inte gör något. Att flytta en container mellan konton
- * är ägarbyte (issue 39), inte en inställning.
+ * EN PATCH mot /containers/{ulid}, och bara `name`, `kind` och — sedan issue
+ * 85 · [[ADR-0037 Valutans arv]] — `currency`. `UpdateContainerRequest` tar
+ * inte emot något annat, så ett `account`-fält här hade varit en yta som inte
+ * gör något. Att flytta en container mellan konton är ägarbyte (issue 39),
+ * inte en inställning.
  *
  * Ingen egen ägarkontouppgift i vyn: den här sidan handlar om containern, och
  * delningsstatus hör till listan.
@@ -47,6 +48,10 @@ const props = defineProps({
     /* Användarens redan använda arter — underlag för autocomplete, inte en
        tillåten mängd. Fältet är fritt och får tömmas. */
     kinds: { type: Array, required: true },
+    /* Containerns EGEN valuta, `null` när den ärver kontots (issue 85). */
+    currency: { type: String, default: null },
+    /* Ägarkontots valuta — det containern faller tillbaka på. */
+    accountCurrency: { type: String, required: true },
     can: { type: Object, required: true },
 });
 
@@ -58,6 +63,10 @@ const form = useForm({
     // En container skapad utan art bär `null`; rutan ska vara tom, inte visa
     // ordet "null" (issue 84).
     kind: props.container.kind ?? '',
+    // Samma sak för valutan: en tom ruta betyder "ärv kontots", och det är
+    // ett giltigt svar — inte ett fält användaren glömt (issue 85 ·
+    // [[ADR-0037 Valutans arv]]).
+    currency: props.currency ?? '',
 });
 
 // Raderingen är ett router.anrop och inte ett useForm-formulär, så vänteläget
@@ -134,6 +143,39 @@ async function destroy() {
                     <option v-for="kind in kinds" :key="kind" :value="kind" />
                 </datalist>
             </FormField>
+
+            <FormField
+                v-slot="{ describedBy }"
+                :label="t('container.edit.currency')"
+                id="currency"
+                :error="form.errors.currency"
+            >
+                <!-- Containerns egen valuta, se issue 85 · [[ADR-0037 Valutans
+                     arv]]. Fältet är FÖRIFYLLT och ändringsbart, aldrig dolt:
+                     rutan visar vad containern står på och vad en ny
+                     kostnadsrad föreslås i. Tre bokstäver, versaler —
+                     servern normaliserar till versaler, så `sek` och `SEK` är
+                     samma valuta. En tom ruta är svaret "ärv kontots", och
+                     därför står kontots valuta i hjälptexten och inte bara
+                     "kontots". Ingen lista att välja ur: en valuta är ingen
+                     uppräkning, och en lista i koden vore domänen inbyggd i
+                     den ([[ADR-0033 Produktens omfång]]). -->
+                <input
+                    id="currency"
+                    v-model="form.currency"
+                    :aria-describedby="describedBy"
+                    type="text"
+                    name="currency"
+                    maxlength="3"
+                    autocomplete="off"
+                    class="w-24 rounded border border-slate-300 bg-white px-3 py-2 uppercase"
+                    :placeholder="accountCurrency"
+                >
+            </FormField>
+
+            <p class="-mt-2 text-sm text-slate-600">
+                {{ t('container.edit.currency_hint', { currency: accountCurrency }) }}
+            </p>
 
             <button
                 type="submit"

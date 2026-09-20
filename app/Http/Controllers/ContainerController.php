@@ -223,6 +223,17 @@ class ContainerController extends Controller
      * ens hit (grinden ovan är `update()`), men en `write`-deltagare som
      * postar förbi vyn får 403 på `containers.destroy` — flaggan är ingen
      * grind.
+     *
+     * **Valutan kommer som TVÅ propar bredvid resursen** (issue 85 ·
+     * [[ADR-0037 Valutans arv]]): `currency` är containerns EGEN, och `null`
+     * betyder att den ärver, medan `accountCurrency` är ägarkontots värde och
+     * det vyn visar som "ärver kontots valuta (SEK)". Proparna läggs bredvid
+     * `ContainerResource` och inte inuti den, av samma skäl som `can.delete`
+     * ovan: `ContainerResource` är `/api`:ets format, och `accountCurrency` är
+     * en upplysning bara den här vyn behöver — API-klienten ser kontots valuta
+     * genom kontots egen yta. Arvsregeln skrivs INTE av här; vyn får båda
+     * värdena och frågar `App\Models\Container::effectiveCurrency()` om den
+     * behöver svaret.
      */
     public function edit(Request $request, Container $container): Response
     {
@@ -237,6 +248,11 @@ class ContainerController extends Controller
             'container' => ContainerResource::make($container)->resolve($request),
             // Samma lista som skapavyn får — en metod, en prop (issue 84).
             'kinds' => $this->kindsUsedBy($request->user()),
+            // Containerns egen valuta, och ägarkontots att falla tillbaka på
+            // när den är tom (issue 85). `null` är ett giltigt värde för
+            // `currency` och betyder "ärver".
+            'currency' => $container->currency,
+            'accountCurrency' => $container->account->currency,
             'can' => [
                 'delete' => Gate::forUser($request->user())->allows('delete', $container),
             ],
