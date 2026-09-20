@@ -45,5 +45,6 @@ Thumbs.db
 .claude/settings.local.json
 .claude/usage.jsonl
 .claude/process-next-issue.lock
+.claude/.headroom_wrap_settings.lock
 .claude/hooks/__pycache__/
 .github/scripts/__pycache__/
