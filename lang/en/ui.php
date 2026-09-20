@@ -505,13 +505,6 @@ return [
             'read_only' => 'You can see the details but not change them.',
             'empty' => 'You are not a member of any account.',
 
-            // Issue 85 · [[ADR-0037 Valutans arv]] — the account carries the
-            // currency and is the bottom of the inheritance: a container
-            // without one of its own falls back on this value. Three letters,
-            // no list to pick from ([[ADR-0033 Produktens omfång]]), and no
-            // "follow ..." option — the account has nothing to follow.
-            'currency' => 'Currency',
-
             'submit' => 'Save',
         ],
 

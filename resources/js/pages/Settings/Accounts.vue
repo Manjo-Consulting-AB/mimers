@@ -88,10 +88,6 @@ const { t } = useTranslations();
                             <dt class="shrink-0 text-slate-600 md:w-40">{{ t('settings.profile.unit_system') }}</dt>
                             <dd>{{ t(`settings.units.${account.unitSystem}`) }}</dd>
                         </div>
-                        <div class="flex flex-col gap-1 md:flex-row md:gap-2">
-                            <dt class="shrink-0 text-slate-600 md:w-40">{{ t('settings.accounts.currency') }}</dt>
-                            <dd>{{ account.currency }}</dd>
-                        </div>
                     </dl>
                 </div>
             </article>

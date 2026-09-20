@@ -23,15 +23,6 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * valt något. Därför ingen "följ ..."-post i de här väljarna, och därför
  * `required` i markupen — samma markör som på profilen.
  *
- * `currency` kom hit i issue 85 · [[ADR-0037 Valutans arv]]: kontot är botten
- * i valutans arv, och containern faller tillbaka på det här värdet när den
- * saknar en egen. Fältet är förifyllt med kontots värde och ändringsbart,
- * precis som containerns valutafält i pages/Containers/Edit.vue — och det är
- * ett fritextfält och ingen väljare: en valuta är ingen uppräkning, och en
- * lista i koden vore domänen inbyggd i den ([[ADR-0033 Produktens omfång]]).
- * Servern normaliserar till versaler. Att byta värdet skriver bara
- * `account.currency` — ingen skriven kostnadsrad märks om.
- *
  * `useErrorFocus` importeras ur pages/Auth/ där filen bor sedan issue 53a;
  * flytten till composables/ ligger utanför den här issuen (se filens eget
  * docblock).
@@ -52,7 +43,6 @@ const form = useForm({
     locale: props.account.locale,
     timezone: props.account.timezone,
     unit_system: props.account.unitSystem,
-    currency: props.account.currency,
 });
 
 const locales = computed(() => ['sv_SE', 'en_GB']);
@@ -138,32 +128,6 @@ function submit() {
                     {{ t(`settings.units.${unit}`) }}
                 </option>
             </select>
-        </FormField>
-
-        <!-- Kontots valuta, se issue 85 · [[ADR-0037 Valutans arv]]. Fältet
-             är förifyllt och ändringsbart, aldrig dolt — det är botten i
-             arvet, och en container utan egen valuta visar det här värdet i
-             sin tur. Fritext och tre tecken: servern normaliserar till
-             versaler, och en lista i koden vore domänen inbyggd i den
-             ([[ADR-0033 Produktens omfång]]). Att byta värdet skriver bara
-             kontot; ingen skriven kostnadsrad märks om. -->
-        <FormField
-            v-slot="{ describedBy }"
-            :label="t('settings.accounts.currency')"
-            :id="field('currency')"
-            :error="form.errors.currency"
-        >
-            <input
-                :id="field('currency')"
-                v-model="form.currency"
-                :aria-describedby="describedBy"
-                type="text"
-                name="currency"
-                maxlength="3"
-                autocomplete="off"
-                required
-                class="w-24 rounded border border-slate-300 bg-white px-3 py-2 uppercase"
-            >
         </FormField>
 
         <button
