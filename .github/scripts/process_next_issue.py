@@ -416,19 +416,43 @@ def call_claude_direct(model, prompt, cwd):
     upprepade gånger och krävde varje gång att Tony satte `atgarda:arkitektsvar`
     på nytt. stdin har ingen motsvarande gräns, så prompten kan inte längre bli
     för stor för att skickas. Behåll formen: allow-raden i settings.json matchar
-    prefixet `claude -p --model <modell> --permission-mode bypassPermissions`,
-    och ett återinfört promptargument skulle både bryta matchningen och ta
-    tillbaka kraschen.
+    prefixet `headroom wrap claude -- -p --model <modell> --permission-mode
+    bypassPermissions`, och ett återinfört promptargument skulle både bryta
+    matchningen och ta tillbaka kraschen.
+
+    Körs via `headroom wrap claude` i stället för `claude` direkt: wrap-kommandot
+    startar en egen proxy för just det här anropet och dödar den i sin `finally`
+    när claude-processen avslutas (headroom/cli/wrap.py). Det ger headroom-
+    komprimeringen utan att hålla en proxy vid liv mellan varje eskalering -
+    en permanent proxy (`headroom install deploy`) svalt minnet på VPS:ens 2 GB
+    och hängde hela maskinen 2026-09-20.
     """
-    print(f"--> Startar {model} direkt...")
+    print(f"--> Startar {model} via headroom wrap...")
     cmd = [
-        "claude",
+        "headroom", "wrap", "claude", "--",
         "-p",
         "--model", model,
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",
+        # Måste stå sist: allow-raden i settings.json matchar prefixet upp
+        # till "bypassPermissions" med en trailing wildcard, se docstringen
+        # ovan. --setting-sources user,project utesluter "local" så att en
+        # ANNAN `headroom wrap claude`-sessions ANTHROPIC_BASE_URL, sparad i
+        # .claude/settings.local.json, inte kan skriva över den modell och
+        # proxy den här eskaleringen faktiskt ska prata med - wrap-kommandot
+        # ovan sätter sin egen proxys ANTHROPIC_BASE_URL som miljövariabel,
+        # vilket "local"-uteslutningen inte påverkar.
+        "--setting-sources", "user,project",
     ]
-    result = run_cmd(cmd, check=True, cwd=cwd, input=prompt)
+    # HEADROOM_DISABLE_KOMPRESS_ANTHROPIC: Kompress ML-komprimering laddar en
+    # egen ONNX-embedder per proxyinstans (~600 MB+ RSS). Under en stor
+    # PR-diff svalde den minnet på VPS:ens 2 GB och earlyoom fick döda
+    # proxyn mitt i en Sonnet-granskning, vilket kraschade hela körningen
+    # (issue 2026-09-21). Strukturell komprimering och cache-läget
+    # (HEADROOM_MODE=cache) är opåverkade - bara den tunga ML-modellen är
+    # avstängd för just de här anropen.
+    env = {**os.environ, "HEADROOM_DISABLE_KOMPRESS_ANTHROPIC": "1"}
+    result = run_cmd(cmd, check=True, cwd=cwd, input=prompt, env=env)
     return result.stdout
 
 
@@ -443,10 +467,11 @@ def usage_ok_to_proceed():
     ändra bara svansen, annars matchar ingen allow-rad i
     ~/.claude/settings.json och den oövervakade cron-körningen stannar på
     permission-klassificeraren. Därför går prompten på stdin här också, trots
-    att "ok" aldrig kan bli för lång: prefixet ska vara ett och samma.
+    att "ok" aldrig kan bli för lång: prefixet ska vara ett och samma. Körs
+    via `headroom wrap claude`, se motiveringen i call_claude_direct().
     """
     cmd = [
-        "claude",
+        "headroom", "wrap", "claude", "--",
         "-p",
         "--model", "sonnet",
         "--permission-mode", "bypassPermissions",
@@ -454,7 +479,10 @@ def usage_ok_to_proceed():
         "--verbose",
         "--max-turns", "1",
     ]
-    result = run_cmd(cmd, check=False, input="ok")
+    # Samma motivering som call_claude_direct(): stäng av Kompress ML-
+    # komprimeringens ONNX-embedder för att undvika dess minnestryck.
+    env = {**os.environ, "HEADROOM_DISABLE_KOMPRESS_ANTHROPIC": "1"}
+    result = run_cmd(cmd, check=False, input="ok", env=env)
     for line in result.stdout.splitlines():
         try:
             event = json.loads(line)
