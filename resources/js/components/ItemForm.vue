@@ -53,11 +53,31 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * text — en väljare hade varit en andra fråga om något användaren redan
  * besvarat. `parent` skickas bara i skapandeläget: `UpdateItemRequest` tar
  * inte emot fältet, och ett item som redan finns byter inte förälder här.
+ *
+ * **Omslagsbilden är en väljare och bara i redigeringsläget** (issue 93 ·
+ * [[ADR-0041 Itemets vy]] § Beslut). `images` är itemets bilder ur
+ * App\Actions\Item\ResolveItemCover::images() — äldst först och redan
+ * filtrerade till `kind = 'image'` — och formuläret väljer ur den listan,
+ * sorterar den aldrig om och letar aldrig själv bland bilagorna: en andra
+ * regel om vad som är en bild glider ifrån den första. `cover` är den VALDA
+ * bildens ULID, aldrig den upplösta: väljer användaren ingenting är pekaren
+ * null och upplösningens steg 2 gäller, och då ska väljaren visa just det.
+ * Annars gick valet aldrig att ta tillbaka.
+ *
+ * Ingen bild i itemet betyder inget fält: ett val mellan ett alternativ är
+ * ingen fråga (samma regel som det enda kontot nedan).
+ *
+ * Skapandeläget skickar inte `cover` alls — itemet har inga bilagor än, och
+ * `StoreItemRequest` tar inte emot fältet.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
     categories: { type: Array, required: true },
     tags: { type: Array, required: true },
+    /* Itemets bilder, äldst först; tom i skapandeläget. */
+    images: { type: Array, default: () => [] },
+    /* Den valda bildens ULID, eller null när inget val är gjort. */
+    cover: { type: String, default: null },
     /* Kontolistan ur den delade propen `auth.accounts`; tom i redigeringsläget. */
     accounts: { type: Array, default: () => [] },
     /* Det förvalda kontot — containerns ägarkonto när användaren är medlem i det. */
@@ -91,6 +111,12 @@ const fields = {
     position_note: props.item?.position_note ?? '',
     category: props.item?.category ?? null,
     tags: props.item?.tags?.map((tag) => tag.ulid) ?? [],
+    /*
+     * Omslagsbilden: nyckeln finns bara i redigeringsläget (issue 93). Ett
+     * item som just skapas har inga bilagor att välja bland, och
+     * StoreItemRequest har ingen regel för fältet.
+     */
+    ...(props.item === null ? {} : { cover: props.cover ?? null }),
 };
 
 const form = useForm(props.item === null
@@ -154,6 +180,31 @@ function submit() {
                 required
                 class="rounded border border-slate-300 bg-white px-3 py-2"
             >
+        </FormField>
+
+        <!-- Omslagsbilden: en väljare ur itemets bilder, med "inget val" överst
+             (issue 93). Fältet ritas bara i redigeringsläget och bara när
+             itemet har bilder; `images` kommer färdigfiltrerad och sorterad
+             ur App\Actions\Item\ResolveItemCover::images(). -->
+        <FormField
+            v-if="item !== null && images.length > 0"
+            v-slot="{ describedBy }"
+            :label="t('item.form.cover')"
+            id="cover"
+            :error="form.errors.cover"
+        >
+            <select
+                id="cover"
+                v-model="form.cover"
+                :aria-describedby="describedBy"
+                name="cover"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
+            >
+                <option :value="null">{{ t('item.form.cover_none') }}</option>
+                <option v-for="image in images" :key="image.ulid" :value="image.ulid">
+                    {{ image.filename }}
+                </option>
+            </select>
         </FormField>
 
         <FormField

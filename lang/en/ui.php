@@ -1271,6 +1271,18 @@ return [
             // selector: the link has already answered the question, and
             // `parent` is only sent on creation.
             'parent' => 'Created under: :name',
+
+            // The cover image (issue 93, [[ADR-0041 Itemets vy]]). One
+            // selector over the item's own images, and only in the edit form:
+            // an item that does not exist yet has no attachments to choose
+            // from. `cover_none` is the top row and it CLEARS the choice —
+            // with no choice made, App\Actions\Item\ResolveItemCover falls
+            // back to the item's oldest image. The label says what the user
+            // does and not what the rule then picks: a promise about the
+            // result would be a second statement of the rule, in text, to
+            // keep in step with the first.
+            'cover' => 'Cover image',
+            'cover_none' => '— no choice —',
         ],
 
         'create' => [

@@ -6,6 +6,7 @@ use App\Actions\Category\ListCategories;
 use App\Actions\Item\LinkItems;
 use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
+use App\Actions\Item\ResolveItemCover;
 use App\Actions\Tag\ListTags;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
@@ -89,6 +90,14 @@ use Inertia\Response;
  * betyder noll förfallna förekomster i itemets underträd, och uppslaget
  * byggs av App\Support\Item\ItemStatus på ett konstant antal frågor — se
  * `statuses` i index().
+ *
+ * **Omslagsbilden ligger BREDVID resursen** (issue 93 · [[ADR-0041 Itemets
+ * vy]] § Beslut), samma linje igen: `ItemResource` är `/api`:s format och har
+ * inte bett om fältet — varken pekaren eller den upplösta bilden. Redigeringsvyn
+ * får i stället `images`, itemets bilder i upplösningens egen ordning, och
+ * `cover`, den VALDA bildens ULID. Urvalet av vad som är en bild och i vilken
+ * ordning de kommer bor i App\Actions\Item\ResolveItemCover och skrivs inte
+ * om här; vyn varken väljer bland bilagorna eller sorterar dem.
  *
  * **Ingen behörighetslogik bor här.** Ett nekat svar kastar
  * `AuthorizationException`, som bootstrap/app.php renderar som felsidan för
@@ -605,7 +614,7 @@ class ItemController extends Controller
      * **Inget `account` här** (§ Beslut 4). `UpdateItemRequest` tar inte emot
      * fältet och formuläret ritar det inte: vem som skapade raden är historik.
      */
-    public function edit(Request $request, Container $container, Item $item, ListCategories $listCategories, ListTags $listTags): Response
+    public function edit(Request $request, Container $container, Item $item, ListCategories $listCategories, ListTags $listTags, ResolveItemCover $resolveItemCover): Response
     {
         Gate::authorize('update', $item);
 
@@ -617,11 +626,30 @@ class ItemController extends Controller
 
         $user = $request->user();
 
+        // Itemets bilder, i upplösningens egen ordning — äldst först (issue
+        // 93). EN fråga, och urvalet (`kind = 'image'`, mjukraderade bort)
+        // bor i Actionen: vyn får en färdig lista och letar inte själv bland
+        // bilagorna, för en andra regel om vad som är en bild glider ifrån
+        // den första.
+        $images = $resolveItemCover->images($item);
+
         return Inertia::render('Containers/Items/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
             'categories' => CategoryResource::collection($listCategories->handle($user, $container))->resolve($request),
             'tags' => TagResource::collection($listTags->handle($user, $container))->resolve($request),
+
+            // Väljarens alternativ, och det VALDA — pekaren och inte den
+            // upplösta bilden. Skillnaden är hela "rensa": väljer användaren
+            // ingenting är pekaren null och upplösningen gäller, och då ska
+            // väljaren visa just det och inte det foto regeln råkade peka ut
+            // (annars gick valet aldrig att ta tillbaka).
+            //
+            // Pekaren kan stå kvar på en bilaga som mjukraderats; hon finns
+            // inte i listan, och `firstWhere` svarar då null. Det är rätt svar:
+            // valet är borta, och upplösningens steg 2 gäller.
+            'images' => $this->imageOptions($images),
+            'cover' => $images->firstWhere('id', $item->cover_attachment_id)?->ulid,
         ]);
     }
 
@@ -644,13 +672,29 @@ class ItemController extends Controller
      *
      * `account` finns inte i `UpdateItemRequest` och inte i formuläret: vem
      * som skapade raden är historik (§ Beslut 4).
+     *
+     * **Omslagsbilden sätts, byts och RENSAS i samma PATCH** (issue 93 ·
+     * [[ADR-0041 Itemets vy]] § Beslut). Fältet `cover` bär bilagans ULID,
+     * `cover: null` tömmer valet och låter upplösningens steg 2 gälla, och
+     * `UpdateItemRequest` har redan prövat att bilagan finns, hör till DET HÄR
+     * itemet, är en bild och lever. Uppslaget till löpnummer går genom
+     * App\Actions\Item\ResolveItemCover::images() — samma urval som
+     * upplösningen själv använder — så en bilaga som hinner mjukraderas mellan
+     * valideringen och skrivningen blir `null` i stället för en pekare till en
+     * bild ingen kan visa (samma resonemang som kategorin: valideringen äger
+     * regeln, kontrollern gör ett uppslag).
      */
-    public function update(UpdateItemRequest $request, Container $container, Item $item): RedirectResponse
+    public function update(UpdateItemRequest $request, Container $container, Item $item, ResolveItemCover $resolveItemCover): RedirectResponse
     {
         Gate::authorize('update', $item);
 
-        $item->fill($request->safe()->except(['category', 'tags']));
+        $item->fill($request->safe()->except(['category', 'tags', 'cover']));
         $item->category_id = $this->category($container, $request->validated('category'))?->id;
+
+        $cover = $request->validated('cover');
+        $item->cover_attachment_id = $cover === null
+            ? null
+            : $resolveItemCover->images($item)->firstWhere('ulid', $cover)?->id;
 
         // Item-skrivningen och taggknytningen i samma transaktion, samma
         // resonemang som store() (issue 13b § Beslut 7). replaceTags() kör
@@ -950,6 +994,37 @@ class ItemController extends Controller
     private function isOverdue(Loan $loan): bool
     {
         return $loan->due_at !== null && $loan->due_at->lessThan(Carbon::today());
+    }
+
+    /**
+     * Itemets bilder som väljarens alternativ — ULID och filnamn (issue 93 ·
+     * [[ADR-0041 Itemets vy]] § Beslut).
+     *
+     * **Två fält och inte `AttachmentResource`.** Väljaren ritar ett filnamn
+     * per rad, och resursen bär `mime_type`, `byte_size` och
+     * `billed_account` — tre relationer att eager-ladda för en lista som inte
+     * visar dem. Formen är `categoryNames()`s och `counterparts()`s: ett
+     * uppslag BREDVID resursen, utan att resursen rörs
+     * (`app/Http/Resources/**` är `/api`:s format).
+     *
+     * Filnamnet är det enda som skiljer två bilder åt för användaren, så det
+     * är etiketten. Ordningen är Actionens egen — äldst först — och vyn
+     * sorterar den aldrig om (samma regel som itemlistan, issue 57a
+     * § Beslut 8): det är ordningen upplösningens steg 2 väljer ur, och två
+     * ordningar av samma lista hade gjort "den äldsta" till två olika bilder.
+     *
+     * @param  Collection<int, Attachment>  $images
+     * @return list<array{ulid: string, filename: string}>
+     */
+    private function imageOptions(Collection $images): array
+    {
+        return $images
+            ->map(fn (Attachment $image): array => [
+                'ulid' => $image->ulid,
+                'filename' => $image->filename,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

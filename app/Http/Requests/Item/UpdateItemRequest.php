@@ -29,6 +29,30 @@ use Illuminate\Validation\Rule;
  * PATCH. Who created the row is history; an `account` (or `created_by_*`)
  * field sent in a PATCH body is silently ignored by `validated()`, see §
  * Beslut 6.
+ *
+ * `cover` — itemets omslagsbild (issue 93 · [[ADR-0041 Itemets vy]]
+ * § Beslut) — finns bara på WEBBENS rutt. Fältet är ett val i
+ * redigeringsformuläret, och `/api` har inte bett om det: samma linje som
+ * `variants` i issue 61b § Beslut 1 och kategorinamnet i issue 57a
+ * § Beslut 6, som ligger bredvid resursen i stället för i den. PATCH finns på
+ * båda ruttrena, så det är RUTTEN och inte metoden som skiljer dem, samma
+ * grepp som `$onContainerRoute` i IndexItemRequest. Utan grenen hade `/api`
+ * tagit emot ett fält som `Item::fill()` sedan kastar — en validering som
+ * lovar en skrivning ingen gör.
+ *
+ * Värdet är bilagans ULID, och regeln är hela "Klart när"-listan i ett
+ * villkor: bilagan måste FINNAS, höra till DET HÄR itemet, vara en BILD och
+ * inte vara mjukraderad. Ett annat items bilaga och en PDF ger därför samma
+ * svar som en påhittad ULID — 422 på fältet, aldrig ett tyst nej och aldrig
+ * en trasig bild i vyn. Läckaget — att felet skiljer en ULID som finns från en
+ * som inte gör det — är detsamma som för `category` och `tags`, och samma
+ * resonemang gäller: den som redan håller en 26-tecken-ULID får veta att hon
+ * håller den (issue 13b § Beslut 5).
+ *
+ * `nullable` och inte `sometimes`: formuläret skickar ALLTID fältet, och
+ * `cover: null` är hur valet RENSAS — upplösningen faller då tillbaka på
+ * itemets äldsta bild (issue 93, samma skillnad mellan "rör det inte" och
+ * "töm det" som `category` bär för `/api`).
  */
 class UpdateItemRequest extends FormRequest
 {
@@ -58,7 +82,7 @@ class UpdateItemRequest extends FormRequest
             }
         }
 
-        return [
+        $rules = [
             'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string'],
             'manufacturer' => ['sometimes', 'nullable', 'string', 'max:255'],
@@ -78,5 +102,23 @@ class UpdateItemRequest extends FormRequest
             'tags' => ['sometimes', 'array'],
             'tags.*' => ['string', Rule::in($validTagUlids)],
         ];
+
+        // Omslagsbilden finns bara i webbens redigeringsformulär, se
+        // klassens docblock. `{item}` är redan löst av scopeBindings(), så
+        // regeln kan pröva bilagan mot DET HÄR itemet.
+        if ($this->routeIs('containers.items.update')) {
+            $rules['cover'] = [
+                'nullable',
+                'string',
+                Rule::exists('attachment', 'ulid')->where(
+                    fn ($query) => $query
+                        ->where('item_id', $this->route('item')->id)
+                        ->where('kind', 'image')
+                        ->whereNull('deleted_at')
+                ),
+            ];
+        }
+
+        return $rules;
     }
 }
