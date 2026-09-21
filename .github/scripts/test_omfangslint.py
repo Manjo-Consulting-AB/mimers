@@ -77,12 +77,14 @@ def test_ruttabellen_lases_utan_att_appen_startar():
     assert len(tabell) > 100, f"orimligt få rutter: {len(tabell)}"
 
 
-def test_rutten_bakom_containern_pekar_pa_itemcontroller():
-    """Det enda faktum hela steg 3 vilar på."""
+def test_rutten_bakom_containern_pekar_pa_containercontroller():
+    """Det enda faktum hela steg 3 vilar på. Issue 89 (ADR-0039) flyttade
+    itemlistan till `/containers/{container}/items`, så containerns egen URL
+    bärs i dag av `ContainerController::show`."""
     tabell = l.rutter(ROT)
     traff = [r for r in tabell if r.metod == "get" and l._nyckel(r.uri) == "/containers/{}"]
     assert traff, "GET /containers/{container} hittades inte i ruttabellen"
-    assert traff[0].fil == "app/Http/Controllers/ItemController.php", traff[0].fil
+    assert traff[0].fil == "app/Http/Controllers/ContainerController.php", traff[0].fil
 
 
 def test_api_rutter_far_sitt_prefix():
@@ -149,7 +151,7 @@ def test_modellfragan_bar_faktumet_modellen_behover():
     _, fraga, _, _ = _analys(ISSUE_83)
     assert fraga is not None
     assert "att öppna en container sätter sessionsnyckeln" in fraga
-    assert "/containers/{container} -> app/Http/Controllers/ItemController.php::index" in fraga
+    assert "/containers/{container} -> app/Http/Controllers/ContainerController.php::show" in fraga
     assert "app/Support/Frontend/ActiveContainer.php" in fraga
 
 
