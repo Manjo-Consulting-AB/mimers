@@ -423,14 +423,23 @@ def call_claude_direct(model, prompt, cwd):
     prefixet `claude -p --model <modell> --permission-mode bypassPermissions`,
     och ett återinfört promptargument skulle både bryta matchningen och ta
     tillbaka kraschen.
+
+    Körs mot `claude` direkt, inte via `headroom wrap` - headroom-proxyn gjorde
+    mer skada än nytta i den oövervakade cron-körningen (dödade hela maskinen
+    2026-09-20 som permanent proxy, och krånglade med minne per eskalering
+    2026-09-21) och är borttagen ur de automatiserade anropen.
     """
-    print(f"--> Startar {model} direkt...")
+    print(f"--> Startar {model}...")
     cmd = [
         "claude",
         "-p",
         "--model", model,
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",
+        # Måste stå sist: allow-raden i settings.json matchar prefixet upp
+        # till "bypassPermissions" med en trailing wildcard, se docstringen
+        # ovan.
+        "--setting-sources", "user,project",
     ]
     result = run_cmd(cmd, check=True, cwd=cwd, input=prompt)
     return result.stdout
@@ -447,7 +456,8 @@ def usage_ok_to_proceed():
     ändra bara svansen, annars matchar ingen allow-rad i
     ~/.claude/settings.json och den oövervakade cron-körningen stannar på
     permission-klassificeraren. Därför går prompten på stdin här också, trots
-    att "ok" aldrig kan bli för lång: prefixet ska vara ett och samma.
+    att "ok" aldrig kan bli för lång: prefixet ska vara ett och samma. Körs
+    mot `claude` direkt, se motiveringen i call_claude_direct().
     """
     cmd = [
         "claude",
