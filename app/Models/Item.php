@@ -22,12 +22,13 @@ use Laravel\Scout\Searchable;
  * builds the table, the model and the CRUD surface; tags (`item_tag`) and
  * item-to-item links are later issues (13b and 14).
  *
- * `container_id`, `category_id`, `created_by_user_id` and
- * `created_by_account_id` are deliberately EXCLUDED from `#[Fillable]`:
- * the controller sets them explicitly (from the route, from a validated
- * `category` ULID, and from the token/body respectively), never via mass
- * assignment — same reasoning as `Container::$account_id`. `created_at`/
- * `updated_at` timestamps are set by Eloquent.
+ * `container_id`, `category_id`, `cover_attachment_id`, `created_by_user_id`
+ * and `created_by_account_id` are deliberately EXCLUDED from `#[Fillable]`:
+ * the controller sets them explicitly (from the route, from the validated
+ * `category` ULID, from the validated `cover` ULID, and from the token/body
+ * respectively), never via mass assignment — same reasoning as
+ * `Container::$account_id`. `created_at`/`updated_at` timestamps are set by
+ * Eloquent.
  *
  * `model` is a column name here — `$item->model` is a product designation,
  * not an Eloquent model. It is the document's name and does not change.
