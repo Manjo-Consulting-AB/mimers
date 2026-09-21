@@ -7,6 +7,7 @@ use App\Actions\Item\LinkItems;
 use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ResolveItemCover;
+use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Tag\ListTags;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
@@ -99,6 +100,14 @@ use Inertia\Response;
  * på en mjukraderad bilaga blir null. Urvalet av vad som är en bild och i vilken
  * ordning de kommer bor i App\Actions\Item\ResolveItemCover och skrivs inte
  * om här; vyn varken väljer bland bilagorna eller sorterar dem.
+ *
+ * **Förekomsterna ligger BREDVID resursen** (issue 95 · [[ADR-0041 Itemets
+ * vy]] § Beslut), samma linje en gång till: `paths` är alla vägar från en rot
+ * ned till itemet, med den aktuella utmärkt, och `ItemResource` har fortfarande
+ * inte bett om fältet. Ingen kolumn pekar ut en huvudplats — vägen står i
+ * querysträngen (`?path=…`), som filtret i issue 59a § Beslut 1 och av samma
+ * skäl: det gör vyn till en delbar länk. Upplösningen bor i
+ * App\Actions\Item\ResolveItemPaths, och vyn varken vandrar eller sorterar.
  *
  * **Ingen behörighetslogik bor här.** Ett nekat svar kastar
  * `AuthorizationException`, som bootstrap/app.php renderar som felsidan för
@@ -307,6 +316,20 @@ class ItemController extends Controller
      * (Beslut 10). Vyn ritar dem, `can.create` och `can.delete` styr ytorna,
      * och skrivningarna ligger i App\Http\Controllers\AttachmentController.
      *
+     * **Förekomsterna i strukturen får en prop och en querysträng** (issue 95
+     * · [[ADR-0041 Itemets vy]] § Beslut). `paths` bär alla vägar från en rot
+     * ned till itemet — ett item med två föräldrar har två — och exakt en av
+     * dem är märkt `current`. Vilken det är avgörs av `?path=`, en punktlista
+     * av ULID:ar från roten ned till itemet, och en väg som inte längre finns
+     * ignoreras till förmån för den första i ordningen: aldrig 404, aldrig
+     * 422, ingen rad om varför (se `itemPaths()`).
+     *
+     * **ItemResource har inget nytt fält.** Vägarna bär ULID och namn och
+     * ligger BREDVID resursen, samma linje som `categories`, `variants` och
+     * `statuses`: `/api` har inte bett om dem, och upplösningen sker på
+     * servern — en vy som själv vandrade i grafen vore en andra regel som
+     * glider ifrån den första (samma resonemang som omslagsbilden i issue 93).
+     *
      * **`max_upload_bytes` är det TEKNISKA taket och en prop** (issue 60b
      * § Beslut 5). Det är samma tal som `StoreAttachmentRequest` prövar med
      * `max:` — vyn avvisar en för stor fil innan bytena lämnar webbläsaren,
@@ -317,7 +340,7 @@ class ItemController extends Controller
      * där de hör hemma — på servern — och kommer tillbaka som fältfelet på
      * `file`.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, ResolveItemPaths $resolveItemPaths): Response
     {
         Gate::authorize('view', $item);
 
@@ -331,6 +354,13 @@ class ItemController extends Controller
         $user = $request->user();
 
         $links = $listItemLinks->handle($user, $container, $item);
+
+        // Förekomsterna i strukturen (issue 95 · [[ADR-0041 Itemets vy]]
+        // § Beslut): alla vägar från en rot ned till itemet, i serverns
+        // ordning. Upplösningen bor i App\Actions\Item\ResolveItemPaths och
+        // läses här — vyn vandrar aldrig själv, och den sorterar aldrig om
+        // något (issue 57a § Beslut 8). Två frågor, oavsett antalet vägar.
+        $paths = $resolveItemPaths->handle($user, $container, $item);
 
         // Bilagorna kommer med detaljvyns props och aldrig ur ett eget anrop
         // (issue 60 § Beslut 2). Relationerna och sorteringen är
@@ -394,6 +424,16 @@ class ItemController extends Controller
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
             'categories' => $this->categoryNames([$item]),
+
+            // Förekomsterna (issue 95 · [[ADR-0041 Itemets vy]] § Beslut):
+            // varje väg som sina led, och exakt en av dem märkt som den
+            // AKTUELLA. Vägen står i querysträngen — hela ledet från roten,
+            // som `?path=<båtens ulid>.<motorns ulid>.<impellerns ulid>` — och
+            // den ligger BREDVID resursen, inte i den: `ItemResource` är
+            // `/api`:s format och har inte bett om fältet, samma linje som
+            // `categories` ovan och `variants` i issue 61b.
+            'paths' => $this->itemPaths($paths, $request),
+
             'attachments' => AttachmentResource::collection($attachments)->resolve($request),
             'maxUploadBytes' => (int) config('files.max_upload_bytes'),
 
@@ -873,6 +913,113 @@ class ItemController extends Controller
             ['q' => $q, 'tags' => $keptTags, 'category' => $keptCategory],
             $dropped,
         ];
+    }
+
+    /**
+     * Vägarna från App\Actions\Item\ResolveItemPaths som vyens prop — varje
+     * väg som sina led, och exakt en av dem märkt som den AKTUELLA
+     * (issue 95 · [[ADR-0041 Itemets vy]] § Beslut).
+     *
+     * **Querysträngen väljer förekomsten, och det är samma regel som filtret i
+     * issue 59a § Beslut 1:** samma rutt, samma sida, inget eget läge — ett
+     * delat läge är en LÄNK som går att spara, dela och backa ur. Markeringen
+     * räknas här och inte i vyn, av samma skäl som `filter()` löser upp sina
+     * ULID:ar här: vyn ska inte bära en andra upplaga av en serverregel.
+     *
+     * **En väg som inte längre finns ignoreras, och den första i ordningen
+     * används i stället. Aldrig ett fel.** Trädet har byggts om, ett led har
+     * raderats, någon har delat en gammal länk: svaret är vyn med den första
+     * förekomsten, utan en rad om varför. En delad länk som slutar fungera
+     * för att någon flyttat ett item är en fälla, inte ett fel — och en 404
+     * eller en 422 hade varit precis den fällan. Utan `?path` gäller samma
+     * sak: den första i ordningen är den aktuella.
+     *
+     * **Ett okänt ULID, skräp och en lista behandlas likadant** — ingen av dem
+     * matchar en väg, alltså gäller den första. Ingen validering, ingen
+     * felkod: den som klickade på länken är inte här, och svaret hon får är
+     * sidan hon bad om.
+     *
+     * MARKERINGEN LÄCKER INGENTING. Antalet vägar i svaret är antalet vägar
+     * hon ser, och `current` säger vilken av DEM som är den aktuella —
+     * ingenting om hur många som föll bort (issue 73 § Beslut 6).
+     *
+     * @param  list<list<array{ulid: string, name: string}>>  $paths
+     * @return list<array{current: bool, nodes: list<array{ulid: string, name: string}>}>
+     */
+    private function itemPaths(array $paths, Request $request): array
+    {
+        $requested = $this->requestedPath($request);
+
+        // Den första i ordningen är utgångsläget: den gäller utan `?path`, och
+        // den gäller när den begärda vägen inte finns bland de upplösta.
+        $current = 0;
+
+        foreach ($paths as $index => $path) {
+            if ($this->isRequestedPath($path, $requested)) {
+                $current = $index;
+
+                break;
+            }
+        }
+
+        $occurrences = [];
+
+        foreach ($paths as $index => $path) {
+            $occurrences[] = ['current' => $index === $current, 'nodes' => $path];
+        }
+
+        return $occurrences;
+    }
+
+    /**
+     * Vägen ur querysträngen, som en lista ULID:ar (issue 95).
+     *
+     * Värdet är användarinput och kan komma som en lista (`?path[]=…`) — allt
+     * annat än en sträng läses som "ingen väg", samma gräns och samma form som
+     * `parentUlid()` och `filter()`. Ingen FormRequest och ingen ny regel:
+     * formen lånas, precis som i 59a § Beslut 3.
+     *
+     * Ingen tolkning av innehållet sker här. Ett skräpvärde ger en lista som
+     * inte matchar någon väg, och det är hela behandlingen.
+     *
+     * @return list<string>
+     */
+    private function requestedPath(Request $request): array
+    {
+        $path = $request->query('path');
+
+        if (! is_string($path) || $path === '') {
+            return [];
+        }
+
+        return explode('.', $path);
+    }
+
+    /**
+     * Är $requested den här vägen? Led för led, i ordning och i samma antal.
+     *
+     * Ingen prefixmatchning och ingen delmängd: en väg är hela ledet från
+     * roten ned till itemet, och en kortare sträng är en annan väg — eller
+     * ingen alls. Två led med samma ULID kan inte följa på varandra (en
+     * cykel avbryts i upplösningen), så en jämförelse led för led är
+     * tillräcklig.
+     *
+     * @param  list<array{ulid: string, name: string}>  $path
+     * @param  list<string>  $requested
+     */
+    private function isRequestedPath(array $path, array $requested): bool
+    {
+        if (count($path) !== count($requested)) {
+            return false;
+        }
+
+        foreach ($path as $index => $node) {
+            if ($node['ulid'] !== $requested[$index]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

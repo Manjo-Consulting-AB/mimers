@@ -61,12 +61,35 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * Kategorinamnet slås upp i `categories` (ULID → namn), byggd bredvid
  * resursen i kontrollern — se App\Http\Controllers\ItemController. ItemResource
  * bär bara kategorins ULID.
+ *
+ * **Förekomsterna ritas som en brödsmula och en lista** (issue 95 ·
+ * [[ADR-0041 Itemets vy]] § Beslut). Ett item som hänger under två föräldrar
+ * har två vägar upp, och mockupen visar båda. Ingen kolumn pekar ut en
+ * huvudplats: servern löser upp vägarna, querysträngen väljer vilken som är
+ * den aktuella, och den här filen varken vandrar i grafen eller sorterar om
+ * listan (issue 57a § Beslut 8).
  */
 const props = defineProps({
     container: { type: Object, required: true },
     item: { type: Object, required: true },
     /* Kategori-ULID → namn; tom när itemet saknar kategori. */
     categories: { type: Object, required: true },
+    /*
+     * Itemets förekomster i strukturen, ur
+     * App\Actions\Item\ResolveItemPaths och byggda bredvid resursen i
+     * kontrollern (issue 95): alla vägar från en rot ned till itemet, varje
+     * väg som sina led `{ulid, name}`, i serverns ordning — namnen längs
+     * vägen — och exakt en av dem märkt `current`.
+     *
+     * Listan är TOM för ett item utan väg: en ren cykel i grafen har ingen
+     * rot, och då ritas varken brödsmulan eller listan. Det är rotregeln och
+     * inte ett feltillstånd — se App\Actions\Item\ResolveItemPaths.
+     *
+     * En väg som inte längre finns är redan utbytt mot den första i ordningen
+     * när den här proppen kommer hit: vyn får aldrig veta att något föll
+     * bort, och den ska inte kunna räkna det ur svaret (issue 73 § Beslut 6).
+     */
+    paths: { type: Array, required: true },
     /*
      * Itemets bilagor ur App\Http\Resources\AttachmentResource, nyast först —
      * samma lista och samma ordning som `/api` ger (issue 60 § Beslut 2).
@@ -155,6 +178,31 @@ const fields = computed(() =>
 const categoryName = computed(() => props.categories[props.item.category] ?? null);
 
 /*
+ * Den AKTUELLA förekomsten — den väg servern märkte. Vyn sorterar aldrig om
+ * listan och väljer aldrig själv: markeringen kommer ur querysträngen, och
+ * den som inte pekar på en väg som finns får den första i ordningen märkt utan
+ * att vyn ser någon skillnad.
+ *
+ * `null` bara när `paths` är tom, alltså för ett item utan väg — då ritas
+ * varken brödsmulan eller listan.
+ */
+const currentPath = computed(() => props.paths.find((path) => path.current) ?? null);
+
+/*
+ * Länken till en förekomst: ledets SISTA item med sin egen väg i
+ * querysträngen. Ett klick på ett led i brödsmulan landar därför på samma
+ * förekomst och inte på en godtycklig — vägen följer med upp, och `?path=`
+ * betyder samma sak på varje items sida. Det är samma regel som filtret i
+ * issue 59a § Beslut 1: ett läge är en delbar länk.
+ */
+function pathHref(nodes) {
+    const last = nodes[nodes.length - 1];
+    const chain = nodes.map((node) => node.ulid).join('.');
+
+    return `/containers/${props.container.ulid}/items/${last.ulid}?path=${chain}`;
+}
+
+/*
  * Raderingen. Bekräftelsen är webbläsarens egen dialog med serverns mening ur
  * `lang/` — ingen modal komponent och ingen sträng i JavaScript.
  *
@@ -184,6 +232,37 @@ function destroy() {
 <template>
     <ContainerLayout :container="container">
         <Head :title="item.name" />
+
+        <!--
+            Brödsmulan (issue 95): vägen från roten ned till itemet, den
+            aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
+            länk — rubriken strax under säger samma namn.
+
+            Rubriken *Förekomster i struktur* som mockupen sätter på listan
+            nedanför kan inte skrivas här: orden hör till `lang/en/ui.php`,
+            som ligger Out of scope, och SprakTest fäller svensk text i en
+            .vue-fil. Se PR:ens Frågor och antaganden.
+        -->
+        <nav v-if="currentPath" class="mb-2 text-sm text-slate-600">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li
+                    v-for="(node, index) in currentPath.nodes"
+                    :key="`${node.ulid}-${index}`"
+                    class="flex items-center gap-2"
+                >
+                    <Link
+                        v-if="index < currentPath.nodes.length - 1"
+                        :href="pathHref(currentPath.nodes.slice(0, index + 1))"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                    >
+                        {{ node.name }}
+                    </Link>
+                    <span v-else aria-current="page">{{ node.name }}</span>
+
+                    <span v-if="index < currentPath.nodes.length - 1" aria-hidden="true">›</span>
+                </li>
+            </ol>
+        </nav>
 
         <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
 
@@ -220,6 +299,39 @@ function destroy() {
                 {{ t('item.links.create_child.action') }}
             </Link>
         </div>
+
+        <!--
+            Förekomstlistan (issue 95 · [[ADR-0041 Itemets vy]] § Beslut):
+            samma vägar som brödsmulan visar en av, med den aktuella utmärkt.
+            Raderna kommer i serverns ordning och sorteras aldrig här — för
+            samma användare står brödsmulan och listan därför alltid i samma
+            ordning (issue 57a § Beslut 8).
+
+            Listan ritas bara när itemet har MER än en förekomst: med en enda
+            hade den upprepat brödsmulan ordagrant och tillagt en rad utan
+            innehåll. Antalet är antalet vägar mottagaren ser, och det avslöjar
+            ingenting om dem hon inte ser.
+
+            Rubriken mockupen sätter på listan kan inte skrivas här — orden
+            hör till `lang/`, som ligger Out of scope. Se brödsmulans kommentar.
+        -->
+        <ul v-if="paths.length > 1" class="mt-6 space-y-1 text-sm">
+            <li v-for="(occurrence, index) in paths" :key="index">
+                <Link
+                    :href="pathHref(occurrence.nodes)"
+                    :aria-current="occurrence.current ? 'true' : null"
+                    class="flex min-h-11 flex-wrap items-center gap-1"
+                    :class="occurrence.current
+                        ? 'font-semibold text-slate-900'
+                        : 'text-blue-700 hover:underline'"
+                >
+                    <template v-for="(node, step) in occurrence.nodes" :key="`${node.ulid}-${step}`">
+                        <span>{{ node.name }}</span>
+                        <span v-if="step < occurrence.nodes.length - 1" aria-hidden="true">›</span>
+                    </template>
+                </Link>
+            </li>
+        </ul>
 
         <dl class="mt-8 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <div v-for="field in fields" :key="field.key">
