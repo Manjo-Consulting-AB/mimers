@@ -2,7 +2,9 @@
 
 use App\Exceptions\Api\ApiException;
 use App\Models\Container;
+use App\Models\CostEntry;
 use App\Models\Invitation;
+use App\Models\Item;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\UsageCounter;
@@ -11,6 +13,7 @@ use App\Support\Plan\Entitlements;
 use Illuminate\Http\Request;
 
 use function Pest\Laravel\deleteJson;
+use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
 
 /*
@@ -269,6 +272,35 @@ it('en utomstående inbjudan i en full container avslöjar inte delningstaket', 
     $response->assertStatus(403);
     expect($response->json('error.code'))->toBe('auth.forbidden');
     expect($response->json('error.data'))->toBe([]);
+});
+
+it('den fasta kostnadssummeringen är fri medan rapporten kräver cost_reports', function () {
+    // Kontrollpunkten flyttade från summering till FRÅGA
+    // ([[ADR-0038 Gränsen för Pro i kostnaderna]]): samma gratiskonto, samma
+    // kostnadsrader — den fasta summeringen svarar 200, den parametriserade
+    // rapporten nekas. Det är den enda kontrollpunkten i M8 som rör en
+    // funktion och inte en gräns ([[Planer och kvoter]] § Kontrollpunkter).
+    [$account, $user, $headers] = kontoMedMedlem(); // gratis
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create([
+        'created_by_user_id' => $user->id,
+        'created_by_account_id' => $account->id,
+    ]);
+    CostEntry::factory()->for($item, 'item')->create(['amount' => 1000]);
+
+    $containern = getJson("/api/containers/{$container->ulid}/costs/summary", $headers);
+    $kontot = getJson("/api/accounts/{$account->ulid}/costs/summary", $headers);
+
+    $containern->assertOk();
+    $kontot->assertOk();
+    expect($containern->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+    expect($kontot->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
+
+    $rapporten = getJson("/api/containers/{$container->ulid}/costs/report?group_by=item", $headers);
+
+    $rapporten->assertStatus(403);
+    expect($rapporten->json('error.code'))->toBe('plan.feature_unavailable');
+    expect($rapporten->json('error.data'))->toBe(['feature' => 'cost_reports']);
 });
 
 it('assertFeature nekar en funktion som planen saknar', function () {

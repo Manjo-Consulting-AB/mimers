@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\ContainerTrashController;
 use App\Http\Controllers\Api\CostEntryController;
 use App\Http\Controllers\Api\CostReportController;
+use App\Http\Controllers\Api\CostSummaryController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
@@ -444,7 +445,31 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // av ägarkontots plan (assertFeature 'cost_reports') — i den ordningen
     // (§ Beslut 2). Enda kontrollpunkten i M8 som rör en funktion och inte
     // en gräns: registrering är fri, summering kräver Pro.
+    // Sedan issue 86 gäller den sista raden bara den FRÅGBARA summeringen
+    // ([[ADR-0038 Gränsen för Pro i kostnaderna]]): den fasta är fri och har
+    // sina egna rutter nedan. Rapporten och dess grind är oförändrade.
     Route::get('/containers/{container}/costs/report', CostReportController::class);
+
+    // Issue 86 · De fasta kostnadssummeringarna — containerns och kontots
+    // totalsumma utan parametrar, se
+    // App\Http\Controllers\Api\CostSummaryController och
+    // App\Support\Cost\CostReport::summary()/summaryForContainers().
+    // [[ADR-0038 Gränsen för Pro i kostnaderna]] flyttade gränsen från
+    // summering till fråga: den fasta summeringen är fri och bär därför
+    // INGEN plangrind — bara behörigheten. Containerrutten frågar view(),
+    // kontorutten AccountPolicy::viewStorage() (medlemskap; app/Policies
+    // ligger utanför issuen, se kontrollerns docblock).
+    //
+    // Rutterna tar inga parametrar: ingen period, inget filter, ingen
+    // gruppering. En okänd parameter i querysträngen kan inte påverka
+    // utfallet — kontrollern läser den inte.
+    //
+    // Kontorutten ligger här och inte under de andra /accounts-rutterna
+    // därför att den hör ihop med containerrutten och med rapporten: de tre
+    // läser samma radmängd, och den som ändrar en av dem ska se de andra.
+    // Nedbrytningen per item är issue 91:s och byggs inte här.
+    Route::get('/containers/{container}/costs/summary', [CostSummaryController::class, 'forContainer']);
+    Route::get('/accounts/{account}/costs/summary', [CostSummaryController::class, 'forAccount']);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och

@@ -49,6 +49,14 @@ use Illuminate\Support\Facades\DB;
  * taggnamnen — är ett konstant antal frågor oavsett antalet rader, items,
  * taggar eller kategorinivåer (Beslut 12). Inga kostnadsrader laddas som
  * modeller.
+ *
+ * Sedan issue 86 bor också de FASTA SUMMERINGARNA här — `summary()` för
+ * containern och `summaryForContainers()` för kontot ([[ADR-0038 Gränsen
+ * för Pro i kostnaderna]]: en fast summering är fri, allt frågbart är Pro).
+ * De är samma radmängd utan filter och utan gruppering, summerad per valuta,
+ * och de delar därför `rowSet()` och `applyScope()` med rapporten i stället
+ * för att formulera om den. En andra formulering av "vilka rader räknas" är
+ * en andra chans att glömma ett villkor — och den som glöms läcker.
  */
 final class CostReport
 {
@@ -87,32 +95,60 @@ final class CostReport
         ];
     }
 
+    /**
+     * Den fasta summeringen för EN container, issue 86 — containerns
+     * kostnadssumma i [[ADR-0038 Gränsen för Pro i kostnaderna]]s tabell.
+     * Ingen period, inget filter, ingen gruppering: samma radmängd som
+     * rapporten och samma `GROUP BY currency`, utan parametrar.
+     *
+     * @return list<array{currency: string, amount: int, count: int}>
+     */
+    public function summary(Container $container, ItemScope $scope): array
+    {
+        return $this->totals($this->summaryQuery([$container->id => $scope]));
+    }
+
+    /**
+     * Den fasta summeringen för ett KONTO, issue 86 — underlaget för
+     * dashboardens totalsumma ([[ADR-0037 Valutans arv]]: kontot är den
+     * nivå som bär valutan, så det är kontots summa och inte användarens).
+     *
+     * Flera containers i EN fråga: `whereIn` på container-id plus en
+     * omfångsgrupp per container, så frågekostnaden är konstant oavsett hur
+     * många containers kontot har. Summan räknas per valuta över hela
+     * mängden — aldrig genom att lägga ihop containersummor i PHP, som hade
+     * gett samma tal men ett annat antal frågor.
+     *
+     * @param  array<int, ItemScope>  $scopes  container_id → omfånget för den anropande användaren
+     * @return list<array{currency: string, amount: int, count: int}>
+     */
+    public function summaryForContainers(array $scopes): array
+    {
+        return $this->totals($this->summaryQuery($scopes));
+    }
+
+    /**
+     * Radmängden för de fasta summeringarna: `rowSet()` avgränsad till de
+     * efterfrågade containrarna och till användarens omfång. Ingen filtergren
+     * — en fast summering tar inga parametrar (issue 86), och läggs en
+     * period in här är ändpunkten inte längre fast.
+     *
+     * @param  array<int, ItemScope>  $scopes  container_id → omfång
+     */
+    private function summaryQuery(array $scopes): Builder
+    {
+        $query = $this->rowSet()->whereIn('cost_entry.container_id', array_keys($scopes));
+
+        $this->applyScope($query, $scopes);
+
+        return $query;
+    }
+
     private function baseQuery(Container $container, array $params, ItemScope $scope): Builder
     {
-        $query = DB::table('cost_entry')
-            ->join('item', 'item.id', '=', 'cost_entry.item_id')
-            ->where('cost_entry.container_id', $container->id)
-            ->whereNull('cost_entry.deleted_at')
-            ->whereNull('item.deleted_at');
+        $query = $this->rowSet()->where('cost_entry.container_id', $container->id);
 
-        // Issue 74 § Beslut 5: omfånget läggs i BASFRÅGAN, en gång — alla
-        // fem grupperingarna och toppnivåns totals bygger på samma Builder,
-        // så ingen av dem behöver veta om filtret. Ett filter som lades i
-        // groupByItem() och glömdes i totals() hade gett en rapport där
-        // delarna inte summerar till helheten, vilket är svårare att upptäcka
-        // än att den läcker.
-        //
-        // `Item::inScope()` kan inte användas här: frågan är en Query\Builder
-        // över en join, inte en Item-modellfråga. `itemIds()` svarar `null`
-        // för ett omfattande omfång — "hela containern" ska inte
-        // materialiseras till en `whereIn` med varje löpnummer (issue 73
-        // § Beslut 1) — och kolumnen kvalificeras eftersom joinen gör `id`
-        // tvetydig, samma skäl som i Item::scopeInScope().
-        $itemIds = $scope->itemIds();
-
-        if ($itemIds !== null) {
-            $query->whereIn('item.id', $itemIds);
-        }
+        $this->applyScope($query, [$container->id => $scope]);
 
         if (! empty($params['item'])) {
             $itemId = Item::query()
@@ -163,6 +199,64 @@ final class CostReport
         }
 
         return $query;
+    }
+
+    /**
+     * Radmängden före varje filter och varje omfång: kostnadsrader i levande
+     * items. Joinen mot `item` behövs alltid — `container_id` sparar in den
+     * bara för SCOPINGEN, inte för papperskorgen: en kostnad på ett raderat
+     * item är osynlig i listning, sök och todo och ska inte dyka upp i en
+     * total användaren inte kan klicka sig fram till.
+     *
+     * Bryt ut ur frågorna (issue 86) så att rapporten och de fasta
+     * summeringarna delar exakt samma "vilka rader räknas" — se klassens
+     * docblock.
+     */
+    private function rowSet(): Builder
+    {
+        return DB::table('cost_entry')
+            ->join('item', 'item.id', '=', 'cost_entry.item_id')
+            ->whereNull('cost_entry.deleted_at')
+            ->whereNull('item.deleted_at');
+    }
+
+    /**
+     * Issue 74 § Beslut 5: omfånget läggs i BASFRÅGAN, en gång — alla fem
+     * grupperingarna och toppnivåns totals bygger på samma Builder, så ingen
+     * av dem behöver veta om filtret. Ett filter som lades i groupByItem()
+     * och glömdes i totals() hade gett en rapport där delarna inte summerar
+     * till helheten, vilket är svårare att upptäcka än att den läcker.
+     *
+     * `Item::inScope()` kan inte användas här: frågan är en Query\Builder
+     * över en join, inte en Item-modellfråga. `itemIds()` svarar `null` för
+     * ett omfattande omfång — "hela containern" ska inte materialiseras till
+     * en `whereIn` med varje löpnummer (issue 73 § Beslut 1) — och kolumnen
+     * kvalificeras eftersom joinen gör `id` tvetydig, samma skäl som i
+     * Item::scopeInScope().
+     *
+     * Ett begränsat omfång kvalificeras med SIN container (issue 86):
+     * kontosummeringen frågar flera containers samtidigt, och ett naket
+     * `whereIn('item.id', ...)` hade släppt in en rad från en annan container
+     * om samma item-id råkade stå i omfånget för den här. Ett obegränsat
+     * omfång behöver ingen gren alls — containervillkoret står redan i frågan
+     * som anropar.
+     *
+     * @param  array<int, ItemScope>  $scopes  container_id → omfång
+     */
+    private function applyScope(Builder $query, array $scopes): void
+    {
+        foreach ($scopes as $containerId => $scope) {
+            $itemIds = $scope->itemIds();
+
+            if ($itemIds === null) {
+                continue;
+            }
+
+            $query->where(function (Builder $query) use ($containerId, $itemIds): void {
+                $query->where('cost_entry.container_id', $containerId)
+                    ->whereIn('item.id', $itemIds);
+            });
+        }
     }
 
     /**
