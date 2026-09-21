@@ -20,7 +20,7 @@ use Illuminate\Validation\Validator;
  * tom lista serialiseras som `[]`. Varje ULID måste peka på ett icke
  * mjukraderat item i DEN HÄR containern; kontrollen behöver containern från
  * rutten och bor därför i withValidator() nedan. Ett item i någon annans
- * pärm i listan är inte ett stavfel, det är ett försök.
+ * container i listan är inte ett stavfel, det är ett försök.
  *
  * `retain_access_level` (Beslut 6) är `read` eller `write`, eller null —
  * samma två nivåer som `container_access.level` bär i dag. Laddern

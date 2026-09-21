@@ -87,6 +87,15 @@ bakåtcitat. Hela M2 (#91-#100) skrevs i den senare formen, och skriptet svarade
 Därför felar kontrollen numera stängt: en implementations-PR vars ruta inte går
 att läsa underkänns i stället för att hoppas över.
 
+Sedan M14 har rutan två lägen, satta i issuen under `### Omfångsläge`. `fast` är
+det gamla beteendet och det som gäller när fältet saknas. `spårad` är för issues
+vars ruta skrivs innan någon vet vilken fil som bär beteendet - designissues,
+där vägen från skärm till kod upptäcks under arbetet. Där fälls en fil utanför
+`In scope` inte, om implementeraren deklarerar den i PR-kroppen under
+`Utanför rutan:`; `Out of scope` gäller oförändrat, och en odeklarerad fil är
+röd i båda lägena. Se konstanterna nedan för issue 83 (PR #392), fallet som gav
+regeln, och `bedom_fil()` för ordningen mellan de fyra utfallen.
+
 Avslutar 0 om allt ligger innanför rutan, eller om kontrollen inte är tillämplig
 (process-PR utan issuereferens eller utan ruta). 1 vid överträdelse, när en
 implementations-PR saknar issuereferens, och när dess issue saknar läsbar ruta.
@@ -152,6 +161,11 @@ TOMT = {"_No response_", "_Inget svar_"}
 # slutar betyda något, se ci.yml:s egna kommentarer om ordbudgeten.
 KLASSKONSTANT = re.compile(r"`(?P<klass>[A-Z][A-Za-z0-9_]*)::(?P<konstant>[A-Z0-9_]{3,})`")
 KODBLOCK = re.compile(r"```.*?```", re.DOTALL)
+# PR-mallen visar deklarationen med ett exempel, och ett exempel står i en
+# HTML-kommentar. Lämnas mallens kommentar kvar i kroppen - vilket den ofta gör -
+# skulle en rå sökning läsa exemplets sökväg som en verklig deklaration och
+# släppa igenom en fil ingen bett om. Kommentarerna klipps därför bort först.
+HTMLKOMMENTAR = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
 def notis(niva: str, text: str) -> None:
@@ -254,6 +268,28 @@ def hamta_redigeringshistorik(repo: str, nummer: str, token: str) -> dict:
 # som en omskriven ruta.
 UNDANTAGSMARKOR = "Beviljat undantag från omfångsrutan:"
 ARKITEKTRUBRIK = re.compile(r"^###\s+.*arkitektsvar", re.IGNORECASE)
+
+# Rutan skrivs innan koden lästs. För en issue som börjar i datamodellen är den
+# därför billig och träffsäker - valvet namnger filerna. För en issue som börjar
+# i en skärm är den en gissning om implementationen, och den missar samma sak
+# varje gång: filen som faktiskt bär beteendet. Issue 83 (PR #392) är fallet som
+# gav regeln - rutan listade `ContainerController`, men rutten
+# `GET /containers/{container}` bärs av `ItemController::index()`, och utan den
+# filen går issuens egen "Klart när"-punkt inte att uppfylla. Samma klass som de
+# åtta testfiler M11 lämnade utanför rutan: rutan missar det bara koden vet, inte
+# det som står i valvet.
+#
+# Läget sätts av den som skriver issuen, som axlarna. `fast` är dagens beteende
+# och det som gäller när fältet saknas: rutan är en positiv lista, allt utanför
+# den är rött. `spårad` gäller designissues, där vägen från skärm till fil
+# upptäcks under arbetet: `Out of scope` gäller oförändrat, men en fil som ingen
+# `In scope`-glob täcker släpps igenom om implementeraren deklarerar den i
+# PR-kroppen under DEKLARATIONSMARKOR. Odeklarerat är rött i båda lägena - alltså
+# är tripwiren mot en session som vandrar kvar - och varje deklarerad fil skrivs
+# ut, så att retron kan räkna dem precis som den räknar beviljade undantag.
+OMFANGSLAGE_ETIKETT = "Omfångsläge"
+OMFANGSLAGE_SPARAD = "spårad"
+DEKLARATIONSMARKOR = "Utanför rutan:"
 
 
 def pr_nummer_ur_handelsen() -> str | None:
@@ -412,6 +448,103 @@ def matchar(fil: str, monster: str) -> bool:
     """
     monster = monster.rstrip("/")
     return fnmatch.fnmatch(fil, monster) or fnmatch.fnmatch(fil, f"{monster}/*")
+
+
+def omfangslage(kropp_issue: str) -> str:
+    """`spårad` om issuen uttryckligen säger det, annars `fast`.
+
+    Felar stängt: ett fält som saknas, är tomt eller stavas något annat ger
+    `fast`, alltså rutan som den alltid gällt. Issues skrivna innan fältet fanns
+    beter sig därför exakt som förut, och en felskrivning kan aldrig vidga rutan.
+    Samma val som `extract_risk_class()` en gång gjorde tvärtom och betalade för
+    - en axel som inte gick att läsa routade till banan med minst kontroll, se
+    docs/Process/Lärdomar.md.
+    """
+    for rad in avsnitt(kropp_issue, OMFANGSLAGE_ETIKETT).splitlines():
+        rad = rad.strip().strip("`").strip()
+        if not rad or rad in TOMT:
+            continue
+        return OMFANGSLAGE_SPARAD if rad.lower().startswith(("spårad", "sparad")) else "fast"
+    return "fast"
+
+
+def deklarerade_sokvagar(kropp_pr: str) -> list[str]:
+    """Sökvägarna implementeraren deklarerat i PR-kroppen.
+
+    Exakt samma stela form som ett beviljat undantag: en rad som är just
+    DEKLARATIONSMARKOR, följd av ett kodblock med en sökväg per rad. Stelheten är
+    poängen - PR #231 visar vad en fri form kostar: arkitekten beviljade sitt
+    undantag i löptext och PR:en fälldes av den order den följde.
+
+    Deklarationen är inte ett undantag. Den vidgar ingenting i läget `fast`; den
+    säger bara, i läget `spårad`, att implementeraren sett filen och tar ansvar
+    för den. Skillnaden syns i utskriften och går därför att räkna i retron.
+
+    Mallens eget exempel står i en HTML-kommentar och får inte räknas - en mall
+    som lämnas ifylld till hälften är normalfallet, inte undantaget.
+    """
+    sokvagar: list[str] = []
+    for block in re.findall(
+        rf"^\s*{re.escape(DEKLARATIONSMARKOR)}\s*\n\s*```[^\n]*\n(.*?)^\s*```",
+        HTMLKOMMENTAR.sub("", kropp_pr), re.MULTILINE | re.DOTALL,
+    ):
+        for rad in block.splitlines():
+            rad = rad.strip().strip("`").strip()
+            if rad and ar_sokvag(rad):
+                sokvagar.append(rad)
+    return sokvagar
+
+
+def bedom_fil(
+    fil: str,
+    innanfor: list[str],
+    utanfor: list[str],
+    undantag: list[tuple[str, str]],
+    deklarerade: list[str],
+    lage: str,
+) -> tuple[str, str]:
+    """Utfallet för EN ändrad fil: ("ok" | "beviljad" | "deklarerad" | "brott", text).
+
+    Bruten ur main() för att gå att testa: ordningen mellan `In scope`, ett
+    beviljat undantag, `Out of scope` och en deklaration är hela regeln, och en
+    regel som bara finns inuti en slinga i main() går bara att pröva genom att
+    köra hela grinden.
+    """
+    if any(matchar(fil, monster) for monster in innanfor):
+        return "ok", ""
+
+    beviljat = [(m, url) for m, url in undantag if matchar(fil, m)]
+    if beviljat:
+        _, url = beviljat[0]
+        return "beviljad", (
+            f"{fil} ligger utanför omfångsrutan men är uttryckligen beviljad i "
+            f"arkitektsvaret ({url}). Släpps igenom, räknas som omfångsdrift i retron."
+        )
+
+    # Out of scope före deklarationen, och i båda lägena. Den halvan är inte en
+    # gissning om implementationen utan ett beslut - "ingen ny kolumn", "rör inte
+    # åtkomstlagret" - och ett beslut kan implementeraren inte deklarera sig förbi.
+    traffad_utanfor = [m for m in utanfor if matchar(fil, m)]
+    if traffad_utanfor:
+        tillagg = (
+            " - Out of scope gäller oförändrat också i läget spårad"
+            if lage == OMFANGSLAGE_SPARAD else ""
+        )
+        return "brott", f"{fil} ligger under Out of scope ({', '.join(traffad_utanfor)}){tillagg}"
+
+    if lage == OMFANGSLAGE_SPARAD:
+        if any(matchar(fil, monster) for monster in deklarerade):
+            return "deklarerad", (
+                f"{fil} matchar ingen glob i In scope men är deklarerad i PR-kroppen under "
+                f"`{DEKLARATIONSMARKOR}`. Släpps igenom i läget spårad, räknas som "
+                "omfångsdrift i retron."
+            )
+        return "brott", (
+            f"{fil} matchar ingen glob i In scope och är inte deklarerad under "
+            f"`{DEKLARATIONSMARKOR}` i PR-kroppen"
+        )
+
+    return "brott", f"{fil} matchar ingen glob i In scope"
 
 
 def hitta_klassfil(klass: str) -> str | None:
@@ -620,7 +753,6 @@ def main() -> int:
 
     innanfor = globbar(avsnitt(kropp_issue, "In scope"))
     utanfor = globbar(avsnitt(kropp_issue, "Out of scope"))
-
     # Felar stängt för implementations-PR:er. Fram till 2026-09-02 var det här en
     # varning plus exit 0, och eftersom rubrikformen inte kändes igen tog varje
     # M2-PR den vägen: tio gröna process-jobb, åtta filer utanför rutan. En grind
@@ -643,6 +775,18 @@ def main() -> int:
             "Använd .github/ISSUE_TEMPLATE/agent_task.yml när issuen skrivs.",
         )
         return 0
+
+    lage = omfangslage(kropp_issue)
+    deklarerade = deklarerade_sokvagar(kropp_pr)
+    if lage != OMFANGSLAGE_SPARAD and deklarerade:
+        notis(
+            "warning",
+            f"PR-kroppen deklarerar {len(deklarerade)} sökväg(ar) under "
+            f"`{DEKLARATIONSMARKOR}`, men issue #{nummer} står i läget fast - en "
+            "deklaration vidgar ingenting där. Rutan gäller som skriven: revertera "
+            "raderna, eller be arkitekten om ett undantag i tråden.",
+        )
+        deklarerade = []
 
     # Vad som diffas mot är inte självklart, och fel svar ger fantomöverträdelser.
     # `actions/checkout@v4` checkar vid en pull_request-händelse ut refs/pull/N/merge,
@@ -674,6 +818,12 @@ def main() -> int:
     # de senare ("docs/Process/L\303\244rdomar.md"). Båda ger filer som inte matchar
     # någon glob, alltså falska överträdelser på varje docs-PR. Upptäckt när grinden
     # kördes skarpt första gången, 2026-09-01.
+    # .claude/ är agentverktygets egen tillståndskatalog (settings, hooks,
+    # lokala lockfiler som Headroom skriver) - inte en del av issuens
+    # implementation, och ingen issue kommer någonsin lista den i sin
+    # omfångsruta. Filtreras bort här i stället för att jagas fil för fil i
+    # .gitignore, som redan visat sig inte hålla när en spårad kopia smyger
+    # tillbaka (se docs/Process/Lärdomar.md).
     andrade = [
         f
         for f in subprocess.run(
@@ -683,7 +833,7 @@ def main() -> int:
             text=True,
             check=True,
         ).stdout.split("\0")
-        if f
+        if f and not f.startswith(".claude/")
     ]
 
     # In scope vinner över Out of scope. Rutan är en positiv lista, och `Out of
@@ -699,39 +849,47 @@ def main() -> int:
         undantag = beviljade_undantag(repo, pr_nummer, token)
 
     brott: list[str] = []
+    slapp_igenom = 0
     for fil in andrade:
-        if any(matchar(fil, m) for m in innanfor):
+        utfall, text = bedom_fil(fil, innanfor, utanfor, undantag, deklarerade, lage)
+        if utfall == "ok":
             continue
-        beviljat = [(m, url) for m, url in undantag if matchar(fil, m)]
-        if beviljat:
-            _, url = beviljat[0]
-            notis(
-                "warning",
-                f"{fil} ligger utanför omfångsrutan men är uttryckligen beviljad i "
-                f"arkitektsvaret ({url}). Släpps igenom, räknas som omfångsdrift i retron.",
-            )
+        if utfall == "brott":
+            brott.append(text)
             continue
-        traffad_utanfor = [m for m in utanfor if matchar(fil, m)]
-        if traffad_utanfor:
-            brott.append(f"{fil} ligger under Out of scope ({', '.join(traffad_utanfor)})")
-        else:
-            brott.append(f"{fil} matchar ingen glob i In scope")
+        notis("warning", text)
+        slapp_igenom += 1
 
-    print(f"Issue #{nummer}: {len(innanfor)} In scope-globbar, {len(utanfor)} Out of scope.")
+    print(
+        f"Issue #{nummer}: läge {lage}, {len(innanfor)} In scope-globbar, "
+        f"{len(utanfor)} Out of scope."
+    )
     print(f"Diffen rör {len(andrade)} filer.")
+    if slapp_igenom:
+        print(
+            f"{slapp_igenom} fil(er) utanför In scope släpptes igenom som beviljade eller "
+            "deklarerade - de räknas som omfångsdrift i retron."
+        )
 
     if brott:
         for rad in brott:
             notis("error", rad)
-        notis(
-            "error",
-            f"{len(brott)} fil(er) utanför omfångsrutan. Ligger en fil utanför rutan med "
-            "avsikt: skriv vilken och varför i PR:en och vänta på svar - vidga inte rutan "
-            "i efterhand.",
+        rad_att_gora = (
+            f"Deklarera den under `{DEKLARATIONSMARKOR}` i PR-kroppen om en "
+            "\"Klart när\"-punkt kräver filen, eller revertera raderna."
+            if lage == OMFANGSLAGE_SPARAD else
+            "Ligger en fil utanför rutan med avsikt: skriv vilken och varför i PR:en och "
+            "vänta på svar - vidga inte rutan i efterhand."
         )
+        notis("error", f"{len(brott)} fil(er) utanför omfångsrutan. {rad_att_gora}")
         return 1
 
-    print("Alla ändrade filer ligger innanför omfångsrutan.")
+    if slapp_igenom:
+        # Inte samma sak som "innanför rutan", och utskriften ska inte påstå det:
+        # den som läser körningshistoriken i efterhand ska se att rutan vidgades.
+        print("Inga odeklarerade eller obeviljade filer utanför omfångsrutan.")
+    else:
+        print("Alla ändrade filer ligger innanför omfångsrutan.")
     return 0
 
 

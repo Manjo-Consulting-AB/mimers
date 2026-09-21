@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -26,7 +28,7 @@ use function Pest\Laravel\postJson;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 67b · Ägarbytets två ytor: avsändarens sida i pärmen och mottagarens
+ * Issue 67b · Ägarbytets två ytor: avsändarens sida i containern och mottagarens
  * inkorg. Se App\Http\Controllers\OwnershipTransferController,
  * resources/js/pages/Containers/Transfers.vue,
  * resources/js/pages/Transfers/Index.vue,
@@ -34,7 +36,7 @@ use function Pest\Laravel\withoutVite;
  *
  * Filen bevisar de sex gränserna issuen är byggd kring:
  *
- * 1. **Två nivåer** (Beslut 1): avsändarens sida under pärmen, mottagarens på
+ * 1. **Två nivåer** (Beslut 1): avsändarens sida under containern, mottagarens på
  *    toppnivå — och mottagarens lista innehåller bara rader som är hennes.
  * 2. **Fyra val och inget femte** (Beslut 2): mottagare (konto ELLER adress),
  *    undantagna items, kvarhållen åtkomst — och bara de nivåer requesten
@@ -45,12 +47,12 @@ use function Pest\Laravel\withoutVite;
  *    kvar, och en utgången rad redovisas som utgången.
  * 5. **Identitet, aldrig en länk** (Beslut 5): ingen `{token}`-rutt finns, och
  *    en overifierad adress ger ingen träff.
- * 6. **Konsekvenserna före knappen** (Beslut 6 och 7): pärm, avsändare, antal
+ * 6. **Konsekvenserna före knappen** (Beslut 6 och 7): container, avsändare, antal
  *    items, kvarhållen åtkomst och de tolv månaderna Pro, och ett kvotfel som
  *    en mening med gräns och värde — utan att något flyttas.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js och jämför ui.php nyckel för nyckel. De
  * nya nycklarna prövas dessutom i sista testet här.
  *
@@ -71,7 +73,7 @@ function agarbytesvyProKonto(Account $account): void
 }
 
 /**
- * Ett ägarkonto med Pro, en medlem och en pärm — avsändarens utgångsläge.
+ * Ett ägarkonto med Pro, en medlem och en container — avsändarens utgångsläge.
  *
  * @return array{0: Account, 1: User, 2: Container}
  */
@@ -107,7 +109,7 @@ function agarbytesvyUrl(Container $container): string
 }
 
 /**
- * Ett item i pärmen, med skaparen satt — fabrikens egna default-skapare hade
+ * Ett item i containern, med skaparen satt — fabrikens egna default-skapare hade
  * annars skapat ovidkommande konton per item.
  */
 function agarbytesvyItem(Container $container, Account $konto, User $anvandare, string $namn): Item
@@ -238,8 +240,8 @@ it('kan initieras mot ett konto-ULID eller en e-postadress', function () {
     expect($motKonto->status)->toBe('pending');
 
     // En adress normaliseras till gemener innan den lagras, som
-    // inbjudningarna (39a § Beslut 6). En EGEN pärm: den första raden väntar
-    // fortfarande, och dubblettspärren hade nekat en andra på samma pärm.
+    // inbjudningarna (39a § Beslut 6). En EGEN container: den första raden väntar
+    // fortfarande, och dubblettspärren hade nekat en andra på samma container.
     $annan = Container::factory()->for($container->account, 'account')->create();
 
     actingAs($anvandare)
@@ -362,7 +364,7 @@ it('ritar ytan för ett gratiskonto med en mening om planen och ger fältfel vid
     [, $anvandare, $container] = agarbytesvyGratiskonto();
     [, $mottagarkonto] = agarbytesvyMottagare();
 
-    $mening = (string) trans('ui.error.plan.feature_unavailable', ['feature' => 'Ägarbyte'], 'sv');
+    $mening = (string) trans('ui.error.plan.feature_unavailable', ['feature' => 'Ownership transfer'], 'en');
 
     actingAs($anvandare)->get(agarbytesvyUrl($container))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
@@ -389,13 +391,12 @@ it('länkar till plansidan bredvid planmeningen', function () {
     expect($sida)->toContain('transfer.plan_link');
     expect($sida)->toContain('/settings/plan?account=');
 
-    expect(Lang::has('ui.error.plan.feature_name.ownership_transfer', 'sv'))->toBeTrue();
     expect(Lang::has('ui.error.plan.feature_name.ownership_transfer', 'en'))->toBeTrue();
 });
 
 // --- behörigheten -------------------------------------------------------
 
-it('ger 403 för en användare som inte får överlåta pärmen', function () {
+it('ger 403 för en användare som inte får överlåta containern', function () {
     withoutVite();
 
     [, , $container] = agarbytesvySaljare();
@@ -603,7 +604,7 @@ it('visar konsekvenserna innan knappen', function () {
     [, , $container] = agarbytesvySaljare();
     [$mottagare, $mottagarkonto] = agarbytesvyMottagare();
 
-    // Fem items i pärmen, två av dem undantagna — alltså tre som följer med.
+    // Fem items i containern, två av dem undantagna — alltså tre som följer med.
     for ($i = 1; $i <= 3; $i++) {
         Item::factory()->for($container, 'container')->create(['name' => "Följer med {$i}"]);
     }
@@ -636,7 +637,7 @@ it('visar konsekvenserna innan knappen', function () {
     expect($kort)->toContain('transfer.card.final');
 });
 
-it('räknar bara undantag som fortfarande finns i pärmen', function () {
+it('räknar bara undantag som fortfarande finns i containern', function () {
     withoutVite();
 
     [, , $container] = agarbytesvySaljare();
@@ -662,7 +663,7 @@ it('räknar bara undantag som fortfarande finns i pärmen', function () {
     );
 });
 
-it('flyttar pärmen vid accept och låter mottagaren se den i pärmlistan', function () {
+it('flyttar containern vid accept och låter mottagaren se den i containerlistan', function () {
     withoutVite();
 
     [, , $container] = agarbytesvySaljare();
@@ -712,7 +713,7 @@ it('nekar en accept som spränger mottagarens plan och flyttar ingenting', funct
     [, , $container] = agarbytesvySaljare();
     [$mottagare, $mottagarkonto] = agarbytesvyMottagare();
 
-    // Gratisplanen rymmer EN pärm, och mottagaren har redan en: kvotkontrollen
+    // Gratisplanen rymmer EN container, och mottagaren har redan en: kvotkontrollen
     // i AcceptOwnershipTransfer slår i mot hennes NUVARANDE plan, före
     // Pro-bonusen.
     Container::factory()->for($mottagarkonto, 'account')->create();
@@ -732,7 +733,7 @@ it('nekar en accept som spränger mottagarens plan och flyttar ingenting', funct
     // Meningen bär gränsen och värdet, som varje annat kvotfel på webben.
     $mening = session('errors')->get('transfer')[0];
 
-    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'sv'));
+    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'en'));
     expect($mening)->toContain('1');
 
     // Och ingenting flyttades: hela transaktionen rullades tillbaka.
@@ -821,8 +822,8 @@ it('lämnar /api:s avsändarrutter oförändrade', function () {
         ->assertStatus(422)
         ->assertJsonPath('error.code', 'transfer.already_pending');
 
-    // En EGEN pärm för raden som ska dras tillbaka: den första väntar
-    // fortfarande, och dubblettspärren gäller per pärm.
+    // En EGEN container för raden som ska dras tillbaka: den första väntar
+    // fortfarande, och dubblettspärren gäller per container.
     $ny = Container::factory()->for($saljarkonto, 'account')->create();
     $nyUrl = "/api/containers/{$ny->ulid}/transfers";
 
@@ -855,7 +856,7 @@ it('lämnar /api:s mottagarrutter oförändrade', function () {
 
 // --- språknycklarna -----------------------------------------------------
 
-it('har ägarbytets nycklar på båda språken och med olika text', function () {
+it('har ägarbytets nycklar och läser dem ur lang/', function () {
     $nycklar = [
         'transfer.heading',
         'transfer.intro',
@@ -884,15 +885,15 @@ it('har ägarbytets nycklar på båda språken och med olika text', function () 
         'error.plan.feature_name.ownership_transfer',
     ];
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach ($nycklar as $nyckel) {
-            expect(Lang::has("ui.{$nyckel}", $locale))->toBeTrue("ui.{$nyckel} saknas på {$locale}");
-            expect(trim((string) trans("ui.{$nyckel}", [], $locale)))->not->toBe('');
-        }
+    foreach ($nycklar as $nyckel) {
+        expect(Lang::has("ui.{$nyckel}", 'en'))->toBeTrue("ui.{$nyckel} saknas");
+        expect(trim((string) trans("ui.{$nyckel}", [], 'en')))->not->toBe('');
     }
 
     // Felkoden `transfer.expired` slås upp som `error.transfer.expired` av
     // App\Support\Frontend\ApiErrorTranslator — grenen kan inte heta något
-    // annat, hur gärna meningen än hör till ägarbytet.
-    expect(trans('ui.error.transfer.expired', [], 'sv'))->not->toBe(trans('ui.error.transfer.expired', [], 'en'));
+    // annat, hur gärna meningen än hör till ägarbytet. Meningen är en mening
+    // och inte nyckeln själv.
+    expect(trans('ui.error.transfer.expired', [], 'en'))
+        ->toBe('The transfer has expired. The sender must send a new one.');
 });

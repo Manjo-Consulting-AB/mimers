@@ -44,7 +44,7 @@ use function Pest\Laravel\withoutVite;
  * på båda ställena.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js.
  *
  * Hjälparna har prefixet `itemrelation` — Pest lägger alla testfiler i samma
@@ -52,8 +52,8 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem, och en pärm ägd av kontot. Båda på svenska, så
- * meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * Ett konto med en medlem, och en container ägd av kontot. Båda på svenska, så
+ * meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container}
  */
@@ -68,7 +68,7 @@ function itemrelationKontext(): array
 }
 
 /**
- * Ett item i pärmen med sammanhängande `created_by_*`.
+ * Ett item i containern med sammanhängande `created_by_*`.
  *
  * @param  array<string, mixed>  $attribut
  */
@@ -106,7 +106,7 @@ function itemrelationMottagare(Container $container, ?Item $item, string $niva, 
 /**
  * Ett konto mottagaren äger själv, för `account`-fältet i StoreItemRequest:
  * medlemsprövningen i `ItemController::store()` gäller det anropade kontot,
- * inte pärmens.
+ * inte containerns.
  */
 function itemrelationEgetKonto(User $mottagare): Account
 {
@@ -117,12 +117,12 @@ function itemrelationEgetKonto(User $mottagare): Account
 }
 
 /**
- * En kant, kanoniskt lagrad: `sibling` normaliseras till lägst id först
+ * En kant, kanoniskt lagrad: `related` normaliseras till lägst id först
  * ([[Items och organisation]] § item_link), `parent` behåller paret.
  */
 function itemrelationKant(Item $fran, Item $till, string $relation = 'parent'): ItemLink
 {
-    if ($relation === 'sibling' && $till->id < $fran->id) {
+    if ($relation === 'related' && $till->id < $fran->id) {
         [$fran, $till] = [$till, $fran];
     }
 
@@ -157,7 +157,7 @@ it('visar relationerna i tre grupper sorterade på motpartens namn', function ()
     itemrelationKant($baten, $motorn, 'parent');
     itemrelationKant($motorn, $alfan, 'parent');
     itemrelationKant($motorn, $betan, 'parent');
-    itemrelationKant($motorn, $masten, 'sibling');
+    itemrelationKant($motorn, $masten, 'related');
 
     actingAs($anvandare)->get(itemrelationUrl($container, $motorn))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
@@ -172,16 +172,16 @@ it('visar relationerna i tre grupper sorterade på motpartens namn', function ()
             // på id och inte på när länken skapades.
             ->where('links.child.0.item.name', 'Alfan')
             ->where('links.child.1.item.name', 'Betan')
-            ->has('links.sibling', 1)
-            ->where('links.sibling.0.item.name', 'Masten')
+            ->has('links.related', 1)
+            ->where('links.related.0.item.name', 'Masten')
     );
 });
 
-it('renderar grupperna i ordningen överordnade, underordnade, syskon', function () {
+it('renderar grupperna i ordningen överordnade, underordnade, relaterade', function () {
     $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
 
     // Ordningen är en del av Beslut 9, och den bor i komponenten.
-    expect($vy)->toContain("const groups = ['parent', 'child', 'sibling'];");
+    expect($vy)->toContain("const groups = ['parent', 'child', 'related'];");
 });
 
 it('länkar varje rad till motpartens detaljvy', function () {
@@ -202,7 +202,7 @@ it('visar en rad om itemet inte är kopplat till något', function () {
         fn (AssertableInertia $page) => $page
             ->where('links.parent', [])
             ->where('links.child', [])
-            ->where('links.sibling', [])
+            ->where('links.related', [])
     );
 
     // Tre tomma rubriker säger mindre än en rad: en tom grupp ritas inte
@@ -260,7 +260,7 @@ it('listar inte itemet självt, redan kopplade items eller items utanför omfån
     $masten = itemrelationItem($container, 'Masten');
     $fria = itemrelationItem($container, 'Fria');
 
-    itemrelationKant($motorn, $pumpen, 'sibling');
+    itemrelationKant($motorn, $pumpen, 'related');
 
     // Skrivare på motorn, pumpen och den fria — masten ligger utanför.
     $skrivare = itemrelationMottagare($container, $motorn, 'write');
@@ -374,7 +374,7 @@ it('knyter upp och lämnar båda itemen kvar', function () {
     expect(Item::query()->whereKey([$motorn->id, $impellern->id])->count())->toBe(2);
 });
 
-it('ger 404 för en motpart i en annan pärm', function () {
+it('ger 404 för en motpart i en annan container', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemrelationKontext();
@@ -436,7 +436,7 @@ it('gör item_link.self till ett fältfel på item', function () {
     ]);
 
     $svar->assertSessionHasErrors([
-        'item' => Lang::get('ui.error.item_link.self', [], 'sv'),
+        'item' => Lang::get('ui.error.item_link.self', [], 'en'),
     ]);
 });
 
@@ -469,10 +469,10 @@ it('gör item_link.pair_exists till ett fältfel som säger vilken relation pare
     // ersatte (Beslut 6).
     expect($meddelande)->toBe(
         Lang::get('ui.error.item_link.pair_exists', [
-            'relation' => Lang::get('ui.error.item_link.relation_word.child', [], 'sv'),
-        ], 'sv')
+            'relation' => Lang::get('ui.error.item_link.relation_word.child', [], 'en'),
+        ], 'en')
     );
-    expect($meddelande)->toContain('underordnad');
+    expect($meddelande)->toContain('child');
 });
 
 it('gör item_link.cycle till ett fältfel på relation', function () {
@@ -499,11 +499,11 @@ it('gör item_link.cycle till ett fältfel på relation', function () {
     ]);
 
     $svar->assertSessionHasErrors([
-        'relation' => Lang::get('ui.error.item_link.cycle', [], 'sv'),
+        'relation' => Lang::get('ui.error.item_link.cycle', [], 'en'),
     ]);
 });
 
-it('avvisar en motpart i en annan pärm redan i valideringen', function () {
+it('avvisar en motpart i en annan container redan i valideringen', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemrelationKontext();
@@ -535,7 +535,7 @@ it('skapar ett barn-item ur detaljvyns länk, i samma transaktion som kopplingen
     $motorn = itemrelationItem($container, 'Motorn');
 
     // En mottagare med `create` på motorn och ingenting annat: hon når ingen
-    // rot i pärmen, men hon får lägga in "impellerbyte 2026" under det hon
+    // rot i containern, men hon får lägga in "impellerbyte 2026" under det hon
     // fått ([[ADR-0028 Åtkomst på itemnivå]] § Beslut).
     $mottagare = itemrelationMottagare($container, $motorn, 'create');
     $hennesKonto = itemrelationEgetKonto($mottagare);
@@ -584,7 +584,7 @@ it('skapar ett barn-item ur detaljvyns länk, i samma transaktion som kopplingen
     actingAs($mottagare)->get(itemrelationUrl($container, $nytt))->assertOk();
 });
 
-it('prövar förälderns grind när parent finns och pärmens grind när det saknas', function () {
+it('prövar förälderns grind när parent finns och containerns grind när det saknas', function () {
     withoutVite();
 
     [, , $container] = itemrelationKontext();
@@ -625,7 +625,7 @@ it('prövar förälderns grind när parent finns och pärmens grind när det sak
     expect(Item::query()->where('name', 'Rot')->exists())->toBeFalse();
 });
 
-it('ger 404 när föräldern i länken ligger i en annan pärm', function () {
+it('ger 404 när föräldern i länken ligger i en annan container', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemrelationKontext();
@@ -668,7 +668,7 @@ it('kostar ett konstant antal frågor oavsett antal relationer', function () {
     actingAs($anvandare)->get($url)->assertOk();
     $medEn = $antal;
 
-    itemrelationKant($grannar[1], $mitt, 'sibling');
+    itemrelationKant($grannar[1], $mitt, 'related');
     itemrelationKant($mitt, $grannar[2], 'parent');
 
     $antal = 0;
@@ -678,7 +678,7 @@ it('kostar ett konstant antal frågor oavsett antal relationer', function () {
     // Motpartsuppslaget är EN fråga, omfånget ligger i SAMMA fråga, och
     // motpartsväljarens `update`-prövning per kandidat kostar ingenting:
     // ResolveItemScope är memoiserad och `container` sätts ur den redan
-    // hämtade pärmen (Beslut 5).
+    // hämtade containern (Beslut 5).
     expect($medTre)->toBe($medEn);
 });
 

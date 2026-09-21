@@ -1,13 +1,18 @@
 <?php
 
+// rott-pa-basen: issue 77b och 83 — ordbyte i prosa (kommentar och testnamn) och en struken rad för den borttagna rutten, ingen ändring av applikationskoden; bas och head delar den.
+
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
+use App\Models\Schedule;
+use App\Models\ScheduleOccurrence;
 use App\Models\UsageCounter;
 use App\Models\User;
 use App\Support\Frontend\ApiErrorTranslator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
@@ -17,13 +22,11 @@ use function Pest\Laravel\from;
 use function Pest\Laravel\get;
 use function Pest\Laravel\patch;
 use function Pest\Laravel\post;
-use function Pest\Laravel\put;
 use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 54 · Containerytan i webben — listan, skapandet och redigeringen.
  * Se App\Http\Controllers\ContainerController,
- * App\Http\Controllers\ActiveContainerController,
  * App\Actions\Container\CreateContainer,
  * resources/js/layouts/ContainerLayout.vue,
  * resources/js/layouts/containerSections.js och
@@ -31,7 +34,7 @@ use function Pest\Laravel\withoutVite;
  *
  * Den här filen prövar SIDORNA och skrivningarna: att rutterna renderar rätt
  * komponent, att urvalet och `can.update` kommer ur samma frågor som `/api`
- * ställer, att en pärm blir aktiv av skapandet, och att kvotgränsen blir ett
+ * ställer, att en container blir aktiv av skapandet, och att kvotgränsen blir ett
  * FORMULÄRFEL i stället för en rå JSON-kropp (Beslut 4) — det sista är hela
  * skälet till att App\Support\Frontend\ApiErrorTranslator finns.
  *
@@ -88,6 +91,10 @@ function containerGrant(Container $container, User $user, string $level, ?Item $
  * Raderingen kom med issue 62b § Beslut 4 och är den SJUNDE — den ligger i
  * samma grupp och av samma skäl: raderingsknappen på inställningssidan får
  * inte vara den enda vägen in i kontrollern som en gäst når.
+ *
+ * Översiktens GET kom med issue 89 och ligger i samma grupp av samma skäl som
+ * raderingen: containerns egen URL får inte vara den enda vägen in i
+ * kontrollern som en gäst når.
  */
 it('skickar en utloggad besökare till inloggningen från alla sju rutterna', function () {
     withoutVite();
@@ -98,9 +105,12 @@ it('skickar en utloggad besökare till inloggningen från alla sju rutterna', fu
     get('/containers')->assertRedirect('/login');
     get('/containers/create')->assertRedirect('/login');
     post('/containers', [])->assertRedirect('/login');
+    // Översikten kom med issue 89 och ligger i samma grupp: den svarar på
+    // containerns egen URL, och en gäst ska mötas av inloggningen där precis
+    // som på varje annan containerrutt.
+    get("/containers/{$container->ulid}")->assertRedirect('/login');
     get("/containers/{$container->ulid}/edit")->assertRedirect('/login');
     patch("/containers/{$container->ulid}", [])->assertRedirect('/login');
-    put("/containers/{$container->ulid}/active")->assertRedirect('/login');
     delete("/containers/{$container->ulid}")->assertRedirect('/login');
 });
 
@@ -117,12 +127,12 @@ it('renderar Containers/Index för en inloggad användare', function () {
 
 /*
  * Urvalet är samma fråga som API:ets index() ställer —
- * Container::scopeAccessibleBy() — så en pärm i ett främmande konto utan
- * container_access syns inte, och en pärm med en giltig access gör det.
+ * Container::scopeAccessibleBy() — så en container i ett främmande konto utan
+ * container_access syns inte, och en container med en giltig access gör det.
  * "Delad med dig" härleds i vyn ur `account`-ULID:n mot `auth.accounts`
  * (Beslut 10), så serverns halva är att `account` bär ÄGARKONTOT.
  */
-it('listar egna och delade pärmar sorterade på namn, och ingenting annat', function () {
+it('listar egna och delade containers sorterade på namn, och ingenting annat', function () {
     withoutVite();
 
     // Kontot och medlemmen byggs för hand i stället för med containerKontext():
@@ -153,7 +163,7 @@ it('listar egna och delade pärmar sorterade på namn, och ingenting annat', fun
     );
 });
 
-it('märker en delad pärm som delad och en egen som egen i vyn', function () {
+it('märker en delad container som delad och en egen som egen i vyn', function () {
     // Härledningen bor i vyn (Beslut 10), och det enda en serverhalva kan
     // bevisa är att den läser rätt fält: `account` mot `auth.accounts`.
     $vy = File::get(resource_path('js/pages/Containers/Index.vue'));
@@ -164,26 +174,58 @@ it('märker en delad pärm som delad och en egen som egen i vyn', function () {
 });
 
 /*
- * Beslut 8: `kind` är presentation. Väljarlistan kommer ur
- * Container::KINDS som en prop — samma teknik som 53c:s tidszoner — så
- * listan aldrig skrivs av i JavaScript.
+ * Beslut 8 och issue 84 · [[ADR-0036 Containerns art]]: `kind` är
+ * presentation och ett FRITT fält. Propen bär de arter ANVÄNDAREN redan
+ * använt — underlaget för autocomplete, samma mönster som leverantörsfältet i
+ * [[ADR-0016 Kostnadsregistrering]] — och aldrig en fast mängd. Den är
+ * sorterad och utan dubbletter.
+ *
+ * **Mängden är användarens containers, inte hennes konton.** En container som
+ * delats DIREKT med henne ligger utanför "konton hon är med i" men innanför
+ * hennes containerlista ([[Konton och åtkomst]] § container_access), och
+ * navigeringen grupperar på `kind` över just den listan ([[ADR-0036
+ * Containerns art]]) — föreslog vi ur en snävare mängd skulle autocomplete
+ * själv producera de stavningsvarianter den finns för att förhindra. Ett
+ * annat kontos container, som hon varken är medlem i eller har en access
+ * till, hör däremot inte hit.
+ *
+ * SAMMA lista går till båda formulären, ur samma servermetod: en metod, en
+ * prop.
  */
-it('skickar kind-listan ur Container::KINDS till båda formulären', function () {
+it('skickar användarens redan använda arter till båda formulären', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = containerKontext();
 
+    // Kontextens container bär fabrikens ord — byt den så listan blir läsbar.
+    $container->update(['kind' => 'Segelbåt']);
+
+    Container::factory()->for($konto, 'account')->create(['kind' => 'Husvagn']);
+    Container::factory()->for($konto, 'account')->create(['kind' => 'Husvagn']);
+
+    // En container utan art ger inget förslag — fältet är frivilligt.
+    Container::factory()->for($konto, 'account')->create(['kind' => null]);
+
+    // Delad direkt med henne: i hennes containerlista, men inte i hennes konto.
+    $delad = Container::factory()->for(Account::factory()->create(), 'account')->create(['kind' => 'Delad art']);
+    containerGrant($delad, $anvandare, 'read');
+
+    // Ett annat kontos container, utan access: varken hennes lista eller
+    // hennes förslag.
+    $annat = Account::factory()->create();
+    Container::factory()->for($annat, 'account')->create(['kind' => 'Främmande art']);
+
     actingAs($anvandare)->get('/containers/create')->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Create')
-        ->where('kinds', Container::KINDS)
+        ->where('kinds', ['Delad art', 'Husvagn', 'Segelbåt'])
     );
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/edit")->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Edit')
-        ->where('kinds', Container::KINDS)
+        ->where('kinds', ['Delad art', 'Husvagn', 'Segelbåt'])
         ->where('container.ulid', $container->ulid)
         ->where('container.name', $container->name)
-        ->where('container.kind', $container->kind)
+        ->where('container.kind', 'Segelbåt')
         ->where('container.account', $konto->ulid)
     );
 
@@ -191,6 +233,106 @@ it('skickar kind-listan ur Container::KINDS till båda formulären', function ()
         ->toContain('containerSections');
     expect(File::get(resource_path('js/layouts/ContainerLayout.vue')))
         ->toContain('v-for="section in containerSections"');
+});
+
+/*
+ * Klart när: en container kan skapas UTAN art (issue 84).
+ *
+ * Propen ovan är ett förslag; fältet självt är fritt. En ny användare som ännu
+ * inte vet vad hennes container är ska kunna lämna rutan tom — ingen förvald
+ * art ärvs, och `null` är vad som sparas. Kolumnen är nullbar, för en tom
+ * sträng är just den sentinel [[ADR-0004 Fria taggar och kategorier]] vill
+ * undvika.
+ */
+it('skapar en container utan art', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'Utan art',
+        'account' => $konto->ulid,
+    ])->assertSessionHasNoErrors();
+
+    expect(Container::query()->where('name', 'Utan art')->firstOrFail()->kind)->toBeNull();
+});
+
+/*
+ * Klart när: en container kan sparas med en art utanför den gamla listan.
+ *
+ * `Segelbåt` är lika giltig som `boat`: valideringen är längd och format,
+ * aldrig medlemskap i en mängd ([[ADR-0036 Containerns art]]).
+ */
+it('tar emot en egenskriven art', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'Egenskriven',
+        'kind' => 'Segelbåt',
+        'account' => $konto->ulid,
+    ])->assertSessionHasNoErrors();
+
+    expect(Container::query()->where('name', 'Egenskriven')->firstOrFail()->kind)->toBe('Segelbåt');
+});
+
+/*
+ * Klart när: en container med en egenskriven art visas med arten ORDAGRANT i
+ * containerlistan, och aldrig som en översättningsnyckel (issue 84).
+ *
+ * `t()` returnerar nyckeln själv när uppslaget misslyckas, så den gamla raden
+ * `t('container.kind.' + värdet)` hade skrivit `container.kind.Segelbåt` på
+ * skärmen. Provet är tvådelat: värdet går ORÖRAT genom API-lagret och står
+ * ordagrant i listans prop, och vyn bygger ingen nyckel ur det — de fem
+ * nycklarna under `container.kind` finns inte kvar i `lang/`.
+ */
+it('skriver ut arten ordagrant i listan', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+    $container->refresh()->update(['kind' => 'Segelbåt']);
+
+    actingAs($anvandare)->get('/containers')->assertInertia(fn (AssertableInertia $page) => $page
+        ->component('Containers/Index')
+        ->where('containers.0.kind', 'Segelbåt')
+    );
+
+    $index = File::get(resource_path('js/pages/Containers/Index.vue'));
+
+    // Ingen nyckel byggs ur värdet — mönstret `t(`container.kind...`)` är
+    // precis det som gav `container.kind.Segelbåt` på skärmen.
+    expect($index)->toContain('{{ container.kind }}');
+    expect(str_contains($index, 't(`container.kind'))->toBeFalse();
+
+    // En container utan art visar ingen art alls: elementet döljs i stället för
+    // att ritas tomt. Närvarokontrollen frågar om fältet är SATT och aldrig
+    // VILKET värde det bär — den grenar inte på arten.
+    expect($index)->toContain('v-if="container.kind"');
+
+    expect(array_key_exists('kind', trans('ui.container', [], 'en')))->toBeFalse();
+});
+
+/*
+ * Ett för långt värde avvisas: `max:40` är kolumnens bredd, och regeln är
+ * densamma i både skapa- och redigeringsformuläret (issue 84).
+ */
+it('avvisar en art längre än kolumnen', function () {
+    withoutVite();
+
+    [$konto, $anvandare, $container] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'För lång',
+        'kind' => str_repeat('a', 41),
+        'account' => $konto->ulid,
+    ])->assertSessionHasErrors('kind');
+
+    expect(Container::query()->where('name', 'För lång')->exists())->toBeFalse();
+
+    from("/containers/{$container->ulid}/edit")->actingAs($anvandare)->patch("/containers/{$container->ulid}", [
+        'kind' => str_repeat('a', 41),
+    ])->assertSessionHasErrors('kind');
 });
 
 /*
@@ -216,10 +358,10 @@ it('skickar ingen egen kontolista till skapaformuläret', function () {
 
 /*
  * Beslut 3 och 5: POST skapar med name, kind och det valda kontot, gör den
- * nya pärmen aktiv och ökar ägarkontots räknare med ett — allt genom samma
+ * nya containern aktiv och ökar ägarkontots räknare med ett — allt genom samma
  * action som /api anropar.
  */
-it('skapar en pärm med namn, typ och konto och gör den aktiv', function () {
+it('skapar en container med namn, typ och konto och gör den aktiv', function () {
     withoutVite();
 
     [$konto, $anvandare] = containerKontext();
@@ -235,8 +377,8 @@ it('skapar en pärm med namn, typ och konto och gör den aktiv', function () {
 
     $skapad = Container::query()->where('name', 'Vindil')->firstOrFail();
 
-    // Issue 56b § Beslut 5: målet är den nya pärmens kategoriyta, inte
-    // listan — den som just skapat en pärm möts av förslaget.
+    // Issue 56b § Beslut 5: målet är den nya containerns kategoriyta, inte
+    // listan — den som just skapat en container möts av förslaget.
     $svar->assertRedirect("/containers/{$skapad->ulid}/categories");
 
     expect($skapad->kind)->toBe('boat');
@@ -247,7 +389,7 @@ it('skapar en pärm med namn, typ och konto och gör den aktiv', function () {
     // aldrig — räknaren hålls i takt av skrivvägarna, inte av databasen.
     expect((int) UsageCounter::query()->where('account_id', $konto->id)->value('container_count'))->toBe(1);
 
-    // Den som just skapat en pärm vill arbeta i den (Beslut 6).
+    // Den som just skapat en container vill arbeta i den (Beslut 6).
     actingAs($anvandare)->get('/containers')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('activeContainer', $skapad->ulid)
     );
@@ -305,7 +447,7 @@ it('nekar skapande i ett read_only-konto', function () {
 it('ger ett läsbart kvotfel i stället för JSON när containertaket slår i', function () {
     withoutVite();
 
-    // Gratisplanen har `containers => 1` (issue 27), så den andra pärmen
+    // Gratisplanen har `containers => 1` (issue 27), så den andra containern
     // fyller kontot.
     [$konto, $anvandare] = containerKontext('owner', 'sv_SE');
 
@@ -315,7 +457,7 @@ it('ger ett läsbart kvotfel i stället för JSON när containertaket slår i', 
 
     $första = Container::query()->where('name', 'Första')->firstOrFail();
 
-    // Den första pärmen skapas och landar på sin kategoriyta (issue 56b
+    // Den första containern skapas och landar på sin kategoriyta (issue 56b
     // § Beslut 5); den andra är den som slår i taket.
     $förstaSvar->assertRedirect("/containers/{$första->ulid}/categories");
 
@@ -330,7 +472,7 @@ it('ger ett läsbart kvotfel i stället för JSON när containertaket slår i', 
 
     $mening = session('errors')->get('quota')[0];
 
-    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'sv'));
+    expect($mening)->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 1, 'used' => 1], 'en'));
     expect($mening)->not->toBe('quota.containers_exceeded');
     expect($svar->headers->get('content-type'))->toContain('text/html');
 
@@ -378,30 +520,28 @@ it('ger den generiska meningen för en okänd felkod i stället för att kasta',
         ->toBe(trans('ui.error.quota.containers_exceeded', ['limit' => 3, 'used' => 3]));
 });
 
-it('avvisar ett tomt namn och en okänd typ på respektive fält', function () {
+/*
+ * Namnet är det enda fältet som måste vara ifyllt. En art är det inte längre
+ * (issue 84), och en art utanför den gamla listan är inget fel — den sidan av
+ * gamla provet bor numera i `skapar en container utan art` och
+ * `tar emot en egenskriven art` ovan.
+ */
+it('avvisar ett tomt namn', function () {
     withoutVite();
 
     [$konto, $anvandare] = containerKontext();
 
-    $tomtNamn = from('/containers/create')->actingAs($anvandare)->post('/containers', [
+    $svar = from('/containers/create')->actingAs($anvandare)->post('/containers', [
         'name' => '',
         'kind' => 'boat',
         'account' => $konto->ulid,
     ]);
 
-    $tomtNamn->assertRedirect('/containers/create');
-    $tomtNamn->assertSessionHasErrors('name');
+    $svar->assertRedirect('/containers/create');
+    $svar->assertSessionHasErrors('name');
 
-    $okandTyp = from('/containers/create')->actingAs($anvandare)->post('/containers', [
-        'name' => 'Rymdskepp',
-        'kind' => 'spaceship',
-        'account' => $konto->ulid,
-    ]);
-
-    $okandTyp->assertRedirect('/containers/create');
-    $okandTyp->assertSessionHasErrors('kind');
-
-    expect(Container::query()->where('name', 'Rymdskepp')->exists())->toBeFalse();
+    // Bara kontextens container finns kvar.
+    expect(Container::query()->count())->toBe(1);
 });
 
 /*
@@ -469,10 +609,10 @@ it('låter en containerbred write-access redigera men nekar en read', function (
 
 /*
  * Issue 70: ContainerPolicy::update() kräver en CONTAINERBRED rad. En
- * itemåtkomst på `write` får inte byta namn på pärmen — annars hade en
+ * itemåtkomst på `write` får inte byta namn på containern — annars hade en
  * itemgrant blivit en ContainerPolicy::create() i smyg.
  */
-it('nekar en itemåtkomst på write att redigera pärmen', function () {
+it('nekar en itemåtkomst på write att redigera containern', function () {
     withoutVite();
 
     [, , $container] = containerKontext();
@@ -493,7 +633,7 @@ it('nekar en itemåtkomst på write att redigera pärmen', function () {
  * Layouten är skalet fem issues fyller (Beslut 7), och redigeringssidan är
  * den första som bor i den. Sidpropen `container` är kontraktet.
  */
-it('renderar redigeringssidan i ContainerLayout med pärmens namn', function () {
+it('renderar redigeringssidan i ContainerLayout med containerns namn', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerKontext();
@@ -516,12 +656,12 @@ it('renderar redigeringssidan i ContainerLayout med pärmens namn', function () 
 });
 
 /*
- * Nycklarna finns på båda språken och vyn läser dem. En nyckel som finns men
+ * Nycklarna finns och vyn läser dem. En nyckel som finns men
  * inte används är en text ingen ser, och en svensk sträng i en .vue-fil blir
  * aldrig engelsk — SprakTest fäller den bredare varianten, den här kontrollerar
  * att just de här texterna kom med.
  */
-it('har containerytans texter på båda språken och läser dem ur lang/', function () {
+it('har containerytans texter och läser dem ur lang/', function () {
     $nycklar = [
         'nav.containers',
         'container.index.heading',
@@ -529,13 +669,14 @@ it('har containerytans texter på båda språken och läser dem ur lang/', funct
         'container.index.empty',
         'container.index.shared',
         'container.index.active',
-        'container.index.make_active',
         'container.index.edit',
         'container.create.heading',
         'container.create.account',
         'container.create.account_choose',
+        'container.create.description',
         'container.create.submit',
         'container.edit.heading',
+        'container.edit.description',
         'container.edit.submit',
         'container.destroy.action',
         'container.nav.settings',
@@ -546,25 +687,20 @@ it('har containerytans texter på båda språken och läser dem ur lang/', funct
         'flash.container-trashed',
     ];
 
-    foreach (['sv', 'en'] as $locale) {
-        foreach ($nycklar as $nyckel) {
-            $mening = trans("ui.{$nyckel}", [], $locale);
+    foreach ($nycklar as $nyckel) {
+        $mening = trans("ui.{$nyckel}", [], 'en');
 
-            expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på {$locale}");
-            expect(trim($mening))->not->toBe('');
-        }
+        expect($mening)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+        expect(trim($mening))->not->toBe('');
     }
 
-    // `kind` är en etikett per värde i Container::KINDS, på båda språken.
-    foreach (['sv', 'en'] as $locale) {
-        foreach (Container::KINDS as $kind) {
-            expect(trans("ui.container.kind.{$kind}", [], $locale))
-                ->not->toBe("ui.container.kind.{$kind}", "kind.{$kind} saknas på {$locale}");
-        }
-    }
+    // Ingen etikett per art sedan issue 84: fältet är fritt, och vyn skriver
+    // ut värdet användaren matat in ([[ADR-0036 Containerns art]]).
+    expect(trans('ui.container', [], 'en'))->not->toHaveKey('kind');
 
-    expect(trans('ui.error.quota.containers_exceeded', [], 'sv'))
-        ->not->toBe(trans('ui.error.quota.containers_exceeded', [], 'en'));
+    // Kvotmeningen bär gränsen och värdet, och är en mening och inte nyckeln.
+    expect(trans('ui.error.quota.containers_exceeded', ['used' => 1, 'limit' => 1], 'en'))
+        ->toBe('The account has reached its limit for the number of containers (1 of 1).');
 
     $index = File::get(resource_path('js/pages/Containers/Index.vue'));
 
@@ -574,4 +710,373 @@ it('har containerytans texter på båda språken och läser dem ur lang/', funct
 
     expect(File::get(resource_path('js/pages/Containers/Create.vue')))->toContain('container.create.submit');
     expect(File::get(resource_path('js/pages/Containers/Edit.vue')))->toContain('container.edit.submit');
+});
+
+/*
+ * Issue 88 · Containern får en beskrivning. Se [[ADR-0039 Containerns
+ * översikt]] § Beslut.
+ *
+ * ETT fritextfält, nullbart och frivilligt, i BÅDE skapa- och redigeravyn.
+ * Skapandevägen går genom App\Actions\Container\CreateContainer, och
+ * parametern lades SIST med ett förval — ingen befintlig anropare rördes.
+ *
+ * API:ets halva prövas i tests/Feature/Container/ContainerCrudTest.php.
+ */
+
+/*
+ * Klart när: en beskrivning som anges vid skapandet sparas — via webbens
+ * `store()` (issue 88).
+ *
+ * Värdet är mockupens egen underrubrik, med punkten kvar, och det sparas
+ * ORDAGRANT: ingen kod plockar isär fältet i modell och årtal, och hade den
+ * gjort det hade raden kommit tillbaka i delar.
+ */
+it('skapar en container med en beskrivning', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'Vindil',
+        'description' => 'Malö 116 • 1984',
+        'account' => $konto->ulid,
+    ])->assertSessionHasNoErrors();
+
+    expect(Container::query()->where('name', 'Vindil')->firstOrFail()->description)
+        ->toBe('Malö 116 • 1984');
+});
+
+/*
+ * Klart när: en container kan skapas och sparas UTAN beskrivning (issue 88).
+ *
+ * Fältet är frivilligt i BÅDA vyerna — att kräva en beskrivning vid skapandet
+ * är att ställa en fråga användaren ännu inte kan svara på, samma resonemang
+ * som gjorde `kind` frivillig i issue 84. Det som sparas är `null`, och
+ * skapavyns ruta är tom och inte förifylld med något.
+ */
+it('skapar en container utan beskrivning', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'Utan beskrivning',
+        'account' => $konto->ulid,
+    ])->assertSessionHasNoErrors();
+
+    expect(Container::query()->where('name', 'Utan beskrivning')->firstOrFail()->description)
+        ->toBeNull();
+});
+
+/*
+ * Klart när: `ContainerResource` bär fältet och alltid som `null` när det
+ * saknas, aldrig utelämnat (issue 88 · issue 8 § Beslut 7).
+ *
+ * Redigeravyns sidprop är samma resurs som `/api` svarar med, så provet
+ * gäller båda ytorna: `has()` fäller en nyckel som saknas, och `where()`
+ * fäller ett värde som är fel.
+ */
+it('bär beskrivningen i redigeravyns sidprop, som null när den saknas', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/edit")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Edit')
+            ->has('container.description')
+            ->where('container.description', null)
+        );
+
+    $container->update(['description' => 'Malö 116 • 1984']);
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/edit")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('container.description', 'Malö 116 • 1984')
+        );
+});
+
+/*
+ * Klart när: en beskrivning kan sättas och ändras i redigeravyn (issue 88).
+ */
+it('sätter och ändrar beskrivningen i redigeravyn', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    from("/containers/{$container->ulid}/edit")
+        ->actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}", ['description' => 'Malö 116 • 1984'])
+        ->assertRedirect("/containers/{$container->ulid}/edit")
+        ->assertSessionHas('status', 'container-updated');
+
+    expect($container->fresh()->description)->toBe('Malö 116 • 1984');
+
+    from("/containers/{$container->ulid}/edit")
+        ->actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}", ['description' => 'Såld 2019.'])
+        ->assertSessionHasNoErrors();
+
+    expect($container->fresh()->description)->toBe('Såld 2019.');
+});
+
+/*
+ * Klart när: en beskrivning kan TÖMMAS i redigeravyn (issue 88).
+ *
+ * En tom ruta är ett giltigt svar — fältet är frivilligt hela vägen, och
+ * `null` är vad som sparas. Att tömma det är inte samma sak som att låta
+ * nyckeln vara: `sometimes` skiljer de två åt, och den halvan prövas i
+ * ContainerCrudTest.
+ */
+it('tömmer beskrivningen i redigeravyn', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+    $container->update(['description' => 'Malö 116 • 1984']);
+
+    from("/containers/{$container->ulid}/edit")
+        ->actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}", ['description' => ''])
+        ->assertSessionHasNoErrors();
+
+    expect($container->fresh()->description)->toBeNull();
+});
+
+/*
+ * Fältet finns i BÅDA vyerna och läses ur `lang/` (issue 88).
+ *
+ * En nyckel som finns men inte används är en text ingen ser. Provet är
+ * tvådelat: nycklarna finns i `lang/` (prövat i testet ovan) och vyerna
+ * binder sina rutor till `form.description` med sin egen nyckel.
+ */
+it('har beskrivningsfältet i både skapa- och redigeravyn', function () {
+    $skapa = File::get(resource_path('js/pages/Containers/Create.vue'));
+    $redigera = File::get(resource_path('js/pages/Containers/Edit.vue'));
+
+    expect($skapa)->toContain("t('container.create.description')");
+    expect($skapa)->toContain('v-model="form.description"');
+    expect($redigera)->toContain("t('container.edit.description')");
+    expect($redigera)->toContain('v-model="form.description"');
+
+    // Redigeravyn fyller rutan ur resursen och faller tillbaka på en tom
+    // sträng: en container utan beskrivning bär `null`, och rutan ska vara
+    // tom — inte visa ordet "null".
+    expect($redigera)->toContain('props.container.description ??');
+});
+
+// --- översikten -------------------------------------------------------------
+
+/*
+ * Klart när: `GET /containers/{container}` svarar med översikten, och
+ * `containers.show` namnger den medan itemlistan har ett eget ruttnamn.
+ *
+ * Ruttnamnet följde med URL:en och inte med kontrollern — det var containerns
+ * sida hela tiden, och det är den fortfarande ([[ADR-0039 Containerns översikt]]
+ * § Beslut). Huvudet bär namn, art och beskrivning, och beskrivningen skrivs ut
+ * ORDAGRANT: ingen tolkning, ingen uppdelning i delar (issue 88).
+ */
+it('svarar med översikten på containerns egen URL', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+    $container->update([
+        'kind' => 'Segelbåt',
+        'description' => "Malö 116 • 1984\nRenoverad 2019.",
+    ]);
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->component('Containers/Overview')
+            ->where('container.ulid', $container->ulid)
+            ->where('container.name', $container->name)
+            ->where('container.kind', 'Segelbåt')
+            ->where('container.description', "Malö 116 • 1984\nRenoverad 2019.")
+    );
+
+    expect(route('containers.show', $container, false))->toBe("/containers/{$container->ulid}")
+        ->and(route('containers.items.index', $container, false))->toBe("/containers/{$container->ulid}/items");
+
+    $vy = File::get(resource_path('js/pages/Containers/Overview.vue'));
+
+    expect($vy)->toContain('{{ container.name }}')
+        ->toContain('{{ container.kind }}')
+        ->toContain('{{ container.description }}')
+        ->toContain("t('container.overview.kind')")
+        ->toContain("t('container.overview.description')")
+        ->toContain('counts.items')
+        ->toContain('counts.todos');
+
+    // Arten är ett FRITT fält ([[ADR-0036 Containerns art]]): ingen nyckel
+    // byggs ur värdet, för `t()` returnerar nyckeln själv när uppslaget
+    // misslyckas — samma fälla som `container.kind.Segelbåt` på skärmen.
+    expect(str_contains($vy, 't(`container.overview.kind'))->toBeFalse();
+
+    // Nycklarna finns och är inte tomma (issue 52: ingen sträng i JavaScript).
+    $en = require lang_path('en/ui.php');
+
+    foreach (['kind', 'description', 'items', 'todos'] as $nyckel) {
+        expect(trim($en['container']['overview'][$nyckel]))->not->toBe('', "container.overview.{$nyckel} är tom");
+    }
+});
+
+/*
+ * Klart när: itembrickan visar antalet items användaren NÅR — och en
+ * omfångsbegränsad mottagares tal är lika med antalet rader hon får i listan.
+ *
+ * Det är hela poängen med räkneregeln ([[ADR-0039 Containerns översikt]]
+ * § Beslut): brickan är exakt lika lång som listan, för båda kommer ur
+ * `ListItems`. Ett tal som sade hur många som FINNS hade avslöjat precis det
+ * [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser stänger. Testet jämför
+ * därför de två talen i stället för att bara räkna det ena — och letar efter
+ * den dolda radens namn och ULID i svaret, för ett tal är inte det enda sättet
+ * en yta kan avslöja något.
+ */
+it('räknar itembrickan som antalet items användaren når', function () {
+    withoutVite();
+
+    [, $ägare, $container] = containerKontext();
+
+    $motorn = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
+
+    foreach (range(1, 5) as $i) {
+        Item::factory()->for($container, 'container')->create(['name' => "Hemlig $i"]);
+    }
+
+    // En itemgrant och ingen containerbred: hon når motorn och ingenting annat.
+    $mottagare = User::factory()->create();
+    containerGrant($container, $mottagare, 'read', $motorn);
+
+    $bricka = fn (User $anvandare): int => actingAs($anvandare)
+        ->get("/containers/{$container->ulid}")->assertOk()
+        ->inertiaProps()['counts']['items'];
+
+    $rader = fn (User $anvandare): int => count(actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items")->assertOk()
+        ->inertiaProps()['items']);
+
+    expect($bricka($ägare))->toBe(6)
+        ->and($bricka($mottagare))->toBe(1);
+
+    // Talet är lika långt som listan — samma urval, samma längd, båda gångerna.
+    expect($bricka($ägare))->toBe($rader($ägare))
+        ->and($bricka($mottagare))->toBe($rader($mottagare));
+
+    // Ingenting av det hon inte når finns i svaret — varken namnet eller ULID:n.
+    $svar = actingAs($mottagare)->get("/containers/{$container->ulid}")->assertOk();
+
+    expect($svar->getContent())->not->toContain('Hemlig');
+
+    foreach (Item::query()->where('name', 'like', 'Hemlig%')->get() as $dold) {
+        expect($svar->getContent())->not->toContain($dold->ulid);
+    }
+});
+
+/*
+ * Klart när: uppgiftsbrickan är ETT tal och inte två.
+ *
+ * `schedule` har inget fält som skiljer en uppgift från ett underhåll och får
+ * inte ett — skillnaden är domänen ([[ADR-0033 Produktens omfång]]), så
+ * mockupens två brickor är en teckning och inte ett krav. Talet är
+ * `ScheduleOccurrence::scopeTodoFor()` avgränsat till containern: en stängd
+ * förekomst räknas inte, och en i en annan container hör inte hit.
+ */
+it('räknar uppgifter och underhåll som ett tal', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    $motorn = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
+
+    $schema = fn (Item $item, string $titel): Schedule => Schedule::factory()
+        ->for($item, 'item')
+        ->create([
+            'title' => $titel,
+            'recurrence_type' => 'none',
+            'lead_days' => 0,
+            'is_active' => true,
+        ]);
+
+    $förekomst = fn (Schedule $schema, string $status = 'open'): ScheduleOccurrence => ScheduleOccurrence::factory()->create([
+        'schedule_id' => $schema->id,
+        'due_at' => Carbon::today()->addDays(30)->toDateString(),
+        'visible_from' => Carbon::today()->subDays(30)->toDateString(),
+        'status' => $status,
+    ]);
+
+    // Två öppna och synliga i containern — en "uppgift" och ett "underhåll",
+    // samma rad och samma tal.
+    $förekomst($schema($motorn, 'Byt impeller'));
+    $förekomst($schema($motorn, 'Byt olja'));
+
+    // En stängd: todo-listan läser ÖPPNA förekomster, och historiken är loggen.
+    $förekomst($schema($motorn, 'Byt filter'), 'completed');
+
+    // En i en annan container. Användaren når den, men brickan hör hit.
+    $annan = Container::factory()->for($container->account, 'account')->create();
+    $annatItem = Item::factory()->for($annan, 'container')->create(['name' => 'Trailern']);
+    $förekomst($schema($annatItem, 'Byt däck'));
+
+    $svar = actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk();
+
+    expect($svar->inertiaProps()['counts']['todos'])->toBe(2);
+
+    // Och det finns INGEN andra räknande bricka: nycklarna är exakt de två.
+    expect(array_keys($svar->inertiaProps()['counts']))->toBe(['items', 'todos']);
+});
+
+/*
+ * Klart när: ingen kostnadssummering räknas i den här kontrollern.
+ *
+ * Kostnadsbrickan är issue 86:s ändpunkt. En `SUM` här hade varit en andra väg
+ * till samma tal — precis den drift som gör att två ytor börjar visa olika
+ * siffror ([[ADR-0039 Containerns översikt]] § Konsekvenser). Provet är
+ * tvådelat: svaret bär ingen kostnadsprop, och kontrollerns KOD rör ingen
+ * kostnadskälla.
+ *
+ * Kodprovet läser filen med kommentarerna bortskalade, samma grepp som
+ * SprakTest använder på Vue-filerna: `update()`s docblock nämner
+ * `cost_entry.currency` i prosa, och en råtextkontroll hade fällt på en
+ * mening i stället för på en fråga.
+ */
+it('räknar ingen kostnadssummering på översikten', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->missing('costs')
+            ->missing('total')
+            ->missing('costReport')
+    );
+
+    $kontroller = File::get(app_path('Http/Controllers/ContainerController.php'));
+    $kontroller = (string) preg_replace('#/\*.*?\*/#s', '', $kontroller);
+    $kontroller = (string) preg_replace('#^[ \t]*//.*$#m', '', $kontroller);
+
+    expect($kontroller)->not->toContain('CostEntry');
+    expect($kontroller)->not->toContain('cost_entry');
+});
+
+/*
+ * Klart när: radering av ett item landar på översikten.
+ *
+ * Omdirigeringen i App\Http\Controllers\ItemController::destroy() behövde
+ * inte flyttas — `containers.show` pekade på containerns egen URL före flytten
+ * också — men den måste följas: en 302 till rätt adress är inte samma sak som
+ * rätt sida. Provet går hela vägen fram.
+ */
+it('landar på översikten efter en radering', function () {
+    withoutVite();
+
+    [, $ägare, $container] = containerKontext();
+    $motorn = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
+
+    actingAs($ägare)
+        ->delete("/containers/{$container->ulid}/items/{$motorn->ulid}")
+        ->assertRedirect("/containers/{$container->ulid}");
+
+    actingAs($ägare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->component('Containers/Overview')
+    );
 });

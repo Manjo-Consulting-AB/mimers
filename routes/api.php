@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\ContainerParticipantController;
 use App\Http\Controllers\Api\ContainerTrashController;
 use App\Http\Controllers\Api\CostEntryController;
 use App\Http\Controllers\Api\CostReportController;
+use App\Http\Controllers\Api\CostSummaryController;
 use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
@@ -62,7 +63,16 @@ Route::post('/login', [AuthenticatedTokenController::class, 'store'])
 Route::post('/login/magic-link', [MagicLinkRequestController::class, 'store'])
     ->middleware('throttle:'.LoginRateLimiter::NAME);
 
-Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store']);
+/*
+ * Issue 80 · Sedan den här issuen bär rutten samma takgräns som
+ * inloggningen (`throttle:login`) och som webbens steg två, se
+ * routes/web.php: ett konto med bekräftad tvåfaktor svarar
+ * `auth.totp_required`/`auth.totp_invalid` här, och en kodkontroll utan tak
+ * är en gissningsyta. Nyckeln `email` finns i kroppen redan för tokenets
+ * skull, se App\Http\Requests\Auth\ConsumeMagicLinkRequest.
+ */
+Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store'])
+    ->middleware('throttle:'.LoginRateLimiter::NAME);
 
 /*
  * Issue 38b · Mailguns webhook för studsar, spamanmälningar och
@@ -287,7 +297,7 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
 
     // Issue 15b · Fritextsök — den ENDA toppnivårutten som rör items, och
     // den enda som finns just för att frågan är global: en sökning över ALLT
-    // användaren har åtkomst till, inte inom en pärm hon redan valt (issue
+    // användaren har åtkomst till, inte inom en container hon redan valt (issue
     // 15b § Beslut 5). Rutten bär sitt eget åtkomstfilter (Container::scopeAccessibleBy(),
     // Beslut 4) i stället för rutt-nästlingens grind — och det är därför den
     // är issuens riskyta. Bara `q`, inga tagg-/kategorifilter (Beslut 6).
@@ -435,7 +445,39 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // av ägarkontots plan (assertFeature 'cost_reports') — i den ordningen
     // (§ Beslut 2). Enda kontrollpunkten i M8 som rör en funktion och inte
     // en gräns: registrering är fri, summering kräver Pro.
+    // Sedan issue 86 gäller den sista raden bara den FRÅGBARA summeringen
+    // ([[ADR-0038 Gränsen för Pro i kostnaderna]]): den fasta är fri och har
+    // sina egna rutter nedan. Rapporten och dess grind är oförändrade.
     Route::get('/containers/{container}/costs/report', CostReportController::class);
+
+    // Issue 86 · De fasta kostnadssummeringarna — containerns, itemets och
+    // kontots summering utan parametrar, se
+    // App\Http\Controllers\Api\CostSummaryController och
+    // App\Support\Cost\CostReport::summary()/forItem()/summaryForContainers().
+    // [[ADR-0038 Gränsen för Pro i kostnaderna]] flyttade gränsen från
+    // summering till fråga: den fasta summeringen är fri och bär därför
+    // INGEN plangrind — bara behörigheten. Containerrutten frågar view(),
+    // itemrutten itemets view() (samma grind som kostnadsraderna på samma
+    // item, issue 71 § Beslut 1 och 5), kontorutten
+    // AccountPolicy::viewStorage() (medlemskap; app/Policies ligger utanför
+    // issuen, se kontrollerns docblock).
+    //
+    // Rutterna tar inga parametrar: ingen period, inget filter, ingen
+    // gruppering. En okänd parameter i querysträngen kan inte påverka
+    // utfallet — kontrollern läser den inte.
+    //
+    // Itemrutten kom med issue 91 och är samma regel som containerrutten med
+    // en annan startpunkt ([[ADR-0040 Underträdets summor]]): underträdet är
+    // itemet plus dess ättlingar. Den ligger under {item}, som gruppen redan
+    // binder med scopeBindings() — en ULID från en annan container ger 404,
+    // inte en summa ur fel container.
+    //
+    // Kontorutten ligger här och inte under de andra /accounts-rutterna
+    // därför att den hör ihop med containerrutten och med rapporten: de
+    // läser samma radmängd, och den som ändrar en av dem ska se de andra.
+    Route::get('/containers/{container}/costs/summary', [CostSummaryController::class, 'forContainer']);
+    Route::get('/containers/{container}/items/{item}/costs/summary', [CostSummaryController::class, 'forItem']);
+    Route::get('/accounts/{account}/costs/summary', [CostSummaryController::class, 'forAccount']);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll
     // i en LEVANDE container, se App\Http\Controllers\Api\TrashController och

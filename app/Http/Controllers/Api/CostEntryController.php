@@ -36,7 +36,7 @@ use Illuminate\Support\Facades\Gate;
  *
  * Fram till dess var grinden containerns `view`/`update` i alla fyra: en
  * omfångsbegränsad mottagare kunde läsa kostnaderna på vilket item som helst
- * i pärmen men inte bokföra en på sitt eget, och en `write`-mottagare kunde
+ * i containern men inte bokföra en på sitt eget, och en `write`-mottagare kunde
  * radera en kostnadsrad. `Container $container` står kvar i signaturerna för
  * att ImplicitRouteBinding löser barnbindningen mot den redan lösta
  * föräldern; `store()` behöver den dessutom för attributedAccountId().
@@ -95,10 +95,28 @@ class CostEntryController extends Controller
 
     /**
      * POST /api/containers/{container}/items/{item}/costs — 201.
-     * StoreCostEntryRequest har bevisat att fälten finns och att `amount` är
-     * en sträng; själva beloppstolkningen ligger HÄR, i kontrollern, genom
-     * MinorUnits::parse() — den kastar `cost.amount_invalid`/
-     * `cost.amount_decimals` innan en rad skapas (§ Beslut 4–5).
+     * StoreCostEntryRequest har bevisat att `amount` är en sträng; själva
+     * beloppstolkningen ligger HÄR, i kontrollern, genom MinorUnits::parse()
+     * — den kastar `cost.amount_invalid`/`cost.amount_decimals` innan en rad
+     * skapas (§ Beslut 4–5).
+     *
+     * **Valutan är valfri i kroppen sedan issue 85 · [[ADR-0037 Valutans
+     * arv]], och den enda raden här som fyller ett tomrum.** Skickar klienten
+     * ingen valuta skriver servern containerns
+     * `App\Models\Container::effectiveCurrency()` — containerns egen om den
+     * har en, annars ägarkontots. Det är samma värde formuläret visar som
+     * förval, och det är därför arvsregeln är prövbar i dag: den Vue-yta som
+     * visar värdet för användaren byggs i den issue som bygger kostnadsytan.
+     *
+     * Skickas en valuta vinner den ALLTID och sparas ordagrant
+     * (versalnormaliserad av requesten). Arvet är ett förslag, aldrig ett
+     * tvång — och kolumnen är oförändrat `NOT NULL`: det finns ingen väg
+     * genom den här metoden som skapar en rad utan valuta. Fallet ligger
+     * före `MinorUnits::parse()`, som behöver valutan för att veta antalet
+     * decimaler.
+     *
+     * Containern är den som redan denormaliseras ur itemet på raden nedan;
+     * ingen ny uppslagning görs och itemet är fortfarande ingen nivå i arvet.
      *
      * Inga domänregler utöver det: registrering är fri på alla plannivåer,
      * kostnadsrader är metadata (räknas inte mot kvoten) och bär ingen
@@ -114,6 +132,13 @@ class CostEntryController extends Controller
         Gate::authorize('create', $item);
 
         $data = $request->validated();
+
+        // `??=` och inte en `if`: en nyckel som saknas OCH en nyckel som kom
+        // in som `null` (tom ruta, ConvertEmptyStringsToNull) betyder samma
+        // sak — containern föreslår. Se klassdokumentationen i
+        // StoreCostEntryRequest.
+        $data['currency'] ??= $container->effectiveCurrency();
+
         $amount = MinorUnits::parse($data['amount'], $data['currency']);
         unset($data['amount']);
 
@@ -212,7 +237,7 @@ class CostEntryController extends Controller
      *
      * Issue 74 § Beslut 6: ytan står kvar på containergrinden, men den
      * LÄCKER — en lista med "Advokatbyrån Ek & Partners" säger något om
-     * pärmen som mottagaren av motorn inte ska veta. För en OMFÅNGSBEGRÄNSAD
+     * containern som mottagaren av motorn inte ska veta. För en OMFÅNGSBEGRÄNSAD
      * mottagare joinas därför `item` in och omfånget styr raderna. För ett
      * OMFATTANDE omfång läggs ingen join till: den befintliga frågan mot
      * bara `cost_entry` är billigare (indexet från 45a), och de två fallen
@@ -285,7 +310,7 @@ class CostEntryController extends Controller
      *    användarens EGET konto gäller: `type = 'personal'` bland hens
      *    medlemskap, och saknas ett sådant, medlemskapet med lägst
      *    `account_id`. En privatperson som bjudits in tillskrivs sig själv,
-     *    inte pärmens ägare.
+     *    inte containerns ägare.
      *
      * Att fältet aldrig tas ur kroppen står fast (§ Beslut 2–3) — en
      * `managed`-skribent kan inte välja vilket av sina konton posten hamnar

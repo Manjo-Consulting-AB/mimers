@@ -34,5 +34,5 @@ return [
     'status_skipped' => 'Skipped',
     'relation_parent' => 'Parent:',
     'relation_child' => 'Child:',
-    'relation_sibling' => 'Sibling:',
+    'relation_related' => 'Related:',
 ];

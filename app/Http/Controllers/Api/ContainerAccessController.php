@@ -104,7 +104,7 @@ class ContainerAccessController extends Controller
      * samma mottagare avvisas som i dag, två rader för samma mottagare OCH
      * samma item avvisas, medan en container-bred rad PLUS en itemrad
      * tillåts. Det sista är avsiktligt och hela poängen med ADR-0028 §
-     * Beslut regel 4: mottagaren får `read` på pärmen och `write` på
+     * Beslut regel 4: mottagaren får `read` på containern och `write` på
      * motorn, och upplösningen tar max.
      */
     public function store(StoreContainerAccessRequest $request, Container $container, Entitlements $entitlements, ListContainerAccesses $listAccesses): JsonResponse

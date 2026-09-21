@@ -20,7 +20,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * `container` är nästlad med `ulid` och `name`, samma form som
  * TodoEntryResource — toppnivårutterna (incoming) kan inte förutsätta att
- * klienten redan vet vilken pärm det gäller.
+ * klienten redan vet vilken container det gäller.
  *
  * `status` härleds på en punkt: kolumnen står kvar på `pending` när
  * `created_at` + TTL_DAYS passerat — ingen bakgrundsprocess flippar den, se

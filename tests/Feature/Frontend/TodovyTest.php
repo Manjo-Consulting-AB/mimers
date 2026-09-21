@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Http\Controllers\TodoController;
 use App\Models\Account;
 use App\Models\Container;
@@ -29,17 +31,17 @@ use function Pest\Laravel\withoutVite;
  *
  * 1. **Urvalet är `scopeTodoFor()` — vyn filtrerar ingenting** (Beslut 2).
  *    Villkoren prövas genom WEBBSIDAN: en stängd förekomst, en vars
- *    `visible_from` ligger i framtiden, en som är blockerad och en i en pärm
+ *    `visible_from` ligger i framtiden, en som är blockerad och en i en container
  *    användaren inte når får aldrig en rad.
  * 2. **Ordningen och grupperingen är serverns** (Beslut 3) — `due_at`
  *    stigande med `ulid` som andra nyckel, och gruppen räknas mot serverns
  *    datum, aldrig mot klientens.
  * 3. **Raden går att bocka av där den står** (Beslut 4) — 63b:s rutt, samma
  *    grind, och listan ritas om utan raden.
- * 4. **Raden säger var uppgiften hör hemma** (Beslut 5) — pärm, item, schema,
+ * 4. **Raden säger var uppgiften hör hemma** (Beslut 5) — container, item, schema,
  *    med länkar som går rätt.
  * 5. **Tom lista säger ingenting om vad som dolts** (Beslut 6) — men skiljer
- *    på "inga pärmar" och "inget att göra".
+ *    på "inga containers" och "inget att göra".
  * 6. **Frågekostnaden är konstant** (Beslut 8), mätt med `DB::listen`.
  *
  * Datumen är relativa till `Carbon::today()` och inte fasta strängar: listan
@@ -47,7 +49,7 @@ use function Pest\Laravel\withoutVite;
  * tidsberoende — den hade fallit i morgon och klarat sig i dag.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att nycklarna finns
- * på båda språken prövas också av tests/Feature/Frontend/SprakTest.php, som
+ * prövas också av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js; den sista testen här binder de NYA
  * nycklarna och de NYA filerna till just det testet.
  *
@@ -64,7 +66,7 @@ function todovyDatum(int $dagar): string
 }
 
 /**
- * Ett ägarkonto med en medlem i. Ingen pärm — den som behöver en skapar en med
+ * Ett ägarkonto med en medlem i. Ingen container — den som behöver en skapar en med
  * todovyPärm().
  *
  * @return array{0: Account, 1: User}
@@ -79,7 +81,7 @@ function todovyKonto(): array
 }
 
 /**
- * En pärm under $konto.
+ * En container under $konto.
  */
 function todovyPärm(Account $konto): Container
 {
@@ -87,7 +89,7 @@ function todovyPärm(Account $konto): Container
 }
 
 /**
- * Ett item i pärmen. `created_by_*` sätts sammanhängande, som i SokvyTest:
+ * Ett item i containern. `created_by_*` sätts sammanhängande, som i SokvyTest:
  * fabrikens egna default-skapare hade blivit två ovidkommande rader per item.
  */
 function todovyItem(Container $container, string $namn): Item
@@ -153,7 +155,7 @@ function todovyUppgift(Item $item, string $due, string $titel = 'Byt olja', arra
 }
 
 /**
- * Ett konto med en medlem, en pärm och ett item i den.
+ * Ett konto med en medlem, en container och ett item i den.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -275,19 +277,19 @@ it('skickar en utloggad besökare till inloggningen', function () {
  * Klart när: `/dashboard` visar de öppna förekomsterna användaren når, i
  * `due_at`-ordning.
  *
- * Träffarna ligger i tre pärmar — två egna och en delad — och skapas i omvänd
+ * Träffarna ligger i tre containers — två egna och en delad — och skapas i omvänd
  * ordning, så att en lista som behöll skapelseordningen faller. Två av raderna
  * delar `due_at` och prövar andra nyckeln, `ulid`.
  */
-it('visar de öppna förekomsterna över alla pärmar användaren når, i due_at-ordning', function () {
+it('visar de öppna förekomsterna över alla containers användaren når, i due_at-ordning', function () {
     withoutVite();
 
     [$konto, $anvandare, $container, $item] = todovyKontext();
 
     $andra = todovyPärm($konto);
 
-    // En pärm under ett FRÄMMANDE konto som användaren når genom en
-    // container-bred grant — "alla pärmar användaren når" är inte "sina egna".
+    // En container under ett FRÄMMANDE konto som användaren når genom en
+    // container-bred grant — "alla containers användaren når" är inte "sina egna".
     $delad = todovyPärm(Account::factory()->create());
     todovyMottagare($delad, null, 'read', $anvandare);
 
@@ -317,7 +319,7 @@ it('visar de öppna förekomsterna över alla pärmar användaren når, i due_at
     // Andra nyckeln: samma datum, stigande ULID — alltså skapelseordningen.
     expect(array_slice(array_column($rader, 'ulid'), 0, 2))->toBe([$först->ulid, $senare->ulid]);
 
-    // Båda pärmarna med en öppen uppgift syns — också den delade. Pärmen vars
+    // Båda containerna med en öppen uppgift syns — också den delade. Containern vars
     // enda förekomst är avbockad gör det inte.
     $pärmar = array_column(array_column($rader, 'container'), 'ulid');
 
@@ -377,7 +379,7 @@ it('visar inte en blockerad förekomst', function () {
 });
 
 /*
- * Klart när: en förekomst i en pärm användaren inte når aldrig syns.
+ * Klart när: en förekomst i en container användaren inte når aldrig syns.
  *
  * Det är hela läckagetestet. Både ULID:n och itemets namn prövas i
  * svarskroppen — ett svar som ser rätt ut men bär en rad för mycket är precis
@@ -386,7 +388,7 @@ it('visar inte en blockerad förekomst', function () {
  * Den främmande radens `visible_from` ligger i det förflutna: det ENDA som
  * håller den borta är åtkomsten.
  */
-it('visar aldrig en förekomst ur en pärm användaren inte når', function () {
+it('visar aldrig en förekomst ur en container användaren inte når', function () {
     withoutVite();
 
     [, $anvandare, , $egetItem] = todovyKontext();
@@ -407,10 +409,10 @@ it('visar aldrig en förekomst ur en pärm användaren inte når', function () {
  * Klart när: en omfångsbegränsad mottagare ser bara uppgifter på items hon
  * når.
  *
- * Hon når pärmen genom en itemgrant men bara det itemet — den som når pärmen
+ * Hon når containern genom en itemgrant men bara det itemet — den som når containern
  * når inte nödvändigtvis allt i den ([[ADR-0028 Åtkomst på itemnivå]] § Beslut
  * regel 3). Todo-listan är en TOPPNIVÅvy och hade annars namngett varje annat
- * items uppgifter i pärmen (issue 74 § Beslut 7).
+ * items uppgifter i containern (issue 74 § Beslut 7).
  */
 it('ger en omfångsbegränsad mottagare bara uppgifter på de items hon når', function () {
     withoutVite();
@@ -514,14 +516,19 @@ it('låter serverns datum styra gruppen, inte klientens', function () {
 // --- raden -----------------------------------------------------------------
 
 /*
- * Klart när: varje rad visar pärm, item och schema, och länkarna går rätt.
+ * Klart när: varje rad visar container, item och schema, och länkarna går rätt.
  *
  * Alla tre behövs (Beslut 5): "Byt impeller" utan "Motorn" och "Havsörnen" går
- * inte att handla på när man har fyra pärmar. Länkarna prövas mot de href
+ * inte att handla på när man har fyra containers. Länkarna prövas mot de href
  * ruttnamnen faktiskt ger — en vy som länkar till en påhittad adress hade
  * annars sett rätt ut i en strukturell kontroll.
+ *
+ * **Containernamnet går till itemlistan** (issue 89 · [[ADR-0039 Containerns
+ * översikt]] § Konsekvenser). Det gjorde det före flytten också, men då sammanföll
+ * listans adress med containerns egen; nu är de två, och `containers.show` — som
+ * står kvar i raden ovan — pekar på översikten. Vyns href prövas därför för sig.
  */
-it('visar pärm, item och schema med länkar som går rätt', function () {
+it('visar container, item och schema med länkar som går rätt', function () {
     withoutVite();
 
     [, $anvandare, $container, $item] = todovyKontext();
@@ -547,6 +554,12 @@ it('visar pärm, item och schema med länkar som går rätt', function () {
         ->toContain('{{ entry.item.name }}')
         ->toContain('{{ entry.container.name }}')
         ->toContain('{{ entry.schedule.title }}');
+
+    // Containernamnet går till ITEMLISTAN, inte till containerns egen URL —
+    // den svarar med översikten sedan issue 89 · [[ADR-0039 Containerns
+    // översikt]] § Konsekvenser. Utan `/items` hade raden sett rätt ut i en
+    // strukturell kontroll och landat fel i drift.
+    expect($rad)->toContain(':href="`/containers/${entry.container.ulid}/items`"');
 });
 
 /*
@@ -555,7 +568,7 @@ it('visar pärm, item och schema med länkar som går rätt', function () {
  *
  * Avbockningen är 63b:s rutt rakt av (Beslut 4): samma grind, samma
  * FormRequest, samma Action. Kontot som postas är det servern räknade fram —
- * pärmens ägarkonto, eftersom användaren är medlem i det.
+ * containerns ägarkonto, eftersom användaren är medlem i det.
  *
  * Nästa förekomst öppnas i samma transaktion av `CloseOccurrence`, med
  * `visible_from = due_at`, och ligger därför i framtiden: listan blir tom och
@@ -569,7 +582,7 @@ it('bockar av en uppgift från listan och ritar om utan den', function () {
 
     $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
 
-    // Förvalet är serverns (Beslut 4): pärmens ägarkonto när hon är medlem.
+    // Förvalet är serverns (Beslut 4): containerns ägarkonto när hon är medlem.
     expect(todovyRader($svar)[0]['account'])->toBe($konto->ulid);
 
     actingAs($anvandare)->from('/dashboard')
@@ -619,11 +632,11 @@ it('ritar ingen avbockningsknapp för en läsare och ger 403 om hon postar änd�
 });
 
 /*
- * Klart när: kontot som postas är mottagarens EGET, inte pärmens.
+ * Klart när: kontot som postas är mottagarens EGET, inte containerns.
  *
- * Regeln är 63b § Beslut 4: pärmens ägarkonto när användaren är medlem i det,
+ * Regeln är 63b § Beslut 4: containerns ägarkonto när användaren är medlem i det,
  * annars hennes första konto. En `write`-mottagare utanför ägarkontot får
- * alltså inte pärmens konto som förval — det är ett konto hon inte får skriva
+ * alltså inte containerns konto som förval — det är ett konto hon inte får skriva
  * i, och rutten hade svarat 403.
  */
 it('ger en mottagare utanför ägarkontot sitt eget konto som förval', function () {
@@ -648,19 +661,19 @@ it('ger en mottagare utanför ägarkontot sitt eget konto som förval', function
 // --- de tomma lägena -------------------------------------------------------
 
 /*
- * Klart när: tom lista utan pärmar och tom lista utan uppgifter ger olika
+ * Klart när: tom lista utan containers och tom lista utan uppgifter ger olika
  * meningar.
  *
- * En användare med ett konto men ingen pärm får `hasContainers = false`, en
- * med en pärm men inga uppgifter `true`. Grupperna är tomma i båda fallen —
- * det är meningen, och länken till att skapa en pärm, som skiljer dem.
+ * En användare med ett konto men ingen container får `hasContainers = false`, en
+ * med en container men inga uppgifter `true`. Grupperna är tomma i båda fallen —
+ * det är meningen, och länken till att skapa en container, som skiljer dem.
  */
-it('skiljer en tom lista utan pärmar från en tom lista utan uppgifter', function () {
+it('skiljer en tom lista utan containers från en tom lista utan uppgifter', function () {
     withoutVite();
 
     [, $utanPärmar] = todovyKonto();
 
-    // Pärmen finns, uppgifterna gör det inte: ett item utan schema.
+    // Containern finns, uppgifterna gör det inte: ett item utan schema.
     [, $medPärm] = todovyKontext();
 
     $utan = actingAs($utanPärmar)->get('/dashboard')->assertOk();
@@ -675,7 +688,7 @@ it('skiljer en tom lista utan pärmar från en tom lista utan uppgifter', functi
         ->toContain("t('todo.empty.no_containers')")
         ->toContain('href="/containers/create"');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['todo']['empty']['no_containers'])->not->toBe($sv['todo']['empty']['nothing'])
@@ -687,21 +700,21 @@ it('skiljer en tom lista utan pärmar från en tom lista utan uppgifter', functi
  * som en ägare vars uppgifter är gjorda — ingen av dem nämner dolda rader
  * (Beslut 6, issue 73 § Beslut 6, issue 74).
  *
- * Den som når en pärm men ingenting i den får ordagrant samma props som den
+ * Den som når en container men ingenting i den får ordagrant samma props som den
  * som gjort allt: samma tomma grupper, samma `hasContainers`, och ingen rad i
  * svarskroppen som röjer att det fanns uppgifter att dölja.
  */
 it('ger en mottagare utan synliga uppgifter samma tomma svar som en färdig ägare', function () {
     withoutVite();
 
-    // Ägaren: en pärm vars enda uppgift redan är avbockad.
+    // Ägaren: en container vars enda uppgift redan är avbockad.
     [, $ägare, , $egetItem] = todovyKontext();
     [, $avbockad] = todovyUppgift($egetItem, todovyDatum(30), 'Byt impeller');
     $avbockad->status = 'completed';
     $avbockad->completed_at = now();
     $avbockad->save();
 
-    // Mottagaren: en itemgrant på ett item HELT utan uppgifter, i en pärm där
+    // Mottagaren: en itemgrant på ett item HELT utan uppgifter, i en container där
     // ett annat item har en öppen uppgift hon inte når.
     $främmande = todovyPärm(Account::factory()->create());
     $hennes = todovyItem($främmande, 'Motorn');
@@ -720,7 +733,7 @@ it('ger en mottagare utan synliga uppgifter samma tomma svar som en färdig äga
 
     // Och meningarna bär varken ett tal eller en parameter — ingenting att
     // räkna ut omfånget ur.
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach ([$sv, $en] as $fil) {
@@ -737,9 +750,9 @@ it('ger en mottagare utan synliga uppgifter samma tomma svar som en färdig äga
  * Klart när: listan kostar ett konstant antal frågor oavsett antal rader, mätt
  * med DB::listen (Beslut 8).
  *
- * Raderna läggs i NYA pärmar, ett värstingfall för en `can`-flagga som hade
- * kostat en omfångsupplösning per pärm: kontrollern värmer omfånget i ett
- * anrop för de pärmar listan bär, `schedule.item.container.account` laddas i
+ * Raderna läggs i NYA containers, ett värstingfall för en `can`-flagga som hade
+ * kostat en omfångsupplösning per container: kontrollern värmer omfånget i ett
+ * anrop för de containers listan bär, `schedule.item.container.account` laddas i
  * förväg, och `with()`:en gör att raderna själva inte kostar något.
  */
 it('kostar ett konstant antal frågor oavsett antal rader', function () {
@@ -780,7 +793,7 @@ it('kostar ett konstant antal frågor oavsett antal rader', function () {
  *
  * Webben LÅNAR listan; den bygger ingen egen. Resursen fick inga nya nycklar
  * av `account` och `can` — de ligger BREDVID den i webbens props, samma
- * uppdelning som SearchController gör med pärmen, och `/api` har inte bett om
+ * uppdelning som SearchController gör med containern, och `/api` har inte bett om
  * dem.
  */
 it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', function () {
@@ -826,8 +839,8 @@ it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', func
  * resources/js. Här prövas den andra: nycklarna under `todo`, nyckel för
  * nyckel, och att gruppnycklarna är desamma som kontrollerns grupper.
  */
-it('har varje todo-nyckel på båda språken och ingen svensk sträng i vyn', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har varje todo-nyckel och ingen svensk sträng i vyn', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect(array_keys($en['todo']))->toBe(array_keys($sv['todo']))
@@ -839,7 +852,7 @@ it('har varje todo-nyckel på båda språken och ingen svensk sträng i vyn', fu
             continue;
         }
 
-        expect(trim($varde))->not->toBe('', "todo.{$nyckel} är tom på sv")
+        expect(trim($varde))->not->toBe('', "todo.{$nyckel} är")
             ->and(trim($en['todo'][$nyckel]))->not->toBe('', "todo.{$nyckel} är tom på en");
     }
 

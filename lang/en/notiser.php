@@ -4,13 +4,13 @@ return [
     'task_due' => [
         'subject' => ':title is due on :date',
         'greeting' => 'Hello!',
-        'line' => 'The task ":title" on ":item" in the binder ":container" is due on :date.',
+        'line' => 'The task ":title" on ":item" in the container ":container" is due on :date.',
         'action' => 'Open task',
     ],
     'task_overdue' => [
         'subject' => ':title was due on :date',
         'greeting' => 'Hello!',
-        'line' => 'The task ":title" on ":item" in the binder ":container" was due on :date and is now overdue.',
+        'line' => 'The task ":title" on ":item" in the container ":container" was due on :date and is now overdue.',
         'action' => 'Open task',
     ],
     'loan_due' => [
@@ -32,9 +32,9 @@ return [
         'action' => 'Log in',
     ],
     'transfer_requested' => [
-        'subject' => 'Someone wants to take over the binder ":container"',
+        'subject' => 'Someone wants to take over the container ":container"',
         'greeting' => 'Hello!',
-        'line' => 'A transfer request is waiting for the binder ":container". Sign in to see it under Transfers.',
+        'line' => 'A transfer request is waiting for the container ":container". Sign in to see it under Transfers.',
         'action' => 'View transfer',
     ],
     'digest' => [
@@ -54,11 +54,39 @@ return [
             'task_overdue' => 'overdue task alerts',
             'loan_due' => 'loan reminders',
             'quota_warning' => 'storage quota warnings',
-            'invitation_received' => 'binder invitations',
+            'invitation_received' => 'container invitations',
             'transfer_requested' => 'ownership transfer requests',
             'account_inactive' => 'inactive account warnings',
         ],
     ],
+    /*
+     * Mejlen som skickas av en Notification-klass direkt och inte genom
+     * leveransloopen (app/Notifications/). De står här och inte i en egen fil
+     * därför att de är samma slags text som resten: serverrenderat innehåll på
+     * mottagarens språk. Nycklarna delar inget med typerna ovan — mejlet till
+     * en mottagare som ännu inte har ett konto kan inte gå genom en
+     * leveransrad, eftersom raden kräver en `User`.
+     */
+    'magic_link' => [
+        'subject' => 'Your login link',
+        'line' => 'Click the link below to log in.',
+        'action' => 'Log in',
+        'expires' => 'The link stops working in :minutes minutes and can only be used once.',
+    ],
+    'invitation' => [
+        'subject' => 'You have been invited to :container',
+        'line' => 'You have been invited to share ":container".',
+        'line_verify' => 'To get access you need to create an account with this email address and verify it — everyone who reads anything in the system must be identified.',
+        'action' => 'Open the invitation',
+        'expires' => 'The invitation expires in :days days.',
+    ],
+    'ownership_transfer' => [
+        'subject' => 'Someone wants to take over the container ":container"',
+        'line' => 'Someone wants to transfer the container ":container" to you.',
+        'line_verify' => 'Create an account with this email address and verify it — everyone who reads anything in the system must be identified. Then log in and open the transfers tab to see the request.',
+        'action' => 'View ownership transfer',
+    ],
+
     'calendar' => [
         'name' => 'Maintenance: :container',
         'overdue_prefix' => 'Overdue: ',

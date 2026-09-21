@@ -171,7 +171,7 @@ class ScheduleOccurrence extends Model
      *   container-bred åtkomst räcker inte: sedan ADR-0028 kan en mottagare
      *   ha `read` på ett enskilt item i en container hon i övrigt inte ser,
      *   och todo-listan är en TOPPNIVÅvy som annars namnger varje annat items
-     *   uppgifter i pärmen.
+     *   uppgifter i containern.
      * - inga öppna beroenden — samma villkor som spärren i 23b § Beslut 4.
      *   En förekomst vars motpart har status `open` går inte att stänga och
      *   ska inte stå bland det man kan göra nu. Ett öppet beroende vars

@@ -8,15 +8,15 @@ import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
 /*
- * Pärmens export, se issue 67c § Beslut 1–8.
+ * Containerns export, se issue 67c § Beslut 1–8.
  *
  * Sidan svarar på EN fråga — "kan jag få med mig allt jag lagt in här?" — och
  * har tre delar i den ordningen en användare möter dem: vad påsen innehåller,
  * knappen som beställer den, och listan över de beställningar som finns.
  *
- * **Sidan ligger i pärmen och exporten är fri** (Beslut 1 och 2). Raden i
+ * **Sidan ligger i containern och exporten är fri** (Beslut 1 och 2). Raden i
  * navigationen kommer ur resources/js/layouts/containerSections.js, och
- * grinden är `view` på pärmen: den som får läsa pärmen får ta ut den. Ingen
+ * grinden är `view` på containern: den som får läsa containern får ta ut den. Ingen
  * `can`-flagga ritas, för det finns inget svar att rita olika för två
  * användare — en `read`-deltagare ser samma sida som ägaren.
  *
@@ -34,7 +34,7 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * svarar `export.already_running` för den som postar förbi vyn. Felet ritas
  * som en ruta ovanför formuläret och inte som en rå felkod —
  * App\Support\Frontend\ApiErrorTranslator formulerar meningen ur `lang/`, och
- * nyckeln är `export` eftersom felet gäller pärmens tillstånd och beställningen
+ * nyckeln är `export` eftersom felet gäller containerns tillstånd och beställningen
  * inte har något fält.
  *
  * **En färdig eller misslyckad rad hindrar ingenting** (Beslut 3 och 4):
@@ -42,10 +42,10 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * beställs om med samma knapp.
  */
 const props = defineProps({
-    /* Pärmen ur App\Http\Resources\ContainerResource. */
+    /* Containern ur App\Http\Resources\ContainerResource. */
     container: { type: Object, required: true },
 
-    /* Pärmens exporter, nyast först, ur App\Http\Resources\ExportResource. */
+    /* Containerns exporter, nyast först, ur App\Http\Resources\ExportResource. */
     exports: { type: Array, required: true },
 });
 
@@ -99,7 +99,7 @@ function schedulePoll() {
 function reloadExports() {
     timer = null;
 
-    // Bara `exports`: pärmens namn och navigationen ändras inte av att en påse
+    // Bara `exports`: containerns namn och navigationen ändras inte av att en påse
     // blir klar, och en full omladdning hade räknat om allt på sidan.
     router.reload({ only: ['exports'], onFinish: schedulePoll });
 }
@@ -126,9 +126,9 @@ onUnmounted(() => {
         <p class="mt-2 text-sm text-slate-700">{{ t('export.intro') }}</p>
 
         <!--
-            Domänfelet ur en beställning — pärmen har redan en export som
+            Domänfelet ur en beställning — containern har redan en export som
             packas — blir en ruta och inte en rå felkod. Nyckeln är `export`:
-            felet gäller pärmens tillstånd och inte ett fält.
+            felet gäller containerns tillstånd och inte ett fält.
         -->
         <p
             v-if="page.props.errors.export"

@@ -3,6 +3,7 @@
 namespace App\Support\Cost;
 
 use App\Actions\Category\ResolveCategoryDescendants;
+use App\Actions\Item\ResolveItemDescendants;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
@@ -49,6 +50,26 @@ use Illuminate\Support\Facades\DB;
  * taggnamnen — är ett konstant antal frågor oavsett antalet rader, items,
  * taggar eller kategorinivåer (Beslut 12). Inga kostnadsrader laddas som
  * modeller.
+ *
+ * Sedan issue 86 bor också de FASTA SUMMERINGARNA här — `summary()` för
+ * containern, `forItem()` för ett item och `summaryForContainers()` för
+ * kontot ([[ADR-0038 Gränsen för Pro i kostnaderna]]: en fast summering är
+ * fri, allt frågbart är Pro). De är samma radmängd utan filter och utan
+ * gruppering, summerad per valuta, och de delar därför `rowSet()` och
+ * `applyScope()` med rapporten i stället för att formulera om den. En andra
+ * formulering av "vilka rader räknas" är en andra chans att glömma ett
+ * villkor — och den som glöms läcker.
+ *
+ * Sedan issue 91 bär `summary()` och `forItem()` dessutom en NEDBRYTNING
+ * ([[ADR-0040 Underträdets summor]] § Beslut, [[ADR-0041 Itemets vy]]
+ * § Rättelsen av ADR-0040): *summera kostnaderna i det aktuella underträdet,
+ * grupperat per item*. De är samma regel med olika startpunkt — hela
+ * containern respektive itemet plus dess ättlingar — och de delar därför
+ * `groupByItem()` med rapporten. Tårtbitarna är de items som BÄR
+ * kostnadsraderna och inte underträdets toppnivå: varje `cost_entry` har
+ * exakt ett `item_id`, så varje rad hamnar i exakt en bit och bitarna
+ * summerar alltid precis till totalen bredvid — också i den DAG `LinkItems`
+ * tillåter, där ett item kan nås längs två vägar.
  */
 final class CostReport
 {
@@ -57,6 +78,7 @@ final class CostReport
 
     public function __construct(
         private readonly ResolveCategoryDescendants $resolveCategoryDescendants,
+        private readonly ResolveItemDescendants $resolveItemDescendants,
     ) {}
 
     /**
@@ -87,32 +109,122 @@ final class CostReport
         ];
     }
 
+    /**
+     * Den fasta summeringen för EN container, issue 86 — containerns
+     * kostnadssumma i [[ADR-0038 Gränsen för Pro i kostnaderna]]s tabell.
+     * Ingen period, inget filter, ingen gruppering att BYTA: samma radmängd
+     * som rapporten och samma `GROUP BY currency`, utan parametrar.
+     *
+     * Sedan issue 91 bär svaret också nedbrytningen. Underträdet är hela
+     * containern ([[ADR-0040 Underträdets summor]]) — men bara den del av
+     * den användaren når, för omfånget ligger i basfrågan och därmed i båda
+     * talen. Det är samma `groupByItem()` som rapporten använder, vilket är
+     * vad som gör att bitarna och totalen härrör ur exakt samma radmängd.
+     *
+     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     */
+    public function summary(Container $container, ItemScope $scope): array
+    {
+        return $this->summarise($this->summaryQuery([$container->id => $scope]));
+    }
+
+    /**
+     * Den fasta summeringen för ETT item, issue 91. Underträdet är itemet
+     * plus dess ättlingar — samma regel som containerns, annan startpunkt
+     * ([[ADR-0040 Underträdets summor]] § Beslut): frågan *vad kostar
+     * motorn* besvaras av totalen, frågan *var tog pengarna vägen* av
+     * bitarna, och de två är olika frågor.
+     *
+     * Ättlingarna kommer ur App\Actions\Item\ResolveItemDescendants (issue
+     * 90) och inte ur en egen vandring: den följer `parent`-kanter, filtrerar
+     * bort `related` i FRÅGAN, bryter kedjan vid ett mjukraderat item och
+     * svarar med en MÄNGD — ett item som nås längs två vägar räknas en gång.
+     * Den sista egenskapen är hela skälet till att `whereIn` räcker här:
+     * en join mot kanterna hade räknat samma rad en gång per väg och gett en
+     * total som inte stämmer med bitarna.
+     *
+     * Startpunkten förutsätts levande — routebindningen går genom
+     * SoftDeletes-scopet, och ett mjukraderat item är inte bindbart.
+     *
+     * Omfånget läggs på som för containern. Det skär ingenting i dag
+     * ([[ADR-0040 Underträdets summor]] § Motivering: den som ser ett item
+     * ser allt under det), men regeln ska inte bero på vilken grind som
+     * råkar sitta på rutten.
+     *
+     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     */
+    public function forItem(Container $container, Item $item, ItemScope $scope): array
+    {
+        $subtree = $this->resolveItemDescendants->handle($item);
+
+        $query = $this->summaryQuery([$container->id => $scope])
+            ->whereIn('cost_entry.item_id', $subtree);
+
+        return $this->summarise($query);
+    }
+
+    /**
+     * Formen de två startpunkterna delar: totalen på toppen och bitarna
+     * under den, ur SAMMA Builder. Att räkna dem ur var sin fråga vore att
+     * be om två tal som säger emot varandra — och det är precis vad
+     * [[ADR-0041 Itemets vy]] § Rättelsen av ADR-0040 förbjöd.
+     *
+     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     */
+    private function summarise(Builder $base): array
+    {
+        return [
+            'totals' => $this->totals($base),
+            'breakdown' => $this->groupByItem($base),
+        ];
+    }
+
+    /**
+     * Den fasta summeringen för ett KONTO, issue 86 — underlaget för
+     * dashboardens totalsumma ([[ADR-0037 Valutans arv]]: kontot är den
+     * nivå som bär valutan, så det är kontots summa och inte användarens).
+     *
+     * Flera containers i EN fråga: `whereIn` på container-id plus en
+     * omfångsgrupp per container, så frågekostnaden är konstant oavsett hur
+     * många containers kontot har. Summan räknas per valuta över hela
+     * mängden — aldrig genom att lägga ihop containersummor i PHP, som hade
+     * gett samma tal men ett annat antal frågor.
+     *
+     * Ingen nedbrytning (issue 91): kontot är ingen startpunkt för
+     * underträdet — dess donut är nedbruten per CONTAINER och inte per item
+     * ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut), och den axeln
+     * är inte den här issuen.
+     *
+     * @param  array<int, ItemScope>  $scopes  container_id → omfånget för den anropande användaren
+     * @return list<array{currency: string, amount: int, count: int}>
+     */
+    public function summaryForContainers(array $scopes): array
+    {
+        return $this->totals($this->summaryQuery($scopes));
+    }
+
+    /**
+     * Radmängden för de fasta summeringarna: `rowSet()` avgränsad till de
+     * efterfrågade containrarna och till användarens omfång. Ingen filtergren
+     * — en fast summering tar inga parametrar (issue 86), och läggs en
+     * period in här är ändpunkten inte längre fast.
+     *
+     * @param  array<int, ItemScope>  $scopes  container_id → omfång
+     */
+    private function summaryQuery(array $scopes): Builder
+    {
+        $query = $this->rowSet()->whereIn('cost_entry.container_id', array_keys($scopes));
+
+        $this->applyScope($query, $scopes);
+
+        return $query;
+    }
+
     private function baseQuery(Container $container, array $params, ItemScope $scope): Builder
     {
-        $query = DB::table('cost_entry')
-            ->join('item', 'item.id', '=', 'cost_entry.item_id')
-            ->where('cost_entry.container_id', $container->id)
-            ->whereNull('cost_entry.deleted_at')
-            ->whereNull('item.deleted_at');
+        $query = $this->rowSet()->where('cost_entry.container_id', $container->id);
 
-        // Issue 74 § Beslut 5: omfånget läggs i BASFRÅGAN, en gång — alla
-        // fem grupperingarna och toppnivåns totals bygger på samma Builder,
-        // så ingen av dem behöver veta om filtret. Ett filter som lades i
-        // groupByItem() och glömdes i totals() hade gett en rapport där
-        // delarna inte summerar till helheten, vilket är svårare att upptäcka
-        // än att den läcker.
-        //
-        // `Item::inScope()` kan inte användas här: frågan är en Query\Builder
-        // över en join, inte en Item-modellfråga. `itemIds()` svarar `null`
-        // för ett omfattande omfång — "hela containern" ska inte
-        // materialiseras till en `whereIn` med varje löpnummer (issue 73
-        // § Beslut 1) — och kolumnen kvalificeras eftersom joinen gör `id`
-        // tvetydig, samma skäl som i Item::scopeInScope().
-        $itemIds = $scope->itemIds();
-
-        if ($itemIds !== null) {
-            $query->whereIn('item.id', $itemIds);
-        }
+        $this->applyScope($query, [$container->id => $scope]);
 
         if (! empty($params['item'])) {
             $itemId = Item::query()
@@ -166,6 +278,77 @@ final class CostReport
     }
 
     /**
+     * Radmängden före varje filter och varje omfång: kostnadsrader i levande
+     * items. Joinen mot `item` behövs alltid — `container_id` sparar in den
+     * bara för SCOPINGEN, inte för papperskorgen: en kostnad på ett raderat
+     * item är osynlig i listning, sök och todo och ska inte dyka upp i en
+     * total användaren inte kan klicka sig fram till.
+     *
+     * Bryt ut ur frågorna (issue 86) så att rapporten och de fasta
+     * summeringarna delar exakt samma "vilka rader räknas" — se klassens
+     * docblock.
+     */
+    private function rowSet(): Builder
+    {
+        return DB::table('cost_entry')
+            ->join('item', 'item.id', '=', 'cost_entry.item_id')
+            ->whereNull('cost_entry.deleted_at')
+            ->whereNull('item.deleted_at');
+    }
+
+    /**
+     * Issue 74 § Beslut 5: omfånget läggs i BASFRÅGAN, en gång — alla fem
+     * grupperingarna och toppnivåns totals bygger på samma Builder, så ingen
+     * av dem behöver veta om filtret. Ett filter som lades i groupByItem()
+     * och glömdes i totals() hade gett en rapport där delarna inte summerar
+     * till helheten, vilket är svårare att upptäcka än att den läcker.
+     *
+     * `Item::inScope()` kan inte användas här: frågan är en Query\Builder
+     * över en join, inte en Item-modellfråga. `itemIds()` svarar `null` för
+     * ett omfattande omfång — "hela containern" ska inte materialiseras till
+     * en `whereIn` med varje löpnummer (issue 73 § Beslut 1) — och kolumnen
+     * kvalificeras eftersom joinen gör `id` tvetydig, samma skäl som i
+     * Item::scopeInScope().
+     *
+     * Ett begränsat omfång kvalificeras med SIN container (issue 86):
+     * kontosummeringen frågar flera containers samtidigt, och ett naket
+     * `whereIn('item.id', ...)` hade släppt in en rad från en annan container
+     * om samma item-id råkade stå i omfånget för den här. Ett obegränsat
+     * omfång bidrar bara med containervillkoret — det begränsar ingenting
+     * inom sin container, och det villkoret står redan i frågan som anropar.
+     *
+     * Grenarna kombineras med OR, i EN grupp (issue 86). Ett `where()` per
+     * container hade kedjats med AND, och med två samtidigt begränsade
+     * containers blir `container_id = A AND … AND container_id = B AND …`
+     * omöjligt att uppfylla för någon rad: summeringen svarar tyst tomt i
+     * stället för fel. Varje gren är "raderna jag når i DEN här containern",
+     * och de olika containrarna är alternativ — inte villkor som ska gälla
+     * samtidigt.
+     *
+     * @param  array<int, ItemScope>  $scopes  container_id → omfång
+     */
+    private function applyScope(Builder $query, array $scopes): void
+    {
+        if ($scopes === []) {
+            return;
+        }
+
+        $query->where(function (Builder $query) use ($scopes): void {
+            foreach ($scopes as $containerId => $scope) {
+                $itemIds = $scope->itemIds();
+
+                $query->orWhere(function (Builder $query) use ($containerId, $itemIds): void {
+                    $query->where('cost_entry.container_id', $containerId);
+
+                    if ($itemIds !== null) {
+                        $query->whereIn('item.id', $itemIds);
+                    }
+                });
+            }
+        });
+    }
+
+    /**
      * Toppnivåns totalsumma: en egen `GROUP BY currency` över samma
      * filtrerade mängd (Beslut 6). Aldrig en summa av grupperna — för
      * `category` och `tag` överlappar de med flit.
@@ -186,6 +369,23 @@ final class CostReport
     }
 
     /**
+     * Per item — rapportens `group_by=item` och de fasta summeringarnas
+     * nedbrytning, samma kod (issue 91). Grupperingen är
+     * `cost_entry.item_id` över raderna i mängden, så en grupp är ett item
+     * som BÄR kostnadsrader och ingenting annat: ett item utan egna rader
+     * finns inte i svaret, hur mycket som än hänger under det.
+     *
+     * Ingen walk uppåt och ingen walk nedåt här. Den tidigare skrivningen
+     * av [[ADR-0040 Underträdets summor]] — tårtbitarna som underträdets
+     * toppnivåitems — hade krävt den, och hade gått sönder i den DAG
+     * `LinkItems` tillåter: ett item under två föräldrar hade hamnat i två
+     * bitar och bitarna hade summerat till mer än totalen. Se [[ADR-0041
+     * Itemets vy]] § Rättelsen av ADR-0040 samt `summarise()`.
+     *
+     * Joinen mot `item` ligger redan i `rowSet()`, och den filtrerar bort
+     * mjukraderade items — ett raderat item blir alltså ingen bit alls, inte
+     * en namnlös.
+     *
      * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
      */
     private function groupByItem(Builder $base): array

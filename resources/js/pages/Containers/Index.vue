@@ -5,30 +5,35 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
- * Pärmlistan, se issue 54 § Beslut 6, 9 och 10.
+ * Containerlistan, se issue 54 § Beslut 6, 9 och 10.
  *
  * Sorteringen och urvalet kommer från servern — den här vyn filtrerar
  * ingenting. Det som avgörs HÄR är presentationen, och två saker härleds ur
  * de delade propsen i stället för ur ett eget serverfält (Beslut 10):
  *
- *   - Är pärmen delad med mig? `ContainerResource` bär ägarkontots ULID i
+ *   - Är containern delad med mig? `ContainerResource` bär ägarkontots ULID i
  *     `account`. Är den ULID:n inte ett av mina konton (`auth.accounts`) är
- *     pärmen någon annans. Ett `shared`-fält i `/api` som bara webben
+ *     containern någon annans. Ett `shared`-fält i `/api` som bara webben
  *     behöver är precis den drift [[ADR-0021 Frontendteknik]] § Konsekvenser
  *     varnar för.
  *   - Ägarkontots namn visas bara när användaren är med i MER än ett konto.
  *     Med ett enda konto är namnet brus.
  *
- * Den aktiva raden bär `aria-current` och en synlig etikett, och har ingen
- * knapp — den är redan vald (Beslut 6). Den aktiva pärmen läses ur den
- * delade propen `activeContainer`, som bär ULID:t och ingenting annat.
+ * Den aktiva raden bär `aria-current` och en synlig etikett. Den aktiva
+ * containern läses ur den delade propen `activeContainer`, som bär ULID:t och
+ * ingenting annat.
+ *
+ * **Ingen knapp sätter kontexten** (issue 83). Kontexten är bokföring över
+ * vilken container användaren arbetar i, och bokföringen sköter sig själv: den
+ * sätts av att containern ÖPPNAS — namnet här är länken dit — och knappen som
+ * gjorde det för hand finns inte längre. Markeringen står kvar och visar
+ * vilken container som senast öppnades.
  *
  * Redigeringslänken visas efter `can.update`, som kontrollern räknat med
  * policyn (Beslut 9). Flaggan är presentation; rutten auktoriserar ändå.
  *
- * Pärmnamnet är en länk till pärmens EGEN sida — itemlistan, se issue 57a
- * § Beslut 1. Det är den enda ändringen i den här filen; knapparna för aktiv
- * pärm och redigering står kvar som de är.
+ * Containernamnet är en länk till containerns EGEN sida — itemlistan, se issue 57a
+ * § Beslut 1.
  */
 defineProps({
     containers: { type: Array, required: true },
@@ -67,14 +72,31 @@ const isShared = (container) => accountName(container) === null;
 
         <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
             <li v-for="container in containers" :key="container.ulid" class="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
+                <!-- Namnlänken går till ITEMLISTAN och inte till översikten
+                     (issue 89 · [[ADR-0039 Containerns översikt]]
+                     § Konsekvenser). Den menade listan redan före flytten, och
+                     den som väljer en container ur listan vill in i den — inte
+                     förbi en mellansida. -->
                 <Link
-                    :href="`/containers/${container.ulid}`"
+                    :href="`/containers/${container.ulid}/items`"
                     class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                 >
                     {{ container.name }}
                 </Link>
 
-                <span class="text-sm text-slate-600">{{ t(`container.kind.${container.kind}`) }}</span>
+                <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
+                     Containerns art]]). Ingen översättningsnyckel byggs ur
+                     värdet: `t()` returnerar nyckeln själv när uppslaget
+                     misslyckas, så den gamla raden hade skrivit
+                     `container.kind.Segelbåt` på skärmen första gången någon
+                     skrev en egen art.
+                     Spärren frågar om fältet är SATT, aldrig vilket värde det
+                     bär — samma behandling som varje annat nullbart fält
+                     (`description`), och den domänlogik regeln stänger ute är
+                     en förgrening på VILKEN art det är. En rad med en tom art
+                     vore ett synligt fel, och "ingen art angiven" är ett
+                     tillstånd [[ADR-0036]] § Konsekvenser pekar ut. -->
+                <span v-if="container.kind" class="text-sm text-slate-600">{{ container.kind }}</span>
 
                 <span v-if="showsAccountName && !isShared(container)" class="text-sm text-slate-600">
                     {{ accountName(container) }}
@@ -93,15 +115,6 @@ const isShared = (container) => accountName(container) === null;
                 </span>
 
                 <Link
-                    v-else
-                    method="put"
-                    :href="`/containers/${container.ulid}/active`"
-                    class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
-                >
-                    {{ t('container.index.make_active') }}
-                </Link>
-
-                <Link
                     v-if="container.can.update"
                     :href="`/containers/${container.ulid}/edit`"
                     class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
@@ -114,7 +127,7 @@ const isShared = (container) => accountName(container) === null;
         <!--
             Vägen tillbaka, se issue 62b § Beslut 8. Raden ligger under listan
             och är ALLTID synlig — också för en tom lista, för den som raderat
-            sin enda pärm är den som mest behöver den. Ingen räknare: ett tal
+            sin enda container är den som mest behöver den. Ingen räknare: ett tal
             hade varit en fråga per sidladdning, och texten är konstant.
         -->
         <p class="mt-8 text-sm">

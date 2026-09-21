@@ -61,12 +61,35 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * Kategorinamnet slås upp i `categories` (ULID → namn), byggd bredvid
  * resursen i kontrollern — se App\Http\Controllers\ItemController. ItemResource
  * bär bara kategorins ULID.
+ *
+ * **Förekomsterna ritas som en brödsmula och en lista** (issue 95 ·
+ * [[ADR-0041 Itemets vy]] § Beslut). Ett item som hänger under två föräldrar
+ * har två vägar upp, och mockupen visar båda. Ingen kolumn pekar ut en
+ * huvudplats: servern löser upp vägarna, querysträngen väljer vilken som är
+ * den aktuella, och den här filen varken vandrar i grafen eller sorterar om
+ * listan (issue 57a § Beslut 8).
  */
 const props = defineProps({
     container: { type: Object, required: true },
     item: { type: Object, required: true },
     /* Kategori-ULID → namn; tom när itemet saknar kategori. */
     categories: { type: Object, required: true },
+    /*
+     * Itemets förekomster i strukturen, ur
+     * App\Actions\Item\ResolveItemPaths och byggda bredvid resursen i
+     * kontrollern (issue 95): alla vägar från en rot ned till itemet, varje
+     * väg som sina led `{ulid, name}`, i serverns ordning — namnen längs
+     * vägen — och exakt en av dem märkt `current`.
+     *
+     * Listan är TOM för ett item utan väg: en ren cykel i grafen har ingen
+     * rot, och då ritas varken brödsmulan eller listan. Det är rotregeln och
+     * inte ett feltillstånd — se App\Actions\Item\ResolveItemPaths.
+     *
+     * En väg som inte längre finns är redan utbytt mot den första i ordningen
+     * när den här proppen kommer hit: vyn får aldrig veta att något föll
+     * bort, och den ska inte kunna räkna det ur svaret (issue 73 § Beslut 6).
+     */
+    paths: { type: Array, required: true },
     /*
      * Itemets bilagor ur App\Http\Resources\AttachmentResource, nyast först —
      * samma lista och samma ordning som `/api` ger (issue 60 § Beslut 2).
@@ -155,6 +178,31 @@ const fields = computed(() =>
 const categoryName = computed(() => props.categories[props.item.category] ?? null);
 
 /*
+ * Den AKTUELLA förekomsten — den väg servern märkte. Vyn sorterar aldrig om
+ * listan och väljer aldrig själv: markeringen kommer ur querysträngen, och
+ * den som inte pekar på en väg som finns får den första i ordningen märkt utan
+ * att vyn ser någon skillnad.
+ *
+ * `null` bara när `paths` är tom, alltså för ett item utan väg — då ritas
+ * varken brödsmulan eller listan.
+ */
+const currentPath = computed(() => props.paths.find((path) => path.current) ?? null);
+
+/*
+ * Länken till en förekomst: ledets SISTA item med sin egen väg i
+ * querysträngen. Ett klick på ett led i brödsmulan landar därför på samma
+ * förekomst och inte på en godtycklig — vägen följer med upp, och `?path=`
+ * betyder samma sak på varje items sida. Det är samma regel som filtret i
+ * issue 59a § Beslut 1: ett läge är en delbar länk.
+ */
+function pathHref(nodes) {
+    const last = nodes[nodes.length - 1];
+    const chain = nodes.map((node) => node.ulid).join('.');
+
+    return `/containers/${props.container.ulid}/items/${last.ulid}?path=${chain}`;
+}
+
+/*
  * Raderingen. Bekräftelsen är webbläsarens egen dialog med serverns mening ur
  * `lang/` — ingen modal komponent och ingen sträng i JavaScript.
  *
@@ -184,6 +232,38 @@ function destroy() {
 <template>
     <ContainerLayout :container="container">
         <Head :title="item.name" />
+
+        <!--
+            Brödsmulan (issue 95): vägen från roten ned till itemet, den
+            aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
+            länk — rubriken strax under säger samma namn. Sista ledet bär
+            `aria-current="page"`, och <nav> bär sitt namn ur `lang/`:
+            `breadcrumb` är ordet för ytan, inte för någon av förekomsterna.
+        -->
+        <nav
+            v-if="currentPath"
+            :aria-label="t('item.show.breadcrumb')"
+            class="mb-2 text-sm text-slate-600"
+        >
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li
+                    v-for="(node, index) in currentPath.nodes"
+                    :key="`${node.ulid}-${index}`"
+                    class="flex items-center gap-2"
+                >
+                    <Link
+                        v-if="index < currentPath.nodes.length - 1"
+                        :href="pathHref(currentPath.nodes.slice(0, index + 1))"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                    >
+                        {{ node.name }}
+                    </Link>
+                    <span v-else aria-current="page">{{ node.name }}</span>
+
+                    <span v-if="index < currentPath.nodes.length - 1" aria-hidden="true">›</span>
+                </li>
+            </ol>
+        </nav>
 
         <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
 
@@ -220,6 +300,58 @@ function destroy() {
                 {{ t('item.links.create_child.action') }}
             </Link>
         </div>
+
+        <!--
+            Förekomstlistan (issue 95 · [[ADR-0041 Itemets vy]] § Beslut):
+            samma vägar som brödsmulan visar en av, med den aktuella utmärkt.
+            Raderna kommer i serverns ordning och sorteras aldrig här — för
+            samma användare står brödsmulan och listan därför alltid i samma
+            ordning (issue 57a § Beslut 8).
+
+            Listan ritas bara när itemet har MER än en förekomst: med en enda
+            hade den upprepat brödsmulan ordagrant och tillagt en rad utan
+            innehåll. Antalet är antalet vägar mottagaren ser, och det avslöjar
+            ingenting om dem hon inte ser.
+
+            Rubriken är listans namn och kopplas till den med
+            `aria-labelledby` — därför behövs ingen egen `aria-label`. Den
+            aktuella raden bär `aria-current="true"` och ordet *Current* som
+            SYNLIG text: markeringen får aldrig vara en färg allena. Orden
+            kommer ur `lang/en/ui.php` (`item.show.placements`,
+            `item.show.placement_current`), och ordet är *placement* och inte
+            *occurrence* — se nyckelns kommentar där.
+        -->
+        <section v-if="paths.length > 1" class="mt-6">
+            <h2 id="item-placements-heading" class="text-sm font-medium text-slate-600">
+                {{ t('item.show.placements') }}
+            </h2>
+
+            <ul aria-labelledby="item-placements-heading" class="mt-2 space-y-1 text-sm">
+                <li
+                    v-for="(occurrence, index) in paths"
+                    :key="index"
+                    class="flex flex-wrap items-center gap-2"
+                >
+                    <Link
+                        :href="pathHref(occurrence.nodes)"
+                        :aria-current="occurrence.current ? 'true' : null"
+                        class="flex min-h-11 flex-wrap items-center gap-1"
+                        :class="occurrence.current
+                            ? 'font-semibold text-slate-900'
+                            : 'text-blue-700 hover:underline'"
+                    >
+                        <template v-for="(node, step) in occurrence.nodes" :key="`${node.ulid}-${step}`">
+                            <span>{{ node.name }}</span>
+                            <span v-if="step < occurrence.nodes.length - 1" aria-hidden="true">›</span>
+                        </template>
+                    </Link>
+
+                    <span v-if="occurrence.current" class="rounded bg-slate-200 px-2 py-1 text-sm font-medium">
+                        {{ t('item.show.placement_current') }}
+                    </span>
+                </li>
+            </ul>
+        </section>
 
         <dl class="mt-8 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <div v-for="field in fields" :key="field.key">
@@ -269,7 +401,7 @@ function destroy() {
             också den öppna förekomsten och avbockningen — det är produktens
             vanligaste skrivning och ska kosta en knapptryckning från itemet.
             Historiken ligger på schemats egen sida; beroendena är 63c och har
-            ingen yta här. `container.account` är pärmens ägarkonto och
+            ingen yta här. `container.account` är containerns ägarkonto och
             avbockningens förval när användaren är medlem i det.
         -->
         <ScheduleListSection
@@ -282,7 +414,7 @@ function destroy() {
         />
 
         <!-- Bilagorna under relationerna (issue 60 § Beslut 1): de är itemets
-             innehåll och inte en egen vy. `container.account` är pärmens
+             innehåll och inte en egen vy. `container.account` är containerns
              ägarkonto — sektionens förval när användaren är medlem i det. -->
         <ItemAttachmentSection
             :container-ulid="container.ulid"

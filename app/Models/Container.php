@@ -18,9 +18,28 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * container och [[ADR-0002 Konto äger container]]. Ägs av exakt ett konto,
  * aldrig en användare.
  *
- * `kind` styr bara presentation och mallval — systemet beter sig aldrig
- * olika beroende på värdet, se issue 8 § Beslut 5. Ingen `match`/`if` på
- * `kind` hör hemma i den här klassen eller i kod som använder den.
+ * `kind` är ett FRITT textfält som användaren själv namnger — se
+ * [[ADR-0036 Containerns art]]. Det styr bara presentationen: systemet beter
+ * sig aldrig olika beroende på värdet, och kategorimallarna väljs av
+ * användaren i stället för att härledas ur det. Ingen `match`/`if` på `kind`
+ * hör hemma i den här klassen eller i kod som använder den. Regeln skärptes
+ * när fältet blev fritt: en sluten lista som styr logik är illa, ett fritt
+ * fält som gör det är värre.
+ *
+ * Fältet är FRIVILLIGT, och kolumnen är nullbar: ingen art angiven lagras som
+ * `null` och aldrig som en tom sträng, som är just den sentinel
+ * [[ADR-0004 Fria taggar och kategorier]] vill undvika. Ett värde som bara är
+ * blanksteg blir `null` vid inmatningen (App\Http\Requests\Container) och
+ * lagras i övrigt ordagrant — ingen skiftlägesnormalisering, ingen hopslagning
+ * av stavningsvarianter ([[ADR-0016 Kostnadsregistrering]] § Motivering).
+ *
+ * `description` är containerns ENDA fritextfält utöver `name`, se
+ * [[ADR-0039 Containerns översikt]] § Beslut. Det är nullbart och frivilligt,
+ * och det visas ORDAGRANT: ingen kod plockar isär det i delar, och den
+ * formaterade underrubrik mockupen ville ha — modell och årtal — utgår
+ * eftersom den bara går att generera ur fält som inte finns och inte ska
+ * finnas ([[ADR-0033 Produktens omfång]]). Ingen `explode`, ingen parsning,
+ * ingen presentation byggd ur innehållet.
  *
  * `account_id` och `template_source_id` är medvetet UTESLUTNA ur
  * `#[Fillable]`: `account_id` kan bara sättas vid skapande (issue 8 §
@@ -29,22 +48,17 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * sättas via massildelning, vare sig från en request eller ett API-anrop.
  * `App\Http\Controllers\Api\ContainerController::store()` sätter
  * `account_id` explicit efter att `ContainerPolicy::create()` godkänt det.
+ *
+ * `currency` är containerns EGEN valuta, och den är NULLBAR: en container
+ * utan egen valuta följer kontots. Se effectiveCurrency() nedan —
+ * arvsregeln formuleras där och ingen annanstans.
  */
-#[Fillable(['name', 'kind'])]
+#[Fillable(['name', 'kind', 'description', 'currency'])]
 #[RouteKey('ulid')]
 class Container extends Model
 {
     /** @use HasFactory<ContainerFactory> */
     use HasFactory, HasUlid, SoftDeletes;
-
-    /**
-     * De giltiga värdena för `kind`, se migrationens CHECK-villkor. Delas
-     * mellan FormRequests (App\Http\Requests\Container) och
-     * ContainerFactory så listan bara underhålls på ett ställe.
-     *
-     * @var list<string>
-     */
-    public const KINDS = ['boat', 'caravan', 'house', 'car', 'other'];
 
     /**
      * Tabellen heter `container`, inte Eloquents standardplural `containers`.
@@ -59,6 +73,33 @@ class Container extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    /**
+     * Valutan en ny kostnadsrad i den här containern föreslås — containerns
+     * egen om den har en, annars kontots. Se [[ADR-0037 Valutans arv]] och
+     * issue 85.
+     *
+     * **Det här är arvsregeln, och den formuleras bara här.** Containern är
+     * nivån som ärver; kontot är botten, och itemet är inte en nivå alls —
+     * det är bara stället där formuläret öppnas ([[ADR-0037 Valutans arv]]).
+     * En andra `?? $container->account->currency` i en kontroller, en resurs
+     * eller en Vue-sida vore en andra sanning om samma sak, och de två
+     * kunde glida isär utan att något test faller.
+     *
+     * Värdet är ett FÖRSLAG, aldrig ett tvång: raden bär sin egen valuta,
+     * obligatorisk, och användaren får välja en annan ([[ADR-0016
+     * Kostnadsregistrering]] § Vad som ingår). Metoden läser kontot genom
+     * relationen — är den inte laddad gör Eloquent en fråga, vilket är
+     * billigare än att varje anropare själv ska komma ihåg `with('account')`.
+     *
+     * Ändras containerns eller kontots valuta ändras svaret härifrån, men
+     * aldrig en redan skriven `cost_entry`-rad: det som står i en rad är vad
+     * som betalades ([[ADR-0037 Valutans arv]] § Beslut).
+     */
+    public function effectiveCurrency(): string
+    {
+        return $this->currency ?? $this->account->currency;
     }
 
     /**

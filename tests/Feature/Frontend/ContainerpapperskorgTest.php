@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b och 83 — ordbyte i prosa (kommentar och testnamn), ingen ändring av applikationskoden; bas och head delar den.
+
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
 use App\Models\Account;
@@ -25,7 +27,7 @@ use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 62b · Papperskorgen för raderade pärmar och raderingsknappen som
+ * Issue 62b · Papperskorgen för raderade containers och raderingsknappen som
  * fyller den. Se App\Http\Controllers\ContainerTrashController,
  * App\Http\Controllers\ContainerController::destroy(),
  * App\Actions\Container\TrashContainer, App\Actions\Trash\
@@ -38,23 +40,22 @@ use function Pest\Laravel\withoutVite;
  * tests/Feature/Trash/ContainerPapperskorgTest.php**, som är grönt utan en
  * enda ändrad förväntan efter utbrytningen i Beslut 2 — en ny formulering av
  * samma sak här hade bevisat noll. Den här filen prövar i stället webbens
- * yta: knappen, bekräftelsen, raderingen, den aktiva pärmen, listan och
+ * yta: knappen, bekräftelsen, raderingen, den aktiva containern, listan och
  * återställningen.
  *
  * **Två acceptanskriterier prövas inte här**, därför att de redan har en
  * ägare: `/api`:s tre svar (ContainerPapperskorgTest) och "ingen svensk
- * sträng i en .vue-fil, samma nycklar på sv och en" (SprakTest § "har inga
- * användarvända strängar kvar i Vue-komponenterna" och § "har samma nycklar
- * på båda språken").
+ * sträng i en .vue-fil" (SprakTest § "har inga användarvända strängar kvar i
+ * Vue-komponenterna").
  *
  * Hjälparna har prefixet `containerpapperskorg` — Pest lägger alla testfiler i
  * samma namnrymd när hela sviten körs.
  */
 
 /**
- * Ett konto med en medlem och en pärm. Pärmen är fabriksgjord och räknas
+ * Ett konto med en medlem och en container. Containern är fabriksgjord och räknas
  * därför INTE i `usage_counter` — räknaren hålls i takt av skrivvägarna, inte
- * av databasen, och den som vill pröva räkningen skapar sin pärm genom
+ * av databasen, och den som vill pröva räkningen skapar sin container genom
  * CreateContainer (se `containerpapperskorgRäknad()`).
  *
  * @return array{0: Account, 1: User, 2: Container}
@@ -70,7 +71,7 @@ function containerpapperskorgKontext(string $kontostatus = 'active'): array
 }
 
 /**
- * En pärm skapad genom den riktiga skrivvägen, så `usage_counter` står på 1 —
+ * En container skapad genom den riktiga skrivvägen, så `usage_counter` står på 1 —
  * samma utgångsläge som efter ett skarpt skapande (issue 26a).
  *
  * @return array{0: Account, 1: User, 2: Container}
@@ -87,7 +88,7 @@ function containerpapperskorgRäknad(): array
 }
 
 /**
- * Mjukraderar en pärm genom att sätta `deleted_at` — samma sluttillstånd som
+ * Mjukraderar en container genom att sätta `deleted_at` — samma sluttillstånd som
  * raderingsrutten (SoftDeletes) men med kontrollerad tidpunkt.
  * `containerKorgMjukradera()` i tests/Feature/Trash/ContainerPapperskorgTest.php
  * gör exakt samma sak; den ligger i en annan testfil och får inte sitt eget
@@ -142,7 +143,7 @@ it('skickar en utloggad besökare till inloggningen från de tre rutterna', func
 });
 
 /*
- * Klart när: pärmens inställningssida har en raderingsknapp för den som får
+ * Klart när: containerns inställningssida har en raderingsknapp för den som får
  * radera, och ingen för den som inte får (Beslut 4).
  *
  * Flaggan är presentation (Beslut 6): `can.delete` räknas ur samma grind som
@@ -183,47 +184,41 @@ it('ritar raderingsknappen för ägaren och inte för en delegerad åtkomst', fu
  * de 30 dagarna (Beslut 5).
  *
  * `window.confirm` med serverns mening ur `lang/`, samma mönster som 57b
- * § Beslut 8 — ingen modal komponent. Meningen bär pärmens namn, säger att
+ * § Beslut 8 — ingen modal komponent. Meningen bär containerns namn, säger att
  * allt följer med och att den går att återställa, och säger ALDRIG "raderas
  * permanent": raderingen är mjuk (issue 8).
  */
-it('bekräftar raderingen med pärmens namn, papperskorgen och de 30 dagarna', function () {
+it('bekräftar raderingen med containerns namn, papperskorgen och de 30 dagarna', function () {
     $vy = File::get(resource_path('js/pages/Containers/Edit.vue'));
 
     expect($vy)->toContain("t('container.destroy.confirm', { name: props.container.name })");
     expect($vy)->toContain('router.delete(`/containers/${props.container.ulid}`)');
     expect($vy)->toContain('window.confirm(');
 
-    $sv = require lang_path('sv/ui.php');
-    $en = require lang_path('en/ui.php');
+    $fil = require lang_path('en/ui.php');
 
-    foreach (['sv' => $sv, 'en' => $en] as $locale => $fil) {
-        $mening = $fil['container']['destroy']['confirm'];
+    $mening = $fil['container']['destroy']['confirm'];
 
-        expect($mening)->toContain(':name');
-        expect($mening)->toContain('30');
+    expect($mening)->toContain(':name');
+    expect($mening)->toContain('30');
 
-        // Papperskorgen och återställningen nämns — orden är olika på de två
-        // språken, så de prövas per språk i stället för mot en gemensam sträng.
-        expect($mening)->toContain($locale === 'sv' ? 'papperskorgen' : 'trash');
-        expect($mening)->toContain($locale === 'sv' ? 'återställa' : 'restored');
+    // Papperskorgen och återställningen nämns, med de engelska orden.
+    expect($mening)->toContain('trash');
+    expect($mening)->toContain('restored');
 
-        // Och aldrig det osanna ordet.
-        expect($mening)->not->toContain('permanent');
+    // Och aldrig det osanna ordet.
+    expect($mening)->not->toContain('permanent');
 
-        expect($fil['container']['destroy']['action'])->not->toBe('');
-        expect($fil['flash']['container-trashed'])->not->toBe('');
-        expect($fil['flash']['container-restored'])->not->toBe('');
-    }
-
-    expect($sv['container']['destroy']['confirm'])->not->toBe($en['container']['destroy']['confirm']);
+    expect($fil['container']['destroy']['action'])->not->toBe('');
+    expect($fil['flash']['container-trashed'])->not->toBe('');
+    expect($fil['flash']['container-restored'])->not->toBe('');
 });
 
 /*
  * Klart när: raderingen är mjuk — bara `deleted_at` på container-raden, inget
  * item och ingen kategori rörd (issue 8). Ingen kaskad.
  */
-it('mjukraderar pärmen och rör ingenting i den', function () {
+it('mjukraderar containern och rör ingenting i den', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = containerpapperskorgKontext();
@@ -242,7 +237,7 @@ it('mjukraderar pärmen och rör ingenting i den', function () {
     expect(DB::table('container')->where('id', $container->id)->value('deleted_at'))->not->toBeNull();
 
     // Innehållet mjukraderades aldrig — det ligger kvar orört och gäller igen
-    // om pärmen återställs.
+    // om containern återställs.
     foreach ([
         ['item', $item->id],
         ['category', $kategori->id],
@@ -289,7 +284,7 @@ it('minskar förbrukningen med exakt ett, också vid en upprepad radering', func
  * i laddern får radera containern ([[Konton och åtkomst]] §
  * Behörighetsregler regel 3).
  */
-it('nekar en delegerad åtkomst på delete-nivå att radera pärmen', function () {
+it('nekar en delegerad åtkomst på delete-nivå att radera containern', function () {
     withoutVite();
 
     [, , $container] = containerpapperskorgKontext();
@@ -310,12 +305,12 @@ it('nekar en delegerad åtkomst på delete-nivå att radera pärmen', function (
  * Båda är skrivningar, och `ContainerPolicy::delete()` bär samma kontokontroll
  * i båda riktningarna (Beslut 3).
  */
-it('låter ett fruset konto varken radera eller återställa en pärm', function () {
+it('låter ett fruset konto varken radera eller återställa en container', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = containerpapperskorgKontext();
 
-    // Återställningen prövas först, medan pärmen ligger i papperskorgen.
+    // Återställningen prövas först, medan containern ligger i papperskorgen.
     $andra = Container::factory()->for($konto, 'account')->create(['name' => 'Andra']);
     containerpapperskorgRaderad($andra);
 
@@ -335,10 +330,10 @@ it('låter ett fruset konto varken radera eller återställa en pärm', function
 });
 
 /*
- * Klart när: den raderade pärmen försvinner ur pärmlistan och dess sidor ger
+ * Klart när: den raderade containern försvinner ur containerlistan och dess sidor ger
  * 404.
  */
-it('tar bort pärmen ur listan och ger 404 på dess sidor', function () {
+it('tar bort containern ur listan och ger 404 på dess sidor', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = containerpapperskorgKontext();
@@ -358,19 +353,19 @@ it('tar bort pärmen ur listan och ger 404 på dess sidor', function () {
 });
 
 /*
- * Klart när: var pärmen aktiv rensas sessionsnyckeln, och nästa sida pekar
+ * Klart när: var containern aktiv rensas sessionsnyckeln, och nästa sida pekar
  * inte på den (Beslut 6).
  *
  * `App\Support\Frontend\ActiveContainer` är den enda som rör nyckeln, och den
  * anropas från kontrollern — en `/api`-radering har ingen session att röra.
  */
-it('rensar den aktiva pärmen när den raderas, och bara då', function () {
+it('rensar den aktiva containern när den raderas, och bara då', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = containerpapperskorgKontext();
     $annan = Container::factory()->for($konto, 'account')->create();
 
-    // En annan pärm raderas först: nyckeln ska stå kvar.
+    // En annan container raderas först: nyckeln ska stå kvar.
     actingAs($ägare)
         ->withSession([ActiveContainer::SESSION_KEY => $annan->ulid])
         ->delete("/containers/{$container->ulid}")
@@ -383,7 +378,7 @@ it('rensar den aktiva pärmen när den raderas, och bara då', function () {
         ->assertInertia(fn (AssertableInertia $page) => $page->where('activeContainer', $annan->ulid));
 
     // Sedan den aktiva: nyckeln ska bort, och nästa sida visa ingen aktiv
-    // pärm alls — den hade annars pekat på en pärm som inte finns.
+    // container alls — den hade annars pekat på en container som inte finns.
     actingAs($ägare)
         ->withSession([ActiveContainer::SESSION_KEY => $annan->ulid])
         ->delete("/containers/{$annan->ulid}")
@@ -397,13 +392,13 @@ it('rensar den aktiva pärmen när den raderas, och bara då', function () {
 });
 
 /*
- * Klart när: `/trash/containers` listar raderade pärmar i konton användaren är
+ * Klart när: `/trash/containers` listar raderade containers i konton användaren är
  * medlem i, senast raderad först, med återstående tid (Beslut 3 och 7).
  *
  * Raderna kommer ur `TrashEntryResource`, samma sex nycklar som `/api` — vyn
  * hittar inte på någon egen form.
  */
-it('listar raderade pärmar senast raderad först, med den återstående tiden', function () {
+it('listar raderade containers senast raderad först, med den återstående tiden', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = containerpapperskorgKontext();
@@ -433,10 +428,10 @@ it('listar raderade pärmar senast raderad först, med den återstående tiden',
 });
 
 /*
- * Klart när: en pärm vars retention passerat listas inte och går inte att
+ * Klart när: en container vars retention passerat listas inte och går inte att
  * återställa (Beslut 7, issue 20c § Beslut 3).
  */
-it('listar inte och återställer inte en utgången pärm', function () {
+it('listar inte och återställer inte en utgången container', function () {
     withoutVite();
 
     Carbon::setTestNow('2026-09-02 12:00:00');
@@ -471,13 +466,13 @@ it('listar inte och återställer inte en utgången pärm', function () {
 });
 
 /*
- * Klart när: en pärm en annan användare äger syns inte, även om hon har
+ * Klart när: en container en annan användare äger syns inte, även om hon har
  * åtkomst till den (Beslut 3).
  *
- * Listan är en FRÅGA — "vilka raderade pärmar finns i mina konton" — och en
+ * Listan är en FRÅGA — "vilka raderade containers finns i mina konton" — och en
  * delegerad `container_access` ger varken en rad i listan eller en knapp.
  */
-it('visar inte en annan användares pärm, ens med delegerad åtkomst', function () {
+it('visar inte en annan användares container, ens med delegerad åtkomst', function () {
     withoutVite();
 
     [, $ägare] = containerpapperskorgKontext();
@@ -505,11 +500,11 @@ it('visar inte en annan användares pärm, ens med delegerad åtkomst', function
 });
 
 /*
- * Klart när: återställningen väcker pärmen, ökar förbrukningen med exakt ett,
+ * Klart när: återställningen väcker containern, ökar förbrukningen med exakt ett,
  * och innehållet finns kvar — items, kategorier, taggar, åtkomster och
  * inbjudningar (issue 20c § Beslut 4).
  */
-it('återställer pärmen, ökar förbrukningen och lämnar innehållet kvar', function () {
+it('återställer containern, ökar förbrukningen och lämnar innehållet kvar', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = containerpapperskorgRäknad();
@@ -541,7 +536,7 @@ it('återställer pärmen, ökar förbrukningen och lämnar innehållet kvar', f
     expect(containerpapperskorgAntal($konto))->toBe(1);
 
     // Innehållet mjukraderades aldrig och är åtkomligt igen genom den levande
-    // pärmen (Beslut 7, issue 20c § Beslut 4). Inga kaskader i någondera
+    // containern (Beslut 7, issue 20c § Beslut 4). Inga kaskader i någondera
     // riktningen.
     expect(Item::query()->whereKey($item->id)->exists())->toBeTrue();
     expect(Category::query()->whereKey($kategori->id)->exists())->toBeTrue();
@@ -550,10 +545,10 @@ it('återställer pärmen, ökar förbrukningen och lämnar innehållet kvar', f
     expect(Invitation::query()->whereKey($inbjudan->id)->exists())->toBeTrue();
     expect(DB::table('item_tag')->where('item_id', $item->id)->where('tag_id', $tagg->id)->exists())->toBeTrue();
 
-    // Och pärmen svarar igen: itemet står i pärmens lista som om ingenting
+    // Och containern svarar igen: itemet står i containerns lista som om ingenting
     // hänt, för ingenting hände med det.
     actingAs($ägare)
-        ->get("/containers/{$container->ulid}")
+        ->get("/containers/{$container->ulid}/items")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('items', fn ($items) => collect($items)->pluck('ulid')->contains($item->ulid))
@@ -561,12 +556,13 @@ it('återställer pärmen, ökar förbrukningen och lämnar innehållet kvar', f
 });
 
 /*
- * Klart när: återställningen sätter inte pärmen som aktiv (Beslut 6).
+ * Klart när: återställningen sätter inte containern som aktiv (Beslut 6).
  *
- * Att välja pärm är användarens handling, och `ActiveContainer` rörs därför
- * inte av återställningen.
+ * Att ÖPPNA en container är användarens handling (issue 83), och
+ * återställningen öppnar den inte: svaret är en omdirigering till
+ * papperskorgen, och `ActiveContainer` rörs därför inte.
  */
-it('sätter inte den återställda pärmen som aktiv', function () {
+it('sätter inte den återställda containern som aktiv', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = containerpapperskorgKontext();
@@ -585,13 +581,13 @@ it('sätter inte den återställda pärmen som aktiv', function () {
 });
 
 /*
- * Klart när: pärmlistan länkar till papperskorgen (Beslut 8).
+ * Klart när: containerlistan länkar till papperskorgen (Beslut 8).
  *
- * Raden ligger under listan och är ALLTID synlig — den som raderat en pärm av
+ * Raden ligger under listan och är ALLTID synlig — den som raderat en container av
  * misstag ska hitta tillbaka utan att veta att `/trash/containers` finns.
  * Texten är konstant: en räknare hade varit en fråga per sidladdning.
  */
-it('länkar till papperskorgen från pärmlistan', function () {
+it('länkar till papperskorgen från containerlistan', function () {
     withoutVite();
 
     $index = File::get(resource_path('js/pages/Containers/Index.vue'));
@@ -600,18 +596,11 @@ it('länkar till papperskorgen från pärmlistan', function () {
     expect($index)->toContain("t('trash.containers.link')");
 
     // Länken ligger UNDER listan och bär inget villkor: den ritas också för
-    // en tom lista, för den som raderat sin enda pärm är den som mest behöver
+    // en tom lista, för den som raderat sin enda container är den som mest behöver
     // den. Låg den innanför `v-else`-grenen hade den försvunnit precis då.
     expect(strpos($index, 'href="/trash/containers"'))->toBeGreaterThan(strpos($index, '</ul>'));
 
-    foreach (['sv', 'en'] as $locale) {
-        expect(trans('ui.trash.containers.link', [], $locale))->not->toBe('');
-    }
-
-    $sv = require lang_path('sv/ui.php');
-    $en = require lang_path('en/ui.php');
-
-    expect($sv['trash']['containers']['link'])->not->toBe($en['trash']['containers']['link']);
+    expect(trans('ui.trash.containers.link', [], 'en'))->not->toBe('');
 });
 
 /*
@@ -641,7 +630,7 @@ it('säger att papperskorgen är tom och återanvänder raden från 62a', functi
     expect($vy)->toContain("import TrashRow from '../../components/TrashRow.vue'");
 
     // Sidan skickar varken URL eller kropp — målet bor i raden, som härleder
-    // det ur `entry.type`. Pärmlistan och innehållslistan är därmed samma
+    // det ur `entry.type`. Containerlistan och innehållslistan är därmed samma
     // anrop: bara raderna skiljer sig.
     expect($vy)->not->toContain('restore-href');
     expect($vy)->not->toContain('restore-data');
@@ -652,34 +641,32 @@ it('säger att papperskorgen är tom och återanvänder raden från 62a', functi
     expect($rad)->toContain("'/trash/containers/restore'");
     expect($rad)->toContain('`/containers/${props.containerUlid}/trash/restore`');
 
-    // Och samma rad anropas likadant från 62a:s pärmpapperskorg, vars sida
+    // Och samma rad anropas likadant från 62a:s containerpapperskorg, vars sida
     // alltså står orörd av den här issuen.
     $innehall = File::get(resource_path('js/pages/Containers/Trash.vue'));
 
     expect($innehall)->toContain(':container-ulid="container.ulid"');
     expect($innehall)->not->toContain('restore-href');
 
-    $sv = require lang_path('sv/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['title', 'heading', 'description', 'empty', 'link', 'back'] as $nyckel) {
-        expect($sv['trash']['containers'][$nyckel])->not->toBe('');
         expect($en['trash']['containers'][$nyckel])->not->toBe('');
     }
 
-    // Typetiketten för en raderad pärm, i samma uppslag som de fyra andra
-    // typerna: raden läser `trash.type.<type>` och `container` är ett värde ur
-    // TrashEntryResource.
-    expect($sv['trash']['type']['container'])->not->toBe('');
-    expect($en['trash']['type']['container'])->not->toBe('');
-    expect($sv['trash']['type']['container'])->not->toBe($en['trash']['type']['container']);
+    // Typetiketten för en raderad container, i samma uppslag som de fyra
+    // andra typerna: raden läser `trash.type.<type>` och `container` är ett
+    // värde ur TrashEntryResource. Se [[ADR-0032 Produktens ord]]: containern
+    // heter container, och den engelska filen lånar ordet i stället för att
+    // översätta det — den är därför likadan som den svenska var.
+    expect($en['trash']['type']['container'])->toBe('Container');
 });
 
 /*
  * Klart när: en delegerad åtkomst får 403 också på återställningen, och
  * listan visar den inte.
  */
-it('nekar en delegerad åtkomst att återställa en pärm', function () {
+it('nekar en delegerad åtkomst att återställa en container', function () {
     withoutVite();
 
     [$konto, , $container] = containerpapperskorgKontext();

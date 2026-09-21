@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -45,7 +47,7 @@ use function Pest\Laravel\withoutVite;
  *    men texten nämner varken papperskorgen eller de 30 dagarna.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js; den sista testen här binder de NYA
  * nycklarna till just det testet.
  *
@@ -54,8 +56,8 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem, och en pärm med ett item under kontot. Båda på
- * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * Ett konto med en medlem, och en container med ett item under kontot. Båda på
+ * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -249,15 +251,15 @@ it('formulerar återkommandet i ord och aldrig som kolumnvärden', function () {
     expect(schemavyKör('console.log(m.recurrenceLabel(t, { recurrence_type: "none", interval_unit: null, interval_count: null }));'))
         ->toBe('item.schedule.recurrence.none');
 
-    // Och meningarna nycklarna pekar på: orden står i lang/, på båda språken,
-    // och `:count` bär talet.
-    expect(Lang::get('ui.item.schedule.recurrence.interval.month_count', ['count' => 12], 'sv'))
-        ->toBe('Var 12:e månad, räknat från senast utfört');
+    // Och meningarna nycklarna pekar på: orden står i lang/, och `:count` bär
+    // talet.
+    expect(Lang::get('ui.item.schedule.recurrence.interval.month_count', ['count' => 12], 'en'))
+        ->toBe('Every 12 months, counted from last done');
 
-    expect(Lang::get('ui.item.schedule.recurrence.fixed.year_count', ['count' => 3], 'sv'))
-        ->toBe('Var 3:e år enligt kalendern');
+    expect(Lang::get('ui.item.schedule.recurrence.fixed.year_count', ['count' => 3], 'en'))
+        ->toBe('Every 3 years according to the calendar');
 
-    expect(Lang::get('ui.item.schedule.recurrence.none', [], 'sv'))->toBe('En gång');
+    expect(Lang::get('ui.item.schedule.recurrence.none', [], 'en'))->toBe('Once');
 
     // De två typerna säger olika saker om VARIFRÅN nästa förfall räknas — det
     // är hela skillnaden ([[Scheman och uppgifter]] § De två
@@ -402,8 +404,8 @@ it('kräver anchor_date för alla tre typerna', function () {
     expect($vy)->toContain('anchor_date_fixed');
     expect($vy)->toContain("t('item.schedule.form.anchor_date')");
 
-    expect(Lang::get('ui.item.schedule.form.anchor_date', [], 'sv'))->toBe('Första förfallodatum');
-    expect(Lang::get('ui.item.schedule.form.anchor_date_fixed', [], 'sv'))->toBe('Startpunkt i serien');
+    expect(Lang::get('ui.item.schedule.form.anchor_date', [], 'en'))->toBe('First due date');
+    expect(Lang::get('ui.item.schedule.form.anchor_date_fixed', [], 'en'))->toBe('Start of the series');
 });
 
 /*
@@ -430,8 +432,8 @@ it('sätter lead_days och förklarar fältet med vad det gör', function () {
     // Förklaringen står i lang/ och ritas vid fältet; standarden är serverns
     // (`lead_days` är 0 i modellens $attributes och i migrationen), och vyn
     // hittar ingen egen.
-    expect(Lang::get('ui.item.schedule.form.lead_days_hint', [], 'sv'))
-        ->toContain('todo-listan');
+    expect(Lang::get('ui.item.schedule.form.lead_days_hint', [], 'en'))
+        ->toContain('to-do list');
 
     expect(File::get(resource_path('js/components/ScheduleForm.vue')))
         ->toContain('item.schedule.form.lead_days_hint');
@@ -508,7 +510,7 @@ it('märker ett pausat schema i listan men låter raden ligga kvar', function ()
     expect($vy)->toContain("t('item.schedule.paused_note')");
     // Och sektionen ritas på detaljvyn — en prop ingen vy läser är ingen yta.
     expect(File::get(resource_path('js/pages/Containers/Items/Show.vue')))->toContain('<ScheduleListSection');
-    expect(Lang::get('ui.item.schedule.paused_note', [], 'sv'))->toContain('inga nya förekomster');
+    expect(Lang::get('ui.item.schedule.paused_note', [], 'en'))->toContain('no new occurrences');
 });
 
 /*
@@ -584,10 +586,10 @@ it('raderar ett schema efter bekräftelse och lovar ingen papperskorg', function
     // eller de 30 dagarna (Beslut 8): papperskorgen listar fyra typer och
     // `schedule` är inte en av dem (issue 20a § Beslut 3), så en återställning
     // som inte finns får inte utlovas.
-    $text = Lang::get('ui.item.schedule.destroy_confirm', [], 'sv');
+    $text = Lang::get('ui.item.schedule.destroy_confirm', [], 'en');
 
-    expect($text)->toContain('tas bort');
-    expect($text)->not->toContain('papperskorg');
+    expect($text)->toContain('are removed');
+    expect($text)->not->toContain('trash');
     expect($text)->not->toContain('30');
 
     expect(Lang::get('ui.item.schedule.destroy_confirm', [], 'en'))->not->toContain('trash');
@@ -795,14 +797,14 @@ it('kostar ett konstant antal frågor oavsett antal scheman', function () {
 
 /*
  * Klart när: ingen svensk sträng står kvar i en .vue-fil; varje ny nyckel finns
- * på sv och en.
+ *.
  *
  * Den GLOBALA svepet över resources/js ägs av
  * tests/Feature/Frontend/SprakTest.php. Här binds de NYA nycklarna och de NYA
  * filerna: en nyckel som bara finns på svenska hade fallit där, men den här
  * filen pekar ut vilka nycklar 63a lade till.
  */
-it('har varje ny schemanyckel på båda språken och ingen svensk sträng i vyerna', function () {
+it('har varje ny schemanyckel och ingen svensk sträng i vyerna', function () {
     $nycklar = [
         'item.schedule.heading',
         'item.schedule.empty',
@@ -857,7 +859,7 @@ it('har varje ny schemanyckel på båda språken och ingen svensk sträng i vyer
     }
 
     foreach ($nycklar as $nyckel) {
-        $sv = Lang::get("ui.{$nyckel}", [], 'sv');
+        $sv = Lang::get("ui.{$nyckel}", [], 'en');
         $en = Lang::get("ui.{$nyckel}", [], 'en');
 
         expect($sv)->not->toBe("ui.{$nyckel}", "{$nyckel} saknas på svenska");

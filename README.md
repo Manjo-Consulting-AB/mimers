@@ -1,6 +1,6 @@
 # Mimers
 
-Ägaren av en båt, husvagn, stuga eller bil samlar all dokumentation om objektet på ett ställe: prylar, manualer, kvitton, serienummer, servicehistorik och återkommande underhåll. En blandning av Evernote och OmniFocus, byggd för en nisch.
+Mimers samlar information om sådant du äger, använder eller arbetar med — en båt, en bil, en fastighet, en kund, ett projekt. Sammanhanget kallas **container** och innehållet består av **objekt**: manualer, kvitton, serienummer, filer, historik och återkommande underhåll. En blandning av Evernote och OmniFocus.
 
 Namnet syftar på Mimer i nordisk mytologi, som vaktar brunnen där visdomen finns. Produkten bor på `mimers.app`.
 

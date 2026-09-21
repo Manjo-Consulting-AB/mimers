@@ -118,7 +118,7 @@ export function categoryOptions(categories) {
 }
 
 /*
- * Valen i en föräldraväljare: pärmens kategorier utom $currentUlid och dess
+ * Valen i en föräldraväljare: containerns kategorier utom $currentUlid och dess
  * ättlingar. `$currentUlid` är `null` när inget är valt — vid skapandet finns
  * ingen cykel att undvika, för den nya kategorin har inga ättlingar.
  *

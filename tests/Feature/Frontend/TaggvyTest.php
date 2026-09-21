@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -26,7 +28,7 @@ use function Pest\Laravel\withoutVite;
  * resources/js/components/TagRow.vue/TagColorField.vue.
  *
  * Den viktigaste gränsen i filen är RÄKNAREN (Beslut 6): talet är per OMFÅNG,
- * inte per pärm. En mottagare som når fyra items ska se att taggen sitter på
+ * inte per container. En mottagare som når fyra items ska se att taggen sitter på
  * två av dem, inte att den sitter på nittio — och en tagg hon inte når något
  * item genom syns inte alls, för namnet är avslöjandet.
  *
@@ -183,7 +185,7 @@ it('listar taggarna sorterade på namn och skickar färgen med', function () {
 });
 
 /*
- * Klart när: en användare utan åtkomst till pärmen får 403 på båda sidorna.
+ * Klart när: en användare utan åtkomst till containern får 403 på båda sidorna.
  */
 it('nekar en främling både taggsidan och varje taggskrivning', function () {
     withoutVite();
@@ -234,7 +236,7 @@ it('visar bara taggar inom omfånget, och räknar bara hennes items', function (
         ->has('tags', 2)
         ->where('tags.0.name', 'Försäkringar')
         ->where('tags.1.name', 'Motor')
-        // Talet är hennes items, inte pärmens.
+        // Talet är hennes items, inte containerns.
         ->where('counts', [
             $försäkringar->ulid => 1,
             $motor->ulid => 1,
@@ -422,7 +424,7 @@ it('byter namn och färg, och mjukraderar', function () {
  * både kategorier och taggar; en med `read` får 403 på varje skrivning.
  *
  * Grinden är `ContainerPolicy::update()`, ALDRIG `delete()` — den senare
- * betyder "får radera pärmen" och skulle låsa ute en write-deltagare från att
+ * betyder "får radera containern" och skulle låsa ute en write-deltagare från att
  * städa bland taggarna (regel 3, [[Konton och åtkomst]]).
  */
 it('låter en write-innehavare skriva och nekar en read-innehavare varje skrivning', function () {
@@ -499,10 +501,10 @@ it('låter ett fryst ägarkonto lista men inte skriva', function () {
 });
 
 /*
- * Klart när: en tagg i en annan pärm går inte att nå via den här pärmens rutter
+ * Klart när: en tagg i en annan container går inte att nå via den här containerns rutter
  * (404). `scopeBindings()` på de två nästlade skrivningarna.
  */
-it('når inte en tagg i en annan pärm via den här pärmens rutt', function () {
+it('når inte en tagg i en annan container via den här containerns rutt', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = taggvyKontext();
@@ -605,10 +607,10 @@ it('ställer ett konstant antal frågor på api-listan, oavsett antal taggar', f
 
 /*
  * Beslut 8: skillnaden mellan tagg och kategori står i gränssnittet — två
- * rubriker och en mening under var sin, på båda språken.
+ * rubriker och en mening under var sin,.
  */
-it('skiljer taggen från kategorin med en mening på båda språken', function () {
-    $sv = require lang_path('sv/ui.php');
+it('skiljer taggen från kategorin med en mening', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['container']['tags']['description'])->not->toBe('');

@@ -12,7 +12,7 @@ use Illuminate\Http\JsonResponse;
  * Fritextsökningen, issue 15b — den ENDA toppnivårutten som rör items,
  * `GET /api/items?q=...`. Den finns just för att frågan är global: "var la
  * jag den där?" är en fråga över ALLT användaren har åtkomst till, inte
- * inom en pärm hon redan valt (issue 15b § Beslut 5).
+ * inom en container hon redan valt (issue 15b § Beslut 5).
  *
  * Issuens tyngdpunkt: sökresultat måste ALLTID begränsas till containers
  * användaren har åtkomst till — en glömd `where` ger inget fel, inget larm

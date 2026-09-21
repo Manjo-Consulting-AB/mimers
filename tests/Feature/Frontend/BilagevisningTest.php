@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
@@ -44,7 +46,7 @@ use function Pest\Laravel\withoutVite;
  * bilagevyKör() i BilagevyTest.php: formateringen och uppslaget är rena
  * funktioner i en egen fil just för att gå att pröva — en mall går inte att
  * pröva. Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny
- * nyckel finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php,
+ * nyckel finns prövas av tests/Feature/Frontend/SprakTest.php,
  * som läser varenda fil under resources/js; nycklarna den här issuen la till
  * prövas dessutom uttryckligen sist i den här filen.
  *
@@ -62,8 +64,8 @@ beforeEach(function () {
 });
 
 /**
- * Ett konto med en medlem, och en pärm med ett item under kontot. Båda på
- * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * Ett konto med en medlem, och en container med ett item under kontot. Båda på
+ * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -488,19 +490,10 @@ it('ger en read-mottagare miniatyrerna och visningen men ingen skrivyta', functi
 
 // --- strängarna (Beslut 7) -----------------------------------------------
 
-it('har visningens fyra nycklar på både svenska och engelska', function () {
+it('har visningens fyra nycklar och läser dem ur lang/', function () {
     foreach (['viewer_heading', 'viewer_close', 'file_icon', 'pdf_fallback'] as $nyckel) {
-        foreach (['sv', 'en'] as $locale) {
-            expect(trim((string) Lang::get("ui.item.attachment.{$nyckel}", [], $locale)))
-                ->not->toBe('', "ui.item.attachment.{$nyckel} saknas på {$locale}");
-        }
-    }
-});
-
-it('skiljer svensk och engelsk text åt — ingen nyckel är en kopia', function () {
-    foreach (['viewer_heading', 'viewer_close', 'file_icon', 'pdf_fallback'] as $nyckel) {
-        expect(Lang::get("ui.item.attachment.{$nyckel}", [], 'sv'))
-            ->not->toBe(Lang::get("ui.item.attachment.{$nyckel}", [], 'en'));
+        expect(trim((string) Lang::get("ui.item.attachment.{$nyckel}", [], 'en')))
+            ->not->toBe('', "ui.item.attachment.{$nyckel} saknas");
     }
 });
 

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Revisionsloggens rad — systemets egen anteckning om vad som hänt i en
- * pärm, se [[Konton och åtkomst]] § audit_log och issue 40. Den ENDA vägen
+ * container, se [[Konton och åtkomst]] § audit_log och issue 40. Den ENDA vägen
  * in är App\Actions\Audit\RecordAuditEvent (issue 40 § Beslut 6) — allt är
  * därför UTESLUTET ur `#[Fillable]`, sätts explicit av Actionen och aldrig
  * via massilldelning, samma resonemang som App\Models\Notification.

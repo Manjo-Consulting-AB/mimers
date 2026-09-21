@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Jobs\BuildContainerExport;
 use App\Models\Account;
 use App\Models\Container;
@@ -30,11 +32,11 @@ use function Pest\Laravel\withoutVite;
  * BuildContainerExport, så den filen är grön utan en enda ändrad förväntan)
  * och nedladdningens egen grind (tests/Feature/Export/ExportNedladdningTest.php,
  * som redan prövar att en `read`-deltagare kan ladda ner och att en främling
- * får 403). "Ingen svensk sträng står kvar i en .vue-fil; varje ny nyckel finns
- * på sv och en" ägs av tests/Feature/Frontend/SprakTest.php § "har inga
- * användarvända strängar kvar i Vue-komponenterna" och § "har samma nycklar på
- * båda språken". Den här filen prövar i stället exportytans EGNA nycklar och
- * att grinden är densamma på sidan och på beställningen.
+ * får 403). "Ingen svensk sträng står kvar i en .vue-fil; varje nyckel finns i
+ * katalogen" ägs av tests/Feature/Frontend/SprakTest.php § "har inga
+ * användarvända strängar kvar i Vue-komponenterna". Den här filen prövar i
+ * stället exportytans EGNA nycklar och att grinden är densamma på sidan och på
+ * beställningen.
  *
  * **Pollningen prövas som kod och inte som beteende.** Sviten kör ingen
  * webbläsare, så det som går att pröva är att vyn ber om rätt sak: en
@@ -56,7 +58,7 @@ afterEach(function () {
 });
 
 /**
- * Ett konto med en ägare och en pärm.
+ * Ett konto med en ägare och en container.
  *
  * @return array{0: Account, 1: User, 2: Container}
  */
@@ -127,13 +129,13 @@ it('skickar en utloggad besökare till inloggningen från exportrutterna', funct
 });
 
 /*
- * Klart när: `/containers/{c}/export` visar pärmens exporter, nyast först.
+ * Klart när: `/containers/{c}/export` visar containerns exporter, nyast först.
  *
  * Raderna är ExportResource, samma sex nycklar som `/api` svarar med — vyn
  * hittar inte på någon egen form. `storage_path` och `failure_reason` följer
  * aldrig med.
  */
-it('visar pärmens exporter med nyaste först', function () {
+it('visar containerns exporter med nyaste först', function () {
     withoutVite();
 
     Carbon::setTestNow('2026-09-16 12:00:00');
@@ -283,10 +285,10 @@ it('visar en misslyckad export som misslyckad och låter den beställas om', fun
 });
 
 /*
- * Klart när: en användare utan åtkomst till pärmen får 403 på sidan och på
+ * Klart när: en användare utan åtkomst till containern får 403 på sidan och på
  * beställningen.
  *
- * Grinden är `view` på pärmen, och den prövas på pärmen i rutten — inte mot
+ * Grinden är `view` på containern, och den prövas på containern i rutten — inte mot
  * en flagga i vyn (Beslut 2).
  */
 it('ger 403 för en användare utan åtkomst, på sidan och på beställningen', function () {
@@ -305,7 +307,7 @@ it('ger 403 för en användare utan åtkomst, på sidan och på beställningen',
  * Klart när: en `read`-deltagare kan beställa och ladda ner.
  *
  * Exporten är fri på alla nivåer med flit (Beslut 2): den som får läsa
- * pärmen får ta ut den. Nedladdningen går till den befintliga
+ * containern får ta ut den. Nedladdningen går till den befintliga
  * `/exports/{export}/download` (41b) — den här issuen lägger ingen egen
  * leveransrutt, och rutten egna tester ligger i ExportNedladdningTest.
  */
@@ -474,7 +476,7 @@ it('väljer mening på den återstående tiden och säger vad påsen innehåller
     expect($modul)->toContain('days < 1');
     expect($modul)->toContain('days === 1');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['today', 'day', 'days'] as $nyckel) {
@@ -494,7 +496,7 @@ it('väljer mening på den återstående tiden och säger vad påsen innehåller
 
     expect($sida)->toContain("t('export.intro')");
 
-    // Varje status kolumnen kan ha har en mening på båda språken — annars
+    // Varje status kolumnen kan ha har en mening — annars
     // visar listan en rå status för någon.
     foreach (['pending', 'running', 'ready', 'failed', 'expired'] as $status) {
         expect($sv['export']['status'][$status])->not->toBe('');
@@ -503,7 +505,7 @@ it('väljer mening på den återstående tiden och säger vad påsen innehåller
 });
 
 /*
- * Klart när: sidan syns i pärmens navigering.
+ * Klart när: sidan syns i containerns navigering.
  *
  * Navigationen renderas ur containerSections.js, så en ny sida är en ny rad
  * där — och texten formuleras på servern ur `container.nav.<key>` på båda
@@ -511,12 +513,12 @@ it('väljer mening på den återstående tiden och säger vad påsen innehåller
  * är fri på alla planer, och en utgång ingen hittar är samma sak som en
  * inlåsning.
  */
-it('har en rad i pärmens navigering på båda språken', function () {
+it('har en rad i containerns navigering', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("{ key: 'export', href: (ulid) => `/containers/\${ulid}/export` }");
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['container']['nav']['export'])->not->toBe('');

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * Ett ägarbyte — överlåtelsen av en hel pärm, se [[Konton och åtkomst]] §
+ * Ett ägarbyte — överlåtelsen av en hel container, se [[Konton och åtkomst]] §
  * ownership_transfer och [[ADR-0003 Åtkomstmodell]]. Täcker
  * nybyggnadsvarv → kund, mäklare → köpare och privat försäljning med samma
  * mekanism. Raden ligger `pending` tills den accepteras (39b), avvisas, dras

@@ -22,8 +22,19 @@ use RuntimeException;
  *
  * Inget soft delete: kontolivscykeln går via `status`
  * (`active` | `read_only` | `closed`), inte via `deleted_at`.
+ *
+ * `currency` är kontots valuta och botten i valutans arv, se [[ADR-0037
+ * Valutans arv]] och issue 85. Den är OBLIGATORISK av samma skäl som
+ * `locale`, `timezone` och `unit_system`: kontot är nivån som svarar på vad
+ * en global summa betyder, och ett `null` där hade lämnat containerns arv
+ * (`Container::effectiveCurrency()`) utan något att falla tillbaka på.
+ *
+ * Värdet sätts av kolumnens default när kontot skapas — registreringen frågar
+ * aldrig efter det ([[ADR-0037 Valutans arv]] § Konsekvenser) — och en
+ * ändring gäller bara NYA poster: ingen befintlig `cost_entry`-rad märks
+ * någonsin om, för det som står i en rad är vad som betalades.
  */
-#[Fillable(['type', 'name', 'locale', 'timezone', 'unit_system', 'status', 'read_only_reason', 'registration_ip'])]
+#[Fillable(['type', 'name', 'locale', 'timezone', 'unit_system', 'currency', 'status', 'read_only_reason', 'registration_ip'])]
 #[RouteKey('ulid')]
 class Account extends Model
 {

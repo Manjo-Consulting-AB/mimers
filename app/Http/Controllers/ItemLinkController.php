@@ -42,7 +42,7 @@ use Illuminate\Validation\ValidationException;
  *
  * **`{other}` binds INTE av `scopeBindings()`** (issue 14 § Beslut 1 och 7).
  * Bara `{container}` och `{item}` gör det; motparten slås upp för hand INOM
- * containern, och en ULID från en annan pärm blir därför 404. Missar man det
+ * containern, och en ULID från en annan container blir därför 404. Missar man det
  * går det att knyta upp över containergränsen.
  *
  * **Fyra domänfel blir fältfel, inte JSON.** `LinkItems` kastar
@@ -60,7 +60,7 @@ class ItemLinkController extends Controller
      *
      * `StoreItemLinkRequest` har redan bevisat att motpartens ULID finns i
      * DEN HÄR containern och inte är mjukraderad — en ULID från en annan
-     * pärm är ett fältfel på `item`, aldrig en 404 och aldrig en
+     * container är ett fältfel på `item`, aldrig en 404 och aldrig en
      * behörighetsfråga. Här slås motparten bara upp, och `update` krävs i
      * båda ändarna.
      */
@@ -128,7 +128,7 @@ class ItemLinkController extends Controller
 
     /**
      * Vyns `relation` → `LinkItems`-anropets `relation` (§ Beslut 4).
-     * `parent` och `child` byter plats; `sibling` är symmetrisk och står
+     * `parent` och `child` byter plats; `related` är symmetrisk och står
      * stilla.
      */
     private function invert(string $relation): string
@@ -136,7 +136,7 @@ class ItemLinkController extends Controller
         return match ($relation) {
             'parent' => 'child',
             'child' => 'parent',
-            default => 'sibling',
+            default => 'related',
         };
     }
 
@@ -155,7 +155,7 @@ class ItemLinkController extends Controller
      * meddelande utan det är sämre än felkoden det ersatte.
      *
      * `item_link.pair_exists` bär den befintliga relationen som en KOD
-     * (`parent` | `child` | `sibling`) i `data.relation`, och meningen ska
+     * (`parent` | `child` | `related`) i `data.relation`, och meningen ska
      * säga den med ord — därför översätts koden i två steg, först till ett
      * adjektiv och sedan in i meningen. De tre andra går rakt genom
      * App\Support\Frontend\ApiErrorTranslator.

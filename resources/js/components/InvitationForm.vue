@@ -11,10 +11,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * kontroll av om den redan har ett konto, och ingen ledtråd åt något håll —
  * svaret ska vara detsamma oavsett. Det är hela skälet till att webben bjuder
  * in i stället för att bevilja direkt (55a § Beslut 2). `level` är
- * AccessLevelField från 55a, oförändrad. `item` är omfånget: hela pärmen
+ * AccessLevelField från 55a, oförändrad. `item` är omfånget: hela containern
  * (förvalt) eller ett enskilt item ur listan kontrollern skickar.
  *
- * **`item` skickas som `null` när hela pärmen valts.** Den delade
+ * **`item` skickas som `null` när hela containern valts.** Den delade
  * StoreInvitationRequest är `nullable` på fältet, och en tom sträng är
  * varken `null` eller en ULID — den fastnar i `Rule::exists` och blir ett
  * fältfel. `transform()` är därför inte en bekvämlighet utan det som gör

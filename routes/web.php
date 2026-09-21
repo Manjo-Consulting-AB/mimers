@@ -1,6 +1,5 @@
 <?php
 
-use App\Http\Controllers\ActiveContainerController;
 use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AttachmentDownloadController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
@@ -44,6 +43,7 @@ use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\WebhookEndpointController;
+use App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Files\FileOrigin;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -134,6 +134,29 @@ Route::middleware('guest')->group(function () {
 
     Route::get('/login/magic-link/consume', MagicLinkLoginController::class)
         ->name('magic-link.consume');
+
+    /*
+     * Issue 80 · Steg två: engångskoden (eller återställningskoden) för det
+     * konto som väntar i sessionen, se
+     * App\Http\Controllers\Auth\MagicLinkLoginController::store() och
+     * App\Support\Auth\PendingMagicLinkLogin.
+     *
+     * Samma sökväg som GET-rutten och skilda åt av metoden — steg två är
+     * samma försök, inte en andra rutt att hålla i takt. Rutten ligger kvar
+     * i `guest`-gruppen: den som redan loggat in ska inte kunna byta konto
+     * genom att skriva en kod.
+     *
+     * `BindsMagicLinkCodeThrottleToPendingLogin` i stället för
+     * `throttle:login` rakt av — kodförsöken bär samma takgräns som
+     * inloggningen (issue 80 § Beslut 2), men begränsaren nycklas på det
+     * konto som väntar i sessionen och inte på ett `email`-fält ur kroppen,
+     * som den som har ett väntetillstånd hade kunnat byta ut mot en ny hink
+     * för varje försök. Middlewaret anropar samma begränsare; se dess
+     * docblock.
+     */
+    Route::post('/login/magic-link/consume', [MagicLinkLoginController::class, 'store'])
+        ->middleware(BindsMagicLinkCodeThrottleToPendingLogin::class)
+        ->name('magic-link.consume.code');
 });
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])
@@ -146,13 +169,13 @@ Route::middleware('auth')->group(function () {
      * App\Http\Controllers\SearchController.
      *
      * EN rutt och EN sida (Beslut 1). Den ligger på TOPPNIVÅ och inte under
-     * en pärm — det är hela poängen med den globala frågan: "var la jag den
+     * en container — det är hela poängen med den globala frågan: "var la jag den
      * där?" är en fråga över allt användaren har åtkomst till, inte inom en
-     * pärm hon redan valt (issue 15b § Beslut 5).
+     * container hon redan valt (issue 15b § Beslut 5).
      *
      * `GET` och inte `POST`: frågan är en querysträng, så en sökning går att
      * spara, dela och backa ur — samma skäl som 59a § Beslut 1. Filtren
-     * (tagg, kategori) hör till en pärm och finns bara i pärmens lista;
+     * (tagg, kategori) hör till en container och finns bara i containerns lista;
      * den här rutten tar bara `q` (Beslut 1 och 4).
      *
      * Ingen `throttle`. Sökningen är en vanlig läsning av inloggade
@@ -344,7 +367,7 @@ Route::middleware('auth')->group(function () {
      * Navigationen renderas ur listan, och en sida ingen kan navigera till är
      * en sida ingen hittar.
      *
-     * 65b lägger kalenderlänken per pärm och webhookarna per konto — ingendera
+     * 65b lägger kalenderlänken per container och webhookarna per konto — ingendera
      * hör hit: de svarar inte på frågan om när och hur HON vill bli störd.
      */
     Route::get('/settings/notifications', [NotificationSettingsController::class, 'edit'])
@@ -360,7 +383,7 @@ Route::middleware('auth')->group(function () {
      * Issue 65b § Beslut 1 · Webhookarna — kontots utgång till egna system, se
      * App\Http\Controllers\WebhookEndpointController.
      *
-     * **Här och inte i pärmen.** En webhook hör till KONTOT: kontot äger
+     * **Här och inte i containern.** En webhook hör till KONTOT: kontot äger
      * URL:en, betalar för funktionen och är det vars plan grinden läser. Den
      * ligger därför bland inställningarna, med en egen rad i
      * resources/js/layouts/settingsSections.js.
@@ -397,8 +420,7 @@ Route::middleware('auth')->group(function () {
 
     /*
      * Issue 54 · Containerytan — listan, skapandet och redigeringen, se
-     * App\Http\Controllers\ContainerController och
-     * App\Http\Controllers\ActiveContainerController.
+     * App\Http\Controllers\ContainerController.
      *
      * Sex rutter, och den första webbytan mot en domänresurs `/api` redan
      * äger. Ingenting av API:et byggs om: StoreContainerRequest,
@@ -410,11 +432,11 @@ Route::middleware('auth')->group(function () {
      * `{container}` binds på ULID via #[RouteKey('ulid')] på
      * App\Models\Container, som överallt annars.
      *
-     * **DELETE kom med issue 62b § Beslut 4.** Raderingen står på pärmens
-     * INSTÄLLNINGSSIDA och aldrig i listan: en raderingsknapp bredvid *Gör
-     * aktiv* är en felklickning från att pärmen försvinner. Vägen tillbaka —
-     * papperskorgen på `/trash/containers` — byggdes i samma issue, för en
-     * raderingsknapp utan en väg tillbaka är en fälla.
+     * **DELETE kom med issue 62b § Beslut 4.** Raderingen står på containerns
+     * INSTÄLLNINGSSIDA och aldrig i listan: en raderingsknapp i en lista där
+     * man byter container är en felklickning från att containern försvinner.
+     * Vägen tillbaka — papperskorgen på `/trash/containers` — byggdes i samma
+     * issue, för en raderingsknapp utan en väg tillbaka är en fälla.
      *
      * `/containers/create` ligger före `/containers/{container}/edit` i
      * filen för läsbarhetens skull — `create` är ett fast segment och
@@ -427,38 +449,55 @@ Route::middleware('auth')->group(function () {
         ->name('containers.create');
 
     /*
-     * Issue 57a · Itemsidorna — pärmens förstasida och detaljvyn, se
-     * App\Http\Controllers\ItemController.
+     * Issue 89 · Containerns översikt — `GET /containers/{container}` svarar med
+     * översikten och itemlistan flyttar till `GET /containers/{container}/items`,
+     * se [[ADR-0039 Containerns översikt]] och
+     * App\Http\Controllers\ContainerController::show().
      *
-     * Två GET-rutter och ingenting annat (Beslut 1). Skapandet och
-     * redigeringen är 57b, och den här issuen lägger ingen skrivande rutt.
+     * **Ruttnamnet `containers.show` följer med översikten.** Det var
+     * containerns sida hela tiden, och det är den fortfarande — det som byter
+     * plats är vad som ritas på den. Itemlistan får ett eget namn,
+     * `containers.items.index`, och ligger kvar i samma familj som
+     * `containers.items.create` och `containers.items.show` nedan.
+     *
+     * **`GET /containers/{container}` sätter den aktiva containern** (issue 83):
+     * att öppna en container är den handling som gör den till sessionens
+     * kontext. Anropet bor i ContainerController::show() och — för den som
+     * kommer in via en bokmärkt lista — i ItemController::index(). Den gamla
+     * rutten för hand, `PUT /containers/{container}/active`, togs bort i issue
+     * 83 och kommer inte tillbaka.
      *
      * **`GET /containers/{container}` måste registreras EFTER
      * `GET /containers/create`** — annars matchar `{container}` strängen
      * `create` och formuläret blir en 404. Det är hela skälet att raden har
-     * en plats och inte bara en rutt. URL:en är pärmens egen sida och inte en
-     * tom detaljvy: App\Http\Controllers\ContainerController har ingen
-     * `show()` med flit (issue 54 § Beslut 2), och den som svarar här är
-     * itemkontrollern.
+     * en plats och inte bara en rutt.
+     */
+    Route::get('/containers/{container}', [ContainerController::class, 'show'])
+        ->name('containers.show');
+
+    /*
+     * Issue 57a · Itemsidorna — itemlistan och detaljvyn, se
+     * App\Http\Controllers\ItemController. Listan låg på containerns egen URL
+     * fram till issue 89, som flyttade den hit och satte översikten där.
      *
      * **`scopeBindings()` på `{item}`**, av exakt samma skäl som
      * `routes/api.php` gör det (issue 13a § Beslut 1, issue 9b § Beslut 1):
-     * utan det löser en item-ULID från en annan pärm upp här, och ett item i
-     * pärm B går att nå via pärm A:s rutt. Den blir 404.
+     * utan det löser en item-ULID från en annan container upp här, och ett item i
+     * container B går att nå via container A:s rutt. Den blir 404.
      *
      * `{container}` och `{item}` binds båda på ULID via `#[RouteKey('ulid')]`
      * på App\Models\Container respektive App\Models\Item.
      *
      * **Filtren är querysträng på just den här rutten** — issue 59a § Beslut 1.
-     * `GET /containers/{container}?q=…&tags[]=…&category=…` är samma sida i ett
-     * filtrerat läge, och en filtrerad URL går att spara, dela och backa ur.
-     * Ingen egen sökväg: en andra lista att hålla i takt med den första är
+     * `GET /containers/{container}/items?q=…&tags[]=…&category=…` är samma sida
+     * i ett filtrerat läge, och en filtrerad URL går att spara, dela och backa
+     * ur. Ingen egen sökväg: en andra lista att hålla i takt med den första är
      * precis vad den här raden undviker, och en ny rutt hade varit den andra
      * listan. Filtrens semantik bor i App\Http\Controllers\ItemController::
      * index() och `filter()`; `routes/api.php` är orörd.
      */
-    Route::get('/containers/{container}', [ItemController::class, 'index'])
-        ->name('containers.show');
+    Route::get('/containers/{container}/items', [ItemController::class, 'index'])
+        ->name('containers.items.index');
 
     /*
      * Issue 57b · Skrivytorna — skapa, redigera och radera ett item, se
@@ -476,8 +515,8 @@ Route::middleware('auth')->group(function () {
      *
      * **`scopeBindings()` på de rutter som bär `{item}`**, av samma skäl som
      * routes/api.php sätter det på sin grupp (issue 13a § Beslut 1): utan det
-     * löser en item-ULID från en annan pärm upp här, och ett item i pärm B går
-     * att ändra eller radera via pärm A:s rutt. En ULID från en annan pärm
+     * löser en item-ULID från en annan container upp här, och ett item i container B går
+     * att ändra eller radera via container A:s rutt. En ULID från en annan container
      * blir 404.
      *
      * `{container}` och `{item}` binds båda på ULID via `#[RouteKey('ulid')]`
@@ -485,7 +524,7 @@ Route::middleware('auth')->group(function () {
      *
      * Skrivningarna svarar 302 med en flash-kod — mönstret från issue 51
      * § Beslut 5, `status` och ingenting annat. Efter skapande och ändring
-     * bär svaret det nya itemets detaljvy; efter radering pärmens förstasida.
+     * bär svaret det nya itemets detaljvy; efter radering containerns förstasida.
      */
     Route::get('/containers/{container}/items/create', [ItemController::class, 'create'])
         ->name('containers.items.create');
@@ -522,7 +561,7 @@ Route::middleware('auth')->group(function () {
      * **`scopeBindings()` på alla tre**, av samma skäl som varje annan nästlad
      * skrivning i filen (issue 9b § Beslut 1): `{item}` löses genom
      * containerns `items()` och `{loan}` genom App\Models\Item::loans(), så en
-     * item-ULID ur en annan pärm — eller ett lån på ett annat item — blir 404
+     * item-ULID ur en annan container — eller ett lån på ett annat item — blir 404
      * i stället för ändrad. Det är hela skyddet, och samma form som
      * routes/api.php ger samma tre rutter (issue 76 § Beslut 5).
      *
@@ -562,7 +601,7 @@ Route::middleware('auth')->group(function () {
      *
      * `{other}` binds INTE av scopeBindings() (issue 14 § Beslut 1 och 7):
      * motparten är en strängparameter och slås upp inom containern i
-     * destroy(), så en ULID från en annan pärm blir 404. `{container}` och
+     * destroy(), så en ULID från en annan container blir 404. `{container}` och
      * `{item}` binds båda på ULID via #[RouteKey('ulid')] och löses genom
      * containerns items()-relation, som alla andra itemrutter här.
      *
@@ -593,7 +632,7 @@ Route::middleware('auth')->group(function () {
      *
      * **`scopeBindings()` på båda**, av samma skäl som varje annan nästlad
      * skrivning i filen (issue 9b § Beslut 1): utan det löser `{item}` upp en
-     * item-ULID från en annan pärm, och `{attachment}` en bilaga på ett annat
+     * item-ULID från en annan container, och `{attachment}` en bilaga på ett annat
      * item — den senare blir 404 i stället för raderad. `{item}` binds genom
      * containerns `items()`, `{attachment}` genom
      * App\Models\Item::attachments(). Det sätts per rutt och inte på gruppen
@@ -642,7 +681,7 @@ Route::middleware('auth')->group(function () {
      * **`scopeBindings()` på alla fem**, av samma skäl som itemrutterna ovan
      * och routes/api.php (issue 9b § Beslut 1): `{item}` löses genom
      * containerns `items()` och `{schedule}` genom App\Models\Item::
-     * schedules(), så en ULID ur en annan pärm — eller ett schema på ett
+     * schedules(), så en ULID ur en annan container — eller ett schema på ett
      * annat item — blir 404 i stället för rättad eller raderad.
      *
      * `{container}` binds på ULID via `#[RouteKey('ulid')]` på
@@ -751,8 +790,8 @@ Route::middleware('auth')->group(function () {
      * App\Actions\Schedule\DependSchedule och DependOccurrence.
      *
      * **`{other}` binds INTE av `scopeBindings()`** (issue 23 § Beslut 3):
-     * motparten är en strängparameter och slås upp inom pärmen i destroy(),
-     * så en ULID ur en annan pärm blir 404. `{container}`, `{item}`,
+     * motparten är en strängparameter och slås upp inom containern i destroy(),
+     * så en ULID ur en annan container blir 404. `{container}`, `{item}`,
      * `{schedule}` och `{occurrence}` binds som i 63a och 63b.
      *
      * Båda svaren är 302 tillbaka med en flash-kod — mönstret från issue 51
@@ -796,26 +835,17 @@ Route::middleware('auth')->group(function () {
         ->name('containers.destroy');
 
     /*
-     * Den aktiva pärmen sätts på tre ställen (Beslut 6): här, i store() ovan,
-     * och i App\Support\Frontend\ActiveContainer::set() som är den enda som
-     * rör sessionsnyckeln. `view`-grinden och inte `update`: att välja vilken
-     * pärm man arbetar i är att läsa.
-     */
-    Route::put('/containers/{container}/active', ActiveContainerController::class)
-        ->name('containers.active');
-
-    /*
-     * Issue 65b § Beslut 1 och 2 · Pärmens kalenderlänk, se
+     * Issue 65b § Beslut 1 och 2 · Containerns kalenderlänk, se
      * App\Http\Controllers\CalendarFeedController.
      *
-     * **Feeden bor i pärmen och inte i inställningarna.** Den visar pärmens
+     * **Feeden bor i containern och inte i inställningarna.** Den visar containerns
      * uppgifter — för den inloggade användaren, för feeden visar bara det hon
-     * får se — och den som ska skapa en ny är redan i pärmen. Sidan får en rad
+     * får se — och den som ska skapa en ny är redan i containern. Sidan får en rad
      * i resources/js/layouts/containerSections.js.
      *
      * **`scopeBindings()` på raderingen**, som varje annan nästlad
      * containerrutt: `{calendar_feed}` binds genom
-     * App\Models\Container::calendarFeeds(), så en ULID från en annan pärm
+     * App\Models\Container::calendarFeeds(), så en ULID från en annan container
      * löser aldrig upp här (36a § Beslut 3).
      *
      * **Sökvägen `/kalender/{token}.ics` rörs inte** — den ligger längre ner i
@@ -857,7 +887,7 @@ Route::middleware('auth')->group(function () {
      * **`scopeBindings()` på de två skrivningarna**, av exakt samma skäl som
      * `routes/api.php` gör det på gruppen där (issue 9b § Beslut 1): utan det
      * löser `{access}` upp en ULID ur vilken container som helst, och en
-     * åtkomst i pärm B går att återkalla via pärm A:s rutt. Här sätts det per
+     * åtkomst i container B går att återkalla via container A:s rutt. Här sätts det per
      * rutt i stället för på gruppen — de övriga containerrutterna ovan har
      * bara ett rutt-parameter var, och en grupp hade flyttat dem också.
      *
@@ -885,11 +915,11 @@ Route::middleware('auth')->group(function () {
      * App\Http\Controllers\InvitationResponseController.
      *
      * Fyra av de sex rutterna ligger i den här gruppen (Beslut 1): de två
-     * skrivningarna mot pärmen, och mottagarens accept och avvisande.
+     * skrivningarna mot containern, och mottagarens accept och avvisande.
      *
      * `{invitation}` nästlas under `{container}` med `->scopeBindings()`, av
      * exakt samma skäl som routes/api.php gör det (issue 9b § Beslut 1) — utan
-     * det går en inbjudan i pärm B att dra tillbaka via pärm A:s rutt, och
+     * det går en inbjudan i container B att dra tillbaka via container A:s rutt, och
      * acceptensen är en behörighet. `{invitation}` binds på ULID via
      * `#[RouteKey('ulid')]` på App\Models\Invitation.
      *
@@ -916,21 +946,21 @@ Route::middleware('auth')->group(function () {
         ->name('invitations.reject');
 
     /*
-     * Issue 67b · Ägarbytet — avsändarens sida i pärmen och mottagarens
+     * Issue 67b · Ägarbytet — avsändarens sida i containern och mottagarens
      * inkorg, se App\Http\Controllers\OwnershipTransferController.
      *
      * **Två nivåer, och det är hela skillnaden mot inbjudningarna.** De tre
-     * första rutterna ligger UNDER pärmen: avsändaren står i den. Mottagarens
-     * tre ligger på TOPPNIVÅ, för hon har inte pärmen ännu — den är inte
+     * första rutterna ligger UNDER containern: avsändaren står i den. Mottagarens
+     * tre ligger på TOPPNIVÅ, för hon har inte containern ännu — den är inte
      * hennes att navigera i, och en sida under `{container}` hade krävt att
      * hon först fick den.
      *
      * **Ingen `{token}`, ingen session och ingen mellanlandning.** 55b löser
      * inbjudan med ett token i en URL som läggs i sessionen och glöms
      * (InvitationResponseController § Beslut 2). Här finns ingen motsvarande
-     * rutt med flit: en inbjudan ger läsrätt till en pärm, ett ägarbyte
-     * överlåter hela pärmen, och en bärartoken i ett mejl till en overifierad
-     * adress vore en kapabilitet att ta emot någon annans pärm. Mejlet
+     * rutt med flit: en inbjudan ger läsrätt till en container, ett ägarbyte
+     * överlåter hela containern, och en bärartoken i ett mejl till en overifierad
+     * adress vore en kapabilitet att ta emot någon annans container. Mejlet
      * (App\Notifications\OwnershipTransferNotification) pekar på den statiska
      * sökvägen `/transfers`, och mottagaren hittar sin begäran på identitet —
      * sitt konto, eller sin verifierade adress — prövad i kontrollern.
@@ -938,7 +968,7 @@ Route::middleware('auth')->group(function () {
      * **`scopeBindings()` på den nästlade skrivningen**, av exakt samma skäl
      * som varje annan nästlad containerrutt i filen (issue 9b § Beslut 1):
      * `{transfer}` löses genom App\Models\Container::transfers(), så en
-     * transfer-ULID från en annan pärm blir 404 i stället för tillbakadragen.
+     * transfer-ULID från en annan container blir 404 i stället för tillbakadragen.
      * `{container}` och `{transfer}` binds båda på ULID via #[RouteKey('ulid')]
      * på App\Models\Container respektive App\Models\OwnershipTransfer.
      *
@@ -985,9 +1015,9 @@ Route::middleware('auth')->group(function () {
      * dagarna, se App\Http\Controllers\ExportController.
      *
      * **Två rutter och en sida** (Beslut 1). Listan är en GET, beställningen
-     * en POST utan kropp, och båda grindas av `view` på pärmen — ingen
+     * en POST utan kropp, och båda grindas av `view` på containern — ingen
      * ExportPolicy, ingen ny policymetod och ingen plangrind. Exporten är fri
-     * på alla nivåer med flit: den som får läsa pärmen får ta ut den, för en
+     * på alla nivåer med flit: den som får läsa containern får ta ut den, för en
      * export bär exakt det innehåll en view-innehavare redan kan hämta bilaga
      * för bilaga ([[Planer och kvoter]] § Gränserna i MVP, [[ADR-0014
      * Prismodell]]).
@@ -1030,17 +1060,17 @@ Route::middleware('auth')->group(function () {
      *
      * **`scopeBindings()` på de fyra nästlade skrivningarna**, av exakt samma
      * skäl som routes/api.php gör det (issue 11 § Beslut 1, issue 9b
-     * § Beslut 1): utan det löser en kategori-ULID från en annan pärm upp här,
-     * och en kategori i pärm B går att flytta eller radera via pärm A:s rutt.
-     * En ULID från en annan pärm blir 404. Det sätts per rutt och inte på
+     * § Beslut 1): utan det löser en kategori-ULID från en annan container upp här,
+     * och en kategori i container B går att flytta eller radera via container A:s rutt.
+     * En ULID från en annan container blir 404. Det sätts per rutt och inte på
      * gruppen — de övriga containerrutterna ovan har bara ett rutt-parameter
      * var, och en grupp hade flyttat dem också.
      *
      * `{container}`, `{category}` och `{tag}` binds alla på ULID via
      * `#[RouteKey('ulid')]` på App\Models\Container, Category respektive Tag.
      *
-     * **Sidorna har ingen `destroy()` på pärmen.** Raderingen ligger på
-     * pärmens inställningssida sedan issue 62b § Beslut 4 — inte här, för det
+     * **Sidorna har ingen `destroy()` på containern.** Raderingen ligger på
+     * containerns inställningssida sedan issue 62b § Beslut 4 — inte här, för det
      * här är kategoriernas och taggarnas yta. Itemvyn kom med issue 57a och
      * ligger i sin egen grupp ovan.
      *
@@ -1056,7 +1086,7 @@ Route::middleware('auth')->group(function () {
 
     /*
      * Den färdiga uppsättningen, se issue 56b § Beslut 3 och 4. POST lägger in
-     * hela uppsättningen, DELETE tackar nej till förslaget för den här pärmen i
+     * hela uppsättningen, DELETE tackar nej till förslaget för den här containern i
      * den här sessionen.
      *
      * **Bägge ligger FÖRE `{category}`-rutterna nedan.** En DELETE mot
@@ -1093,7 +1123,7 @@ Route::middleware('auth')->group(function () {
         ->name('containers.tags.destroy');
 
     /*
-     * Issue 62a · Pärmens papperskorg — det mjukraderade innehållet,
+     * Issue 62a · Containerns papperskorg — det mjukraderade innehållet,
      * den återstående tiden och återställningen, se
      * App\Http\Controllers\TrashController.
      *
@@ -1104,13 +1134,13 @@ Route::middleware('auth')->group(function () {
      *
      * **Ingen `scopeBindings()`.** Rutterna bär bara `{container}`: ULID:n
      * som ska återställas ligger i kroppen och `RestoreRequest` bevisar att
-     * den finns i DEN HÄR containern — en ULID ur en annan pärm är ett
+     * den finns i DEN HÄR containern — en ULID ur en annan container är ett
      * valideringsfel. Att flytta den till URL:en hade gett `scopeBindings()`
      * något att binda, men också fyra rutter och en andra form än `/api`:s.
      *
      * **Ingen DELETE och ingen tömning.** Gallringen är schemalagd (20b) och
      * lever vid sidan av den här ytan i båda ändar. Papperskorgen för raderade
-     * PÄRMAR är 62b och ligger på toppnivå — se den egna gruppen nedan.
+     * CONTAINERS är 62b och ligger på toppnivå — se den egna gruppen nedan.
      *
      * Återställningen svarar `back()` med en flash-kod — mönstret från issue
      * 51 § Beslut 5, `status` och ingenting annat — och ett domänfel som ett
@@ -1123,14 +1153,14 @@ Route::middleware('auth')->group(function () {
         ->name('containers.trash.restore');
 
     /*
-     * Issue 62b § Beslut 1, 2 och 3 · Papperskorgen för raderade PÄRMAR, se
+     * Issue 62b § Beslut 1, 2 och 3 · Papperskorgen för raderade CONTAINERS, se
      * App\Http\Controllers\ContainerTrashController.
      *
      * Två rutter (Beslut 1), samma form som `/api` (issue 20c § Beslut 1):
      * LISTAN är en GET, och återställningen tar ULID:en i KROPPEN och inte i
-     * URL:en. Skälet är bindande — en raderad pärm löses inte upp av
+     * URL:en. Skälet är bindande — en raderad container löses inte upp av
      * ruttbindningen, för `{container}` ser bara levande rader. Att nästla
-     * rutterna under en pärm som inte finns går alltså inte, och därför ligger
+     * rutterna under en container som inte finns går alltså inte, och därför ligger
      * de på TOPPNIVÅ.
      *
      * **Ingen `scopeBindings()`** och ingen `{container}`-parameter: det finns
@@ -1140,14 +1170,14 @@ Route::middleware('auth')->group(function () {
      * prövar `ContainerPolicy::delete()` mot radens ägarkonto.
      *
      * **På toppnivå även i NAVIGERINGEN**: `/trash/containers` nås ur
-     * pärmlistan (Beslut 8), inte ur pärmens egen navigation — den som står i
-     * en raderad pärm har ingen pärm att navigera i. Länken på `/containers`
+     * containerlistan (Beslut 8), inte ur containerns egen navigation — den som står i
+     * en raderad container har ingen container att navigera i. Länken på `/containers`
      * är alltid synlig och räknar ingenting: en räknare hade varit en fråga
      * per sidladdning.
      *
      * Återställningen svarar en omdirigering med en flash-kod — mönstret från
      * issue 51 § Beslut 5, `status` och ingenting annat — och raderingen
-     * `container-trashed` på samma sätt, mot pärmlistan.
+     * `container-trashed` på samma sätt, mot containerlistan.
      */
     Route::get('/trash/containers', [ContainerTrashController::class, 'index'])
         ->name('trash.containers');

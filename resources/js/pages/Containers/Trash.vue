@@ -5,7 +5,7 @@ import TrashRow from '../../components/TrashRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
- * Pärmens papperskorg, se issue 62a § Beslut 1, 4, 5, 6 och 7.
+ * Containerns papperskorg, se issue 62a § Beslut 1, 4, 5, 6 och 7.
  *
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver:
  * `container` ur App\Http\Resources\ContainerResource.

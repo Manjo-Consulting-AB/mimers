@@ -14,7 +14,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * längre.
  *
  * **Sidan filtrerar ingenting** (Beslut 2). Urvalet — öppen, synlig idag,
- * inte blockerad, i en åtkomlig pärm och inom användarens omfång — formuleras
+ * inte blockerad, i en åtkomlig container och inom användarens omfång — formuleras
  * EN gång, i `ScheduleOccurrence::scopeTodoFor()`, och den här filen har
  * varken en `computed` som sållar rader eller en klientmatchning. Servern
  * äger urvalet; sidan visar det.
@@ -31,9 +31,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * hela listan och grupperingen är det som gör den begriplig (Beslut 7).
  *
  * **De två tomma lägena är olika, och ingen av dem vet om omfånget**
- * (Beslut 6). `hasContainers` är serverns svar på "har hon någon pärm alls" —
+ * (Beslut 6). `hasContainers` är serverns svar på "har hon någon container alls" —
  * den som inte har någon får en mening och en länk till att skapa en, den som
- * har pärmar utan öppna uppgifter får en annan. Ingen av meningarna nämner
+ * har containers utan öppna uppgifter får en annan. Ingen av meningarna nämner
  * ett tal eller antyder att rader dolts: en omfångsbegränsad mottagare med
  * tom lista får ordagrant samma mening som en ägare vars uppgifter är gjorda
  * (issue 73 § Beslut 6, issue 74).
@@ -41,7 +41,7 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /* Listorna per grupp, i ritningsordning: overdue, today, upcoming. */
     groups: { type: Object, required: true },
-    /* Har användaren någon pärm alls? Skiljer de två tomma lägena åt. */
+    /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
     hasContainers: { type: Boolean, required: true },
 });
 

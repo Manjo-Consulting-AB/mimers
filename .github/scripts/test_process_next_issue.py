@@ -85,11 +85,15 @@ def _dagens_prompt_utan_fragor(issue_body, diff, uppfoljning=False):
         f"det är den enda kontrollen av att inget missats.\n"
         f"2. Kontrollera att issuens numrerade beslut faktiskt följs, och att varje "
         f"avvikelse är motiverad i PR-kroppen.\n"
-        f"3. Håll dig till issuens omfångsruta. Ligger en ändrad fil utanför 'In scope' "
-        f"är det ett fynd. Beställ ALDRIG en ändring i en fil som ligger utanför rutan - "
-        f"be i så fall om att den bryts ut till en egen issue. Rutan kontrolleras även "
-        f"maskinellt av .github/scripts/omfangsruta.py, så en sådan beställning gör bara "
-        f"PR:en röd.\n"
+        f"3. Omfångsrutan ägs av .github/scripts/omfangsruta.py, inte av dig. Ligger en "
+        f"ändrad fil utanför 'In scope' skriver du EN rad om vilken fil det är och om "
+        f"ändringen i sig är riktig - och håller ALDRIG inne review:approved för rutans "
+        f"skull. Etiketten säger att koden är rätt; grinden säger att rutan är rätt, och "
+        f"mergespärren kräver båda, så en PR med röd ruta mergas inte för att du "
+        f"godkände koden. Är ändringen utanför rutan dessutom sakligt fel är den ett "
+        f"vanligt fynd som vilket annat. Beställ ALDRIG en ändring i en fil som ligger "
+        f"utanför rutan - be i så fall om att den bryts ut till en egen issue, eftersom "
+        f"en sådan beställning bara gör PR:en röd.\n"
         f"4. Sedan det vanliga: säkerhet, samtidighet, felhantering, datamodell.\n\n"
         f"Har du fynd, skriv dem som en numrerad lista - konkret nog att en annan "
         f"implementerare kan åtgärda dem utan att fråga dig något mer."
@@ -729,6 +733,39 @@ def test_ingen_no_verify_i_skriptet():
     rader = [r.strip() for r in _kalla().splitlines()
              if '"--no-verify"' in r]
     assert rader == [], f"--no-verify används: {rader}"
+
+
+def test_omfangslinten_nar_bada_implementationsprompterna():
+    """Linten är värdelös om dess fynd inte når den som bygger. Båda banorna -
+    DeepSeeks tre försök och Sonnet-eskaleringen - ska bära notisen."""
+    kropp = _funktionskropp("_process_in_worktree")
+    assert "omfangsnotis = kor_omfangslint(" in kropp
+    assert kropp.count("{omfangsnotis}") == 2, "notisen når inte båda prompterna"
+
+
+def test_omfangslinten_backar_ett_smutsat_arbetstrad():
+    """Modellanropet går genom en agent med skrivrätt. Prompten ber om en lista,
+    men PR #163 visar att en agent gör vad den vill - alltså mäts trädet."""
+    kropp = _funktionskropp("kor_omfangslint")
+    assert 'run_cmd(["git", "reset", "--hard", head_fore]' in kropp
+    assert '"clean", "-fd"' in kropp
+
+
+def test_omfangslinten_stoppar_aldrig_kon():
+    """Fail-open i varje led: ett falskt positivt utfall som stoppar arbetet
+    kostar mer än linten sparar."""
+    kropp = _funktionskropp("kor_omfangslint")
+    assert kropp.count("except Exception") == 2
+    assert "sys.exit" not in kropp and "eskalera(" not in kropp
+
+
+def test_omfangslintens_instruktion_sager_att_rutan_galler():
+    """Notisen får aldrig läsas som ett tillstånd att vidga rutan."""
+    kalla = _kalla()
+    block = kalla.split("OMFANGSLINT_INSTRUKTION = (")[1].split(")\n")[0]
+    assert "inte ett tillstånd" in block
+    assert "fortfarande bindande" in block
+    assert "Utanför rutan:" in block
 
 
 def test_omforsoket_packar_forst():

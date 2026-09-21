@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
@@ -19,7 +21,7 @@ use function Pest\Laravel\withoutVite;
  * resources/js/pages/Containers/Items/Show.vue.
  *
  * Den viktigaste gränsen i filen är AUKTORISERINGEN (Beslut 5): grinden är
- * ITEMETS egen, inte containerns, och ett item i pärmen men utanför
+ * ITEMETS egen, inte containerns, och ett item i containern men utanför
  * mottagarens omfång ger 403 — inte 404. "Känd men utanför omfånget" har en
  * kod över tio kontrollrar (issue 73 § Beslut 3), och webben uppfinner inte en
  * elfte regel.
@@ -36,7 +38,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem i angiven roll, och en pärm ägd av kontot.
+ * Ett konto med en medlem i angiven roll, och en container ägd av kontot.
  *
  * @param  array<string, mixed>  $kontoAttribut
  * @return array{0: Account, 1: User, 2: Container}
@@ -52,7 +54,7 @@ function itemdetaljKontext(array $kontoAttribut = []): array
 }
 
 /**
- * Ett item i pärmen med sammanhängande `created_by_*`.
+ * Ett item i containern med sammanhängande `created_by_*`.
  *
  * @param  array<string, mixed>  $attribut
  */
@@ -164,13 +166,13 @@ it('visar itemets fält, kategorin och taggarna för den som når itemet', funct
 });
 
 /*
- * Klart när: ett item i pärmen men utanför mottagarens omfång ger 403 på
+ * Klart när: ett item i containern men utanför mottagarens omfång ger 403 på
  * detaljvyn, inte 404.
  *
  * Samma item som mottagaren NÅR svarar 200 i samma test — annars hade 403:an
  * kunnat vara en trasig rutt.
  */
-it('ger 403 och inte 404 för ett item i pärmen men utanför omfånget', function () {
+it('ger 403 och inte 404 för ett item i containern men utanför omfånget', function () {
     withoutVite();
 
     [, , $container] = itemdetaljKontext();
@@ -190,12 +192,12 @@ it('ger 403 och inte 404 för ett item i pärmen men utanför omfånget', functi
 });
 
 /*
- * Klart när: en item-ULID från en annan pärm ger 404 på den här pärmens rutt.
+ * Klart när: en item-ULID från en annan container ger 404 på den här containerns rutt.
  *
  * `scopeBindings()` löser `{item}` genom containerns `items()`-relation
  * (Beslut 1) — samma skydd som routes/api.php sätter på sin grupp.
  */
-it('ger 404 för en item-ULID från en annan pärm', function () {
+it('ger 404 för en item-ULID från en annan container', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = itemdetaljKontext();

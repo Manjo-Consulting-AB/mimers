@@ -50,7 +50,7 @@ use ZipArchive;
  *
  * Mjukraderat innehåll följer inte med: SoftDeletes' globala scope gäller
  * automatiskt genom relationerna för item, kategori, tagg, schema, lån och
- * bilaga. Papperskorgen är inte pärmen (Beslut 9).
+ * bilaga. Papperskorgen är inte containern (Beslut 9).
  *
  * Issue 74 § Beslut 8: exporten tar med exakt det BESTÄLLAREN når.
  * Omfånget är `$export->requested_by_user_id` — raden som redan finns på
@@ -442,8 +442,8 @@ class ContainerExportBuilder
      * Renderar index.html — en enda självständig fil utan externa resurser
      * (Beslut 11). Språket väljs från den beställande användarens locale,
      * samma regel som mejlen (AGENTS.md § Serverrenderat innehåll). Texterna
-     * ligger i lang/{sv,en}/export.php, samma form som mejlen mot
-     * lang/{sv,en}/notiser.php.
+     * ligger i lang/en/export.php, samma form som mejlen mot
+     * lang/en/notiser.php.
      *
      * Appens locale sätts runt renderingen och återställs i finally — jobbet
      * kör i en kö där appens locale är processens, inte den beställande

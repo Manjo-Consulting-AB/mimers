@@ -5,7 +5,7 @@ import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Den globala sökningen, se issue 59b § Beslut 1, 3, 4, 6 och 8. Sidan
- * ligger under AppLayout och på toppnivå: frågan spänner över alla pärmar
+ * ligger under AppLayout och på toppnivå: frågan spänner över alla containers
  * användaren når, och det är därför den har en egen URL.
  *
  * **Sökrutan ritas inte här.** Den bor i AppLayout (SearchField) och syns på
@@ -13,19 +13,19 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Tre lägen, och bara ett av dem körde en fråga** (Beslut 4):
  *
- *   - `q` är null             → utgångsläget: vad man kan söka på, och att
- *                               sökningen matchar hela ord
+ *   - `q` är null             → utgångsläget: vad man kan söka på, och vad
+ *                               sökningen matchar
  *   - `q` finns, inga träffar → meningen som nämner sökordet och slutar där
  *   - `q` finns, träffar      → listan
  *
  * Utgångsläget är inte ett fel: `/search` utan `q` betyder att någon klickat
  * på sökfältet, och servern har då inte ställt någon fråga alls.
  *
- * **Varje träff bär sin pärm** (Beslut 3). `container` ligger BREDVID
- * ItemResource — resursen bär ingen pärm med flit, för `/api` har inte bett om
+ * **Varje träff bär sin container** (Beslut 3). `container` ligger BREDVID
+ * ItemResource — resursen bär ingen container med flit, för `/api` har inte bett om
  * den, och ett fält som bara webben behöver hör inte inuti den
  * ([[ADR-0021 Frontendteknik]] § Konsekvenser). Itemets namn länkar till
- * detaljvyn; pärmens namn till pärmens förstasida.
+ * detaljvyn; containerns namn till containerns förstasida.
  *
  * **Sorteringen är serverns** (`orderBy('name')` i
  * App\Actions\Item\SearchAccessibleItems) — vyn sorterar aldrig om, och den
@@ -33,19 +33,24 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Den tomma träfflistan vet ingenting om omfånget** (Beslut 6). Meningen
  * nämner sökordet och ingenting annat: inget tal om hur många rader som
- * fanns, ingen antydan om att något dolts, ingen uppräkning av vilka pärmar
+ * fanns, ingen antydan om att något dolts, ingen uppräkning av vilka containers
  * som genomsöktes. En användare utan åtkomst till någonting alls får
  * ordagrant samma mening som en vars sökord inte matchar.
  *
  * **Ingen "menade du"-rad** (Beslut 7). Svensk stemming finns inte i MVP
  * ([[ADR-0012 Sök]]), och ingen kompensation byggs här: en klientomskrivning
  * av sökordet är en andra sökmotor och blir kvar långt efter att den riktiga
- * bytts ut. Utgångsläget säger i stället att sökningen matchar hela ord.
+ * bytts ut. Utgångsläget säger i stället vad frågan faktiskt gör — att den
+ * matchar en del av ett ord (issue 78 § Beslut 5). Den gamla meningen lovade
+ * hela ord, vilket är FULLTEXT-grenens regel och inte den här körda frågans.
+ *
+ * **Vägen hit står i layouten** (issue 78 § Beslut 2): `nav.search` länkar
+ * hit från navigeringen. Sidan själv ritar ingen andra väg in.
  */
 defineProps({
     /* Sökordet servern ställde frågan med, eller null när ingen fråga kördes. */
     q: { type: String, default: null },
-    /* ItemResource per träff, med pärmens { ulid, name, kind } bredvid. */
+    /* ItemResource per träff, med containerns { ulid, name, kind } bredvid. */
     results: { type: Array, required: true },
 });
 
@@ -60,7 +65,7 @@ const { t } = useTranslations();
 
         <template v-if="q === null">
             <p class="mt-4 text-slate-700">{{ t('search.intro') }}</p>
-            <p class="mt-2 text-sm text-slate-600">{{ t('search.whole_words') }}</p>
+            <p class="mt-2 text-sm text-slate-600">{{ t('search.match_rule') }}</p>
         </template>
 
         <template v-else>
@@ -80,14 +85,25 @@ const { t } = useTranslations();
                     <p class="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-600">
                         <span>{{ t('search.in_container') }}</span>
 
+                        <!-- Containernamnet går till ITEMLISTAN (issue 89 ·
+                             [[ADR-0039 Containerns översikt]] § Konsekvenser):
+                             träffen är ett item, och den som följer containern
+                             ur en träff söker det sammanhang itemet låg i. -->
                         <Link
-                            :href="`/containers/${result.container.ulid}`"
+                            :href="`/containers/${result.container.ulid}/items`"
                             class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
                         >
                             {{ result.container.name }}
                         </Link>
 
-                        <span>{{ t(`container.kind.${result.container.kind}`) }}</span>
+                        <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
+                             Containerns art]]): fältet är fritt, och `t()`
+                             returnerar nyckeln själv när uppslaget misslyckas,
+                             så ingen nyckel får byggas ur värdet. Spärren
+                             frågar om fältet är SATT och aldrig vilket värde
+                             det bär — en sökträff i en container utan art
+                             visar ingen art, inte en tom fläck. -->
+                        <span v-if="result.container.kind">{{ result.container.kind }}</span>
                     </p>
                 </li>
             </ul>

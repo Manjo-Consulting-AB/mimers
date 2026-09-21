@@ -29,7 +29,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * en `computed` som för en kolumn.
  *
  * **Kontot är varvet** (Beslut 4). `CompleteOccurrenceRequest` kräver
- * `account`, och förvalet är pärmens ägarkonto när användaren är medlem i
+ * `account`, och förvalet är containerns ägarkonto när användaren är medlem i
  * det, annars hennes första konto — samma regel som 57b § Beslut 4 och 60a
  * § Beslut 4, ur den delade propen `auth.accounts`. Är hon medlem i exakt ett
  * konto ritas ingen väljare: ett val mellan ett alternativ är ingen fråga,
@@ -50,7 +50,7 @@ const props = defineProps({
     scheduleUlid: { type: String, required: true },
     /* Den öppna förekomsten ur ScheduleOccurrenceResource. */
     occurrence: { type: Object, required: true },
-    /* Pärmens ägarkonto — förvalet när användaren är medlem i det. */
+    /* Containerns ägarkonto — förvalet när användaren är medlem i det. */
     containerAccount: { type: String, default: '' },
     can: { type: Object, required: true },
 });

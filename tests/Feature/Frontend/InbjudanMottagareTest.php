@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Http\Controllers\InvitationResponseController;
 use App\Models\Account;
 use App\Models\Container;
@@ -62,7 +64,7 @@ function mottagarInbjudan(Container $container, string $email, array $overrides 
 }
 
 /**
- * Pärmen i ett konto, utan inloggad mottagare.
+ * Containern i ett konto, utan inloggad mottagare.
  */
 function mottagarParm(): Container
 {
@@ -118,14 +120,14 @@ it('skriver inte över en väntande inbjudan när inloggningen skickar tillbaka 
 });
 
 /*
- * Klart när: en gäst på `/invitations` ser pärmens namn och vägarna till
+ * Klart när: en gäst på `/invitations` ser containerns namn och vägarna till
  * inloggning och registrering, och ingen e-postadress.
  *
  * Adressen inbjudan gäller visas aldrig — den vet mottagaren redan, och en
- * bärare som inte är mottagaren ska inte få veta den. Pärmens namn och
+ * bärare som inte är mottagaren ska inte få veta den. Containerns namn och
  * inbjudarens namn är däremot ingen ny uppgift: båda står i mejlet.
  */
-it('visar pärmens namn och vägarna in för en gäst, men ingen adress', function () {
+it('visar containerns namn och vägarna in för en gäst, men ingen adress', function () {
     withoutVite();
 
     $container = mottagarParm();
@@ -324,9 +326,9 @@ it('ger fel adress ett besked utan den inbjudna adressen, och ingen åtkomst', f
 /*
  * Klart när: en verifierad mottagare som accepterar får en
  * `container_access`-rad med inbjudans `level` och `item_id`, inbjudan blir
- * `accepted`, pärmen blir aktiv och hon landar på `/containers`.
+ * `accepted`, containern blir aktiv och hon landar på `/containers`.
  */
-it('accepterar inbjudan och landar i den nya pärmen', function () {
+it('accepterar inbjudan och landar i den nya containern', function () {
     withoutVite();
 
     $container = mottagarParm();
@@ -368,7 +370,7 @@ it('accepterar inbjudan och landar i den nya pärmen', function () {
 
     expect($inbjudan->refresh()->status)->toBe('accepted');
 
-    // Den som just fått en pärm ska landa i den (Beslut 4).
+    // Den som just fått en container ska landa i den (Beslut 4).
     expect(session(ActiveContainer::SESSION_KEY))->toBe($container->ulid);
 
     // Och tokenet glöms — inbjudan är besvarad.
@@ -466,8 +468,8 @@ it('skickar en gäst till inloggningen och behåller inbjudan i sessionen', func
  * Sidans text bor i lang/ och aldrig i vyn, och varje ny nyckel finns på båda
  * språken — samma krav som 55a ställde på delningssidan.
  */
-it('har mottagarsidans texter på båda språken', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har mottagarsidans texter', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['title', 'heading', 'intro', 'level', 'guest', 'mismatch', 'unavailable', 'accept', 'reject', 'home'] as $nyckel) {

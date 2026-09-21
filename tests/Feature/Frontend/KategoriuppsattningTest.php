@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Http\Controllers\CategoryController;
 use App\Http\Requests\Category\StoreCategoryPresetRequest;
 use App\Models\Account;
@@ -16,11 +18,15 @@ use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 56b · Färdiga kategoriuppsättningar per språk och containertyp. Se
+ * Issue 56b · Färdiga kategoriuppsättningar per språk. Se
  * resources/js/data/categoryPresets.js,
  * resources/js/components/CategoryPresetCard.vue,
  * App\Http\Requests\Category\StoreCategoryPresetRequest och
  * App\Http\Controllers\CategoryController::storePreset()/dismissPreset().
+ *
+ * Uppsättningarna hängde fram till issue 84 på containerns `kind` och valdes
+ * åt användaren. Den nyckeln finns inte längre ([[ADR-0036 Containerns art]]):
+ * uppsättningen har ett eget NAMN, och den som vill ha en pekar på den.
  *
  * Den bärande arkitekturen i filen är att SERVERN ALDRIG VET VAD ORDEN
  * BETYDER ([[ADR-0004 Fria taggar och kategorier]] § Konsekvenser). Därför
@@ -41,8 +47,9 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en ägare, och en pärm av given typ. Ägarens locale styr den
- * delade propen `locale` och därmed vilken uppsättning klienten väljer.
+ * Ett konto med en ägare, och en container med given art. Ägarens locale styr den
+ * delade propen `locale` och därmed vilken uppsättning kortet erbjuder — arten
+ * styr ingenting (issue 84).
  *
  * @param  array<string, mixed>  $kontoAttribut
  * @return array{0: Account, 1: User, 2: Container}
@@ -88,19 +95,31 @@ function uppsattningKor(string $uttryck): mixed
 }
 
 /**
- * Uppsättningen klienten hade valt för $locale och $kind.
+ * Kategorierna i uppsättningen som heter $namn på $locale, eller `null` om
+ * namnet inte finns där.
  *
- * @return list<array{name: string, children?: list<string>}>
+ * Sedan issue 84 slås uppsättningarna inte längre upp på containerns `kind`
+ * ([[ADR-0036 Containerns art]]) — de har ett eget namn, och användaren väljer
+ * bland dem. Hjälparen letar därför på namnet, precis som väljaren i
+ * resources/js/components/CategoryPresetCard.vue gör.
+ *
+ * @return list<array{name: string, children?: list<string>}>|null
  */
-function uppsattningFor(string $locale, string $kind): array
+function uppsattningFor(string $locale, string $namn): ?array
 {
-    return uppsattningKor('mod.presetFor('.json_encode($locale).', '.json_encode($kind).')');
+    foreach (uppsattningKor('mod.presetsFor('.json_encode($locale).')') as $uppsattning) {
+        if ($uppsattning['name'] === $namn) {
+            return $uppsattning['categories'];
+        }
+    }
+
+    return null;
 }
 
 /**
- * Hela datan, så att alla tio kombinationerna kan prövas på en gång.
+ * Hela datan, så att varje uppsättning kan prövas på en gång.
  *
- * @return array<string, array<string, list<array<string, mixed>>>>
+ * @return array<string, list<array{name: string, categories: list<array<string, mixed>>}>>
  */
 function uppsattningAlla(): array
 {
@@ -161,14 +180,14 @@ it('skickar en utloggad besökare till inloggningen från uppsättningsrutten', 
 });
 
 /*
- * Klart när: en tom pärm visar förslaget, och servern har inte skickat orden.
+ * Klart när: en tom container visar förslaget, och servern har inte skickat orden.
  *
  * Att kortet ritas är presentationslogik och prövas i källfilerna; det som
  * prövas HÄR är att servern bara säger sitt om nej:et (Beslut 2 och 4) och att
  * uppsättningens ord inte finns i svaret — servern får aldrig veta vad de
  * betyder.
  */
-it('visar förslaget på en tom pärm och skickar aldrig orden till webbläsaren', function () {
+it('visar förslaget på en tom container och skickar aldrig orden till webbläsaren', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE');
@@ -188,10 +207,26 @@ it('visar förslaget på en tom pärm och skickar aldrig orden till webbläsaren
         ->where('can.manage', true)
     );
 
-    // Orden bor i klienten. Hade de kommit som prop hade ADR-0004 varit
-    // upphävd, oavsett vad kortet visade.
-    foreach (uppsattningNamn(uppsattningFor('sv', 'boat')) as $namn) {
-        expect($svar->getContent())->not->toContain($namn);
+    /*
+     * Orden bor i klienten. Hade de kommit som prop hade ADR-0004 varit
+     * upphävd, oavsett vad kortet visade — så ALLA uppsättningar prövas, inte
+     * bara den testet råkade peka på.
+     *
+     * Språkkatalogen `translations` undantas med flit: den ÄR `lang/en/ui.php`
+     * och bär sidans egna ord (`Other` har en kategori som heter `Storage`, och
+     * navigeringen har en flik med samma ord). Att orden inte står i `lang/`
+     * vaktas i stället av provet `har inga kategorinamn i lang/, config/ eller
+     * någon PHP-fil` längre ner i filen.
+     */
+    $proppar = $svar->inertiaProps();
+    unset($proppar['translations']);
+
+    foreach (uppsattningAlla() as $samling) {
+        foreach ($samling as $uppsattning) {
+            foreach (uppsattningNamn($uppsattning['categories']) as $namn) {
+                expect(json_encode($proppar))->not->toContain($namn);
+            }
+        }
     }
 
     // Sidans eget formulär fungerar medan kortet står kvar obesvarat — det är
@@ -236,7 +271,7 @@ it('lägger in uppsättningen i ordning, med rätt föräldrar och positioner', 
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
 
-    $uppsattning = uppsattningFor('sv', 'boat');
+    $uppsattning = uppsattningFor('en', 'Boat');
 
     $svar = actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
@@ -257,21 +292,21 @@ it('lägger in uppsättningen i ordning, med rätt föräldrar och positioner', 
     expect($rotter->pluck('position')->all())->toBe(range(1, count($rotnamn)));
 
     // Barnen ligger under sin rot, i uppsättningens ordning.
-    $motor = $rotter->firstWhere('name', 'Motor');
+    $motor = $rotter->firstWhere('name', 'Engine');
 
     $barn = Category::query()
         ->where('parent_id', $motor->id)
         ->orderBy('position')
         ->get();
 
-    expect($barn->pluck('name')->all())->toBe(['Drivlina', 'Kylsystem']);
+    expect($barn->pluck('name')->all())->toBe(['Drive train', 'Cooling']);
     expect($barn->pluck('position')->all())->toBe([1, 2]);
     expect($barn->pluck('container_id')->unique()->all())->toBe([$container->id]);
 
     // Ingen märkning: raderna ÄR vanliga kategorier (Beslut 6). Lövet går att
     // radera med 56a:s yta, och ingenting i systemet minns att det kom från
     // ett förslag.
-    $drivlina = $barn->firstWhere('name', 'Drivlina');
+    $drivlina = $barn->firstWhere('name', 'Drive train');
 
     actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
@@ -282,13 +317,13 @@ it('lägger in uppsättningen i ordning, med rätt föräldrar och positioner', 
 });
 
 /*
- * Klart när: ett andra anrop mot `preset` på en pärm som redan har kategorier
+ * Klart när: ett andra anrop mot `preset` på en container som redan har kategorier
  * ger 422 och skapar ingenting.
  *
  * Utan den kontrollen är rutten ett sätt att fördubbla trädet med en knapp som
  * ser ut som ett förslag (Beslut 3).
  */
-it('vägrar en uppsättning i en pärm som redan har kategorier och skapar ingenting', function () {
+it('vägrar en uppsättning i en container som redan har kategorier och skapar ingenting', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
@@ -298,7 +333,7 @@ it('vägrar en uppsättning i en pärm som redan har kategorier och skapar ingen
     $svar = actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
         ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => uppsattningFor('sv', 'boat'),
+            'categories' => uppsattningFor('en', 'Boat'),
         ]);
 
     $svar->assertRedirect("/containers/{$container->ulid}/categories");
@@ -308,7 +343,7 @@ it('vägrar en uppsättning i en pärm som redan har kategorier och skapar ingen
     // språk — rutten finns bara på webben.
     $mening = session('errors')->get('categories')[0];
 
-    expect($mening)->toBe(trans('ui.container.categories.preset_not_empty', [], 'sv'));
+    expect($mening)->toBe(trans('ui.container.categories.preset_not_empty', [], 'en'));
     expect($mening)->not->toBe('preset_not_empty');
 
     expect(Category::query()->where('container_id', $container->id)->count())->toBe(1);
@@ -316,11 +351,11 @@ it('vägrar en uppsättning i en pärm som redan har kategorier och skapar ingen
 });
 
 /*
- * Klart när: en pärm vars enda kategorier är mjukraderade är TOM. Villkoret är
+ * Klart när: en container vars enda kategorier är mjukraderade är TOM. Villkoret är
  * "minst en levande kategori", alltså Eloquents SoftDeletes-scope och inte en
  * rå `count()`.
  */
-it('räknar en pärm med bara mjukraderade kategorier som tom', function () {
+it('räknar en container med bara mjukraderade kategorier som tom', function () {
     withoutVite();
 
     [, $anvandare, $container] = uppsattningKontext('sv_SE', 'boat');
@@ -331,12 +366,12 @@ it('räknar en pärm med bara mjukraderade kategorier som tom', function () {
     actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
         ->post("/containers/{$container->ulid}/categories/preset", [
-            'categories' => [['name' => 'Rigg och segel']],
+            'categories' => [['name' => 'Rig and sails']],
         ])
         ->assertSessionHas('status', 'category-preset-applied');
 
     expect(Category::query()->where('container_id', $container->id)->pluck('name')->all())
-        ->toBe(['Rigg och segel']);
+        ->toBe(['Rig and sails']);
 });
 
 /*
@@ -421,7 +456,7 @@ it('avvisar ett namn längre än 255 tecken på rätt fält', function () {
 });
 
 /*
- * Klart när: *Nej tack* döljer förslaget för den pärmen under sessionen, och
+ * Klart när: *Nej tack* döljer förslaget för den containern under sessionen, och
  * sidans övriga formulär fungerar oförändrat.
  */
 it('döljer förslaget i sessionen och lämnar skapa-formuläret orört', function () {
@@ -445,26 +480,26 @@ it('döljer förslaget i sessionen och lämnar skapa-formuläret orört', functi
             ->where('can.manage', true)
     );
 
-    // Att tacka nej är ingen skrivning i pärmen, och sidans eget formulär
+    // Att tacka nej är ingen skrivning i containern, och sidans eget formulär
     // fungerar precis som förut — det är vad "kan tacka nej utan att fastna"
     // betyder.
     expect(session(CategoryController::PRESET_DISMISSED_SESSION_KEY))->toBe([$container->ulid]);
 
     actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
-        ->post("/containers/{$container->ulid}/categories", ['name' => 'Rigg och segel'])
+        ->post("/containers/{$container->ulid}/categories", ['name' => 'Rig and sails'])
         ->assertSessionHas('status', 'category-created');
 
     expect(Category::query()->where('container_id', $container->id)->pluck('name')->all())
-        ->toBe(['Rigg och segel']);
+        ->toBe(['Rig and sails']);
 });
 
 /*
- * Klart när: *Nej tack* på en pärm döljer inte förslaget på en ANNAN tom pärm.
+ * Klart när: *Nej tack* på en container döljer inte förslaget på en ANNAN tom container.
  *
- * Nej:et är per pärm — en lista av ULID:n, inte en enda flagga för användaren.
+ * Nej:et är per container — en lista av ULID:n, inte en enda flagga för användaren.
  */
-it('döljer inte förslaget på en annan tom pärm', function () {
+it('döljer inte förslaget på en annan tom container', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = uppsattningKontext('sv_SE');
@@ -483,7 +518,7 @@ it('döljer inte förslaget på en annan tom pärm', function () {
 });
 
 /*
- * Klart när: en användare med `read` på pärmen får 403 på `preset`, och ett
+ * Klart när: en användare med `read` på containern får 403 på `preset`, och ett
  * `read_only`-ägarkonto likaså.
  *
  * Grinden är `ContainerPolicy::update()` — samma som att skapa en kategori för
@@ -512,7 +547,7 @@ it('nekar en read-innehavare och ett fryst ägarkonto uppsättningsrutten', func
 
     actingAs($läsare)->delete("/containers/{$container->ulid}/categories/preset")->assertForbidden();
 
-    // Läsaren ser trädet och den tomma pärmen, men ingen skrivyta.
+    // Läsaren ser trädet och den tomma containern, men ingen skrivyta.
     actingAs($läsare)->get("/containers/{$container->ulid}/categories")->assertInertia(
         fn (AssertableInertia $page) => $page->where('can.manage', false)
     );
@@ -528,7 +563,7 @@ it('nekar en read-innehavare och ett fryst ägarkonto uppsättningsrutten', func
 });
 
 /*
- * Klart när: en pärm i en annan användares konto går inte att fylla via rutten
+ * Klart när: en container i en annan användares konto går inte att fylla via rutten
  * (403).
  */
 it('nekar en främling både uppsättningen och ett nej', function () {
@@ -548,78 +583,82 @@ it('nekar en främling både uppsättningen och ett nej', function () {
 
 /*
  * Klart när: en svensk användare får den svenska uppsättningen, en användare
- * med `en_GB` den engelska — samma pärm, olika ord.
+ * med `en_GB` den engelska — samma container, olika ord.
  *
- * Valet görs av den delade propen `locale` och pärmens `kind` (Beslut 2), och
+ * Valet görs av den delade propen `locale` och containerns `kind` (Beslut 2), och
  * prövas därför med klientens egen väljare på den locale servern faktiskt
  * skickade.
  */
-it('ger svenska och engelska användare var sin uppsättning för samma pärm', function () {
+it('ger varje användare samma uppsättning för samma container', function () {
     withoutVite();
 
     [, $svensk, $container] = uppsattningKontext('sv_SE', 'boat');
     $engelsk = User::factory()->create(['locale' => 'en_GB']);
     $container->account->users()->attach($engelsk, ['role' => 'member']);
 
-    $sv = uppsattningFor(uppsattningLocale($svensk, $container), 'boat');
-    $en = uppsattningFor(uppsattningLocale($engelsk, $container), 'boat');
-
-    expect(uppsattningLocale($svensk, $container))->toBe('sv');
+    // Propen `locale` är `en` för båda: `en` är den enda katalogen
+    // ([[ADR-0034 Engelska vid lansering]]), och klientens väljare följer den.
+    expect(uppsattningLocale($svensk, $container))->toBe('en');
     expect(uppsattningLocale($engelsk, $container))->toBe('en');
 
-    expect(array_column($sv, 'name'))->toContain('Rigg och segel');
-    expect(array_column($en, 'name'))->toContain('Rig and sails');
+    $uppsattning = uppsattningFor(uppsattningLocale($svensk, $container), 'Boat');
 
-    // Förslag på var sitt språk, inte en sträng med två former: de SKA skilja
-    // sig, och ingen får försöka slå ihop dem till `lang/`.
-    expect(array_column($sv, 'name'))->not->toBe(array_column($en, 'name'));
+    expect(array_column($uppsattning, 'name'))->toContain('Rig and sails');
 });
 
 /*
- * Klart när: en pärm med `kind = 'other'` och en med ett okänt `kind` får
- * båda uppsättningen för `other` utan fel.
+ * Klart när: en locale utan samling möts av engelska, utan fel.
  *
- * Ett okänt `kind` kan inte finnas i databasen — kolumnen har en CHECK mot
- * Container::KINDS — men klienten kan möta ett värde från en nyare server, och
- * då ska förslaget falla tillbaka tyst i stället för att krascha sidan.
+ * Ingen containeregenskap styr längre vilken uppsättning som erbjuds (issue
+ * 84), så kvar att falla tillbaka på är språket: `en` är den enda katalogen
+ * ([[ADR-0034 Engelska vid lansering]]). Ett okänt NAMN är inget fel heller —
+ * det betyder bara att kortet inte har någon förhandsvisning att rita.
  */
-it('faller tillbaka på other och sv utan fel', function () {
+it('faller tillbaka på engelska för en okänd locale', function () {
     withoutVite();
 
-    [, $anvandare, $container] = uppsattningKontext('sv_SE', 'other');
+    [, $anvandare, $container] = uppsattningKontext('sv_SE', 'Segelbåt');
 
     actingAs($anvandare)
         ->get("/containers/{$container->ulid}/categories")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where('presetDismissed', false));
 
-    expect(uppsattningFor('sv', 'other'))->toBe(uppsattningAlla()['sv']['other']);
+    // Samma samling, oavsett locale — och samma uppsättning ur den.
+    expect(uppsattningFor('de', 'Boat'))->toBe(uppsattningAlla()['en'][0]['categories']);
+    expect(uppsattningFor('de', 'Boat'))->toBe(uppsattningFor('en', 'Boat'));
 
-    // Okänd typ: `other` i samma språk. Okänd locale: `sv`, sedan `other`.
-    expect(uppsattningFor('sv', 'rymdskepp'))->toBe(uppsattningAlla()['sv']['other']);
-    expect(uppsattningFor('de', 'boat'))->toBe(uppsattningAlla()['sv']['boat']);
-    expect(uppsattningFor('de', 'rymdskepp'))->toBe(uppsattningAlla()['sv']['other']);
+    // Ett namn som inte finns ger ingenting att visa, inte ett fel.
+    expect(uppsattningFor('en', 'rymdskepp'))->toBeNull();
 });
 
 /*
- * Beslut 1: tio uppsättningar, ingen saknad kombination, sex till tolv
- * rotkategorier och högst två nivåer.
+ * Beslut 1: varje uppsättning har ett eget namn, sex till tolv rotkategorier
+ * och högst två nivåer.
+ *
+ * Namnet är nytt med issue 84: uppsättningarna hade tidigare containerns `kind`
+ * som nyckel, och den nyckeln finns inte längre. Det är namnet väljaren visar,
+ * så det får inte vara tomt och inte dubbelt.
  */
-it('har en uppsättning för varje typ och språk, med sex till tolv rötter och två nivåer', function () {
+it('har namngivna uppsättningar med sex till tolv rötter och två nivåer', function () {
     $alla = uppsattningAlla();
 
-    expect(array_keys($alla))->toBe(['sv', 'en']);
+    expect(array_keys($alla))->toBe(['en']);
 
-    foreach ($alla as $locale => $perTyp) {
-        expect(array_keys($perTyp))->toBe(Container::KINDS);
+    foreach ($alla as $locale => $samling) {
+        $namn = array_column($samling, 'name');
 
-        foreach ($perTyp as $kind => $uppsattning) {
-            $antal = count($uppsattning);
+        expect($namn)->toBe(array_unique($namn), "{$locale} har två uppsättningar med samma namn");
 
-            expect($antal)->toBeGreaterThanOrEqual(6, "{$locale}/{$kind} har för få rötter");
-            expect($antal)->toBeLessThanOrEqual(12, "{$locale}/{$kind} har för många rötter");
+        foreach ($samling as $uppsattning) {
+            expect(trim($uppsattning['name']))->not->toBe('');
 
-            foreach ($uppsattning as $rot) {
+            $antal = count($uppsattning['categories']);
+
+            expect($antal)->toBeGreaterThanOrEqual(6, "{$locale}/{$uppsattning['name']} har för få rötter");
+            expect($antal)->toBeLessThanOrEqual(12, "{$locale}/{$uppsattning['name']} har för många rötter");
+
+            foreach ($uppsattning['categories'] as $rot) {
                 expect($rot['name'])->toBeString();
                 expect(trim($rot['name']))->not->toBe('');
 
@@ -648,9 +687,9 @@ it('har en uppsättning för varje typ och språk, med sex till tolv rötter och
 it('har inga kategorinamn i lang/, config/ eller någon PHP-fil', function () {
     $namn = [];
 
-    foreach (uppsattningAlla() as $perTyp) {
-        foreach ($perTyp as $uppsattning) {
-            $namn = [...$namn, ...uppsattningNamn($uppsattning)];
+    foreach (uppsattningAlla() as $samling) {
+        foreach ($samling as $uppsattning) {
+            $namn = [...$namn, ...uppsattningNamn($uppsattning['categories'])];
         }
     }
 
@@ -689,7 +728,7 @@ it('har inga kategorinamn i lang/, config/ eller någon PHP-fil', function () {
 
 /*
  * Beslut 4: förslaget är ett kort och ingen modal. Det ritas i stället för
- * tomtexten på en tom pärm, och sidans eget formulär finns kvar oavsett.
+ * tomtexten på en tom container, och sidans eget formulär finns kvar oavsett.
  */
 it('renderar förslaget som ett kort ovanför trädet', function () {
     $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
@@ -708,10 +747,38 @@ it('renderar förslaget som ett kort ovanför trädet', function () {
 
     // Ingen modal, ingen overlay: ett <section> i sidflödet.
     expect($kort)->toContain('<section')
-        ->toContain('presetFor')
+        ->toContain('presetsFor')
         ->toContain('preset_apply')
         ->toContain('preset_dismiss');
 
-    expect($data)->toContain('export function presetFor')
+    expect($data)->toContain('export function presetsFor')
         ->toContain('export const categoryPresets');
+});
+
+/*
+ * Klart när: kategorimallen väljs uttryckligen av användaren och härleds inte
+ * ur `kind` (issue 84).
+ *
+ * Tre påståenden, alla om källfilen och inte om renderingen: kortet får ingen
+ * art att slå upp en mall med, det väljer bland uppsättningarna på deras EGET
+ * namn, och den uppsättning som ligger i listan är den användaren pekat på —
+ * inte den första. Det sista är det som skiljer "ett val" från "ett förval".
+ */
+it('väljer mallen på användarens val och inte ur containerns art', function () {
+    $kort = File::get(resource_path('js/components/CategoryPresetCard.vue'));
+    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
+
+    // Ingen art in i kortet, och ingen uppslagning på en.
+    expect(str_contains($sida, ':kind="container.kind"'))->toBeFalse();
+    expect(str_contains($kort, 'props.kind'))->toBeFalse();
+    expect(str_contains($kort, 'presetFor('))->toBeFalse();
+
+    // Valet är användarens: en `<select>` över uppsättningarnas namn, och
+    // förhandsvisningen ritas ur det valda namnet.
+    expect($kort)->toContain('<select')
+        ->toContain('chosenName')
+        ->toContain('presetsFor(page.props.locale)')
+        ->toContain('find((one) => one.name === chosenName.value)')
+        // Ingen förvald uppsättning: listan är tom tills hon pekat på en.
+        ->toContain("ref('')");
 });

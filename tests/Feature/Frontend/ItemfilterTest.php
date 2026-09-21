@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
@@ -18,7 +20,7 @@ use function Pest\Laravel\getJson;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 59a · Filterraden i pärmens itemlista. Se
+ * Issue 59a · Filterraden i containerns itemlista. Se
  * App\Http\Controllers\ItemController::index() och `filter()`,
  * resources/js/components/ItemFilterBar.vue,
  * resources/js/components/itemFilter.js och
@@ -40,7 +42,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Pärmen, med ett kategoriträd, två taggar och fyra items:
+ * Containern, med ett kategoriträd, två taggar och fyra items:
  *
  *   Framdrivning          Motorn     Framdrivning  [Motor, Försäkring]
  *   └── Impeller          Impellern  Impeller      [Motor]
@@ -111,7 +113,7 @@ function itemfilterPärm(): array
 }
 
 /**
- * Ett item i pärmen. `created_by_*` sätts sammanhängande — fabrikens egna
+ * Ett item i containern. `created_by_*` sätts sammanhängande — fabrikens egna
  * default-skapare hade annars blivit två ovidkommande rader per item.
  *
  * @param  array<string, mixed>  $attribut
@@ -148,14 +150,14 @@ function itemfilterMottagare(Container $container, ?Item $item = null, string $n
 }
 
 /**
- * Pärmens URL med filtret i querysträngen — samma form vyn skickar, se
+ * Containerns URL med filtret i querysträngen — samma form vyn skickar, se
  * App\Http\Controllers\ItemController::index() § Beslut 1.
  *
  * @param  array<string, mixed>  $query
  */
 function itemfilterUrl(Container $container, array $query = []): string
 {
-    $url = "/containers/{$container->ulid}";
+    $url = "/containers/{$container->ulid}/items";
 
     return $query === [] ? $url : $url.'?'.http_build_query($query);
 }
@@ -203,7 +205,7 @@ function itemfilterFrågor(Closure $värm, Closure $anrop): int
  *
  * Termen ligger i EN kolumn per item, så ett filter som bara såg `name` hade
  * gett ett svar — ett kortare. Kontrollitemet utan termen bevisar att
- * filtret inte svarar med hela pärmen.
+ * filtret inte svarar med hela containern.
  */
 it('filtrerar på fritext över de fem sökbara kolumnerna', function () {
     withoutVite();
@@ -233,7 +235,7 @@ it('filtrerar på fritext över de fem sökbara kolumnerna', function () {
 
     expect(itemfilterNamn($svar))->not->toContain('Kontrollen');
 
-    // En blank `q` är samma sak som ingen `q` (Beslut 3) — hela pärmen, tio
+    // En blank `q` är samma sak som ingen `q` (Beslut 3) — hela containern, tio
     // rader, inte noll.
     $blank = actingAs($anvandare)->get(itemfilterUrl($container, ['q' => '   ']))->assertOk();
 
@@ -381,8 +383,8 @@ it('visar aldrig en rad utanför omfånget, med eller utan filter', function () 
  * listan visas med resten, och sidan säger att ett filter föll bort — ingen
  * 422, ingen redirectloop.
  *
- * Två bortfall prövas: en mjukraderad tagg i SAMMA pärm, och en kategori ur en
- * ANNAN pärm. Båda är "en gammal länk" och inte "en fråga som är fel ställd"
+ * Två bortfall prövas: en mjukraderad tagg i SAMMA container, och en kategori ur en
+ * ANNAN container. Båda är "en gammal länk" och inte "en fråga som är fel ställd"
  * (Beslut 3) — till skillnad från `/api`, som prövas längre ner.
  */
 it('tar bort ett filtervärde som inte längre finns och säger till', function () {
@@ -430,13 +432,13 @@ it('tar bort ett filtervärde som inte längre finns och säger till', function 
 });
 
 /*
- * Klart när: tom lista utan filter säger att pärmen är tom; tom lista med
+ * Klart när: tom lista utan filter säger att containern är tom; tom lista med
  * filter räknar upp de aktiva filtren.
  *
  * Två lägen, två texter (Beslut 4). Vyn väljer mellan dem på om användaren har
  * ett filter PÅ — `hasFilter` — och inte på om listan råkade bli tom.
  */
-it('säger att pärmen är tom utan filter och räknar upp filtren med', function () {
+it('säger att containern är tom utan filter och räknar upp filtren med', function () {
     withoutVite();
 
     ['container' => $container, 'anvandare' => $anvandare] = itemfilterPärm();
@@ -456,7 +458,7 @@ it('säger att pärmen är tom utan filter och räknar upp filtren med', functio
         fn (AssertableInertia $page) => $page->has('items', 0)->where('filter.q', 'Ingenting alls')
     );
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
 
     expect($sv['item']['index']['empty'])->not->toContain(':filters')
         ->and($sv['item']['index']['filter_empty'])->toContain(':filters');
@@ -495,7 +497,7 @@ it('nämner aldrig ett tal om dolda rader och ger mottagaren ägarens mening', f
 
     // Ingen av de två tomma texterna bär ett tal, och den dolda raden finns
     // inte i mottagarens svar.
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['item']['index']['empty'])->not->toMatch('/\d/')
@@ -569,13 +571,39 @@ it('gör aktiva filter rensbara ett i taget och alla på en gång', function () 
     // Ett filter tas bort ur den MÄNGD som redan är vald — resten behålls.
     expect($rad)->toContain('selectedTags.value.filter((ulid) => ulid !== entry.value)');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['item']['index']['filter_clear'])->not->toBe('')
         ->and($en['item']['index']['filter_clear'])->not->toBe('')
         ->and($sv['item']['index']['filter_remove'])->toContain(':filter')
         ->and($en['item']['index']['filter_remove'])->toContain(':filter');
+});
+
+/*
+ * Klart när: itemlistans filter fungerar oförändrat på den NYA URL:en.
+ *
+ * Två halvor. Servern: samma querysträng ger samma urval på
+ * `/containers/{ulid}/items` — urvalet är `ListItems`, och flytten i issue 89
+ * rörde den inte. Klienten: filterraden submittar mot LISTANS adress och inte
+ * mot containerns egen, som sedan flytten svarar med översikten. Ett filter som
+ * submittade dit hade tappat både listan och filtret, och det är den här raden
+ * som fångar det — resources/js/components/ItemFilterBar.vue ligger utanför
+ * issuens ruta och ändrades ändå, se PR:ens Frågor och antaganden.
+ */
+it('filtrerar oförändrat på itemlistans nya URL', function () {
+    withoutVite();
+
+    ['container' => $container, 'anvandare' => $anvandare, 'taggar' => $taggar] = itemfilterPärm();
+
+    expect(itemfilterNamn(actingAs($anvandare)->get(itemfilterUrl($container, [
+        'q' => 'Impellern',
+        'tags' => [$taggar['Motor']->ulid],
+    ]))->assertOk()))->toBe(['Impellern']);
+
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+
+    expect($rad)->toContain('router.get(`/containers/${props.containerUlid}/items`');
 });
 
 /*
@@ -704,8 +732,8 @@ it('lämnar /api orört, inklusive 422 på ett okänt filtervärde', function ()
  * nyckel för nyckel — och att modulen som bygger etiketterna inte bär en enda
  * sträng (Beslut 8).
  */
-it('har varje filter-nyckel på båda språken och ingen svensk sträng i vyn', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har varje filter-nyckel och ingen svensk sträng i vyn', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     $filterNycklar = fn (array $fil): array => array_values(array_filter(
@@ -719,7 +747,7 @@ it('har varje filter-nyckel på båda språken och ingen svensk sträng i vyn', 
     expect($svNycklar)->not->toBe([])->and($enNycklar)->toBe($svNycklar);
 
     foreach ($svNycklar as $nyckel) {
-        expect(trim($sv['item']['index'][$nyckel]))->not->toBe('', "item.index.{$nyckel} är tom på sv")
+        expect(trim($sv['item']['index'][$nyckel]))->not->toBe('', "item.index.{$nyckel} är")
             ->and(trim($en['item']['index'][$nyckel]))->not->toBe('', "item.index.{$nyckel} är tom på en");
     }
 

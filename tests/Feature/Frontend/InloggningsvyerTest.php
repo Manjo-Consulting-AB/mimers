@@ -1,9 +1,12 @@
 <?php
 
 use App\Models\User;
+use App\Notifications\MagicLinkNotification;
+use App\Support\Auth\MagicLinkBroker;
 use App\Support\Auth\RecoveryCodeBroker;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\URL;
 use Inertia\Testing\AssertableInertia;
 
@@ -50,6 +53,36 @@ it('renderar Auth/MagicLink för en gäst', function () {
     get('/login/magic-link')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->component('Auth/MagicLink'));
+});
+
+/*
+ * Issue 80 § Beslut 2: ett konto med bekräftad tvåfaktor loggas inte in av
+ * klicket på länken — kodsidan renderas i stället, och där frågar vyn efter
+ * koden. Serverns halva av det är att komponenten är Auth/MagicLinkCode och
+ * att ingen är inloggad; att sidan faktiskt visar fältet är `v-if`-löst i
+ * resources/js/pages/Auth/MagicLinkCode.vue, eftersom användaren redan vet
+ * att koden behövs och det därför inte finns någon sidokanal att värna.
+ */
+it('renderar Auth/MagicLinkCode i stället för att logga in när kontot har tvåfaktor', function () {
+    withoutVite();
+    Notification::fake();
+
+    [$user] = användareMedBekräftadTotp();
+
+    MagicLinkBroker::issue($user->email);
+
+    $länk = null;
+    Notification::assertSentTo($user, MagicLinkNotification::class, function (MagicLinkNotification $notification) use (&$länk) {
+        $länk = $notification->url;
+
+        return true;
+    });
+
+    get($länk)
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->component('Auth/MagicLinkCode'));
+
+    assertGuest();
 });
 
 it('renderar Auth/VerifyEmail för en inloggad användare', function () {

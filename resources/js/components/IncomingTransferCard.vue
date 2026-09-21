@@ -6,7 +6,7 @@ import { useTranslations } from '../composables/useTranslations.js';
 /*
  * Ett inkommande ägarbyte, se issue 67b § Beslut 5, 6 och 7.
  *
- * **Konsekvenserna står FÖRE knappen** (Beslut 6): vilken pärm, från vilket
+ * **Konsekvenserna står FÖRE knappen** (Beslut 6): vilken container, från vilket
  * konto, hur många items som följer med och hur många som undantas, vilken
  * åtkomst avsändaren behåller, och att mottagaren får tolv månader Pro.
  * Därför fem rader text och två knappar under dem, i den ordningen — att
@@ -14,7 +14,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * handlingen i produkten.
  *
  * **`item_count` och `excluded_count` kommer färdiga från servern** och
- * räknas aldrig om här: `item_count` är pärmens levande items, räknade i EN
+ * räknas aldrig om här: `item_count` är containerns levande items, räknade i EN
  * fråga för hela inkorgen (OwnershipTransferController::itemCounts()), och
  * `excluded_count` är längden på radens `excluded_items`.
  *

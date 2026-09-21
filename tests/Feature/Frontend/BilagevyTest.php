@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
@@ -53,7 +55,7 @@ use function Pest\Laravel\withoutVite;
  *
  * Att `/api`:s tre bilagerutter svarar exakt som förut prövas i sista testet.
  * Att ingen svensk sträng står kvar i en Vue-komponent och att varje ny nyckel
- * finns på båda språken prövas av tests/Feature/Frontend/SprakTest.php, som
+ * finns prövas av tests/Feature/Frontend/SprakTest.php, som
  * läser varenda fil under resources/js.
  *
  * Hjälparna har prefixet `bilagevy` — Pest lägger alla testfiler i samma
@@ -65,8 +67,8 @@ beforeEach(function () {
 });
 
 /**
- * Ett konto med en medlem, och en pärm med ett item under kontot. Båda på
- * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'sv')`.
+ * Ett konto med en medlem, och en container med ett item under kontot. Båda på
+ * svenska, så meningarna nedan kan jämföras mot `Lang::get(…, 'en')`.
  *
  * @return array{0: Account, 1: User, 2: Container, 3: Item}
  */
@@ -323,12 +325,12 @@ it('laddar upp en fil och visar den i listan direkt efteråt', function () {
     );
 });
 
-it('belastar det valda kontot och inte pärmens ägare', function () {
+it('belastar det valda kontot och inte containerns ägare', function () {
     withoutVite();
 
     [$agarkonto, $anvandare, $container, $item] = bilagevyKontext();
 
-    // Användaren är medlem i två konton: pärmens ägarkonto och sitt eget.
+    // Användaren är medlem i två konton: containerns ägarkonto och sitt eget.
     $egetKonto = Account::factory()->create();
     $egetKonto->users()->attach($anvandare, ['role' => 'owner']);
 
@@ -337,7 +339,7 @@ it('belastar det valda kontot och inte pärmens ägare', function () {
         'account' => $egetKonto->ulid,
     ])->assertRedirect();
 
-    // Kvoten räknas på det uppladdande kontot, inte på pärmens ägare
+    // Kvoten räknas på det uppladdande kontot, inte på containerns ägare
     // ([[Filer och lagring]] § attachment, Beslut 4).
     expect(bilagevyForbrukning($egetKonto))->toBe(1500);
     expect(bilagevyForbrukning($agarkonto))->toBe(0);
@@ -509,7 +511,7 @@ it('gör en för stor fil till ett fältfel med gräns och filstorlek', function
     expect($mening)->toBe(Lang::get('ui.error.quota.max_file_size_exceeded', [
         'limit_bytes' => Number::fileSize(1024),
         'file_bytes' => Number::fileSize(2048),
-    ], 'sv'));
+    ], 'en'));
 
     expect($mening)->toContain(Number::fileSize(1024));
     expect($mening)->toContain(Number::fileSize(2048));
@@ -546,7 +548,7 @@ it('gör en sprängd totalkvot till ett fältfel med gräns, förbrukning och fi
         'limit_bytes' => Number::fileSize(3000),
         'used_bytes' => Number::fileSize(2000),
         'file_bytes' => Number::fileSize(2000),
-    ], 'sv'));
+    ], 'en'));
 
     expect($mening)->toContain(Number::fileSize(3000));
 

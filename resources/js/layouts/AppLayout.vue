@@ -44,8 +44,20 @@ import { useTranslations } from '../composables/useTranslations.js';
  * /logout är en POST-rutt (routes/web.php) och Inertia skickar CSRF-tokenet
  * åt oss. Utan den går det att logga in men inte ut i webbläsaren.
  *
+ * **Länken till sökningen kom med issue 78 § Beslut 2.** Fältet i headern är
+ * en väg in, men bara för den som redan vet att sökningen finns; den som
+ * letar efter den letar i menyn. Raden ligger därför innanför `#huvudmenyn`
+ * och följer med i hopfällningen.
+ *
+ * **Länken till inställningarna kom med issue 79 § Beslut 1.** Sju
+ * inställningssidor var byggda och nåddes bara av den som redan stod inne i
+ * dem: sektionslistan i SettingsLayout renderas först på en inställningssida.
+ * En rad här räcker — den pekar på `/settings`, som omdirigerar till profilen
+ * (issue 53c), och därifrån ligger varje sektion ett klick bort. Ingen
+ * användarmeny med utfällning: det är en egen designfråga.
+ *
  * **Navigeringen fälls ihop på en telefon** (issue 68a § Beslut 2). Vid
- * 375 px ryms varken märket, sökfältet och de fyra länkarna i en rad, och en
+ * 375 px ryms varken märket, sökfältet och de sex länkarna i en rad, och en
  * rad som inte ryms är en rad som klipps av. Länkarna ligger därför bakom en
  * menyknapp och sökfältet på sin egen rad; `menuOpen` är den enda
  * tillståndsvariabeln layouten har. Över `md:` ritas allt som förut och
@@ -108,6 +120,12 @@ const showsVerificationNotice = computed(
                     </Link>
                     <Link v-if="user" href="/transfers" class="inline-flex min-h-11 items-center hover:underline">
                         {{ t('nav.transfers') }}
+                    </Link>
+                    <Link v-if="user" href="/search" class="inline-flex min-h-11 items-center hover:underline">
+                        {{ t('nav.search') }}
+                    </Link>
+                    <Link v-if="user" href="/settings" class="inline-flex min-h-11 items-center hover:underline">
+                        {{ t('nav.settings') }}
                     </Link>
                     <span v-if="user" class="inline-flex min-h-11 items-center text-slate-600">{{ user.name }}</span>
                     <Link

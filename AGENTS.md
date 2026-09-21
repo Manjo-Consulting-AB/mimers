@@ -56,6 +56,10 @@ Märker du att sessionen växer okontrollerat — du läser om filer, tappar tr�
 
 <!-- ai-standards:end agent-core -->
 
+## Omfångsläget
+
+Står issuen i läget `spårad` får du ändra en fil utanför `In scope` som en `Klart när`-punkt kräver — deklarera den i PR-kroppen under `Utanför rutan:`. Saknas fältet gäller rutan som skriven.
+
 ## Sessionshygien i det här repot
 
 Reglerna står i blocket ovan. Här står bara kommandona de motsvarar.

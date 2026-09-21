@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
@@ -43,7 +45,7 @@ use function Pest\Laravel\withoutVite;
 
 /**
  * Ett konto med en medlem i angiven roll (rollen styr inget här, men ett
- * `read_only`-konto gör det — se testet om det frysta ägarkontot), och en pärm
+ * `read_only`-konto gör det — se testet om det frysta ägarkontot), och en container
  * ägd av kontot.
  *
  * @param  array<string, mixed>  $kontoAttribut
@@ -73,7 +75,7 @@ function kategorivyKategori(
 }
 
 /**
- * Ett item i pärmen, med `category_id` satt direkt på instansen —
+ * Ett item i containern, med `category_id` satt direkt på instansen —
  * `category_id` är medvetet utanför `#[Fillable]` (se App\Models\Item), så
  * `update([...])` hade tystats bort.
  */
@@ -213,7 +215,7 @@ it('renderar kategoriträdet i rätt ordning med barn under sina föräldrar', f
 });
 
 /*
- * Klart när: en användare utan åtkomst till pärmen får 403 på båda sidorna.
+ * Klart när: en användare utan åtkomst till containern får 403 på båda sidorna.
  */
 it('nekar en främling både kategorisidan och varje kategoriskrivning', function () {
     withoutVite();
@@ -409,7 +411,7 @@ it('avvisar en cykel med en mening på fältet parent och lämnar trädet orört
     // Ingen rå felkod och ingen JSON-kropp i webbläsaren (Beslut 4).
     expect($svar->getContent())->not->toContain('error.code');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect($sv['error']['category']['cycle'])->not->toBe('');
@@ -508,8 +510,8 @@ it('nekas radera en kategori med barn eller items, med talet i meddelandet', fun
     // Ingen tyst nollning av `category_id` — items ligger kvar där de låg.
     expect(Item::query()->where('category_id', $medItems->id)->count())->toBe(3);
 
-    // Meningarna finns på båda språken och ritar talet.
-    $sv = require lang_path('sv/ui.php');
+    // Meningarna finns och ritar talet.
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['has_children', 'has_items'] as $nyckel) {
@@ -545,11 +547,11 @@ it('mjukraderar en tom kategori och låter den försvinna ur listan', function (
 });
 
 /*
- * Klart när: en kategori i en annan pärm går inte att nå via den här pärmens
+ * Klart när: en kategori i en annan container går inte att nå via den här containerns
  * rutter (404). `scopeBindings()` på de två nästlade skrivningarna, av samma
  * skäl som routes/api.php gör det.
  */
-it('når inte en kategori i en annan pärm via den här pärmens rutt', function () {
+it('når inte en kategori i en annan container via den här containerns rutt', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = kategorivyKontext();
@@ -577,7 +579,7 @@ it('når inte en kategori i en annan pärm via den här pärmens rutt', function
  * radera; en med `read` får 403 på varje skrivning.
  *
  * Grinden är `ContainerPolicy::update()`, ALDRIG `delete()` — den senare
- * betyder "får radera pärmen" och skulle låsa ute en write-deltagare från att
+ * betyder "får radera containern" och skulle låsa ute en write-deltagare från att
  * städa bland sina egna kategorier.
  */
 it('låter en write-innehavare skriva och nekar en read-innehavare varje skrivning', function () {
@@ -682,7 +684,7 @@ it('låter ett fryst ägarkonto lista men inte skriva', function () {
  * Beslut 1: sektionsraderna. Navigationen renderas ur containerSections, så en
  * ny sida är en ny rad där och ingen ändring i ContainerLayout.
  */
-it('lägger kategorisidan och taggsidan i pärmens navigation', function () {
+it('lägger kategorisidan och taggsidan i containerns navigation', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'categories'");

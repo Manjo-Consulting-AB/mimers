@@ -16,7 +16,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * varje spara-knapp i trädet.
  *
  * **En flytt är två fält, inte drag-and-drop** (Beslut 3). Att ändra förälder
- * är en väljare över pärmens övriga kategorier, position ett heltalsfält.
+ * är en väljare över containerns övriga kategorier, position ett heltalsfält.
  * Inget dragbibliotek: det vore ett nytt beroende (AGENTS.md § Nya beroenden),
  * det kräver tangentbordsstöd som issue 68 annars får städa, och det löser ett
  * problem trädet inte har vid fem nivåer.

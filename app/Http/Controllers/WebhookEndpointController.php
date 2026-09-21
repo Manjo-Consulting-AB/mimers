@@ -28,7 +28,7 @@ use Inertia\Response;
  * Slack och Home Assistant aldrig behöver byggas ([[ADR-0010
  * Notisarkitektur]]), se issue 65b § Beslut 1, 3, 5, 6, 7 och 8.
  *
- * **Webhookarna bor i INSTÄLLNINGARNA och inte i pärmen.** De hör till
+ * **Webhookarna bor i INSTÄLLNINGARNA och inte i containern.** De hör till
  * KONTOT — kontot äger URL:en, betalar för funktionen och är det vars plan
  * grinden läser — och sidan får därför en egen rad i
  * resources/js/layouts/settingsSections.js (Beslut 1).

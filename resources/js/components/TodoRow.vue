@@ -9,8 +9,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  * En rad i todo-listan, se issue 64 § Beslut 4 och 5.
  *
  * **Raden säger var uppgiften hör hemma** (Beslut 5): itemets namn, schemats
- * titel och pärmens namn, alla tre, för "Byt impeller" utan "Motorn" och
- * "Havsörnen" går inte att handla på när man har fyra pärmar. Itemets namn är
+ * titel och containerns namn, alla tre, för "Byt impeller" utan "Motorn" och
+ * "Havsörnen" går inte att handla på när man har fyra containers. Itemets namn är
  * en länk till itemet, schemats titel till schemats sida (63b).
  *
  * **Avbockningen är 63b:s rutt, rakt av** (Beslut 4). Samma `complete`-rutt,
@@ -20,7 +20,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * App\Actions\Schedule\CloseOccurrence och kan inte gissas här.
  *
  * **Kontot kommer färdigt ur propen** (Beslut 4). Servern har räknat förvalet
- * — pärmens ägarkonto när användaren är medlem i det, annars hennes första
+ * — containerns ägarkonto när användaren är medlem i det, annars hennes första
  * konto (63b § Beslut 4) — och vyn skickar bara tillbaka ULID:t. Ingen
  * väljare: raden är en arbetsyta och inte ett formulär, och en lista på
  * hundra rader ska inte bära hundra kontoväljare.
@@ -84,7 +84,11 @@ function complete() {
 
                 <span aria-hidden="true">·</span>
 
-                <Link :href="`/containers/${entry.container.ulid}`" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+                <!-- Containernamnet går till ITEMLISTAN (issue 89 · [[ADR-0039
+                     Containerns översikt]] § Konsekvenser): uppgiften hör till
+                     ett item, och den som följer containern ur todo-vyn letar i
+                     listan — inte på en översikt. -->
+                <Link :href="`/containers/${entry.container.ulid}/items`" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
                     {{ entry.container.name }}
                 </Link>
 

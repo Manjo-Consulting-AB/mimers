@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Invitation;
@@ -39,7 +41,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en medlem och en pärm ägd av kontot. Medlemmen får `sv_SE`, så
+ * Ett konto med en medlem och en container ägd av kontot. Medlemmen får `sv_SE`, så
  * de översatta meningarna i felpåsen går att jämföra mot `lang/sv/ui.php` —
  * appens standardspråk är `en`, och en användare utan locale får den.
  *
@@ -188,7 +190,7 @@ it('läcker aldrig klartexttokenet till sidan eller till svaret', function () {
 });
 
 /*
- * Klart när: en andra inbjudan till samma adress och pärm ger ett läsbart fel
+ * Klart när: en andra inbjudan till samma adress och container ger ett läsbart fel
  * på fältet `email`, ingen ny rad och inget mejl.
  */
 it('ger ett läsbart fel på fältet email för en andra inbjudan till samma adress', function () {
@@ -198,7 +200,7 @@ it('ger ett läsbart fel på fältet email för en andra inbjudan till samma adr
     [, $anvandare, $container] = inbjudningsKontext();
     $befintlig = bjudInRad($container, 'ny@exempel.se');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
 
     $svar = actingAs($anvandare)->post("/containers/{$container->ulid}/invitations", [
         'email' => 'NY@Exempel.se',
@@ -230,7 +232,7 @@ it('lägger ett passerat delningstak under errors.quota', function () {
 
     sättPlangräns('free', 'shared_users_per_container', 1);
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
 
     $svar = actingAs($anvandare)->post("/containers/{$container->ulid}/invitations", [
         'email' => 'ny@exempel.se',
@@ -238,7 +240,7 @@ it('lägger ett passerat delningstak under errors.quota', function () {
     ]);
 
     $svar->assertSessionHasErrors('quota');
-    expect(session('errors')->first('quota'))->toStartWith('Delningen har nått kontots tak')
+    expect(session('errors')->first('quota'))->toStartWith('The sharing has reached the account limit')
         ->and($sv['error']['quota']['shared_users_exceeded'])->not->toBe('quota.shared_users_exceeded');
 });
 
@@ -262,7 +264,7 @@ it('lägger ett passerat inbjudningstak under errors.quota', function () {
     ]);
 
     $svar->assertSessionHasErrors('quota');
-    expect(session('errors')->first('quota'))->toStartWith('Kontot har nått sitt tak för utestående inbjudningar');
+    expect(session('errors')->first('quota'))->toStartWith('The account has reached its limit for outstanding invitations');
 
     expect(Invitation::query()->count())->toBe(1);
 });
@@ -288,7 +290,7 @@ it('prövar kontotaket efter delningstaket', function () {
     ]);
 
     $svar->assertSessionHasErrors('quota');
-    expect(session('errors')->first('quota'))->toStartWith('Delningen har nått kontots tak');
+    expect(session('errors')->first('quota'))->toStartWith('The sharing has reached the account limit');
 });
 
 /*
@@ -367,7 +369,7 @@ it('drar tillbaka en pending och en utgången inbjudan, men inte en besvarad', f
     $utgangen = bjudInRad($container, 'utgangen@exempel.se', expiresAt: now()->subDay());
     $besvarad = bjudInRad($container, 'besvarad@exempel.se', status: 'accepted');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
 
     foreach ([$vantande, $utgangen] as $rad) {
         from(inbjudningsSida($container))
@@ -391,11 +393,11 @@ it('drar tillbaka en pending och en utgången inbjudan, men inte en besvarad', f
 });
 
 /*
- * Klart när: en inbjudan i en annan pärm går inte att dra tillbaka via den här
- * pärmens rutt (404). `scopeBindings()` på skrivningen, av samma skäl som
+ * Klart när: en inbjudan i en annan container går inte att dra tillbaka via den här
+ * containerns rutt (404). `scopeBindings()` på skrivningen, av samma skäl som
  * routes/api.php gör det (issue 9b § Beslut 1).
  */
-it('når inte en inbjudan i en annan pärm via den här pärmens rutt', function () {
+it('når inte en inbjudan i en annan container via den här containerns rutt', function () {
     withoutVite();
 
     [$konto, $anvandare, $container] = inbjudningsKontext();
@@ -510,7 +512,7 @@ it('visar inbjudningslistan med adress, nivå, omfång, status, utgång och inbj
 /*
  * Klart när: den enda ytan i M10 där en itemavgränsad delning kan skapas.
  * [[ADR-0028 Åtkomst på itemnivå]] § Beslut säger att `invitation` speglar
- * omfånget, och formuläret bär därför en lista över pärmens levande items.
+ * omfånget, och formuläret bär därför en lista över containerns levande items.
  */
 it('skapar en itemavgränsad inbjudan från formuläret', function () {
     Notification::fake();
@@ -533,7 +535,7 @@ it('skapar en itemavgränsad inbjudan från formuläret', function () {
 
     expect(Invitation::query()->sole()->item_id)->toBe($item->id);
 
-    // En ULID ur en annan pärm är ett valideringsfel (422), aldrig en tyst
+    // En ULID ur en annan container är ett valideringsfel (422), aldrig en tyst
     // container-bred inbjudan — StoreInvitationRequest delas med /api och
     // regeln formuleras inte om här.
     $annan = Container::factory()->for($container->account, 'account')->create();
@@ -552,7 +554,7 @@ it('skapar en itemavgränsad inbjudan från formuläret', function () {
 
 /*
  * Klart när: en mjukraderad item-rad i listan redovisas med sitt namn, inte som
- * "Hela pärmen". Uppslaget sker med `withTrashed()` — utan det hade ULID:n
+ * "Hela containern". Uppslaget sker med `withTrashed()` — utan det hade ULID:n
  * fallit bort och raden lästs som en containerbred inbjudan.
  */
 it('redovisar en inbjudan till ett mjukraderat item med sitt namn', function () {
@@ -598,7 +600,7 @@ it('har inbjudningsformuläret som tredje sektion på delningssidan', function (
     expect($formular)->toContain('form.errors.quota');
     expect($formular)->toContain("t('sharing.invitations.item_container')");
 
-    // `item` skickas som `null` när hela pärmen valts: en tom sträng fastnar i
+    // `item` skickas som `null` när hela containern valts: en tom sträng fastnar i
     // `Rule::exists` i den delade FormRequesten.
     expect($formular)->toContain("data.item === '' ? null : data.item");
 });
@@ -608,8 +610,8 @@ it('har inbjudningsformuläret som tredje sektion på delningssidan', function (
  * lang/ och aldrig i en .vue-fil — den grinden ägs av SprakTest, som läser
  * hela resources/js.
  */
-it('har inbjudningstexterna på båda språken', function () {
-    $sv = require lang_path('sv/ui.php');
+it('har inbjudningstexterna', function () {
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['heading', 'description', 'email', 'item', 'item_container', 'submit', 'revoke', 'expires', 'invited_by', 'empty'] as $nyckel) {

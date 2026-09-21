@@ -53,13 +53,13 @@ class CreateInvitation
 
     /**
      * @param  User  $inviter  Den som bjuder in. Blir `invited_by_user_id`.
-     * @param  Container  $container  Pärmen inbjudan gäller.
+     * @param  Container  $container  Containern inbjudan gäller.
      * @param  string  $email  Adressen som den kom in i kroppen. Normaliseras
      *                         här, så duplikatspärren och den lagrade raden
      *                         garanterat jämför samma sträng.
      * @param  string  $level  Ett steg i AccessLevel::LADDER.
      * @param  Item|null  $item  Itemet inbjudan avgränsas till, eller `null`
-     *                           för hela pärmen. Anroparen har redan bevisat
+     *                           för hela containern. Anroparen har redan bevisat
      *                           att det finns i DEN HÄR containern och är
      *                           levande (`StoreInvitationRequest`).
      *

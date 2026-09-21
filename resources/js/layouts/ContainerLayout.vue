@@ -6,11 +6,11 @@ import { containerSections } from './containerSections.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Pärmens skal, se issue 54 § Beslut 7.
+ * Containerns skal, se issue 54 § Beslut 7.
  *
  * Samma konstruktion som SettingsLayout och av samma skäl: 55a (delning),
  * 56a (kategorier och taggar), 57 (items), 62 (papperskorg) och 63 (scheman)
- * får alla en sida per pärm, och varje sida wrappar sitt innehåll i den här:
+ * får alla en sida per container, och varje sida wrappar sitt innehåll i den här:
  *
  *   <ContainerLayout> ... </ContainerLayout>
  *
@@ -20,11 +20,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * navigationen bygger sina href ur `container.ulid`. 55a behöver inte gissa:
  * kontrollern gör `ContainerResource::make($container)->resolve($request)`.
  *
- * Den aktiva pärmen läses INTE här. Den delade propen `activeContainer` bär
+ * Den aktiva containern läses INTE här. Den delade propen `activeContainer` bär
  * ULID:t och ingenting annat (issue 51 § Beslut 4) — en sida som behöver
- * pärmens namn får det som sin egen `container`-prop, inte ur en utökad
- * delad prop. AppLayout har av samma skäl ingen pärmväljare: listan på
- * /containers är ytan där pärmar byts.
+ * containerns namn får det som sin egen `container`-prop, inte ur en utökad
+ * delad prop. AppLayout har av samma skäl ingen containerväljare: listan på
+ * /containers är ytan där containers byts.
  *
  * Navigationen renderas ur containerSections med v-for — en post till kräver
  * ingen ändring här, bara en rad i listan. Texten kommer ur t() med nyckeln

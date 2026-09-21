@@ -18,17 +18,17 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Webbens exportyta — knappen som beställer en påse med hela pärmen, väntan
+ * Webbens exportyta — knappen som beställer en påse med hela containern, väntan
  * medan jobbet packar, nedladdningen och de sju dagarna, se issue 67c
  * § Beslut 1–8. API-motsvarigheten är
  * App\Http\Controllers\Api\ExportController.
  *
  * **Exporten är fri på alla plannivåer, med flit** (Beslut 2). Grinden är
- * `view()` och ingenting annat: den som får läsa pärmen får exportera den.
+ * `view()` och ingenting annat: den som får läsa containern får exportera den.
  * Ingen ExportPolicy, ingen ny policymetod, ingen plangrind och inget anrop
  * till Entitlements — `/api` sätter `view` på alla tre metoderna (issue 41a
  * § Beslut 3), och vyn skärper inte det. En `read`-deltagare som kan se allt i
- * pärmen kan också ta ut det, och det är produktlöftet gjort till en knapp:
+ * containern kan också ta ut det, och det är produktlöftet gjort till en knapp:
  * *"påminnelserna skapar vanan, exporten skapar förtroendet"*
  * ([[Planer och kvoter]] § Gränserna i MVP, [[ADR-0014 Prismodell]]).
  *
@@ -51,7 +51,7 @@ use Inertia\Response;
  * containerraden och raden. `app/Http/Controllers/Api/**` och
  * `app/Actions/**` ligger båda utanför den här issuens omfång, så skrivningen
  * kan inte brytas ut; två formuleringar av "högst en pågående export per
- * pärm" får inte glida isär. Ändras den ena ska den andra ändras. Samma
+ * container" får inte glida isär. Ändras den ena ska den andra ändras. Samma
  * avvägning som `OwnershipTransferController::createTransfer()` gjorde i 67b
  * och `LoanController::assertNoOpenLoan()` i 67a.
  *
@@ -61,7 +61,7 @@ use Inertia\Response;
 class ExportController extends Controller
 {
     /**
-     * GET /containers/{container}/export — pärmens exporter, nyast först.
+     * GET /containers/{container}/export — containerns exporter, nyast först.
      *
      * Listan är containerns hela historik av beställningar, precis som
      * API-kontrollerns index(): en export är en rad om en beställning, och
@@ -110,7 +110,7 @@ class ExportController extends Controller
      * ContainerController::store(). **En färdig export hindrar däremot inte en
      * ny**: innehållet ändras, och användaren ska kunna ta en ny påse.
      *
-     * Nyckeln är `export` och inte ett fältnamn: felet handlar om pärmens
+     * Nyckeln är `export` och inte ett fältnamn: felet handlar om containerns
      * tillstånd och inte om vad användaren skrev, och beställningen har inget
      * fält att sätta det på.
      *
@@ -144,11 +144,11 @@ class ExportController extends Controller
      * containerraden låst — se klassens docblock om varför den står här en
      * andra gång och `Api\ExportController::store()` om varför låset krävs.
      *
-     * Två samtidiga POST:ar mot samma pärm måste köa på låset, så bara den
+     * Två samtidiga POST:ar mot samma container måste köa på låset, så bara den
      * första hinner skapa sin `pending`-rad — den andra läser den och får
      * 422. Utan låset hade ett dubbelklick, två flikar eller en klients retry
      * kunnat skapa två rader, och två `BuildContainerExport` hade packat
-     * samma pärm till två påsar.
+     * samma container till två påsar.
      *
      * `container_id`, `requested_by_user_id` och `status` sätts explicit på
      * modellinstansen, aldrig via massildelning: App\Models\Export har

@@ -113,7 +113,7 @@ it('en giltig token ger en kalender', function () {
     $kropp = $response->getContent();
     expect($kropp)->toStartWith('BEGIN:VCALENDAR');
     expect($kropp)->toContain('END:VCALENDAR');
-    expect($kropp)->toContain('X-WR-CALNAME:Underhåll: Vindil');
+    expect($kropp)->toContain('X-WR-CALNAME:Maintenance: Vindil');
     expect($kropp)->toContain('SUMMARY:Byt impeller');
     expect($kropp)->toContain('DESCRIPTION:Impeller');
 });
@@ -230,7 +230,7 @@ it('en container i papperskorgen ger en tom kalender', function () {
 
     expect($kropp)->toContain('BEGIN:VCALENDAR');
     expect($kropp)->toContain('END:VCALENDAR');
-    expect($kropp)->toContain('X-WR-CALNAME:Underhåll: Vindil');
+    expect($kropp)->toContain('X-WR-CALNAME:Maintenance: Vindil');
     expect($kropp)->not->toContain('BEGIN:VEVENT');
 });
 
@@ -323,10 +323,16 @@ it('en försenad förekomst får prefix i SUMMARY', function () {
 
     $kropp = get("/kalender/{$token}.ics")->assertOk()->getContent();
 
-    expect($kropp)->toContain('SUMMARY:Försenad: Byt impeller');
+    expect($kropp)->toContain('SUMMARY:Overdue: Byt impeller');
 });
 
-it('kalenderns namn följer användarens språk', function () {
+/*
+ * Kalendern är enspråkig. Två mottagare med olika locale i samma konto får
+ * samma namn, och dokumentet blandar inte in ett svenskt produktnamn i den
+ * engelska texten — `PRODID` bar `//SV` och "Kalenderfeed" fram till M13.
+ * Se [[ADR-0034 Engelska vid lansering]].
+ */
+it('skriver kalendern på engelska för varje mottagare', function () {
     [$account] = kontoMedMedlem();
     $svensk = User::factory()->create(['locale' => 'sv_SE']);
     $engelsman = User::factory()->create(['locale' => 'en_GB']);
@@ -338,11 +344,12 @@ it('kalenderns namn följer användarens språk', function () {
     [, $engelskToken] = kalenderfeedMedToken($container, $engelsman);
     kalenderuppgift($container, ['title' => 'Byt impeller']);
 
-    $svenskKropp = get("/kalender/{$svenskToken}.ics")->assertOk()->getContent();
-    $engelskKropp = get("/kalender/{$engelskToken}.ics")->assertOk()->getContent();
+    foreach ([$svenskToken, $engelskToken] as $token) {
+        $kropp = get("/kalender/{$token}.ics")->assertOk()->getContent();
 
-    expect($svenskKropp)->toContain('X-WR-CALNAME:Underhåll: Vindil');
-    expect($engelskKropp)->toContain('X-WR-CALNAME:Maintenance: Vindil');
+        expect($kropp)->toContain('PRODID:-//Mimers//Calendar feed//EN');
+        expect($kropp)->toContain('X-WR-CALNAME:Maintenance: Vindil');
+    }
 });
 
 it('last_fetched_at uppdateras', function () {

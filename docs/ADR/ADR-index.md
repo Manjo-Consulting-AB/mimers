@@ -1,6 +1,6 @@
 # ADR-index
 
-Trettio beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Fyrtioen beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -18,10 +18,10 @@ Tillbaka till [[00 Index]].
 | [[ADR-0010 Notisarkitektur]] | Outbox med utbytbara kanaler | [[Notiser]] |
 | [[ADR-0011 Autentisering]] | Sanctum, lösenord plus magic link | [[Konton och åtkomst]] |
 | [[ADR-0012 Sök]] | Scout med databasdrivern tills vidare | [[Items och organisation]] |
-| [[ADR-0013 Språk och i18n]] | Svenska och engelska, felkoder aldrig meningar | Allt |
+| [[ADR-0013 Språk och i18n]] | *Språkuppsättningen ersatt av ADR-0034.* Svenska och engelska, felkoder aldrig meningar | Allt |
 | [[ADR-0014 Prismodell]] | Gratis, Pro 39–49 €/år, tre B2B-spår | [[Planer och kvoter]] |
 | [[ADR-0015 Backup]] | Tre nivåer, off-site från inleed | Drift |
-| [[ADR-0016 Kostnadsregistrering]] | Kostnadsrader per item, rapport bakom Pro | [[Items och organisation]] |
+| [[ADR-0016 Kostnadsregistrering]] | *Pro-gränsen ersatt av ADR-0038.* Kostnadsrader per item, rapport bakom Pro | [[Items och organisation]] |
 | [[ADR-0017 Missbruksvektorer]] | Detektera och prissätt, spärra inte i förväg | [[Planer och kvoter]], Drift |
 | [[ADR-0018 Utvecklingsprocess och deploy]] | Gren per issue, tagg till produktion, bygg en gång | [[Backlog]], Drift |
 | [[ADR-0019 Filleverans]] | Intern omdirigering under webbroten, engångslänk som fallback | [[Filer och lagring]] |
@@ -37,6 +37,16 @@ Tillbaka till [[00 Index]].
 | [[ADR-0029 Agentens läsåtkomst till servern]] | Nyckel låst till ett läsande skript med `command=`, aldrig ett skal | Drift, [[Pipeline]] |
 | [[ADR-0030 Miljövariabler ur GitHubs secrets]] | Utrullningen upsertar miljöns secrets i `shared/.env` före `config:cache` | Drift, [[Pipeline]] |
 | [[ADR-0031 Köarbetaren körs av schemaläggaren]] | Schemalagd `queue:work --stop-when-empty` sist i `routes/console.php`, ingen daemon | Drift, [[Pipeline]] |
+| [[ADR-0032 Produktens ord]] | Container och objekt i gränssnittet, pärmen utgår | Allt |
+| [[ADR-0033 Produktens omfång]] | Generell plats för det du äger, använder eller arbetar med — inte ett båtverktyg | Allt |
+| [[ADR-0034 Engelska vid lansering]] | Engelska enda levererade språk, maskineriet för fler kvar och testat | Allt |
+| [[ADR-0035 Relationen mellan objekt]] | `sibling` heter `related`, tre relationer och inte fyra | [[Items och organisation]] |
+| [[ADR-0036 Containerns art]] | `kind` är fritt med autocomplete, CHECK-villkoret utgår | [[Konton och åtkomst]], [[Items och organisation]] |
+| [[ADR-0037 Valutans arv]] | Konto → container → rad, ändrat förval rör aldrig gamla poster | [[Items och organisation]] |
+| [[ADR-0038 Gränsen för Pro i kostnaderna]] | Fast summering fri, allt frågbart är Pro | [[Planer och kvoter]], [[Items och organisation]] |
+| [[ADR-0039 Containerns översikt]] | Containerns förstasida är en översikt, itemlistan en flik; talen räknar det du når | [[Items och organisation]], [[Konton och åtkomst]] |
+| [[ADR-0040 Underträdets summor]] | Status och kostnad räknas över itemet och dess ättlingar, donuten grupperar per item | [[Items och organisation]], [[Planer och kvoter]] |
+| [[ADR-0041 Itemets vy]] | Itemet bor i containern, strukturen har flera vägar till samma item, anteckningen är itemets egen text | [[Items och organisation]], [[Filer och lagring]] |
 
 ## Om att ändra ett beslut
 

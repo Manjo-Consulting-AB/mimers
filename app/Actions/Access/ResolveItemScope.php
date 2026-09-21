@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\DB;
  *    nivå.
  * 3. En itemgrant når sitt item och itemets ÄTTLINGAR, transitivt och utan
  *    djuptak, längs `item_link`-kanter `from → to` där `relation` är
- *    `parent`. Aldrig uppåt, och `sibling` bär ingen behörighet alls.
+ *    `parent`. Aldrig uppåt, och `related` bär ingen behörighet alls.
  * 4. Når flera grants samma item vinner den högsta nivån, via
  *    AccessLevel::max().
  *
@@ -245,7 +245,7 @@ class ResolveItemScope
      *
      * `relation = 'parent'` filtreras i FRÅGAN, inte i PHP: `child` vänds
      * till en `parent`-rad redan vid skapandet (LinkItems::normalize()), så
-     * `from_item_id` är alltid föräldern. En `sibling`-rad som följde med
+     * `from_item_id` är alltid föräldern. En `related`-rad som följde med
      * och behandlades som en kant hade delat masten på köpet — precis det
      * regel 2 finns till för att förhindra (issue 70 § Beslut 3).
      *

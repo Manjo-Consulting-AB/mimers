@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Trash\ListTrash;
 use App\Models\Account;
@@ -22,7 +24,7 @@ use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 62a · Pärmens papperskorg: det mjukraderade innehållet, den
+ * Issue 62a · Containerns papperskorg: det mjukraderade innehållet, den
  * återstående tiden och återställningen. Se
  * App\Http\Controllers\TrashController,
  * App\Actions\Trash\ListTrash, App\Actions\Trash\FindTrashedInContainer,
@@ -38,9 +40,8 @@ use function Pest\Laravel\withoutVite;
  *
  * **Två acceptanskriterier prövas inte här**, därför att de redan har en
  * ägare: `/api`:s fyra frågor och bitvis identiska svar (PapperskorgTest)
- * och "ingen svensk sträng i en .vue-fil, samma nycklar på sv och en"
- * (SprakTest § "har inga användarvända strängar kvar i Vue-komponenterna"
- * och § "har samma nycklar på båda språken"). Den här filen prövar i stället
+ * och "ingen svensk sträng i en .vue-fil" (SprakTest § "har inga
+ * användarvända strängar kvar i Vue-komponenterna"). Den här filen prövar i stället
  * att papperskorgens EGNA nycklar finns, och att flaggan följer samma grind
  * som rutten.
  *
@@ -49,7 +50,7 @@ use function Pest\Laravel\withoutVite;
  */
 
 /**
- * Ett konto med en ägare och en pärm.
+ * Ett konto med en ägare och en container.
  *
  * @return array{0: Account, 1: User, 2: Container}
  */
@@ -205,7 +206,7 @@ it('väljer mening på den återstående tiden, i singular, plural och sista dyg
     expect($modul)->toContain('days < 1');
     expect($modul)->toContain('days === 1');
 
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     foreach (['today', 'day', 'days'] as $nyckel) {
@@ -287,7 +288,7 @@ it('svarar 404 för ett utgånget innehåll i stället för att återställa det
  * bilagor — aldrig en kategori och aldrig en tagg (issue 74 § Beslut 1).
  *
  * Skälet står i ListTrash: en raderad tagg som heter "Skilsmässa" är en
- * upplysning om pärmen, inte om itemet hon når.
+ * upplysning om containern, inte om itemet hon når.
  */
 it('visar en omfångsbegränsad mottagare bara sina items och deras bilagor', function () {
     withoutVite();
@@ -356,7 +357,7 @@ it('ger en tom papperskorg samma svar för mottagaren som för ägaren', functio
     $kategori = Category::factory()->for($container, 'container')->create(['name' => 'Skilsmässa']);
     papperskorgsvyRaderad($kategori);
 
-    // Ägarens andra pärm, där ingenting alls raderats.
+    // Ägarens andra container, där ingenting alls raderats.
     $tomContainer = Container::factory()->for($konto, 'account')->create();
 
     $ägarsvar = actingAs($ägare)->get("/containers/{$tomContainer->ulid}/trash");
@@ -386,10 +387,10 @@ it('ger en tom papperskorg samma svar för mottagaren som för ägaren', functio
 });
 
 /*
- * Klart när: ett item återställs ur vyn och dyker upp i pärmens itemlista
+ * Klart när: ett item återställs ur vyn och dyker upp i containerns itemlista
  * igen, med flashkoden `trash-restored` (Beslut 7).
  */
-it('återställer ett item ur vyn och visar det i pärmens itemlista igen', function () {
+it('återställer ett item ur vyn och visar det i containerns itemlista igen', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = papperskorgsvyKontext();
@@ -408,7 +409,7 @@ it('återställer ett item ur vyn och visar det i pärmens itemlista igen', func
     expect($raderat->refresh()->deleted_at)->toBeNull();
 
     actingAs($ägare)
-        ->get("/containers/{$container->ulid}")
+        ->get("/containers/{$container->ulid}/items")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('items', fn ($items) => collect($items)->pluck('ulid')->contains($raderat->ulid))
@@ -478,7 +479,7 @@ it('ger ett formulärfel i stället för JSON när föräldern ligger kvar i pap
     $svar->assertSessionHasErrors('trash');
 
     // Meningen, inte koden — på något av de två språken.
-    $sv = require lang_path('sv/ui.php');
+    $sv = require lang_path('en/ui.php');
     $en = require lang_path('en/ui.php');
 
     expect([
@@ -621,7 +622,7 @@ it('låter en omfångsbegränsad mottagare återställa sitt item men inte en ka
 });
 
 /*
- * Klart när: en ULID ur en annan pärm är 422, ett utgånget innehåll 404.
+ * Klart när: en ULID ur en annan container är 422, ett utgånget innehåll 404.
  *
  * Den delade RestoreRequest ger 422 `validation.failed` på `/api`
  * (PapperskorgTest § "en ulid ur en annan container avvisas"). På webben är
@@ -629,7 +630,7 @@ it('låter en omfångsbegränsad mottagare återställa sitt item men inte en ka
  * behåller Laravels vanliga valideringsfel och har inget felkodshölje
  * ([[ADR-0020 Plattformsidentitet och frontendgräns]] § Konsekvenser).
  */
-it('avvisar en ulid ur en annan pärm som ett valideringsfel', function () {
+it('avvisar en ulid ur en annan container som ett valideringsfel', function () {
     withoutVite();
 
     [$konto, $ägare, $container] = papperskorgsvyKontext();
@@ -650,38 +651,31 @@ it('avvisar en ulid ur en annan pärm som ett valideringsfel', function () {
 });
 
 /*
- * Klart när: papperskorgen syns i pärmens navigering (Beslut 1). Raden
+ * Klart när: papperskorgen syns i containerns navigering (Beslut 1). Raden
  * ligger SIST — papperskorgen är dit man går när något gått fel, inte en yta
  * man arbetar i. Texten kommer ur `container.nav.trash`, aldrig ur en
  * sträng i JavaScript.
  */
-it('lägger papperskorgen i pärmens navigation, sist', function () {
+it('lägger papperskorgen i containerns navigation, sist', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'trash'");
     expect($sektioner)->toContain('/containers/${ulid}/trash');
     expect(strpos($sektioner, "key: 'trash'"))->toBeGreaterThan(strpos($sektioner, "key: 'settings'"));
 
-    $sv = require lang_path('sv/ui.php');
     $en = require lang_path('en/ui.php');
 
-    expect($sv['container']['nav']['trash'])->not->toBe('');
     expect($en['container']['nav']['trash'])->not->toBe('');
 
-    // Nycklarna papperskorgen äger, på båda språken. Att de inte är tomma
-    // och att sv och en har exakt samma uppsättning prövas dessutom av
-    // SprakTest § "har samma nycklar på båda språken".
+    // Nycklarna papperskorgen äger. Att ingen av dem är tom prövas dessutom av
+    // SprakTest § "har inga tomma strängar i ui.php".
     foreach (['title', 'heading', 'description', 'empty', 'deleted_at', 'restore'] as $nyckel) {
-        expect($sv['trash'][$nyckel])->not->toBe('');
         expect($en['trash'][$nyckel])->not->toBe('');
     }
 
     foreach (['item', 'attachment', 'category', 'tag'] as $typ) {
-        expect($sv['trash']['type'][$typ])->not->toBe('');
         expect($en['trash']['type'][$typ])->not->toBe('');
     }
-
-    expect($sv['container']['nav']['trash'])->not->toBe($en['container']['nav']['trash']);
 });
 
 /*

@@ -60,7 +60,7 @@ class AcceptOwnershipTransfer
             throw ApiException::make('transfer.expired', [], 422);
         }
 
-        // Beslut 3: ett fruset mottagarkonto nekas. Att lägga en pärm i ett
+        // Beslut 3: ett fruset mottagarkonto nekas. Att lägga en container i ett
         // konto som inte får skrivas i är att låsa in den; `account.status`
         // rörs aldrig av den här transaktionen — att lyfta frysningen är
         // nedgraderingens jobb (issue 28).
@@ -107,7 +107,7 @@ class AcceptOwnershipTransfer
             $entitlements->assertStorageWithinLimit($toAccount, $bytesSomFlyttas);
 
             // Beslut 6: containern flyttas. Ingen annan kolumn rörs — namn,
-            // `kind` och `created_at` följer med pärmen.
+            // `kind` och `created_at` följer med containern.
             $container->account_id = $toAccount->id;
             $container->save();
 
@@ -119,7 +119,7 @@ class AcceptOwnershipTransfer
             // köparen, och varje berörd attachment-rad får säljarens konto
             // bytt mot köparens. Bilagor bokförda på ett TREDJE konto rörs
             // inte: bytena belastar det uppladdande kontot ([[Planer och
-            // kvoter]] § usage_counter), och en gästs uppladdning i pärmen
+            // kvoter]] § usage_counter), och en gästs uppladdning i containern
             // fortsätter belasta gästens konto. Det ser ut som en glömska och
             // är ett beslut.
             if ($bytesSomFlyttas > 0) {
@@ -250,7 +250,7 @@ class AcceptOwnershipTransfer
      *
      * Kvotkontrollen för säljarens nya container hoppas över MED FLIT: en
      * säljare som hunnit nedgraderas mellan initiering och accept skulle
-     * annars blockera en accept köparen inte kan påverka, och pärmen är redan
+     * annars blockera en accept köparen inte kan påverka, och containern är redan
      * initierad av ett Pro-konto.
      */
     private function lyftUtBehallnaItems(
@@ -280,7 +280,7 @@ class AcceptOwnershipTransfer
 
         // Beslut 10: ny container ägd av säljaren, samma `kind` som
         // ursprungscontainern. Ingen annan kolumn ärvs — det här är en ny
-        // pärm, inte en klon.
+        // container, inte en klon.
         $behallnaContainer = new Container;
         $behallnaContainer->account_id = $fromAccount->id;
         $behallnaContainer->name = $container->name.' (behållna poster)';
@@ -291,7 +291,7 @@ class AcceptOwnershipTransfer
 
         // Beslut 11: itemen får den nya containern och `category_id`
         // nollställs — kategorier är per container (issue 11), en kategori i
-        // den gamla pärmen är otillgänglig från den nya. `item_tag`-raderna
+        // den gamla containern är otillgänglig från den nya. `item_tag`-raderna
         // för de undantagna itemen tas bort av samma skäl (issue 12). Det är
         // en medveten förlust av två etiketter på en handfull items, inte av
         // innehåll.
@@ -318,7 +318,7 @@ class AcceptOwnershipTransfer
 
     /**
      * Beslut 12: `schedule_dependency` och `occurrence_dependency` (issue
-     * 23a/23b) kan efter utlyftet peka från ett schema i den nya pärmen till
+     * 23a/23b) kan efter utlyftet peka från ett schema i den nya containern till
      * ett i den gamla, eller tvärtom. Sådana rader raderas i samma
      * transaktion. Ett beroende mellan två items som hamnat i SAMMA container
      * — båda undantagna eller båda kvar — står kvar orört.
@@ -366,7 +366,7 @@ class AcceptOwnershipTransfer
     /**
      * Beslut 12, `item_link`-sidan (issue 14): en länk mellan ett undantaget
      * och ett kvarvarande item pekar efter utlyftet över två containers, och
-     * en sådan rad läcker den ena partens namn och ULID till den andra pärmen
+     * en sådan rad läcker den ena partens namn och ULID till den andra containern
      * (ItemLinkController slår upp motpartens namn utan containerfilter).
      * Rader där ändarna hamnat i SAMMA container — båda undantagna eller båda
      * kvar — står kvar orört. Tabellen har ingen egen container (§ Beslut 3),
@@ -423,7 +423,7 @@ class AcceptOwnershipTransfer
      * kunds period av att hon får en båt. Ligger raden i något annat läge
      * (uppsagd, obetald eller en annan plan) sätts den till Pro, aktiv, från
      * idag. `account.status` rörs aldrig — ett `read_only`-konto blir inte
-     * aktivt av att få en pärm, och här nekas accepten redan i Beslut 3.
+     * aktivt av att få en container, och här nekas accepten redan i Beslut 3.
      *
      * Returnerar `true` om bonusen gavs, `false` om kontot redan konsumerat
      * den. Anroparen lägger det i `audit_log`-radens `meta`, så skillnaden

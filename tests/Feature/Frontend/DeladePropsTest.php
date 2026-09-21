@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 83 — kommentarbyte i prosa (mekanismens anropare), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\User;
@@ -133,9 +135,9 @@ it('gör en container aktiv i sessionen och glömmer den när delningen återkal
 
     $active = app(ActiveContainer::class);
 
-    // Ingen anropare i den här issuen sätter nyckeln — vyn som byter
-    // container är issue 54 — men mekanismen byggs och prövas här så att 54
-    // inte uppfinner sin egen.
+    // Mekanismen prövas direkt här, vid sidan av webbens väg in i den
+    // (issue 83: den som öppnar en container sätter nyckeln). Propen är
+    // oförändrad — den bär fortfarande ULID:t och ingenting annat.
     $active->set($medlem, $container);
 
     expect($active->forUser($medlem))->toBe($container->ulid);

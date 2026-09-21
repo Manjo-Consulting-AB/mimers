@@ -7,11 +7,18 @@ import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
 /*
- * Skapa en pärm, se issue 54 § Beslut 5 och 8.
+ * Skapa en container, se issue 54 § Beslut 5 och 8.
  *
- * TRE fält: `name`, `kind` och `account`. Ägarkontot måste väljas, för
- * servern har inget begrepp "aktivt konto" (issue 8 § Beslut 8) — det är
- * därför `StoreContainerRequest` kräver `account` som konto-ULID.
+ * FYRA fält: `name`, `kind`, `description` och `account`. Ägarkontot måste
+ * väljas, för servern har inget begrepp "aktivt konto" (issue 8 § Beslut 8) —
+ * det är därför `StoreContainerRequest` kräver `account` som konto-ULID.
+ * `kind` är FRIVILLIGT (issue 84 · [[ADR-0036 Containerns art]]) och
+ * `description` likaså (issue 88 · [[ADR-0039 Containerns översikt]]): att
+ * tvinga fram en art eller en beskrivning vid skapandet är att ställa en
+ * fråga användaren ännu inte kan svara på. Beskrivningen är ETT fritextfält
+ * och ingenting mer — modell, årtal och tillverkare byggs inte, för de hade
+ * varit domänen inbyggd i containern ([[ADR-0033 Produktens omfång]]), och
+ * ingen kod plockar isär det användaren skriver.
  *
  * Kontolistan kommer ur den DELADE propen `auth.accounts` och inte ur en
  * egen sidprop (Beslut 5): en fråga för samma lista är en fråga för mycket.
@@ -23,16 +30,21 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * gångerna. Väljaren listar alla hennes konton — även ett fryst; är kontot
  * `read_only` svarar policyn 403, och vyn ska inte gissa sig förbi det.
  *
- * Typ-listan kommer som prop ur `Container::KINDS` (Beslut 8), samma teknik
- * som 53c:s tidszonslista. Ingen egen lista i JavaScript: två listor blir två
- * sanningar. `kind` är presentation och bara presentation — ingenting i den
- * här vyn grenar på värdet.
+ * Typ-listan kommer som prop (Beslut 8), samma teknik som 53c:s tidszonslista.
+ * Ingen egen lista i JavaScript: två listor blir två sanningar. Sedan issue
+ * 84 bär propen de arter ANVÄNDAREN redan använt och inte en fast mängd — den
+ * är autocomplete på ett fritt fält, samma mönster som leverantörsfältet i
+ * [[ADR-0016 Kostnadsregistrering]], och `datalist` låter användaren både
+ * välja ett känt värde och skriva ett eget. `kind` är presentation och bara
+ * presentation — ingenting i den här vyn grenar på värdet.
  *
  * `errors.quota` renderas som en ruta OVANFÖR formuläret, inte under ett
  * fält (Beslut 4): ett kvotfel handlar inte om vad användaren skrev. Servern
  * lägger meningen där när containertaket slår i.
  */
 const props = defineProps({
+    /* De arter användaren redan använt — underlag för autocomplete, inte en
+       tillåten mängd. Fältet är fritt och får lämnas tomt. */
     kinds: { type: Array, required: true },
 });
 
@@ -46,7 +58,10 @@ const singleAccount = computed(() => (accounts.value.length === 1 ? accounts.val
 
 const form = useForm({
     name: '',
-    kind: props.kinds[0] ?? 'other',
+    kind: '',
+    // Tom ruta är ett giltigt svar: fältet är frivilligt, och servern sparar
+    // `null` (issue 88).
+    description: '',
     account: singleAccount.value?.ulid ?? '',
 });
 
@@ -95,17 +110,41 @@ function submit() {
                 id="kind"
                 :error="form.errors.kind"
             >
-                <select
+                <!-- Fritext med autocomplete, inte en väljare: värdet är
+                     användarens eget, och de arter hon redan använt är
+                     förslag. Tomt fält är ett giltigt svar. -->
+                <input
                     id="kind"
                     v-model="form.kind"
                     :aria-describedby="describedBy"
+                    type="text"
                     name="kind"
+                    list="container-kinds"
                     class="rounded border border-slate-300 bg-white px-3 py-2"
                 >
-                    <option v-for="kind in kinds" :key="kind" :value="kind">
-                        {{ t(`container.kind.${kind}`) }}
-                    </option>
-                </select>
+                <datalist id="container-kinds">
+                    <option v-for="kind in kinds" :key="kind" :value="kind" />
+                </datalist>
+            </FormField>
+
+            <FormField
+                v-slot="{ describedBy }"
+                :label="t('container.create.description')"
+                id="description"
+                :error="form.errors.description"
+            >
+                <!-- Ett enda fritextfält, frivilligt (issue 88 ·
+                     [[ADR-0039 Containerns översikt]]). Ingen struktur och
+                     ingen hjälprad som ber om modell eller årtal: fältet
+                     visas som det skrivs, och ingen kod plockar isär det. -->
+                <textarea
+                    id="description"
+                    v-model="form.description"
+                    :aria-describedby="describedBy"
+                    name="description"
+                    rows="4"
+                    class="rounded border border-slate-300 bg-white px-3 py-2"
+                />
             </FormField>
 
             <!-- Ett enda konto: värdet är förvalt och visas som text. Ingen

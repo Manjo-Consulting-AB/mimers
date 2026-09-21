@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
+
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
@@ -33,9 +35,9 @@ use function Pest\Laravel\withoutVite;
  * samma action.
  *
  * "Klart när" i issuen motsvaras var sitt test nedan, med undantag för "ingen
- * svensk sträng står kvar i en .vue-fil; varje ny nyckel finns på sv och en",
- * som vaktas av tests/Feature/Frontend/SprakTest.php — den läser varje fil
- * under resources/js/ och jämför språkfilerna nyckel för nyckel.
+ * svensk sträng står kvar i en .vue-fil; varje nyckel finns i katalogen", som
+ * vaktas av tests/Feature/Frontend/SprakTest.php — den läser varje fil under
+ * resources/js/.
  *
  * Hjälparna har prefixet `lagringsvy` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs, och tests/Feature/Frontend/PlanvyTest.php har
@@ -57,10 +59,10 @@ function lagringsvyKonto(string $roll = 'owner'): array
 }
 
 /**
- * En pärm, ett item och en bilaga av exakt storlek.
+ * En container, ett item och en bilaga av exakt storlek.
  *
  * `$konto` är kontot som BELASTAS (`billed_account_id`) — precis som på
- * `/api` kan pärmen tillhöra någon annan (28 § Beslut 2), och då skickas den
+ * `/api` kan containern tillhöra någon annan (28 § Beslut 2), och då skickas den
  * in. Listan sorterar på `stored_file.byte_size`, så testerna måste kunna
  * styra den.
  *
@@ -155,18 +157,15 @@ function lagringsvyKor(string $anrop): string
 }
 
 /**
- * En nyckel finns på båda språken och är inte tom — samma kontroll som
- * planvyNyckel() i PlanvyTest gör: en nyckel som bara finns på svenska syns
- * som en nyckel i den engelska vyn.
+ * En nyckel finns och är inte tom — samma kontroll som planvyNyckel() i
+ * PlanvyTest gör: en nyckel som saknas i katalogen syns som en nyckel i vyn.
  */
 function lagringsvyNyckel(string $nyckel): void
 {
-    foreach (['sv', 'en'] as $locale) {
-        $mening = trans($nyckel, [], $locale);
+    $mening = trans($nyckel, [], 'en');
 
-        expect($mening)->not->toBe($nyckel, "{$nyckel} saknas på {$locale}");
-        expect(trim((string) $mening))->not->toBe('', "{$nyckel} är tom på {$locale}");
-    }
+    expect($mening)->not->toBe($nyckel, "{$nyckel} saknas");
+    expect(trim((string) $mening))->not->toBe('', "{$nyckel} är tom");
 }
 
 /*
@@ -180,7 +179,7 @@ it('skickar en utloggad besökare till inloggningen från lagringsytan', functio
 
 /*
  * Klart när: `/settings/storage` listar det valda kontots levande bilagor,
- * störst först, och varje rad visar filnamn, storlek, pärm och item
+ * störst först, och varje rad visar filnamn, storlek, container och item
  * (Beslut 2).
  *
  * Två bilagor delar byte_size med flit: sorteringen är `byte_size` fallande med
@@ -188,7 +187,7 @@ it('skickar en utloggad besökare till inloggningen från lagringsytan', functio
  * svarar med, och den ordning som gör valet snabbast. Vid lika storlek står
  * alltså den SIST skapade raden först.
  */
-it('listar kontots levande bilagor störst först med filnamn, storlek, pärm och item', function () {
+it('listar kontots levande bilagor störst först med filnamn, storlek, container och item', function () {
     withoutVite();
 
     [$konto, $anvandare] = lagringsvyKonto();
@@ -241,15 +240,15 @@ it('visar inte mjukraderade bilagor', function () {
 });
 
 /*
- * Klart när: en bilaga vars item eller pärm ligger i papperskorgen syns,
+ * Klart när: en bilaga vars item eller container ligger i papperskorgen syns,
  * markerad som sådan (Beslut 3).
  *
- * Item-mjukraderingen rör INTE bilagan (issue 26a), och en pärm i
+ * Item-mjukraderingen rör INTE bilagan (issue 26a), och en container i
  * papperskorgen tar inte bort det som ligger i den — bilagan belastar kontot
  * tills den själv lämnar papperskorgen. Utan markeringen ser summan ut att
  * vara fel, och därför är `inTrash` ett fält vyn får ur kontrollern.
  */
-it('visar och markerar en bilaga vars item eller pärm ligger i papperskorgen', function () {
+it('visar och markerar en bilaga vars item eller container ligger i papperskorgen', function () {
     withoutVite();
 
     [$konto, $anvandare] = lagringsvyKonto();
@@ -279,15 +278,15 @@ it('visar och markerar en bilaga vars item eller pärm ligger i papperskorgen', 
 });
 
 /*
- * Klart när: listan visar bilagor i pärmar kontot inte äger, så länge kontot
+ * Klart när: listan visar bilagor i containers kontot inte äger, så länge kontot
  * belastas för dem (Beslut 2).
  *
- * Båda riktningarna prövas: en bilaga som BELASTAR kontot syns även om pärmen
+ * Båda riktningarna prövas: en bilaga som BELASTAR kontot syns även om containern
  * är någon annans, och en bilaga som belastar ett ANNAT konto syns inte ens om
- * den ligger i en av kontots pärmar. `attachment.billed_account_id` är det som
+ * den ligger i en av kontots containers. `attachment.billed_account_id` är det som
  * avgör.
  */
-it('visar bilagor i pärmar kontot inte äger men belastas för, och inga andra', function () {
+it('visar bilagor i containers kontot inte äger men belastas för, och inga andra', function () {
     withoutVite();
 
     [$konto, $anvandare] = lagringsvyKonto();
@@ -591,7 +590,7 @@ it('avvisar en ULID som tillhör ett annat konto och raderar ingenting', functio
  * Klart när: bekräftelsen nämner papperskorgen och de 30 dagarna, inte
  * permanent radering (Beslut 6), och svaret efteråt gör detsamma (Beslut 8).
  *
- * Bilagorna mjukraderas och kan återställas ur pärmens papperskorg (62a);
+ * Bilagorna mjukraderas och kan återställas ur containerns papperskorg (62a);
  * bytena frigörs direkt, och det säger bekräftelsen med antalet filer och det
  * frigjorda utrymmet.
  */
@@ -604,13 +603,11 @@ it('säger papperskorgen och de 30 dagarna, aldrig permanent radering', function
         lagringsvyNyckel("ui.storage.result.{$form}");
     }
 
-    foreach (['sv' => 'sv', 'en' => 'en'] as $locale) {
-        foreach (['confirm.one', 'confirm.many', 'result.one', 'result.many'] as $nyckel) {
-            $mening = (string) trans("ui.storage.{$nyckel}", [], $locale);
+    foreach (['confirm.one', 'confirm.many', 'result.one', 'result.many'] as $nyckel) {
+        $mening = (string) trans("ui.storage.{$nyckel}", [], 'en');
 
-            expect($mening)->toContain($locale === 'sv' ? '30 dagar' : '30 days')
-                ->and(mb_strtolower($mening))->not->toContain('permanent');
-        }
+        expect($mening)->toContain('30 days')
+            ->and(mb_strtolower($mening))->not->toContain('permanent');
     }
 
     // Och vyn läser dem: bekräftelsen är webbläsarens egen dialog, och raden
@@ -649,7 +646,7 @@ it('syns i inställningsnavigationen och länkas från plansidan', function () {
  * etikett. Att ingen svensk sträng står kvar i en .vue-fil vaktas av
  * SprakTest.
  */
-it('har varje ny nyckel på båda språken och läser dem i vyn', function () {
+it('har varje ny nyckel och läser dem i vyn', function () {
     foreach ([
         'title', 'heading', 'intro', 'account_label', 'usage_heading',
         'list_heading', 'list_intro', 'empty', 'row.location', 'row.trashed',
