@@ -1025,6 +1025,29 @@ return [
             'transfer' => 'Ownership transfer',
         ],
 
+        // Issue 89 · [[ADR-0039 Containerns översikt]]: the container's own URL
+        // answers with an overview and the item list moved to `…/items`. The
+        // head carries the name, the kind and the description; the two tiles
+        // count what the user HERSELF reaches — never a total, never "of N",
+        // never a word about rows kept back ([[ADR-0028 Åtkomst på itemnivå]]
+        // § Konsekvenser, issue 73 decision 6).
+        //
+        // `kind` is the LABEL only. Its value is written out verbatim from
+        // `container.kind`: the field is free ([[ADR-0036 Containerns art]]),
+        // so no key can be built from it. The label is *Kind* and not the
+        // mockup's *Category*, which is taken by the category tree on items —
+        // one word, one meaning ([[ADR-0032 Produktens ord]]).
+        //
+        // `todos` is ONE tile, not two: `schedule` has no field separating a
+        // task from maintenance and will not get one ([[ADR-0033 Produktens
+        // omfång]]).
+        'overview' => [
+            'kind' => 'Kind',
+            'description' => 'Description',
+            'items' => 'Items',
+            'todos' => 'Open tasks',
+        ],
+
         'index' => [
             'title' => 'Containers',
             'heading' => 'Containers',

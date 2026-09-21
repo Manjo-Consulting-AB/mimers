@@ -84,7 +84,11 @@ function complete() {
 
                 <span aria-hidden="true">·</span>
 
-                <Link :href="`/containers/${entry.container.ulid}`" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+                <!-- Containernamnet går till ITEMLISTAN (issue 89 · [[ADR-0039
+                     Containerns översikt]] § Konsekvenser): uppgiften hör till
+                     ett item, och den som följer containern ur todo-vyn letar i
+                     listan — inte på en översikt. -->
+                <Link :href="`/containers/${entry.container.ulid}/items`" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
                     {{ entry.container.name }}
                 </Link>
 

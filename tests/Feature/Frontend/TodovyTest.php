@@ -522,6 +522,11 @@ it('låter serverns datum styra gruppen, inte klientens', function () {
  * inte att handla på när man har fyra containers. Länkarna prövas mot de href
  * ruttnamnen faktiskt ger — en vy som länkar till en påhittad adress hade
  * annars sett rätt ut i en strukturell kontroll.
+ *
+ * **Containernamnet går till itemlistan** (issue 89 · [[ADR-0039 Containerns
+ * översikt]] § Konsekvenser). Det gjorde det före flytten också, men då sammanföll
+ * listans adress med containerns egen; nu är de två, och `containers.show` — som
+ * står kvar i raden ovan — pekar på översikten. Vyns href prövas därför för sig.
  */
 it('visar container, item och schema med länkar som går rätt', function () {
     withoutVite();
@@ -549,6 +554,12 @@ it('visar container, item och schema med länkar som går rätt', function () {
         ->toContain('{{ entry.item.name }}')
         ->toContain('{{ entry.container.name }}')
         ->toContain('{{ entry.schedule.title }}');
+
+    // Containernamnet går till ITEMLISTAN, inte till containerns egen URL —
+    // den svarar med översikten sedan issue 89 · [[ADR-0039 Containerns
+    // översikt]] § Konsekvenser. Utan `/items` hade raden sett rätt ut i en
+    // strukturell kontroll och landat fel i drift.
+    expect($rad)->toContain(':href="`/containers/${entry.container.ulid}/items`"');
 });
 
 /*

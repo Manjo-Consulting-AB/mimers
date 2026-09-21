@@ -157,7 +157,7 @@ function itemfilterMottagare(Container $container, ?Item $item = null, string $n
  */
 function itemfilterUrl(Container $container, array $query = []): string
 {
-    $url = "/containers/{$container->ulid}";
+    $url = "/containers/{$container->ulid}/items";
 
     return $query === [] ? $url : $url.'?'.http_build_query($query);
 }
@@ -578,6 +578,32 @@ it('gör aktiva filter rensbara ett i taget och alla på en gång', function () 
         ->and($en['item']['index']['filter_clear'])->not->toBe('')
         ->and($sv['item']['index']['filter_remove'])->toContain(':filter')
         ->and($en['item']['index']['filter_remove'])->toContain(':filter');
+});
+
+/*
+ * Klart när: itemlistans filter fungerar oförändrat på den NYA URL:en.
+ *
+ * Två halvor. Servern: samma querysträng ger samma urval på
+ * `/containers/{ulid}/items` — urvalet är `ListItems`, och flytten i issue 89
+ * rörde den inte. Klienten: filterraden submittar mot LISTANS adress och inte
+ * mot containerns egen, som sedan flytten svarar med översikten. Ett filter som
+ * submittade dit hade tappat både listan och filtret, och det är den här raden
+ * som fångar det — resources/js/components/ItemFilterBar.vue ligger utanför
+ * issuens ruta och ändrades ändå, se PR:ens Frågor och antaganden.
+ */
+it('filtrerar oförändrat på itemlistans nya URL', function () {
+    withoutVite();
+
+    ['container' => $container, 'anvandare' => $anvandare, 'taggar' => $taggar] = itemfilterPärm();
+
+    expect(itemfilterNamn(actingAs($anvandare)->get(itemfilterUrl($container, [
+        'q' => 'Impellern',
+        'tags' => [$taggar['Motor']->ulid],
+    ]))->assertOk()))->toBe(['Impellern']);
+
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+
+    expect($rad)->toContain('router.get(`/containers/${props.containerUlid}/items`');
 });
 
 /*

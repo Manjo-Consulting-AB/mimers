@@ -8,8 +8,14 @@ import { activeFilters, filterSummary } from '../../../components/itemFilter.js'
 import { useTranslations } from '../../../composables/useTranslations.js';
 
 /*
- * Containerns itemlista — containerns förstasida, se issue 57a § Beslut 1, 4, 6, 8
- * och 9, och issue 59a § Beslut 1–8.
+ * Containerns itemlista — containerns förstasida till och med issue 88, se
+ * issue 57a § Beslut 1, 4, 6, 8 och 9, och issue 59a § Beslut 1–8.
+ *
+ * **Sidan flyttade i issue 89** · [[ADR-0039 Containerns översikt]]:
+ * containerns egen URL svarar numera med översikten
+ * (pages/Containers/Overview.vue), och listan ligger på
+ * `/containers/{ulid}/items`. Ingenting i vyn ändrades av flytten — bara
+ * adressen — och filtret i querysträngen fungerar oförändrat på den nya URL:en.
  *
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
  * ur App\Http\Resources\ContainerResource.

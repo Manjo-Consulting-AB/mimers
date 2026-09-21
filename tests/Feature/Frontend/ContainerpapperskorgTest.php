@@ -548,7 +548,7 @@ it('återställer containern, ökar förbrukningen och lämnar innehållet kvar'
     // Och containern svarar igen: itemet står i containerns lista som om ingenting
     // hänt, för ingenting hände med det.
     actingAs($ägare)
-        ->get("/containers/{$container->ulid}")
+        ->get("/containers/{$container->ulid}/items")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('items', fn ($items) => collect($items)->pluck('ulid')->contains($item->ulid))

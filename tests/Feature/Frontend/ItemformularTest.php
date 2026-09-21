@@ -468,7 +468,7 @@ it('mjukraderar itemet på delete-pinnen och tar bort det ur listan', function (
     expect(Item::withTrashed()->find($motorn->id)->deleted_at)->not->toBeNull();
     expect(Item::query()->whereKey($motorn->id)->exists())->toBeFalse();
 
-    actingAs($raderare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+    actingAs($raderare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->has('items', 1)
             ->where('items.0.ulid', $masten->ulid)
