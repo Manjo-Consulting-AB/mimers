@@ -10,7 +10,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * Formuläret för ett item — se issue 57b § Beslut 4, 5, 6, 7 och 9.
  *
  * Egen komponent och inte ett formulär i var sin sida: skapandet och
- * redigeringen bär samma nio fält, och den enda skillnaden är `account`
+ * redigeringen bär samma tio fält, och den enda skillnaden är `account`
  * (bara vid skapandet), startvärdena, metoden och knappens ord. Två avskrifter
  * av samma fält hade glidit isär vid första ändringen — samma skäl som
  * AccountSettingsForm ligger i components/.
@@ -43,6 +43,15 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * då `Y-m-d`, vilket är exakt vad `date_format:Y-m-d` i den delade
  * FormRequesten kräver — ingen egen datumtolkning i JavaScript, och ingen
  * `maxlength` på `description`, som är TEXT och inte har någon längdregel.
+ *
+ * **Anteckningen är ett eget fält bredvid beskrivningen** (issue 96 ·
+ * [[ADR-0041 Itemets vy]] § Beslut). Två textrutor, två kolumner, två
+ * betydelser: beskrivningen säger vad itemet ÄR, anteckningen vad användaren
+ * VET om det. Formuläret fyller aldrig den ena ur den andra och visar dem
+ * inte som en text — slås de ihop blir beskrivningen en uppsättning eller
+ * anteckningen en rubrik. `notes` är TEXT som `description` och har därför
+ * ingen `maxlength` heller; ett tömt fält skickas som tom sträng, vilket
+ * `sometimes|nullable` gör till `null`.
  *
  * Ingen egen validering: reglerna bor i StoreItemRequest/UpdateItemRequest och
  * felen renderas av FormField vid sitt fält ([[ADR-0021 Frontendteknik]]).
@@ -117,6 +126,7 @@ const showCover = computed(() => props.item !== null && props.images.length > 0)
 const fields = {
     name: props.item?.name ?? '',
     description: props.item?.description ?? '',
+    notes: props.item?.notes ?? '',
     manufacturer: props.item?.manufacturer ?? '',
     model: props.item?.model ?? '',
     serial_number: props.item?.serial_number ?? '',
@@ -233,6 +243,26 @@ function submit() {
                 v-model="form.description"
                 :aria-describedby="describedBy"
                 name="description"
+                rows="4"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
+            />
+        </FormField>
+
+        <!-- Anteckningen: ett eget fält bredvid beskrivningen och inte en
+             fortsättning på den (issue 96). Beskrivningen säger vad itemet
+             ÄR, anteckningen vad användaren VET om det — ingen av dem fylls
+             ur den andra, och `notes: null` tömmer fältet. -->
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('item.form.notes')"
+            id="notes"
+            :error="form.errors.notes"
+        >
+            <textarea
+                id="notes"
+                v-model="form.notes"
+                :aria-describedby="describedBy"
+                name="notes"
                 rows="4"
                 class="rounded border border-slate-300 bg-white px-3 py-2"
             />

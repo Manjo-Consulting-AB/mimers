@@ -43,10 +43,17 @@ export function formatDateOnly(value, locale) {
  * detaljvyns rubrik och är därför inte med.
  *
  * `key` är också sista ledet i översättningsnyckeln (`item.show.<key>`).
+ *
+ * `notes` (issue 96) är en EGEN rad och inte en fortsättning på
+ * `description`: beskrivningen säger vad itemet ÄR, anteckningen vad
+ * användaren VET om det. Ingen fallback åt något håll — är anteckningen tom
+ * utelämnas raden som varje annan tom rad, och beskrivningen står kvar orörd
+ * ovanför.
  */
 export function itemFields(item, locale) {
     return [
         { key: 'description', value: item.description },
+        { key: 'notes', value: item.notes },
         { key: 'manufacturer', value: item.manufacturer },
         { key: 'model', value: item.model },
         { key: 'serial_number', value: item.serial_number },

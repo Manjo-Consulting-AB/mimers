@@ -16,6 +16,11 @@ use Illuminate\Validation\Rule;
  * means "leave it alone", while `category: null` explicitly clears the
  * category, see § Beslut 7.
  *
+ * `notes` (issue 96) is `sometimes` + `nullable` like `description`: an
+ * omitted `notes` leaves the column alone, while `notes: null` EMPTIES it.
+ * The three states — unset, set, emptied — are all reachable, and the field
+ * is never filled from `description` or the other way round.
+ *
  * `tags` works the same way but is NOT nullable: a present `tags` REPLACES
  * the whole set (issue 13b § Beslut 4) — `tags: []` clears it, an omitted
  * `tags` leaves it alone. The controller reads `has('tags')`, never
@@ -91,6 +96,7 @@ class UpdateItemRequest extends FormRequest
         $rules = [
             'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['sometimes', 'nullable', 'string'],
+            'notes' => ['sometimes', 'nullable', 'string'],
             'manufacturer' => ['sometimes', 'nullable', 'string', 'max:255'],
             'model' => ['sometimes', 'nullable', 'string', 'max:255'],
             'serial_number' => ['sometimes', 'nullable', 'string', 'max:255'],

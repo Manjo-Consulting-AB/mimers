@@ -350,6 +350,85 @@ it('ändrar fälten, byter kategori och ersätter hela taggmängden', function (
 });
 
 /*
+ * Klart när: fältet går att sätta, ändra och tömma i itemets formulär (issue
+ * 96).
+ *
+ * De tre tillstånden prövas över webbens rutt, för det är den ItemForm.vue
+ * postar till. Tömningen skickas som en TOM STRÄNG och inte som `null`: en
+ * `<textarea>` som tömts skickar `''`, och det är `ConvertEmptyStringsToNull`
+ * som gör den till `null` innan `sometimes|nullable` bedöms. Skickade testet
+ * `null` hade det prövat något annat än formuläret gör.
+ *
+ * Beskrivningen sätts i samma anrop och står kvar orörd genom alla tre — ingen
+ * av de två fylls ur den andra.
+ */
+it('sätter, ändrar och tömmer anteckningen i formuläret', function () {
+    withoutVite();
+
+    [$konto, $anvandare, $container] = itemformKontext();
+
+    $svar = actingAs($anvandare)->post("/containers/{$container->ulid}/items", itemformKropp($konto, [
+        'description' => 'En bronsimpeller till sjövattenpumpen.',
+        'notes' => 'Bytte impeller 2024.',
+    ]));
+
+    $item = Item::query()->where('container_id', $container->id)->sole();
+
+    $svar->assertRedirect("/containers/{$container->ulid}/items/{$item->ulid}");
+
+    expect($item->description)->toBe('En bronsimpeller till sjövattenpumpen.')
+        ->and($item->notes)->toBe('Bytte impeller 2024.');
+
+    $url = "/containers/{$container->ulid}/items/{$item->ulid}";
+
+    actingAs($anvandare)->patch($url, itemformKropp($konto, [
+        'description' => 'En bronsimpeller till sjövattenpumpen.',
+        'notes' => 'Bytte impeller 2024 och igen 2026.',
+    ]))->assertRedirect($url);
+
+    expect($item->refresh()->notes)->toBe('Bytte impeller 2024 och igen 2026.');
+
+    actingAs($anvandare)->patch($url, itemformKropp($konto, [
+        'description' => 'En bronsimpeller till sjövattenpumpen.',
+        'notes' => '',
+    ]))->assertRedirect($url);
+
+    $item->refresh();
+
+    expect($item->notes)->toBeNull()
+        ->and($item->description)->toBe('En bronsimpeller till sjövattenpumpen.');
+});
+
+/*
+ * Klart när: anteckningen och beskrivningen går att läsa var för sig.
+ *
+ * Redigeringsvyn får båda ur `ItemResource`, och `itemFields` i
+ * resources/js/components/itemPresentation.js ritar dem som två rader. Den
+ * gamla inställningen — att `description` *är* anteckningsfältet ([[ADR-0041
+ * Itemets vy]] § Beslut i den lydelse som gällde före issue 96) — hade gett
+ * ett fält, och det är skillnaden det här testet håller fast.
+ */
+it('ger redigeringsvyn anteckningen och beskrivningen som två fält', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemformKontext();
+
+    $item = itemformItem($container, 'Impellern', $anvandare, [
+        'description' => 'En bronsimpeller till sjövattenpumpen.',
+        'notes' => 'Bytte impeller 2024.',
+    ]);
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items/{$item->ulid}/edit")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Items/Edit')
+            ->where('item.description', 'En bronsimpeller till sjövattenpumpen.')
+            ->where('item.notes', 'Bytte impeller 2024.')
+        );
+});
+
+/*
  * Klart när: ett `name` som saknas och ett `purchased_at` som inte är `Y-m-d`
  * visas som fel vid sitt eget fält, och formuläret behåller det användaren
  * skrev.

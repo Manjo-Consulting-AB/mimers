@@ -1222,6 +1222,9 @@ return [
 
         'show' => [
             'description' => 'Description',
+            // Issue 96. `description` says what the item IS, `notes` what the
+            // user KNOWS about it — two rows, never one merged text.
+            'notes' => 'Notes',
             'manufacturer' => 'Manufacturer',
             'model' => 'Model',
             'serial_number' => 'Serial number',
@@ -1262,6 +1265,8 @@ return [
         'form' => [
             'name' => 'Name',
             'description' => 'Description',
+            // Issue 96. The same distinction as `item.show.notes` above.
+            'notes' => 'Notes',
             'manufacturer' => 'Manufacturer',
             'model' => 'Model',
             'serial_number' => 'Serial number',
