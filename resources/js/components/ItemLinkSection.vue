@@ -25,12 +25,12 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  *
  * **Riktningen presenteras från motpartens sida** (§ Beslut 4). `parent`
  * betyder att motparten ligger ÖVER det här itemet — etiketterna är
- * *Överordnat item*, *Underordnat item* och *Syskon*, och samma ord bär
+ * *Överordnat item*, *Underordnat item* och *Relaterat item*, och samma ord bär
  * grupprubrikerna. Servern vänder på värdet innan det når `LinkItems`
  * (App\Http\Controllers\ItemLinkController), så det användaren väljer är det
  * detaljvyn visar efter omladdning.
  *
- * **Syskon är det enda valet som inte delar något** (§ Beslut 8), och raden
+ * **Relaterat är det enda valet som inte delar något** (§ Beslut 8), och raden
  * vid riktningsväljaren säger det. Den räknar INTE ut något: ingen fråga om
  * vilka grants som finns och ingen "det här ger N personer åtkomst" — den
  * siffran hör till delningsvyn (issue 55a), och en andra räknare här vore en
