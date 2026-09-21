@@ -13,11 +13,17 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * Sidan ligger i ContainerLayout och bär den prop layouten kräver:
  * `container` ur App\Http\Resources\ContainerResource.
  *
- * EN PATCH mot /containers/{ulid}, och bara `name`, `kind` och — sedan issue
- * 85 · [[ADR-0037 Valutans arv]] — `currency`. `UpdateContainerRequest` tar
+ * EN PATCH mot /containers/{ulid}, och bara `name`, `kind`, `description` —
+ * sedan issue 88 · [[ADR-0039 Containerns översikt]] — och `currency` (issue
+ * 85 · [[ADR-0037 Valutans arv]]). `UpdateContainerRequest` tar
  * inte emot något annat, så ett `account`-fält här hade varit en yta som inte
  * gör något. Att flytta en container mellan konton är ägarbyte (issue 39),
  * inte en inställning.
+ *
+ * **Beskrivningen är ett fritextfält och ingenting mer.** Den är frivillig,
+ * den får sättas, ändras och tömmas, och den visas ordagrant — ingen
+ * presentation byggs ur innehållet, och ingen kod plockar isär det. Modell,
+ * årtal och tillverkare byggs inte ([[ADR-0033 Produktens omfång]]).
  *
  * Ingen egen ägarkontouppgift i vyn: den här sidan handlar om containern, och
  * delningsstatus hör till listan.
@@ -63,6 +69,10 @@ const form = useForm({
     // En container skapad utan art bär `null`; rutan ska vara tom, inte visa
     // ordet "null" (issue 84).
     kind: props.container.kind ?? '',
+    // En container skapad utan beskrivning bär `null`; rutan ska vara tom. En
+    // TÖMD ruta sparar `null` igen — fältet är frivilligt hela vägen (issue
+    // 88 · [[ADR-0039 Containerns översikt]]).
+    description: props.container.description ?? '',
     // Samma sak för valutan: en tom ruta betyder "ärv kontots", och det är
     // ett giltigt svar — inte ett fält användaren glömt (issue 85 ·
     // [[ADR-0037 Valutans arv]]).
@@ -142,6 +152,27 @@ async function destroy() {
                 <datalist id="container-kinds">
                     <option v-for="kind in kinds" :key="kind" :value="kind" />
                 </datalist>
+            </FormField>
+
+            <FormField
+                v-slot="{ describedBy }"
+                :label="t('container.edit.description')"
+                id="description"
+                :error="form.errors.description"
+            >
+                <!-- Ett enda fritextfält, frivilligt hela vägen: det får
+                     sättas, ändras och TÖMMAS (issue 88 · [[ADR-0039
+                     Containerns översikt]]). Ingen struktur och ingen
+                     hjälprad som ber om modell eller årtal — fältet visas
+                     som det skrivs, och ingen kod plockar isär det. -->
+                <textarea
+                    id="description"
+                    v-model="form.description"
+                    :aria-describedby="describedBy"
+                    name="description"
+                    rows="4"
+                    class="rounded border border-slate-300 bg-white px-3 py-2"
+                />
             </FormField>
 
             <FormField

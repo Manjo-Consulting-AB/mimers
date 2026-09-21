@@ -33,6 +33,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * lagras i övrigt ordagrant — ingen skiftlägesnormalisering, ingen hopslagning
  * av stavningsvarianter ([[ADR-0016 Kostnadsregistrering]] § Motivering).
  *
+ * `description` är containerns ENDA fritextfält utöver `name`, se
+ * [[ADR-0039 Containerns översikt]] § Beslut. Det är nullbart och frivilligt,
+ * och det visas ORDAGRANT: ingen kod plockar isär det i delar, och den
+ * formaterade underrubrik mockupen ville ha — modell och årtal — utgår
+ * eftersom den bara går att generera ur fält som inte finns och inte ska
+ * finnas ([[ADR-0033 Produktens omfång]]). Ingen `explode`, ingen parsning,
+ * ingen presentation byggd ur innehållet.
+ *
  * `account_id` och `template_source_id` är medvetet UTESLUTNA ur
  * `#[Fillable]`: `account_id` kan bara sättas vid skapande (issue 8 §
  * Beslut 9, ägarbyte är issue 39) och `template_source_id` är förberedd för
@@ -45,7 +53,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * utan egen valuta följer kontots. Se effectiveCurrency() nedan —
  * arvsregeln formuleras där och ingen annanstans.
  */
-#[Fillable(['name', 'kind', 'currency'])]
+#[Fillable(['name', 'kind', 'description', 'currency'])]
 #[RouteKey('ulid')]
 class Container extends Model
 {

@@ -183,6 +183,7 @@ class ContainerController extends Controller
                 $account,
                 $request->validated('name'),
                 $request->validated('kind'),
+                $request->validated('description'),
             );
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['quota' => $translator->message($e)]);

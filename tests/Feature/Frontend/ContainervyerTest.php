@@ -662,8 +662,10 @@ it('har containerytans texter och läser dem ur lang/', function () {
         'container.create.heading',
         'container.create.account',
         'container.create.account_choose',
+        'container.create.description',
         'container.create.submit',
         'container.edit.heading',
+        'container.edit.description',
         'container.edit.submit',
         'container.destroy.action',
         'container.nav.settings',
@@ -697,4 +699,156 @@ it('har containerytans texter och läser dem ur lang/', function () {
 
     expect(File::get(resource_path('js/pages/Containers/Create.vue')))->toContain('container.create.submit');
     expect(File::get(resource_path('js/pages/Containers/Edit.vue')))->toContain('container.edit.submit');
+});
+
+/*
+ * Issue 88 · Containern får en beskrivning. Se [[ADR-0039 Containerns
+ * översikt]] § Beslut.
+ *
+ * ETT fritextfält, nullbart och frivilligt, i BÅDE skapa- och redigeravyn.
+ * Skapandevägen går genom App\Actions\Container\CreateContainer, och
+ * parametern lades SIST med ett förval — ingen befintlig anropare rördes.
+ *
+ * API:ets halva prövas i tests/Feature/Container/ContainerCrudTest.php.
+ */
+
+/*
+ * Klart när: en beskrivning som anges vid skapandet sparas — via webbens
+ * `store()` (issue 88).
+ *
+ * Värdet är mockupens egen underrubrik, med punkten kvar, och det sparas
+ * ORDAGRANT: ingen kod plockar isär fältet i modell och årtal, och hade den
+ * gjort det hade raden kommit tillbaka i delar.
+ */
+it('skapar en container med en beskrivning', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'Vindil',
+        'description' => 'Malö 116 • 1984',
+        'account' => $konto->ulid,
+    ])->assertSessionHasNoErrors();
+
+    expect(Container::query()->where('name', 'Vindil')->firstOrFail()->description)
+        ->toBe('Malö 116 • 1984');
+});
+
+/*
+ * Klart när: en container kan skapas och sparas UTAN beskrivning (issue 88).
+ *
+ * Fältet är frivilligt i BÅDA vyerna — att kräva en beskrivning vid skapandet
+ * är att ställa en fråga användaren ännu inte kan svara på, samma resonemang
+ * som gjorde `kind` frivillig i issue 84. Det som sparas är `null`, och
+ * skapavyns ruta är tom och inte förifylld med något.
+ */
+it('skapar en container utan beskrivning', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = containerKontext();
+
+    from('/containers/create')->actingAs($anvandare)->post('/containers', [
+        'name' => 'Utan beskrivning',
+        'account' => $konto->ulid,
+    ])->assertSessionHasNoErrors();
+
+    expect(Container::query()->where('name', 'Utan beskrivning')->firstOrFail()->description)
+        ->toBeNull();
+});
+
+/*
+ * Klart när: `ContainerResource` bär fältet och alltid som `null` när det
+ * saknas, aldrig utelämnat (issue 88 · issue 8 § Beslut 7).
+ *
+ * Redigeravyns sidprop är samma resurs som `/api` svarar med, så provet
+ * gäller båda ytorna: `has()` fäller en nyckel som saknas, och `where()`
+ * fäller ett värde som är fel.
+ */
+it('bär beskrivningen i redigeravyns sidprop, som null när den saknas', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/edit")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Edit')
+            ->has('container.description')
+            ->where('container.description', null)
+        );
+
+    $container->update(['description' => 'Malö 116 • 1984']);
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/edit")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('container.description', 'Malö 116 • 1984')
+        );
+});
+
+/*
+ * Klart när: en beskrivning kan sättas och ändras i redigeravyn (issue 88).
+ */
+it('sätter och ändrar beskrivningen i redigeravyn', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    from("/containers/{$container->ulid}/edit")
+        ->actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}", ['description' => 'Malö 116 • 1984'])
+        ->assertRedirect("/containers/{$container->ulid}/edit")
+        ->assertSessionHas('status', 'container-updated');
+
+    expect($container->fresh()->description)->toBe('Malö 116 • 1984');
+
+    from("/containers/{$container->ulid}/edit")
+        ->actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}", ['description' => 'Såld 2019.'])
+        ->assertSessionHasNoErrors();
+
+    expect($container->fresh()->description)->toBe('Såld 2019.');
+});
+
+/*
+ * Klart när: en beskrivning kan TÖMMAS i redigeravyn (issue 88).
+ *
+ * En tom ruta är ett giltigt svar — fältet är frivilligt hela vägen, och
+ * `null` är vad som sparas. Att tömma det är inte samma sak som att låta
+ * nyckeln vara: `sometimes` skiljer de två åt, och den halvan prövas i
+ * ContainerCrudTest.
+ */
+it('tömmer beskrivningen i redigeravyn', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+    $container->update(['description' => 'Malö 116 • 1984']);
+
+    from("/containers/{$container->ulid}/edit")
+        ->actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}", ['description' => ''])
+        ->assertSessionHasNoErrors();
+
+    expect($container->fresh()->description)->toBeNull();
+});
+
+/*
+ * Fältet finns i BÅDA vyerna och läses ur `lang/` (issue 88).
+ *
+ * En nyckel som finns men inte används är en text ingen ser. Provet är
+ * tvådelat: nycklarna finns i `lang/` (prövat i testet ovan) och vyerna
+ * binder sina rutor till `form.description` med sin egen nyckel.
+ */
+it('har beskrivningsfältet i både skapa- och redigeravyn', function () {
+    $skapa = File::get(resource_path('js/pages/Containers/Create.vue'));
+    $redigera = File::get(resource_path('js/pages/Containers/Edit.vue'));
+
+    expect($skapa)->toContain("t('container.create.description')");
+    expect($skapa)->toContain('v-model="form.description"');
+    expect($redigera)->toContain("t('container.edit.description')");
+    expect($redigera)->toContain('v-model="form.description"');
+
+    // Redigeravyn fyller rutan ur resursen och faller tillbaka på en tom
+    // sträng: en container utan beskrivning bär `null`, och rutan ska vara
+    // tom — inte visa ordet "null".
+    expect($redigera)->toContain('props.container.description ??');
 });

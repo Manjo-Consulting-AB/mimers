@@ -1042,6 +1042,11 @@ return [
 
             'name' => 'Name',
             'kind' => 'Type',
+            // The container's one free-text field beyond the name, see issue 88
+            // · [[ADR-0039 Containerns översikt]]. Voluntary, and shown as
+            // written: no label asks for a model or a year, because those fields
+            // do not exist and must not ([[ADR-0033 Produktens omfång]]).
+            'description' => 'Description',
             'account' => 'Account',
             'account_choose' => 'Choose an account',
 
@@ -1054,6 +1059,7 @@ return [
 
             'name' => 'Name',
             'kind' => 'Type',
+            'description' => 'Description',
 
             // The container's own currency, see issue 85 · [[ADR-0037 Valutans
             // arv]]. The field is prefilled with the container's own value and
