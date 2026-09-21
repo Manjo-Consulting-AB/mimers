@@ -450,25 +450,33 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // sina egna rutter nedan. Rapporten och dess grind är oförändrade.
     Route::get('/containers/{container}/costs/report', CostReportController::class);
 
-    // Issue 86 · De fasta kostnadssummeringarna — containerns och kontots
-    // totalsumma utan parametrar, se
+    // Issue 86 · De fasta kostnadssummeringarna — containerns, itemets och
+    // kontots summering utan parametrar, se
     // App\Http\Controllers\Api\CostSummaryController och
-    // App\Support\Cost\CostReport::summary()/summaryForContainers().
+    // App\Support\Cost\CostReport::summary()/forItem()/summaryForContainers().
     // [[ADR-0038 Gränsen för Pro i kostnaderna]] flyttade gränsen från
     // summering till fråga: den fasta summeringen är fri och bär därför
     // INGEN plangrind — bara behörigheten. Containerrutten frågar view(),
-    // kontorutten AccountPolicy::viewStorage() (medlemskap; app/Policies
-    // ligger utanför issuen, se kontrollerns docblock).
+    // itemrutten itemets view() (samma grind som kostnadsraderna på samma
+    // item, issue 71 § Beslut 1 och 5), kontorutten
+    // AccountPolicy::viewStorage() (medlemskap; app/Policies ligger utanför
+    // issuen, se kontrollerns docblock).
     //
     // Rutterna tar inga parametrar: ingen period, inget filter, ingen
     // gruppering. En okänd parameter i querysträngen kan inte påverka
     // utfallet — kontrollern läser den inte.
     //
+    // Itemrutten kom med issue 91 och är samma regel som containerrutten med
+    // en annan startpunkt ([[ADR-0040 Underträdets summor]]): underträdet är
+    // itemet plus dess ättlingar. Den ligger under {item}, som gruppen redan
+    // binder med scopeBindings() — en ULID från en annan container ger 404,
+    // inte en summa ur fel container.
+    //
     // Kontorutten ligger här och inte under de andra /accounts-rutterna
-    // därför att den hör ihop med containerrutten och med rapporten: de tre
+    // därför att den hör ihop med containerrutten och med rapporten: de
     // läser samma radmängd, och den som ändrar en av dem ska se de andra.
-    // Nedbrytningen per item är issue 91:s och byggs inte här.
     Route::get('/containers/{container}/costs/summary', [CostSummaryController::class, 'forContainer']);
+    Route::get('/containers/{container}/items/{item}/costs/summary', [CostSummaryController::class, 'forItem']);
     Route::get('/accounts/{account}/costs/summary', [CostSummaryController::class, 'forAccount']);
 
     // Issue 20a · Papperskorgen — lista och återställ mjukraderat innehåll

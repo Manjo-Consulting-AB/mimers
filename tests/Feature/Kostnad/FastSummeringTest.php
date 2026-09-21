@@ -278,7 +278,7 @@ it('en fast summering över blandade valutor grupperas per valuta och summeras i
     expect($kontot->json('data.totals'))->toBe($facit);
 });
 
-it('svaret bär en total och ingen gruppering per item', function () {
+it('svaret bär en total, och en nedbrytning bara där en startpunkt finns', function () {
     [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $item = summaItem($container, $account, $user, 'Impeller');
@@ -287,12 +287,15 @@ it('svaret bär en total och ingen gruppering per item', function () {
     $containern = getJson("/api/containers/{$container->ulid}/costs/summary", $headers);
     $kontot = getJson("/api/accounts/{$account->ulid}/costs/summary", $headers);
 
-    // Nedbrytningen per item är issue 91:s ([[ADR-0040 Underträdets summor]]).
-    // Nyckeln `totals` är hela svaret — ingen `groups`, ingen `group_by`.
-    expect(array_keys($containern->json('data')))->toBe(['totals']);
+    // Containern och itemet är de två startpunkterna för underträdet och bär
+    // därför nedbrytningen (issue 91, [[ADR-0040 Underträdets summor]]).
+    // Kontot är ingen startpunkt — dess donut är nedbruten per CONTAINER
+    // ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut), en annan axel
+    // som inte är den här issuen — så `totals` är hela dess svar.
+    expect(array_keys($containern->json('data')))->toBe(['totals', 'breakdown']);
     expect(array_keys($kontot->json('data')))->toBe(['totals']);
-    expect($containern->getContent())->not->toContain($item->ulid);
-    expect($containern->getContent())->not->toContain('Impeller');
+    expect($kontot->getContent())->not->toContain($item->ulid);
+    expect($kontot->getContent())->not->toContain('Impeller');
 });
 
 it('kontosummeringen räknar kontots containers och inget annat', function () {
