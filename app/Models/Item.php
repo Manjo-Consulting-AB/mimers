@@ -167,28 +167,6 @@ class Item extends Model
     }
 
     /**
-     * Itemets omslagsbild — den VALDA bilagan, eller null när ingen är vald
-     * (issue 93 · [[ADR-0041 Itemets vy]] § Beslut).
-     *
-     * Pekaren är en preferens och inte data: den som inte väljer får ändå en
-     * bild, genom App\Actions\Item\ResolveItemCover. Kolumnen är NULLBAR och
-     * nollställs av databasen när bilagan försvinner — den främmande nyckeln
-     * är ON DELETE SET NULL och inte husets RESTRICT, se migrationens
-     * kommentar och [[ADR-0008 Soft delete och papperskorg]].
-     *
-     * Relationen är medveten om att pekaren kan stå kvar på en bilaga som
-     * mjukraderats: SoftDeletes' globala scope gör då `coverAttachment` null,
-     * medan kolumnen har kvar sitt värde. Det är upplösningens steg 1 som
-     * avgör — och den läser kolumnen, inte den här relationen.
-     *
-     * @return BelongsTo<Attachment, $this>
-     */
-    public function coverAttachment(): BelongsTo
-    {
-        return $this->belongsTo(Attachment::class, 'cover_attachment_id');
-    }
-
-    /**
      * Itemets scheman — reglerna för återkommande underhåll, noll eller
      * flera, se [[Scheman och uppgifter]] § schedule och [[ADR-0005 Schema
      * och förekomst]] (issue 21). Listningen i
