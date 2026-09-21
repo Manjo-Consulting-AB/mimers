@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  * En relation mellan två items, se [[Items och organisation]] § item_link och
  * issue 14. Riktningen är kanonisk (§ Beslut 4): `relation` beskriver vad
  * `from_item_id` ÄR för `to_item_id`, `parent` skrivs alltid och `child`
- * härleds vid läsning, `sibling` normaliseras till lägst `id` först.
+ * härleds vid läsning, `related` normaliseras till lägst `id` först.
  * Läsningen vänder på relationen per item via relationSeenFromItem().
  *
  * Ingen ULID (§ Beslut 1) och därför inget `#[RouteKey]` — ett par av items
@@ -39,7 +39,7 @@ class ItemLink extends Model
     /**
      * Vad MOTPARTEN är för itemet med `$itemId`, sedd från det itemet — issue
      * 14 § Beslut 8. Länken ligger kanoniskt (`relation` = `parent` eller
-     * `sibling`, `child` skrivs aldrig), så för en `parent`-rad är svaret
+     * `related`, `child` skrivs aldrig), så för en `parent`-rad är svaret
      * `child` om `$itemId` är föräldrasidan och `parent` annars.
      *
      * Delas av App\Actions\Item\LinkItems (data.relation i
@@ -49,8 +49,8 @@ class ItemLink extends Model
      */
     public function relationSeenFromItem(int $itemId): string
     {
-        if ($this->relation === 'sibling') {
-            return 'sibling';
+        if ($this->relation === 'related') {
+            return 'related';
         }
 
         return $this->from_item_id === $itemId ? 'child' : 'parent';

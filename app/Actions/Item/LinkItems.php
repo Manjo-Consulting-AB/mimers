@@ -14,7 +14,7 @@ use App\Models\ItemLink;
  * 2. Samma container — `item_link.cross_container` (§ Beslut 7). Bara
  *    defensiv: requesten har redan bevisat att motparten finns i containern.
  * 3. Kanoniseringen (§ Beslut 4) — `parent` skrivs alltid, `child` vänds
- *    till `parent`, `sibling` normaliseras till lägst `id` först.
+ *    till `parent`, `related` normaliseras till lägst `id` först.
  * 4. Högst en relation per par — `item_link.pair_exists`, prövat åt BÅDA
  *    hållen (§ Beslut 5).
  * 5. Ingen cykel för `parent` — `item_link.cycle` (§ Beslut 6).
@@ -71,17 +71,17 @@ class LinkItems
     /**
      * Kanonisk riktning (§ Beslut 4): `relation` beskriver vad `from` ÄR för
      * `to`. `parent` behåller paret, `child` ("det här itemet är barn till
-     * motparten") vänder på det, `sibling` (symmetrisk) normaliseras till
+     * motparten") vänder på det, `related` (symmetrisk) normaliseras till
      * lägst `id` först.
      *
-     * @return array{0: Item, 1: Item, 2: 'parent'|'sibling'}
+     * @return array{0: Item, 1: Item, 2: 'parent'|'related'}
      */
     private function normalize(Item $item, Item $other, string $relation): array
     {
-        if ($relation === 'sibling') {
+        if ($relation === 'related') {
             return $item->id < $other->id
-                ? [$item, $other, 'sibling']
-                : [$other, $item, 'sibling'];
+                ? [$item, $other, 'related']
+                : [$other, $item, 'related'];
         }
 
         return $relation === 'parent'

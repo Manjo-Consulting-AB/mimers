@@ -366,7 +366,7 @@ it('DELETE links nekas på samma villkor som POST', function () {
     [, $mottagare, $headers] = kontoMedMedlem();
 
     grindGrant($container, $mottagare, $motor, AccessLevel::WRITE);
-    grindKant($motor, $mast, 'sibling');
+    grindKant($motor, $mast, 'related');
 
     $svar = deleteJson("/api/containers/{$container->ulid}/items/{$motor->ulid}/links/{$mast->ulid}", [], $headers);
 
@@ -387,7 +387,7 @@ it('en write-mottagare med båda ändarna får länka och knyta upp', function (
 
     postJson("/api/containers/{$container->ulid}/items/{$motor->ulid}/links", [
         'item' => $mast->ulid,
-        'relation' => 'sibling',
+        'relation' => 'related',
     ], $headers)->assertCreated();
 
     deleteJson("/api/containers/{$container->ulid}/items/{$motor->ulid}/links/{$mast->ulid}", [], $headers)
@@ -500,7 +500,7 @@ it('en ägarkontomedlem kan allt hon kunde före issuen', function () {
 
     postJson("/api/containers/{$container->ulid}/items/{$nytt->ulid}/links", [
         'item' => $båt->ulid,
-        'relation' => 'sibling',
+        'relation' => 'related',
     ], $headers)->assertCreated();
 
     deleteJson("/api/containers/{$container->ulid}/items/{$nytt->ulid}/links/{$båt->ulid}", [], $headers)
@@ -533,7 +533,7 @@ it('en container-bred delete-innehavare kan allt hon kunde före issuen', functi
 
     postJson("/api/containers/{$container->ulid}/items/{$nytt->ulid}/links", [
         'item' => $båt->ulid,
-        'relation' => 'sibling',
+        'relation' => 'related',
     ], $headers)->assertCreated();
 
     deleteJson("/api/containers/{$container->ulid}/items/{$nytt->ulid}", [], $headers)->assertNoContent();

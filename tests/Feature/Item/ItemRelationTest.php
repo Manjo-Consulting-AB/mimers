@@ -5,14 +5,15 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 
 use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
 
 /*
- * Issue 14 · Relationer mellan items. Se
- * App\Http\Controllers\Api\ItemLinkController,
+ * Issue 14 · Relationer mellan items, och issue 87 · Relationen heter
+ * `related`. Se App\Http\Controllers\Api\ItemLinkController,
  * App\Http\Requests\Item\StoreItemLinkRequest,
  * App\Http\Resources\ItemLinkResource, App\Actions\Item\LinkItems och
  * App\Models\ItemLink.
@@ -93,7 +94,7 @@ it('ingen rad i databasen har relation child', function () {
     expect(DB::table('item_link')->where('relation', 'child')->count())->toBe(0);
 });
 
-it('sibling normaliseras till lägst id först', function () {
+it('related normaliseras till lägst id först', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $först = Item::factory()->for($container, 'container')->create(['name' => 'Alpha']);
@@ -104,18 +105,18 @@ it('sibling normaliseras till lägst id först', function () {
 
     $response = postJson("/api/containers/{$container->ulid}/items/{$först->ulid}/links", [
         'item' => $andra->ulid,
-        'relation' => 'sibling',
+        'relation' => 'related',
     ], $headers);
 
     $response->assertCreated();
     expect(DB::table('item_link')->count())->toBe(1);
-    expect(DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->where('relation', 'sibling')->exists())->toBeTrue();
+    expect(DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->where('relation', 'related')->exists())->toBeTrue();
 
     // Samma par från andra hållet ger INTE en andra rad — paret är redan
     // kopplat, oavsett håll (issue 14 § Beslut 4 och 5).
     $igen = postJson("/api/containers/{$container->ulid}/items/{$andra->ulid}/links", [
         'item' => $först->ulid,
-        'relation' => 'sibling',
+        'relation' => 'related',
     ], $headers);
 
     $igen->assertStatus(422);
@@ -167,7 +168,7 @@ it('läsningen härleder motsatsen', function () {
     ]);
 });
 
-it('syskon syns från båda hållen', function () {
+it('relaterade syns från båda hållen', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $a = Item::factory()->for($container, 'container')->create(['name' => 'Alpha']);
@@ -175,16 +176,16 @@ it('syskon syns från båda hållen', function () {
 
     postJson("/api/containers/{$container->ulid}/items/{$a->ulid}/links", [
         'item' => $b->ulid,
-        'relation' => 'sibling',
+        'relation' => 'related',
     ], $headers)->assertCreated();
 
     getJson("/api/containers/{$container->ulid}/items/{$a->ulid}/links", $headers)
         ->assertOk()
-        ->assertJson(['data' => [['item' => ['ulid' => $b->ulid, 'name' => 'Beta'], 'relation' => 'sibling']]]);
+        ->assertJson(['data' => [['item' => ['ulid' => $b->ulid, 'name' => 'Beta'], 'relation' => 'related']]]);
 
     getJson("/api/containers/{$container->ulid}/items/{$b->ulid}/links", $headers)
         ->assertOk()
-        ->assertJson(['data' => [['item' => ['ulid' => $a->ulid, 'name' => 'Alpha'], 'relation' => 'sibling']]]);
+        ->assertJson(['data' => [['item' => ['ulid' => $a->ulid, 'name' => 'Alpha'], 'relation' => 'related']]]);
 });
 
 it('samma par kan inte kopplas två gånger', function () {
@@ -213,7 +214,7 @@ it('samma par kan inte kopplas två gånger', function () {
     expect($response->json('error.data.relation'))->toBe('parent');
 });
 
-it('ett par kan inte ha både parent och sibling', function () {
+it('ett par kan inte ha både parent och related', function () {
     [$account, , $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $a = Item::factory()->for($container, 'container')->create();
@@ -226,7 +227,7 @@ it('ett par kan inte ha både parent och sibling', function () {
 
     $response = postJson("/api/containers/{$container->ulid}/items/{$a->ulid}/links", [
         'item' => $b->ulid,
-        'relation' => 'sibling',
+        'relation' => 'related',
     ], $headers);
 
     $response->assertStatus(422);
@@ -503,7 +504,7 @@ it('listningen gör ett konstant antal frågor', function () {
     // Fler länkar — frågeantalet ska INTE växa med antalet länkar.
     postJson("/api/containers/{$container->ulid}/items/{$mitt->ulid}/links", [
         'item' => $grannar[1]->ulid,
-        'relation' => 'sibling',
+        'relation' => 'related',
     ], $headers)->assertCreated();
     postJson("/api/containers/{$container->ulid}/items/{$grannar[2]->ulid}/links", [
         'item' => $mitt->ulid,
@@ -561,4 +562,164 @@ it('cykelkontrollen gör ett konstant antal frågor', function () {
     DB::disableQueryLog();
 
     expect($frågorMedStorGraf)->toBe($frågorMedLitenGraf);
+});
+
+/*
+ * ── Issue 87 · Relationen heter `related` ────────────────────────────────
+ *
+ * Namnbytet är allt som händer: samma tre värden, samma regler, men det
+ * tredje heter `related` i stället för `sibling` ([[ADR-0035 Relationen
+ * mellan objekt]]). Proverna nedan täcker de tre "Klart när"-punkter som
+ * INTE är ett omdöpt beteende — villkoret i databasen, radomskrivningen och
+ * frånvaron av ordet i koden. Att normaliseringen, härledningen och
+ * åtkomstregeln står oförändrade prövas av filens övriga tester, som nu
+ * matar in `related` och därmed faller om något av dem rörde sig.
+ */
+
+/**
+ * En färsk instans av issue 87:s migration. `require` (inte `require_once`)
+ * gör att filen evalueras på nytt varje gång och ger en ny anonym klass,
+ * samma väg som tests/Feature/Omfang/MigreringTest.php — sviten kör mot en
+ * databas som redan byggts av migreringen, så `up()` måste gå att köra en
+ * gång till för hand.
+ */
+function relationsMigreringen(): object
+{
+    return require database_path('migrations/2026_09_21_000000_rename_item_link_relation_to_related.php');
+}
+
+/**
+ * Ett itempar i samma container, i ordningen [$lägst, $högst] så en
+ * kanoniskt lagrad `related`-rad kan skrivas utan att räkna om.
+ *
+ * @return array{0: Item, 1: Item}
+ */
+function relationsPar(): array
+{
+    [$account] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+
+    $motor = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
+    $drev = Item::factory()->for($container, 'container')->create(['name' => 'Drevet']);
+
+    return $motor->id < $drev->id ? [$motor, $drev] : [$drev, $motor];
+}
+
+/*
+ * Klart när: inga rader med det gamla värdet finns kvar efter migreringen.
+ *
+ * Raden skrivs FÖR HAND med det gamla värdet, efter att schemat redan är
+ * migrerat. En svit som bygger sin databas ur migreringarna kan aldrig ha
+ * haft en rad som "överlevt" dem — samma grepp och samma skäl som
+ * tests/Feature/Container/ContainerCrudTest.php § "lämnar de fem befintliga
+ * arterna orörda genom migreringen".
+ *
+ * `updated_at` sätts till ett bestämt värde i det förflutna och prövas efter:
+ * en rad som byter namn ändras inte, och en tidsstämpel som rör sig hade
+ * gjort namnbytet till en innehållsändring i historiken.
+ */
+it('skriver om rader med det gamla värdet till related', function () {
+    [$lägst, $högst] = relationsPar();
+
+    DB::table('item_link')->insert([
+        'from_item_id' => $lägst->id,
+        'to_item_id' => $högst->id,
+        'relation' => 'sibling',
+        'created_at' => '2026-09-01 08:00:00',
+        'updated_at' => '2026-09-01 08:00:00',
+    ]);
+
+    relationsMigreringen()->up();
+
+    expect(DB::table('item_link')->where('relation', 'sibling')->count())->toBe(0);
+    expect(DB::table('item_link')->where('relation', 'related')->count())->toBe(1);
+
+    $raden = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
+
+    expect($raden->relation)->toBe('related');
+    expect($raden->updated_at)->toBe('2026-09-01 08:00:00');
+});
+
+/*
+ * Rundturen: `related` och `sibling` är samma värde, så omskrivningen är
+ * förlustfri åt båda hållen. Det är beviset för att `down()`:s avbildning är
+ * den omvända av `up()`:s — och att paret, riktningen och tidsstämpeln står
+ * stilla hela vägen.
+ */
+it('en migrering fram och tillbaka lämnar relationen intakt', function () {
+    [$lägst, $högst] = relationsPar();
+
+    DB::table('item_link')->insert([
+        'from_item_id' => $lägst->id,
+        'to_item_id' => $högst->id,
+        'relation' => 'related',
+        'created_at' => '2026-09-01 08:00:00',
+        'updated_at' => '2026-09-01 08:00:00',
+    ]);
+
+    $migration = relationsMigreringen();
+    $migration->down();
+
+    $tillbaka = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
+
+    expect($tillbaka->relation)->toBe('sibling');
+    expect($tillbaka->updated_at)->toBe('2026-09-01 08:00:00');
+
+    $migration->up();
+
+    $igen = DB::table('item_link')->where('from_item_id', $lägst->id)->where('to_item_id', $högst->id)->first();
+
+    expect($igen->relation)->toBe('related');
+    expect($igen->updated_at)->toBe('2026-09-01 08:00:00');
+});
+
+/*
+ * Klart när: CHECK-villkoret tar `related` och inte det gamla ordet.
+ *
+ * Provet läser KÄLLAN, av samma skäl som ContainerCrudTest gör det för
+ * `container_kind_check`: villkoret läggs bara på mysql, och sviten kör
+ * sqlite, som saknar ALTER TABLE ... DROP CHECK. Det som går att pröva är
+ * att migreringen SLÄPPER det gamla villkoret och sätter ett nytt — och att
+ * inget villkor någonstans i kedjan lämnas med det gamla ordet som sista ord.
+ */
+it('släpper det gamla CHECK-villkoret och sätter ett som tar related', function () {
+    $källor = '';
+
+    foreach (File::allFiles(database_path('migrations')) as $fil) {
+        $källor .= $fil->getContents()."\n";
+    }
+
+    expect($källor)->toContain('DROP CHECK item_link_relation_check');
+    expect($källor)->toContain("CHECK (relation IN ('parent', 'child', 'related'))");
+});
+
+/*
+ * Klart när: ingen förekomst av det gamla ordet finns i `app/`,
+ * `resources/js/components/ItemLinkSection.vue`, `lang/` eller `routes/`.
+ *
+ * Provet läser källan, för det är formen regeln gäller: ett ord i en
+ * kommentar eller i en nyckel kan ingen körning leta efter. Sökningen är
+ * skiftlägesokänslig, så både `sibling` och `Sibling` fångas.
+ *
+ * `resources/js/components/categoryTree.js` ligger utanför: kategoriträdet är
+ * en annan struktur med ett annat `parent_id`, och den relationen byter inte
+ * namn (issue 87 § Out of scope).
+ */
+it('har inte kvar det gamla ordet i koden, språkfilerna eller rutterna', function () {
+    $filer = [
+        ...File::allFiles(app_path()),
+        ...File::allFiles(lang_path()),
+        ...File::allFiles(base_path('routes')),
+        new SplFileInfo(resource_path('js/components/ItemLinkSection.vue')),
+    ];
+
+    $träffar = [];
+
+    foreach ($filer as $fil) {
+        if (stripos(File::get($fil->getPathname()), 'sibling') !== false) {
+            $träffar[] = str_replace(base_path().'/', '', $fil->getPathname());
+        }
+    }
+
+    expect($träffar)->toBe([]);
 });

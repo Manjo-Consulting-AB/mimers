@@ -9,7 +9,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * och 9.
  *
  * **Tre grupper och varje rad är en länk** (§ Beslut 9). Överordnade,
- * underordnade, syskon — i den ordningen, och sorterade som servern
+ * underordnade, relaterade — i den ordningen, och sorterade som servern
  * levererade dem (motpartens namn). Raden länkar till motpartens detaljvy,
  * och det är hela navigeringen backlogfilen ber om. En tom grupp ritas inte:
  * tre tomma rubriker säger mindre än en rad om att ingenting är kopplat.
@@ -25,12 +25,12 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  *
  * **Riktningen presenteras från motpartens sida** (§ Beslut 4). `parent`
  * betyder att motparten ligger ÖVER det här itemet — etiketterna är
- * *Överordnat item*, *Underordnat item* och *Syskon*, och samma ord bär
+ * *Överordnat item*, *Underordnat item* och *Relaterat item*, och samma ord bär
  * grupprubrikerna. Servern vänder på värdet innan det når `LinkItems`
  * (App\Http\Controllers\ItemLinkController), så det användaren väljer är det
  * detaljvyn visar efter omladdning.
  *
- * **Syskon är det enda valet som inte delar något** (§ Beslut 8), och raden
+ * **Relaterat är det enda valet som inte delar något** (§ Beslut 8), och raden
  * vid riktningsväljaren säger det. Den räknar INTE ut något: ingen fråga om
  * vilka grants som finns och ingen "det här ger N personer åtkomst" — den
  * siffran hör till delningsvyn (issue 55a), och en andra räknare här vore en
@@ -41,7 +41,7 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * är hård (issue 14 § Beslut 10) och har ingen papperskorg.
  *
  * Varje sträng kommer ur `lang/` (§ Beslut 10). Relationskoderna
- * (`parent`/`child`/`sibling`) är domänvärden och inte text: de är samma tre
+ * (`parent`/`child`/`related`) är domänvärden och inte text: de är samma tre
  * nycklar som serverns grupper och som `relation` i `/api`-svaret, och de
  * ritas aldrig för användaren.
  */
@@ -58,8 +58,8 @@ const props = defineProps({
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
 
-/* Överordnade, underordnade, syskon — i den ordningen (§ Beslut 9). */
-const groups = ['parent', 'child', 'sibling'];
+/* Överordnade, underordnade, relaterade — i den ordningen (§ Beslut 9). */
+const groups = ['parent', 'child', 'related'];
 
 const hasAny = computed(() => groups.some((group) => props.links[group].length > 0));
 
@@ -213,7 +213,7 @@ function remove(counterpart) {
                         <option value="">{{ t('item.links.relation.none') }}</option>
                         <option value="parent">{{ t('item.links.relation.parent') }}</option>
                         <option value="child">{{ t('item.links.relation.child') }}</option>
-                        <option value="sibling">{{ t('item.links.relation.sibling') }}</option>
+                        <option value="related">{{ t('item.links.relation.related') }}</option>
                     </select>
 
                     <p class="text-sm text-slate-600">{{ t('item.links.relation_note') }}</p>

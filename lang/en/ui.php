@@ -302,7 +302,7 @@ return [
             'relation_word' => [
                 'parent' => 'a parent',
                 'child' => 'a child',
-                'sibling' => 'a sibling',
+                'related' => 'a related item',
             ],
             'cycle' => 'That direction would make a circle: this item is already above the counterpart, directly or through other items.',
         ],
@@ -1274,7 +1274,7 @@ return [
             'group' => [
                 'parent' => 'Parent items',
                 'child' => 'Child items',
-                'sibling' => 'Siblings',
+                'related' => 'Related items',
             ],
 
             'empty' => 'The item is not linked to anything.',
@@ -1298,7 +1298,7 @@ return [
                 'none' => '— choose a direction —',
                 'parent' => 'A parent item',
                 'child' => 'A child item',
-                'sibling' => 'A sibling',
+                'related' => 'A related item',
             ],
 
             // Decision 8: what a direction does to the sharing, in one
@@ -1306,7 +1306,7 @@ return [
             // exist and no counter. That number belongs to the sharing view
             // (55a), and a second truth about the scope is one that can
             // drift apart.
-            'relation_note' => 'Sharing a parent item also reaches its child items — siblings share nothing.',
+            'relation_note' => 'Sharing a parent item also reaches its child items — related items share nothing.',
 
             'submit' => 'Link',
         ],
