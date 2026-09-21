@@ -8,7 +8,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * POST /api/containers/{container}/items, see issue 13a § Beslut 5–7 and
- * issue 13b § Beslut 2–5. The body is `{"name", "description"?,
+ * issue 13b § Beslut 2–5. The body is `{"name", "description"?, "notes"?,
  * "manufacturer"?, "model"?, "serial_number"?, "purchased_at"?,
  * "warranty_until"?, "position_note"?, "category"?, "tags"?, "parent"?,
  * "account"}`.
@@ -48,7 +48,9 @@ use Illuminate\Validation\Rule;
  * NOT `date` — the latter accepts "next tuesday", see § Beslut 5.
  *
  * `description` is TEXT, not VARCHAR, so it has no `max:255` — see § Att
- * se upp med. No length rule at all.
+ * se upp med. No length rule at all. `notes` (issue 96) is TEXT too and
+ * follows it exactly: nullable, no length rule, and its own column — the
+ * two say different things and neither falls back on the other.
  *
  * Neither `created_by_user_id` nor `created_by_account_id` is accepted
  * here — the former always comes from the token (controller), the latter
@@ -88,6 +90,7 @@ class StoreItemRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            'notes' => ['nullable', 'string'],
             'manufacturer' => ['nullable', 'string', 'max:255'],
             'model' => ['nullable', 'string', 'max:255'],
             'serial_number' => ['nullable', 'string', 'max:255'],

@@ -19,6 +19,14 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * client that must distinguish "missing" from "empty" should not have to
  * handle two cases.
  *
+ * `notes` (issue 96) is a column on the item and belongs here, unlike issue
+ * 93's cover image: `/api` reads and writes it exactly like `description`,
+ * and a new column the resource says nothing about is half a column. The
+ * cover, by contrast, is a derived presentation choice and lives beside the
+ * resource. The two are separate fields and neither is derived from the
+ * other — `description` says what the item IS, `notes` what the user KNOWS
+ * about it.
+ *
  * `created_by_user` is deliberately NOT exposed in this issue — the
  * creator's identity is a presentation question tied to the audit log
  * (issue 40) and the participant list's identity rules. `created_by_account`
@@ -57,6 +65,7 @@ class ItemResource extends JsonResource
             'ulid' => $this->ulid,
             'name' => $this->name,
             'description' => $this->description,
+            'notes' => $this->notes,
             'manufacturer' => $this->manufacturer,
             'model' => $this->model,
             'serial_number' => $this->serial_number,

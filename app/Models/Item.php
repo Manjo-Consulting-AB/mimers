@@ -33,7 +33,7 @@ use Laravel\Scout\Searchable;
  * `model` is a column name here — `$item->model` is a product designation,
  * not an Eloquent model. It is the document's name and does not change.
  */
-#[Fillable(['name', 'description', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note'])]
+#[Fillable(['name', 'description', 'notes', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note'])]
 #[RouteKey('ulid')]
 class Item extends Model
 {
@@ -64,10 +64,16 @@ class Item extends Model
     }
 
     /**
-     * The searchable columns, issue 15b § Beslut 3 — the document's five
-     * columns, same as the FULLTEXT index from 13a § Beslut 4. The
-     * database driver searches these via Scout's LIKE formulation; the
-     * keys are the columns, the values are ignored by the engine.
+     * The searchable columns, issue 15b § Beslut 3 — the document's six
+     * columns, same as the FULLTEXT index: the five from 13a § Beslut 4 plus
+     * `notes`, which issue 96 added to both lists in the same migration. The
+     * database driver searches these via Scout's LIKE formulation; the keys
+     * are the columns, the values are ignored by the engine.
+     *
+     * The two lists are documented mirrors and must not drift apart: a column
+     * the index carries but this array does not is never searched, and a key
+     * here without an index is a full scan. tests/Feature/Item/
+     * AnteckningsfaltTest compares them column for column.
      *
      * No #[SearchUsingFullText] on purpose: that attribute makes Scout emit
      * `whereFullText(...)`, which MariaDB handles and SQLite (the in-memory
@@ -82,6 +88,7 @@ class Item extends Model
         return [
             'name' => $this->name,
             'description' => $this->description,
+            'notes' => $this->notes,
             'manufacturer' => $this->manufacturer,
             'model' => $this->model,
             'serial_number' => $this->serial_number,
