@@ -24,10 +24,11 @@ use Illuminate\Support\Collection;
  * ett foto: steg 2 tar den äldsta, inte den nyaste.
  *
  * `images()` är samma regel sedd som LISTA — exakt det urval och den ordning
- * `handle()` väljer ur. Den som behöver itemets bilder själv (redigeringsvyns
- * väljare) läser dem härifrån i stället för att formulera `kind = 'image'` och
- * sorteringen en gång till; två formuleringar av "itemets bilder" glider isär
- * precis som två formuleringar av "vad mottagaren når" (issue 9a § Beslut 8).
+ * `handle()` väljer ur. Den som behöver itemets bilder själv (kontrollerns
+ * uppslag av ett val) läser dem härifrån i stället för att formulera
+ * `kind = 'image'` och sorteringen en gång till; två formuleringar av "itemets
+ * bilder" glider isär precis som två formuleringar av "vad mottagaren når"
+ * (issue 9a § Beslut 8).
  *
  * Mjukraderade bilagor faller bort genom SoftDeletes' globala scope: en vald
  * bilaga som mjukraderats hittas inte i steg 1 och steg 2 gäller, så vyn

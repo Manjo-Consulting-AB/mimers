@@ -19,16 +19,17 @@ use function Pest\Laravel\withoutVite;
  * Issue 93 · Itemet får en omslagsbild — se [[ADR-0041 Itemets vy]]
  * § Beslut och § Konsekvenser, och [[M16 Itemets vy]] § 93.
  *
- * Filen prövar den här sidan av itemet: kolumnen, upplösningen och valet i
- * redigeringsvyn. Att en bilaga som raderas HÅRT nollställer pekaren i stället
- * för att blockera raderingen ligger i tests/Feature/Attachment/
+ * Filen prövar den här sidan av itemet: kolumnen, upplösningen och valet över
+ * webbens PATCH-rutt. Att en bilaga som raderas HÅRT nollställer pekaren i
+ * stället för att blockera raderingen ligger i tests/Feature/Attachment/
  * OmslagspekareTest.php, där bilagan är huvudpersonen.
  *
  * Tre saker är värda att se efter, för de är lätta att få fel:
  *
  * 1. **Upplösningen bor i App\Actions\Item\ResolveItemCover och inte i vyn.**
- *    Varje steg i ordningen har ett eget test, och `images()` — urvalet och
- *    ordningen — prövas för sig: en andra formulering av "itemets bilder" i en
+ *    Varje steg i ordningen har ett eget test, och urvalet (`kind = 'image'`,
+ *    mjukraderade bort) och ordningen — äldst först — prövas genom vilken bild
+ *    `handle()` väljer: en andra formulering av "itemets bilder" i en
  *    kontroller eller en mall glider ifrån den första.
  * 2. **`cover` i PATCH är pekaren och inte den upplösta bilden.** Rensar
  *    användaren valet ska upplösningens steg 2 gälla, och det är först då
@@ -332,34 +333,27 @@ it('avvisar en bilaga som ligger i papperskorgen', function () {
 });
 
 /*
- * Redigeringsvyns två propar: `images` och `cover`.
+ * Redigeringsvyns prop: `cover`, den VALDA bildens ULID.
  *
- * `images` är itemets bilder i upplösningens ordning — äldst först — och
- * `cover` är den VALDA bildens ULID. Den upplösta bilden är med flit INTE
- * vald: är pekaren null ska väljaren visa "inget val" och inte det foto regeln
- * råkade peka ut, annars gick valet aldrig att ta tillbaka.
- *
- * Ett dokument är inte med i listan: väljaren erbjuder bara det som går att
- * välja.
+ * Den upplösta bilden är med flit INTE värdet: är pekaren null ska vyn få null
+ * och inte det foto regeln råkade peka ut, annars gick valet aldrig att ta
+ * tillbaka. Itemet har två bilder och ett dokument när det prövas — hade vyn
+ * fått den upplösta bilden hade den varit `gammal.jpg` i stället för null.
  */
-it('ger redigeringsvyn bilderna i ordning och det valda', function () {
+it('ger redigeringsvyn det valda omslaget', function () {
     withoutVite();
 
     [, $anvandare, $container] = omslagKontext();
 
     $item = omslagItem($container);
     omslagBilaga($item, 'manual.pdf', 'document');
-    $aldsta = omslagBilaga($item, 'gammal.jpg');
+    omslagBilaga($item, 'gammal.jpg');
     $nyaste = omslagBilaga($item, 'ny.jpg');
 
     actingAs($anvandare)->get("/containers/{$container->ulid}/items/{$item->ulid}/edit")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Containers/Items/Edit')
-            ->where('images', [
-                ['ulid' => $aldsta->ulid, 'filename' => 'gammal.jpg'],
-                ['ulid' => $nyaste->ulid, 'filename' => 'ny.jpg'],
-            ])
             ->where('cover', null)
         );
 
@@ -373,12 +367,12 @@ it('ger redigeringsvyn bilderna i ordning och det valda', function () {
 });
 
 /*
- * En pekare som står kvar på en mjukraderad bilaga syns inte i väljaren: hon
- * finns inte i `images`. `cover` blir null — valet är borta — och det är rätt
- * svar, för upplösningens steg 2 gäller. Vyn får aldrig en ULID den inte kan
+ * En pekare som står kvar på en mjukraderad bilaga når inte vyn som en ULID:
+ * hon finns inte bland itemets bilder, så uppslaget svarar null — valet är
+ * borta och upplösningens steg 2 gäller. Vyn får aldrig en ULID den inte kan
  * rita en rad för.
  */
-it('utelämnar en mjukraderad bild ur redigeringsvyns val', function () {
+it('ger redigeringsvyn null när den valda bilagan mjukraderats', function () {
     withoutVite();
 
     [, $anvandare, $container] = omslagKontext();
@@ -392,7 +386,6 @@ it('utelämnar en mjukraderad bild ur redigeringsvyns val', function () {
     actingAs($anvandare)->get("/containers/{$container->ulid}/items/{$item->ulid}/edit")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('images', [])
             ->where('cover', null)
         );
 });
