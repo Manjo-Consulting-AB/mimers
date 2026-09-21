@@ -236,14 +236,15 @@ function destroy() {
         <!--
             Brödsmulan (issue 95): vägen från roten ned till itemet, den
             aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
-            länk — rubriken strax under säger samma namn.
-
-            Rubriken *Förekomster i struktur* som mockupen sätter på listan
-            nedanför kan inte skrivas här: orden hör till `lang/en/ui.php`,
-            som ligger Out of scope, och SprakTest fäller svensk text i en
-            .vue-fil. Se PR:ens Frågor och antaganden.
+            länk — rubriken strax under säger samma namn. Sista ledet bär
+            `aria-current="page"`, och <nav> bär sitt namn ur `lang/`:
+            `breadcrumb` är ordet för ytan, inte för någon av förekomsterna.
         -->
-        <nav v-if="currentPath" class="mb-2 text-sm text-slate-600">
+        <nav
+            v-if="currentPath"
+            :aria-label="t('item.show.breadcrumb')"
+            class="mb-2 text-sm text-slate-600"
+        >
             <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <li
                     v-for="(node, index) in currentPath.nodes"
@@ -312,26 +313,45 @@ function destroy() {
             innehåll. Antalet är antalet vägar mottagaren ser, och det avslöjar
             ingenting om dem hon inte ser.
 
-            Rubriken mockupen sätter på listan kan inte skrivas här — orden
-            hör till `lang/`, som ligger Out of scope. Se brödsmulans kommentar.
+            Rubriken är listans namn och kopplas till den med
+            `aria-labelledby` — därför behövs ingen egen `aria-label`. Den
+            aktuella raden bär `aria-current="true"` och ordet *Current* som
+            SYNLIG text: markeringen får aldrig vara en färg allena. Orden
+            kommer ur `lang/en/ui.php` (`item.show.placements`,
+            `item.show.placement_current`), och ordet är *placement* och inte
+            *occurrence* — se nyckelns kommentar där.
         -->
-        <ul v-if="paths.length > 1" class="mt-6 space-y-1 text-sm">
-            <li v-for="(occurrence, index) in paths" :key="index">
-                <Link
-                    :href="pathHref(occurrence.nodes)"
-                    :aria-current="occurrence.current ? 'true' : null"
-                    class="flex min-h-11 flex-wrap items-center gap-1"
-                    :class="occurrence.current
-                        ? 'font-semibold text-slate-900'
-                        : 'text-blue-700 hover:underline'"
+        <section v-if="paths.length > 1" class="mt-6">
+            <h2 id="item-placements-heading" class="text-sm font-medium text-slate-600">
+                {{ t('item.show.placements') }}
+            </h2>
+
+            <ul aria-labelledby="item-placements-heading" class="mt-2 space-y-1 text-sm">
+                <li
+                    v-for="(occurrence, index) in paths"
+                    :key="index"
+                    class="flex flex-wrap items-center gap-2"
                 >
-                    <template v-for="(node, step) in occurrence.nodes" :key="`${node.ulid}-${step}`">
-                        <span>{{ node.name }}</span>
-                        <span v-if="step < occurrence.nodes.length - 1" aria-hidden="true">›</span>
-                    </template>
-                </Link>
-            </li>
-        </ul>
+                    <Link
+                        :href="pathHref(occurrence.nodes)"
+                        :aria-current="occurrence.current ? 'true' : null"
+                        class="flex min-h-11 flex-wrap items-center gap-1"
+                        :class="occurrence.current
+                            ? 'font-semibold text-slate-900'
+                            : 'text-blue-700 hover:underline'"
+                    >
+                        <template v-for="(node, step) in occurrence.nodes" :key="`${node.ulid}-${step}`">
+                            <span>{{ node.name }}</span>
+                            <span v-if="step < occurrence.nodes.length - 1" aria-hidden="true">›</span>
+                        </template>
+                    </Link>
+
+                    <span v-if="occurrence.current" class="rounded bg-slate-200 px-2 py-1 text-sm font-medium">
+                        {{ t('item.show.placement_current') }}
+                    </span>
+                </li>
+            </ul>
+        </section>
 
         <dl class="mt-8 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2">
             <div v-for="field in fields" :key="field.key">

@@ -1230,6 +1230,29 @@ return [
             'position_note' => 'Location',
             'category' => 'Category',
             'tags' => 'Tags',
+
+            // The paths from a root down to the item — the mockup's
+            // *Förekomster i struktur*, see issue 95 and [[ADR-0041 Itemets
+            // vy]]. The word is *placement*, and never *occurrence*:
+            // `occurrence` is the system's word for `schedule_occurrence`
+            // ([[ADR-0005 Schema och förekomst]]) and runs through a score of
+            // keys about tasks above. One English word cannot mean both a
+            // task's occurrence and a spot in the structure — that is what
+            // [[ADR-0032 Produktens ord]] exists to prevent. *Location* is
+            // taken as well: `position_note` above reads 'Location', and it
+            // answers a different question.
+            //
+            // `placements` heads the list, and the list points at that heading
+            // with `aria-labelledby` — so the list needs no `aria-label` of its
+            // own. `breadcrumb` is the `aria-label` of the breadcrumb's <nav>.
+            // `placement_current` is the VISIBLE marker on the current row: a
+            // word and never a colour alone, with `aria-current` on the row
+            // beside it. The label is not a counter — it says which of the
+            // paths the recipient SEES is the current one, and nothing about
+            // the ones she does not (issue 73 decision 6).
+            'placements' => 'Placements in the structure',
+            'placement_current' => 'Current',
+            'breadcrumb' => 'Where this item sits',
         ],
 
         // The form's field labels, see issue 57b decision 9. The product's
