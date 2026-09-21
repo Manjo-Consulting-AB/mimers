@@ -30,6 +30,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Support\Files\FileOrigin;
 use App\Support\Frontend\ActiveContainer;
+use App\Support\Item\ItemStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -82,6 +83,12 @@ use Inertia\Response;
  * mot ITEMET (Beslut 6), listans mot containern. Kostnaden är noll extra frågor
  * per rad — App\Actions\Access\ResolveItemScope är registrerad `scoped` och
  * memoiserar per `{user}:{container}`, se dess docblock.
+ *
+ * **Radens status är härledd och ligger BREDVID resursen** (issue 92 ·
+ * [[ADR-0040 Underträdets summor]]), samma linje som kategorinamnet. `OK`
+ * betyder noll förfallna förekomster i itemets underträd, och uppslaget
+ * byggs av App\Support\Item\ItemStatus på ett konstant antal frågor — se
+ * `statuses` i index().
  *
  * **Ingen behörighetslogik bor här.** Ett nekat svar kastar
  * `AuthorizationException`, som bootstrap/app.php renderar som felsidan för
@@ -188,6 +195,7 @@ class ItemController extends Controller
         ListCategories $listCategories,
         ListTags $listTags,
         ActiveContainer $activeContainer,
+        ItemStatus $itemStatus,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -218,6 +226,19 @@ class ItemController extends Controller
             // ett annat uppslag än `categoryTree` nedan, som är filterradens
             // väljare och bär hela trädet.
             'categories' => $this->categoryNames($items),
+
+            // Statusen är HÄRLEDD och ligger BREDVID resursen (issue 92 ·
+            // [[ADR-0040 Underträdets summor]]), samma linje som
+            // `categoryNames()` ovan: `ItemResource` delas med `/api`, som
+            // inte har bett om fältet, och `app/Http/Resources/**` rörs inte.
+            // `item` har ingen `status`-kolumn och får ingen — det som går att
+            // räkna fram lagras inte.
+            //
+            // Två frågor per lista, oavsett antal rader: kanterna och
+            // förekomsterna hämtas en gång och slutningen sker i minnet, se
+            // App\Support\Item\ItemStatus. En vandring per rad vore den N+1
+            // hela åtkomstlösningen byggdes för att undvika.
+            'statuses' => $itemStatus->forItems($container, $items),
             'tags' => TagResource::collection($tags)->resolve($request),
             'categoryTree' => CategoryResource::collection($categories)->resolve($request),
             'filter' => [

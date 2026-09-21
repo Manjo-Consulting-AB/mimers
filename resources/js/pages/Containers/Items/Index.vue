@@ -65,12 +65,21 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * knapp: hon skapar barn-items under det hon nått, och den ytan är issue 58.
  * Flaggan är presentation; ruttens `Gate::authorize()` gäller oavsett vad
  * sidan visade.
+ *
+ * **Radens status kommer ur `statuses`** (issue 92 · [[ADR-0040 Underträdets
+ * summor]]): itemets ULID → `ok` eller `overdue`, räknat på servern över
+ * itemets underträd. Vyn räknar ingenting själv — den slår upp och översätter,
+ * och TEXTEN ligger i `lang/` precis som resten av sidans ord. Uppslaget
+ * ligger bredvid `ItemResource` av samma skäl som `categories` gör det:
+ * resursen delas med `/api`, som inte har bett om fältet.
  */
 const props = defineProps({
     container: { type: Object, required: true },
     items: { type: Array, required: true },
     /* Kategori-ULID → namn, för de kategorier raderna pekar på. */
     categories: { type: Object, required: true },
+    /* Item-ULID → status: `ok` eller `overdue`. */
+    statuses: { type: Object, required: true },
     /* Containerns taggar inom omfånget, ur ListTags — filterradens kryssrutor. */
     tags: { type: Array, required: true },
     /* Containerns kategoriträd inom omfånget, ur ListCategories — filterradens väljare. */
@@ -130,12 +139,27 @@ const summary = computed(() => filterSummary(activeFilters(props.filter, props.t
                 />
 
                 <div class="min-w-0 flex-1">
-                    <Link
-                        :href="`/containers/${container.ulid}/items/${item.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                    >
-                        {{ item.name }}
-                    </Link>
+                    <div class="flex flex-wrap items-center gap-x-3">
+                        <Link
+                            :href="`/containers/${container.ulid}/items/${item.ulid}`"
+                            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        >
+                            {{ item.name }}
+                        </Link>
+
+                        <!-- Ordet är dämpat och undantaget syns: mockupen
+                             sätter OK på varje rad, och poängen med raden är
+                             att det som AVVIKER ska hittas utan att öppna
+                             sextio items. -->
+                        <span
+                            class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
+                            :class="statuses[item.ulid] === 'overdue'
+                                ? 'bg-red-50 text-red-700'
+                                : 'text-slate-500'"
+                        >
+                            {{ t(`item.index.status_${statuses[item.ulid]}`) }}
+                        </span>
+                    </div>
 
                     <p
                         v-if="categories[item.category] || item.manufacturer || item.model"

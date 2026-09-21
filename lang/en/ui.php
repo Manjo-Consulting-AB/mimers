@@ -1185,6 +1185,15 @@ return [
             'create' => 'New item',
             'empty' => 'The container is empty.',
 
+            // The status of a row, see issue 92 and
+            // App\Support\Item\ItemStatus. `status_ok` says that nothing on
+            // the item or below it has fallen due; `status_overdue` says that
+            // something has — never WHAT or WHERE, because which descendant
+            // carries it is the detail view's answer. The words are the
+            // mockup's own, and they live here rather than in the .vue file.
+            'status_ok' => 'OK',
+            'status_overdue' => 'Overdue',
+
             'filter_heading' => 'Filter',
             'filter_q' => 'Search term',
             'filter_tags' => 'Tags',
