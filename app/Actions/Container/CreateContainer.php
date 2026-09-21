@@ -51,17 +51,34 @@ final class CreateContainer
      * containern får skapas utan art, och `null` är det ärliga värdet för
      * "användaren har inte svarat än" — inte en tom sträng.
      *
+     * `$description` kom med issue 88 · [[ADR-0039 Containerns översikt]] och
+     * är frivillig av samma skäl: att kräva en beskrivning vid skapandet är
+     * att ställa en fråga användaren ännu inte kan svara på. Parametern
+     * läggs SIST med ett förval, så varje anropare — båda kontrollerna, varje
+     * test och varje fabrik — är oförändrad. Att göra om de fyra
+     * positionsargumenten till en attributpåse är en riktig städning och en
+     * egen uppgift: den hade rört varje anropare för en kolumns skull.
+     *
      * @throws ApiException 403 `quota.containers_exceeded`
      *                      när ägarkontots containertak är nått.
      */
-    public function handle(User $creator, Account $account, string $name, ?string $kind): Container
-    {
+    public function handle(
+        User $creator,
+        Account $account,
+        string $name,
+        ?string $kind,
+        ?string $description = null,
+    ): Container {
         // Taket gäller det konto som anges av anroparen — samma konto som blir
         // ägare och vars plan gäller (issue 27 § Beslut 4).
         $this->entitlements->assertCanCreateContainer($account);
 
-        $container = DB::transaction(function () use ($account, $name, $kind): Container {
-            $container = new Container(['name' => $name, 'kind' => $kind]);
+        $container = DB::transaction(function () use ($account, $name, $kind, $description): Container {
+            $container = new Container([
+                'name' => $name,
+                'kind' => $kind,
+                'description' => $description,
+            ]);
             $container->account_id = $account->id;
             $container->save();
 

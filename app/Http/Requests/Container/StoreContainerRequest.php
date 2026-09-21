@@ -7,8 +7,9 @@ use Illuminate\Validation\Rule;
 
 /**
  * POST /api/containers, se issue 8 § Beslut 8: kroppen är
- * `{"name", "kind", "account"}` där `account` är ett konto-ULID, inte
- * kontots löpnummer.
+ * `{"name", "kind", "description", "account"}` där `account` är ett
+ * konto-ULID, inte kontots löpnummer. `description` kom med issue 88 ·
+ * [[ADR-0039 Containerns översikt]] och är lika frivillig som `kind`.
  *
  * `kind` är FRIVILLIGT sedan issue 84 · [[ADR-0036 Containerns art]]: att
  * tvinga fram en art vid skapandet är att ställa en fråga användaren ännu
@@ -79,6 +80,12 @@ class StoreContainerRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'kind' => ['nullable', 'string', 'max:40'],
+            // Frivillig, som `kind` — att kräva en beskrivning vid skapandet
+            // är att ställa en fråga användaren ännu inte kan svara på (issue
+            // 88 · [[ADR-0039 Containerns översikt]] § Beslut). Kolumnen är
+            // TEXT, som `item.description`, och har därför ingen `max:255` att
+            // pröva mot: regeln är format och ingenting annat.
+            'description' => ['nullable', 'string'],
             'account' => ['required', 'string', Rule::exists('account', 'ulid')],
         ];
     }

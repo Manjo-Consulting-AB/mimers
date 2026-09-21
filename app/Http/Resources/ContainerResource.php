@@ -32,6 +32,11 @@ class ContainerResource extends JsonResource
             'ulid' => $this->ulid,
             'name' => $this->name,
             'kind' => $this->kind,
+            // ALLTID med, som `null` när den saknas — aldrig utelämnad. En
+            // klient som måste skilja "saknas" från "tomt" ska inte behöva
+            // hantera två fall (issue 8 § Beslut 7, och samma linje för
+            // `kind` ovan).
+            'description' => $this->description,
             'account' => $this->account->ulid,
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),

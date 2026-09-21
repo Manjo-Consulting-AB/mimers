@@ -7,6 +7,7 @@ use App\Models\Container;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Finder\SplFileInfo;
 
 use function Pest\Laravel\deleteJson;
@@ -29,6 +30,15 @@ use function Pest\Laravel\postJson;
  * - radering är mjuk
  * - en mjukraderad container ger 404 resource.not_found
  * - en art utanför den gamla listan tas emot, och `kind` får utelämnas
+ *
+ * "Klart när" (issue 88):
+ * - `container` har en nullbar `description`
+ * - `ContainerResource` bär fältet och alltid som `null` när det saknas
+ * - en beskrivning som anges vid skapandet sparas
+ * - en container kan skapas och sparas utan beskrivning
+ * - en beskrivning kan sättas, ändras och tömmas
+ * - ingen kod läser ut delar ur fältet
+ * - inga andra kolumner har lagts till på `container`
  *
  * Behörighet (App\Policies\ContainerPolicy) testas separat i
  * tests/Feature/Container/ContainerBehorighetTest.php — här används
@@ -470,4 +480,219 @@ it('listningen laddar ägarkontot i förväg', function () {
     expect($frågorMedÅttaContainers)->toBe($frågorMedTreContainers);
 
     Carbon::setTestNow();
+});
+
+/*
+ * Issue 88 · Containern får en beskrivning. Se [[ADR-0039 Containerns
+ * översikt]] § Beslut.
+ *
+ * Fältet är ETT fritextfält, nullbart och frivilligt, och det bärs av
+ * ContainerResource som `null` när det saknas — aldrig utelämnat (issue 8
+ * § Beslut 7: en klient som måste skilja "saknas" från "tomt" ska inte
+ * behöva hantera två fall). Skapandevägen går genom
+ * App\Actions\Container\CreateContainer, och parametern ligger SIST med ett
+ * förval, så ingen befintlig anropare rördes.
+ */
+
+/*
+ * Klart när: `container` har en nullbar `description` (issue 88).
+ *
+ * Nullbar är hela skillnaden mellan "användaren har skrivit något" och
+ * "användaren har inte svarat" — samma kolumnform som `kind` fick i issue 84,
+ * och `null` är det ärliga värdet i stället för den tomma sträng
+ * [[ADR-0004 Fria taggar och kategorier]] vill undvika.
+ */
+it('bär beskrivningen som en nullbar kolumn på containern', function () {
+    $kolumn = collect(Schema::getColumns('container'))->firstWhere('name', 'description');
+
+    expect($kolumn)->not->toBeNull();
+    expect($kolumn['nullable'])->toBeTrue();
+});
+
+/*
+ * Klart när: inga andra kolumner har lagts till på `container` (issue 88).
+ *
+ * Beskrivningen är det ENDA fältet. Modell, årtal och tillverkare — den
+ * formaterade underrubrik mockupen ville ha — byggs inte, varken nu eller som
+ * förberedelse: en båt har årsmodell, ett kundprojekt har det inte, och
+ * kolumnerna hade varit ett påstående om vad en container är
+ * ([[ADR-0033 Produktens omfång]]).
+ *
+ * Provet läser kolumnlistan i sin helhet och inte bara frånvaron av ett namn:
+ * "inga andra kolumner" är ett påstående om mängden, och en ny kolumn får
+ * gärna vara medveten — men då ska det här provet uppdateras av den som
+ * lägger till den.
+ */
+it('har inte fått någon annan kolumn än description', function () {
+    $kolumner = collect(Schema::getColumns('container'))->pluck('name')->sort()->values()->all();
+
+    expect($kolumner)->toBe([
+        'account_id',
+        'created_at',
+        'currency',
+        'deleted_at',
+        'description',
+        'id',
+        'kind',
+        'name',
+        'template_source_id',
+        'ulid',
+        'updated_at',
+    ]);
+});
+
+/*
+ * Klart när: en beskrivning som anges vid skapandet sparas — via API:ets
+ * `store()` (issue 88). Webbens halva prövas i
+ * tests/Feature/Frontend/ContainervyerTest.php.
+ *
+ * Värdet är mockupens egen underrubrik, med punkten kvar. Den sparas
+ * ORDAGRANT: ingen kod plockar isär fältet i modell och årtal, och hade den
+ * gjort det hade den här raden kommit tillbaka i delar.
+ */
+it('skapar en container med en beskrivning', function () {
+    [$account, , $headers] = kontoMedMedlem();
+
+    $response = postJson('/api/containers', [
+        'name' => 'Vindil',
+        'description' => 'Malö 116 • 1984',
+        'account' => $account->ulid,
+    ], $headers);
+
+    $response->assertCreated();
+    expect($response->json('data.description'))->toBe('Malö 116 • 1984');
+
+    expect(Container::query()->where('name', 'Vindil')->firstOrFail()->description)
+        ->toBe('Malö 116 • 1984');
+});
+
+/*
+ * Klart när: en container kan skapas och sparas UTAN beskrivning (issue 88).
+ *
+ * Fältet är frivilligt — att kräva en beskrivning vid skapandet är att ställa
+ * en fråga användaren ännu inte kan svara på, samma resonemang som gjorde
+ * `kind` frivillig i issue 84. Det som sparas är `null`, och svaret bär
+ * nyckeln ändå.
+ */
+it('skapar en container utan beskrivning och svarar med null', function () {
+    [$account, , $headers] = kontoMedMedlem();
+
+    $response = postJson('/api/containers', [
+        'name' => 'Utan beskrivning',
+        'account' => $account->ulid,
+    ], $headers);
+
+    $response->assertCreated();
+
+    expect($response->json('data'))->toHaveKey('description');
+    expect($response->json('data.description'))->toBeNull();
+
+    expect(Container::query()->where('name', 'Utan beskrivning')->firstOrFail()->description)
+        ->toBeNull();
+});
+
+/*
+ * Klart när: `ContainerResource` bär fältet och alltid som `null` när det
+ * saknas, aldrig utelämnat (issue 88 · issue 8 § Beslut 7).
+ *
+ * Alla fyra svar som bär en container prövas: listan, den enskilda läsningen,
+ * skapandet och uppdateringen. En resurs som utelämnar nyckeln tvingar
+ * klienten att hantera "saknas" och "tomt" som två fall, och det är precis
+ * vad Beslut 7 stänger.
+ */
+it('utelämnar aldrig beskrivningen i något svar', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create(['description' => null]);
+
+    $lista = getJson('/api/containers', $headers)->assertOk();
+    expect($lista->json('data.0'))->toHaveKey('description');
+    expect($lista->json('data.0.description'))->toBeNull();
+
+    $enskild = getJson("/api/containers/{$container->ulid}", $headers)->assertOk();
+    expect($enskild->json('data'))->toHaveKey('description');
+    expect($enskild->json('data.description'))->toBeNull();
+
+    $skapad = postJson('/api/containers', [
+        'name' => 'Ny',
+        'account' => $account->ulid,
+    ], $headers)->assertCreated();
+    expect($skapad->json('data'))->toHaveKey('description');
+    expect($skapad->json('data.description'))->toBeNull();
+
+    $uppdaterad = patchJson("/api/containers/{$container->ulid}", [
+        'name' => 'Nytt namn',
+    ], $headers)->assertOk();
+    expect($uppdaterad->json('data'))->toHaveKey('description');
+    expect($uppdaterad->json('data.description'))->toBeNull();
+});
+
+/*
+ * Klart när: en beskrivning kan sättas, ändras och tömmas (issue 88).
+ *
+ * Tömningen är samma mekanism som för `kind` i issue 84:
+ * `ConvertEmptyStringsToNull` gör en tom ruta till `null` innan reglerna
+ * körs, och kolumnen är nullbar. En nyckel som inte SKICKAS rör inte
+ * beskrivningen — `sometimes` skiljer "töm den" från "ändra den inte".
+ */
+it('sätter, ändrar och tömmer beskrivningen', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create(['description' => null]);
+
+    patchJson("/api/containers/{$container->ulid}", ['description' => 'Malö 116 • 1984'], $headers)
+        ->assertOk();
+    expect($container->fresh()->description)->toBe('Malö 116 • 1984');
+
+    patchJson("/api/containers/{$container->ulid}", ['description' => 'Såld 2019.'], $headers)
+        ->assertOk();
+    expect($container->fresh()->description)->toBe('Såld 2019.');
+
+    patchJson("/api/containers/{$container->ulid}", ['description' => ''], $headers)
+        ->assertOk();
+    expect($container->fresh()->description)->toBeNull();
+
+    // Modellinstansen bär fortfarande det gamla värdet i minnet; utan refresh
+    // ser Eloquent ingen ändring och skriver ingenting.
+    $container->refresh()->update(['description' => 'Kvar']);
+
+    patchJson("/api/containers/{$container->ulid}", ['name' => 'Nytt namn'], $headers)
+        ->assertOk();
+    expect($container->fresh()->description)->toBe('Kvar');
+});
+
+/*
+ * Klart när: ingen kod läser ut delar ur fältet (issue 88).
+ *
+ * Beskrivningen visas som den är skriven, och mockupens formaterade
+ * underrubrik — *Malö 116 • 1984* — ska inte återuppstå som en parsning av
+ * texten ([[ADR-0039 Containerns översikt]] § Beslut). Provet läser KÄLLAN,
+ * för regeln gäller kodformen: ingen körning kan se en parsning som ännu inte
+ * skrivits.
+ *
+ * Bara CONTAINERNS beskrivning prövas, och bara på den rad där fältet och en
+ * uppdelningsfunktion möts — samma form och samma skäl som provet på `kind`
+ * ovan. Att rita ut hela värdet, eller att fråga om det är SATT, är inte att
+ * plocka isär det.
+ */
+it('plockar aldrig isär containerns beskrivning i delar', function () {
+    $träffar = [];
+
+    $filer = [...File::allFiles(app_path()), ...File::allFiles(resource_path('js'))];
+
+    foreach ($filer as $fil) {
+        if (! in_array($fil->getExtension(), ['php', 'js', 'vue'], true)) {
+            continue;
+        }
+
+        foreach (preg_split('/\R/', kallaUtanKommentarer($fil)) as $rad) {
+            if (preg_match('/\b(explode|preg_split|str_split|sscanf|substr|mb_substr|preg_match|preg_match_all)\s*\(/', $rad) !== 1) {
+                continue;
+            }
+
+            if (preg_match('/container(?:->|\.)description\b/i', $rad) === 1) {
+                $träffar[] = $fil->getRelativePathname().': '.trim($rad);
+            }
+        }
+    }
+
+    expect($träffar)->toBe([]);
 });

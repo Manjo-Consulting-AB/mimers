@@ -6,8 +6,9 @@ use Illuminate\Foundation\Http\FormRequest;
 
 /**
  * PATCH /api/containers/{container}, se issue 8 § Beslut 9: PATCH tar bara
- * emot `name`, `kind` och — sedan issue 85 · [[ADR-0037 Valutans arv]] —
- * `currency`, alla valfria (`sometimes`). Varken `account` eller
+ * emot `name`, `kind`, `description` — sedan issue 88 · [[ADR-0039
+ * Containerns översikt]] — och `currency` (issue 85 · [[ADR-0037 Valutans
+ * arv]]), alla valfria (`sometimes`). Varken `account` eller
  * `account_id` finns i reglerna nedan — ett klientskickat sådant fält är
  * alltså inte med i `validated()` och ändrar aldrig ägaren. Att flytta en
  * container mellan konton är ägarbyte, issue 39.
@@ -84,6 +85,12 @@ class UpdateContainerRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'kind' => ['sometimes', 'nullable', 'string', 'max:40'],
+            // Frivillig och tömbar (issue 88 · [[ADR-0039 Containerns
+            // översikt]]). Kolumnen är TEXT, som `item.description`, och har
+            // därför ingen `max:255` att pröva mot: regeln är format och
+            // ingenting annat. En nyckel som SAKNAS rör inte beskrivningen —
+            // `sometimes` skiljer "töm den" från "ändra den inte".
+            'description' => ['sometimes', 'nullable', 'string'],
             'currency' => ['sometimes', 'nullable', 'string', 'alpha', 'size:3'],
         ];
     }

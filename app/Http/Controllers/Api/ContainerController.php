@@ -106,6 +106,7 @@ class ContainerController extends Controller
             $account,
             $request->validated('name'),
             $request->validated('kind'),
+            $request->validated('description'),
         );
 
         return (new ContainerResource($container))
