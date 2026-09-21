@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: issue 87 — ordbyte i fixturens värde (`related` i stället för `sibling`), ingen ändring av det som prövas: upplösningen filtrerar på `parent` i frågan, så en tredje relationsrad delar ingenting i både bas och head.
+
 use App\Actions\Access\ResolveItemScope;
 use App\Models\Account;
 use App\Models\Container;

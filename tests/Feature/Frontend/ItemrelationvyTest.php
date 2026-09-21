@@ -1,7 +1,5 @@
 <?php
 
-// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
-
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
