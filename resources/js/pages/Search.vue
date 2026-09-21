@@ -85,8 +85,12 @@ const { t } = useTranslations();
                     <p class="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-600">
                         <span>{{ t('search.in_container') }}</span>
 
+                        <!-- Containernamnet går till ITEMLISTAN (issue 89 ·
+                             [[ADR-0039 Containerns översikt]] § Konsekvenser):
+                             träffen är ett item, och den som följer containern
+                             ur en träff söker det sammanhang itemet låg i. -->
                         <Link
-                            :href="`/containers/${result.container.ulid}`"
+                            :href="`/containers/${result.container.ulid}/items`"
                             class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
                         >
                             {{ result.container.name }}

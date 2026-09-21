@@ -7,9 +7,12 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
+use App\Models\Schedule;
+use App\Models\ScheduleOccurrence;
 use App\Models\UsageCounter;
 use App\Models\User;
 use App\Support\Frontend\ApiErrorTranslator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
@@ -88,8 +91,12 @@ function containerGrant(Container $container, User $user, string $level, ?Item $
  * Raderingen kom med issue 62b § Beslut 4 och är den SJUNDE — den ligger i
  * samma grupp och av samma skäl: raderingsknappen på inställningssidan får
  * inte vara den enda vägen in i kontrollern som en gäst når.
+ *
+ * Översiktens GET kom med issue 89 och ligger i samma grupp av samma skäl som
+ * raderingen: containerns egen URL får inte vara den enda vägen in i
+ * kontrollern som en gäst når.
  */
-it('skickar en utloggad besökare till inloggningen från alla sex rutterna', function () {
+it('skickar en utloggad besökare till inloggningen från alla sju rutterna', function () {
     withoutVite();
 
     [$konto] = containerKontext();
@@ -98,6 +105,10 @@ it('skickar en utloggad besökare till inloggningen från alla sex rutterna', fu
     get('/containers')->assertRedirect('/login');
     get('/containers/create')->assertRedirect('/login');
     post('/containers', [])->assertRedirect('/login');
+    // Översikten kom med issue 89 och ligger i samma grupp: den svarar på
+    // containerns egen URL, och en gäst ska mötas av inloggningen där precis
+    // som på varje annan containerrutt.
+    get("/containers/{$container->ulid}")->assertRedirect('/login');
     get("/containers/{$container->ulid}/edit")->assertRedirect('/login');
     patch("/containers/{$container->ulid}", [])->assertRedirect('/login');
     delete("/containers/{$container->ulid}")->assertRedirect('/login');
@@ -851,4 +862,221 @@ it('har beskrivningsfältet i både skapa- och redigeravyn', function () {
     // sträng: en container utan beskrivning bär `null`, och rutan ska vara
     // tom — inte visa ordet "null".
     expect($redigera)->toContain('props.container.description ??');
+});
+
+// --- översikten -------------------------------------------------------------
+
+/*
+ * Klart när: `GET /containers/{container}` svarar med översikten, och
+ * `containers.show` namnger den medan itemlistan har ett eget ruttnamn.
+ *
+ * Ruttnamnet följde med URL:en och inte med kontrollern — det var containerns
+ * sida hela tiden, och det är den fortfarande ([[ADR-0039 Containerns översikt]]
+ * § Beslut). Huvudet bär namn, art och beskrivning, och beskrivningen skrivs ut
+ * ORDAGRANT: ingen tolkning, ingen uppdelning i delar (issue 88).
+ */
+it('svarar med översikten på containerns egen URL', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+    $container->update([
+        'kind' => 'Segelbåt',
+        'description' => "Malö 116 • 1984\nRenoverad 2019.",
+    ]);
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->component('Containers/Overview')
+            ->where('container.ulid', $container->ulid)
+            ->where('container.name', $container->name)
+            ->where('container.kind', 'Segelbåt')
+            ->where('container.description', "Malö 116 • 1984\nRenoverad 2019.")
+    );
+
+    expect(route('containers.show', $container, false))->toBe("/containers/{$container->ulid}")
+        ->and(route('containers.items.index', $container, false))->toBe("/containers/{$container->ulid}/items");
+
+    $vy = File::get(resource_path('js/pages/Containers/Overview.vue'));
+
+    expect($vy)->toContain('{{ container.name }}')
+        ->toContain('{{ container.kind }}')
+        ->toContain('{{ container.description }}')
+        ->toContain("t('container.overview.kind')")
+        ->toContain("t('container.overview.description')")
+        ->toContain('counts.items')
+        ->toContain('counts.todos');
+
+    // Arten är ett FRITT fält ([[ADR-0036 Containerns art]]): ingen nyckel
+    // byggs ur värdet, för `t()` returnerar nyckeln själv när uppslaget
+    // misslyckas — samma fälla som `container.kind.Segelbåt` på skärmen.
+    expect(str_contains($vy, 't(`container.overview.kind'))->toBeFalse();
+
+    // Nycklarna finns och är inte tomma (issue 52: ingen sträng i JavaScript).
+    $en = require lang_path('en/ui.php');
+
+    foreach (['kind', 'description', 'items', 'todos'] as $nyckel) {
+        expect(trim($en['container']['overview'][$nyckel]))->not->toBe('', "container.overview.{$nyckel} är tom");
+    }
+});
+
+/*
+ * Klart när: itembrickan visar antalet items användaren NÅR — och en
+ * omfångsbegränsad mottagares tal är lika med antalet rader hon får i listan.
+ *
+ * Det är hela poängen med räkneregeln ([[ADR-0039 Containerns översikt]]
+ * § Beslut): brickan är exakt lika lång som listan, för båda kommer ur
+ * `ListItems`. Ett tal som sade hur många som FINNS hade avslöjat precis det
+ * [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser stänger. Testet jämför
+ * därför de två talen i stället för att bara räkna det ena — och letar efter
+ * den dolda radens namn och ULID i svaret, för ett tal är inte det enda sättet
+ * en yta kan avslöja något.
+ */
+it('räknar itembrickan som antalet items användaren når', function () {
+    withoutVite();
+
+    [, $ägare, $container] = containerKontext();
+
+    $motorn = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
+
+    foreach (range(1, 5) as $i) {
+        Item::factory()->for($container, 'container')->create(['name' => "Hemlig $i"]);
+    }
+
+    // En itemgrant och ingen containerbred: hon når motorn och ingenting annat.
+    $mottagare = User::factory()->create();
+    containerGrant($container, $mottagare, 'read', $motorn);
+
+    $bricka = fn (User $anvandare): int => actingAs($anvandare)
+        ->get("/containers/{$container->ulid}")->assertOk()
+        ->inertiaProps()['counts']['items'];
+
+    $rader = fn (User $anvandare): int => count(actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items")->assertOk()
+        ->inertiaProps()['items']);
+
+    expect($bricka($ägare))->toBe(6)
+        ->and($bricka($mottagare))->toBe(1);
+
+    // Talet är lika långt som listan — samma urval, samma längd, båda gångerna.
+    expect($bricka($ägare))->toBe($rader($ägare))
+        ->and($bricka($mottagare))->toBe($rader($mottagare));
+
+    // Ingenting av det hon inte når finns i svaret — varken namnet eller ULID:n.
+    $svar = actingAs($mottagare)->get("/containers/{$container->ulid}")->assertOk();
+
+    expect($svar->getContent())->not->toContain('Hemlig');
+
+    foreach (Item::query()->where('name', 'like', 'Hemlig%')->get() as $dold) {
+        expect($svar->getContent())->not->toContain($dold->ulid);
+    }
+});
+
+/*
+ * Klart när: uppgiftsbrickan är ETT tal och inte två.
+ *
+ * `schedule` har inget fält som skiljer en uppgift från ett underhåll och får
+ * inte ett — skillnaden är domänen ([[ADR-0033 Produktens omfång]]), så
+ * mockupens två brickor är en teckning och inte ett krav. Talet är
+ * `ScheduleOccurrence::scopeTodoFor()` avgränsat till containern: en stängd
+ * förekomst räknas inte, och en i en annan container hör inte hit.
+ */
+it('räknar uppgifter och underhåll som ett tal', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    $motorn = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
+
+    $schema = fn (Item $item, string $titel): Schedule => Schedule::factory()
+        ->for($item, 'item')
+        ->create([
+            'title' => $titel,
+            'recurrence_type' => 'none',
+            'lead_days' => 0,
+            'is_active' => true,
+        ]);
+
+    $förekomst = fn (Schedule $schema, string $status = 'open'): ScheduleOccurrence => ScheduleOccurrence::factory()->create([
+        'schedule_id' => $schema->id,
+        'due_at' => Carbon::today()->addDays(30)->toDateString(),
+        'visible_from' => Carbon::today()->subDays(30)->toDateString(),
+        'status' => $status,
+    ]);
+
+    // Två öppna och synliga i containern — en "uppgift" och ett "underhåll",
+    // samma rad och samma tal.
+    $förekomst($schema($motorn, 'Byt impeller'));
+    $förekomst($schema($motorn, 'Byt olja'));
+
+    // En stängd: todo-listan läser ÖPPNA förekomster, och historiken är loggen.
+    $förekomst($schema($motorn, 'Byt filter'), 'completed');
+
+    // En i en annan container. Användaren når den, men brickan hör hit.
+    $annan = Container::factory()->for($container->account, 'account')->create();
+    $annatItem = Item::factory()->for($annan, 'container')->create(['name' => 'Trailern']);
+    $förekomst($schema($annatItem, 'Byt däck'));
+
+    $svar = actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk();
+
+    expect($svar->inertiaProps()['counts']['todos'])->toBe(2);
+
+    // Och det finns INGEN andra räknande bricka: nycklarna är exakt de två.
+    expect(array_keys($svar->inertiaProps()['counts']))->toBe(['items', 'todos']);
+});
+
+/*
+ * Klart när: ingen kostnadssummering räknas i den här kontrollern.
+ *
+ * Kostnadsbrickan är issue 86:s ändpunkt. En `SUM` här hade varit en andra väg
+ * till samma tal — precis den drift som gör att två ytor börjar visa olika
+ * siffror ([[ADR-0039 Containerns översikt]] § Konsekvenser). Provet är
+ * tvådelat: svaret bär ingen kostnadsprop, och kontrollerns KOD rör ingen
+ * kostnadskälla.
+ *
+ * Kodprovet läser filen med kommentarerna bortskalade, samma grepp som
+ * SprakTest använder på Vue-filerna: `update()`s docblock nämner
+ * `cost_entry.currency` i prosa, och en råtextkontroll hade fällt på en
+ * mening i stället för på en fråga.
+ */
+it('räknar ingen kostnadssummering på översikten', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->missing('costs')
+            ->missing('total')
+            ->missing('costReport')
+    );
+
+    $kontroller = File::get(app_path('Http/Controllers/ContainerController.php'));
+    $kontroller = (string) preg_replace('#/\*.*?\*/#s', '', $kontroller);
+    $kontroller = (string) preg_replace('#^[ \t]*//.*$#m', '', $kontroller);
+
+    expect($kontroller)->not->toContain('CostEntry');
+    expect($kontroller)->not->toContain('cost_entry');
+});
+
+/*
+ * Klart när: radering av ett item landar på översikten.
+ *
+ * Omdirigeringen i App\Http\Controllers\ItemController::destroy() behövde
+ * inte flyttas — `containers.show` pekade på containerns egen URL före flytten
+ * också — men den måste följas: en 302 till rätt adress är inte samma sak som
+ * rätt sida. Provet går hela vägen fram.
+ */
+it('landar på översikten efter en radering', function () {
+    withoutVite();
+
+    [, $ägare, $container] = containerKontext();
+    $motorn = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
+
+    actingAs($ägare)
+        ->delete("/containers/{$container->ulid}/items/{$motorn->ulid}")
+        ->assertRedirect("/containers/{$container->ulid}");
+
+    actingAs($ägare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->component('Containers/Overview')
+    );
 });

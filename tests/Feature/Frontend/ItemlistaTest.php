@@ -16,18 +16,26 @@ use function Pest\Laravel\get;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 57a · Containerns itemlista — containerns förstasida. Se
+ * Issue 57a · Containerns itemlista. Se
  * App\Http\Controllers\ItemController::index(),
  * App\Actions\Item\ListItems och
  * resources/js/pages/Containers/Items/Index.vue.
  *
+ * **Listan låg på containerns egen URL till och med issue 88.** Sedan issue 89
+ * · [[ADR-0039 Containerns översikt]] ligger den på
+ * `GET /containers/{container}/items`, och containerns egen URL svarar med
+ * översikten — den prövas i tests/Feature/Frontend/ContainervyerTest.php, som
+ * äger App\Http\Controllers\ContainerController. Filen här följer med flytten:
+ * samma sex tester, samma förväntningar, en annan sökväg.
+ *
  * Den viktigaste gränsen i filen är OMFÅNGET (Beslut 4, issue 73 § Beslut 2
  * och 6): en omfångsbegränsad mottagare ser bara de items hon når, och svaret
  * får aldrig bära ett tal om hur många rader som filtrerats bort. Sidan visar
- * antalet rader den ritar och ingenting mer.
+ * antalet rader den ritar och ingenting mer. Samma regel bär översiktens
+ * itembricka, och att de två talen är samma tal prövas i ContainervyerTest.
  *
- * Den andra är RUTTORDNINGEN (Beslut 1): `GET /containers/{container}` måste
- * registreras efter `GET /containers/create`, annars matchar `{container}`
+ * Den andra är RUTTORDNINGEN (Beslut 1): `GET /containers/create` måste
+ * registreras före de rutter som bär `{container}`, annars matchar `{container}`
  * strängen `create` och formuläret blir en 404.
  *
  * Att `/api/containers/{container}/items` svarar exakt som förut prövas av
@@ -124,12 +132,13 @@ it('skickar en utloggad besökare till inloggningen från listan och detaljvyn',
     $item = itemlistaItem($container, 'Motorn');
 
     get("/containers/{$container->ulid}")->assertRedirect('/login');
+    get("/containers/{$container->ulid}/items")->assertRedirect('/login');
     get("/containers/{$container->ulid}/items/{$item->ulid}")->assertRedirect('/login');
 });
 
 /*
- * Klart när: `/containers/{container}` renderar itemlistan för en medlem i
- * ägarkontot, sorterad på namn.
+ * Klart när: itemlistan ligger på `/containers/{container}/items` och renderar
+ * listan för en medlem i ägarkontot, sorterad på namn.
  *
  * Sorteringen är serverns — raderna skapas i omvänd bokstavsordning så att en
  * lista som råkade behålla skapelseordningen faller.
@@ -143,7 +152,7 @@ it('renderar itemlistan sorterad på namn för en medlem i ägarkontot', functio
         itemlistaItem($container, $namn, $anvandare);
     }
 
-    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->component('Containers/Items/Index')
             ->where('container.ulid', $container->ulid)
@@ -158,11 +167,12 @@ it('renderar itemlistan sorterad på namn för en medlem i ägarkontot', functio
 });
 
 /*
- * Klart när: `/containers/create` når fortfarande formuläret — rutten för
- * containerns förstasida skuggar den inte.
+ * Klart när: `/containers/create` når fortfarande formuläret — ingen av
+ * containerrutterna skuggar den.
  *
- * Det är hela skälet att `GET /containers/{container}` har en plats i filen
- * och inte bara en rutt (Beslut 1).
+ * Det är hela skälet att containerns egen rutt har en plats i filen och inte
+ * bara en rutt (Beslut 1), och skälet växer med antalet rutter under
+ * `{container}`: `create` är ett giltigt värde för en ruttparameter.
  */
 it('når fortfarande skapaformuläret på /containers/create', function () {
     withoutVite();
@@ -175,36 +185,49 @@ it('når fortfarande skapaformuläret på /containers/create', function () {
 });
 
 /*
- * Klart när: containernamnet i `/containers` länkar till containerns förstasida.
+ * Klart när: containernamnet i `/containers` länkar till ITEMLISTAN.
  *
- * Länken prövas mot den href ruttnamnet faktiskt ger — en vy som länkar till
- * en påhittad adress hade annars sett rätt ut i en strukturell kontroll.
+ * Länken prövas mot den href ruttnamnen faktiskt ger — en vy som länkar till
+ * en påhittad adress hade annars sett rätt ut i en strukturell kontroll. Det
+ * är den kontrollen som fångar att länken hamnade på containerns översikt i
+ * stället: `containers.show` pekar fortfarande på `/containers/{ulid}`, och
+ * `containers.items.index` är det nya målet (issue 89 · [[ADR-0039
+ * Containerns översikt]] § Konsekvenser).
  */
-it('länkar containernamnet i containerlistan till containerns förstasida', function () {
+it('länkar containernamnet i containerlistan till itemlistan', function () {
     [, , $container] = itemlistaKontext();
 
-    expect(route('containers.show', $container, false))->toBe("/containers/{$container->ulid}");
+    expect(route('containers.show', $container, false))->toBe("/containers/{$container->ulid}")
+        ->and(route('containers.items.index', $container, false))->toBe("/containers/{$container->ulid}/items");
 
     $sida = File::get(resource_path('js/pages/Containers/Index.vue'));
 
-    expect($sida)->toContain(':href="`/containers/${container.ulid}`"')
+    expect($sida)->toContain(':href="`/containers/${container.ulid}/items`"')
         ->toContain('{{ container.name }}');
 });
 
 /*
- * Klart när: `items` är den första raden i containerns undernavigering.
+ * Klart när: `items` är den första raden i containerns undernavigering, och
+ * listan har fortfarande NIO rader.
  *
  * Navigationen renderas ur containerSections, så raden är beviset — och
- * ordningen ligger i listan, inte i layouten.
+ * ordningen ligger i listan, inte i layouten. Raden pekar på itemlistan sedan
+ * issue 89; översikten fick ingen egen rad, för flikraden och omfördelningen
+ * av sektionerna är designarbete ([[M15 Containerns översikt]]).
+ *
+ * Antalet rader räknas och inte bara nämns: en tionde rad vore den flikrad
+ * som inte ingår, och en nionde rad som försvann vore en yta ingen hittar.
  */
-it('lägger itemlistan först i containerns navigation', function () {
+it('lägger itemlistan först i containerns navigation och behåller nio rader', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'items'")
-        ->toContain('/containers/${ulid}');
+        ->toContain('/containers/${ulid}/items');
 
     expect(strpos($sektioner, "key: 'items'"))
         ->toBeLessThan(strpos($sektioner, "key: 'categories'"));
+
+    expect(substr_count($sektioner, 'href: (ulid) =>'))->toBe(9);
 });
 
 /*
@@ -216,7 +239,7 @@ it('nekar en främling listan med 403', function () {
     [, , $container] = itemlistaKontext();
     itemlistaItem($container, 'Motorn');
 
-    actingAs(User::factory()->create())->get("/containers/{$container->ulid}")->assertForbidden();
+    actingAs(User::factory()->create())->get("/containers/{$container->ulid}/items")->assertForbidden();
 });
 
 /*
@@ -241,7 +264,7 @@ it('visar bara items inom omfånget och bär inget tal om de dolda', function ()
 
     $mottagare = itemlistaMottagare($container, $motorn);
 
-    $svar = actingAs($mottagare)->get("/containers/{$container->ulid}");
+    $svar = actingAs($mottagare)->get("/containers/{$container->ulid}/items");
 
     $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->component('Containers/Items/Index')
@@ -278,7 +301,7 @@ it('kostar ett konstant antal frågor oavsett antal items', function () {
 
     actingAs($anvandare);
 
-    $url = "/containers/{$container->ulid}";
+    $url = "/containers/{$container->ulid}/items";
 
     $värm = fn () => get($url)->assertOk();
 
@@ -311,7 +334,7 @@ it('låter ett fryst ägarkonto lista men ger can.create falskt', function () {
     [, $anvandare, $container] = itemlistaKontext(['status' => 'read_only']);
     itemlistaItem($container, 'Motorn', $anvandare);
 
-    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->has('items', 1)
             ->where('can.create', false)
@@ -334,11 +357,11 @@ it('ger can.create efter container-bred create och aldrig efter en itemgrant', f
     $bred = itemlistaMottagare($container, null, 'create');
     $begränsad = itemlistaMottagare($container, $motorn, 'delete');
 
-    actingAs($bred)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+    actingAs($bred)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('can.create', true)
     );
 
-    actingAs($begränsad)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
+    actingAs($begränsad)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('can.create', false)
     );
 });
@@ -355,7 +378,7 @@ it('säger att containern är tom och aldrig att den kanske är det', function (
 
     [, $anvandare, $container] = itemlistaKontext();
 
-    $svar = actingAs($anvandare)->get("/containers/{$container->ulid}");
+    $svar = actingAs($anvandare)->get("/containers/{$container->ulid}/items");
 
     $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->has('items', 0)

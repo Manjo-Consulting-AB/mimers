@@ -4,15 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
+use App\Actions\Item\ListItems;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\ScheduleOccurrence;
 use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -39,10 +42,14 @@ use Inertia\Response;
  * `AuthorizationException`, som bootstrap/app.php renderar som felsidan för
  * 403 på webben.
  *
- * **Ingen `show()`.** Containerns egen sida är itemlistan och den är issue 57 —
- * se issue 54 § Beslut 2. En tom detaljvy nu blir en sida 57 skriver om
- * ändå, och två sidor som slåss om samma URL är dyrare än en URL som ännu
- * inte finns.
+ * **`show()` kom med issue 89** · [[ADR-0039 Containerns översikt]]. Issue 54
+ * § Beslut 2 lämnade med flit URL:en öppen — en tom detaljvy då hade blivit en
+ * sida 57 skrev om ändå — och itemlistan flyttade in. Sedan dess har
+ * containern fått kostnader, bilagor, scheman, delning, export och en
+ * historik, och ingenting av det syntes på förstasidan. Översikten tar
+ * containerns egen URL, itemlistan flyttar till `…/items`, och ruttnamnet
+ * `containers.show` följer med översikten: det är containerns sida, och det
+ * var det hela tiden.
  *
  * **`destroy()` kom med issue 62b**, tillsammans med papperskorgen som
  * återställer raden — en raderingsknapp utan en väg tillbaka är en fälla, och
@@ -103,6 +110,81 @@ class ContainerController extends Controller
                     'update' => Gate::forUser($user)->allows('update', $container),
                 ],
             ])->all(),
+        ]);
+    }
+
+    /**
+     * GET /containers/{container} — containerns översikt, se issue 89 ·
+     * [[ADR-0039 Containerns översikt]].
+     *
+     * **URL:en är containerns egen sida och har varit det hela tiden** — fram
+     * till issue 89 svarade itemlistan på den. Översikten bär i den här issuen
+     * huvudet och de två räknande brickorna; flikraden, panelerna och resten av
+     * mockupens yta väntar på designsystemet ([[M15 Containerns översikt]]).
+     *
+     * **Varje tal räknar det användaren SJÄLV når** ([[ADR-0028 Åtkomst på
+     * itemnivå]] § Konsekvenser, issue 73 § Beslut 6): ingen totalsumma, ingen
+     * *av N*, ingen rad om att något dolts.
+     *
+     * **Itembrickan är `ListItems`** — samma Action som itemsidan ritar sin
+     * lista ur — och är därför lika lång som listan per konstruktion. En egen
+     * `count()`-fråga hade varit en andra formulering av samma urval, och två
+     * formuleringar av omfånget glider isär; det är precis den drift
+     * [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser varnar för. Priset är att
+     * raderna hämtas, vilket itemsidan gör ändå — brickan sitter på den sida
+     * som ersätter ett besök där.
+     *
+     * **Uppgiftsbrickan är `ScheduleOccurrence::scopeTodoFor()` avgränsat till
+     * containern och ingenting annat.** `schedule` har inget fält som skiljer
+     * en uppgift från ett underhåll, och det ska den inte få: skillnaden är
+     * domänen ([[ADR-0033 Produktens omfång]]), så mockupens två brickor är en
+     * teckning och inte ett krav. Avgränsningen är `schedule.item.container_id`
+     * — samma väg till containern som `todoFor()` själv går.
+     *
+     * **Kostnadsbrickan är inte här.** Den är issue 86:s ändpunkt, och en `SUM`
+     * i den här kontrollern hade varit en andra väg till samma tal.
+     *
+     * **Att öppna containern gör den till sessionens kontext** (issue 83).
+     * Anropet ligger efter `Gate::authorize()` och det är bindande: ett nekat
+     * anrop får aldrig nå hit, så 403:an lämnar en kontext användaren redan
+     * hade orörd. ItemController::index() sätter samma nyckel för den som
+     * kommer in via en bokmärkt itemlista — containerns sidor öppnar containern,
+     * vilken av dem hon än landar på.
+     *
+     * Grinden är `view` på CONTAINERN — samma grind som itemlistan ställde när
+     * den låg här, så en `read`-mottagare når översikten precis som förut, och
+     * en främling får 403.
+     */
+    public function show(
+        Request $request,
+        Container $container,
+        ListItems $listItems,
+        ActiveContainer $activeContainer,
+    ): Response {
+        Gate::authorize('view', $container);
+
+        $container->loadMissing('account');
+
+        $user = $request->user();
+
+        $activeContainer->set($user, $container);
+
+        $accountIds = $user->accounts->pluck('id')->values()->all();
+
+        // `todoFor()` formulerar åtkomsten och omfånget själv — den här
+        // kontrollern lägger bara containern ovanpå, och räknar ingenting
+        // själv (issue 74 § Beslut 7, issue 89).
+        $todos = ScheduleOccurrence::query()
+            ->todoFor($user, $accountIds)
+            ->whereHas('schedule.item', fn (Builder $query) => $query->where('container_id', $container->id))
+            ->count();
+
+        return Inertia::render('Containers/Overview', [
+            'container' => ContainerResource::make($container)->resolve($request),
+            'counts' => [
+                'items' => $listItems->handle($user, $container)->count(),
+                'todos' => $todos,
+            ],
         ]);
     }
 

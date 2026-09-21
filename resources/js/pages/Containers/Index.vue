@@ -72,8 +72,13 @@ const isShared = (container) => accountName(container) === null;
 
         <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
             <li v-for="container in containers" :key="container.ulid" class="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
+                <!-- Namnlänken går till ITEMLISTAN och inte till översikten
+                     (issue 89 · [[ADR-0039 Containerns översikt]]
+                     § Konsekvenser). Den menade listan redan före flytten, och
+                     den som väljer en container ur listan vill in i den — inte
+                     förbi en mellansida. -->
                 <Link
-                    :href="`/containers/${container.ulid}`"
+                    :href="`/containers/${container.ulid}/items`"
                     class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
                 >
                     {{ container.name }}

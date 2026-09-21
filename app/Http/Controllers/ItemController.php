@@ -43,11 +43,13 @@ use Inertia\Response;
  * Webbens itemytor — listan och detaljvyn (issue 57a § Beslut 1, 2, 4, 5 och
  * 6), skapandet, redigeringen och raderingen (issue 57b § Beslut 1–9).
  *
- * **Containerns förstasida.** `GET /containers/{container}` är itemlistan, och
- * det är den URL:en App\Http\Controllers\ContainerController:s docblock
- * lämnade öppen i issue 54 § Beslut 2. Sidan bärs av den här kontrollern och
- * inte av ContainerController: den senare har ingen `show()` med flit, och
- * det svaret ändras inte av att någon annan nu svarar på URL:en.
+ * **Containerns förstasida var itemlistan, till och med issue 88.** Sedan
+ * issue 89 · [[ADR-0039 Containerns översikt]] ligger listan på
+ * `GET /containers/{container}/items` och containerns egen URL svarar med
+ * översikten, som bärs av App\Http\Controllers\ContainerController::show().
+ * Flytten är hela ärendet för den issuen: containern hade fått kostnader,
+ * bilagor, scheman, delning, export och en historik, och ingenting av det
+ * syntes på den sida användaren mötte först.
  *
  * **Ingenting av `/api` görs om.** `ItemResource`, `ContainerResource`,
  * `StoreItemRequest` och `UpdateItemRequest` delas rakt av, och läsningen går
@@ -99,12 +101,22 @@ use Inertia\Response;
 class ItemController extends Controller
 {
     /**
-     * GET /containers/{container} — containerns itemlista, sorterad på namn, med
-     * filtren ur querysträngen (issue 59a § Beslut 1–7).
+     * GET /containers/{container}/items — containerns itemlista, sorterad på
+     * namn, med filtren ur querysträngen (issue 59a § Beslut 1–7).
+     *
+     * **Rutten flyttade hit i issue 89** · [[ADR-0039 Containerns översikt]].
+     * Ingenting i metoden ändrades av flytten: urvalet, filtren och propformerna
+     * är 59a:s och 57a:s, och den enda skillnaden är att `{container}` numera
+     * följs av `/items`. Querysträngen följer med oförändrad, precis som
+     * [[ADR-0039 Containerns översikt]] § Beslut kräver — `q`, `tags[]` och
+     * `category` betyder samma sak på den nya URL:en, och en filtrerad länk från
+     * före flytten pekar därför fortfarande på rätt sida så snart sökvägen är
+     * rättad.
      *
      * **Filtret är querysträng på den här sidan** (Beslut 1). Samma rutt,
-     * samma sida, samma `containers.show`; ett filtrerat läge är en LÄNK som
-     * går att spara, dela och backa ur. Ingen egen söksida och ingen ny rutt.
+     * samma sida, samma ruttnamn i `containers.items`-familjen; ett filtrerat
+     * läge är en LÄNK som går att spara, dela och backa ur. Ingen egen söksida
+     * och ingen ny rutt.
      *
      * **Servern gör hela jobbet** (Beslut 2). `tags[]` kräver VARJE angiven
      * tagg, `category` betyder kategorin och hela dess underträd, `q` är
@@ -153,14 +165,21 @@ class ItemController extends Controller
      * detaljvyn.
      *
      * **Att öppna containern gör den till sessionens kontext** (issue 83).
-     * `ActiveContainer::set()` har fyra anropare, och den här är den fjärde:
-     * de tre andra är de tillfällen användaren just FÅTT en container, den här
-     * är den väg kontexten sätts på i vardagen. Anropet ligger efter
-     * `Gate::authorize()` och det är bindande — `set()` glömmer nyckeln när
-     * åtkomsten saknas, så ett nekat anrop får aldrig nå hit: 403:an lämnar en
-     * kontext användaren redan hade orörd. Det finns ingen rutt och ingen
-     * knapp som sätter kontexten för hand; `PUT /containers/{container}/active`
-     * togs bort i samma issue.
+     * `ActiveContainer::set()` har fem anropare, och den här är en av dem: de
+     * tre andra är de tillfällen användaren just FÅTT en container, och den
+     * femte är översikten — ContainerController::show(), som svarar på
+     * containerns egen URL sedan issue 89. Båda sidorna sätter nyckeln med
+     * flit: containerns sidor öppnar containern, vilken av dem hon än landar
+     * på, och containerlistans namnlänk går till LISTAN ([[ADR-0039
+     * Containerns översikt]] § Konsekvenser) — utan anropet här hade den som
+     * öppnar en container ur listan fått en kontext som stod kvar på den
+     * förra.
+     *
+     * Anropet ligger efter `Gate::authorize()` och det är bindande — `set()`
+     * glömmer nyckeln när åtkomsten saknas, så ett nekat anrop får aldrig nå
+     * hit: 403:an lämnar en kontext användaren redan hade orörd. Det finns
+     * ingen rutt och ingen knapp som sätter kontexten för hand;
+     * `PUT /containers/{container}/active` togs bort i issue 83.
      */
     public function index(
         Request $request,
@@ -629,7 +648,14 @@ class ItemController extends Controller
 
     /**
      * DELETE /containers/{container}/items/{item} — 302 till containerns
-     * förstasida.
+     * förstasida, alltså ÖVERSIKTEN (issue 89 · [[ADR-0039 Containerns
+     * översikt]]).
+     *
+     * `containers.show` pekar på containerns egen URL och gjorde det före
+     * flytten också; det som bytte plats är vad som svarar där. Att raderingen
+     * landar på översikten och inte i listan är issuens "Klart när" och inte
+     * en slump: itemet är borta, och den som just raderat något möts av
+     * containern snarare än av listan hon kom ifrån.
      *
      * **Grinden är ITEMETS `delete`, en egen pinne** (§ Beslut 2): en
      * `write`-mottagare ändrar itemet men tar inte bort det, och `can.delete`

@@ -320,7 +320,13 @@ it('visar containerns art ordagrant i träffen', function () {
 
 /*
  * Klart när: träffens namn länkar till itemets detaljvy och containernamnet till
- * containerns förstasida.
+ * containerns ITEMLISTA.
+ *
+ * Containernamnet länkade till containerns egen URL redan före issue 89, och
+ * menade listan hela tiden; sedan flytten ligger listan på `…/items` och
+ * containerns egen URL är en översikt ([[ADR-0039 Containerns översikt]]
+ * § Konsekvenser). `containers.show` står därför kvar oförändrat i raden ovan,
+ * medan vyns href får `/items`.
  *
  * Länkarna prövas mot de href ruttnamnen faktiskt ger — en vy som länkar till
  * en påhittad adress hade annars sett rätt ut i en strukturell kontroll.
@@ -338,7 +344,7 @@ it('länkar träffen till detaljvyn och containern till förstasidan', function 
     $vy = File::get(resource_path('js/pages/Search.vue'));
 
     expect($vy)->toContain(':href="`/containers/${result.container.ulid}/items/${result.ulid}`"')
-        ->toContain(':href="`/containers/${result.container.ulid}`"')
+        ->toContain(':href="`/containers/${result.container.ulid}/items`"')
         ->toContain('{{ result.name }}')
         ->toContain('{{ result.container.name }}');
 });

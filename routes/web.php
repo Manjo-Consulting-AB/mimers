@@ -449,25 +449,36 @@ Route::middleware('auth')->group(function () {
         ->name('containers.create');
 
     /*
-     * Issue 57a · Itemsidorna — containerns förstasida och detaljvyn, se
-     * App\Http\Controllers\ItemController.
+     * Issue 89 · Containerns översikt — `GET /containers/{container}` svarar med
+     * översikten och itemlistan flyttar till `GET /containers/{container}/items`,
+     * se [[ADR-0039 Containerns översikt]] och
+     * App\Http\Controllers\ContainerController::show().
      *
-     * Två GET-rutter och ingenting annat (Beslut 1). Skapandet och
-     * redigeringen är 57b, och den här issuen lägger ingen skrivande rutt.
+     * **Ruttnamnet `containers.show` följer med översikten.** Det var
+     * containerns sida hela tiden, och det är den fortfarande — det som byter
+     * plats är vad som ritas på den. Itemlistan får ett eget namn,
+     * `containers.items.index`, och ligger kvar i samma familj som
+     * `containers.items.create` och `containers.items.show` nedan.
      *
      * **`GET /containers/{container}` sätter den aktiva containern** (issue 83):
      * att öppna en container är den handling som gör den till sessionens
-     * kontext, se App\Http\Controllers\ItemController::index(). Rutten är den
-     * enda som gör det. Det finns ingen rutt som gör det för hand längre:
-     * `PUT /containers/{container}/active` togs bort i samma issue.
+     * kontext. Anropet bor i ContainerController::show() och — för den som
+     * kommer in via en bokmärkt lista — i ItemController::index(). Den gamla
+     * rutten för hand, `PUT /containers/{container}/active`, togs bort i issue
+     * 83 och kommer inte tillbaka.
      *
      * **`GET /containers/{container}` måste registreras EFTER
      * `GET /containers/create`** — annars matchar `{container}` strängen
      * `create` och formuläret blir en 404. Det är hela skälet att raden har
-     * en plats och inte bara en rutt. URL:en är containerns egen sida och inte en
-     * tom detaljvy: App\Http\Controllers\ContainerController har ingen
-     * `show()` med flit (issue 54 § Beslut 2), och den som svarar här är
-     * itemkontrollern.
+     * en plats och inte bara en rutt.
+     */
+    Route::get('/containers/{container}', [ContainerController::class, 'show'])
+        ->name('containers.show');
+
+    /*
+     * Issue 57a · Itemsidorna — itemlistan och detaljvyn, se
+     * App\Http\Controllers\ItemController. Listan låg på containerns egen URL
+     * fram till issue 89, som flyttade den hit och satte översikten där.
      *
      * **`scopeBindings()` på `{item}`**, av exakt samma skäl som
      * `routes/api.php` gör det (issue 13a § Beslut 1, issue 9b § Beslut 1):
@@ -478,15 +489,15 @@ Route::middleware('auth')->group(function () {
      * på App\Models\Container respektive App\Models\Item.
      *
      * **Filtren är querysträng på just den här rutten** — issue 59a § Beslut 1.
-     * `GET /containers/{container}?q=…&tags[]=…&category=…` är samma sida i ett
-     * filtrerat läge, och en filtrerad URL går att spara, dela och backa ur.
-     * Ingen egen sökväg: en andra lista att hålla i takt med den första är
+     * `GET /containers/{container}/items?q=…&tags[]=…&category=…` är samma sida
+     * i ett filtrerat läge, och en filtrerad URL går att spara, dela och backa
+     * ur. Ingen egen sökväg: en andra lista att hålla i takt med den första är
      * precis vad den här raden undviker, och en ny rutt hade varit den andra
      * listan. Filtrens semantik bor i App\Http\Controllers\ItemController::
      * index() och `filter()`; `routes/api.php` är orörd.
      */
-    Route::get('/containers/{container}', [ItemController::class, 'index'])
-        ->name('containers.show');
+    Route::get('/containers/{container}/items', [ItemController::class, 'index'])
+        ->name('containers.items.index');
 
     /*
      * Issue 57b · Skrivytorna — skapa, redigera och radera ett item, se

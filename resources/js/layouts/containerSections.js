@@ -17,9 +17,12 @@
  * [[ADR-0021 Frontendteknik]] och resources/js/composables/useTranslations.js.
  *
  * `items` kom med issue 57a § Beslut 1 och ligger FÖRST: itemen är containern,
- * och kategorierna och taggarna är hur den är ordnad. `href` pekar på containerns
- * EGEN URL — `/containers/{ulid}` är förstasidan och inte en undersida, och
- * den raden är därför den enda vars href är ett prefix till de andra.
+ * och kategorierna och taggarna är hur den är ordnad. Sedan issue 89 ·
+ * [[ADR-0039 Containerns översikt]] pekar raden på `/containers/{ulid}/items` —
+ * itemlistan flyttade dit när containerns egen URL blev en översikt — och den är
+ * därmed en undersida som de andra. Listan har fortfarande nio rader: översikten
+ * fick ingen egen rad, för flikraden och omfördelningen av sektionerna är
+ * designarbete och ingår inte i den issuen.
  *
  * `sharing` kom med issue 55a § Beslut 1. Raden är allt som krävdes: layouten
  * renderar navigationen ur den här listan, så en ny sektion är en ny rad här
@@ -59,7 +62,7 @@
  * bakom en inställning — en utgång ingen hittar är samma sak som en inlåsning.
  */
 export const containerSections = [
-    { key: 'items', href: (ulid) => `/containers/${ulid}` },
+    { key: 'items', href: (ulid) => `/containers/${ulid}/items` },
     { key: 'categories', href: (ulid) => `/containers/${ulid}/categories` },
     { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },

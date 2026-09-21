@@ -409,7 +409,7 @@ it('återställer ett item ur vyn och visar det i containerns itemlista igen', f
     expect($raderat->refresh()->deleted_at)->toBeNull();
 
     actingAs($ägare)
-        ->get("/containers/{$container->ulid}")
+        ->get("/containers/{$container->ulid}/items")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->where('items', fn ($items) => collect($items)->pluck('ulid')->contains($raderat->ulid))

@@ -13,6 +13,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * fälten står kvar. Ingen POST, ingen egen söksida: ett filtrerat läge är en
  * länk som går att spara, dela och backa ur med webbläsarens bakåtknapp.
  *
+ * **Adressen är itemlistans, och den flyttade i issue 89** · [[ADR-0039
+ * Containerns översikt]]. Före flytten var `/containers/{ulid}` listan och
+ * den här raden pekade rätt av sig själv; nu är samma URL en översikt, och ett
+ * filter som submittade dit hade tappat både listan och filtret. Sökvägen
+ * stavas därför ut — komponenten känner inte sin egen rutt, och `props` bär
+ * bara containerns ULID.
+ *
  * **Komponenten filtrerar ingenting** (Beslut 2). Den skickar tre värden till
  * servern och ritar det svar den får tillbaka; ingen rad sållas här, och ingen
  * klientmatchning sker på `name`. Servern äger urvalet.
@@ -106,7 +113,7 @@ function apply(overrides = {}) {
         params.category = chosen;
     }
 
-    router.get(`/containers/${props.containerUlid}`, params, {
+    router.get(`/containers/${props.containerUlid}/items`, params, {
         preserveState: true,
         preserveScroll: true,
         onStart: () => { pending.value = true; },
