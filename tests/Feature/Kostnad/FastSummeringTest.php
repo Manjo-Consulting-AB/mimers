@@ -9,6 +9,8 @@ use App\Models\ItemLink;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Support\Access\ItemScope;
+use App\Support\Cost\CostReport;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -210,6 +212,49 @@ it('en fast summering räknar inte in rader från items användaren inte når', 
     // Den dolda båtens 5000 syns varken i talet eller i kroppen.
     expect($response->getContent())->not->toContain('Båten');
     expect($response->getContent())->not->toContain('5000');
+});
+
+it('en kontosummering över flera begränsade containers räknar varje containers omfång för sig', function () {
+    // Scenariot nås inte via någon rutt i dag: forAccount() kräver medlemskap,
+    // och en medlem får ett obegränsat omfång för kontots egna containers
+    // (ResolveItemScope regel 1). Klassen är ändå publik och delad mellan
+    // rapporten och summeringarna, så omfångsgrenarna prövas direkt — annars
+    // är garantin "regeln beror inte på vilken grind som sitter på rutten"
+    // oprövad. Pro-konto därför att kontots containertak annars är ett.
+    $pro = Plan::where('code', 'pro')->firstOrFail();
+    [$account, $user] = kontoMedMedlem();
+    Subscription::factory()->for($account)->for($pro)->create();
+
+    $ena = Container::factory()->for($account, 'account')->create();
+    $enaNådd = summaItem($ena, $account, $user, 'Impeller');
+    summaKostnad($enaNådd, ['amount' => 1000]);
+    summaKostnad(summaItem($ena, $account, $user, 'Rigg'), ['amount' => 7000]);
+
+    $andra = Container::factory()->for($account, 'account')->create();
+    $andraNådd = summaItem($andra, $account, $user, 'Mast');
+    summaKostnad($andraNådd, ['amount' => 2000]);
+    summaKostnad(summaItem($andra, $account, $user, 'Köl'), ['amount' => 9000]);
+
+    $report = app(CostReport::class);
+
+    // Båda containrarnas nådda rader räknas. Kedes grenarna med AND i
+    // stället för OR blir villkoret `container_id = A … AND container_id =
+    // B …`, som ingen rad kan uppfylla, och svaret blir tyst tomt.
+    $begränsade = $report->summaryForContainers([
+        $ena->id => ItemScope::restricted([$enaNådd->id => 'read']),
+        $andra->id => ItemScope::restricted([$andraNådd->id => 'read']),
+    ]);
+
+    expect($begränsade)->toBe([['currency' => 'EUR', 'amount' => 3000, 'count' => 2]]);
+
+    // Blandat: en begränsad container får inte skära bort raderna i en
+    // obegränsad granne, som inte bidrar med någon begränsning alls.
+    $blandade = $report->summaryForContainers([
+        $ena->id => ItemScope::restricted([$enaNådd->id => 'read']),
+        $andra->id => ItemScope::unrestricted('read'),
+    ]);
+
+    expect($blandade)->toBe([['currency' => 'EUR', 'amount' => 12000, 'count' => 3]]);
 });
 
 it('en fast summering över blandade valutor grupperas per valuta och summeras inte över dem', function () {

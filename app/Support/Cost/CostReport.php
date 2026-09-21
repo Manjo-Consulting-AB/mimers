@@ -238,25 +238,38 @@ final class CostReport
      * kontosummeringen frågar flera containers samtidigt, och ett naket
      * `whereIn('item.id', ...)` hade släppt in en rad från en annan container
      * om samma item-id råkade stå i omfånget för den här. Ett obegränsat
-     * omfång behöver ingen gren alls — containervillkoret står redan i frågan
-     * som anropar.
+     * omfång bidrar bara med containervillkoret — det begränsar ingenting
+     * inom sin container, och det villkoret står redan i frågan som anropar.
+     *
+     * Grenarna kombineras med OR, i EN grupp (issue 86). Ett `where()` per
+     * container hade kedjats med AND, och med två samtidigt begränsade
+     * containers blir `container_id = A AND … AND container_id = B AND …`
+     * omöjligt att uppfylla för någon rad: summeringen svarar tyst tomt i
+     * stället för fel. Varje gren är "raderna jag når i DEN här containern",
+     * och de olika containrarna är alternativ — inte villkor som ska gälla
+     * samtidigt.
      *
      * @param  array<int, ItemScope>  $scopes  container_id → omfång
      */
     private function applyScope(Builder $query, array $scopes): void
     {
-        foreach ($scopes as $containerId => $scope) {
-            $itemIds = $scope->itemIds();
-
-            if ($itemIds === null) {
-                continue;
-            }
-
-            $query->where(function (Builder $query) use ($containerId, $itemIds): void {
-                $query->where('cost_entry.container_id', $containerId)
-                    ->whereIn('item.id', $itemIds);
-            });
+        if ($scopes === []) {
+            return;
         }
+
+        $query->where(function (Builder $query) use ($scopes): void {
+            foreach ($scopes as $containerId => $scope) {
+                $itemIds = $scope->itemIds();
+
+                $query->orWhere(function (Builder $query) use ($containerId, $itemIds): void {
+                    $query->where('cost_entry.container_id', $containerId);
+
+                    if ($itemIds !== null) {
+                        $query->whereIn('item.id', $itemIds);
+                    }
+                });
+            }
+        });
     }
 
     /**
