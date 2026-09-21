@@ -21,19 +21,21 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * `item.tags` är itemets taggar — formuläret förvalt dem, och PATCH skickar
  * alltid tillbaka båda fälten (§ Beslut 6).
  *
- * `cover` är omslagsbilden (issue 93 · [[ADR-0041 Itemets vy]] § Beslut): den
- * VALDA bildens ULID och inte den upplösta, läst ur
- * App\Actions\Item\ResolveItemCover::images() så att en pekare på en
- * mjukraderad bilaga blir null i stället för en ULID vyn inte kan rita en rad
- * för. Fältet ligger bredvid `ItemResource` och inte i den: `/api`:s format
- * har inte bett om det. Formuläret ritar ingen väljare — etiketten och "inget
- * val"-raden hör till `lang/` — men bär pekaren vidare, se ItemForm.
+ * `images` och `cover` är omslagsbilden (issue 93 · [[ADR-0041 Itemets vy]]
+ * § Beslut). `images` är itemets bilder, färdigfiltrerade och sorterade av
+ * App\Actions\Item\ResolveItemCover::images(), och `cover` är den VALDA
+ * bildens ULID — inte den upplösta, se ItemForm — uppslagen ur samma lista så
+ * att en pekare på en mjukraderad bilaga blir null i stället för en ULID vyn
+ * inte kan rita en rad för. Båda ligger bredvid `ItemResource` och inte i
+ * den: `/api`:s format har inte bett om fältet. Varken Create.vue eller
+ * formuläret räknar om listan; väljaren ritar den som den kommer.
  */
 defineProps({
     container: { type: Object, required: true },
     item: { type: Object, required: true },
     categories: { type: Array, required: true },
     tags: { type: Array, required: true },
+    images: { type: Array, required: true },
     cover: { type: String, default: null },
 });
 
@@ -52,6 +54,7 @@ const { t } = useTranslations();
             :categories="categories"
             :tags="tags"
             :item="item"
+            :images="images"
             :cover="cover"
         />
     </ContainerLayout>

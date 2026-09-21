@@ -49,10 +49,16 @@ use Illuminate\Validation\Rule;
  * resonemang gäller: den som redan håller en 26-tecken-ULID får veta att hon
  * håller den (issue 13b § Beslut 5).
  *
- * `nullable` och inte `sometimes`: formuläret skickar ALLTID fältet, och
- * `cover: null` är hur valet RENSAS — upplösningen faller då tillbaka på
- * itemets äldsta bild (issue 93, samma skillnad mellan "rör det inte" och
- * "töm det" som `category` bär för `/api`).
+ * `sometimes` OCH `nullable`: ett UTELÄMNAT `cover` lämnar pekaren orörd,
+ * medan ett uttryckligen skickat `cover: null` RENSAR den — upplösningen
+ * faller då tillbaka på itemets äldsta bild. Skillnaden är inte kosmetisk:
+ * väljaren ritas bara när itemet har bilder (ett val mellan ett alternativ är
+ * ingen fråga), så ett item vars enda bild ligger i papperskorgen får inget
+ * fält alls. Utan `sometimes` hade varje namnbyte på ett sådant item skickat
+ * `cover: null` och tyst raderat ett val som [[ADR-0008 Soft delete och
+ * papperskorg]] lovar ska gå att återställa — kommer bilagan tillbaka ska
+ * omslaget göra det med. Samma skillnad mellan "rör det inte" och "töm det"
+ * som `category` bär för `/api`.
  */
 class UpdateItemRequest extends FormRequest
 {
@@ -108,6 +114,7 @@ class UpdateItemRequest extends FormRequest
         // regeln kan pröva bilagan mot DET HÄR itemet.
         if ($this->routeIs('containers.items.update')) {
             $rules['cover'] = [
+                'sometimes',
                 'nullable',
                 'string',
                 Rule::exists('attachment', 'ulid')->where(

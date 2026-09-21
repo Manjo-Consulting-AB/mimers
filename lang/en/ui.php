@@ -1271,6 +1271,18 @@ return [
             // selector: the link has already answered the question, and
             // `parent` is only sent on creation.
             'parent' => 'Created under: :name',
+
+            // The cover image (issue 93, [[ADR-0041 Itemets vy]]). One
+            // selector over the item's own images, and only in the edit form:
+            // an item that does not exist yet has no attachments to choose
+            // from. `cover_none` is the top row and it CLEARS the choice —
+            // with no choice made, App\Actions\Item\ResolveItemCover falls
+            // back to the item's oldest image, so the row says that no cover
+            // has been CHOSEN and not that the item is left without one. The
+            // name mirrors `category_none` above, the house's word for an
+            // unmade choice.
+            'cover' => 'Cover image',
+            'cover_none' => '— no cover image —',
         ],
 
         'create' => [

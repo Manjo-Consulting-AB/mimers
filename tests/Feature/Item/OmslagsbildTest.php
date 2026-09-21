@@ -272,6 +272,44 @@ it('sätter, byter och rensar omslagsbilden', function () {
 });
 
 /*
+ * Pekaren ÖVERLEVER ett orelaterat namnbyte.
+ *
+ * Ett item vars enda bild ligger i papperskorgen har inga bilder kvar, så
+ * väljaren ritas inte — och formuläret skickar då inte `cover` alls.
+ * `UpdateItemRequest` säger `sometimes|nullable`, och skillnaden är hela
+ * testet: ett UTELÄMNAT fält lämnar pekaren orörd, ett `cover: null` rensar
+ * den. Med bara `nullable` hade samma PATCH tyst raderat valet, och en
+ * återställning ur papperskorgen hade inte gett tillbaka omslaget
+ * ([[ADR-0008 Soft delete och papperskorg]]).
+ *
+ * Så länge bilagan ligger i papperskorgen ger upplösningen ingen bild: steg 1
+ * hittar henne inte och steg 2 har inget att välja.
+ */
+it('behåller pekaren när ett item vars enda bild ligger i papperskorgen byter namn', function () {
+    [, $anvandare, $container] = omslagKontext();
+
+    $item = omslagItem($container);
+    $bild = omslagBilaga($item, 'foto.jpg');
+
+    omslagVal($item, $bild);
+    $bild->delete();
+
+    // Utgångsläget: ingen väljare hade ritats, alltså inget `cover` i kroppen.
+    expect((new ResolveItemCover)->images($item))->toBeEmpty();
+    expect((new ResolveItemCover)->handle($item))->toBeNull();
+
+    actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}/items/{$item->ulid}", omslagKropp(['name' => 'Nya namnet']))
+        ->assertRedirect();
+
+    $item->refresh();
+
+    expect($item->name)->toBe('Nya namnet');
+    expect($item->cover_attachment_id)->toBe($bild->id);
+    expect((new ResolveItemCover)->handle($item))->toBeNull();
+});
+
+/*
  * Klart när: en bilaga som inte är en bild kan inte väljas.
  *
  * 422 på fältet `cover` — webben kör Inertia och behåller Laravels vanliga

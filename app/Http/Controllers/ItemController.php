@@ -94,10 +94,11 @@ use Inertia\Response;
  * **Omslagsbilden ligger BREDVID resursen** (issue 93 · [[ADR-0041 Itemets
  * vy]] § Beslut), samma linje igen: `ItemResource` är `/api`:s format och har
  * inte bett om fältet — varken pekaren eller den upplösta bilden. Redigeringsvyn
- * får i stället `cover`, den VALDA bildens ULID, uppslagen ur itemets bilder så
- * att en pekare på en mjukraderad bilaga blir null. Urvalet av vad som är en bild
- * bor i App\Actions\Item\ResolveItemCover och skrivs inte om här; vyn letar
- * aldrig själv bland bilagorna.
+ * får i stället `images`, itemets bilder i upplösningens egen ordning, och
+ * `cover`, den VALDA bildens ULID uppslagen ur just den listan så att en pekare
+ * på en mjukraderad bilaga blir null. Urvalet av vad som är en bild och i vilken
+ * ordning de kommer bor i App\Actions\Item\ResolveItemCover och skrivs inte
+ * om här; vyn varken väljer bland bilagorna eller sorterar dem.
  *
  * **Ingen behörighetslogik bor här.** Ett nekat svar kastar
  * `AuthorizationException`, som bootstrap/app.php renderar som felsidan för
@@ -629,8 +630,8 @@ class ItemController extends Controller
         // Itemets bilder, i upplösningens egen ordning — äldst först (issue
         // 93). EN fråga, och urvalet (`kind = 'image'`, mjukraderade bort)
         // bor i Actionen: kontrollern letar inte själv bland bilagorna, för en
-        // andra regel om vad som är en bild glider ifrån den första. Listan
-        // behövs för `cover` nedan — hon är uppslaget, inte ett fält.
+        // andra regel om vad som är en bild glider ifrån den första. Listan är
+        // både väljarens alternativ och uppslaget till `cover` nedan.
         $images = $resolveItemCover->images($item);
 
         return Inertia::render('Containers/Items/Edit', [
@@ -638,6 +639,13 @@ class ItemController extends Controller
             'item' => (new ItemResource($item))->resolve($request),
             'categories' => CategoryResource::collection($listCategories->handle($user, $container))->resolve($request),
             'tags' => TagResource::collection($listTags->handle($user, $container))->resolve($request),
+
+            // Väljarens alternativ: ULID och filnamn, i Actionens ordning.
+            // Filnamnet är det enda som skiljer två bilder åt för användaren,
+            // och ordningen är upplösningens egen — vyn sorterar den aldrig om
+            // (samma regel som itemlistan, issue 57a § Beslut 8): två ordningar
+            // av samma lista hade gjort "den äldsta" till två olika bilder.
+            'images' => $this->imageOptions($images),
 
             // Det VALDA omslaget — pekaren och inte den upplösta bilden.
             // Skillnaden är hela "rensa": väljer användaren ingenting är
@@ -669,6 +677,10 @@ class ItemController extends Controller
      * tas, och en gren som aldrig tas är en gren ingen testar (56a § Beslut 5).
      * API:et bär skillnaden; webben behöver den inte.
      *
+     * **`cover` är undantaget** (issue 93): väljaren ritas bara när itemet har
+     * bilder, så fältet kan saknas i kroppen helt — och då betyder det "rör
+     * inte", se raden i metoden.
+     *
      * `account` finns inte i `UpdateItemRequest` och inte i formuläret: vem
      * som skapade raden är historik (§ Beslut 4).
      *
@@ -690,10 +702,19 @@ class ItemController extends Controller
         $item->fill($request->safe()->except(['category', 'tags', 'cover']));
         $item->category_id = $this->category($container, $request->validated('category'))?->id;
 
-        $cover = $request->validated('cover');
-        $item->cover_attachment_id = $cover === null
-            ? null
-            : $resolveItemCover->images($item)->firstWhere('ulid', $cover)?->id;
+        // Omslagsbilden har en `has()`-gren, till skillnad från `category` och
+        // `tags` ovanför: ett UTELÄMNAT `cover` lämnar pekaren orörd medan ett
+        // uttryckligen skickat `cover: null` rensar den (UpdateItemRequest
+        // § docblock). Formuläret ritar ingen väljare när itemet saknar bilder
+        // — ett item vars enda bild ligger i papperskorgen är just det fallet —
+        // och skickar då inte fältet alls. Utan grenen hade ett namnbyte där
+        // rensat ett val som papperskorgen lovar ska gå att återställa.
+        if ($request->has('cover')) {
+            $cover = $request->validated('cover');
+            $item->cover_attachment_id = $cover === null
+                ? null
+                : $resolveItemCover->images($item)->firstWhere('ulid', $cover)?->id;
+        }
 
         // Item-skrivningen och taggknytningen i samma transaktion, samma
         // resonemang som store() (issue 13b § Beslut 7). replaceTags() kör
@@ -993,6 +1014,37 @@ class ItemController extends Controller
     private function isOverdue(Loan $loan): bool
     {
         return $loan->due_at !== null && $loan->due_at->lessThan(Carbon::today());
+    }
+
+    /**
+     * Itemets bilder som väljarens alternativ — ULID och filnamn (issue 93 ·
+     * [[ADR-0041 Itemets vy]] § Beslut).
+     *
+     * **Två fält och inte `AttachmentResource`.** Väljaren ritar ett filnamn
+     * per rad, och resursen bär `mime_type`, `byte_size` och
+     * `billed_account` — tre relationer att eager-ladda för en lista som inte
+     * visar dem. Formen är `categoryNames()`s och `counterparts()`s: ett
+     * uppslag BREDVID resursen, utan att resursen rörs
+     * (`app/Http/Resources/**` är `/api`:s format).
+     *
+     * Filnamnet är det enda som skiljer två bilder åt för användaren, så det
+     * är etiketten. Ordningen är Actionens egen — äldst först — och vyn
+     * sorterar den aldrig om (samma regel som itemlistan, issue 57a
+     * § Beslut 8): det är ordningen upplösningens steg 2 väljer ur, och två
+     * ordningar av samma lista hade gjort "den äldsta" till två olika bilder.
+     *
+     * @param  Collection<int, Attachment>  $images
+     * @return list<array{ulid: string, filename: string}>
+     */
+    private function imageOptions(Collection $images): array
+    {
+        return $images
+            ->map(fn (Attachment $image): array => [
+                'ulid' => $image->ulid,
+                'filename' => $image->filename,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

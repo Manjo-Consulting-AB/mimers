@@ -54,19 +54,24 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * besvarat. `parent` skickas bara i skapandeläget: `UpdateItemRequest` tar
  * inte emot fältet, och ett item som redan finns byter inte förälder här.
  *
- * **Omslagsbilden bärs tillbaka, men formuläret ritar ingen väljare** (issue
- * 93 · [[ADR-0041 Itemets vy]] § Beslut). `cover` är den VALDA bildens ULID,
- * aldrig den upplösta: upplösningens steg 2 pekar alltid ut en bild så länge
- * itemet har någon, så en väljare som visade det upplösta värdet skulle se
- * likadan ut efter "rensa" som före. Fältet skickas tillbaka OFÖRÄNRAT, och
- * den raden är inte kosmetisk: `UpdateItemRequest` säger `nullable` och inte
- * `sometimes`, så ett UTELÄMNAT `cover` är samma sak som `cover: null` — det
- * rensar valet. Utan den hade varje namnändring här tyst nollställt omslaget.
+ * **Omslagsbilden är en väljare och bara i redigeringsläget** (issue 93 ·
+ * [[ADR-0041 Itemets vy]] § Beslut). `images` är itemets bilder ur
+ * App\Actions\Item\ResolveItemCover::images() — äldst först och redan
+ * filtrerade till `kind = 'image'` — och formuläret väljer ur den listan,
+ * sorterar den aldrig om och letar aldrig själv bland bilagorna: en andra
+ * regel om vad som är en bild glider ifrån den första. `cover` är den VALDA
+ * bildens ULID, aldrig den upplösta: väljer användaren ingenting är pekaren
+ * null och upplösningens steg 2 gäller, och då ska väljaren visa just det.
+ * Annars gick valet aldrig att ta tillbaka.
  *
- * Ingen väljare ritas: hennes etikett och "inget val"-rad hör till
- * `lang/en/ui.php`, och en användarvänd text får inte stå i en komponent i
- * stället ([[ADR-0021 Frontendteknik]]: "en text som ligger i en .vue-fil blir
- * aldrig engelsk"). Valet sätts, byts och rensas på itemets PATCH-rutt.
+ * **Fältet skickas bara när väljaren ritas.** Ingen bild i itemet betyder
+ * inget fält — ett val mellan ett alternativ är ingen fråga (samma regel som
+ * det enda kontot nedan) — och då finns heller inget val att uttrycka:
+ * `UpdateItemRequest` säger `sometimes|nullable`, så ett UTELÄMNAT `cover`
+ * lämnar pekaren orörd medan ett skickat `cover: null` rensar den. Utan den
+ * regeln hade ett namnbyte på ett item vars enda bild ligger i papperskorgen
+ * tyst raderat valet, och en återställning ur papperskorgen hade inte gett
+ * tillbaka omslaget ([[ADR-0008 Soft delete och papperskorg]]).
  *
  * Skapandeläget skickar inte `cover` alls — itemet har inga bilagor än, och
  * `StoreItemRequest` tar inte emot fältet.
@@ -75,8 +80,9 @@ const props = defineProps({
     containerUlid: { type: String, required: true },
     categories: { type: Array, required: true },
     tags: { type: Array, required: true },
-    /* Den valda bildens ULID, eller null när inget val är gjort; skickas
-       tillbaka oförändrad, se docblocket. */
+    /* Itemets bilder, äldst först; tom i skapandeläget. */
+    images: { type: Array, default: () => [] },
+    /* Den valda bildens ULID, eller null när inget val är gjort. */
     cover: { type: String, default: null },
     /* Kontolistan ur den delade propen `auth.accounts`; tom i redigeringsläget. */
     accounts: { type: Array, default: () => [] },
@@ -100,6 +106,14 @@ const options = computed(() => categoryOptions(props.categories));
  */
 const singleAccount = computed(() => (props.accounts.length === 1 ? props.accounts[0] : null));
 
+/*
+ * Väljaren ritas bara när det finns något att välja mellan: i
+ * redigeringsläget, och bara om itemet har bilder (issue 93). Ett item som
+ * just skapas har inga bilagor, och `StoreItemRequest` har ingen regel för
+ * fältet.
+ */
+const showCover = computed(() => props.item !== null && props.images.length > 0);
+
 const fields = {
     name: props.item?.name ?? '',
     description: props.item?.description ?? '',
@@ -112,11 +126,12 @@ const fields = {
     category: props.item?.category ?? null,
     tags: props.item?.tags?.map((tag) => tag.ulid) ?? [],
     /*
-     * Omslagsbilden: nyckeln finns bara i redigeringsläget (issue 93).
-     * StoreItemRequest tar inte emot fältet, och värdet är det formuläret
-     * fick — pekaren skickas tillbaka så att PATCHen inte tömmer den.
+     * Omslagsbilden: nyckeln finns bara när väljaren ritas (issue 93).
+     * Ritas hon inte finns inget val att uttrycka, och ett utelämnat `cover`
+     * lämnar pekaren orörd därför att UpdateItemRequest säger `sometimes` —
+     * se docblocket.
      */
-    ...(props.item === null ? {} : { cover: props.cover ?? null }),
+    ...(showCover.value ? { cover: props.cover ?? null } : {}),
 };
 
 const form = useForm(props.item === null
@@ -180,6 +195,31 @@ function submit() {
                 required
                 class="rounded border border-slate-300 bg-white px-3 py-2"
             >
+        </FormField>
+
+        <!-- Omslagsbilden: en väljare ur itemets bilder, med "inget val" överst
+             (issue 93). Fältet ritas bara i redigeringsläget och bara när
+             itemet har bilder; `images` kommer färdigfiltrerad och sorterad
+             ur App\Actions\Item\ResolveItemCover::images(). -->
+        <FormField
+            v-if="showCover"
+            v-slot="{ describedBy }"
+            :label="t('item.form.cover')"
+            id="cover"
+            :error="form.errors.cover"
+        >
+            <select
+                id="cover"
+                v-model="form.cover"
+                :aria-describedby="describedBy"
+                name="cover"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
+            >
+                <option :value="null">{{ t('item.form.cover_none') }}</option>
+                <option v-for="image in images" :key="image.ulid" :value="image.ulid">
+                    {{ image.filename }}
+                </option>
+            </select>
         </FormField>
 
         <FormField
