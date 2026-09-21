@@ -17,13 +17,13 @@ use Illuminate\Support\Facades\DB;
  * App\Actions\Access\ResolveItemScope.
  *
  * Fixturen är ADR:ns: en båt med motor och mast som barn, en impeller under
- * motorn, och ett syskonpar (motorn och drevet). Varje testnamn ska gå att
+ * motorn, och ett relaterat par (motorn och drevet). Varje testnamn ska gå att
  * läsa mot den.
  *
  *   båt
  *   ├── motor ── impeller
  *   └── mast
- *   motor  sibling  drev
+ *   motor  related  drev
  *
  * Cykeltestet bygger sin egen graf och rör inte den här.
  */
@@ -60,8 +60,8 @@ function båtMedDelar(?Account $ägarkonto = null): array
     skapaKant($båt, $mast);
     skapaKant($motor, $impeller);
 
-    // sibling normaliseras till lägst id först, precis som LinkItems gör.
-    skrivKant(min($motor->id, $drev->id), max($motor->id, $drev->id), 'sibling');
+    // related normaliseras till lägst id först, precis som LinkItems gör.
+    skrivKant(min($motor->id, $drev->id), max($motor->id, $drev->id), 'related');
 
     return [$container, $båt, $motor, $mast, $impeller, $drev];
 }
@@ -197,7 +197,7 @@ it('låter en grant på motorn varken nå båten eller båtens övriga barn', fu
     expect($omfång->itemIds())->toEqualCanonicalizing([$motor->id, $impeller->id]);
 });
 
-it('låter varken motorn eller drevet ärva över en sibling-kant', function () {
+it('låter varken motorn eller drevet ärva över en related-kant', function () {
     [$container, , $motor, , $impeller, $drev] = båtMedDelar();
 
     [, $motorMottagare] = kontoMedMedlem();

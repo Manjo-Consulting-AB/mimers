@@ -119,12 +119,12 @@ function itemrelationEgetKonto(User $mottagare): Account
 }
 
 /**
- * En kant, kanoniskt lagrad: `sibling` normaliseras till lägst id först
+ * En kant, kanoniskt lagrad: `related` normaliseras till lägst id först
  * ([[Items och organisation]] § item_link), `parent` behåller paret.
  */
 function itemrelationKant(Item $fran, Item $till, string $relation = 'parent'): ItemLink
 {
-    if ($relation === 'sibling' && $till->id < $fran->id) {
+    if ($relation === 'related' && $till->id < $fran->id) {
         [$fran, $till] = [$till, $fran];
     }
 
@@ -159,7 +159,7 @@ it('visar relationerna i tre grupper sorterade på motpartens namn', function ()
     itemrelationKant($baten, $motorn, 'parent');
     itemrelationKant($motorn, $alfan, 'parent');
     itemrelationKant($motorn, $betan, 'parent');
-    itemrelationKant($motorn, $masten, 'sibling');
+    itemrelationKant($motorn, $masten, 'related');
 
     actingAs($anvandare)->get(itemrelationUrl($container, $motorn))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
@@ -174,16 +174,16 @@ it('visar relationerna i tre grupper sorterade på motpartens namn', function ()
             // på id och inte på när länken skapades.
             ->where('links.child.0.item.name', 'Alfan')
             ->where('links.child.1.item.name', 'Betan')
-            ->has('links.sibling', 1)
-            ->where('links.sibling.0.item.name', 'Masten')
+            ->has('links.related', 1)
+            ->where('links.related.0.item.name', 'Masten')
     );
 });
 
-it('renderar grupperna i ordningen överordnade, underordnade, syskon', function () {
+it('renderar grupperna i ordningen överordnade, underordnade, relaterade', function () {
     $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
 
     // Ordningen är en del av Beslut 9, och den bor i komponenten.
-    expect($vy)->toContain("const groups = ['parent', 'child', 'sibling'];");
+    expect($vy)->toContain("const groups = ['parent', 'child', 'related'];");
 });
 
 it('länkar varje rad till motpartens detaljvy', function () {
@@ -204,7 +204,7 @@ it('visar en rad om itemet inte är kopplat till något', function () {
         fn (AssertableInertia $page) => $page
             ->where('links.parent', [])
             ->where('links.child', [])
-            ->where('links.sibling', [])
+            ->where('links.related', [])
     );
 
     // Tre tomma rubriker säger mindre än en rad: en tom grupp ritas inte
@@ -262,7 +262,7 @@ it('listar inte itemet självt, redan kopplade items eller items utanför omfån
     $masten = itemrelationItem($container, 'Masten');
     $fria = itemrelationItem($container, 'Fria');
 
-    itemrelationKant($motorn, $pumpen, 'sibling');
+    itemrelationKant($motorn, $pumpen, 'related');
 
     // Skrivare på motorn, pumpen och den fria — masten ligger utanför.
     $skrivare = itemrelationMottagare($container, $motorn, 'write');
@@ -670,7 +670,7 @@ it('kostar ett konstant antal frågor oavsett antal relationer', function () {
     actingAs($anvandare)->get($url)->assertOk();
     $medEn = $antal;
 
-    itemrelationKant($grannar[1], $mitt, 'sibling');
+    itemrelationKant($grannar[1], $mitt, 'related');
     itemrelationKant($mitt, $grannar[2], 'parent');
 
     $antal = 0;

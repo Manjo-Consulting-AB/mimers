@@ -289,7 +289,7 @@ class Item extends Model
      * linksTo() täcker de LÄSNINGEN i
      * App\Http\Controllers\Api\ItemLinkController::index() — de två
      * relationerna kombineras med union (issue 14 § Beslut 8), så listan
-     * aldrig blir N+1. Inget mer: inga `parents()`/`children()`/`siblings()`-
+     * aldrig blir N+1. Inget mer: inga `parents()`/`children()`/`related()`-
      * hjälprelationer, och relationerna bäddas inte in i ItemResource (issue
      * 14 § Beslut 9).
      *

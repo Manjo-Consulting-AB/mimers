@@ -25,11 +25,11 @@ use function Pest\Laravel\postJson;
  * App\Support\Plan\Entitlements::assertCanShareContainer().
  *
  * Fixturen är ADR-0028:s: en motor med tre ättlingar (impeller, impellerns
- * eget barn lager, och packning) plus ett sibling-par (motorn och drevet).
+ * eget barn lager, och packning) plus ett relaterat par (motorn och drevet).
  *
  *   motor ── impeller ── lager
  *     └──── packning
- *   motor  sibling  drev
+ *   motor  related  drev
  *
  * kontoMedMedlem(), beviljaAccess() och sättPlangräns() är globala
  * testhjälpare i tests/Support/Testhjalpare.php. Hjälparna nedan är
@@ -390,7 +390,7 @@ it('räknar reach för en grant på motorn och dess ättlingar', function () {
     expect($rader->firstWhere('item', null)['reach'])->toBeNull();
 });
 
-it('räknar inte ett sibling-syskon i reach', function () {
+it('räknar inte ett relaterat item i reach', function () {
     [, , $headers, $container] = atkomstKonto();
     $motor = atkomstItem($container, 'Motor');
     $drev = atkomstItem($container, 'Drev');
@@ -398,7 +398,7 @@ it('räknar inte ett sibling-syskon i reach', function () {
     ItemLink::query()->insert([
         'from_item_id' => min($motor->id, $drev->id),
         'to_item_id' => max($motor->id, $drev->id),
-        'relation' => 'sibling',
+        'relation' => 'related',
         'created_at' => now(),
         'updated_at' => now(),
     ]);

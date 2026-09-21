@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
  * POST /api/containers/{container}/items/{item}/links, se issue 14 § Beslut
  * 7. Kroppen är `{item, relation}` — `item` är MOTPARTENS ULID (inte det
  * item rutten gäller), `relation` är vad det item rutten gäller ÄR för
- * motparten (`parent` | `child` | `sibling`).
+ * motparten (`parent` | `child` | `related`).
  *
  * `item`-ULID:et måste finnas i DEN container rutten redan bär, och får
  * inte vara mjukraderat — en ULID som finns men hör till en annan container
@@ -44,7 +44,7 @@ class StoreItemLinkRequest extends FormRequest
                     fn ($query) => $query->where('container_id', $this->route('container')->id)->whereNull('deleted_at')
                 ),
             ],
-            'relation' => ['required', 'string', Rule::in(['parent', 'child', 'sibling'])],
+            'relation' => ['required', 'string', Rule::in(['parent', 'child', 'related'])],
         ];
     }
 }

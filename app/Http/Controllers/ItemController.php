@@ -766,17 +766,17 @@ class ItemController extends Controller
 
     /**
      * Relationerna i sina tre grupper (§ Beslut 9), i ordningen
-     * överordnade–underordnade–syskon. Nycklarna är relationens tre värden,
+     * överordnade–underordnade–relaterade. Nycklarna är relationens tre värden,
      * alltså samma ord som `ItemLinkResource` bär i `relation`, och
      * ordningen INOM varje grupp är den Actionen levererade (motpartens
      * namn) — grupperingen sorterar inte om något.
      *
      * @param  list<array{item: array{ulid: string, name: string}, relation: string}>  $links
-     * @return array{parent: list<array<string, mixed>>, child: list<array<string, mixed>>, sibling: list<array<string, mixed>>}
+     * @return array{parent: list<array<string, mixed>>, child: list<array<string, mixed>>, related: list<array<string, mixed>>}
      */
     private function groupLinks(array $links): array
     {
-        $groups = ['parent' => [], 'child' => [], 'sibling' => []];
+        $groups = ['parent' => [], 'child' => [], 'related' => []];
 
         foreach ($links as $link) {
             $groups[$link['relation']][] = $link;
