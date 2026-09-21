@@ -818,6 +818,12 @@ def main() -> int:
     # de senare ("docs/Process/L\303\244rdomar.md"). Båda ger filer som inte matchar
     # någon glob, alltså falska överträdelser på varje docs-PR. Upptäckt när grinden
     # kördes skarpt första gången, 2026-09-01.
+    # .claude/ är agentverktygets egen tillståndskatalog (settings, hooks,
+    # lokala lockfiler som Headroom skriver) - inte en del av issuens
+    # implementation, och ingen issue kommer någonsin lista den i sin
+    # omfångsruta. Filtreras bort här i stället för att jagas fil för fil i
+    # .gitignore, som redan visat sig inte hålla när en spårad kopia smyger
+    # tillbaka (se docs/Process/Lärdomar.md).
     andrade = [
         f
         for f in subprocess.run(
@@ -827,7 +833,7 @@ def main() -> int:
             text=True,
             check=True,
         ).stdout.split("\0")
-        if f
+        if f and not f.startswith(".claude/")
     ]
 
     # In scope vinner över Out of scope. Rutan är en positiv lista, och `Out of
