@@ -290,22 +290,37 @@ class ContainerController extends Controller
      * aldrig upp (SoftDeletes' globala scope) och en okänd ULID blir
      * felsidan för 404.
      *
-     * Auktoriseringen är första raden, före varje läsning av raden som
-     * betyder något: en `read`-innehavare kommer hit och får 403.
-     * App\Policies\ContainerPolicy::update() kräver en CONTAINER-BRED grant
-     * på minst `write` — en itemåtkomst räcker alltså inte, se issue 70.
+     * **Grinden är `view` sedan issue 101, och det är med flit en annan grind
+     * än skrivningens.** Sidan bär två slags innehåll: sektionslistan är
+     * `view`-innehåll — varje länk i den är `view`-grindad — och formuläret är
+     * `update`-innehåll. Fram till issue 101 låg sektionsmenyn i layouten och
+     * syntes för var och en som nådde containern; nu är den här sidan enda
+     * vägen till de sju sektionerna, och låg hubben kvar bakom `update` hade en
+     * delegerad `read`-mottagare tappat sex ytor hon når i dag (kategorier,
+     * taggar, delning, kalendern, exporten och papperskorgen är alla
+     * `view`-grindade, och DelningsvyTest slår fast att mottagaren finns).
+     * [[ADR-0039 Containerns översikt]] § Beslut lägger exporten "under
+     * containerns inställningar", och då är det grinden som ger vika — inte
+     * placeringen, och inte App\Policies\ContainerPolicy::update().
+     *
+     * Formuläret ritas ur `can.update` nedan, och PATCH prövar `update()` som
+     * förut: en CONTAINER-BRED grant på minst `write` — en itemåtkomst räcker
+     * alltså inte, se issue 70. Grinden här auktoriserar alltså LÄSNINGEN av
+     * sidan; skrivningen auktoriseras av `update()` på `containers.update`.
      *
      * Sidpropen `container` ur `ContainerResource` är kontraktet varje sida
      * under ContainerLayout uppfyller, se resources/js/layouts/ContainerLayout.vue.
      *
-     * **`can.delete` räknas med en policyfråga** (62b § Beslut 4), samma
-     * mönster som itemets tre flaggor (57a § Beslut 6): raderingsknappen ritas
-     * bara för den som får radera, och flaggan läggs BREDVID
-     * `ContainerResource` — den är presentation, och rutten auktoriserar ändå
-     * med `Gate::authorize()`. En `read`- eller `write`-deltagare kommer inte
-     * ens hit (grinden ovan är `update()`), men en `write`-deltagare som
-     * postar förbi vyn får 403 på `containers.destroy` — flaggan är ingen
-     * grind.
+     * **`can.delete` och `can.update` räknas med en policyfråga** (62b
+     * § Beslut 4, issue 101), samma mönster som itemets tre flaggor (57a
+     * § Beslut 6): formuläret och raderingsknappen ritas bara för den som får
+     * skriva respektive radera, och båda flaggorna läggs BREDVID
+     * `ContainerResource` — de är presentation, och rutterna auktoriserar ändå
+     * med `Gate::authorize()`. Att en `read`-mottagare — eller en mottagare
+     * med åtkomst bara på ett enskilt item — når hit är hela poängen med
+     * `view`-grinden ovan: hon ser de sju sektionerna och inget formulär, och
+     * en `write`-deltagare som postar förbi vyn får 403 på `containers.destroy`
+     * — flaggan är ingen grind.
      *
      * **Valutan kommer som TVÅ propar bredvid resursen** (issue 85 ·
      * [[ADR-0037 Valutans arv]]): `currency` är containerns EGEN, och `null`
@@ -327,7 +342,7 @@ class ContainerController extends Controller
      */
     public function edit(Request $request, Container $container): Response
     {
-        Gate::authorize('update', $container);
+        Gate::authorize('view', $container);
 
         // En enda rad, men ladda ägarkontot uttryckligen ändå så resursen
         // aldrig kör en oplanerad lazy-load — samma resonemang som
@@ -344,6 +359,9 @@ class ContainerController extends Controller
             'currency' => $container->currency,
             'accountCurrency' => $container->account->currency,
             'can' => [
+                // Formuläret ritar sig ur den här; se docblocken ovan om varför
+                // grinden och flaggan inte är samma fråga.
+                'update' => Gate::forUser($request->user())->allows('update', $container),
                 'delete' => Gate::forUser($request->user())->allows('delete', $container),
             ],
         ]);

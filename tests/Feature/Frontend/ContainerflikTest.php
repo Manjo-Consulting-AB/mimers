@@ -2,6 +2,7 @@
 
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
@@ -62,6 +63,32 @@ function containerflikKontext(): array
     $container = Container::factory()->for($konto, 'account')->create();
 
     return [$konto, $anvandare, $container];
+}
+
+/**
+ * En delegerad läsare: en `container_access` på `read`, utan konto i
+ * ägarkontot.
+ *
+ * Byggd här och inte med ContainervyerTests containerGrant(): den hjälparen
+ * bor i en annan testfil, och den här filen bär sina egna med prefixet
+ * `containerflik` av samma skäl som proven gör det — ett prov som lånar en
+ * annan fils kontext måste läsa den filen för att förstå sitt eget.
+ */
+function containerflikLasare(Container $container): User
+{
+    $lasare = User::factory()->create();
+
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'item_id' => null,
+        'grantee_type' => 'user',
+        'grantee_id' => $lasare->id,
+        'level' => 'read',
+        'kind' => 'member',
+        'granted_by_user_id' => User::factory()->create()->id,
+    ]);
+
+    return $lasare;
 }
 
 /**
@@ -259,6 +286,44 @@ it('var och en av de nio sektionerna går att nå', function () {
     expect($lankar)->toHaveCount(1, 'inställningssidan ritar ingen egen länkrad');
     expect($lankar[0])->toContain('section.href(container.ulid)');
     expect($lankar[0])->toContain('min-h-11');
+});
+
+/*
+ * Klart när: var och en av de nio sektionerna går att nå — också för den som
+ * inte äger containern.
+ *
+ * Sedan issue 101 är inställningssidan enda vägen till de sju sektionerna, och
+ * den grindas därför på `view` och inte på `update`:
+ * App\Http\Controllers\ContainerController::edit() auktoriserar läsningen av
+ * sidan, och `PATCH` prövar `update()` som förut. Låg hubben kvar bakom
+ * `update` hade en delegerad `read`-mottagare — som DelningsvyTest visar finns —
+ * tappat sex ytor hon når i dag, för kategorier, taggar, delning, kalendern,
+ * exporten och papperskorgen är alla `view`-grindade.
+ *
+ * Överlåtelsen svarar INTE för henne: `viewTransfers` är ägarkontots (issue
+ * 67b). Länken var en död länk också i den gamla sektionsmenyn, så det är
+ * ingen regression — den står som känd rest i PR:ens `## Frågor och
+ * antaganden`, och provet låser fast att den är just 403 och inte 500.
+ */
+it('låter en delegerad läsare nå sektionerna via inställningssidan', function () {
+    withoutVite();
+
+    [, , $container] = containerflikKontext();
+
+    $lasare = containerflikLasare($container);
+
+    actingAs($lasare)
+        ->get("/containers/{$container->ulid}/edit")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
+
+    $adresser = containerflikLankar('containerSettingsSections', $container->ulid);
+
+    foreach (['categories', 'tags', 'sharing', 'calendar', 'export', 'trash'] as $nyckel) {
+        actingAs($lasare)->get($adresser[$nyckel])->assertOk();
+    }
+
+    actingAs($lasare)->get($adresser['transfer'])->assertForbidden();
 });
 
 /*

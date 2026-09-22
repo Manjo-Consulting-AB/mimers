@@ -63,6 +63,16 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * hittar är samma sak som en yta som inte finns — det var 62a:s motivering för
  * papperskorgen och 67c:s för exporten, och de två är just de rader som hade
  * varit lätta att tappa när menyn blev en flikrad.
+ *
+ * **Sidan bär två grindar och ritas därför i två delar** (issue 101). Rutten
+ * auktoriserar med `view`, för sektionslistan är `view`-innehåll — varje länk i
+ * den är `view`-grindad — och den som bara får läsa måste nå dem; hade hubben
+ * legat bakom `update` hade hon tappat sex ytor. Formuläret och raderingsknappen
+ * är skrivningar och ritas ur `can.update` respektive `can.delete`. Flaggan är
+ * presentation och ingen grind: `PATCH` och `DELETE` prövar `update()` och
+ * `delete()` som förut, och en `read`-mottagare som postar förbi vyn får 403.
+ * Rubriken och sidtiteln följer samma gren som formuläret — att mötas av
+ * *Redigera container* när man inte får redigera är en osanning.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -124,11 +134,18 @@ async function destroy() {
 
 <template>
     <ContainerLayout :container="container">
-        <Head :title="t('container.edit.title')" />
+        <!-- Sidtiteln och rubriken följer samma gren som formuläret: *Redigera
+             container* åt någon som inte får redigera är en osanning, och den
+             som kommer hit för sektionernas skull möts av listans namn i
+             stället. `title`/`heading`-paret är det befintliga och betyder
+             samma sak här; båda grenarna finns i `lang/`. -->
+        <Head :title="can.update ? t('container.edit.title') : t('container.edit.sections')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('container.edit.heading') }}</h1>
+        <h1 class="text-2xl font-semibold">
+            {{ can.update ? t('container.edit.heading') : t('container.edit.sections') }}
+        </h1>
 
-        <form class="mt-8 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
+        <form v-if="can.update" class="mt-8 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
             <FormField
                 v-slot="{ describedBy }"
                 :label="t('container.edit.name')"
