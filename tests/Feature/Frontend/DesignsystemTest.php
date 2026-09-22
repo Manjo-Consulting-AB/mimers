@@ -287,8 +287,8 @@ it('gör fokusringen till en token och inte en nollställd outline', function ()
     //
     // Mängden växer med varje issue som migrerar en komponent: regeln gäller
     // varje fil som nollställer en outline, inte bara de två första. Issue 425
-    // lägger till knappen och de fyra kontrollerna, och de fokuseras av en
-    // tabb — där är ringen `focus-visible:` och inte `focus:`.
+    // lägger till knappen och de fyra kontrollerna. Knappen fokuseras av en
+    // tabb och bär `focus-visible:`; kontrollerna bär `focus:` som FormField.
     $komponenter = [...designKomponenter(), ...designPrimitiverna()];
 
     foreach ($komponenter as $sokvag => $kod) {
