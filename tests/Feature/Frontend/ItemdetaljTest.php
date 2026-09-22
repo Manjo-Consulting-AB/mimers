@@ -6,6 +6,7 @@ use App\Models\Account;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\ContainerAccess;
+use App\Models\Favorite;
 use App\Models\Item;
 use App\Models\Tag;
 use App\Models\User;
@@ -351,4 +352,70 @@ it('formaterar datumet utan att flytta det över en tidszon', function () {
 
     expect(itemdetaljKör("process.stdout.write(String(m.formatDateOnly(null, 'sv-SE')));"))
         ->toBe('null');
+});
+
+/*
+ * Klart när: stjärnan går att sätta och ta bort från itemets huvud.
+ *
+ * Provet är YTANS, inte reglernas: att raden skrivs och raderas, att ett item
+ * utanför omfånget ger 403 och att paret är unikt prövas i
+ * tests/Feature/Item/FavoritTest.php. Här prövas det issuen pekar på —
+ * att växlingen sitter i itemets HUVUD, på detaljvyn, och att den når båda
+ * rutterna därifrån.
+ *
+ * Ordningen mellan rubriken och flikraden är villkoret: stjärnan står efter
+ * `<h1>` och före `<UiTabs>`, alltså i huvudet och inte i en sektion längre
+ * ned. Ett `toContain` mot hela filen hade gått igenom var stjärnan än satt.
+ */
+it('stjärnan går att sätta och ta bort från itemets huvud', function () {
+    [, $anvandare, $container] = itemdetaljKontext();
+    $motorn = itemdetaljItem($container, 'Motorn');
+
+    $url = "/containers/{$container->ulid}/items/{$motorn->ulid}";
+    $stjärna = "{$url}/favorite";
+
+    actingAs($anvandare)->from($url)->post($stjärna)
+        ->assertRedirect($url)
+        ->assertSessionHas('status', 'favorite-added');
+
+    expect($anvandare->favorites()->where('item_id', $motorn->id)->exists())->toBeTrue();
+
+    // Och sidan SÄGER det när den laddas: stjärnans tillstånd kommer ur
+    // serverns svar och inte ur en standard. Utan den här raden är
+    // `isFavorite` alltid falsk i vyn — växlingen väljer POST eller DELETE
+    // efter samma propp, så stjärnan hade kunnat märka men aldrig avmarkera.
+    actingAs($anvandare)->get($url)->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('isFavorite', true)
+    );
+
+    actingAs($anvandare)->from($url)->delete($stjärna)
+        ->assertRedirect($url)
+        ->assertSessionHas('status', 'favorite-removed');
+
+    expect(Favorite::query()->count())->toBe(0);
+
+    actingAs($anvandare)->get($url)->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('isFavorite', false)
+    );
+
+    $vy = File::get(resource_path('js/pages/Containers/Items/Show.vue'));
+
+    // Fånga stjärnans EGET element först och leta inuti det — annars hade ett
+    // `toContain` kunnat matcha en sträng någon helt annanstans i filen.
+    // Bindningsformen `:aria-pressed` och inte ordet: kommentaren ovanför
+    // knappen nämner attributet, och `explode` hade då fångat stycket FÖRE
+    // knappen — som bär orden men ingen knapp.
+    $knapp = collect(explode('<button', $vy))
+        ->first(fn (string $bit) => str_contains($bit, ':aria-pressed'));
+
+    expect($knapp)->not->toBeNull();
+    expect($knapp)->toContain('item.show.favorite_add');
+    expect($knapp)->toContain('item.show.favorite_remove');
+    expect($knapp)->toContain('toggleFavorite');
+
+    // Och den sitter i huvudet: efter rubriken och före flikraden. `:`
+    // framför attributet skiljer bindningen från omnämnandet i kommentaren
+    // ovanför den.
+    expect(strpos($vy, '<h1'))->toBeLessThan(strpos($vy, ':aria-pressed'));
+    expect(strpos($vy, ':aria-pressed'))->toBeLessThan(strpos($vy, '<UiTabs'));
 });

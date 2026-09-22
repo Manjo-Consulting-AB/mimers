@@ -533,6 +533,24 @@ class ItemController extends Controller
             'inlineEnabled' => FileOrigin::host() !== null,
             'links' => $this->groupLinks(ItemLinkResource::collection($links)->resolve($request)),
             'counterparts' => $this->counterparts($user, $container, $item, $links, $listItems),
+
+            // Är itemet en av användarens favoriter? Se issue 105 och
+            // [[ADR-0042 Designsystemet]] § Konsekvenser. Frågan är per
+            // ANVÄNDARE och besvaras här: markeringen är en rad i `favorite`,
+            // och `ItemResource` bär inget fält för den med flit — ett faktum
+            // om relationen mellan en person och ett item är inte ett faktum
+            // om itemet, och en flagga på itemet hade gjort en användares
+            // markering till allas i en delad container. Proppen ligger
+            // därför BREDVID resursen, som `categories` och `paths` ovan.
+            //
+            // EN fråga, och samma par som FavoriteController skriver och
+            // raderar: EXISTS mot det unika `(user_id, item_id)`. Stjärnan
+            // läser svaret för att välja POST eller DELETE, så utan den här
+            // raden står `isFavorite` på sin standard och stjärnan kan märka
+            // men aldrig avmarkera — vyn kan inte sluta sig till tillståndet
+            // själv, och `ItemResource` får det inte bära.
+            'isFavorite' => $item->favoritedBy()->where('user_id', $user->id)->exists(),
+
             'can' => [
                 'update' => Gate::forUser($user)->allows('update', $item),
                 'delete' => Gate::forUser($user)->allows('delete', $item),
