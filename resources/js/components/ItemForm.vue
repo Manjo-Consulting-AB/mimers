@@ -2,6 +2,11 @@
 import { computed } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import UiButton from './UiButton.vue';
+import UiCheckbox from './UiCheckbox.vue';
+import UiInput from './UiInput.vue';
+import UiSelect from './UiSelect.vue';
+import UiTextarea from './UiTextarea.vue';
 import { categoryOptions } from './categoryTree.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
@@ -186,7 +191,7 @@ function submit() {
     <form class="flex max-w-lg flex-col gap-4" @submit.prevent="submit">
         <!-- Föräldern ur länken, som en rad text och inte som en väljare
              (issue 58 § Beslut 7). Värdet är ändå med i postningen. -->
-        <p v-if="item === null && parent" class="text-sm text-slate-600">
+        <p v-if="item === null && parent" class="text-body text-ink-muted">
             {{ t('item.form.parent', { name: parent.name }) }}
         </p>
 
@@ -196,15 +201,13 @@ function submit() {
             id="name"
             :error="form.errors.name"
         >
-            <input
+            <UiInput
                 id="name"
                 v-model="form.name"
-                :aria-describedby="describedBy"
-                type="text"
+                :described-by="describedBy"
                 name="name"
                 required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <!-- Omslagsbilden: en väljare ur itemets bilder, med "inget val" överst
@@ -218,18 +221,17 @@ function submit() {
             id="cover"
             :error="form.errors.cover"
         >
-            <select
+            <UiSelect
                 id="cover"
                 v-model="form.cover"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 name="cover"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
                 <option :value="null">{{ t('item.form.cover_none') }}</option>
                 <option v-for="image in images" :key="image.ulid" :value="image.ulid">
                     {{ image.filename }}
                 </option>
-            </select>
+            </UiSelect>
         </FormField>
 
         <FormField
@@ -238,13 +240,11 @@ function submit() {
             id="description"
             :error="form.errors.description"
         >
-            <textarea
+            <UiTextarea
                 id="description"
                 v-model="form.description"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 name="description"
-                rows="4"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
             />
         </FormField>
 
@@ -258,13 +258,11 @@ function submit() {
             id="notes"
             :error="form.errors.notes"
         >
-            <textarea
+            <UiTextarea
                 id="notes"
                 v-model="form.notes"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 name="notes"
-                rows="4"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
             />
         </FormField>
 
@@ -274,14 +272,12 @@ function submit() {
             id="manufacturer"
             :error="form.errors.manufacturer"
         >
-            <input
+            <UiInput
                 id="manufacturer"
                 v-model="form.manufacturer"
-                :aria-describedby="describedBy"
-                type="text"
+                :described-by="describedBy"
                 name="manufacturer"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <FormField
@@ -290,14 +286,12 @@ function submit() {
             id="model"
             :error="form.errors.model"
         >
-            <input
+            <UiInput
                 id="model"
                 v-model="form.model"
-                :aria-describedby="describedBy"
-                type="text"
+                :described-by="describedBy"
                 name="model"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <FormField
@@ -306,14 +300,12 @@ function submit() {
             id="serial_number"
             :error="form.errors.serial_number"
         >
-            <input
+            <UiInput
                 id="serial_number"
                 v-model="form.serial_number"
-                :aria-describedby="describedBy"
-                type="text"
+                :described-by="describedBy"
                 name="serial_number"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <FormField
@@ -322,14 +314,13 @@ function submit() {
             id="purchased_at"
             :error="form.errors.purchased_at"
         >
-            <input
+            <UiInput
                 id="purchased_at"
                 v-model="form.purchased_at"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 type="date"
                 name="purchased_at"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <FormField
@@ -338,14 +329,13 @@ function submit() {
             id="warranty_until"
             :error="form.errors.warranty_until"
         >
-            <input
+            <UiInput
                 id="warranty_until"
                 v-model="form.warranty_until"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 type="date"
                 name="warranty_until"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <FormField
@@ -354,14 +344,12 @@ function submit() {
             id="position_note"
             :error="form.errors.position_note"
         >
-            <input
+            <UiInput
                 id="position_note"
                 v-model="form.position_note"
-                :aria-describedby="describedBy"
-                type="text"
+                :described-by="describedBy"
                 name="position_note"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <!-- Kategorin: en väljare ur trädet, indraget efter djup. -->
@@ -372,26 +360,25 @@ function submit() {
             id="category"
             :error="form.errors.category"
         >
-            <select
+            <UiSelect
                 id="category"
                 v-model="form.category"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 name="category"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
                 <option :value="null">{{ t('item.form.category_none') }}</option>
                 <option v-for="option in options" :key="option.ulid" :value="option.ulid">
                     {{ option.name }}
                 </option>
-            </select>
+            </UiSelect>
         </FormField>
 
         <!-- Tom container: en rad som pekar på kategorisidan, aldrig en tom väljare. -->
-        <p v-else class="text-sm text-slate-600">
+        <p v-else class="text-body text-ink-muted">
             {{ t('item.form.categories_empty') }}
             <Link
                 :href="`/containers/${containerUlid}/categories`"
-                class="text-blue-700 underline"
+                class="text-accent underline"
             >
                 {{ t('item.form.categories_empty_link') }}
             </Link>
@@ -403,44 +390,44 @@ function submit() {
             class="flex flex-col gap-2"
             :aria-describedby="tagError ? 'tags-error' : undefined"
         >
-            <legend class="text-sm font-medium text-slate-800">{{ t('item.form.tags') }}</legend>
+            <legend class="text-body font-medium text-ink">{{ t('item.form.tags') }}</legend>
 
-            <label
+            <UiCheckbox
                 v-for="tag in tags"
                 :key="tag.ulid"
-                :for="`item-tag-${tag.ulid}`"
-                class="flex min-h-11 min-w-11 items-center gap-2 text-sm text-slate-800"
+                v-model="form.tags"
+                :id="`item-tag-${tag.ulid}`"
+                :value="tag.ulid"
             >
-                <input
-                    :id="`item-tag-${tag.ulid}`"
-                    v-model="form.tags"
-                    type="checkbox"
-                    name="tags[]"
-                    :value="tag.ulid"
-                >
                 <span
                     aria-hidden="true"
-                    class="inline-block h-3 w-3 shrink-0 rounded-full border border-slate-500"
+                    class="inline-block h-3 w-3 shrink-0 rounded-full border border-ink-subtle"
                     :style="tag.color ? { backgroundColor: tag.color } : null"
                 />
                 {{ tag.name }}
-            </label>
+            </UiCheckbox>
 
-            <p v-if="tagError" id="tags-error" role="alert" tabindex="-1" class="text-sm text-red-700 outline-none">
+            <p
+                v-if="tagError"
+                id="tags-error"
+                role="alert"
+                tabindex="-1"
+                class="text-body text-danger outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
+            >
                 {{ tagError }}
             </p>
         </fieldset>
 
-        <p v-else class="text-sm text-slate-600">
+        <p v-else class="text-body text-ink-muted">
             {{ t('item.form.tags_empty') }}
-            <Link :href="`/containers/${containerUlid}/tags`" class="text-blue-700 underline">
+            <Link :href="`/containers/${containerUlid}/tags`" class="text-accent underline">
                 {{ t('item.form.tags_empty_link') }}
             </Link>
         </p>
 
         <!-- Ett enda konto: värdet är förvalt och visas som text (Beslut 4). -->
         <div v-if="item === null && singleAccount" class="flex flex-col gap-1">
-            <p class="text-sm font-medium text-slate-800">{{ t('item.form.account') }}</p>
+            <p class="text-body font-medium text-ink">{{ t('item.form.account') }}</p>
             <p>{{ singleAccount.name }}</p>
         </div>
 
@@ -451,26 +438,21 @@ function submit() {
             id="account"
             :error="form.errors.account"
         >
-            <select
+            <UiSelect
                 id="account"
                 v-model="form.account"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 name="account"
                 required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
                 <option v-for="account in accounts" :key="account.ulid" :value="account.ulid">
                     {{ account.name }}
                 </option>
-            </select>
+            </UiSelect>
         </FormField>
 
-        <button
-            type="submit"
-            :disabled="form.processing"
-            class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-        >
+        <UiButton type="submit" :pending="form.processing" class="self-start">
             {{ submitLabel }}
-        </button>
+        </UiButton>
     </form>
 </template>

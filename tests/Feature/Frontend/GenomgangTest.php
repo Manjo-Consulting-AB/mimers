@@ -81,6 +81,44 @@ function genomgangKnappar(string $kod): array
 }
 
 /**
+ * Varje skicka-knapp i en fil: råa `<button type="submit">` och den
+ * `<UiButton type="submit">` formulären använder sedan issue 425.
+ *
+ * De två skiljer sig i VAR träffytan bor. En rå knapp bär `min-h-11` själv;
+ * UiButton bär den i sin egen mall, en gång, och då prövas den på komponenten i
+ * stället för på taggen — en knapp per formulär är rätt plats för ytan, fem är
+ * fem ställen att glida isär på.
+ *
+ * @return array<int, array{rad: int, markup: string, ui: bool}>
+ */
+function genomgangSkickaknappar(string $kod): array
+{
+    $knappar = [];
+
+    foreach (genomgangKnappar($kod) as $knapp) {
+        if (str_contains($knapp['markup'], 'type="submit"')) {
+            $knappar[] = [...$knapp, 'ui' => false];
+        }
+    }
+
+    preg_match_all('/<UiButton\b.*?<\/UiButton>/s', $kod, $träffar, PREG_OFFSET_CAPTURE);
+
+    foreach ($träffar[0] as $träff) {
+        if (! str_contains($träff[0], 'type="submit"')) {
+            continue;
+        }
+
+        $knappar[] = [
+            'rad' => substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
+            'markup' => $träff[0],
+            'ui' => true,
+        ];
+    }
+
+    return $knappar;
+}
+
+/**
  * Varje `<li>`-element i en fil, som rå markup.
  *
  * @return array<int, array{rad: int, markup: string}>
@@ -149,22 +187,26 @@ it('sätter en sidtitel på varje sida under pages/', function () {
 });
 
 it('ger varje skicka-knapp ett vänteläge med en text ur lang/', function () {
+    $filer = genomgangKod();
     $granskade = 0;
 
-    foreach (genomgangKod() as $sokvag => $kod) {
-        foreach (genomgangKnappar($kod) as $knapp) {
-            if (! str_contains($knapp['markup'], 'type="submit"')) {
-                continue;
-            }
+    expect($filer['components/UiButton.vue'] ?? null)->not->toBeNull(
+        'components/UiButton.vue saknas — den bär träffytan åt varje migrerad skicka-knapp',
+    );
 
+    foreach ($filer as $sokvag => $kod) {
+        foreach (genomgangSkickaknappar($kod) as $knapp) {
             $granskade++;
 
             // Inaktiverad medan svaret hämtas — det är det som gör att samma
-            // knapp inte går att trycka två gånger (Beslut 5).
-            expect($knapp['markup'])->toMatch('/:disabled=/', sprintf(
-                '%s:%d är en skicka-knapp utan :disabled — dubbeltryck är möjligt',
+            // knapp inte går att trycka två gånger (Beslut 5). UiButton äger
+            // mekanismen sedan issue 425: `pending` stänger den, och den råa
+            // knappen stängs av `:disabled`.
+            expect($knapp['markup'])->toMatch($knapp['ui'] ? '/:pending=/' : '/:disabled=/', sprintf(
+                '%s:%d är en skicka-knapp utan %s — dubbeltryck är möjligt',
                 $sokvag,
                 $knapp['rad'],
+                $knapp['ui'] ? ':pending' : ':disabled',
             ));
 
             // Och en text som säger att något händer. Etiketten står inte
@@ -177,11 +219,12 @@ it('ger varje skicka-knapp ett vänteläge med en text ur lang/', function () {
             ));
 
             // 44 px träffyta (Beslut 3).
-            expect($knapp['markup'])->toMatch('/\bmin-h-11\b/', sprintf(
-                '%s:%d har en träffyta under 44 px',
-                $sokvag,
-                $knapp['rad'],
-            ));
+            expect($knapp['ui'] ? $filer['components/UiButton.vue'] : $knapp['markup'])
+                ->toMatch('/\bmin-h-11\b/', sprintf(
+                    '%s:%d har en träffyta under 44 px',
+                    $sokvag,
+                    $knapp['rad'],
+                ));
         }
     }
 
