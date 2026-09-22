@@ -311,10 +311,10 @@ it('låter ett fryst ägarkonto se itemet men nekar varje skrivflagga', function
  * prövas därför i node på exakt den modul klienten importerar. Ett item med
  * bara `manufacturer` satt ska ge EN rad.
  *
- * Sedan issue 102 är listan DETALJFLIKENS rader, och `description` och `notes`
- * står i indata men inte i svaret: de är översiktsflikens ledande fält och
- * aldrig en rad bland tillverkare och modell. Att de har värden här är hela
- * beviset — hade de varit kvar i listan hade de synts.
+ * Sedan issue 102 är listan fältraderna på översiktsfliken, och `description`
+ * och `notes` står i indata men inte i svaret: de är vyns ledande stycken,
+ * över listan, och aldrig en rad bland tillverkare och modell. Att de har
+ * värden här är hela beviset — hade de varit kvar i listan hade de synts.
  */
 it('utelämnar tomma fält i stället för att hitta på ett värde', function () {
     $item = json_encode([

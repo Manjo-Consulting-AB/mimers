@@ -20,16 +20,23 @@ use function Pest\Laravel\withoutVite;
  *
  * **Filen prövar en omfördelning och ett krav.** Omfördelningen är att de sex
  * propar som i dag renderas på en enda lång sida — fälten, relationerna,
- * bilagorna, schemana, utlåningen och taggarna — nu ligger i var sin flik, och
- * att anteckningen och beskrivningen står på översiktsfliken. Kravet är att
- * **utlåningen får en flik trots att bilden inte ritar någon**: en yta ingen
- * hittar är samma sak som en yta som inte finns, och det är 62a:s och 67c:s
- * egen motivering.
+ * bilagorna, schemana, utlåningen och taggarna — nu ligger i var sin flik.
+ * Raden har **sex** flikar och ingen sjunde: "fälten" ur de sex proparna är
+ * översiktsfliken, och anteckningen och beskrivningen står överst på den med
+ * fältlistan under sig. Kravet är att **utlåningen får en flik trots att
+ * bilden inte ritar någon**: en yta ingen hittar är samma sak som en yta som
+ * inte finns, och det är 62a:s och 67c:s egen motivering.
  *
  * **Ingen ny ändpunkt och ingen ny prop.** Provet begär varje fliks adress som
  * inloggad medlem: svarar den inte är fliken en död länk, och en flik som
  * kräver en ny kontrollermetod är ett fynd i PR:ens `## Frågor och antaganden`
  * och ingen ändpunkt i smyg.
+ *
+ * **Flikens adress bär den aktuella förekomsten.** Varje flik skriver samma
+ * `?path=` som adressen den står i, i ordningen `path` före `tab`, så att ett
+ * flikbyte stannar på samma förekomst och `UiTabs` känner igen raden man står
+ * på. Provet läser formen i källkoden: den går inte att köra utan en webbläsare
+ * med en riktig väg i adressen.
  *
  * **Det som INTE prövas här** är det som kräver en webbläsare: att raden ser ut
  * som `struktur - item.jpeg`, att den aktiva fliken lyser, och att
@@ -252,12 +259,13 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         // namn rubriken bär, och det som säger vilket item raden hör till.
         ->toContain(':label="item.name"');
 
-    // Bildens fem, och de två rader bilden inte har (utlåningen och taggarna)
-    // sist. Historiken och kostnaden har ingen flik: den ena väntar på
-    // instrumenteringen och den andra på trepanelslayouten (issue 103).
+    // Sex flikar, och ingen sjunde: översikten är fältens flik. Bildens fem
+    // minus historiken och kostnaderna, plus utlåningen — och taggarna, som
+    // inte heller har någon rad i bilden. Historiken och kostnaden har ingen
+    // flik: den ena väntar på instrumenteringen och den andra på
+    // trepanelslayouten (issue 103).
     expect(itemflikNycklar($vy))->toBe([
         'overview',
-        'details',
         'relations',
         'attachments',
         'schedules',
@@ -270,7 +278,6 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
     // fliken och rubriken strax under den ska inte kunna säga olika saker.
     expect(itemflikEtiketter($vy))->toBe([
         'item.show.overview',
-        'item.show.details',
         'item.links.heading',
         'item.attachment.heading',
         'item.schedule.heading',
@@ -285,15 +292,25 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         expect(trim($mening))->not->toBe('');
     }
 
-    // Adressen: itemets egen sökväg, och `?tab=` för varje flik utom
-    // vilotillståndet — översikten skrivs utan querysträng (issue 100).
+    // Adressen: itemets egen sökväg, `?tab=` för varje flik utom
+    // vilotillståndet, och den aktuella förekomsten med in i fliken.
+    //
+    // Ordningen är `path` FÖRE `tab`, och den är bindande: adressen man står i
+    // innehåller samma `path`, och det är den likheten `UiTabs` jämför. Byts
+    // ordningen tänds ingen flik så snart en väg är vald.
     $bar = itemflikTabbar($vy);
 
-    expect($bar)->toContain('`/containers/${props.container.ulid}/items/${props.item.ulid}`');
+    expect($bar)->toContain('`/containers/${props.container.ulid}/items/${props.item.ulid}`')
+        ->toContain('?path=${path}&tab=${key}')
+        ->toContain('?tab=${key}')
+        // Översikten är frånvaron av `tab` och ingenting annat: sökvägen
+        // allena, med `?path=` när adressen har en och utan när den inte har
+        // det (arkitektens svar på frågan om förekomsten).
+        ->toContain('href: `${base}${here}`');
 
-    preg_match_all('/\?tab=(\w+)/', $bar, $träffar);
+    preg_match_all("/tabHref\('(\w+)'\)/", $bar, $träffar);
 
-    expect($träffar[1])->toBe(['details', 'relations', 'attachments', 'schedules', 'loans', 'tags']);
+    expect($träffar[1])->toBe(['relations', 'attachments', 'schedules', 'loans', 'tags']);
 
     // Och varje flik svarar. Ingen ny ändpunkt: adresserna är itemets egen
     // rutt med en querysträng på, och kontrollern är orörd av issuen.
@@ -312,13 +329,17 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
  * var och en vid sin panel och prövar att ingen av dem ritas i en annan: en
  * prop som ritas på två flikar är samma yta två gånger, och den som försvinner
  * i en omfördelning är den här filens hela ärende.
+ *
+ * Fälten hör till översikten och inte till en egen detaljflik: raden har sex
+ * flikar, och en sjunde som bara bar två stycken text hade varit en yta bilden
+ * inte ritar (arkitektens svar på punkt 4).
  */
 it('alla sex befintliga propar når sin flik', function () {
     $vy = itemflikKod('pages/Containers/Items/Show.vue');
 
     // Panel för panel: markören är den prop eller det anrop som bär ytan.
     $ytor = [
-        'details' => ['v-for="field in fields"', 'field.value'],
+        'overview' => ['v-for="field in fields"', 'field.value'],
         'relations' => ['<ItemLinkSection', ':links="links"', ':counterparts="counterparts"'],
         'attachments' => ['<ItemAttachmentSection', ':attachments="attachments"', ':variants="variants"'],
         'schedules' => ['<ScheduleListSection', ':schedules="schedules"', ':open-occurrences="openOccurrences"'],
@@ -364,9 +385,10 @@ it('alla sex befintliga propar når sin flik', function () {
  *
  * Talet är antalet rader fliken ritar — motparterna i sina tre grupper,
  * bilagorna, schemana, utlåningarna, taggarna — och det kommer ur en prop som
- * redan finns. Översikten och detaljerna ritar ingen lista och bär `null`:
- * `UiTabs` skiljer `null` från en nolla, och en nolla är ett påstående
- * anroparen HAR gjort (issue 100).
+ * redan finns. En flik som ritar en lista bär sin räknare även när den är
+ * noll: `0` säger att listan är tom och en saknad räknare att det inte finns
+ * någon lista. Översikten bär `null` — den ritar itemets eget innehåll och
+ * ingen lista över något annat — och `UiTabs` skiljer de två åt (issue 100).
  */
 it('räknar raderna på fliken och bär inget tal där ingen lista finns', function () {
     $vy = itemflikKod('pages/Containers/Items/Show.vue');
@@ -376,7 +398,6 @@ it('räknar raderna på fliken och bär inget tal där ingen lista finns', funct
     expect(array_keys($rader))->toBe(itemflikNycklar($vy));
 
     expect($rader['overview'])->toContain('count: null');
-    expect($rader['details'])->toContain('count: null');
 
     $listor = [
         'relations' => ['props.links'],
@@ -512,34 +533,42 @@ it('flikraden ligger inuti containerns ram', function () {
  *
  * De är två fält sedan issue 96 — beskrivningen säger vad itemet ÄR,
  * anteckningen vad användaren VET om det — och [[ADR-0041 Itemets vy]]
- * § Beslut säger att de visas som vyns ledande fält i stället för som en rad
- * bland tillverkare och modell. Provet skiljer dem åt på tre ställen: de två
- * fälten på översikten, deras frånvaro i detaljlistan, och modulen som bygger
- * listan — `itemFields` lämnar dem ifrån sig, och det prövas på den modul
- * klienten importerar.
+ * § Beslut säger att de visas som vyns ledande stycken i stället för som en
+ * rad bland tillverkare och modell. Provet skiljer dem åt på tre ställen: de
+ * två styckena överst på översikten, fältlistan UNDER dem på samma flik, och
+ * modulen som bygger listan — `itemFields` lämnar dem ifrån sig, och det
+ * prövas på den modul klienten importerar.
+ *
+ * Att båda ligger på översikten är punkt 4 i arkitektens svar: det finns
+ * ingen sjunde flik som bär de två styckena, och en detaljflik hade betytt
+ * att fältlistan stod någon annanstans än itemets egen text.
  */
 it('står anteckningen och beskrivningen på översiktsfliken', function () {
     $vy = itemflikKod('pages/Containers/Items/Show.vue');
 
     $paneler = itemflikPaneler($vy);
 
-    // Två fält med var sin etikett, aldrig en sammanslagen text.
+    // Två stycken med var sin etikett, aldrig en sammanslagen text.
     expect($paneler['overview'])->toContain('item.description')
         ->toContain("t('item.show.description')")
         ->toContain('item.notes')
         ->toContain("t('item.show.notes')");
 
-    // Och ingen av dem är en rad bland tillverkare och modell: detaljlistan
-    // ritar `fields` och kategorin, och ingenting annat.
-    expect($paneler['details'])->toContain('v-for="field in fields"');
+    // Och fältlistan står på SAMMA flik, under dem. Ingen av de två är en rad
+    // bland tillverkare och modell: listan ritar `fields` och kategorin, och
+    // ingenting annat.
+    expect($paneler['overview'])->toContain('v-for="field in fields"');
+    expect(itemflikNycklar($vy))->not->toContain('details');
 
     foreach (['item.description', 'item.notes'] as $falt) {
-        expect(str_contains($paneler['details'], $falt))->toBeFalse("{$falt} står i detaljlistan");
+        $bit = substr($paneler['overview'], (int) strpos($paneler['overview'], 'v-for="field in fields"'));
+
+        expect(str_contains($bit, $falt))->toBeFalse("{$falt} står i fältlistan");
     }
 
     // Regeln bor i modulen. Ett item med både beskrivning och anteckning ger
-    // därför EN rad i detaljlistan — tillverkaren — och de två fälten står
-    // kvar orörda på översikten.
+    // därför EN rad i fältlistan — tillverkaren — och de två styckena står
+    // kvar orörda ovanför den.
     $item = json_encode([
         'description' => 'En bronsimpeller till sjövattenpumpen.',
         'notes' => 'Bytte impeller 2024.',

@@ -70,10 +70,11 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * den aktuella, och den här filen vandrar inte i grafen och sorterar inte om
  * listan (issue 57a § Beslut 8).
  *
- * **Sidan är en flikrad** (issue 102 · [[M17 Designsystemet]] § 102). Fram
- * till dess renderades fälten, taggarna, relationerna, utlåningen, schemana
- * och bilagorna på en enda lång sida; nu ligger var och en i sin flik, och
- * raden byggs av `UiTabs` (issue 100) precis som containerns. Issuen är en
+ * **Sidan är en flikrad med sex flikar** (issue 102 ·
+ * [[M17 Designsystemet]] § 102). Fram till dess renderades fälten, taggarna,
+ * relationerna, utlåningen, schemana och bilagorna på en enda lång sida; nu
+ * ligger var och en i sin flik — fälten på översikten, som är radens första —
+ * och raden byggs av `UiTabs` (issue 100) precis som containerns. Issuen är en
  * omfördelning av det som redan hämtas: ingen prop tillkommer, ingen fråga
  * ställs och kontrollern är orörd.
  *
@@ -95,17 +96,23 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * matchar ingen fliks `href`, och översikten är den enda som matchar på
  * sökvägen allena (issue 100).
  *
- * **Flikens href bär `tab` och ingenting annat.** Översikten skrivs utan
- * querysträng — den är vilotillståndet, och det är villkoret i `UiTabs` som
- * gör den entydig — och `?path=` följer därför inte med in i en flik. Vilken
- * förekomst man står i väljs i listan ovanför raden; en flik är itemets vy
- * och inte förekomstens.
+ * **Flikens href bär den aktuella förekomsten.** `?tab=` är flikradens egen
+ * nyckel och `?path=` är vyns tillstånd, som raden bara bär med sig: varje
+ * flik skriver samma `path` som adressen den står i, så ett flikbyte stannar
+ * på samma förekomst. Tappade fliken vägen blev vyn en icke-delbar länk så
+ * snart man klickat en gång, och den bytte dessutom rad i brödsmulan och i
+ * *Förekomster i struktur* utan att någon bett om det — samma väg läses i
+ * strukturpanelen i issue 103 § *Klart när*. Översikten är frånvaron av `tab`
+ * och ingenting annat: den skrivs som itemets egen sökväg, med `?path=` när
+ * adressen har en och utan när den inte har det. Ordningen är `path` före
+ * `tab`, så att jämförelsen i `UiTabs` fortsätter hålla — den aktuella
+ * adressen innehåller samma `path`.
  *
- * **Räknaren är antalet rader fliken ritar**, och `null` för de två flikar
- * som inte ritar någon lista: översikten och detaljerna. En nolla är ett
+ * **Räknaren är antalet rader fliken ritar**, och `null` för översikten, som
+ * bär itemets eget innehåll och ingen lista över något annat. En nolla är ett
  * påstående anroparen HAR gjort — fliken ritar noll rader — och `UiTabs`
  * skiljer den från `null`, som betyder att det inte finns något tal att visa
- * (issue 100).
+ * (issue 99 och 100).
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -206,9 +213,10 @@ const locale = computed(() => page.props.locale);
  * resources/js/components/itemPresentation.js — se den modulens docblock för
  * varför tomma rader utelämnas och varför datumen inte räknas om.
  *
- * Det här är DETALJFLIKENS rader. `description` och `notes` står inte bland
- * dem: de är översiktsflikens ledande fält och hade i en lista bland
- * tillverkare och modell varit två rader av fel sort (issue 96 och 102).
+ * Det här är FÄLTRADERNA på översiktsfliken, under itemets ledande stycken.
+ * `description` och `notes` står inte bland dem: de är styckena och hade i en
+ * lista bland tillverkare och modell varit två rader av fel sort (issue 96
+ * och 102).
  */
 const fields = computed(() =>
     itemFields(props.item, locale.value).map((field) => ({
@@ -220,45 +228,70 @@ const fields = computed(() =>
 const categoryName = computed(() => props.categories[props.item.category] ?? null);
 
 /*
+ * Översikten med ingenting i: varken ledande stycken eller ett enda fält.
+ * Raden är HELA panelens tillstånd och inte de två styckenas — ett item med
+ * en tillverkare men utan beskrivning är skrivet, och "ingenting är skrivet om
+ * det här itemet än" över en fylld fältlista hade varit osant.
+ */
+const overviewEmpty = computed(
+    () => ! item.description && ! item.notes && fields.value.length === 0 && categoryName.value === null,
+);
+
+/*
  * Flikraden i den form `UiTabs` vill ha: `{ key, label, href, count }`.
  *
+ * **Raden har SEX flikar, och översikten ÄR fältens flik.** Bilden ritar sju
+ * minus historiken och kostnaderna — fem — och utlåningen läggs till som
+ * sjätte; "fälten" ur de sex proparna är översiktsfliken och ingen egen rad.
+ * Det finns alltså ingen sjunde flik som bär två stycken text: anteckningen
+ * och beskrivningen står överst på översikten och fältlistan under dem
+ * ([[ADR-0041 Itemets vy]] § Beslut, issue 96).
+ *
  * **Ordningen är bildens, och de två rader bilden inte har kommer sist.**
- * `docs/Design/struktur - item.jpeg` ritar översikt, detaljer, relationer,
- * dokument, uppgifter och historik; kostnaden och historiken byggs inte här
+ * `docs/Design/struktur - item.jpeg` ritar översikt, relationer, dokument,
+ * uppgifter och historik; kostnaden och historiken byggs inte här
  * (kostnadsfliken väntar på trepanelslayouten och historiken på
  * instrumenteringen), och utlåningen och taggarna har ingen rad i bilden men
  * måste ändå få en plats — en yta ingen hittar är samma sak som en yta som
  * inte finns (issue 62a:s och 67c:s motivering). De står därför efter de fem,
- * i den ordning issuen räknar dem: fälten, relationerna, bilagorna, schemana,
- * utlåningen och taggarna.
+ * i den ordning issuen räknar dem: översikten, relationerna, bilagorna,
+ * schemana, utlåningen och taggarna.
  *
  * **Etiketten är sektionens eget ord.** Fem av flikarna bär samma rubrik som
  * sektionen de visar — `item.links.heading`, `item.attachment.heading`,
  * `item.schedule.heading`, `item.loan.heading` och `item.show.tags` — så att
  * fliken och rubriken strax under den aldrig kan säga olika saker. Bara
- * översikten och detaljerna lånar inget ord: ingen sektion äger dem, och de
- * har därför egna nycklar.
+ * översikten lånar inget ord: ingen sektion äger den, och den har därför en
+ * egen nyckel.
  *
- * **`href` byggs ur itemets egen adress.** Flikarna ligger på samma sökväg
- * och skiljs av `?tab=` (issue 100), och översikten skrivs utan querysträng
- * som vilotillstånd. `tab` är engelskt med flit (AGENTS.md § Språk i koden).
+ * **`href` byggs ur itemets egen adress och bär den aktuella förekomsten.**
+ * Flikarna ligger på samma sökväg och skiljs av `?tab=` (issue 100); `path`
+ * är vyns tillstånd och skrivs FÖRE `tab`, i samma ordning som adressen vyn
+ * står i, så att `UiTabs` känner igen den aktuella raden även när en väg är
+ * vald. `tab` och `path` är engelska med flit (AGENTS.md § Språk i koden).
  *
  * **`count` räknas ur proparna och aldrig ur en egen förfrågan.** Det är
  * antalet rader fliken ritar: motparterna i sina tre grupper, bilagorna,
- * schemana, utlåningarna — den öppna är en rad — och taggarna. Översikten och
- * detaljerna ritar ingen lista och bär `null`.
+ * schemana, utlåningarna — den öppna är en rad — och taggarna. En flik som
+ * ritar en lista bär sin räknare även när den är noll: `0` säger att listan är
+ * tom och en saknad räknare att det inte finns någon lista (issue 99).
+ * Översikten bär `null` — den ritar itemets eget innehåll och ingen lista över
+ * något annat.
  */
 const tabs = computed(() => {
     const base = `/containers/${props.container.ulid}/items/${props.item.ulid}`;
+    const path = new URLSearchParams(page.url.split('?')[1] ?? '').get('path');
+    const here = path === null ? '' : `?path=${path}`;
+
+    const tabHref = (key) => (path === null ? `${base}?tab=${key}` : `${base}?path=${path}&tab=${key}`);
 
     return [
-        { key: 'overview', label: t('item.show.overview'), href: base, count: null },
-        { key: 'details', label: t('item.show.details'), href: `${base}?tab=details`, count: null },
-        { key: 'relations', label: t('item.links.heading'), href: `${base}?tab=relations`, count: props.links.parent.length + props.links.child.length + props.links.related.length },
-        { key: 'attachments', label: t('item.attachment.heading'), href: `${base}?tab=attachments`, count: props.attachments.length },
-        { key: 'schedules', label: t('item.schedule.heading'), href: `${base}?tab=schedules`, count: props.schedules.length },
-        { key: 'loans', label: t('item.loan.heading'), href: `${base}?tab=loans`, count: props.loanHistory.length + (props.openLoan ? 1 : 0) },
-        { key: 'tags', label: t('item.show.tags'), href: `${base}?tab=tags`, count: props.item.tags.length },
+        { key: 'overview', label: t('item.show.overview'), href: `${base}${here}`, count: null },
+        { key: 'relations', label: t('item.links.heading'), href: tabHref('relations'), count: props.links.parent.length + props.links.child.length + props.links.related.length },
+        { key: 'attachments', label: t('item.attachment.heading'), href: tabHref('attachments'), count: props.attachments.length },
+        { key: 'schedules', label: t('item.schedule.heading'), href: tabHref('schedules'), count: props.schedules.length },
+        { key: 'loans', label: t('item.loan.heading'), href: tabHref('loans'), count: props.loanHistory.length + (props.openLoan ? 1 : 0) },
+        { key: 'tags', label: t('item.show.tags'), href: tabHref('tags'), count: props.item.tags.length },
     ];
 });
 
@@ -466,16 +499,25 @@ function destroy() {
 
         <!--
             Översikten (issue 102 · [[ADR-0041 Itemets vy]] § Beslut):
-            anteckningen och beskrivningen som vyns ledande fält, inte som
-            rader bland tillverkare och modell. De är två fält sedan issue 96 —
-            beskrivningen säger vad itemet ÄR, anteckningen vad användaren VET
-            om det — och de står därför var för sig med sin egen etikett, och
-            aldrig som en sammanslagen text. Ett item utan både beskrivning och
-            anteckning är oskrivet och inte trasigt, och raden i stället för
-            listan säger vilket: fliken är den första en läsare möter, och en
-            tom panel där hade sagt att sidan är sönder.
+            anteckningen och beskrivningen som vyns ledande stycken, inte som
+            rader bland tillverkare och modell, och fältlistan under dem. De är
+            två fält sedan issue 96 — beskrivningen säger vad itemet ÄR,
+            anteckningen vad användaren VET om det — och de står därför var för
+            sig med sin egen etikett, och aldrig som en sammanslagen text.
+
+            **Översikten ÄR fältens flik.** Bildens *Detaljer* är ingen egen
+            rad: raden har sex flikar och ingen sjunde som bär två stycken
+            text, så tillverkaren, modellen, kategorin och resten står här,
+            under styckena. Kategorin hör hemma i listan — den är ett
+            strukturerat fält och ingen tagg — och ett tomt fält utelämnas
+            (se itemPresentation.js).
+
+            Ett item utan både stycken och fält är oskrivet och inte trasigt,
+            och raden i stället för innehållet säger vilket: fliken är den
+            första en läsare möter, och en tom panel där hade sagt att sidan
+            är sönder.
         -->
-        <section v-if="activeTab === 'overview'" class="mt-8">
+        <section v-if="activeTab === 'overview'" class="mt-8 space-y-8">
             <dl v-if="item.description || item.notes" class="flex flex-col gap-6">
                 <div v-if="item.description">
                     <dt class="text-sm font-medium text-slate-600">{{ t('item.show.description') }}</dt>
@@ -487,28 +529,24 @@ function destroy() {
                     <dd class="mt-1 whitespace-pre-line text-slate-900">{{ item.notes }}</dd>
                 </div>
             </dl>
-            <p v-else class="text-sm text-slate-600">{{ t('item.show.overview_empty') }}</p>
+
+            <dl
+                v-if="fields.length > 0 || categoryName"
+                class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2"
+            >
+                <div v-for="field in fields" :key="field.key">
+                    <dt class="text-sm font-medium text-slate-600">{{ field.label }}</dt>
+                    <dd class="mt-1 whitespace-pre-line text-slate-900">{{ field.value }}</dd>
+                </div>
+
+                <div v-if="categoryName">
+                    <dt class="text-sm font-medium text-slate-600">{{ t('item.show.category') }}</dt>
+                    <dd class="mt-1 text-slate-900">{{ categoryName }}</dd>
+                </div>
+            </dl>
+
+            <p v-if="overviewEmpty" class="text-sm text-slate-600">{{ t('item.show.overview_empty') }}</p>
         </section>
-
-        <!--
-            Detaljerna (issue 102): itemets egna fält ur `itemFields`, med
-            kategorin som sista rad. Ett tomt fält utelämnas — se
-            itemPresentation.js.
-        -->
-        <dl
-            v-if="activeTab === 'details'"
-            class="mt-8 grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2"
-        >
-            <div v-for="field in fields" :key="field.key">
-                <dt class="text-sm font-medium text-slate-600">{{ field.label }}</dt>
-                <dd class="mt-1 whitespace-pre-line text-slate-900">{{ field.value }}</dd>
-            </div>
-
-            <div v-if="categoryName">
-                <dt class="text-sm font-medium text-slate-600">{{ t('item.show.category') }}</dt>
-                <dd class="mt-1 text-slate-900">{{ categoryName }}</dd>
-            </div>
-        </dl>
 
         <!-- Relationerna (issue 58 § Beslut 9), i sin egen flik: sektionen
              finns redan och byter bara plats. -->

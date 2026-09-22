@@ -14,18 +14,18 @@
  * komponent. Det är samma regel som gör att ItemResource serialiserar dem med
  * `toDateString()` och aldrig `toIso8601String()`.
  *
- * `itemFields` är detaljvyns rader: itemets EGNA fält, filtrerade så att ett
- * tomt fält UTELÄMNAS i stället för att visas tomt eller fyllas med ett
+ * `itemFields` är fältraderna på itemets vy: itemets EGNA fält, filtrerade så
+ * att ett tomt fält UTELÄMNAS i stället för att visas tomt eller fyllas med ett
  * påhittat värde — ett streck eller en tom etikett är en uppgift vyn hittar på
  * och inte en uppgift ur datat. Regeln är en rad kod, och den bor här för att
  * gå att pröva: den sortens filter glider isär när det skrivs i en mall.
  *
- * **Listan är DETALJFLIKENS rader** (issue 102 · [[M17 Designsystemet]] § 102).
- * Itemets vy är en flikrad, och `description` och `notes` står inte här: de är
- * översiktsflikens ledande stycken och ingen rad bland tillverkare och modell
- * ([[ADR-0041 Itemets vy]] § Beslut, issue 96). Modulens avgränsning är
- * därmed flikens och inte itemets — den som lägger ett fält här lägger det på
- * detaljfliken.
+ * **Listan är fältraderna på översiktsfliken** (issue 102 ·
+ * [[M17 Designsystemet]] § 102). Itemets vy är en flikrad, och `description`
+ * och `notes` står inte här: de är vyns ledande stycken, över listan, och
+ * ingen rad bland tillverkare och modell ([[ADR-0041 Itemets vy]] § Beslut,
+ * issue 96). Modulens avgränsning är därmed ytans och inte itemets — den som
+ * lägger ett fält här lägger det under de två styckena.
  *
  * Egen modul och inte rader i vyn: båda funktionerna går att köra i node, och
  * en mall går inte att pröva.
@@ -47,8 +47,8 @@ export function formatDateOnly(value, locale) {
 
 /*
  * Rader i den ordning [[Items och organisation]] § item räknar dem. Namnet är
- * detaljvyns rubrik och är därför inte med, och varken `description` eller
- * `notes` är det heller — se docblocken ovan.
+ * vyns rubrik och är därför inte med, och varken `description` eller `notes`
+ * är det heller — se docblocken ovan.
  *
  * `key` är också sista ledet i översättningsnyckeln (`item.show.<key>`).
  */
