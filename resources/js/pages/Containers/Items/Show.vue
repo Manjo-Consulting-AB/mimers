@@ -234,7 +234,7 @@ const categoryName = computed(() => props.categories[props.item.category] ?? nul
  * det här itemet än" över en fylld fältlista hade varit osant.
  */
 const overviewEmpty = computed(
-    () => ! item.description && ! item.notes && fields.value.length === 0 && categoryName.value === null,
+    () => ! props.item.description && ! props.item.notes && fields.value.length === 0 && categoryName.value === null,
 );
 
 /*
