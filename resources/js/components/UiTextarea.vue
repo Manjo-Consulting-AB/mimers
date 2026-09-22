@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 
 /*
- * Textrutan, se issue 98 § Beslut och [[ADR-0042 Designsystemet]] § Beslut.
+ * Textrutan, se issue 98 och [[ADR-0042 Designsystemet]] § Beslut.
  *
  * Samma kontrakt som UiInput: etiketten, felet och `aria-describedby` ägs av
  * FormField (issue 51 § Beslut 9), ingen validering bor här, och `rows`

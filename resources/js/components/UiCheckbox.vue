@@ -2,10 +2,10 @@
 import { computed } from 'vue';
 
 /*
- * Kryssrutan, se issue 98 § Beslut och [[ADR-0042 Designsystemet]] § Beslut.
+ * Kryssrutan, se issue 98 och [[ADR-0042 Designsystemet]] § Beslut.
  *
  * **Etiketten ligger i slotten och `for`/`id` binder den till rutan.**
- * FormField äger etiketten OVANFältet (issue 51 § Beslut 9); en kryssruta
+ * FormField äger etiketten ovan fältet (issue 51 § Beslut 9); en kryssruta
  * bär sin text bredvid sig, och då är `<label for>` bindningen i stället.
  * Rutan får sin text av anroparen — `item.form.tags` ritar taggens namn och
  * färgprick i slotten — och kontrollen känner inte till något av dem.

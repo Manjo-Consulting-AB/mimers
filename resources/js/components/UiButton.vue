@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 
 /*
- * Knappen, se issue 98 § Beslut och [[ADR-0042 Designsystemet]] § Beslut.
+ * Knappen, se issue 98 och [[ADR-0042 Designsystemet]] § Beslut.
  *
  * **Fyra varianter och två storlekar, och det är hela uppsättningen.** De
  * femton klasskombinationer som låg utspridda över vyerna var varianter av

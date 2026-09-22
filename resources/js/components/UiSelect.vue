@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 
 /*
- * Väljaren, se issue 98 § Beslut och [[ADR-0042 Designsystemet]] § Beslut.
+ * Väljaren, se issue 98 och [[ADR-0042 Designsystemet]] § Beslut.
  *
  * Alternativen kommer i slotten — kontrollen känner inte till dem, och ska
  * inte göra det: `categoryTree.js`, `AccessLevel::LADDER` och itemets

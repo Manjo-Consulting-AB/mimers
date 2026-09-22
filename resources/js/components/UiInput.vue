@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 
 /*
- * Inmatningsfältet, se issue 98 § Beslut och [[ADR-0042 Designsystemet]]
+ * Inmatningsfältet, se issue 98 och [[ADR-0042 Designsystemet]]
  * § Beslut.
  *
  * **Kontrollen fyller FormField, den ersätter den inte.** Etiketten, felet
