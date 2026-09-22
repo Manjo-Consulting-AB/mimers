@@ -1289,6 +1289,33 @@ return [
             'breadcrumb' => 'Where this item sits',
         ],
 
+        // The left-hand panel of the three-panel layout, see issue 103 and
+        // [[M17 Designsystemet]] § 103. `heading` names the panel and `tree`
+        // the foldable surface inside it: the structure is what the panel
+        // shows, and the tree is the resolution from issue 94 drawn under it.
+        // On a narrow screen the tree folds, and the disclosure needs a word
+        // of its own — a `<summary>` with the panel's heading had said the
+        // same thing twice on the same card.
+        //
+        // No word here counts anything. The tree never says how many items
+        // were left out, and an empty tree is an answer and not a state: it
+        // means she reaches nothing, or the container is empty, and the two
+        // are deliberately indistinguishable (issue 73 decision 6).
+        'structure' => [
+            'heading' => 'Structure',
+            'tree' => 'Tree',
+        ],
+
+        // The right-hand panel, and it is EMPTY ON PURPOSE: the focus map is
+        // its own piece of work and nothing about it is decided yet, so the
+        // panel waits instead of drawing nodes. It is not a broken surface,
+        // and nothing here may say that it is — no empty state, no "coming
+        // soon", no counter. The heading is the only word in it, and it names
+        // the place that will be filled.
+        'map' => [
+            'heading' => 'Map',
+        ],
+
         // The form's field labels, see issue 57b decision 9. The product's
         // words and not the column names: *Purchased* and *Warranty until* is
         // what the field asks, unlike the detail view's summarising *Purchase
