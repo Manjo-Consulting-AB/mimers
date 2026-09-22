@@ -27,6 +27,32 @@ return [
         ],
     ],
 
+    /*
+     * Datumregeln, se issue 104 och [[ADR-0042 Designsystemet]] § Konsekvenser.
+     *
+     * Meningarna används av varje yta som skriver ut ett förfallodatum —
+     * todo-vyn, itemets förekomst och containerns underhållspanel — och de är
+     * HELA meningen: en relativ rad bär sin egen preposition och står för sig
+     * själv, medan det absoluta datumet får panelens egna ord runt sig
+     * ("Due :date"). Panelen väljer ramen, `useRelativeDate.js` väljer formen.
+     *
+     * `overdue_one` och `overdue` finns som två nycklar därför att `t()` inte
+     * kan pluralisera (issue 52 § Beslut 4): en dag har sin egen mening.
+     *
+     * Ordet är produktens, inte ett fjärde: `overdue` bär redan begreppet i
+     * tre led — kolumnens härledning ([[Scheman och uppgifter]] § förekomst),
+     * `Overdue`-brickan i OpenOccurrence och *förfallna* i bildens taltuta —
+     * och [[ADR-0032 Produktens ord]] finns för att systemet inte ska bära
+     * två ord för samma sak.
+     */
+    'date' => [
+        'today' => 'Today',
+        'tomorrow' => 'Tomorrow',
+        'in_days' => 'In :days days',
+        'overdue' => 'Overdue by :days days',
+        'overdue_one' => 'Overdue by 1 day',
+    ],
+
     'nav' => [
         'menu' => 'Menu',
         'menu_close' => 'Close the menu',

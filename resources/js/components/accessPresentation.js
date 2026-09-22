@@ -1,3 +1,5 @@
+import { formatLocaleDate } from '../composables/useRelativeDate.js';
+
 /*
  * Hur en åtkomstrad beskrivs, se issue 55a § Beslut 5, 6 och 7.
  *
@@ -7,10 +9,13 @@
  * betyder och av vem mottagaren och beviljaren är får inte formuleras två
  * gånger: då kan de två listorna säga olika saker om samma rad.
  *
- * Filen är ren — den importerar varken Vue eller Inertia — och tar `t` som
- * argument, precis som resources/js/i18n/translate.js. Texten kommer alltså
- * fortfarande ur lang/{locale}/ui.php; den här filen väljer bara vilken
- * nyckel som gäller för en rad.
+ * Filen tar `t` som argument, precis som resources/js/i18n/translate.js.
+ * Texten kommer alltså fortfarande ur lang/{locale}/ui.php; den här filen
+ * väljer bara vilken nyckel som gäller för en rad.
+ *
+ * Den enda importen är `formatLocaleDate()` ur datumregeln (issue 104):
+ * frontenden har ett anrop till `Intl`, och det bor där. Att skriva ut ett
+ * datum är inte att välja hur det skrivs.
  *
  * Ingen härledning av tillstånd: `revoked_at` och `expires_at` delar raderna
  * i giltiga och historiska, och den uppdelningen gör vyn (Beslut 7).
@@ -92,5 +97,5 @@ export function formatDate(iso, locale) {
         return '';
     }
 
-    return new Date(iso).toLocaleDateString(locale);
+    return formatLocaleDate(new Date(iso), locale);
 }

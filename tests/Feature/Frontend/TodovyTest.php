@@ -549,8 +549,12 @@ it('visar container, item och schema med länkar som går rätt', function () {
 
     $rad = File::get(resource_path('js/components/TodoRow.vue'));
 
+    // Datumet kommer ur datumregeln (issue 104): `dueDate()` svarar med
+    // meningen och sin roll, och raden sätter ordet "Due" framför det absoluta
+    // datumet — en relativ mening bär sin egen preposition.
     expect($rad)->toContain('${props.entry.container.ulid}/items/${props.entry.item.ulid}')
-        ->toContain("t('todo.due', { date: due })")
+        ->toContain('useRelativeDate')
+        ->toContain("t('todo.due', { date: due.text })")
         ->toContain('{{ entry.item.name }}')
         ->toContain('{{ entry.container.name }}')
         ->toContain('{{ entry.schedule.title }}');

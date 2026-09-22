@@ -1,3 +1,5 @@
+import { formatLocaleDate } from '../composables/useRelativeDate.js';
+
 /*
  * Presentationshjälpare för item, se issue 57a § Beslut 8.
  *
@@ -11,8 +13,12 @@
  * ([[Items och organisation]] § item) och bär ingen tid alls.
  *
  * Därför delas strängen upp och datumet byggs i LOKAL tid, komponent för
- * komponent. Det är samma regel som gör att ItemResource serialiserar dem med
- * `toDateString()` och aldrig `toIso8601String()`.
+ * komponent — samma uppdelning som `parseDateOnly()` i useRelativeDate.js gör,
+ * och av samma skäl som ItemResource serialiserar dem med `toDateString()` och
+ * aldrig `toIso8601String()`.
+ *
+ * Själva utskriften LÅNAS av `formatLocaleDate()` därifrån (issue 104):
+ * frontenden har ett enda anrop till `Intl`, och det bor i datumregeln.
  *
  * `itemFields` är fältraderna på itemets vy: itemets EGNA fält, filtrerade så
  * att ett tomt fält UTELÄMNAS i stället för att visas tomt eller fyllas med ett
@@ -42,7 +48,7 @@ export function formatDateOnly(value, locale) {
     }
 
     // `new Date(y, m, d)` bygger datumet i lokal tid — ingen tidszoneffekt.
-    return new Date(year, month - 1, day).toLocaleDateString(locale);
+    return formatLocaleDate(new Date(year, month - 1, day), locale);
 }
 
 /*
