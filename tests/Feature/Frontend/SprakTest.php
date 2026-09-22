@@ -354,6 +354,29 @@ it('hämtar datumsträngarna ur ui.php och inte ur komposabeln', function () {
 });
 
 /*
+ * Skalets egna strängar, se issue 106 och resources/js/layouts/AppLayout.vue.
+ *
+ * `translate()` returnerar NYCKELN SJÄLV när uppslaget misslyckas (provet
+ * strax ovanför pinnar det), så en nyckel som glöms i katalogen syns inte som
+ * ett fel — den syns som `nav.favorites` i rubriken. Provet läser nycklarna ur
+ * källkoden i stället för att räkna upp dem, samma form som datumregelns prov:
+ * en mening som läggs till i layouten och glöms i katalogen faller då, och en
+ * nyckel som byter namn följer med utan att provet skrivs om.
+ */
+it('hämtar skalets strängar ur ui.php', function () {
+    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+
+    preg_match_all("/t\('([a-z0-9_.]+)'/", $layout, $träffar);
+
+    // Favoritlistans rubrik kom med issue 106 och är skalets enda nya nyckel.
+    expect($träffar[1])->toContain('nav.favorites');
+
+    foreach ($träffar[1] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+});
+
+/*
  * [[ADR-0033 Produktens omfång]] § Beslut: containern är ett sammanhang för
  * allt man äger, använder eller arbetar med — inte ett fordon eller ett
  * fritidshus. Det generiska svaret issue 81 lämnade efter sig är

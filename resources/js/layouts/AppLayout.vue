@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import FlashMessage from '../components/FlashMessage.vue';
 import SearchField from '../components/SearchField.vue';
+import UiListRow from '../components/UiListRow.vue';
 import VerifyEmailNotice from '../components/VerifyEmailNotice.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -67,11 +68,42 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Länkarna bär `min-h-11` (44 px, issue 68a § Beslut 3). I den hopfällda
  * listan står de under varandra och träffas med tummen, och en rad som är
  * 36 px hög är en rad man missar.
+ *
+ * **`FAVORITER` kom med issue 106** — sidopanelens sektion ur bilden, se
+ * [[M17 Designsystemet]] § 106 och [[ADR-0042 Designsystemet]]
+ * § Konsekvenser. Den ritas ur den delade proppen `favorites` och ställer
+ * ingen egen fråga: listan är redan filtrerad genom `ResolveItemScope` på
+ * servern, och en vy som prövade omfånget en gång till vore den andra regeln
+ * om vad man når.
+ *
+ * **Sektionen ritas bara när det finns något i den.** En rubrik över en tom
+ * lista är en yta som lovar något den inte har, och en användare utan
+ * favoriter ska inte mötas av ett tomt fack. Villkoret är listans längd och
+ * ingenting annat — ingen egen flagga, och ingen rad som säger att listan är
+ * tom.
+ *
+ * **Raden är `UiListRow`** (issue 99), samma form som resten av skalet, och
+ * titeln är en `<Link>` till itemets detaljvy. Adressen kommer färdig i
+ * proppen: den bär två ULID:n, och skalet bygger inga adresser av delar.
+ *
+ * **Ingen räknare och ingen antydan.** Antalet favoriter står ingenstans —
+ * varken som tal, som "dolda rader" eller som en gråad rad — eftersom servern
+ * redan utelämnat det användaren inte når och en siffra hade läckt skillnaden
+ * (issue 73 § Beslut 6). Sektionen är listan, och listan är det man når.
+ *
+ * **Sektionen ligger i skalet och inte i en sidorail.** Bilden ritar
+ * `FAVORITER` i en mörk vänsterkolumn, men den globala vänstermenyn tas inte
+ * in ([[ADR-0042 Designsystemet]] § Beslut: raderna för Struktur, Karta,
+ * Uppgifter, Dokument och Kostnader avvisas), och en rail som bara bar den
+ * här sektionen hade lagt om varje sida i produkten — utanför den här
+ * issuen. Sektionen ritas därför som sitt eget band i skalet, på samma plats
+ * och i samma form som `FlashMessage` och verifieringspåminnelsen ovanför.
  */
 const { t } = useTranslations();
 const page = usePage();
 const menuOpen = ref(false);
 const user = computed(() => page.props.auth.user);
+const favorites = computed(() => page.props.favorites ?? []);
 const showsVerificationNotice = computed(
     () => Boolean(user.value) && user.value.email_verified_at === null && !page.url.startsWith('/email/verify'),
 );
@@ -154,6 +186,28 @@ const showsVerificationNotice = computed(
         </div>
 
         <FlashMessage />
+
+        <!-- Sektionen ritas bara när listan har rader: en tom rubrik är en yta
+             som lovar något den inte har (issue 106). -->
+        <nav
+            v-if="favorites.length"
+            :aria-label="t('nav.favorites')"
+            class="mx-auto w-full max-w-3xl px-4 pt-6"
+        >
+            <h2 class="text-meta font-semibold uppercase tracking-wide text-ink-subtle">
+                {{ t('nav.favorites') }}
+            </h2>
+
+            <ul class="flex flex-col">
+                <UiListRow v-for="favorite in favorites" :key="favorite.url">
+                    <template #title>
+                        <Link :href="favorite.url" class="flex min-h-11 items-center hover:underline">
+                            {{ favorite.name }}
+                        </Link>
+                    </template>
+                </UiListRow>
+            </ul>
+        </nav>
 
         <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
             <slot />

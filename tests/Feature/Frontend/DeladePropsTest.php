@@ -4,6 +4,8 @@
 
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\Favorite;
+use App\Models\Item;
 use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
 use Illuminate\Support\Facades\DB;
@@ -174,5 +176,53 @@ it('delar flash.status efter en back()->with(...)', function () {
 
     actingAs($user)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('flash.status', 'verification-link-sent')
+    );
+});
+
+/*
+ * Issue 106 · Favoritlistan, se HandleInertiaRequests::favorites() och
+ * App\Actions\Item\ListFavorites.
+ *
+ * Proppen är den delade ytan för skalets `FAVORITER`-sektion, och formen är
+ * det som prövas här: en gäst får samma TOMHET som en inloggad utan
+ * favoriter, och en rad bär namn och adress — adressen byggd på servern,
+ * eftersom den bär två ULID:n som klienten inte kan sätta ihop själv
+ * (issue 51 § Beslut 7).
+ *
+ * Att själva filtreringen är riktig prövas i FavoritlistaTest; här prövas
+ * bara att nyckeln delas och vad den bär.
+ */
+it('delar favoritlistan och ger en gäst samma tomma svar som en utan favoriter', function () {
+    withoutVite();
+
+    $konto = Account::factory()->create();
+    $ägare = User::factory()->create();
+    $konto->users()->attach($ägare, ['role' => 'owner']);
+
+    $container = Container::factory()->for($konto, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create([
+        'name' => 'Motorn',
+        'created_by_user_id' => $ägare->id,
+        'created_by_account_id' => $konto->id,
+    ]);
+
+    // Gästen först: actingAs() sätter guardens användare för resten av testet.
+    get('/')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('favorites', 0)
+        ->where('auth.user', null)
+    );
+
+    actingAs($ägare)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('favorites', 0)
+    );
+
+    $favorite = new Favorite;
+    $favorite->item_id = $item->id;
+    $ägare->favorites()->save($favorite);
+
+    actingAs($ägare)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('favorites', 1)
+        ->where('favorites.0.name', 'Motorn')
+        ->where('favorites.0.url', "/containers/{$container->ulid}/items/{$item->ulid}")
     );
 });
