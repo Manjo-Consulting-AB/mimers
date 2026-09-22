@@ -8,6 +8,7 @@ use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Item\ResolveItemPaths;
+use App\Actions\Item\ResolveItemTree;
 use App\Actions\Tag\ListTags;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
@@ -33,6 +34,8 @@ use App\Models\User;
 use App\Support\Files\FileOrigin;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Item\ItemStatus;
+use App\Support\Item\ItemTree;
+use App\Support\Item\ItemTreeNode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -330,6 +333,16 @@ class ItemController extends Controller
      * servern — en vy som själv vandrade i grafen vore en andra regel som
      * glider ifrån den första (samma resonemang som omslagsbilden i issue 93).
      *
+     * **Strukturen får en prop ur samma upplösning** (issue 103 ·
+     * [[M17 Designsystemet]] § 103). `structure` är trädet ur
+     * App\Actions\Item\ResolveItemTree — containerns items som anroparen når,
+     * med sina föräldrakanter och i namnets ordning — och det är vänsterpanelen
+     * i trepanelslayouten. Panelen ställer ingen egen fråga: upplösningen är
+     * issue 94:s, rotregeln är `paths` egen, och en panel som byggde en andra
+     * vore den andra regeln [[ADR-0041 Itemets vy]] byggde en gemensam rot för
+     * att slippa. Ingen räknare följer med, och ingen markering av vad som
+     * filtrerats bort (issue 73 § Beslut 6).
+     *
      * **`max_upload_bytes` är det TEKNISKA taket och en prop** (issue 60b
      * § Beslut 5). Det är samma tal som `StoreAttachmentRequest` prövar med
      * `max:` — vyn avvisar en för stor fil innan bytena lämnar webbläsaren,
@@ -340,7 +353,7 @@ class ItemController extends Controller
      * där de hör hemma — på servern — och kommer tillbaka som fältfelet på
      * `file`.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, ResolveItemPaths $resolveItemPaths): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree): Response
     {
         Gate::authorize('view', $item);
 
@@ -361,6 +374,19 @@ class ItemController extends Controller
         // läses här — vyn vandrar aldrig själv, och den sorterar aldrig om
         // något (issue 57a § Beslut 8). Två frågor, oavsett antalet vägar.
         $paths = $resolveItemPaths->handle($user, $container, $item);
+
+        // Strukturen (issue 103 · [[ADR-0042 Designsystemet]] § Beslut):
+        // containerns items som användaren når, med sina föräldrakanter —
+        // trädet i trepanelslayoutens vänsterpanel. Upplösningen är issue 94:s
+        // och byggs inte på nytt: App\Actions\Item\ResolveItemTree, samma
+        // rotregel som `paths` ovan vandrar efter, så panelen och
+        // förekomstlistan inte kan säga olika saker om samma graf.
+        //
+        // Anropet ligger EFTER `paths` med flit: båda löser upp omfånget, och
+        // ResolveItemScope är memoiserad per användare och container — den
+        // andra frågan är alltså gratis, och trädet kostar sina egna två
+        // (itemen, kanterna) oavsett trädets djup och bredd.
+        $tree = $resolveItemTree->handle($user, $container);
 
         // Bilagorna kommer med detaljvyns props och aldrig ur ett eget anrop
         // (issue 60 § Beslut 2). Relationerna och sorteringen är
@@ -433,6 +459,19 @@ class ItemController extends Controller
             // `/api`:s format och har inte bett om fältet, samma linje som
             // `categories` ovan och `variants` i issue 61b.
             'paths' => $this->itemPaths($paths, $request),
+
+            // Strukturen (issue 103): trädet ur samma upplösning som issue 94
+            // byggde, som `{ulid, name, children}` — det panelen ritar och
+            // navigerar med och ingenting mer. Ingen räknare och ingen
+            // markering om att en gren är avklippt: svaret får inte avslöja hur
+            // många items som filtrerats bort (issue 73 § Beslut 6), och en
+            // omfångsbegränsad mottagares träd ska vara ordagrant det hon hade
+            // sett om resten inte fanns.
+            //
+            // Ligger BREDVID resursen och inte i den, samma linje som `paths`
+            // och `categories`: `ItemResource` är `/api`:s format och har inte
+            // bett om fältet.
+            'structure' => $this->structure($tree),
 
             'attachments' => AttachmentResource::collection($attachments)->resolve($request),
             'maxUploadBytes' => (int) config('files.max_upload_bytes'),
@@ -1233,6 +1272,47 @@ class ItemController extends Controller
         }
 
         return $variants;
+    }
+
+    /**
+     * Trädet som panelen ritar: `{ulid, name, children}` per nod (issue 103 ·
+     * [[M17 Designsystemet]] § 103).
+     *
+     * **Formen är nodens eget svar och ingenting mer.** ItemTreeNode bär ULID,
+     * namn och barn — löpnumret stannar i upplösningen, och panelen får inte
+     * fler fält än den behöver för att rita och navigera: ett `depth` eller en
+     * föräldra-ULID hade frestat vyn att bygga en andra väg vid sidan av
+     * `?path=`, och den vägen är issue 95:s.
+     *
+     * **Ett item med två föräldrar förekommer två gånger**, som två noder
+     * (App\Support\Item\ItemTreeNode): panelen ritar dem båda, precis som
+     * mockupen gör, och den som klickar på den ena landar på den förekomsten.
+     *
+     * Ett tomt träd är ett giltigt svar och serialiseras som `[]` — hon når
+     * ingenting, eller containern är tom. De två går inte att skilja åt, med
+     * flit (issue 73 § Beslut 6).
+     *
+     * @return list<array{ulid: string, name: string, children: list<array<string, mixed>>}>
+     */
+    private function structure(ItemTree $tree): array
+    {
+        return $this->structureNodes($tree->roots());
+    }
+
+    /**
+     * @param  list<ItemTreeNode>  $nodes
+     * @return list<array{ulid: string, name: string, children: list<array<string, mixed>>}>
+     */
+    private function structureNodes(array $nodes): array
+    {
+        return array_map(
+            fn (ItemTreeNode $node): array => [
+                'ulid' => $node->ulid(),
+                'name' => $node->name(),
+                'children' => $this->structureNodes($node->children()),
+            ],
+            $nodes,
+        );
     }
 
     /**
