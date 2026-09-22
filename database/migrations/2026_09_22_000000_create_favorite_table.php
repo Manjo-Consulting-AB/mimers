@@ -39,9 +39,16 @@ use Illuminate\Support\Facades\Schema;
  * här itemet" — App\Models\Item::favoritedBy(). Det unika indexet leder på
  * `user_id` och täcker bara användarens sida.
  *
- * `ON DELETE RESTRICT` som allt annat (AGENTS.md § Databaskonventioner): både
- * itemet och användaren mjukraderas i stället för att försvinna, och en hård
- * radering ska vara ett medvetet beslut.
+ * **`ON DELETE CASCADE` åt båda håll, och undantaget står i klartext.**
+ * Konventionen är `RESTRICT` (AGENTS.md § Databaskonventioner), och
+ * avvikelsen är medveten: en borttagen användare eller ett hårdraderat item
+ * ska inte lämna kvar bokmärken. En markering är inget innehåll att
+ * återställa — den är ett par och ingenting mer — så en föräldralös rad hade
+ * varit skräp som varje läsning genom relationen ändå aldrig ser.
+ *
+ * I praktiken rör kaskaden ingenting: både itemet och användaren mjukraderas
+ * ([[ADR-0008 Soft delete och papperskorg]]), och en hård radering är det
+ * medvetna beslut någon annanstans som kaskaden då städar efter.
  */
 return new class extends Migration
 {
@@ -52,8 +59,8 @@ return new class extends Migration
     {
         Schema::create('favorite', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained('user')->onDelete('restrict');
-            $table->foreignId('item_id')->constrained('item')->onDelete('restrict');
+            $table->foreignId('user_id')->constrained('user')->onDelete('cascade');
+            $table->foreignId('item_id')->constrained('item')->onDelete('cascade');
             $table->timestamps();
 
             $table->unique(['user_id', 'item_id']);

@@ -43,11 +43,15 @@ use function Pest\Laravel\post;
  * Ägarkontot, dess medlem, containern och två items i den, i ordningen
  * [$konto, $ägare, $container, $motorn, $masten].
  *
+ * Ägarkontot kan skickas in så att ett fryst konto kan prövas mot samma
+ * fixture — samma parameter och samma skäl som `grindFixture()` i
+ * tests/Feature/Omfang/ItemgrindTest.php.
+ *
  * @return array{0: Account, 1: User, 2: Container, 3: Item, 4: Item}
  */
-function favoritKontext(): array
+function favoritKontext(?Account $ägarkonto = null): array
 {
-    $konto = Account::factory()->create();
+    $konto = $ägarkonto ?? Account::factory()->create();
     $ägare = User::factory()->create();
     $konto->users()->attach($ägare, ['role' => 'owner']);
 
@@ -169,6 +173,36 @@ it('stjärnan kräver inloggning och en item-ULID ur samma container', function 
     actingAs($ägare)->from($url)
         ->post("/containers/{$container->ulid}/items/{$främmande->ulid}/favorite")
         ->assertNotFound();
+
+    expect(Favorite::query()->count())->toBe(0);
+});
+
+// --- regel 4: det frysta ägarkontot -------------------------------------
+
+it('ett fruset ägarkonto hindrar inte en markering', function () {
+    // Regel 4 nekar ett `read_only`- (eller `closed`-) konto allt SKRIVANDE
+    // på kontots innehåll ([[Konton och åtkomst]] § Behörighetsregler regel
+    // 4). Provet pinnar varför den inte träffar en favorit: markeringen är
+    // användarens EGET bokmärke — den rör inte containerns data och kostar
+    // ingen kvot — och pinnen är `view`, som hoppar över spärren med flit
+    // (App\Policies\ItemPolicy). Utan provet hade nästa läsare behövt ta
+    // upp frågan igen, och en `favorite()`-pinne hade varit den nya regel
+    // issuen förbjuder.
+    $ägarkonto = Account::factory()->create(['status' => 'read_only']);
+    [, $ägare, $container, $motorn] = favoritKontext($ägarkonto);
+
+    $url = favoritUrl($container, $motorn);
+
+    actingAs($ägare)->from($url)->post("{$url}/favorite")
+        ->assertRedirect($url)
+        ->assertSessionHas('status', 'favorite-added');
+
+    expect($ägare->favorites()->where('item_id', $motorn->id)->exists())->toBeTrue();
+
+    // Och borttagningen är samma pinne: den som fick märka får ångra sig.
+    actingAs($ägare)->from($url)->delete("{$url}/favorite")
+        ->assertRedirect($url)
+        ->assertSessionHas('status', 'favorite-removed');
 
     expect(Favorite::query()->count())->toBe(0);
 });
