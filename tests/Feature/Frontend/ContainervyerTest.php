@@ -1076,7 +1076,7 @@ it('räknar ingen kostnadssummering på översikten', function () {
  * Ett tal som saknas byggs inte här; det är skrivet i PR:ens
  * `## Frågor och antaganden`.
  */
-it('containerns fyra tal renderas av taltutan', function () {
+it('containerns tal renderas av taltutan', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerKontext();
