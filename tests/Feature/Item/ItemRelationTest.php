@@ -678,7 +678,7 @@ it('en migrering fram och tillbaka lämnar relationen intakt', function () {
  *
  * Provet läser KÄLLAN, av samma skäl som ContainerCrudTest gör det för
  * `container_kind_check`: villkoret läggs bara på mysql, och sviten kör
- * sqlite, som saknar ALTER TABLE ... DROP CHECK. Det som går att pröva är
+ * sqlite, som saknar ALTER TABLE ... DROP CONSTRAINT. Det som går att pröva är
  * att migreringen SLÄPPER det gamla villkoret och sätter ett nytt — och att
  * inget villkor någonstans i kedjan lämnas med det gamla ordet som sista ord.
  */
@@ -689,7 +689,7 @@ it('släpper det gamla CHECK-villkoret och sätter ett som tar related', functio
         $källor .= $fil->getContents()."\n";
     }
 
-    expect($källor)->toContain('DROP CHECK item_link_relation_check');
+    expect($källor)->toContain('DROP CONSTRAINT item_link_relation_check');
     expect($källor)->toContain("CHECK (relation IN ('parent', 'child', 'related'))");
 });
 
