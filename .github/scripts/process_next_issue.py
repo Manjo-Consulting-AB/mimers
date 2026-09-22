@@ -180,7 +180,15 @@ def run_cmd(args, check=True, capture_output=True, cwd=None, env=None, input=Non
         )
     if check and result.returncode != 0:
         cmd_str = " ".join(args)
-        raise Exception(f"Kommando misslyckades: {cmd_str}\nFEL: {result.stderr}")
+        # Både stdout OCH stderr med, plus koden. `claude -p` skriver sina egna
+        # fel på stdout och bara connector-varningen på stderr; en rapport som
+        # bara visade stderr pekade därför ut ett autentiseringsfel som inte
+        # fanns, varje gång anropet dog av något annat (issue #430, 2026-09-22).
+        raise Exception(
+            f"Kommando misslyckades: {cmd_str} (kod {result.returncode})"
+            f"\nUT: {(result.stdout or '').strip()[-2000:]}"
+            f"\nFEL: {(result.stderr or '').strip()[-2000:]}"
+        )
     return result
 
 
@@ -401,8 +409,29 @@ def call_deepseek(prompt, cwd):
         "--permission-mode", "bypassPermissions",
         "--output-format", "text",
     ]
-    result = run_cmd(cmd, check=True, cwd=cwd, input=prompt)
-    return result.stdout
+    # Ett omtag, av en enda anledning: earlyoom. Burken har 2 GB och en full
+    # swap, och när minnet går under 10 % SIGTERM:ar earlyoom den feta
+    # processen - ofta LiteLLM-proxyn (~340 MiB), ibland claudes node. Anropet
+    # dör då mitt i, utan eget felmeddelande, och pipelinen kraschade på det
+    # (issue #430, 2026-09-22). Wrappern reser proxyn igen i början av nästa
+    # anrop, så omtaget räcker. Går det inte andra gången heller är det ett
+    # riktigt fel och undantaget bär nu både stdout och koden.
+    for forsok in (1, 2):
+        result = run_cmd(cmd, check=False, cwd=cwd, input=prompt)
+        if result.returncode == 0:
+            return result.stdout
+        print(f"  ⚠ claude-subagent slutade med kod {result.returncode}.")
+        print(f"     UT:  {(result.stdout or '').strip()[-500:]}")
+        print(f"     FEL: {(result.stderr or '').strip()[-500:]}")
+        if forsok == 1:
+            print("  -> Omtag 2/2 (wrappern reser proxyn först)...")
+    raise Exception(
+        f"claude-subagent misslyckades två gånger (kod {result.returncode}). "
+        f"Kolla om earlyoom dödade proxyn: "
+        f"journalctl --since '-1h' | grep earlyoom"
+        f"\nUT: {(result.stdout or '').strip()[-2000:]}"
+        f"\nFEL: {(result.stderr or '').strip()[-2000:]}"
+    )
 
 
 def call_claude_direct(model, prompt, cwd):
