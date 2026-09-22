@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import process_next_issue as p
@@ -493,6 +494,8 @@ class _Fangad:
         self.args = None
         self.input = None
         self.stdout = "svar från modellen"
+        self.stderr = ""
+        self.returncode = 0
 
     def __call__(self, args, **kw):
         self.args = args
@@ -510,6 +513,57 @@ def test_deepseek_far_prompten_pa_stdin_inte_i_argv():
         p.run_cmd = original
     assert fangad.input == "PROMPTTEXT"
     assert "PROMPTTEXT" not in fangad.args
+
+
+class _FallerForstaGangen:
+    """run_cmd som dör en gång och sedan lyckas - earlyooms signatur: ingen
+    egen felutskrift, bara connector-varningen på stderr."""
+
+    VARNING = ("⚠ claude.ai connectors are disabled because ANTHROPIC_API_KEY "
+               "or another auth source is set")
+
+    def __init__(self, antal_fel=1):
+        self.antal_fel = antal_fel
+        self.anrop = 0
+
+    def __call__(self, args, **kw):
+        self.anrop += 1
+        if self.anrop <= self.antal_fel:
+            return types.SimpleNamespace(returncode=1, stdout="", stderr=self.VARNING)
+        return types.SimpleNamespace(returncode=0, stdout="svar från modellen", stderr="")
+
+
+def test_deepseek_gor_ett_omtag_nar_proxyn_dodas_mitt_i():
+    """earlyoom SIGTERM:ar LiteLLM-proxyn när minnet tar slut. Anropet dör utan
+    eget felmeddelande; wrappern reser proxyn vid nästa anrop, så omtaget ska
+    rädda körningen i stället för att krascha pipelinen (issue #430)."""
+    faller = _FallerForstaGangen()
+    original = p.run_cmd
+    p.run_cmd = faller
+    try:
+        svar = p.call_deepseek("PROMPTTEXT", cwd=".")
+    finally:
+        p.run_cmd = original
+    assert faller.anrop == 2
+    assert svar == "svar från modellen"
+
+
+def test_deepseek_ger_upp_efter_tva_forsok_och_bar_med_stdout():
+    """Två fall i rad är ett riktigt fel. Felet måste bära stdout och koden -
+    `claude -p` skriver sina egna fel där, och en rapport med bara stderr
+    pekade ut ett autentiseringsfel som inte fanns."""
+    faller = _FallerForstaGangen(antal_fel=2)
+    original = p.run_cmd
+    p.run_cmd = faller
+    try:
+        p.call_deepseek("PROMPTTEXT", cwd=".")
+        raise AssertionError("skulle ha kastat")
+    except Exception as e:
+        assert "två gånger" in str(e)
+        assert "earlyoom" in str(e)
+    finally:
+        p.run_cmd = original
+    assert faller.anrop == 2
 
 
 def test_call_claude_direct_far_prompten_pa_stdin_inte_i_argv():
