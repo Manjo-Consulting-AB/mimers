@@ -3,18 +3,20 @@
 use Illuminate\Support\Facades\File;
 
 /*
- * Issue 424 · Designtokens i @theme, och issue 425 · Primitiverna, se
- * [[ADR-0042 Designsystemet]] § Beslut.
+ * Issue 424 · Designtokens i @theme, issue 425 · Primitiverna, och issue
+ * 426 · Ytorna, se [[ADR-0042 Designsystemet]] § Beslut.
  *
  * **Det här är ett källkodsprov, inte ett sidprov.** Issuerna bygger nästan
  * ingenting som syns: 424 flyttar fjorton färgroller, fem typsteg och tre
  * radier ur ADR:ens tabell och in i `@theme` och bevisar dem på två befintliga
  * komponenter; 425 bygger knappen och de fyra formulärkontrollerna och
- * migrerar fem formulär till dem. Det som går att pröva på serversidan är
- * därför formen på källkoden — att varje roll ADR:en namnger finns som token,
- * att de migrerade filerna inte bär råa färgklasser, att fokusringen blev en
- * token i stället för en nollställd outline, och att ingen kontroll smugit in
- * en egen validering.
+ * migrerar fem formulär till dem; 426 bygger de fem ytorna — kortet, brickan,
+ * listraden, tom-tillståndet och taltutan — och ritar containerns tal med den
+ * sista. Det som går att pröva på serversidan är därför formen på källkoden —
+ * att varje roll ADR:en namnger finns som token, att de migrerade filerna inte
+ * bär råa färgklasser, att fokusringen blev en token i stället för en
+ * nollställd outline, att ingen kontroll smugit in en egen validering, och att
+ * var och en av de fem ytorna bär sina egna slots och tillstånd.
  *
  * **Det som INTE prövas här** är det som kräver en webbläsare: att värdena ser
  * ut som bilderna, att kontrasten håller, och att tangentbordet hittar ringen.
@@ -86,9 +88,14 @@ function designFormular(): array
  *
  * Rutan är smal med flit och av samma skäl som i issue 424: resten av
  * resources/js bär råa färgklasser tills en sida ändå byggs om (ADR-0042
- * § Konsekvenser). Provet gäller den ändring som är gjord, och `Ui*`-filerna
+ * § Konsekvenser). Provet gäller den ändring som är gjord, och kontrollerna
  * räknas hit — en rå färgklass i knappen hade varit exakt samma fel som en i
- * formuläret, och den hade inte fångats av någon annan regel.
+ * formuläret.
+ *
+ * De fem namnges och globbas inte: `Ui*.vue` rymmer sedan issue 426 också
+ * ytorna, och ett prov vars mängd växer av en annan issues filer mäter något
+ * annat än det påstår. Ytorna har sitt eget prov strax nedanför, med sin egen
+ * räkning.
  *
  * @return array<string, string> relativ sökväg → källkod utan kommentarer
  */
@@ -96,11 +103,36 @@ function designPrimitiverna(): array
 {
     $filer = [];
 
-    foreach (File::glob(resource_path('js/components/Ui*.vue')) as $fil) {
-        $filer['components/'.basename($fil)] = designUtanKommentarer(File::get($fil));
+    foreach (['UiButton', 'UiInput', 'UiSelect', 'UiTextarea', 'UiCheckbox'] as $namn) {
+        $sokvag = "components/{$namn}.vue";
+        $filer[$sokvag] = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
     }
 
     foreach (designFormular() as $sokvag) {
+        $filer[$sokvag] = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
+    }
+
+    return $filer;
+}
+
+/**
+ * De fem ytorna ur issue 426: kortet, brickan, listraden, tom-tillståndet och
+ * taltutan. Se [[ADR-0042 Designsystemet]] § Beslut — kärnkomponenterna är
+ * åtta och uttömmande för bilderna, och de fem här är de som återstår när
+ * knappen, formulärkontrollen och flikraden (issue 100) räknats bort.
+ *
+ * Namngivna med flit, som i designPrimitiverna: provet ska bevisa att de FEM
+ * finns — en glob över `Ui*.vue` hade blivit grön av fem filer med fel namn,
+ * och den här issuen är till för att ingen sjätte byggs på spekulation.
+ *
+ * @return array<string, string> relativ sökväg → källkod utan kommentarer
+ */
+function designYtorna(): array
+{
+    $filer = [];
+
+    foreach (['UiCard', 'UiBadge', 'UiListRow', 'UiEmptyState', 'UiStat'] as $namn) {
+        $sokvag = "components/{$namn}.vue";
         $filer[$sokvag] = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
     }
 
@@ -374,7 +406,9 @@ it('gör fokusringen till en token och inte en nollställd outline', function ()
     // `focus-visible:` — ringen hör till tangentbordet, och webbläsarens egen
     // heuristik låter ett textfält matcha den även vid musklick. FormFields
     // felmeddelande bär `focus:`; det fokuseras av kod, inte av en tabb.
-    $komponenter = [...designKomponenter(), ...designPrimitiverna()];
+    // Issue 426:s fem ytor är med av samma skäl: en yta som senare får en
+    // fokuserbar rad ska mötas av regeln och inte av ett tomt prov.
+    $komponenter = [...designKomponenter(), ...designPrimitiverna(), ...designYtorna()];
 
     foreach ($komponenter as $sokvag => $kod) {
         foreach (designKlasser($kod) as $klass) {
@@ -409,4 +443,106 @@ it('gör fokusringen till en token och inte en nollställd outline', function ()
         '/focus(-visible)?:(ring|outline)-focus/',
         'FormField sätter ingen fokusring i --color-focus',
     );
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * Issue 426 · Ytorna.
+ *
+ * Samma sorts källkodsprov och av samma skäl: de fem komponenterna är rena
+ * former — vad som står i dem kommer ur slotarna, och bilderna skiljer sig
+ * bara i vad som står där. Det som går att avgöra utan webbläsare är att
+ * formen FINNS och att den bär roller och inte färger. Hur den ser ut mot
+ * bilden, och att kontrasten håller, står i PR-kroppens handprov.
+ * ---------------------------------------------------------------------------
+ */
+
+it('de fem ytkomponenterna finns och bär bara tokens', function () {
+    // De FEM, namngivna och räknade. En glob över `Ui*.vue` hade blivit grön
+    // av fem filer med fel namn, och en sjätte yta är precis vad issuen inte
+    // vill ha.
+    expect(array_keys(designYtorna()))->toBe([
+        'components/UiCard.vue',
+        'components/UiBadge.vue',
+        'components/UiListRow.vue',
+        'components/UiEmptyState.vue',
+        'components/UiStat.vue',
+    ]);
+
+    // Och tokenregeln gäller katalogen, inte bara de fem: en rå färgklass i en
+    // yta är samma fel som en i knappen — rollen ska komma ur `@theme`, och
+    // `text-slate-800` är den färg rollen ersatte. Regeln står över globben så
+    // att en elfte `Ui*.vue` möts av den och inte av tystnad; SprakTest räknar
+    // samma katalog och fäller den som en övertalig komponent.
+    $granskade = 0;
+
+    foreach (File::glob(resource_path('js/components/Ui*.vue')) as $fil) {
+        $granskade++;
+
+        expect(designRaaFargklasser(
+            'components/'.basename($fil),
+            designUtanKommentarer(File::get($fil)),
+        ))->toBe([]);
+    }
+
+    expect($granskade)->toBe(10);
+});
+
+it('kortet tar rubrik och åtgärd som slots', function () {
+    $kod = designYtorna()['components/UiCard.vue'];
+
+    // Rubriken och åtgärden är slots och inte proppar per variant: bilderna
+    // skiljer sig bara i vad som står i raden, och en propp per variant hade
+    // vuxit varje gång en femte bild kom.
+    expect($kod)->toMatch('/<slot[^>]*name="heading"/', 'UiCard tar ingen rubrik som slot');
+    expect($kod)->toMatch('/<slot[^>]*name="action"/', 'UiCard tar ingen åtgärd som slot');
+
+    // Åtgärden är VALFRI: raden ritas utan den, och frågan gäller om slotten
+    // finns och aldrig om den är tom.
+    expect($kod)->toContain('$slots.action');
+
+    // Innehållet under rubrikraden är standard-sloten.
+    expect($kod)->toMatch('/<slot\s*\/>/', 'UiCard har ingen innehållsslot');
+
+    // Och kortet har inga proppar alls — en `variant` hade varit bildernas
+    // varianter gjorda till kod.
+    expect($kod)->not->toContain('defineProps');
+});
+
+it('brickan har fyra tillstånd', function () {
+    $kod = designYtorna()['components/UiBadge.vue'];
+
+    // ADR-0042 § Beslut namnger rollerna: OK, varning, fara och neutral.
+    foreach (['ok', 'warning', 'danger', 'neutral'] as $tillstand) {
+        expect($kod)->toMatch(
+            "/\b{$tillstand}:/",
+            "UiBadge saknar tillståndet {$tillstand} — rollerna står i ADR-0042 § Beslut",
+        );
+    }
+
+    // Fyra och inte fler. Ett femte tillstånd är en nyans någon hittade på,
+    // och raden nedan fäller både en femte roll och en roll som bytts bort.
+    preg_match_all('/text-(success|warning|danger|ink-muted)/', $kod, $träffar);
+
+    expect($träffar[1])->toBe(['success', 'warning', 'danger', 'ink-muted']);
+});
+
+it('tom-tillståndet skiljer inget alls från inget som matchar', function () {
+    $kod = designYtorna()['components/UiEmptyState.vue'];
+
+    // Två lägen. `empty` är första gången — här finns ingenting än. `filtered`
+    // är en fråga utan träff: här FINNS rader, och det är filtret som ska
+    // ändras. Att rita dem lika hade sagt till en användare med fyrtio items
+    // att hon inte har några.
+    expect($kod)->toMatch('/\bempty:/', 'UiEmptyState saknar läget empty');
+    expect($kod)->toMatch('/\bfiltered:/', 'UiEmptyState saknar läget filtered');
+
+    // Läget väljs ur proppen, och de två ger olika ytor — annars är de två
+    // orden samma yta med två namn.
+    expect($kod)->toContain('MODES[props.mode]');
+
+    preg_match_all('/(empty|filtered):\s*\'([^\']+)\'/', $kod, $träffar);
+
+    expect($träffar[1])->toBe(['empty', 'filtered']);
+    expect($träffar[2][0])->not->toBe($träffar[2][1]);
 });
