@@ -1,10 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Link, router, usePage } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import OpenOccurrence from './OpenOccurrence.vue';
-import { formatDateOnly } from './itemPresentation.js';
 import { scheduleUrl } from './occurrencePresentation.js';
 import { recurrenceLabel } from './schedulePresentation.js';
+import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -66,30 +66,36 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
-const page = usePage();
-
-const locale = computed(() => page.props.locale);
+const { dueDate } = useRelativeDate();
 
 /*
  * Raderna: återkommandet formulerat i ord, den öppna förekomsten som den kom
- * från servern, och dess datum formaterat utan att flyttas över en tidszon —
- * `due_at` är en DATE-kolumn ([[Scheman och uppgifter]] §
- * schedule_occurrence), och `formatDateOnly()` bygger datumet i lokal tid i
- * stället för att tolka strängen som UTC.
+ * från servern, och dess datum ur datumregeln (issue 104) — relativt inom
+ * gränsen, absolut bortom den. Nästa förfall är ett förfallodatum som alla
+ * andra och får samma form: en egen formatering här är precis den blandning
+ * regeln finns för att ta bort. `occurrence.overdue` är serverns fält och går
+ * in i regeln — raden räknar aldrig försenat själv.
  *
  * `done` är `none`-uppgiftens sista tillstånd (Beslut 8 och "Klart när"): en
  * engångsuppgift vars förekomst är stängd öppnar ingen ny, och raden ska säga
  * att uppgiften är klar i stället för att visa ett tomt förfallodatum. En
  * PAUSAD rad har redan sin egen mening och förväxlas inte med den.
+ *
+ * `dueLabel` är den färdiga meningen: en relativ rad bär sin egen preposition
+ * ("Overdue by 3 days"), medan det absoluta datumet får radens ord runt sig
+ * ("Next due: 14 Oct 2026").
  */
 const rows = computed(() => props.schedules.map((schedule) => {
     const occurrence = props.openOccurrences[schedule.ulid] ?? null;
+    const due = occurrence ? dueDate(occurrence.due_at, occurrence.overdue) : null;
 
     return {
         ...schedule,
         recurrence: recurrenceLabel(t, schedule),
         occurrence,
-        due: formatDateOnly(occurrence?.due_at ?? null, locale.value),
+        dueLabel: due === null
+            ? null
+            : (due.relative ? due.text : t('item.schedule.next_due', { date: due.text })),
         done: occurrence === null && schedule.recurrence_type === 'none' && schedule.is_active,
     };
 }));
@@ -180,8 +186,8 @@ function destroy(schedule) {
                     <span class="text-sm">{{ schedule.recurrence }}</span>
 
                     <span class="text-sm">
-                        {{ schedule.due
-                            ? t('item.schedule.next_due', { date: schedule.due })
+                        {{ schedule.dueLabel
+                            ? schedule.dueLabel
                             : schedule.done
                                 ? t('item.schedule.occurrence.done')
                                 : t('item.schedule.no_next_due') }}

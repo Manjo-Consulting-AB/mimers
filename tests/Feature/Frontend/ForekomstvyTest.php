@@ -288,9 +288,10 @@ it('räknar aldrig försenat i vyn utan läser serverns fält', function () {
     $komponent = File::get(resource_path('js/components/OpenOccurrence.vue'));
 
     expect($komponent)->toContain('occurrence.overdue');
-    // Ingen klocka och ingen jämförelse i komponenten. `new Date(` finns bara
-    // i occurrencePresentation.js, och bara för att räkna glappet mellan två
-    // datum servern redan gett — aldrig för att avgöra ett tillstånd.
+    // Ingen klocka och ingen jämförelse i komponenten. `new Date(` finns i
+    // occurrencePresentation.js — för att räkna glappet mellan två datum
+    // servern redan gett — och i useRelativeDate.js, komposabeln som äger
+    // datumregeln (issue 104). Ingen av dem avgör ett tillstånd i komponenten.
     expect($komponent)->not->toContain('new Date');
     expect($komponent)->not->toContain('Date.now');
     expect($komponent)->not->toContain('toISOString');

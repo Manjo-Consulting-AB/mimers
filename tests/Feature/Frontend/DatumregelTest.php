@@ -123,13 +123,13 @@ it('skriver gränsen i komposabelns docblock och prövar båda sidor om den', fu
         ->and($absolut['text'])->toBe($bortom);
 
     // Och de relativa meningarna finns i lang/, som allt annat användaren läser.
-    foreach (['today', 'tomorrow', 'in_days', 'late', 'late_one'] as $nyckel) {
+    foreach (['today', 'tomorrow', 'in_days', 'overdue', 'overdue_one'] as $nyckel) {
         expect(Lang::get("ui.date.{$nyckel}", [], 'en'))
             ->not->toBe("ui.date.{$nyckel}", "ui.date.{$nyckel} saknas");
     }
 
     expect(Lang::get('ui.date.in_days', [], 'en'))->toContain(':days');
-    expect(Lang::get('ui.date.late', [], 'en'))->toContain(':days');
+    expect(Lang::get('ui.date.overdue', [], 'en'))->toContain(':days');
 });
 
 // --- förfallet -------------------------------------------------------------
@@ -147,21 +147,21 @@ it('gör ett förfallet datum relativt och markerat som fara', function () {
 
     expect($försenad['relative'])->toBeTrue()
         ->and($försenad['state'])->toBe('danger')
-        ->and($försenad['text'])->toBe('date.late:3');
+        ->and($försenad['text'])->toBe('date.overdue:3');
 
     // Även utan serverns flagga: ett datum bakåt i tiden ÄR förfallet.
     expect(datumregel('2027-04-28', '2027-05-01')['state'])->toBe('danger');
 
     // En dag sen har sin egen mening — `t()` pluraliserar inte (issue 52
     // § Beslut 4), och "1 dagar försenad" är fel.
-    expect(datumregel('2027-04-30', '2027-05-01', true)['text'])->toBe('date.late_one');
+    expect(datumregel('2027-04-30', '2027-05-01', true)['text'])->toBe('date.overdue_one');
 
     // Relativt hur länge sedan det än är: en uppgift från i fjol tappar inte
     // ordet som säger att den är sen.
     $gammal = datumregel('2026-05-01', '2027-05-01');
 
     expect($gammal['relative'])->toBeTrue()
-        ->and($gammal['text'])->toBe('date.late:365');
+        ->and($gammal['text'])->toBe('date.overdue:365');
 
     /*
      * Serverns flagga vinner över klockan. En klient som ligger efter får
@@ -172,12 +172,37 @@ it('gör ett förfallet datum relativt och markerat som fara', function () {
     $efter = datumregel('2027-05-01', '2027-05-01', true);
 
     expect($efter['state'])->toBe('danger')
-        ->and($efter['text'])->toBe('date.late_one');
+        ->and($efter['text'])->toBe('date.overdue_one');
 
     // Och flaggan är serverns i båda panelerna som ritar ett förfallodatum.
     expect(File::get(resource_path('js/components/TodoRow.vue')))->toContain('entry.overdue');
     expect(File::get(resource_path('js/components/OpenOccurrence.vue')))
         ->toContain('dueDate(props.occurrence.due_at, props.occurrence.overdue)');
+});
+
+// --- DATE-kontraktet -------------------------------------------------------
+
+/*
+ * Klart när: regeln tar DATE-strängar och allt annat ger `null`.
+ *
+ * `due_at` och `visible_from` är DATE-kolumner, och de kommer som `Y-m-d`.
+ * Tidsstämpelformen — *Idag 10:24* ur aktivitetslistan — hör till en yta som
+ * ännu inte ritas ([[ADR-0042 Designsystemet]] § Konsekvenser), och den byggs
+ * här när ytan finns. Tills dess är svaret `null`, och det är ett PRÖVAT
+ * beslut och inte en odokumenterad bugg: en tyst `null` är en fälla som
+ * väntar, en prövad `null` är ett kontrakt.
+ */
+it('svarar null för allt som inte är ett DATE', function () {
+    // En tidsstämpel, inte ett DATE.
+    $tidsstämpel = datumregel('2027-05-05T10:24:00Z', '2027-05-01');
+
+    expect($tidsstämpel['text'])->toBeNull()
+        ->and($tidsstämpel['relative'])->toBeFalse()
+        ->and($tidsstämpel['days'])->toBeNull()
+        ->and($tidsstämpel['state'])->toBe('neutral');
+
+    // Ett tomt värde likaså: ingen dag att skriva ut.
+    expect(datumregel('', '2027-05-01')['text'])->toBeNull();
 });
 
 // --- språket ---------------------------------------------------------------

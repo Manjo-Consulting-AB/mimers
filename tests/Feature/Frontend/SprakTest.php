@@ -350,7 +350,7 @@ it('hämtar datumsträngarna ur ui.php och inte ur komposabeln', function () {
 
     $kod = (string) preg_replace('#/\*.*?\*/#s', '', File::get(resource_path('js/composables/useRelativeDate.js')));
 
-    expect($kod)->not->toMatch('/\b(Today|Tomorrow|days late|day late)\b/');
+    expect($kod)->not->toMatch('/\b(Today|Tomorrow|Overdue by)\b/');
 });
 
 /*

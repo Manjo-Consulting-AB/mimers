@@ -36,15 +36,21 @@ return [
      * själv, medan det absoluta datumet får panelens egna ord runt sig
      * ("Due :date"). Panelen väljer ramen, `useRelativeDate.js` väljer formen.
      *
-     * `late_one` och `late` finns som två nycklar därför att `t()` inte kan
-     * pluralisera (issue 52 § Beslut 4): en dag har sin egen mening.
+     * `overdue_one` och `overdue` finns som två nycklar därför att `t()` inte
+     * kan pluralisera (issue 52 § Beslut 4): en dag har sin egen mening.
+     *
+     * Ordet är produktens, inte ett fjärde: `overdue` bär redan begreppet i
+     * tre led — kolumnens härledning ([[Scheman och uppgifter]] § förekomst),
+     * `Overdue`-brickan i OpenOccurrence och *förfallna* i bildens taltuta —
+     * och [[ADR-0032 Produktens ord]] finns för att systemet inte ska bära
+     * två ord för samma sak.
      */
     'date' => [
         'today' => 'Today',
         'tomorrow' => 'Tomorrow',
         'in_days' => 'In :days days',
-        'late' => ':days days late',
-        'late_one' => '1 day late',
+        'overdue' => 'Overdue by :days days',
+        'overdue_one' => 'Overdue by 1 day',
     ],
 
     'nav' => [

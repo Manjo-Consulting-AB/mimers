@@ -13,26 +13,39 @@ import { useTranslations } from './useTranslations.js';
  *
  * **Gränsen är 30 dagar.** Inom den skrivs datumet relativt — *Idag*,
  * *I morgon*, *Om 24 dagar* — och bortom den absolut, formaterat för
- * användarens locale. Trettio och inte fjorton: bilden kallar 24 dagar
- * relativt, så en snävare gräns hade gjort bildens eget exempel absolut. Och
- * inte längre: en månad är där "hur många dagar" slutar betyda något, och
- * bildens *Om 3 månader* hade krävt en andra skala med egna strängar och en
- * egen gräns att hålla i synk. RELATIVE_DAYS är talet, och docblocken och
- * konstanten får inte glida isär — DatumregelTest läser det ur den ena och
- * prövar det mot den andra.
+ * användarens locale. Talet är designerns eget och inte vårt: `docs/Design/
+ * main.jpeg`s taltuta *Kommande underhåll* bär undertexten "Nästa 30 dagar",
+ * och det fönstret är precis det regeln ritar relativt. En snävare gräns hade
+ * gjort bildens eget *Om 24 dagar* absolut. Och inte längre: en månad är där
+ * "hur många dagar" slutar betyda något, och bildens *Om 3 månader* hade
+ * krävt en andra skala med egna strängar och en egen gräns att hålla i synk —
+ * vill vi ha en månadsform är det en egen nyckel och en egen issue.
+ * RELATIVE_DAYS är talet, och docblocken och konstanten får inte glida isär —
+ * DatumregelTest läser det ur den ena och prövar det mot den andra.
  *
- * **Ett förfallet datum är alltid relativt och alltid fara.** *3 dagar
- * försenad* är den upplysning en förfallodag är till för; *14 okt 2026*
- * säger ingenting om att den är sen. Försenat kommer ur serverns `overdue`
- * när fältet finns: ett tillstånd klockan ändrar lagras aldrig ([[ADR-0005
- * Schema och förekomst]]), och en klient med fel datum ska inte kunna färga
- * en uppgift röd. Klockan får räkna HUR många dagar — aldrig om.
+ * **Serverns `overdue` vinner; annars härleds tillståndet.** Finns flaggan på
+ * raden avgör den: ett tillstånd klockan ändrar lagras aldrig ([[ADR-0005
+ * Schema och förekomst]]), och en klient med fel datum ska inte kunna färga en
+ * uppgift röd. Saknas den — en yta vars resurs inte bär fältet — härleder
+ * komposabeln förfallet ur datumet och klientens dag, så att ett förfallet
+ * datum inte tyst blir `warning`. Klockan får räkna HUR många dagar, aldrig
+ * om: en förfallen rad är alltid relativ och alltid fara, för *3 dagar
+ * försenad* är den upplysning en förfallodag är till för och *14 okt 2026*
+ * säger ingenting om att den är sen.
  *
- * **DATE-kolumner, inte tidsstämplar.** `due_at` och `visible_from` är DATE
- * ([[Scheman och uppgifter]] § schedule_occurrence) och byggs i LOKAL tid,
- * som formatDateOnly(): `new Date("2027-05-05")` tolkas som UTC midnatt och
- * visar i en negativ offset dagen FÖRE. Aktivitetslistans *Idag 10:24* bär en
- * tid och väntar på att listan byggs.
+ * **DATE-kolumner, inte tidsstämplar.** Regeln tar DATE-strängar (`Y-m-d`),
+ * som `due_at` och `visible_from` ([[Scheman och uppgifter]] §
+ * schedule_occurrence). Allt annat — en tidsstämpel, ett tomt värde — ger
+ * `null`: aktivitetslistans *Idag 10:24* bär en tid och väntar på att listan
+ * byggs, och den formen byggs här när den ytan finns. Datumen byggs i LOKAL
+ * tid, som formatDateOnly(): `new Date("2027-05-05")` tolkas som UTC midnatt
+ * och visar i en negativ offset dagen FÖRE.
+ *
+ * **Beroenderiktningen är enkelriktad.** Presentationsmodulerna
+ * (`itemPresentation.js`, `accessPresentation.js`) importerar komposabeln för
+ * att skriva ut ett datum; komposabeln importerar aldrig en presentationsmodul.
+ * Att skriva ut ett datum är inte att välja hur det skrivs, och riktningen
+ * håller regeln i EN modul.
  */
 
 /*
@@ -83,15 +96,18 @@ export function formatDueDate(value, { t, locale, today, overdue = false }) {
     const days = Math.round((date - reference) / 86400000);
 
     if (overdue || days < 0) {
-        // Servern har sagt försenat medan klockan här är efter: antalet dagar
-        // kan räknas fel, tillståndet aldrig. "0 dagar försenad" finns inte.
-        const late = Math.max(1, -days);
+        // Serverns flagga vinner; saknas den är `days < 0` härledningen ur
+        // klientens dag. Antalet dagar kan räknas fel, tillståndet aldrig.
+        // Minsta försening är en dag — "0 dagar försenad" finns inte.
+        const overdueDays = Math.max(1, -days);
 
         return {
-            text: late === 1 ? t('date.late_one') : t('date.late', { days: late }),
+            text: overdueDays === 1
+                ? t('date.overdue_one')
+                : t('date.overdue', { days: overdueDays }),
             state: 'danger',
             relative: true,
-            days: late,
+            days: overdueDays,
         };
     }
 
