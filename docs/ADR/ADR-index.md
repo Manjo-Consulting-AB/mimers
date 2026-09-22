@@ -1,6 +1,6 @@
 # ADR-index
 
-Fyrtioen beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Fyrtiotvå beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -47,6 +47,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0039 Containerns översikt]] | Containerns förstasida är en översikt, itemlistan en flik; talen räknar det du når | [[Items och organisation]], [[Konton och åtkomst]] |
 | [[ADR-0040 Underträdets summor]] | Status och kostnad räknas över itemet och dess ättlingar, donuten grupperar per item | [[Items och organisation]], [[Planer och kvoter]] |
 | [[ADR-0041 Itemets vy]] | Itemet bor i containern, strukturen har flera vägar till samma item, anteckningen är itemets egen text | [[Items och organisation]], [[Filer och lagring]] |
+| [[ADR-0042 Designsystemet]] | Tokens med roller före komponenter före sidor, designbilderna i `docs/Design/` | Allt |
 
 ## Om att ändra ett beslut
 

@@ -6,6 +6,8 @@ Listan kommer ur genomgången av MVP:n 2026-09-17. Första omgången mockuper gi
 
 **En post lämnar den här filen när den blir en issue i en milstolpe** — eller, för ett beslut, när det står i en ADR. Står något kvar här som redan är byggt blir filen värdelös, precis som [[Tankar]] § Öppet.
 
+**Designern lämnade fyra bilder 2026-09-22.** De ligger i `docs/Design/` och är den första designkällan valvet haft. Det de avgjorde — tokens, kärnkomponenterna, och fem ställen där bilden säger emot ett tidigare beslut — står i [[ADR-0042 Designsystemet]], och arbetet har issues i [[M17 Designsystemet]]. **Bilderna är nyare än besluten men inte mer genomtänkta:** vädret, framdriftsstapeln, leverantören och artikelnumret är strukna i ADR:en, och den globala navigeringen är fortfarande avvisad av [[ADR-0041 Itemets vy]].
+
 ---
 
 ## Avgjort vid mockupgenomgången
@@ -30,7 +32,7 @@ Itemmockuparna gicks igenom 2026-09-18 och gav en till:
 
 - [[ADR-0041 Itemets vy]] — itemet bor i containern och inte i en global navigering. Strukturens rötter är de items användaren når som saknar nåbar förälder, ett item får förekomma på flera ställen, och den aktuella platsen står i querysträngen. Anteckningen är itemets egen text, omslagsbilden en vald bilaga med en regel som gör valet frivilligt. **Rättar tårtbitarnas indelning i [[ADR-0040 Underträdets summor]]**: de är de items som bär kostnadsraderna, inte underträdets toppnivå, eftersom ett item under två föräldrar annars hamnar i två bitar.
 
-Den del som inte väntar på designen har issues i [[M16 Itemets vy]] — 93 till 95.
+Den del som inte väntar på designen har issues i [[M16 Itemets vy]] — 93 till 96.
 
 **Skalen**, som inte är ett beslut utan en läsning av mockuparna: trepanelsvyn är vad användaren ser när ett objekt öppnas, dashboarden är vad som möter henne efter inloggning, containervyn ligger mellan dem.
 
@@ -64,13 +66,9 @@ Genomgången av dashboardmockupen mot datamodellen. Punkterna nedan är avgjorda
 
 Genomgången av containermockupen mot datamodellen. Det som blev beslut står i [[ADR-0039 Containerns översikt]] och [[ADR-0040 Underträdets summor]]; punkterna nedan är avgjorda men har varken ADR eller issue.
 
-**Väntar på designen:** flikradens indelning, exportens flytt in under inställningarna, dokumentfliken, bildpanelen och containerns hjältebild. Översiktens skelett, beskrivningen, ättlingsupplösningen, kostnadsnedbrytningen och OK-statusen ligger i [[M15 Containerns översikt]].
-
-**Flikraden ersätter sektionsmenyn, och ingen rad får försvinna.** `containerSections.js` har nio rader; mockupen har sju flikar. Kategorier, taggar, delning, kalender, export, papperskorg och överlåtelse får inte plats bland flikarna och samlas på inställningssidan. Fördelningen är designarbete. Kravet är att var och en går att nå — en yta ingen hittar är samma sak som en yta som inte finns, vilket är issue 62a:s och 67c:s egen motivering.
+**Väntar på designen:** dokumentfliken och bildpanelen. Flikradens indelning och exportens flytt har sedan 2026-09-22 issue 101 i [[M17 Designsystemet]]; containerns hjältebild kräver ett datamodellbeslut och inte en vy-issue, se [[ADR-0042 Designsystemet]] § Bildernas avvikelser. Översiktens skelett, beskrivningen, ättlingsupplösningen, kostnadsnedbrytningen och OK-statusen ligger i [[M15 Containerns översikt]].
 
 **Navigeringens gruppering är ADR-0036:s regel, oberoende uppfunnen.** Mockupens sidomeny har *Mina containers* med fyra arter à en container och *Projekt* med tre. Det är exakt vad *gruppera vid minst två* ger: bara en art når två, resten ligger löst i en hög som behöver ett namn. Namnet på högen är det enda ADR-0036 lämnade öppet, och mockupen svarade.
-
-**Datumen i underhållspanelen blandar två format.** *Om 24 dagar* bredvid *14 okt 2026*. Vilket som visas när behöver en regel, och den är en presentationsfråga utan schemapåverkan.
 
 **Dessa är kvar utan datakälla:** containerns hjältebild. `attachment.item_id` är `NOT NULL`, så en container kan inte äga en fil. Det krävs antingen en nullbar `container_id` på `attachment` eller ett eget fält, och frågan är densamma som dashboardkortens foto — den avgörs en gång, inte två.
 
@@ -84,9 +82,7 @@ Genomgången av containermockupen mot datamodellen. Det som blev beslut står i 
 
 Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut står i [[ADR-0041 Itemets vy]]; punkterna nedan är avgjorda men har varken ADR eller issue.
 
-**Väntar på designen:** flikraden på itemet, trepanelslayouten, fokuskartan och itemets kostnadsflik. Omslagsbilden, strukturupplösningen och förekomsterna ligger i [[M16 Itemets vy]].
-
-**Flikraden är billig när den väl ritas.** Sex av mockupens sju flikar — fälten, relationerna, bilagorna, schemana, utlåningen och taggarna — ligger redan som propar i `Containers/Items/Show` och renderas i dag på en enda lång sida. Flikraden är en omfördelning av det som redan hämtas, inte nya ändpunkter. **Utlåningen har ingen flik i mockupen** och måste ändå få en plats: samma krav som containerns sektionsmeny ställde, ingen rad får försvinna.
+**Väntar på designen:** fokuskartan och itemets kostnadsflik. Omslagsbilden, strukturupplösningen och förekomsterna ligger i [[M16 Itemets vy]]; flikraden och trepanelslayouten har sedan 2026-09-22 issue 102 och 103 i [[M17 Designsystemet]].
 
 **Fokuskartan behöver ingen ny fråga.** `ListItemLinks` ger redan motparterna med relationen sedd från itemet och med omfångsfiltret i samma fråga — en graf över närmaste relationer är den listan ritad som noder. Det som kostar är layouten. Teckenförklaringen ska vara tre sorter, *Parent · Child · Related*, enligt [[ADR-0035 Relationen mellan objekt]]; den ena mockupen säger fortfarande *Syskon*.
 
@@ -94,19 +90,15 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 
 **Itemets historikflik har det sämre än containerns.** `audit_log` är indexerad på `(container_id, created_at)` — precis containerfliken behöver — men det finns **inget index på `(subject_type, subject_id)`**, som är itemhistorikens fråga. Fliken vore alltså tom *och* en full scan. Den ritas inte, och indexet hör till händelseinstrumenteringen nedan.
 
-**Datumen i itempanelerna har samma blandning som containerns underhållspanel.** Samma regel löser båda, och den avgörs en gång.
-
 **Strukna ur mockupen:** leverantör och artikelnummer i detaljrutan. Leverantören bor på `cost_entry`, där den redan är indexerad och har en autocomplete; artikelnumret finns inte, och `serial_number` är inte det — ett serienummer identifierar exemplaret, ett artikelnummer modellen. Skulle de behövas är det ett beslut, inte två fält.
 
-**"Anteckning" är avgjord sedan containerrundan.** Frågan stod kvar ovan efter containermockupen; [[ADR-0041 Itemets vy]] svarar att `item.description` *är* anteckningsfältet. Många daterade anteckningar per item vore en tabell och ett nytt beslut.
+**"Anteckning" är avgjord, men inte som ADR-0041 skrev.** ADR:en svarade att `item.description` *är* anteckningsfältet. Issue 96 (#406) skilde dem åt igen: `description` säger vad itemet **är**, anteckningen vad användaren **vet** om det, och kolumnen är nullbar text vid sidan av. Många daterade anteckningar per item vore fortfarande en tabell och ett nytt beslut.
 
 ---
 
 ## Ännu inte issues
 
 **Händelseinstrumenteringen.** `audit_log` har tabellen, indexet, en resurs och en API-kontroller — men skrivs bara av `RevokeContainerAccess` och `AcceptOwnershipTransfer`. Varje händelse mockuparna visar, på både dashboarden och containersidan, är oregistrerad: dokument tillagt, kostnad registrerad, uppgift slutförd, bild uppladdad, schema ändrat. Det är ett eget arbete med egna beslut — vilka handlingar som loggas, vad som hamnar i `meta`, hur länge raderna sparas, vem som får läsa dem — och det ska inte smygas in i en vy-issue. Ytorna byggs som reserverad plats tills det finns.
-
-**Favoriter.** Mockupens vänsterspalt har en hel sektion för dem och det finns ingen tabell, inget beslut och ingen issue. Frågan är inte bara var raderna lagras utan vad en favorit är — ett item, en container, en sparad sökning — och den är därför ett eget litet beslut och inte en kolumn.
 
 **Containerns karta.** En graf över containerns alla items och deras relationer. Datat finns; layouten över hundratals noder är arbetet, och den delar ingenting med fokuskartan på itemet utom namnet.
 
@@ -119,7 +111,5 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 **Notiser vid uppgift.** När skickas de? Frågan är först en uppslagning i [[Notiser]] och blir en issue bara om svaret och beteendet går isär.
 
 **Delsträngssök kräver MariaDB i CI.** `LIKE '%ord%'` är dagens beteende via databasdrivaren; FULLTEXT-grenen i [[ADR-0012 Sök]] är avstängd tills sviten kan köras mot MariaDB. Den frågan står redan i [[Tankar]] § Öppet, rest i issue 2 och halvt besvarad 2026-09-03 — den behöver inte resas igen, den behöver avgöras.
-
-**Designsystemet och genomgången vy för vy.** Väntar på mockuparna per definition. Tokens och kärnkomponenter före sidor, annars blir varje vy ett frihandsjobb.
 
 **Miniatyrer i itemlistan** står redan som öppen fråga i [[Tankar]] § Öppet, rest när 61b skrevs. Den avgörs av designen och behöver inget eget spår här.
