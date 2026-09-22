@@ -6,6 +6,8 @@
 // tests/Feature/Frontend/SprakTest.php.
 
 use App\Models\Account;
+use App\Models\Container;
+use App\Models\Item;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
@@ -222,4 +224,46 @@ it('svarar på varje sektion i settingsSections efter två klick', function () {
         // Klick två: raden i SettingsLayout.
         actingAs($anvandare)->get($url)->assertOk();
     }
+});
+
+/*
+ * Issue 106 · Favoritlistan. Klart när: `FAVORITER`-sektionen är SKALETS och
+ * inte en sidas.
+ *
+ * Den ritas ur den delade proppen, så den följer med varje sida layouten
+ * wrappar utan att en enda sida importerar den. Provet läser samma rad på två
+ * adresser — översikten och containersidan — och de två sidorna vet ingenting
+ * om varandra. Att raden sedan filtreras på omfång prövas i
+ * FavoritlistaTest; här prövas bara att den bor i skalet.
+ */
+it('ritar favoritlistan i skalet för varje sida layouten wrappar', function () {
+    withoutVite();
+
+    $konto = Account::factory()->create();
+    $ägare = User::factory()->create();
+    $konto->users()->attach($ägare, ['role' => 'owner']);
+
+    $container = Container::factory()->for($konto, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create([
+        'name' => 'Motorn',
+        'created_by_user_id' => $ägare->id,
+        'created_by_account_id' => $konto->id,
+    ]);
+
+    $url = "/containers/{$container->ulid}/items/{$item->ulid}";
+
+    actingAs($ägare)->from($url)->post("{$url}/favorite")->assertRedirect($url);
+
+    foreach (['/dashboard', '/containers'] as $sida) {
+        actingAs($ägare)->get($sida)->assertOk()->assertInertia(
+            fn (AssertableInertia $page) => $page->where('favorites.0.name', 'Motorn')
+        );
+    }
+
+    // Rubriken kommer ur lang/ som all annan text i layouten, och raden är
+    // UiListRow — samma form som resten av skalet (issue 99).
+    expect(trans('ui.nav.favorites', [], 'en'))->toBe('Favourites');
+
+    expect(File::get(resource_path('js/layouts/AppLayout.vue')))
+        ->toContain("import UiListRow from '../components/UiListRow.vue'");
 });

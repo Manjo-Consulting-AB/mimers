@@ -2,9 +2,11 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\Item\ListFavorites;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
+use App\Models\Item;
 use App\Support\Frontend\ActiveContainer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -15,11 +17,25 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Sex nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Sju nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
  * App\Support\Frontend\ActiveContainer och `flash.status` ur sessionen.
+ *
+ * **`favorites` kom med issue 106** — sidopanelens `FAVORITER`-sektion,
+ * se [[M17 Designsystemet]] § 106 och [[ADR-0042 Designsystemet]]
+ * § Konsekvenser. Listan byggs av App\Actions\Item\ListFavorites, som
+ * filtrerar den genom ResolveItemScope som varje annan listning: en favorit
+ * användaren förlorat åtkomsten till försvinner i stället för att bli en
+ * trasig länk, och ingenting i svaret berättar hur många som föll bort
+ * (issue 73 § Beslut 6).
+ *
+ * Raden bär `name` och `url` och ingenting mer. Adressen byggs HÄR och inte i
+ * JavaScript: den innehåller två ULID:n som bara servern känner, och skalets
+ * egen regel är att en sådan URL skickas som prop (issue 51 § Beslut 7).
+ * Ingen `ItemResource` — sektionen visar ett namn och en länk, och `app/Http/
+ * Resources/**` rörs inte av den här issuen.
  *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
@@ -56,7 +72,10 @@ class HandleInertiaRequests extends Middleware
      */
     protected $rootView = 'app';
 
-    public function __construct(private readonly ActiveContainer $activeContainer) {}
+    public function __construct(
+        private readonly ActiveContainer $activeContainer,
+        private readonly ListFavorites $listFavorites,
+    ) {}
 
     /**
      * Determines the current asset version.
@@ -81,6 +100,7 @@ class HandleInertiaRequests extends Middleware
             ...parent::share($request),
             'auth' => fn (): array => $this->auth($request),
             'activeContainer' => fn (): ?string => $this->activeContainer->forUser($request->user()),
+            'favorites' => fn (): array => $this->favorites($request),
             'locale' => fn (): string => App::getLocale(),
             'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
@@ -123,5 +143,36 @@ class HandleInertiaRequests extends Middleware
                 ->map(fn (Account $account): array => AccountResource::make($account)->resolve($request))
                 ->all(),
         ];
+    }
+
+    /**
+     * Användarens favoriter som raddata åt skalet, eller tomt för en gäst —
+     * se klassens docblock.
+     *
+     * Ett tidigt `return []` och inte en tom lista ur actionen: en gäst har
+     * ingen att fråga för, och `ListFavorites` tar en `User`. Formen på
+     * svaret är densamma som för en inloggad utan favoriter, så skalet aldrig
+     * behöver två avpackningsvägar — samma regel som `auth()` ovan.
+     *
+     * `route(..., false)` ger en relativ adress, samma form skalet skriver
+     * för hand i sina egna `<Link href="/dashboard">`.
+     *
+     * @return list<array{name: string, url: string}>
+     */
+    private function favorites(Request $request): array
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return [];
+        }
+
+        return $this->listFavorites->handle($user)
+            ->map(fn (Item $item): array => [
+                'name' => $item->name,
+                'url' => route('containers.items.show', [$item->container, $item], false),
+            ])
+            ->values()
+            ->all();
     }
 }

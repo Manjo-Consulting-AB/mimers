@@ -70,6 +70,11 @@ return [
         // redirects to the profile (issue 53c).
         'settings' => 'Settings',
         'login' => 'Log in',
+        // The FAVOURITES section in the shell, see issue 106. The word is the
+        // section's heading AND the nav element's accessible name: the section
+        // carries no other text, and a second key for the aria-label would be
+        // the same word in two places.
+        'favorites' => 'Favourites',
     ],
 
     'auth' => [
