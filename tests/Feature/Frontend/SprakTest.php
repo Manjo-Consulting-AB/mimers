@@ -433,6 +433,45 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
  * tests/Feature/Frontend/KategoriuppsattningTest.php, mot samma modul klienten
  * importerar. Här prövas bara att undantaget inte har vidgats.
  */
+/*
+ * Issue 425 · Primitiverna. Testet ovan fångar svensk text i en komponent; det
+ * här fångar den engelska, och det är den som är lätt att skriva utan att
+ * tänka. Knappen och de fyra kontrollerna är rena former: etiketten kommer ur
+ * FormField, knappens ord ur anroparen och vänteläget ur `common.pending.*`.
+ * En literal sträng i en `Ui*.vue` blir därför alltid fel — den finns inte i
+ * `lang/`, och `en` är den enda katalogen som levereras ([[ADR-0034 Engelska
+ * vid lansering]]).
+ *
+ * Textnoder i mallen är allt mellan två taggar som inte är en interpolation.
+ * Attributvärdena tas bort först: ett `>` inuti ett värde är inget slut på en
+ * tagg, och utan det steget hade `v-if="a > b"` fällt provet på fel sak.
+ */
+it('har ingen hårdkodad text i Ui-komponenterna', function () {
+    $filer = File::glob(resource_path('js/components/Ui*.vue'));
+
+    expect($filer)->toHaveCount(5);
+
+    foreach ($filer as $fil) {
+        $kod = (string) preg_replace('#/\*.*?\*/#s', '', File::get($fil));
+        $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+        preg_match('#<template>(.*)</template>#s', $kod, $träff);
+        $mall = $träff[1] ?? '';
+
+        expect(trim($mall))->not->toBe('', basename($fil).' har ingen mall');
+
+        $text = (string) preg_replace('/"[^"]*"/', '""', $mall);
+        $text = (string) preg_replace('/<[^>]*>/', '', $text);
+        $text = (string) preg_replace('/\{\{.*?\}\}/s', '', $text);
+
+        expect(trim($text))->toBe('', sprintf(
+            'hårdkodad text i %s: %s — den hör i lang/en/ui.php',
+            basename($fil),
+            trim($text),
+        ));
+    }
+});
+
 it('har bara kategoriuppsättningarna i js/data/', function () {
     $katalog = resource_path('js/data');
 

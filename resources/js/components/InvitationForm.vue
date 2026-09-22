@@ -2,6 +2,9 @@
 import { useForm } from '@inertiajs/vue3';
 import AccessLevelField from './AccessLevelField.vue';
 import FormField from './FormField.vue';
+import UiButton from './UiButton.vue';
+import UiInput from './UiInput.vue';
+import UiSelect from './UiSelect.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -59,7 +62,7 @@ function submit() {
 </script>
 
 <template>
-    <form class="mt-4 flex flex-col gap-4 rounded border border-slate-300 bg-white p-4" @submit.prevent="submit">
+    <form class="mt-4 flex flex-col gap-4 rounded-card border border-border bg-surface p-4" @submit.prevent="submit">
         <!--
             Kvotgränserna (§ Beslut 6): `quota.shared_users_exceeded` och
             `quota.pending_invitations_exceeded` kommer ur det delade lagret
@@ -70,22 +73,21 @@ function submit() {
         <p
             v-if="form.errors.quota"
             role="alert"
-            class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            class="rounded-control border border-warning bg-warning/10 px-3 py-2 text-body text-ink"
         >
             {{ form.errors.quota }}
         </p>
 
         <FormField v-slot="{ describedBy }" :label="t('sharing.invitations.email')" id="invitation-email" :error="form.errors.email">
-            <input
+            <UiInput
                 id="invitation-email"
                 v-model="form.email"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 type="email"
                 name="email"
                 autocomplete="off"
                 required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <AccessLevelField
@@ -95,33 +97,26 @@ function submit() {
             :error="form.errors.level"
         />
 
-        <div class="flex flex-col gap-1">
-            <label for="invitation-item" class="text-sm font-medium text-slate-800">
-                {{ t('sharing.invitations.item') }}
-            </label>
-
-            <select
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('sharing.invitations.item')"
+            id="invitation-item"
+            :error="form.errors.item"
+        >
+            <UiSelect
                 id="invitation-item"
                 v-model="form.item"
-                :aria-describedby="form.errors.item ? 'invitation-item-error' : undefined"
+                :described-by="describedBy"
                 name="item"
-                class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+                class="self-start"
             >
                 <option value="">{{ t('sharing.invitations.item_container') }}</option>
                 <option v-for="item in items" :key="item.ulid" :value="item.ulid">{{ item.name }}</option>
-            </select>
+            </UiSelect>
+        </FormField>
 
-            <p v-if="form.errors.item" id="invitation-item-error" role="alert" class="text-sm text-red-700">
-                {{ form.errors.item }}
-            </p>
-        </div>
-
-        <button
-            type="submit"
-            :disabled="form.processing"
-            class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-        >
+        <UiButton type="submit" :pending="form.processing" class="self-start">
             {{ form.processing ? t('common.pending.default') : t('sharing.invitations.submit') }}
-        </button>
+        </UiButton>
     </form>
 </template>

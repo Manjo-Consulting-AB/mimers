@@ -2,6 +2,8 @@
 import { useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import TagColorField from './TagColorField.vue';
+import UiButton from './UiButton.vue';
+import UiInput from './UiInput.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
@@ -52,25 +54,19 @@ function submit() {
             id="tag-create-name"
             :error="form.errors.name"
         >
-            <input
+            <UiInput
                 id="tag-create-name"
                 v-model="form.name"
-                :aria-describedby="describedBy"
-                type="text"
+                :described-by="describedBy"
                 name="name"
                 required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <TagColorField v-model="form.color" id="tag-create-color" :error="form.errors.color" />
 
-        <button
-            type="submit"
-            :disabled="form.processing"
-            class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-        >
+        <UiButton type="submit" :pending="form.processing" class="self-start">
             {{ form.processing ? t('common.pending.default') : t('container.tags.create') }}
-        </button>
+        </UiButton>
     </form>
 </template>

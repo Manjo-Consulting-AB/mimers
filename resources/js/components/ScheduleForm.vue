@@ -2,6 +2,10 @@
 import { computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import UiButton from './UiButton.vue';
+import UiInput from './UiInput.vue';
+import UiSelect from './UiSelect.vue';
+import UiTextarea from './UiTextarea.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
@@ -122,15 +126,13 @@ function submit() {
             id="title"
             :error="form.errors.title"
         >
-            <input
+            <UiInput
                 id="title"
                 v-model="form.title"
-                :aria-describedby="describedBy"
-                type="text"
+                :described-by="describedBy"
                 name="title"
                 required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <FormField
@@ -139,13 +141,12 @@ function submit() {
             id="notes"
             :error="form.errors.notes"
         >
-            <textarea
+            <UiTextarea
                 id="notes"
                 v-model="form.notes"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 name="notes"
-                rows="3"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
+                :rows="3"
             />
         </FormField>
 
@@ -160,19 +161,18 @@ function submit() {
             id="recurrence_type"
             :error="form.errors.recurrence_type"
         >
-            <select
+            <UiSelect
                 id="recurrence_type"
                 v-model="form.recurrence_type"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 name="recurrence_type"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
                 <option value="none">{{ t('item.schedule.form.type.none') }}</option>
                 <option value="fixed">{{ t('item.schedule.form.type.fixed') }}</option>
                 <option value="interval">{{ t('item.schedule.form.type.interval') }}</option>
-            </select>
+            </UiSelect>
 
-            <p class="text-sm text-slate-600">
+            <p class="text-body text-ink-muted">
                 {{ t(`item.schedule.form.recurrence_${form.recurrence_type}`) }}
             </p>
         </FormField>
@@ -190,16 +190,15 @@ function submit() {
                 id="interval_count"
                 :error="form.errors.interval_count"
             >
-                <input
+                <UiInput
                     id="interval_count"
                     v-model="form.interval_count"
-                    :aria-describedby="describedBy"
+                    :described-by="describedBy"
                     type="number"
                     name="interval_count"
                     min="1"
                     required
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
+                />
             </FormField>
 
             <FormField
@@ -208,20 +207,19 @@ function submit() {
                 id="interval_unit"
                 :error="form.errors.interval_unit"
             >
-                <select
+                <UiSelect
                     id="interval_unit"
                     v-model="form.interval_unit"
-                    :aria-describedby="describedBy"
+                    :described-by="describedBy"
                     name="interval_unit"
                     required
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
                 >
                     <option :value="null">{{ t('item.schedule.form.unit_none') }}</option>
                     <option value="day">{{ t('item.schedule.form.units.day') }}</option>
                     <option value="week">{{ t('item.schedule.form.units.week') }}</option>
                     <option value="month">{{ t('item.schedule.form.units.month') }}</option>
                     <option value="year">{{ t('item.schedule.form.units.year') }}</option>
-                </select>
+                </UiSelect>
             </FormField>
         </template>
 
@@ -236,15 +234,14 @@ function submit() {
             id="anchor_date"
             :error="form.errors.anchor_date"
         >
-            <input
+            <UiInput
                 id="anchor_date"
                 v-model="form.anchor_date"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 type="date"
                 name="anchor_date"
                 required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <FormField
@@ -253,26 +250,22 @@ function submit() {
             id="lead_days"
             :error="form.errors.lead_days"
         >
-            <input
+            <UiInput
                 id="lead_days"
                 v-model="form.lead_days"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 type="number"
                 name="lead_days"
                 min="0"
                 max="365"
-                class="self-start rounded border border-slate-300 bg-white px-3 py-2"
-            >
+                class="self-start"
+            />
 
-            <p class="text-sm text-slate-600">{{ t('item.schedule.form.lead_days_hint') }}</p>
+            <p class="text-body text-ink-muted">{{ t('item.schedule.form.lead_days_hint') }}</p>
         </FormField>
 
-        <button
-            type="submit"
-            :disabled="form.processing"
-            class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-        >
+        <UiButton type="submit" :pending="form.processing" class="self-start">
             {{ submitLabel }}
-        </button>
+        </UiButton>
     </form>
 </template>

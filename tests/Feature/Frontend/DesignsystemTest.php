@@ -3,15 +3,18 @@
 use Illuminate\Support\Facades\File;
 
 /*
- * Issue 424 · Designtokens i @theme, se [[ADR-0042 Designsystemet]] § Beslut.
+ * Issue 424 · Designtokens i @theme, och issue 425 · Primitiverna, se
+ * [[ADR-0042 Designsystemet]] § Beslut.
  *
- * **Det här är ett källkodsprov, inte ett sidprov.** Issuen bygger ingenting
- * som syns: den flyttar fjorton färgroller, fem typsteg och tre radier ur
- * ADR:ens tabell och in i `@theme`, och bevisar dem på två befintliga
- * komponenter. Det som går att pröva på serversidan är därför formen på
- * källkoden — att varje roll ADR:en namnger finns som token, att de två
- * komponenterna inte längre bär råa färgklasser, och att fokusringen blev en
- * token i stället för en nollställd outline.
+ * **Det här är ett källkodsprov, inte ett sidprov.** Issuerna bygger nästan
+ * ingenting som syns: 424 flyttar fjorton färgroller, fem typsteg och tre
+ * radier ur ADR:ens tabell och in i `@theme` och bevisar dem på två befintliga
+ * komponenter; 425 bygger knappen och de fyra formulärkontrollerna och
+ * migrerar fem formulär till dem. Det som går att pröva på serversidan är
+ * därför formen på källkoden — att varje roll ADR:en namnger finns som token,
+ * att de migrerade filerna inte bär råa färgklasser, att fokusringen blev en
+ * token i stället för en nollställd outline, och att ingen kontroll smugit in
+ * en egen validering.
  *
  * **Det som INTE prövas här** är det som kräver en webbläsare: att värdena ser
  * ut som bilderna, att kontrasten håller, och att tangentbordet hittar ringen.
@@ -60,6 +63,88 @@ function designKomponenter(): array
 }
 
 /**
+ * De fem befintliga formulär issue 425 migrerar till primitiverna. En lista
+ * och inte två: proven nedan pekar på samma fem filer, och en som glider isär
+ * hade mätt något annat än det den påstår.
+ *
+ * @return array<int, string> relativa sökvägar
+ */
+function designFormular(): array
+{
+    return [
+        'components/ItemForm.vue',
+        'components/TagCreateForm.vue',
+        'components/CategoryCreateForm.vue',
+        'components/InvitationForm.vue',
+        'components/ScheduleForm.vue',
+    ];
+}
+
+/**
+ * Filerna issue 425 äger: knappen, de fyra kontrollerna, och de fem befintliga
+ * formulär som nu består av dem.
+ *
+ * Rutan är smal med flit och av samma skäl som i issue 424: resten av
+ * resources/js bär råa färgklasser tills en sida ändå byggs om (ADR-0042
+ * § Konsekvenser). Provet gäller den ändring som är gjord, och `Ui*`-filerna
+ * räknas hit — en rå färgklass i knappen hade varit exakt samma fel som en i
+ * formuläret, och den hade inte fångats av någon annan regel.
+ *
+ * @return array<string, string> relativ sökväg → källkod utan kommentarer
+ */
+function designPrimitiverna(): array
+{
+    $filer = [];
+
+    foreach (File::glob(resource_path('js/components/Ui*.vue')) as $fil) {
+        $filer['components/'.basename($fil)] = designUtanKommentarer(File::get($fil));
+    }
+
+    foreach (designFormular() as $sokvag) {
+        $filer[$sokvag] = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
+    }
+
+    return $filer;
+}
+
+/**
+ * Råa färgklasser i en fil: en palettfärg, eller svart eller vitt, efter ett
+ * verktyg som målar. Adressen till sanningen är ADR-0042 § Beslut — rollen ska
+ * komma ur `@theme`, och en palettfärg är den färg rollen skulle ha ersatt.
+ *
+ * @return array<int, string> avvikelser som läsbara rader, tomt när filen är ren
+ */
+function designRaaFargklasser(string $sokvag, string $kod): array
+{
+    $palett = 'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
+    $verktyg = 'text|bg|border|ring|outline|divide|from|via|to|fill|stroke|placeholder|decoration|shadow|accent|caret';
+
+    preg_match_all(
+        '/\b(?:'.$verktyg.')-(?:(?:'.$palett.')-\d{2,3}|white|black)\b/',
+        $kod,
+        $träffar,
+        PREG_OFFSET_CAPTURE,
+    );
+
+    return array_map(fn (array $träff): string => sprintf(
+        '%s:%d använder %s — rollen ska komma ur @theme',
+        $sokvag,
+        substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
+        $träff[0],
+    ), $träffar[0]);
+}
+
+/**
+ * `<script setup>`-blocket i en .vue-fil, med kommentarer borta.
+ */
+function designScriptSetup(string $kod): string
+{
+    preg_match('#<script setup>(.*?)</script>#s', $kod, $träffar);
+
+    return $träffar[1] ?? '';
+}
+
+/**
  * Varje `class`-attribut i en fil, som rå klass-sträng.
  *
  * Attributvärdet matchas med citattecken runt om, så ett `>` inuti ett värde
@@ -76,6 +161,37 @@ function designKlasser(string $kod): array
         'rad' => substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
         'klasser' => $träff[0],
     ], $träffar[1]);
+}
+
+/**
+ * Varje anrop av en Ui-kontroll i en fil: komponentnamn, rå markup och rad.
+ *
+ * Attributen matchas med citattecken runt om, som i designKlasser: ett `>`
+ * inuti ett attributvärde hade annars avslutat taggen i förtid, och en
+ * kontroll vars id stod efter det hade setts som id-lös.
+ *
+ * @return array<int, array{namn: string, markup: string, rad: int}>
+ */
+function designKontrollanrop(string $kod): array
+{
+    preg_match_all(
+        '#<(UiInput|UiSelect|UiTextarea|UiCheckbox)\b((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>#s',
+        $kod,
+        $träffar,
+        PREG_OFFSET_CAPTURE,
+    );
+
+    $anrop = [];
+
+    foreach ($träffar[0] as $i => $hel) {
+        $anrop[] = [
+            'namn' => $träffar[1][$i][0],
+            'markup' => $hel[0],
+            'rad' => substr_count(substr($kod, 0, $hel[1]), "\n") + 1,
+        ];
+    }
+
+    return $anrop;
 }
 
 it('har varje roll i ADR-0042 som token', function () {
@@ -125,35 +241,140 @@ it('har varje roll i ADR-0042 som token', function () {
 it('bär inga råa färgklasser i FormField och FlashMessage', function () {
     // Ett `text-slate-800` är en färg någonstans i markupen; ett `text-ink` är
     // en roll. Provet gäller bara de två filerna — de trettiosex andra
-    // migreras av issue 98 och 99, och att fälla dem här hade varit att göra
+    // migreras av issue 425 och 99, och att fälla dem här hade varit att göra
     // deras arbete i förväg.
-    $palett = 'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
-    $verktyg = 'text|bg|border|ring|outline|divide|from|via|to|fill|stroke|placeholder|decoration|shadow|accent|caret';
-
     foreach (designKomponenter() as $sokvag => $kod) {
-        preg_match_all(
-            '/\b(?:'.$verktyg.')-(?:(?:'.$palett.')-\d{2,3}|white|black)\b/',
-            $kod,
-            $träffar,
-            PREG_OFFSET_CAPTURE,
-        );
-
-        $avvikelser = array_map(fn (array $träff): string => sprintf(
-            '%s:%d använder %s — rollen ska komma ur @theme',
-            $sokvag,
-            substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
-            $träff[0],
-        ), $träffar[0]);
-
-        expect($avvikelser)->toBe([]);
+        expect(designRaaFargklasser($sokvag, $kod))->toBe([]);
     }
+});
+
+it('bär inga råa färgklasser i de fem migrerade formulären', function () {
+    // Samma regel, men över de filer issue 425 rör: formulären och de
+    // komponenter de nu består av. En rå färgklass kvar i någon av dem är den
+    // sextonde knappen — arbetet halvgjort, och ingen regel hade sett det.
+    $filer = designPrimitiverna();
+
+    // Fyra kontroller och en knapp. Glober filerna bort blir loopen nedan
+    // tyst, och ett tyst prov är värre än inget.
+    expect(array_filter(
+        array_keys($filer),
+        fn (string $sokvag): bool => str_starts_with($sokvag, 'components/Ui'),
+    ))->toHaveCount(5);
+
+    foreach ($filer as $sokvag => $kod) {
+        expect(designRaaFargklasser($sokvag, $kod))->toBe([]);
+    }
+});
+
+it('bär ingen egen klientvalidering i Ui-kontrollerna', function () {
+    // Mönstret från issue 51 § Beslut 9 står kvar: valideringen bor på
+    // servern, i samma FormRequest som `/api` använder ([[ADR-0021
+    // Frontendteknik]]). En kontroll som smyger in en egen regel i JavaScript
+    // bygger den sextonde varianten av samma fel — den avvisar något servern
+    // hade accepterat, eller tvärtom, och `/api` och webben börjar svara olika
+    // på samma kropp.
+    //
+    // `required` och `min` i markupen är tillåtna och syns därför inte här:
+    // de ger tangentbords- och skärmläsarstöd. Provet gäller `<script setup>`.
+    $förbjudna = ['watch(', 'new RegExp', '.test(', 'minlength', 'maxlength', 'pattern', 'useForm'];
+
+    $kontroller = array_filter(
+        designPrimitiverna(),
+        fn (string $sokvag): bool => str_starts_with($sokvag, 'components/Ui'),
+        ARRAY_FILTER_USE_KEY,
+    );
+
+    expect($kontroller)->toHaveCount(5);
+
+    foreach ($kontroller as $sokvag => $kod) {
+        $script = designScriptSetup($kod);
+
+        foreach ($förbjudna as $markör) {
+            expect($script)->not->toContain($markör, sprintf(
+                '%s bär %s i <script setup> — valideringen bor i FormRequesten',
+                $sokvag,
+                $markör,
+            ));
+        }
+    }
+});
+
+it('bär id på varje Ui-kontroll i de fem migrerade formulären', function () {
+    // `id` är en `required` prop på de fyra kontrollerna, och det är ett
+    // dev-läges-kontrakt: en varning ingen läser är inget skydd, och 68a
+    // § Beslut 3 valde ett källkodsprov av just det skälet. Regeln flyttade
+    // från formulären in i komponenterna när issue 425 byggde dem, och provet
+    // följer med.
+    //
+    // Skälet står i issue 51 § Beslut 9: FormField äger etiketten och binder
+    // den med `for`, och en kontroll utan `id` får ett `for` som pekar på
+    // ingenting — skärmläsaren får ett namnlöst fält.
+    //
+    // GenomgangTests *"knyter varje etikett till sitt fält med for och id"*
+    // står kvar orörd: den mäter fortfarande de komponenter som inte
+    // migrerats, och den hade slutat se de här fälten i samma stund de bytte
+    // till en komponent.
+    $formularen = designFormular();
+    $anrop = 0;
+
+    expect($formularen)->toHaveCount(5);
+
+    foreach ($formularen as $sokvag) {
+        $kod = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
+
+        foreach (designKontrollanrop($kod) as $kontroll) {
+            $anrop++;
+
+            expect($kontroll['markup'])->toMatch('/(^|\s):?id="/', sprintf(
+                '%s:%d är en <%s> utan id — FormFields for pekar då på ingenting',
+                $sokvag,
+                $kontroll['rad'],
+                $kontroll['namn'],
+            ));
+        }
+    }
+
+    // Ett prov som letar i en tom mängd är tyst, och ett tyst prov är värre än
+    // inget. Golvet är de 25 anrop som finns i dag.
+    expect($anrop)->toBeGreaterThan(20);
+});
+
+it('ger UiButton fyra varianter och två storlekar', function () {
+    $kod = designUtanKommentarer(File::get(resource_path('js/components/UiButton.vue')));
+
+    // Fyra varianter, namngivna i ADR-0042 § Beslut: knappen är EN
+    // kärnkomponent, och de femton uppsättningar klasser den ersätter var
+    // varianter av samma sak. Ett namn till här är den sextonde.
+    foreach (['primary', 'secondary', 'quiet', 'danger'] as $variant) {
+        expect($kod)->toMatch(
+            "/\b{$variant}:/",
+            "UiButton saknar varianten {$variant} — den står i ADR-0042 § Beslut",
+        );
+    }
+
+    // Två storlekar. Den mindre kan inte heta `sm`: GenomgangTest läser `sm:`
+    // som en brytpunkt, och den enda brytpunkten uppåt är `md:`.
+    expect($kod)->toMatch('/\bmd:/', 'UiButton saknar storleken md');
+    expect($kod)->toMatch('/\bcompact:/', 'UiButton saknar storleken compact');
+
+    // Träffytan är 44 px i BÅDA storlekarna (issue 68a § Beslut 3). Den bor i
+    // den statiska klassen, alltså för varje knapp — en storlek som tappade
+    // den vore en knapp en tumme inte träffar.
+    expect($kod)->toMatch('/\bmin-h-11\b/', 'UiButton har en träffyta under 44 px');
 });
 
 it('gör fokusringen till en token och inte en nollställd outline', function () {
     // Regeln ur [[ADR-0042 Designsystemet]] § Beslut, och skälet till att den
     // står i FormFields docblock: 68a och 68b gick igenom hela frontenden med
     // tangentbord. En `outline-none` utan ersättning river det arbetet.
-    $komponenter = designKomponenter();
+    //
+    // Mängden växer med varje issue som migrerar en komponent: regeln gäller
+    // varje fil som nollställer en outline, inte bara de två första. Issue 425
+    // lägger till knappen och de fyra kontrollerna, och alla fem bär
+    // `focus-visible:` — ringen hör till tangentbordet, och webbläsarens egen
+    // heuristik låter ett textfält matcha den även vid musklick. FormFields
+    // felmeddelande bär `focus:`; det fokuseras av kod, inte av en tabb.
+    $komponenter = [...designKomponenter(), ...designPrimitiverna()];
 
     foreach ($komponenter as $sokvag => $kod) {
         foreach (designKlasser($kod) as $klass) {

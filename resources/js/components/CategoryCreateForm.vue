@@ -2,6 +2,9 @@
 import { computed } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import UiButton from './UiButton.vue';
+import UiInput from './UiInput.vue';
+import UiSelect from './UiSelect.vue';
 import { parentOptions } from './categoryTree.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
@@ -53,15 +56,13 @@ function submit() {
             id="category-create-name"
             :error="form.errors.name"
         >
-            <input
+            <UiInput
                 id="category-create-name"
                 v-model="form.name"
-                :aria-describedby="describedBy"
-                type="text"
+                :described-by="describedBy"
                 name="name"
                 required
-                class="rounded border border-slate-300 bg-white px-3 py-2"
-            >
+            />
         </FormField>
 
         <FormField
@@ -70,26 +71,21 @@ function submit() {
             id="category-create-parent"
             :error="form.errors.parent"
         >
-            <select
+            <UiSelect
                 id="category-create-parent"
                 v-model="form.parent"
-                :aria-describedby="describedBy"
+                :described-by="describedBy"
                 name="parent"
-                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
                 <option :value="null">{{ t('container.categories.parent_root') }}</option>
                 <option v-for="option in options" :key="option.ulid" :value="option.ulid">
                     {{ option.name }}
                 </option>
-            </select>
+            </UiSelect>
         </FormField>
 
-        <button
-            type="submit"
-            :disabled="form.processing"
-            class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-        >
+        <UiButton type="submit" :pending="form.processing" class="self-start">
             {{ form.processing ? t('common.pending.default') : t('container.categories.create') }}
-        </button>
+        </UiButton>
     </form>
 </template>
