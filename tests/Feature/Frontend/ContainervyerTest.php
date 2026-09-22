@@ -229,10 +229,19 @@ it('skickar användarens redan använda arter till båda formulären', function 
         ->where('container.account', $konto->ulid)
     );
 
-    expect(File::get(resource_path('js/layouts/containerSections.js')))
-        ->toContain('containerSections');
+    // Sedan issue 101 ritar layouten en flikrad och inte sektionsmenyn: den
+    // importerar `containerTabs`, och de sju sektionerna som lämnade raden
+    // ritas av inställningssidan ur `containerSettingsSections`. Båda listorna
+    // bor kvar i samma modul, så kunskapen om containerns sidor ligger
+    // fortfarande utanför vyerna.
+    $modul = File::get(resource_path('js/layouts/containerSections.js'));
+
+    expect($modul)->toContain('export const containerSections')
+        ->toContain('export const containerTabs')
+        ->toContain('export const containerSettingsSections');
+
     expect(File::get(resource_path('js/layouts/ContainerLayout.vue')))
-        ->toContain('v-for="section in containerSections"');
+        ->toContain('import { containerTabs } from');
 });
 
 /*

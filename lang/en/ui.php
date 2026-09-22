@@ -996,9 +996,15 @@ return [
         // första gången någon skrev en egen art.
 
         'nav' => [
-            // `items` comes first, like the row in containerSections.js: the
-            // items are the container, the categories and tags are how it is
-            // organised.
+            // Issue 101 · [[ADR-0042 Designsystemet]]: the tab row. `overview`
+            // has no row in containerSections.js — it is the container's OWN
+            // page and not a subpage (issue 89 · [[ADR-0039 Containerns
+            // översikt]]) — and is written in `containerTabs` instead. It is
+            // first because it is where the container opens.
+            'overview' => 'Overview',
+            // `items` comes first among the sections, like the row in
+            // containerSections.js: the items are the container, the
+            // categories and tags are how it is organised.
             'items' => 'Items',
             'categories' => 'Categories',
             'tags' => 'Tags',
@@ -1092,6 +1098,13 @@ return [
             // what the container falls back on has to be readable on the page.
             'currency' => 'Currency',
             'currency_hint' => 'Three letters, for example SEK. Leave the field empty and the container uses the account\'s currency (:currency).',
+
+            // Issue 101: the seven sections that did not fit in the tab row are
+            // gathered here — categories, tags, sharing, the calendar link, the
+            // export, the trash and the ownership transfer. The heading is the
+            // list's visible name and the `nav`'s accessible one: a list of
+            // links without a name is a list a screen reader reads as "list".
+            'sections' => 'More in this container',
 
             'submit' => 'Save',
         ],
