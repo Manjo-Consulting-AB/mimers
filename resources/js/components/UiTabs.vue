@@ -33,16 +33,34 @@ import UiBadge from './UiBadge.vue';
  * håller inget `ref` med valet i. Den som ändå lägger ett tillstånd här får
  * två sanningar så fort användaren klickar i webbläsarens historik.
  *
- * Träffen går i två steg, och båda behövs:
+ * **Träffen är en regel med två villkor, och båda behövs:**
  *
- *   1. **Hela adressen, querysträng inräknad.** Itemets flikar ligger på samma
- *      sida och skiljs bara av sin querysträng — samma konstruktion som
- *      `?path=` i issue 95 — så en träff på sökvägen hade tänt alla sex.
- *   2. **Sökvägen, och den LÄNGSTA träffen vinner.** Containerns flikar är
- *      egna sidor, och ett filter i adressen (issue 59a) ska inte släcka
- *      fliken man står på. Längsta träffen behövs därför att översiktens
- *      adress är ett prefix till varandra fliks: `/containers/{ulid}` matchar
- *      varje undersida, och utan regeln hade översikten lyst på alla.
+ *   1. **Sökvägen.** Flikens sökväg är lika med adressens, eller ett prefix av
+ *      den vid en segmentgräns: `/containers/{ulid}` matchar
+ *      `/containers/{ulid}/items/{ulid}`. Översiktens sökväg är ett prefix
+ *      till varandra fliks — därav villkor 2.
+ *   2. **Flikens EGNA parametrar.** Varje queryparameter som står i flikens
+ *      `href` ska ha samma värde i adressen. Parametrar som bara finns i
+ *      adressen ignoreras.
+ *
+ * Itemets sex flikar ligger på samma sökväg och skiljs bara av sin querysträng
+ * — samma konstruktion som `?path=` i issue 95 — så en träff på sökvägen hade
+ * tänt alla sex. Och en jämförelse av HELA adressen hade släckt fliken man står
+ * på så fort en främmande parameter kom in: `?tab=relations&sort=name` är
+ * ingen fliks `href`, och `sort` är issue 59a:s filter, inte flikens.
+ *
+ * Bland de flikar som matchar vinner den med **flest matchade parametrar**,
+ * sedan den med **längst sökväg**, sedan den **första i listan**. Ordningen är
+ * hela poängen och inte en detalj: det är så `?tab=relations&sort=name` blir
+ * entydig, och så översikten slutar lysa på varje undersida.
+ *
+ * Två följder för anroparen, och de är bindande:
+ *
+ *   - **Översiktsfliken skrivs utan querysträng.** Den är vilotillståndet, och
+ *     det är villkor 2 som gör den entydig.
+ *   - **Komponenten känner inte till parameterns namn.** Den jämför de
+ *     parametrar anroparen råkar skriva i sin `href`; namnet väljs i issue 102
+ *     och ska vara engelskt (AGENTS.md § Språk i koden) — `tab`, inte `flik`.
  *
  * **Tangentbordet är inte en efterhandsfråga** (issue 68a och 68b gick igenom
  * hela frontenden). Roving tabindex: bara den aktiva fliken är tabbbar
@@ -85,25 +103,65 @@ const props = defineProps({
 const page = usePage();
 
 /*
- * Den aktiva fliken, läst ur adressen. Se docblocken ovan för de två stegen —
- * ordningen mellan dem är hela poängen och inte en detalj.
+ * En adress delad i sökväg och parametrar. `URLSearchParams` tolkar
+ * procentkodning och `+` åt oss: `?tag=verk%20tyg` och `?tag=verk+tyg` är
+ * samma värde, och en jämförelse på råtext hade sagt nej om det ena.
  */
-const activeKey = computed(() => {
-    const url = page.url;
+function splitAddress(address) {
+    const [path, query = ''] = address.split('?');
 
-    const exact = props.tabs.find((tab) => tab.href === url);
+    return { path, params: new URLSearchParams(query) };
+}
 
-    if (exact !== undefined) {
-        return exact.key;
+/*
+ * Villkor 1 och 2 ovan, i den ordningen: sökvägen först, och sedan varje
+ * parameter i flikens egen `href` mot adressen. Loopen går över FLIKENS
+ * parametrar och slår upp dem i adressen — aldrig tvärtom, för det är så en
+ * främmande parameter förblir ignorerad.
+ */
+function matches(tab, current) {
+    if (current.path !== tab.path && !current.path.startsWith(`${tab.path}/`)) {
+        return false;
     }
 
-    const path = url.split('?')[0];
+    for (const [name, value] of tab.params) {
+        if (current.params.get(name) !== value) {
+            return false;
+        }
+    }
 
-    const hit = props.tabs
-        .filter((tab) => path === tab.href || path.startsWith(`${tab.href}/`))
-        .sort((a, b) => b.href.length - a.href.length)[0];
+    return true;
+}
 
-    return hit?.key ?? null;
+/*
+ * Den aktiva fliken, läst ur adressen — se docblocken ovan för regeln och
+ * rangordningen. `best` är kandidaten som leder; en senare flik tar över bara
+ * när den är STRICKT bättre, och därför vinner den första i listan vid lika.
+ */
+const activeKey = computed(() => {
+    const current = splitAddress(page.url);
+
+    let best = null;
+
+    for (const tab of props.tabs) {
+        const address = splitAddress(tab.href);
+
+        if (!matches(address, current)) {
+            continue;
+        }
+
+        const matched = [...address.params].length;
+        const better =
+            best === null ||
+            matched > best.matched ||
+            (matched === best.matched && address.path.length > best.path.length);
+
+        if (better) {
+            best = { key: tab.key, matched, path: address.path };
+        }
+    }
+
+    return best?.key ?? null;
 });
 
 const activeIndex = computed(() => props.tabs.findIndex((tab) => tab.key === activeKey.value));

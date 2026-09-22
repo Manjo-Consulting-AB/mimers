@@ -12,8 +12,9 @@ use Illuminate\Support\Facades\File;
  * 102. Det som går att pröva på serversidan är därför formen på källkoden:
  * att etiketten och räknaren kommer från anroparen, att tangentbordet följer
  * WAI-ARIA:s mönster för en tablist, att `aria-selected` följer den aktiva
- * fliken, och att den aktiva fliken läses ur adressen i stället för ur ett
- * tillstånd i komponenten.
+ * fliken, att den aktiva fliken läses ur adressen i stället för ur ett
+ * tillstånd i komponenten, och vilken flik som är aktiv när adressen bär både
+ * flikens egen parameter och en främmande.
  *
  * **Det som INTE prövas här** är det som kräver en webbläsare: att raden ser
  * ut som `container.jpeg` och `struktur - item.jpeg`, att fokusringen syns,
@@ -280,4 +281,94 @@ it('har den aktiva fliken i adressen och inte i komponentens tillstånd', functi
     // `page.url` bara ett namn som nämns i förbigående.
     expect($script)->toMatch('/computed\(.*?page\.url/s', 'adressen jämförs aldrig med flikarna');
     expect($script)->toMatch('/tab\.href/', 'flikarnas adresser jämförs aldrig med sidans');
+});
+
+/*
+ * Arkitektsvaret på issue 100 skärpte träffen mot adressen, och det här provet
+ * är det som håller skärpningen. Den gamla regeln — hela adressen querysträng
+ * inräknad, annars längsta sökväg — höll inte för en flik som bär BÅDE sin egen
+ * parameter och en främmande:
+ *
+ *   /containers/X/items/Y?tab=relations&sort=name
+ *
+ * Exaktträffen missar (`&sort=name` står inte i någon fliks href), och
+ * fallbacken jämför sökvägar som itemets sex flikar delar — den längsta träffen
+ * är ett sexvägars oavgjort som den första fliken vinner. Översikten hade alltså
+ * lyst medan relationsfliken stod tom, och `sort` är issue 59a:s filter och inte
+ * flikens.
+ *
+ * Regeln är i stället två villkor: flikens sökväg är lika med adressens eller
+ * ett prefix av den vid en segmentgräns, OCH varje parameter i flikens egen
+ * `href` har samma värde i adressen. Bland de matchande vinner flest matchade
+ * parametrar, sedan längst sökväg, sedan den första i listan.
+ *
+ * Källkodsprov som de andra i filen: regeln bor i en `computed` i komponenten,
+ * och ingen rutt renderar flikraden ännu — containerns rad är issue 101 och
+ * itemets 102. Det som går att pröva är därför att de två villkoren och
+ * rangordningen FINNS i källkoden, och att den gamla regeln inte gör det.
+ */
+it('håller fliken aktiv när adressen bär både flikens parameter och en främmande', function () {
+    $kod = flikradKod();
+    $script = flikradScript($kod);
+
+    expect($script)->not->toBe('', 'UiTabs har inget <script setup>');
+
+    // Båda sidorna läses LIKADANT, och det är den ena regeln: adressen och
+    // flikens href delas upp i sökväg och parametrar av samma hjälpare. En
+    // jämförelse som läste den ena av dem rått kunde inte skilja `sort` från
+    // `tab`. Hjälparen hittas på att den används på båda — namnet är fritt.
+    preg_match_all('/function (\w+)\(/', $script, $träffar);
+
+    $delare = array_values(array_filter(
+        $träffar[1],
+        fn (string $namn): bool => str_contains($script, "{$namn}(page.url)")
+            && str_contains($script, "{$namn}(tab.href)"),
+    ));
+
+    expect($delare)->not->toBeEmpty(
+        'adressen och flikens href delas inte upp på samma sätt — då går flikens parametrar inte att skilja från adressens',
+    );
+
+    // Och uppdelningen tar querysträngen med sig. Utan den är `?tab=relations`
+    // och `?tab=overview` samma sökväg, alltså samma flik.
+    expect($script)->toMatch(flikradText("split('?')"), 'adressen delas inte i sökväg och querysträng');
+    expect($script)->toMatch(flikradText('URLSearchParams'), 'parametrarna läses inte ur adressen');
+
+    // Villkor 1: prefixet prövas vid en SEGMENTGRÄNS. Utan snedstrecket hade
+    // `/containers/X` matchat `/containers/XYZ`, och översikten hade lyst på en
+    // främmande container.
+    expect($script)->toMatch(
+        '/\$\{tab\.path\}\//',
+        'prefixet prövas utan segmentgräns — /containers/X matchar då /containers/XYZ',
+    );
+
+    // Villkor 2, och riktningen är hela poängen: loopen går över FLIKENS
+    // parametrar och slår upp dem i adressen. Den som loopar över adressens
+    // parametrar kräver i stället att fliken bär varje parameter adressen råkar
+    // ha, och då släcker `sort` fliken man står på.
+    expect($script)->toMatch(
+        '/of tab\.params\)/',
+        'flikens egna parametrar läses inte — främmande parametrar kan då inte ignoreras',
+    );
+
+    expect($script)->toMatch(
+        '/params\.get\(/',
+        'ingen parameter slås upp i adressen — flikens parametrar jämförs inte med något',
+    );
+
+    // Och den gamla regeln är borta. `tab.href === url` är hela adressen mot
+    // flikens, och den faller på `?tab=relations&sort=name`: ingen fliks href
+    // bär `sort`, så ingen flik matchar alls.
+    expect($script)->not->toMatch(
+        '/tab\.href\s*==|==\s*tab\.href/',
+        'hela adressen jämförs med flikens href — en främmande parameter släcker då fliken',
+    );
+
+    // Rangordningen: flest matchade parametrar FÖRE längst sökväg. Båda behövs
+    // och i den ordningen — `?tab=relations` slår översikten på en matchad
+    // parameter, och översikten slår undersidorna på längst sökväg.
+    expect($script)->toMatch(
+        '/matched\s*>\s*\w+\.matched.*?path\.length/s',
+        'rangordningen jämför sökvägen före antalet matchade parametrar',
+    );
 });
