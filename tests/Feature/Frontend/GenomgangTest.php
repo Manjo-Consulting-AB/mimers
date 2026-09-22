@@ -290,16 +290,21 @@ it('använder md: som enda brytpunkt', function () {
     expect($avvikelser)->toBe([]);
 });
 
-it('fäller ihop navigeringen på en telefon i alla tre layouterna', function () {
-    // De tre ytorna beslutet namnger: AppLayouts toppnavigering,
-    // ContainerLayouts sektioner och SettingsLayouts sidlista (Beslut 2).
-    // Var och en ska ha en menyknapp som bara syns under `md:` (`md:hidden`),
-    // annonsera sitt läge (`aria-expanded`) och peka ut listan den styr
-    // (`aria-controls`) — och listan ska stå framme över `md:` (`md:flex`)
-    // och vara fälld under den.
+it('fäller ihop navigeringen på en telefon i skalets båda layouter', function () {
+    // De ytor beslutet namnger: AppLayouts toppnavigering och SettingsLayouts
+    // sidlista (Beslut 2). Var och en ska ha en menyknapp som bara syns under
+    // `md:` (`md:hidden`), annonsera sitt läge (`aria-expanded`) och peka ut
+    // listan den styr (`aria-controls`) — och listan ska stå framme över `md:`
+    // (`md:flex`) och vara fälld under den.
+    //
+    // **ContainerLayout står inte längre här** (issue 101). Dess sektionsmeny
+    // är en flikrad byggd av `UiTabs`, och den fälls inte ihop: ett band flikar
+    // bryter (`flex-wrap`) i stället för att skrolla i sidled, vilket är
+    // samma svar på samma problem — nio rader man skrollar förbi är en vägg,
+    // ett band är en rad. Att raden inte skrollar i sidled prövas av testet
+    // ovan, som gäller varje fil under resources/js.
     $layouter = [
         'layouts/AppLayout.vue',
-        'layouts/ContainerLayout.vue',
         'layouts/SettingsLayout.vue',
     ];
 
@@ -396,13 +401,25 @@ it('skrollar ingen sida i sidled', function () {
 
 it('renderar sektionslistorna ur samma moduler som förut', function () {
     // Beslut 2:s andra mening: en ny sektion ska fortsätta fungera utan att
-    // någon rör layouten (54 § Beslut 7). Genomgången får inte ha flyttat
-    // kunskapen om sektionerna in i layouten.
-    foreach (['layouts/ContainerLayout.vue' => 'containerSections', 'layouts/SettingsLayout.vue' => 'settingsSections'] as $layout => $modul) {
-        $kod = genomgangKod()[$layout];
+    // någon rör ytan som visar den (54 § Beslut 7). Genomgången får inte ha
+    // flyttat kunskapen om sektionerna in i en vy.
+    //
+    // Sedan issue 101 finns sektionerna på TVÅ ytor, och båda läser sin lista
+    // ur samma modul som förut: flikraden i ContainerLayout ritar
+    // `containerTabs` (och mappar den till UiTabs i stället för att rendera
+    // länkar själv), och inställningssidan ritar `containerSettingsSections`
+    // med `v-for` precis som SettingsLayout ritar `settingsSections`.
+    $ytor = [
+        'layouts/ContainerLayout.vue' => ['containerTabs', 'containerTabs.map('],
+        'pages/Containers/Edit.vue' => ['containerSettingsSections', 'v-for="section in containerSettingsSections"'],
+        'layouts/SettingsLayout.vue' => ['settingsSections', 'v-for="section in settingsSections"'],
+    ];
 
-        expect(str_contains($kod, "import { {$modul} }"))->toBeTrue("{$layout} importerar inte {$modul}");
-        expect(str_contains($kod, 'v-for="section in'))->toBeTrue("{$layout} renderar inte sin lista med v-for");
+    foreach ($ytor as $yta => [$modul, $rendering]) {
+        $kod = genomgangKod()[$yta];
+
+        expect(str_contains($kod, "import { {$modul} }"))->toBeTrue("{$yta} importerar inte {$modul}");
+        expect(str_contains($kod, $rendering))->toBeTrue("{$yta} renderar inte sin lista ur {$modul}");
     }
 });
 

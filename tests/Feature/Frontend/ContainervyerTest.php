@@ -229,10 +229,19 @@ it('skickar användarens redan använda arter till båda formulären', function 
         ->where('container.account', $konto->ulid)
     );
 
-    expect(File::get(resource_path('js/layouts/containerSections.js')))
-        ->toContain('containerSections');
+    // Sedan issue 101 ritar layouten en flikrad och inte sektionsmenyn: den
+    // importerar `containerTabs`, och de sju sektionerna som lämnade raden
+    // ritas av inställningssidan ur `containerSettingsSections`. Båda listorna
+    // bor kvar i samma modul, så kunskapen om containerns sidor ligger
+    // fortfarande utanför vyerna.
+    $modul = File::get(resource_path('js/layouts/containerSections.js'));
+
+    expect($modul)->toContain('export const containerSections')
+        ->toContain('export const containerTabs')
+        ->toContain('export const containerSettingsSections');
+
     expect(File::get(resource_path('js/layouts/ContainerLayout.vue')))
-        ->toContain('v-for="section in containerSections"');
+        ->toContain('import { containerTabs } from');
 });
 
 /*
@@ -574,10 +583,11 @@ it('sparar namn och typ för en medlem i ägarkontot', function () {
 
 /*
  * Beslut 9: `can.update` räknas med policyn per rad, och rutterna
- * auktoriserar ändå. En containerbred `write` får redigera; en `read` nekas
- * och får ingen flagga — alltså ingen länk i listan.
+ * auktoriserar ändå. En containerbred `write` får redigera; en `read` når
+ * SIDAN — den är containerns samlingsplats och grindas på `view` sedan issue
+ * 101 — men får varken flaggan eller skrivningen.
  */
-it('låter en containerbred write-access redigera men nekar en read', function () {
+it('låter en containerbred write-access redigera men nekar en read att spara', function () {
     withoutVite();
 
     [, , $container] = containerKontext();
@@ -591,9 +601,19 @@ it('låter en containerbred write-access redigera men nekar en read', function (
     actingAs($skrivare)
         ->get("/containers/{$container->ulid}/edit")
         ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('container.ulid', $container->ulid));
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('container.ulid', $container->ulid)
+            ->where('can.update', true)
+        );
 
-    actingAs($lasare)->get("/containers/{$container->ulid}/edit")->assertForbidden();
+    // Läsaren ser de sju sektionerna — var och en är `view`-grindad — men
+    // inget formulär. Den grenen är flaggan, och grinden är `update()` på
+    // PATCH-raden nedan, som är kvar som 403.
+    actingAs($lasare)
+        ->get("/containers/{$container->ulid}/edit")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
+
     actingAs($lasare)->patch("/containers/{$container->ulid}", ['name' => 'Tjuvnamn'])->assertForbidden();
 
     expect($container->fresh()->name)->toBe($container->name);
@@ -611,6 +631,12 @@ it('låter en containerbred write-access redigera men nekar en read', function (
  * Issue 70: ContainerPolicy::update() kräver en CONTAINERBRED rad. En
  * itemåtkomst på `write` får inte byta namn på containern — annars hade en
  * itemgrant blivit en ContainerPolicy::create() i smyg.
+ *
+ * Hon når däremot SIDAN sedan issue 101: `view()` sätter aldrig ett
+ * `item_id IS NULL`-filter, just för att en omfångsbegränsad mottagare måste
+ * nå containerrutten (issue 69 § Beslut 4). Flaggan är falsk, formuläret ritas
+ * inte, och PATCH nekas av `update()` — det är den raden som bär issue 70:s
+ * skäl, inte GET-raden.
  */
 it('nekar en itemåtkomst på write att redigera containern', function () {
     withoutVite();
@@ -621,7 +647,14 @@ it('nekar en itemåtkomst på write att redigera containern', function () {
     $item = Item::factory()->for($container, 'container')->create();
     containerGrant($container, $mottagare, 'write', $item);
 
-    actingAs($mottagare)->get("/containers/{$container->ulid}/edit")->assertForbidden();
+    actingAs($mottagare)
+        ->get("/containers/{$container->ulid}/edit")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
+
+    actingAs($mottagare)->patch("/containers/{$container->ulid}", ['name' => 'Tjuvnamn'])->assertForbidden();
+
+    expect($container->fresh()->name)->toBe($container->name);
 
     actingAs($mottagare)->get('/containers')->assertInertia(fn (AssertableInertia $page) => $page
         ->has('containers', 1)
