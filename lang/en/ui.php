@@ -1234,10 +1234,27 @@ return [
         ],
 
         'show' => [
+            // The two tabs that have no section of their own to borrow a word
+            // from, see issue 102 · [[M17 Designsystemet]] § 102. The other
+            // five read the heading of the section they carry — one surface,
+            // one word, and no second place for *Relations* to drift from.
+            //
+            // `overview` is the item's own text and the resting tab: it is
+            // written without a query string, and `details` is the mockup's
+            // *Detaljer* — the rows `itemFields` returns.
+            'overview' => 'Overview',
+            'details' => 'Details',
+
             'description' => 'Description',
             // Issue 96. `description` says what the item IS, `notes` what the
-            // user KNOWS about it — two rows, never one merged text.
+            // user KNOWS about it — two rows, never one merged text. On the
+            // overview tab they are the two leading fields of the item, and
+            // the words label one paragraph each.
             'notes' => 'Notes',
+            // The overview tab with nothing written in it. The tab is the
+            // first thing a reader meets, and an empty panel there says the
+            // page is broken — this line says the item is unwritten.
+            'overview_empty' => 'Nothing is written about this item yet.',
             'manufacturer' => 'Manufacturer',
             'model' => 'Model',
             'serial_number' => 'Serial number',

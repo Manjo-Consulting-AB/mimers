@@ -20,6 +20,13 @@
  * och inte en uppgift ur datat. Regeln är en rad kod, och den bor här för att
  * gå att pröva: den sortens filter glider isär när det skrivs i en mall.
  *
+ * **Listan är DETALJFLIKENS rader** (issue 102 · [[M17 Designsystemet]] § 102).
+ * Itemets vy är en flikrad, och `description` och `notes` står inte här: de är
+ * översiktsflikens ledande stycken och ingen rad bland tillverkare och modell
+ * ([[ADR-0041 Itemets vy]] § Beslut, issue 96). Modulens avgränsning är
+ * därmed flikens och inte itemets — den som lägger ett fält här lägger det på
+ * detaljfliken.
+ *
  * Egen modul och inte rader i vyn: båda funktionerna går att köra i node, och
  * en mall går inte att pröva.
  */
@@ -40,20 +47,13 @@ export function formatDateOnly(value, locale) {
 
 /*
  * Rader i den ordning [[Items och organisation]] § item räknar dem. Namnet är
- * detaljvyns rubrik och är därför inte med.
+ * detaljvyns rubrik och är därför inte med, och varken `description` eller
+ * `notes` är det heller — se docblocken ovan.
  *
  * `key` är också sista ledet i översättningsnyckeln (`item.show.<key>`).
- *
- * `notes` (issue 96) är en EGEN rad och inte en fortsättning på
- * `description`: beskrivningen säger vad itemet ÄR, anteckningen vad
- * användaren VET om det. Ingen fallback åt något håll — är anteckningen tom
- * utelämnas raden som varje annan tom rad, och beskrivningen står kvar orörd
- * ovanför.
  */
 export function itemFields(item, locale) {
     return [
-        { key: 'description', value: item.description },
-        { key: 'notes', value: item.notes },
         { key: 'manufacturer', value: item.manufacturer },
         { key: 'model', value: item.model },
         { key: 'serial_number', value: item.serial_number },
