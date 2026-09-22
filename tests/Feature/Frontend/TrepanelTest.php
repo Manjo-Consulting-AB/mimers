@@ -462,6 +462,15 @@ it('staplar panelerna på smal skärm med strukturen utfällbar', function () {
         ->toContain('<summary')
         ->toContain('<ItemStructureTree');
 
+    // Och taket: en öppen `<details>` utan höjdtak är i praktiken den egna sida
+    // staplingen inte får vara — hela containerns träd står då mellan användaren
+    // och itemet vid varje sidladdning. Trädet skrollar i höjdled under `md:`
+    // och är fritt däröver; `md:` är fortfarande enda brytpunkten.
+    expect($panelen)->toContain('max-h-80')
+        ->toContain('overflow-y-auto')
+        ->toContain('md:max-h-none')
+        ->toContain('md:overflow-visible');
+
     // Trädet står INUTI den utfällbara ytan — en `<details>` runt en rubrik
     // hade varit en fällning utan innehåll.
     expect(strpos($panelen, '<ItemStructureTree'))->toBeGreaterThan((int) strpos($panelen, '<summary'));

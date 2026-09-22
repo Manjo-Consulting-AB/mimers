@@ -25,6 +25,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * stå i vägen för itemet; över `md:` står panelerna sida vid sida och ytan är
  * öppen som förut. Den är öppen i källan (`open`) med flit: en panel som
  * startade fälld hade gömt trädet på den breda skärmen, där bilden visar det.
+ * Under `md:` har trädet ett höjdtak och skrollar i stället för att skjuta
+ * itemet nedanför sig — en öppen `<details>` utan tak är i praktiken den egna
+ * sida staplingen inte får vara, eftersom hela containerns träd då står mellan
+ * användaren och itemet vid varje sidladdning. `overflow-x` rörs inte;
+ * `md:` är fortfarande enda brytpunkten.
  *
  * **Ingen egen tom-text.** Ett tomt träd ritar ingenting — se
  * ItemStructureTree.vue — och panelen säger varken att containern är tom eller
@@ -51,7 +56,7 @@ const { t } = useTranslations();
             </summary>
 
             <ItemStructureTree
-                class="mt-2"
+                class="mt-2 max-h-80 overflow-y-auto md:max-h-none md:overflow-visible"
                 :nodes="nodes"
                 :container-ulid="containerUlid"
                 :trail="[]"
