@@ -20,6 +20,7 @@ use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTrashController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ExportDownloadController;
+use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
 use App\Http\Controllers\InvitationResponseController;
@@ -547,6 +548,46 @@ Route::middleware('auth')->group(function () {
     Route::get('/containers/{container}/items/{item}', [ItemController::class, 'show'])
         ->scopeBindings()
         ->name('containers.items.show');
+
+    /*
+     * Issue 105 · Favoritmarkeringen — stjärnan i itemets huvud, se
+     * App\Http\Controllers\FavoriteController och [[ADR-0042 Designsystemet]]
+     * § Konsekvenser.
+     *
+     * **Två rutter och ingen sida.** Stjärnan sitter i itemets huvud på
+     * detaljvyn, och markeringen är en växling: POST märker, DELETE
+     * tar bort. Ingen GET — listan är issue 106 och ligger i skalet, och
+     * ingen resurs ändras: `ItemResource` har inget fält för markeringen,
+     * för en favorit är ett faktum om relationen mellan en användare och ett
+     * item och inte om itemet.
+     *
+     * **Samma sökväg och samma singular.** En användare har högst EN
+     * markering per item, så resursen är itemets egen `favorite` och inte en
+     * samling — samma form som `/calendar` och `/export`, och motsatsen
+     * till `loans` och `links`, som är listor. Sökvägen är därför identisk på
+     * båda rutterna och metoderna skiljer dem åt.
+     *
+     * **`scopeBindings()` på båda**, av exakt samma skäl som itemets övriga
+     * rutter (issue 9b § Beslut 1): `{item}` löses genom containerns
+     * `items()`, så en item-ULID från en annan container blir 404 i stället
+     * för märkt.
+     *
+     * Grinden är `view` på itemet — markeringen speglar åtkomsten, den ger
+     * den inte ([[ADR-0028 Åtkomst på itemnivå]] § Beslut). Ingen ny
+     * åtkomstregel och ingen ändring i App\Actions\Access\ResolveItemScope.
+     *
+     * Båda svarar `back()` med en flash-kod — mönstret från issue 51
+     * § Beslut 5, `status` och ingenting annat — och inte en omdirigering
+     * till itemets rutt: sidan bär `?tab=` och `?path=`, och de två hade
+     * tappats på vägen.
+     */
+    Route::post('/containers/{container}/items/{item}/favorite', [FavoriteController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.favorite.store');
+
+    Route::delete('/containers/{container}/items/{item}/favorite', [FavoriteController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.favorite.destroy');
 
     /*
      * Issue 67a · Utlåningen — markera utlånat, ändra och registrera

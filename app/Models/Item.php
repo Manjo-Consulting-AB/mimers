@@ -292,6 +292,24 @@ class Item extends Model
     }
 
     /**
+     * Markeringarna på det här itemet — vilka som har det som favorit, se
+     * [[ADR-0042 Designsystemet]] § Konsekvenser och [[M17 Designsystemet]]
+     * § 105. Spegeln av App\Models\User::favorites(), och den sida av paret
+     * som det omvända indexet `(item_id, user_id)` bär.
+     *
+     * Relationen är "vilka har märkt itemet", aldrig "itemet är en favorit":
+     * en favorit är ett faktum om relationen mellan en användare och ett
+     * item, och det finns därför ingen flagga att läsa på itemet självt —
+     * och inget fält i App\Http\Resources\ItemResource.
+     *
+     * @return HasMany<Favorite, $this>
+     */
+    public function favoritedBy(): HasMany
+    {
+        return $this->hasMany(Favorite::class);
+    }
+
+    /**
      * Länkarna där det här itemet är från-sidan (`from_item_id`), se
      * [[Items och organisation]] § item_link och issue 14. Tillsammans med
      * linksTo() täcker de LÄSNINGEN i

@@ -165,6 +165,14 @@ return [
         // deleted hard (issue 14 decision 10), but both items remain.
         'item-link-removed' => 'The link is gone. Both items remain.',
 
+        // Issue 105. The star in the item's head is the only surface, and the
+        // two codes say what happened to the MARKING — never that the item
+        // changed. A favourite is a fact about the relationship between a
+        // user and an item ([[ADR-0042 Designsystemet]] § Konsekvenser), so
+        // the sentence says *favourite* and nothing about the item itself.
+        'favorite-added' => 'The item is one of your favourites.',
+        'favorite-removed' => 'The item is no longer one of your favourites.',
+
         // Issue 60 decision 9. The attachment is soft-deleted — `deleted_at`
         // is set and the bytes stay until the trash purges them (ADR-0008) —
         // so the sentence says the trash and the 30 days, never "deleted".
@@ -1313,6 +1321,16 @@ return [
             'placements' => 'Placements in the structure',
             'placement_current' => 'Current',
             'breadcrumb' => 'Where this item sits',
+
+            // The star in the item's head, see issue 105. The two strings are
+            // the toggle's accessible name and never visible text: the star
+            // itself is the surface, and `aria-pressed` carries the state
+            // ([[ADR-0042 Designsystemet]] § Konsekvenser). The name says what
+            // the press DOES, so it flips with the state — a button labelled
+            // "Add to favourites" while it is already a favourite describes
+            // the wrong action.
+            'favorite_add' => 'Add to favourites',
+            'favorite_remove' => 'Remove from favourites',
         ],
 
         // The left-hand panel of the three-panel layout, see issue 103 and

@@ -1054,6 +1054,15 @@ it('lägger delningssidan i containerns navigation', function () {
  * § Gränserna i MVP). Raden den skriver är beställarens EGET ärende —
  * jobbet packar det hon själv når (issue 74 § Beslut 8) — och resultatet
  * delas med ingen.
+ *
+ * Sedan issue 105 finns favoritens POST här. Den skriver en `favorite`-rad —
+ * ett bokmärke på ett item — och rör inga `container_access`-rader alls:
+ * grinden är `view` på ITEMET ([[ADR-0042 Designsystemet]] § Konsekvenser),
+ * alltså samma grind som avgör om hon får LÄSA itemet. Markeringen speglar
+ * åtkomsten, den ger den inte ([[ADR-0028 Åtkomst på itemnivå]] § Beslut):
+ * raden pekar på den inloggade användaren själv, ingen ny läsare och ingen ny
+ * mottagare läggs till, och ett item utanför omfånget ger 403 — den som inte
+ * får se itemet får heller inte märka det.
  */
 it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $rutter = collect(app('router')->getRoutes()->getRoutes());
@@ -1061,14 +1070,15 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
     $poster = $rutter->filter(fn ($rutt) => $rutt->methods() === ['POST']
         && ($rutt->uri() === 'containers' || str_starts_with($rutt->uri(), 'containers/')));
 
-    // Itemet, utlåningen, relationen, bilagan, schemat, förekomstens två
-    // avslut, containerns eget skapande, kalenderlänken, inbjudan, ägarbytet,
-    // exporten, kategorin, uppsättningen, taggen och papperskorgen. Ingen
-    // /accesses.
+    // Itemet, favoriten, utlåningen, relationen, bilagan, schemat,
+    // förekomstens två avslut, containerns eget skapande, kalenderlänken,
+    // inbjudan, ägarbytet, exporten, kategorin, uppsättningen, taggen och
+    // papperskorgen. Ingen /accesses.
     // Ordningen är registreringsordningen i routes/web.php — itemrutterna
     // ligger ovanför `POST /containers`.
     expect($poster->pluck('uri')->values()->all())->toBe([
         'containers/{container}/items',
+        'containers/{container}/items/{item}/favorite',
         'containers/{container}/items/{item}/loans',
         'containers/{container}/items/{item}/links',
         'containers/{container}/items/{item}/attachments',

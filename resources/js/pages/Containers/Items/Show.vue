@@ -226,6 +226,20 @@ const props = defineProps({
     /* Serverns datum, `Y-m-d` — "Tillbaka idag" sätter det (Beslut 3). */
     today: { type: String, required: true },
     can: { type: Object, required: true },
+    /*
+     * Är itemet en av användarens favoriter? Se issue 105 och
+     * [[ADR-0042 Designsystemet]] § Konsekvenser.
+     *
+     * Frågan är per ANVÄNDARE och besvaras av servern:
+     * `App\Models\Favorite` är en pivot mellan personen och itemet, och
+     * vyn kan inte sluta sig till svaret ur `item` — `ItemResource` bär
+     * inget fält för markeringen, med flit. En flagga på itemet hade gjort
+     * en användares markering till allas i en delad container.
+     *
+     * `false` är standarden: stjärnan ritas omärkt när svaret inte säger
+     * något annat, och ett klick märker itemet.
+     */
+    isFavorite: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -400,6 +414,39 @@ function destroy() {
         onFinish: () => { pending.value = false; },
     });
 }
+
+/*
+ * Stjärnan (issue 105). En VÄXLING: POST märker itemet, DELETE tar bort
+ * markeringen, och båda svarar `back()` med en flash-kod. `preserveScroll`
+ * håller kvar läsaren där hon stod — ett klick på stjärnan är ingen
+ * navigering, och svaret är ändå samma sida.
+ *
+ * Adressen är itemets, och markeringen är användarens egen: den som stjärnan
+ * tillhör är den inloggade, aldrig en propp i kroppen (samma regel som
+ * `account` i de andra skrivningarna — servern läser subjektet ur sessionen).
+ *
+ * `favoritePending` är stjärnans eget vänteläge, samma mönster som `pending`
+ * för raderingen (issue 68a § Beslut 4 och 5): knappen är stängd medan
+ * servern svarar, så ett dubbelklick inte blir två skrivningar. Servern tål
+ * dem ändå — paret `(user_id, item_id)` är unikt — men en knapp som svarar
+ * på det första klicket är ärligare än en som tiger.
+ */
+const favoritePending = ref(false);
+
+function toggleFavorite() {
+    const url = `/containers/${props.container.ulid}/items/${props.item.ulid}/favorite`;
+    const options = {
+        preserveScroll: true,
+        onStart: () => { favoritePending.value = true; },
+        onFinish: () => { favoritePending.value = false; },
+    };
+
+    if (props.isFavorite) {
+        router.delete(url, options);
+    } else {
+        router.post(url, {}, options);
+    }
+}
 </script>
 
 <template>
@@ -463,7 +510,56 @@ function destroy() {
                     </ol>
                 </nav>
 
-                <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
+                <!--
+                    Rubriken och stjärnan (issue 105) på samma rad: namnet är
+                    vad läsaren söker, och markeringen hör till itemet och inte
+                    till någon av handlingarna i raden under. `items-start` och
+                    inte `items-center`, så att en rubrik som bryts över två
+                    rader behåller stjärnan i höjd med den första.
+
+                    Stjärnan är en VÄXLING och ingen länk: `aria-pressed` bär
+                    tillståndet, och den tillgängliga namnens text säger vad
+                    ett tryck GÖR — *Add to favourites* eller *Remove from
+                    favourites* ur `lang/` — så den flippar med tillståndet.
+                    Fyllningen är en form och inte bara en färg (fylld stjärna
+                    mot kontur), så markeringen syns också utan färgseende.
+
+                    Färgen kommer ur en ROLL och inte ur en färgkod
+                    ([[ADR-0042 Designsystemet]] § Beslut): `text-accent` när
+                    itemet är märkt, `text-ink-subtle` när det inte är det.
+                    Vill designern ha en annan ton är det en rad i `app.css`,
+                    inte ett svep genom komponenterna.
+
+                    Fokusringen får aldrig tas bort — samma
+                    `focus-visible:ring-focus` som UiButton bär, för fokuset
+                    sätts av en tabb och inte av kod.
+                -->
+                <div class="flex items-start justify-between gap-4">
+                    <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
+
+                    <button
+                        type="button"
+                        :aria-pressed="isFavorite ? 'true' : 'false'"
+                        :aria-label="isFavorite ? t('item.show.favorite_remove') : t('item.show.favorite_add')"
+                        :disabled="favoritePending"
+                        class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                        :class="isFavorite ? 'text-accent' : 'text-ink-subtle'"
+                        @click="toggleFavorite"
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            :fill="isFavorite ? 'currentColor' : 'none'"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-6 w-6"
+                            aria-hidden="true"
+                        >
+                            <path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"></path>
+                        </svg>
+                    </button>
+                </div>
 
                 <div class="mt-4 flex flex-wrap gap-4 text-sm">
                     <Link

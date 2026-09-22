@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -105,6 +106,29 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
         return $this->belongsToMany(Account::class, 'account_user')
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    /**
+     * Personens favoritmarkeringar — en rad per item hon märkt, se
+     * [[ADR-0042 Designsystemet]] § Konsekvenser och [[M17 Designsystemet]]
+     * § 105.
+     *
+     * **Per användare och inte per item**, och därför en egen relation och
+     * ingen kolumn på `item`: markeringen är personens bokmärke, och två
+     * personer som ser samma item ska kunna märka det oberoende av varandra.
+     *
+     * Relationen bär ingen åtkomst. Den säger vad användaren har märkt, inte
+     * vad hon får se — App\Http\Controllers\FavoriteController prövar
+     * App\Policies\ItemPolicy::view() innan något skrivs hit, och issue 106
+     * filtrerar listan genom App\Actions\Access\ResolveItemScope som allt
+     * annat. Ett item hon förlorat åtkomsten till försvinner därför ur
+     * listan medan raden ligger kvar.
+     *
+     * @return HasMany<Favorite, $this>
+     */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class);
     }
 
     /**
