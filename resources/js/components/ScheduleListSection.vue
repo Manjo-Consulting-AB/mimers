@@ -93,6 +93,7 @@ const rows = computed(() => props.schedules.map((schedule) => {
         ...schedule,
         recurrence: recurrenceLabel(t, schedule),
         occurrence,
+        due,
         dueLabel: due === null
             ? null
             : (due.relative ? due.text : t('item.schedule.next_due', { date: due.text })),
@@ -185,7 +186,10 @@ function destroy(schedule) {
 
                     <span class="text-sm">{{ schedule.recurrence }}</span>
 
-                    <span class="text-sm">
+                    <span
+                        class="text-sm"
+                        :class="schedule.due?.state === 'danger' ? 'text-danger' : ''"
+                    >
                         {{ schedule.dueLabel
                             ? schedule.dueLabel
                             : schedule.done

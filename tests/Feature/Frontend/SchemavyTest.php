@@ -252,6 +252,20 @@ it('skriver förfallodagen med datumregeln och den synliga från-dagen absolut',
         ->toContain('formatDateOnly(props.occurrence.visible_from, locale.value)');
 });
 
+/*
+ * Även schemaradens "nästa förfall" är ett förfallodatum och går genom samma
+ * regel (issue 104). Provet är filriktat med flit: radens egen formatering var
+ * `formatDateOnly()`, som källkodsprovet i DatumregelTest inte fångar — det ser
+ * bara literala `toLocaleDateString`-anrop. Utan det här provet kan en egen
+ * formatering smyga tillbaka utan att något går rött.
+ */
+it('låter schemaraden skriva nästa förfall med datumregeln', function () {
+    $sektionen = File::get(resource_path('js/components/ScheduleListSection.vue'));
+
+    expect($sektionen)->toContain('useRelativeDate')
+        ->toContain('dueDate(occurrence.due_at, occurrence.overdue)');
+});
+
 it('formulerar återkommandet i ord och aldrig som kolumnvärden', function () {
     // Nyckeln komponenten väljer, per typ, enhet och antal. Antal 1 har en egen
     // nyckel — `t()` har ingen pluralisering (issue 52 § Beslut 4).
