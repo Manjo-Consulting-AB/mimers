@@ -17,6 +17,7 @@ Systemet heter **Mimers** och bor på `mimers.app`. Namnet syftar på Mimer i no
 | veta hur vi står oss mot ett annat verktyg | [[Konkurrens]] |
 | bygga eller ändra en tabell | rätt fil under **Datamodell/** |
 | veta *varför* något är som det är | rätt ADR under **ADR/** |
+| se hur produkten ska se ut | bilderna i `docs/Design/`, sedan [[ADR-0042 Designsystemet]] |
 | ta nästa arbetsuppgift | [[Backlog]] |
 | implementera en issue | `AGENTS.md` i repo-roten |
 | veta vilka dokument en uppgift kräver | `CLAUDE.md` i repo-roten |

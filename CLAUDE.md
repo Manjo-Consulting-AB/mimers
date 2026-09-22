@@ -57,6 +57,7 @@ Skriv inte in radnummer från minnet — de flyttar sig vid varje redigering. K�
 - `docs/Backlog/` — en fil per milstolpe, issues med läslista och acceptanskriterier
 - `docs/ADR/` — 30 beslut, ett per fil, med kontext och konsekvenser
 - `docs/Datamodell/` — vad systemet består av, uppdelat per domän
+- `docs/Design/` — designerns bilder, förlaga för [[M17 Designsystemet]]
 - `docs/Deploy/Pipeline.md` — CI, miljöer, utrullning, verifierade fakta om servern
 - `docs/Tankar.md` — obesvarade frågor om **produkten**
 - `docs/Process/Lärdomar.md` — vad arbetssättet lärt oss; frågor om **hur vi arbetar**. Fylls av retron, inte av dig mitt i en issue.

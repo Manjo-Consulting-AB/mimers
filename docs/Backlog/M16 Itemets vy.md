@@ -6,7 +6,7 @@ Tillagd 2026-09-18, efter genomgången av itemmockuparna. Besluten står i [[ADR
 
 Det är därför en liten milstolpe med en stor ADR bakom sig. Det mesta mockuparna visar finns redan: flera föräldrar är byggt, relationerna kommer ur `ListItemLinks`, och sex av mockupens sju flikar ligger redan som propar i `Containers/Items/Show`. Det som verkligen saknas är två upplösningar — strukturen nedåt och vägarna uppåt — och ett fält.
 
-**Detta ingår inte, och det är med flit:** flikraden, trepanelslayouten, fokuskartan, containerns hela karta, historikfliken och favoriterna. De tre första väntar på designsystemet; containerkartan är ett eget projekt; historiken väntar på att applikationen instrumenteras (se [[Att sortera efter mockuparna]] § Händelseinstrumenteringen); favoriterna har ingen tabell och inget beslut. Itemets kostnadsflik kräver ingen ny ändpunkt — issue 91 bygger redan summeringen med itemet som startpunkt, och det som saknas är ytan.
+**Detta ingår inte, och det är med flit:** flikraden, trepanelslayouten, fokuskartan, containerns hela karta, historikfliken och favoriterna. Flikraden, trepanelslayouten och favoriterna väntade på designsystemet och har sedan 2026-09-22 issues i [[M17 Designsystemet]]; fokuskartan och containerkartan är eget layoutarbete; historiken väntar på att applikationen instrumenteras (se [[Att sortera efter mockuparna]] § Händelseinstrumenteringen). Itemets kostnadsflik kräver ingen ny ändpunkt — issue 91 bygger redan summeringen med itemet som startpunkt, och det som saknas är ytan.
 
 **Issue 91 i [[M15 Containerns översikt]] ändrades samma dag den här milstolpen skrevs.** [[ADR-0041 Itemets vy]] § Rättelsen av ADR-0040 visade att tårtbitarna inte kan vara underträdets toppnivåitems: ett item under två föräldrar hamnar då i två bitar, och bitarna summerar till mer än totalen bredvid. Tårtbitarna är de items som bär kostnadsraderna. Den som bygger 91 läser den ändrade formuleringen, inte den här rutan.
 
@@ -56,3 +56,14 @@ Ordningen är namnen längs vägen, så förekomstlistan och brödsmulan alltid 
 **Läs:** [[ADR-0041 Itemets vy]] § Beslut, [[M16 Itemets vy]] § 94 (rotregeln), [[M10 Webbfrontend]] § 59a (Beslut 1), [[M11 Åtkomst på itemnivå]] § 73 (Beslut 6), [[ADR-0028 Åtkomst på itemnivå]] § Beslut (regel 3)
 **Klart när:** itemets vy bär alla vägar från en rot till itemet; ett item med två föräldrar får två förekomster; en väg som passerar ett item utanför omfånget finns inte i svaret; rotregeln är ordagrant issue 94:s; querysträngen väljer vilken förekomst som är den aktuella; en väg som inte längre finns ignoreras och den första i ordningen används i stället, aldrig ett fel; utan querysträng används den första i ordningen; ordningen är stabil för samma användare; en cykel avslutar vandringen; antalet frågor är konstant oavsett antalet vägar; `ItemResource` har inget nytt fält; hela testsviten är grön.
 **Beror på:** 94
+
+### 96. Itemet får ett anteckningsfält
+Itemmockupen har en knapp *Ny anteckning* i snabbåtkomsten och en rad *Anteckningar* i navigeringen. Det finns varken entitet eller fält bakom dem.
+
+[[ADR-0041 Itemets vy]] svarade att `item.description` *är* anteckningen. Issuen skiljer dem åt igen, och skillnaden är hela issuen: **`description` säger vad itemet är** — meningen en annan människa behöver för att veta vad hon tittar på — medan **anteckningen säger vad användaren vet om det**, ett fritt fält som växer med tiden. Ett fält som bär två syften får förr eller senare två format. Kolumnen är nullbar text vid sidan av `description`.
+
+**Skriven direkt i GitHub som #406 och infogad här i efterhand, 2026-09-22.** Den ändrar ADR-0041 § Beslut på en punkt; ADR:en står oförändrad som historik enligt regeln i [[ADR-0032 Produktens ord]].
+
+**Läs:** [[ADR-0041 Itemets vy]] § Beslut och § Konsekvenser, [[Items och organisation]] § item, [[ADR-0012 Sök]]
+**Klart när:** `item` har en nullbar anteckningskolumn vid sidan av `description`; fältet går att sätta och ändra i itemets redigeravy och visas i itemets vy; de två fälten är åtskilda i formuläret; hela testsviten är grön.
+**Beror på:** -
