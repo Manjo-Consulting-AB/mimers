@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Schema;
  * Sedan sätts villkoret tillbaka med det nya värdet.
  *
  * Villkoret skapades i 2026_08_31_130000_create_item_link_table.php och lades
- * bara på mysql — sqlite saknar ALTER TABLE ... DROP CHECK. Samma
+ * bara på mysql — sqlite saknar ALTER TABLE ... DROP CONSTRAINT. Samma
  * drivrutinsvakt här, av samma skäl, och samma form som
  * 2026_09_18_000000_free_container_kind.php. Den gamla migreringen lämnas
  * orörd: den beskriver vad som byggdes då, och migrationer rullas aldrig
@@ -42,7 +42,7 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::getConnection()->getDriverName() === 'mysql') {
-            DB::statement('ALTER TABLE item_link DROP CHECK item_link_relation_check');
+            DB::statement('ALTER TABLE item_link DROP CONSTRAINT item_link_relation_check');
         }
 
         DB::table('item_link')
@@ -65,7 +65,7 @@ return new class extends Migration
     public function down(): void
     {
         if (Schema::getConnection()->getDriverName() === 'mysql') {
-            DB::statement('ALTER TABLE item_link DROP CHECK item_link_relation_check');
+            DB::statement('ALTER TABLE item_link DROP CONSTRAINT item_link_relation_check');
         }
 
         DB::table('item_link')

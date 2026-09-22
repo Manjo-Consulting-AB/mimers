@@ -1,6 +1,6 @@
 name: Migreringar
 
-# Testsviten kör sqlite i minnet, produktionen och staging kör mysql. Issue 12
+# Testsviten kör sqlite i minnet, produktionen och staging kör MariaDB. Issue 12
 # (M1) betalade den skillnaden i en skiftlägeskänslig jämförelse; issue 23b
 # (M3) betalade den igen, dyrare: två indexnamn som Laravel härleder till 67
 # respektive 66 tecken går rakt igenom sqlite och faller på mysqls
@@ -17,6 +17,19 @@ name: Migreringar
 # betalade en mysql-tjänst plus en minuts avrundning för att köra noll nya
 # migreringar. `composer.lock` är med för att en ny Laravel-version kan ändra
 # hur schemat härleds utan att en enda fil under database/migrations rörs.
+#
+# Tjänsten kör `mariadb:10.6` sedan 2026-09-22, inte `mysql:8`. Servern hos
+# inleed är MariaDB 10.6.27 (Pipeline.md § Läget på GitHub och hos inleed), och
+# de två dialekterna är inte utbytbara: `ALTER TABLE ... DROP CHECK` är MySQL:s
+# egen stavning och ger 1064 på MariaDB. Två migreringar i v0.9.0 skrevs så,
+# gick grönt mot mysql:8 och sänkte staging. En vakt som kör en annan
+# databasmotor än den som ska ta emot migreringen vaktar ingenting - felen den
+# finns till för att fånga är just dialektskillnader.
+#
+# `DB_CONNECTION` i .env.example står kvar på `mysql`. Laravel har en egen
+# `mariadb`-drivrutin, men servern kör kopplingen som `mysql`, och
+# drivrutinsvakterna i migreringarna frågar efter just det namnet - CI ska
+# spegla servern, inte rätta den.
 #
 # Repot har ingen branch protection (privat repo på gratisplanen, se
 # Pipeline.md § Branch protection), så filtret kan inte råka blockera en merge
@@ -43,15 +56,15 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      mysql:
-        image: mysql:8
+      mariadb:
+        image: mariadb:10.6
         env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
-          MYSQL_DATABASE: mimers
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+          MARIADB_DATABASE: mimers
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping --silent"
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
@@ -68,9 +81,9 @@ jobs:
       - name: Installera beroenden
         run: composer install --prefer-dist --no-interaction --no-progress
 
-      # .env.example pekar redan på mysql på 127.0.0.1:3306 med databasen
+      # .env.example pekar redan på 127.0.0.1:3306 med databasen
       # `mimers` och tom root - samma värden som tjänsten ovan startas med.
-      - name: Migreringarna går på MySQL
+      - name: Migreringarna går på MariaDB
         run: |
           cp .env.example .env
           php artisan key:generate

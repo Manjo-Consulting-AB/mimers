@@ -190,7 +190,7 @@ it('släpper CHECK-villkoret och tar emot en art utanför den gamla listan', fun
         $migreringar[] = $fil->getContents();
     }
 
-    expect(implode("\n", $migreringar))->toContain('DROP CHECK container_kind_check');
+    expect(implode("\n", $migreringar))->toContain('DROP CONSTRAINT container_kind_check');
 });
 
 /*

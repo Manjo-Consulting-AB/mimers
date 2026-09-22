@@ -18,8 +18,14 @@ use Illuminate\Support\Facades\Schema;
  *   lagras som tomt och inte som en tom sträng.
  *
  * Villkoret skapades i 2026_08_25_010000_create_container_table.php och lades
- * bara på mysql — sqlite saknar ALTER TABLE ... DROP CHECK. Samma
+ * bara på mysql — sqlite saknar ALTER TABLE ... DROP CONSTRAINT. Samma
  * drivrutinsvakt här, av samma skäl.
+ *
+ * Droppen skrivs DROP CONSTRAINT och inte DROP CHECK. Det senare är MySQL:s
+ * egen stavning; servern kör MariaDB 10.6, som bara kan DROP CONSTRAINT och
+ * svarar med 1064 på den andra. DROP CONSTRAINT förstås av båda (MariaDB
+ * 10.2+, MySQL 8.0.19+) och är därför den form som går att rulla ut. Felet
+ * släpptes igenom en grön CI 2026-09-22 — se PR:en till v0.9.1.
  */
 return new class extends Migration
 {
@@ -29,7 +35,7 @@ return new class extends Migration
     public function up(): void
     {
         if (Schema::getConnection()->getDriverName() === 'mysql') {
-            DB::statement('ALTER TABLE container DROP CHECK container_kind_check');
+            DB::statement('ALTER TABLE container DROP CONSTRAINT container_kind_check');
         }
 
         Schema::table('container', function (Blueprint $table) {
