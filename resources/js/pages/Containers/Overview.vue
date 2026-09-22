@@ -1,6 +1,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
@@ -41,7 +42,10 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * krav.
  *
  * Kostnadsbrickan är inte här: den är issue 86:s ändpunkt, och den här sidan
- * bygger ingen egen väg till samma tal.
+ * bygger ingen egen väg till samma tal. Talen ritas av `UiStat` (issue 99),
+ * som är en form och ingen räknare — den får `counts` rakt igenom och ställer
+ * ingen fråga själv. Det är därför bildens fyra rutor är två här: uppgifter
+ * och underhåll är EN, och kostnaden har ingen källa i den här kontrollern.
  *
  * Ingen sträng i JavaScript (issue 52 · [[ADR-0013 Språk och i18n]]): varje
  * text kommer ur `t()` med en nyckel under `container.overview.*`.
@@ -73,16 +77,9 @@ const { t } = useTranslations();
             </div>
         </dl>
 
-        <dl class="mt-8 flex flex-wrap gap-4">
-            <div class="min-w-32 rounded border border-slate-200 px-4 py-3">
-                <dt class="text-sm text-slate-600">{{ t('container.overview.items') }}</dt>
-                <dd class="text-2xl font-semibold">{{ counts.items }}</dd>
-            </div>
-
-            <div class="min-w-32 rounded border border-slate-200 px-4 py-3">
-                <dt class="text-sm text-slate-600">{{ t('container.overview.todos') }}</dt>
-                <dd class="text-2xl font-semibold">{{ counts.todos }}</dd>
-            </div>
-        </dl>
+        <div class="mt-8 flex flex-wrap gap-4">
+            <UiStat :value="counts.items" :label="t('container.overview.items')" />
+            <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
+        </div>
     </ContainerLayout>
 </template>

@@ -339,6 +339,22 @@ it('ger varje knapp och länk i en radlista en träffyta på minst 44 px', funct
     expect($granskade)->toBeGreaterThan(10);
 });
 
+/*
+ * Issue 426 · Ytorna. Provet ovan mäter en `<button>` eller `<Link>` inuti en
+ * rad; den här mäter radens ROT. Listraden är formen radåtgärden ställs i, och
+ * ytan ska inte bero på vad anroparen stoppar in i slotarna — en rad vars
+ * träffyta kommer och går med innehållet är ingen träffyta.
+ */
+it('ger listraden en träffyta på minst 44 px', function () {
+    $kod = genomgangKod()['components/UiListRow.vue'] ?? null;
+
+    expect($kod)->not->toBeNull(
+        'components/UiListRow.vue saknas — den bär träffytan åt varje listrad',
+    );
+
+    expect($kod)->toMatch('/<li[^>]*\bmin-h-11\b/', 'UiListRow har en träffyta under 44 px');
+});
+
 it('skrollar ingen sida i sidled', function () {
     foreach (genomgangKod() as $sokvag => $kod) {
         // En sida som skrollar i sidled är det enklaste provet på att den inte

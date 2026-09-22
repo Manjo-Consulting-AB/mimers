@@ -1059,6 +1059,47 @@ it('räknar ingen kostnadssummering på översikten', function () {
 });
 
 /*
+ * Klart när (issue 99): containerns tal renderas av taltutan, och talen kommer
+ * ur issue 89:s propar och inte ur en ny fråga.
+ *
+ * Provet är tvådelat av det skälet. Den ena halvan är svarets form: `counts`
+ * bär exakt de nycklar issue 89 lade dit, och ingen ny räknare har smugit in
+ * — en `SUM` i `show()` hade varit en andra väg till samma siffra, och de två
+ * hade glidit isär ([[ADR-0039 Containerns översikt]] § Konsekvenser). Den
+ * andra halvan är att sidan RITAR dem med `UiStat` i stället för med egna
+ * divar: komponenten är en form, och den får talet rakt igenom.
+ *
+ * **Talet är två och inte fyra.** Bilden ritar fyra rutor i hjälten, men
+ * `counts` har två: uppgifter och underhåll är EN räknare (ADR-0042
+ * § Beslut — `schedule` skiljer dem bara via `recurrence_type`), och
+ * kostnaden är issue 86:s ändpunkt och räknas inte i den här kontrollern.
+ * Ett tal som saknas byggs inte här; det är skrivet i PR:ens
+ * `## Frågor och antaganden`.
+ */
+it('containerns tal renderas av taltutan', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    $svar = actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk();
+
+    // Talen kommer ur propen och ingen ny fråga: nycklarna är exakt de två
+    // issue 89 lade dit, och ingen kostnadssumma har tillkommit.
+    expect(array_keys($svar->inertiaProps()['counts']))->toBe(['items', 'todos']);
+
+    $vy = File::get(resource_path('js/pages/Containers/Overview.vue'));
+
+    // Taltutan ritar dem, och den matas ur `counts` — samma prop som förut,
+    // ingen ny hämtning i vyn.
+    expect($vy)->toContain('import UiStat from')
+        ->toContain('<UiStat :value="counts.items"')
+        ->toContain('<UiStat :value="counts.todos"');
+
+    // En taltuta per tal, och ingen tredje: vyn hittar inte på en ruta.
+    expect(substr_count($vy, '<UiStat'))->toBe(count($svar->inertiaProps()['counts']));
+});
+
+/*
  * Klart när: radering av ett item landar på översikten.
  *
  * Omdirigeringen i App\Http\Controllers\ItemController::destroy() behövde
