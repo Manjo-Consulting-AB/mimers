@@ -4,7 +4,56 @@
 @source '../views/**/*.blade.php';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
+/*
+ * Designtokens, se [[ADR-0042 Designsystemet]] § Beslut.
+ *
+ * Rollnamn, aldrig färgnamn: `--color-surface` och inte `--color-blue-600`.
+ * Ett rollnamn binds om på ett ställe; ett färgnamn måste bytas ut i varje
+ * komponent som råkar nämna det. Ett mörkt läge är därför ett andra block
+ * med samma nycklar — inget byggs här, men inget hindrar det heller.
+ *
+ * Värdena är lästa ur ADR-0042:s tabell och ska inte hämtas ur bilderna igen.
+ */
 @theme {
     --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+
+    /* Ytor och kanter */
+    --color-shell: #0b1f35;
+    --color-shell-active: #133d63;
+    --color-surface: #ffffff;
+    --color-surface-muted: #f6fafd;
+    --color-surface-sunken: #eff4f8;
+    --color-border: #e2e8f0;
+
+    /* Text */
+    --color-ink: #0f172a;
+    --color-ink-muted: #475569;
+    --color-ink-subtle: #64748b;
+
+    /* Handling och tillstånd */
+    --color-accent: #2563eb;
+    --color-accent-soft: #eff6ff;
+    --color-danger: #dc2626;
+    --color-warning: #d97706;
+    --color-success: #15803d;
+
+    /*
+     * Fokusringen. Får aldrig tas bort — en nollställd outline utan ring
+     * river tangentbordsarbetet i issue 68a och 68b. Se FormField.vue.
+     */
+    --color-focus: #2563eb;
+
+    /* Typskalan, fem steg */
+    --text-meta: 12px;
+    --text-body: 14px;
+    --text-title: 15px;
+    --text-title--font-weight: 600;
+    --text-heading: 24px;
+    --text-display: 30px;
+
+    /* Radierna, tre */
+    --radius-card: 12px;
+    --radius-control: 8px;
+    --radius-pill: 9999px;
 }

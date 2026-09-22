@@ -19,6 +19,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * Ingen `flash.success`/`flash.error`/`flash.warning`: ingen kod sätter dem,
  * och en mekanism utan avsändare är en mekanism att riva.
+ *
+ * Meddelandet bär alltså ingen allvarlighetsgrad, och ytan är
+ * informationsrutan ur [[ADR-0042 Designsystemet]] § Beslut:
+ * `--color-accent-soft` mot `--color-border`. Det gröna det bar förut
+ * (emerald-paletten) har ingen roll i tokensystemet — `--color-success` är
+ * OK-märket, inte en banneryta — och en färg utan roll är just den här
+ * issuens ärende.
  */
 const { t } = useTranslations();
 
@@ -31,7 +38,7 @@ const text = computed(() => (code.value ? t(`flash.${code.value}`) : null));
     <div
         v-if="text"
         role="status"
-        class="border-b border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-900"
+        class="border-b border-border bg-accent-soft px-4 py-3 text-center text-body text-ink"
     >
         {{ text }}
     </div>
