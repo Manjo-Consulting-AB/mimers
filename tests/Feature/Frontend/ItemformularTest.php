@@ -402,9 +402,11 @@ it('sätter, ändrar och tömmer anteckningen i formuläret', function () {
 /*
  * Klart när: anteckningen och beskrivningen går att läsa var för sig.
  *
- * Redigeringsvyn får båda ur `ItemResource`, och `itemFields` i
- * resources/js/components/itemPresentation.js ritar dem som två rader. Den
- * gamla inställningen — att `description` *är* anteckningsfältet ([[ADR-0041
+ * Redigeringsvyn får båda ur `ItemResource`. På detaljvyn står de som vyns
+ * två ledande stycken på översiktsfliken — `itemFields` i
+ * resources/js/components/itemPresentation.js lämnar dem ifrån sig, och
+ * provet nedan prövar bara att redigeringsvyn bär dem var för sig. Den gamla
+ * inställningen — att `description` *är* anteckningsfältet ([[ADR-0041
  * Itemets vy]] § Beslut i den lydelse som gällde före issue 96) — hade gett
  * ett fält, och det är skillnaden det här testet håller fast.
  */
