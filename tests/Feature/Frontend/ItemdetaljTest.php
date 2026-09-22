@@ -380,11 +380,23 @@ it('stjärnan går att sätta och ta bort från itemets huvud', function () {
 
     expect($anvandare->favorites()->where('item_id', $motorn->id)->exists())->toBeTrue();
 
+    // Och sidan SÄGER det när den laddas: stjärnans tillstånd kommer ur
+    // serverns svar och inte ur en standard. Utan den här raden är
+    // `isFavorite` alltid falsk i vyn — växlingen väljer POST eller DELETE
+    // efter samma propp, så stjärnan hade kunnat märka men aldrig avmarkera.
+    actingAs($anvandare)->get($url)->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('isFavorite', true)
+    );
+
     actingAs($anvandare)->from($url)->delete($stjärna)
         ->assertRedirect($url)
         ->assertSessionHas('status', 'favorite-removed');
 
     expect(Favorite::query()->count())->toBe(0);
+
+    actingAs($anvandare)->get($url)->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('isFavorite', false)
+    );
 
     $vy = File::get(resource_path('js/pages/Containers/Items/Show.vue'));
 
