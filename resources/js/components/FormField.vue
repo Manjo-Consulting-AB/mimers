@@ -27,6 +27,19 @@ import { computed } from 'vue';
  * element utan tabindex går inte att sätta fokus på, och det är hit fokus
  * ska när servern svarar — se resources/js/pages/Auth/useErrorFocus.js.
  * Fältet blir inte tabbbart av det, bara fokuserbart med kod.
+ *
+ * **Fokusringen på felmeddelandet får aldrig tas bort.** `outline-none` utan
+ * en ring som tar över lämnar fokus osynligt: den som använder tangentbord
+ * eller skärmläsare får ingen signal om var svaret hamnade. Issue 68a och 68b
+ * gick igenom hela frontenden med tangentbord, och en enda nollställd outline
+ * river det arbetet. Ringen är `--color-focus` ur
+ * [[ADR-0042 Designsystemet]] § Beslut — två pixlar med två pixlars
+ * förskjutning — och `focus:` och inte `focus-visible:` därför att fokuset
+ * sätts av kod och inte av en tabb; `:focus-visible` behöver inte slå till
+ * alls för ett anrop till `.focus()`.
+ *
+ * Färgerna kommer ur samma ADR: `text-ink` för etiketten, `text-danger` för
+ * felet.
  */
 const props = defineProps({
     label: { type: String, required: true },
@@ -39,10 +52,17 @@ const describedBy = computed(() => (props.error ? `${props.id}-error` : undefine
 
 <template>
     <div class="flex flex-col gap-1">
-        <label :for="id" class="text-sm font-medium text-slate-800">{{ label }}</label>
+        <label :for="id" class="text-body font-medium text-ink">{{ label }}</label>
 
         <slot :described-by="describedBy" />
 
-        <p v-if="error" :id="`${id}-error`" tabindex="-1" class="text-sm text-red-700 outline-none">{{ error }}</p>
+        <p
+            v-if="error"
+            :id="`${id}-error`"
+            tabindex="-1"
+            class="text-body text-danger outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
+        >
+            {{ error }}
+        </p>
     </div>
 </template>
