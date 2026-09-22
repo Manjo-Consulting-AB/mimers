@@ -31,6 +31,15 @@
     --color-ink-muted: #475569;
     --color-ink-subtle: #64748b;
 
+    /*
+     * Texten ovanpå en fylld yta. Två roller trots samma värde: en ljusare
+     * accent i designerns nästa bild ska inte tvinga fram en ändring av
+     * faran. `--color-surface` är rollen yta man lägger saker på, och en
+     * textroll den inte — se [[ADR-0042 Designsystemet]] § Beslut.
+     */
+    --color-ink-on-accent: #ffffff;
+    --color-ink-on-danger: #ffffff;
+
     /* Handling och tillstånd */
     --color-accent: #2563eb;
     --color-accent-soft: #eff6ff;

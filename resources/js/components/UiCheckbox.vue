@@ -20,8 +20,8 @@ import { computed } from 'vue';
  * som FormField ritar fältets.
  *
  * Fokusringen är `--color-focus` och får aldrig tas bort; skälet står i
- * FormField och UiButton. Den är `focus:` som hos de tre andra kontrollerna
- * och inte `focus-visible:` som på knappen.
+ * FormField och UiButton. Den är `focus-visible:`, som på knappen och de tre
+ * andra kontrollerna — rutan slipper ringen efter ett musklick.
  */
 const props = defineProps({
     id: { type: String, required: true },
@@ -57,7 +57,7 @@ function toggle(event) {
             type="checkbox"
             :checked="checked"
             :disabled="disabled"
-            class="size-4 shrink-0 accent-accent outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2 disabled:opacity-50"
+            class="size-4 shrink-0 accent-accent outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
             @change="toggle"
         >
 

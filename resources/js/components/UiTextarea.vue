@@ -10,7 +10,8 @@ import { computed } from 'vue';
  * det finns ingen `maxlength` att sätta och ingen gräns att rita.
  *
  * Fokusringen är `--color-focus` och får aldrig tas bort; skälet står i
- * FormField och UiButton.
+ * FormField och UiButton. Den är `focus-visible:`, som på knappen och de tre
+ * andra kontrollerna.
  */
 const props = defineProps({
     id: { type: String, required: true },
@@ -35,6 +36,6 @@ const value = computed({
         :rows="rows"
         :aria-describedby="describedBy"
         :disabled="disabled"
-        class="rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2 disabled:bg-surface-sunken"
+        class="rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:bg-surface-sunken"
     />
 </template>

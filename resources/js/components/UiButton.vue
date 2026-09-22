@@ -13,10 +13,11 @@ import { computed } from 'vue';
  *
  * **Varianten är en roll och inte en färg.** Klasserna nedan pekar på tokens
  * ur `resources/css/app.css` — `bg-accent`, `border-border`, `text-accent`,
- * `bg-danger` — och aldrig på en palettfärg. `text-surface` står där en vit
- * text förväntas: tokensystemet har ingen egen roll för texten PÅ accenten,
- * och en ny token är issue 97:s yta. Fyndet står i PR:en och inte i
- * `app.css`.
+ * `bg-danger` — och aldrig på en palettfärg. Texten ovanpå en fylld yta bär
+ * `text-ink-on-accent` och `text-ink-on-danger`, och de två hör till
+ * `--color-ink`-familjen: en textroll hör dit. `--color-surface` är rollen
+ * yta man lägger saker på, och binds den om — mörkt läge, eller designerns
+ * femte bild — blir texten på den blå knappen mörk.
  *
  * **Vänteläget bor här.** `pending` stänger knappen medan servern svarar —
  * en knapp som går att trycka två gånger är en dubbelpostning (issue 68a
@@ -30,9 +31,10 @@ import { computed } from 'vue';
  *
  * **Fokusringen är `--color-focus` och får aldrig tas bort.** `outline-none`
  * utan en ring som tar över lämnar fokus osynligt för den som tabbar
- * ([[ADR-0042 Designsystemet]] § Beslut). Här är den `focus-visible:` och
- * inte `focus:` — knappen fokuseras av en tabb, till skillnad från
- * FormFields felmeddelande, som fokuseras av kod och därför behöver `focus:`.
+ * ([[ADR-0042 Designsystemet]] § Beslut). Här är den `focus-visible:`, som i
+ * de fyra kontrollerna: webbläsarens egen heuristik låter ett textfält matcha
+ * även vid musklick, medan en knapp slipper ringen efter ett klick.
+ * FormFields felmeddelande bär `focus:` — det fokuseras av kod.
  */
 const props = defineProps({
     variant: { type: String, default: 'primary' },
@@ -48,10 +50,10 @@ const props = defineProps({
 });
 
 const VARIANTS = {
-    primary: 'bg-accent text-surface hover:bg-accent/90',
+    primary: 'bg-accent text-ink-on-accent hover:bg-accent/90',
     secondary: 'border border-border bg-surface text-ink hover:bg-surface-sunken',
     quiet: 'text-accent hover:underline',
-    danger: 'bg-danger text-surface hover:bg-danger/90',
+    danger: 'bg-danger text-ink-on-danger hover:bg-danger/90',
 };
 
 /*

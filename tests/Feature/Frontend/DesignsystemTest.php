@@ -63,6 +63,24 @@ function designKomponenter(): array
 }
 
 /**
+ * De fem befintliga formulär issue 425 migrerar till primitiverna. En lista
+ * och inte två: proven nedan pekar på samma fem filer, och en som glider isär
+ * hade mätt något annat än det den påstår.
+ *
+ * @return array<int, string> relativa sökvägar
+ */
+function designFormular(): array
+{
+    return [
+        'components/ItemForm.vue',
+        'components/TagCreateForm.vue',
+        'components/CategoryCreateForm.vue',
+        'components/InvitationForm.vue',
+        'components/ScheduleForm.vue',
+    ];
+}
+
+/**
  * Filerna issue 425 äger: knappen, de fyra kontrollerna, och de fem befintliga
  * formulär som nu består av dem.
  *
@@ -82,13 +100,7 @@ function designPrimitiverna(): array
         $filer['components/'.basename($fil)] = designUtanKommentarer(File::get($fil));
     }
 
-    foreach ([
-        'components/ItemForm.vue',
-        'components/TagCreateForm.vue',
-        'components/CategoryCreateForm.vue',
-        'components/InvitationForm.vue',
-        'components/ScheduleForm.vue',
-    ] as $sokvag) {
+    foreach (designFormular() as $sokvag) {
         $filer[$sokvag] = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
     }
 
@@ -149,6 +161,37 @@ function designKlasser(string $kod): array
         'rad' => substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
         'klasser' => $träff[0],
     ], $träffar[1]);
+}
+
+/**
+ * Varje anrop av en Ui-kontroll i en fil: komponentnamn, rå markup och rad.
+ *
+ * Attributen matchas med citattecken runt om, som i designKlasser: ett `>`
+ * inuti ett attributvärde hade annars avslutat taggen i förtid, och en
+ * kontroll vars id stod efter det hade setts som id-lös.
+ *
+ * @return array<int, array{namn: string, markup: string, rad: int}>
+ */
+function designKontrollanrop(string $kod): array
+{
+    preg_match_all(
+        '#<(UiInput|UiSelect|UiTextarea|UiCheckbox)\b((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>#s',
+        $kod,
+        $träffar,
+        PREG_OFFSET_CAPTURE,
+    );
+
+    $anrop = [];
+
+    foreach ($träffar[0] as $i => $hel) {
+        $anrop[] = [
+            'namn' => $träffar[1][$i][0],
+            'markup' => $hel[0],
+            'rad' => substr_count(substr($kod, 0, $hel[1]), "\n") + 1,
+        ];
+    }
+
+    return $anrop;
 }
 
 it('har varje roll i ADR-0042 som token', function () {
@@ -256,6 +299,46 @@ it('bär ingen egen klientvalidering i Ui-kontrollerna', function () {
     }
 });
 
+it('bär id på varje Ui-kontroll i de fem migrerade formulären', function () {
+    // `id` är en `required` prop på de fyra kontrollerna, och det är ett
+    // dev-läges-kontrakt: en varning ingen läser är inget skydd, och 68a
+    // § Beslut 3 valde ett källkodsprov av just det skälet. Regeln flyttade
+    // från formulären in i komponenterna när issue 425 byggde dem, och provet
+    // följer med.
+    //
+    // Skälet står i issue 51 § Beslut 9: FormField äger etiketten och binder
+    // den med `for`, och en kontroll utan `id` får ett `for` som pekar på
+    // ingenting — skärmläsaren får ett namnlöst fält.
+    //
+    // GenomgangTests *"knyter varje etikett till sitt fält med for och id"*
+    // står kvar orörd: den mäter fortfarande de komponenter som inte
+    // migrerats, och den hade slutat se de här fälten i samma stund de bytte
+    // till en komponent.
+    $formularen = designFormular();
+    $anrop = 0;
+
+    expect($formularen)->toHaveCount(5);
+
+    foreach ($formularen as $sokvag) {
+        $kod = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
+
+        foreach (designKontrollanrop($kod) as $kontroll) {
+            $anrop++;
+
+            expect($kontroll['markup'])->toMatch('/(^|\s):?id="/', sprintf(
+                '%s:%d är en <%s> utan id — FormFields for pekar då på ingenting',
+                $sokvag,
+                $kontroll['rad'],
+                $kontroll['namn'],
+            ));
+        }
+    }
+
+    // Ett prov som letar i en tom mängd är tyst, och ett tyst prov är värre än
+    // inget. Golvet är de 25 anrop som finns i dag.
+    expect($anrop)->toBeGreaterThan(20);
+});
+
 it('ger UiButton fyra varianter och två storlekar', function () {
     $kod = designUtanKommentarer(File::get(resource_path('js/components/UiButton.vue')));
 
@@ -287,8 +370,10 @@ it('gör fokusringen till en token och inte en nollställd outline', function ()
     //
     // Mängden växer med varje issue som migrerar en komponent: regeln gäller
     // varje fil som nollställer en outline, inte bara de två första. Issue 425
-    // lägger till knappen och de fyra kontrollerna. Knappen fokuseras av en
-    // tabb och bär `focus-visible:`; kontrollerna bär `focus:` som FormField.
+    // lägger till knappen och de fyra kontrollerna, och alla fem bär
+    // `focus-visible:` — ringen hör till tangentbordet, och webbläsarens egen
+    // heuristik låter ett textfält matcha den även vid musklick. FormFields
+    // felmeddelande bär `focus:`; det fokuseras av kod, inte av en tabb.
     $komponenter = [...designKomponenter(), ...designPrimitiverna()];
 
     foreach ($komponenter as $sokvag => $kod) {

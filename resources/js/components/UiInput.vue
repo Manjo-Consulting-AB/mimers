@@ -22,7 +22,8 @@ import { computed } from 'vue';
  * formuläret — utan det hade `<input type="date">` visat ordet "null".
  *
  * Fokusringen är `--color-focus`, två pixlar med två pixlars förskjutning,
- * och får aldrig tas bort; skälet står i FormField och UiButton.
+ * och får aldrig tas bort; skälet står i FormField och UiButton. Den är
+ * `focus-visible:`, som på knappen och de tre andra kontrollerna.
  */
 const props = defineProps({
     id: { type: String, required: true },
@@ -47,6 +48,6 @@ const value = computed({
         :type="type"
         :aria-describedby="describedBy"
         :disabled="disabled"
-        class="min-h-11 rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2 disabled:bg-surface-sunken"
+        class="min-h-11 rounded-control border border-border bg-surface px-3 py-2 text-body text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:bg-surface-sunken"
     >
 </template>
