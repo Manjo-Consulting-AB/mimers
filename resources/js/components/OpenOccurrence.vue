@@ -4,6 +4,7 @@ import { useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import { formatDateOnly } from './itemPresentation.js';
 import { occurrenceActionUrl, occurrenceWindow } from './occurrencePresentation.js';
+import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -56,6 +57,7 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
+const { dueDate } = useRelativeDate();
 const page = usePage();
 
 const locale = computed(() => page.props.locale);
@@ -86,7 +88,13 @@ const accountId = computed(() => `occurrence-account-${props.occurrence.ulid}`);
 const noteId = computed(() => `occurrence-note-${props.occurrence.ulid}`);
 const errorId = computed(() => `occurrence-error-${props.occurrence.ulid}`);
 
-const due = computed(() => formatDateOnly(props.occurrence.due_at, locale.value));
+/*
+ * Förfallodagen ur datumregeln (issue 104). `occurrence.overdue` är serverns
+ * härledda fält och går in i regeln — vyn jämför fortfarande aldrig `due_at`
+ * mot sin egen klocka (63b § Beslut 3). `visible_from` är inget
+ * förfallodatum: den är när uppgiften dök upp och skrivs alltid absolut.
+ */
+const due = computed(() => dueDate(props.occurrence.due_at, props.occurrence.overdue));
 const visibleFrom = computed(() => formatDateOnly(props.occurrence.visible_from, locale.value));
 const spare = computed(() => occurrenceWindow(t, props.occurrence));
 
@@ -138,7 +146,9 @@ function action(name) {
         </div>
 
         <p class="mt-2 flex flex-wrap gap-x-2 text-sm text-slate-700">
-            <span>{{ t('item.schedule.occurrence.due', { date: due }) }}</span>
+            <span :class="due.state === 'danger' ? 'text-danger' : ''">
+                {{ due.relative ? due.text : t('item.schedule.occurrence.due', { date: due.text }) }}
+            </span>
             <span aria-hidden="true">·</span>
             <span>{{ t('item.schedule.occurrence.visible_from', { date: visibleFrom }) }}</span>
             <template v-if="spare">

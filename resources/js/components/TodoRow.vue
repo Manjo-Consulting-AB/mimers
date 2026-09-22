@@ -1,8 +1,8 @@
 <script setup>
 import { computed } from 'vue';
-import { Link, useForm, usePage } from '@inertiajs/vue3';
-import { formatDateOnly } from './itemPresentation.js';
+import { Link, useForm } from '@inertiajs/vue3';
 import { occurrenceActionUrl, scheduleUrl } from './occurrencePresentation.js';
+import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -38,13 +38,15 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
-const page = usePage();
+const { dueDate } = useRelativeDate();
 
-const locale = computed(() => page.props.locale);
-
-// Serverns DATE-sträng, formaterad utan att räknas om över en tidszon —
-// samma uppslag som schemats sida använder.
-const due = computed(() => formatDateOnly(props.entry.due_at, locale.value));
+/*
+ * Förfallodagen ur datumregeln (issue 104): relativ inom gränsen, absolut
+ * bortom den. `entry.overdue` är serverns fält och går in i regeln — raden
+ * räknar aldrig försenat själv, och `due.relative` säger att meningen redan
+ * bär sin egen preposition ("In 24 days", inte "Due In 24 days").
+ */
+const due = computed(() => dueDate(props.entry.due_at, props.entry.overdue));
 
 const itemUrl = computed(
     () => `/containers/${props.entry.container.ulid}/items/${props.entry.item.ulid}`,
@@ -94,7 +96,9 @@ function complete() {
 
                 <span aria-hidden="true">·</span>
 
-                <span>{{ t('todo.due', { date: due }) }}</span>
+                <span :class="due.state === 'danger' ? 'text-danger' : ''">
+                    {{ due.relative ? due.text : t('todo.due', { date: due.text }) }}
+                </span>
             </p>
 
             <!-- Domänfelet ur avslutsflödet, formulerat av servern och

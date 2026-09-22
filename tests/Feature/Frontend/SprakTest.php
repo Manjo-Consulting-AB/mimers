@@ -319,6 +319,41 @@ it('har inga tomma strängar i ui.php', function () {
 });
 
 /*
+ * Datumregeln, se issue 104 och [[ADR-0042 Designsystemet]] § Konsekvenser.
+ *
+ * Även datumsträngarna kommer ur `lang/`: regeln väljer NYCKEL och katalogen
+ * äger orden. Nycklarna läses ur källkoden i stället för att räknas upp här —
+ * en mening som läggs till i regeln och glöms i katalogen faller då, och en
+ * nyckel som byter namn följer med utan att provet skrivs om.
+ *
+ * Den sista raden är den som stänger den andra vägen in: en färdig mening
+ * skriven direkt i komposabeln är samma fel som en hårdkodad sträng i en
+ * komponent, och den hade annars passerat obemärkt eftersom regeln är
+ * engelskt textad (svenskprovet ovan letar bara efter å, ä och ö).
+ */
+it('hämtar datumsträngarna ur ui.php och inte ur komposabeln', function () {
+    $nycklar = [];
+
+    foreach (['js/composables/useRelativeDate.js'] as $fil) {
+        preg_match_all("/t\\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    $datum = array_values(array_filter($nycklar, fn (string $nyckel): bool => str_starts_with($nyckel, 'date.')));
+
+    expect($datum)->not->toBeEmpty('datumregeln väljer inga nycklar ur lang/');
+
+    foreach ($datum as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', File::get(resource_path('js/composables/useRelativeDate.js')));
+
+    expect($kod)->not->toMatch('/\b(Today|Tomorrow|days late|day late)\b/');
+});
+
+/*
  * [[ADR-0033 Produktens omfång]] § Beslut: containern är ett sammanhang för
  * allt man äger, använder eller arbetar med — inte ett fordon eller ett
  * fritidshus. Det generiska svaret issue 81 lämnade efter sig är

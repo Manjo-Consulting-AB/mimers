@@ -27,6 +27,26 @@ return [
         ],
     ],
 
+    /*
+     * Datumregeln, se issue 104 och [[ADR-0042 Designsystemet]] § Konsekvenser.
+     *
+     * Meningarna används av varje yta som skriver ut ett förfallodatum —
+     * todo-vyn, itemets förekomst och containerns underhållspanel — och de är
+     * HELA meningen: en relativ rad bär sin egen preposition och står för sig
+     * själv, medan det absoluta datumet får panelens egna ord runt sig
+     * ("Due :date"). Panelen väljer ramen, `useRelativeDate.js` väljer formen.
+     *
+     * `late_one` och `late` finns som två nycklar därför att `t()` inte kan
+     * pluralisera (issue 52 § Beslut 4): en dag har sin egen mening.
+     */
+    'date' => [
+        'today' => 'Today',
+        'tomorrow' => 'Tomorrow',
+        'in_days' => 'In :days days',
+        'late' => ':days days late',
+        'late_one' => '1 day late',
+    ],
+
     'nav' => [
         'menu' => 'Menu',
         'menu_close' => 'Close the menu',

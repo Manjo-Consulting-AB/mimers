@@ -236,6 +236,22 @@ it('visar nästa förfall ur den öppna förekomsten och inget påhittat datum',
     );
 });
 
+/*
+ * Klart när: datumet skrivs med datumregeln och inte med en egen formatering.
+ *
+ * Den öppna förekomsten ritas av OpenOccurrence på både schemats sida och
+ * itemets sektion (63b § Beslut 1), så regeln gäller samma två datum på båda
+ * ställena. `visible_from` är inget förfallodatum — den är när uppgiften dök
+ * upp och skrivs absolut, som förut (issue 104).
+ */
+it('skriver förfallodagen med datumregeln och den synliga från-dagen absolut', function () {
+    $vy = File::get(resource_path('js/components/OpenOccurrence.vue'));
+
+    expect($vy)->toContain('useRelativeDate')
+        ->toContain('dueDate(props.occurrence.due_at, props.occurrence.overdue)')
+        ->toContain('formatDateOnly(props.occurrence.visible_from, locale.value)');
+});
+
 it('formulerar återkommandet i ord och aldrig som kolumnvärden', function () {
     // Nyckeln komponenten väljer, per typ, enhet och antal. Antal 1 har en egen
     // nyckel — `t()` har ingen pluralisering (issue 52 § Beslut 4).
