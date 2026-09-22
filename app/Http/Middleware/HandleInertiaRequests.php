@@ -34,8 +34,8 @@ use Inertia\Middleware;
  * Raden bär `name` och `url` och ingenting mer. Adressen byggs HÄR och inte i
  * JavaScript: den innehåller två ULID:n som bara servern känner, och skalets
  * egen regel är att en sådan URL skickas som prop (issue 51 § Beslut 7).
- * Ingen `ItemResource` — sektionen visar ett namn och en länk, och `app/Http/
- * Resources/**` rörs inte av den här issuen.
+ * Ingen `ItemResource`: sektionen visar ett namn och en länk, och resurserna
+ * under `app/Http/Resources/` rörs inte av den här issuen.
  *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
