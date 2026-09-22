@@ -140,6 +140,25 @@ function designYtorna(): array
 }
 
 /**
+ * Flikraden ur issue 100. Den är den elfte `Ui*.vue` och den nollställer en
+ * outline som knappen och kontrollerna — men den hör inte till någon av deras
+ * listor: `designPrimitiverna` och `designYtorna` räknar fem var och ska
+ * fortsätta göra det. Därför står den för sig, och är med i fokusringsprovet
+ * nedan av samma skäl som de andra: en komponent som nollställer en outline
+ * utan en ring som tar över river tangentbordsarbetet i issue 68a och 68b.
+ *
+ * @return array<string, string> relativ sökväg → källkod utan kommentarer
+ */
+function designFlikraden(): array
+{
+    return [
+        'components/UiTabs.vue' => designUtanKommentarer(
+            File::get(resource_path('js/components/UiTabs.vue')),
+        ),
+    ];
+}
+
+/**
  * Råa färgklasser i en fil: en palettfärg, eller svart eller vitt, efter ett
  * verktyg som målar. Adressen till sanningen är ADR-0042 § Beslut — rollen ska
  * komma ur `@theme`, och en palettfärg är den färg rollen skulle ha ersatt.
@@ -407,8 +426,15 @@ it('gör fokusringen till en token och inte en nollställd outline', function ()
     // heuristik låter ett textfält matcha den även vid musklick. FormFields
     // felmeddelande bär `focus:`; det fokuseras av kod, inte av en tabb.
     // Issue 426:s fem ytor är med av samma skäl: en yta som senare får en
-    // fokuserbar rad ska mötas av regeln och inte av ett tomt prov.
-    $komponenter = [...designKomponenter(), ...designPrimitiverna(), ...designYtorna()];
+    // fokuserbar rad ska mötas av regeln och inte av ett tomt prov. Issue
+    // 100:s flikrad likaså: den nollställer en outline precis som knappen, och
+    // en flik utan synlig ring är en flik tangentbordet tappar.
+    $komponenter = [
+        ...designKomponenter(),
+        ...designPrimitiverna(),
+        ...designYtorna(),
+        ...designFlikraden(),
+    ];
 
     foreach ($komponenter as $sokvag => $kod) {
         foreach (designKlasser($kod) as $klass) {
@@ -472,8 +498,11 @@ it('de fem ytkomponenterna finns och bär bara tokens', function () {
     // Och tokenregeln gäller katalogen, inte bara de fem: en rå färgklass i en
     // yta är samma fel som en i knappen — rollen ska komma ur `@theme`, och
     // `text-slate-800` är den färg rollen ersatte. Regeln står över globben så
-    // att en elfte `Ui*.vue` möts av den och inte av tystnad; SprakTest räknar
+    // att en tolfte `Ui*.vue` möts av den och inte av tystnad; SprakTest räknar
     // samma katalog och fäller den som en övertalig komponent.
+    //
+    // Elva i dag: de fem primitiverna (issue 425), de fem ytorna (issue 426)
+    // och flikraden (issue 100).
     $granskade = 0;
 
     foreach (File::glob(resource_path('js/components/Ui*.vue')) as $fil) {
@@ -485,7 +514,7 @@ it('de fem ytkomponenterna finns och bär bara tokens', function () {
         ))->toBe([]);
     }
 
-    expect($granskade)->toBe(10);
+    expect($granskade)->toBe(11);
 });
 
 it('kortet tar rubrik och åtgärd som slots', function () {

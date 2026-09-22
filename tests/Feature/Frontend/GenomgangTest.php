@@ -355,6 +355,36 @@ it('ger listraden en träffyta på minst 44 px', function () {
     expect($kod)->toMatch('/<li[^>]*\bmin-h-11\b/', 'UiListRow har en träffyta under 44 px');
 });
 
+/*
+ * Issue 100 · Flikraden. Samma prov som listraden ovanför och av samma skäl:
+ * träffytan ska ligga på flikens egen rot och inte komma och gå med vad
+ * anroparen stoppar in. Flikraden bär fler rader än någon annan yta — fem i
+ * containern, sju på itemet — och en flik en tumme missar är en sektion som
+ * inte går att nå på en telefon.
+ */
+it('ger varje flik i flikraden en träffyta på minst 44 px', function () {
+    $kod = genomgangKod()['components/UiTabs.vue'] ?? null;
+
+    expect($kod)->not->toBeNull(
+        'components/UiTabs.vue saknas — den bär träffytan åt varje flik',
+    );
+
+    // Fliken fångas först och läses sedan, och det är två steg av ett skäl:
+    // ett mönster som letar inuti ett attributvärde kan inte se förbi
+    // citattecknen. `:ref="(element) => ..."` bär dessutom en pil, så ett
+    // `[^>]*` hade stannat vid den. Samma form som genomgangTaggar.
+    preg_match('/<Link\b(?:"[^"]*"|\'[^\']*\'|[^>"\'])*?>/s', $kod, $träff);
+
+    $flik = $träff[0] ?? '';
+
+    expect($flik)->toMatch('/<Link\b/', 'UiTabs ritar ingen <Link> — fliken är ingen flik');
+
+    expect($flik)->toMatch(
+        '/\bmin-h-11\b/',
+        'UiTabs har en flik med en träffyta under 44 px',
+    );
+});
+
 it('skrollar ingen sida i sidled', function () {
     foreach (genomgangKod() as $sokvag => $kod) {
         // En sida som skrollar i sidled är det enklaste provet på att den inte
