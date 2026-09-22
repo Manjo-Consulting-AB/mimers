@@ -434,15 +434,18 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
  * importerar. Här prövas bara att undantaget inte har vidgats.
  */
 /*
- * Issue 425 · Primitiverna och issue 426 · Ytorna. Testet ovan fångar svensk
- * text i en komponent; det här fångar den engelska, och det är den som är
- * lätt att skriva utan att tänka. Knappen och de fyra kontrollerna är rena
- * former: etiketten kommer ur FormField, knappens ord ur anroparen och
- * vänteläget ur `common.pending.*`. De fem ytorna är rena former på samma
- * sätt — kortets rubrik, brickans ord, radens titel och talets etikett kommer
- * alla ur anroparens slots och `t()`-uppslag. En literal sträng i en
- * `Ui*.vue` blir därför alltid fel — den finns inte i `lang/`, och `en` är den
- * enda katalogen som levereras ([[ADR-0034 Engelska vid lansering]]).
+ * Issue 425 · Primitiverna, issue 426 · Ytorna och issue 100 · Flikraden.
+ * Testet ovan fångar svensk text i en komponent; det här fångar den engelska,
+ * och det är den som är lätt att skriva utan att tänka. Knappen och de fyra
+ * kontrollerna är rena former: etiketten kommer ur FormField, knappens ord ur
+ * anroparen och vänteläget ur `common.pending.*`. De fem ytorna är rena former
+ * på samma sätt — kortets rubrik, brickans ord, radens titel och talets
+ * etikett kommer alla ur anroparens slots och `t()`-uppslag. Flikraden bär
+ * varken etikett eller radnamn själv: fliktexten kommer som prop och slås upp
+ * ur `lang/` av anroparen, precis som `container.nav.<key>` gör i dag. En
+ * literal sträng i en `Ui*.vue` blir därför alltid fel — den finns inte i
+ * `lang/`, och `en` är den enda katalogen som levereras
+ * ([[ADR-0034 Engelska vid lansering]]).
  *
  * Textnoder i mallen är allt mellan två taggar som inte är en interpolation.
  * Attributvärdena tas bort först: ett `>` inuti ett värde är inget slut på en
@@ -451,11 +454,11 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
 it('har ingen hårdkodad text i Ui-komponenterna', function () {
     $filer = File::glob(resource_path('js/components/Ui*.vue'));
 
-    // Tio: de fem primitiverna (issue 425) och de fem ytorna (issue 426).
-    // Räkningen är en spärr och inte en bekvämlighet — en elfte `Ui*.vue` är
-    // en komponent någon byggt utan att en issue bad om den, och den ska
-    // mötas av det här provet och inte av tystnad.
-    expect($filer)->toHaveCount(10);
+    // Elva: de fem primitiverna (issue 425), de fem ytorna (issue 426) och
+    // flikraden (issue 100). Räkningen är en spärr och inte en bekvämlighet —
+    // en tolfte `Ui*.vue` är en komponent någon byggt utan att en issue bad om
+    // den, och den ska mötas av det här provet och inte av tystnad.
+    expect($filer)->toHaveCount(11);
 
     foreach ($filer as $fil) {
         $kod = (string) preg_replace('#/\*.*?\*/#s', '', File::get($fil));
