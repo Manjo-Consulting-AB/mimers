@@ -165,6 +165,36 @@ def test_beviljat_undantag_slapps_igenom_i_bada_lagena():
         assert "arkitektsvaret" in text
 
 
+# =====================================================================
+# undantag_ur_kommentar() - arkitektsvarets markör
+# =====================================================================
+
+def test_undantag_lases_med_rak_markor():
+    kropp = ("### Opus 5 - arkitektsvar på kvarstående fynd\n\n"
+             "Beviljat undantag från omfångsrutan:\n```\napp/Support/Notification/LocaleResolver.php\n```\n")
+    assert o.undantag_ur_kommentar(kropp) == ["app/Support/Notification/LocaleResolver.php"]
+
+
+def test_undantag_lases_med_markor_i_fetstil():
+    """PR #436: markören i fetstil, en tom rad, sedan kodblocket - kön körde om CI, grinden såg inget."""
+    kropp = ("### Opus 5 - arkitektsvar på Frågor och antaganden\n\n"
+             "**Beviljat undantag från omfångsrutan:**\n\n```\nresources/css/app.css\n```\n")
+    assert o.undantag_ur_kommentar(kropp) == ["resources/css/app.css"]
+
+
+def test_undantag_kraver_arkitektrubrik():
+    """En begäran om undantag som citerar markören är inte ett beviljande (PR #386)."""
+    kropp = ("### Begäran om arkitekturbeslut\n\n"
+             "Beviljat undantag från omfångsrutan:\n```\ntests/Feature/Utlaning/UtlaningsnotisTest.php\n```\n")
+    assert o.undantag_ur_kommentar(kropp) == []
+
+
+def test_undantag_kraver_markoren_pa_egen_rad():
+    kropp = ("### Arkitektsvar\n\nJag skriver Beviljat undantag från omfångsrutan: i löptext.\n"
+             "```\napp/Models/Item.php\n```\n")
+    assert o.undantag_ur_kommentar(kropp) == []
+
+
 def test_deklaration_som_glob_matchar_undertradet():
     """Samma matchning som rutan själv använder, inte en egen."""
     assert _bedom(

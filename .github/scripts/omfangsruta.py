@@ -340,19 +340,36 @@ def beviljade_undantag(repo: str, pr_nummer: str, token: str) -> list[tuple[str,
 
     beviljade: list[tuple[str, str]] = []
     for kommentar in kommentarer:
-        kropp = kommentar.get("body") or ""
-        forsta = kropp.lstrip().splitlines()[0] if kropp.strip() else ""
-        if not ARKITEKTRUBRIK.match(forsta):
-            continue
-        for block in re.findall(
-            rf"^\s*{re.escape(UNDANTAGSMARKOR)}\s*\n\s*```[^\n]*\n(.*?)^\s*```",
-            kropp, re.MULTILINE | re.DOTALL,
-        ):
-            for rad in block.splitlines():
-                rad = rad.strip().strip("`").strip()
-                if rad and ar_sokvag(rad):
-                    beviljade.append((rad, kommentar.get("html_url", "")))
+        for sokvag in undantag_ur_kommentar(kommentar.get("body") or ""):
+            beviljade.append((sokvag, kommentar.get("html_url", "")))
     return beviljade
+
+
+def undantag_ur_kommentar(kropp: str) -> list[str]:
+    """Sökvägarna EN kommentar beviljar - tom lista om den inte är ett arkitektsvar.
+
+    Markören får stå i fetstil. Opus skrev den så på PR #436 (issue 98):
+    `**Beviljat undantag från omfångsrutan:**`, med rätt rubrik och rätt kodblock.
+    Kön läser markören som en delsträng (`beviljar_undantag()` i
+    process_next_issue.py) och körde om CI, men det här mönstret krävde att raden
+    BÖRJADE med markören - undantaget lästes aldrig, grinden stod röd och PR:en
+    mergades för hand. Två läsare av samma markör som svarar olika är värre än en
+    stel läsare. Stelheten ligger kvar där den gör nytta: rubriken, raden för sig,
+    och kodblocket direkt under.
+    """
+    forsta = kropp.lstrip().splitlines()[0] if kropp.strip() else ""
+    if not ARKITEKTRUBRIK.match(forsta):
+        return []
+    sokvagar: list[str] = []
+    for block in re.findall(
+        rf"^\s*(?:\*\*|__)?{re.escape(UNDANTAGSMARKOR)}(?:\*\*|__)?\s*\n\s*```[^\n]*\n(.*?)^\s*```",
+        kropp, re.MULTILINE | re.DOTALL,
+    ):
+        for rad in block.splitlines():
+            rad = rad.strip().strip("`").strip()
+            if rad and ar_sokvag(rad):
+                sokvagar.append(rad)
+    return sokvagar
 
 
 def kropp_vid_pr_oppning(historik: dict, pr_skapad: str) -> str:
