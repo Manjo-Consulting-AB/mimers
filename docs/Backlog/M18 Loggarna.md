@@ -85,14 +85,14 @@ Kontrollen är en enda fråga, `LegalHold::covers($account)`, som varje gallrand
 **Beror på:** -
 
 ### 113. Säkerhetsloggen
-En ny tabell, `security_log`, med en egen väg in, `RecordSecurityEvent`: användaren, kontot, handlingen, IP-adressen, webbläsaren och `meta`. Samma `meta`-regel som händelseloggen, och aldrig ett lösenord, en kod eller en token, inte ens en hashad.
+En ny tabell, `security_log`, med en egen väg in, `RecordSecurityEvent`: användaren, kontot, handlingen, `ip_group`, enhetsnamnet och `meta`. **Ingen rå IP-adress och ingen rå webbläsarsträng sparas.** `ip_group` är samma pseudonym som missbruksrapporten räknar fram, och formeln bryts ut ur `ReportsAbuseSignals` till en delad klass så att de två aldrig kan glida isär. Enhetsnamnet tolkas ur webbläsarsträngen när raden skrivs, med en enkel regel utan nytt beroende, och strängen kastas. Samma `meta`-regel som händelseloggen, och aldrig ett lösenord, en kod eller en token, inte ens en hashad.
 
 Loggade handlingar: lyckad och misslyckad inloggning, inlöst magic link, tvåfaktor på och av, nya återställningskoder, skickad inbjudan, beställd och hämtad export, skapad och borttagen webhook, tömd lagring, och **nedladdning av en fil ur en container användaren inte äger**. En misslyckad inloggning mot en e-postadress som inte finns loggas utan användare och utan adressen. Byte av lösenord och e-post finns inte i produkten än; de loggas här när de byggs.
 
 Den rättsliga spärrens kommandon från issue 112 byter från applikationsloggen till säkerhetsloggen.
 
-**Läs:** [[ADR-0043 Tre loggar]] § Säkerhetsloggen, [[ADR-0017 Missbruksvektorer]] § Mätningen, `app/Http/Controllers/Auth/AuthenticatedSessionController.php`, `app/Http/Controllers/Auth/MagicLinkLoginController.php`, `app/Http/Controllers/Auth/TotpController.php`, `app/Http/Controllers/FileDeliveryController.php`, `app/Console/ReportsAbuseSignals.php` (docblocken)
-**Klart när:** varje uppräknad handling skriver exakt en rad; en misslyckad inloggning mot en okänd adress skriver en rad utan användare och utan adress; en nedladdning ur användarens egen container skriver ingen rad, en ur någon annans skriver en; ingen rad bär lösenord, kod eller token; den rättsliga spärrens kommandon skriver hit; [[Registerförteckning]] har en rad för `security_log`; hela testsviten är grön.
+**Läs:** [[ADR-0043 Tre loggar]] § Säkerhetsloggen, [[ADR-0017 Missbruksvektorer]] § Mätningen, `app/Http/Controllers/Auth/AuthenticatedSessionController.php`, `app/Http/Controllers/Auth/MagicLinkLoginController.php`, `app/Http/Controllers/Auth/TotpController.php`, `app/Http/Controllers/FileDeliveryController.php`, `app/Console/ReportsAbuseSignals.php` (docblocken och `ipGroup()`)
+**Klart när:** varje uppräknad handling skriver exakt en rad; ingen rad bär en rå IP-adress eller en rå webbläsarsträng; samma IP-adress ger samma `ip_group` i loggen som i missbruksrapporten; en misslyckad inloggning mot en okänd adress skriver en rad utan användare och utan adress; en nedladdning ur användarens egen container skriver ingen rad, en ur någon annans skriver en; ingen rad bär lösenord, kod eller token; den rättsliga spärrens kommandon skriver hit; [[Registerförteckning]] har en rad för `security_log`; hela testsviten är grön.
 **Beror på:** 112
 
 ### 114. Mätningen
@@ -107,16 +107,15 @@ En ny tabell, `usage_metric`: datum, handling, plan och antal. Inget användar-i
 **Beror på:** 109, 110, 111, 113
 
 ### 115. Gallringen av loggarna
-Ett nattligt jobb med tre steg:
+Ett nattligt jobb med två steg:
 
 1. Händelseloggens rader för en container tas bort tolv månader efter containerns `container.purged`-rad. Rader utan container följer kontots `account.deleted` på samma sätt.
-2. Säkerhetsloggens IP-adress och webbläsare nollställs efter 90 dagar.
-3. Säkerhetsloggens rader tas bort efter tolv månader.
+2. Säkerhetsloggens rader tas bort efter tolv månader.
 
-**Den rättsliga spärren går före allt.** Ett spärrat kontos rader rörs inte, inte heller IP-adresserna. Jobbet kör efter mätningen varje natt.
+**Den rättsliga spärren går före allt.** Ett spärrat kontos rader rörs inte. Jobbet kör efter mätningen varje natt.
 
-**Läs:** [[ADR-0043 Tre loggar]] § Beslut och § Konsekvenser, `app/Console/PrunesRegistrationIps.php` (förlagan för nittiodagarsfristen), [[Återläsning]] § Efter varje återläsning: tillämpa raderingarna igen
-**Klart när:** en containers rader finns kvar elva månader efter `container.purged` och är borta efter tolv; en levande containers rader rörs aldrig; IP-adress och webbläsare är nollställda efter 90 dagar och raden finns kvar; säkerhetsloggens rader är borta efter tolv månader; ett spärrat kontos rader rörs inte i något av stegen; jobbet schemaläggs efter mätningen; [[Återläsning]] säger att loggarnas gallring tillämpas igen efter en återläsning; hela testsviten är grön.
+**Läs:** [[ADR-0043 Tre loggar]] § Beslut och § Konsekvenser, `app/Console/PrunesRegistrationIps.php` (förlagan för jobbet och fristen), [[Återläsning]] § Efter varje återläsning: tillämpa raderingarna igen
+**Klart när:** en containers rader finns kvar elva månader efter `container.purged` och är borta efter tolv; en levande containers rader rörs aldrig; säkerhetsloggens rader är borta efter tolv månader; ett spärrat kontos rader rörs inte i något av stegen; jobbet schemaläggs efter mätningen; [[Återläsning]] säger att loggarnas gallring tillämpas igen efter en återläsning; hela testsviten är grön.
 **Beror på:** 107, 112, 114
 
 ### 116. Historikflikarna
@@ -131,10 +130,10 @@ Raderna läses genom `ListAuditEvents` från issue 108. Varje rad är en mening 
 **Beror på:** 108, 109, 110, 111
 
 ### 117. Inloggningshistoriken
-Kontoinställningarnas säkerhetssida får en lista över användarens tjugo senaste inloggningar: tid, ungefärlig enhet ur webbläsarsträngen, och om inloggningen lyckades. **Bara användarens egna rader**, och bara inloggningar. Resten av säkerhetsloggen är vår. IP-adressen visas inte.
+Kontoinställningarnas säkerhetssida får en lista över användarens tjugo senaste inloggningar: tid, ungefärlig enhet och om inloggningen lyckades. **Bara användarens egna rader**, och bara inloggningar. Resten av säkerhetsloggen är vår. IP-adressen visas inte.
 
-Enheten tolkas med en enkel regel utan nytt beroende. En rad vars webbläsarsträng nollställts efter 90 dagar visas som *okänd enhet*.
+Enheten är det enhetsnamn säkerhetsloggen redan sparat (issue 113). En rad utan enhetsnamn visas som *okänd enhet*.
 
 **Läs:** [[ADR-0043 Tre loggar]] § Säkerhetsloggen, `app/Http/Controllers/Settings/SecurityController.php`, `resources/js/pages/Settings/Security.vue`
-**Klart när:** säkerhetssidan visar användarens tjugo senaste inloggningar med tid, enhet och utfall; ingen annan användares rader syns; inga andra handlingar ur säkerhetsloggen syns; ingen IP-adress visas; en rad med nollställd webbläsarsträng visas som okänd enhet; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
+**Klart när:** säkerhetssidan visar användarens tjugo senaste inloggningar med tid, enhet och utfall; ingen annan användares rader syns; inga andra handlingar ur säkerhetsloggen syns; ingen IP-adress visas; en rad utan enhetsnamn visas som okänd enhet; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
 **Beror på:** 113
