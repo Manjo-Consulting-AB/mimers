@@ -2,7 +2,10 @@
 
 namespace App\Actions\Trash;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
+use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
@@ -45,6 +48,16 @@ use Illuminate\Support\Facades\DB;
  *
  * Kontot rörs aldrig (Beslut 8) — att gallra den sista containern på ett
  * konto raderar inte kontot.
+ *
+ * Loggen rensas inte (issue 107). Så länge `container_id` bar ON DELETE
+ * RESTRICT fällde varje loggrad `forceDelete()` nedan — containern gick inte
+ * att ta bort medan en rad pekade på den — och gallringen föll varje natt.
+ * Raderna ska leva vidare i tolv månader efter containern ([[ADR-0043 Tre
+ * loggar]]), så det är `forceDelete()` som skulle ha gett vika, inte loggen.
+ * `container_id` är därför en identifierare utan nyckel sedan issue 107, och
+ * containerns SISTA rad skrivs här, `container.purged`, i samma transaktion
+ * som resten: en gallring som rullas tillbaka lämnar varken en container
+ * eller en rad som påstår att den försvann.
  *
  * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
  * se [[ADR-0024 Tunna controllers och actions]]. Räknaren är en beroendefri,
@@ -136,6 +149,23 @@ class PurgeContainer
             if ($varLevande) {
                 (new AdjustUsage)->handle($accountId, containersDelta: -1);
             }
+
+            // Containerns sista rad (issue 107): gallringen i issue 115 räknar
+            // tolv månader från den, och den är det enda som säger att
+            // containerid:t i loggen en gång var en container och inte bara
+            // ett tal. `user_id` är null — det är jobbet som gallrar, ingen
+            // användare (issue 40 § Beslut 11) — och inget item hör hit.
+            //
+            // Efter `$raderade`-kontrollen: en container som redan var borta
+            // får ingen andra rad, och en rad skrivs aldrig för en gallring
+            // som inte blev av. Containern är redan borta ur tabellen när
+            // raden skrivs; sedan issue 107 är `container_id` en identifierare
+            // utan främmande nyckel, och modellen i minnet bär sitt id.
+            (new RecordAuditEvent)->handle(
+                action: AuditLog::ACTION_CONTAINER_PURGED,
+                account: Account::find($accountId),
+                container: $container,
+            );
         });
     }
 }
