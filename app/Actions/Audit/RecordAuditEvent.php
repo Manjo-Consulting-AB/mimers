@@ -5,6 +5,7 @@ namespace App\Actions\Audit;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
+use App\Models\Item;
 use App\Models\User;
 
 /**
@@ -27,6 +28,11 @@ use App\Models\User;
  * motsvarande modell inte skickas in; `user_id` är null för händelser ett
  * jobb orsakat, och resursen hittar då inte på en systemanvändare (Beslut
  * 11).
+ *
+ * `item_id` (issue 107) sätts när händelsen hör till ett item, oavsett
+ * subjekt — itemet självt eller något som hänger på det. Kolumnen är en
+ * identifierare utan främmande nyckel, som `subject_id`: raden ska överleva
+ * itemet den beskriver.
  */
 class RecordAuditEvent
 {
@@ -42,6 +48,7 @@ class RecordAuditEvent
         ?Account $account = null,
         ?User $user = null,
         ?Container $container = null,
+        ?Item $item = null,
         ?string $subjectType = null,
         ?string $subjectUlid = null,
         array $meta = [],
@@ -51,6 +58,7 @@ class RecordAuditEvent
         $log->account_id = $account?->id;
         $log->user_id = $user?->id;
         $log->container_id = $container?->id;
+        $log->item_id = $item?->id;
         $log->subject_type = $subjectType;
         $log->subject_id = $subjectUlid;
         $log->meta = $meta;

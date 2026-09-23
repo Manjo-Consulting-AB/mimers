@@ -14,8 +14,8 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  * händelserutinerna (accepten och återkallningen).
  *
  * Standardtillståndet är en containerlös konto-åtgärd utan handlande
- * användare och utan subject; tester som vill ha en container, en användare
- * eller ett subject sätter dem uttryckligen.
+ * användare, utan subject och utan item; tester som vill ha en container, en
+ * användare, ett subject eller ett item sätter dem uttryckligen.
  *
  * @extends Factory<AuditLog>
  */
@@ -32,6 +32,7 @@ class AuditLogFactory extends Factory
             'account_id' => Account::factory(),
             'user_id' => null,
             'container_id' => null,
+            'item_id' => null,
             'action' => AuditLog::ACTION_CONTAINER_TRANSFERRED,
             'subject_type' => null,
             'subject_id' => null,

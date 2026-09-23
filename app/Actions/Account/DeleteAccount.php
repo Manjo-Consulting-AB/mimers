@@ -2,8 +2,10 @@
 
 namespace App\Actions\Account;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Trash\PurgeContainer;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Container;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -38,6 +40,13 @@ use Illuminate\Support\Facades\Log;
  * ordning, eller en rad som någon glömt, avbryter med ett integritetsfel
  * mitt i — transaktionen är det enda som gör det ofarligt. Loggen skrivs
  * före commit, medan raderna fortfarande finns att beskriva (Beslut 8).
+ *
+ * `audit_log` står inte i listan ovan och ska inte göra det (issue 107):
+ * sedan `account_id` blev en identifierare utan främmande nyckel blockerar
+ * en loggrad varken containergallringen eller account-raderingen, och
+ * raderna ska leva vidare i tolv månader ([[ADR-0043 Tre loggar]]). Det är
+ * också därför kontots sista rad skrivs här — `account.deleted`, i samma
+ * transaktion och före commit, som ankaret issue 115 räknar från.
  */
 class DeleteAccount
 {
@@ -124,6 +133,18 @@ class DeleteAccount
                 'attachments' => $attachmentCount,
                 'bytes' => $bytes,
             ]);
+
+            // Kontots sista rad i händelseloggen (issue 107), på samma plats
+            // och av samma skäl som raden ovan: efter raderingarna, före
+            // commit. Det är den issue 115 räknar tolv månader från för de
+            // rader som saknar container — containerns rader följer sin egen
+            // `container.purged` — och den enda som säger att kontoid:t i
+            // loggen en gång var ett konto. `user_id` är null: det är jobbet
+            // som raderar, ingen användare (issue 40 § Beslut 11).
+            (new RecordAuditEvent)->handle(
+                action: AuditLog::ACTION_ACCOUNT_DELETED,
+                account: $account,
+            );
 
             DB::table('account')->where('id', $accountId)->delete();
         });

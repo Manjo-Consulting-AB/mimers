@@ -32,6 +32,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * subjektets ULID och skrivs och läses bara som identifierare, aldrig som
  * join.
  *
+ * Samma sak gäller `item_id` sedan issue 107: en identifierare, ingen
+ * främmande nyckel och ingen `item()`-relation. Kolumnen sätts på varje
+ * händelse som hör till ett item, oavsett subjekt, och gör att en rad kan
+ * läsas upp per item. `account_id`, `user_id` och `container_id` förlorade
+ * sina nycklar i samma migrering — [[ADR-0043 Tre loggar]] § Händelseloggen:
+ * loggen överlever det den handlar om.
+ *
  * `meta` bär data om händelsen — kontonas ULID:er, mottagarens typ och nivå
  * — och aldrig en e-postadress eller något annat som loggens läsare inte
  * behöver (Beslut 9 och 10). Castas till array; tom serialiseras som `{}`
@@ -52,6 +59,19 @@ class AuditLog extends Model
     public const ACTION_CONTAINER_TRANSFERRED = 'container.transferred';
 
     public const ACTION_ACCESS_REVOKED = 'access.revoked';
+
+    /**
+     * Containerns sista rad, skriven av App\Actions\Trash\PurgeContainer
+     * (issue 107). Gallringen i issue 115 räknar tolv månader från den.
+     */
+    public const ACTION_CONTAINER_PURGED = 'container.purged';
+
+    /**
+     * Kontots sista rad, skriven av App\Actions\Account\DeleteAccount
+     * (issue 107) — för de rader som saknar container. Issue 115 räknar tolv
+     * månader från den på samma sätt.
+     */
+    public const ACTION_ACCOUNT_DELETED = 'account.deleted';
 
     /**
      * Tabellen heter `audit_log`, inte Eloquents standardplural `audit_logs`.

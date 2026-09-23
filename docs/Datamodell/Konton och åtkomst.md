@@ -137,17 +137,20 @@ Krävs av B2B och av ägarbyten — i en mäklarsituation är det ett värde i s
 | Kolumn | Typ | Not |
 |---|---|---|
 | id, ulid | | Loggen är läsbar genom API:et, så raden bär ULID som allt annat |
-| account_id, user_id | FK NULL | Aktörens konto och användare. `user_id` är `NULL` när ett jobb orsakat händelsen |
-| container_id | FK NULL | |
-| action | VARCHAR(60) | `container.transferred`, `access.revoked`, … Öppet namnrum, inget CHECK |
+| account_id, user_id | Identifierare NULL | Aktörens konto och användare. `user_id` är `NULL` när ett jobb orsakat händelsen |
+| container_id | Identifierare NULL | |
+| item_id | Identifierare NULL | Itemet händelsen hör till, oavsett subjekt |
+| action | VARCHAR(60) | `container.transferred`, `access.revoked`, `container.purged`, … Öppet namnrum, inget CHECK |
 | subject_type | VARCHAR(40) NULL | Domännamn (`container_access`), aldrig ett klassnamn |
 | subject_id | CHAR(26) NULL | Subjektets ULID |
 | meta | JSON | Aldrig e-postadresser — loggen läses av hela ägarkontot |
 | created_at | | |
 
-Index: `(container_id, created_at)`.
+Index: `(container_id, created_at)`, `(item_id, created_at)`, `(user_id, created_at)`.
 
-**Ändras av [[ADR-0043 Tre loggar]], byggs i [[M18 Loggarna]] § 107:** de tre främmande nycklarna släpps, eftersom loggen ska överleva det den handlar om och inte blockera gallringen. `item_id` tillkommer, nullbar och utan FK, med indexen `(item_id, created_at)` och `(user_id, created_at)`. Raderna gallras tolv månader efter containerns `container.purged`, och `meta` bär aldrig fritext. Säkerhetsloggen och mätningen är egna tabeller, se ADR:en. Tabellen ovan uppdateras när migreringen finns.
+**De fyra id-kolumnerna är identifierare, inte främmande nycklar** ([[ADR-0043 Tre loggar]] § Händelseloggen, issue 107). `account_id`, `user_id` och `container_id` bar `ON DELETE RESTRICT` fram till dess, och en enda loggrad fällde därför den nattliga gallringen: `PurgeContainer` tar hårt bort en container efter trettio dagar i papperskorgen men rensar inte loggen — och ska inte göra det. Nycklarna släpptes i migreringen `2026_09_23_000000`; kolumnerna finns kvar med samma värden, och `item_id` kom till på samma villkor som `subject_id`: utan nyckel, skrivs och läses bara som identifierare, aldrig som join. Raden överlever alltså det den beskriver, och ett id i loggen kan peka på något som inte finns längre.
+
+**Livslängden följer subjektet.** `PurgeContainer` skriver `container.purged` och `DeleteAccount` skriver `account.deleted`, båda i sina befintliga transaktioner. Tolv månader efter den raden tar gallringen i issue 115 bort subjektets rader — containerns rader efter `container.purged`, raderna utan container efter kontots `account.deleted`. `meta` bär aldrig fritext. Säkerhetsloggen och mätningen är egna tabeller, se [[ADR-0043 Tre loggar]].
 
 **Append-only.** Ingen `updated_at`, ingen `deleted_at`, ingen rutt som ändrar eller raderar en rad. Det är den enda avvikelsen från [[Datamodell – översikt]]:s tidsstämpel- och soft delete-krav som är motiverad av vad tabellen är: en logg som går att skriva om är inget bevis.
 
