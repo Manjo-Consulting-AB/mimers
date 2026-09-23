@@ -147,7 +147,7 @@ Krävs av B2B och av ägarbyten — i en mäklarsituation är det ett värde i s
 
 Index: `(container_id, created_at)`.
 
-**Ändras av [[ADR-0043 Händelseloggen]], byggs i [[M18 Händelseloggen]] § 107:** de tre främmande nycklarna släpps, eftersom loggen ska överleva det den handlar om och inte blockera gallringen. `item_id` tillkommer, nullbar och utan FK, med indexen `(item_id, created_at)` och `(user_id, created_at)`. Raderna sparas för evigt, och `meta` bär aldrig fritext. Tabellen ovan uppdateras när migreringen finns.
+**Ändras av [[ADR-0043 Tre loggar]], byggs i [[M18 Loggarna]] § 107:** de tre främmande nycklarna släpps, eftersom loggen ska överleva det den handlar om och inte blockera gallringen. `item_id` tillkommer, nullbar och utan FK, med indexen `(item_id, created_at)` och `(user_id, created_at)`. Raderna gallras tolv månader efter containerns `container.purged`, och `meta` bär aldrig fritext. Säkerhetsloggen och mätningen är egna tabeller, se ADR:en. Tabellen ovan uppdateras när migreringen finns.
 
 **Append-only.** Ingen `updated_at`, ingen `deleted_at`, ingen rutt som ändrar eller raderar en rad. Det är den enda avvikelsen från [[Datamodell – översikt]]:s tidsstämpel- och soft delete-krav som är motiverad av vad tabellen är: en logg som går att skriva om är inget bevis.
 
