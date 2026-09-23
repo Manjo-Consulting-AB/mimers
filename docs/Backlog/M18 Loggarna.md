@@ -76,18 +76,20 @@ En ny tabell, `legal_hold`: kontot, ärendenumret, anledningen, när spärren sa
 
 Spärren sätts och hävs med två artisan-kommandon och har ingen yta i webben. Varje åtgärd skriver en rad i säkerhetsloggen när den finns. Fram till dess skriver kommandot till applikationsloggen.
 
-**Spärren stoppar allt som gallrar kontots innehåll:** papperskorgens gallring av containrar, items och bilagor, gallringen av lagrade filer som kontots bilagor pekar på, kontoraderingen och gallringen av vilande konton. Issue 115 lägger till loggarnas gallring. **Spärren syns inte för användaren**: allt fungerar som vanligt i vyerna.
+**Spärren stoppar de två jobb som raderar hårt:** papperskorgens gallring (`PurgesExpiredTrash`) och gallringen av vilande konton (`DeletesDormantAccounts`). Lagrade filer skyddas utan en egen kontroll: en bilaga som inte gallras håller kvar sin referens, och `PurgesExpiredStoredFiles` rör bara filer utan referenser. Ett test ska bevisa det. Issue 115 lägger till loggarnas gallring. **Spärren syns inte för användaren**: allt fungerar som vanligt i vyerna.
 
-Kontrollen är en enda fråga, `LegalHold::covers($account)`, som varje gallrande jobb anropar. Ingen egen formulering per jobb.
+Kontrollen är en enda fråga, `LegalHold::covers($account)`, som varje gallrande jobb anropar. Ingen egen formulering per jobb. Kontrollen ligger i jobben och inte i `PurgeContainer` eller `DeleteAccount`: de är verktygen, jobben är grindarna.
 
 **Läs:** [[ADR-0043 Tre loggar]] § Den rättsliga spärren och § Vad lagen kräver, som vi läser den, `app/Console/PurgesExpiredTrash.php`, `app/Console/PurgesExpiredStoredFiles.php`, `app/Console/DeletesDormantAccounts.php`, `app/Actions/Account/DeleteAccount.php`
-**Klart när:** en spärr går att sätta och häva från kommandoraden med ärendenummer och anledning; en spärrad containers papperskorg gallras inte; en spärrad användares lagrade filer gallras inte; ett spärrat konto raderas inte, varken på begäran eller som vilande, och raderingen nekas med en felkod enligt `AGENTS.md` § Felformat; en hävd spärr släpper gallringen nästa natt; ingen vy och ingen API-resurs avslöjar spärren; [[Registerförteckning]] har en rad för `legal_hold`; hela testsviten är grön.
+**Klart när:** en spärr går att sätta och häva från kommandoraden med ärendenummer och anledning; ett spärrat kontos papperskorg gallras inte; den lagrade filen bakom en spärrad bilaga finns kvar efter båda gallringsjobben; ett spärrat vilande konto raderas inte; en hävd spärr släpper gallringen nästa natt; ingen vy och ingen API-resurs avslöjar spärren; [[Registerförteckning]] har en rad för `legal_hold`; hela testsviten är grön.
 **Beror på:** -
 
 ### 113. Säkerhetsloggen
 En ny tabell, `security_log`, med en egen väg in, `RecordSecurityEvent`: användaren, kontot, handlingen, IP-adressen, webbläsaren och `meta`. Samma `meta`-regel som händelseloggen, och aldrig ett lösenord, en kod eller en token, inte ens en hashad.
 
-Loggade handlingar: lyckad och misslyckad inloggning, inlöst magic link, tvåfaktor på och av, använd återställningskod, bytt lösenord, skickad inbjudan, beställd och hämtad export, och **nedladdning av en fil ur en container användaren inte äger**. En misslyckad inloggning mot en e-postadress som inte finns loggas utan användare och utan adressen.
+Loggade handlingar: lyckad och misslyckad inloggning, inlöst magic link, tvåfaktor på och av, nya återställningskoder, skickad inbjudan, beställd och hämtad export, skapad och borttagen webhook, tömd lagring, och **nedladdning av en fil ur en container användaren inte äger**. En misslyckad inloggning mot en e-postadress som inte finns loggas utan användare och utan adressen. Byte av lösenord och e-post finns inte i produkten än; de loggas här när de byggs.
+
+Den rättsliga spärrens kommandon från issue 112 byter från applikationsloggen till säkerhetsloggen.
 
 **Läs:** [[ADR-0043 Tre loggar]] § Säkerhetsloggen, [[ADR-0017 Missbruksvektorer]] § Mätningen, `app/Http/Controllers/Auth/AuthenticatedSessionController.php`, `app/Http/Controllers/Auth/MagicLinkLoginController.php`, `app/Http/Controllers/Auth/TotpController.php`, `app/Http/Controllers/FileDeliveryController.php`, `app/Console/ReportsAbuseSignals.php` (docblocken)
 **Klart när:** varje uppräknad handling skriver exakt en rad; en misslyckad inloggning mot en okänd adress skriver en rad utan användare och utan adress; en nedladdning ur användarens egen container skriver ingen rad, en ur någon annans skriver en; ingen rad bär lösenord, kod eller token; den rättsliga spärrens kommandon skriver hit; [[Registerförteckning]] har en rad för `security_log`; hela testsviten är grön.
@@ -129,10 +131,10 @@ Raderna läses genom `ListAuditEvents` från issue 108. Varje rad är en mening 
 **Beror på:** 108, 109, 110, 111
 
 ### 117. Inloggningshistoriken
-Kontoinställningarnas säkerhetssida får en lista över användarens senaste inloggningar: tid, ungefärlig enhet ur webbläsarsträngen, och om inloggningen lyckades. **Bara användarens egna rader**, och bara inloggningar. Resten av säkerhetsloggen är vår.
+Kontoinställningarnas säkerhetssida får en lista över användarens tjugo senaste inloggningar: tid, ungefärlig enhet ur webbläsarsträngen, och om inloggningen lyckades. **Bara användarens egna rader**, och bara inloggningar. Resten av säkerhetsloggen är vår. IP-adressen visas inte.
 
-Visas IP-adressen syns den bara så länge den finns kvar, alltså i 90 dagar. Listan får inte påstå något om en rad vars IP redan nollställts.
+Enheten tolkas med en enkel regel utan nytt beroende. En rad vars webbläsarsträng nollställts efter 90 dagar visas som *okänd enhet*.
 
 **Läs:** [[ADR-0043 Tre loggar]] § Säkerhetsloggen, `app/Http/Controllers/Settings/SecurityController.php`, `resources/js/pages/Settings/Security.vue`
-**Klart när:** säkerhetssidan visar användarens senaste inloggningar med tid, enhet och utfall; ingen annan användares rader syns; inga andra handlingar ur säkerhetsloggen syns; en rad med nollställd IP visas utan adress; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
+**Klart när:** säkerhetssidan visar användarens tjugo senaste inloggningar med tid, enhet och utfall; ingen annan användares rader syns; inga andra handlingar ur säkerhetsloggen syns; ingen IP-adress visas; en rad med nollställd webbläsarsträng visas som okänd enhet; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
 **Beror på:** 113

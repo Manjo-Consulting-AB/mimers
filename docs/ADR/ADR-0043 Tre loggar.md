@@ -63,11 +63,11 @@ En gäst ser alltså sina egna handlingar och inget annat. Den som förlorat åt
 
 ### Säkerhetsloggen
 
-**Den loggar det som rör konton och det som lämnar systemet:** lyckade och misslyckade inloggningar, inlösta magic links, tvåfaktor som slås på eller av, byte av lösenord och e-post, skickade inbjudningar, exporter, och **nedladdningar av filer ur en container som användaren inte äger**. Det sista är den enda läsning som loggas. Det är genom den som innehåll sprids vidare via delning.
+**Den loggar det som rör konton och det som lämnar systemet:** lyckade och misslyckade inloggningar, inlösta magic links, tvåfaktor som slås på eller av, byte av lösenord och e-post när de finns, skickade inbjudningar, exporter, webhooks som skapas och tas bort, tömd lagring, och **nedladdningar av filer ur en container som användaren inte äger**. Det sista är den enda läsning som loggas. Det är genom den som innehåll sprids vidare via delning.
 
 **IP-adressen och webbläsaren nollställs efter 90 dagar, raden tas bort efter 12 månader.** Nittio dagar är samma frist som registrerings-IP:n har enligt [[ADR-0017 Missbruksvektorer]]. Tolv månader räcker för att se mönster över ett år, till exempel säsongsmissbruk och vilande konton som vaknar. Båda tiderna vilar på berättigat intresse. Den nattliga missbruksrapporten får läsa loggen, men den skriver aldrig en rå IP-adress, samma regel som i dag.
 
-**Användaren ser sina egna inloggningar**, med tid, ungefärlig enhet och om de lyckades, i kontoinställningarna. Det kostar lite och är det bästa skyddet mot ett kapat konto: användaren upptäcker det själv.
+**Användaren ser sina egna inloggningar**, med tid, ungefärlig enhet och om de lyckades, i kontoinställningarna. IP-adressen visas inte. Det kostar lite och är det bästa skyddet mot ett kapat konto: användaren upptäcker det själv.
 
 ### Mätningen
 
