@@ -1,6 +1,6 @@
 # ADR-0043 Tre loggar
 
-**Status:** Antagen 2026-09-23 · Bygger vidare på issue 40 (revisionsloggen, [[M6 Resten av MVP]]) och [[ADR-0017 Missbruksvektorer]] § Mätningen · Löser ut instrumenteringen som [[ADR-0039 Containerns översikt]], [[ADR-0041 Itemets vy]] och [[ADR-0042 Designsystemet]] lämnade · [[ADR-index]]
+**Status:** Antagen 2026-09-23, IP-adressen pseudonymiserad samma dag · Bygger vidare på issue 40 (revisionsloggen, [[M6 Resten av MVP]]) och [[ADR-0017 Missbruksvektorer]] § Mätningen · Löser ut instrumenteringen som [[ADR-0039 Containerns översikt]], [[ADR-0041 Itemets vy]] och [[ADR-0042 Designsystemet]] lämnade · [[ADR-index]]
 
 Fattat efter retron för M12–M17. Uppdelningen i tre loggar, tidsgränserna och den rättsliga spärren är Tonys beslut 2026-09-23, efter ett första utkast som sparade en enda logg för evigt.
 
@@ -13,7 +13,7 @@ Loggen ska tjäna fyra syften, och de kräver olika saker:
 3. **Missbruket** ska gå att upptäcka och utreda. [[ADR-0017 Missbruksvektorer]] har en nattlig rapport, men den räknar ur produkttabellerna eftersom ingen logg finns.
 4. **Rättsliga krav** ska kunna mötas när något olagligt händer.
 
-Syfte 1 behöver detaljer så länge det användaren äger finns. Syfte 2 behöver lång tid men inga personer. Syfte 3 behöver IP-adresser, men bara en begränsad tid. En enda tabell kan inte vara både evig och personuppgiftsbärande utan att bryta mot lagringsbegränsningen i GDPR artikel 5.1 e.
+Syfte 1 behöver detaljer så länge det användaren äger finns. Syfte 2 behöver lång tid men inga personer. Syfte 3 behöver kunna känna igen samma källa bakom flera konton och inloggningar, men inte veta vilken adress källan har. En enda tabell kan inte vara både evig och personuppgiftsbärande utan att bryta mot lagringsbegränsningen i GDPR artikel 5.1 e.
 
 I dag finns en tabell, `audit_log`, med en enda väg in, `RecordAuditEvent`. Den skrivs från två ställen: `AcceptOwnershipTransfer` och `RevokeContainerAccess`. **Den blockerar dessutom redan gallringen.** `container_id`, `user_id` och `account_id` har `ON DELETE RESTRICT`. `PurgeContainer` rensar åtkomster, inbjudningar och kalenderflöden men inte loggen. En container med en loggrad fäller därför den nattliga gallringen varje natt när containern ska bort. I dag är det sällsynt. När varje handling skriver en rad blir det varje container.
 
@@ -40,8 +40,8 @@ Läsningen är vår egen och inte en juristbedömning. Den bör granskas av en j
 | **Tabell** | `audit_log`, den befintliga | `security_log`, ny | `usage_metric`, ny |
 | **Svarar på** | Vem gjorde vad med det jag äger? | Missbruk, intrång och olagligt innehåll | Hur används systemet? |
 | **Läses av** | Användaren, enligt läsregeln nedan | Bara vi, utom användarens egna inloggningar | Bara vi |
-| **Personuppgifter** | Användarens id, aldrig fritext | Användarens id, IP-adress och webbläsare | Inga |
-| **Sparas** | Så länge containern finns, plus 12 månader | 12 månader, IP-adressen och webbläsaren 90 dagar | För evigt |
+| **Personuppgifter** | Användarens id, aldrig fritext | Användarens id, en pseudonym för IP-adressen och ett tolkat enhetsnamn | Inga |
+| **Sparas** | Så länge containern finns, plus 12 månader | 12 månader | För evigt |
 
 ### Händelseloggen
 
@@ -65,7 +65,13 @@ En gäst ser alltså sina egna handlingar och inget annat. Den som förlorat åt
 
 **Den loggar det som rör konton och det som lämnar systemet:** lyckade och misslyckade inloggningar, inlösta magic links, tvåfaktor som slås på eller av, byte av lösenord och e-post när de finns, skickade inbjudningar, exporter, webhooks som skapas och tas bort, tömd lagring, och **nedladdningar av filer ur en container som användaren inte äger**. Det sista är den enda läsning som loggas. Det är genom den som innehåll sprids vidare via delning.
 
-**IP-adressen och webbläsaren nollställs efter 90 dagar, raden tas bort efter 12 månader.** Nittio dagar är samma frist som registrerings-IP:n har enligt [[ADR-0017 Missbruksvektorer]]. Tolv månader räcker för att se mönster över ett år, till exempel säsongsmissbruk och vilande konton som vaknar. Båda tiderna vilar på berättigat intresse. Den nattliga missbruksrapporten får läsa loggen, men den skriver aldrig en rå IP-adress, samma regel som i dag.
+**Ingen rå IP-adress och ingen rå webbläsarsträng sparas.** IP-adressen skrivs som en pseudonym, `ip_group`: de första sexton hexatecknen av `hash_hmac('sha256', $ip, config('app.key'))`. Det är samma formel som missbruksrapporten redan använder, så grupperna i rapporten och i loggen är samma grupper. Webbläsarsträngen tolkas när raden skrivs till ett kort enhetsnamn, som *Firefox · macOS*, och själva strängen kastas.
+
+Pseudonymen räcker till allt loggen finns för: att se att samma källa står bakom många konton, att se många inloggningsförsök från ett ställe, och att märka att ett konto plötsligt loggar in från en ny källa. Den räcker också när en myndighet frågar om en viss adress: vi räknar fram samma pseudonym och kan svara om adressen förekommit och i så fall för vilket konto. Det enda den inte kan är att svara på *vilken adress hade konto X?*. Ingen regel vi känner till kräver att vi kan det.
+
+**Nyckeln är det som gör pseudonymen till en pseudonym.** En vanlig hash av en IPv4-adress går att vända genom att pröva alla fyra miljarder adresser. Med `APP_KEY` som nyckel går det inte. En byte av `APP_KEY` bryter kopplingen mellan gamla och nya rader, precis som för rapporten.
+
+**Raden tas bort efter 12 månader.** Tolv månader räcker för att se mönster över ett år, till exempel säsongsmissbruk och vilande konton som vaknar. Tiden vilar på berättigat intresse. En pseudonym är fortfarande en personuppgift enligt GDPR, men en läckt tabell avslöjar ingen adress.
 
 **Användaren ser sina egna inloggningar**, med tid, ungefärlig enhet och om de lyckades, i kontoinställningarna. IP-adressen visas inte. Det kostar lite och är det bästa skyddet mot ett kapat konto: användaren upptäcker det själv.
 
@@ -83,7 +89,7 @@ Jobbet måste gå innan gallringen tar raderna. Det kör därför före gallring
 
 Spärren stoppar:
 
-- gallringen av händelseloggen och säkerhetsloggen för kontot, inklusive nollställningen av IP-adresser,
+- gallringen av händelseloggen och säkerhetsloggen för kontot,
 - papperskorgens gallring av kontots containrar, items och bilagor,
 - kontoraderingen och gallringen av vilande konton,
 - gallringen av lagrade filer som kontots bilagor pekar på.
@@ -106,6 +112,8 @@ Spärren stoppar:
 
 **Läsregeln följer ägandet och inte åtkomsten.** Regel 1 är densamma som `ContainerPolicy::viewAuditLog()` redan har. I en delad container är det ägarens sak att veta vem som gjort vad. Regel 2 är ny: i dag får en gäst `403` på hela loggen, men de egna handlingarna är ingen hemlighet för gästen själv.
 
+**Adressen behövs inte, bara att den är densamma.** Varje användning av IP-adressen i den här ADR:en är en jämförelse: samma källa, många konton; samma konto, ny källa. En jämförelse fungerar lika bra mellan pseudonymer som mellan adresser. Att spara adressen i 90 dagar för att sedan nollställa den hade kostat ett gallringssteg och gett en uppgift vi inte har någon användning för.
+
 **Nedladdningar är den enda läsning som loggas.** Att logga varje visning vore en logg över allt alla tittar på. En nedladdning ur någon annans container är däremot när innehåll lämnar sin ägare, och det är där både dataintrång och spridning av olagligt material syns.
 
 ## Konsekvenser
@@ -118,6 +126,8 @@ Spärren stoppar:
 - **Personraderingen rör inte loggarna när den byggs.** Användarraden raderas, och `user_id` blir en siffra som inte pekar på någon. En sådan rad visas som *en tidigare användare*.
 - **DSA kräver mer än loggar.** Anmälningsvägen enligt artikel 16 och motiveringen enligt artikel 17 är egna funktioner med egna ytor. De har ingen issue än och står i [[Att sortera efter mockuparna]] § Ännu inte issues.
 - **Dashboarden kan byggas.** Dess händelsepanel är händelseloggen med läsregeln, över alla användarens konton. Den blir en egen milstolpe efter [[M18 Loggarna]].
+- **Registrerings-IP:n sparas fortfarande rå i 90 dagar**, enligt [[ADR-0017 Missbruksvektorer]]. Den kan läggas om till samma pseudonym senare, men den här ADR:en rör den inte.
+- **Webbhotellets åtkomstloggar** innehåller sannolikt råa IP-adresser oavsett vad appen gör. Hur länge inleed sparar dem står inte i valvet; svaret hör hemma i [[Registerförteckning]].
 - **Missbruksrapporten får en bättre källa.** Den räknar i dag ur produkttabellerna. Säkerhetsloggen ger den inloggningar, exporter och nedladdningar direkt. Rapporten förblir skrivskyddad enligt issue 50b.
 
 ## Alternativ
@@ -131,5 +141,9 @@ Spärren stoppar:
 **Behålla främmande nycklar med `ON DELETE SET NULL`.** Då överlever raden, men den skrivs om av databasen och tappar sin container. Det tömmer historiken just när den behövs, efter en radering.
 
 **Låta gäster läsa hela containerns logg.** Avvisat: i en delad container är vetskapen om vem som gjort vad ägarens.
+
+**Spara IP-adressen rå i 90 dagar och nollställ den sedan.** Det första beslutet. Avvisat samma dag: varje användning är en jämförelse som pseudonymen klarar, och den råa adressen hade varit en personuppgift utan användning.
+
+**En vanlig hash av IP-adressen utan nyckel.** Avvisat: den går att vända genom att pröva alla adresser.
 
 **En spärr som syns för användaren.** Avvisat: den kan varna den som utreds, och ingen DSA-regel kräver att en bevarad uppgift märks.
