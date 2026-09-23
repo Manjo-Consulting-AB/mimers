@@ -98,7 +98,9 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 
 ## Ännu inte issues
 
-**Händelseinstrumenteringen.** `audit_log` har tabellen, indexet, en resurs och en API-kontroller — men skrivs bara av `RevokeContainerAccess` och `AcceptOwnershipTransfer`. Varje händelse mockuparna visar, på både dashboarden och containersidan, är oregistrerad: dokument tillagt, kostnad registrerad, uppgift slutförd, bild uppladdad, schema ändrat. Det är ett eget arbete med egna beslut — vilka handlingar som loggas, vad som hamnar i `meta`, hur länge raderna sparas, vem som får läsa dem — och det ska inte smygas in i en vy-issue. Ytorna byggs som reserverad plats tills det finns.
+**Händelseinstrumenteringen har lämnat listan 2026-09-23.** Besluten står i [[ADR-0043 Tre loggar]] och arbetet har issues i [[M18 Loggarna]] — 107 till 117. Dashboardens händelsepanel väntar på dashboardens egen milstolpe.
+
+**Anmälningsvägen enligt DSA.** Mimers är en värdtjänst, och artikel 16 kräver att vem som helst kan anmäla innehåll som den anser vara olagligt. Artikel 17 kräver att en användare vars innehåll begränsas får en motivering. Båda är egna ytor med egna flöden och hör ihop med den rättsliga spärren i [[ADR-0043 Tre loggar]]. Ingen av dem har en issue.
 
 **Containerns karta.** En graf över containerns alla items och deras relationer. Datat finns; layouten över hundratals noder är arbetet, och den delar ingenting med fokuskartan på itemet utom namnet.
 

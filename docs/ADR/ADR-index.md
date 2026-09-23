@@ -48,6 +48,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0040 Underträdets summor]] | Status och kostnad räknas över itemet och dess ättlingar, donuten grupperar per item | [[Items och organisation]], [[Planer och kvoter]] |
 | [[ADR-0041 Itemets vy]] | Itemet bor i containern, strukturen har flera vägar till samma item, anteckningen är itemets egen text | [[Items och organisation]], [[Filer och lagring]] |
 | [[ADR-0042 Designsystemet]] | Tokens med roller före komponenter före sidor, designbilderna i `docs/Design/` | Allt |
+| [[ADR-0043 Tre loggar]] | Händelselogg, säkerhetslogg och anonym mätning med var sin livslängd, plus en rättslig spärr enligt DSA | [[Konton och åtkomst]], [[Registerförteckning]] |
 
 ## Om att ändra ett beslut
 
