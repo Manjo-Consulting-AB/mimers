@@ -98,7 +98,7 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 
 ## Ännu inte issues
 
-**Händelseinstrumenteringen.** `audit_log` har tabellen, indexet, en resurs och en API-kontroller — men skrivs bara av `RevokeContainerAccess` och `AcceptOwnershipTransfer`. Varje händelse mockuparna visar, på både dashboarden och containersidan, är oregistrerad: dokument tillagt, kostnad registrerad, uppgift slutförd, bild uppladdad, schema ändrat. Det är ett eget arbete med egna beslut — vilka handlingar som loggas, vad som hamnar i `meta`, hur länge raderna sparas, vem som får läsa dem — och det ska inte smygas in i en vy-issue. Ytorna byggs som reserverad plats tills det finns.
+**Händelseinstrumenteringen har lämnat listan 2026-09-23.** Besluten står i [[ADR-0043 Händelseloggen]] och arbetet har issues i [[M18 Händelseloggen]] — 107 till 112. Dashboardens händelsepanel väntar på dashboardens egen milstolpe.
 
 **Containerns karta.** En graf över containerns alla items och deras relationer. Datat finns; layouten över hundratals noder är arbetet, och den delar ingenting med fokuskartan på itemet utom namnet.
 
