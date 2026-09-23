@@ -4,10 +4,12 @@ namespace App\Console;
 
 use App\Actions\Trash\PurgeContainer;
 use App\Actions\Trash\PurgeContent;
+use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
+use App\Models\LegalHold;
 use App\Models\Tag;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,6 +44,15 @@ use Throwable;
  * `handle(): array` returnerar antalet gallrade poster per typ (containern
  * räknas som en post) och loggar en rad när summan är över noll; tyst när
  * det inte fanns något att göra (Beslut 10, samma som 17b § Beslut 5).
+ *
+ * Den rättsliga spärren (issue 112) är jobbets sista grind: en rad vars konto
+ * är spärrat gallras inte, och hoppas över utan att räknas. Kontrollen ligger
+ * här och inte i PurgeContent eller PurgeContainer — de är verktygen, det här
+ * jobbet är grinden — och den ställs med LegalHold::covers() för radens
+ * ägande konto, en enda fråga formulerad på ett enda ställe. Kontots innehåll
+ * skyddas därmed utan att de lagrade filerna behöver en egen kontroll: en
+ * bilaga som inte gallras behåller sin referens, och
+ * App\Console\PurgesExpiredStoredFiles rör bara filer utan referenser.
  *
  * Schemaläggs i routes/console.php med `Schedule::call(...)`, aldrig
  * `Schedule::command(...)` — se AGENTS.md § Driftmiljön saknar proc_open. Av
@@ -120,6 +131,17 @@ class PurgesExpiredTrash
         $query->chunkById(100, function ($rows) use ($type, $perRow, &$deleted): void {
             foreach ($rows as $row) {
                 try {
+                    // Den rättsliga spärren (issue 112), läst per rad och
+                    // inte i urvalet: en spärr som sätts medan körningen pågår
+                    // ska hinna få verkan. Ingen loggning när en rad hoppas
+                    // över — en spärr är ett beslut och inte ett fel, och
+                    // beslutet står i legal_hold.
+                    $account = $this->owningAccount($row);
+
+                    if ($account !== null && LegalHold::covers($account)) {
+                        continue;
+                    }
+
                     $perRow($row);
                     $deleted++;
                 } catch (Throwable $e) {
@@ -133,5 +155,33 @@ class PurgesExpiredTrash
         });
 
         return $deleted;
+    }
+
+    /**
+     * Kontot som äger raden. Containern bär sitt konto själv; allt annat i
+     * papperskorgen hänger under en container som ägs av ett konto
+     * ([[ADR-0002 Konto äger container]]), och bilagan når sin container
+     * genom itemet.
+     *
+     * Båda leden läses med `withTrashed()`: en mjukraderad förälder är
+     * precis vad den här gallringen tittar på, och Eloquents globala
+     * SoftDeletes-scope hade gömt den — och därmed spärren. Null betyder
+     * "ingen ägare att fråga om", och då gallras raden som förut.
+     */
+    private function owningAccount(Item|Attachment|Category|Tag|Container $row): ?Account
+    {
+        if ($row instanceof Container) {
+            return $row->account;
+        }
+
+        $containerId = $row instanceof Attachment
+            ? Item::withTrashed()->whereKey($row->item_id)->value('container_id')
+            : $row->container_id;
+
+        if ($containerId === null) {
+            return null;
+        }
+
+        return Container::withTrashed()->whereKey($containerId)->first()?->account;
     }
 }

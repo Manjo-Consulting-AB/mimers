@@ -8,6 +8,7 @@ use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
+use App\Models\LegalHold;
 use App\Models\Subscription;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -43,6 +44,15 @@ use Throwable;
  *   de finns kvar. Radera aldrig i en främmande container — hoppa över kontot
  *   och lämna frågan om vad som ska hända med innehållet till [[Tankar]]
  *   (se Frågor och antaganden i PR:n för 29b).
+ *
+ * Den rättsliga spärren (issue 112) prövas först av alla, direkt efter
+ * statuskontrollen: ett konto som är spärrat raderas inte, hur vilande det
+ * än är. Kontrollen ligger i jobbet och inte i DeleteAccount — jobbet är
+ * grinden, actionen är verktyget — och den ställs med LegalHold::covers(),
+ * samma enda fråga som papperskorgens gallring ställer. Ett spärrat kontos
+ * innehåll skyddas därmed på båda vägarna: det gallras inte ur
+ * papperskorgen (PurgesExpiredTrash) och kontot försvinner inte med sitt
+ * innehåll.
  *
  * Ett konto i taget, en transaktion per konto, och ett fel stoppar inte de
  * andra (Beslut 8). Schemaläggs i routes/console.php med
@@ -117,6 +127,20 @@ class DeletesDormantAccounts
                 ->first();
 
             if ($row === null || $row->status !== 'closed' || $row->read_only_reason !== 'inactivity') {
+                return;
+            }
+
+            // Den rättsliga spärren (issue 112) — kontots innehåll är bevis
+            // och får inte gallras medan en utredning pågår. Spärren är ett
+            // beslut och inte ett fel, därför info och inte warning; raden i
+            // legal_hold är själva spåret, loggen bara kvittot på att den fick
+            // verkan i natt.
+            if (LegalHold::covers($row)) {
+                Log::info('account.deletion_blocked', [
+                    'account_ulid' => $row->ulid,
+                    'reason' => 'legal_hold',
+                ]);
+
                 return;
             }
 

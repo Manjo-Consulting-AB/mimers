@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\LegalHold\LiftLegalHold;
+use App\Actions\LegalHold\PlaceLegalHold;
 use App\Console\AdvancesAccountLifecycle;
 use App\Console\DeletesDormantAccounts;
 use App\Console\DeliversNotifications;
@@ -16,8 +18,10 @@ use App\Console\PurgesExpiredTrash;
 use App\Console\ReconcilesUsageCounters;
 use App\Console\ReportsAbuseSignals;
 use App\Console\SendsWeeklyDigest;
+use App\Models\Account;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -380,3 +384,70 @@ Schedule::call(function () {
         '--tries' => 1,
     ]);
 })->everyMinute()->name('drain-queue')->withoutOverlapping(10);
+
+/*
+ * Issue 112 · Den rättsliga spärren — sätts och hävs bara härifrån. Se
+ * [[ADR-0043 Tre loggar]] § Den rättsliga spärren, App\Models\LegalHold,
+ * App\Actions\LegalHold\PlaceLegalHold och [[Registerförteckning]].
+ *
+ * **Ingen yta i webben och inget API.** Den som kan sätta spärren ska inte
+ * kunna göra det av misstag, och en spärr som syns i en vy kunde varna den
+ * som är föremål för en utredning. Kontot anges med sin ULID — löpnumret
+ * lämnar aldrig servern (AGENTS.md § Databaskonventioner).
+ *
+ * Båda kommandona skriver en rad till applikationsloggen. Säkerhetsloggen
+ * finns inte än (issue 113); när den finns flyttar raden dit. Meddelandena
+ * är därför redan namngivna som händelser och inte som meningar.
+ *
+ * **Kommandona schemaläggs inte.** De är handgrepp för den som utreder, inte
+ * nattjobb, och `drain-queue` ska fortsätta ligga sist i schemat — se
+ * tests/Feature/Drift/KoarbetareTest.php.
+ */
+Artisan::command('legal-hold:place {account : Kontots ULID} {case : Ärendenumret} {reason : Varför spärren sätts}', function (string $account, string $case, string $reason): int {
+    $target = Account::query()->where('ulid', $account)->first();
+
+    if ($target === null) {
+        $this->error("Inget konto med ULID {$account}.");
+
+        return 1;
+    }
+
+    app(PlaceLegalHold::class)->handle($target, $case, $reason);
+
+    Log::info('legal_hold.placed', [
+        'account_ulid' => $target->ulid,
+        'case_number' => $case,
+        'reason' => $reason,
+    ]);
+
+    $this->info("Rättslig spärr satt på {$target->ulid}, ärende {$case}.");
+
+    return 0;
+})->purpose('Sätter en rättslig spärr på ett konto');
+
+Artisan::command('legal-hold:lift {account : Kontots ULID}', function (string $account): int {
+    $target = Account::query()->where('ulid', $account)->first();
+
+    if ($target === null) {
+        $this->error("Inget konto med ULID {$account}.");
+
+        return 1;
+    }
+
+    $lifted = app(LiftLegalHold::class)->handle($target);
+
+    if ($lifted === 0) {
+        $this->error("Kontot {$target->ulid} har ingen gällande spärr.");
+
+        return 1;
+    }
+
+    Log::info('legal_hold.lifted', [
+        'account_ulid' => $target->ulid,
+        'holds' => $lifted,
+    ]);
+
+    $this->info("Rättslig spärr hävd på {$target->ulid}.");
+
+    return 0;
+})->purpose('Häver en rättslig spärr på ett konto');

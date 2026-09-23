@@ -13,3 +13,4 @@ Vilka personuppgifter systemet behandlar, var de bor, varför de finns, hur län
 | Uppgift | Var den bor | Varför | Gallring | Rättslig grund |
 |---|---|---|---|---|
 | Registrerings-IP | `account.registration_ip` | Upptäcka missbruk av gratisnivån, [[ADR-0017 Missbruksvektorer]] § 1–2 | 90 dygn efter `account.created_at`, nollställs av `prune-registration-ips` | Berättigat intresse, art. 6.1 f |
+| Rättslig spärr | `legal_hold` | Kontots innehåll är bevis och får inte gallras medan en anmälan enligt DSA art. 16 eller en myndighetsbegäran utreds, [[ADR-0043 Tre loggar]] § Den rättsliga spärren | Raden tas aldrig bort; spärren hävs genom att `lifted_at` sätts, och raden blir kvar som historik | Berättigat intresse, art. 6.1 f |
