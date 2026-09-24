@@ -420,7 +420,7 @@ it('hämtar skalets strängar ur ui.php', function () {
 });
 
 /*
- * Dashboardens strängar, se issue 122, 124 och 125.
+ * Dashboardens strängar, se issue 122, 124, 125 och 126.
  *
  * Samma form som skalets prov strax ovanför: nycklarna läses ur källkoden i
  * stället för att räknas upp här, så att en mening som läggs till i en
@@ -435,6 +435,12 @@ it('hämtar skalets strängar ur ui.php', function () {
  * `translate()` skriver nyckeln själv när uppslaget misslyckas. Donutens
  * legend har ingen nyckel alls: en tårtbit namnges av containerns eget namn,
  * som skrivs ordagrant och aldrig slås upp.
+ *
+ * Händelsepanelen kom med issue 126. Dess rubrik och tomma läge är panelens
+ * egna, och raderna är historikflikens — `HistoryRow` slår upp
+ * `audit.action.*`, `audit.field.*` och `audit.fallback.container`, som
+ * prövas i HistorikflikTest och HandelsepanelTest. Här står alltså bara de två
+ * nycklar panelen äger själv.
  */
 it('hämtar dashboardens strängar ur ui.php', function () {
     $nycklar = [];
@@ -444,6 +450,7 @@ it('hämtar dashboardens strängar ur ui.php', function () {
         'js/components/DashboardStats.vue',
         'js/components/ContainerCard.vue',
         'js/components/CostDonut.vue',
+        'js/components/DashboardActivityPanel.vue',
     ] as $fil) {
         preg_match_all("/t\\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
 

@@ -357,6 +357,29 @@ it('en rad om ett gallrat item eller en raderad användare visas med en ersätta
 
     expect(trans('ui.audit.fallback.user', [], 'en'))->toBe('a former user');
     expect(trans('ui.audit.fallback.item', [], 'en'))->toBe('a deleted item');
+
+    /*
+     * Containerns ersättare kom med issue 126 och bor i samma katalog. Raden
+     * ritar den bara när anroparen ber om den — `showContainer` är satt av
+     * dashboardens händelsepanel och av ingen flik — så historikflikarnas rad
+     * ser ut precis som förut: containern är given av sidan man står på, och
+     * en rad som upprepade dess namn hade sagt samma sak två gånger.
+     *
+     * Provet fäster båda sidorna av det: nyckeln finns, och flikarna ber inte
+     * om raden. Det senare är det som går sönder först om någon sätter flaggan
+     * på fel ställe.
+     */
+    expect(trans('ui.audit.fallback.container', [], 'en'))->toBe('a deleted container');
+
+    expect($rad)->toContain("t('audit.fallback.container')")
+        ->toContain('props.showContainer');
+
+    foreach ([
+        'js/pages/Containers/History.vue',
+        'js/pages/Containers/Items/Show.vue',
+    ] as $flik) {
+        expect(historikKod($flik))->not->toContain('show-container');
+    }
 });
 
 /*

@@ -1331,6 +1331,12 @@ return [
         'fallback' => [
             'user' => 'a former user',
             'item' => 'a deleted item',
+            // The container, on the dashboard's activity panel (issue 126):
+            // the row stands outside its container there and names it, and a
+            // container that has been purged — or is in the trash — has no
+            // name left to give. Same rule as the two above: the replacement
+            // is a sentence the user reads, never a blank field.
+            'container' => 'a deleted container',
         ],
 
         /*
@@ -2276,6 +2282,21 @@ return [
             'others' => 'My containers',
             'items' => 'Items: :count',
             'todos' => 'Open tasks: :count',
+        ],
+
+        // The activity panel, see issue 126. The heading is the mockup's own
+        // name for it. The rows are the history log's, built by
+        // resources/js/components/HistoryRow.vue from `audit.action.*` — so
+        // there is exactly one string here that the panel itself owns.
+        //
+        // The empty sentence is the panel's own and not the history tab's
+        // (`audit.history.empty`): that one says nothing has happened *here*,
+        // which is true inside a container and false on a page that spans all
+        // of them. A blank panel is not an option — an empty heading with
+        // nothing under it reads as a rendering fault.
+        'activity' => [
+            'heading' => 'Recent activity',
+            'empty' => 'Nothing has happened yet.',
         ],
     ],
 
