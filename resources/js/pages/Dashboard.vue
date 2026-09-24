@@ -1,82 +1,49 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
-import TodoRow from '../components/TodoRow.vue';
+import DashboardTasksPanel from '../components/DashboardTasksPanel.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Startsidan efter inloggning — todo-vyn, se issue 64 § Beslut 1–8.
+ * Dashboarden — startsidan efter inloggning, se issue 122 och
+ * docs/Design/main.jpeg. Panelen *Kommande uppgifter* är den första av M19:s
+ * paneler; brickorna (124), kostnaderna (125), händelserna (126), klockan
+ * (127) och informationsytan (128) kommer efter.
  *
- * Sidan är produktens andra huvudfråga, "vad ska jag göra?", och den öppnas
- * oftare än någon annan i M10. Den ligger kvar på `/dashboard` (Beslut 1);
- * `Dashboard.vue` var redan komponenten som renderades, och den är inte tom
- * längre.
+ * **Sidan ritar paneler och äger ingenting själv.** Den här filen är
+ * monteringspunkten: varje panel är sin egen komponent med sin egen propp, och
+ * den här sidan skickar vidare vad servern gav den — den räknar ingenting,
+ * filtrerar ingenting och formulerar ingen fråga. Det är hela skälet att M19:s
+ * issues kan byggas parallellt: en ny panel krockar om en rad här och en rad i
+ * App\Http\Controllers\DashboardController, inte om varandras innehåll.
  *
- * **Sidan filtrerar ingenting** (Beslut 2). Urvalet — öppen, synlig idag,
- * inte blockerad, i en åtkomlig container och inom användarens omfång — formuleras
- * EN gång, i `ScheduleOccurrence::scopeTodoFor()`, och den här filen har
- * varken en `computed` som sållar rader eller en klientmatchning. Servern
- * äger urvalet; sidan visar det.
+ * **Komponenten hette `Dashboard` redan före issue 122** — då var den todo-vyn,
+ * och `/dashboard` var dess adress. Rutten och ruttnamnet står kvar därför att
+ * ramverket skickar en nyinloggad användare hit (issue 64 § Beslut 1), och
+ * sidnamnet är kontraktet mot `import.meta.glob` över `pages/` (issue 51).
  *
- * **Grupperingen är också serverns** (Beslut 3). `groups` kommer som tre
- * färdiga listor i den ordning de ska ritas — försenat först, sedan idag och
- * kommande — och vyn itererar objektets nycklar som de kommer. Den räknar
- * aldrig en grupp själv: en klient med fel klocka ska inte kunna flytta en
- * uppgift till fel hög, och en `computed` som jämför `due_at` mot `Date.now()`
- * hade varit precis den klockan.
- *
- * **Ingen paginering och ingen sorteringsväljare** (Beslut 3). Systemet är
- * kraftigt säsongsbetonat — i april förfaller allt samtidigt — så listan är
- * hela listan och grupperingen är det som gör den begriplig (Beslut 7).
- *
- * **De två tomma lägena är olika, och ingen av dem vet om omfånget**
- * (Beslut 6). `hasContainers` är serverns svar på "har hon någon container alls" —
- * den som inte har någon får en mening och en länk till att skapa en, den som
- * har containers utan öppna uppgifter får en annan. Ingen av meningarna nämner
- * ett tal eller antyder att rader dolts: en omfångsbegränsad mottagare med
- * tom lista får ordagrant samma mening som en ägare vars uppgifter är gjorda
- * (issue 73 § Beslut 6, issue 74).
+ * **Uppgifterna kommer ur samma urval som `/tasks`.** Servern klipper de fem
+ * första i App\Http\Controllers\DashboardController, och panelen formulerar
+ * inget eget `where` — se resources/js/components/DashboardTasksPanel.vue.
  */
 const props = defineProps({
-    /* Listorna per grupp, i ritningsordning: overdue, today, upcoming. */
-    groups: { type: Object, required: true },
+    /* Högst fem rader ur todo-urvalet, i serverns ordning. */
+    tasks: { type: Array, required: true },
     /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
     hasContainers: { type: Boolean, required: true },
 });
 
 const { t } = useTranslations();
-
-const isEmpty = computed(() => Object.values(props.groups).every((entries) => entries.length === 0));
 </script>
 
 <template>
     <AppLayout>
-        <Head :title="t('todo.title')" />
+        <Head :title="t('dashboard.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('todo.heading') }}</h1>
+        <h1 class="text-2xl font-semibold">{{ t('dashboard.heading') }}</h1>
 
-        <template v-if="isEmpty">
-            <p class="mt-8 text-slate-700">
-                <template v-if="hasContainers">{{ t('todo.empty.nothing') }}</template>
-
-                <template v-else>
-                    {{ t('todo.empty.no_containers') }}
-                    <Link href="/containers/create" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
-                        {{ t('todo.empty.create') }}
-                    </Link>
-                </template>
-            </p>
-        </template>
-
-        <template v-for="(entries, group) in groups" :key="group">
-            <section v-if="entries.length > 0" class="mt-8">
-                <h2 class="text-sm font-medium text-slate-700">{{ t(`todo.group.${group}`) }}</h2>
-
-                <ul class="mt-2 flex flex-col divide-y divide-slate-200">
-                    <TodoRow v-for="entry in entries" :key="entry.ulid" :entry="entry" />
-                </ul>
-            </section>
-        </template>
+        <div class="mt-8">
+            <DashboardTasksPanel :tasks="props.tasks" :has-containers="props.hasContainers" />
+        </div>
     </AppLayout>
 </template>

@@ -19,6 +19,7 @@ use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTrashController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\FavoriteController;
@@ -59,16 +60,29 @@ use Inertia\Inertia;
  * kontraktet: app.js löser upp det mot import.meta.glob över pages/, så en
  * omdöpning bryter varje Inertia::render() som pekar på det.
  *
- * **Startsidan är todo-vyn sedan issue 64**, se
- * App\Http\Controllers\TodoController. Closuren som issue 51 lämnade efter
- * sig — avsiktligt tom, med en kommentar om att issue 64 ersätter den — är
- * bytt mot kontrollern, och URL:en är oförändrad: den heter `dashboard`, och
- * ramverket skickar en nyinloggad användare hit (Beslut 1). Att lägga todo på
- * `/todo` och låta `/dashboard` omdirigera vore två URL:er för en sida.
+ * **Startsidan är dashboarden sedan issue 122**, se
+ * App\Http\Controllers\DashboardController. Closuren som issue 51 lämnade
+ * efter sig — avsiktligt tom, med en kommentar om att issue 64 ersätter den —
+ * blev todo-vyn i issue 64 och panelerna i M19. URL:en och ruttnamnet är
+ * oförändrade: den heter `dashboard`, och ramverket skickar en nyinloggad
+ * användare hit (issue 64 § Beslut 1). Att byta namn på adressen hade tvingat
+ * varje omdirigering i inloggningen, registreringen och magic link att följa
+ * med, och en bokmärkt adress hade blivit en 404.
+ *
+ * **Todo-vyn fick sin egen adress i samma issue**, `GET /tasks` med ruttnamnet
+ * `tasks`, se App\Http\Controllers\TodoController. Den låg på `/dashboard`
+ * fram till dess, men det var startsidan som var dess hemvist och inte
+ * uppgifterna: två sidor i samma URL är samma sorts hopblandning som två
+ * URL:er för samma sida. Panelen på dashboarden visar de fem första raderna ur
+ * samma urval och länkar hit.
  */
-Route::get('/dashboard', [TodoController::class, 'index'])
+Route::get('/dashboard', [DashboardController::class, 'index'])
     ->middleware('auth')
     ->name('dashboard');
+
+Route::get('/tasks', [TodoController::class, 'index'])
+    ->middleware('auth')
+    ->name('tasks');
 
 Route::get('/', fn () => Inertia::render('Welcome'))->name('welcome');
 
