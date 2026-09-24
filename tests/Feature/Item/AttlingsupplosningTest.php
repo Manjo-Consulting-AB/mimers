@@ -4,6 +4,7 @@ use App\Actions\Item\ResolveItemDescendants;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -246,6 +247,10 @@ it('ställer ett konstant antal frågor oavsett trädets djup och bredd', functi
     // och en kedja om tio under det första barnbarnet — 83 items.
     [, $bredRot] = attlingBrett();
 
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
+
     $smal = attlingFrågor(fn () => app(ResolveItemDescendants::class)->handle($smalRot));
     $bred = attlingFrågor(fn () => app(ResolveItemDescendants::class)->handle($bredRot));
 
@@ -253,6 +258,8 @@ it('ställer ett konstant antal frågor oavsett trädets djup och bredd', functi
     // ingen fråga ställs per nivå eller per item.
     expect($smal)->toBe(1);
     expect($bred)->toBe(1);
+
+    Carbon::setTestNow();
 });
 
 it('ställer en fråga för hela listan, inte en per rad', function () {
@@ -262,6 +269,10 @@ it('ställer en fråga för hela listan, inte en per rad', function () {
 
     $underträd = [];
     $resolver = app(ResolveItemDescendants::class);
+
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
 
     $frågor = attlingFrågor(function () use ($resolver, $container, $rader, &$underträd): void {
         $underträd = $resolver->forItems($container->id, $rader);
@@ -277,6 +288,8 @@ it('ställer en fråga för hela listan, inte en per rad', function () {
     expect($underträd[$motor->id])->toEqualCanonicalizing([$motor->id, $impeller->id]);
     expect($underträd[$impeller->id])->toBe([$impeller->id]);
     expect($underträd[$drev->id])->toBe([$drev->id]);
+
+    Carbon::setTestNow();
 });
 
 it('ger en nyckel för varje begärd startpunkt, även en utan ättlingar', function () {
@@ -288,8 +301,14 @@ it('ger en nyckel för varje begärd startpunkt, även en utan ättlingar', func
     expect($underträd[$motor->id])->toEqualCanonicalizing([$motor->id, $impeller->id]);
     expect($underträd[$impeller->id])->toBe([$impeller->id]);
 
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
+
     // Ingen startpunkt alls är ett tomt svar, inte en fråga.
     expect(attlingFrågor(fn () => app(ResolveItemDescendants::class)->forItems($container->id, [])))->toBe(0);
+
+    Carbon::setTestNow();
 });
 
 /**

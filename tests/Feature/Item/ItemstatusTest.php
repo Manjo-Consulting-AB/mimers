@@ -157,6 +157,10 @@ it('kostar två frågor oavsett antal rader och trädets storlek', function () {
 
     itemstatusFörekomst($impeller, -3);
 
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
+
     $litet = itemstatusFrågor(fn () => itemstatusFör($container, [$båt, $motor, $impeller]));
 
     // Trettio rotitems med vardera två barn och en förekomst, plus de fem
@@ -177,6 +181,8 @@ it('kostar två frågor oavsett antal rader och trädets storlek', function () {
 
     expect($litet)->toBe(2);
     expect($stort)->toBe($litet);
+
+    Carbon::setTestNow();
 });
 
 /*

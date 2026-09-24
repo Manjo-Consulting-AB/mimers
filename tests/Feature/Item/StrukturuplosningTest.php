@@ -8,6 +8,7 @@ use App\Models\ItemLink;
 use App\Models\User;
 use App\Support\Item\ItemTree;
 use App\Support\Item\ItemTreeNode;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -376,6 +377,10 @@ it('ställer två frågor oavsett trädets djup och bredd', function () {
 
     $resolver = app(ResolveItemTree::class);
 
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
+
     $smal = trädFrågor(
         fn () => $resolver->handle($smalMedlem, $smalContainer),
         fn () => $resolver->handle($smalMedlem, $smalContainer),
@@ -391,6 +396,8 @@ it('ställer två frågor oavsett trädets djup och bredd', function () {
     // och memoiserat av det värmande anropet, se ResolveItemScope.
     expect($smal)->toBe(2);
     expect($bred)->toBe(2);
+
+    Carbon::setTestNow();
 });
 
 it('ger ett tomt träd för en container utan items, utan att fråga efter kanter', function () {
@@ -398,6 +405,10 @@ it('ger ett tomt träd för en container utan items, utan att fråga efter kante
     $medlem = trädMedlem($container->account);
 
     $resolver = app(ResolveItemTree::class);
+
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
 
     $frågor = trädFrågor(
         fn () => $resolver->handle($medlem, $container),
@@ -407,6 +418,8 @@ it('ger ett tomt träd för en container utan items, utan att fråga efter kante
     // En fråga: det finns ingen itemmängd för kanterna att bära en nod ur.
     expect($frågor)->toBe(1);
     expect($resolver->handle($medlem, $container)->roots())->toBe([]);
+
+    Carbon::setTestNow();
 });
 
 /**

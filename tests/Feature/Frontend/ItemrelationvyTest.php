@@ -6,6 +6,7 @@ use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Lang;
@@ -652,6 +653,10 @@ it('kostar ett konstant antal frågor oavsett antal relationer', function () {
 
     $url = itemrelationUrl($container, $mitt);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     // Värm sessionen så att den första frågan för `last_active_at` inte
     // räknas med, samma resonemang som ItemRelationTest.
     actingAs($anvandare)->get($url)->assertOk();
@@ -680,6 +685,8 @@ it('kostar ett konstant antal frågor oavsett antal relationer', function () {
     // ResolveItemScope är memoiserad och `container` sätts ur den redan
     // hämtade containern (Beslut 5).
     expect($medTre)->toBe($medEn);
+
+    Carbon::setTestNow();
 });
 
 it('lämnar /api-listningen oförändrad', function () {

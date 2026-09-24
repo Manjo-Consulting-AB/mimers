@@ -8,6 +8,7 @@ use App\Models\Favorite;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia;
 
@@ -91,6 +92,10 @@ it('kostar samma antal frågor för tre konton som för ett', function () {
         Account::factory()->create()->users()->attach($treKonton, ['role' => 'owner']);
     }
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     // Relationerna nollställs före var mätning. Guardens användare är samma
     // modellinstans mellan anropen i en testsvit, så utan det skulle den
     // andra mätningen ärva den förstas eager-loading och jämförelsen bli
@@ -114,6 +119,8 @@ it('kostar samma antal frågor för tre konton som för ett', function () {
     $medTreKonton = $frågor;
 
     expect($medTreKonton)->toBe($medEttKonto);
+
+    Carbon::setTestNow();
 });
 
 it('delar ingen aktiv container när sessionen är tom', function () {

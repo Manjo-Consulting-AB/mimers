@@ -8,6 +8,7 @@ use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\Tag;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
@@ -542,6 +543,10 @@ it('räknar träffarna med ett konstant antal frågor, oavsett antal taggar', fu
     $första = taggvyTagg($container, 'Motor');
     $motorn->tags()->attach([$första->id]);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     actingAs($anvandare);
 
     // En uppvärmningsrequest först: den inloggade användaren ligger kvar i
@@ -566,6 +571,8 @@ it('räknar träffarna med ett konstant antal frågor, oavsett antal taggar', fu
     });
 
     expect($flerTaggar)->toBe($faTaggar);
+
+    Carbon::setTestNow();
 });
 
 /*
@@ -586,6 +593,10 @@ it('ställer ett konstant antal frågor på api-listan, oavsett antal taggar', f
     $headers = ['Authorization' => "Bearer {$token->plainTextToken}"];
     $url = "/api/containers/{$container->ulid}/tags";
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     getJson($url, $headers)->assertOk();
 
     $faTaggar = taggvyFrågor(function () use ($url, $headers) {
@@ -603,6 +614,8 @@ it('ställer ett konstant antal frågor på api-listan, oavsett antal taggar', f
     });
 
     expect($flerTaggar)->toBe($faTaggar);
+
+    Carbon::setTestNow();
 });
 
 /*

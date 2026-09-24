@@ -369,6 +369,10 @@ it('kostar ett konstant antal frågor oavsett antal items', function () {
         itemlistaItem($container, "Item $i", $anvandare);
     }
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     actingAs($anvandare);
 
     $url = "/containers/{$container->ulid}/items";
@@ -389,6 +393,8 @@ it('kostar ett konstant antal frågor oavsett antal items', function () {
     });
 
     expect($tjugoItems)->toBe($tioItems);
+
+    Carbon::setTestNow();
 });
 
 /*
@@ -599,6 +605,10 @@ it('kostar ett konstant antal frågor även när raderna har barn och förekomst
     itemlistaKant($motorn, $impellern);
     itemlistaFörekomst($impellern, -1);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     actingAs($anvandare);
 
     $url = "/containers/{$container->ulid}/items";
@@ -624,6 +634,8 @@ it('kostar ett konstant antal frågor även när raderna har barn och förekomst
     });
 
     expect($sextiofyraRader)->toBe($fyraRader);
+
+    Carbon::setTestNow();
 });
 
 /*

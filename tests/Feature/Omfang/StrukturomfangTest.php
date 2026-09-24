@@ -9,6 +9,7 @@ use App\Models\ItemLink;
 use App\Models\User;
 use App\Support\Item\ItemTree;
 use App\Support\Item\ItemTreeNode;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -267,6 +268,10 @@ it('ställer två frågor också för en omfångsbegränsad mottagare', function
 
     $resolver = app(ResolveItemTree::class);
 
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
+
     $frågor = strukturFrågor(
         fn () => $resolver->handle($mottagare, $container),
         fn () => $resolver->handle($mottagare, $container),
@@ -275,4 +280,6 @@ it('ställer två frågor också för en omfångsbegränsad mottagare', function
     // Omfånget är en enda `whereIn` i itemfrågan och kostar ingen egen
     // fråga per item: en fråga för itemen, en för kanterna.
     expect($frågor)->toBe(2);
+
+    Carbon::setTestNow();
 });

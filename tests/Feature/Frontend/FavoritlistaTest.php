@@ -7,6 +7,7 @@ use App\Models\Favorite;
 use App\Models\Item;
 use App\Models\User;
 use App\Support\Access\AccessLevel;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Testing\TestResponse;
@@ -387,6 +388,10 @@ it('antalet frågor är konstant oavsett antal favoriter', function () {
     $första = favoritlistaItem($container, 'Favorit ett', $ägare);
     favoritlistaMarkera($ägare, $container, $första);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     actingAs($ägare);
 
     $värm = fn () => get('/dashboard')->assertOk();
@@ -408,6 +413,8 @@ it('antalet frågor är konstant oavsett antal favoriter', function () {
     });
 
     expect($medFem)->toBe($medEn);
+
+    Carbon::setTestNow();
 });
 
 /*
