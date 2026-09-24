@@ -34,6 +34,11 @@ use function Pest\Laravel\withoutVite;
  * vyn ska bete sig exakt som förut, och den enda rad i filen som rör den nya
  * startsidan är länken till `/tasks` i navigeringen, som prövas i SkalTest.
  *
+ * **Sidan är paginerad sedan issue 123, och det rör inte proven här.** Varje
+ * test i filen bygger långt färre än femtio rader, så alla ligger på första
+ * sidan och ser exakt ut som förut. Pagineringen — markören, sidgränsen och
+ * gruppen som delas — prövas i tests/Feature/Frontend/TaskpagineringTest.php.
+ *
  * Filen bevisar de gränser issuen är byggd kring:
  *
  * 1. **Urvalet är `scopeTodoFor()` — vyn filtrerar ingenting** (Beslut 2).

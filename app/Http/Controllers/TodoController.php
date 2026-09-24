@@ -8,7 +8,8 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Todo-vyn — "vad ska jag göra?" — `GET /tasks`, issue 64 och issue 122.
+ * Todo-vyn — "vad ska jag göra?" — `GET /tasks`, issue 64, issue 122 och
+ * issue 123.
  *
  * **Sidan är produktens andra huvudfråga** vid sidan av "var la jag den där?",
  * och den öppnas oftare än någon annan i M10. Den låg på `/dashboard` fram
@@ -21,9 +22,14 @@ use Inertia\Response;
  * urvalet, grupperingen på servern, `can.update` per rad, kontoförvalet och
  * den konstanta frågekostnaden. Det bor nu i App\Actions\Schedule\ListTodo,
  * för dashboardens uppgiftspanel läser samma urval och två sidor som
- * formulerade samma fråga var förr eller senare två sanningar om den. Den här
- * kontrollern väljer sida och ingenting annat — den formulerar inget `where`,
- * räknar ingen grupp och klipper ingen lista.
+ * formulerade samma fråga var förr eller senare två sanningar om den.
+ *
+ * **Kontrollern väljer sida och ingenting annat** (issue 123). Den formulerar
+ * inget `where`, räknar ingen grupp och klipper ingen lista: den ber actionen
+ * om en sida och översätter markörerna till adresser. Sidan är därför högst
+ * `ListTodo::PER_PAGE` rader, och vilka rader det är bestäms av `before` och
+ * `after` i querysträngen — namnen kommer ur actionens konstanter, så den som
+ * läser dem och den som skriver dem inte kan glida ifrån varandra.
  *
  * Gruppkonstanterna står kvar här som alias mot actionens: de är nycklarna i
  * `lang/en/ui.php` och prövas mot `TodoController::GROUP_*` i
@@ -47,16 +53,26 @@ class TodoController extends Controller
     public const GROUP_UPCOMING = ListTodo::GROUP_UPCOMING;
 
     /**
-     * GET /tasks — 200. De öppna förekomsterna användaren når, i `due_at`-
-     * ordning, grupperade i försenat, idag och kommande.
+     * GET /tasks — 200. En sida av de öppna förekomsterna användaren når, i
+     * `due_at`-ordning, grupperade i försenat, idag och kommande.
+     *
+     * Länkarna till nästa och föregående sida byggs här och inte i vyn:
+     * adressen och parameternamnen hör till rutten, och vyn ska bara rita den
+     * href den fick. `null` betyder att sidan är den första eller den sista.
      */
     public function index(Request $request): Response
     {
-        $todo = app(ListTodo::class)->handle($request->user(), $request);
+        $todo = app(ListTodo::class)->page($request->user(), $request);
 
         return Inertia::render('Tasks/Index', [
             'groups' => $todo['groups'],
             'hasContainers' => $todo['hasContainers'],
+            'previousUrl' => $todo['previous'] === null
+                ? null
+                : route('tasks', [ListTodo::CURSOR_BEFORE => $todo['previous']], false),
+            'nextUrl' => $todo['next'] === null
+                ? null
+                : route('tasks', [ListTodo::CURSOR_AFTER => $todo['next']], false),
         ]);
     }
 }

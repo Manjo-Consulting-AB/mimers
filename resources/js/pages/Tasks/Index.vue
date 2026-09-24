@@ -29,9 +29,21 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * uppgift till fel hög, och en `computed` som jämför `due_at` mot `Date.now()`
  * hade varit precis den klockan.
  *
- * **Ingen paginering och ingen sorteringsväljare** (Beslut 3). Systemet är
- * kraftigt säsongsbetonat — i april förfaller allt samtidigt — så listan är
- * hela listan och grupperingen är det som gör den begriplig (Beslut 7).
+ * **Sidan är paginerad och har ingen sorteringsväljare** (issue 123). Den
+ * visar högst femtio rader och får `previousUrl` och `nextUrl` färdiga av
+ * servern — vyn bygger ingen adress själv och vet inte vilken markör som står
+ * i den. Ordningen är `due_at` och grupperingen är det som gör listan
+ * begriplig (Beslut 7).
+ *
+ * **En sida kan börja mitt i en grupp** (issue 123). Servern grupperar de
+ * rader sidan bär, per rad, så en grupp som sträcker sig över en sidgräns får
+ * sin rubrik en gång per sida. Vyn ritar varje icke-tom grupp precis som förr
+ * och minns ingenting mellan sidorna: rubriken följer av raderna här, inte av
+ * en räknare.
+ *
+ * **Det tomma läget gäller sidan, inte listan.** En sida utan rader visar
+ * samma mening som en tom lista gjorde, och länkarna ritas utanför den
+ * grenen, så en sida som blivit tom går att ta sig tillbaka från.
  *
  * **De två tomma lägena är olika, och ingen av dem vet om omfånget**
  * (Beslut 6). `hasContainers` är serverns svar på "har hon någon container alls" —
@@ -50,6 +62,10 @@ const props = defineProps({
     groups: { type: Object, required: true },
     /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
     hasContainers: { type: Boolean, required: true },
+    /* Adressen till föregående sida, eller null när den här är den första. */
+    previousUrl: { type: String, default: null },
+    /* Adressen till nästa sida, eller null när den här är den sista. */
+    nextUrl: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -85,5 +101,23 @@ const isEmpty = computed(() => Object.values(props.groups).every((entries) => en
                 </ul>
             </section>
         </template>
+
+        <nav v-if="previousUrl || nextUrl" class="mt-8 flex items-center gap-4">
+            <Link
+                v-if="previousUrl"
+                :href="previousUrl"
+                class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+            >
+                {{ t('todo.pagination.previous') }}
+            </Link>
+
+            <Link
+                v-if="nextUrl"
+                :href="nextUrl"
+                class="ml-auto inline-flex min-h-11 items-center text-blue-700 hover:underline"
+            >
+                {{ t('todo.pagination.next') }}
+            </Link>
+        </nav>
     </AppLayout>
 </template>

@@ -2263,6 +2263,14 @@ return [
             'create' => 'Create a container',
             'nothing' => 'Nothing to do right now.',
         ],
+
+        // The page links, see issue 123. The list is paginated over
+        // `(due_at, ulid)` with fifty rows per page, and the addresses come
+        // ready-made from the server — the words here are all the view owns.
+        'pagination' => [
+            'previous' => 'Previous',
+            'next' => 'Next',
+        ],
     ],
 
     // The sharing page, see issue 55a. Two sections with different audiences
