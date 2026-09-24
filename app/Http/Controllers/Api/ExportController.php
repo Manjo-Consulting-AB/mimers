@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ExportResource;
 use App\Jobs\BuildContainerExport;
 use App\Models\Container;
 use App\Models\Export;
+use App\Models\SecurityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,8 +49,11 @@ class ExportController extends Controller
      * en klients retry kunna skapa två rader, och två `BuildContainerExport`
      * skulle packa samma container till två påsar.
      */
-    public function store(Request $request, Container $container): JsonResponse
-    {
+    public function store(
+        Request $request,
+        Container $container,
+        RecordSecurityEvent $recordSecurityEvent,
+    ): JsonResponse {
         Gate::authorize('view', $container);
 
         $export = DB::transaction(function () use ($request, $container): Export {
@@ -72,6 +77,18 @@ class ExportController extends Controller
 
             return $export;
         });
+
+        // Issue 113: en beställd export — samma rad som webbens väg skriver.
+        // En dubblettspärrad beställning kastade inne i transaktionen ovan
+        // och loggar ingenting, för ingenting hände.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_EXPORT_REQUESTED,
+            account: $container->account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['export' => $export->ulid],
+        );
 
         // Jobbet köas efter transaktionen är klar (Beslut 1), precis som
         // GenerateImageDerivatives.

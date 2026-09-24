@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\LegalHold;
+use App\Models\SecurityLog;
 use App\Models\StoredFile;
 use App\Models\Tag;
 use App\Models\User;
@@ -116,24 +117,25 @@ it('en spärr sätts och hävs från kommandoraden med ärendenummer och anledni
     expect($rad->lifted_at)->toBeNull();
     expect($rad->created_at)->not->toBeNull();
 
-    // Säkerhetsloggen finns inte än (issue 113); tills dess skriver
-    // kommandot en rad till applikationsloggen.
-    $logg->shouldHaveReceived('info')->withArgs(
-        fn (string $meddelande, array $kontext) => $meddelande === 'legal_hold.placed'
-            && ($kontext['account_ulid'] ?? null) === $account->ulid
-            && ($kontext['case_number'] ?? null) === 'AR-2026-0042'
-            && ($kontext['reason'] ?? null) === 'Anmälan enligt DSA artikel 16, under utredning.',
-    );
+    // Sedan issue 113 skriver kommandot till SÄKERHETSLOGGEN och inte till
+    // applikationsloggen — raden flyttade, den dubblerades inte. Radens
+    // innehåll prövas i tests/Feature/Missbruk/SakerhetsloggTest.php; här
+    // står bara att den hamnade i rätt tabell.
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_LEGAL_HOLD_PLACED)->count())->toBe(1);
+    $logg->shouldNotHaveReceived('info');
 
     artisan('legal-hold:lift', ['account' => $account->ulid])->assertSuccessful();
 
     expect(LegalHold::covers($account))->toBeFalse();
     expect($rad->refresh()->lifted_at)->not->toBeNull();
 
-    $logg->shouldHaveReceived('info')->withArgs(
-        fn (string $meddelande, array $kontext) => $meddelande === 'legal_hold.lifted'
-            && ($kontext['account_ulid'] ?? null) === $account->ulid,
-    );
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_LEGAL_HOLD_LIFTED)->count())->toBe(1);
+
+    // Ingen spärr att häva är ingen händelse: kommandot säger ifrån och
+    // loggen får ingen rad.
+    artisan('legal-hold:lift', ['account' => $account->ulid])->assertFailed();
+
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_LEGAL_HOLD_LIFTED)->count())->toBe(1);
 });
 
 it('ett spärrat kontos papperskorg gallras inte', function () {

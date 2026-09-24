@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Models\Attachment;
+use App\Models\Container;
+use App\Models\SecurityLog;
 use App\Support\Files\AttachmentDelivery;
 use App\Support\Files\FileOrigin;
 use Illuminate\Http\Request;
@@ -55,8 +58,11 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class AttachmentDownloadController extends Controller
 {
-    public function __invoke(Request $request, Attachment $attachment): Response
-    {
+    public function __invoke(
+        Request $request,
+        Attachment $attachment,
+        RecordSecurityEvent $recordSecurityEvent,
+    ): Response {
         $attachment->load(['storedFile', 'item.container']);
 
         // SoftDeletes' globala scope gäller även genom relationerna: item()
@@ -81,13 +87,82 @@ class AttachmentDownloadController extends Controller
         $filorigin = FileOrigin::host();
 
         if ($filorigin !== null) {
-            return redirect()->to(self::signedDeliveryUrl($attachment, $variant));
+            $svar = redirect()->to(self::signedDeliveryUrl($attachment, $variant));
+        } else {
+            // Ingen egen origin: leveransen ligger kvar på appdomänen och allt är
+            // attachment, utan undantag ([[ADR-0019 Filleverans]] § Uppföljning
+            // 2026-08-31, andra punkten).
+            $svar = AttachmentDelivery::make($attachment, $variant, inline: false);
         }
 
-        // Ingen egen origin: leveransen ligger kvar på appdomänen och allt är
-        // attachment, utan undantag ([[ADR-0019 Filleverans]] § Uppföljning
-        // 2026-08-31, andra punkten).
-        return AttachmentDelivery::make($attachment, $variant, inline: false);
+        // Loggrader skrivs först när svaret är byggt, aldrig före (issue 113):
+        // båda grenarna slår upp varianten medan de byggs, och en okänd eller
+        // saknad variant ger 404 redan där (AttachmentDelivery::storagePath) —
+        // liksom en fil som inte finns på disken. Ett 404 är ingen nedladdning,
+        // och en rad som påstod en händelse som inte hände vore sämre än ingen
+        // rad. Samma regel som ExportDownloadController och LiftLegalHold följer.
+        $this->recordForeignDownload($request, $attachment, $container, $recordSecurityEvent);
+
+        return $svar;
+    }
+
+    /**
+     * Nedladdningen ur någon ANNANS container, i säkerhetsloggen (issue 113).
+     *
+     * **Den enda läsning som loggas** ([[ADR-0043 Tre loggar]]
+     * § Säkerhetsloggen). Att logga varje visning vore en logg över allt alla
+     * tittar på; en nedladdning ur en container man inte äger är däremot när
+     * innehållet lämnar sin ägare, och det är där både dataintrång och
+     * spridning av olagligt material syns.
+     *
+     * **"Äger" är medlemskap i ägarkontot**, samma mått som händelseloggens
+     * regel 1 använder — en container har exakt en ägare och ägaren är ett
+     * konto (AGENTS.md § Sådant som är lätt att göra fel). Den som laddar ner
+     * ur sitt eget kontos container skriver alltså ingen rad, hur hon än nådde
+     * den: som ägare, som medlem eller som inbjuden gäst.
+     *
+     * **Raden skrivs när länken präglas**, det vill säga här, och inte på
+     * fildomänen: FileDeliveryController har ingen session och ingen
+     * användare, och en leverans som loggas där kunde bara säga att NÅGON
+     * hämtade filen (issue 113 § Omfångsrutan). Filnamnet följer aldrig med —
+     * det är användarens text (ADR § Händelseloggen), och det bor i itemet.
+     *
+     * **Anropet ligger efter att svaret byggts, inte före.** En nedladdning
+     * som slutar i 404 — okänd eller saknad variant, eller en fil som inte
+     * finns på disken — är ingen nedladdning, och ska inte lämna en rad som
+     * påstår motsatsen.
+     */
+    private function recordForeignDownload(
+        Request $request,
+        Attachment $attachment,
+        Container $container,
+        RecordSecurityEvent $recordSecurityEvent,
+    ): void {
+        $user = $request->user();
+
+        // `accounts` är den lista App\Actions\Access\ResolveItemScope läste
+        // några rader ovanför, i grinden: samma användarinstans, samma
+        // relation, redan i minnet. Kontrollen kostar därför ingen fråga på
+        // den här vägen — och är listan mot förmodan inte laddad laddas den
+        // här, en gång, aldrig en per bilaga.
+        $äger = $user !== null
+            && $user->accounts->contains('id', $container->account_id);
+
+        if ($äger) {
+            return;
+        }
+
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_ATTACHMENT_DOWNLOADED,
+            account: $container->account,
+            user: $user,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: [
+                'container' => $container->ulid,
+                'attachment' => $attachment->ulid,
+            ],
+        );
     }
 
     /**

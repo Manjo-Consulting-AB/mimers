@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\SecurityLog;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Auth\TotpInvalidException;
 use App\Support\Auth\TotpRequiredException;
@@ -52,7 +54,7 @@ class AuthenticatedSessionController extends Controller
         return Inertia::render('Auth/Login');
     }
 
-    public function store(LoginRequest $request): RedirectResponse
+    public function store(LoginRequest $request, RecordSecurityEvent $recordSecurityEvent): RedirectResponse
     {
         try {
             $user = $request->authenticate();
@@ -73,6 +75,18 @@ class AuthenticatedSessionController extends Controller
         LoginRateLimiter::clear($request, $request->string('email')->toString());
 
         Auth::guard('web')->login($user);
+
+        // Issue 113: den lyckade inloggningen i säkerhetsloggen. Raden skrivs
+        // efter att sessionen faktiskt är upprättad — en rad som beskriver en
+        // inloggning som inte blev av vore sämre än ingen rad. Ingen
+        // e-postadress och inget lösenord följer med, bara användaren och
+        // pseudonymen för IP-adressen.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_LOGIN,
+            user: $user,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         $request->session()->regenerate();
 

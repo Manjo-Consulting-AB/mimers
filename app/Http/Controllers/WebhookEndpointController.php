@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\StoreWebhookEndpointRequest;
 use App\Http\Requests\UpdateWebhookEndpointRequest;
 use App\Http\Resources\WebhookEndpointResource;
 use App\Models\Account;
+use App\Models\SecurityLog;
 use App\Models\User;
 use App\Models\WebhookEndpoint;
 use App\Support\Frontend\ApiErrorTranslator;
@@ -196,6 +198,7 @@ class WebhookEndpointController extends Controller
         UrlSafetyValidator $urlSafety,
         Entitlements $entitlements,
         ApiErrorTranslator $translator,
+        RecordSecurityEvent $recordSecurityEvent,
     ): RedirectResponse {
         $account = $this->accountFrom($request);
 
@@ -219,6 +222,20 @@ class WebhookEndpointController extends Controller
         // rad som API-kontrollern.
         $endpoint->is_active = true;
         $endpoint->save();
+
+        // Issue 113: en skapad webhook. En endpoint är en utgång ur systemet
+        // och bär en hemlighet — **URL:en finns därför inte i raden**: en
+        // webhook-URL har ofta sin egen token i sökvägen (Slack, Telegram),
+        // och en logg som bar den vore en andra kopia av en hemlighet.
+        // ULID:n räcker för att peka ut raden.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_WEBHOOK_CREATED,
+            account: $account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['webhook' => $endpoint->ulid],
+        );
 
         return redirect()
             ->route('settings.webhooks', ['account' => $account->ulid])
@@ -287,8 +304,11 @@ class WebhookEndpointController extends Controller
      * annars gett 500. Kön tillhör endpointen, och utan en mottagare kvar
      * finns det ingen att försöka mot.
      */
-    public function destroy(Request $request, WebhookEndpoint $webhook): RedirectResponse
-    {
+    public function destroy(
+        Request $request,
+        WebhookEndpoint $webhook,
+        RecordSecurityEvent $recordSecurityEvent,
+    ): RedirectResponse {
         $account = $this->accountFrom($request);
 
         Gate::authorize('manageWebhooks', $account);
@@ -296,6 +316,17 @@ class WebhookEndpointController extends Controller
         $this->assertWebhookBelongsToAccount($webhook, $account);
 
         DB::table('webhook_delivery')->where('webhook_endpoint_id', $webhook->getKey())->delete();
+
+        // Issue 113: en borttagen webhook. ULID:n läses före delete() — efter
+        // den finns den inte kvar på modellinstansen.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_WEBHOOK_DELETED,
+            account: $account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['webhook' => $webhook->ulid],
+        );
 
         $webhook->delete();
 

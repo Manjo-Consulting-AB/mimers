@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Attachment\TrashAttachment;
+use App\Actions\Security\RecordSecurityEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Account\RemoveStorageRequest;
 use App\Http\Resources\StorageEntryResource;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\SecurityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -100,8 +102,12 @@ class AccountStorageController extends Controller
      * `$removed` summeras ur handle()s returvärde i stället: bara rader som
      * faktiskt mjukraderades här räknas.
      */
-    public function destroy(RemoveStorageRequest $request, Account $account, TrashAttachment $trashAttachment): JsonResponse
-    {
+    public function destroy(
+        RemoveStorageRequest $request,
+        Account $account,
+        TrashAttachment $trashAttachment,
+        RecordSecurityEvent $recordSecurityEvent,
+    ): JsonResponse {
         Gate::authorize('manageStorage', $account);
 
         $attachments = Attachment::query()
@@ -121,6 +127,16 @@ class AccountStorageController extends Controller
                 }
             }
         });
+
+        // Issue 113: tömd lagring — samma rad som webbens väg skriver.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_STORAGE_EMPTIED,
+            account: $account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['removed' => $removed],
+        );
 
         $storageBytes = (int) (DB::table('usage_counter')
             ->where('account_id', $account->id)

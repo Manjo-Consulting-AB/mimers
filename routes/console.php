@@ -21,7 +21,6 @@ use App\Console\SendsWeeklyDigest;
 use App\Models\Account;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -395,9 +394,12 @@ Schedule::call(function () {
  * som är föremål för en utredning. Kontot anges med sin ULID — löpnumret
  * lämnar aldrig servern (AGENTS.md § Databaskonventioner).
  *
- * Båda kommandona skriver en rad till applikationsloggen. Säkerhetsloggen
- * finns inte än (issue 113); när den finns flyttar raden dit. Meddelandena
- * är därför redan namngivna som händelser och inte som meningar.
+ * Båda kommandona skriver en rad i säkerhetsloggen (issue 113). Raden skrivs
+ * av respektive action (App\Actions\LegalHold\PlaceLegalHold och
+ * LiftLegalHold), inte här: actionen är den enda vägen in i tabellen, och den
+ * som sätter en spärr ska inte kunna göra det förbi loggen. Fram till issue
+ * 113 skrev kommandot till applikationsloggen; den raden är borta, inte
+ * dubblerad.
  *
  * **Kommandona schemaläggs inte.** De är handgrepp för den som utreder, inte
  * nattjobb, och `drain-queue` ska fortsätta ligga sist i schemat — se
@@ -413,12 +415,6 @@ Artisan::command('legal-hold:place {account : Kontots ULID} {case : Ärendenumre
     }
 
     app(PlaceLegalHold::class)->handle($target, $case, $reason);
-
-    Log::info('legal_hold.placed', [
-        'account_ulid' => $target->ulid,
-        'case_number' => $case,
-        'reason' => $reason,
-    ]);
 
     $this->info("Rättslig spärr satt på {$target->ulid}, ärende {$case}.");
 
@@ -441,11 +437,6 @@ Artisan::command('legal-hold:lift {account : Kontots ULID}', function (string $a
 
         return 1;
     }
-
-    Log::info('legal_hold.lifted', [
-        'account_ulid' => $target->ulid,
-        'holds' => $lifted,
-    ]);
 
     $this->info("Rättslig spärr hävd på {$target->ulid}.");
 

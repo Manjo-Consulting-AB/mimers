@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Models\Export;
+use App\Models\SecurityLog;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -34,8 +37,11 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class ExportDownloadController extends Controller
 {
-    public function __invoke(Export $export): Response
-    {
+    public function __invoke(
+        Request $request,
+        Export $export,
+        RecordSecurityEvent $recordSecurityEvent,
+    ): Response {
         $export->load('container');
 
         // SoftDeletes' globala scope gäller genom relationen: en mjukraderad
@@ -56,6 +62,19 @@ class ExportDownloadController extends Controller
         if (! Storage::disk('files')->exists($export->storage_path)) {
             abort(404);
         }
+
+        // Issue 113: en hämtad export. Raden skrivs efter behörighetsprövningen
+        // och efter att artefakten visat sig finnas — ett 404 är ingen
+        // nedladdning — men FÖRE leveransen, så att båda grenarna nedan
+        // (intern omdirigering och appens egen strömning) loggar samma sak.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_EXPORT_DOWNLOADED,
+            account: $export->container->account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['export' => $export->ulid],
+        );
 
         $filename = $export->container->name.'-export-'.$export->created_at->toDateString().'.zip';
 
