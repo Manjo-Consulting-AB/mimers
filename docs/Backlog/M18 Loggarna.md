@@ -137,3 +137,39 @@ Enheten är det enhetsnamn säkerhetsloggen redan sparat (issue 113). En rad uta
 **Läs:** [[ADR-0043 Tre loggar]] § Säkerhetsloggen, `app/Http/Controllers/Settings/SecurityController.php`, `resources/js/pages/Settings/Security.vue`
 **Klart när:** säkerhetssidan visar användarens tjugo senaste inloggningar med tid, enhet och utfall; ingen annan användares rader syns; inga andra handlingar ur säkerhetsloggen syns; ingen IP-adress visas; en rad utan enhetsnamn visas som okänd enhet; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
 **Beror på:** 113
+
+---
+
+## Tillagda vid retron
+
+Tillagda 2026-09-24, efter retron för M18. De fyra stänger det milstolpens egna PR:er pekade ut men inte fick röra, och de mergas **före** releasen av M18: tre av dem rättar text som annars beskriver en logg som inte finns, och den fjärde tar bort den flake som två milstolpar i rad mergade röd på. Underlaget står i [[Lärdomar]] under `Bekräftat` och `Infört`.
+
+### 118. Datamodellen känner alla tabeller
+Åtta av appens tabeller nämns ingenstans under `docs/Datamodell/`: `calendar_feed`, `favorite`, `heartbeat`, `legal_hold`, `magic_link_token`, `security_log`, `totp_recovery_code` och `usage_metric`. Varje tabell får ett avsnitt i rätt fil, i samma form som grannarna: rubriken är tabellnamnet, och en kolumntabell följer. Innehållet läses ur migreringen och modellens docblock. Motiveringar skrivs inte om, de pekar på sin ADR.
+
+Därefter ett prov som gör luckan omöjlig att öppna igen. Varje tabell som en migrering skapar med `Schema::create()` ska nämnas i en fil under `docs/Datamodell/`, utom ramverkets egna tabeller och de som en senare migrering tar bort. De står i en uttalad lista i provet.
+
+**Läs:** [[Datamodell – översikt]] § Var bor vad, `tests/Feature/Dokumentation/ProduktbeskrivningenTest.php` (förlagan för att pröva dokumentation som text), migreringarna för de åtta tabellerna
+**Klart när:** de åtta tabellerna har var sitt avsnitt; ett prov fäller en tabell som saknas i datamodellen; provet bär en uttalad lista över ramverkets tabeller; hela testsviten är grön.
+**Beror på:** 112, 113, 114
+
+### 119. Identitetsbytet i testerna
+`actingAs()` sätter webbguarden, och Sanctums guard cachar den autentiserade användaren. Ett andra anrop i samma test, som en annan användare, svarar därför tyst som den första. Fyra issues har felsökt det var för sig (337, 345, 451, 452), och lösningen, `auth()->forgetGuards()`, finns bara i testkommentarer. Issuen lägger en hjälpare i `tests/Support/Testhjalpare.php` som byter användare och glömmer guardens cache. De filer som i dag gör det för hand byter till hjälparen.
+
+**Läs:** `tests/Support/Testhjalpare.php`, `tests/Feature/Revision/ContainerhandelserTest.php` (kommentaren vid `forgetGuards()`)
+**Klart när:** hjälparen finns; ett prov visar att två användare i samma test får var sitt svar; de befintliga `forgetGuards()`-anropen går genom hjälparen; hela testsviten är grön.
+**Beror på:** -
+
+### 120. Frågeräkningen fryser tiden
+`UpdateLastActiveAt` skriver `last_active_at` bara när sekundvärdet har ändrats. Därför får en frågeräkning över två HTTP-anrop en `UPDATE` extra varje gång en sekundgräns faller mellan dem. Issue 80 fixade det i ett tjugotal filer, PR #465 i `LeverantorTest` och PR #472 i `LasregelTest`. Arton filer som använder `DB::listen` fryser fortfarande inte tiden. Issuen fryser tiden i dem, och ett prov fäller varje testfil som använder `DB::listen` utan att frysa tiden.
+
+**Läs:** `tests/Feature/Kostnad/LeverantorTest.php` och `tests/Feature/Kostnad/FastSummeringTest.php` (förlagorna), `app/Http/Middleware/UpdateLastActiveAt.php`
+**Klart när:** de arton filerna fryser tiden runt sin mätning; ett prov fäller en testfil med `DB::listen` utan `Carbon::setTestNow`; hela testsviten är grön.
+**Beror på:** -
+
+### 121. Texterna som M18 gjorde fel
+Fem ställen säger något som M18 gjort osant. `AuditLog`s klassdocblock och den ursprungliga migreringens docblock säger att loggen aldrig gallras, men det gör den sedan issue 115. `routes/api.php` säger *"Bara GET och bara regel 1"* om en rutt som sedan issue 108 läser alla tre reglerna. [[Konton och åtkomst]] § audit_log säger *"Aktörens konto"* om `account_id`, som sedan issue 109 är containerns ägarkonto. [[Att sortera efter mockuparna]] säger att det saknas ett index för itemhistoriken, men det lade issue 107 till. Bara kommentarer och dokumentation ändras, ingen kod.
+
+**Läs:** [[ADR-0043 Tre loggar]] § Händelseloggen, `app/Console/PrunesLogs.php` (docblocken), `app/Actions/Audit/ListAuditEvents.php` (docblocken)
+**Klart när:** de fem ställena beskriver koden som den är; ingen rad kod utanför kommentarer är ändrad; hela testsviten är grön.
+**Beror på:** -
