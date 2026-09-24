@@ -24,9 +24,11 @@ use Inertia\Response;
  * för dashboardens uppgiftspanel läser samma urval och två sidor som
  * formulerade samma fråga var förr eller senare två sanningar om den.
  *
- * **Kontrollern väljer sida och ingenting annat** (issue 123). Den formulerar
- * inget `where`, räknar ingen grupp och klipper ingen lista: den ber actionen
- * om en sida och översätter markörerna till adresser. Sidan är därför högst
+ * **Kontrollern väljer sida och översätter markörer till adresser** (issue
+ * 123) — ingenting annat. Den formulerar inget `where`, räknar ingen grupp och
+ * klipper ingen lista: den ber actionen om en sida, och länkarna byggs här
+ * därför att adressen och parameternamnen hör till rutten och inte till vyn.
+ * Sidan är därför högst
  * `ListTodo::PER_PAGE` rader, och vilka rader det är bestäms av `before` och
  * `after` i querysträngen — namnen kommer ur actionens konstanter, så den som
  * läser dem och den som skriver dem inte kan glida ifrån varandra.

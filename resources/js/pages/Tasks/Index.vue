@@ -32,8 +32,8 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * **Sidan är paginerad och har ingen sorteringsväljare** (issue 123). Den
  * visar högst femtio rader och får `previousUrl` och `nextUrl` färdiga av
  * servern — vyn bygger ingen adress själv och vet inte vilken markör som står
- * i den. Ordningen är `due_at` och grupperingen är det som gör listan
- * begriplig (Beslut 7).
+ * i den. Ordningen är `due_at` stigande med `ulid` som andra nyckel, och
+ * grupperingen är det som gör listan begriplig (Beslut 7).
  *
  * **En sida kan börja mitt i en grupp** (issue 123). Servern grupperar de
  * rader sidan bär, per rad, så en grupp som sträcker sig över en sidgräns får
