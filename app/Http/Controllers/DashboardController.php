@@ -2,9 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Access\ResolveItemScope;
 use App\Actions\Container\ListContainerSummaries;
 use App\Actions\Schedule\ListTodo;
+use App\Models\Container;
+use App\Models\User;
+use App\Support\Cost\CostReport;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -44,6 +49,15 @@ use Inertia\Response;
  * `$todo` — todo-svaret som redan är hämtat — i stället för att ställa samma
  * fråga en gång till: uppgiftsbrickan ska visa antalet rader på `/tasks`, och
  * det finns bara ett sätt att vara säker på att den gör det.
+ *
+ * **Kostnaderna kom med issue 125**, som sin egen propp: `costs` bär
+ * månadens totalsumma per valuta och nedbrytningen per container, och båda
+ * kommer ur App\Support\Cost\CostReport::monthForContainers(). Månaden är
+ * INNEVARANDE KALENDARMÅNAD och servern bestämmer den — sidan tar ingen
+ * parameter, och en period i querysträngen är därför ett värde ingen läser.
+ * En månad som går att välja vore en fråga, och en fråga är Pro
+ * ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut); den parametriserade
+ * rapporten ligger orörd i CostReportController.
  */
 class DashboardController extends Controller
 {
@@ -58,9 +72,10 @@ class DashboardController extends Controller
 
     /**
      * GET /dashboard — 200. Panelerna. Uppgiftspanelen visar de fem första
-     * raderna ur todo-urvalet, brickorna och korten räknar samma urval.
+     * raderna ur todo-urvalet, brickorna och korten räknar samma urval, och
+     * kostnaderna är innevarande kalendermånad.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, CostReport $report): Response
     {
         $user = $request->user();
 
@@ -72,6 +87,79 @@ class DashboardController extends Controller
             'hasContainers' => $todo['hasContainers'],
             'stats' => $summaries['stats'],
             'containerGroups' => $summaries['groups'],
+            'costs' => $this->monthCosts($user, $report),
         ]);
+    }
+
+    /**
+     * Månadens kostnader över användarens containrar, som `{totals,
+     * breakdown}` — underlaget för den tredje brickan och donuten.
+     *
+     * **Containrarna är samma urval som containerlistan**, `Container::
+     * scopeAccessibleBy()`, formulerat på ett ställe och använt här — en
+     * mottagare av en itemgrant ska se sin containers månad och ingenting
+     * annat. Månaden räknas ur användarens tidszon (se `timezoneFor()`), och
+     * servern är den enda som vet vad "innevarande" betyder: klientens klocka
+     * får aldrig flytta en månadsgräns.
+     *
+     * **Omfånget löses upp på en FÄRSK instans, i ETT anrop.** Samma grepp
+     * och samma skäl som i CostSummaryController: memon på den
+     * `scoped`-bundna instansen finns för ItemPolicy, som frågar en gång per
+     * rad i en listning, och för en summering skulle den bara göra
+     * frågekostnaden beroende av vad samma PHP-process råkade ha löst upp
+     * tidigare. `forContainers()` och inte en upplösning per container: en
+     * fråga per container vore den N+1 som issue 70 § Beslut 2 stänger.
+     *
+     * Ingen plangrind: en fast summering är fri (ADR-0038).
+     *
+     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     */
+    private function monthCosts(User $user, CostReport $report): array
+    {
+        $accountIds = $user->accounts->pluck('id')->all();
+
+        $containerIds = Container::query()
+            ->accessibleBy($user, $accountIds)
+            ->pluck('id')
+            ->all();
+
+        $scopes = app()->build(ResolveItemScope::class)
+            ->forContainers($user, $containerIds);
+
+        return $report->monthForContainers($scopes, $this->currentMonth($user));
+    }
+
+    /**
+     * Innevarande kalendermånad i användarens tidszon, som 'YYYY-MM'.
+     *
+     * `Carbon::now($timezone)` och inte `today()`: det är ögonblicket i
+     * användarens tid som avgör vilken månad hon är i, och en användare i
+     * Europe/Stockholm är i oktober redan när servern i UTC ännu är i
+     * september. Se `timezoneFor()`.
+     */
+    private function currentMonth(User $user): string
+    {
+        return Carbon::now($this->timezoneFor($user))->format('Y-m');
+    }
+
+    /**
+     * Användarens tidszon, med kontots som reserv och appens som sista
+     * utväg — samma fallande ordning som `User::preferredLocale()` har för
+     * språk och App\Support\Notification\QuietHours::timezoneFor() har för
+     * den tysta timmen. `user.timezone` är nullable och `account.timezone`
+     * är det inte.
+     */
+    private function timezoneFor(User $user): string
+    {
+        $timezone = $user->timezone;
+
+        if ($timezone === null && $user->accounts->isNotEmpty()) {
+            // first() är godtyckligt när användaren har flera konton — accepterat
+            // här, en gissning är bättre än UTC (samma resonemang som
+            // User::preferredLocale() och QuietHours::timezoneFor()).
+            $timezone = $user->accounts->first()->timezone;
+        }
+
+        return $timezone ?? config('app.timezone');
     }
 }

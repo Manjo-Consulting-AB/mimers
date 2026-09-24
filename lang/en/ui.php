@@ -2239,10 +2239,32 @@ return [
         // date, and a browser with a wrong clock cannot move a row into it.
         // No pluralisation (issue 52 decision 4), so the strings read the same
         // at one as at twelve.
+        //
+        // The cost tile (issue 125) is drawn once per currency the month has,
+        // so `costs` is its label and the sub-line is `costs.month` below —
+        // the same two lines the task tile has, in the same order. The mockup
+        // prints *this month* above *costs*; the name line is the tile's own
+        // and sits where `UiStat` puts a label, under the number.
         'stats' => [
             'containers' => 'Containers',
             'tasks' => 'Open tasks',
             'overdue' => 'Overdue: :count',
+            'costs' => 'Costs',
+        ],
+
+        // The cost panel and the donut, see issue 125. The month is the
+        // server's and not the reader's: the page takes no parameter, and a
+        // month that could be chosen would be a question — and a question is
+        // Pro ([[ADR-0038 Gränsen för Pro i kostnaderna]]). `month` therefore
+        // states which period the numbers belong to, and it is the same
+        // sentence under the tile and inside the donut.
+        //
+        // There is no legend string: a slice is named by the container's own
+        // name, which is the user's word and is printed verbatim, never looked
+        // up here (the same rule as `containers.others` above).
+        'costs' => [
+            'heading' => 'Costs',
+            'month' => 'This month',
         ],
 
         // The container cards, see issue 124. `others` is the mockup's own

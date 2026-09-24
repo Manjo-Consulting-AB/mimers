@@ -420,22 +420,30 @@ it('hämtar skalets strängar ur ui.php', function () {
 });
 
 /*
- * Dashboardens brickor och containerkort, se issue 124.
+ * Dashboardens strängar, se issue 122, 124 och 125.
  *
  * Samma form som skalets prov strax ovanför: nycklarna läses ur källkoden i
  * stället för att räknas upp här, så att en mening som läggs till i en
- * komponent och glöms i katalogen faller. Det spelar roll just för de här två
+ * komponent och glöms i katalogen faller. Det spelar roll just för de här
  * filerna därför att grupprubriken för en art skrivs ORDAGRANT — artens namn
  * kommer ur användarens tangentbord och har ingen nyckel — så den enda
- * strängen som SKA slås upp är högens namn och de tre talens etiketter. Ett
- * uppslag som glider över till att omfatta artens namn syns då här.
+ * strängen som SKA slås upp är högens namn och talens etiketter. Ett uppslag
+ * som glider över till att omfatta artens namn syns då här.
+ *
+ * Sidan själv står med sedan issue 125: rubriken över donuten är hennes, och
+ * en rubrik som glöms i katalogen renderas som `dashboard.costs.heading` —
+ * `translate()` skriver nyckeln själv när uppslaget misslyckas. Donutens
+ * legend har ingen nyckel alls: en tårtbit namnges av containerns eget namn,
+ * som skrivs ordagrant och aldrig slås upp.
  */
-it('hämtar brickornas och kortens strängar ur ui.php', function () {
+it('hämtar dashboardens strängar ur ui.php', function () {
     $nycklar = [];
 
     foreach ([
+        'js/pages/Dashboard.vue',
         'js/components/DashboardStats.vue',
         'js/components/ContainerCard.vue',
+        'js/components/CostDonut.vue',
     ] as $fil) {
         preg_match_all("/t\\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
 

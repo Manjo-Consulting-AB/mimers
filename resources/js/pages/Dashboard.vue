@@ -2,6 +2,7 @@
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
 import ContainerCard from '../components/ContainerCard.vue';
+import CostDonut from '../components/CostDonut.vue';
 import DashboardStats from '../components/DashboardStats.vue';
 import DashboardTasksPanel from '../components/DashboardTasksPanel.vue';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -35,6 +36,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * för högen ur `lang/` och skriver artens namn ORDAGRANT: fältet är fritt och
  * har ingen översättningsnyckel, så en sträng från användarens tangentbord får
  * aldrig slås upp (samma linje som Containers/Overview.vue).
+ *
+ * **Kostnaderna kom med issue 125**, som sin egen propp: `costs` bär månadens
+ * totalsumma per valuta och nedbrytningen per container. Brickan får bara
+ * summorna och donuten båda, och ingen av dem räknar något själv. Panelen ritas
+ * bara när månaden har någon kostnadsrad alls — en rubrik över en tom ring är
+ * en yta som påstår att det finns något att visa.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -45,6 +52,8 @@ const props = defineProps({
     stats: { type: Object, required: true },
     /* Korten, grupperade på art: `[{ kind, containers }]`. */
     containerGroups: { type: Array, required: true },
+    /* Månadens kostnader: `{ totals: [{currency, amount, count}], breakdown: [...] }`. */
+    costs: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
@@ -57,7 +66,7 @@ const { t } = useTranslations();
         <h1 class="text-2xl font-semibold">{{ t('dashboard.heading') }}</h1>
 
         <div class="mt-8">
-            <DashboardStats :stats="props.stats" />
+            <DashboardStats :stats="props.stats" :costs="props.costs.totals" />
         </div>
 
         <section v-for="group in props.containerGroups" :key="group.kind ?? 'others'" class="mt-8">
@@ -71,6 +80,16 @@ const { t } = useTranslations();
                     :key="container.ulid"
                     :container="container"
                 />
+            </div>
+        </section>
+
+        <section v-if="props.costs.totals.length" class="mt-8">
+            <h2 class="text-title font-semibold text-ink">
+                {{ t('dashboard.costs.heading') }}
+            </h2>
+
+            <div class="mt-3">
+                <CostDonut :totals="props.costs.totals" :breakdown="props.costs.breakdown" />
             </div>
         </section>
 
