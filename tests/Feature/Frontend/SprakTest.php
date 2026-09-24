@@ -420,6 +420,36 @@ it('hämtar skalets strängar ur ui.php', function () {
 });
 
 /*
+ * Dashboardens brickor och containerkort, se issue 124.
+ *
+ * Samma form som skalets prov strax ovanför: nycklarna läses ur källkoden i
+ * stället för att räknas upp här, så att en mening som läggs till i en
+ * komponent och glöms i katalogen faller. Det spelar roll just för de här två
+ * filerna därför att grupprubriken för en art skrivs ORDAGRANT — artens namn
+ * kommer ur användarens tangentbord och har ingen nyckel — så den enda
+ * strängen som SKA slås upp är högens namn och de tre talens etiketter. Ett
+ * uppslag som glider över till att omfatta artens namn syns då här.
+ */
+it('hämtar brickornas och kortens strängar ur ui.php', function () {
+    $nycklar = [];
+
+    foreach ([
+        'js/components/DashboardStats.vue',
+        'js/components/ContainerCard.vue',
+    ] as $fil) {
+        preg_match_all("/t\\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+});
+
+/*
  * [[ADR-0033 Produktens omfång]] § Beslut: containern är ett sammanhang för
  * allt man äger, använder eller arbetar med — inte ett fordon eller ett
  * fritidshus. Det generiska svaret issue 81 lämnade efter sig är
