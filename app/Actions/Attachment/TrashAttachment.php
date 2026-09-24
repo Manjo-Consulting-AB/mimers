@@ -53,7 +53,10 @@ use Illuminate\Support\Facades\DB;
  * och bär användaren, medan nedgraderingens jobb
  * (App\Console\EnforcesDowngrades) raderar utan en — och en rad ett jobb
  * orsakat har `user_id` null, aldrig en påhittad systemanvändare (issue 40
- * § Beslut 11).
+ * § Beslut 11). Även "töm lagringen" bär användaren: det är ett klick, och
+ * bara nedgraderingen och gallringen är handlingslösa. Aktören skickas alltid
+ * in av anroparen — actionen letar aldrig själv efter en inloggad användare,
+ * för då går en jobbrad och en klickrad inte längre att skilja åt.
  */
 class TrashAttachment
 {

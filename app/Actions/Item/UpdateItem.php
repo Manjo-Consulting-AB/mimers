@@ -3,9 +3,7 @@
 namespace App\Actions\Item;
 
 use App\Actions\Audit\RecordAuditEvent;
-use App\Models\Attachment;
 use App\Models\AuditLog;
-use App\Models\Category;
 use App\Models\Item;
 use App\Models\Tag;
 use App\Models\User;
@@ -172,17 +170,19 @@ class UpdateItem
     }
 
     /**
-     * ULID:en för kategorin med det löpnumret, eller null. `withTrashed()`:
-     * en kategori som mjukraderats sedan itemet fick den ska läsas upp med
-     * sitt ULID och inte bli null i en gammal rad.
+     * ULID:en för kategorin med det löpnumret, eller null. Läsningen går förbi
+     * Eloquents SoftDeletes-scope och returnerar kolumnens råa värde: raden
+     * bär identifieraren och ingenting annat, så det finns inget att skydda —
+     * en kategori som mjukraderats sedan itemet fick den ger fortfarande sitt
+     * ULID. Att den då inte går att slå upp vid visning är issue 116:s sak.
      */
     private function categoryUlid(?int $id): ?string
     {
-        return $id === null ? null : Category::withTrashed()->whereKey($id)->value('ulid');
+        return $id === null ? null : DB::table('category')->where('id', $id)->value('ulid');
     }
 
     private function attachmentUlid(?int $id): ?string
     {
-        return $id === null ? null : Attachment::withTrashed()->whereKey($id)->value('ulid');
+        return $id === null ? null : DB::table('attachment')->where('id', $id)->value('ulid');
     }
 }

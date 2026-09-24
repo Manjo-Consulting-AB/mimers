@@ -30,8 +30,9 @@ use Illuminate\Support\Facades\DB;
  *
  * **ULID:er, aldrig namn.** Raden säger vilka taggar som kom och gick, inte
  * vad de heter; namnet är användarens fritext och slås upp när raden visas
- * (issue 116). En bortkopplad tagg kan vara mjukraderad sedan länge, därav
- * `withTrashed()` i uppslaget.
+ * (issue 116). Uppslaget läser kolumnens råa värde förbi SoftDeletes-scopet:
+ * en bortkopplad tagg kan vara mjukraderad sedan länge, och raden bär ändå
+ * bara identifieraren.
  *
  * Actionen öppnar ingen egen transaktion: den anropas inifrån
  * App\Actions\Item\CreateItem och App\Actions\Item\UpdateItem, som båda äger
@@ -72,7 +73,7 @@ class SyncItemTags
             item: $item,
             meta: [
                 'added' => $tags->whereIn('id', $toAttach)->pluck('ulid')->values()->all(),
-                'removed' => Tag::withTrashed()->whereIn('id', $toDetach)->pluck('ulid')->values()->all(),
+                'removed' => DB::table('tag')->whereIn('id', $toDetach)->pluck('ulid')->values()->all(),
             ],
         );
     }

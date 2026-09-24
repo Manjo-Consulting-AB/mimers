@@ -186,9 +186,12 @@ class StorageController extends Controller
             ->keyBy('ulid');
 
         $removed = 0;
-        DB::transaction(function () use ($attachments, $trashAttachment, &$removed): void {
+        DB::transaction(function () use ($request, $attachments, $trashAttachment, &$removed): void {
             foreach ($attachments as $attachment) {
-                if ($trashAttachment->handle($attachment)) {
+                // Användaren skickas in: att tömma lagringen är ett klick av
+                // en människa, inte ett jobb. Bara nedgraderingen och
+                // gallringen skriver rader utan aktör (issue 109).
+                if ($trashAttachment->handle($attachment, $request->user())) {
                     $removed++;
                 }
             }
