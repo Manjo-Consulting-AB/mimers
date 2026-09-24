@@ -168,7 +168,7 @@ Krävs av B2B och av ägarbyten — i en mäklarsituation är det ett värde i s
 | Kolumn | Typ | Not |
 |---|---|---|
 | id, ulid | | Loggen är läsbar genom API:et, så raden bär ULID som allt annat |
-| account_id, user_id | Identifierare NULL | Aktörens konto och användare. `user_id` är `NULL` när ett jobb orsakat händelsen |
+| account_id, user_id | Identifierare NULL | `account_id` är kontot raden rör: containerns ägarkonto när händelsen skedde, och på en rad utan container kontot händelsen rör. `user_id` är den handlande användaren, `NULL` när ett jobb orsakat händelsen |
 | container_id | Identifierare NULL | |
 | item_id | Identifierare NULL | Itemet händelsen hör till, oavsett subjekt |
 | action | VARCHAR(60) | `container.transferred`, `access.revoked`, `container.purged`, … Öppet namnrum, inget CHECK |
