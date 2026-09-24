@@ -5,6 +5,7 @@ use App\Models\Container;
 use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\getJson;
@@ -205,8 +206,17 @@ it('gör lika många frågor oavsett antal leverantörer', function () {
 
     CostEntry::factory()->for($item, 'item')->create(['supplier' => 'Volvo Penta']);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver
+    // deterministiskt (issue 80), se FastSummeringTest. Middlewaren sparar
+    // last_active_at bara när värdet ändrats, med sekundupplösning: hann
+    // de trettio fabriksraderna nedan över en sekundgräns blev det en
+    // UPDATE extra i andra mätningen - 5 mot 4 frågor, bara i fullsvit.
+    Carbon::setTestNow(now());
+
     // Värm Sanctum-guarden och containerns policyväg med ett omätt anrop,
     // samma mönster som ItemFilterTest::it('...konstant oavsett djup').
+    // Anropet skriver också den frysta last_active_at, så ingen av
+    // mätningarna nedan gör det.
     getJson($url, $headers)->assertOk();
 
     $frågor = 0;
@@ -226,4 +236,6 @@ it('gör lika många frågor oavsett antal leverantörer', function () {
     $medTrettioenLeverantörer = $frågor;
 
     expect($medTrettioenLeverantörer)->toBe($medEnLeverantör);
+
+    Carbon::setTestNow();
 });
