@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Schedule\DependOccurrence;
-use App\Exceptions\Api\ApiException;
+use App\Actions\Schedule\UndependOccurrence;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\StoreOccurrenceDependencyRequest;
 use App\Http\Resources\OccurrenceDependencyResource;
@@ -13,6 +13,7 @@ use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 
@@ -147,7 +148,7 @@ class OccurrenceDependencyController extends Controller
         // Andra änden, efter uppslaget (issue 71 § Beslut 1 och 3).
         Gate::authorize('update', $other->schedule->item);
 
-        $dependency = $dependOccurrence->handle($occurrence, $other);
+        $dependency = $dependOccurrence->handle($occurrence, $other, $request->user());
 
         $this->attachCounterpart($dependency, $other);
 
@@ -174,7 +175,7 @@ class OccurrenceDependencyController extends Controller
      * och 3). En motpart inom containern men utanför omfånget ger 403 utan att
      * svaret röjer dess titel eller itemnamn.
      */
-    public function destroy(Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, string $other): Response
+    public function destroy(Request $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, string $other, UndependOccurrence $undependOccurrence): Response
     {
         Gate::authorize('update', $occurrence->schedule->item);
 
@@ -186,16 +187,10 @@ class OccurrenceDependencyController extends Controller
 
         Gate::authorize('update', $otherOccurrence->schedule->item);
 
-        $dependency = OccurrenceDependency::query()
-            ->where('occurrence_id', $occurrence->id)
-            ->where('depends_on_occurrence_id', $otherOccurrence->id)
-            ->first();
-
-        if ($dependency === null) {
-            throw ApiException::make('resource.not_found', [], 404);
-        }
-
-        $dependency->delete();
+        // Raderingen och loggraden är UndependOccurrence sedan issue 110 —
+        // delad med webben. Även där ger ett par utan beroenderad 404
+        // `resource.not_found`, genom samma ModelNotFoundException.
+        $undependOccurrence->handle($occurrence, $otherOccurrence, $request->user());
 
         return response()->noContent();
     }

@@ -112,6 +112,64 @@ class AuditLog extends Model
 
     public const ACTION_COST_ENTRY_DELETED = 'cost_entry.deleted';
 
+    /*
+     * Uppgifts- och utlåningshändelserna (issue 110). Scheman, förekomster,
+     * beroenden och lån — allt som skrivs på en uppgift eller en utlåning.
+     * Varje rad bär `item_id`; [[ADR-0043 Tre loggar]] § Händelseloggen.
+     */
+
+    public const ACTION_SCHEDULE_CREATED = 'schedule.created';
+
+    /**
+     * Schemat ändrades — eller pausades, eller återupptogs: pausen är samma
+     * skrivning som en ändring av titeln, bara `meta.changed` skiljer dem.
+     */
+    public const ACTION_SCHEDULE_UPDATED = 'schedule.updated';
+
+    public const ACTION_SCHEDULE_DELETED = 'schedule.deleted';
+
+    /**
+     * Förekomsten bockades av. Den nya förekomsten `CloseOccurrence` öppnar i
+     * samma transaktion loggas INTE — den är en följd av avbockningen, inte
+     * en handling (issue 110).
+     */
+    public const ACTION_SCHEDULE_OCCURRENCE_COMPLETED = 'schedule_occurrence.completed';
+
+    /**
+     * Förekomsten hoppades över — en EGEN handling, inte en avbockning med en
+     * annan flagga: historiken skiljer dem, och nästa `interval`-förfall
+     * räknas ur ett annat datum (issue 22b § Beslut 4).
+     */
+    public const ACTION_SCHEDULE_OCCURRENCE_SKIPPED = 'schedule_occurrence.skipped';
+
+    /**
+     * Beroendena bär sina två ULID:er i `meta` och ingen `subject_type`:
+     * raden i `schedule_dependency`/`occurrence_dependency` har ingen egen
+     * ULID — paret identifierar den (issue 23 § Beslut 1, issue 23b
+     * § Beslut 1), samma form som `item_link.created` bär.
+     */
+    public const ACTION_SCHEDULE_DEPENDENCY_CREATED = 'schedule_dependency.created';
+
+    public const ACTION_SCHEDULE_DEPENDENCY_DELETED = 'schedule_dependency.deleted';
+
+    public const ACTION_OCCURRENCE_DEPENDENCY_CREATED = 'occurrence_dependency.created';
+
+    public const ACTION_OCCURRENCE_DEPENDENCY_DELETED = 'occurrence_dependency.deleted';
+
+    public const ACTION_LOAN_CREATED = 'loan.created';
+
+    public const ACTION_LOAN_UPDATED = 'loan.updated';
+
+    /**
+     * Lånet lämnades tillbaka — `returned_at` gick från null till ett datum.
+     * Egen handling och inte `loan.updated`: återlämningen är den händelse
+     * utlåningen finns för, och historiken (issue 116) formulerar den som en
+     * egen mening.
+     */
+    public const ACTION_LOAN_RETURNED = 'loan.returned';
+
+    public const ACTION_LOAN_DELETED = 'loan.deleted';
+
     /**
      * Tabellen heter `audit_log`, inte Eloquents standardplural `audit_logs`.
      */

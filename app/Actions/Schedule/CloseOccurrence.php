@@ -2,8 +2,10 @@
 
 namespace App\Actions\Schedule;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
@@ -23,7 +25,9 @@ use RuntimeException;
  *    sig att systemet ljuger om vad som återstår. Kontrollen gäller BÅDA
  *    rutterna: `skip` är också en stängning.
  * 2. Raden stängs: status, `completed_at`, `completed_by_user_id`,
- *    `completed_by_account_id`, ev. `completion_note`.
+ *    `completed_by_account_id`, ev. `completion_note`. I samma transaktion
+ *    skrivs händelseloggen (issue 110): `schedule_occurrence.completed` eller
+ *    `schedule_occurrence.skipped`, med `item_id` satt.
  * 3. Nästa `due_at` räknas — av App\Actions\Schedule\OpenNextOccurrence,
  *    som är den ENDA vägen in i `schedule_occurrence` (22a). Ingen andra
  *    beräkning skrivs här: två uttryck för samma regel driver isär.
@@ -55,6 +59,7 @@ class CloseOccurrence
 {
     public function __construct(
         private OpenNextOccurrence $openNextOccurrence,
+        private RecordAuditEvent $recordAuditEvent,
     ) {}
 
     /**
@@ -145,6 +150,31 @@ class CloseOccurrence
             $lockedOccurrence->completed_by_account_id = $account->id;
             $lockedOccurrence->completion_note = $completionNote;
             $lockedOccurrence->save();
+
+            // Raden i händelseloggen (issue 110). `completed` och `skipped` är
+            // två handlingar och inte en med en flagga: skillnaden syns i
+            // historiken, och flashkoden skiljer dem redan åt. Förekomsten som
+            // öppnas i steg 3 och 4 loggas INTE — den är en följd av
+            // avbockningen, inte en handling.
+            //
+            // `account_id` är containerns ägarkonto och inte `$account`: den
+            // senare är kontot användaren HANDLAR i namn av (varvet), medan
+            // loggens konto är det som äger raden — samma val som i
+            // App\Actions\Item\CreateItem. Anteckningen (`completion_note`) är
+            // fritext och följer aldrig med; `due_at` är ett datum och gör
+            // raden läsbar utan att slå upp förekomsten.
+            $this->recordAuditEvent->handle(
+                action: $status === ScheduleOccurrence::STATUS_SKIPPED
+                    ? AuditLog::ACTION_SCHEDULE_OCCURRENCE_SKIPPED
+                    : AuditLog::ACTION_SCHEDULE_OCCURRENCE_COMPLETED,
+                account: $lockedSchedule->item->container->account,
+                user: $user,
+                container: $lockedSchedule->item->container,
+                item: $lockedSchedule->item,
+                subjectType: 'schedule_occurrence',
+                subjectUlid: $lockedOccurrence->ulid,
+                meta: ['due_at' => $lockedOccurrence->due_at->toDateString()],
+            );
 
             // Steg 3 och 4 — nästa förfall räknas och nästa förekomst skapas
             // av OpenNextOccurrence, i samma transaktion. `$from` är det enda

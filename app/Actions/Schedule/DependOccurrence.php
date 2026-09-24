@@ -2,11 +2,15 @@
 
 namespace App\Actions\Schedule;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
+use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Skapar beroendet mellan två förekomster, med reglerna från issue 23b §
@@ -42,10 +46,22 @@ use App\Models\ScheduleOccurrence;
  * schemanivån (23a § Beslut 7). Även STÄNGDA förekomsters kanter räknas: en
  * stängd förekomst kan ha utgående rader sedan den var öppen, och en cykel
  * kan sluta genom dem.
+ *
+ * Sedan issue 110 loggas raden här — `occurrence_dependency.created`, med
+ * förekomsternas båda ULID:er i `meta` — så att webbens och `/api`:s två
+ * anropare får samma rad. Upplösningen ligger i
+ * App\Actions\Schedule\UndependOccurrence (§ Beslut 5).
  */
 class DependOccurrence
 {
-    public function handle(ScheduleOccurrence $occurrence, ScheduleOccurrence $other): OccurrenceDependency
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
+    /**
+     * @param  User  $actor  Den som knyter beroendet. Behörigheten är redan
+     *                       prövad av anroparen; hen blir `user_id` på
+     *                       loggraden.
+     */
+    public function handle(ScheduleOccurrence $occurrence, ScheduleOccurrence $other, User $actor): OccurrenceDependency
     {
         $containerId = $this->assertSameContainer($occurrence, $other);
 
@@ -67,7 +83,25 @@ class DependOccurrence
         $dependency = new OccurrenceDependency;
         $dependency->occurrence_id = $occurrence->id;
         $dependency->depends_on_occurrence_id = $other->id;
-        $dependency->save();
+
+        // Kanten och loggraden i EN transaktion: en rad som skrevs utanför
+        // kunde överleva ett rollback och beskriva ett beroende som inte
+        // finns.
+        DB::transaction(function () use ($dependency, $occurrence, $other, $actor): void {
+            $dependency->save();
+
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_OCCURRENCE_DEPENDENCY_CREATED,
+                account: $occurrence->schedule->item->container->account,
+                user: $actor,
+                container: $occurrence->schedule->item->container,
+                item: $occurrence->schedule->item,
+                meta: [
+                    'occurrence' => $occurrence->ulid,
+                    'depends_on' => $other->ulid,
+                ],
+            );
+        });
 
         return $dependency;
     }

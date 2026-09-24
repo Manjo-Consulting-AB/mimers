@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Exceptions\Api\ApiException;
+use App\Actions\Loan\CreateLoan;
+use App\Actions\Loan\DeleteLoan;
+use App\Actions\Loan\UpdateLoan;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Loan\StoreLoanRequest;
 use App\Http\Requests\Loan\UpdateLoanRequest;
@@ -11,8 +13,8 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\Loan;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -40,15 +42,15 @@ use Illuminate\Support\Facades\Gate;
  * Ingen show(): listan hämtar hela uppsättningen, som är kort per definition
  * (§ Beslut 5).
  *
- * Domänregeln "högst en öppen utlåning per item" bor här i kontrollern, inte
- * i en Request — den behöver itemet från rutten och är en domänregel, inte en
- * formregel (§ Beslut 4). Den är för liten för en egen Action ([[ADR-0024
- * Tunna controllers och actions]]: bara skrivningar med en regel värd ett
- * eget test får en) och ingen fil i app/Actions får röras i den här issuen.
- * Spärren är en check-then-act och körs därför i EN transaktion med
- * `lockForUpdate()` på ITEM-raden (granskningsfynd; samma konvention som
- * ContainerController::destroy och 22a/22b) — låset ligger aldrig på
- * loan-tabellen, en tom mängd rader är ett gap lock i MySQL (22a § Beslut 7).
+ * Domänregeln "högst en öppen utlåning per item" bor i
+ * App\Actions\Loan\AssertNoOpenLoan sedan issue 110, inte här och inte i en
+ * Request — den behöver itemet från rutten och är en domänregel, inte en
+ * formregel (§ Beslut 4). Fram till dess låg den i kontrollern: ingen fil i
+ * app/Actions fick röras i den issuen. Spärren är en check-then-act och körs
+ * därför i EN transaktion med `lockForUpdate()` på ITEM-raden, inuti
+ * Actionerna (granskningsfynd; samma konvention som ContainerController::
+ * destroy och 22a/22b) — låset ligger aldrig på loan-tabellen, en tom mängd
+ * rader är ett gap lock i MySQL (22a § Beslut 7).
  *
  * `item_id` sätts explicit från rutten, aldrig via massildelning — `item_id`
  * är UTESLUTEN ur Loan#[Fillable] (§ Beslut 9). Påminnelsen mot `due_at` —
@@ -94,24 +96,11 @@ class LoanController extends Controller
      * Grinden är itemets `create` (issue 71 § Beslut 1 och 5): en utlåning är
      * ny information som läggs till itemet, inte en ändring av det.
      */
-    public function store(StoreLoanRequest $request, Container $container, Item $item): JsonResponse
+    public function store(StoreLoanRequest $request, Container $container, Item $item, CreateLoan $createLoan): JsonResponse
     {
         Gate::authorize('create', $item);
 
-        $loan = DB::transaction(function () use ($request, $item): Loan {
-            $lockedItem = $item->newQuery()
-                ->whereKey($item->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $this->assertNoOpenLoan($lockedItem);
-
-            $loan = new Loan($request->validated());
-            $loan->item_id = $lockedItem->id;
-            $loan->save();
-
-            return $loan;
-        });
+        $loan = $createLoan->handle($item, $request->user(), new Loan($request->validated()));
 
         return (new LoanResource($loan))
             ->response()
@@ -142,41 +131,24 @@ class LoanController extends Controller
      * inaktuell rad ska inte omedvetet återöppna ett lån en samtidig begäran
      * just stängde.
      */
-    public function update(UpdateLoanRequest $request, Container $container, Item $item, Loan $loan): LoanResource
+    public function update(UpdateLoanRequest $request, Container $container, Item $item, Loan $loan, UpdateLoan $updateLoan): LoanResource
     {
         Gate::authorize('update', $item);
 
-        $loan = DB::transaction(function () use ($request, $item, $loan): Loan {
-            $lockedItem = $item->newQuery()
-                ->whereKey($item->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $lockedLoan = $lockedItem->loans()
-                ->whereKey($loan->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            // Bara de fält klienten faktiskt skickade skrivs tillbaka.
-            // `validated()` bär HELA det sammanslagna tillståndet — radens
-            // tidigare värden (lästa vid request-resolution, före låset) plus
-            // klientens, se UpdateLoanRequest::validationData(). Att fylla
-            // alltihop skulle skriva de inaktuella, pre-lock-värdena över den
-            // nyss låsta raden och t.ex. tyst återöppna ett lån en samtidig
-            // PATCH just stängde (granskningsfynd). Det sammanslagna
-            // tillståndet behövs bara för tvärfältsvalideringen.
-            $lockedLoan->fill(
-                array_intersect_key($request->validated(), $request->all())
-            );
-
-            if ($lockedLoan->returned_at === null) {
-                $this->assertNoOpenLoan($lockedItem, $lockedLoan);
-            }
-
-            $lockedLoan->save();
-
-            return $lockedLoan;
-        });
+        // Bara de fält klienten faktiskt skickade skrivs tillbaka.
+        // `validated()` bär HELA det sammanslagna tillståndet — radens tidigare
+        // värden (lästa vid request-resolution, före låset) plus klientens, se
+        // UpdateLoanRequest::validationData(). Att fylla alltihop skulle skriva
+        // de inaktuella, pre-lock-värdena över den nyss låsta raden och t.ex.
+        // tyst återöppna ett lån en samtidig PATCH just stängde
+        // (granskningsfynd). Det sammanslagna tillståndet behövs bara för
+        // tvärfältsvalideringen.
+        $loan = $updateLoan->handle(
+            $item,
+            $loan,
+            array_intersect_key($request->validated(), $request->all()),
+            $request->user(),
+        );
 
         return new LoanResource($loan);
     }
@@ -192,38 +164,12 @@ class LoanController extends Controller
      * Grinden är itemets `delete` (issue 71 § Beslut 1 och 5): `write` ändrar
      * ett lån men tar inte bort det.
      */
-    public function destroy(Container $container, Item $item, Loan $loan): Response
+    public function destroy(Request $request, Container $container, Item $item, Loan $loan, DeleteLoan $deleteLoan): Response
     {
         Gate::authorize('delete', $item);
 
-        $loan->delete();
+        $deleteLoan->handle($loan, $request->user());
 
         return response()->noContent();
-    }
-
-    /**
-     * Spärren "högst en öppen utlåning per item" (§ Beslut 4): hittar
-     * kontrollern en öppen utlåning (annan än $except, när ett lån håller på
-     * att återöppnas) avvisas skrivningen med `loan.already_open` och den
-     * befintliga utlåningens ULID i `data.loan` — så klienten kan peka ut
-     * raden som blockerar.
-     *
-     * Måste anropas under `lockForUpdate()` på item-raden (se store och
-     * update) — check-then-act utan låset låter två samtidiga skrivningar
-     * passera och bryter "högst en öppen utlåning".
-     */
-    private function assertNoOpenLoan(Item $item, ?Loan $except = null): void
-    {
-        $query = $item->loans()->whereNull('returned_at');
-
-        if ($except !== null) {
-            $query->whereKeyNot($except->getKey());
-        }
-
-        $open = $query->first();
-
-        if ($open !== null) {
-            throw ApiException::make('loan.already_open', ['loan' => $open->ulid], 422);
-        }
     }
 }
