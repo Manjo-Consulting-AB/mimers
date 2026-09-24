@@ -40,23 +40,7 @@ Den del som inte väntar på designen har issues i [[M16 Itemets vy]] — 93 til
 
 ## Dashboarden — avgjort 2026-09-18
 
-Genomgången av dashboardmockupen mot datamodellen. Punkterna nedan är avgjorda men har ingen issue.
-
-**Dashboarden är en ny sida, och `/dashboard` är i dag todo-vyn.** `TodoController` flyttar till en egen task-vy på egen URL, och den behåller allt som redan är genomtänkt i den — ordningen som räknas på servern, `can.update` per rad, den konstanta frågekostnaden via `ResolveItemScope`. Dashboardens högerspalt visar fem rader och länkar dit.
-
-**Pagineringsförbudet faller.** Issue 64 § Beslut 3 och [[ADR-0005 Schema och förekomst]] motiverar den opaginerade listan med att *"i april förfaller allt samtidigt"*. Den premissen är båtpärmen, inte produkten — se [[ADR-0033 Produktens omfång]]. ADR-0005 står kvar som historik enligt regeln i [[ADR-0032 Produktens ord]]; omprövningen hör hemma i task-vyns issue och behöver ingen ADR.
-
-**En uppgiftsbricka, inte två.** Mockupens *Uppgifter* och *Underhåll* är samma tabell — `schedule` skiljer dem bara åt via `recurrence_type`, och den skillnaden ska inte bäras av dashboarden. Siffran är antalet rader bakom "Visa alla", alltså `ScheduleOccurrence::scopeTodoFor()`, och inget annat tal. Brickorna blir tre.
-
-**Händelsepanelen visar användarens egna rader**, `audit_log` filtrerat på `user_id`. Det är hennes egna handlingar, så ingen åtkomstfråga uppstår och panelen är `risk_class: none`. Kontots samlade logg är en annan funktion med andra läsare — bygg inte ihop dem. Tabellen har bara `(container_id, created_at)`; frågan behöver ett index till. Radernas text är `action` plus `meta`, inte meningar, så copyn hör till `lang/` och alltså efter [[M13 Omskrivningen]].
-
-**Rättelse 2026-09-18:** panelen är inte billig. `audit_log` skrivs i dag på exakt två ställen — `container.transferred` och `access.revoked` — så den är tom för alla utom den som just överlåtit en container eller fått en åtkomst indragen. Det gäller både dashboardens panel och containerns; se *Händelseinstrumenteringen* nedan. Resten av punkten ovan står kvar och gäller när instrumenteringen finns.
-
-**Inbjudningar hamnar bakom klockan.** `Notification::TYPE_INVITATION_RECEIVED` finns redan och `notification` är indexerad på `(user_id, created_at)` — det som saknas är bara en yta som läser raderna. Alla sju notistyperna kan visas där. `user_id` är nullbar för en inbjudan till någon som ännu inte har konto; för henne är mejlet fortfarande enda vägen in, och det är rätt.
-
-**Nollor är inte ett designproblem.** Tomma fält och nollställda tal accepteras tills användaren fyllt systemet. Undantaget är förstagångsanvändaren utan en enda container — `TodoController` skiljer redan på *ingen container alls* och *containrar utan uppgifter*, och den skillnaden ska behållas.
-
-**Informationsytan** ersätter mockupens exempelbanner: korta tips som användaren bläddrar i ordning och kan dölja med ett kryss. Fyra krav: det dolda tillståndet lagras på användaren och inte i webbläsaren, det lagras per meddelande så att ett nytt viktigt meddelande kan tändas igen utan att riva hennes tidigare val, ordningen är bestämd och inte slumpad, och tipsen är strängar i `lang/` — alltså efter [[M13 Omskrivningen]].
+**Har lämnat listan 2026-09-24.** Punkterna från genomgången av dashboardmockupen har issues i [[M19 Dashboarden]] — 122 till 128. Två av dem stämde inte när de skrevs in där. Händelsepanelen visar läsregeln över alla användarens konton och inte bara hennes egna rader, som [[ADR-0043 Tre loggar]] § Konsekvenser beslutade. Inbjudningarna fanns inte *"redan"* bakom klockan: `invitation.received` skrivs av ingen kod, och vägen dit är issue 131 i [[M20 Kontot]].
 
 **Dessa är kvar utan datakälla:** containerns foto och undertitel, kortens framdriftsstapel. Vädret är struket.
 
@@ -98,13 +82,13 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 
 ## Ännu inte issues
 
-**Händelseinstrumenteringen har lämnat listan 2026-09-23.** Besluten står i [[ADR-0043 Tre loggar]] och arbetet har issues i [[M18 Loggarna]] — 107 till 117. Dashboardens händelsepanel väntar på dashboardens egen milstolpe.
+**Händelseinstrumenteringen har lämnat listan 2026-09-23.** Besluten står i [[ADR-0043 Tre loggar]] och arbetet har issues i [[M18 Loggarna]] — 107 till 117. Dashboardens händelsepanel är issue 126 i [[M19 Dashboarden]].
 
 **Anmälningsvägen enligt DSA.** Mimers är en värdtjänst, och artikel 16 kräver att vem som helst kan anmäla innehåll som den anser vara olagligt. Artikel 17 kräver att en användare vars innehåll begränsas får en motivering. Båda är egna ytor med egna flöden och hör ihop med den rättsliga spärren i [[ADR-0043 Tre loggar]]. Ingen av dem har en issue.
 
 **Containerns karta.** En graf över containerns alla items och deras relationer. Datat finns; layouten över hundratals noder är arbetet, och den delar ingenting med fokuskartan på itemet utom namnet.
 
-**Luckorna i kontot.** Byta lösenord. Byta e-post — egen issue och `risk_class: elevated`, för med tvingande tvåfaktor blir ett e-postbyte utan kodkrav en väg runt andra faktorn, samma klass av hål som issue 80 stängde. Inbjudningar syns i dag bara som mejl och inte när användaren loggar in.
+**Luckorna i kontot har lämnat listan 2026-09-24.** Lösenordet, e-postadressen och inbjudningarna har issues i [[M20 Kontot]] — 129 till 131.
 
 **Verifieringarna.** Att en uppladdning bara lagras en gång (dedup och referensräkning) och att filer inte går att nå obehörigt ska bevisas av bestående tester, inte av en genomgång per release. Båda ytorna är `risk_class: elevated` enligt [[AGENTS.md]] § De tre axlarna.
 
