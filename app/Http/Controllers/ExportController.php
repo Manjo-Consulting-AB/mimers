@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ExportResource;
 use App\Jobs\BuildContainerExport;
 use App\Models\Container;
 use App\Models\Export;
+use App\Models\SecurityLog;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -123,6 +125,7 @@ class ExportController extends Controller
         Request $request,
         Container $container,
         ApiErrorTranslator $translator,
+        RecordSecurityEvent $recordSecurityEvent,
     ): RedirectResponse {
         Gate::authorize('view', $container);
 
@@ -131,6 +134,18 @@ class ExportController extends Controller
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['export' => $translator->message($e)]);
         }
+
+        // Issue 113: en beställd export. En export är hela containern i en
+        // fil — den lämnar systemet. En dubblettspärrad beställning kastade
+        // ovanför och loggar ingenting, för ingenting hände.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_EXPORT_REQUESTED,
+            account: $container->account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['export' => $export->ulid],
+        );
 
         BuildContainerExport::dispatch($export);
 

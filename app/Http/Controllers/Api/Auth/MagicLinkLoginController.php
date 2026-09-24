@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Auth;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ConsumeMagicLinkRequest;
+use App\Models\SecurityLog;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Auth\MagicLinkExpiredException;
 use App\Support\Auth\MagicLinkInvalidException;
@@ -58,7 +60,7 @@ use Illuminate\Http\JsonResponse;
  */
 class MagicLinkLoginController extends Controller
 {
-    public function store(ConsumeMagicLinkRequest $request): JsonResponse
+    public function store(ConsumeMagicLinkRequest $request, RecordSecurityEvent $recordSecurityEvent): JsonResponse
     {
         // Steg ett: pröva token utan att förbruka det — se klassens docblock.
         try {
@@ -95,6 +97,15 @@ class MagicLinkLoginController extends Controller
         LoginRateLimiter::clear($request, $user->email);
 
         $token = $user->createToken('api')->plainTextToken;
+
+        // Issue 113: `auth.magic_link`, samma namn och samma innehåll som
+        // webbens väg skriver. Tokenet finns inte i raden.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_MAGIC_LINK,
+            user: $user,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         return response()->json(['token' => $token]);
     }

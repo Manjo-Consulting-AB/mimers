@@ -2,6 +2,7 @@
 
 namespace App\Console;
 
+use App\Support\Security\IpGroup;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -464,14 +465,15 @@ class ReportsAbuseSignals
 
     /**
      * Pseudonymen som loggen bär i stället för en rå IP-adress (Beslut 10).
-     * De första sexton hexatecknen av en HMAC-SHA256 med applikationsnyckeln:
-     * samma IP ger samma grupp mellan två körningar, två olika IP:n olika
-     * grupper, och nyckeln gör att pseudonymen inte kan räknas fram utan
-     * `config('app.key')`.
+     *
+     * Sedan issue 113 bor formeln i App\Support\Security\IpGroup och anropas
+     * härifrån: säkerhetsloggen skriver samma pseudonym, och rapportens
+     * grupper och loggens grupper måste vara samma grupper. Utbrytningen
+     * ändrade ingenting — rapportens utdata är byte för byte densamma.
      */
     private function ipGroup(string $ip): string
     {
-        return substr(hash_hmac('sha256', $ip, (string) config('app.key')), 0, 16);
+        return IpGroup::from($ip);
     }
 
     /**

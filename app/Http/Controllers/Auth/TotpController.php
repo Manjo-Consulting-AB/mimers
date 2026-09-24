@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\TotpCodeRequest;
+use App\Models\SecurityLog;
 use App\Support\Auth\TotpAlreadyConfirmedException;
 use App\Support\Auth\TotpBroker;
 use App\Support\Auth\TotpInvalidException;
@@ -40,7 +42,7 @@ class TotpController extends Controller
         return back()->with('totp_uri', $uri);
     }
 
-    public function confirm(TotpCodeRequest $request): RedirectResponse
+    public function confirm(TotpCodeRequest $request, RecordSecurityEvent $recordSecurityEvent): RedirectResponse
     {
         try {
             TotpBroker::confirm($request->user(), $request->string('code')->toString());
@@ -52,10 +54,20 @@ class TotpController extends Controller
             ]);
         }
 
+        // Issue 113: tvåfaktor slogs PÅ. Den påbörjade aktiveringen i store()
+        // ovan loggas inte — först en bekräftad hemlighet skyddar något, och
+        // en avbruten aktivering är ingen händelse. Koden finns inte i raden.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_TOTP_ENABLED,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
+
         return back()->with('status', 'totp-confirmed');
     }
 
-    public function destroy(TotpCodeRequest $request): RedirectResponse
+    public function destroy(TotpCodeRequest $request, RecordSecurityEvent $recordSecurityEvent): RedirectResponse
     {
         try {
             TotpBroker::disable($request->user(), $request->string('code')->toString());
@@ -64,6 +76,15 @@ class TotpController extends Controller
                 'code' => __('auth.totp_invalid'),
             ]);
         }
+
+        // Issue 113: tvåfaktor slogs AV. Att stänga av sitt andra faktor är
+        // en av de händelser en kapad session gör först.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_TOTP_DISABLED,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         return back()->with('status', 'totp-disabled');
     }

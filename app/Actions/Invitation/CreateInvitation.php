@@ -3,11 +3,13 @@
 namespace App\Actions\Invitation;
 
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\Item;
+use App\Models\SecurityLog;
 use App\Models\User;
 use App\Notifications\InvitationNotification;
 use App\Support\Plan\Entitlements;
@@ -60,6 +62,7 @@ class CreateInvitation
     public function __construct(
         private readonly Entitlements $entitlements,
         private readonly RecordAuditEvent $recordAuditEvent,
+        private readonly RecordSecurityEvent $recordSecurityEvent,
     ) {}
 
     /**
@@ -136,6 +139,26 @@ class CreateInvitation
                 item: $item,
                 subjectType: 'invitation',
                 subjectUlid: $invitation->ulid,
+                meta: [
+                    'item' => $item?->ulid,
+                    'level' => $invitation->level,
+                ],
+            );
+
+            // `invitation.created` i säkerhetsloggen (issue 113), i samma
+            // transaktion och av samma skäl: en inbjudan är ett utskick, och
+            // utskicksvolymen per konto är en av de vektorer [[ADR-0017
+            // Missbruksvektorer]] mäter. `meta` bär nivån och itemets ULID —
+            // **aldrig adressen** inbjudan gick till, och aldrig tokenet.
+            //
+            // Ingen IP-adress och ingen webbläsarsträng: actionen har ingen
+            // request, och den som bjuder in når hit genom två controllers
+            // som båda ligger utanför den här issuens omfång (issue 113
+            // § Omfångsrutan). Pseudonymen blir därför null på den här raden.
+            $this->recordSecurityEvent->handle(
+                action: SecurityLog::ACTION_INVITATION_CREATED,
+                account: $container->account,
+                user: $inviter,
                 meta: [
                     'item' => $item?->ulid,
                     'level' => $invitation->level,

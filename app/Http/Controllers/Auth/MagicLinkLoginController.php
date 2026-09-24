@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\ConsumeMagicLinkRequest;
+use App\Models\SecurityLog;
 use App\Models\User;
 use App\Support\Auth\ConsumeMagicLinkCodeRequest;
 use App\Support\Auth\LoginRateLimiter;
@@ -55,7 +57,7 @@ class MagicLinkLoginController extends Controller
      * kontot inte har någon bekräftad tvåfaktor; annars väntetillståndet och
      * kodsidan.
      */
-    public function __invoke(ConsumeMagicLinkRequest $request): Response|RedirectResponse
+    public function __invoke(ConsumeMagicLinkRequest $request, RecordSecurityEvent $recordSecurityEvent): Response|RedirectResponse
     {
         try {
             $user = $request->consume();
@@ -64,7 +66,7 @@ class MagicLinkLoginController extends Controller
         }
 
         if (! TwoFactorChallenge::isRequired($user)) {
-            return $this->completeLogin($request, $user);
+            return $this->completeLogin($request, $user, $recordSecurityEvent);
         }
 
         PendingMagicLinkLogin::start($request, $user);
@@ -95,7 +97,7 @@ class MagicLinkLoginController extends Controller
      * den av App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin innan
      * den här metoden körs, se det middlewarets docblock.
      */
-    public function store(ConsumeMagicLinkCodeRequest $request): RedirectResponse
+    public function store(ConsumeMagicLinkCodeRequest $request, RecordSecurityEvent $recordSecurityEvent): RedirectResponse
     {
         $user = PendingMagicLinkLogin::user($request);
 
@@ -119,7 +121,7 @@ class MagicLinkLoginController extends Controller
         // App\Support\Auth\PendingMagicLinkLogin::clear().
         PendingMagicLinkLogin::clear($request);
 
-        return $this->completeLogin($request, $user);
+        return $this->completeLogin($request, $user, $recordSecurityEvent);
     }
 
     /**
@@ -127,12 +129,28 @@ class MagicLinkLoginController extends Controller
      * annanstans — aldrig vid klicket, se issue 80 § Beslut 2 och "Klart
      * när". Begränsaren töms som vid en lyckad lösenordsinloggning, se
      * App\Support\Auth\LoginRateLimiter.
+     *
+     * Sedan issue 113 skrivs `auth.magic_link` här, och därmed EN rad per
+     * inlöst länk oavsett om kontot har tvåfaktor: ett konto utan bekräftad
+     * tvåfaktor kommer hit i steg ett, ett med i steg två. Raden skrivs när
+     * inloggningen fullbordas — en länk som öppnas men aldrig leder in
+     * loggar ingenting, och länken är förbrukad ändå (issue 80 § Beslut 2).
      */
-    private function completeLogin(ConsumeMagicLinkRequest|ConsumeMagicLinkCodeRequest $request, User $user): RedirectResponse
-    {
+    private function completeLogin(
+        ConsumeMagicLinkRequest|ConsumeMagicLinkCodeRequest $request,
+        User $user,
+        RecordSecurityEvent $recordSecurityEvent,
+    ): RedirectResponse {
         LoginRateLimiter::clear($request, $user->email);
 
         Auth::guard('web')->login($user);
+
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_MAGIC_LINK,
+            user: $user,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         $request->session()->regenerate();
 

@@ -2,8 +2,10 @@
 
 namespace App\Actions\LegalHold;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Models\Account;
 use App\Models\LegalHold;
+use App\Models\SecurityLog;
 
 /**
  * Sätter en rättslig spärr på ett konto — se [[ADR-0043 Tre loggar]] § Den
@@ -26,12 +28,31 @@ use App\Models\LegalHold;
  */
 class PlaceLegalHold
 {
+    public function __construct(
+        private readonly RecordSecurityEvent $recordSecurityEvent,
+    ) {}
+
     public function handle(Account $account, string $caseNumber, string $reason): LegalHold
     {
-        return LegalHold::create([
+        $hold = LegalHold::create([
             'account_id' => $account->id,
             'case_number' => $caseNumber,
             'reason' => $reason,
         ]);
+
+        // Issue 113: spärren skrivs till säkerhetsloggen, inte till
+        // applikationsloggen — raden är en händelse i systemet och hör
+        // hemma där de andra gör det. **Anledningen följer inte med**:
+        // `meta` bär ärendenumret och aldrig fritext (ADR § Händelseloggen),
+        // och anledningen står i `legal_hold.reason` där den hör hemma.
+        // Ingen användare och ingen pseudonym: kommandot körs från
+        // serverns kommandorad utan en inloggad användare och utan request.
+        $this->recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_LEGAL_HOLD_PLACED,
+            account: $account,
+            meta: ['case_number' => $caseNumber],
+        );
+
+        return $hold;
     }
 }

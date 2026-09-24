@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Auth;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\TotpCodeRequest;
+use App\Models\SecurityLog;
 use App\Support\Auth\TotpAlreadyConfirmedException;
 use App\Support\Auth\TotpBroker;
 use App\Support\Auth\TotpInvalidException;
@@ -33,7 +35,7 @@ class TotpController extends Controller
         return response()->json(['uri' => $uri]);
     }
 
-    public function confirm(TotpCodeRequest $request): Response
+    public function confirm(TotpCodeRequest $request, RecordSecurityEvent $recordSecurityEvent): Response
     {
         try {
             TotpBroker::confirm($request->user(), $request->string('code')->toString());
@@ -43,16 +45,32 @@ class TotpController extends Controller
             throw ApiException::make('auth.totp_invalid');
         }
 
+        // Issue 113: tvåfaktor slogs PÅ — samma rad som webbens väg skriver.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_TOTP_ENABLED,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
+
         return response()->noContent();
     }
 
-    public function destroy(TotpCodeRequest $request): Response
+    public function destroy(TotpCodeRequest $request, RecordSecurityEvent $recordSecurityEvent): Response
     {
         try {
             TotpBroker::disable($request->user(), $request->string('code')->toString());
         } catch (TotpInvalidException) {
             throw ApiException::make('auth.totp_invalid');
         }
+
+        // Issue 113: tvåfaktor slogs AV.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_TOTP_DISABLED,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         return response()->noContent();
     }

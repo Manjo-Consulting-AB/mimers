@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Actions\Security\RecordSecurityEvent;
+use App\Models\SecurityLog;
 use App\Models\User;
 use App\Support\Auth\TotpInvalidException;
 use App\Support\Auth\TotpRequiredException;
@@ -80,6 +82,11 @@ class LoginRequest extends FormRequest
      * till sitt eget format, samma mönster som ValidationException nedan
      * redan följer.
      *
+     * Issue 113 · Säkerhetsloggen: ett misslyckat lösenordssteg skriver en rad
+     * innan undantaget kastas — se recordFailedLogin() nedan. Ett felaktigt
+     * engångskodsteg längre ner gör det inte: den handlingen är inte
+     * uppräknad i issue 113.
+     *
      * @throws ValidationException
      * @throws TotpRequiredException
      * @throws TotpInvalidException
@@ -87,6 +94,8 @@ class LoginRequest extends FormRequest
     public function authenticate(): User
     {
         if (! Auth::guard('web')->validate($this->only('email', 'password'))) {
+            $this->recordFailedLogin();
+
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
             ]);
@@ -106,5 +115,36 @@ class LoginRequest extends FormRequest
         }
 
         return $user;
+    }
+
+    /**
+     * Den misslyckade inloggningen i säkerhetsloggen (issue 113).
+     *
+     * Raden skrivs HÄR och inte i de fyra kontrollerna: de två ytorna delar
+     * den här metoden, så en rad per försök blir en rad per försök oavsett
+     * väg, och ingen yta kan glömma den.
+     *
+     * **Utan adressen.** E-postadressen någon försökte logga in med sparas
+     * aldrig — att logga den vore att bygga ett register över gissade
+     * adresser, och en adress som inte finns är inte en uppgift om någon.
+     * Användaren sätts när adressen FINNS: ett försök mot ett verkligt konto
+     * är en uppgift om det kontot, och det är den raden en utredning av ett
+     * utsatt konto läser. Finns adressen inte är användaren null och
+     * pseudonymen allt som återstår.
+     *
+     * Uppslagningen kostar en fråga på en väg som redan är takbegränsad av
+     * App\Support\Auth\LoginRateLimiter, och den sker bara när inloggningen
+     * redan har misslyckats.
+     */
+    private function recordFailedLogin(): void
+    {
+        $user = User::query()->where('email', $this->string('email'))->first();
+
+        app(RecordSecurityEvent::class)->handle(
+            action: SecurityLog::ACTION_LOGIN_FAILED,
+            user: $user,
+            ip: $this->ip(),
+            userAgent: $this->userAgent(),
+        );
     }
 }

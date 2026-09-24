@@ -2,17 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreWebhookEndpointRequest;
 use App\Http\Requests\UpdateWebhookEndpointRequest;
 use App\Http\Resources\WebhookEndpointResource;
 use App\Models\Account;
+use App\Models\SecurityLog;
 use App\Models\WebhookEndpoint;
 use App\Support\Notification\UnsafeUrlException;
 use App\Support\Notification\UrlSafetyValidator;
 use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -82,6 +85,7 @@ class WebhookEndpointController extends Controller
         Account $account,
         UrlSafetyValidator $urlSafety,
         Entitlements $entitlements,
+        RecordSecurityEvent $recordSecurityEvent,
     ): JsonResponse {
         Gate::authorize('manageWebhooks', $account);
 
@@ -102,6 +106,18 @@ class WebhookEndpointController extends Controller
         // spegla raden redan i svaret (en ny endpoint är alltid aktiv).
         $endpoint->is_active = true;
         $endpoint->save();
+
+        // Issue 113: en skapad webhook — samma rad som webbens väg. URL:en
+        // finns inte i raden: en webhook-URL har ofta sin egen token i
+        // sökvägen, och hemligheten hör inte i loggen.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_WEBHOOK_CREATED,
+            account: $account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['webhook' => $endpoint->ulid],
+        );
 
         return (new WebhookEndpointResource($endpoint))
             ->additional(['secret' => $rawSecret])
@@ -165,11 +181,25 @@ class WebhookEndpointController extends Controller
      * (`is_active = false`), där pending-raderna ska ligga kvar — den
      * distinktionen är redan testad och rörs inte här.
      */
-    public function destroy(Account $account, WebhookEndpoint $webhook): Response
-    {
+    public function destroy(
+        Request $request,
+        Account $account,
+        WebhookEndpoint $webhook,
+        RecordSecurityEvent $recordSecurityEvent,
+    ): Response {
         Gate::authorize('manageWebhooks', $account);
 
         DB::table('webhook_delivery')->where('webhook_endpoint_id', $webhook->getKey())->delete();
+
+        // Issue 113: en borttagen webhook — samma rad som webbens väg.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_WEBHOOK_DELETED,
+            account: $account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['webhook' => $webhook->ulid],
+        );
 
         $webhook->delete();
 

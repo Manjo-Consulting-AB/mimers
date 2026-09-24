@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers\Api\Auth;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Models\SecurityLog;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Auth\TotpInvalidException;
 use App\Support\Auth\TotpRequiredException;
@@ -31,7 +33,7 @@ use Illuminate\Validation\ValidationException;
  */
 class AuthenticatedTokenController extends Controller
 {
-    public function store(LoginRequest $request): JsonResponse
+    public function store(LoginRequest $request, RecordSecurityEvent $recordSecurityEvent): JsonResponse
     {
         // LoginRequest::authenticate() kastar ValidationException::withMessages(['email' => ...])
         // — Laravels egen konvention för ett fält-knutet formulärfel, som
@@ -61,6 +63,16 @@ class AuthenticatedTokenController extends Controller
         LoginRateLimiter::clear($request, $request->string('email')->toString());
 
         $token = $user->createToken('api')->plainTextToken;
+
+        // Issue 113: samma rad som webbens inloggning — samma handling, samma
+        // namn. Tokenet självt finns inte i raden, bara användaren och
+        // pseudonymen för IP-adressen.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_LOGIN,
+            user: $user,
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+        );
 
         return response()->json(['token' => $token]);
     }

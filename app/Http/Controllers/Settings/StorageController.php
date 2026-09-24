@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Settings;
 
 use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Plan\ReadPlanUsage;
+use App\Actions\Security\RecordSecurityEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Account\RemoveStorageRequest;
 use App\Http\Resources\StorageEntryResource;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\SecurityLog;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -176,6 +178,7 @@ class StorageController extends Controller
         RemoveStorageRequest $request,
         Account $account,
         TrashAttachment $trashAttachment,
+        RecordSecurityEvent $recordSecurityEvent,
     ): RedirectResponse {
         Gate::authorize('manageStorage', $account);
 
@@ -196,6 +199,17 @@ class StorageController extends Controller
                 }
             }
         });
+
+        // Issue 113: tömd lagring. `removed` är antalet bilagor som faktiskt
+        // hamnade i papperskorgen — ett tal, ingen fritext, och inga filnamn.
+        $recordSecurityEvent->handle(
+            action: SecurityLog::ACTION_STORAGE_EMPTIED,
+            account: $account,
+            user: $request->user(),
+            ip: $request->ip(),
+            userAgent: $request->userAgent(),
+            meta: ['removed' => $removed],
+        );
 
         $storageBytes = (int) (DB::table('usage_counter')
             ->where('account_id', $account->id)

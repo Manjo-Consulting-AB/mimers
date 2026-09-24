@@ -2,8 +2,10 @@
 
 namespace App\Actions\LegalHold;
 
+use App\Actions\Security\RecordSecurityEvent;
 use App\Models\Account;
 use App\Models\LegalHold;
+use App\Models\SecurityLog;
 
 /**
  * Häver en rättslig spärr — se [[ADR-0043 Tre loggar]] § Den rättsliga
@@ -23,14 +25,32 @@ use App\Models\LegalHold;
  */
 class LiftLegalHold
 {
+    public function __construct(
+        private readonly RecordSecurityEvent $recordSecurityEvent,
+    ) {}
+
     /**
      * @return int Antalet rader som fick `lifted_at` satt.
      */
     public function handle(Account $account): int
     {
-        return LegalHold::query()
+        $lifted = LegalHold::query()
             ->where('account_id', $account->id)
             ->whereNull('lifted_at')
             ->update(['lifted_at' => now()]);
+
+        // Issue 113: hävningen skrivs till säkerhetsloggen, som sättningen.
+        // Noll hävda rader loggas inte — det var ingen spärr att häva, och
+        // `legal-hold:lift` säger ifrån om det. En rad som påstod en händelse
+        // som inte hände vore sämre än ingen rad.
+        if ($lifted > 0) {
+            $this->recordSecurityEvent->handle(
+                action: SecurityLog::ACTION_LEGAL_HOLD_LIFTED,
+                account: $account,
+                meta: ['holds' => $lifted],
+            );
+        }
+
+        return $lifted;
     }
 }
