@@ -3,7 +3,9 @@ import { computed, ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import FormField from '../../components/FormField.vue';
+import UiListRow from '../../components/UiListRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
 /*
@@ -38,6 +40,17 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * återställningskod" som på inloggningen: TotpBroker::confirm() och
  * ::disable() prövar bara TOTP-koden. Återställningskodsgrenen finns uteslutande
  * i LoginRequest::authenticate() (Beslut 8).
+ *
+ * **Inloggningshistoriken, issue 117.** Under tvåfaktorskortet står
+ * användarens tjugo senaste inloggningar — den enda ytan där säkerhetsloggen
+ * läses av någon annan än oss ([[ADR-0043 Tre loggar]] § Säkerhetsloggen).
+ * Raderna är `logins` ur SecurityController och kommer FÄRDIGA: `device_name`
+ * är enhetsnamnet som tolkades när raden skrevs, `succeeded` är utfallet.
+ * Vyn tolkar ingenting — den väljer ett ord ur `lang/` och skriver ut
+ * datumet med datumregeln (issue 104) — och `ip_group` finns varken här eller
+ * i proparna: pseudonymen är vår. Formen är `UiListRow` (issue 99), och
+ * `device_name` null möts av `logins.unknown_device`, aldrig av ett tomt
+ * fält.
  */
 const props = defineProps({
     totpEnabled: { type: Boolean, required: true },
@@ -45,9 +58,11 @@ const props = defineProps({
     recoveryCodesRemaining: { type: Number, required: true },
     totpUri: { type: String, default: null },
     recoveryCodes: { type: Array, default: null },
+    logins: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
+const { eventDate } = useRelativeDate();
 const { focusFirstError } = useErrorFocus();
 
 const setupForm = useForm({});
@@ -103,6 +118,18 @@ function disableTotp() {
 // självmotsägande. Asymmetrin mot avstängningen är medveten.
 function generateRecoveryCodes() {
     recoveryForm.post('/totp/recovery-codes');
+}
+
+// Enheten och utfallet, som ord. Reserven är en nyckel och inte en tom sträng:
+// en rad utan enhetsnamn är en rad vi inte kunde namnge — inte en trasig rad.
+function deviceLabel(login) {
+    return login.device_name ?? t('settings.security.logins.unknown_device');
+}
+
+function outcomeLabel(login) {
+    return login.succeeded
+        ? t('settings.security.logins.succeeded')
+        : t('settings.security.logins.failed');
 }
 </script>
 
@@ -254,6 +281,33 @@ function generateRecoveryCodes() {
                     </form>
                 </div>
             </template>
+        </section>
+
+        <!--
+            Inloggningshistoriken, issue 117. En <ul> med UiListRow i, som
+            varje annan lista: en skärmläsare ska höra hur många rader det
+            finns innan den läser den första. Ingen rad är klickbar — en
+            inloggning går inte att öppna, och en rad som ser klickbar ut utan
+            att leda någonstans är värre än en rad som inte gör det.
+        -->
+        <section class="mt-8 flex max-w-lg flex-col gap-4">
+            <h2 class="text-lg font-semibold">{{ t('settings.security.logins.heading') }}</h2>
+
+            <p v-if="props.logins.length === 0" class="text-sm text-slate-700">
+                {{ t('settings.security.logins.empty') }}
+            </p>
+
+            <ul v-else class="flex flex-col">
+                <UiListRow v-for="(login, index) in props.logins" :key="`${login.created_at}-${index}`">
+                    <template #title>{{ deviceLabel(login) }}</template>
+
+                    <template #subtitle>{{ outcomeLabel(login) }}</template>
+
+                    <template #meta>
+                        <time :datetime="login.created_at">{{ eventDate(login.created_at).text }}</time>
+                    </template>
+                </UiListRow>
+            </ul>
         </section>
     </SettingsLayout>
 </template>

@@ -590,6 +590,32 @@ return [
                 'disable_warning' => 'Turning it off deletes the recovery codes. Turning it on again gives you a new sheet.',
                 'disable_submit' => 'Turn off two-factor',
             ],
+
+            /*
+             * Inloggningshistoriken, se issue 117 och [[ADR-0043 Tre loggar]]
+             * § Säkerhetsloggen. The user's own logins, the twenty latest, and
+             * the one place in the product where the security log is read by
+             * anyone but us: the best protection against a hijacked account is
+             * that the user notices it themselves.
+             *
+             * `unknown_device` is the replacement and not a device: the
+             * browser string was never stored (issue 113), so a row without a
+             * device name is a row we could not name — a client without a
+             * `User-Agent`, or one we do not recognise. It is a noun phrase
+             * and lower case, like `audit.fallback.*`, because it fills the
+             * same slot: the device's.
+             *
+             * `succeeded` and `failed` are the outcome. The view picks between
+             * them and chooses nothing else; which action the row carried is
+             * ours (App\Http\Controllers\Settings\SecurityController).
+             */
+            'logins' => [
+                'heading' => 'Recent logins',
+                'empty' => 'No logins recorded yet.',
+                'unknown_device' => 'unknown device',
+                'succeeded' => 'Succeeded',
+                'failed' => 'Failed',
+            ],
         ],
     ],
 
