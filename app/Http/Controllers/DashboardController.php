@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Actions\Audit\ListAuditEvents;
+use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Container\ListContainerSummaries;
 use App\Actions\Schedule\ListTodo;
 use App\Models\Container;
@@ -58,6 +60,16 @@ use Inertia\Response;
  * En månad som går att välja vore en fråga, och en fråga är Pro
  * ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut); den parametriserade
  * rapporten ligger orörd i CostReportController.
+ *
+ * **Händelserna kom med issue 126**, som sin egen propp: `events` bär de
+ * senaste raderna ur händelseloggen över ALLA användarens konton
+ * ([[ADR-0043 Tre loggar]] § Konsekvenser). Läsregeln bor i
+ * App\Actions\Audit\ListAuditEvents och anropas med panelens gräns —
+ * kontrollern filtrerar ingenting själv, precis som historikflikarna låter
+ * bli (issue 108 och 116). Formen kommer ur
+ * App\Actions\Audit\PresentAuditEvents, som också slår upp containernamnen:
+ * en rad på den här sidan står utanför sin container och måste säga vilken
+ * den gäller.
  */
 class DashboardController extends Controller
 {
@@ -71,12 +83,27 @@ class DashboardController extends Controller
     public const TASK_LIMIT = 5;
 
     /**
-     * GET /dashboard — 200. Panelerna. Uppgiftspanelen visar de fem första
-     * raderna ur todo-urvalet, brickorna och korten räknar samma urval, och
-     * kostnaderna är innevarande kalendermånad.
+     * Antalet rader händelsepanelen visar.
+     *
+     * Fem, samma tak som uppgiftspanelen och av samma skäl: panelen är en
+     * glimt av loggen och inte loggen själv. Gränsen går in i anropet till
+     * App\Actions\Audit\ListAuditEvents — läsregeln har inget eget femtal, och
+     * en yta som vill se färre rader säger det i sin egen ände (issue 126).
      */
-    public function index(Request $request, CostReport $report): Response
-    {
+    public const ACTIVITY_LIMIT = 5;
+
+    /**
+     * GET /dashboard — 200. Panelerna. Uppgiftspanelen visar de fem första
+     * raderna ur todo-urvalet, brickorna och korten räknar samma urval,
+     * kostnaderna är innevarande kalendermånad, och händelsepanelen visar de
+     * fem senaste läsbara loggraderna över användarens konton.
+     */
+    public function index(
+        Request $request,
+        CostReport $report,
+        ListAuditEvents $listAuditEvents,
+        PresentAuditEvents $presentAuditEvents,
+    ): Response {
         $user = $request->user();
 
         $todo = app(ListTodo::class)->handle($user, $request);
@@ -88,6 +115,13 @@ class DashboardController extends Controller
             'stats' => $summaries['stats'],
             'containerGroups' => $summaries['groups'],
             'costs' => $this->monthCosts($user, $report),
+            // Läsregeln, med panelens gräns: de fem senaste av det användaren
+            // får läsa. ListAuditEvents svarar på vilka rader det är och
+            // PresentAuditEvents på hur de ser ut — kontrollern gör inget av
+            // det själv.
+            'events' => $presentAuditEvents->handle(
+                $listAuditEvents->forUser($user, self::ACTIVITY_LIMIT),
+            ),
         ]);
     }
 

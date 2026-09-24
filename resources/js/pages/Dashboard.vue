@@ -3,6 +3,7 @@ import { Head } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
 import ContainerCard from '../components/ContainerCard.vue';
 import CostDonut from '../components/CostDonut.vue';
+import DashboardActivityPanel from '../components/DashboardActivityPanel.vue';
 import DashboardStats from '../components/DashboardStats.vue';
 import DashboardTasksPanel from '../components/DashboardTasksPanel.vue';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -42,6 +43,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * summorna och donuten båda, och ingen av dem räknar något själv. Panelen ritas
  * bara när månaden har någon kostnadsrad alls — en rubrik över en tom ring är
  * en yta som påstår att det finns något att visa.
+ *
+ * **Händelserna kom med issue 126**, som sin egen propp: `events` bär de fem
+ * senaste raderna ur händelseloggen över alla användarens konton, ur
+ * App\Actions\Audit\ListAuditEvents::forUser() och
+ * App\Actions\Audit\PresentAuditEvents. Panelen filtrerar ingenting själv och
+ * ritar heller ingen *Visa alla* — sidan med alla händelser finns inte.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -54,6 +61,8 @@ const props = defineProps({
     containerGroups: { type: Array, required: true },
     /* Månadens kostnader: `{ totals: [{currency, amount, count}], breakdown: [...] }`. */
     costs: { type: Object, required: true },
+    /* Högst fem rader ur händelseloggen, nyast först. */
+    events: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -95,6 +104,10 @@ const { t } = useTranslations();
 
         <div class="mt-8">
             <DashboardTasksPanel :tasks="props.tasks" :has-containers="props.hasContainers" />
+        </div>
+
+        <div class="mt-8">
+            <DashboardActivityPanel :events="props.events" />
         </div>
     </AppLayout>
 </template>

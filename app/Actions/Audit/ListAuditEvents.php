@@ -58,6 +58,14 @@ use Illuminate\Database\Eloquent\Collection;
  * visar. Ingen paginering uppfinns här; ordningen `created_at` fallande med
  * `id` fallande som sekundär är stabil också för två rader skrivna i samma
  * transaktion.
+ *
+ * **Gränsen är en parameter och ingenting annat.** Dashboardens händelsepanel
+ * (issue 126) vill ha en femma i stället för hundra, och den lägger den i
+ * anropet: `forUser($user, 5)`. Läsregeln är densamma — de tre leden, i en
+ * fråga — och en yta som vill se färre rader får klippa i SIN ände av
+ * anropet, aldrig genom ett eget `where` bredvid. Ett eget filter i panelen
+ * hade varit en andra formulering av läsregeln, och den hade glidit isär från
+ * den här.
  */
 class ListAuditEvents
 {
@@ -101,11 +109,14 @@ class ListAuditEvents
      * kvarvarande omfång (led 2) och kontoraderna utan container (led 3), i en
      * fråga.
      *
+     * `$limit` är dashboardens femma (issue 126) och har hundredra som reserv,
+     * som förut.
+     *
      * @return Collection<int, AuditLog>
      */
-    public function forUser(User $viewer): Collection
+    public function forUser(User $viewer, int $limit = self::LIMIT): Collection
     {
-        return $this->readable($viewer)->get();
+        return $this->readable($viewer, $limit)->get();
     }
 
     /**
@@ -115,7 +126,7 @@ class ListAuditEvents
      *
      * @return Builder<AuditLog>
      */
-    private function readable(User $viewer): Builder
+    private function readable(User $viewer, int $limit = self::LIMIT): Builder
     {
         $accountIds = $viewer->accounts->pluck('id')->values()->all();
 
@@ -154,7 +165,7 @@ class ListAuditEvents
             })
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->limit(self::LIMIT);
+            ->limit($limit);
     }
 
     /**

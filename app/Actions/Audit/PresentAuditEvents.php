@@ -3,6 +3,7 @@
 namespace App\Actions\Audit;
 
 use App\Models\AuditLog;
+use App\Models\Container;
 use App\Models\Item;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -54,6 +55,23 @@ use Illuminate\Database\Eloquent\Collection;
  * fältnamnen för en ändring och ingenting annat ur `meta`; att skicka hela
  * arrayen hade gett klienten data ingen yta ritar, och `subject_id`,
  * kontonas ULID:er och nivåer hör till `/api`:s svar och inte hit.
+ *
+ * **Containernamnet kom med issue 126, efter samma princip som itemnamnet.**
+ * Raderna i historikflikarna står INUTI sin container och behöver inte säga
+ * vilken den är, men dashboardens händelsepanel visar rader över alla
+ * användarens konton och måste göra det. Namnet slås därför upp på samma sätt
+ * — när raden läses, för hela listan, i EN fråga — och en container som inte
+ * längre finns får ett `null` i stället för ett namn, med vyns neutrala
+ * ersättare *a deleted container*.
+ *
+ * **Containern är ett objekt och itemet ett namn, och skillnaden är med
+ * flit.** En rad kan sakna container HELT (kontoraderna, led 3:
+ * `account.deleted`) eller peka på en container som gallrats — och panelen får
+ * inte säga *a deleted container* om en rad som handlar om ett konto. `null`
+ * betyder därför "raden gäller ingen container" och `['name' => null]` "den
+ * finns men går inte att namnge", precis som `item` är `null` när raden inte
+ * handlar om ett item. Utan den skillnaden hade en kontorad burit en
+ * containerrad den inte har.
  */
 class PresentAuditEvents
 {
@@ -61,11 +79,12 @@ class PresentAuditEvents
      * Raderna i ritad ordning — samma ordning ListAuditEvents gav dem.
      *
      * @param  Collection<int, AuditLog>  $logs
-     * @return list<array{ulid: string, action: string, created_at: string, user: string|null, item: string|null, changed: list<string>}>
+     * @return list<array{ulid: string, action: string, created_at: string, user: string|null, item: string|null, container: array{name: string|null}|null, changed: list<string>}>
      */
     public function handle(Collection $logs): array
     {
-        $names = $this->itemNames($logs);
+        $itemNames = $this->itemNames($logs);
+        $containerNames = $this->containerNames($logs);
 
         return $logs
             ->map(fn (AuditLog $log): array => [
@@ -73,7 +92,10 @@ class PresentAuditEvents
                 'action' => $log->action,
                 'created_at' => $log->created_at->toIso8601String(),
                 'user' => $log->user?->name,
-                'item' => $log->item_id === null ? null : ($names[$log->item_id] ?? null),
+                'item' => $log->item_id === null ? null : ($itemNames[$log->item_id] ?? null),
+                'container' => $log->container_id === null
+                    ? null
+                    : ['name' => $containerNames[$log->container_id] ?? null],
                 'changed' => $this->changed($log),
             ])
             ->values()
@@ -102,6 +124,35 @@ class PresentAuditEvents
 
         foreach (Item::query()->whereIn('id', $ids)->get(['id', 'name']) as $item) {
             $namn[$item->id] = $item->name;
+        }
+
+        return $namn;
+    }
+
+    /**
+     * Containerns namn per löpnummer, i EN fråga — samma uppslag som
+     * `itemNames()` och av samma skäl (issue 126).
+     *
+     * SoftDeletes' globala scope gäller: en container i papperskorgen är
+     * raderad för läsaren, och en rad som handlar om den säger *a deleted
+     * container*. Det är samma svar som ett gallrat item ger, och det är med
+     * flit — de två går inte att skilja, och för läsaren är de samma sak.
+     *
+     * @param  Collection<int, AuditLog>  $logs
+     * @return array<int, string>
+     */
+    private function containerNames(Collection $logs): array
+    {
+        $ids = $logs->pluck('container_id')->filter()->unique()->values()->all();
+
+        if ($ids === []) {
+            return [];
+        }
+
+        $namn = [];
+
+        foreach (Container::query()->whereIn('id', $ids)->get(['id', 'name']) as $container) {
+            $namn[$container->id] = $container->name;
         }
 
         return $namn;
