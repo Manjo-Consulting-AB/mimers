@@ -11,6 +11,7 @@ use App\Models\ItemLink;
 use App\Models\User;
 use App\Support\Access\AccessLevel;
 use App\Support\Access\ItemScope;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /*
@@ -342,6 +343,10 @@ it('kostar samma antal frågor för tre items som för trehundra', function () {
 
     itemgrant($container, $user, $motor, AccessLevel::READ);
 
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
+
     $medTre = mätFrågor($user, fn () => app(ResolveItemScope::class)->handle($user, $container));
 
     $förälder = $motor;
@@ -353,6 +358,8 @@ it('kostar samma antal frågor för tre items som för trehundra', function () {
     $medTrettioHundra = mätFrågor($user, fn () => app(ResolveItemScope::class)->handle($user, $container));
 
     expect($medTrettioHundra)->toBe($medTre);
+
+    Carbon::setTestNow();
 });
 
 it('kostar samma antal frågor för tio containers som för en', function () {
@@ -366,10 +373,16 @@ it('kostar samma antal frågor för tio containers som för en', function () {
         $containers[] = Container::factory()->for(Account::factory()->create(), 'account')->create()->id;
     }
 
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
+
     $medEn = mätFrågor($user, fn () => app(ResolveItemScope::class)->forContainers($user, [$container->id]));
     $medTio = mätFrågor($user, fn () => app(ResolveItemScope::class)->forContainers($user, $containers));
 
     expect($medTio)->toBe($medEn);
+
+    Carbon::setTestNow();
 });
 
 it('ställer frågorna en gång för två anrop i samma request', function () {
@@ -379,6 +392,10 @@ it('ställer frågorna en gång för två anrop i samma request', function () {
     itemgrant($container, $user, $motor, AccessLevel::READ);
 
     $user->unsetRelation('accounts');
+
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
 
     app(ResolveItemScope::class)->handle($user, $container);
 
@@ -394,6 +411,8 @@ it('ställer frågorna en gång för två anrop i samma request', function () {
 
     expect($antal)->toBe(0);
     expect($igen->levelFor($motor->id))->toBe(AccessLevel::READ);
+
+    Carbon::setTestNow();
 });
 
 it('ger varje begärd container en nyckel, även en hon inte når', function () {

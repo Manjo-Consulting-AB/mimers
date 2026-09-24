@@ -10,6 +10,7 @@ use App\Models\ImageDerivative;
 use App\Models\Item;
 use App\Models\StoredFile;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Lang;
@@ -247,6 +248,10 @@ it('kostar ett konstant antal frågor oavsett antal bilagor och derivat', functi
         'medium',
     );
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     // Värm sessionen så att den första frågan för `last_active_at` inte
     // räknas med, samma resonemang som BilagevyTest och ItemrelationvyTest.
     actingAs($anvandare)->get($url)->assertOk();
@@ -279,6 +284,8 @@ it('kostar ett konstant antal frågor oavsett antal bilagor och derivat', functi
     // antal frågor: `storedFile.derivatives` är eager-laddad, precis som
     // `categoryNames()` bygger sitt uppslag ur en laddad relation.
     expect($medTio)->toBe($medEn);
+
+    Carbon::setTestNow();
 });
 
 // --- inlineEnabled: flaggan räknas på servern (Beslut 2) -----------------

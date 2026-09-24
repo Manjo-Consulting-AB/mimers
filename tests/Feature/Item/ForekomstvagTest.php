@@ -6,6 +6,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
@@ -348,6 +349,10 @@ it('ställer två frågor oavsett antalet vägar', function () {
 
     $resolver = app(ResolveItemPaths::class);
 
+    // Frys tiden runt mätningarna (issue 477): en fil med DB::listen fryser
+    // alltid, oavsett om den mäter ett HTTP-anrop eller en action.
+    Carbon::setTestNow(now());
+
     $enkel = vagFrågor(
         fn () => $resolver->handle($enkelMedlem, $enkelContainer, $enkelItem),
         fn () => $resolver->handle($enkelMedlem, $enkelContainer, $enkelItem),
@@ -360,6 +365,8 @@ it('ställer två frågor oavsett antalet vägar', function () {
 
     expect($enkel)->toBe(2);
     expect($bred)->toBe(2);
+
+    Carbon::setTestNow();
 });
 
 /*

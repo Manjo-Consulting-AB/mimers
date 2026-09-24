@@ -259,6 +259,10 @@ it('kostar ett konstant antal frågor oavsett antal bilagor', function () {
     // rad TIO inte kostar mer än rad ETT.
     bilagevyBilaga($item, $konto, $anvandare, 'forsta.pdf', 1024, '2026-09-01 10:00:00');
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     // Värm sessionen så att den första frågan för `last_active_at` inte
     // räknas med, samma resonemang som ItemrelationvyTest.
     actingAs($anvandare)->get($url)->assertOk();
@@ -287,6 +291,8 @@ it('kostar ett konstant antal frågor oavsett antal bilagor', function () {
     // precis som Api\AttachmentController::index() (Beslut 2 och 10): ingen
     // fråga per rad, och resursen kör ingen oplanerad lazy-load.
     expect($medTio)->toBe($medEn);
+
+    Carbon::setTestNow();
 });
 
 // --- uppladdningen: samma rader som /api --------------------------------

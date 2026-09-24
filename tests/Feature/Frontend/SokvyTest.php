@@ -7,6 +7,7 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Testing\TestResponse;
@@ -506,6 +507,10 @@ it('renderar utgångsläget utan att köra en sökfråga', function () {
     [$konto, $anvandare] = sokvyKonto();
     sokvyItem(sokvyPärm($konto), 'Impellern', $anvandare);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     actingAs($anvandare);
 
     $sedda = [];
@@ -532,6 +537,8 @@ it('renderar utgångsläget utan att köra en sökfråga', function () {
     expect($vy)->toContain("t('search.intro')")
         ->toContain("t('search.match_rule')")
         ->toContain("t('search.empty', { q })");
+
+    Carbon::setTestNow();
 });
 
 /*
@@ -678,6 +685,10 @@ it('kostar ett konstant antal frågor oavsett antal containers och träffar', fu
 
     sokvyMottagare($första, null, 'read', $mottagare);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     actingAs($mottagare);
 
     $url = sokvyUrl('Impeller');
@@ -700,6 +711,8 @@ it('kostar ett konstant antal frågor oavsett antal containers och träffar', fu
     });
 
     expect($medFemPärmar)->toBe($medEnPärm);
+
+    Carbon::setTestNow();
 });
 
 /*

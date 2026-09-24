@@ -5,6 +5,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Lang;
@@ -266,6 +267,10 @@ it('visar trädet ur issue 94 utan att ställa en egen fråga', function () {
 
     expect($namn)->toBe(['Impellern', 'Impellern']);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     // Sedan växer skogen: tretti items under båten, och samma sida igen.
     $medEtt = trepanelFragor($container, $motorn, $anvandare);
 
@@ -299,6 +304,8 @@ it('visar trädet ur issue 94 utan att ställa en egen fråga', function () {
     expect(trepanelKod('pages/Containers/Items/Show.vue'))
         ->toContain(':nodes="structure"')
         ->toContain(':active-trail="activeTrail"');
+
+    Carbon::setTestNow();
 });
 
 /*

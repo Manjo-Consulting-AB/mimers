@@ -190,6 +190,10 @@ it('kostar ett konstant antal frågor oavsett antal utlåningar', function () {
     // BilagevyTest).
     utlaningsvyLan($item, ['returned_at' => '2026-09-02']);
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     // Värm sessionen så att den första frågan för `last_active_at` inte räknas
     // med.
     actingAs($anvandare)->get($url)->assertOk();
@@ -216,6 +220,8 @@ it('kostar ett konstant antal frågor oavsett antal utlåningar', function () {
     // Lånen hämtas i EN fråga och LoanResource läser bara kolumner på raden
     // själv — inga relationer att ladda i förväg (Beslut 1).
     expect($antal)->toBe($medEn);
+
+    Carbon::setTestNow();
 });
 
 // --- utlåningen: samma regler som /api ----------------------------------

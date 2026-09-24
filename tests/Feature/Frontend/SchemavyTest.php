@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Lang;
@@ -792,6 +793,10 @@ it('kostar ett konstant antal frågor oavsett antal scheman', function () {
     $första = schemavySchema($item, ['title' => 'Schema 1']);
     schemavyFörekomst($första, '2027-05-05');
 
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
     // Värm sessionen så att den första frågan för `last_active_at` inte räknas
     // med, samma resonemang som BilagevyTest.
     actingAs($anvandare)->get($url)->assertOk();
@@ -821,6 +826,8 @@ it('kostar ett konstant antal frågor oavsett antal scheman', function () {
     // Api\ScheduleController::index() (Beslut 9): ingen fråga per rad, och
     // ScheduleResource kör ingen oplanerad lazy-load.
     expect($medTio)->toBe($medEtt);
+
+    Carbon::setTestNow();
 });
 
 // --- språket ---------------------------------------------------------------
