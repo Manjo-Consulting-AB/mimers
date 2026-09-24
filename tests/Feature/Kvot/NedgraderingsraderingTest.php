@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Attachment\TrashAttachment;
+use App\Actions\Audit\RecordAuditEvent;
 use App\Console\EnforcesDowngrades;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -141,7 +142,7 @@ function raderingForbrukning(int $accountId): int
  */
 function raderingKör(?TrashAttachment $trashAttachment = null): void
 {
-    (new EnforcesDowngrades($trashAttachment ?? new TrashAttachment))->handle();
+    (new EnforcesDowngrades($trashAttachment ?? app(TrashAttachment::class)))->handle();
 }
 
 it('inga items raderas — bara bilagor', function () {
@@ -572,17 +573,20 @@ it('ett fallerande konto stoppar inte körningen', function () {
 
     // En TrashAttachment som kastar för just det trasiga kontots bilaga —
     // samma teknik som GallringTest använder för att låta en rad kasta.
-    $trashAttachment = new class($trasigt->id) extends TrashAttachment
+    $trashAttachment = new class($trasigt->id, app(RecordAuditEvent::class)) extends TrashAttachment
     {
-        public function __construct(private readonly int $trasigtKontoId) {}
+        public function __construct(private readonly int $trasigtKontoId, RecordAuditEvent $recordAuditEvent)
+        {
+            parent::__construct($recordAuditEvent);
+        }
 
-        public function handle(Attachment $attachment): bool
+        public function handle(Attachment $attachment, ?User $actor = null): bool
         {
             if ($attachment->billed_account_id === $this->trasigtKontoId) {
                 throw new RuntimeException('trasigt konto');
             }
 
-            return parent::handle($attachment);
+            return parent::handle($attachment, $actor);
         }
     };
 

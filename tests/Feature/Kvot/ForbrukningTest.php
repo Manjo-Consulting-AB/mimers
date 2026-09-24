@@ -85,7 +85,7 @@ function forbrukningSetup(): array
  */
 function forbrukningLaddaUpp(Item $item, User $user, Account $account, string $innehåll): Attachment
 {
-    return (new StoreAttachment)->handle(
+    return app(StoreAttachment::class)->handle(
         $item,
         UploadedFile::fake()->createWithContent('manual.pdf', $innehåll),
         $user,

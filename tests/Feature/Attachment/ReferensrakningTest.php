@@ -143,7 +143,7 @@ it('en ny uppladdning av samma innehåll nollställer purge_after', function () 
     ]);
     $innehåll = 'samma victron-manual';
 
-    $första = (new StoreAttachment)->handle(
+    $första = app(StoreAttachment::class)->handle(
         $item,
         UploadedFile::fake()->createWithContent('manual.pdf', $innehåll),
         $användare,
@@ -159,7 +159,7 @@ it('en ny uppladdning av samma innehåll nollställer purge_after', function () 
     // Samma innehåll laddas upp igen (Beslut 5). Utan nollställningen skulle
     // den gamla markeringen överleva och 17b radera bytena under fötterna på
     // den nya bilagan — en fil som försvinner utan att någon raderat den.
-    (new StoreAttachment)->handle(
+    app(StoreAttachment::class)->handle(
         $item,
         UploadedFile::fake()->createWithContent('manual.pdf', $innehåll),
         $användare,

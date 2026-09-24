@@ -2,9 +2,12 @@
 
 namespace App\Actions\Item;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
+use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\User;
 
 /**
  * Skapar relationen mellan två items, med reglerna från issue 14 § Beslut
@@ -21,7 +24,10 @@ use App\Models\ItemLink;
  *
  * En Action i stället för direkt i kontrollern, se [[ADR-0024 Tunna
  * controllers och actions]], som namnger just den här normaliseringen.
- * Raderingen bär ingen regel och bor i kontrollern (§ Beslut 11).
+ * Sedan issue 109 loggas relationen här — `item_link.created`, med parets
+ * båda ULID:er och den lagrade relationen i `meta` — så att alla fyra
+ * anropare (webbens och API:ts item- och relationscontrollers) får samma
+ * rad. Upplösningen ligger i App\Actions\Item\UnlinkItems (§ Beslut 11).
  *
  * Cykelkontrollen hämtar containerns `parent`-kanter i EN fråga och vandrar
  * i PHP (§ Beslut 6), samma teknik och samma skäl som issue 11 § Beslut 8 —
@@ -31,7 +37,14 @@ use App\Models\ItemLink;
  */
 class LinkItems
 {
-    public function handle(Item $item, Item $other, string $relation): ItemLink
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
+    /**
+     * @param  User  $actor  Den som knyter relationen. Behörigheten är redan
+     *                       prövad av anroparen; hen blir `user_id` på
+     *                       loggraden.
+     */
+    public function handle(Item $item, Item $other, string $relation, User $actor): ItemLink
     {
         if ($item->is($other)) {
             throw ApiException::make('item_link.self', [], 422);
@@ -64,6 +77,24 @@ class LinkItems
         $link->to_item_id = $to->id;
         $link->relation = $storedRelation;
         $link->save();
+
+        // Raden skrivs i anroparens transaktion — actionen öppnar ingen egen,
+        // samma skäl som App\Actions\Audit\RecordAuditEvent. `item_id` är
+        // `$item`, det vill säga den kanoniska from-sidan: itemet anropet
+        // gällde i relationscontrollers, och föräldern när kanten skapas
+        // tillsammans med ett nytt barn (App\Actions\Item\CreateItem).
+        $this->recordAuditEvent->handle(
+            action: AuditLog::ACTION_ITEM_LINK_CREATED,
+            account: $item->container->account,
+            user: $actor,
+            container: $item->container,
+            item: $item,
+            meta: [
+                'from' => $from->ulid,
+                'to' => $to->ulid,
+                'relation' => $storedRelation,
+            ],
+        );
 
         return $link;
     }

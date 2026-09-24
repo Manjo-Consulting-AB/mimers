@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Actions\Audit\RecordAuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Cost\StoreCostEntryRequest;
 use App\Http\Requests\Cost\UpdateCostEntryRequest;
 use App\Http\Resources\CostEntryResource;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\CostEntry;
@@ -65,6 +67,24 @@ use Illuminate\Support\Facades\Gate;
 class CostEntryController extends Controller
 {
     /**
+     * Datumfältet. Gamla och nya värdet följer med i `meta` — som `Y-m-d`,
+     * samma form kolumnen har (issue 109, [[ADR-0043 Tre loggar]]
+     * § Händelseloggen).
+     */
+    private const DATE_FIELDS = ['incurred_on'];
+
+    /**
+     * Fälten vars värde får följa med i `meta`: datumet, valutan och
+     * beloppet. `description` och `supplier` är användarens fritext och
+     * följer aldrig med — bara deras NAMN står i `changed`.
+     *
+     * @var list<string>
+     */
+    private const VALUED_FIELDS = ['incurred_on', 'currency', 'amount'];
+
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
+    /**
      * Högst 50 förslag. Uppslaget matar en autocomplete, inte en rapport, och
      * klienten hämtar listan en gång och filtrerar medan användaren skriver —
      * fler rader hade bara gjort hämtningen långsammare (issue 45b § Beslut
@@ -118,11 +138,16 @@ class CostEntryController extends Controller
      * Containern är den som redan denormaliseras ur itemet på raden nedan;
      * ingen ny uppslagning görs och itemet är fortfarande ingen nivå i arvet.
      *
-     * Inga domänregler utöver det: registrering är fri på alla plannivåer,
-     * kostnadsrader är metadata (räknas inte mot kvoten) och bär ingen
-     * revisionslogg (issue 45a Omfång). Därför ingen transaktion och ingen
-     * Action — det finns ingen regel värd ett eget test att skydda
+     * Inga domänregler utöver det: registrering är fri på alla plannivåer och
+     * kostnadsrader är metadata (räknas inte mot kvoten). Ingen Action: ytan
+     * finns bara på `/api`, så det finns ingen andra yta att glida ifrån
      * ([[ADR-0024 Tunna controllers och actions]]).
+     *
+     * Sedan issue 109 skrivs raden och händelseloggen i EN transaktion —
+     * kostnaden hör till itemet och loggas i händelseloggen som allt annat
+     * som hänger på det. `meta` bär beloppet och valutan; `description` och
+     * `supplier` är användarens fritext och följer aldrig med ([[ADR-0043
+     * Tre loggar]] § Händelseloggen).
      *
      * Grinden är itemets `create` (issue 71 § Beslut 1 och 5): en kostnadsrad
      * är ny information som läggs till itemet, inte en ändring av det.
@@ -148,7 +173,21 @@ class CostEntryController extends Controller
         $cost->container_id = $item->container_id;
         $cost->created_by_user_id = $request->user()->id;
         $cost->created_by_account_id = $this->attributedAccountId($request->user(), $container);
-        $cost->save();
+
+        DB::transaction(function () use ($cost, $item, $request): void {
+            $cost->save();
+
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_COST_ENTRY_CREATED,
+                account: $item->container->account,
+                user: $request->user(),
+                container: $item->container,
+                item: $item,
+                subjectType: 'cost_entry',
+                subjectUlid: $cost->ulid,
+                meta: ['amount' => $cost->amount, 'currency' => $cost->currency],
+            );
+        });
 
         return (new CostEntryResource($cost->load('createdByAccount')))
             ->response()
@@ -166,6 +205,11 @@ class CostEntryController extends Controller
      * Inga tvärfältsregler mot radens befintliga tillstånd, så ingen
      * validationData()-sammanslagning som UpdateLoanRequest behövde
      * (§ Beslut 12).
+     *
+     * Sedan issue 109 loggas ändringen med fältens NAMN, och gamla och nya
+     * värdet för beloppet, valutan och datumet — aldrig för beskrivningen
+     * eller leverantören. En PATCH som inte ändrar något skriver ingen rad:
+     * skillnaden mot databasen läses innan raden sparas.
      *
      * Grinden är itemets `update` (issue 71 § Beslut 1 och 5).
      */
@@ -186,9 +230,69 @@ class CostEntryController extends Controller
             $cost->amount = $amount;
         }
 
-        $cost->save();
+        $meta = $this->metaFor($cost);
+
+        DB::transaction(function () use ($cost, $item, $request, $meta): void {
+            $cost->save();
+
+            if ($meta === null) {
+                return;
+            }
+
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_COST_ENTRY_UPDATED,
+                account: $item->container->account,
+                user: $request->user(),
+                container: $item->container,
+                item: $item,
+                subjectType: 'cost_entry',
+                subjectUlid: $cost->ulid,
+                meta: $meta,
+            );
+        });
 
         return new CostEntryResource($cost->load('createdByAccount'));
+    }
+
+    /**
+     * `meta` för de fält som ändrades, eller null när ingenting ändrades.
+     *
+     * Läses FÖRE `save()`: `getDirty()` är skillnaden mot databasen, och
+     * efter en sparad rad är den tom.
+     *
+     * @return array{changed: list<string>, values?: array<string, array{from: mixed, to: mixed}>}|null
+     */
+    private function metaFor(CostEntry $cost): ?array
+    {
+        $dirty = $cost->getDirty();
+
+        if ($dirty === []) {
+            return null;
+        }
+
+        $changed = array_keys($dirty);
+        $values = [];
+
+        foreach ($changed as $field) {
+            if (! in_array($field, self::VALUED_FIELDS, true)) {
+                continue;
+            }
+
+            $values[$field] = in_array($field, self::DATE_FIELDS, true)
+                ? [
+                    'from' => $cost->getOriginal($field)?->toDateString(),
+                    'to' => $cost->{$field}->toDateString(),
+                ]
+                : ['from' => $cost->getOriginal($field), 'to' => $cost->{$field}];
+        }
+
+        $meta = ['changed' => $changed];
+
+        if ($values !== []) {
+            $meta['values'] = $values;
+        }
+
+        return $meta;
     }
 
     /**
@@ -202,12 +306,31 @@ class CostEntryController extends Controller
      *
      * Grinden är itemets `delete` (issue 71 § Beslut 1 och 5): `write` ändrar
      * en kostnadsrad men tar inte bort den.
+     *
+     * Sedan issue 109 skrivs raden och händelseloggen i EN transaktion.
+     * `meta` bär beloppet och valutan, aldrig beskrivningen eller
+     * leverantören.
      */
-    public function destroy(Container $container, Item $item, CostEntry $cost): Response
+    public function destroy(Request $request, Container $container, Item $item, CostEntry $cost): Response
     {
         Gate::authorize('delete', $item);
 
-        $cost->delete();
+        DB::transaction(function () use ($cost, $item, $request): void {
+            $meta = ['amount' => $cost->amount, 'currency' => $cost->currency];
+
+            $cost->delete();
+
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_COST_ENTRY_DELETED,
+                account: $item->container->account,
+                user: $request->user(),
+                container: $item->container,
+                item: $item,
+                subjectType: 'cost_entry',
+                subjectUlid: $cost->ulid,
+                meta: $meta,
+            );
+        });
 
         return response()->noContent();
     }

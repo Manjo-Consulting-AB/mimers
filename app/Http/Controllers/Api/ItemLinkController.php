@@ -4,16 +4,17 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Item\LinkItems;
 use App\Actions\Item\ListItemLinks;
+use App\Actions\Item\UnlinkItems;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Item\StoreItemLinkRequest;
 use App\Http\Resources\ItemLinkResource;
 use App\Models\Container;
 use App\Models\Item;
-use App\Models\ItemLink;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -89,7 +90,10 @@ class ItemLinkController extends Controller
 
         Gate::authorize('update', $other);
 
-        $link = $linkItems->handle($item, $other, $request->validated('relation'));
+        // Relationen och händelseloggen i EN transaktion (issue 109) — en
+        // loggrad som skrevs utanför kunde överleva ett rollback och
+        // beskriva en relation som inte finns.
+        $link = DB::transaction(fn () => $linkItems->handle($item, $other, $request->validated('relation'), $request->user()));
 
         $link->setAttribute('counterpart_ulid', $other->ulid);
         $link->setAttribute('counterpart_name', $other->name);
@@ -107,11 +111,14 @@ class ItemLinkController extends Controller
      * utan slås upp här, inom containern (§ Beslut 1 och 7).
      *
      * Finns ingen länk mellan paret (eller motparten inte i containern):
-     * 404 `resource.not_found`. Raderingen bär ingen regel och skrivs rakt i
-     * kontrollern (§ Beslut 11) — men `update` krävs i båda ändar, precis
-     * som i store() (issue 71 § Beslut 4).
+     * 404 `resource.not_found`. `update` krävs i båda ändar, precis som i
+     * store() (issue 71 § Beslut 4).
+     *
+     * Sedan issue 109 bor uppslaget, raderingen och händelseloggen i
+     * App\Actions\Item\UnlinkItems — samma sak som webben gör, och i samma
+     * transaktion.
      */
-    public function destroy(Container $container, Item $item, string $other): Response
+    public function destroy(Request $request, Container $container, Item $item, string $other, UnlinkItems $unlinkItems): Response
     {
         Gate::authorize('update', $item);
 
@@ -119,16 +126,9 @@ class ItemLinkController extends Controller
 
         Gate::authorize('update', $otherItem);
 
-        $link = ItemLink::query()
-            ->where(fn ($query) => $query->where('from_item_id', $item->id)->where('to_item_id', $otherItem->id))
-            ->orWhere(fn ($query) => $query->where('from_item_id', $otherItem->id)->where('to_item_id', $item->id))
-            ->first();
-
-        if ($link === null) {
+        if (! $unlinkItems->handle($item, $otherItem, $request->user())) {
             throw ApiException::make('resource.not_found', [], 404);
         }
-
-        $link->delete();
 
         return response()->noContent();
     }

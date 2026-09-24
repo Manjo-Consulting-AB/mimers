@@ -87,7 +87,7 @@ function nedgraderingBilagaMedStorlek(Item $item, Account $account, User $user, 
  */
 function nedgraderingLaddaUpp(Item $item, User $user, Account $account, string $innehåll): Attachment
 {
-    return (new StoreAttachment)->handle(
+    return app(StoreAttachment::class)->handle(
         $item,
         UploadedFile::fake()->createWithContent('manual.pdf', $innehåll),
         $user,

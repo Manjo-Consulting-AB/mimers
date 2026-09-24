@@ -3,13 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Item\LinkItems;
+use App\Actions\Item\UnlinkItems;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Item\StoreItemLinkRequest;
 use App\Models\Container;
 use App\Models\Item;
-use App\Models\ItemLink;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -78,7 +80,8 @@ class ItemLinkController extends Controller
         Gate::authorize('update', $other);
 
         try {
-            $linkItems->handle($item, $other, $this->invert($request->validated('relation')));
+            // Relationen och händelseloggen i EN transaktion (issue 109).
+            DB::transaction(fn () => $linkItems->handle($item, $other, $this->invert($request->validated('relation')), $request->user()));
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
                 $this->errorField($e) => $this->errorMessage($e, $translator),
@@ -98,11 +101,14 @@ class ItemLinkController extends Controller
      * auktoriseras med `update` — samma grind som POST, för att knyta upp en
      * relation är samma skrivning som att knyta den.
      *
-     * Raderingen är HÅRD (issue 14 § Beslut 10) och bär ingen regel: båda
-     * itemen finns kvar, det som går förlorat är kopplingen. Finns ingen länk
-     * mellan paret är svaret 404 — samma som på `/api`.
+     * Raderingen är HÅRD (issue 14 § Beslut 10): båda itemen finns kvar, det
+     * som går förlorat är kopplingen. Finns ingen länk mellan paret är svaret
+     * 404 — samma som på `/api`.
+     *
+     * Sedan issue 109 bor uppslaget, raderingen och händelseloggen i
+     * App\Actions\Item\UnlinkItems — samma action som `/api` använder.
      */
-    public function destroy(Container $container, Item $item, string $other): RedirectResponse
+    public function destroy(Request $request, Container $container, Item $item, string $other, UnlinkItems $unlinkItems): RedirectResponse
     {
         Gate::authorize('update', $item);
 
@@ -110,16 +116,9 @@ class ItemLinkController extends Controller
 
         Gate::authorize('update', $otherItem);
 
-        $link = ItemLink::query()
-            ->where(fn ($query) => $query->where('from_item_id', $item->id)->where('to_item_id', $otherItem->id))
-            ->orWhere(fn ($query) => $query->where('from_item_id', $otherItem->id)->where('to_item_id', $item->id))
-            ->first();
-
-        if ($link === null) {
+        if (! $unlinkItems->handle($item, $otherItem, $request->user())) {
             abort(404);
         }
-
-        $link->delete();
 
         return redirect()
             ->route('containers.items.show', [$container, $item])

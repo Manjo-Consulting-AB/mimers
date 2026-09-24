@@ -2,10 +2,12 @@
 
 namespace App\Actions\Attachment;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
 use App\Jobs\GenerateImageDerivatives;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\StoredFile;
 use App\Models\User;
@@ -59,9 +61,16 @@ use RuntimeException;
  * tillståndslös lövaction utan egna beroenden att injicera eller mocka, och
  * den här actionen är befintlig kod som 26a bara lägger ett anrop i; att trä
  * räknaren genom konstruktorn vore omarbetning utan mottagare.
+ *
+ * `RecordAuditEvent` (issue 109) injiceras däremot i konstruktorn: raden
+ * skrivs INNE i transaktionen, och `meta` bär bilagans `kind` — aldrig
+ * filnamnet, som är användarens fritext ([[ADR-0043 Tre loggar]]
+ * § Händelseloggen).
  */
 class StoreAttachment
 {
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
     public function handle(Item $item, UploadedFile $file, User $user, Account $account): Attachment
     {
         // Hashen beräknas alltid på servern, ur den mottagna temporära
@@ -191,6 +200,22 @@ class StoreAttachment
             // dessutom inte det auktoritativa värdet i dedup-grenen
             // (granskningsfynd 3).
             (new AdjustUsage)->handle($account->id, bytesDelta: $storedFile->byte_size);
+
+            // Händelseloggen i SAMMA transaktion som raden (issue 109): en
+            // loggrad som skrevs utanför kunde överleva ett rollback och
+            // beskriva en bilaga som inte finns. `meta` bär `kind` och aldrig
+            // filnamnet — namnet är användarens fritext och slås upp ur
+            // raden när historiken visas (issue 116).
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_ATTACHMENT_CREATED,
+                account: $item->container->account,
+                user: $user,
+                container: $item->container,
+                item: $item,
+                subjectType: 'attachment',
+                subjectUlid: $attachment->ulid,
+                meta: ['kind' => $attachment->kind],
+            );
 
             // Resursen läser storedFile/billedAccount genom relationerna —
             // sätt dem direkt så inget oplanerat lazy-load sker.

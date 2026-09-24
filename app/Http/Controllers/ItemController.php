@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Category\ListCategories;
-use App\Actions\Item\LinkItems;
+use App\Actions\Item\CreateItem;
+use App\Actions\Item\DeleteItem;
 use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Item\ResolveItemTree;
+use App\Actions\Item\UpdateItem;
 use App\Actions\Tag\ListTags;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
@@ -40,7 +42,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -648,8 +649,14 @@ class ItemController extends Controller
      * `Api\ItemController::store()`: ett item sparat med halv taggning — eller
      * utan sin förälder — är ett tillstånd användaren varken kan se eller
      * rätta.
+     *
+     * Sedan issue 109 bor den skrivningen i `App\Actions\Item\CreateItem`,
+     * som båda ytorna använder — och som skriver händelseloggens rader i
+     * samma transaktion. `parent` beskriver vad FÖRÄLDERN är för det nya
+     * itemet, inte tvärtom: samma riktning som `Api\ItemController::store()`
+     * och samma ord som `LinkItems::normalize()` förväntar sig.
      */
-    public function store(StoreItemRequest $request, Container $container, LinkItems $linkItems): RedirectResponse
+    public function store(StoreItemRequest $request, Container $container, CreateItem $createItem): RedirectResponse
     {
         $parent = $this->parent($container, $request->validated('parent'));
 
@@ -667,31 +674,15 @@ class ItemController extends Controller
 
         $category = $this->category($container, $request->validated('category'));
 
-        // Taggarna slås upp EN gång, före transaktionen: requesten har redan
-        // bevisat varje ULID, så uppslaget är betrott — i klump, en fråga
-        // oavsett antal (issue 13b § Beslut 6).
+        // Taggarna slås upp EN gång: requesten har redan bevisat varje ULID,
+        // så uppslaget är betrott — i klump, en fråga oavsett antal (issue
+        // 13b § Beslut 6). Webben skickar alltid hela mängden, så en tom
+        // lista betyder "inga taggar" och inte "rör dem inte" (§ Beslut 6).
         $tags = Tag::whereIn('ulid', $request->validated('tags') ?? [])->get();
 
         $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent']));
 
-        DB::transaction(function () use ($item, $container, $category, $account, $request, $tags, $parent, $linkItems): void {
-            $item->container_id = $container->id;
-            $item->category_id = $category?->id;
-            $item->created_by_user_id = $request->user()->id;
-            $item->created_by_account_id = $account->id;
-            $item->save();
-
-            if ($tags->isNotEmpty()) {
-                $this->replaceTags($item, $tags);
-            }
-
-            // `parent` beskriver vad FÖRÄLDERN är för det nya itemet, inte
-            // tvärtom — samma riktning som Api\ItemController::store() och
-            // samma ord som LinkItems::normalize() förväntar sig.
-            if ($parent !== null) {
-                $linkItems->handle($parent, $item, 'parent');
-            }
-        });
+        $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent);
 
         return redirect()
             ->route('containers.items.show', [$container, $item])
@@ -791,8 +782,12 @@ class ItemController extends Controller
      * valideringen och skrivningen blir `null` i stället för en pekare till en
      * bild ingen kan visa (samma resonemang som kategorin: valideringen äger
      * regeln, kontrollern gör ett uppslag).
+     *
+     * Sedan issue 109 bor skrivningen i `App\Actions\Item\UpdateItem`, som
+     * båda ytorna använder — och som loggar vilka fält som ändrades, eller
+     * ingenting alls när formuläret skickades oförändrat.
      */
-    public function update(UpdateItemRequest $request, Container $container, Item $item, ResolveItemCover $resolveItemCover): RedirectResponse
+    public function update(UpdateItemRequest $request, Container $container, Item $item, ResolveItemCover $resolveItemCover, UpdateItem $updateItem): RedirectResponse
     {
         Gate::authorize('update', $item);
 
@@ -813,15 +808,16 @@ class ItemController extends Controller
                 : $resolveItemCover->images($item)->firstWhere('ulid', $cover)?->id;
         }
 
-        // Item-skrivningen och taggknytningen i samma transaktion, samma
-        // resonemang som store() (issue 13b § Beslut 7). replaceTags() kör
-        // ALLTID — webben skickar alltid hela mängden, så `tags: []` betyder
-        // "töm" och inte "rör inte".
-        DB::transaction(function () use ($item, $request): void {
-            $item->save();
-
-            $this->replaceTags($item, Tag::whereIn('ulid', $request->validated('tags') ?? [])->get());
-        });
+        // Taggmängden synkas ALLTID — webben skickar alltid hela mängden, så
+        // `tags: []` betyder "töm" och inte "rör inte" (§ Beslut 6).
+        // Actionen skriver itemet, taggarna och loggraderna i EN transaktion
+        // (issue 13b § Beslut 7, issue 109).
+        $updateItem->handle(
+            $item,
+            $request->user(),
+            true,
+            Tag::whereIn('ulid', $request->validated('tags') ?? [])->get(),
+        );
 
         return redirect()
             ->route('containers.items.show', [$container, $item])
@@ -849,12 +845,16 @@ class ItemController extends Controller
      * papperskorg]]); ingen fysisk gallring öppnas här och ingen kaskad —
      * itemets beroenden följer itemet. Papperskorgen som listar och
      * återställer är issue 62.
+     *
+     * Sedan issue 109 bor skrivningen i `App\Actions\Item\DeleteItem`, som
+     * båda ytorna använder — och som skriver händelseloggen i samma
+     * transaktion.
      */
-    public function destroy(Container $container, Item $item): RedirectResponse
+    public function destroy(Request $request, Container $container, Item $item, DeleteItem $deleteItem): RedirectResponse
     {
         Gate::authorize('delete', $item);
 
-        $item->delete();
+        $deleteItem->handle($item, $request->user());
 
         return redirect()
             ->route('containers.show', $container)
@@ -1139,37 +1139,6 @@ class ItemController extends Controller
             ->map(fn (Item $candidate): array => ['ulid' => $candidate->ulid, 'name' => $candidate->name])
             ->values()
             ->all();
-    }
-
-    /**
-     * Ersätter itemets taggmängd med $tags, med `sync()`s ersätt-semantik men
-     * ett KONSTANT antal frågor oavsett antal taggar (issue 13b § Beslut 6).
-     *
-     * **Samma kropp som `Api\ItemController::replaceTags()`, med flit en
-     * andra kopia** — samma linje som App\Policies\ItemPolicy::isFrozen().
-     * Utbrytningen till en delad Action ligger utanför den här issuen
-     * (omfångsrutan räknar inte upp `app/Actions/**`), och två formuleringar
-     * av samma skrivning glider isär. Ändras den ena ska den andra ändras.
-     *
-     * Den nuvarande mängden läses direkt ur pivottabellen, INTE genom
-     * `tags()`: relationen tillämpar SoftDeletes' globala scope och hade
-     * dolt pivotrader för mjukraderade taggar som `sync()` fortfarande ser.
-     */
-    private function replaceTags(Item $item, Collection $tags): void
-    {
-        $desired = $tags->pluck('id')->all();
-        $current = DB::table('item_tag')->where('item_id', $item->id)->pluck('tag_id')->all();
-
-        $toAttach = array_values(array_diff($desired, $current));
-        $toDetach = array_values(array_diff($current, $desired));
-
-        if ($toAttach !== []) {
-            $item->tags()->attach($toAttach);
-        }
-
-        if ($toDetach !== []) {
-            $item->tags()->detach($toDetach);
-        }
     }
 
     /**

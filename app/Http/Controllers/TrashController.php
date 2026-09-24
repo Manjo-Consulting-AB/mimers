@@ -139,7 +139,7 @@ class TrashController extends Controller
         $this->authorizeRestore($container, $model);
 
         try {
-            $restoreContent->handle($type, $model);
+            $restoreContent->handle($type, $model, $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['trash' => $translator->message($e)]);
         }

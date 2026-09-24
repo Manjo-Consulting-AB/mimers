@@ -14,6 +14,7 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
@@ -145,11 +146,11 @@ class AttachmentController extends Controller
      * item ger 404, och en redan mjukraderad bilaga syns inte av bindningen —
      * 404 `resource.not_found`.
      */
-    public function destroy(Container $container, Item $item, Attachment $attachment, TrashAttachment $trashAttachment): Response
+    public function destroy(Request $request, Container $container, Item $item, Attachment $attachment, TrashAttachment $trashAttachment): Response
     {
         Gate::authorize('delete', $item);
 
-        $trashAttachment->handle($attachment);
+        $trashAttachment->handle($attachment, $request->user());
 
         return response()->noContent();
     }
