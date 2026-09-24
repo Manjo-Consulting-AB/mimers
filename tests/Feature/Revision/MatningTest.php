@@ -149,6 +149,23 @@ it('en other-grupp under fem slås ihop över planerna', function () {
     expect(matningAntal('2026-09-23', 'audit', UsageMetric::ACTION_OTHER, UsageMetric::PLAN_UNKNOWN))->toBe(6);
 });
 
+it('en riktig handling som heter other skrivs inte över av hopslagningen', function () {
+    Carbon::setTestNow('2026-09-24 00:05:00');
+    $dagen = Carbon::parse('2026-09-23');
+    $konto = matningKonto();
+
+    // `other` är ett öppet namnrum (UsageMetric § action), så en riktig grupp
+    // kan redan heta `other`. De små grupperna på samma plan som slås ihop ska
+    // LÄGGAS TILL den, inte ersätta den — annars tappas fem rader tyst.
+    matningLogg('audit_log', 5, UsageMetric::ACTION_OTHER, $konto, $dagen);
+    matningLogg('audit_log', 3, AuditLog::ACTION_ITEM_DELETED, $konto, $dagen);
+    matningLogg('audit_log', 3, AuditLog::ACTION_ITEM_RESTORED, $konto, $dagen);
+
+    (new AggregatesUsageMetrics)->handle();
+
+    expect(matningAntal('2026-09-23', 'audit', UsageMetric::ACTION_OTHER, 'free'))->toBe(11);
+});
+
 it('två körningar för samma dag ger samma rader', function () {
     Carbon::setTestNow('2026-09-24 00:05:00');
     $konto = matningKonto();
@@ -169,6 +186,31 @@ it('två körningar för samma dag ger samma rader', function () {
     // att dagen redan är räknad och rör den inte.
     expect(DB::table('usage_metric')->orderBy('id')->get()->map(fn ($rad) => (array) $rad)->all())
         ->toBe($första);
+});
+
+it('en dag som räknats för en källa men inte den andra räknas om för den andra', function () {
+    Carbon::setTestNow('2026-09-24 00:05:00');
+    $konto = matningKonto();
+    $dagen = Carbon::parse('2026-09-23');
+
+    matningLogg('audit_log', 6, AuditLog::ACTION_ITEM_CREATED, $konto, $dagen);
+    matningLogg('security_log', 7, SecurityLog::ACTION_LOGIN, $konto, $dagen);
+
+    (new AggregatesUsageMetrics)->handle();
+
+    $audit = DB::table('usage_metric')->where('source', 'audit')->orderBy('id')->get()->map(fn ($rad) => (array) $rad)->all();
+
+    // En körning som föll mellan de två transaktionerna: audit hann skrivas,
+    // security inte. Källorna skrivs i var sin transaktion, så dagen kan vara
+    // halvräknad — den får inte bli permanent oräknad för den ena källan.
+    DB::table('usage_metric')->where('source', 'security')->delete();
+
+    (new AggregatesUsageMetrics)->handle();
+
+    // Nästa körning ser att just security saknar dagen. Audit räknas inte om.
+    expect(matningAntal('2026-09-23', 'security', 'auth.login', 'free'))->toBe(7);
+    expect(DB::table('usage_metric')->where('source', 'audit')->orderBy('id')->get()->map(fn ($rad) => (array) $rad)->all())
+        ->toBe($audit);
 });
 
 it('en missad dag räknas vid nästa körning', function () {

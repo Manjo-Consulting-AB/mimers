@@ -29,17 +29,28 @@ use Illuminate\Support\Facades\DB;
  * någon. Tröskeln är en konstant: den får höjas men aldrig sänkas utan en ny
  * ADR.
  *
- * IDEMPOTENT. Jobbet räknar bara dagar som saknas i `usage_metric`, och
- * skriver om hela dagen och källan i en transaktion (delete + insert) i
- * stället för att lägga till. Två körningar för samma dag ger därför samma
- * rader, inte dubbla, och det unika indexet på (date, source, action, plan)
- * är skyddsnätet under det.
+ * IDEMPOTENT. Jobbet räknar bara det som saknas i `usage_metric`, och skriver
+ * om hela dagen och källan i en transaktion (delete + insert) i stället för
+ * att lägga till. Två körningar för samma dag ger därför samma rader, inte
+ * dubbla, och det unika indexet på (date, source, action, plan) är skyddsnätet
+ * under det. Enheten är paret (dag, källa), inte dagen: de två källorna skrivs
+ * i var sin transaktion, och en körning som faller mellan dem får inte lämna
+ * den ena källan oräknad för alltid. Nästa körning ser att just den källan
+ * saknar dagen och räknar om den — den andra källans rader rörs inte.
  *
  * EN MISSAD NATT RÄKNAS I EFTERHAND. Jobbet letar upp varje dag som har
  * loggrader men ingen rad i `usage_metric`, inte bara gårdagen — så länge
  * raderna finns kvar. Det är också därför jobbet måste köra före gallringen i
  * issue 115: det som gallras innan det räknats är borta ur mätningen för
  * alltid. Schemaläggs i routes/console.php, före `drain-queue`.
+ *
+ * SÖKNINGEN BÖRJAR DAGEN EFTER DEN SENAST RÄKNADE DAGEN för källan, inte i
+ * loggens början. En loggrad skrivs alltid med "nu", och en dag som en gång
+ * räknats kan inte få fler rader — alltså kan ingenting oräknat ligga under
+ * gränsen, och varje natt läser frågan svansen i stället för hela tabellen.
+ * Bara första körningen, när `usage_metric` är tom för källan, söker från
+ * loggens äldsta rad. Indexet på `created_at` (migreringen
+ * 2026_09_24_020000) bär gränsen.
  *
  * PLANEN ÄR KONTOTS PLANKOD NÄR JOBBET KÖR, genom Account::currentPlan()->code
  * — aldrig en egen SQL-formulering av regeln. Att skriva av regeln i ett
@@ -83,60 +94,90 @@ class AggregatesUsageMetrics
     {
         $skrivna = 0;
 
-        foreach ($this->pendingDays() as $dag) {
-            foreach (self::SOURCES as $källa => $tabell) {
-                $grupper = $this->groups($tabell, $dag);
+        foreach ($this->pendingSources() as [$dag, $källa]) {
+            $grupper = $this->groups(self::SOURCES[$källa], $dag);
 
-                if ($grupper === []) {
-                    continue;
-                }
-
-                $skrivna += $this->write($dag, $källa, $grupper);
+            if ($grupper === []) {
+                continue;
             }
+
+            $skrivna += $this->write($dag, $källa, $grupper);
         }
 
         return $skrivna;
     }
 
     /**
-     * Dagarna som har loggrader men ingen rad i `usage_metric` — gårdagen i
-     * normalfallet, och varje natt som missats dessförinnan. Dagens rader
-     * räknas aldrig: dygnet ska vara slut först.
+     * Det som väntar på att räknas: varje dag som har loggrader men ingen rad
+     * i `usage_metric` — per källa, eftersom de två skrivs i var sin
+     * transaktion. Gårdagen i normalfallet, och varje natt som missats
+     * dessförinnan. Dagens rader räknas aldrig: dygnet ska vara slut först.
      *
-     * @return list<string>
+     * @return list<array{0: string, 1: string}> [dag, källa] i stigande ordning
      */
-    private function pendingDays(): array
+    private function pendingSources(): array
     {
         $idag = now()->startOfDay();
+        $väntande = [];
 
-        $loggade = collect()
-            ->merge($this->loggedDays('audit_log'))
-            ->merge($this->loggedDays('security_log'))
-            ->unique()
-            ->filter(fn (string $dag): bool => Carbon::parse($dag)->lt($idag))
-            ->values();
+        foreach (self::SOURCES as $källa => $tabell) {
+            $från = $this->firstUncountedDay($källa, $tabell);
 
-        if ($loggade->isEmpty()) {
-            return [];
+            if ($från->gte($idag)) {
+                continue;
+            }
+
+            $räknade = DB::table('usage_metric')
+                ->where('source', $källa)
+                ->pluck('date')
+                ->mapWithKeys(fn ($dag): array => [Carbon::parse((string) $dag)->toDateString() => true])
+                ->all();
+
+            foreach ($this->loggedDays($tabell, $från) as $dag) {
+                if (isset($räknade[$dag]) || ! Carbon::parse($dag)->lt($idag)) {
+                    continue;
+                }
+
+                $väntande[] = [$dag, $källa];
+            }
         }
 
-        $räknade = DB::table('usage_metric')
-            ->whereIn('date', $loggade)
-            ->pluck('date')
-            ->map(fn ($dag): string => Carbon::parse((string) $dag)->toDateString());
+        usort($väntande, fn (array $a, array $b): int => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
 
-        return $loggade->diff($räknade)->sort()->values()->all();
+        return $väntande;
     }
 
     /**
-     * De dygn som loggen har rader på — ett datum per rad, aldrig ett dygn som
-     * bara passerat.
+     * Den första dag som kan behöva räknas för en källa: dagen efter den
+     * senast räknade, eller loggens äldsta dag när ingenting räknats än. Se
+     * klassdocblocket om varför gränsen är säker.
+     */
+    private function firstUncountedDay(string $källa, string $tabell): Carbon
+    {
+        $senastRäknad = DB::table('usage_metric')->where('source', $källa)->max('date');
+
+        if ($senastRäknad !== null) {
+            return Carbon::parse((string) $senastRäknad)->addDay()->startOfDay();
+        }
+
+        $äldsta = DB::table($tabell)->min('created_at');
+
+        return $äldsta === null
+            ? now()->startOfDay()
+            : Carbon::parse((string) $äldsta)->startOfDay();
+    }
+
+    /**
+     * De dygn som loggen har rader på, från och med $från — ett datum per rad,
+     * aldrig ett dygn som bara passerat. Gränsen gör att frågan läser svansen
+     * i stället för hela tabellen, via indexet på `created_at`.
      *
      * @return list<string>
      */
-    private function loggedDays(string $tabell): array
+    private function loggedDays(string $tabell, Carbon $från): array
     {
         return DB::table($tabell)
+            ->where('created_at', '>=', $från)
             ->selectRaw('DATE(created_at) as dag')
             ->distinct()
             ->pluck('dag')
@@ -217,6 +258,11 @@ class AggregatesUsageMetrics
      * `other`-grupp som själv ligger under tröskeln hamnar i `unknown` över
      * planerna. Se klassdocblocket.
      *
+     * `other` är ett öppet namnrum — en riktig handling kan heta `other` — så
+     * varje skrivning till hinken SUMMERAR. Skulle en riktig `other`-grupp
+     * redan stå på samma plan skrivs den inte över, den får de hopslagna
+     * raderna tillagda.
+     *
      * @param  array<string, array<string, int>>  $grupper
      * @return array<string, array<string, int>>
      */
@@ -228,7 +274,7 @@ class AggregatesUsageMetrics
         foreach ($grupper as $action => $planer) {
             foreach ($planer as $plan => $antal) {
                 if ($antal >= self::MIN_GROUP_SIZE) {
-                    $ut[$action][$plan] = $antal;
+                    $ut[$action][$plan] = ($ut[$action][$plan] ?? 0) + $antal;
 
                     continue;
                 }
@@ -239,7 +285,8 @@ class AggregatesUsageMetrics
 
         foreach ($other as $plan => $antal) {
             if ($antal >= self::MIN_GROUP_SIZE) {
-                $ut[UsageMetric::ACTION_OTHER][$plan] = $antal;
+                $ut[UsageMetric::ACTION_OTHER][$plan] =
+                    ($ut[UsageMetric::ACTION_OTHER][$plan] ?? 0) + $antal;
 
                 continue;
             }
