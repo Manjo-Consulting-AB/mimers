@@ -30,7 +30,9 @@ use function Pest\Laravel\postJson;
  * - meta innehåller ingen e-postadress i någon av de två händelserna
  * - en tom meta serialiseras som {} i svaret, aldrig []
  * - en medlem i ägarkontot kan läsa loggen; en användare med giltig
- *   write-åtkomst får auth.forbidden (403)
+ *   write-åtkomst ser sina EGNA rader och inga andras, med 200 (issue 108 —
+ *   före den fick hon auth.forbidden (403), se
+ *   tests/Feature/Revision/LasregelTest.php för läsregeln i sin helhet)
  * - ett read_only ägarkonto kan läsa sin logg
  * - listningen svarar med nyaste raden först, och två rader i samma
  *   transaktion kommer i stabil ordning
@@ -199,19 +201,30 @@ it('en medlem i ägarkontot kan läsa loggen', function () {
     expect($rad['user'])->not->toHaveKey('id');
 });
 
-it('en användare med giltig write-åtkomst får auth.forbidden på loggen', function () {
-    [$account] = kontoMedMedlem();
+/*
+ * Ersätter provet "en användare med giltig write-åtkomst får auth.forbidden på
+ * loggen" (issue 40 § Beslut 7). Sedan issue 108 är läsregeln ett radfilter i
+ * App\Actions\Audit\ListAuditEvents: en delegerad `write`-innehavare passerar
+ * grinden och ser sina EGNA rader — men inte ägarens, som ligger i samma
+ * container. 403:an var hela loggen; nu är det bara raderna som skiljer.
+ */
+it('en användare med giltig write-åtkomst ser sina egna rader och inga andras', function () {
+    [$account, $ägare] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $writeAnvändare = User::factory()->create();
     beviljaAccess($container, $writeAnvändare, 'write', 'member');
+
+    loggRad($container, $account, $ägare);
+    $egen = loggRad($container, $account, $writeAnvändare);
 
     $token = $writeAnvändare->createToken('api');
     $writeHeaders = ['Authorization' => "Bearer {$token->plainTextToken}"];
 
     $response = getJson("/api/containers/{$container->ulid}/audit-log", $writeHeaders);
 
-    $response->assertStatus(403);
-    expect($response->json('error.code'))->toBe('auth.forbidden');
+    $response->assertOk();
+    expect($response->json('data'))->toHaveCount(1)
+        ->and($response->json('data.0.ulid'))->toBe($egen->ulid);
 });
 
 it('ett read_only ägarkonto kan läsa sin logg', function () {

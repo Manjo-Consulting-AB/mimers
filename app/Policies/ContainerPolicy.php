@@ -215,21 +215,32 @@ class ContainerPolicy
     }
 
     /**
-     * Får användaren SE containerns revisionslogg (issue 40)? Bara regel 1 —
-     * INGEN regel 4-kontroll, av samma skäl som viewAccesses() och
-     * viewTransfers(): läsning påverkas aldrig av att kontot är fryst, och
-     * ett konto som håller på att nedgraderas måste kunna se sin egen
-     * historik. En delegerad `write`-innehavare får inget se: loggen berättar
-     * vem som haft åtkomst och när, och det är ägarens uppgift (issue 40 §
-     * Beslut 7).
+     * Får användaren FRÅGA efter containerns händelselogg (issue 40, vidgad i
+     * issue 108)? Regel 1 ELLER regel 2 — samma kropp som view(), och samma
+     * minimikrav `read`. INGEN regel 4-kontroll, av samma skäl som
+     * viewAccesses() och viewTransfers(): läsning påverkas aldrig av att kontot
+     * är fryst, och ett konto som håller på att nedgraderas måste kunna se sin
+     * egen historik.
      *
-     * Identisk kropp med viewAccesses() i dag — ändå en egen metod, av samma
-     * skäl som viewTransfers() ovan: åtkomsthistorik och överlåtelsehistorik
-     * är olika ytor och kan ändras oberoende av varandra. Slå inte ihop dem.
+     * Metoden svarar på om användaren NÅR containern, inte på vilka rader hon
+     * får se. Sedan issue 108 är läsregeln ett RADFILTER i
+     * App\Actions\Audit\ListAuditEvents ([[ADR-0043 Tre loggar]] §
+     * Händelseloggen): ägarkontots medlem ser allt i containern och dess items,
+     * en gäst ser sina EGNA rader där hon fortfarande når, och ingenting annat.
+     * Att en delegerad `write`-innehavare därför passerar grinden är avsiktligt
+     * — hon får 200 med sina egna rader, inte 403. Grinden är kvar som grind
+     * just för att den som inte når containern alls ska få 403 och inte en tom
+     * lista.
+     *
+     * `item_id IS NULL` sätts ALDRIG här, av samma skäl som view() inte sätter
+     * det: en omfångsbegränsad mottagare måste nå containerrutten för att kunna
+     * se det hon fått (issue 69 § Beslut 4). Det är actionen som sedan håller
+     * henne till sitt omfång.
      */
     public function viewAuditLog(User $user, Container $container): bool
     {
-        return $this->isMemberOfOwnerAccount($user, $container->account);
+        return $this->isMemberOfOwnerAccount($user, $container->account)
+            || $this->hasContainerAccess($user, $container, AccessLevel::READ);
     }
 
     /**
