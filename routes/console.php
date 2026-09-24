@@ -3,6 +3,7 @@
 use App\Actions\LegalHold\LiftLegalHold;
 use App\Actions\LegalHold\PlaceLegalHold;
 use App\Console\AdvancesAccountLifecycle;
+use App\Console\AggregatesUsageMetrics;
 use App\Console\DeletesDormantAccounts;
 use App\Console\DeliversNotifications;
 use App\Console\DeliversWebhooks;
@@ -338,6 +339,28 @@ Schedule::call(fn () => app(DeliversWebhooks::class)->handle())
 Schedule::call(fn () => app(SendsWeeklyDigest::class)->handle())
     ->weeklyOn(1, '06:00')
     ->name('send-weekly-digest');
+
+/*
+ * Issue 114 · Mätningen: räknar ihop loggarnas rader till anonyma summor i
+ * `usage_metric` — antal per dag, källa, handling och plan — se
+ * App\Console\AggregatesUsageMetrics och [[ADR-0043 Tre loggar]] § Mätningen.
+ * Logiken bor i en vanlig klass, testad direkt i
+ * tests/Feature/Revision/MatningTest.php; det här är bara schemaläggningen.
+ *
+ * Posten ligger FÖRE gallringen av loggarna (issue 115) och före `drain-queue`
+ * med flit: mätningen läser de rader gallringen tar, och det som gallras innan
+ * det räknats är borta ur mätningen för alltid. `drain-queue` ska fortsätta
+ * ligga sist — se tests/Feature/Drift/KoarbetareTest.php.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * nattliga fönster som de andra jobben.
+ */
+Schedule::call(fn () => app(AggregatesUsageMetrics::class)->handle())
+    ->daily()
+    ->name('aggregate-usage-metrics');
 
 /*
  * Issue 237 · Köarbetaren: tömmer `jobs`-tabellen varje minut. Inget annat
