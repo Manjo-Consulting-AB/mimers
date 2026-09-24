@@ -15,6 +15,7 @@ use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
+use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTrashController;
@@ -1162,6 +1163,30 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/tags/{tag}', [TagController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.tags.destroy');
+
+    /*
+     * Issue 116 · Containerns historikflik, se App\Http\Controllers\
+     * ContainerHistoryController och [[ADR-0043 Tre loggar]] § Händelseloggen.
+     *
+     * **En egen sida på en egen rutt, som de andra flikarna i
+     * `containerTabs`.** Översikten, items och inställningssidan har var sin
+     * adress (issue 89, 57a och 54); historiken är containerns fjärde flik och
+     * hade varit den enda utan. Fliken fyller den plats issue 101 lämnade tom
+     * med flit — därför att historiken inte rittades ännu — och raden ligger i
+     * resources/js/layouts/containerSections.js som varje annan sektion.
+     *
+     * **Containern OCH dess items i samma lista.** Containerns egna rader och
+     * raderna för det som hänger på den möts här; det är samma läsyta som
+     * `GET /api/containers/{container}/audit-log` svarar med, och samma
+     * läsregel (issue 108) — en gäst ser sina egna rader och ägaren allas. Att
+     * lägga historiken på itemnivå hade delat en regel i två ytor.
+     *
+     * `{container}` binds på ULID via #[RouteKey('ulid')] på
+     * App\Models\Container, som överallt annars. Ingen `scopeBindings()`
+     * behövs: rutten bär bara containern.
+     */
+    Route::get('/containers/{container}/history', [ContainerHistoryController::class, 'index'])
+        ->name('containers.history');
 
     /*
      * Issue 62a · Containerns papperskorg — det mjukraderade innehållet,

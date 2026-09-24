@@ -8,6 +8,7 @@ use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 use function Pest\Laravel\getJson;
@@ -329,11 +330,22 @@ it('startpunkten användare ger användarens läsbara rader över alla containra
  * containern, loggraderna hämtas i en fråga och den handlande användaren
  * eager-laddas i en. En lat `user`-relation hade gett en fråga per rad och
  * fällt provet, och det är precis den N+1 AuditLogResource varnar för.
+ *
+ * **Tiden är frusen runt mätningarna, och det är inte kosmetika.** Den som
+ * mäts är en inloggad användare, och UpdateLastActiveAt sparar `last_active_at`
+ * på varje autentiserat anrop — men bara när värdet ändrats, med
+ * sekundupplösning. Faller en sekundgräns mellan värmningen och det mätta
+ * anropet blir det en UPDATE extra, och provet svarar 7 mot 6. Det är samma
+ * mekanism som issue 80 fixade i FastSummeringTest och som PR #465 fixade i
+ * LeverantorTest; här slog den till i fullsvit på PR #472, där de nya
+ * historikproven gör körningen långsammare och gränsen lättare att passera.
  */
 it('antalet frågor är konstant oavsett antal rader', function () {
     [$konto, $ägare, $headers] = kontoMedMedlem();
     $pärm = Container::factory()->for($konto, 'account')->create();
     $item = Item::factory()->for($pärm, 'container')->create();
+
+    Carbon::setTestNow(now());
 
     foreach (range(1, 3) as $i) {
         lasregelRad($pärm, $konto, $ägare, ['item_id' => $item->id]);
@@ -355,4 +367,6 @@ it('antalet frågor är konstant oavsett antal rader', function () {
     });
 
     expect($medFyrtioRader)->toBe($medTreRader);
+
+    Carbon::setTestNow();
 });

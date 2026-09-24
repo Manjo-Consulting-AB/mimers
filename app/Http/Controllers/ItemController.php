@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Audit\ListAuditEvents;
+use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Category\ListCategories;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
@@ -354,7 +356,7 @@ class ItemController extends Controller
      * där de hör hemma — på servern — och kommer tillbaka som fältfelet på
      * `file`.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents): Response
     {
         Gate::authorize('view', $item);
 
@@ -446,6 +448,28 @@ class ItemController extends Controller
 
         $openLoan = $loans->first(fn (Loan $loan): bool => $loan->returned_at === null);
         $history = $loans->reject(fn (Loan $loan): bool => $loan->returned_at === null)->values();
+
+        // Historikfliken (issue 116 · [[ADR-0043 Tre loggar]]
+        // § Händelseloggen). Raderna läses genom App\Actions\Audit\
+        // ListAuditEvents — samma läsregel som containerns historiksida och
+        // `GET /api/containers/{container}/audit-log` (issue 108), så en gäst
+        // ser sina egna rader och ägaren allas. Formen kommer ur
+        // App\Actions\Audit\PresentAuditEvents: `audit_log` bär identifierare
+        // och inte namn, så namnen slås upp när raden läses och en gallrad
+        // item- eller användarrad får sin neutrala ersättare i vyn.
+        //
+        // **Bara när fliken är aktiv.** Raderna kostar en egen fråga mot
+        // `audit_log`, och den som öppnar itemet för att se bilagorna ska inte
+        // betala för historiken. `?tab=history` är flikens egen adress (issue
+        // 100 och 102), och utan den lämnar kontrollern proppen helt: nyckeln
+        // finns inte i svaret och ingen fråga ställs.
+        //
+        // De hundra senaste, och ingen paginering: gränsen står i
+        // ListAuditEvents och är API:ets egen (issue 40 § Beslut 8). Behövs mer
+        // är det ett eget beslut.
+        $auditRows = $request->query('tab') === 'history'
+            ? $presentAuditEvents->handle($listAuditEvents->forItem($user, $item))
+            : null;
 
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -557,6 +581,13 @@ class ItemController extends Controller
                 'delete' => Gate::forUser($user)->allows('delete', $item),
                 'create' => Gate::forUser($user)->allows('create', $item),
             ],
+
+            // Historikfliken (issue 116). Proppen finns BARA när fliken är
+            // aktiv — se `$auditRows` ovan — och vyn ritar sin tomma rad när
+            // listan är tom. Ligger BREDVID resursen och inte i den, samma
+            // linje som `categories`, `variants` och `paths`: `ItemResource` är
+            // `/api`:s format och har inte bett om fältet.
+            ...($auditRows === null ? [] : ['history' => $auditRows]),
         ]);
     }
 

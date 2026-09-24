@@ -265,22 +265,27 @@ it('länkar containernamnet i containerlistan till itemlistan', function () {
 
 /*
  * Klart när: `items` är den första raden i containerns undernavigering, och
- * listan har fortfarande NIO rader.
+ * listan har fortfarande TIO rader.
  *
  * Navigationen renderas ur containerSections, så raden är beviset — och
  * ordningen ligger i listan, inte i layouten. Raden pekar på itemlistan sedan
  * issue 89, och översikten fick ingen egen rad där: flikraden och
  * omfördelningen av sektionerna var designarbete, och den kom med issue 101.
  *
- * Antalet rader räknas och inte bara nämns: en tionde rad vore en ny sida
- * ingen issue bad om, och en nionde rad som försvann vore en yta ingen hittar.
+ * Antalet rader räknas och inte bara nämns: en elfte rad vore en ny sida ingen
+ * issue bad om, och en nionde rad som försvann vore en yta ingen hittar.
+ *
+ * **Nio blev tio i issue 116.** Historikfliken är en ny SIDA och därmed en ny
+ * rad i listan — containerns fjärde flik, på samma villkor som de andra.
+ * Provet fångade den med flit: raden är tillagd av en issue som bad om den,
+ * och räkningen är vad som skiljer det från en rad någon lagt till i smyg.
  *
  * **Räkningen gäller `containerSections` och ingenting annat.** Sedan issue 101
  * bär filen också `containerTabs`, och översiktsraden där är en adress utan
  * sektion — den hör till flikraden och räknas inte hit. En räkning över hela
  * filen hade räknat den som en sektion.
  */
-it('lägger itemlistan först i containerns navigation och behåller nio rader', function () {
+it('lägger itemlistan först i containerns navigation och behåller tio rader', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'items'")
@@ -292,7 +297,7 @@ it('lägger itemlistan först i containerns navigation och behåller nio rader',
     preg_match('#export const containerSections = \[(.*?)\n\];#s', $sektioner, $träff);
 
     expect($träff[1] ?? '')->not->toBe('', 'containerSections finns inte i filen');
-    expect(substr_count($träff[1], 'href: (ulid) =>'))->toBe(9);
+    expect(substr_count($träff[1], 'href: (ulid) =>'))->toBe(10);
 });
 
 /*

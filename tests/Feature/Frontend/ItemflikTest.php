@@ -21,13 +21,29 @@ use function Pest\Laravel\withoutVite;
  * **Filen prövar en omfördelning och ett krav.** Omfördelningen är att de sex
  * propar som i dag renderas på en enda lång sida — fälten, relationerna,
  * bilagorna, schemana, utlåningen och taggarna — nu ligger i var sin flik.
- * Raden har **sex** flikar och ingen sjunde: "fälten" ur de sex proparna är
- * översiktsfliken, och anteckningen och beskrivningen står överst på den med
- * fältlistan under sig. Kravet är att **utlåningen får en flik trots att
- * bilden inte ritar någon**: en yta ingen hittar är samma sak som en yta som
- * inte finns, och det är 62a:s och 67c:s egen motivering.
+ * "Fälten" ur de sex proparna är översiktsfliken, och anteckningen och
+ * beskrivningen står överst på den med fältlistan under sig. Kravet är att
+ * **utlåningen får en flik trots att bilden inte ritar någon**: en yta ingen
+ * hittar är samma sak som en yta som inte finns, och det är 62a:s och 67c:s
+ * egen motivering.
  *
- * **Ingen ny ändpunkt och ingen ny prop.** Provet begär varje fliks adress som
+ * **Raden hade sex flikar och har sju sedan issue 116.** Den sjunde är
+ * historiken — bildens sista flik, den som issue 102 lämnade utanför därför
+ * att `audit_log` ännu inte instrumenterats. Den är det ENDA undantaget från
+ * satsen att ingen ny ändpunkt tillkommer: hennes rader är en ny prop ur
+ * App\Http\Controllers\ItemController::show(), och den hämtas bara när fliken
+ * är aktiv (HistorikflikTest § *"itemets rader hämtas bara när
+ * historikfliken är aktiv"*).
+ *
+ * **`history` är därför inte längre en av bildens GLOBALa rader**, och det är
+ * en ändring i det här provet: listan över rader som inte får bli flikar
+ * tappar den. Bilden ritar en global vänstermeny med egna rader för Struktur,
+ * Karta, Uppgifter, Dokument och Kostnader — men historiken är ingen global
+ * rad, den ligger inuti containerns ram som varje annan flik
+ * ([[ADR-0041 Itemets vy]] § Beslut). Issue 102 läste fel när den räknade den
+ * dit, och issue 116 rättar det.
+ *
+ * **Ingen ny ändpunkt utom historikens.** Provet begär varje fliks adress som
  * inloggad medlem: svarar den inte är fliken en död länk, och en flik som
  * kräver en ny kontrollermetod är ett fynd i PR:ens `## Frågor och antaganden`
  * och ingen ändpunkt i smyg.
@@ -259,11 +275,10 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         // namn rubriken bär, och det som säger vilket item raden hör till.
         ->toContain(':label="item.name"');
 
-    // Sex flikar, och ingen sjunde: översikten är fältens flik. Bildens fem
-    // minus historiken och kostnaderna, plus utlåningen — och taggarna, som
-    // inte heller har någon rad i bilden. Historiken och kostnaden har ingen
-    // flik: den ena väntar på instrumenteringen och den andra på
-    // trepanelslayouten (issue 103).
+    // Sju flikar: översikten är fältens flik, och historiken (issue 116) är
+    // den sjunde och sista. Bildens sju minus kostnaden, plus utlåningen —
+    // och taggarna, som inte heller har någon rad i bilden. Kostnaden har
+    // ingen flik: den väntar på trepanelslayouten (issue 103).
     expect(itemflikNycklar($vy))->toBe([
         'overview',
         'relations',
@@ -271,10 +286,11 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         'schedules',
         'loans',
         'tags',
+        'history',
     ]);
 
     // Etiketten slås upp och skrivs aldrig i filen: `t()` hade skrivit nyckeln
-    // själv på skärmen om den saknades. Fem av dem är sektionens eget ord —
+    // själv på skärmen om den saknades. Sex av dem är sektionens eget ord —
     // fliken och rubriken strax under den ska inte kunna säga olika saker.
     expect(itemflikEtiketter($vy))->toBe([
         'item.show.overview',
@@ -283,6 +299,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         'item.schedule.heading',
         'item.loan.heading',
         'item.show.tags',
+        'audit.history.heading',
     ]);
 
     foreach (itemflikEtiketter($vy) as $nyckel) {
@@ -310,7 +327,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     preg_match_all("/tabHref\('(\w+)'\)/", $bar, $träffar);
 
-    expect($träffar[1])->toBe(['relations', 'attachments', 'schedules', 'loans', 'tags']);
+    expect($träffar[1])->toBe(['relations', 'attachments', 'schedules', 'loans', 'tags', 'history']);
 
     // Och varje flik svarar. Ingen ny ändpunkt: adresserna är itemets egen
     // rutt med en querysträng på, och kontrollern är orörd av issuen.
@@ -330,9 +347,14 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
  * prop som ritas på två flikar är samma yta två gånger, och den som försvinner
  * i en omfördelning är den här filens hela ärende.
  *
- * Fälten hör till översikten och inte till en egen detaljflik: raden har sex
- * flikar, och en sjunde som bara bar två stycken text hade varit en yta bilden
- * inte ritar (arkitektens svar på punkt 4).
+ * **Historiken prövas i samma tabell och är det sjunde ytan** (issue 116).
+ * Den kom till efter issue 102, så den hör inte till de sex — men den hör
+ * till samma regel, och en flik vars innehåll ritas i en annan flik är precis
+ * felet den här tabellen finns för att fånga. Att den står här i stället för i
+ * ett eget prov är med flit: det är samma påstående.
+ *
+ * Fälten hör till översikten och inte till en egen detaljflik: raden har
+ * ingen flik som bara bär två stycken text (arkitektens svar på punkt 4).
  */
 it('alla sex befintliga propar når sin flik', function () {
     $vy = itemflikKod('pages/Containers/Items/Show.vue');
@@ -345,6 +367,7 @@ it('alla sex befintliga propar når sin flik', function () {
         'schedules' => ['<ScheduleListSection', ':schedules="schedules"', ':open-occurrences="openOccurrences"'],
         'loans' => ['<ItemLoanSection', ':open-loan="openLoan"', ':loan-history="loanHistory"'],
         'tags' => ['<ItemTagList', ':tags="item.tags"'],
+        'history' => ['<HistoryRow', 'v-for="row in history"', ':row="row"'],
     ];
 
     $paneler = itemflikPaneler($vy);
@@ -482,8 +505,12 @@ it('utlåningen har en egen flik', function () {
  *
  * Provet faller på tre sätt en global navigering hade kunnat smyga in: en egen
  * layout i vyn, en andra `<nav>`, eller en adress som lämnar containern. Det
- * fjärde är fliklistan själv: ingen av bildens fem globala rader får finnas som
- * flik.
+ * fjärde är fliklistan själv: ingen av de globala raderna får finnas som flik.
+ *
+ * **Historiken står inte längre i den listan** (issue 116). Bilden ritar den i
+ * vänstermenyn, men produkten lägger den inuti containerns ram — som en
+ * sjunde flik jämte de sex andra, med sin egen rutt under `/containers/`. Att
+ * den FINNS som flik är alltså rätt, och den är kvar i samma slot som resten.
  */
 it('flikraden ligger inuti containerns ram', function () {
     $vy = itemflikKod('pages/Containers/Items/Show.vue');
@@ -517,11 +544,18 @@ it('flikraden ligger inuti containerns ram', function () {
         expect($adress)->toStartWith('/containers/', "vyn pekar utanför containern: {$adress}");
     }
 
-    // Ingen av bildens fem globala rader finns som flik: de är ytor i
-    // containerns ram i den här produkten, inte egna sidor.
+    // Ingen av bildens globala rader finns som flik: de är ytor i containerns
+    // ram i den här produkten, inte egna sidor.
+    //
+    // **`history` står inte i listan, och det är ändringen issue 116 gör.**
+    // Bilden ritar historiken som en GLOBAL rad i vänstermenyn; den här
+    // produkten lägger den inuti containerns ram, som en sjunde flik jämte de
+    // sex andra. Att den alltså FINNS som flik är rätt, och ett prov som
+    // fortfarande förbjöd namnet hade fällt den riktiga lösningen. Kvar i
+    // listan står de fyra som fortfarande vore en global navigering.
     $flikar = itemflikNycklar($vy);
 
-    foreach (['structure', 'map', 'documents', 'costs', 'history'] as $global) {
+    foreach (['structure', 'map', 'documents', 'costs'] as $global) {
         expect(in_array($global, $flikar, true))->toBeFalse(
             "bildens globala rad {$global} har blivit en flik",
         );
