@@ -44,6 +44,7 @@ audit_log
 | stored_file, attachment | [[Filer och lagring]] |
 | notification, notification_delivery, webhook_endpoint, subscription_preference | [[Notiser]] |
 | plan, subscription, usage_counter, entitlement | [[Planer och kvoter]] |
+| heartbeat | [[Datamodell – översikt]] § heartbeat |
 
 ## Konventioner för alla tabeller
 
@@ -69,3 +70,18 @@ audit_log
 - **Innehållshashen beräknas alltid på servern.** Tar du emot en hash från klienten kan någon lägga beslag på en annan användares fil genom att gissa den. Se [[ADR-0006 Innehållsadresserad lagring]].
 - **En container har exakt en ägare, och ägaren är ett konto — aldrig en användare.** Se [[ADR-0002 Konto äger container]].
 - **Scheman genererar aldrig serier i förväg.** Endast öppen förekomst plus historik. Se [[Scheman och uppgifter]].
+
+## heartbeat
+
+Dead man's switch-ens minne: en rad per schemapost, med postens namn och tidpunkten för senaste lyckade körning. Raden skrivs av lyssnaren på `ScheduledTaskFinished`, och bara när körningen gick klar utan fel. Se [[Notiser]] § Kön.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` — raden syns aldrig i API:et; ytan `GET /drift/heartbeat` lämnar ut namn och tidsstämpel, ingenting annat |
+| name | VARCHAR(64) UNIQUE | Schemapostens `->name(...)` i `routes/console.php`, t.ex. `deliver-notifications` |
+| last_success_at | TIMESTAMP | |
+| created_at, updated_at | | |
+
+Uniknyckeln är det som gör att en andra körning uppdaterar raden i stället för att skapa en ny: tabellen växer aldrig.
+
+Ingen `deleted_at`: det här är drifttillstånd, inte användarskapat innehåll — samma undantag som `webhook_delivery`.

@@ -86,6 +86,21 @@ Cykelkontroll krävs för `parent`/`child`. Se motsvarande resonemang i [[Schema
 
 **`parent`/`child` bär behörighet, `sibling` gör det inte.** En åtkomst som pekar på ett item når även itemets ättlingar via `parent`/`child`, transitivt och aldrig uppåt. `sibling` är symmetrisk och hade därför spridit behörighet åt båda håll utan gräns — motorn `sibling` masten skulle ha delat masten på köpet. Att lägga till ett barn utvidgar alltså en befintlig delning, vilket delningsvyn måste visa. Att **ändra** en länk kräver `write` i båda ändar, annars kan en mottagare länka in ett item hon inte får se. Se [[ADR-0028 Åtkomst på itemnivå]].
 
+## favorite
+
+En favoritmarkering: en användares bokmärke på ett item. **Per användare, alltså en pivot och inte en kolumn på `item`** — en flagga på itemet hade gjort en användares markering till allas i en delad container. Se [[ADR-0042 Designsystemet]] § Konsekvenser.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: ingen rutt identifierar en enskild favoritrad, samma resonemang som `item_link` |
+| user_id | FK → user, CASCADE | |
+| item_id | FK → item, CASCADE | |
+| created_at, updated_at | | |
+
+UNIQUE `(user_id, item_id)` — garanten för en markering per användare och item, och det är indexet och inte en läsning-i-förväg som bär den: en dubblett fångas som ett skrivfel. Index: `(item_id, user_id)` för läsningen "vem har märkt det här itemet".
+
+**`ON DELETE CASCADE` åt båda håll** — ett medvetet undantag från konventionens `RESTRICT`: en borttagen användare eller ett hårdraderat item ska inte lämna kvar bokmärken, för en markering är ett par och ingenting mer. Ingen `deleted_at`: att ta bort en markering är en växling, inte en radering av innehåll — och en mjukraderad rad hade legat kvar i det unika indexet och blockerat en ny markering av samma item.
+
 ## loan
 
 Utlåning. Markera en pryl som utlånad, hålla reda på vem som har den, och bli påmind när den skulle ha kommit tillbaka.

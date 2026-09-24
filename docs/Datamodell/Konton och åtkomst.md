@@ -53,6 +53,37 @@ Ingen `ulid` — medlemskapet exponeras aldrig som egen resurs i API:et, det nå
 | role | VARCHAR(20) | `owner` \| `admin` \| `member` |
 | created_at, updated_at | | Medlem sedan, och när rollen senast ändrades |
 
+## magic_link_token
+
+Ett utfärdat magic link-token — engångslänken som loggar in en användare utan lösenord. Se [[ADR-0011 Autentisering]] § Konsekvenser.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` — raden exponeras aldrig som egen resurs i API:et |
+| email | VARCHAR(255), index | Token binds till **adressen**, inte till `user_id`: adressen ingår i verifieringen, och ett e-postbyte mellan utfärdande och inlösen ändrar inte vad ett redan utfärdat token gäller för |
+| token_hash | CHAR(64) UNIQUE | SHA-256 av slumpen i länken. Klartexten lagras aldrig |
+| expires_at | TIMESTAMP | |
+| used_at | TIMESTAMP NULL | Satt = förbrukad — engångsanvändning utan en separat borttagning |
+| created_at, updated_at | | |
+
+Ingen `deleted_at`: en kortlivad säkerhetsartefakt, inte användarskapat innehåll, samma undantag som `personal_access_tokens`.
+
+## totp_recovery_code
+
+En utfärdad TOTP-återställningskod, en rad per engångskod. Se [[ADR-0011 Autentisering]].
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: raden exponeras aldrig som egen resurs i API:et |
+| user_id | FK → user, RESTRICT | Koden binds till kontot — till skillnad från `magic_link_token` har den ingen mening frikopplad från det |
+| code_hash | VARCHAR(255) | Alltid `Hash::make()` (bcrypt), aldrig klartext. Koden är kort nog att skrivas av, så en läckt tabell ska kräva samma kostsamma offline-gissning som ett läckt lösenord — därför inte `magic_link_token`s snabba hash. Ingen unik nyckel: bcrypt saltar varje hash olika, så uppslaget sker mot kontots oförbrukade rader |
+| used_at | TIMESTAMP NULL | Satt = förbrukad |
+| created_at, updated_at | | |
+
+Index: `(user_id, used_at)`.
+
+Ingen `deleted_at`: samma skäl som `magic_link_token`. En omgenerering raderar kontots hela raduppsättning och skriver en ny.
+
 ## container
 
 Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
@@ -153,6 +184,59 @@ Index: `(container_id, created_at)`, `(item_id, created_at)`, `(user_id, created
 **Livslängden följer subjektet.** `PurgeContainer` skriver `container.purged` och `DeleteAccount` skriver `account.deleted`, båda i sina befintliga transaktioner. Tolv månader efter den raden tar gallringen i issue 115 bort subjektets rader — containerns rader efter `container.purged`, raderna utan container efter kontots `account.deleted`. `meta` bär aldrig fritext. Säkerhetsloggen och mätningen är egna tabeller, se [[ADR-0043 Tre loggar]].
 
 **Append-only.** Ingen `updated_at`, ingen `deleted_at`, ingen rutt som ändrar eller raderar en rad. Det är den enda avvikelsen från [[Datamodell – översikt]]:s tidsstämpel- och soft delete-krav som är motiverad av vad tabellen är: en logg som går att skriva om är inget bevis.
+
+## legal_hold
+
+Den rättsliga spärren. Ett konto är spärrat när det har en rad utan `lifted_at` — frågan ställs av `LegalHold::covers()`, som de hårdraderande jobben anropar. Se [[ADR-0043 Tre loggar]] § Den rättsliga spärren och [[Registerförteckning]].
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: ingen rutt, ingen resurs och ingen vy identifierar en spärrrad |
+| account_id | BIGINT UNSIGNED | **Identifierare utan främmande nyckel**, samma avvägning som `audit_log`: raden överlever kontot — annars hade varje konto som någonsin varit spärrat fällt kontoraderingen för alltid — och den får aldrig kaskadraderas, för spärren är just det bevis som ska bevaras |
+| case_number | VARCHAR(120) | Ärendenumret |
+| reason | TEXT | Varför spärren sattes |
+| lifted_at | TIMESTAMP NULL | `NULL` = spärren gäller. Att häva är att sätta den här, inte att städa |
+| created_at, updated_at | | `created_at` är när spärren sattes — ingen egen `held_at`; `updated_at` rör sig när den hävs |
+
+Index: `(account_id, lifted_at)` — `covers()` läsväg.
+
+Ingen `deleted_at`: en rad tas aldrig bort. En hävd spärr lämnar sin rad kvar, för att en spärr en gång funnits är i sig en uppgift värd att bevara. Ingen yta i webben och inget API.
+
+## security_log
+
+Säkerhetsloggen: systemets anteckning om missbruk, intrång och olagligt innehåll. Den läses av oss, utom användarens egna inloggningar. Se [[ADR-0043 Tre loggar]] § Säkerhetsloggen.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: ingen rutt, ingen resurs och ingen vy identifierar en rad |
+| account_id, user_id | BIGINT UNSIGNED NULL | **Identifierare utan främmande nycklar**, som i `audit_log`: en nyckel hade fällt kontoraderingen varje natt för varje konto som någon gång loggat in |
+| action | VARCHAR(60) | Öppet namnrum, inget CHECK — fler händelser följer med loggen utan en migrering |
+| ip_group | CHAR(16) NULL | Pseudonymen: de sexton första hexatecknen av `hash_hmac('sha256', $ip, config('app.key'))`. **Ingen rå IP-adress sparas**, och formeln delas med missbruksrapporten så att de två aldrig kan glida isär |
+| device_name | VARCHAR(60) NULL | Webbläsarsträngen tolkad till ett kort namn när raden skrivs; strängen själv kastas |
+| meta | JSON | Data om händelsen. **Aldrig ett lösenord, en kod eller ett token, inte ens hashad**, och aldrig en e-postadress |
+| created_at | | Raden tas bort hel eller inte alls — av gallringen tolv månader efter `created_at` |
+
+Index: `(user_id, created_at)`, `(ip_group, created_at)`, `(created_at)`.
+
+**Append-only.** Ingen `updated_at`, ingen `deleted_at`: en logg som kan ändras är inget bevis. Den enda vägen in är `RecordSecurityEvent`.
+
+## usage_metric
+
+Mätningen: anonyma summor över vad som görs, en rad per dag, källa, handling och plan. Den läses bara av oss och sparas för evigt. Se [[ADR-0043 Tre loggar]] § Mätningen.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` |
+| date | DATE | Mätdagen |
+| source | VARCHAR(20) | `audit` \| `security` — vilken av de två loggarna raden räknats ur. CHECK-villkor i databasen |
+| action | VARCHAR(60) | Handlingens namn ur respektive logg, eller `other` — dit grupper under fem slås ihop, så att en enskild person inte kan pekas ut |
+| plan | VARCHAR(40) | Kontots plankod. `unknown` när kontot inte längre finns, `mixed` när en `other`-grupp slagits ihop över planerna — de två är olika fakta och får inte blandas |
+| count | INT UNSIGNED | |
+| created_at, updated_at | | |
+
+UNIQUE `(date, source, action, plan)` — det **är** idempotensen: en andra körning för samma dag skriver om mängden i stället för att lägga till.
+
+**Ingen kolumn pekar på en person, ett konto eller en container** — ingen `user_id`, ingen `account_id`, ingen `container_id`, ingen IP-adress och inget `ulid`. En rad som kan knytas till en användare vore personuppgifter med evig livslängd. Ingen främmande nyckel mot `plan`: mätningen överlever planen den räknades på, precis som loggen överlever sitt subjekt.
 
 ## Behörighetsregler
 
