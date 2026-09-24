@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Notification;
 use App\Models\User;
 use App\Support\Notification\LocaleResolver;
@@ -351,6 +352,48 @@ it('hämtar datumsträngarna ur ui.php och inte ur komposabeln', function () {
     $kod = (string) preg_replace('#/\*.*?\*/#s', '', File::get(resource_path('js/composables/useRelativeDate.js')));
 
     expect($kod)->not->toMatch('/\b(Today|Tomorrow|Overdue by)\b/');
+});
+
+/*
+ * Varje handling i händelseloggen har en mening (issue 116).
+ *
+ * Historikflikarna formulerar varje rad ur handlingens namn —
+ * `audit.action.<handling>`, se resources/js/components/HistoryRow.vue — och
+ * `translate()` skriver NYCKELN SJÄLV när uppslaget misslyckas (provet strax
+ * ovanför pinnar det). En handling utan mening syns därför inte som ett fel i
+ * vyn: den syns som `audit.action.item.created` i en rad, på engelska, i en
+ * produkt vars enda katalog är engelsk ([[ADR-0034 Engelska vid lansering]]).
+ *
+ * **Nycklarna räknas upp ur konstanterna och inte ur en avskrift här.**
+ * Handlingarna är ett ÖPPET namnrum — `AuditLog` har ingen `ACTIONS`-lista med
+ * flit (se modellens docblock), bara konstanterna — så avskriften hade varit
+ * en andra lista att hålla i takt, och den hade glidit isär inom en milstolpe.
+ * En handling som läggs till och glöms i katalogen faller här, och det är
+ * samma form som provet för skalets strängar och datumregelns.
+ *
+ * Kontoraderna (`account.deleted`) och gallringsraden (`container.purged`)
+ * prövas som alla andra: de skrivs av ett jobb och inte av en person, men de
+ * LÄSES av en människa inom sina tolv månader (issue 115), och en rad utan
+ * mening är lika oläslig vem som än skrev den.
+ */
+it('har en mening åt varje handling i händelseloggen', function () {
+    $lov = sprakLov(sprakFil('en'));
+
+    $handlingar = [];
+
+    foreach ((new ReflectionClass(AuditLog::class))->getConstants() as $namn => $varde) {
+        if (str_starts_with($namn, 'ACTION_') && is_string($varde)) {
+            $handlingar[$namn] = $varde;
+        }
+    }
+
+    expect($handlingar)->not->toBeEmpty('AuditLog har inga ACTION_-konstanter');
+
+    foreach ($handlingar as $namn => $handling) {
+        $mening = $lov["audit.action.{$handling}"] ?? '';
+
+        expect($mening)->not->toBe('', "ui.audit.action.{$handling} saknas ({$namn})");
+    }
 });
 
 /*

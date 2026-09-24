@@ -16,7 +16,7 @@
  * texten formuleras på servern och slås bara upp på klienten, se
  * [[ADR-0021 Frontendteknik]] och resources/js/composables/useTranslations.js.
  *
- * **Nio rader, och varken fler eller färre.** Listan är containerns sidor, och
+ * **Tio rader, och varken fler eller färre.** Listan är containerns sidor, och
  * issue 101 · [[ADR-0042 Designsystemet]] § Konsekvenser delar dem i två ytor:
  * flikraden (`containerTabs`) och inställningssidan
  * (`containerSettingsSections`). Ingen rad får försvinna — en yta ingen hittar
@@ -68,6 +68,15 @@
  * exporten skapar förtroendet"*. Raden låg därför i NAVIGERINGEN och ligger
  * sedan issue 101 på inställningssidan, som är containerns skyltade
  * samlingsplats — en utgång ingen hittar är samma sak som en inlåsning.
+ *
+ * `history` kom med issue 116 · [[ADR-0043 Tre loggar]] § Händelseloggen och
+ * ligger SIST, efter `transfer`: historiken är vad som HAR hänt, och den är
+ * ingen yta man arbetar i utan den man läser efteråt. Den är ändå en flik och
+ * ingen sidfot — issue 101 lämnade platsen tom med flit, med orden
+ * *"historiken ritas inte ännu"*, och den förutsättningen faller här. Raden
+ * hör till flikraden (`TAB_KEYS` nedan): bilden ritar historiken jämte
+ * översikten och items, och den som undrar vad som hänt letar där hon mötte
+ * resten — inte på inställningssidan.
  */
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}/items` },
@@ -79,6 +88,7 @@ export const containerSections = [
     { key: 'export', href: (ulid) => `/containers/${ulid}/export` },
     { key: 'trash', href: (ulid) => `/containers/${ulid}/trash` },
     { key: 'transfer', href: (ulid) => `/containers/${ulid}/transfer` },
+    { key: 'history', href: (ulid) => `/containers/${ulid}/history` },
 ];
 
 /*
@@ -90,18 +100,19 @@ export const containerSections = [
  * hjälte (*Redigera container*), och hjälten byggs inte ännu; fliken är samma
  * adress och samma yta, och den syns från varje flik i stället för från en.
  */
-const TAB_KEYS = ['items', 'settings'];
+const TAB_KEYS = ['items', 'settings', 'history'];
 
 /*
  * Flikraden, se issue 101 · [[ADR-0042 Designsystemet]] § Beslut och
  * § Bildernas avvikelser.
  *
- * **Bildens sju flikar blir tre här, och de fyra som fattas är inte glömda.**
+ * **Bildens sju flikar blir fyra här, och de tre som fattas är inte glömda.**
  * Bilden ritar översikt, items, dokument, uppgifter, underhåll, kostnader och
  * historik. Uppgifter och underhåll är EN flik (§ Bildernas avvikelser:
  * `schedule` skiljer dem bara åt via `recurrence_type`, och skillnaden är ett
- * filter i listan), och historikfliken ritas inte (§ Konsekvenser: `audit_log`
- * instrumenteras i ett eget arbete).
+ * filter i listan), och historiken ritades inte när issue 101 skrevs
+ * (§ Konsekvenser: `audit_log` instrumenteras i ett eget arbete). Issue 116
+ * bygger den, och raden är den tionde i listan ovan.
  *
  * **Dokument, uppgifter och kostnader har ingen sida.** Ingen rutt svarar på
  * dem, ingen kontrollermetod hämtar dem och ingen prop bär dem, så en flik för
@@ -111,9 +122,9 @@ const TAB_KEYS = ['items', 'settings'];
  * `## Frågor och antaganden` och inte en ändpunkt i smyg.
  *
  * **Översikten skrivs här och inte i listan ovan**, för den är containerns egen
- * sida och ingen undersida (`containers.show`, issue 89). `items` och
- * `settings` är sektioner och har sin rad i listan; fliken är samma nyckel och
- * samma adress, och därför ingen andra formulering av samma sak.
+ * sida och ingen undersida (`containers.show`, issue 89). `items`, `settings`
+ * och `history` är sektioner och har sin rad i listan; fliken är samma nyckel
+ * och samma adress, och därför ingen andra formulering av samma sak.
  *
  * `count` sätts inte: flikarna bär inga tal i bilden, och `UiTabs` ritar en
  * bricka bara när anroparen har ett tal att visa (issue 100).

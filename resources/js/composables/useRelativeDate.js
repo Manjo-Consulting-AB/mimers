@@ -33,13 +33,22 @@ import { useTranslations } from './useTranslations.js';
  * försenad* är den upplysning en förfallodag är till för och *14 okt 2026*
  * säger ingenting om att den är sen.
  *
- * **DATE-kolumner, inte tidsstämplar.** Regeln tar DATE-strängar (`Y-m-d`),
- * som `due_at` och `visible_from` ([[Scheman och uppgifter]] §
- * schedule_occurrence). Allt annat — en tidsstämpel, ett tomt värde — ger
- * `null`: aktivitetslistans *Idag 10:24* bär en tid och väntar på att listan
- * byggs, och den formen byggs här när den ytan finns. Datumen byggs i LOKAL
- * tid, som formatDateOnly(): `new Date("2027-05-05")` tolkas som UTC midnatt
- * och visar i en negativ offset dagen FÖRE.
+ * **Två former, och det är åt vilket håll de pekar som skiljer dem.** En
+ * FÖRFALLODAG är ett DATE (`Y-m-d`) och en framtid: `due_at` och
+ * `visible_from` ([[Scheman och uppgifter]] § schedule_occurrence), och
+ * `dueDate()` svarar *Om 24 dagar* eller *14 okt 2026*. En HÄNDELSE är en
+ * tidsstämpel och ett minne: `created_at` på en loggrad, och `eventDate()`
+ * svarar *Idag 10:24* eller *14 okt 2026*. Formerna delar gränsen, katalogen
+ * och den lokala tiden — men inte orden, för *Om 3 dagar* om något som hände
+ * i förrgår är fel hur noggrant det än räknas. Vilken form en yta vill ha
+ * avgörs av vad kolumnen är, och båda bor här: en panel som skrev sitt eget
+ * datum hade varit den blandning regeln finns för att ta bort.
+ *
+ * En DATE-sträng till `dueDate()` och en tidsstämpel till `eventDate()`.
+ * Fel form ger `null` och inte ett påhittat datum: `parseDateOnly()` läser
+ * `Y-m-d` och ingenting annat, och `parseTimestamp()` tar en ISO-sträng.
+ * Datumen byggs i LOKAL tid, som formatDateOnly(): `new Date("2027-05-05")`
+ * tolkas som UTC midnatt och visar i en negativ offset dagen FÖRE.
  *
  * **Beroenderiktningen är enkelriktad.** Presentationsmodulerna
  * (`itemPresentation.js`, `accessPresentation.js`) importerar komposabeln för
@@ -58,8 +67,9 @@ export const RELATIVE_DAYS = 30;
  * (issue 52, [[ADR-0013 Språk och i18n]]) och aldrig requestens
  * `Accept-Language`.
  *
- *   const { dueDate } = useRelativeDate()
- *   dueDate('2027-05-05', false)   // { text: 'In 24 days', state: 'warning', … }
+ *   const { dueDate, eventDate } = useRelativeDate()
+ *   dueDate('2027-05-05', false)                        // { text: 'In 24 days', state: 'warning', … }
+ *   eventDate('2026-09-24T08:24:00+00:00')              // { text: 'Today 10:24', relative: true }
  */
 export function useRelativeDate() {
     const { t } = useTranslations();
@@ -71,6 +81,11 @@ export function useRelativeDate() {
             locale: locale.value,
             today: now(),
             overdue,
+        }),
+        eventDate: (value) => formatEventDate(value, {
+            t,
+            locale: locale.value,
+            today: now(),
         }),
     };
 }
@@ -132,9 +147,69 @@ export function formatDueDate(value, { t, locale, today, overdue = false }) {
 }
 
 /*
- * Frontendens ENDA anrop till `Intl`. Datumet kommer färdigt som ett Date i
- * lokal tid — den som bygger det äger tidszonen, och den som skriver ut det
- * ska inte behöva veta vilken den är.
+ * En HÄNDELSE: tidsstämpeln på en loggrad, i historikfliken (issue 116).
+ *
+ * Samma regel som `formatDueDate()` och samma gräns — inom `RELATIVE_DAYS`
+ * skrivs datumet relativt och bortom den absolut — men orden pekar BAKÅT.
+ * *Om 3 dagar* om något som hände i förrgår är fel hur noggrant det än
+ * räknas, så de två formerna har var sin katalog: `date.today` delas (en dag
+ * är en dag), och `date.yesterday` och `date.days_ago` är händelsens egna.
+ * Vill vi ha en månadsform även här är det en egen nyckel och en egen issue.
+ *
+ * **Tiden står med så länge datumet är relativt.** *Idag 10:24* är den form
+ * bilden ritar (docs/Design/container.jpeg, *Senaste aktiviteter*), och den
+ * är till för att skilja dagens rader åt: två händelser samma dag får samma
+ * ord och behöver klockan för att gå att skilja. Bortom trettio dagar faller
+ * tiden bort och datumet står ensamt — *14 okt 2026* — för där är det dagen
+ * och inte klockslaget som är upplysningen, och samma form som `dueDate()`
+ * ger. Tiden skrivs i användarens `locale`, som datumet.
+ *
+ * En framtida tidsstämpel — en klocka som går fel — behandlas som dagens rad
+ * och inte som *-2 dagar sedan*: antalet dagar får räknas fel, meningen får
+ * inte bli osann, och det är samma ordning som `formatDueDate()` väljer
+ * (serverns flagga vinner över klientens klocka).
+ *
+ * `relative` är den enda grenen en panel behöver känna till, precis som hos
+ * `formatDueDate()`: ett relativt datum bär sina egna ord och står för sig
+ * självt, medan det absoluta är ett datum någon annan kan sätta en
+ * preposition framför.
+ */
+export function formatEventDate(value, { t, locale, today }) {
+    const date = parseTimestamp(value);
+
+    if (date === null) {
+        return { text: null, relative: false };
+    }
+
+    // Dagens rad är dag 0, gårdagens är -1, och en framtid kläms till 0.
+    const days = Math.min(0, Math.round((midnight(date) - today) / 86400000));
+
+    if (days < -RELATIVE_DAYS) {
+        return { text: formatLocaleDate(date, locale), relative: false };
+    }
+
+    const day = days === 0
+        ? t('date.today')
+        : days === -1
+            ? t('date.yesterday')
+            : t('date.days_ago', { days: -days });
+
+    return { text: `${day} ${formatLocaleTime(date, locale)}`, relative: true };
+}
+
+/*
+ * Klockan i användarens `locale`, `HH:MM`. Anropas bara av `formatEventDate()`
+ * och bara medan datumet är relativt — se docblocken ovan.
+ */
+export function formatLocaleTime(date, locale) {
+    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+}
+
+/*
+ * Datumet i användarens `locale`, och modulens ENDA anrop till `Intl` för
+ * datum. Datumet kommer färdigt som ett Date i lokal tid — den som bygger det
+ * äger tidszonen, och den som skriver ut det ska inte behöva veta vilken den
+ * är.
  *
  * itemPresentation.js och accessPresentation.js lånar den i stället för att
  * formatera själva, så att "ingen panel formaterar ett datum själv" går att
@@ -155,9 +230,32 @@ function parseDateOnly(value) {
     return year && month && day ? new Date(year, month - 1, day) : null;
 }
 
+/*
+ * En ISO-tidsstämpel → ett Date, eller null när strängen inte går att läsa.
+ * `Date` tolkar ISO 8601 med tidszon själv, och den som skriver ut datumet
+ * läser det sedan i användarens egen tidszon — samma linje som
+ * `formatDateOnly()`: den som bygger datumet äger tidszonen.
+ */
+function parseTimestamp(value) {
+    if (typeof value !== 'string' || value === '') {
+        return null;
+    }
+
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/*
+ * Midnatt i lokal tid för ett Date — den form dagräkningen jämför i, så att
+ * en rad skriven 23:59 och en läst 00:01 hamnar på var sin dag och inte på
+ * var sin sida om ett dygn.
+ */
+function midnight(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
 /* Dagens datum i lokal tid, midnatt — samma form som parseDateOnly ger. */
 function now() {
-    const nu = new Date();
-
-    return new Date(nu.getFullYear(), nu.getMonth(), nu.getDate());
+    return midnight(new Date());
 }

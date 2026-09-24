@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\User;
@@ -18,10 +19,10 @@ use function Pest\Laravel\withoutVite;
  * och [[ADR-0042 Designsystemet]] § Beslut och § Konsekvenser.
  *
  * **Filen prövar en fördelning och ett krav.** Fördelningen — vilka av
- * containerns nio sidor som blir flikar och vilka som samlas på
+ * containerns tio sidor som blir flikar och vilka som samlas på
  * inställningssidan — är designarbete. Kravet är det inte: **ingen rad får
  * försvinna**, och det är 62a:s motivering för papperskorgen och 67c:s för
- * exporten. Provet *"var och en av de nio sektionerna går att nå"* är därför
+ * exporten. Provet *"var och en av de tio sektionerna går att nå"* är därför
  * filens tyngdpunkt: det räknar upp nycklarna ur modulen klienten importerar
  * och begär varje adress som inloggad medlem.
  *
@@ -50,7 +51,7 @@ use function Pest\Laravel\withoutVite;
 /**
  * Ett konto med en medlem som äger en container.
  *
- * Medlemmen och inte en delegat: de nio sektionerna är containerns egna sidor,
+ * Medlemmen och inte en delegat: de tio sektionerna är containerns egna sidor,
  * och den som ser dem är den som förvaltar containern.
  *
  * @return array{0: Account, 1: User, 2: Container}
@@ -211,7 +212,7 @@ it('containern har en flikrad byggd av UiTabs', function () {
     // Flikarna, ur modulen klienten importerar: översikten först — det är
     // containerns egen sida — sedan den sektion man arbetar i och den sida som
     // bär resten.
-    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'settings']);
+    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'settings', 'history']);
 
     foreach (containerflikLankar('containerTabs', $container->ulid) as $nyckel => $adress) {
         // Etiketten kommer ur `lang/`, och `t()` hade skrivit nyckeln själv på
@@ -226,7 +227,7 @@ it('containern har en flikrad byggd av UiTabs', function () {
 });
 
 /*
- * Klart när: var och en av de nio sektionerna går att nå.
+ * Klart när: var och en av de tio sektionerna går att nå.
  *
  * Filens tyngdpunkt, och issue 101:s enda krav: **ingen rad får försvinna**.
  * Nycklarna räknas upp ur modulen — en tionde rad vore en ny sida någon byggt
@@ -238,7 +239,7 @@ it('containern har en flikrad byggd av UiTabs', function () {
  * hitta: raden ska ritas på sidan, med samma etikett och samma adress som
  * sektionsmenyn gav den.
  */
-it('var och en av de nio sektionerna går att nå', function () {
+it('var och en av de tio sektionerna går att nå', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerflikKontext();
@@ -253,14 +254,17 @@ it('var och en av de nio sektionerna går att nå', function () {
         'export',
         'trash',
         'transfer',
+        'history',
     ]);
 
     foreach (containerflikLankar('containerSections', $container->ulid) as $nyckel => $adress) {
         actingAs($anvandare)->get($adress)->assertOk();
     }
 
-    // De sju som lämnade flikraden, ur samma modul: items och settings stannar
-    // i raden, resten samlas på inställningssidan.
+    // De sju som lämnade flikraden, ur samma modul: items, settings och sedan
+    // issue 116 även history stannar i raden, resten samlas på
+    // inställningssidan. Historiken stannar därför att bilden ritar den jämte
+    // översikten och items — se containerSections.js.
     expect(containerflikNycklar('containerSettingsSections'))->toBe([
         'categories',
         'tags',
@@ -289,7 +293,7 @@ it('var och en av de nio sektionerna går att nå', function () {
 });
 
 /*
- * Klart när: var och en av de nio sektionerna går att nå — också för den som
+ * Klart när: var och en av de tio sektionerna går att nå — också för den som
  * inte äger containern.
  *
  * Sedan issue 101 är inställningssidan enda vägen till de sju sektionerna, och
@@ -399,40 +403,63 @@ it('uppgifter och underhåll är en flik', function () {
 });
 
 /*
- * Klart när: ingen historikflik finns.
+ * Klart när: historikfliken finns och läser genom läsregeln.
  *
- * [[ADR-0042 Designsystemet]] § Konsekvenser: historikfliken ritas fortfarande
- * inte, och en flik för en yta som inte finns är en död länk. Provet faller om
- * fliken, en egen rutt eller en etikett för den dyker upp — tre ställen där en
- * halvfärdig historik hade kunnat smyga in.
+ * **Provet hette *"ingen historikflik finns"* och vände i issue 116.** Det
+ * skrevs i issue 101 medan historiken väntade på instrumenteringen
+ * ([[ADR-0042 Designsystemet]] § Konsekvenser: `audit_log` instrumenteras i ett
+ * eget arbete), och det förutsatte att fliken, rutten och etiketten saknades.
+ * Förutsättningen faller här, och provet svarar nu på samma tre ställen i
+ * omvänd riktning — plus det fjärde som är issuens ärende: sidan läser genom
+ * App\Actions\Audit\ListAuditEvents och inte runt den.
+ *
+ * **Läsregeln prövas inte här.** Rad för rad görs det i LasregelTest (issue
+ * 108) och genom fliken i HistorikflikTest; det här provet bevisar att fliken
+ * pekar på den ytan och att grinden står kvar. De två frågorna är åtskilda med
+ * flit: grinden svarar på om man når containern, läsregeln på vilka rader man
+ * då får läsa, och en främling får 403 och inte en tom lista.
  */
-it('ingen historikflik finns', function () {
+it('historikfliken finns och läser genom läsregeln', function () {
     withoutVite();
 
-    [, $anvandare, $container] = containerflikKontext();
+    [$konto, $ägare, $container] = containerflikKontext();
 
-    $flikar = containerflikNycklar('containerTabs');
+    // Fliken finns i raden och bär sin egen etikett ur katalogen — `t()` hade
+    // skrivit nyckeln själv på skärmen om den saknades.
+    expect(containerflikNycklar('containerTabs'))->toContain('history');
 
-    expect(array_values(array_filter($flikar, fn (string $nyckel): bool => str_contains($nyckel, 'histor'))))
-        ->toBe([], 'historiken har fått en flik');
+    $mening = trans('ui.container.nav.history', [], 'en');
 
-    $rutter = collect(app('router')->getRoutes()->getRoutes())
-        ->map(fn ($rutt): string => $rutt->uri())
-        ->filter(fn (string $uri): bool => str_starts_with($uri, 'containers/{container}'))
-        ->values()
-        ->all();
+    expect($mening)->not->toBe('ui.container.nav.history', 'container.nav.history saknas');
+    expect(trim($mening))->not->toBe('');
 
-    expect(array_values(array_filter($rutter, fn (string $uri): bool => (bool) preg_match('#/(history|audit)#', $uri))))
-        ->toBe([], 'historiken har fått en egen rutt');
+    // Och rutten svarar. Raden är skriven i loggen och hämtad ur den — en sida
+    // som svarade 200 med en tom lista hade sett likadan ut i ett prov som
+    // bara mätte statuskoden.
+    $rad = AuditLog::factory()->create([
+        'container_id' => $container->id,
+        'account_id' => $konto->id,
+        'user_id' => $ägare->id,
+        'action' => AuditLog::ACTION_CONTAINER_CREATED,
+    ]);
 
-    // Ingen etikett kvar åt den heller: en nyckel ingen flik läser är en text
-    // ingen ser, och den hade gjort fliken ett `t()`-anrop bort.
-    $en = require lang_path('en/ui.php');
+    actingAs($ägare)->get("/containers/{$container->ulid}/history")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/History')
+            ->has('rows', 1)
+            ->where('rows.0.ulid', $rad->ulid)
+        );
 
-    expect(array_key_exists('history', $en['container']['nav']))->toBeFalse();
+    // Grinden är kvar: den som inte når containern får 403 och inte en lista
+    // över sina egna rader (issue 108).
+    actingAs(User::factory()->create())
+        ->get("/containers/{$container->ulid}/history")
+        ->assertForbidden();
 
-    // Och ingen händelsepanel har smugit in som prop på översikten.
-    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk()
+    // Och ingen händelsepanel har smugit in som prop på översikten: historiken
+    // är en egen sida och inte ett kort på någon annans.
+    actingAs($ägare)->get("/containers/{$container->ulid}")->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->missing('events')
             ->missing('history')
@@ -441,21 +468,27 @@ it('ingen historikflik finns', function () {
 });
 
 /*
- * Ingen ny ändpunkt och ingen ny fråga (issue 101).
+ * Varje flik pekar på en NAMNGIVEN rutt (issue 101 och 116).
  *
- * Flikarna renderar propar som redan hämtas: översikten (issue 89), itemlistan
- * (57a) och inställningssidan (54) svarar alla i dag, och de nio sektionerna
- * likaså. Provet fäster varje flik vid den NAMNGIVNA rutt den redan pekade på:
- * hade en flik behövt en ny kontrollermetod hade adressen inte funnits i
- * ruttabellen, och då är den ett fynd i PR:ens `## Frågor och antaganden` och
- * ingen ändpunkt i smyg.
+ * Flikarna renderar ytor som redan fanns när issue 101 skrevs: översikten
+ * (issue 89), itemlistan (57a) och inställningssidan (54). Provet fäster varje
+ * flik vid sin rutt så att en flik inte kan peka på en adress någon byggt för
+ * hand: hade en flik behövt en ny kontrollermetod hade adressen inte funnits i
+ * ruttabellen, och då är den ett fynd i PR:ens `## Frågor och antaganden`.
+ *
+ * **`history` är den flik som BRÖT mot det**, och det är ärligt bokfört:
+ * historikfliken kom med issue 116, kontrollermetoden
+ * (ContainerHistoryController::index()) är ny, och rutten `containers.history`
+ * fanns inte förut. Provet räknar därför fyra rader i stället för tre — den
+ * femte fliken hade varit den som smög in.
  */
-it('pekar varje flik på en rutt som redan fanns', function () {
+it('pekar varje flik på en namngiven rutt', function () {
     [, , $container] = containerflikKontext();
 
     expect(containerflikLankar('containerTabs', $container->ulid))->toBe([
         'overview' => route('containers.show', $container, false),
         'items' => route('containers.items.index', $container, false),
         'settings' => route('containers.edit', $container, false),
+        'history' => route('containers.history', $container, false),
     ]);
 });

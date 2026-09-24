@@ -51,6 +51,14 @@ return [
         'in_days' => 'In :days days',
         'overdue' => 'Overdue by :days days',
         'overdue_one' => 'Overdue by 1 day',
+        // Issue 116 · [[ADR-0043 Tre loggar]] § Händelseloggen: the history
+        // rows look BACKWARDS, and the two forms point in opposite
+        // directions. `in_days` above is a due date — "In 3 days" about
+        // something that happened three days ago is wrong however carefully
+        // it is counted — so the past has its own words. `today` is shared:
+        // a day is a day whichever way you look at it.
+        'yesterday' => 'Yesterday',
+        'days_ago' => ':days days ago',
     ],
 
     'nav' => [
@@ -1068,6 +1076,12 @@ return [
             // ownership transfer is the most consequential action in the
             // product and not something you do often (issue 67b decision 1).
             'transfer' => 'Ownership transfer',
+            // Issue 116 · [[ADR-0043 Tre loggar]] § Händelseloggen: the last
+            // tab, like the last row in containerSections.js. The history is
+            // what HAS happened — no surface you work in, but the one you read
+            // afterwards. Issue 101 left the place empty on purpose, in the
+            // words "historiken ritas inte ännu"; that premise falls here.
+            'history' => 'History',
         ],
 
         // Issue 89 · [[ADR-0039 Containerns översikt]]: the container's own URL
@@ -1212,6 +1226,265 @@ return [
             'save' => 'Save',
             'destroy' => 'Delete',
             'empty' => 'No tags yet.',
+        ],
+    ],
+
+    /*
+     * The event log as a sentence, see issue 116 and [[ADR-0043 Tre loggar]]
+     * § Händelseloggen.
+     *
+     * **One key per action, and the key IS the action name.** `audit_log.action`
+     * is an open namespace whose values are the constants on App\Models\AuditLog
+     * (`item.created`, `container.transferred`), and the two dot-separated
+     * parts are already the shape a translation key wants: the string for
+     * `item.created` is `ui.audit.action.item.created`, and nothing has to be
+     * mapped, spelled out or kept in sync by hand. SprakTest reads the
+     * constants off the model and proves every one of them resolves — a new
+     * action without a sentence falls there and not in a view.
+     *
+     * **The sentence is the whole row.** `:user` is the acting person's name,
+     * looked up when the row is read (App\Actions\Audit\PresentAuditEvents) —
+     * never stored in the log, because a log that remembers what someone was
+     * called is a second register of what the user wrote. `:item` is the
+     * item's name or its neutral replacement, and `:fields` the names of the
+     * fields a change touched. Attributes an action does not use are simply
+     * left in the string; `translate()` replaces what it finds and leaves the
+     * rest alone.
+     *
+     * **Two sentences have no `:user`, and that is deliberate.**
+     * `container.purged` and `account.deleted` are written by the nightly job
+     * and not by a person: `audit_log.user_id` is null for them, and the
+     * resource does not invent a system user (issue 40 decision 11). Had they
+     * carried `:user` they would have been rendered as "a former user
+     * permanently deleted the container" — a sentence about someone who was
+     * never there. Every other action IS a person's, and a row whose user has
+     * since been deleted meets the replacement: [[ADR-0043 Tre loggar]]
+     * § Konsekvenser, a deleted user's rows show *a former user*.
+     *
+     * The words for the two replacements and for the fields live below; the
+     * heading and the empty state live under `history`.
+     */
+    'audit' => [
+        'history' => [
+            // The tab's label, the page's heading and the browser tab. The
+            // `title` key is the same word as `heading` and still its own key:
+            // every other container page carries one (`container.categories`,
+            // `container.tags`), and the day a page title needs to say more
+            // than its heading does, the key is already there.
+            'title' => 'History',
+            'heading' => 'History',
+            // The first time, and not "nothing matches": the log is the whole
+            // content of the tab, so an empty list means nothing has happened
+            // here yet — never that a filter hid something (issue 99's two
+            // states, and there is no filter on this page).
+            'empty' => 'Nothing has happened here yet.',
+        ],
+
+        /*
+         * The neutral replacement, see [[ADR-0043 Tre loggar]] § Konsekvenser
+         * and issue 116.
+         *
+         * The log outlives what it is about: the foreign keys were dropped in
+         * issue 107, an item can be purged and a user deleted, and a row that
+         * pointed at them still stands. It is shown with a replacement and
+         * NEVER with an empty field — a blank space reads as a rendering
+         * fault, and the row is not broken, it is old.
+         *
+         * Both are noun phrases and not sentences, because that is the slot
+         * they fill: `:user` is the subject of the sentence and `:item` the
+         * object, so "a former user created a deleted item" is a complete and
+         * truthful sentence. Lower case on purpose — they are substituted
+         * mid-sentence, and only `container.purged` and `account.deleted`
+         * begin one.
+         */
+        'fallback' => [
+            'user' => 'a former user',
+            'item' => 'a deleted item',
+        ],
+
+        /*
+         * The actions, one sentence each — the key is the action (see the
+         * block comment above). `:user` opens every sentence a person wrote,
+         * `:item` names the item when the action is about one, and `:fields`
+         * lists what a change touched.
+         *
+         * `:item` is the item's NAME and never its ULID or its id: the id is
+         * an internal running number that never leaves the building
+         * ([[Datamodell – översikt]]), and the ULID is an identifier, not
+         * something a person reads.
+         */
+        'action' => [
+            'account' => [
+                'deleted' => 'The account and its content were permanently deleted',
+            ],
+
+            'access' => [
+                'granted' => ':user gave someone access',
+                'updated' => ':user changed :fields on an access',
+                'revoked' => ':user revoked an access',
+            ],
+
+            'attachment' => [
+                'created' => ':user added a file to :item',
+                'deleted' => ':user moved a file on :item to the trash',
+                'restored' => ':user restored a file on :item',
+            ],
+
+            'calendar_feed' => [
+                'created' => ':user created a calendar link',
+                'revoked' => ':user revoked a calendar link',
+            ],
+
+            'category' => [
+                'created' => ':user created a category',
+                'updated' => ':user changed :fields on a category',
+                'deleted' => ':user deleted a category',
+                // One row for the whole action and not one per category it
+                // creates (issue 111): the set is what the person chose.
+                'template_applied' => ':user applied a set of categories',
+            ],
+
+            'container' => [
+                'created' => ':user created the container',
+                'updated' => ':user changed :fields on the container',
+                'deleted' => ':user moved the container to the trash',
+                'restored' => ':user restored the container from the trash',
+                'transferred' => ':user transferred the container to another account',
+                // No `:user` — see the block comment above. The container was
+                // emptied thirty days after it was put in the trash, and the
+                // row is what the log's own cleanup counts twelve months from
+                // (issue 107 and issue 115).
+                'purged' => 'The container was permanently deleted',
+            ],
+
+            'cost_entry' => [
+                'created' => ':user registered a cost on :item',
+                'updated' => ':user changed :fields on a cost on :item',
+                'deleted' => ':user deleted a cost on :item',
+            ],
+
+            'invitation' => [
+                'created' => ':user sent an invitation',
+                'revoked' => ':user withdrew an invitation',
+                'accepted' => ':user accepted an invitation',
+                'rejected' => ':user declined an invitation',
+            ],
+
+            'item' => [
+                'created' => ':user created :item',
+                'updated' => ':user changed :fields on :item',
+                'deleted' => ':user moved :item to the trash',
+                'restored' => ':user restored :item from the trash',
+                // Its own action and not a field on `item.updated`: a tag is
+                // a link to another table, and `meta` carries which tags were
+                // added and removed (issue 109).
+                'tags_changed' => ':user changed the tags on :item',
+            ],
+
+            'item_link' => [
+                'created' => ':user linked :item to another item',
+                'deleted' => ':user removed a link on :item',
+            ],
+
+            'loan' => [
+                'created' => ':user lent out :item',
+                'updated' => ':user changed :fields on a loan of :item',
+                // Its own action and not `loan.updated`: getting the item
+                // back is what a loan exists for (issue 110).
+                'returned' => ':user got :item back',
+                'deleted' => ':user deleted a loan of :item',
+            ],
+
+            'occurrence_dependency' => [
+                'created' => ':user made a task on :item depend on another',
+                'deleted' => ':user removed a dependency between tasks on :item',
+            ],
+
+            'ownership_transfer' => [
+                'offered' => ':user offered to transfer the container',
+                'revoked' => ':user withdrew the transfer',
+                'rejected' => ':user declined the transfer',
+            ],
+
+            'schedule' => [
+                'created' => ':user created a task on :item',
+                'updated' => ':user changed :fields on a task on :item',
+                'deleted' => ':user deleted a task on :item',
+            ],
+
+            'schedule_dependency' => [
+                'created' => ':user made a task on :item depend on another',
+                'deleted' => ':user removed a dependency between tasks on :item',
+            ],
+
+            'schedule_occurrence' => [
+                // The occurrence the completion OPENS is not logged — it is a
+                // consequence and not an action (issue 110).
+                'completed' => ':user completed a task on :item',
+                // Skipping is its own action and not a completion with a
+                // flag: the history tells them apart, and the next interval
+                // due date is counted from a different date (issue 110).
+                'skipped' => ':user skipped a task on :item',
+            ],
+
+            'tag' => [
+                'created' => ':user created a tag',
+                'updated' => ':user changed :fields on a tag',
+                'deleted' => ':user deleted a tag',
+            ],
+        ],
+
+        /*
+         * The names of the fields a change touched, see [[ADR-0043 Tre
+         * loggar]] § Händelseloggen: *the row says that the name and the note
+         * changed, not what they said*. `meta.changed` carries the column
+         * names, and these are their words — the key is the value in `meta`,
+         * so a field added to an update action without a word here shows as
+         * `audit.field.<column>` in the row and is found the first time
+         * someone reads it.
+         *
+         * The values are noun phrases, because they are substituted into
+         * `:fields` — the list a sentence like ":user changed :fields on the
+         * item" reads out. Free text never appears here or anywhere else in
+         * the log: not the name, the description, the note, the file name or
+         * the supplier.
+         */
+        'field' => [
+            'amount' => 'the amount',
+            'anchor_date' => 'the start date',
+            'borrower_email' => 'the borrower\'s email address',
+            'borrower_name' => 'the borrower',
+            'category' => 'the category',
+            'color' => 'the colour',
+            'cover' => 'the cover image',
+            'currency' => 'the currency',
+            'description' => 'the description',
+            'due_at' => 'the due date',
+            'expires_at' => 'the expiry date',
+            'incurred_on' => 'the date',
+            'interval_count' => 'the interval',
+            'interval_unit' => 'the interval',
+            'is_active' => 'the pause',
+            'kind' => 'the kind',
+            'lead_days' => 'the notice',
+            'lent_at' => 'the loan date',
+            'level' => 'the level',
+            'manufacturer' => 'the manufacturer',
+            'model' => 'the model',
+            'name' => 'the name',
+            'note' => 'the note',
+            'notes' => 'the notes',
+            'parent_id' => 'the parent',
+            'position' => 'the position',
+            'position_note' => 'the place',
+            'purchased_at' => 'the purchase date',
+            'recurrence_type' => 'the repetition',
+            'returned_at' => 'the return date',
+            'serial_number' => 'the serial number',
+            'supplier' => 'the supplier',
+            'tags' => 'the tags',
+            'title' => 'the title',
+            'warranty_until' => 'the warranty',
         ],
     ],
 

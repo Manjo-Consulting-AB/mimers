@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
+import HistoryRow from '../../../components/HistoryRow.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
@@ -82,13 +83,15 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * flit (ItemMapPanel.vue). Under `md:` staplas panelerna, och strukturen blir
  * en utfällbar yta och inte en egen sida.
  *
- * **Sidan är en flikrad med sex flikar** (issue 102 ·
- * [[M17 Designsystemet]] § 102). Fram till dess renderades fälten, taggarna,
- * relationerna, utlåningen, schemana och bilagorna på en enda lång sida; nu
- * ligger var och en i sin flik — fälten på översikten, som är radens första —
- * och raden byggs av `UiTabs` (issue 100) precis som containerns. Issuen är en
- * omfördelning av det som redan hämtas: ingen prop tillkommer, ingen fråga
- * ställs och kontrollern är orörd.
+ * **Sidan är en flikrad med sju flikar** (issue 102 och 116 ·
+ * [[M17 Designsystemet]] § 102). Fram till issue 102 renderades fälten,
+ * taggarna, relationerna, utlåningen, schemana och bilagorna på en enda lång
+ * sida; nu ligger var och en i sin flik — fälten på översikten, som är radens
+ * första — och raden byggs av `UiTabs` (issue 100) precis som containerns.
+ * Issue 102 var en omfördelning av det som redan hämtas: ingen prop tillkom,
+ * ingen fråga ställdes och kontrollern rördes inte. Issue 116 lägger till den
+ * SJUNDE fliken — historiken — och den är det enda undantaget från den regeln:
+ * dess rader är en ny prop, och den frågan ställs bara när fliken är aktiv.
  *
  * **Flikraden ligger inuti containerns ram** ([[ADR-0041 Itemets vy]]
  * § Beslut). Itemet bor i containern, och bildens globala vänstermeny med
@@ -225,6 +228,24 @@ const props = defineProps({
     loanHistory: { type: Array, required: true },
     /* Serverns datum, `Y-m-d` — "Tillbaka idag" sätter det (Beslut 3). */
     today: { type: String, required: true },
+    /*
+     * Historikens rader (issue 116 · [[ADR-0043 Tre loggar]]
+     * § Händelseloggen), ur App\Actions\Audit\PresentAuditEvents — nyast
+     * först, högst hundra, med namnen redan uppslagna.
+     *
+     * **Proppen finns BARA när fliken är aktiv, och standarden är `null`.**
+     * Servern lämnar nyckeln helt när `?tab=` inte är `history` (se
+     * ItemController::show()), så raderna kostar ingenting för den som öppnar
+     * itemet för att se bilagorna. Skillnaden mellan "inte hämtad" och "hämtad
+     * och tom" är hela räknarens giltighet — den ena ger inget tal och den
+     * andra en nolla — och därför är standarden `null` och inte en tom lista:
+     * en tom lista är ett svar servern HAR gett.
+     *
+     * Vyn ställer ingen fråga och filtrerar ingenting: vilka rader användaren
+     * får läsa avgjorde App\Actions\Audit\ListAuditEvents på servern (issue
+     * 108), och en gäst ser sina egna och ägaren allas ur samma svar.
+     */
+    history: { type: Array, default: null },
     can: { type: Object, required: true },
     /*
      * Är itemet en av användarens favoriter? Se issue 105 och
@@ -279,29 +300,32 @@ const overviewEmpty = computed(
 /*
  * Flikraden i den form `UiTabs` vill ha: `{ key, label, href, count }`.
  *
- * **Raden har SEX flikar, och översikten ÄR fältens flik.** Bilden ritar sju
- * minus historiken och kostnaderna — fem — och utlåningen läggs till som
- * sjätte; "fälten" ur de sex proparna är översiktsfliken och ingen egen rad.
- * Det finns alltså ingen sjunde flik som bär två stycken text: anteckningen
- * och beskrivningen står överst på översikten och fältlistan under dem
+ * **Raden har SJU flikar, och översikten ÄR fältens flik.** Bilden ritar sju
+ * — översikt, detaljer, relationer, dokument, kostnader, uppgifter och
+ * historik — och raden är bildens, med två namn bytta: "detaljer" är ingen
+ * egen rad (fälten hör till översikten, se nedan) och "dokument" är bilagorna.
+ * Utlåningen och taggarna har ingen rad i bilden men måste ändå få en plats —
+ * en yta ingen hittar är samma sak som en yta som inte finns (issue 62a:s och
+ * 67c:s motivering) — så de står efter de fem, i den ordning issue 102 räknar
+ * dem. Det finns alltså ingen flik som bär två stycken text: anteckningen och
+ * beskrivningen står överst på översikten och fältlistan under dem
  * ([[ADR-0041 Itemets vy]] § Beslut, issue 96).
  *
- * **Ordningen är bildens, och de två rader bilden inte har kommer sist.**
- * `docs/Design/struktur - item.jpeg` ritar översikt, relationer, dokument,
- * uppgifter och historik; kostnaden och historiken byggs inte här
- * (kostnadsfliken väntar på trepanelslayouten och historiken på
- * instrumenteringen), och utlåningen och taggarna har ingen rad i bilden men
- * måste ändå få en plats — en yta ingen hittar är samma sak som en yta som
- * inte finns (issue 62a:s och 67c:s motivering). De står därför efter de fem,
- * i den ordning issuen räknar dem: översikten, relationerna, bilagorna,
- * schemana, utlåningen och taggarna.
+ * **Ordningen är översikten först, sedan bildens, och de egna sist.**
+ * `docs/Design/struktur - item.jpeg` ritar översikt, detaljer, relationer,
+ * dokument, kostnader, uppgifter och historik. Kostnaden har ingen flik (den
+ * väntar på trepanelslayouten, issue 103), och historiken kom med issue 116
+ * och ligger SIST — efter utlåningen och taggarna, som containerns egen
+ * historikflik: den är vad som HAR hänt och inte en yta man arbetar i.
  *
- * **Etiketten är sektionens eget ord.** Fem av flikarna bär samma rubrik som
+ * **Etiketten är sektionens eget ord.** Sex av flikarna bär samma rubrik som
  * sektionen de visar — `item.links.heading`, `item.attachment.heading`,
- * `item.schedule.heading`, `item.loan.heading` och `item.show.tags` — så att
- * fliken och rubriken strax under den aldrig kan säga olika saker. Bara
- * översikten lånar inget ord: ingen sektion äger den, och den har därför en
- * egen nyckel.
+ * `item.schedule.heading`, `item.loan.heading`, `item.show.tags` och
+ * `audit.history.heading` — så att fliken och rubriken strax under den aldrig
+ * kan säga olika saker. Bara översikten lånar inget ord: ingen sektion äger
+ * den, och den har därför en egen nyckel. Historikens nyckel ligger under
+ * `audit` och inte under `item` med flit: ordet är detsamma som containerns
+ * flik bär, och två nycklar för samma ord hade kunnat glida isär.
  *
  * **`href` byggs ur itemets egen adress och bär den aktuella förekomsten.**
  * Flikarna ligger på samma sökväg och skiljs av `?tab=` (issue 100); `path`
@@ -331,6 +355,21 @@ const tabs = computed(() => {
         { key: 'schedules', label: t('item.schedule.heading'), href: tabHref('schedules'), count: props.schedules.length },
         { key: 'loans', label: t('item.loan.heading'), href: tabHref('loans'), count: props.loanHistory.length + (props.openLoan ? 1 : 0) },
         { key: 'tags', label: t('item.show.tags'), href: tabHref('tags'), count: props.item.tags.length },
+        /*
+         * Historiken (issue 116) är den SJUNDE fliken och ligger sist, som
+         * containerns egen: den är vad som HAR hänt och inte en yta man
+         * arbetar i. Etiketten är `audit.history.heading` — samma ord som
+         * containerns flik och som panelens egen rubrik, så fliken och ytan
+         * strax under den inte kan säga olika saker.
+         *
+         * Räknaren är `null` så länge raderna inte är hämtade — servern
+         * skickar dem bara när fliken är aktiv (se `history`-proppen) — och
+         * talet när de finns. `null` betyder "inget tal att visa" och inte
+         * "noll rader": en nolla hade varit ett påstående om innehållet som
+         * vyn inte har gjort (issue 99 och 100). En hämtad och TOM lista ger
+         * däremot noll, och det är ett svar och inte en gissning.
+         */
+        { key: 'history', label: t('audit.history.heading'), href: tabHref('history'), count: props.history === null ? null : props.history.length },
     ];
 });
 
@@ -664,7 +703,7 @@ function toggleFavorite() {
                     sig med sin egen etikett, och aldrig som en sammanslagen text.
 
                     **Översikten ÄR fältens flik.** Bildens *Detaljer* är ingen egen
-                    rad: raden har sex flikar och ingen sjunde som bär två stycken
+                    rad: raden har ingen flik som bär två stycken
                     text, så tillverkaren, modellen, kategorin och resten står här,
                     under styckena. Kategorin hör hemma i listan — den är ett
                     strukturerat fält och ingen tagg — och ett tomt fält utelämnas
@@ -781,6 +820,36 @@ function toggleFavorite() {
 
                         <ItemTagList class="mt-2" :tags="item.tags" />
                     </template>
+                </section>
+
+                <!--
+                    Historiken (issue 116 · [[ADR-0043 Tre loggar]]
+                    § Händelseloggen): itemets rader, nyast först, ur
+                    `history`-proppen — som servern BARA skickar när den här
+                    fliken är aktiv. Raderna är desamma som containerns
+                    historikflik visar för itemet, genom samma läsregel (issue
+                    108): en gäst ser sina egna rader här och ägaren allas.
+
+                    Raden formulerar sig själv i HistoryRow.vue — meningen, de
+                    två ersättarna och datumet ur `lang/` — och den här panelen
+                    ritar bara listan. Rubriken är samma ord som flikens
+                    etikett, så raden och ytan under den inte kan säga olika
+                    saker.
+
+                    Ett item utan rader är inte trasigt: `audit_log` börjar
+                    tomt och fylls av det som händer, och raden i stället för
+                    listan säger vilket — samma val som översiktsfliken gör.
+                -->
+                <section v-if="activeTab === 'history'" class="mt-8">
+                    <h2 class="text-sm font-medium text-slate-600">{{ t('audit.history.heading') }}</h2>
+
+                    <p v-if="history.length === 0" class="mt-2 text-sm text-slate-600">
+                        {{ t('audit.history.empty') }}
+                    </p>
+
+                    <ul v-else class="mt-2">
+                        <HistoryRow v-for="row in history" :key="row.ulid" :row="row" />
+                    </ul>
                 </section>
             </div>
 
