@@ -73,6 +73,45 @@ class AuditLog extends Model
      */
     public const ACTION_ACCOUNT_DELETED = 'account.deleted';
 
+    /*
+     * Innehållshändelserna (issue 109). Varje skrivning på ett item och det
+     * som hänger på det — itemet självt, taggarna, relationerna, bilagorna
+     * och kostnadsraderna — får sitt eget namn här, så anroparna aldrig
+     * stavar en sträng. Alla bär `item_id`; [[ADR-0043 Tre loggar]]
+     * § Händelseloggen.
+     */
+
+    public const ACTION_ITEM_CREATED = 'item.created';
+
+    public const ACTION_ITEM_UPDATED = 'item.updated';
+
+    public const ACTION_ITEM_DELETED = 'item.deleted';
+
+    public const ACTION_ITEM_RESTORED = 'item.restored';
+
+    /**
+     * Taggmängden byttes. Egen handling och inte ett fält på `item.updated`:
+     * en tagg är en koppling till en annan tabell, och `meta` bär vilka
+     * taggar som lades till och togs bort som ULID:er — aldrig deras namn.
+     */
+    public const ACTION_ITEM_TAGS_CHANGED = 'item.tags_changed';
+
+    public const ACTION_ITEM_LINK_CREATED = 'item_link.created';
+
+    public const ACTION_ITEM_LINK_DELETED = 'item_link.deleted';
+
+    public const ACTION_ATTACHMENT_CREATED = 'attachment.created';
+
+    public const ACTION_ATTACHMENT_DELETED = 'attachment.deleted';
+
+    public const ACTION_ATTACHMENT_RESTORED = 'attachment.restored';
+
+    public const ACTION_COST_ENTRY_CREATED = 'cost_entry.created';
+
+    public const ACTION_COST_ENTRY_UPDATED = 'cost_entry.updated';
+
+    public const ACTION_COST_ENTRY_DELETED = 'cost_entry.deleted';
+
     /**
      * Tabellen heter `audit_log`, inte Eloquents standardplural `audit_logs`.
      */

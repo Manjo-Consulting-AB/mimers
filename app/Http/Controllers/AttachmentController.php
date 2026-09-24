@@ -13,6 +13,7 @@ use App\Models\Item;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Plan\Entitlements;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
@@ -140,6 +141,7 @@ class AttachmentController extends Controller
      * bindningen.
      */
     public function destroy(
+        Request $request,
         Container $container,
         Item $item,
         Attachment $attachment,
@@ -147,7 +149,7 @@ class AttachmentController extends Controller
     ): RedirectResponse {
         Gate::authorize('delete', $item);
 
-        $trashAttachment->handle($attachment);
+        $trashAttachment->handle($attachment, $request->user());
 
         return back()->with('status', 'attachment-deleted');
     }

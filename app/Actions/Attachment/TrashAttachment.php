@@ -2,9 +2,13 @@
 
 namespace App\Actions\Attachment;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
 use App\Models\Attachment;
+use App\Models\AuditLog;
+use App\Models\Item;
 use App\Models\StoredFile;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -43,12 +47,30 @@ use Illuminate\Support\Facades\DB;
  * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
  * se [[ADR-0024 Tunna controllers och actions]] och PurgeAttachments
  * docblock.
+ *
+ * **Händelseloggen (issue 109) skrivs här, i samma transaktion.** Det är
+ * därför `$actor` är frivillig: den vanliga vägen kommer från en controller
+ * och bär användaren, medan nedgraderingens jobb
+ * (App\Console\EnforcesDowngrades) raderar utan en — och en rad ett jobb
+ * orsakat har `user_id` null, aldrig en påhittad systemanvändare (issue 40
+ * § Beslut 11). Även "töm lagringen" bär användaren: det är ett klick, och
+ * bara nedgraderingen och gallringen är handlingslösa. Aktören skickas alltid
+ * in av anroparen — actionen letar aldrig själv efter en inloggad användare,
+ * för då går en jobbrad och en klickrad inte längre att skilja åt.
  */
 class TrashAttachment
 {
-    public function handle(Attachment $attachment): bool
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
+    /**
+     * @param  User|null  $actor  Den som raderar, eller null när ett jobb
+     *                            gör det. Behörigheten är redan prövad av
+     *                            anroparen.
+     * @return bool Sant när raden faktiskt mjukraderades här.
+     */
+    public function handle(Attachment $attachment, ?User $actor = null): bool
     {
-        return DB::transaction(function () use ($attachment): bool {
+        return DB::transaction(function () use ($attachment, $actor): bool {
             $rad = Attachment::query()
                 ->whereKey($attachment->getKey())
                 ->lockForUpdate()
@@ -61,9 +83,27 @@ class TrashAttachment
             $billedAccountId = $rad->billed_account_id;
             $byteSize = (int) StoredFile::query()->whereKey($rad->stored_file_id)->value('byte_size');
 
+            // Itemet läses med `withTrashed()`: bilagan kan raderas medan
+            // dess item redan ligger i papperskorgen, och loggraden ska då
+            // ändå bära itemet och dess container. Främmande nyckeln från
+            // `attachment` till `item` är RESTRICT, så raden finns.
+            $item = Item::withTrashed()->findOrFail($rad->item_id);
+            $kind = $rad->kind;
+
             $rad->delete();
 
             (new AdjustUsage)->handle($billedAccountId, bytesDelta: -$byteSize);
+
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_ATTACHMENT_DELETED,
+                account: $item->container->account,
+                user: $actor,
+                container: $item->container,
+                item: $item,
+                subjectType: 'attachment',
+                subjectUlid: $rad->ulid,
+                meta: ['kind' => $kind],
+            );
 
             return true;
         });

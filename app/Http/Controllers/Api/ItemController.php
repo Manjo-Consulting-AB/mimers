@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Item\LinkItems;
+use App\Actions\Item\CreateItem;
+use App\Actions\Item\DeleteItem;
 use App\Actions\Item\ListItems;
+use App\Actions\Item\UpdateItem;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Item\IndexItemRequest;
@@ -15,9 +17,8 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\Tag;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -107,8 +108,14 @@ class ItemController extends Controller
      * all deliberately excluded from App\Models\Item#[Fillable], see that
      * class's docblock. `created_by_user_id` always comes from the token,
      * never from the body (§ Beslut 6).
+     *
+     * The write moved to App\Actions\Item\CreateItem in issue 109: the two
+     * surfaces write through the same Action, and the Action owns the
+     * transaction that also carries the audit rows. The web controller keeps
+     * the same split — its request shape differs (it always sends `tags`),
+     * the write does not.
      */
-    public function store(StoreItemRequest $request, Container $container, LinkItems $linkItems): JsonResponse
+    public function store(StoreItemRequest $request, Container $container, CreateItem $createItem): JsonResponse
     {
         $parentUlid = $request->validated('parent');
 
@@ -144,27 +151,7 @@ class ItemController extends Controller
 
         $item = new Item($request->safe()->except(['account', 'category', 'tags', 'parent']));
 
-        // The item write and the tag sync share one transaction (issue 13b
-        // § Beslut 7): an item saved with half its tagging is a state the
-        // user can neither see nor fix. replaceTags() has sync()'s replace
-        // semantics but keeps the query count constant, see that method. A
-        // new item starts with no tags, so an empty `tags` list needs no
-        // sync call.
-        DB::transaction(function () use ($item, $container, $category, $account, $request, $tags, $parent, $linkItems) {
-            $item->container_id = $container->id;
-            $item->category_id = $category?->id;
-            $item->created_by_user_id = $request->user()->id;
-            $item->created_by_account_id = $account->id;
-            $item->save();
-
-            if ($tags->isNotEmpty()) {
-                $this->replaceTags($item, $tags);
-            }
-
-            if ($parent !== null) {
-                $linkItems->handle($parent, $item, 'parent');
-            }
-        });
+        $createItem->handle($container, $account, $request->user(), $item, $category, $tags, $parent);
 
         // $account, $category and $tags are already in hand above — set the
         // relations directly instead of letting ItemResource trigger new
@@ -219,8 +206,12 @@ class ItemController extends Controller
      * that holds for the WHOLE body — there is deliberately no field-by-field
      * gate: no field on an existing item is one a `create` recipient may
      * change.
+     *
+     * The write moved to App\Actions\Item\UpdateItem in issue 109, which
+     * also logs which fields changed. The `has()`-branches stay here: they
+     * are the request's shape, and only `/api` has them.
      */
-    public function update(UpdateItemRequest $request, Container $container, Item $item): ItemResource
+    public function update(UpdateItemRequest $request, Container $container, Item $item, UpdateItem $updateItem): ItemResource
     {
         Gate::authorize('update', $item);
 
@@ -235,18 +226,15 @@ class ItemController extends Controller
             $item->category_id = $category?->id;
         }
 
-        // Item write and tag sync in one transaction, same reasoning as
-        // store() (issue 13b § Beslut 7). The tag ULID → id lookup is in
-        // bulk, one query regardless of count (§ Beslut 6). replaceTags()
-        // runs whenever the KEY is present — including `tags: []`, which
-        // clears.
-        DB::transaction(function () use ($item, $request) {
-            $item->save();
-
-            if ($request->has('tags')) {
-                $this->replaceTags($item, Tag::whereIn('ulid', $request->validated('tags'))->get());
-            }
-        });
+        // The tag ULID → id lookup is in bulk, one query regardless of count
+        // (§ Beslut 6). The sync runs whenever the KEY is present —
+        // including `tags: []`, which clears.
+        $updateItem->handle(
+            $item,
+            $request->user(),
+            $request->has('tags'),
+            Tag::whereIn('ulid', $request->validated('tags') ?? [])->get(),
+        );
 
         // See show() above — same reasoning, a single row. `tags` is loaded
         // AFTER the sync so the response reflects the new set.
@@ -266,44 +254,16 @@ class ItemController extends Controller
      * not remove it. `delete` is soft deletion and nothing else; physical
      * pruning stays the owner account's, see [[ADR-0008 Soft delete och
      * papperskorg]], and no new path to forceDelete() is opened here.
+     *
+     * The write moved to App\Actions\Item\DeleteItem in issue 109, which
+     * writes the audit row in the same transaction.
      */
-    public function destroy(Container $container, Item $item): Response
+    public function destroy(Request $request, Container $container, Item $item, DeleteItem $deleteItem): Response
     {
         Gate::authorize('delete', $item);
 
-        $item->delete();
+        $deleteItem->handle($item, $request->user());
 
         return response()->noContent();
-    }
-
-    /**
-     * Replaces the item's tag set with $tags, keeping sync()'s replace
-     * semantics (an omitted id is detached, a new one attached) but a
-     * CONSTANT number of queries no matter how many tags (issue 13b §
-     * Beslut 6). BelongsToMany::sync() attaches one pivot row per query —
-     * an INSERT per new tag. This diffs against the current pivot rows and
-     * then attach()/detach() the whole side at once: Eloquent batches the
-     * list into a single multi-row INSERT / DELETE regardless of count.
-     *
-     * The current set is read straight from the pivot table, NOT through
-     * the `tags()` relation — the relation applies SoftDeletes' global
-     * scope and would hide the pivot rows of soft-deleted tags that sync()
-     * still sees (issue 13b § Beslut 3).
-     */
-    private function replaceTags(Item $item, Collection $tags): void
-    {
-        $desired = $tags->pluck('id')->all();
-        $current = DB::table('item_tag')->where('item_id', $item->id)->pluck('tag_id')->all();
-
-        $toAttach = array_values(array_diff($desired, $current));
-        $toDetach = array_values(array_diff($current, $desired));
-
-        if ($toAttach !== []) {
-            $item->tags()->attach($toAttach);
-        }
-
-        if ($toDetach !== []) {
-            $item->tags()->detach($toDetach);
-        }
     }
 }

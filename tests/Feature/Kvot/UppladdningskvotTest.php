@@ -268,7 +268,7 @@ it('den auktoritativa kontrollen sitter innanför transaktionen', function () {
 
     $exception = null;
     try {
-        (new StoreAttachment)->handle($item, $fil, $user, $account);
+        app(StoreAttachment::class)->handle($item, $fil, $user, $account);
     } catch (ApiException $e) {
         $exception = $e;
     }

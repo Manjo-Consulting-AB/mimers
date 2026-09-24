@@ -126,7 +126,7 @@ class TrashController extends Controller
 
         $this->authorizeRestore($container, $model);
 
-        $restoreContent->handle($type, $model);
+        $restoreContent->handle($type, $model, $request->user());
 
         if ($model instanceof Attachment) {
             $row = ListTrash::entry('attachment', $model->ulid, $model->filename, $model->item?->name, null, $retentionDays);

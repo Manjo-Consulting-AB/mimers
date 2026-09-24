@@ -2,13 +2,16 @@
 
 namespace App\Actions\Trash;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\Attachment;
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Item;
 use App\Models\Tag;
+use App\Models\User;
 use App\Support\Plan\Entitlements;
 use Illuminate\Support\Facades\DB;
 
@@ -42,13 +45,23 @@ use Illuminate\Support\Facades\DB;
  * tillståndslös lövaction utan egna beroenden att injicera eller mocka, och
  * den här actionen är befintlig kod som 26a bara lägger ett anrop i; att trä
  * räknaren genom konstruktorn vore omarbetning utan mottagare.
+ *
+ * **Händelseloggen (issue 109) skrivs i samma transaktion, och bara för
+ * item och bilaga.** En återställd kategori eller tagg hör till containerns
+ * organisation och loggas av issue 111, inte här. En rad skrivs bara när
+ * raden faktiskt LÅG i papperskorgen — en återställning av något som redan
+ * är levande är ingen händelse.
  */
 class RestoreContent
 {
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
     /**
      * @param  'item'|'attachment'|'category'|'tag'  $type
+     * @param  User  $actor  Den som återställer; blir `user_id` på
+     *                       loggraden. Behörigheten är redan prövad.
      */
-    public function handle(string $type, Item|Attachment|Category|Tag $model): void
+    public function handle(string $type, Item|Attachment|Category|Tag $model, User $actor): void
     {
         if ($model instanceof Attachment) {
             $item = Item::withTrashed()->find($model->item_id);
@@ -72,7 +85,7 @@ class RestoreContent
             }
         }
 
-        DB::transaction(function () use ($model): void {
+        DB::transaction(function () use ($model, $actor): void {
             // Återställningen och en eventuell räknarökning i en transaktion
             // (issue 26a): en mjukraderad bilaga som blir levande igen kommer
             // tillbaka i kontots förbrukning, i samma transaktion som raden.
@@ -120,6 +133,40 @@ class RestoreContent
 
             if ($model instanceof Attachment && $varMjukraderad) {
                 (new AdjustUsage)->handle($model->billed_account_id, bytesDelta: $byteSize);
+            }
+
+            // Bara en rad som låg i papperskorgen är en händelse — en
+            // återställning av något som redan är levande skriver ingenting
+            // (issue 109). Kategori och tagg loggas av issue 111.
+            if (! $varMjukraderad) {
+                return;
+            }
+
+            if ($model instanceof Item) {
+                $this->recordAuditEvent->handle(
+                    action: AuditLog::ACTION_ITEM_RESTORED,
+                    account: $model->container->account,
+                    user: $actor,
+                    container: $model->container,
+                    item: $model,
+                );
+
+                return;
+            }
+
+            if ($model instanceof Attachment) {
+                $item = Item::withTrashed()->findOrFail($model->item_id);
+
+                $this->recordAuditEvent->handle(
+                    action: AuditLog::ACTION_ATTACHMENT_RESTORED,
+                    account: $item->container->account,
+                    user: $actor,
+                    container: $item->container,
+                    item: $item,
+                    subjectType: 'attachment',
+                    subjectUlid: $model->ulid,
+                    meta: ['kind' => $model->kind],
+                );
             }
         });
     }
