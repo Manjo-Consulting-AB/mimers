@@ -19,7 +19,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Ingen `updated_at`, ingen `deleted_at` (Beslut 3): en revisionslogg som
  * kan ändras är inget bevis, och en som kan mjukraderas är sämre än ingen
  * alls. `const UPDATED_AT = null` stänger av Eloquents andra tidsstämpel;
- * migrationen skapar inte kolumnen. Rader raderas aldrig och gallras aldrig.
+ * migrationen skapar inte kolumnen. Rader ändras aldrig och mjukraderas
+ * aldrig — men de gallras: App\Console\PrunesLogs (issue 115) tar bort en
+ * containers rader tolv månader efter dess `container.purged`-rad, och
+ * containerlösa rader tolv månader efter kontots `account.deleted`
+ * ([[ADR-0043 Tre loggar]] § Händelseloggen).
  *
  * `action` är ett ÖPPET namnrum (Beslut 6) — `container.transferred` och
  * `access.revoked` är de två första värdena men fler kan komma, så det finns

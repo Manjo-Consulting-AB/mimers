@@ -17,8 +17,11 @@ use Illuminate\Support\Facades\Schema;
  * - Ingen `updated_at`: en revisionslogg som kan ändras är inget bevis.
  *   Modellen sätter `const UPDATED_AT = null`.
  * - Ingen `deleted_at`: en logg som kan mjukraderas är sämre än ingen alls.
- *   Inget städjobb gallrar `audit_log` — raderna är historik, precis som
- *   `ownership_transfer` och `container_access`.
+ *   Rader mjukraderas aldrig och ändras aldrig, men de gallras:
+ *   App\Console\PrunesLogs (issue 115) tar bort en containers rader tolv
+ *   månader efter dess `container.purged`-rad, och containerlösa rader tolv
+ *   månader efter kontots `account.deleted` ([[ADR-0043 Tre loggar]]
+ *   § Händelseloggen).
  * - Ingen ändring, ingen radering: det finns ingen rutt som skriver om en
  *   rad. Append-only.
  *

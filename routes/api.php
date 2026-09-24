@@ -211,10 +211,12 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
 
     // Issue 40 · Revisionsloggen — containerns historik av känsliga
     // händelser, se App\Http\Controllers\Api\AuditLogController och
-    // App\Policies\ContainerPolicy::viewAuditLog(). Bara GET och bara regel 1
-    // (medlemskap i ägarkontot): loggen berättar vem som haft åtkomst och
-    // när, och det är ägarens uppgift (Beslut 7). Det finns ingen rutt som
-    // ändrar eller raderar en rad — loggen är append-only (Beslut 3).
+    // App\Policies\ContainerPolicy::viewAuditLog(). Sedan issue 108 prövar
+    // grinden bara om användaren NÅR containern; vilka rader hon får läsa
+    // väljer App\Actions\Audit\ListAuditEvents efter de tre reglerna i
+    // [[ADR-0043 Tre loggar]] § Händelseloggen — ägarkontots medlem ser allt i
+    // containern, en gäst sina egna rader. Bara en GET: det finns ingen rutt
+    // som ändrar eller raderar en rad — loggen är append-only (Beslut 3).
     Route::get('/containers/{container}/audit-log', [AuditLogController::class, 'index']);
 
     // Issue 41 · Export — beställ en fullständig export av containern

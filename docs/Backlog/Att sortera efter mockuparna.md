@@ -72,7 +72,7 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 
 **Containerns hela karta är ett eget projekt.** En graf över hundratals noder är en layoutalgoritm, inte en vy, och den hör inte ihop med fokuskartan mer än till namnet.
 
-**Itemets historikflik har det sämre än containerns.** `audit_log` är indexerad på `(container_id, created_at)` — precis containerfliken behöver — men det finns **inget index på `(subject_type, subject_id)`**, som är itemhistorikens fråga. Fliken vore alltså tom *och* en full scan. Den ritas inte, och indexet hör till händelseinstrumenteringen nedan.
+**Itemets historikflik är byggd** — indexet `(item_id, created_at)` kom med issue 107 och fliken med issue 116.
 
 **Strukna ur mockupen:** leverantör och artikelnummer i detaljrutan. Leverantören bor på `cost_entry`, där den redan är indexerad och har en autocomplete; artikelnumret finns inte, och `serial_number` är inte det — ett serienummer identifierar exemplaret, ett artikelnummer modellen. Skulle de behövas är det ett beslut, inte två fält.
 
