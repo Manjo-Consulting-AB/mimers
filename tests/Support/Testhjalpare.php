@@ -26,7 +26,9 @@
  * docs/Process/Lärdomar.md § Observerat.
  *
  * Varje funktion nedan är en ren flytt — namn, signatur och beteende är
- * oförändrade. Ursprungsfilen står i funktionens docblock.
+ * oförändrade — med undantag för somAnvandare(), som är ny här och hör till
+ * testinfrastrukturen i stället för till en enskild testfil. Ursprungsfilen
+ * står i funktionens docblock.
  */
 
 use App\Actions\Attachment\PurgeAttachment;
@@ -52,8 +54,42 @@ use App\Models\ScheduleOccurrence;
 use App\Models\StoredFile;
 use App\Models\Tag;
 use App\Models\User;
+use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Carbon;
 use PragmaRX\Google2FA\Google2FA;
+
+use function Pest\Laravel\actingAs;
+
+// --- Testinfrastruktur --------------------------------------------------
+
+/**
+ * Loggar in $user — efter att först ha glömt guardernas cache — och
+ * returnerar `actingAs($user)`, så att den kan kedjas precis som `actingAs()`
+ * kan:
+ *
+ *     somAnvandare($b)->getJson('/api/containers');
+ *
+ * Anropas i stället för `actingAs()` varje gång ett test byter användare
+ * mellan två anrop. `actingAs()` sätter webbguarden, och Sanctums
+ * RequestGuard cachar den autentiserade användaren efter första uppslaget.
+ * Guarden ligger kvar i applikationsbehållaren testet igenom — i drift är
+ * varje request en egen process, men i ett test delar alla anrop samma — så
+ * ett andra anrop som en annan användare annars svarar tyst som den första.
+ * `forgetGuards()` kastar de uppslagna guarderna, och nästa anrop slår upp
+ * användaren på nytt.
+ *
+ * Fyra issues felsökte samma sak var för sig (337, 345, 451, 452) innan
+ * förklaringen hamnade här. Beteendet är Sanctums och är rätt i drift; det är
+ * bara testerna som delar en process. Se
+ * tests/Feature/Testinfrastruktur/IdentitetsbyteTest.php, som prövar både
+ * hjälparen och felet utan den.
+ */
+function somAnvandare(User $user): TestCase
+{
+    auth()->forgetGuards();
+
+    return actingAs($user);
+}
 
 // --- tests/Feature/Container ------------------------------------------
 

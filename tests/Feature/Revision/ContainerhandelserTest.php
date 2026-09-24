@@ -438,17 +438,13 @@ it('en inbjudan som skickas, återkallas, accepteras eller avböjs skriver en ra
     /*
      * Accepteras — en andra inbjudan, med mottagarens eget token.
      * `user_id` är MOTTAGAREN — accepten är hennes handling.
-     *
-     * `forgetGuards()`: Sanctums RequestGuard cachar den autentiserade
-     * användaren efter första uppslaget, och utan den hade accepten nedan
-     * svarat som ägaren — och adressmatchningen fallit.
      */
-    auth()->forgetGuards();
-
     [$mottagare, $mottagarHeaders] = containerhandelseMottagare('accepterande@exempel.se');
     [$accepterad, $accepteradToken] = containerhandelseInbjudan($container, 'accepterande@exempel.se');
 
-    postJson('/api/invitations/accept', ['token' => $accepteradToken], $mottagarHeaders)->assertOk();
+    somAnvandare($mottagare)
+        ->postJson('/api/invitations/accept', ['token' => $accepteradToken], $mottagarHeaders)
+        ->assertOk();
 
     $accepteradRad = containerhandelseRad(AuditLog::ACTION_INVITATION_ACCEPTED, $container);
     expect($accepteradRad->subject_id)->toBe($accepterad->ulid);
@@ -616,12 +612,9 @@ it('en överlåtelse som erbjuds, återkallas eller avböjs skriver en rad', fun
         ->where('status', 'pending')
         ->firstOrFail();
 
-    // `forgetGuards()`: Sanctums RequestGuard cachar den autentiserade
-    // användaren efter första uppslaget, och utan den hade mottagarens begäran
-    // nedan fortfarande varit säljarens.
-    auth()->forgetGuards();
-
-    postJson("/api/transfers/{$motKonto->ulid}/reject", [], $köparHeaders)->assertNoContent();
+    somAnvandare($köpare)
+        ->postJson("/api/transfers/{$motKonto->ulid}/reject", [], $köparHeaders)
+        ->assertNoContent();
 
     // Erbjudandet mot ett KONTO bär kontots ULID och typen `account` — samma
     // form som adressvägen bär, utan att någonsin bära en adress.

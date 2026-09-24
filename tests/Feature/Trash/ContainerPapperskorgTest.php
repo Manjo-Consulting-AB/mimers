@@ -236,27 +236,22 @@ it('åtkomster och inbjudningar gäller igen efter återställning', function ()
     // ser bara levande rader.
     getJson("/api/containers/{$container->ulid}", $gästHeaders)->assertStatus(404);
 
-    // Guarden cachar den inloggade användaren mellan förfrågningar i samma
-    // test (RequestGuard), så den måste nollställas när en annan användares
-    // token ska få styra.
-    app('auth')->forgetGuards();
-
-    $response = postJson('/api/trash/containers/restore', [
-        'ulid' => $container->ulid,
-    ], $ägareHeaders);
+    $response = somAnvandare($ägare)
+        ->postJson('/api/trash/containers/restore', [
+            'ulid' => $container->ulid,
+        ], $ägareHeaders);
 
     $response->assertOk();
 
     // Raderna rördes aldrig (Beslut 4) och gäller igen: gästen når
     // containern och inbjudan ligger kvar.
-    app('auth')->forgetGuards();
-    getJson("/api/containers/{$container->ulid}", $gästHeaders)->assertOk();
+    somAnvandare($gäst)->getJson("/api/containers/{$container->ulid}", $gästHeaders)->assertOk();
     expect(ContainerAccess::query()->where('container_id', $container->id)->whereNull('revoked_at')->exists())->toBeTrue();
     expect(Invitation::query()->where('container_id', $container->id)->exists())->toBeTrue();
 });
 
 it('en write-deltagare kan inte återställa', function () {
-    [$ägarkonto, , $ägareHeaders] = kontoMedMedlem();
+    [$ägarkonto, $ägare, $ägareHeaders] = kontoMedMedlem();
     $container = Container::factory()->for($ägarkonto, 'account')->create(['name' => 'Havsörnen']);
     containerKorgMjukradera($container);
 
@@ -273,15 +268,11 @@ it('en write-deltagare kan inte återställa', function () {
     // Återställningen gick inte hem — containern ligger kvar i papperskorgen.
     expect(DB::table('container')->where('id', $container->id)->whereNotNull('deleted_at')->exists())->toBeTrue();
 
-    // Guarden cachar den inloggade användaren mellan förfrågningar i samma
-    // test (RequestGuard), så den måste nollställas när ägarens token ska få
-    // styra.
-    app('auth')->forgetGuards();
-
     // Ägarkontot kan fortfarande återställa.
-    $ägarens = postJson('/api/trash/containers/restore', [
-        'ulid' => $container->ulid,
-    ], $ägareHeaders);
+    $ägarens = somAnvandare($ägare)
+        ->postJson('/api/trash/containers/restore', [
+            'ulid' => $container->ulid,
+        ], $ägareHeaders);
     $ägarens->assertOk();
 });
 

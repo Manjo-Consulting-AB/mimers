@@ -257,13 +257,10 @@ it('en användare ändrar aldrig någon annans preferenser', function () {
         ],
     ], $headersA)->assertOk();
 
-    // Sanctums RequestGuard cachar den autentiserade användaren efter första
-    // uppslaget (se ContainerCrudTest om samma mekanism) — utan
-    // forgetGuards() skulle B:s begäran nedan fortfarande vara A.
-    auth()->forgetGuards();
-
     // B:s lista är orörd — alla rader saknas, förvalet gäller.
-    $karta = preferensKarta(getJson('/api/me/notification-preferences', $headersB));
+    $karta = preferensKarta(
+        somAnvandare($användareB)->getJson('/api/me/notification-preferences', $headersB)
+    );
     expect($karta[Notification::TYPE_TASK_DUE]['is_default'])->toBeTrue();
     expect(NotificationPreference::query()->where('user_id', $användareB->id)->count())->toBe(0);
 });
