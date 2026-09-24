@@ -2226,9 +2226,34 @@ return [
         'title' => 'Dashboard',
         'heading' => 'Dashboard',
 
+        // The panel's own words, see issue 122.
         'tasks' => [
             'heading' => 'Upcoming tasks',
             'view_all' => 'View all',
+        ],
+
+        // The tiles, see issue 124. Two of the mockup's four: *Tasks* and
+        // *Maintenance* are the same table, and the cost tile is issue 125.
+        // `overdue` is the sub-line under the task count and carries the rows
+        // the server sorted into the overdue group — the client compares no
+        // date, and a browser with a wrong clock cannot move a row into it.
+        // No pluralisation (issue 52 decision 4), so the strings read the same
+        // at one as at twelve.
+        'stats' => [
+            'containers' => 'Containers',
+            'tasks' => 'Open tasks',
+            'overdue' => 'Overdue: :count',
+        ],
+
+        // The container cards, see issue 124. `others` is the mockup's own
+        // name for the heap: the containers whose kind does not hold two of
+        // them ([[ADR-0036 Containerns art]]). A kind that does gets its own
+        // heading, and that heading is the user's own string — the field is
+        // free, so it is printed verbatim and never looked up here.
+        'containers' => [
+            'others' => 'My containers',
+            'items' => 'Items: :count',
+            'todos' => 'Open tasks: :count',
         ],
     ],
 

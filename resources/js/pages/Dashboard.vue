@@ -1,6 +1,8 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
+import ContainerCard from '../components/ContainerCard.vue';
+import DashboardStats from '../components/DashboardStats.vue';
 import DashboardTasksPanel from '../components/DashboardTasksPanel.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -25,12 +27,24 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Uppgifterna kommer ur samma urval som `/tasks`.** Servern klipper de fem
  * första i App\Http\Controllers\DashboardController, och panelen formulerar
  * inget eget `where` — se resources/js/components/DashboardTasksPanel.vue.
+ *
+ * **Brickorna och kortraderna kom med issue 124.** Gruppen är serverns:
+ * `containerGroups` kommer ur App\Actions\Container\ListContainerSummaries och
+ * bär en `kind` per grupp — `null` för högen, artens sträng för en art med
+ * minst två containrar ([[ADR-0036 Containerns art]]). Sidan ritar rubriken
+ * för högen ur `lang/` och skriver artens namn ORDAGRANT: fältet är fritt och
+ * har ingen översättningsnyckel, så en sträng från användarens tangentbord får
+ * aldrig slås upp (samma linje som Containers/Overview.vue).
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
     tasks: { type: Array, required: true },
     /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
     hasContainers: { type: Boolean, required: true },
+    /* `{ containers, tasks, overdue }` — talen brickorna visar. */
+    stats: { type: Object, required: true },
+    /* Korten, grupperade på art: `[{ kind, containers }]`. */
+    containerGroups: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -41,6 +55,24 @@ const { t } = useTranslations();
         <Head :title="t('dashboard.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('dashboard.heading') }}</h1>
+
+        <div class="mt-8">
+            <DashboardStats :stats="props.stats" />
+        </div>
+
+        <section v-for="group in props.containerGroups" :key="group.kind ?? 'others'" class="mt-8">
+            <h2 class="text-title font-semibold text-ink">
+                {{ group.kind ?? t('dashboard.containers.others') }}
+            </h2>
+
+            <div class="mt-3 flex flex-wrap items-stretch gap-4">
+                <ContainerCard
+                    v-for="container in group.containers"
+                    :key="container.ulid"
+                    :container="container"
+                />
+            </div>
+        </section>
 
         <div class="mt-8">
             <DashboardTasksPanel :tasks="props.tasks" :has-containers="props.hasContainers" />

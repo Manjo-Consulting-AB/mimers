@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Container\ListContainerSummaries;
 use App\Actions\Schedule\ListTodo;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -35,6 +36,14 @@ use Inertia\Response;
  * **De två tomma lägena följer med** (issue 64 § Beslut 6). `hasContainers`
  * kommer ur samma anrop som listan, så panelen kan skilja "ingen container
  * alls" från "inget att göra" utan en egen räkning.
+ *
+ * **Brickorna och containerkorten kom med issue 124.** De är egna komponenter
+ * med egna proppar, som panelen: `stats` bär de tre talen (containrar, öppna
+ * uppgifter, försenade) och `containerGroups` bär korten grupperade på art.
+ * Båda kommer ur App\Actions\Container\ListContainerSummaries, som får
+ * `$todo` — todo-svaret som redan är hämtat — i stället för att ställa samma
+ * fråga en gång till: uppgiftsbrickan ska visa antalet rader på `/tasks`, och
+ * det finns bara ett sätt att vara säker på att den gör det.
  */
 class DashboardController extends Controller
 {
@@ -49,15 +58,20 @@ class DashboardController extends Controller
 
     /**
      * GET /dashboard — 200. Panelerna. Uppgiftspanelen visar de fem första
-     * raderna ur todo-urvalet.
+     * raderna ur todo-urvalet, brickorna och korten räknar samma urval.
      */
     public function index(Request $request): Response
     {
-        $todo = app(ListTodo::class)->handle($request->user(), $request);
+        $user = $request->user();
+
+        $todo = app(ListTodo::class)->handle($user, $request);
+        $summaries = app(ListContainerSummaries::class)->handle($user, $todo);
 
         return Inertia::render('Dashboard', [
             'tasks' => array_slice($todo['rows'], 0, self::TASK_LIMIT),
             'hasContainers' => $todo['hasContainers'],
+            'stats' => $summaries['stats'],
+            'containerGroups' => $summaries['groups'],
         ]);
     }
 }
