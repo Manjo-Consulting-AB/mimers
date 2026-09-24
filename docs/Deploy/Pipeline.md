@@ -122,11 +122,13 @@ printf 'command="/home/s174280/bin/retro-fakta",restrict %s\n' "$(cat claude-ret
 Anropet, från utvecklings-VPS:en:
 
 ```bash
-ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
-ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net staging
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro -o IdentitiesOnly=yes s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro -o IdentitiesOnly=yes s174280@prime5.inleed.net staging
 ```
 
 `command=` gör att servern kör skriptet oavsett vad klienten ber om — klientens kommando hamnar i `SSH_ORIGINAL_COMMAND`, och skriptet läser bara miljönamnet ur det. `restrict` stänger portforwarding, agentforwarding, X11 och pty. Skriptet skriver ut sin egen version, så att ett glapp mellan serverns kopia och repots syns i utdatan.
+
+**`-o IdentitiesOnly=yes` behövs.** Utan den erbjuder `ssh` först nycklarna i ssh-agenten och först därefter nyckeln efter `-i`. Ligger en nyckel med fullt skal till samma konto i agenten, som på utvecklings-VPS:en, så godtar servern den i stället. Då körs `production` som ett vanligt skalkommando och svarar `bash: production: command not found`, och det ser ut som att `retro-fakta` är trasig. Den är det inte, den kördes aldrig. Flaggan gör att bara den nyckel som anges med `-i` erbjuds. Verifierat 2026-09-24 vid releasen av v0.11.0.
 
 ## Repo och organisation
 
@@ -405,10 +407,10 @@ ssh: connect to host staging.mimers.app port 22: Network is unreachable
 Det ser ut som att servern är nere. Den är det inte — routen saknas i andra änden av kabeln. Hela raden som fungerar:
 
 ```bash
-ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro -o IdentitiesOnly=yes s174280@prime5.inleed.net production
 ```
 
-Sista ordet är miljövalet som `retro-fakta` läser, inte en del av lösningen på routeproblemet — se § Engångsuppsättning.
+Sista ordet är miljövalet som `retro-fakta` läser, och `-o IdentitiesOnly=yes` hör till nyckelvalet. Inget av dem är en del av lösningen på routeproblemet — se § Engångsuppsättning.
 
 Två saker som gör felet svårare än det borde vara:
 
@@ -668,8 +670,8 @@ Artefakten har 90 dagars retention. Det är gott om tid mellan steg 3 och steg 5
 
 ```bash
 git diff v0.1.0..origin/main -- .env.example
-ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net production
-ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro s174280@prime5.inleed.net staging
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro -o IdentitiesOnly=yes s174280@prime5.inleed.net production
+ssh -4 -p 2020 -i ~/.ssh/id_ed25519_retro -o IdentitiesOnly=yes s174280@prime5.inleed.net staging
 ```
 
 Läs samtidigt av avsnittet **Kön** i utdatan. `köarbetare:` ska säga *schemalagd i routes/console.php*, och `jobs` ska inte ha rader som ligger kvar mellan två körningar. Kön dras av schemaläggaren sedan [[ADR-0031 Köarbetaren körs av schemaläggaren]] — en tom `jobs` med en arbetare betyder att kön töms, samma tabell utan arbetare betyder att exporten aldrig blir klar.
