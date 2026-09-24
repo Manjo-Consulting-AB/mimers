@@ -499,10 +499,12 @@ def deklarerade_sokvagar(kropp_pr: str) -> list[str]:
 
     Mallens eget exempel står i en HTML-kommentar och får inte räknas - en mall
     som lämnas ifylld till hälften är normalfallet, inte undantaget.
+
+    Markören får stå i fetstil, av samma skäl som i undantag_ur_kommentar().
     """
     sokvagar: list[str] = []
     for block in re.findall(
-        rf"^\s*{re.escape(DEKLARATIONSMARKOR)}\s*\n\s*```[^\n]*\n(.*?)^\s*```",
+        rf"^\s*(?:\*\*|__)?{re.escape(DEKLARATIONSMARKOR)}(?:\*\*|__)?\s*\n\s*```[^\n]*\n(.*?)^\s*```",
         HTMLKOMMENTAR.sub("", kropp_pr), re.MULTILINE | re.DOTALL,
     ):
         for rad in block.splitlines():
@@ -510,6 +512,25 @@ def deklarerade_sokvagar(kropp_pr: str) -> list[str]:
             if rad and ar_sokvag(rad):
                 sokvagar.append(rad)
     return sokvagar
+
+
+def olasbar_deklaration(kropp_pr: str) -> bool:
+    """Nämner PR-kroppen `Utanför rutan` utan att en enda sökväg gick att läsa?
+
+    PR #469 (issue 113) deklarerade sina två filer under `**Utanför rutan**` i
+    fetstil, som en punktlista med motivering - sakligt rätt, i läget spårad, och
+    oläsbar för deklarerade_sokvagar(). Grinden fällde båda filerna som
+    odeklarerade, två körningar i rad, och felutskriften sade "deklarera den" till
+    en PR som redan hade gjort det. Formen ligger kvar stel; det som ändras är att
+    grinden säger vad den såg, så att nästa varv kan rätta formen själv i stället
+    för att någon ska fråga arkitekten.
+    """
+    utan_kommentarer = HTMLKOMMENTAR.sub("", kropp_pr)
+    return (
+        re.search(re.escape(DEKLARATIONSMARKOR.rstrip(":")), utan_kommentarer, re.IGNORECASE)
+        is not None
+        and not deklarerade_sokvagar(kropp_pr)
+    )
 
 
 def bedom_fil(
@@ -899,6 +920,14 @@ def main() -> int:
             "vänta på svar - vidga inte rutan i efterhand."
         )
         notis("error", f"{len(brott)} fil(er) utanför omfångsrutan. {rad_att_gora}")
+        if lage == OMFANGSLAGE_SPARAD and olasbar_deklaration(kropp_pr):
+            notis(
+                "error",
+                f"PR-kroppen nämner `{DEKLARATIONSMARKOR.rstrip(':')}`, men ingen sökväg gick "
+                f"att läsa. Skriv markören `{DEKLARATIONSMARKOR}` ensam på en rad och ett "
+                "kodblock direkt under, en sökväg per rad - en punktlista eller löptext "
+                "läses inte. Motiveringen står som prosa under blocket.",
+            )
         return 1
 
     if slapp_igenom:
