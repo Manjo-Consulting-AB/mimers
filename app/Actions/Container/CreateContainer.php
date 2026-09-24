@@ -2,9 +2,11 @@
 
 namespace App\Actions\Container;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
 use App\Exceptions\Api\ApiException;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\User;
 use App\Support\Plan\Entitlements;
@@ -38,14 +40,14 @@ final class CreateContainer
     public function __construct(
         private readonly AdjustUsage $adjustUsage,
         private readonly Entitlements $entitlements,
+        private readonly RecordAuditEvent $recordAuditEvent,
     ) {}
 
     /**
-     * $creator bärs med av kontraktet i issue 54 § Beslut 3, men läses inte:
-     * en container har ingen `created_by`-kolumn, och ägaren är alltid ett
-     * konto ([[ADR-0002 Konto äger container]]). Parametern finns för att
-     * anroparen har användaren till hands och för att signaturen ska kunna
-     * utökas utan att röra båda kontrollerna den dag skapandet ska spåras.
+     * $creator bärs med av kontraktet i issue 54 § Beslut 3 och blev
+     * `user_id` på loggraden i issue 111: en container har ingen
+     * `created_by`-kolumn, och ägaren är alltid ett konto ([[ADR-0002 Konto
+     * äger container]]), men historiken svarar på vem som skapade den.
      *
      * `$kind` är frivillig sedan issue 84 · [[ADR-0036 Containerns art]]:
      * containern får skapas utan art, och `null` är det ärliga värdet för
@@ -73,7 +75,7 @@ final class CreateContainer
         // ägare och vars plan gäller (issue 27 § Beslut 4).
         $this->entitlements->assertCanCreateContainer($account);
 
-        $container = DB::transaction(function () use ($account, $name, $kind, $description): Container {
+        $container = DB::transaction(function () use ($creator, $account, $name, $kind, $description): Container {
             $container = new Container([
                 'name' => $name,
                 'kind' => $kind,
@@ -86,6 +88,20 @@ final class CreateContainer
             // 26a) — i samma transaktion som raden. Kontot är alltid ägaren;
             // containerns räknare har inget "billed_account_id" att gå vilse i.
             $this->adjustUsage->handle($account->id, containersDelta: 1);
+
+            // `container.created` i SAMMA transaktion som raden (issue 111):
+            // en loggrad utanför den kunde överleva ett rollback och beskriva
+            // en container som aldrig skapades. `meta` är tom — namnet är
+            // fritext och följer aldrig med, och `kind` och `description` är
+            // containerns utgångsläge, inte en ändring.
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_CONTAINER_CREATED,
+                account: $account,
+                user: $creator,
+                container: $container,
+                subjectType: 'container',
+                subjectUlid: $container->ulid,
+            );
 
             return $container;
         });

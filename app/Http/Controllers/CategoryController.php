@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Category\CreateCategory;
+use App\Actions\Category\DeleteCategory;
 use App\Actions\Category\ListCategories;
-use App\Actions\Category\MoveCategory;
+use App\Actions\Category\UpdateCategory;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Category\StoreCategoryPresetRequest;
 use App\Http\Requests\Category\StoreCategoryRequest;
 use App\Http\Requests\Category\UpdateCategoryRequest;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
 use App\Support\Frontend\ApiErrorTranslator;
@@ -131,6 +134,7 @@ class CategoryController extends Controller
             $request->validated('name'),
             $this->parent($container, $request->validated('parent')),
             $request->validated('position'),
+            $request->user(),
         );
 
         return back()->with('status', 'category-created');
@@ -166,15 +170,24 @@ class CategoryController extends Controller
      * webben och har ingen motsvarighet i `/api` att hålla koden i takt med,
      * till skillnad från `category.has_children` och de andra i
      * App\Http\Controllers\Api\CategoryController.
+     *
+     * **Mallen skriver EN loggrad, inte en per kategori** (issue 111). Att
+     * tillämpa mallen är användarens handling; kategorierna den skapar är
+     * följden, på samma sätt som förekomsten `CloseOccurrence` öppnar i issue
+     * 110 inte loggas. Raden skrivs därför HÄR — rutten finns bara på webben,
+     * och `CreateCategory` får `null` som aktör och avstår från en egen rad.
+     * Att AVFÄRDA mallen (App\Http\Controllers\CategoryController::
+     * dismissPreset()) är ingen skrivning alls och loggas inte.
      */
     public function storePreset(
         StoreCategoryPresetRequest $request,
         Container $container,
         CreateCategory $createCategory,
+        RecordAuditEvent $recordAuditEvent,
     ): RedirectResponse {
         Gate::authorize('update', $container);
 
-        DB::transaction(function () use ($request, $container, $createCategory): void {
+        DB::transaction(function () use ($request, $container, $createCategory, $recordAuditEvent): void {
             $container = Container::query()->whereKey($container->id)->lockForUpdate()->firstOrFail();
 
             if ($container->categories()->exists()) {
@@ -183,13 +196,32 @@ class CategoryController extends Controller
                 ]);
             }
 
+            $createdCount = 0;
+
+            // `null` som aktör: mallen skriver EN rad för hela tillämpningen
+            // och ingen per kategori den skapar (issue 111) — se den här
+            // metodens docblock.
             foreach ($request->validated('categories') as $preset) {
-                $root = $createCategory->handle($container, $preset['name'], null, null);
+                $root = $createCategory->handle($container, $preset['name'], null, null, null);
+                $createdCount++;
 
                 foreach ($preset['children'] ?? [] as $child) {
-                    $createCategory->handle($container, $child, $root, null);
+                    $createCategory->handle($container, $child, $root, null, null);
+                    $createdCount++;
                 }
             }
+
+            // EN rad, i samma transaktion som trädet: en mall som avfärdas
+            // skriver ingen rad alls — avfärdandet är ingen skrivning.
+            $recordAuditEvent->handle(
+                action: AuditLog::ACTION_CATEGORY_TEMPLATE_APPLIED,
+                account: $container->account,
+                user: $request->user(),
+                container: $container,
+                subjectType: 'container',
+                subjectUlid: $container->ulid,
+                meta: ['categories' => $createdCount],
+            );
         });
 
         return back()->with('status', 'category-preset-applied');
@@ -262,8 +294,8 @@ class CategoryController extends Controller
      * som finns för en partiell PATCH från en API-klient. Sidans formulär har
      * alltid en föräldraväljare med ett valt värde, så `parent` finns alltid i
      * kroppen och grenen `else` skulle aldrig tas. En gren som aldrig tas är
-     * en gren ingen testar, så den skrivs inte av här: `MoveCategory` anropas
-     * villkorslöst.
+     * en gren ingen testar, så den skrivs inte av här: `parentGiven: true`, och
+     * `MoveCategory` anropas villkorslöst inuti actionen.
      *
      * **De tre flyttfelen blir meningar på fältet `parent`** (Beslut 4).
      * `category.cycle`, `category.max_depth_exceeded` och
@@ -272,23 +304,30 @@ class CategoryController extends Controller
      * Meddelandet formulerar talet ur `data` — "högst 5 nivåer" är bättre än
      * felkoden det ersatte.
      *
-     * `fill()` rör bara `name`/`position`, och `MoveCategory` kastar före sin
-     * `save()` — ett avvisat drag lämnar därför trädet oförändrat, också
-     * namnet.
+     * Sedan issue 111 bor `fill()`, flytten och loggraden i
+     * App\Actions\Category\UpdateCategory, som `/api` anropar på samma sätt —
+     * villkoren och `meta` formuleras inte två gånger. `MoveCategory` kastar
+     * före sin `save()`, och nu ligger båda i samma transaktion: ett avvisat
+     * drag lämnar trädet oförändrat, också namnet.
      */
     public function update(
         UpdateCategoryRequest $request,
         Container $container,
         Category $category,
-        MoveCategory $moveCategory,
+        UpdateCategory $updateCategory,
         ApiErrorTranslator $translator,
     ): RedirectResponse {
         Gate::authorize('update', $container);
 
-        $category->fill($request->safe()->only(['name', 'position']));
-
         try {
-            $moveCategory->handle($category, $this->parent($container, $request->validated('parent')));
+            $updateCategory->handle(
+                $container,
+                $category,
+                $request->user(),
+                $request->safe()->only(['name', 'position']),
+                parentGiven: true,
+                parent: $this->parent($container, $request->validated('parent')),
+            );
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['parent' => $translator->message($e)]);
         }
@@ -307,43 +346,33 @@ class CategoryController extends Controller
      * dataförlusten [[ADR-0008 Soft delete och papperskorg]] finns till för
      * att undvika.
      *
-     * **Villkoren är desamma som i `Api\CategoryController::destroy()`, och
-     * de står på två ställen med flit**: issue 56a:s fyra utbrytningar räknar
-     * inte upp någon `DeleteCategory`, och att lägga en femte Action vid sidan
-     * av Beslut 7 vore att ändra issuen i smyg. Villkoren är två `count()` på
-     * relationer som redan finns och testade; den dag de glider isär är det
-     * den gemensamma Actionen som ska till, inte en tredje avskrift.
+     * **Villkoren står på ett ställe sedan issue 111**: de två `count()`-en bor
+     * i App\Actions\Category\DeleteCategory, som `/api` anropar på samma sätt.
+     * Fram till dess stod de med flit i båda kontrollerna — issue 56a:s fyra
+     * utbrytningar räknade inte upp någon `DeleteCategory` — men den dagen
+     * docblocken pekade ut ("den dag de glider isär är det den gemensamma
+     * Actionen som ska till") är här: loggraden ska skrivas i handlingens
+     * transaktion.
      *
      * Felet hamnar på formulärnyckeln `category`, inte på ett fältnamn: det
      * hör inte till vad användaren skrev. Sidan renderar det som en ruta över
      * trädet — felpåsen kan inte säga vilken rad felet gäller, och en ruta per
      * rad hade upprepat samma mening lika många gånger som trädet har noder.
      */
-    public function destroy(Container $container, Category $category, ApiErrorTranslator $translator): RedirectResponse
-    {
+    public function destroy(
+        Request $request,
+        Container $container,
+        Category $category,
+        DeleteCategory $deleteCategory,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
         Gate::authorize('update', $container);
 
-        $childrenCount = $category->children()->count();
-
-        if ($childrenCount > 0) {
-            throw ValidationException::withMessages([
-                'category' => $translator->message(
-                    ApiException::make('category.has_children', ['children' => $childrenCount], 422)
-                ),
-            ]);
+        try {
+            $deleteCategory->handle($container, $category, $request->user());
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['category' => $translator->message($e)]);
         }
-
-        $itemsCount = $category->items()->count();
-
-        if ($itemsCount > 0) {
-            throw ValidationException::withMessages([
-                'category' => $translator->message(
-                    ApiException::make('category.has_items', ['items' => $itemsCount], 422)
-                ),
-            ]);
-        }
-
-        $category->delete();
 
         return back()->with('status', 'category-deleted');
     }

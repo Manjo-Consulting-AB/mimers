@@ -133,7 +133,7 @@ class ContainerTrashController extends Controller
             throw ApiException::make('resource.not_found', [], 404);
         }
 
-        $restoreTrashedContainer->handle($container);
+        $restoreTrashedContainer->handle($container, $request->user());
 
         return (new TrashEntryResource(ListTrash::entry(
             'container',

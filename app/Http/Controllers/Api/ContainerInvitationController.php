@@ -12,6 +12,7 @@ use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
@@ -130,11 +131,11 @@ class ContainerInvitationController extends Controller
      * relation, medan en pending inbjudan aldrig blivit en relation — den
      * hör till samma yta som att bjuda in, se issue 10a § Beslut 10.
      */
-    public function destroy(Container $container, Invitation $invitation, RevokeInvitation $revokeInvitation): Response
+    public function destroy(Request $request, Container $container, Invitation $invitation, RevokeInvitation $revokeInvitation): Response
     {
         Gate::authorize('manageAccess', $container);
 
-        $revokeInvitation->handle($container, $invitation);
+        $revokeInvitation->handle($container, $invitation, $request->user());
 
         return response()->noContent();
     }

@@ -2,9 +2,14 @@
 
 namespace App\Actions\Invitation;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Invitation;
+use App\Models\Item;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Drar tillbaka en inbjudan: `status = 'revoked'`, se issue 55b § Beslut 7.
@@ -23,23 +28,61 @@ use App\Models\Invitation;
  *
  * Raden raderas aldrig (issue 10a § Beslut 13).
  *
+ * **Engångsspärren sitter i UPDATE-satsen**, aldrig i ett `if` före ett
+ * `save()` — samma villkorade skrivning som App\Actions\Invitation\
+ * RejectInvitation och App\Actions\Invitation\AcceptInvitation använder, så
+ * två samtidiga återkallelser av samma `pending`-inbjudan aldrig båda kan
+ * lyckas och båda skriva en `invitation.revoked`-rad.
+ *
  * **Ingen `Gate::authorize()`**, samma linje som CreateInvitation: anroparen
- * prövar behörighet med `manageAccess()`. `$container` används inte i kroppen
- * — den finns i signaturen för att anroparens `scopeBindings()` redan bundit
- * inbjudan till den, och för att de två ingångarna ska läsa likadant.
+ * prövar behörighet med `manageAccess()`. `$container` bars tidigare i
+ * signaturen bara för att de två ingångarna skulle läsa likadant — sedan
+ * issue 111 bär den också loggradens `container_id`, `account_id` och
+ * `meta.item`.
  */
 class RevokeInvitation
 {
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
     /**
+     * @param  User  $actor  Den som drar tillbaka inbjudan; blir `user_id` på
+     *                       loggraden. Behörigheten är redan prövad.
+     *
      * @throws ApiException 422 `invitation.not_pending`.
      */
-    public function handle(Container $container, Invitation $invitation): void
+    public function handle(Container $container, Invitation $invitation, User $actor): void
     {
-        if ($invitation->status !== 'pending') {
-            throw ApiException::make('invitation.not_pending', ['invitation' => $invitation->ulid], 422);
-        }
+        DB::transaction(function () use ($container, $invitation, $actor): void {
+            $revoked = Invitation::query()
+                ->whereKey($invitation->getKey())
+                ->where('status', 'pending')
+                ->update(['status' => 'revoked']);
 
-        $invitation->status = 'revoked';
-        $invitation->save();
+            if ($revoked !== 1) {
+                throw ApiException::make('invitation.not_pending', ['invitation' => $invitation->ulid], 422);
+            }
+
+            // `invitation.revoked` i samma transaktion (issue 111). En rad
+            // som inte gick att dra tillbaka kastar ovanför och lämnar ingen
+            // loggrad. `meta` bär nivån och itemets ULID — **aldrig adressen**
+            // (issue 40 § Beslut 10) och aldrig tokenet.
+            $item = $invitation->item_id === null
+                ? null
+                : Item::withTrashed()->whereKey($invitation->item_id)->first();
+
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_INVITATION_REVOKED,
+                account: $container->account,
+                user: $actor,
+                container: $container,
+                item: $item,
+                subjectType: 'invitation',
+                subjectUlid: $invitation->ulid,
+                meta: [
+                    'item' => $item?->ulid,
+                    'level' => $invitation->level,
+                ],
+            );
+        });
     }
 }

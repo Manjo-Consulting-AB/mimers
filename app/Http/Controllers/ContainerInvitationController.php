@@ -11,6 +11,7 @@ use App\Models\Invitation;
 use App\Models\Item;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -99,6 +100,7 @@ class ContainerInvitationController extends Controller
      * och bär ingen egen yta att sätta felet på.
      */
     public function destroy(
+        Request $request,
         Container $container,
         Invitation $invitation,
         RevokeInvitation $revokeInvitation,
@@ -107,7 +109,7 @@ class ContainerInvitationController extends Controller
         Gate::authorize('manageAccess', $container);
 
         try {
-            $revokeInvitation->handle($container, $invitation);
+            $revokeInvitation->handle($container, $invitation, $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['invitation' => $translator->message($e)]);
         }

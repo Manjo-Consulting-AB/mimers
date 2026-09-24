@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Access\GrantContainerAccess;
 use App\Actions\Access\ListContainerAccesses;
 use App\Actions\Access\RevokeContainerAccess;
 use App\Actions\Access\UpdateContainerAccess;
-use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContainerAccess\StoreContainerAccessRequest;
 use App\Http\Requests\ContainerAccess\UpdateContainerAccessRequest;
@@ -15,7 +15,6 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\User;
-use App\Support\Plan\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -107,12 +106,15 @@ class ContainerAccessController extends Controller
      * Beslut regel 4: mottagaren får `read` på containern och `write` på
      * motorn, och upplösningen tar max.
      */
-    public function store(StoreContainerAccessRequest $request, Container $container, Entitlements $entitlements, ListContainerAccesses $listAccesses): JsonResponse
+    public function store(StoreContainerAccessRequest $request, Container $container, GrantContainerAccess $grantContainerAccess, ListContainerAccesses $listAccesses): JsonResponse
     {
         Gate::authorize('manageAccess', $container);
 
         $granteeType = $request->validated('grantee_type');
 
+        // ULID:n har redan bevisats finnas av StoreContainerAccessRequest —
+        // uppslaget här är inte en andra kontroll, och `firstOrFail()` är
+        // därför oåtkomlig.
         $granteeModel = $granteeType === 'user'
             ? User::where('ulid', $request->validated('grantee'))->firstOrFail()
             : Account::where('ulid', $request->validated('grantee'))->firstOrFail();
@@ -123,34 +125,18 @@ class ContainerAccessController extends Controller
             ? null
             : Item::where('ulid', $request->validated('item'))->firstOrFail();
 
-        $existing = $container->accesses()
-            ->where('grantee_type', $granteeType)
-            ->where('grantee_id', $granteeModel->id)
-            ->where('item_id', $item?->id)
-            ->validFor(
-                $granteeType === 'user' ? $granteeModel : $request->user(),
-                $granteeType === 'account' ? [$granteeModel->id] : [],
-            )
-            ->first();
-
-        if ($existing !== null) {
-            throw ApiException::make('container_access.already_granted', ['access' => $existing->ulid], 422);
-        }
-
-        // Kvotkontrollen efter Gate (Beslut 3) och efter dubblettspärren: att
-        // bevilja någon som redan har en giltig åtkomst är inte en ny
-        // delning. Båda ingångarna till delning — direkt åtkomst här och
-        // inbjudan i ContainerInvitationController — delar samma tak (issue
-        // 27 § Beslut 5). Taket räknar sedan issue 72 § Beslut 6 distinkta
-        // mottagare, inte rader.
-        $entitlements->assertCanShareContainer($container);
-
-        $access = new ContainerAccess($request->safe()->only(['grantee_type', 'level', 'kind', 'expires_at']));
-        $access->grantee_id = $granteeModel->id;
-        $access->container_id = $container->id;
-        $access->item_id = $item?->id;
-        $access->granted_by_user_id = $request->user()->id;
-        $access->save();
+        // Dubblettspärren, delningstaket och `access.granted` bor i
+        // App\Actions\Access\GrantContainerAccess sedan issue 111 — se dess
+        // docblock om varför en åtkomst som beviljas loggas med samma `meta`
+        // som en som återkallas.
+        $access = $grantContainerAccess->handle(
+            $container,
+            $request->user(),
+            $granteeModel,
+            $granteeType,
+            $item,
+            $request->safe()->only(['level', 'kind', 'expires_at']),
+        );
 
         $access->setAttribute('grantee_ulid', $granteeModel->ulid);
         $access->setAttribute('granted_by_ulid', $request->user()->ulid);
@@ -190,7 +176,7 @@ class ContainerAccessController extends Controller
     {
         Gate::authorize('manageAccess', $container);
 
-        $updateContainerAccess->handle($container, $access, $request->safe()->only(['level', 'expires_at']));
+        $updateContainerAccess->handle($container, $access, $request->safe()->only(['level', 'expires_at']), $request->user());
 
         $listAccesses->hydrateGranteeUlids(collect([$access]));
         $listAccesses->hydrateItemScope($container, collect([$access]));

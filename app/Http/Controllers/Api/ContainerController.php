@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
+use App\Actions\Container\UpdateContainer;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
@@ -140,12 +141,11 @@ class ContainerController extends Controller
      * och issue 8 § Beslut 9. `account`/`account_id` finns inte i den
      * requestens regler och är därför aldrig med i `validated()`.
      */
-    public function update(UpdateContainerRequest $request, Container $container): ContainerResource
+    public function update(UpdateContainerRequest $request, Container $container, UpdateContainer $updateContainer): ContainerResource
     {
         Gate::authorize('update', $container);
 
-        $container->fill($request->validated());
-        $container->save();
+        $updateContainer->handle($container, $request->user(), $request->validated());
 
         // Se show() ovan — samma resonemang, en enda rad.
         $container->loadMissing('account');
@@ -166,11 +166,11 @@ class ContainerController extends Controller
      * `Gate::authorize()` står kvar här, utanför actionen, så att API:ets 403
      * och webbens 403 kommer från samma ställe.
      */
-    public function destroy(Container $container, TrashContainer $trashContainer): Response
+    public function destroy(Request $request, Container $container, TrashContainer $trashContainer): Response
     {
         Gate::authorize('delete', $container);
 
-        $trashContainer->handle($container);
+        $trashContainer->handle($container, $request->user());
 
         return response()->noContent();
     }

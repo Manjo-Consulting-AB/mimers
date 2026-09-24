@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Notification\CreateNotification;
 use App\Actions\OwnershipTransfer\AcceptOwnershipTransfer;
+use App\Actions\OwnershipTransfer\OfferOwnershipTransfer;
+use App\Actions\OwnershipTransfer\RejectOwnershipTransfer;
+use App\Actions\OwnershipTransfer\RevokeOwnershipTransfer;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OwnershipTransfer\AcceptOwnershipTransferRequest;
@@ -12,17 +14,14 @@ use App\Http\Resources\ContainerResource;
 use App\Http\Resources\OwnershipTransferResource;
 use App\Models\Account;
 use App\Models\Container;
-use App\Models\Notification as NotificationModel;
 use App\Models\OwnershipTransfer;
 use App\Models\User;
-use App\Notifications\OwnershipTransferNotification;
 use App\Support\Plan\Entitlements;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Notification as NotificationFacade;
 
 /**
  * Ägarbyte — avsändarytan (39a) och mottagarytan med accept (39b). Den
@@ -92,53 +91,28 @@ class OwnershipTransferController extends Controller
      * innan den lagras, exakt som inbjudningarna (issue 10a § Beslut 6).
      * Alla kolumner sätts explicit, aldrig via massildelning.
      */
-    public function store(StoreOwnershipTransferRequest $request, Container $container, Entitlements $entitlements): JsonResponse
+    public function store(StoreOwnershipTransferRequest $request, Container $container, Entitlements $entitlements, OfferOwnershipTransfer $offerOwnershipTransfer): JsonResponse
     {
         Gate::authorize('transfer', $container);
 
         $entitlements->assertFeature($container->account, 'ownership_transfer');
 
-        $existing = $container->transfers()
-            ->where('status', 'pending')
-            ->where('created_at', '>', now()->subDays(OwnershipTransfer::TTL_DAYS))
-            ->first();
-
-        if ($existing instanceof OwnershipTransfer) {
-            throw ApiException::make('transfer.already_pending', ['transfer' => $existing->ulid], 422);
-        }
-
-        $transfer = new OwnershipTransfer;
-        $transfer->container_id = $container->id;
-        $transfer->from_account_id = $container->account_id;
-        $transfer->status = 'pending';
-        $transfer->excluded_item_ids = $request->validated('excluded_items') ?? [];
-        $transfer->retain_access_level = $request->validated('retain_access_level');
-        $transfer->initiated_by_user_id = $request->user()->id;
-
-        $toAccount = null;
-        $toEmail = null;
-
-        if ($request->validated('to_account') !== null) {
-            $toAccount = Account::query()->where('ulid', $request->validated('to_account'))->firstOrFail();
-            $transfer->to_account_id = $toAccount->id;
-            $transfer->to_email = null;
-        } else {
-            $toEmail = mb_strtolower((string) $request->validated('to_email'));
-            $transfer->to_account_id = null;
-            $transfer->to_email = $toEmail;
-        }
-
-        $transfer->save();
+        // Dubblettspärren, raden, mottagarvägens notifiering och
+        // `ownership_transfer.offered` bor i
+        // App\Actions\OwnershipTransfer\OfferOwnershipTransfer sedan issue 111,
+        // som webbens `store()` anropar — se dess docblock om varför två
+        // avskrifter inte fick stå kvar.
+        $transfer = $offerOwnershipTransfer->handle(
+            $container,
+            $request->user(),
+            $request->validated('to_account'),
+            $request->validated('to_email'),
+            $request->validated('excluded_items') ?? [],
+            $request->validated('retain_access_level'),
+        );
 
         $transfer->setRelation('container', $container);
         $transfer->load('toAccount');
-
-        // Beslut 12: mottagarvägen avgör notifieringen.
-        if ($toAccount instanceof Account) {
-            $this->notifyAccountMembers($transfer, $toAccount, $container);
-        } else {
-            $this->sendOnDemandMail($toEmail, $container);
-        }
 
         return (new OwnershipTransferResource($transfer))
             ->response()
@@ -156,19 +130,16 @@ class OwnershipTransferController extends Controller
      * fortfarande `pending` (Beslut 10) och att städa bort en glömd begäran
      * ur listan är precis vad avsändaren vill kunna göra, samma princip som
      * inbjudningarna.
+     *
+     * Flippen och `ownership_transfer.revoked` bor i
+     * App\Actions\OwnershipTransfer\RevokeOwnershipTransfer sedan issue 111,
+     * och webben anropar samma Action.
      */
-    public function destroy(Container $container, OwnershipTransfer $transfer): Response
+    public function destroy(Request $request, Container $container, OwnershipTransfer $transfer, RevokeOwnershipTransfer $revokeOwnershipTransfer): Response
     {
         Gate::authorize('transfer', $container);
 
-        $revoked = OwnershipTransfer::query()
-            ->whereKey($transfer->getKey())
-            ->where('status', 'pending')
-            ->update(['status' => 'revoked']);
-
-        if ($revoked !== 1) {
-            throw ApiException::make('transfer.not_pending', ['transfer' => $transfer->ulid], 422);
-        }
+        $revokeOwnershipTransfer->handle($request->user(), $container, $transfer);
 
         return response()->noContent();
     }
@@ -201,8 +172,12 @@ class OwnershipTransferController extends Controller
      * begäran, ger 404 — samma tystnad som en okänd ULID. Själva flippen är
      * en villkorad `UPDATE ... WHERE status = 'pending'`, aldrig
      * läs-följt-av-skriv — samma spärr som AcceptInvitation.
+     *
+     * Flippen och `ownership_transfer.rejected` bor i
+     * App\Actions\OwnershipTransfer\RejectOwnershipTransfer sedan issue 111,
+     * och webben anropar samma Action.
      */
-    public function reject(Request $request, OwnershipTransfer $transfer): Response
+    public function reject(Request $request, OwnershipTransfer $transfer, RejectOwnershipTransfer $rejectOwnershipTransfer): Response
     {
         /** @var User $user */
         $user = $request->user();
@@ -215,14 +190,7 @@ class OwnershipTransferController extends Controller
             throw ApiException::make('resource.not_found', [], 404);
         }
 
-        $rejected = OwnershipTransfer::query()
-            ->whereKey($transfer->getKey())
-            ->where('status', 'pending')
-            ->update(['status' => 'rejected']);
-
-        if ($rejected !== 1) {
-            throw ApiException::make('transfer.not_pending', [], 422);
-        }
+        $rejectOwnershipTransfer->handle($user, $transfer);
 
         return response()->noContent();
     }
@@ -286,46 +254,6 @@ class OwnershipTransferController extends Controller
         return Account::query()
             ->where('ulid', $request->validated('to_account'))
             ->firstOrFail();
-    }
-
-    /**
-     * En `transfer.requested`-notis per medlem i det mottagande kontot, genom
-     * App\Actions\Notification\CreateNotification — den enda vägen in i
-     * `notification`, som respekterar preferenser och tysta timmar och skapar
-     * leveransraderna för kön (Beslut 12). Inget on-demand-mejl här; `to_email`
-     * är null.
-     *
-     * `dedupe_key` bär transfer och mottagare: skulle store() anropas två
-     * gånger (efter att den första raden hunnit skapas men innan svaret)
-     * skapar CreateNotification ingen andra notisrad.
-     */
-    private function notifyAccountMembers(OwnershipTransfer $transfer, Account $toAccount, Container $container): void
-    {
-        foreach ($toAccount->users as $recipient) {
-            app(CreateNotification::class)->handle(
-                type: NotificationModel::TYPE_TRANSFER_REQUESTED,
-                account: $toAccount,
-                user: $recipient,
-                container: $container,
-                payload: ['container' => $container->name],
-                dedupeKey: "transfer.requested:{$transfer->ulid}:{$recipient->ulid}",
-            );
-        }
-    }
-
-    /**
-     * On-demand-mejlet till en adress utan konto (Beslut 12). Inget
-     * `notification`-rad skapas och mejlet bär ingen token eller länk med
-     * hemlighet (Beslut 11) — det ber mottagaren skapa ett konto med just den
-     * adressen och verifiera den, och pekar på `{app.url}/transfers`, sökvägen
-     * issue 67 (M10) ska implementera.
-     */
-    private function sendOnDemandMail(string $email, Container $container): void
-    {
-        $url = rtrim((string) config('app.url'), '/').'/transfers';
-
-        NotificationFacade::route('mail', $email)
-            ->notify(new OwnershipTransferNotification($url, $container));
     }
 
     /**

@@ -2,8 +2,11 @@
 
 namespace App\Actions\Container;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
+use App\Models\AuditLog;
 use App\Models\Container;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -36,15 +39,20 @@ use Illuminate\Support\Facades\DB;
  *
  * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
  * samma val som TrashAttachment gör och av samma skäl, se [[ADR-0024 Tunna
- * controllers och actions]].
+ * controllers och actions]]. `RecordAuditEvent` (issue 111) anropas på samma
+ * sätt, av samma skäl.
  */
 class TrashContainer
 {
-    public function handle(Container $container): void
+    /**
+     * @param  User  $actor  Den som raderar; blir `user_id` på loggraden.
+     *                       Behörigheten är redan prövad av anroparen.
+     */
+    public function handle(Container $container, User $actor): void
     {
         $accountId = $container->account_id;
 
-        DB::transaction(function () use ($container, $accountId): void {
+        DB::transaction(function () use ($container, $actor, $accountId): void {
             $levande = Container::query()
                 ->whereKey($container->getKey())
                 ->lockForUpdate()
@@ -59,6 +67,18 @@ class TrashContainer
             // Mjukraderingen och minskningen i en transaktion (issue 26a) —
             // containern slutar vara levande och lämnar ägarkontots räknare.
             (new AdjustUsage)->handle($accountId, containersDelta: -1);
+
+            // `container.deleted` i samma transaktion (issue 111), och bara
+            // på grenen där raden faktiskt var levande: en andra radering är
+            // ingen handling och lämnar ingen rad.
+            (new RecordAuditEvent)->handle(
+                action: AuditLog::ACTION_CONTAINER_DELETED,
+                account: $container->account,
+                user: $actor,
+                container: $container,
+                subjectType: 'container',
+                subjectUlid: $container->ulid,
+            );
         });
     }
 }

@@ -270,7 +270,8 @@ it('minskar förbrukningen med exakt ett, också vid en upprepad radering', func
     expect(containerpapperskorgAntal($konto))->toBe(0);
 
     app(TrashContainer::class)->handle(
-        Container::withTrashed()->whereKey($container->id)->firstOrFail()
+        Container::withTrashed()->whereKey($container->id)->firstOrFail(),
+        $ägare,
     );
 
     expect(containerpapperskorgAntal($konto))->toBe(0);
