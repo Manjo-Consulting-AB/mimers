@@ -23,9 +23,16 @@ use function Pest\Laravel\getJson;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 64 · Todo-vyn — startsidan efter inloggning, se
- * App\Http\Controllers\TodoController, resources/js/pages/Dashboard.vue,
- * resources/js/components/TodoRow.vue, routes/web.php och lang/sv|en/ui.php.
+ * Issue 64 · Todo-vyn — startsidan efter inloggning fram till issue 122, då
+ * den flyttade till `GET /tasks` och dashboarden tog över `/dashboard`. Se
+ * App\Http\Controllers\TodoController, App\Actions\Schedule\ListTodo,
+ * resources/js/pages/Tasks/Index.vue, resources/js/components/TodoRow.vue,
+ * routes/web.php och lang/sv|en/ui.php.
+ *
+ * **Provens innehåll är oförändrat sedan flytten** (issue 122): adressen och
+ * sökvägarna till filerna är utbytta, och ingenting annat. Det är poängen —
+ * vyn ska bete sig exakt som förut, och den enda rad i filen som rör den nya
+ * startsidan är länken till `/tasks` i navigeringen, som prövas i SkalTest.
  *
  * Filen bevisar de gränser issuen är byggd kring:
  *
@@ -270,11 +277,11 @@ function todovyAvbockUrl(Schedule $schema, ScheduleOccurrence $rad): string
 it('skickar en utloggad besökare till inloggningen', function () {
     withoutVite();
 
-    get('/dashboard')->assertRedirect('/login');
+    get('/tasks')->assertRedirect('/login');
 });
 
 /*
- * Klart när: `/dashboard` visar de öppna förekomsterna användaren når, i
+ * Klart när: `/tasks` visar de öppna förekomsterna användaren når, i
  * `due_at`-ordning.
  *
  * Träffarna ligger i tre containers — två egna och en delad — och skapas i omvänd
@@ -306,7 +313,7 @@ it('visar de öppna förekomsterna över alla containers användaren når, i due
     [, $först] = todovyUppgift(todovyItem($delad, 'Backen'), todovyDatum(60), 'Smörj backen');
     [, $senare] = todovyUppgift(todovyItem($delad, 'Bogen'), todovyDatum(60), 'Spänn bogen');
 
-    $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
     $rader = todovyRader($svar);
 
@@ -344,7 +351,7 @@ it('visar inte en förekomst vars visible_from ligger i framtiden', function () 
     $doldSchema = todovySchema($item, todovyDatum(60), ['title' => 'Dold än']);
     $dold = todovyRad($doldSchema, todovyDatum(60), ['visible_from' => todovyDatum(30)]);
 
-    $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
     expect(array_column(array_column(todovyRader($svar), 'schedule'), 'title'))
         ->toBe(['Synlig nu'])
@@ -372,7 +379,7 @@ it('visar inte en blockerad förekomst', function () {
         'depends_on_occurrence_id' => $först->id,
     ]);
 
-    $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
     expect(array_column(todovyRader($svar), 'ulid'))->toBe([$först->ulid])
         ->and($svar->getContent())->not->toContain($väntar->ulid);
@@ -397,7 +404,7 @@ it('visar aldrig en förekomst ur en container användaren inte når', function 
     $främmande = todovyPärm(Account::factory()->create());
     todovyUppgift(todovyItem($främmande, 'Hemlig motor'), todovyDatum(30), 'Hemlig uppgift');
 
-    $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
     expect(todovyRader($svar))->toHaveCount(1)
         ->and($svar->getContent())->not->toContain('Hemlig uppgift')
@@ -428,7 +435,7 @@ it('ger en omfångsbegränsad mottagare bara uppgifter på de items hon når', f
 
     $mottagare = todovyMottagare($pärm, $mitt, 'read');
 
-    $svar = actingAs($mottagare)->get('/dashboard')->assertOk();
+    $svar = actingAs($mottagare)->get('/tasks')->assertOk();
 
     expect(todovyRader($svar))->toHaveCount(2)
         ->and($svar->getContent())->not->toContain('Hemlig uppgift')
@@ -458,7 +465,7 @@ it('grupperar raderna i försenat, idag och kommande efter serverns datum', func
     [, $idag] = todovyUppgift($item, '2026-06-15', 'Byt olja', $synlig);
     [, $kommande] = todovyUppgift($item, '2026-06-20', 'Byt filter', $synlig);
 
-    $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
     expect(array_column(todovyGrupp($svar, 'overdue'), 'ulid'))->toBe([$försenad->ulid])
         ->and(array_column(todovyGrupp($svar, 'today'), 'ulid'))->toBe([$idag->ulid])
@@ -485,7 +492,7 @@ it('låter serverns datum styra gruppen, inte klientens', function () {
 
     todovyUppgift($item, '2026-06-15', 'Byt olja', ['visible_from' => '2026-06-01']);
 
-    actingAs($anvandare)->get('/dashboard')->assertOk()->assertInertia(
+    actingAs($anvandare)->get('/tasks')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->has('groups.today', 1)
             ->has('groups.overdue', 0)
@@ -494,7 +501,7 @@ it('låter serverns datum styra gruppen, inte klientens', function () {
     // Ett dygn senare är samma rad försenad.
     Carbon::setTestNow('2026-06-16 10:00:00');
 
-    actingAs($anvandare)->get('/dashboard')->assertOk()->assertInertia(
+    actingAs($anvandare)->get('/tasks')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->has('groups.today', 0)
             ->has('groups.overdue', 1)
@@ -504,7 +511,7 @@ it('låter serverns datum styra gruppen, inte klientens', function () {
 
     // Kommentarerna bort före kontrollen: det är KODEN som inte får jämföra
     // datum, och docblocken talar med flit om vilken klocka den inte läser.
-    $vy = File::get(resource_path('js/pages/Dashboard.vue'));
+    $vy = File::get(resource_path('js/pages/Tasks/Index.vue'));
     $vy = (string) preg_replace('#/\*.*?\*/#s', '', $vy);
     $vy = (string) preg_replace('#<!--.*?-->#s', '', $vy);
 
@@ -540,7 +547,7 @@ it('visar container, item och schema med länkar som går rätt', function () {
         ->and(route('containers.items.schedules.show', [$container, $item, $schema], false))
         ->toBe("/containers/{$container->ulid}/items/{$item->ulid}/schedules/{$schema->ulid}");
 
-    actingAs($anvandare)->get('/dashboard')->assertOk()->assertInertia(
+    actingAs($anvandare)->get('/tasks')->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->where('groups.upcoming.0.item.name', 'Motorn')
             ->where('groups.upcoming.0.container.name', $container->name)
@@ -584,19 +591,19 @@ it('bockar av en uppgift från listan och ritar om utan den', function () {
     [$konto, $anvandare, , $item] = todovyKontext();
     [$schema, $rad] = todovyUppgift($item, todovyDatum(30), 'Byt impeller');
 
-    $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
     // Förvalet är serverns (Beslut 4): containerns ägarkonto när hon är medlem.
     expect(todovyRader($svar)[0]['account'])->toBe($konto->ulid);
 
-    actingAs($anvandare)->from('/dashboard')
+    actingAs($anvandare)->from('/tasks')
         ->post(todovyAvbockUrl($schema, $rad), ['account' => $konto->ulid])
-        ->assertRedirect('/dashboard')
+        ->assertRedirect('/tasks')
         ->assertSessionHas('status', 'occurrence-completed');
 
     expect($rad->fresh()->status)->toBe('completed');
 
-    $efter = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $efter = actingAs($anvandare)->get('/tasks')->assertOk();
 
     expect(todovyRader($efter))->toBe([])
         ->and($efter->getContent())->not->toContain($rad->ulid);
@@ -618,13 +625,13 @@ it('ritar ingen avbockningsknapp för en läsare och ger 403 om hon postar änd�
 
     $lasare = todovyMottagare($container, null, 'read');
 
-    $rader = todovyRader(actingAs($lasare)->get('/dashboard')->assertOk());
+    $rader = todovyRader(actingAs($lasare)->get('/tasks')->assertOk());
 
     expect($rader)->toHaveCount(1)
         ->and($rader[0]['can']['update'])->toBeFalse();
 
     // Knappen är presentation; grinden är Gate::authorize('update', item).
-    actingAs($lasare)->from('/dashboard')
+    actingAs($lasare)->from('/tasks')
         ->post(todovyAvbockUrl($schema, $rad), ['account' => $konto->ulid])
         ->assertForbidden();
 
@@ -654,7 +661,7 @@ it('ger en mottagare utanför ägarkontot sitt eget konto som förval', function
     $hennesKonto = Account::factory()->create(['locale' => 'sv_SE']);
     $hennesKonto->users()->attach($mottagare, ['role' => 'owner']);
 
-    $rader = todovyRader(actingAs($mottagare)->get('/dashboard')->assertOk());
+    $rader = todovyRader(actingAs($mottagare)->get('/tasks')->assertOk());
 
     expect($rader)->toHaveCount(1)
         ->and($rader[0]['account'])->toBe($hennesKonto->ulid)
@@ -680,13 +687,13 @@ it('skiljer en tom lista utan containers från en tom lista utan uppgifter', fun
     // Containern finns, uppgifterna gör det inte: ett item utan schema.
     [, $medPärm] = todovyKontext();
 
-    $utan = actingAs($utanPärmar)->get('/dashboard')->assertOk();
-    $med = actingAs($medPärm)->get('/dashboard')->assertOk();
+    $utan = actingAs($utanPärmar)->get('/tasks')->assertOk();
+    $med = actingAs($medPärm)->get('/tasks')->assertOk();
 
     expect($utan->inertiaProps()['hasContainers'])->toBeFalse()
         ->and($med->inertiaProps()['hasContainers'])->toBeTrue();
 
-    $vy = File::get(resource_path('js/pages/Dashboard.vue'));
+    $vy = File::get(resource_path('js/pages/Tasks/Index.vue'));
 
     expect($vy)->toContain("t('todo.empty.nothing')")
         ->toContain("t('todo.empty.no_containers')")
@@ -726,8 +733,8 @@ it('ger en mottagare utan synliga uppgifter samma tomma svar som en färdig äga
 
     $mottagare = todovyMottagare($främmande, $hennes, 'read');
 
-    $ägarensSvar = actingAs($ägare)->get('/dashboard')->assertOk();
-    $mottagarensSvar = actingAs($mottagare)->get('/dashboard')->assertOk();
+    $ägarensSvar = actingAs($ägare)->get('/tasks')->assertOk();
+    $mottagarensSvar = actingAs($mottagare)->get('/tasks')->assertOk();
 
     expect($mottagarensSvar->inertiaProps()['groups'])->toBe($ägarensSvar->inertiaProps()['groups'])
         ->and($mottagarensSvar->inertiaProps()['hasContainers'])->toBeTrue()
@@ -768,7 +775,7 @@ it('kostar ett konstant antal frågor oavsett antal rader', function () {
 
     actingAs($anvandare);
 
-    $url = '/dashboard';
+    $url = '/tasks';
 
     $medEtt = todovyFrågor(function () use ($url) {
         get($url)->assertOk()->assertInertia(
@@ -827,7 +834,7 @@ it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', func
     ]);
 
     // Samma rad i webbens svar, med de två nycklarna bredvid — aldrig inuti.
-    $rad = todovyRader(actingAs($anvandare)->get('/dashboard')->assertOk())[0];
+    $rad = todovyRader(actingAs($anvandare)->get('/tasks')->assertOk())[0];
 
     expect($rad['ulid'])->toBe($apiRaden['ulid'])
         ->and(array_keys($rad))->toBe([...array_keys($apiRaden), 'account', 'can']);
@@ -869,7 +876,7 @@ it('har varje todo-nyckel och ingen svensk sträng i vyn', function () {
     ]);
 
     // Ingen svensk sträng utanför kommentar i de två nya komponenterna.
-    foreach (['pages/Dashboard.vue', 'components/TodoRow.vue'] as $fil) {
+    foreach (['pages/Tasks/Index.vue', 'components/TodoRow.vue'] as $fil) {
         $kod = File::get(resource_path("js/{$fil}"));
         $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
         $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);

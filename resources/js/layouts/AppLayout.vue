@@ -57,8 +57,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * (issue 53c), och därifrån ligger varje sektion ett klick bort. Ingen
  * användarmeny med utfällning: det är en egen designfråga.
  *
+ * **Länken till uppgifterna kom med issue 122.** Todo-vyn flyttade från
+ * `/dashboard` till `/tasks` när dashboarden tog över startsidan, och en vy
+ * som bara nås genom att skriva adressen är en vy ingen hittar. Raden ligger
+ * bredvid dashboarden — de två sidorna var en fram till dess — och bär sidans
+ * eget ord (`todo.heading`) i stället för ruttens: användaren ska möta samma
+ * ord i menyn som på sidan.
+ *
  * **Navigeringen fälls ihop på en telefon** (issue 68a § Beslut 2). Vid
- * 375 px ryms varken märket, sökfältet och de sex länkarna i en rad, och en
+ * 375 px ryms varken märket, sökfältet och de sju länkarna i en rad, och en
  * rad som inte ryms är en rad som klipps av. Länkarna ligger därför bakom en
  * menyknapp och sökfältet på sin egen rad; `menuOpen` är den enda
  * tillståndsvariabeln layouten har. Över `md:` ritas allt som förut och
@@ -146,6 +153,9 @@ const showsVerificationNotice = computed(
                 >
                     <Link v-if="user" href="/dashboard" class="inline-flex min-h-11 items-center hover:underline">
                         {{ t('nav.dashboard') }}
+                    </Link>
+                    <Link v-if="user" href="/tasks" class="inline-flex min-h-11 items-center hover:underline">
+                        {{ t('nav.tasks') }}
                     </Link>
                     <Link v-if="user" href="/containers" class="inline-flex min-h-11 items-center hover:underline">
                         {{ t('nav.containers') }}

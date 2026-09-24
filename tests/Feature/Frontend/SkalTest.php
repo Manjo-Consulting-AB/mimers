@@ -170,6 +170,48 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
 });
 
 /*
+ * Issue 122 · Vägen till uppgifterna. Todo-vyn flyttade från `/dashboard` till
+ * `/tasks` när dashboarden tog över startsidan, och en vy som bara nås genom
+ * att skriva adressen är en vy ingen hittar — samma skäl som länken till
+ * inställningarna (issue 79, provet ovanför).
+ *
+ * Klart när: huvudmenyn länkar till `/tasks`, och raden följer med i det
+ * hopfällda mobillaget som alla andra rader i `#huvudmenyn`.
+ */
+it('har en väg till uppgifterna i navigeringen för en inloggad och ingen för en gäst', function () {
+    withoutVite();
+
+    // Gästen prövas FÖRST: actingAs() sätter guardens användare för resten av
+    // testet, och därefter är varje anrop inloggat.
+    get('/')->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('auth.user', null)
+    );
+
+    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+
+    // Villkoret är den inloggade användaren ur den delade propen, och raden
+    // ligger innanför `#huvudmenyn` — samma div som de andra länkarna fälls
+    // ihop i (issue 68a § Beslut 2).
+    expect($layout)->toContain('<Link v-if="user" href="/tasks"');
+
+    $menyn = substr($layout, (int) strpos($layout, 'id="huvudmenyn"'));
+
+    expect($menyn)->toContain("t('nav.tasks')")
+        ->and($menyn)->toContain('href="/tasks" class="inline-flex min-h-11 items-center');
+
+    // Texten bor i lang/, och ordet är sidans eget (`todo.heading`) och inte
+    // ruttens — användaren ska möta samma ord i menyn som på sidan.
+    expect(trans('ui.nav.tasks', [], 'en'))->toBe('To do')
+        ->and(trans('ui.todo.heading', [], 'en'))->toBe('To do');
+
+    // Och nyckeln följer med i de delade propsen till varje sida layouten
+    // renderar, alltså är raden läsbar överallt och inte bara på en sida.
+    actingAs(User::factory()->create())->get('/dashboard')->assertInertia(
+        fn (AssertableInertia $page) => $page->where('translations.nav.tasks', 'To do')
+    );
+});
+
+/*
  * Klart när: ett test visar vägen hela sträckan — inloggad användare →
  * navigeringens länk → säkerhetssidan, som är där tvåfaktorn slås på.
  *

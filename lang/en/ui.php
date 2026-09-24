@@ -65,6 +65,11 @@ return [
         'menu' => 'Menu',
         'menu_close' => 'Close the menu',
         'dashboard' => 'Dashboard',
+        // The way to the to-do view, see issue 122: the row sits next to the
+        // dashboard because the two pages were one until then, and the label
+        // is the page's own word (`todo.heading`) rather than the route's —
+        // the user should meet the same words in the menu and on the page.
+        'tasks' => 'To do',
         'containers' => 'Containers',
         'transfers' => 'Ownership transfers',
         // The way into the global search, see issue 78 decision 2: the field
@@ -2206,14 +2211,37 @@ return [
         ],
     ],
 
-    // The to-do view, see issue 64. The landing page after sign-in: the open
-    // occurrences across every container the user can reach.
+    // The dashboard, see issue 122. The landing page after sign-in since 122:
+    // the two pages were one until then, and `/dashboard` was the to-do view.
+    //
+    // `title` and `heading` are the page's own words and not `todo.*`: the
+    // dashboard is the shell the panels hang in, and M19 gives it four more
+    // panels (issues 124–128) that have nothing to do with the task list.
+    //
+    // The panel heading is the mockup's *Kommande uppgifter* — the same five
+    // rows as `/tasks`, in the same order, cut on the server. `view_all` is
+    // the mockup's *Visa alla* and is also drawn when the list is empty: it is
+    // the way to the to-do view, not a button for the list.
+    'dashboard' => [
+        'title' => 'Dashboard',
+        'heading' => 'Dashboard',
+
+        'tasks' => [
+            'heading' => 'Upcoming tasks',
+            'view_all' => 'View all',
+        ],
+    ],
+
+    // The to-do view, see issue 64. Its own page on `/tasks` since issue 122,
+    // when the landing page after sign-in became the dashboard.
     //
     // The two empty sentences differ on purpose (decision 6): one says the
     // user has no container at all and carries a link to create one, the other
     // that there is nothing to do. Neither mentions a number or hints that
     // anything was hidden — a scope-limited recipient with an empty list gets
-    // the exact same sentence as an owner whose tasks are done.
+    // the exact same sentence as an owner whose tasks are done. The dashboard's
+    // task panel draws the same two sentences, so they live here and not under
+    // `dashboard.*`.
     'todo' => [
         'title' => 'To do',
         'heading' => 'To do',
