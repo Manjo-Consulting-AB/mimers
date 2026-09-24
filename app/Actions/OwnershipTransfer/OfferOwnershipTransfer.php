@@ -42,9 +42,13 @@ use Illuminate\Support\Facades\Notification as NotificationFacade;
  * `status`, för kolumnen flippas aldrig (39a § Beslut 10).
  *
  * **`to_email` följer aldrig med i `meta`.** En adress är det enda `meta`
- * aldrig får bära (issue 40 § Beslut 10): `meta.to_account` är mottagarkontots
+ * aldrig får bära (issue 40 § Beslut 10): `meta.recipient` är mottagarkontots
  * ULID, eller `null` när vägen gick via en adress. `meta.recipient_type` säger
  * vilket, så historiken kan skilja fallen åt utan att någonsin bära adressen.
+ * Paret `recipient_type`/`recipient` är samma form som `grantee_type`/`grantee`
+ * i App\Actions\Access\RevokeContainerAccess: issue 116 renderar raderna
+ * generiskt, och ett id-fält som heter olika saker beroende på handling kostar
+ * en uppslagning per rad.
  */
 class OfferOwnershipTransfer
 {
@@ -126,7 +130,7 @@ class OfferOwnershipTransfer
                 subjectUlid: $transfer->ulid,
                 meta: [
                     'recipient_type' => $toAccount instanceof Account ? 'account' : 'email',
-                    'to_account' => $toAccount?->ulid,
+                    'recipient' => $toAccount?->ulid,
                     'retain_access_level' => $retainAccessLevel,
                     'excluded_item_count' => count($transfer->excluded_item_ids ?? []),
                 ],

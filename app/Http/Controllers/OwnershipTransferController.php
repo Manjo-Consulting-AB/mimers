@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\OwnershipTransfer\AcceptOwnershipTransfer;
 use App\Actions\OwnershipTransfer\OfferOwnershipTransfer;
+use App\Actions\OwnershipTransfer\RejectOwnershipTransfer;
+use App\Actions\OwnershipTransfer\RevokeOwnershipTransfer;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\OwnershipTransfer\AcceptOwnershipTransferRequest;
 use App\Http\Requests\OwnershipTransfer\StoreOwnershipTransferRequest;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\OwnershipTransferResource;
 use App\Models\Account;
-use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\OwnershipTransfer;
@@ -23,7 +23,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -80,6 +79,12 @@ use Inertia\Response;
  * App\Actions\OwnershipTransfer\OfferOwnershipTransfer, som `/api` anropar på
  * samma sätt. Det var den avvägning docblocken ovan beskrev: två avskrifter
  * fick stå kvar så länge `app/Actions/**` låg utanför rutan.
+ *
+ * **Samma sak gäller `destroy()` och `reject()`:** flippen och loggraden —
+ * `ownership_transfer.revoked` respektive `ownership_transfer.rejected` — bor
+ * i App\Actions\OwnershipTransfer\RevokeOwnershipTransfer och
+ * ::RejectOwnershipTransfer. Kvar här är urvalet (vem får dra tillbaka, vem är
+ * mottagare) och felet som formulärfel.
  */
 class OwnershipTransferController extends Controller
 {
@@ -209,12 +214,15 @@ class OwnershipTransferController extends Controller
      * kvar i listan.
      *
      * Bara en `pending`-rad kan dras tillbaka, och villkoret sitter i
-     * UPDATE-satsen och inte i ett `if` före ett `save()` — samma
-     * engångsspärr som App\Http\Controllers\Api\OwnershipTransferController::
-     * destroy() och AcceptInvitation använder. En utgången rad går däremot att
-     * dra tillbaka: kolumnen står fortfarande på `pending` (utgången härleds
-     * ur `created_at`), och att städa bort en glömd begäran ur listan är
-     * precis vad avsändaren vill kunna göra.
+     * UPDATE-satsen och inte i ett `if` före ett `save()`. En utgången rad går
+     * däremot att dra tillbaka: kolumnen står fortfarande på `pending`
+     * (utgången härleds ur `created_at`), och att städa bort en glömd begäran
+     * ur listan är precis vad avsändaren vill kunna göra.
+     *
+     * Flippen och `ownership_transfer.revoked` bor i
+     * App\Actions\OwnershipTransfer\RevokeOwnershipTransfer sedan issue 111,
+     * och `/api` anropar samma Action — två avskrifter av samma loggrad är
+     * precis vad milstolpen varnar för.
      *
      * `{transfer}` löses av `scopeBindings()` i routes/web.php, så en ULID ur
      * en annan container blir 404 innan den här metoden körs.
@@ -223,35 +231,13 @@ class OwnershipTransferController extends Controller
         Request $request,
         Container $container,
         OwnershipTransfer $transfer,
-        RecordAuditEvent $recordAuditEvent,
+        RevokeOwnershipTransfer $revokeOwnershipTransfer,
         ApiErrorTranslator $translator,
     ): RedirectResponse {
         Gate::authorize('transfer', $container);
 
-        // Flippen och `ownership_transfer.revoked` i EN transaktion (issue
-        // 111), exakt som i Api\OwnershipTransferController::destroy(). `meta`
-        // är tom — vem som återkallade står i `user_id`, och mottagarens adress
-        // får aldrig skrivas (issue 40 § Beslut 10).
         try {
-            DB::transaction(function () use ($request, $container, $transfer, $recordAuditEvent): void {
-                $revoked = OwnershipTransfer::query()
-                    ->whereKey($transfer->getKey())
-                    ->where('status', 'pending')
-                    ->update(['status' => 'revoked']);
-
-                if ($revoked !== 1) {
-                    throw ApiException::make('transfer.not_pending', [], 422);
-                }
-
-                $recordAuditEvent->handle(
-                    action: AuditLog::ACTION_OWNERSHIP_TRANSFER_REVOKED,
-                    account: $container->account,
-                    user: $request->user(),
-                    container: $container,
-                    subjectType: 'ownership_transfer',
-                    subjectUlid: $transfer->ulid,
-                );
-            });
+            $revokeOwnershipTransfer->handle($request->user(), $container, $transfer);
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['transfer' => $translator->message($e)]);
         }
@@ -381,11 +367,15 @@ class OwnershipTransferController extends Controller
      * **Avslag är slutgiltigt och raden står kvar** (Beslut 7). Flippen är en
      * villkorad UPDATE, aldrig läs-följt-av-skriv, och det finns ingen väg
      * tillbaka som knapp: en ny överlåtelse måste skickas av avsändaren.
+     *
+     * Flippen och `ownership_transfer.rejected` bor i
+     * App\Actions\OwnershipTransfer\RejectOwnershipTransfer sedan issue 111,
+     * och `/api` anropar samma Action.
      */
     public function reject(
         Request $request,
         OwnershipTransfer $transfer,
-        RecordAuditEvent $recordAuditEvent,
+        RejectOwnershipTransfer $rejectOwnershipTransfer,
         ApiErrorTranslator $translator,
     ): RedirectResponse {
         /** @var User $user */
@@ -399,30 +389,8 @@ class OwnershipTransferController extends Controller
             abort(404);
         }
 
-        // Flippen och `ownership_transfer.rejected` i EN transaktion (issue
-        // 111), exakt som i Api\OwnershipTransferController::reject().
-        // `user_id` är MOTTAGAREN — den som avböjde — och `meta` är tom, för
-        // avsändarens adress får aldrig skrivas (issue 40 § Beslut 10).
         try {
-            DB::transaction(function () use ($user, $transfer, $recordAuditEvent): void {
-                $rejected = OwnershipTransfer::query()
-                    ->whereKey($transfer->getKey())
-                    ->where('status', 'pending')
-                    ->update(['status' => 'rejected']);
-
-                if ($rejected !== 1) {
-                    throw ApiException::make('transfer.not_pending', [], 422);
-                }
-
-                $recordAuditEvent->handle(
-                    action: AuditLog::ACTION_OWNERSHIP_TRANSFER_REJECTED,
-                    account: $transfer->container->account,
-                    user: $user,
-                    container: $transfer->container,
-                    subjectType: 'ownership_transfer',
-                    subjectUlid: $transfer->ulid,
-                );
-            });
+            $rejectOwnershipTransfer->handle($user, $transfer);
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['transfer' => $translator->message($e)]);
         }

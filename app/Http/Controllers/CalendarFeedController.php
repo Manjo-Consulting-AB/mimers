@@ -2,17 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\CalendarFeed\CreateCalendarFeed;
+use App\Actions\CalendarFeed\RevokeCalendarFeed;
 use App\Http\Resources\CalendarFeedResource;
 use App\Http\Resources\ContainerResource;
-use App\Models\AuditLog;
 use App\Models\CalendarFeed;
 use App\Models\Container;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,11 +28,9 @@ use Inertia\Response;
  * **Klartexten visas EN gång och lagras aldrig.** App\Models\CalendarFeed
  * sparar bara `token_hash`, och App\Http\Resources\CalendarFeedResource bär
  * varken hashen eller tokenet — exakt som
- * App\Http\Controllers\Api\CalendarFeedController § Beslut 5. Den här
- * kontrollern gör därför samma sak som API-kontrollern: tokenet genereras i
- * `store()`, sätts in i URL:en och lämnar processen med svaret. Skillnaden är
- * bara transporten — `/api` lägger den i svarets `url`, webben i redirectens
- * flash, som `index()` lyfter in i sidans prop `url`.
+ * App\Http\Controllers\Api\CalendarFeedController § Beslut 5. Skillnaden
+ * mellan ytorna är bara transporten: `/api` lägger klartexten i svarets `url`,
+ * webben i redirectens flash, som `index()` lyfter in i sidans prop `url`.
  *
  * **URL:en är i praktiken ett lösenord** ([[Notiser]] § ICS-kalenderfeed), och
  * den får därför aldrig hamna i en adressrad, en `<a href>` eller en logg.
@@ -63,15 +59,6 @@ use Inertia\Response;
  */
 class CalendarFeedController extends Controller
 {
-    /**
-     * Klartextens längd — samma 64 tecken ur Str::random()s 62-teckens
-     * alfabet som App\Http\Controllers\Api\CalendarFeedController::TOKEN_LENGTH.
-     * Två konstanter och inte en delad: den här är entropin i ett token som
-     * hashas, inte ett format de två vägarna måste vara ense om, och den
-     * delade klassen ligger utanför den här issuen.
-     */
-    private const TOKEN_LENGTH = 64;
-
     /**
      * Sessionsnyckeln URL:en flashas under. Stavas bara här — `store()`
      * lägger den och `index()` läser den, så en omladdning av nyckeln är en
@@ -118,40 +105,21 @@ class CalendarFeedController extends Controller
      * duplikatspärr heller — en användare får ha flera feeder till samma
      * container, det är hela poängen med `revoked_at` (36a § Beslut 2).
      *
-     * `container_id`, `user_id` och `token_hash` sätts explicit på
-     * modellinstansen, aldrig via massildelning:
-     * App\Models\CalendarFeed har `#[Fillable([])]`.
+     * Själva skrivningen — raden, tokenet och `calendar_feed.created` — bor i
+     * App\Actions\CalendarFeed\CreateCalendarFeed sedan issue 111, och `/api`
+     * anropar samma Action. Kvar här är transporten: URL:en byggs ur
+     * klartexten och läggs i flashen.
      *
      * Skapandet är den enda vägen till klartexten, och därför den enda vägen
      * till `url`-propen i `index()` ovan.
      */
-    public function store(Request $request, Container $container, RecordAuditEvent $recordAuditEvent): RedirectResponse
+    public function store(Request $request, Container $container, CreateCalendarFeed $createCalendarFeed): RedirectResponse
     {
         Gate::authorize('view', $container);
 
-        $rawToken = Str::random(self::TOKEN_LENGTH);
+        ['token' => $token] = $createCalendarFeed->handle($container, $request->user());
 
-        DB::transaction(function () use ($request, $container, $rawToken, $recordAuditEvent): void {
-            $feed = new CalendarFeed;
-            $feed->container_id = $container->id;
-            $feed->user_id = $request->user()->id;
-            $feed->token_hash = hash('sha256', $rawToken);
-            $feed->save();
-
-            // `calendar_feed.created` i samma transaktion (issue 111).
-            // **Token följer aldrig med i `meta`** — varken klartexten eller
-            // hashen: loggen får inte bli en andra väg till feeden.
-            $recordAuditEvent->handle(
-                action: AuditLog::ACTION_CALENDAR_FEED_CREATED,
-                account: $container->account,
-                user: $request->user(),
-                container: $container,
-                subjectType: 'calendar_feed',
-                subjectUlid: $feed->ulid,
-            );
-        });
-
-        $url = rtrim((string) config('app.url'), '/').'/kalender/'.$rawToken.'.ics';
+        $url = rtrim((string) config('app.url'), '/').'/kalender/'.$token.'.ics';
 
         return redirect()
             ->route('containers.calendar', $container)
@@ -171,41 +139,15 @@ class CalendarFeedController extends Controller
      * ett andra anrop är en no-op som ändå svarar som ett första (Beslut 4).
      * App\Models\CalendarFeed använder inte SoftDeletes.
      *
-     * Raden läses om och låses INNE i transaktionen (`lockForUpdate`):
-     * route-modellbindningens instans lästes innan transaktionen öppnades,
-     * och två samtidiga anrop mot samma feed skulle annars båda se
-     * `revoked_at === null` på sin egen instans och skriva var sin loggrad
-     * för samma återkallelse — samma teknik och samma skäl som
-     * App\Actions\Access\RevokeContainerAccess.
+     * Skrivningen — låset, tidsstämpeln och `calendar_feed.revoked` — bor i
+     * App\Actions\CalendarFeed\RevokeCalendarFeed sedan issue 111, och `/api`
+     * anropar samma Action.
      */
-    public function destroy(Request $request, Container $container, CalendarFeed $calendarFeed, RecordAuditEvent $recordAuditEvent): RedirectResponse
+    public function destroy(Request $request, Container $container, CalendarFeed $calendarFeed, RevokeCalendarFeed $revokeCalendarFeed): RedirectResponse
     {
         Gate::authorize('view', $container);
 
-        DB::transaction(function () use ($request, $container, $calendarFeed, $recordAuditEvent): void {
-            $låstFeed = CalendarFeed::query()
-                ->whereKey($calendarFeed->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if ($låstFeed->revoked_at !== null) {
-                // En andra återkallelse är ingen handling: den rör varken
-                // tidsstämpeln eller loggen (issue 36a § Beslut 3, issue 111).
-                return;
-            }
-
-            $låstFeed->revoked_at = now();
-            $låstFeed->save();
-
-            $recordAuditEvent->handle(
-                action: AuditLog::ACTION_CALENDAR_FEED_REVOKED,
-                account: $container->account,
-                user: $request->user(),
-                container: $container,
-                subjectType: 'calendar_feed',
-                subjectUlid: $låstFeed->ulid,
-            );
-        });
+        $revokeCalendarFeed->handle($request->user(), $container, $calendarFeed);
 
         return back()->with('status', 'calendar-feed-revoked');
     }

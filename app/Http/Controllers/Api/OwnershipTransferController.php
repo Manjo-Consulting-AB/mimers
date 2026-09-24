@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\OwnershipTransfer\AcceptOwnershipTransfer;
 use App\Actions\OwnershipTransfer\OfferOwnershipTransfer;
+use App\Actions\OwnershipTransfer\RejectOwnershipTransfer;
+use App\Actions\OwnershipTransfer\RevokeOwnershipTransfer;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OwnershipTransfer\AcceptOwnershipTransferRequest;
@@ -12,7 +13,6 @@ use App\Http\Requests\OwnershipTransfer\StoreOwnershipTransferRequest;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\OwnershipTransferResource;
 use App\Models\Account;
-use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\OwnershipTransfer;
 use App\Models\User;
@@ -21,7 +21,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -131,35 +130,16 @@ class OwnershipTransferController extends Controller
      * fortfarande `pending` (Beslut 10) och att städa bort en glömd begäran
      * ur listan är precis vad avsändaren vill kunna göra, samma princip som
      * inbjudningarna.
+     *
+     * Flippen och `ownership_transfer.revoked` bor i
+     * App\Actions\OwnershipTransfer\RevokeOwnershipTransfer sedan issue 111,
+     * och webben anropar samma Action.
      */
-    public function destroy(Request $request, Container $container, OwnershipTransfer $transfer, RecordAuditEvent $recordAuditEvent): Response
+    public function destroy(Request $request, Container $container, OwnershipTransfer $transfer, RevokeOwnershipTransfer $revokeOwnershipTransfer): Response
     {
         Gate::authorize('transfer', $container);
 
-        // Flippen och `ownership_transfer.revoked` i EN transaktion (issue
-        // 111): en loggrad utanför den kunde överleva ett rollback och
-        // beskriva en återkallelse som inte hände. `meta` är tom — vem som
-        // återkallade står i `user_id`, och mottagarens adress får aldrig
-        // skrivas (issue 40 § Beslut 10).
-        DB::transaction(function () use ($request, $container, $transfer, $recordAuditEvent): void {
-            $revoked = OwnershipTransfer::query()
-                ->whereKey($transfer->getKey())
-                ->where('status', 'pending')
-                ->update(['status' => 'revoked']);
-
-            if ($revoked !== 1) {
-                throw ApiException::make('transfer.not_pending', ['transfer' => $transfer->ulid], 422);
-            }
-
-            $recordAuditEvent->handle(
-                action: AuditLog::ACTION_OWNERSHIP_TRANSFER_REVOKED,
-                account: $container->account,
-                user: $request->user(),
-                container: $container,
-                subjectType: 'ownership_transfer',
-                subjectUlid: $transfer->ulid,
-            );
-        });
+        $revokeOwnershipTransfer->handle($request->user(), $container, $transfer);
 
         return response()->noContent();
     }
@@ -192,8 +172,12 @@ class OwnershipTransferController extends Controller
      * begäran, ger 404 — samma tystnad som en okänd ULID. Själva flippen är
      * en villkorad `UPDATE ... WHERE status = 'pending'`, aldrig
      * läs-följt-av-skriv — samma spärr som AcceptInvitation.
+     *
+     * Flippen och `ownership_transfer.rejected` bor i
+     * App\Actions\OwnershipTransfer\RejectOwnershipTransfer sedan issue 111,
+     * och webben anropar samma Action.
      */
-    public function reject(Request $request, OwnershipTransfer $transfer, RecordAuditEvent $recordAuditEvent): Response
+    public function reject(Request $request, OwnershipTransfer $transfer, RejectOwnershipTransfer $rejectOwnershipTransfer): Response
     {
         /** @var User $user */
         $user = $request->user();
@@ -206,30 +190,7 @@ class OwnershipTransferController extends Controller
             throw ApiException::make('resource.not_found', [], 404);
         }
 
-        // Flippen och `ownership_transfer.rejected` i EN transaktion (issue
-        // 111). Avslag är slutgiltigt och raden står kvar (Beslut 7); en rad
-        // som inte längre är `pending` kastar ovanför och lämnar ingen
-        // loggrad. `user_id` är MOTTAGAREN — den som avböjde — och `meta` är
-        // tom, för avsändarens adress får aldrig skrivas (issue 40 § Beslut 10).
-        DB::transaction(function () use ($user, $transfer, $recordAuditEvent): void {
-            $rejected = OwnershipTransfer::query()
-                ->whereKey($transfer->getKey())
-                ->where('status', 'pending')
-                ->update(['status' => 'rejected']);
-
-            if ($rejected !== 1) {
-                throw ApiException::make('transfer.not_pending', [], 422);
-            }
-
-            $recordAuditEvent->handle(
-                action: AuditLog::ACTION_OWNERSHIP_TRANSFER_REJECTED,
-                account: $transfer->container->account,
-                user: $user,
-                container: $transfer->container,
-                subjectType: 'ownership_transfer',
-                subjectUlid: $transfer->ulid,
-            );
-        });
+        $rejectOwnershipTransfer->handle($user, $transfer);
 
         return response()->noContent();
     }

@@ -37,12 +37,11 @@ use function Pest\Laravel\postJson;
  *    båda ytorna, och instrumenteras de var för sig glider de isär. Sedan issue
  *    111 går båda genom samma Actions — CreateContainer, UpdateContainer,
  *    TrashContainer, RestoreTrashedContainer, CreateCategory, UpdateCategory,
- *    DeleteCategory, CreateTag, UpdateTag, DeleteTag, GrantContainerAccess,
- *    UpdateContainerAccess, CreateInvitation, AcceptInvitation,
- *    RevokeInvitation, RejectInvitation och OfferOwnershipTransfer.
- *    Kalenderflödena och överlåtelsens återkallande och avböjande är undantagen:
- *    deras Actions ligger utanför issuens omfångsruta, och raden skrivs i båda
- *    kontrollerna — se § Frågor och antaganden i PR:en.
+ *    DeleteCategory, CreateTag, UpdateTag, DeleteTag, CreateCalendarFeed,
+ *    RevokeCalendarFeed, GrantContainerAccess, UpdateContainerAccess,
+ *    CreateInvitation, AcceptInvitation, RevokeInvitation, RejectInvitation,
+ *    OfferOwnershipTransfer, RevokeOwnershipTransfer och
+ *    RejectOwnershipTransfer.
  * 2. **Fritext följer aldrig med.** Containerns namn, beskrivning, kategorins
  *    namn, taggens namn och mottagarens e-postadress får bara finnas som
  *    fältnamn — `meta` säger VILKA fält som ändrades, inte vad som stod där.
@@ -529,6 +528,9 @@ it('en ändrad eller direkt beviljad åtkomst skriver en rad med nivå och typ m
     expect($ändrad->user_id)->toBe($ägare->id);
     expect($ändrad->meta)->not->toContain('@');
 
+    // Kontraktet för issue 116: `level` i basmetan är det NYA värdet, och
+    // `values` bär paret gammalt→nytt. Raden läses alltså utan att slå upp
+    // paret, och paret finns där historiken behöver det.
     $ändradMeta = containerhandelseMeta($ändrad);
     expect($ändradMeta['grantee_type'])->toBe('user');
     expect($ändradMeta['grantee'])->toBe($mottagare->ulid);
@@ -536,6 +538,7 @@ it('en ändrad eller direkt beviljad åtkomst skriver en rad med nivå och typ m
     expect($ändradMeta['level'])->toBe('read');
     expect($ändradMeta['changed'])->toBe(['level']);
     expect($ändradMeta['values'])->toBe(['level' => ['from' => 'write', 'to' => 'read']]);
+    expect($ändradMeta['level'])->toBe($ändradMeta['values']['level']['to']);
 
     // En PATCH med samma nivå ändrar ingenting och skriver ingen rad.
     actingAs($ägare)->patch("/containers/{$container->ulid}/accesses/{$access->ulid}", ['level' => 'read'])
@@ -626,7 +629,7 @@ it('en överlåtelse som erbjuds, återkallas eller avböjs skriver en rad', fun
     expect($motKontoErbjuden->subject_id)->toBe($motKonto->ulid);
     expect(containerhandelseMeta($motKontoErbjuden))->toBe([
         'recipient_type' => 'account',
-        'to_account' => $köparkonto->ulid,
+        'recipient' => $köparkonto->ulid,
         'retain_access_level' => null,
         'excluded_item_count' => 0,
     ]);
@@ -659,7 +662,7 @@ it('en överlåtelse som erbjuds, återkallas eller avböjs skriver en rad', fun
     expect($erbjuden->user_id)->toBe($säljare->id);
     expect(containerhandelseMeta($erbjuden))->toBe([
         'recipient_type' => 'email',
-        'to_account' => null,
+        'recipient' => null,
         'retain_access_level' => 'read',
         'excluded_item_count' => 0,
     ]);

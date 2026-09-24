@@ -2,18 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\CalendarFeed\CreateCalendarFeed;
+use App\Actions\CalendarFeed\RevokeCalendarFeed;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CalendarFeedResource;
-use App\Models\AuditLog;
 use App\Models\CalendarFeed;
 use App\Models\Container;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 
 /**
  * API-ytan för ICS-kalenderfeeds, issue 36a. Skapa, lista och återkalla de
@@ -33,16 +31,14 @@ use Illuminate\Support\Str;
  * en ULID från en annan container löser aldrig upp här, av exakt samma skäl
  * som 9b § Beslut 1 (issue 36a § Beslut 3 och § Att se upp med).
  *
- * Klartexten genereras i `store()` nedan, används i svarets `url` och lämnar
- * aldrig processen igen — bara hashen sparas, se App\Models\CalendarFeed och
- * issue 36a § Beslut 5 (samma modell som App\Models\Invitation). `strlen` är
- * 64 tecken ur Str::random()s 62-teckens alfabet — långt bortom vad som går
- * att gissa.
+ * Klartexten genereras i App\Actions\CalendarFeed\CreateCalendarFeed, används
+ * i svarets `url` och lämnar aldrig processen igen — bara hashen sparas, se
+ * App\Models\CalendarFeed och issue 36a § Beslut 5 (samma modell som
+ * App\Models\Invitation). Den är 64 tecken ur Str::random()s 62-teckens
+ * alfabet — långt bortom vad som går att gissa.
  */
 class CalendarFeedController extends Controller
 {
-    private const TOKEN_LENGTH = 64;
-
     /**
      * GET /api/containers/{container}/calendar-feeds — 200. Visar BARA den
      * inloggade användarens egna feeder, aldrig andras (issue 36a § Beslut
@@ -77,7 +73,9 @@ class CalendarFeedController extends Controller
      *
      * `container_id`, `user_id` och `token_hash` sätts explicit på
      * modellinstansen, aldrig via massildelning — se App\Models\CalendarFeed
-     * och § Beslut 5.
+     * och § Beslut 5. Skrivningen, tokenet och `calendar_feed.created` bor i
+     * App\Actions\CalendarFeed\CreateCalendarFeed sedan issue 111, och webben
+     * anropar samma Action.
      *
      * Sökvägen `/kalender/{token}.ics` är kontraktet 36b ska implementera
      * (§ Beslut 6): svenska i sökvägen därför att det är en URL en människa
@@ -92,37 +90,15 @@ class CalendarFeedController extends Controller
      * CalendarFeedResource, som aldrig får bära token (se resursens
      * docblock).
      */
-    public function store(Request $request, Container $container, RecordAuditEvent $recordAuditEvent): JsonResponse
+    public function store(Request $request, Container $container, CreateCalendarFeed $createCalendarFeed): JsonResponse
     {
         Gate::authorize('view', $container);
 
         // Klartexten är svarets enda konsument — den skickas i `url` nedan
         // och lagras aldrig, se klassens docblock.
-        $rawToken = Str::random(self::TOKEN_LENGTH);
+        ['feed' => $feed, 'token' => $token] = $createCalendarFeed->handle($container, $request->user());
 
-        $feed = DB::transaction(function () use ($request, $container, $rawToken, $recordAuditEvent): CalendarFeed {
-            $feed = new CalendarFeed;
-            $feed->container_id = $container->id;
-            $feed->user_id = $request->user()->id;
-            $feed->token_hash = hash('sha256', $rawToken);
-            $feed->save();
-
-            // `calendar_feed.created` i samma transaktion (issue 111).
-            // **Token följer aldrig med i `meta`** — varken klartexten eller
-            // hashen: loggen får inte bli en andra väg till feeden.
-            $recordAuditEvent->handle(
-                action: AuditLog::ACTION_CALENDAR_FEED_CREATED,
-                account: $container->account,
-                user: $request->user(),
-                container: $container,
-                subjectType: 'calendar_feed',
-                subjectUlid: $feed->ulid,
-            );
-
-            return $feed;
-        });
-
-        $url = rtrim((string) config('app.url'), '/').'/kalender/'.$rawToken.'.ics';
+        $url = rtrim((string) config('app.url'), '/').'/kalender/'.$token.'.ics';
 
         return (new CalendarFeedResource($feed))
             ->additional(['url' => $url])
@@ -142,41 +118,15 @@ class CalendarFeedController extends Controller
      * exponeringen, och den som får skapa en feed får klippa den, se Beslut
      * 4.
      *
-     * Raden läses om och låses INNE i transaktionen (`lockForUpdate`):
-     * route-modellbindningens instans lästes innan transaktionen öppnades,
-     * och två samtidiga anrop mot samma feed skulle annars båda se
-     * `revoked_at === null` på sin egen instans och skriva var sin loggrad
-     * för samma återkallelse — samma teknik och samma skäl som
-     * App\Actions\Access\RevokeContainerAccess.
+     * Låset, tidsstämpeln och `calendar_feed.revoked` bor i
+     * App\Actions\CalendarFeed\RevokeCalendarFeed sedan issue 111, och webben
+     * anropar samma Action.
      */
-    public function destroy(Request $request, Container $container, CalendarFeed $calendarFeed, RecordAuditEvent $recordAuditEvent): Response
+    public function destroy(Request $request, Container $container, CalendarFeed $calendarFeed, RevokeCalendarFeed $revokeCalendarFeed): Response
     {
         Gate::authorize('view', $container);
 
-        DB::transaction(function () use ($request, $container, $calendarFeed, $recordAuditEvent): void {
-            $låstFeed = CalendarFeed::query()
-                ->whereKey($calendarFeed->getKey())
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if ($låstFeed->revoked_at !== null) {
-                // En andra återkallelse är ingen handling: den rör varken
-                // tidsstämpeln eller loggen (issue 36a § Beslut 3, issue 111).
-                return;
-            }
-
-            $låstFeed->revoked_at = now();
-            $låstFeed->save();
-
-            $recordAuditEvent->handle(
-                action: AuditLog::ACTION_CALENDAR_FEED_REVOKED,
-                account: $container->account,
-                user: $request->user(),
-                container: $container,
-                subjectType: 'calendar_feed',
-                subjectUlid: $låstFeed->ulid,
-            );
-        });
+        $revokeCalendarFeed->handle($request->user(), $container, $calendarFeed);
 
         return response()->noContent();
     }
