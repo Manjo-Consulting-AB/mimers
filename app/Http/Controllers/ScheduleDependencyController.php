@@ -3,14 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Schedule\DependSchedule;
+use App\Actions\Schedule\UndependSchedule;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Schedule\StoreScheduleDependencyRequest;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\Schedule;
-use App\Models\ScheduleDependency;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -73,7 +74,7 @@ class ScheduleDependencyController extends Controller
         Gate::authorize('update', $other->item);
 
         try {
-            $dependSchedule->handle($schedule, $other);
+            $dependSchedule->handle($schedule, $other, $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
                 'depends_on' => $this->errorMessage($e, $translator, $schedule, $other),
@@ -93,8 +94,13 @@ class ScheduleDependencyController extends Controller
      *
      * Båda ändarna auktoriseras med `update`, samma grind som POST: att bryta
      * en koppling är samma skrivning som att knyta den.
+     *
+     * Själva raderingen och loggraden är App\Actions\Schedule\UndependSchedule
+     * sedan issue 110 — delad med `/api`. Finns ingen beroenderad mellan paret
+     * kastar actionen en `ModelNotFoundException`, som blir samma 404 som
+     * `abort(404)` gav förut.
      */
-    public function destroy(Container $container, Item $item, Schedule $schedule, string $other): RedirectResponse
+    public function destroy(Request $request, Container $container, Item $item, Schedule $schedule, string $other, UndependSchedule $undependSchedule): RedirectResponse
     {
         Gate::authorize('update', $schedule->item);
 
@@ -105,16 +111,7 @@ class ScheduleDependencyController extends Controller
 
         Gate::authorize('update', $otherSchedule->item);
 
-        $dependency = ScheduleDependency::query()
-            ->where('schedule_id', $schedule->id)
-            ->where('depends_on_schedule_id', $otherSchedule->id)
-            ->first();
-
-        if ($dependency === null) {
-            abort(404);
-        }
-
-        $dependency->delete();
+        $undependSchedule->handle($schedule, $otherSchedule, $request->user());
 
         return back()->with('status', 'schedule-dependency-removed');
     }

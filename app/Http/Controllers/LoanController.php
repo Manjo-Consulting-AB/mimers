@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Loan\CreateLoan;
+use App\Actions\Loan\DeleteLoan;
+use App\Actions\Loan\UpdateLoan;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Loan\StoreLoanRequest;
 use App\Http\Requests\Loan\UpdateLoanRequest;
@@ -10,7 +13,7 @@ use App\Models\Item;
 use App\Models\Loan;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -51,19 +54,18 @@ use Illuminate\Validation\ValidationException;
  * raden var den öppna. Bekräftelsen i vyn säger det, och återlämningen är den
  * andra knappen.
  *
- * **Domänregeln "högst en öppen utlåning per item" är en medveten andra kopia
- * av `Api\LoanController`s** (Beslut 6, [[Items och organisation]] § loan).
- * Den måste prövas här också: utan den kunde webben skapa två öppna lån på
- * samma item. Utbrytningen till en delad Action ligger utanför den här
- * issuen (omfångsrutan räknar inte upp `app/Actions/**`) och
- * `app/Http/Controllers/Api/**` får inte röras — samma avvägning och samma
- * linje som `ItemController::replaceTags()` och `ItemPolicy::isFrozen()`.
- * Ändras den ena ska den andra ändras.
+ * **Domänregeln "högst en öppen utlåning per item" ligger i
+ * App\Actions\Loan\AssertNoOpenLoan** sedan issue 110 (Beslut 6, [[Items och
+ * organisation]] § loan). Fram till dess var den en medveten andra kopia av
+ * `Api\LoanController`s, för `app/Actions/**` låg utanför den issunens
+ * omfångsruta; nu anropar båda ytorna samma spärr, och de tre skrivningarna
+ * (`CreateLoan`, `UpdateLoan`, `DeleteLoan`) bor i samma katalog. Utan
+ * spärren kunde webben skapa två öppna lån på samma item.
  *
  * Spärren är en check-then-act och körs därför i EN transaktion med
- * `lockForUpdate()` på ITEM-raden, precis som på `/api` (granskningsfynd där;
- * samma konvention som ContainerController::destroy och 22a/22b) — låset
- * ligger aldrig på loan-tabellen, en tom mängd rader är ett gap lock i MySQL
+ * `lockForUpdate()` på ITEM-raden, inuti Actionerna (granskningsfynd; samma
+ * konvention som ContainerController::destroy och 22a/22b) — låset ligger
+ * aldrig på loan-tabellen, en tom mängd rader är ett gap lock i MySQL
  * (22a § Beslut 7).
  *
  * **Ett domänfel blir ett formulärfel, aldrig en JSON-kropp.** `ApiException`
@@ -79,27 +81,22 @@ class LoanController extends Controller
      * detaljvy.
      *
      * `{loan}` finns inte i rutten: raden skapas här. `item_id` sätts
-     * explicit och aldrig via massildelning — `item_id` är UTESLUTEN ur
-     * Loan#[Fillable], samma regel som på `/api`.
+     * explicit av App\Actions\Loan\CreateLoan och aldrig via massildelning —
+     * `item_id` är UTESLUTEN ur Loan#[Fillable], samma regel som på `/api`.
+     * Sedan issue 110 skriver actionen också loggraden, så att webben och
+     * `/api` skriver exakt samma rad.
      */
     public function store(
         StoreLoanRequest $request,
         Container $container,
         Item $item,
         ApiErrorTranslator $translator,
+        CreateLoan $createLoan,
     ): RedirectResponse {
         Gate::authorize('create', $item);
 
         try {
-            DB::transaction(function () use ($request, $item): void {
-                $lockedItem = $this->lockItem($item);
-
-                $this->assertNoOpenLoan($lockedItem);
-
-                $loan = new Loan($request->validated());
-                $loan->item_id = $lockedItem->id;
-                $loan->save();
-            });
+            $createLoan->handle($item, $request->user(), new Loan($request->validated()));
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
                 // Felet gäller formuläret i sin helhet och inte ett enskilt
@@ -135,6 +132,11 @@ class LoanController extends Controller
      * **Vyn skickar alltid ett datum** (Beslut 3): "Tillbaka idag" sätter
      * dagens datum och formuläret ett eget. Att nolla `returned_at` — och
      * därmed återöppna lånet — är en API-operation utan yta här.
+     *
+     * Skrivningen är App\Actions\Loan\UpdateLoan sedan issue 110 — delad med
+     * `/api`, så att de två ytorna skriver exakt samma rad i händelseloggen.
+     * Kontrollern behåller formen: den skickar bara de fält klienten faktiskt
+     * skickade.
      */
     public function update(
         UpdateLoanRequest $request,
@@ -142,28 +144,17 @@ class LoanController extends Controller
         Item $item,
         Loan $loan,
         ApiErrorTranslator $translator,
+        UpdateLoan $updateLoan,
     ): RedirectResponse {
         Gate::authorize('update', $item);
 
         try {
-            DB::transaction(function () use ($request, $item, $loan): void {
-                $lockedItem = $this->lockItem($item);
-
-                $lockedLoan = $lockedItem->loans()
-                    ->whereKey($loan->getKey())
-                    ->lockForUpdate()
-                    ->firstOrFail();
-
-                $lockedLoan->fill(
-                    array_intersect_key($request->validated(), $request->all())
-                );
-
-                if ($lockedLoan->returned_at === null) {
-                    $this->assertNoOpenLoan($lockedItem, $lockedLoan);
-                }
-
-                $lockedLoan->save();
-            });
+            $updateLoan->handle(
+                $item,
+                $loan,
+                array_intersect_key($request->validated(), $request->all()),
+                $request->user(),
+            );
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
                 'returned_at' => $translator->message($e),
@@ -188,57 +179,17 @@ class LoanController extends Controller
      *
      * **Det här är inte en återlämning** (Beslut 7). Raden tas bort för att
      * den registrerades fel; att prylen kommit tillbaka registreras med
-     * `update()` och en egen knapp.
+     * `update()` och en egen knapp. Raderingen och loggraden är
+     * App\Actions\Loan\DeleteLoan sedan issue 110 — delad med `/api`.
      */
-    public function destroy(Container $container, Item $item, Loan $loan): RedirectResponse
+    public function destroy(Request $request, Container $container, Item $item, Loan $loan, DeleteLoan $deleteLoan): RedirectResponse
     {
         Gate::authorize('delete', $item);
 
-        $loan->delete();
+        $deleteLoan->handle($loan, $request->user());
 
         return redirect()
             ->route('containers.items.show', [$container, $item])
             ->with('status', 'loan-deleted');
-    }
-
-    /**
-     * Item-raden under lås, den enda raden transaktionerna låser. Hämtad med
-     * `lockForUpdate()` så två samtidiga skrivningar på samma item
-     * serialiseras och den andra ser den förstas öppna lån — spärren nedan är
-     * en check-then-act och utan låset vore den ingen spärr.
-     */
-    private function lockItem(Item $item): Item
-    {
-        return $item->newQuery()
-            ->whereKey($item->getKey())
-            ->lockForUpdate()
-            ->firstOrFail();
-    }
-
-    /**
-     * Spärren "högst en öppen utlåning per item": hittar kontrollern en öppen
-     * utlåning — annan än `$except`, när ett lån håller på att återöppnas —
-     * avvisas skrivningen med `loan.already_open` och den befintliga
-     * utlåningens ULID i `data.loan`.
-     *
-     * Måste anropas under `lockForUpdate()` på item-raden (se `lockItem()`):
-     * utan låset passerar två samtidiga skrivningar och bryter regeln.
-     *
-     * Samma kropp som `Api\LoanController::assertNoOpenLoan()`, med flit en
-     * andra kopia — se klassens docblock.
-     */
-    private function assertNoOpenLoan(Item $item, ?Loan $except = null): void
-    {
-        $query = $item->loans()->whereNull('returned_at');
-
-        if ($except !== null) {
-            $query->whereKeyNot($except->getKey());
-        }
-
-        $open = $query->first();
-
-        if ($open !== null) {
-            throw ApiException::make('loan.already_open', ['loan' => $open->ulid], 422);
-        }
     }
 }

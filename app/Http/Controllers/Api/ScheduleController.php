@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Schedule\OpenNextOccurrence;
+use App\Actions\Schedule\CreateSchedule;
+use App\Actions\Schedule\DeleteSchedule;
+use App\Actions\Schedule\UpdateSchedule;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\StoreScheduleRequest;
 use App\Http\Requests\Schedule\UpdateScheduleRequest;
@@ -11,8 +13,8 @@ use App\Models\Container;
 use App\Models\Item;
 use App\Models\Schedule;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -86,20 +88,11 @@ class ScheduleController extends Controller
      * det på sitt item utan att för den skull få ändra det som redan står
      * där.
      */
-    public function store(StoreScheduleRequest $request, Container $container, Item $item, OpenNextOccurrence $openNextOccurrence): JsonResponse
+    public function store(StoreScheduleRequest $request, Container $container, Item $item, CreateSchedule $createSchedule): JsonResponse
     {
         Gate::authorize('create', $item);
 
-        $schedule = new Schedule($request->validated());
-        $schedule->item_id = $item->id;
-
-        DB::transaction(function () use ($schedule, $openNextOccurrence): void {
-            $schedule->save();
-
-            if ($schedule->is_active) {
-                $openNextOccurrence->handle($schedule);
-            }
-        });
+        $schedule = $createSchedule->handle($item, $request->user(), new Schedule($request->validated()));
 
         return (new ScheduleResource($schedule))
             ->response()
@@ -123,11 +116,9 @@ class ScheduleController extends Controller
      *
      * Grinden är itemets `update` (issue 71 § Beslut 1 och 5).
      */
-    public function update(UpdateScheduleRequest $request, Container $container, Item $item, Schedule $schedule, OpenNextOccurrence $openNextOccurrence): ScheduleResource
+    public function update(UpdateScheduleRequest $request, Container $container, Item $item, Schedule $schedule, UpdateSchedule $updateSchedule): ScheduleResource
     {
         Gate::authorize('update', $item);
-
-        $wasActive = $schedule->is_active;
 
         $schedule->fill($request->validated());
 
@@ -136,15 +127,7 @@ class ScheduleController extends Controller
             $schedule->interval_count = null;
         }
 
-        $reactivated = $schedule->is_active && ! $wasActive;
-
-        DB::transaction(function () use ($schedule, $openNextOccurrence, $reactivated): void {
-            $schedule->save();
-
-            if ($reactivated && ! $schedule->openOccurrence()->exists()) {
-                $openNextOccurrence->handle($schedule);
-            }
-        });
+        $updateSchedule->handle($schedule, $request->user());
 
         return new ScheduleResource($schedule);
     }
@@ -160,11 +143,11 @@ class ScheduleController extends Controller
      * Grinden är itemets `delete` (issue 71 § Beslut 1 och 5): `write` ändrar
      * ett schema men tar inte bort det.
      */
-    public function destroy(Container $container, Item $item, Schedule $schedule): Response
+    public function destroy(Request $request, Container $container, Item $item, Schedule $schedule, DeleteSchedule $deleteSchedule): Response
     {
         Gate::authorize('delete', $item);
 
-        $schedule->delete();
+        $deleteSchedule->handle($schedule, $request->user());
 
         return response()->noContent();
     }

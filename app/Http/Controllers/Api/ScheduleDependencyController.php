@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Schedule\DependSchedule;
-use App\Exceptions\Api\ApiException;
+use App\Actions\Schedule\UndependSchedule;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\StoreScheduleDependencyRequest;
 use App\Http\Resources\ScheduleDependencyResource;
@@ -12,6 +12,7 @@ use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleDependency;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Gate;
 
@@ -131,7 +132,7 @@ class ScheduleDependencyController extends Controller
         // Andra änden, efter uppslaget (issue 71 § Beslut 1 och 3).
         Gate::authorize('update', $other->item);
 
-        $dependency = $dependSchedule->handle($schedule, $other);
+        $dependency = $dependSchedule->handle($schedule, $other, $request->user());
 
         $this->attachCounterpart($dependency, $other);
 
@@ -157,7 +158,7 @@ class ScheduleDependencyController extends Controller
      * och 3). En motpart inom containern men utanför omfånget ger 403 utan att
      * svaret röjer dess titel eller itemnamn.
      */
-    public function destroy(Container $container, Item $item, Schedule $schedule, string $other): Response
+    public function destroy(Request $request, Container $container, Item $item, Schedule $schedule, string $other, UndependSchedule $undependSchedule): Response
     {
         Gate::authorize('update', $schedule->item);
 
@@ -172,16 +173,10 @@ class ScheduleDependencyController extends Controller
 
         Gate::authorize('update', $otherSchedule->item);
 
-        $dependency = ScheduleDependency::query()
-            ->where('schedule_id', $schedule->id)
-            ->where('depends_on_schedule_id', $otherSchedule->id)
-            ->first();
-
-        if ($dependency === null) {
-            throw ApiException::make('resource.not_found', [], 404);
-        }
-
-        $dependency->delete();
+        // Raderingen och loggraden är UndependSchedule sedan issue 110 — delad
+        // med webben. Även där ger ett par utan beroenderad 404
+        // `resource.not_found`, genom samma ModelNotFoundException.
+        $undependSchedule->handle($schedule, $otherSchedule, $request->user());
 
         return response()->noContent();
     }

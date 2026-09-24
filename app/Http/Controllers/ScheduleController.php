@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Schedule\OpenNextOccurrence;
+use App\Actions\Schedule\CreateSchedule;
+use App\Actions\Schedule\DeleteSchedule;
+use App\Actions\Schedule\UpdateSchedule;
 use App\Http\Requests\Schedule\StoreScheduleRequest;
 use App\Http\Requests\Schedule\UpdateScheduleRequest;
 use App\Http\Resources\ContainerResource;
@@ -17,7 +19,6 @@ use App\Models\ScheduleDependency;
 use App\Models\ScheduleOccurrence;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -166,23 +167,16 @@ class ScheduleController extends Controller
      * öppnar alltid sin första förekomst. Modellens standardvärde gäller —
      * vyn hittar inget eget.
      *
-     * `item_id` sätts explicit från rutten, aldrig via massildelning: fältet
-     * är uteslutet ur Schedule#[Fillable] (§ Att se upp med).
+     * `item_id` sätts explicit av App\Actions\Schedule\CreateSchedule, aldrig
+     * via massildelning: fältet är uteslutet ur Schedule#[Fillable]
+     * (§ Att se upp med). Sedan issue 110 skriver actionen också loggraden,
+     * så att webben och `/api` skriver exakt samma rad.
      */
-    public function store(StoreScheduleRequest $request, Container $container, Item $item, OpenNextOccurrence $openNextOccurrence): RedirectResponse
+    public function store(StoreScheduleRequest $request, Container $container, Item $item, CreateSchedule $createSchedule): RedirectResponse
     {
         Gate::authorize('create', $item);
 
-        $schedule = new Schedule($request->validated());
-        $schedule->item_id = $item->id;
-
-        DB::transaction(function () use ($schedule, $openNextOccurrence): void {
-            $schedule->save();
-
-            if ($schedule->is_active) {
-                $openNextOccurrence->handle($schedule);
-            }
-        });
+        $createSchedule->handle($item, $request->user(), new Schedule($request->validated()));
 
         return redirect()
             ->route('containers.items.show', [$container, $item])
@@ -224,10 +218,11 @@ class ScheduleController extends Controller
      * nuvarande värden under klientens, så en paus tvingar inte fram de
      * andra fälten och `validated()` bär ändå hela raden.
      *
-     * Logiken är `/api`:s (App\Http\Controllers\Api\ScheduleController::
-     * update()), och den är kopierad med flit och inte delad — samma linje
-     * som ItemController::replaceTags(): utbrytningen ligger utanför den här
-     * issuen, och två formuleringar av samma skrivning glider isär.
+     * Skrivningen är App\Actions\Schedule\UpdateSchedule sedan issue 110 —
+     * delad med `/api`, så att de två ytorna skriver exakt samma rad i
+     * händelseloggen. Kontrollern behåller det som hör till requesten: den
+     * nollar intervallkolumnerna när typen blir `none`, och den räknar ut
+     * vilken flashkod användaren möts av.
      *
      * Ett PAUSAT schema som aktiveras och saknar en öppen förekomst öppnar en,
      * i samma transaktion (issue 22 § Beslut 3). Att pausa rör ALDRIG den
@@ -239,7 +234,7 @@ class ScheduleController extends Controller
         Container $container,
         Item $item,
         Schedule $schedule,
-        OpenNextOccurrence $openNextOccurrence,
+        UpdateSchedule $updateSchedule,
     ): RedirectResponse {
         Gate::authorize('update', $item);
 
@@ -252,15 +247,9 @@ class ScheduleController extends Controller
             $schedule->interval_count = null;
         }
 
+        $updateSchedule->handle($schedule, $request->user());
+
         $reactivated = $schedule->is_active && ! $wasActive;
-
-        DB::transaction(function () use ($schedule, $openNextOccurrence, $reactivated): void {
-            $schedule->save();
-
-            if ($reactivated && ! $schedule->openOccurrence()->exists()) {
-                $openNextOccurrence->handle($schedule);
-            }
-        });
 
         // Pausen och återupptagningen är samma skrivning som en ändring av
         // titeln — bara `is_active` avgör vilken mening användaren möts av.
@@ -288,12 +277,16 @@ class ScheduleController extends Controller
      * kvar. Schemat hamnar INTE i papperskorgen — den listar fyra typer och
      * behåller fyra (issue 20a § Beslut 3) — och därför lovar varken
      * bekräftelsen eller flashkoden en väg tillbaka (Beslut 8).
+     *
+     * Raderingen och loggraden är App\Actions\Schedule\DeleteSchedule sedan
+     * issue 110 — delad med `/api`, så att de två ytorna skriver exakt samma
+     * rad i händelseloggen.
      */
-    public function destroy(Container $container, Item $item, Schedule $schedule): RedirectResponse
+    public function destroy(Request $request, Container $container, Item $item, Schedule $schedule, DeleteSchedule $deleteSchedule): RedirectResponse
     {
         Gate::authorize('delete', $item);
 
-        $schedule->delete();
+        $deleteSchedule->handle($schedule, $request->user());
 
         return redirect()
             ->route('containers.items.show', [$container, $item])

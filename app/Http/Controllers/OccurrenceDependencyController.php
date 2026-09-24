@@ -3,15 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Schedule\DependOccurrence;
+use App\Actions\Schedule\UndependOccurrence;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Schedule\StoreOccurrenceDependencyRequest;
 use App\Models\Container;
 use App\Models\Item;
-use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -76,7 +77,7 @@ class OccurrenceDependencyController extends Controller
         Gate::authorize('update', $other->schedule->item);
 
         try {
-            $dependOccurrence->handle($occurrence, $other);
+            $dependOccurrence->handle($occurrence, $other, $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages([
                 'depends_on' => $this->errorMessage($e, $translator, $occurrence, $other),
@@ -93,13 +94,20 @@ class OccurrenceDependencyController extends Controller
      * Raderingen är HÅRD (Beslut 7): både schemana och förekomsterna finns
      * kvar, det som går förlorat är undantaget. Finns ingen beroenderad mellan
      * paret är svaret 404 — samma som på `/api`.
+     *
+     * Själva raderingen och loggraden är
+     * App\Actions\Schedule\UndependOccurrence sedan issue 110 — delad med
+     * `/api`. Finns ingen beroenderad mellan paret kastar actionen en
+     * `ModelNotFoundException`, som blir samma 404 som `abort(404)` gav förut.
      */
     public function destroy(
+        Request $request,
         Container $container,
         Item $item,
         Schedule $schedule,
         ScheduleOccurrence $occurrence,
         string $other,
+        UndependOccurrence $undependOccurrence,
     ): RedirectResponse {
         Gate::authorize('update', $occurrence->schedule->item);
 
@@ -111,16 +119,7 @@ class OccurrenceDependencyController extends Controller
 
         Gate::authorize('update', $otherOccurrence->schedule->item);
 
-        $dependency = OccurrenceDependency::query()
-            ->where('occurrence_id', $occurrence->id)
-            ->where('depends_on_occurrence_id', $otherOccurrence->id)
-            ->first();
-
-        if ($dependency === null) {
-            abort(404);
-        }
-
-        $dependency->delete();
+        $undependOccurrence->handle($occurrence, $otherOccurrence, $request->user());
 
         return back()->with('status', 'occurrence-dependency-removed');
     }

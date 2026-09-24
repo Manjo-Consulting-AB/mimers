@@ -2,10 +2,14 @@
 
 namespace App\Actions\Schedule;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
+use App\Models\AuditLog;
 use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleDependency;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Skapar beroendet mellan två scheman, med de tre reglerna från issue 23 §
@@ -32,11 +36,21 @@ use App\Models\ScheduleDependency;
  * den första. Mjukraderade scheman räknas inte (§ Beslut 7): en kant med en
  * mjukraderad ände är osynlig tills schemat återställs.
  *
- * Raderingen bär ingen regel och bor i kontrollern (§ Beslut 7).
+ * Sedan issue 110 loggas raden här — `schedule_dependency.created`, med
+ * parets båda ULID:er i `meta` — så att webbens och `/api`:s två anropare får
+ * samma rad. Upplösningen ligger i App\Actions\Schedule\UndependSchedule
+ * (§ Beslut 7).
  */
 class DependSchedule
 {
-    public function handle(Schedule $schedule, Schedule $other): ScheduleDependency
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
+    /**
+     * @param  User  $actor  Den som knyter beroendet. Behörigheten är redan
+     *                       prövad av anroparen; hen blir `user_id` på
+     *                       loggraden.
+     */
+    public function handle(Schedule $schedule, Schedule $other, User $actor): ScheduleDependency
     {
         $containerId = $this->assertSameContainer($schedule, $other);
 
@@ -54,7 +68,25 @@ class DependSchedule
         $dependency = new ScheduleDependency;
         $dependency->schedule_id = $schedule->id;
         $dependency->depends_on_schedule_id = $other->id;
-        $dependency->save();
+
+        // Kanten och loggraden i EN transaktion: en rad som skrevs utanför
+        // kunde överleva ett rollback och beskriva ett beroende som inte
+        // finns.
+        DB::transaction(function () use ($dependency, $schedule, $other, $actor): void {
+            $dependency->save();
+
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_SCHEDULE_DEPENDENCY_CREATED,
+                account: $schedule->item->container->account,
+                user: $actor,
+                container: $schedule->item->container,
+                item: $schedule->item,
+                meta: [
+                    'schedule' => $schedule->ulid,
+                    'depends_on' => $other->ulid,
+                ],
+            );
+        });
 
         return $dependency;
     }
