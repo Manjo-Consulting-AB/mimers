@@ -447,6 +447,22 @@ it('en nedladdning ur användarens egen container skriver ingen rad, en ur någo
         ->and(sakerhetsJson())->not->toContain($främmandeBilaga->filename);
 });
 
+it('en nedladdning som slutar i 404 skriver ingen rad', function () {
+    $ägare = Account::factory()->create();
+    $gäst = User::factory()->create();
+    $främmande = Container::factory()->for($ägare, 'account')->create();
+    [, $främmandeBilaga] = sakerhetsNedladdning($främmande);
+    beviljaAccess($främmande, $gäst, 'read', 'guest');
+
+    // Okänt värde och en variant som saknas: båda ger 404 innan några byten
+    // rör sig. Grinden släpper igenom, så det är variantvalideringen — inte
+    // behörigheten — som stoppar, och ett 404 är ingen nedladdning.
+    actingAs($gäst)->get("/files/{$främmandeBilaga->ulid}?variant=okant")->assertNotFound();
+    actingAs($gäst)->get("/files/{$främmandeBilaga->ulid}?variant=thumb")->assertNotFound();
+
+    expect(sakerhetsRader())->toBe([]);
+});
+
 it('ingen rad bär lösenord, kod, token eller e-postadress', function () {
     Notification::fake();
 

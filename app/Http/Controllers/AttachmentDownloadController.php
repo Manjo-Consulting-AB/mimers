@@ -83,19 +83,27 @@ class AttachmentDownloadController extends Controller
 
         Gate::authorize('view', $attachment->item);
 
-        $this->recordForeignDownload($request, $attachment, $container, $recordSecurityEvent);
-
         $variant = $request->query('variant');
         $filorigin = FileOrigin::host();
 
         if ($filorigin !== null) {
-            return redirect()->to(self::signedDeliveryUrl($attachment, $variant));
+            $svar = redirect()->to(self::signedDeliveryUrl($attachment, $variant));
+        } else {
+            // Ingen egen origin: leveransen ligger kvar på appdomänen och allt är
+            // attachment, utan undantag ([[ADR-0019 Filleverans]] § Uppföljning
+            // 2026-08-31, andra punkten).
+            $svar = AttachmentDelivery::make($attachment, $variant, inline: false);
         }
 
-        // Ingen egen origin: leveransen ligger kvar på appdomänen och allt är
-        // attachment, utan undantag ([[ADR-0019 Filleverans]] § Uppföljning
-        // 2026-08-31, andra punkten).
-        return AttachmentDelivery::make($attachment, $variant, inline: false);
+        // Loggrader skrivs först när svaret är byggt, aldrig före (issue 113):
+        // båda grenarna slår upp varianten medan de byggs, och en okänd eller
+        // saknad variant ger 404 redan där (AttachmentDelivery::storagePath) —
+        // liksom en fil som inte finns på disken. Ett 404 är ingen nedladdning,
+        // och en rad som påstod en händelse som inte hände vore sämre än ingen
+        // rad. Samma regel som ExportDownloadController och LiftLegalHold följer.
+        $this->recordForeignDownload($request, $attachment, $container, $recordSecurityEvent);
+
+        return $svar;
     }
 
     /**
@@ -118,6 +126,11 @@ class AttachmentDownloadController extends Controller
      * användare, och en leverans som loggas där kunde bara säga att NÅGON
      * hämtade filen (issue 113 § Omfångsrutan). Filnamnet följer aldrig med —
      * det är användarens text (ADR § Händelseloggen), och det bor i itemet.
+     *
+     * **Anropet ligger efter att svaret byggts, inte före.** En nedladdning
+     * som slutar i 404 — okänd eller saknad variant, eller en fil som inte
+     * finns på disken — är ingen nedladdning, och ska inte lämna en rad som
+     * påstår motsatsen.
      */
     private function recordForeignDownload(
         Request $request,
