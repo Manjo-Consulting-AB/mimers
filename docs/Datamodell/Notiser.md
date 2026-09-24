@@ -116,14 +116,23 @@ Alla icke-transaktionella utskick behöver avregistreringslänk och en inställn
 
 En hemlig prenumerationslänk per container som Apple Calendar eller Google Calendar hämtar själv. Kostar nästan ingenting att bygga, har ingen leveransproblematik, och hamnar i kalendern användaren redan tittar i varje dag.
 
+### calendar_feed
+
+En hemlig prenumerationslänk per **container och användare**, återkallbar.
+
 | Kolumn | Typ | Not |
 |---|---|---|
-| id | | |
+| id, ulid | | Raden syns i API:et som en resurs man listar och återkallar |
 | container_id | FK | |
 | user_id | FK | Feeden visar bara det den här användaren får se |
-| token_hash | CHAR(64) | Klartexten finns bara i URL:en |
+| token_hash | CHAR(64) UNIQUE | SHA-256 av slumpen. Klartexten finns bara i URL:en |
 | revoked_at | TIMESTAMP NULL | Måste gå att återkalla — URL:en är i praktiken ett lösenord |
 | last_fetched_at | TIMESTAMP NULL | |
+| created_at, updated_at | | |
+
+Index: `(container_id, user_id)`.
+
+**Ingen uniknyckel på `(container_id, user_id)`:** en användare får ha flera feeder till samma container — en i telefonen och en i datorn — så att den ena kan återkallas när telefonen tappas bort. Det är hela poängen med `revoked_at`. Ingen `deleted_at`: en feed som ska bort återkallas, den mjukraderas inte — historiken är poängen, man ska kunna se att en länk en gång fanns och stängdes.
 
 Feeden innehåller öppna förekomster som `VEVENT` med `due_at` som datum och schemats titel som sammanfattning. Textinnehållet följer användarens `locale`.
 
