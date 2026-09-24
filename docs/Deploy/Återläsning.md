@@ -126,6 +126,7 @@ Raderad användardata lever kvar i backuper (sista konsekvenspunkten i [[ADR-001
 
 1. **Mjukraderade rader vars `deleted_at` passerat retentionen** — de gallras av den schemalagda gallringen (`routes/console.php`), men direkt efter en återläsning ska de bort igen utan att vänta på nästa körning. Retentionen står i `config/files.php`; exemplet nedan använder 30 dagar.
 2. **Konton som raderats efter dumpens tidpunkt** — en hårt raderad rad finns inte i dumpen, så en återläsning väcker kontot till liv igen. Stäm av mot era raderingsärenden och ta bort kontona igen.
+3. **Loggarnas gallrade rader** — händelseloggen och säkerhetsloggen gallras av det schemalagda `prune-logs` (`routes/console.php`), tolv månader efter `container.purged`, `account.deleted` respektive radens eget `created_at` ([[ADR-0043 Tre loggar]] § Beslut; fristen står i `config/loggar.php`). En återläsning väcker de rader som redan gallrats, och de ska bort igen — annars står en loggrad kvar efter sin frist. **Den rättsliga spärren går före:** ett spärrat kontos rader tas inte bort, varken av jobbet eller för hand. Kontrollera `legal_hold` innan något tas bort manuellt.
 
 ```sql
 -- Körs mot produktionsdatabasen. Kontrollen är en räkning: blir den inte noll
@@ -139,6 +140,28 @@ UNION ALL SELECT 'attachment', COUNT(*) FROM attachment
 ```
 
 Blir räkningen inte noll, och det inte rör sig om ett pågående ärende — ta bort raderna på samma sätt som gallringen gör, eller låt nästa schemalagda körning ta dem.
+
+Samma kontroll för loggarna. Tolv månader är standardfristen i `config/loggar.php`, och frågan tar inte hänsyn till den rättsliga spärren: en rad som står kvar därför att kontot är spärrat räknas här. Stäm av mot `legal_hold` innan något tas bort för hand.
+
+```sql
+SELECT 'audit_log, containers rader' AS tabell, COUNT(*) AS antal
+  FROM audit_log r
+  WHERE EXISTS (
+    SELECT 1 FROM audit_log a
+    WHERE a.action = 'container.purged'
+      AND a.container_id = r.container_id
+      AND a.created_at < UTC_TIMESTAMP() - INTERVAL 12 MONTH
+  )
+UNION ALL SELECT 'audit_log, kontots rader', COUNT(*) FROM audit_log r
+  WHERE r.container_id IS NULL AND EXISTS (
+    SELECT 1 FROM audit_log a
+    WHERE a.action = 'account.deleted'
+      AND a.account_id = r.account_id
+      AND a.created_at < UTC_TIMESTAMP() - INTERVAL 12 MONTH
+  )
+UNION ALL SELECT 'security_log', COUNT(*) FROM security_log
+  WHERE created_at < UTC_TIMESTAMP() - INTERVAL 12 MONTH;
+```
 
 ## Installation av driftkedjan
 

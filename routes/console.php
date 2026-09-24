@@ -12,6 +12,7 @@ use App\Console\GeneratesLoanNotifications;
 use App\Console\GeneratesQuotaWarnings;
 use App\Console\GeneratesTaskNotifications;
 use App\Console\PrunesExpiredMagicLinkTokens;
+use App\Console\PrunesLogs;
 use App\Console\PrunesRegistrationIps;
 use App\Console\PurgesExpiredExports;
 use App\Console\PurgesExpiredStoredFiles;
@@ -361,6 +362,31 @@ Schedule::call(fn () => app(SendsWeeklyDigest::class)->handle())
 Schedule::call(fn () => app(AggregatesUsageMetrics::class)->handle())
     ->daily()
     ->name('aggregate-usage-metrics');
+
+/*
+ * Issue 115 · Gallringen av loggarna: händelseloggen tolv månader efter
+ * containerns `container.purged` eller kontots `account.deleted`, och
+ * säkerhetsloggen tolv månader efter radens eget `created_at` — se
+ * App\Console\PrunesLogs, config/loggar.php och [[ADR-0043 Tre loggar]]
+ * § Beslut. Den rättsliga spärren (issue 112) går före båda stegen. Logiken
+ * bor i en vanlig klass, testad direkt i
+ * tests/Feature/Revision/LoggallringTest.php; det här är bara
+ * schemaläggningen.
+ *
+ * Posten ligger EFTER mätningen (issue 114) och FÖRE `drain-queue` med flit:
+ * mätningen läser de rader gallringen tar, och det som gallras innan det
+ * räknats är borta ur mätningen för alltid. `drain-queue` ska fortsätta ligga
+ * sist — se tests/Feature/Drift/KoarbetareTest.php.
+ *
+ * `Schedule::call(...)`, ALDRIG `Schedule::command(...)` eller
+ * `->runInBackground()` — båda går via Symfony Process/proc_open, avstängt
+ * hos inleed i både webb-SAPI och CLI, se AGENTS.md § Driftmiljön saknar
+ * proc_open och kommentaren för magic link-gallringen ovan. Kör i samma
+ * nattliga fönster som de andra gallringsjobben.
+ */
+Schedule::call(fn () => app(PrunesLogs::class)->handle())
+    ->daily()
+    ->name('prune-logs');
 
 /*
  * Issue 237 · Köarbetaren: tömmer `jobs`-tabellen varje minut. Inget annat
