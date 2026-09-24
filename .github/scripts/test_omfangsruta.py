@@ -204,6 +204,38 @@ def test_deklaration_som_glob_matchar_undertradet():
     )[0] == "deklarerad"
 
 
+# =====================================================================
+# olasbar_deklaration() - PR #469 deklarerade i fetstil och punktlista
+# =====================================================================
+
+def test_deklarationsmarkor_i_fetstil_lases():
+    kropp = "**Utanför rutan:**\n```\nroutes/console.php\n```\n"
+    assert o.deklarerade_sokvagar(kropp) == ["routes/console.php"]
+
+
+def test_deklaration_som_punktlista_ar_olasbar_och_sags_ut():
+    """PR #469:s form, ordagrant i sina delar: sakligt rätt, maskinellt oläsbar."""
+    kropp = (
+        "**Utanför rutan** (issuen står i läget `spårad`, så ändringen görs och "
+        "deklareras här):\n\n"
+        "- `routes/console.php` — krävs av \"Klart när\" punkt 9.\n"
+        "- `tests/Feature/Missbruk/RattsligSparrTest.php` — krävs av samma punkt.\n"
+    )
+    assert o.deklarerade_sokvagar(kropp) == []
+    assert o.olasbar_deklaration(kropp)
+
+
+def test_lasbar_deklaration_ar_inte_olasbar():
+    kropp = "Utanför rutan:\n```\nroutes/console.php\n```\n"
+    assert not o.olasbar_deklaration(kropp)
+
+
+def test_mallens_kommentar_ger_ingen_olasbar_deklaration():
+    """En halvifylld mall nämner markören i sin HTML-kommentar - det är inte ett försök."""
+    kropp = "<!--\nUtanför rutan:\n```\napp/Exempel.php\n```\n-->\n\n## Kontroller\n"
+    assert not o.olasbar_deklaration(kropp)
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
