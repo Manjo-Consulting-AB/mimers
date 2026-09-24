@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\Tag;
 use App\Support\Access\ItemScope;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -70,6 +71,12 @@ use Illuminate\Support\Facades\DB;
  * exakt ett `item_id`, så varje rad hamnar i exakt en bit och bitarna
  * summerar alltid precis till totalen bredvid — också i den DAG `LinkItems`
  * tillåter, där ett item kan nås längs två vägar.
+ *
+ * Sedan issue 125 bär `monthForContainers()` dashboardens månadssumma:
+ * samma fasta summering, avgränsad till innevarande kalendermånad, med
+ * containrarna som bitar ([[ADR-0038 Gränsen för Pro i kostnaderna]]
+ * § Beslut). Månaden kommer ur anroparen och inte ur en parameter — se
+ * metoden.
  */
 final class CostReport
 {
@@ -204,10 +211,73 @@ final class CostReport
     }
 
     /**
+     * Den fasta summeringen för INNEVARANDE KALENDARMÅNAD, issue 125 —
+     * dashboardens tredje bricka och dess donut. Båda är fria enligt
+     * [[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut: *"Dashboardens
+     * totalsumma för innevarande månad"* och *"Dashboardens donut, nedbruten
+     * per container"*.
+     *
+     * **Månaden är ingen parameter.** Den kommer ur anroparen, som räknade
+     * fram den ur användarens tidszon och skickar 'YYYY-MM' — samma månad för
+     * alla som tittar, och ingen fråga att ställa. Det är skillnaden mot den
+     * parametriserade rapporten, vars period användaren SKICKAR IN och vars
+     * grind därför ligger kvar orörd (`cost_reports`, CostReportController).
+     * Gränsen i ADR-0038 går vid frågan, inte vid ordet *summering*.
+     *
+     * Radmängden är `summaryQuery()` med ett datumspann ovanpå: samma
+     * `rowSet()` och samma `applyScope()` som `summaryForContainers()`,
+     * aldrig en egen formulering av vilka rader som räknas. `incurred_on` är
+     * en DATE-kolumn och jämförs med `whereDate()`, som i `baseQuery()` och
+     * av samma skäl: i sqlite bär kolumnen en tidskomponent, och en
+     * månadsgräns ska inte bero på klockslaget när frågan körs. Månaden är
+     * användarens LOKALA kalendermånad, men jämförelsen är en ren
+     * datumjämförelse — `incurred_on` är en dag och har därför ingen tidszon
+     * att konvertera (samma regel som `purchased_at`, issue 13a § Beslut 5).
+     *
+     * Totalen och nedbrytningen räknas ur SAMMA Builder, som i `summarise()`
+     * — summeringen sker i SQL och aldrig i PHP — och de svarar på var sin
+     * fråga: brickan *vad kostade månaden* och donuten *var tog pengarna
+     * vägen*. Bitarna är CONTAINRARNA och inte items: kontot är ingen
+     * startpunkt för underträdet, och den axeln är per container enligt
+     * ADR-0038 § Beslut.
+     *
+     * Valutorna grupperas och summeras aldrig ihop
+     * ([[ADR-0040 Underträdets summor]] § Konsekvenser): `totals` är en post
+     * per valuta, och en container som bär flera valutor bär dem var för sig.
+     * Donuten ritas därför en gång per valuta.
+     *
+     * @param  array<int, ItemScope>  $scopes  container_id → omfånget för den anropande användaren
+     * @param  string  $month  innevarande kalendermånad i användarens tidszon, 'YYYY-MM'
+     * @return array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>}
+     */
+    public function monthForContainers(array $scopes, string $month): array
+    {
+        // Månadens första och sista dag, som datum utan tidszon: `copy()` så
+        // att `endOfMonth()` inte flyttar `$first` under fötterna på gränsen
+        // den redan satt.
+        $first = Carbon::parse("{$month}-01");
+        $last = $first->copy()->endOfMonth();
+
+        $query = $this->summaryQuery($scopes)
+            ->whereDate('cost_entry.incurred_on', '>=', $first->toDateString())
+            ->whereDate('cost_entry.incurred_on', '<=', $last->toDateString());
+
+        return [
+            'totals' => $this->totals($query),
+            'breakdown' => $this->groupByContainer($query),
+        ];
+    }
+
+    /**
      * Radmängden för de fasta summeringarna: `rowSet()` avgränsad till de
      * efterfrågade containrarna och till användarens omfång. Ingen filtergren
      * — en fast summering tar inga parametrar (issue 86), och läggs en
      * period in här är ändpunkten inte längre fast.
+     *
+     * Månadssummeringen (issue 125) lägger sitt datumspann ovanpå den här
+     * frågan i stället för inuti den: spannet kommer ur serverns klocka och
+     * inte ur en parameter, så grinden står stilla. Se
+     * `monthForContainers()`.
      *
      * @param  array<int, ItemScope>  $scopes  container_id → omfång
      */
@@ -406,6 +476,52 @@ final class CostReport
                 'key' => ['ulid' => $row->item_ulid, 'name' => $row->item_name],
                 'name' => $row->item_name,
                 'ulid' => $row->item_ulid,
+                'currencies' => [],
+            ];
+            $this->addToBucket($buckets[$id], $row->currency, (int) $row->amount, (int) $row->count);
+        }
+
+        return $this->formatGroups($buckets);
+    }
+
+    /**
+     * Per container — månadssummeringens nedbrytning, alltså donutens
+     * tårtbitar (issue 125). Samma kod och samma form som `groupByItem()`:
+     * grupperingen sker i SQL på `cost_entry.container_id`, en bucket per
+     * container och valuta, och raderna lämnar databasen färdigsummerade.
+     *
+     * Containerns ULID och namn hämtas i SAMMA fråga, genom en join mot
+     * `container`. En container är en rad per id, så joinen varken
+     * dubblerar eller filtrerar något — och den sparar det uppslag som en
+     * namnlista i PHP hade kostat. Frågekostnaden är därför konstant
+     * oavsett antalet containrar, som för `summaryForContainers()`.
+     *
+     * En container utan kostnadsrader den här månaden blir ingen bit alls:
+     * grupperingen sker över raderna i mängden, och en tom container har
+     * inga. Det är samma egenskap som gör att bitarna alltid summerar precis
+     * till totalen bredvid.
+     *
+     * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
+     */
+    private function groupByContainer(Builder $base): array
+    {
+        $rows = (clone $base)
+            ->join('container', 'container.id', '=', 'cost_entry.container_id')
+            ->selectRaw('container.id AS container_id, container.ulid AS container_ulid, container.name AS container_name')
+            ->selectRaw('cost_entry.currency AS currency')
+            ->selectRaw('SUM(cost_entry.amount) AS amount')
+            ->selectRaw('COUNT(*) AS count')
+            ->groupBy('container.id', 'container.ulid', 'container.name', 'cost_entry.currency')
+            ->get();
+
+        $buckets = [];
+
+        foreach ($rows as $row) {
+            $id = (int) $row->container_id;
+            $buckets[$id] ??= [
+                'key' => ['ulid' => $row->container_ulid, 'name' => $row->container_name],
+                'name' => $row->container_name,
+                'ulid' => $row->container_ulid,
                 'currencies' => [],
             ];
             $this->addToBucket($buckets[$id], $row->currency, (int) $row->amount, (int) $row->count);
