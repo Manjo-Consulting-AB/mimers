@@ -28,6 +28,12 @@ use Illuminate\Support\Facades\DB;
  *
  * Raden raderas aldrig (issue 10a § Beslut 13).
  *
+ * **Engångsspärren sitter i UPDATE-satsen**, aldrig i ett `if` före ett
+ * `save()` — samma villkorade skrivning som App\Actions\Invitation\
+ * RejectInvitation och App\Actions\Invitation\AcceptInvitation använder, så
+ * två samtidiga återkallelser av samma `pending`-inbjudan aldrig båda kan
+ * lyckas och båda skriva en `invitation.revoked`-rad.
+ *
  * **Ingen `Gate::authorize()`**, samma linje som CreateInvitation: anroparen
  * prövar behörighet med `manageAccess()`. `$container` bars tidigare i
  * signaturen bara för att de två ingångarna skulle läsa likadant — sedan
@@ -46,13 +52,15 @@ class RevokeInvitation
      */
     public function handle(Container $container, Invitation $invitation, User $actor): void
     {
-        if ($invitation->status !== 'pending') {
-            throw ApiException::make('invitation.not_pending', ['invitation' => $invitation->ulid], 422);
-        }
-
         DB::transaction(function () use ($container, $invitation, $actor): void {
-            $invitation->status = 'revoked';
-            $invitation->save();
+            $revoked = Invitation::query()
+                ->whereKey($invitation->getKey())
+                ->where('status', 'pending')
+                ->update(['status' => 'revoked']);
+
+            if ($revoked !== 1) {
+                throw ApiException::make('invitation.not_pending', ['invitation' => $invitation->ulid], 422);
+            }
 
             // `invitation.revoked` i samma transaktion (issue 111). En rad
             // som inte gick att dra tillbaka kastar ovanför och lämnar ingen

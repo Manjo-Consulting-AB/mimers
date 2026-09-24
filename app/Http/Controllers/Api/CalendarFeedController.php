@@ -141,28 +141,42 @@ class CalendarFeedController extends Controller
      * Grinden är view() — samma som skapandet. Att återkalla är att minska
      * exponeringen, och den som får skapa en feed får klippa den, se Beslut
      * 4.
+     *
+     * Raden läses om och låses INNE i transaktionen (`lockForUpdate`):
+     * route-modellbindningens instans lästes innan transaktionen öppnades,
+     * och två samtidiga anrop mot samma feed skulle annars båda se
+     * `revoked_at === null` på sin egen instans och skriva var sin loggrad
+     * för samma återkallelse — samma teknik och samma skäl som
+     * App\Actions\Access\RevokeContainerAccess.
      */
     public function destroy(Request $request, Container $container, CalendarFeed $calendarFeed, RecordAuditEvent $recordAuditEvent): Response
     {
         Gate::authorize('view', $container);
 
-        if ($calendarFeed->revoked_at === null) {
-            DB::transaction(function () use ($request, $container, $calendarFeed, $recordAuditEvent): void {
-                $calendarFeed->revoked_at = now();
-                $calendarFeed->save();
+        DB::transaction(function () use ($request, $container, $calendarFeed, $recordAuditEvent): void {
+            $låstFeed = CalendarFeed::query()
+                ->whereKey($calendarFeed->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
+            if ($låstFeed->revoked_at !== null) {
                 // En andra återkallelse är ingen handling: den rör varken
                 // tidsstämpeln eller loggen (issue 36a § Beslut 3, issue 111).
-                $recordAuditEvent->handle(
-                    action: AuditLog::ACTION_CALENDAR_FEED_REVOKED,
-                    account: $container->account,
-                    user: $request->user(),
-                    container: $container,
-                    subjectType: 'calendar_feed',
-                    subjectUlid: $calendarFeed->ulid,
-                );
-            });
-        }
+                return;
+            }
+
+            $låstFeed->revoked_at = now();
+            $låstFeed->save();
+
+            $recordAuditEvent->handle(
+                action: AuditLog::ACTION_CALENDAR_FEED_REVOKED,
+                account: $container->account,
+                user: $request->user(),
+                container: $container,
+                subjectType: 'calendar_feed',
+                subjectUlid: $låstFeed->ulid,
+            );
+        });
 
         return response()->noContent();
     }
