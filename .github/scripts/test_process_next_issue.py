@@ -326,6 +326,33 @@ def test_beviljar_inte_undantag_pa_tomt_svar():
 #  ett arkitektbeslut, och ingen väg ledde dit)
 # =====================================================================
 
+# =====================================================================
+# kapa_felutskrift() - issue 109 (#450): svansen får inte kapas bort
+# =====================================================================
+
+def test_kapa_felutskrift_kort_text_orord():
+    assert p.kapa_felutskrift("kort", 100) == "kort"
+
+
+def test_kapa_felutskrift_none_ger_tomt():
+    assert p.kapa_felutskrift(None, 100) == ""
+
+
+def test_kapa_felutskrift_behaller_svansen():
+    """Sammanfattningen står sist - den ska överleva kapningen."""
+    text = "fillista\n" + "x" * 10_000 + "\n::error::2 testfil(er) är gröna"
+    kapad = p.kapa_felutskrift(text, 1000)
+    assert kapad.startswith("fillista")
+    assert kapad.endswith("::error::2 testfil(er) är gröna")
+    assert "tecken utelämnade" in kapad
+    assert len(kapad) < 1100
+
+
+def test_ingen_felutskrift_kapas_bara_fran_borjan():
+    """Återfall: `test_output[:N]` tappar sammanfattningen i slutet."""
+    assert not re.search(r"test_output\[:\d+\]", _kalla())
+
+
 def _kalla(filnamn="process_next_issue.py"):
     return open(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), filnamn),

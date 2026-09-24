@@ -27,6 +27,17 @@
 # Granulariteten är per fil - en fil som blandar en genuint ny acceptanstest med
 # en flakighetsfix ska inte ha markören.
 #
+# En ÄNDRAD testfil prövas bara om den lägger till ett testfall - ett `it('…')`
+# eller `test('…')` vars namn inte finns i basens version av filen. Utan nytt
+# namn är ändringen en följdändring: en ny konstruktorsignatur, en hjälpare som
+# byter anrop. Sådana filer beter sig likadant på basen och kan aldrig bli röda
+# där, och det var så issue 109 (#450) fastnade i fyra försök - fem befintliga
+# tester som bara bytte `new StoreAttachment` mot en injicerad variant. Ett
+# "Klart när"-kriterium namnger alltid ett testfall, så ett nytt kriterium ger
+# alltid ett nytt namn. Det kontrollen släpper igenom är en ändrad assertion i
+# ett befintligt testfall med oförändrat namn; den läses av granskaren.
+# Tillagda filer prövas som förut.
+#
 # Läser BASE_SHA ur miljön. Avslutar 0 om alla nya tester är röda på basen (eller
 # undantagna) eller om PR:en inte lägger till några tester, 1 om något
 # icke-undantaget test går igenom utan koden.
@@ -46,6 +57,40 @@ fi
 
 echo "Nya eller ändrade testfiler: ${#TESTER[@]}"
 printf '  %s\n' "${TESTER[@]}"
+
+# Testfallens namn i en fil på stdin, ett per rad. Repots tester skriver alla
+# namnet med enkelfnutt direkt efter parentesen; ett namn med escapad fnutt
+# kapas på samma ställe i bas och HEAD, så jämförelsen håller ändå.
+testnamn() {
+    grep -oE "^[[:space:]]*(it|test)\([[:space:]]*'[^']*'" \
+        | sed -E "s/^[[:space:]]*(it|test)\([[:space:]]*//" \
+        | sort -u || true
+}
+
+# Sant om filen lägger till minst ett testfall jämfört med baskommiten. En fil
+# som inte fanns på basen räknas som ny.
+har_nya_testfall() {
+    local fil="$1"
+    git cat-file -e "$BASE_SHA:$fil" 2>/dev/null || return 0
+    [ -n "$(comm -13 <(git show "$BASE_SHA:$fil" | testnamn) <(git show "HEAD:$fil" | testnamn))" ]
+}
+
+# Följdändringar sorteras bort innan något byggs - består PR:en bara av sådana
+# behövs inget basträd alls.
+PROVAS=()
+for fil in "${TESTER[@]}"; do
+    if har_nya_testfall "$fil"; then
+        PROVAS+=("$fil")
+    else
+        echo "::notice file=$fil::ändrad utan nytt testfall - en följdändring, prövas inte mot basen."
+    fi
+done
+
+if [ ${#PROVAS[@]} -eq 0 ]; then
+    echo "Inga nya testfall att pröva - alla ${#TESTER[@]} ändrade testfiler är följdändringar."
+    exit 0
+fi
+TESTER=("${PROVAS[@]}")
 
 ARBETE="$(mktemp -d)"
 trap 'rm -rf "$ARBETE"' EXIT
@@ -104,8 +149,22 @@ for fil in "${TESTER[@]}"; do
 done
 
 if [ ${#GRONA[@]} -gt 0 ]; then
+    # Sammanfattningen skrivs sist med flit: den som bara läser svansen av
+    # utdatan - en agent vars felutskrift kapats - ska ändå få veta vad som
+    # fälldes och vad som går att göra åt det.
     echo "::error::${#GRONA[@]} testfil(er) är gröna redan på baskommiten. Varje \"Klart när\"-punkt ska motsvaras av ett test som faller utan koden."
+    echo "Fällda filer:"
+    printf '  %s\n' "${GRONA[@]}"
+    cat <<'RAD'
+Vad du kan göra, per fil:
+  - Nytt testfall som ska bevisa ett kriterium: skärp assertionen så att den
+    faller utan din implementation. Byt den mot det nya beteendet, stryk den inte.
+  - Ett nytt testfall som av goda skäl är grönt på basen (en ren testfix, en
+    flytt): sätt `// rott-pa-basen: <motivering>` som första rad efter `<?php`.
+  - En befintlig fil du bara behövde ändra för en ny signatur fälls inte - lägg
+    inte till testfall i den som inte hör till issuen.
+RAD
     exit 1
 fi
 
-echo "Alla ${#TESTER[@]} testfiler är röda på basen eller undantagna."
+echo "Alla ${#TESTER[@]} prövade testfiler är röda på basen eller undantagna."

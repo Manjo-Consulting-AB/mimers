@@ -327,6 +327,24 @@ def kora_om_ci_efter_undantag(pr_number, svar):
         print(f"⚠️ Kunde inte köra om CI på #{pr_number}: {e}")
 
 
+def kapa_felutskrift(text, grans):
+    """Kortar en felutskrift till högst ungefär `grans` tecken och behåller
+    både början och slutet.
+
+    Att bara ta början, som förr, tappade det viktigaste: rott-pa-basen.sh och
+    Pest skriver sin sammanfattning sist. Issue 109 (#450) fick fyra försök med
+    bara fillistan och första gröna filens testrader - aldrig vilka filer som
+    fälldes eller att en markör fanns. Svansen får den större delen.
+    """
+    text = text or ""
+    if len(text) <= grans:
+        return text
+    huvud = grans // 4
+    svans = grans - huvud
+    utelamnat = len(text) - huvud - svans
+    return f"{text[:huvud]}\n[... {utelamnat} tecken utelämnade ...]\n{text[-svans:]}"
+
+
 def run_local_tests(cwd):
     """
     Kvalitetsgrind: Pint (auto-fix, aldrig ett skäl att fela), PHPStan
@@ -739,7 +757,7 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         passed, test_output = run_local_tests(cwd=worktree_path)
         if not passed:
             print(f"  ✗ Åtgärden bröt testsviten på varv {round_num}.")
-            findings = f"{findings}\n\nÅtgärden bröt testsviten:\n```\n{test_output[:1500]}\n```"
+            findings = f"{findings}\n\nÅtgärden bröt testsviten:\n```\n{kapa_felutskrift(test_output, 1500)}\n```"
             backa_trasig_egen_commit(worktree_path, branch_name, head_fore, head_efter, round_num)
             continue
 
@@ -2052,7 +2070,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         else:
             print(f"  ✗ Tester RÖDA på försök {attempt}.")
             last_error_output = test_output
-            error_history += f"\n--- Försök {attempt} felutskrift ---\n{test_output[:1000]}\n"
+            error_history += f"\n--- Försök {attempt} felutskrift ---\n{kapa_felutskrift(test_output, 3000)}\n"
 
     # -----------------------------------------------------------------
     # STEG 3: SONNET ESKALERING (EXAKT 1 FÖRSÖK)
@@ -2087,7 +2105,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
                 f"⚠️ **Processen avbruten - Mänsklig granskning krävs**\n\n"
                 f"- **DeepSeek V4 Flash:** Misslyckades efter 3 försök.\n"
                 f"- **Sonnet:** Misslyckades på försök 1.\n\n"
-                f"**Sista testfelet:**\n```\n{test_output[:2000]}\n```"
+                f"**Sista testfelet:**\n```\n{kapa_felutskrift(test_output, 3000)}\n```"
             )
             run_cmd(["gh", "issue", "comment", issue_num, "--body", comment_body], cwd=REPO_ROOT)
             run_cmd([
