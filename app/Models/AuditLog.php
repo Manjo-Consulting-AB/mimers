@@ -170,6 +170,95 @@ class AuditLog extends Model
 
     public const ACTION_LOAN_DELETED = 'loan.deleted';
 
+    /*
+     * Container- och åtkomsthändelserna (issue 111). Varje skrivning på
+     * containern själv, på det som hänger på den — kategorier, taggar och
+     * kalenderflöden — och på åtkomsten, inbjudningarna och överlåtelsen.
+     * `container.transferred` och `access.revoked` ovan rörs inte.
+     * [[ADR-0043 Tre loggar]] § Händelseloggen.
+     */
+
+    public const ACTION_CONTAINER_CREATED = 'container.created';
+
+    /**
+     * Containern ändrades. `meta.changed` är namnen på fälten som ändrades;
+     * `name` är fritext och följer bara med som namn.
+     */
+    public const ACTION_CONTAINER_UPDATED = 'container.updated';
+
+    /**
+     * Containern hamnade i papperskorgen. Mjukraderingen är användarens
+     * handling — gallringen (`container.purged`) är jobbets.
+     */
+    public const ACTION_CONTAINER_DELETED = 'container.deleted';
+
+    public const ACTION_CONTAINER_RESTORED = 'container.restored';
+
+    public const ACTION_CATEGORY_CREATED = 'category.created';
+
+    public const ACTION_CATEGORY_UPDATED = 'category.updated';
+
+    public const ACTION_CATEGORY_DELETED = 'category.deleted';
+
+    /**
+     * Den färdiga kategorimallen tillämpades — EN rad för hela handlingen,
+     * inte en per kategori den skapar (issue 111). Att avfärda mallen är
+     * ingen skrivning och loggas inte alls.
+     */
+    public const ACTION_CATEGORY_TEMPLATE_APPLIED = 'category.template_applied';
+
+    public const ACTION_TAG_CREATED = 'tag.created';
+
+    public const ACTION_TAG_UPDATED = 'tag.updated';
+
+    public const ACTION_TAG_DELETED = 'tag.deleted';
+
+    /**
+     * Kalenderflödet utfärdades. **Flödets token följer aldrig med i
+     * `meta`** — varken klartexten eller hashen (issue 111, issue 36a
+     * § Beslut 5).
+     */
+    public const ACTION_CALENDAR_FEED_CREATED = 'calendar_feed.created';
+
+    public const ACTION_CALENDAR_FEED_REVOKED = 'calendar_feed.revoked';
+
+    /**
+     * En åtkomst beviljades direkt, utan inbjudan. `meta` bär mottagarens
+     * typ, nivå och sort — aldrig en e-postadress (issue 40 § Beslut 10).
+     */
+    public const ACTION_ACCESS_GRANTED = 'access.granted';
+
+    /**
+     * En levande åtkomst bytte nivå eller utgång.
+     */
+    public const ACTION_ACCESS_UPDATED = 'access.updated';
+
+    /**
+     * Inbjudan skickades. `item_id` är satt när inbjudan gäller ett enskilt
+     * item.
+     */
+    public const ACTION_INVITATION_CREATED = 'invitation.created';
+
+    public const ACTION_INVITATION_REVOKED = 'invitation.revoked';
+
+    /**
+     * Inbjudan accepterades — avsändarens mening, och den rad som gör
+     * övergången från inbjudan till åtkomst läsbar i historiken.
+     */
+    public const ACTION_INVITATION_ACCEPTED = 'invitation.accepted';
+
+    /**
+     * Inbjudan avböjdes. `status`-kolumnen heter `rejected`, och namnet
+     * följer kolumnen, som `schedule_occurrence.skipped` gör.
+     */
+    public const ACTION_INVITATION_REJECTED = 'invitation.rejected';
+
+    public const ACTION_OWNERSHIP_TRANSFER_OFFERED = 'ownership_transfer.offered';
+
+    public const ACTION_OWNERSHIP_TRANSFER_REVOKED = 'ownership_transfer.revoked';
+
+    public const ACTION_OWNERSHIP_TRANSFER_REJECTED = 'ownership_transfer.rejected';
+
     /**
      * Tabellen heter `audit_log`, inte Eloquents standardplural `audit_logs`.
      */

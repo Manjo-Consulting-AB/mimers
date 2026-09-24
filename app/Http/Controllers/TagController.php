@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Tag\CreateTag;
+use App\Actions\Tag\DeleteTag;
 use App\Actions\Tag\ListTags;
+use App\Actions\Tag\UpdateTag;
 use App\Http\Requests\Tag\StoreTagRequest;
 use App\Http\Requests\Tag\UpdateTagRequest;
 use App\Http\Resources\ContainerResource;
@@ -99,6 +101,7 @@ class TagController extends Controller
             $container,
             $request->validated('name'),
             $request->validated('color'),
+            $request->user(),
         );
 
         return back()->with('status', 'tag-created');
@@ -108,16 +111,18 @@ class TagController extends Controller
      * PATCH /containers/{container}/tags/{tag} — 302 tillbaka.
      *
      * `UpdateTagRequest` gör att taggen kan spara sitt eget namn oförändrat
-     * (`->ignore($this->route('tag'))`, issue 12 § Beslut 5). Ingen Action:
-     * en `fill()` och en `save()` är hela skrivningen, och ett `color: null`
-     * betyder "ingen färg" — det är inte en tömning att skydda sig mot.
+     * (`->ignore($this->route('tag'))`, issue 12 § Beslut 5). Skrivningen bar
+     * ingen egen regel och stod därför i kontrollern — men sedan issue 111 ska
+     * `tag.updated` skrivas i handlingens transaktion, och då bor både
+     * `fill()` och raden i App\Actions\Tag\UpdateTag, som `/api` anropar på
+     * samma sätt. Ett `color: null` betyder "ingen färg" — det är inte en
+     * tömning att skydda sig mot.
      */
-    public function update(UpdateTagRequest $request, Container $container, Tag $tag): RedirectResponse
+    public function update(UpdateTagRequest $request, Container $container, Tag $tag, UpdateTag $updateTag): RedirectResponse
     {
         Gate::authorize('update', $container);
 
-        $tag->fill($request->validated());
-        $tag->save();
+        $updateTag->handle($container, $tag, $request->user(), $request->validated());
 
         return back()->with('status', 'tag-updated');
     }
@@ -128,13 +133,14 @@ class TagController extends Controller
      * Mjuk radering, nekas aldrig: taggen är platt och har inget barn att
      * skydda (issue 12 § Beslut 7, till skillnad från kategorin i issue 11
      * § Beslut 7). Ingen domänfelkod kan komma ur den här vägen, och därför
-     * ingen `ApiErrorTranslator` här.
+     * ingen `ApiErrorTranslator` här. Sedan issue 111 bor raderingen och
+     * `tag.deleted` i App\Actions\Tag\DeleteTag, som `/api` anropar.
      */
-    public function destroy(Container $container, Tag $tag): RedirectResponse
+    public function destroy(Request $request, Container $container, Tag $tag, DeleteTag $deleteTag): RedirectResponse
     {
         Gate::authorize('update', $container);
 
-        $tag->delete();
+        $deleteTag->handle($container, $tag, $request->user());
 
         return back()->with('status', 'tag-deleted');
     }

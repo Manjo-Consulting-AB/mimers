@@ -84,7 +84,7 @@ class ContainerAccessController extends Controller
         Gate::authorize('manageAccess', $container);
 
         try {
-            $updateContainerAccess->handle($container, $access, $request->safe()->only(['level', 'expires_at']));
+            $updateContainerAccess->handle($container, $access, $request->safe()->only(['level', 'expires_at']), $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['level' => $translator->message($e)]);
         }

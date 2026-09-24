@@ -2,10 +2,13 @@
 
 namespace App\Actions\Invitation;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Invitation;
+use App\Models\Item;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -23,12 +26,17 @@ use Illuminate\Support\Facades\DB;
  * Formen är instansklass med `handle()`, injicerad av containern, som
  * förlagan App\Actions\Auth\CreatesUserWithPersonalAccount.
  *
+ * Sedan issue 111 skrivs `invitation.accepted` i samma transaktion
+ * ([[ADR-0043 Tre loggar]] § Händelseloggen).
+ *
  * Anropas efter App\Http\Requests\Invitation\InvitationTokenRequest::invitation(),
  * som redan bevisat att tokenet hör till den inloggade adressen, att
  * containern finns och att inbjudan är `pending` och inte utgången.
  */
 class AcceptInvitation
 {
+    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
+
     /**
      * @param  Invitation  $invitation  Redan uppslagen och kontrollerad, med
      *                                  `container`-relationen laddad.
@@ -87,6 +95,34 @@ class AcceptInvitation
             if (! $harRedanAtkomst) {
                 $this->createAccess($invitation, $user);
             }
+
+            // `invitation.accepted` i samma transaktion (issue 111,
+            // [[ADR-0043 Tre loggar]] § Händelseloggen). Raden skrivs på BÅDA
+            // grenarna: inbjudan är accepterad även när mottagaren redan hade
+            // en giltig åtkomst — det är handlingen, inte accessraden, som
+            // loggas. `meta` bär nivån och itemets ULID, aldrig adressen
+            // (issue 40 § Beslut 10).
+            //
+            // `withTrashed()`: en itemsinbjudan kan ha mjukraderats mellan
+            // utskicket och accepten, och raden ska då bära sitt item och inte
+            // `null` — samma skäl som RevokeContainerAccess använder det.
+            $item = $invitation->item_id === null
+                ? null
+                : Item::withTrashed()->whereKey($invitation->item_id)->first();
+
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_INVITATION_ACCEPTED,
+                account: $container->account,
+                user: $user,
+                container: $container,
+                item: $item,
+                subjectType: 'invitation',
+                subjectUlid: $invitation->ulid,
+                meta: [
+                    'item' => $item?->ulid,
+                    'level' => $invitation->level,
+                ],
+            );
 
             // § Beslut 11: ett `read_only` ägarkonto hindrar INTE accept.
             // Regel 4 spärrar skrivande i containern och det gör policyn

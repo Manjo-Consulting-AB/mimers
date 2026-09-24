@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
+use App\Actions\Container\UpdateContainer;
 use App\Actions\Item\ListItems;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\StoreContainerRequest;
@@ -388,12 +389,14 @@ class ContainerController extends Controller
      * `Gate::authorize()` FRÅGAS oavsett vad listan visade: flaggan i listan
      * är presentation, grinden är policyn (Beslut 9).
      */
-    public function update(UpdateContainerRequest $request, Container $container): RedirectResponse
-    {
+    public function update(
+        UpdateContainerRequest $request,
+        Container $container,
+        UpdateContainer $updateContainer,
+    ): RedirectResponse {
         Gate::authorize('update', $container);
 
-        $container->fill($request->validated());
-        $container->save();
+        $updateContainer->handle($container, $request->user(), $request->validated());
 
         return redirect()
             ->route('containers.edit', $container)
@@ -438,7 +441,7 @@ class ContainerController extends Controller
 
         $varAktiv = $activeContainer->forUser($request->user()) === $container->ulid;
 
-        $trashContainer->handle($container);
+        $trashContainer->handle($container, $request->user());
 
         if ($varAktiv) {
             $activeContainer->forget();

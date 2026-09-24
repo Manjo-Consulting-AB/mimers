@@ -2,8 +2,12 @@
 
 namespace App\Actions\Category;
 
+use App\Actions\Audit\RecordAuditEvent;
+use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
+use App\Models\User;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Skapar en kategori i containern — se issue 56a § Beslut 7, issue 11
@@ -21,19 +25,50 @@ use App\Models\Container;
  *
  * **Ingen `Gate::authorize()`** — behörigheten prövas av anroparen, samma
  * linje som ListCategories och issue 54 § Beslut 3.
+ *
+ * Sedan issue 111 skrivs `category.created` i SAMMA transaktion som raden
+ * ([[ADR-0043 Tre loggar]] § Händelseloggen): en loggrad utanför den kunde
+ * överleva ett rollback och beskriva en kategori som aldrig skapades.
  */
 class CreateCategory
 {
-    public function __construct(private readonly MoveCategory $moveCategory) {}
+    public function __construct(
+        private readonly MoveCategory $moveCategory,
+        private readonly RecordAuditEvent $recordAuditEvent,
+    ) {}
 
-    public function handle(Container $container, string $name, ?Category $parent, ?int $position): Category
+    /**
+     * @param  User|null  $actor  Den som skapar kategorin; blir `user_id` på
+     *                            loggraden. Behörigheten är redan prövad av
+     *                            anroparen. **`null` betyder att anroparen
+     *                            skriver loggraden SJÄLV** — den färdiga
+     *                            kategorimallen skriver EN rad för hela
+     *                            tillämpningen (`category.template_applied`)
+     *                            och ingen per kategori den skapar, se
+     *                            App\Http\Controllers\CategoryController::
+     *                            storePreset().
+     */
+    public function handle(Container $container, string $name, ?Category $parent, ?int $position, ?User $actor = null): Category
     {
         $category = new Category(['name' => $name]);
         $category->container_id = $container->id;
         $category->position = $position ?? $this->nextPosition($container, $parent);
 
-        // handle() sätter parent_id och sparar — se App\Actions\Category\MoveCategory.
-        $this->moveCategory->handle($category, $parent);
+        DB::transaction(function () use ($container, $parent, $category, $actor): void {
+            // handle() sätter parent_id och sparar — se App\Actions\Category\MoveCategory.
+            $this->moveCategory->handle($category, $parent);
+
+            if ($actor !== null) {
+                $this->recordAuditEvent->handle(
+                    action: AuditLog::ACTION_CATEGORY_CREATED,
+                    account: $container->account,
+                    user: $actor,
+                    container: $container,
+                    subjectType: 'category',
+                    subjectUlid: $category->ulid,
+                );
+            }
+        });
 
         $category->setAttribute('parent_ulid', $parent?->ulid);
 

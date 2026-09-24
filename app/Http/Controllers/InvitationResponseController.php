@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Invitation\AcceptInvitation;
+use App\Actions\Invitation\RejectInvitation;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Invitation\InvitationTokenRequest;
 use App\Models\Invitation;
@@ -189,25 +190,21 @@ class InvitationResponseController extends Controller
      * adressmatchning krävs fortfarande — de prövas av
      * `InvitationTokenRequest::invitation()`.
      *
-     * Ingen Action: skrivningen är statusflippen och ingenting mer, så
-     * tröskeln i [[ADR-0024 Tunna controllers och actions]] är inte nådd.
-     * Kroppen är /api:s oförändrad, och villkoret `status = pending` sitter i
-     * UPDATE-satsen och inte i ett `if` före ett `save()` — samma
-     * engångsspärr som accept.
+     * Sedan issue 111 bor flippen OCH `invitation.rejected` i
+     * App\Actions\Invitation\RejectInvitation, som `/api` anropar på samma
+     * sätt. Fram till dess stod skrivningen här med motiveringen att den var
+     * "statusflippen och ingenting mer" och att tröskeln i [[ADR-0024 Tunna
+     * controllers och actions]] inte var nådd — raden i handlingens
+     * transaktion är det som ändrade det. Engångsspärren sitter alltjämt i
+     * UPDATE-satsen och inte i ett `if` före ett `save()`.
      */
-    public function reject(InvitationTokenRequest $request, ApiErrorTranslator $translator): RedirectResponse
-    {
+    public function reject(
+        InvitationTokenRequest $request,
+        RejectInvitation $rejectInvitation,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
         try {
-            $invitation = $request->invitation();
-
-            $rejected = Invitation::query()
-                ->whereKey($invitation->getKey())
-                ->where('status', 'pending')
-                ->update(['status' => 'rejected']);
-
-            if ($rejected !== 1) {
-                throw ApiException::make('invitation.not_pending', [], 422);
-            }
+            $rejectInvitation->handle($request->invitation(), $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['invitation' => $translator->message($e)]);
         }

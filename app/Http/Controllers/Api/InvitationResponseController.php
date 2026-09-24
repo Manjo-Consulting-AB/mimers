@@ -3,11 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Invitation\AcceptInvitation;
-use App\Exceptions\Api\ApiException;
+use App\Actions\Invitation\RejectInvitation;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Invitation\InvitationTokenRequest;
 use App\Http\Resources\ContainerResource;
-use App\Models\Invitation;
 use App\Models\User;
 use Illuminate\Http\Response;
 
@@ -62,23 +61,17 @@ class InvitationResponseController extends Controller
      * ett mejl vore fel väg. Autentisering och adressmatchning krävs
      * fortfarande — de prövas av InvitationTokenRequest::invitation().
      *
-     * Ingen Action: skrivningen är statusflippen och ingenting mer — ingen
-     * access skapas, inget annat rörs — så tröskeln i ADR-0024 är inte
-     * nådd. Villkoret `status = pending` sitter ändå i UPDATE-satsen och
-     * inte i ett `if` före ett `save()`, samma engångsspärr som accept.
+     * Sedan issue 111 bor flippen OCH `invitation.rejected` i
+     * App\Actions\Invitation\RejectInvitation, som webben anropar på samma
+     * sätt. Fram till dess stod skrivningen här med motiveringen att den var
+     * "statusflippen och ingenting mer" och att tröskeln i ADR-0024 inte var
+     * nådd — raden i handlingens transaktion är det som ändrade det.
+     * Engångsspärren sitter alltjämt i UPDATE-satsen och inte i ett `if` före
+     * ett `save()`.
      */
-    public function reject(InvitationTokenRequest $request): Response
+    public function reject(InvitationTokenRequest $request, RejectInvitation $rejectInvitation): Response
     {
-        $invitation = $request->invitation();
-
-        $rejected = Invitation::query()
-            ->whereKey($invitation->getKey())
-            ->where('status', 'pending')
-            ->update(['status' => 'rejected']);
-
-        if ($rejected !== 1) {
-            throw ApiException::make('invitation.not_pending', [], 422);
-        }
+        $rejectInvitation->handle($request->invitation(), $request->user());
 
         return response()->noContent();
     }

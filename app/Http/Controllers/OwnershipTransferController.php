@@ -2,20 +2,20 @@
 
 namespace App\Http\Controllers;
 
-use App\Actions\Notification\CreateNotification;
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\OwnershipTransfer\AcceptOwnershipTransfer;
+use App\Actions\OwnershipTransfer\OfferOwnershipTransfer;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\OwnershipTransfer\AcceptOwnershipTransferRequest;
 use App\Http\Requests\OwnershipTransfer\StoreOwnershipTransferRequest;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\OwnershipTransferResource;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Item;
-use App\Models\Notification as NotificationModel;
 use App\Models\OwnershipTransfer;
 use App\Models\User;
-use App\Notifications\OwnershipTransferNotification;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Plan\Entitlements;
@@ -23,8 +23,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -74,9 +74,12 @@ use Inertia\Response;
  * ligger utanför rutan. Samma avvägning som
  * App\Http\Controllers\LoanController::assertNoOpenLoan() gjorde i 67a.
  *
- * **Samma sak gäller `createTransfer()`** nedan: initieringen — dubblettspärren
- * och mottagarvägen — bor i `Api\OwnershipTransferController::store()`, och
- * den här ytan behöver samma skrivning. Se § Frågor och antaganden i PR:en.
+ * **`createTransfer()` är borta sedan issue 111.** Initieringen —
+ * dubblettspärren, raden, mottagarvägens notifiering och
+ * `ownership_transfer.offered` — bor i
+ * App\Actions\OwnershipTransfer\OfferOwnershipTransfer, som `/api` anropar på
+ * samma sätt. Det var den avvägning docblocken ovan beskrev: två avskrifter
+ * fick stå kvar så länge `app/Actions/**` låg utanför rutan.
  */
 class OwnershipTransferController extends Controller
 {
@@ -171,6 +174,7 @@ class OwnershipTransferController extends Controller
         StoreOwnershipTransferRequest $request,
         Container $container,
         Entitlements $entitlements,
+        OfferOwnershipTransfer $offerOwnershipTransfer,
         ApiErrorTranslator $translator,
     ): RedirectResponse {
         Gate::authorize('transfer', $container);
@@ -178,7 +182,14 @@ class OwnershipTransferController extends Controller
         $this->assertFeature($entitlements, $container->account, $translator);
 
         try {
-            $this->createTransfer($request, $container);
+            $offerOwnershipTransfer->handle(
+                $container,
+                $request->user(),
+                $request->validated('to_account'),
+                $request->validated('to_email'),
+                $request->validated('excluded_items') ?? [],
+                $request->validated('retain_access_level'),
+            );
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['transfer' => $translator->message($e)]);
         }
@@ -209,21 +220,40 @@ class OwnershipTransferController extends Controller
      * en annan container blir 404 innan den här metoden körs.
      */
     public function destroy(
+        Request $request,
         Container $container,
         OwnershipTransfer $transfer,
+        RecordAuditEvent $recordAuditEvent,
         ApiErrorTranslator $translator,
     ): RedirectResponse {
         Gate::authorize('transfer', $container);
 
-        $revoked = OwnershipTransfer::query()
-            ->whereKey($transfer->getKey())
-            ->where('status', 'pending')
-            ->update(['status' => 'revoked']);
+        // Flippen och `ownership_transfer.revoked` i EN transaktion (issue
+        // 111), exakt som i Api\OwnershipTransferController::destroy(). `meta`
+        // är tom — vem som återkallade står i `user_id`, och mottagarens adress
+        // får aldrig skrivas (issue 40 § Beslut 10).
+        try {
+            DB::transaction(function () use ($request, $container, $transfer, $recordAuditEvent): void {
+                $revoked = OwnershipTransfer::query()
+                    ->whereKey($transfer->getKey())
+                    ->where('status', 'pending')
+                    ->update(['status' => 'revoked']);
 
-        if ($revoked !== 1) {
-            throw ValidationException::withMessages([
-                'transfer' => $translator->message(ApiException::make('transfer.not_pending', [], 422)),
-            ]);
+                if ($revoked !== 1) {
+                    throw ApiException::make('transfer.not_pending', [], 422);
+                }
+
+                $recordAuditEvent->handle(
+                    action: AuditLog::ACTION_OWNERSHIP_TRANSFER_REVOKED,
+                    account: $container->account,
+                    user: $request->user(),
+                    container: $container,
+                    subjectType: 'ownership_transfer',
+                    subjectUlid: $transfer->ulid,
+                );
+            });
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['transfer' => $translator->message($e)]);
         }
 
         return redirect()
@@ -355,6 +385,7 @@ class OwnershipTransferController extends Controller
     public function reject(
         Request $request,
         OwnershipTransfer $transfer,
+        RecordAuditEvent $recordAuditEvent,
         ApiErrorTranslator $translator,
     ): RedirectResponse {
         /** @var User $user */
@@ -368,114 +399,37 @@ class OwnershipTransferController extends Controller
             abort(404);
         }
 
-        $rejected = OwnershipTransfer::query()
-            ->whereKey($transfer->getKey())
-            ->where('status', 'pending')
-            ->update(['status' => 'rejected']);
+        // Flippen och `ownership_transfer.rejected` i EN transaktion (issue
+        // 111), exakt som i Api\OwnershipTransferController::reject().
+        // `user_id` är MOTTAGAREN — den som avböjde — och `meta` är tom, för
+        // avsändarens adress får aldrig skrivas (issue 40 § Beslut 10).
+        try {
+            DB::transaction(function () use ($user, $transfer, $recordAuditEvent): void {
+                $rejected = OwnershipTransfer::query()
+                    ->whereKey($transfer->getKey())
+                    ->where('status', 'pending')
+                    ->update(['status' => 'rejected']);
 
-        if ($rejected !== 1) {
-            throw ValidationException::withMessages([
-                'transfer' => $translator->message(ApiException::make('transfer.not_pending', [], 422)),
-            ]);
+                if ($rejected !== 1) {
+                    throw ApiException::make('transfer.not_pending', [], 422);
+                }
+
+                $recordAuditEvent->handle(
+                    action: AuditLog::ACTION_OWNERSHIP_TRANSFER_REJECTED,
+                    account: $transfer->container->account,
+                    user: $user,
+                    container: $transfer->container,
+                    subjectType: 'ownership_transfer',
+                    subjectUlid: $transfer->ulid,
+                );
+            });
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['transfer' => $translator->message($e)]);
         }
 
         return redirect()
             ->route('transfers.index')
             ->with('status', 'transfer-rejected');
-    }
-
-    /**
-     * Initieringen: dubblettspärren, raden och mottagarvägens notifiering —
-     * samma skrivning som `Api\OwnershipTransferController::store()` gör, se
-     * klassens docblock om varför den står här en andra gång.
-     *
-     * Dubblettspärren frågar efter en `pending`-rad som inte gått ut. En
-     * utgången, avvisad eller tillbakadragen rad blockerar inget — att begära
-     * igen efter ett nej ska gå — och utgången läses ur `created_at` + TTL och
-     * inte ur `status`, för kolumnen flippas aldrig (39a § Beslut 10).
-     *
-     * `to_account` löses upp till id, `to_email` normaliseras till gemener
-     * innan den lagras, och alla kolumner sätts explicit — aldrig via
-     * massildelning (`OwnershipTransfer` har tom `#[Fillable]`).
-     */
-    private function createTransfer(StoreOwnershipTransferRequest $request, Container $container): void
-    {
-        $existing = $container->transfers()
-            ->where('status', 'pending')
-            ->where('created_at', '>', now()->subDays(OwnershipTransfer::TTL_DAYS))
-            ->first();
-
-        if ($existing instanceof OwnershipTransfer) {
-            throw ApiException::make('transfer.already_pending', ['transfer' => $existing->ulid], 422);
-        }
-
-        $transfer = new OwnershipTransfer;
-        $transfer->container_id = $container->id;
-        $transfer->from_account_id = $container->account_id;
-        $transfer->status = 'pending';
-        $transfer->excluded_item_ids = $request->validated('excluded_items') ?? [];
-        $transfer->retain_access_level = $request->validated('retain_access_level');
-        $transfer->initiated_by_user_id = $request->user()->id;
-
-        $toAccount = null;
-        $toEmail = null;
-
-        if ($request->validated('to_account') !== null) {
-            $toAccount = Account::query()->where('ulid', $request->validated('to_account'))->firstOrFail();
-            $transfer->to_account_id = $toAccount->id;
-            $transfer->to_email = null;
-        } else {
-            $toEmail = mb_strtolower((string) $request->validated('to_email'));
-            $transfer->to_account_id = null;
-            $transfer->to_email = $toEmail;
-        }
-
-        $transfer->save();
-
-        // Mottagarvägen avgör notifieringen (39a § Beslut 12).
-        if ($toAccount instanceof Account) {
-            $this->notifyAccountMembers($transfer, $toAccount, $container);
-        } else {
-            $this->sendOnDemandMail($toEmail, $container);
-        }
-    }
-
-    /**
-     * En `transfer.requested`-notis per medlem i det mottagande kontot, genom
-     * App\Actions\Notification\CreateNotification — den enda vägen in i
-     * `notification`, som respekterar preferenser och tysta timmar och skapar
-     * leveransraderna för kön.
-     *
-     * `dedupe_key` bär transfer och mottagare: skulle store() anropas två
-     * gånger (efter att den första raden hunnit skapas men innan svaret)
-     * skapar CreateNotification ingen andra notisrad.
-     */
-    private function notifyAccountMembers(OwnershipTransfer $transfer, Account $toAccount, Container $container): void
-    {
-        foreach ($toAccount->users as $recipient) {
-            app(CreateNotification::class)->handle(
-                type: NotificationModel::TYPE_TRANSFER_REQUESTED,
-                account: $toAccount,
-                user: $recipient,
-                container: $container,
-                payload: ['container' => $container->name],
-                dedupeKey: "transfer.requested:{$transfer->ulid}:{$recipient->ulid}",
-            );
-        }
-    }
-
-    /**
-     * On-demand-mejlet till en adress utan konto. Inget `notification`-rad
-     * skapas, och mejlet bär ingen token och ingen länk med hemlighet: det
-     * pekar på `/transfers`, sökvägen den här sidan svarar på, och ber
-     * mottagaren skapa ett konto med just den adressen och verifiera den.
-     */
-    private function sendOnDemandMail(string $email, Container $container): void
-    {
-        $url = rtrim((string) config('app.url'), '/').'/transfers';
-
-        NotificationFacade::route('mail', $email)
-            ->notify(new OwnershipTransferNotification($url, $container));
     }
 
     /**

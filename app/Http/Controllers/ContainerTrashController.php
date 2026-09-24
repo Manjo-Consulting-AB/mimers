@@ -115,7 +115,7 @@ class ContainerTrashController extends Controller
 
         abort_if($container->deleted_at->lt($cutoff), 404);
 
-        $restoreTrashedContainer->handle($container);
+        $restoreTrashedContainer->handle($container, $request->user());
 
         return redirect()
             ->route('trash.containers')

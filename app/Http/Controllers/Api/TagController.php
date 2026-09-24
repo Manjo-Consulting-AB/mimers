@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Tag\CreateTag;
+use App\Actions\Tag\DeleteTag;
 use App\Actions\Tag\ListTags;
+use App\Actions\Tag\UpdateTag;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Tag\StoreTagRequest;
 use App\Http\Requests\Tag\UpdateTagRequest;
@@ -70,6 +72,7 @@ class TagController extends Controller
             $container,
             $request->validated('name'),
             $request->validated('color'),
+            $request->user(),
         );
 
         return (new TagResource($tag))
@@ -83,12 +86,11 @@ class TagController extends Controller
      * `->ignore($this->route('tag'))` gör att taggen kan spara sitt eget
      * namn oförändrat (issue 12 § Beslut 5).
      */
-    public function update(UpdateTagRequest $request, Container $container, Tag $tag): TagResource
+    public function update(UpdateTagRequest $request, Container $container, Tag $tag, UpdateTag $updateTag): TagResource
     {
         Gate::authorize('update', $container);
 
-        $tag->fill($request->validated());
-        $tag->save();
+        $updateTag->handle($container, $tag, $request->user(), $request->validated());
 
         return new TagResource($tag);
     }
@@ -98,13 +100,14 @@ class TagController extends Controller
      * Mjuk radering (`SoftDeletes`), nekas aldrig — taggen är platt, inget
      * barn att skydda (issue 12 § Beslut 7, till skillnad från kategorin i
      * issue 11 § Beslut 7). Vad som händer med `item_tag`-kopplingarna
-     * avgörs av issue 13b, inte här.
+     * avgörs av issue 13b, inte här. Sedan issue 111 bor raderingen och
+     * `tag.deleted` i App\Actions\Tag\DeleteTag, som webben anropar.
      */
-    public function destroy(Container $container, Tag $tag): Response
+    public function destroy(Request $request, Container $container, Tag $tag, DeleteTag $deleteTag): Response
     {
         Gate::authorize('update', $container);
 
-        $tag->delete();
+        $deleteTag->handle($container, $tag, $request->user());
 
         return response()->noContent();
     }

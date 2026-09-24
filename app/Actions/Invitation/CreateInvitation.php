@@ -2,13 +2,16 @@
 
 namespace App\Actions\Invitation;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\User;
 use App\Notifications\InvitationNotification;
 use App\Support\Plan\Entitlements;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
@@ -33,6 +36,11 @@ use Illuminate\Support\Str;
  * och inte i en logg (issue 10a § Beslut 5). Returvärdet är raden, och den bär
  * bara hashen.
  *
+ * Sedan issue 111 skrivs `invitation.created` i samma transaktion som raden
+ * ([[ADR-0043 Tre loggar]] § Händelseloggen). Raden bär `item_id` när inbjudan
+ * gäller ett enskilt item, och **`meta` bär varken adressen eller tokenet** —
+ * bara nivån och itemets ULID.
+ *
  * **Ingen `Gate::authorize()`.** Behörigheten prövas av anroparen, precis som
  * i App\Actions\Access\ListContainerAccesses och
  * App\Actions\Container\CreateContainer — se issue 54 § Beslut 3 och issue
@@ -49,7 +57,10 @@ class CreateInvitation
      */
     private const TOKEN_LENGTH = 64;
 
-    public function __construct(private readonly Entitlements $entitlements) {}
+    public function __construct(
+        private readonly Entitlements $entitlements,
+        private readonly RecordAuditEvent $recordAuditEvent,
+    ) {}
 
     /**
      * @param  User  $inviter  Den som bjuder in. Blir `invited_by_user_id`.
@@ -98,19 +109,41 @@ class CreateInvitation
         // lagras aldrig, se klassens docblock.
         $rawToken = Str::random(self::TOKEN_LENGTH);
 
-        $invitation = new Invitation([
-            'email' => $email,
-            'level' => $level,
-        ]);
-        $invitation->container_id = $container->id;
-        // Kolumnen är medvetet inte #[Fillable] — den sätts explicit, som
-        // container_id och invited_by_user_id.
-        $invitation->item_id = $item?->id;
-        $invitation->token_hash = hash('sha256', $rawToken);
-        $invitation->status = 'pending';
-        $invitation->expires_at = now()->addDays(Invitation::TTL_DAYS);
-        $invitation->invited_by_user_id = $inviter->id;
-        $invitation->save();
+        $invitation = DB::transaction(function () use ($inviter, $container, $email, $level, $item, $rawToken): Invitation {
+            $invitation = new Invitation([
+                'email' => $email,
+                'level' => $level,
+            ]);
+            $invitation->container_id = $container->id;
+            // Kolumnen är medvetet inte #[Fillable] — den sätts explicit, som
+            // container_id och invited_by_user_id.
+            $invitation->item_id = $item?->id;
+            $invitation->token_hash = hash('sha256', $rawToken);
+            $invitation->status = 'pending';
+            $invitation->expires_at = now()->addDays(Invitation::TTL_DAYS);
+            $invitation->invited_by_user_id = $inviter->id;
+            $invitation->save();
+
+            // `invitation.created` i samma transaktion (issue 111). Raden bär
+            // `item_id` när inbjudan gäller ett enskilt item, och `meta` bär
+            // nivån och itemets ULID — **aldrig adressen** den skickades till
+            // (issue 40 § Beslut 10) och aldrig tokenet.
+            $this->recordAuditEvent->handle(
+                action: AuditLog::ACTION_INVITATION_CREATED,
+                account: $container->account,
+                user: $inviter,
+                container: $container,
+                item: $item,
+                subjectType: 'invitation',
+                subjectUlid: $invitation->ulid,
+                meta: [
+                    'item' => $item?->ulid,
+                    'level' => $invitation->level,
+                ],
+            );
+
+            return $invitation;
+        });
 
         // Issue 10b § Beslut 2 och 3: mejlet skickas härifrån, direkt efter att
         // raden skapats, med den klartext-token som genererades ovan.

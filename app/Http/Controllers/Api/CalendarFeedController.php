@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CalendarFeedResource;
+use App\Models\AuditLog;
 use App\Models\CalendarFeed;
 use App\Models\Container;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
@@ -89,7 +92,7 @@ class CalendarFeedController extends Controller
      * CalendarFeedResource, som aldrig får bära token (se resursens
      * docblock).
      */
-    public function store(Request $request, Container $container): JsonResponse
+    public function store(Request $request, Container $container, RecordAuditEvent $recordAuditEvent): JsonResponse
     {
         Gate::authorize('view', $container);
 
@@ -97,11 +100,27 @@ class CalendarFeedController extends Controller
         // och lagras aldrig, se klassens docblock.
         $rawToken = Str::random(self::TOKEN_LENGTH);
 
-        $feed = new CalendarFeed;
-        $feed->container_id = $container->id;
-        $feed->user_id = $request->user()->id;
-        $feed->token_hash = hash('sha256', $rawToken);
-        $feed->save();
+        $feed = DB::transaction(function () use ($request, $container, $rawToken, $recordAuditEvent): CalendarFeed {
+            $feed = new CalendarFeed;
+            $feed->container_id = $container->id;
+            $feed->user_id = $request->user()->id;
+            $feed->token_hash = hash('sha256', $rawToken);
+            $feed->save();
+
+            // `calendar_feed.created` i samma transaktion (issue 111).
+            // **Token följer aldrig med i `meta`** — varken klartexten eller
+            // hashen: loggen får inte bli en andra väg till feeden.
+            $recordAuditEvent->handle(
+                action: AuditLog::ACTION_CALENDAR_FEED_CREATED,
+                account: $container->account,
+                user: $request->user(),
+                container: $container,
+                subjectType: 'calendar_feed',
+                subjectUlid: $feed->ulid,
+            );
+
+            return $feed;
+        });
 
         $url = rtrim((string) config('app.url'), '/').'/kalender/'.$rawToken.'.ics';
 
@@ -123,13 +142,26 @@ class CalendarFeedController extends Controller
      * exponeringen, och den som får skapa en feed får klippa den, se Beslut
      * 4.
      */
-    public function destroy(Container $container, CalendarFeed $calendarFeed): Response
+    public function destroy(Request $request, Container $container, CalendarFeed $calendarFeed, RecordAuditEvent $recordAuditEvent): Response
     {
         Gate::authorize('view', $container);
 
         if ($calendarFeed->revoked_at === null) {
-            $calendarFeed->revoked_at = now();
-            $calendarFeed->save();
+            DB::transaction(function () use ($request, $container, $calendarFeed, $recordAuditEvent): void {
+                $calendarFeed->revoked_at = now();
+                $calendarFeed->save();
+
+                // En andra återkallelse är ingen handling: den rör varken
+                // tidsstämpeln eller loggen (issue 36a § Beslut 3, issue 111).
+                $recordAuditEvent->handle(
+                    action: AuditLog::ACTION_CALENDAR_FEED_REVOKED,
+                    account: $container->account,
+                    user: $request->user(),
+                    container: $container,
+                    subjectType: 'calendar_feed',
+                    subjectUlid: $calendarFeed->ulid,
+                );
+            });
         }
 
         return response()->noContent();

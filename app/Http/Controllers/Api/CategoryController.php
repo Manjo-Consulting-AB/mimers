@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Actions\Category\CreateCategory;
+use App\Actions\Category\DeleteCategory;
 use App\Actions\Category\ListCategories;
-use App\Actions\Category\MoveCategory;
-use App\Exceptions\Api\ApiException;
+use App\Actions\Category\UpdateCategory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Category\StoreCategoryRequest;
 use App\Http\Requests\Category\UpdateCategoryRequest;
@@ -81,6 +81,7 @@ class CategoryController extends Controller
             $request->validated('name'),
             $parent,
             $request->validated('position'),
+            $request->user(),
         );
 
         return (new CategoryResource($category))
@@ -90,31 +91,34 @@ class CategoryController extends Controller
 
     /**
      * PATCH /api/containers/{container}/categories/{category} — 200.
-     * `name`/`position` fylls i direkt om de skickats. `parent` hanteras
-     * bara om NYCKELN finns i kroppen (`$request->has()`, aldrig
-     * `filled()`) — ett utelämnat `parent` rör inte föräldern, ett
-     * uttryckligt `parent: null` flyttar till roten (§ Beslut 10).
-     * Flyttar MoveCategory prövar, sparar den (§ Beslut 9); annars sparas
-     * `$category` direkt här.
+     * `name`/`position` fylls i om de skickats. `parent` hanteras bara om
+     * NYCKELN finns i kroppen (`$request->has()`, aldrig `filled()`) — ett
+     * utelämnat `parent` rör inte föräldern, ett uttryckligt `parent: null`
+     * flyttar till roten (§ Beslut 10). Skillnaden bärs vidare som
+     * `$parentGiven`; själva skrivningen — inklusive `category.updated` i
+     * `audit_log` — bor i App\Actions\Category\UpdateCategory sedan issue 111,
+     * som webbens `PATCH` anropar.
      */
-    public function update(UpdateCategoryRequest $request, Container $container, Category $category, MoveCategory $moveCategory): CategoryResource
+    public function update(UpdateCategoryRequest $request, Container $container, Category $category, UpdateCategory $updateCategory): CategoryResource
     {
         Gate::authorize('update', $container);
 
-        $category->fill($request->safe()->only(['name', 'position']));
+        $parentGiven = $request->has('parent');
+        $parentUlid = $parentGiven ? $request->validated('parent') : null;
+        $parent = $parentUlid !== null
+            ? $container->categories()->where('ulid', $parentUlid)->firstOrFail()
+            : null;
 
-        if ($request->has('parent')) {
-            $parentUlid = $request->validated('parent');
-            $parent = $parentUlid !== null
-                ? $container->categories()->where('ulid', $parentUlid)->firstOrFail()
-                : null;
+        $updateCategory->handle(
+            $container,
+            $category,
+            $request->user(),
+            $request->safe()->only(['name', 'position']),
+            $parentGiven,
+            $parent,
+        );
 
-            $moveCategory->handle($category, $parent);
-            $category->setAttribute('parent_ulid', $parent?->ulid);
-        } else {
-            $category->save();
-            $category->setAttribute('parent_ulid', $category->parent?->ulid);
-        }
+        $category->setAttribute('parent_ulid', $parentGiven ? $parent?->ulid : $category->parent?->ulid);
 
         return new CategoryResource($category);
     }
@@ -132,23 +136,11 @@ class CategoryController extends Controller
      * asking is exactly the kind of silent data loss [[ADR-0008 Soft delete
      * och papperskorg]] exists for.
      */
-    public function destroy(Container $container, Category $category): Response
+    public function destroy(Request $request, Container $container, Category $category, DeleteCategory $deleteCategory): Response
     {
         Gate::authorize('update', $container);
 
-        $childrenCount = $category->children()->count();
-
-        if ($childrenCount > 0) {
-            throw ApiException::make('category.has_children', ['children' => $childrenCount], 422);
-        }
-
-        $itemsCount = $category->items()->count();
-
-        if ($itemsCount > 0) {
-            throw ApiException::make('category.has_items', ['items' => $itemsCount], 422);
-        }
-
-        $category->delete();
+        $deleteCategory->handle($container, $category, $request->user());
 
         return response()->noContent();
     }

@@ -2,8 +2,11 @@
 
 namespace App\Actions\Trash;
 
+use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
+use App\Models\AuditLog;
 use App\Models\Container;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -45,9 +48,13 @@ use Illuminate\Support\Facades\DB;
  */
 class RestoreTrashedContainer
 {
-    public function handle(Container $container): void
+    /**
+     * @param  User  $actor  Den som återställer; blir `user_id` på loggraden.
+     *                       Behörigheten är redan prövad av anroparen.
+     */
+    public function handle(Container $container, User $actor): void
     {
-        DB::transaction(function () use ($container): void {
+        DB::transaction(function () use ($container, $actor): void {
             $rad = Container::withTrashed()
                 ->whereKey($container->getKey())
                 ->lockForUpdate()
@@ -63,6 +70,18 @@ class RestoreTrashedContainer
 
             if ($varMjukraderad) {
                 (new AdjustUsage)->handle($container->account_id, containersDelta: 1);
+
+                // `container.restored` i samma transaktion (issue 111), och
+                // bara på grenen där raden faktiskt låg i papperskorgen: en
+                // andra återställning är ingen handling och lämnar ingen rad.
+                (new RecordAuditEvent)->handle(
+                    action: AuditLog::ACTION_CONTAINER_RESTORED,
+                    account: $container->account,
+                    user: $actor,
+                    container: $container,
+                    subjectType: 'container',
+                    subjectUlid: $container->ulid,
+                );
             }
         });
     }
