@@ -20,7 +20,9 @@ use Illuminate\Support\Facades\Schema;
  * (`audit_log` eller `security_log`) och `action` är handlingens namn ur
  * respektive logg — eller `other`, som grupper under tröskeln hamnar i.
  * `plan` är kontots plankod när jobbet körde; `unknown` när kontot inte
- * längre finns, och när en `other`-grupp slagits ihop över planerna.
+ * längre finns, och `mixed` när en `other`-grupp slagits ihop över planerna
+ * (AggregatesUsageMetrics::PLAN_MIXED). De två får inte blandas: `unknown` är
+ * ett mätbart mått på aktivitet från raderade konton.
  *
  * **Det unika indexet är idempotensen.** En dag, en källa, en handling och en
  * plan förekommer högst en gång, så en andra körning för samma dag kan inte

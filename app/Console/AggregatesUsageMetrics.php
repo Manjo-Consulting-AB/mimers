@@ -23,34 +23,49 @@ use Illuminate\Support\Facades\DB;
  * EN GRUPP UNDER FEM SKRIVS ALDRIG (ADR § Mätningen). En rad som säger att en
  * enda användare på en viss plan gjorde en viss sak en viss dag pekar ut en
  * person. Grupper under MIN_GROUP_SIZE slås därför ihop med handlingen `other`
- * för samma dag, källa och plan. Är även den gruppen under fem slås den ihop
- * över planerna och skrivs med planen `unknown` — den hör då inte till någon
- * enskild plan, och en summa utan plan och utan handling kan inte peka ut
- * någon. Tröskeln är en konstant: den får höjas men aldrig sänkas utan en ny
- * ADR.
+ * för samma dag, källa och plan. Når den gruppen fem skrivs den på sin egen
+ * plan. Gör den inte det slås den ihop över planerna, och den sammanslagna
+ * raden skrivs med planen `mixed` — den hör inte till någon enskild plan.
+ * `unknown` betyder något annat: att kontot inte längre finns (se
+ * UsageMetric::PLAN_UNKNOWN). "Planen är okänd" och "flera planer i
+ * samma rad" är två olika fakta, och blandas de blir andelen aktivitet från
+ * raderade konton omätbar.
  *
- * IDEMPOTENT. Jobbet räknar bara det som saknas i `usage_metric`, och skriver
- * om hela dagen och källan i en transaktion (delete + insert) i stället för
- * att lägga till. Två körningar för samma dag ger därför samma rader, inte
- * dubbla, och det unika indexet på (date, source, action, plan) är skyddsnätet
- * under det. Enheten är paret (dag, källa), inte dagen: de två källorna skrivs
- * i var sin transaktion, och en körning som faller mellan dem får inte lämna
- * den ena källan oräknad för alltid. Nästa körning ser att just den källan
- * saknar dagen och räknar om den — den andra källans rader rörs inte.
+ * TRÖSKELN GÄLLER VARJE RAD SOM SKRIVS, också den sammanslagna. Når planerna
+ * inte fem tillsammans kastas raden i stället för att skrivas — annars vore en
+ * liten sammanslagen grupp vägen runt tröskeln. Att upp till fyra händelser per
+ * dag och källa går förlorade är en medveten kostnad; sammanslagningen räddar
+ * de fall där flera små planers `other` tillsammans når fem. Tröskeln är en
+ * konstant: den får höjas men aldrig sänkas utan en ny ADR.
  *
- * EN MISSAD NATT RÄKNAS I EFTERHAND. Jobbet letar upp varje dag som har
- * loggrader men ingen rad i `usage_metric`, inte bara gårdagen — så länge
- * raderna finns kvar. Det är också därför jobbet måste köra före gallringen i
- * issue 115: det som gallras innan det räknats är borta ur mätningen för
- * alltid. Schemaläggs i routes/console.php, före `drain-queue`.
+ * DÄRFÖR RÄKNAS DYGNET OM, INTE BARA DET SOM SAKNAS. En dag som gav noll rader
+ * — allt under tröskeln — går inte att skilja från en dag som aldrig räknats
+ * om man ser till tabellens innehåll. Jobbet håller i stället en
+ * HÖGVATTENMÄRKESNIVÅ per källa: det räknar varje dag från max(date) + 1 fram
+ * till och med gårdagen. Är tabellen tom för källan börjar det på loggens
+ * äldsta dag. En dag som gav noll rader ligger därmed under märket så fort en
+ * senare dag skrivits och räknas inte om; blir gårdagen tom räknas den om
+ * nästa natt, vilket är ofarligt eftersom omräkningen är idempotent. Det
+ * behövs ingen markör och ingen extra tabell.
  *
- * SÖKNINGEN BÖRJAR DAGEN EFTER DEN SENAST RÄKNADE DAGEN för källan, inte i
- * loggens början. En loggrad skrivs alltid med "nu", och en dag som en gång
- * räknats kan inte få fler rader — alltså kan ingenting oräknat ligga under
- * gränsen, och varje natt läser frågan svansen i stället för hela tabellen.
- * Bara första körningen, när `usage_metric` är tom för källan, söker från
- * loggens äldsta rad. Indexet på `created_at` (migreringen
- * 2026_09_24_020000) bär gränsen.
+ * EN MISSAD NATT RÄKNAS I EFTERHAND — högvattenmärket går från den senast
+ * skrivna dagen, inte från i går — så länge raderna finns kvar. Det är därför
+ * jobbet måste köra före gallringen i issue 115: det som gallras innan det
+ * räknats är borta ur mätningen för alltid. Schemaläggs i routes/console.php,
+ * före `drain-queue`.
+ *
+ * IDEMPOTENT. Varje dag räknas om från grunden: jobbet raderar dagens rader för
+ * källan och skriver dem på nytt i samma transaktion, i stället för att lägga
+ * till. Två körningar för samma dag ger därför samma rader, inte dubbla, och
+ * det unika indexet på (date, source, action, plan) är skyddsnätet under det.
+ * Enheten är paret (dag, källa), inte dagen: de två källorna skrivs i var sin
+ * transaktion, och en körning som faller mellan dem får inte lämna den ena
+ * källan oräknad för alltid — nästa körning ser att just den källan står kvar
+ * under märket och räknar om den, utan att röra den andra källans rader.
+ *
+ * DAGENS RADER RÄKNAS ALDRIG: dygnet ska vara slut först. Frågan mot loggen
+ * läser då bara den dag som ska räknas, via indexet på `created_at`
+ * (migreringen 2026_09_24_020000).
  *
  * PLANEN ÄR KONTOTS PLANKOD NÄR JOBBET KÖR, genom Account::currentPlan()->code
  * — aldrig en egen SQL-formulering av regeln. Att skriva av regeln i ett
@@ -78,6 +93,14 @@ class AggregatesUsageMetrics
     public const MIN_GROUP_SIZE = 5;
 
     /**
+     * Planen för en `other`-grupp som slagits ihop över planerna: raden hör
+     * inte till någon enskild plan. Den får en egen konstant och inte
+     * `unknown`, som betyder att kontot inte längre finns — se
+     * klassdocblocket.
+     */
+    public const PLAN_MIXED = 'mixed';
+
+    /**
      * Källan och tabellen den räknas ur. Ordningen är källornas.
      *
      * @var array<string, string>
@@ -94,63 +117,40 @@ class AggregatesUsageMetrics
     {
         $skrivna = 0;
 
-        foreach ($this->pendingSources() as [$dag, $källa]) {
-            $grupper = $this->groups(self::SOURCES[$källa], $dag);
-
-            if ($grupper === []) {
-                continue;
+        foreach (self::SOURCES as $källa => $tabell) {
+            foreach ($this->daysToCount($källa, $tabell) as $dag) {
+                $skrivna += $this->write($dag, $källa, $this->groups($tabell, $dag));
             }
-
-            $skrivna += $this->write($dag, $källa, $grupper);
         }
 
         return $skrivna;
     }
 
     /**
-     * Det som väntar på att räknas: varje dag som har loggrader men ingen rad
-     * i `usage_metric` — per källa, eftersom de två skrivs i var sin
-     * transaktion. Gårdagen i normalfallet, och varje natt som missats
-     * dessförinnan. Dagens rader räknas aldrig: dygnet ska vara slut först.
+     * Dygnen som ska räknas för en källa: från dagen efter den senast skrivna
+     * fram till och med gårdagen. Per källa, eftersom de två skrivs i var sin
+     * transaktion. En dag utan rader räknas också — den skriver noll rader, och
+     * det är så en dag som föll under tröskeln skiljs från en oräknad dag.
      *
-     * @return list<array{0: string, 1: string}> [dag, källa] i stigande ordning
+     * @return list<string>
      */
-    private function pendingSources(): array
+    private function daysToCount(string $källa, string $tabell): array
     {
         $idag = now()->startOfDay();
-        $väntande = [];
+        $dagar = [];
 
-        foreach (self::SOURCES as $källa => $tabell) {
-            $från = $this->firstUncountedDay($källa, $tabell);
-
-            if ($från->gte($idag)) {
-                continue;
-            }
-
-            $räknade = DB::table('usage_metric')
-                ->where('source', $källa)
-                ->pluck('date')
-                ->mapWithKeys(fn ($dag): array => [Carbon::parse((string) $dag)->toDateString() => true])
-                ->all();
-
-            foreach ($this->loggedDays($tabell, $från) as $dag) {
-                if (isset($räknade[$dag]) || ! Carbon::parse($dag)->lt($idag)) {
-                    continue;
-                }
-
-                $väntande[] = [$dag, $källa];
-            }
+        for ($dag = $this->firstUncountedDay($källa, $tabell); $dag->lt($idag); $dag->addDay()) {
+            $dagar[] = $dag->toDateString();
         }
 
-        usort($väntande, fn (array $a, array $b): int => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
-
-        return $väntande;
+        return $dagar;
     }
 
     /**
-     * Den första dag som kan behöva räknas för en källa: dagen efter den
-     * senast räknade, eller loggens äldsta dag när ingenting räknats än. Se
-     * klassdocblocket om varför gränsen är säker.
+     * Högvattenmärket: dagen efter den senast skrivna raden för källan, eller
+     * loggens äldsta dag när `usage_metric` är tom för den. Se
+     * klassdocblocket om varför märket, och inte tabellens innehåll, avgör
+     * vilka dygn som räknas.
      */
     private function firstUncountedDay(string $källa, string $tabell): Carbon
     {
@@ -165,24 +165,6 @@ class AggregatesUsageMetrics
         return $äldsta === null
             ? now()->startOfDay()
             : Carbon::parse((string) $äldsta)->startOfDay();
-    }
-
-    /**
-     * De dygn som loggen har rader på, från och med $från — ett datum per rad,
-     * aldrig ett dygn som bara passerat. Gränsen gör att frågan läser svansen
-     * i stället för hela tabellen, via indexet på `created_at`.
-     *
-     * @return list<string>
-     */
-    private function loggedDays(string $tabell, Carbon $från): array
-    {
-        return DB::table($tabell)
-            ->where('created_at', '>=', $från)
-            ->selectRaw('DATE(created_at) as dag')
-            ->distinct()
-            ->pluck('dag')
-            ->map(fn ($dag): string => Carbon::parse((string) $dag)->toDateString())
-            ->all();
     }
 
     /**
@@ -254,9 +236,13 @@ class AggregatesUsageMetrics
     }
 
     /**
-     * Tröskeln: grupper under MIN_GROUP_SIZE hamnar i `other`, och en
-     * `other`-grupp som själv ligger under tröskeln hamnar i `unknown` över
-     * planerna. Se klassdocblocket.
+     * Tröskeln, i två steg. Grupper under MIN_GROUP_SIZE hamnar i `other` på
+     * sin egen plan; når den gruppen fem skrivs den. Gör den inte det slås
+     * planernas `other`-hinkar ihop, och den sammanslagna raden skrivs med
+     * PLAN_MIXED — men bara om den når MIN_GROUP_SIZE. Är den fortfarande
+     * under fem kastas den: tröskeln gäller varje rad som skrivs. En
+     * `unknown`-plans hink ingår i sammanslagningen som vilken plan som helst.
+     * Se klassdocblocket.
      *
      * `other` är ett öppet namnrum — en riktig handling kan heta `other` — så
      * varje skrivning till hinken SUMMERAR. Skulle en riktig `other`-grupp
@@ -270,6 +256,7 @@ class AggregatesUsageMetrics
     {
         $ut = [];
         $other = [];
+        $mixed = 0;
 
         foreach ($grupper as $action => $planer) {
             foreach ($planer as $plan => $antal) {
@@ -291,8 +278,12 @@ class AggregatesUsageMetrics
                 continue;
             }
 
-            $ut[UsageMetric::ACTION_OTHER][UsageMetric::PLAN_UNKNOWN] =
-                ($ut[UsageMetric::ACTION_OTHER][UsageMetric::PLAN_UNKNOWN] ?? 0) + $antal;
+            $mixed += $antal;
+        }
+
+        if ($mixed >= self::MIN_GROUP_SIZE) {
+            $ut[UsageMetric::ACTION_OTHER][self::PLAN_MIXED] =
+                ($ut[UsageMetric::ACTION_OTHER][self::PLAN_MIXED] ?? 0) + $mixed;
         }
 
         return $ut;

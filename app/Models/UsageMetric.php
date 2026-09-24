@@ -48,9 +48,11 @@ class UsageMetric extends Model
     public const ACTION_OTHER = 'other';
 
     /**
-     * Planen är inte känd: kontot finns inte längre, raden saknade konto, eller
-     * så har en `other`-grupp slagits ihop över planerna och hör då inte till
-     * någon av dem.
+     * Planen är inte känd: kontot finns inte längre, eller så saknade raden
+     * konto. Det är ett mått i sig — hur mycket aktivitet som kommer från
+     * raderade konton. En `other`-grupp som slagits ihop över planerna hör
+     * däremot inte hit: den får AggregatesUsageMetrics::PLAN_MIXED, för "planen
+     * är okänd" och "flera planer i samma rad" är två olika fakta.
      */
     public const PLAN_UNKNOWN = 'unknown';
 

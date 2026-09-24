@@ -119,34 +119,56 @@ it('jobbet räknar en dags rader per källa, handling och plan', function () {
 
 it('en grupp under fem hamnar i other', function () {
     Carbon::setTestNow('2026-09-24 00:05:00');
+    $dagen = Carbon::parse('2026-09-23');
+    $konto = matningKonto();
 
-    matningLogg('audit_log', 4, AuditLog::ACTION_ITEM_DELETED, matningKonto(), Carbon::parse('2026-09-23'));
+    // Två grupper under tröskeln på SAMMA plan: fyra item.deleted och tre
+    // item.restored. Ihop når `other`-hinken på planen fem, och skrivs då på
+    // sin egen plan.
+    matningLogg('audit_log', 4, AuditLog::ACTION_ITEM_DELETED, $konto, $dagen);
+    matningLogg('audit_log', 3, AuditLog::ACTION_ITEM_RESTORED, $konto, $dagen);
 
     (new AggregatesUsageMetrics)->handle();
 
     // Handlingen själv skrivs aldrig: fyra rader på en plan pekar ut en person.
-    expect(matningAntal('2026-09-23', 'audit', 'item.deleted', 'free'))->toBeNull();
+    expect(matningAntal('2026-09-23', 'audit', AuditLog::ACTION_ITEM_DELETED, 'free'))->toBeNull();
+    expect(matningAntal('2026-09-23', 'audit', AuditLog::ACTION_ITEM_RESTORED, 'free'))->toBeNull();
 
-    // Den hamnar i `other` — och eftersom även den gruppen ligger under fem
-    // slås den ihop över planerna och tappar sin plan.
     expect(DB::table('usage_metric')->get())->toHaveCount(1);
-    expect(matningAntal('2026-09-23', 'audit', UsageMetric::ACTION_OTHER, UsageMetric::PLAN_UNKNOWN))->toBe(4);
+    expect(matningAntal('2026-09-23', 'audit', UsageMetric::ACTION_OTHER, 'free'))->toBe(7);
 });
 
 it('en other-grupp under fem slås ihop över planerna', function () {
     Carbon::setTestNow('2026-09-24 00:05:00');
     $dagen = Carbon::parse('2026-09-23');
 
-    matningLogg('audit_log', 3, AuditLog::ACTION_ITEM_DELETED, matningKonto(), $dagen);
-    matningLogg('audit_log', 3, AuditLog::ACTION_ITEM_RESTORED, matningProKonto(), $dagen);
+    $gratis = matningKonto();
+    $pro = matningProKonto();
+
+    matningLogg('audit_log', 2, AuditLog::ACTION_ITEM_DELETED, $gratis, $dagen);
+    matningLogg('audit_log', 2, AuditLog::ACTION_ITEM_RESTORED, $pro, $dagen);
+
+    $jobbet = new AggregatesUsageMetrics;
+
+    // Två planer med två rader var: 2 + 2 = 4, fortfarande under tröskeln.
+    // Ingen rad skrivs — tröskeln gäller varje rad som skrivs, också den
+    // sammanslagna, och en liten sammanslagen grupp vore annars vägen runt den.
+    expect($jobbet->handle())->toBe(0);
+    expect(DB::table('usage_metric')->get())->toHaveCount(0);
+
+    // En rad till per plan: 3 + 3 = 6, över tröskeln. Ingenting skrevs, så
+    // dagen ligger kvar under högvattenmärket och räknas om.
+    matningLogg('audit_log', 1, AuditLog::ACTION_ITEM_DELETED, $gratis, $dagen);
+    matningLogg('audit_log', 1, AuditLog::ACTION_ITEM_RESTORED, $pro, $dagen);
 
     (new AggregatesUsageMetrics)->handle();
 
-    // Två planer med tre rader var blir EN rad: sex, utan plan. Hade de skrivits
-    // var för sig hade båda legat under tröskeln, och hade de behållit sin plan
-    // hade de fortfarande pekat ut var sin liten grupp.
+    // En rad, med planen `mixed` — inte `unknown`, som betyder att kontot inte
+    // finns. Hade grupperna behållit sin plan hade de fortfarande pekat ut var
+    // sin lilla grupp.
     expect(DB::table('usage_metric')->get())->toHaveCount(1);
-    expect(matningAntal('2026-09-23', 'audit', UsageMetric::ACTION_OTHER, UsageMetric::PLAN_UNKNOWN))->toBe(6);
+    expect(matningAntal('2026-09-23', 'audit', UsageMetric::ACTION_OTHER, AggregatesUsageMetrics::PLAN_MIXED))->toBe(6);
+    expect(matningAntal('2026-09-23', 'audit', UsageMetric::ACTION_OTHER, UsageMetric::PLAN_UNKNOWN))->toBeNull();
 });
 
 it('en riktig handling som heter other skrivs inte över av hopslagningen', function () {
