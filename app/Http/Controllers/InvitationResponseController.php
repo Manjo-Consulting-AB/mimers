@@ -217,7 +217,10 @@ class InvitationResponseController extends Controller
             ->values()
             ->all();
 
-        return $this->page('pending', null, null, $invitations);
+        // Namngivna argument: de två mittersta propparna hör till tokenvägen,
+        // och `page('pending', null, null, $invitations)` hade tvingat läsaren
+        // att räkna positioner för att se det.
+        return $this->page(state: 'pending', invitations: $invitations);
     }
 
     /**
