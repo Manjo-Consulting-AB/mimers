@@ -389,9 +389,15 @@ it('länkar till /tasks och ritar raden med TodoRow i UiCard', function () {
 
     // Sidan är monteringspunkten: panelen får sin egen propp och sidan räknar
     // ingenting. Det är formen som gör att M19:s paneler kan byggas parallellt.
+    //
+    // Växelns läge är den tredje proppen sedan issue 134 — samma form, en
+    // propp per sak panelen behöver, och ingen av dem räknas fram här.
     $sida = File::get(resource_path('js/pages/Dashboard.vue'));
 
-    expect($sida)->toContain('<DashboardTasksPanel :tasks="props.tasks" :has-containers="props.hasContainers" />');
+    expect($sida)->toContain('<DashboardTasksPanel')
+        ->toContain(':tasks="props.tasks"')
+        ->toContain(':has-containers="props.hasContainers"')
+        ->toContain(':show-upcoming-tasks="props.showUpcomingTasks"');
 });
 
 // --- de tomma lägena -------------------------------------------------------

@@ -934,8 +934,10 @@ it('har varje todo-nyckel och ingen svensk sträng i vyn', function () {
         TodoController::GROUP_UPCOMING,
     ]);
 
-    // Ingen svensk sträng utanför kommentar i de två nya komponenterna.
-    foreach (['pages/Tasks/Index.vue', 'components/TodoRow.vue'] as $fil) {
+    // Ingen svensk sträng utanför kommentar i todovyns komponenter. Växeln
+    // (issue 134) står på båda ytorna och prövas därför här, där todovyns
+    // filer redan räknas upp.
+    foreach (['pages/Tasks/Index.vue', 'components/TodoRow.vue', 'components/UpcomingTasksToggle.vue'] as $fil) {
         $kod = File::get(resource_path("js/{$fil}"));
         $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
         $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);

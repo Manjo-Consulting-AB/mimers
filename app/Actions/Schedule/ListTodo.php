@@ -30,6 +30,14 @@ use Illuminate\Support\Facades\Gate;
  * filtrerar: två filtreringar är två sanningar, och den ena är alltid den som
  * glömmer omfånget.
  *
+ * **Användarens växel lägger på ETT villkor till, och det bor också i
+ * modellen** (issue 134). Är `user.show_upcoming_tasks` falsk visas bara det
+ * som är aktuellt nu — försenat och i dag — genom
+ * `ScheduleOccurrence::scopeDueTodayOrEarlier()`, bredvid `scopeTodoFor`.
+ * Klassens regel står kvar: inget `where` formuleras här, bara valet om
+ * modellens villkor ska gälla. Dashboardens brickor räknar samma tal oavsett
+ * växeln, och den enda vägen dit är att fråga utan flaggan (se `handle()`).
+ *
  * **Ordningen och grupperingen räknas på servern** (Beslut 3). `due_at`
  * stigande med `ulid` stigande — samma deterministiska ordning som
  * `Api\TodoController::index()` — och raden hamnar i `overdue`, `today` eller
@@ -136,13 +144,22 @@ class ListTodo
      * PHP (issue 122): panelen pagineras inte (issue 123), och frågan är den
      * samma som `/tasks` ställer.
      *
+     * **Växeln gäller här** (issue 134): är `show_upcoming_tasks` falsk bär
+     * både `rows` och `groups` bara försenat och i dag, och `upcoming` är en
+     * tom lista. `$applyPreference` finns för dashboardens BRICKOR, som
+     * räknar samma tal oavsett växeln: App\Http\Controllers\
+     * DashboardController frågar en gång med flaggan (panelen) och en gång
+     * utan (brickorna), och den senare läser `rows` som om ingen växel
+     * fanns. `page()` har ingen motsvarighet — `/tasks` visar alltid det
+     * användaren valt.
+     *
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
      *     rows: list<array<string, mixed>>,
      *     hasContainers: bool
      * }
      */
-    public function handle(User $user, Request $request): array
+    public function handle(User $user, Request $request, bool $applyPreference = true): array
     {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
@@ -155,7 +172,11 @@ class ListTodo
             ->pluck('id')
             ->all();
 
-        $occurrences = $this->occurrences($user, $accountIds)->get();
+        $occurrences = $this->occurrences(
+            $user,
+            $accountIds,
+            $applyPreference && $this->onlyCurrent($user),
+        )->get();
 
         return [
             ...$this->present($user, $request, $occurrences),
@@ -219,7 +240,11 @@ class ListTodo
         // hade räknat in samma dag i sviten och inte i drift.
         $backwards = $before !== null;
 
-        $query = $this->occurrences($user, $accountIds);
+        // Växeln lägger på ett villkor och rör inte markören: sidgränsen är
+        // `(due_at, ulid)` över de rader frågan bär, och en avgränsning mot
+        // dagens datum flyttar varken nycklarna eller deras ordning
+        // (issue 134, issue 123).
+        $query = $this->occurrences($user, $accountIds, $this->onlyCurrent($user));
 
         if ($backwards) {
             $query->where(fn (Builder $query) => $query
@@ -274,14 +299,37 @@ class ListTodo
      * markören vilar på. Ordningen ställs av anroparen, för sidan vänder på
      * den.
      *
+     * **Växeln lägger på ett villkor och inget `where`** (issue 134): är
+     * `$onlyCurrent` sann begränsas frågan av
+     * `ScheduleOccurrence::scopeDueTodayOrEarlier()`, bredvid `scopeTodoFor`
+     * i modellen. Den här klassen formulerar fortfarande inget eget `where` —
+     * den väljer bara om modellens villkor ska gälla.
+     *
      * @param  list<int>  $accountIds
      * @return Builder<ScheduleOccurrence>
      */
-    private function occurrences(User $user, array $accountIds): Builder
+    private function occurrences(User $user, array $accountIds, bool $onlyCurrent): Builder
     {
-        return ScheduleOccurrence::query()
+        $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
             ->with(['schedule.item.container.account']);
+
+        if ($onlyCurrent) {
+            $query->dueTodayOrEarlier($user);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Användarens växel, som ett svar på "bara det aktuella nu?" —
+     * `show_upcoming_tasks` sann betyder "visa även framtida", alltså att
+     * inget villkor läggs på (issue 134). Läsningen bor här så att `handle()`
+     * och `page()` svarar likadant på samma kolumn.
+     */
+    private function onlyCurrent(User $user): bool
+    {
+        return ! $user->show_upcoming_tasks;
     }
 
     /**

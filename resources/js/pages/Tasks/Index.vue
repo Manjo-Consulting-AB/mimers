@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import TodoRow from '../../components/TodoRow.vue';
+import UpcomingTasksToggle from '../../components/UpcomingTasksToggle.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
@@ -53,6 +54,12 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * tom lista får ordagrant samma mening som en ägare vars uppgifter är gjorda
  * (issue 73 § Beslut 6, issue 74).
  *
+ * **Rubrikraden bär växeln för framtida uppgifter** (issue 134). Den är
+ * resources/js/components/UpcomingTasksToggle.vue, samma komponent som
+ * panelen ritar, och den postar till `PUT /settings/tasks`. Sidan filtrerar
+ * fortfarande ingenting: växeln styr serverns urval, och `groups` kommer
+ * redan avgränsad när `showUpcomingTasks` är falsk.
+ *
  * Dashboardens uppgiftspanel ritar samma två meningar och samma rader, ur
  * samma action, men bara de fem första — se
  * resources/js/components/DashboardTasksPanel.vue.
@@ -62,6 +69,8 @@ const props = defineProps({
     groups: { type: Object, required: true },
     /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
     hasContainers: { type: Boolean, required: true },
+    /* Växelns sparade läge, se resources/js/components/UpcomingTasksToggle.vue. */
+    showUpcomingTasks: { type: Boolean, required: true },
     /* Adressen till föregående sida, eller null när den här är den första. */
     previousUrl: { type: String, default: null },
     /* Adressen till nästa sida, eller null när den här är den sista. */
@@ -77,7 +86,14 @@ const isEmpty = computed(() => Object.values(props.groups).every((entries) => en
     <AppLayout>
         <Head :title="t('todo.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('todo.heading') }}</h1>
+        <!-- Rubrikraden bär växeln (issue 134): frågan "vilka uppgifter ska
+             listan visa?" ställs där listan står, och svaret gäller både den
+             här sidan och dashboardens panel. -->
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <h1 class="text-2xl font-semibold">{{ t('todo.heading') }}</h1>
+
+            <UpcomingTasksToggle :enabled="props.showUpcomingTasks" />
+        </div>
 
         <template v-if="isEmpty">
             <p class="mt-8 text-slate-700">

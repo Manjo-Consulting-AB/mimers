@@ -30,6 +30,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Uppgifterna kommer ur samma urval som `/tasks`.** Servern klipper de fem
  * första i App\Http\Controllers\DashboardController, och panelen formulerar
  * inget eget `where` — se resources/js/components/DashboardTasksPanel.vue.
+ * Sedan issue 134 följer urvalet användarens växel för framtida uppgifter, och
+ * `showUpcomingTasks` skickas vidare till panelen som ritar den.
  *
  * **Brickorna och kortraderna kom med issue 124.** Gruppen är serverns:
  * `containerGroups` kommer ur App\Actions\Container\ListContainerSummaries och
@@ -65,6 +67,8 @@ const props = defineProps({
     tasks: { type: Array, required: true },
     /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
     hasContainers: { type: Boolean, required: true },
+    /* Växelns sparade läge, vidare till uppgiftspanelen (issue 134). */
+    showUpcomingTasks: { type: Boolean, required: true },
     /* `{ containers, tasks, overdue }` — talen brickorna visar. */
     stats: { type: Object, required: true },
     /* Korten, grupperade på art: `[{ kind, containers }]`. */
@@ -119,7 +123,11 @@ const { t } = useTranslations();
         </section>
 
         <div class="mt-8">
-            <DashboardTasksPanel :tasks="props.tasks" :has-containers="props.hasContainers" />
+            <DashboardTasksPanel
+                :tasks="props.tasks"
+                :has-containers="props.hasContainers"
+                :show-upcoming-tasks="props.showUpcomingTasks"
+            />
         </div>
 
         <div class="mt-8">

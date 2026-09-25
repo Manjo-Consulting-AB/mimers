@@ -45,6 +45,7 @@ use App\Http\Controllers\Settings\PlanController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\StorageController;
+use App\Http\Controllers\Settings\TaskPreferenceController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
@@ -512,6 +513,31 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/settings/notifications/quiet-hours', [NotificationSettingsController::class, 'updateQuietHours'])
         ->name('settings.notifications.quiet-hours');
+
+    /*
+     * Issue 134 · Växeln för framtida uppgifter, se
+     * App\Http\Controllers\Settings\TaskPreferenceController och
+     * [[M21 Uppgifterna i vardagen]] § 134.
+     *
+     * **EN skrivning och ingen sida.** Växeln står i rubrikraden på `/tasks`
+     * och på dashboardens uppgiftspanel, och båda ritar samma komponent
+     * (resources/js/components/UpcomingTasksToggle.vue). En egen GET hade
+     * varit en sida ingen letar på — frågan "vilka uppgifter ska listan
+     * visa?" ställs där listan står.
+     *
+     * **PUT, för det är samma flagga som skrivs om.** Kroppen bär ett fält
+     * och ingenting annat av resursen, och en POST hade sagt "skapa" om en
+     * kolumn som redan finns. Sökvägen ligger bland inställningarna för att
+     * flaggan hör till personen och inte till en container eller ett item —
+     * den följer henne mellan webbläsare (issuens krav).
+     *
+     * Bakom `auth` som resten av webben: en utloggad besökare har ingen rad
+     * att skriva på och skickas till /login. Ingen FormRequest och ingen ny
+     * Action: rutten har ett fält att validera, och skrivningen är de rader
+     * kontrollern gör.
+     */
+    Route::put('/settings/tasks', [TaskPreferenceController::class, 'update'])
+        ->name('settings.tasks.update');
 
     /*
      * Issue 65b § Beslut 1 · Webhookarna — kontots utgång till egna system, se

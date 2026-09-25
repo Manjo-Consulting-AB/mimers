@@ -572,6 +572,35 @@ it('hämtar prickens strängar ur ui.php', function () {
 });
 
 /*
+ * Växeln för framtida uppgifter, se issue 134 och
+ * resources/js/components/UpcomingTasksToggle.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här, så en mening som byter namn i komponenten följer med
+ * utan att provet skrivs om. Det betyder något särskilt för just den här
+ * växeln, för etiketten är dess ENDA text, och `translate()` skriver NYCKELN
+ * SJÄLV när uppslaget misslyckas — en glömd nyckel står då som `todo.toggle`
+ * i rubrikraden i stället för *Show upcoming tasks*.
+ *
+ * Nyckeln ligger under `todo` och inte under `dashboard`: komponenten ritas på
+ * båda ytorna, och en egen kopia i `dashboard.*` hade varit den andra
+ * sanningen om vad växeln heter — samma skäl som `todo.empty.*` sedan issue
+ * 122.
+ */
+it('hämtar växelns strängar ur ui.php', function () {
+    $vaxel = File::get(resource_path('js/components/UpcomingTasksToggle.vue'));
+
+    preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $vaxel, $träffar);
+
+    expect($träffar[1])->toContain('todo.toggle')
+        ->and(Lang::get('ui.todo.toggle', [], 'en'))->toBe('Show upcoming tasks');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+});
+
+/*
  * Lösenordsformuläret, se issue 129 och
  * resources/js/components/PasswordForm.vue.
  *
