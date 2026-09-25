@@ -2514,6 +2514,12 @@ return [
             'upcoming' => 'Upcoming',
         ],
 
+        // Växeln för framtida uppgifter, se issue 134. Etiketten namnger
+        // kolumnen (`user.show_upcoming_tasks`): på visar listan allt synligt
+        // — dagens beteende — och av bara det som är aktuellt nu. Samma ord
+        // på `/tasks` och i dashboardens panel, för det är samma växel.
+        'toggle' => 'Show upcoming tasks',
+
         'empty' => [
             'no_containers' => 'You have no containers yet.',
             'create' => 'Create a container',

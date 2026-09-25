@@ -33,6 +33,13 @@ use Inertia\Response;
  * `after` i querysträngen — namnen kommer ur actionens konstanter, så den som
  * läser dem och den som skriver dem inte kan glida ifrån varandra.
  *
+ * **Växelns läge följer med som en propp** (issue 134). Sidan ritar
+ * resources/js/components/UpcomingTasksToggle.vue och behöver veta vad som
+ * är sparat; urvalet självt formulerar kontrollern inte — det gör
+ * App\Actions\Schedule\ListTodo ur användarens flagga. Proppen är läget och
+ * ingenting annat: växeln skriver till `PUT /settings/tasks` och svarar
+ * `back()`, så nästa sidladdning bär det nya värdet.
+ *
  * Gruppkonstanterna står kvar här som alias mot actionens: de är nycklarna i
  * `lang/en/ui.php` och prövas mot `TodoController::GROUP_*` i
  * tests/Feature/Frontend/TodovyTest.php.
@@ -69,6 +76,11 @@ class TodoController extends Controller
         return Inertia::render('Tasks/Index', [
             'groups' => $todo['groups'],
             'hasContainers' => $todo['hasContainers'],
+            // Växelns läge, så att komponenten kan rita sitt eget tillstånd
+            // (issue 134). Servern är den enda som vet vad som sparats, och
+            // `PUT /settings/tasks` svarar `back()` — sidan ritas om ur det
+            // här värdet och aldrig ur ett klienttillstånd.
+            'showUpcomingTasks' => $request->user()->show_upcoming_tasks,
             'previousUrl' => $todo['previous'] === null
                 ? null
                 : route('tasks', [ListTodo::CURSOR_BEFORE => $todo['previous']], false),

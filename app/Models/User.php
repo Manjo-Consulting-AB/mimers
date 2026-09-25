@@ -52,8 +52,16 @@ use Laravel\Sanctum\HasApiTokens;
  * "Krypterad", och App\Support\Auth\TotpBroker § Beslut 1, som sätter och
  * läser kolumnen men inte vet något om krypteringen själv. Redan dold i
  * serialisering sedan issue 3 (`#[Hidden]` nedan) — det ändras inte här.
+ *
+ * `show_upcoming_tasks` kom med issue 134 — växeln som avgör om todo-listan
+ * visar alla synliga uppgifter eller bara det som är aktuellt nu. Den är en
+ * personlig inställning som `locale` och `timezone` och ligger därför inom
+ * `#[Fillable]`: App\Http\Controllers\Settings\TaskPreferenceController
+ * skriver den, och regeln om vem som får skriva den är rutten (`auth`), inte
+ * en lista i modellen. Standardvärdet `true` speglar kolumnens `DEFAULT` — se
+ * `$attributes` nedan.
  */
-#[Fillable(['name', 'email', 'password_hash', 'locale', 'timezone', 'unit_system', 'quiet_hours_start', 'quiet_hours_end'])]
+#[Fillable(['name', 'email', 'password_hash', 'locale', 'timezone', 'unit_system', 'quiet_hours_start', 'quiet_hours_end', 'show_upcoming_tasks'])]
 #[Hidden(['password_hash', 'totp_secret'])]
 #[RouteKey('ulid')]
 class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail
@@ -78,6 +86,22 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     protected $rememberTokenName = '';
 
     /**
+     * Modellens standardvärden, speglar kolumnernas DEFAULT i migrationen.
+     *
+     * En ny modell som skapas utan `show_upcoming_tasks` i kroppen bär
+     * standardvärdet direkt — annars läser en osparad eller nyinläst instans
+     * null ur attributet trots att databasen skulle ha satt `true`, och
+     * App\Actions\Schedule\ListTodo hade filtrerat listan för en användare som
+     * aldrig rört växeln. Samma grepp och samma skäl som `$attributes` på
+     * App\Models\Schedule.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'show_upcoming_tasks' => true,
+    ];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -90,6 +114,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'totp_confirmed_at' => 'datetime',
             'last_active_at' => 'datetime',
             'notifications_read_at' => 'datetime',
+            'show_upcoming_tasks' => 'boolean',
             'password_hash' => 'hashed',
         ];
     }

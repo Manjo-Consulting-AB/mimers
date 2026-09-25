@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import UiCard from './UiCard.vue';
 import TodoRow from './TodoRow.vue';
+import UpcomingTasksToggle from './UpcomingTasksToggle.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -34,12 +35,21 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Länken ritas också när listan är tom.** Den är vägen till todo-vyn, inte
  * en knapp för listan: en tom panel utan väg vidare vore en återvändsgränd.
+ *
+ * **Växeln för framtida uppgifter står i rubrikraden** (issue 134), bredvid
+ * *Visa alla*: den är samma komponent som `/tasks` ritar
+ * (resources/js/components/UpcomingTasksToggle.vue), och läget kommer ur
+ * `showUpcomingTasks` — panelen håller inget eget tillstånd. Raderna följer
+ * valet därför att servern gjorde det: `tasks` är redan avgränsad när flaggan
+ * är falsk.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
     tasks: { type: Array, required: true },
     /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
     hasContainers: { type: Boolean, required: true },
+    /* Växelns sparade läge — samma propp och samma komponent som `/tasks`. */
+    showUpcomingTasks: { type: Boolean, required: true },
 });
 
 const { t } = useTranslations();
@@ -49,10 +59,18 @@ const { t } = useTranslations();
     <UiCard>
         <template #heading>{{ t('dashboard.tasks.heading') }}</template>
 
+        <!-- Rubrikradens åtgärdsplats bär växeln (issue 134) och *Visa
+             alla*. Växeln är samma komponent som `/tasks` ritar, och den
+             gäller båda ytorna — panelen visar de fem första av den lista
+             hon valt. -->
         <template #action>
-            <Link href="/tasks" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
-                {{ t('dashboard.tasks.view_all') }}
-            </Link>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <UpcomingTasksToggle :enabled="props.showUpcomingTasks" />
+
+                <Link href="/tasks" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+                    {{ t('dashboard.tasks.view_all') }}
+                </Link>
+            </div>
         </template>
 
         <p v-if="props.tasks.length === 0" class="text-slate-700">

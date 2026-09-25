@@ -41,6 +41,7 @@ En person. Tillhör ett konto via `account_user` — modellerat som många-till-
 | quiet_hours_start, quiet_hours_end | TIME NULL | Se [[Notiser]] |
 | last_active_at | TIMESTAMP | **Uppdateras av API-anrop från vilken klient som helst**, inte bara inloggning. Driver livscykeln i [[Planer och kvoter]] |
 | notifications_read_at | TIMESTAMP NULL | Klockans oläst, se [[M19 Dashboarden]] § 127. Antalet olästa är raderna i `notification` med personens `user_id` skapade **efter** den här tidpunkten; `NULL` betyder att klockan aldrig öppnats och att alla räknas. En tidsstämpel här och ingen `read_at` per notisrad: `notification` är outboxen, och klockan är ingen kanal ([[ADR-0010 Notisarkitektur]] § Beslut). Sätts av `POST /notifications/read` |
+| show_upcoming_tasks | BOOLEAN NOT NULL DEFAULT TRUE | Växeln på todo-listan, se [[M21 Uppgifterna i vardagen]] § 134. `TRUE` visar alla synliga uppgifter — dagens beteende — och `FALSE` bara det som är aktuellt nu: försenat och i dag. Valet följer personen och inte webbläsaren, och läses av `App\Actions\Schedule\ListTodo`; `ScheduleOccurrence::scopeDueTodayOrEarlier()` är villkoret. Sätts av `PUT /settings/tasks` |
 | created_at, updated_at | | |
 
 ### account_user

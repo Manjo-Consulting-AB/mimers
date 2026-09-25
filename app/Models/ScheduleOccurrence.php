@@ -268,4 +268,34 @@ class ScheduleOccurrence extends Model
                     ->whereHas('schedule.item');
             });
     }
+
+    /**
+     * Begränsar till det som är AKTUELLT NU — försenat och i dag (issue 134).
+     *
+     * **Växeln `user.show_upcoming_tasks` avgör om det här villkoret alls
+     * ställs**, och det formuleras här och inte i anroparen: precis som
+     * `scopeTodoFor()` är det ett urval och ingen presentation, och en
+     * filtrering i App\Actions\Schedule\ListTodo hade varit den andra
+     * sanningen om vad listan visar. Är flaggan sann — standardvärdet, dagens
+     * beteende — läggs ingen scope på alls.
+     *
+     * **`whereDate()` och inte en rå kolumnjämförelse**, av exakt samma skäl
+     * som `scopeTodoFor()` väljer det: `due_at` är en DATE-kolumn, men värdet
+     * lagras med en tidsdel — `2026-06-15 00:00:00`. MariaDB klipper den till
+     * kolumnens typ, sqlite gör det inte, så `due_at <= '2026-06-15'` hade
+     * räknat in samma dag i sviten och inte i drift.
+     *
+     * **Idag är användarens dag**, `User::today()` — samma klocka som
+     * `overdue`, grupperingen och `scopeTodoFor` räknar mot sedan issue 135
+     * ([[ADR-0044 Användarens dag]]). En förekomst som förfaller i morgon enligt
+     * UTC men i dag enligt hennes tidszon hör till "i dag" och stannar kvar i
+     * listan.
+     *
+     * @param  Builder<ScheduleOccurrence>  $query
+     * @return Builder<ScheduleOccurrence>
+     */
+    public function scopeDueTodayOrEarlier(Builder $query, User $user): Builder
+    {
+        return $query->whereDate('due_at', '<=', $user->today()->toDateString());
+    }
 }
