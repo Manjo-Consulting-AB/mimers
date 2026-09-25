@@ -516,7 +516,20 @@ it('har inloggningens takgräns', function () {
     $svar = from('/settings/profile')->post('/settings/profile/email', epostKropp('ny@example.com'));
 
     $svar->assertSessionHasErrors('email');
-    expect(session('errors')->get('email')[0])->toBe(trans('auth.throttle', ['seconds' => 60], 'en'));
+
+    // Meningen och inte nyckeln: `auth.throttle` med antalet sekunder i.
+    // Sekunderna LÄSES ur meningen och pinnas inte till 60. Takgränsen räknar
+    // hela sekunder — `availableIn()` är `timer − nu`, båda trunkerade — så ett
+    // prov vars sex anrop korsar en sekundgräns får 59 och faller på en
+    // kapplöpning i stället för på ett fel. Samma form och samma skäl som
+    // tests/Feature/Frontend/TakgransTest.php och syskonprovet i
+    // tests/Feature/Auth/LosenordsbyteTest.php.
+    $mening = session('errors')->get('email')[0];
+    preg_match('/(\d+)/', $mening, $träff);
+
+    expect($träff)->not->toBeEmpty('meddelandet saknar antal sekunder')
+        ->and((int) $träff[0])->toBeGreaterThan(0)->toBeLessThanOrEqual(60)
+        ->and($mening)->toBe(trans('auth.throttle', ['seconds' => (int) $träff[0]], 'en'));
 
     // Det sjätte försöket nådde aldrig valideringen: ingen rad skrevs.
     expect(EmailChange::query()->count())->toBe(0);
