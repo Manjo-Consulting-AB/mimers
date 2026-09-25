@@ -57,7 +57,7 @@ Skillnaden är inte kosmetisk och kan inte uttryckas med ett enda nästa-datum-f
 
 Index: `(schedule_id, status)`, `(due_at, status)` för todo-listan över alla containers.
 
-**Förfallen** (`overdue`) är inte en status utan härleds: `status = 'open' AND due_at < CURDATE()`. Lagra aldrig ett tillstånd som klockan kan ändra åt dig — då måste ett jobb hålla det uppdaterat, och det jobbet kommer att missa körningar.
+**Förfallen** (`overdue`) är inte en status utan härleds: `status = 'open' AND due_at < idag`, där `idag` är **användarens kalenderdag** — `User::today()` — och inte serverns. Se [[ADR-0044 Användarens dag]] § Beslut 1. Lagra aldrig ett tillstånd som klockan kan ändra åt dig — då måste ett jobb hålla det uppdaterat, och det jobbet kommer att missa körningar.
 
 **Historiken är loggen.** Avklarade förekomster är svaret på "när bytte jag impellern senast" — ingen separat historiktabell behövs.
 
@@ -89,10 +89,12 @@ Läser **förekomster**, aldrig items:
 
 ```
 status = 'open'
-AND visible_from <= CURDATE()
+AND visible_from <= användarens idag (`User::today()`)
 AND containern är åtkomlig för användaren
 AND inga öppna beroenden
 ORDER BY due_at
 ```
+
+`idag` är användarens kalenderdag och inte serverns; se [[ADR-0044 Användarens dag]] § Beslut 1.
 
 Systemet är kraftigt säsongsbetonat — i april förfaller allting samtidigt. Det påverkar notisstrategin, se veckosammanfattningen i [[Notiser]].

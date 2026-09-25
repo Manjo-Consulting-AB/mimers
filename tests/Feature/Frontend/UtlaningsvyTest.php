@@ -34,8 +34,8 @@ use function Pest\Laravel\withoutVite;
  * 2. **Skrivningarna** — utlåningen, återlämningen och raderingen går genom
  *    `StoreLoanRequest` och `UpdateLoanRequest` rakt av, med `after_or_equal:
  *    lent_at` orörd (Beslut 3).
- * 3. **Försenad är härledd** på serverns datum och läses ur en flagga — vyn
- *    har ingen egen klocka (Beslut 5).
+ * 3. **Försenad är härledd** på användarens datum ([[ADR-0044 Användarens
+ *    dag]]) och läses ur en flagga — vyn har ingen egen klocka (Beslut 5).
  * 4. **Adressen är en kontaktuppgift** — ingen `mailto:`, ingen
  *    påminnelseknapp, och ytan säger varför (Beslut 4).
  * 5. **Grindarna** är itemets, en pinne per handling: `view`, `create`,
@@ -52,6 +52,16 @@ use function Pest\Laravel\withoutVite;
  * Hjälparna har prefixet `utlaningsvy` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
  */
+
+/*
+ * Klockan nollställs mellan proven: de datumkänsliga fallen nedan fryser tiden
+ * mitt på dagen, då UTC-datumet och användarens svenska datum är detsamma
+ * ([[ADR-0044 Användarens dag]]). Utan frysningen vore de känsliga för
+ * väggklockan mellan 22:00 och 24:00 UTC, då användaren redan är i morgondagen.
+ */
+afterEach(function () {
+    Carbon::setTestNow();
+});
 
 /**
  * Ett konto med en medlem, och en container med ett item under kontot. Båda på
@@ -321,15 +331,18 @@ it('gör en andra öppen utlåning till ett fältfel i stället för en JSON-kro
     expect(Loan::query()->count())->toBe(1);
 });
 
-// --- försenad: härledd på serverns datum --------------------------------
+// --- försenad: härledd på användarens datum ------------------------------
 
 it('visar en öppen utlåning med passerat due_at som försenad', function () {
     withoutVite();
 
+    // Mitt på dagen, då UTC-datumet och det svenska datumet sammanfaller: en
+    // gårdag är försenad, i dag och i morgon är det inte (issue 136, jfr
+    // proven i tests/Feature/Uppgift/VyernasDagTest.php som prövar glappet).
+    Carbon::setTestNow('2026-09-25 10:00:00');
+
     [, $anvandare, $container, $item] = utlaningsvyKontext();
 
-    // Dagens datum är serverns, och raden byggs ur samma klocka: en gårdag är
-    // försenad, i dag och i morgon är det inte.
     $forfallen = utlaningsvyLan($item, [
         'lent_at' => '2026-01-01',
         'due_at' => Carbon::today()->subDay()->toDateString(),
@@ -365,6 +378,8 @@ it('visar en öppen utlåning med passerat due_at som försenad', function () {
 it('räknar aldrig försenat på klientens klocka', function () {
     withoutVite();
 
+    Carbon::setTestNow('2026-09-25 10:00:00');
+
     [, $anvandare, $container, $item] = utlaningsvyKontext();
 
     utlaningsvyLan($item, ['lent_at' => '2026-01-01', 'due_at' => Carbon::today()->subDay()->toDateString()]);
@@ -388,14 +403,16 @@ it('räknar aldrig försenat på klientens klocka', function () {
 it('sätter returned_at till dagens datum och flyttar raden till historiken', function () {
     withoutVite();
 
+    Carbon::setTestNow('2026-09-25 10:00:00');
+
     [, $anvandare, $container, $item] = utlaningsvyKontext();
 
     $loan = utlaningsvyLan($item, ['lent_at' => '2026-01-01']);
 
     $url = utlaningsvyUrl($container, $item);
 
-    // Knappen skickar serverns eget datum, ur `today`-propen — inte
-    // webbläsarens klocka.
+    // Knappen skickar användarens eget datum, ur `today`-propen — inte
+    // webbläsarens klocka och inte serverns ([[ADR-0044 Användarens dag]]).
     actingAs($anvandare)->get($url)->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('today', Carbon::today()->toDateString())
     );

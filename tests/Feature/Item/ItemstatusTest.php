@@ -5,6 +5,7 @@ use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
+use App\Models\User;
 use App\Support\Item\ItemStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -114,12 +115,24 @@ function itemstatusFörekomst(Item $item, int $dagar, string $status = 'open'): 
 /**
  * Statusen för en lista av items, som kontrollern frågar efter den.
  *
+ * `forItems()` tar användaren sedan issue 136 ([[ADR-0044 Användarens dag]]
+ * § Beslut 1): förfallet räknas mot HENNES kalenderdag. Standardanvändaren
+ * här är oskapad och står i appens tidszon, alltså samma dag som
+ * `Carbon::today()` gav före issuen — proven nedan är oförändrade av den
+ * anledningen, och tidszonens halva prövas i
+ * tests/Feature/Uppgift/VyernasDagTest.php. `make()` och inte `create()`:
+ * ingen rad behövs och ingen fråga får tillkomma i
+ * frågeräkningstestet (User::today() rör aldrig `accounts` när `timezone`
+ * är satt).
+ *
  * @param  list<Item>  $items
  * @return array<string, string>
  */
-function itemstatusFör(Container $container, array $items): array
+function itemstatusFör(Container $container, array $items, ?User $user = null): array
 {
-    return app(ItemStatus::class)->forItems($container, $items);
+    $user ??= User::factory()->make(['timezone' => config('app.timezone')]);
+
+    return app(ItemStatus::class)->forItems($container, $user, $items);
 }
 
 /**
