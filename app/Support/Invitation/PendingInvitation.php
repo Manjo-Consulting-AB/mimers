@@ -22,14 +22,14 @@ use Illuminate\Database\Eloquent\Builder;
  * App\Actions\Invitation\AcceptInvitation och ::RejectInvitation anropas
  * oförändrade av båda.
  *
- * **De två metoderna svarar på samma fråga från varsitt håll.** `assert()`
- * prövar en rad som redan är uppslagen: tokenvägen hittar den på
- * `token_hash`, och svaret på en rad som inte är användarens är
- * `invitation.email_mismatch` (403) — den som bär ett giltigt token har
- * bevisat att hon har mejlet, och fel adress är då ett besked och inte en
- * hemlighet. `forUser()` slår i stället upp användarens EGNA väntande
- * inbjudningar; den vägen har inget token alls, och en rad som inte pekar på
- * henne är därför OSYNLIG (404, se
+ * **Metoderna svarar på samma fråga från varsitt håll.** `assert()` prövar en
+ * rad som redan är uppslagen: tokenvägen hittar den på `token_hash`, och
+ * svaret på en rad som inte är användarens är `invitation.email_mismatch`
+ * (403) — den som bär ett giltigt token har bevisat att hon har mejlet, och
+ * fel adress är då ett besked och inte en hemlighet. `forUser()` slår i
+ * stället upp användarens EGNA väntande inbjudningar, och `findForUser()` är
+ * samma uppslag på en ULID; den vägen har inget token alls, och en rad som
+ * inte pekar på henne är därför OSYNLIG (404, se
  * App\Http\Controllers\InvitationResponseController § acceptPending) —
  * samma svar som ägarbytets inkorg ger, av samma skäl: ett gissat `ulid` ska
  * inte avslöja att inbjudan finns.
@@ -106,7 +106,8 @@ class PendingInvitation
 
     /**
      * Användarens väntande inbjudningar — listan på `/invitations` när inget
-     * token ligger i sessionen, och ingenting annat.
+     * token ligger i sessionen, klockans rader och siffra, och uppslaget
+     * accept- och avvisa-vägarna på `ulid` gör (se `findForUser()`).
      *
      * Frågan går på det befintliga indexet `(email, status)`: `email` är
      * jämförelsen, `status` är `pending`, och `expires_at` silas på samma rad.
@@ -131,21 +132,56 @@ class PendingInvitation
      * Utan det hade `$invitation->container` varit `null` och listan fallit på
      * `->name` — en 500:a i stället för en rad färre.
      *
-     * **Anroparen har redan prövat verifieringen.** Kravet på verifierad
-     * adress gäller listan ([[ADR-0003 Åtkomstmodell]]) och bor i
-     * InvitationResponseController::waiting() och
-     * App\Http\Middleware\HandleInertiaRequests — den förra svarar tillståndet
-     * `unverified`, den senare en tom lista. Frågan nedan är
-     * adressjämförelsen och ingenting mer; den är ingen grind.
+     * **Verifieringsgrinden bor här.** En overifierad adress är inte bevisat
+     * användarens, och utan token finns inget annat bevis ([[ADR-0003
+     * Åtkomstmodell]], [[ADR-0011 Autentisering]]). Därför ger frågan inga
+     * rader när `hasVerifiedEmail()` är falsk — den returnerar en fråga som
+     * inte kan matcha någon rad, så en tom mängd är det enda svar den kan ge.
+     * Anroparens egen kontroll — InvitationResponseController::waiting()
+     * för tillståndet `unverified`, App\Http\Middleware\HandleInertiaRequests::
+     * verifiedUser() för att spara frågan — är nu en genväg och inte själva
+     * grinden: samma svar hade kommit ändå. Samma form som
+     * App\Http\Controllers\OwnershipTransferController::recipientQuery(), där
+     * verifieringen avgör om adressgrenen alls läggs till.
      *
      * @param  User  $user  Den inloggade mottagaren.
      * @return Builder<Invitation>
      */
     public function forUser(User $user): Builder
     {
+        if (! $user->hasVerifiedEmail()) {
+            return Invitation::query()->whereRaw('1 = 0');
+        }
+
         return Invitation::query()
             ->outstanding()
             ->whereHas('container')
             ->where('email', mb_strtolower($user->email));
+    }
+
+    /**
+     * Användarens väntande inbjudan med den här ULID:n, eller `404`.
+     *
+     * Uppslaget går genom `forUser()` och ärver därmed verifieringsgrinden:
+     * en overifierad användare får inga rader och därmed samma svar som en rad
+     * som inte är hennes — 404, aldrig 403. Det är samma resonemang som
+     * `forUser()` vilar på: den som inte kan se raden i listan ska inte heller
+     * kunna svara på den, och ett gissat `ulid` ska inte avslöja att den finns.
+     *
+     * Kontrollerna i `assert()` prövas fortfarande efteråt av anroparen, precis
+     * som på tokenvägen: den här metoden avgör vad som är SYNLIGT, `assert()`
+     * vad som är TILLÅTET.
+     *
+     * @throws ApiException 404 `resource.not_found`
+     */
+    public function findForUser(User $user, string $ulid): Invitation
+    {
+        $invitation = $this->forUser($user)->where('ulid', $ulid)->first();
+
+        if (! $invitation instanceof Invitation) {
+            throw ApiException::make('resource.not_found', [], 404);
+        }
+
+        return $invitation;
     }
 }

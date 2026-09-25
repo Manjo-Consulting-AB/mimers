@@ -8,6 +8,7 @@ use App\Models\ContainerAccess;
 use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
+use App\Support\Invitation\PendingInvitation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -237,6 +238,21 @@ it('visar ingen lista för en overifierad användare', function () {
 });
 
 /*
+ * Verifieringsgrinden bor i FRÅGAN och inte hos anroparen: `forUser()` ger
+ * noll rader för en overifierad adress även när den anropas direkt, utan
+ * kontrollern emellan. Provet mäter uppslaget självt, så en ny väg in som
+ * glömmer den egna genvägen ändå möts av samma svar.
+ */
+it('ger forUser noll rader för en overifierad användare, även vid direkt anrop', function () {
+    [$inbjudan] = vantandeInbjudan(vantandeParm(), User::factory()->create(), 'ny@exempel.se');
+    $overifierad = User::factory()->unverified()->create(['email' => 'ny@exempel.se']);
+
+    // Raden finns och väntar — det är bara verifieringen som skiljer.
+    expect($inbjudan->refresh()->status)->toBe('pending')
+        ->and(app(PendingInvitation::class)->forUser($overifierad)->count())->toBe(0);
+});
+
+/*
  * Rutten ligger utanför `auth`-gruppen: en utloggad besökare på
  * `/invitations` möts av det neutrala beskedet och inte av inloggningssidan —
  * utan token finns varken adress eller inbjudan att visa.
@@ -409,6 +425,25 @@ it('ger 404 för en utgången, besvarad eller återkallad inbjudan', function ()
     expect($utgangen->refresh()->status)->toBe('pending')
         ->and($besvarad->refresh()->status)->toBe('accepted')
         ->and($tillbakadragen->refresh()->status)->toBe('revoked')
+        ->and(ContainerAccess::query()->count())->toBe(0);
+});
+
+/*
+ * En overifierad adress får 404 på ulid-vägen också — accept OCH avvisande.
+ * Grinden sitter i uppslaget (PendingInvitation::forUser()), och en rad som
+ * inte är synlig i listan går inte heller att svara på. Raden ligger kvar
+ * orörd: den är inte ogiltig, den är bara inte hennes att svara på ännu.
+ */
+it('ger 404 vid accept och avvisande för en overifierad adress', function () {
+    withoutVite();
+
+    [$inbjudan] = vantandeInbjudan(vantandeParm(), User::factory()->create(), 'ny@exempel.se');
+    $overifierad = User::factory()->unverified()->create(['email' => 'ny@exempel.se']);
+
+    actingAs($overifierad)->post("/invitations/{$inbjudan->ulid}/accept")->assertNotFound();
+    actingAs($overifierad)->post("/invitations/{$inbjudan->ulid}/reject")->assertNotFound();
+
+    expect($inbjudan->refresh()->status)->toBe('pending')
         ->and(ContainerAccess::query()->count())->toBe(0);
 });
 

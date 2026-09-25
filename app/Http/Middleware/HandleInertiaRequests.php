@@ -394,10 +394,11 @@ class HandleInertiaRequests extends Middleware
      *
      * Verifieringen är hela identitetsbeviset när ingen token finns
      * ([[ADR-0003 Åtkomstmodell]]): klockan visar en inbjudan till en adress
-     * bara när adressen är bevisat hennes. Villkoret står här och inte i
-     * PendingInvitation::forUser(), för frågan är adressjämförelsen och
-     * ingenting mer — samma uppdelning som
-     * App\Http\Controllers\InvitationResponseController::waiting() gör.
+     * bara när adressen är bevisat hennes. Grinden bor i
+     * PendingInvitation::forUser(), som ger noll rader för en overifierad
+     * adress; den här kontrollen är en genväg som sparar frågan, och samma
+     * uppdelning som App\Http\Controllers\InvitationResponseController::
+     * waiting() gör för tillståndet `unverified`.
      */
     private function verifiedUser(Request $request): ?User
     {

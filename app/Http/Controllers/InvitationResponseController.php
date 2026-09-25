@@ -309,6 +309,12 @@ class InvitationResponseController extends Controller
      * så åtkomsten blir exakt den tokenvägen ger, och containern blir aktiv av
      * samma skäl som där (§ Beslut 4).
      *
+     * **Uppslaget går genom `findForUser()`.** Raden hämtas på ULID:n men bara
+     * ur användarens EGNA väntande inbjudningar, och det uppslaget bär
+     * verifieringsgrinden (App\Support\Invitation\PendingInvitation): en
+     * overifierad adress ger inga rader och därmed 404, precis som en rad som
+     * inte är hennes.
+     *
      * **Allt `assert()` säger nej till blir `404`.** En inbjudan som inte är
      * användarens, en som redan besvarats, en som dragits tillbaka och en som
      * gått ut är alla OSYNLIGA — ett gissat `ulid` ska inte kunna skilja "finns
@@ -339,6 +345,7 @@ class InvitationResponseController extends Controller
         $user = $request->user();
 
         try {
+            $invitation = $pendingInvitation->findForUser($user, $invitation->ulid);
             $invitation = $pendingInvitation->assert($invitation, $user);
         } catch (ApiException) {
             abort(404);
@@ -367,10 +374,13 @@ class InvitationResponseController extends Controller
      * samma `status` som via token.
      *
      * **Verifierad adress krävs INTE för att tacka nej**, precis som på
-     * tokenvägen (issue 10b § Beslut 7): att avvisa ger ingen behörighet.
-     * Kravet ligger i `waiting()` och i den delade proppen, alltså på LISTAN —
-     * en overifierad användare ser den inte, och har därför ingen ULID att
-     * posta. Kan hon sin egen ULID får hon avvisa, och det är riktigt.
+     * tokenvägen (issue 10b § Beslut 7): att avvisa ger ingen behörighet. Men
+     * uppslaget går genom `findForUser()` och bär därför verifieringsgrinden
+     * ändå — en overifierad adress ger 404, samma svar som en rad som inte är
+     * hennes. Grinden står därför på ETT ställe för både listan och svaret,
+     * och en overifierad användare kan varken se raden eller svara på den.
+     * Tokenvägen är oförändrad: den bär sitt eget bevis och kräver ingen
+     * verifiering för att avvisa.
      *
      * **Tillbaka till listan och inte till startsidan.** Tokenvägen landar på
      * `/` därför att mottagaren kom från ett mejl och inte har någon sida att
@@ -389,6 +399,7 @@ class InvitationResponseController extends Controller
         $user = $request->user();
 
         try {
+            $invitation = $pendingInvitation->findForUser($user, $invitation->ulid);
             $invitation = $pendingInvitation->assert($invitation, $user);
         } catch (ApiException) {
             abort(404);
