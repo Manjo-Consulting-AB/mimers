@@ -31,6 +31,20 @@ import { useTranslations } from '../composables/useTranslations.js';
  * schema, en redan stängd förekomst — formuleras av servern och ritas på
  * raden. Blockerade uppgifter finns aldrig i listan (villkor tre i
  * `scopeTodoFor`), så 63b:s blockeringsmening kan inte uppstå här.
+ *
+ * **Knappen bär en prick för försenat och framtida** (issue 133). Färgen
+ * kommer ur `entry.overdue` och `entry.upcoming`, som servern redan har räknat
+ * — raden jämför inga datum själv, av samma skäl som `due` ovan (issue 64 §
+ * Beslut 3). En uppgift som förfaller i dag har ingen prick, för de två
+ * fälten är varandras komplement och möts inte.
+ *
+ * **Pricken är dekor; orden bär betydelsen.** Den sitter `absolute`, alltså
+ * utanför flödet, så knappen behåller sin storlek och sin 44 px höga träffyta
+ * (`min-h-11`). Texten i `sr-only` är det skärmläsaren läser tillsammans med
+ * `todo.complete` — *Overdue Check off* — och färgen är därför aldrig den
+ * enda bäraren av tillståndet. Ordvalet är grupprubrikernas egna nycklar
+ * (`todo.group.*`): samma ord om samma sak, och en kopia i `lang/` hade varit
+ * den andra sanningen om vad gruppen heter.
  */
 const props = defineProps({
     /* En post ur todo-listan: TodoEntryResource plus `account` och `can`. */
@@ -117,8 +131,24 @@ function complete() {
             <button
                 type="submit"
                 :disabled="form.processing"
-                class="inline-flex min-h-11 items-center rounded bg-slate-900 px-3 text-sm font-medium text-white disabled:opacity-50"
+                class="relative inline-flex min-h-11 items-center rounded bg-slate-900 px-3 text-sm font-medium text-white disabled:opacity-50"
             >
+                <!-- Pricken (issue 133): `danger` för försenad, `accent` för
+                     framtida — designsystemets roller ([[ADR-0042
+                     Designsystemet]] § Beslut), aldrig en rå palettfärg som
+                     `bg-red-600`. `absolute` så att den varken flyttar
+                     knappens text eller ändrar dess storlek. -->
+                <span
+                    v-if="entry.overdue || entry.upcoming"
+                    aria-hidden="true"
+                    class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
+                    :class="entry.overdue ? 'bg-danger' : 'bg-accent'"
+                />
+
+                <!-- Betydelsen, för den som inte ser färgen. -->
+                <span v-if="entry.overdue" class="sr-only">{{ t('todo.group.overdue') }}</span>
+                <span v-else-if="entry.upcoming" class="sr-only">{{ t('todo.group.upcoming') }}</span>
+
                 {{ form.processing ? t('common.pending.complete') : t('todo.complete') }}
             </button>
         </form>

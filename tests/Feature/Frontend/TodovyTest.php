@@ -579,6 +579,59 @@ it('visar container, item och schema med länkar som går rätt', function () {
 });
 
 /*
+ * Klart när: en försenad rad har pricken i `danger` på knappen, en framtida
+ * rad har den i `accent`, och en rad som förfaller i dag har ingen prick.
+ *
+ * **Servern avgör, klienten ritar** (issue 64 § Beslut 3). Raden läser
+ * `entry.overdue` och `entry.upcoming`, som `TodoEntryResource` räknar mot
+ * användarens dag (issue 133) — vyn jämför inga datum själv. Halvan som
+ * bevisar det står i provet "låter serverns datum styra gruppen": `new Date`
+ * och `Date.now` får inte finnas i vyn.
+ *
+ * Fälten prövas per grupp och inte bara i `/api`: grupperingen och fälten
+ * räknas ur SAMMA predikat, så en rad i `upcoming` som inte är `upcoming`
+ * vore två svar på samma fråga.
+ */
+it('ritar pricken för försenat och framtida på avbockningsknappen', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = todovyKontext();
+
+    todovyUppgift($item, todovyDatum(-5), 'Försenad');
+    todovyUppgift($item, todovyDatum(0), 'I dag');
+    todovyUppgift($item, todovyDatum(10), 'Framtida');
+
+    $svar = actingAs($anvandare)->get('/tasks')->assertOk();
+
+    expect(todovyGrupp($svar, 'overdue')[0]['overdue'])->toBeTrue()
+        ->and(todovyGrupp($svar, 'overdue')[0]['upcoming'])->toBeFalse()
+        ->and(todovyGrupp($svar, 'today')[0]['overdue'])->toBeFalse()
+        ->and(todovyGrupp($svar, 'today')[0]['upcoming'])->toBeFalse()
+        ->and(todovyGrupp($svar, 'upcoming')[0]['overdue'])->toBeFalse()
+        ->and(todovyGrupp($svar, 'upcoming')[0]['upcoming'])->toBeTrue();
+
+    $rad = File::get(resource_path('js/components/TodoRow.vue'));
+
+    // Färgerna ur designsystemets tokens ([[ADR-0042 Designsystemet]]
+    // § Beslut), aldrig en hårdkodad Tailwind-färg — `bg-red-600` hade sett
+    // likadan ut i en strukturell kontroll och fallit först vid en ombindning.
+    expect($rad)->toContain(":class=\"entry.overdue ? 'bg-danger' : 'bg-accent'\"")
+        // Pricken ritas bara när servern pekat ut ett tillstånd: en rad som
+        // förfaller i dag får ingen prick, för båda fälten är false.
+        ->toContain('v-if="entry.overdue || entry.upcoming"')
+        // Betydelsen för den som inte ser färgen, i knappens namn.
+        ->toContain('class="sr-only"')
+        ->toContain("t('todo.group.overdue')")
+        ->toContain("t('todo.group.upcoming')")
+        ->toContain('aria-hidden="true"');
+
+    // Pricken sitter utanför flödet och krymper inte träffytan: `min-h-11` är
+    // 44 px, och en prick i flödet hade gjort knappen högre och knuffat raden.
+    expect($rad)->toContain('class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"')
+        ->toContain('relative inline-flex min-h-11 items-center rounded bg-slate-900');
+});
+
+/*
  * Klart när: en uppgift kan bockas av från listan, och listan ritas om utan
  * den.
  *
@@ -833,6 +886,7 @@ it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', func
         'due_at',
         'visible_from',
         'overdue',
+        'upcoming',
         'schedule',
         'item',
         'container',

@@ -41,6 +41,12 @@ use function Pest\Laravel\withoutVite;
  * skillnaden fast: hade `today()` gett midnatt i Stockholm hade jämförelsen
  * mot en DATE-kolumn pekat en dag fel.
  *
+ * **`upcoming` kom med issue 133** och räknas mot samma dag. Fältet ligger
+ * bredvid `overdue` i TodoEntryResource, och rättningen av `overdue` var inte
+ * hela felet: en rad som förföll i dag låg under *kommande* just därför att
+ * "efter serverns datum" såg ut som framtid. Provet "gör en förekomst som
+ * förfaller i den lokala dagen inte upcoming" håller den halvan fast.
+ *
  * Kostnadsmånaden på dashboarden räknas också ur användarens tidszon sedan
  * issue 125, nu genom `User::preferredTimezone()`. Det beteendet prövas i
  * tests/Feature/Kostnad/DashboardkostnadTest.php — inklusive reserven — och
@@ -209,6 +215,38 @@ it('lägger samma förekomst i /api/todo med overdue false', function () {
     expect($svar->json('data.0.ulid'))->toBe($idag->ulid)
         ->and($svar->json('data.0.due_at'))->toBe('2026-09-25')
         ->and($svar->json('data.0.overdue'))->toBeFalse();
+});
+
+/*
+ * Klart när: klockan 23:30 UTC är en rad som förfaller på det svenska
+ * datumet inte `upcoming` för en användare i Europe/Stockholm (issue 133).
+ *
+ * Det är `upcoming`s halva av samma fel som provet ovanför bevisar för
+ * `overdue`, och spegelbilden är hela poängen: serverns datum är den 24:e,
+ * användarens är den 25:e, och en rad som förfaller den 25:e ser "framtida" ut
+ * för var och en som jämför mot serverns klocka. Raden i morgon är framtida
+ * för båda och står med för att visa att fältet inte bara är false.
+ */
+it('gör en förekomst som förfaller i den lokala dagen inte upcoming', function () {
+    Carbon::setTestNow('2026-09-24 23:30:00');
+
+    [$konto, $anvandare, $headers] = dagKonto();
+    $container = dagParm($konto);
+
+    [, , $idag] = dagUppgift($container, $konto, $anvandare, 'Byt impeller', '2026-09-25');
+
+    // Framförhållning sju dagar: visible_from blir 2026-09-19, alltså synlig
+    // trots att den förfaller först i morgon.
+    [, , $imorgon] = dagUppgift($container, $konto, $anvandare, 'Byt olja', '2026-09-26', 7);
+
+    $svar = getJson('/api/todo', $headers);
+
+    $svar->assertOk();
+    expect($svar->json('data.0.ulid'))->toBe($idag->ulid)
+        ->and($svar->json('data.0.overdue'))->toBeFalse()
+        ->and($svar->json('data.0.upcoming'))->toBeFalse()
+        ->and($svar->json('data.1.ulid'))->toBe($imorgon->ulid)
+        ->and($svar->json('data.1.upcoming'))->toBeTrue();
 });
 
 /*

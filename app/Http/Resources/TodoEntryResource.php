@@ -26,6 +26,12 @@ use Illuminate\Support\Carbon;
  * tillstånd som klockan ändrar kräver ett jobb som förr eller senare missar en
  * körning — därför beräknas det per rad vid läsning.
  *
+ * `upcoming` är `overdue`s spegelbild och beräknas på samma sätt: `status =
+ * 'open' AND due_at > idag`, samma `today()` (issue 133). De två är varandras
+ * komplement men möts inte — en rad som förfaller i dag är varken eller. Vyn
+ * jämför inga datum själv (issue 64 § Beslut 3); den ritar den prick servern
+ * pekar ut, och färgen är aldrig den enda bäraren av den.
+ *
  * `visible_from` och `due_at` är DATE-kolumner och serialiseras med
  * `toDateString()` ("2027-05-05"), aldrig `toIso8601String()` — ett
  * förfallodatum har ingen tidszon (Beslut 5).
@@ -44,6 +50,7 @@ class TodoEntryResource extends JsonResource
             'due_at' => $this->due_at->toDateString(),
             'visible_from' => $this->visible_from->toDateString(),
             'overdue' => $this->status === ScheduleOccurrence::STATUS_OPEN && $this->due_at->lessThan($this->today($request)),
+            'upcoming' => $this->status === ScheduleOccurrence::STATUS_OPEN && $this->due_at->greaterThan($this->today($request)),
             'schedule' => [
                 'ulid' => $this->schedule->ulid,
                 'title' => $this->schedule->title,
@@ -62,11 +69,12 @@ class TodoEntryResource extends JsonResource
     /**
      * Användarens kalenderdatum, eller appens när ingen är inloggad.
      *
-     * `overdue` är per definition "före ANVÄNDARENS idag" (issue 135): servern
-     * är i UTC, och mellan midnatt och klockan två svensk tid är det ännu i går
-     * där. Anropet går via `User::today()`, som bygger om datumet till appens
-     * tidszon så att jämförelsen mot DATE-kolumnen blir en datumjämförelse och
-     * inte en ögonblicksjämförelse.
+     * Både `overdue` och `upcoming` räknas mot ANVÄNDARENS idag (issue 135) —
+     * det ena före, det andra efter. Servern är i UTC, och mellan midnatt och
+     * klockan två svensk tid är det ännu i går där. Anropet går via
+     * `User::today()`, som bygger om datumet till appens tidszon så att
+     * jämförelsen mot DATE-kolumnen blir en datumjämförelse och inte en
+     * ögonblicksjämförelse.
      *
      * Utan användare — en resurs som löses upp utanför en autentiserad request
      * — gäller appens tidszon. Det är samma svar som före issue 135.
