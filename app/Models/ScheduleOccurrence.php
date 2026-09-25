@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Support\Carbon;
 
 /**
  * Den ENSKILDA GÅNGEN av ett schema — se [[Scheman och uppgifter]] §
@@ -35,7 +34,10 @@ use Illuminate\Support\Carbon;
  *
  * `overdue` är INTE en kolumn utan härleds vid läsning av
  * App\Http\Resources\ScheduleOccurrenceResource: `status = 'open' AND
- * due_at < CURDATE()` (dokumentet § schedule_occurrence).
+ * due_at < idag`. `idag` är ANVÄNDARENS kalenderdatum sedan issue 135 —
+ * `User::today()` — och inte serverns; se den metoden för varför datumet
+ * byggs om till appens tidszon. App\Support\Item\ItemStatus räknar fortfarande
+ * i serverns datum och rörs inte av issue 135.
  */
 #[Fillable([])]
 #[RouteKey('ulid')]
@@ -154,10 +156,14 @@ class ScheduleOccurrence extends Model
      * något ([[Scheman och uppgifter]] § Todo-listan, issue 24 § Beslut 3):
      *
      * - `status = 'open'`
-     * - `visible_from <= idag`. `whereDate()`, aldrig en rå kolumnjämförelse:
-     *   i sqlite lagras DATE-kolumner med en tidskomponent, och ett datum
-     *   ska inte bero på klockslaget när frågan körs (issue 24 § Att se upp
-     *   med).
+     * - `visible_from <= idag`, där idag är ANVÄNDARENS kalenderdatum och
+     *   inte serverns (issue 135): `User::today()` ger hennes datum, och
+     *   `toDateString()` gör jämförelsen till en datumjämförelse. `whereDate()`,
+     *   aldrig en rå kolumnjämförelse: i sqlite lagras DATE-kolumner med en
+     *   tidskomponent, och ett datum ska inte bero på klockslaget när frågan
+     *   körs (issue 24 § Att se upp med). Skickas `today()` rakt in hade
+     *   datumet följt med som ett ögonblick i appens tidszon — rätt här, men
+     *   strängen gör det omöjligt att läsa fel.
      * - containern är åtkomlig för användaren. Villkoret ligger på
      *   Container-modellen (`scopeAccessibleBy`) och appliceras som `whereHas`
      *   genom relationskedjan förekomst → schema → item → container — aldrig
@@ -248,7 +254,7 @@ class ScheduleOccurrence extends Model
 
         return $query
             ->where('status', self::STATUS_OPEN)
-            ->whereDate('visible_from', '<=', Carbon::today())
+            ->whereDate('visible_from', '<=', $user->today()->toDateString())
             ->whereHas('schedule', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {
                 $query->where('schedule.is_active', true)
                     ->whereHas('item', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {

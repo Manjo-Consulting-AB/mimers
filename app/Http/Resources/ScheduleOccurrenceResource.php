@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\ScheduleOccurrence;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
@@ -15,7 +16,8 @@ use Illuminate\Support\Carbon;
  * under schemat, så klienten vet redan vilket det är.
  *
  * `overdue` är INTE en kolumn utan en BERÄKNAD boolean: `status = 'open'
- * AND due_at < CURDATE()` (dokumentet § schedule_occurrence). Ett lagrat
+ * AND due_at < idag` (dokumentet § schedule_occurrence), där idag är
+ * ANVÄNDARENS datum och inte serverns (issue 135, se `today()`). Ett lagrat
  * tillstånd som klockan ändrar kräver ett jobb som förr eller senare missar
  * en körning — därför beräknas det per rad vid läsning (Beslut 2).
  *
@@ -43,7 +45,7 @@ class ScheduleOccurrenceResource extends JsonResource
             'visible_from' => $this->visible_from->toDateString(),
             'due_at' => $this->due_at->toDateString(),
             'status' => $this->status,
-            'overdue' => $this->status === 'open' && $this->due_at->lessThan(Carbon::today()),
+            'overdue' => $this->status === 'open' && $this->due_at->lessThan($this->today($request)),
             'completed_at' => $this->completed_at?->toIso8601String(),
             'completed_by_account' => $this->completedByAccount === null
                 ? null
@@ -55,5 +57,24 @@ class ScheduleOccurrenceResource extends JsonResource
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),
         ];
+    }
+
+    /**
+     * Användarens kalenderdatum, eller appens när ingen är inloggad.
+     *
+     * `overdue` är per definition "före ANVÄNDARENS idag" (issue 135): servern
+     * är i UTC, och mellan midnatt och klockan två svensk tid är det ännu i går
+     * där. Anropet går via `User::today()`, som bygger om datumet till appens
+     * tidszon så att jämförelsen mot DATE-kolumnen blir en datumjämförelse och
+     * inte en ögonblicksjämförelse.
+     *
+     * Utan användare — en resurs som löses upp utanför en autentiserad request
+     * — gäller appens tidszon. Det är samma svar som före issue 135.
+     */
+    private function today(Request $request): Carbon
+    {
+        $user = $request->user();
+
+        return $user instanceof User ? $user->today() : Carbon::today();
     }
 }

@@ -442,7 +442,17 @@ it('har inloggningens takgräns', function () {
     $svar->assertRedirect('/settings/security');
     $svar->assertSessionHasErrors('email');
 
-    expect(session('errors')->get('email')[0])->toBe(trans('auth.throttle', ['seconds' => 60], 'en'));
+    // Meningen och inte nyckeln: `auth.throttle` med antalet sekunder i.
+    // Sekunderna läses ur meningen och pinnas inte till 60 — takgränsen räknar
+    // hela sekunder, så ett prov vars sex anrop korsar en sekundgräns får 59.
+    // Samma form som provet längre ned i filen och som
+    // tests/Feature/Frontend/TakgransTest.php.
+    $mening = session('errors')->get('email')[0];
+    preg_match('/(\d+)/', $mening, $träff);
+
+    expect($träff)->not->toBeEmpty('meddelandet saknar antal sekunder')
+        ->and((int) $träff[0])->toBeGreaterThan(0)->toBeLessThanOrEqual(60)
+        ->and($mening)->toBe(trans('auth.throttle', ['seconds' => (int) $träff[0]], 'en'));
 
     // Det sjätte försöket nådde aldrig valideringen: lösenordet står kvar.
     expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();

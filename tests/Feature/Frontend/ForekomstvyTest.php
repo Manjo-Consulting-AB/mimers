@@ -307,9 +307,11 @@ it('räknar aldrig försenat i vyn utan läser serverns fält', function () {
     expect($modul)->not->toContain('overdue');
 
     // Och fältet är serverns: ScheduleOccurrenceResource räknar det ur
-    // `due_at` mot dagens datum, aldrig ur en kolumn.
+    // `due_at` mot dagens datum, aldrig ur en kolumn. Dagen är användarens och
+    // löses upp på servern sedan issue 135 — `$this->today($request)` läser
+    // `User::today()`, aldrig en klocka i klienten.
     expect(File::get(app_path('Http/Resources/ScheduleOccurrenceResource.php')))
-        ->toContain("'overdue' => \$this->status === 'open' && \$this->due_at->lessThan(Carbon::today())");
+        ->toContain("'overdue' => \$this->status === 'open' && \$this->due_at->lessThan(\$this->today(\$request))");
 });
 
 // --- avbockningen: en knapptryckning, och nästa förfall ur servern ----------

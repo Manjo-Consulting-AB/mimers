@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
@@ -202,5 +203,48 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
         $accounts = $this->accounts;
 
         return $accounts->count() === 1 ? $accounts->first()->locale : null;
+    }
+
+    /**
+     * Personens tidszon, med kontots som reserv och appens som sista utväg
+     * ([[Konton och åtkomst]] § user: `timezone` åsidosätter kontots värden
+     * för den här personen).
+     *
+     * **Regeln bor här och inte i anroparen** (issue 135). Den fanns tidigare
+     * som två privata kopior — App\Http\Controllers\DashboardController::
+     * timezoneFor() och App\Support\Notification\QuietHours::timezoneFor() —
+     * och två kopior av samma regel är förr eller senare två svar på samma
+     * fråga. QuietHours har sin kvar än så länge; den rörs inte av issue 135.
+     *
+     * `first()` är godtyckligt när användaren har flera konton — accepterat,
+     * en gissning är bättre än UTC. Samma resonemang som `preferredLocale()`
+     * och QuietHours::timezoneFor(); `account.timezone` är till skillnad från
+     * `user.timezone` inte nullable, så reserven finns alltid.
+     */
+    public function preferredTimezone(): string
+    {
+        $timezone = $this->timezone;
+
+        if ($timezone === null && $this->accounts->isNotEmpty()) {
+            $timezone = $this->accounts->first()->timezone;
+        }
+
+        return $timezone ?? config('app.timezone');
+    }
+
+    /**
+     * Personens kalenderdatum — vad "idag" betyder för henne (issue 135).
+     *
+     * **Datumet är midnatt i APPENS tidszon, inte i hennes.** `due_at` och
+     * `visible_from` är DATE-kolumner som lagras och jämförs i UTC, och
+     * `Carbon::today('Europe/Stockholm')` är ett annat ÖGONBLICK än midnatt i
+     * UTC — 22:00 dagen innan. Jämförs det med en DATE-kolumn blir svaret fel,
+     * både med `lessThan()` och rakt in i `whereDate()`. Tidszonen används
+     * därför bara för att avgöra VILKET datum hon är i; själva datumet byggs
+     * om till appens tidszon. Frågorna läser `toDateString()`.
+     */
+    public function today(): Carbon
+    {
+        return Carbon::parse(Carbon::now($this->preferredTimezone())->toDateString());
     }
 }
