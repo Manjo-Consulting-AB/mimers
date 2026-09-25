@@ -243,8 +243,15 @@ it('delar favoritlistan och ger en gäst samma tomma svar som en utan favoriter'
  * partiell omladdning hämtar. Här prövas formen — att siffran finns, att en
  * gäst får samma nolla som en inloggad utan olästa, och att listan inte kommer
  * med av sig själv. Läsningen och räkningen prövas i NotisklockaTest.
+ *
+ * **Issue 131 gav klockan en andra lista och siffran en andra del.**
+ * `pendingInvitations` är en optional prop av exakt samma skäl som
+ * `notifications` — raden per väntande inbjudan behövs bara när klockan är
+ * öppen — och den kommer därför inte heller med av sig själv. Siffran räknar
+ * båda, och det är därför den numera kan kosta två frågor; läsningen prövas i
+ * tests/Feature/Frontend/VantandeInbjudningarTest.
  */
-it('delar klockans siffra men aldrig listan på en vanlig sidladdning', function () {
+it('delar klockans siffra men aldrig listorna på en vanlig sidladdning', function () {
     withoutVite();
 
     // Gästen först: actingAs() sätter guardens användare för resten av testet.
@@ -252,6 +259,7 @@ it('delar klockans siffra men aldrig listan på en vanlig sidladdning', function
         ->where('auth.user', null)
         ->where('unreadNotificationCount', 0)
         ->missing('notifications')
+        ->missing('pendingInvitations')
     );
 
     $anvandare = User::factory()->create();
@@ -260,5 +268,6 @@ it('delar klockans siffra men aldrig listan på en vanlig sidladdning', function
     actingAs($anvandare)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
         ->where('unreadNotificationCount', 0)
         ->missing('notifications')
+        ->missing('pendingInvitations')
     );
 });

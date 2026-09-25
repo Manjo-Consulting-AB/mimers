@@ -10,6 +10,7 @@ use App\Models\Invitation;
 use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
+use App\Support\Invitation\PendingInvitation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -20,8 +21,25 @@ use Inertia\Response;
  * Mottagarsidan i webben — mejlets landningssida, accept och avvisande, se
  * issue 55b § Beslut 1, 2, 3 och 4. API-motsvarigheten är
  * App\Http\Controllers\Api\InvitationResponseController; kontrollkedjan
- * innan något händer är App\Http\Requests\Invitation\InvitationTokenRequest,
- * och den delas rakt av.
+ * innan något händer är App\Http\Requests\Invitation\InvitationTokenRequest
+ * och App\Support\Invitation\PendingInvitation::assert(), och de delas rakt
+ * av.
+ *
+ * **Sedan issue 131 har sidan en andra väg in, och den är ingen andra
+ * kontroll.** Ligger inget token i sessionen visar `waiting()` i stället
+ * användarens EGNA väntande inbjudningar — uppslagna på hennes verifierade
+ * adress och inte på en hemlighet — och accept och avvisande går då på
+ * inbjudans `ulid` i stället för på tokenet. Tokenvägen är oförändrad:
+ * ligger ett token där gäller § Beslut 3 som förut. Det är samma mönster som
+ * App\Http\Controllers\OwnershipTransferController, och av samma skäl —
+ * en inbjudan ger läsrätt till en container, och en rad som inte är
+ * användarens ska vara osynlig (404) i stället för att bekräftas med 403.
+ *
+ * **`invitation.received` skrivs fortfarande inte.** Klockan ritar en rad per
+ * väntande inbjudan direkt ur `invitation`
+ * (App\Http\Middleware\HandleInertiaRequests::pendingInvitations()), och om
+ * konstanten ska bort eller börja skrivas står som fråga i [[Tankar]]
+ * § Öppet.
  *
  * **Tokenet lämnar URL:en direkt** (§ Beslut 2). `open()` lägger det i
  * sessionen och omdirigerar till `/invitations`; ingenting renderas på
@@ -84,8 +102,8 @@ class InvitationResponseController extends Controller
     }
 
     /**
-     * GET /invitations — landningssidan, som renderar EXAKT ett av fem
-     * tillstånd (§ Beslut 3):
+     * GET /invitations — landningssidan, som renderar EXAKT ett av sex
+     * tillstånd (§ Beslut 3, och `pending` sedan issue 131):
      *
      * - `guest`       — utloggad, och tokenet är giltigt. Containerns namn, vem
      *                   som bjöd in och nivån, plus vägarna till inloggning
@@ -94,6 +112,8 @@ class InvitationResponseController extends Controller
      * - `ready`       — inloggad, verifierad mottagare. Här bor accept- och
      *                   avvisa-formulären; utan det tillståndet hade en
      *                   inbjudan gått ut utan att kunna besvaras.
+     * - `pending`     — inloggad, verifierad, och INGET token i sessionen.
+     *                   Listan över hennes väntande inbjudningar.
      * - `mismatch`    — inloggad med en annan adress än inbjudans.
      * - `unavailable` — utgången, redan besvarad eller okänt token.
      *
@@ -104,14 +124,15 @@ class InvitationResponseController extends Controller
      * Tillståndet avgörs av den delade InvitationTokenRequest::invitation()
      * — samma uppslag, samma `pending`-kontroll, samma utgångskontroll och
      * samma adressjämförelse som accept- och avvisa-vägarna använder. Ingen
-     * av dem formuleras om här.
+     * av dem formuleras om här. Ligger inget token i sessionen är svaret i
+     * stället `waiting()`.
      */
-    public function show(Request $request): Response
+    public function show(Request $request, PendingInvitation $pendingInvitation): Response
     {
         $token = $request->session()->get(self::SESSION_KEY);
 
         if (! is_string($token) || $token === '') {
-            return $this->page('unavailable');
+            return $this->waiting($request, $pendingInvitation);
         }
 
         // Tokenet ligger i sessionen och inte i kroppen, så den delade
@@ -139,6 +160,67 @@ class InvitationResponseController extends Controller
         }
 
         return $this->page('ready', $this->preview($invitation), $token);
+    }
+
+    /**
+     * Läget utan token i sessionen — listan över användarens väntande
+     * inbjudningar, se issue 131 och [[M20 Kontot]] § 131.
+     *
+     * **Listan byggs på identitet och inte på en hemlighet.** Uppslaget är
+     * App\Support\Invitation\PendingInvitation::forUser() — användarens
+     * VERIFIERADE adress, och ingenting annat. Verifieringen är vad som
+     * ersätter tokenet ([[ADR-0003 Åtkomstmodell]]): tokenet bevisar att
+     * mottagaren når brevlådan, och en verifierad adress som är lika med
+     * inbjudans bevisar samma sak. Därför ritas ingen lista alls för en
+     * overifierad användare — tillståndet blir `unverified`, och AppLayouts
+     * banner säger varför.
+     *
+     * **En gäst får det neutrala beskedet**, precis som förut: en utloggad
+     * besökare på `/invitations` har varken token eller adress, och
+     * `unavailable` är det svar sidan redan gav utan token. Rutten ligger
+     * kvar utanför `auth`-gruppen av skälet som står i routes/web.php.
+     *
+     * **`invitations` är en tom LISTA och inte `null` för en verifierad
+     * användare utan väntande inbjudningar** — samma skillnad som klockans
+     * `notifications` gör: den ena betyder "ingenting väntar", den andra
+     * "ingen lista finns". Vyn ritar tomtillståndet för den första och
+     * ingenting för den andra.
+     *
+     * Bara det vyn behöver följer med: containerns namn, inbjudarens namn och
+     * nivån. Ingen `InvitationResource` — den är `/api`:s kontrakt och listar
+     * `email`, som aldrig får nå en sida (se `preview()`), och
+     * `app/Http/Resources/**` ligger utanför issue 131:s omfång.
+     */
+    private function waiting(Request $request, PendingInvitation $pendingInvitation): Response
+    {
+        /** @var User|null $user */
+        $user = $request->user();
+
+        if ($user === null) {
+            return $this->page('unavailable');
+        }
+
+        if (! $user->hasVerifiedEmail()) {
+            return $this->page('unverified');
+        }
+
+        $invitations = $pendingInvitation->forUser($user)
+            ->with(['container', 'invitedBy'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (Invitation $invitation): array => [
+                'ulid' => $invitation->ulid,
+                'container' => $invitation->container->name,
+                'inviter' => $invitation->invitedBy->name,
+                'level' => $invitation->level,
+            ])
+            ->values()
+            ->all();
+
+        // Namngivna argument: de två mittersta propparna hör till tokenvägen,
+        // och `page('pending', null, null, $invitations)` hade tvingat läsaren
+        // att räkna positioner för att se det.
+        return $this->page(state: 'pending', invitations: $invitations);
     }
 
     /**
@@ -217,6 +299,124 @@ class InvitationResponseController extends Controller
     }
 
     /**
+     * POST /invitations/{invitation}/accept — 302 till `/containers`.
+     *
+     * Acceptvägen för listan (issue 131). Skillnaden mot `accept()` ovan är
+     * UPPSLAGET och ingenting annat: raden hittas på sin ULID i stället för
+     * på tokenet i kroppen, och kontrollerna är
+     * App\Support\Invitation\PendingInvitation::assert() — samma fyra steg,
+     * samma felkoder, ingen avskrift. `AcceptInvitation` anropas oförändrad,
+     * så åtkomsten blir exakt den tokenvägen ger, och containern blir aktiv av
+     * samma skäl som där (§ Beslut 4).
+     *
+     * **Uppslaget går genom `findForUser()`.** Raden hämtas på ULID:n men bara
+     * ur användarens EGNA väntande inbjudningar, och det uppslaget bär
+     * verifieringsgrinden (App\Support\Invitation\PendingInvitation): en
+     * overifierad adress ger inga rader och därmed 404, precis som en rad som
+     * inte är hennes.
+     *
+     * **Allt `assert()` säger nej till blir `404`.** En inbjudan som inte är
+     * användarens, en som redan besvarats, en som dragits tillbaka och en som
+     * gått ut är alla OSYNLIGA — ett gissat `ulid` ska inte kunna skilja "finns
+     * inte" från "finns, men är inte din", precis som tokenvägens
+     * `unavailable` inte skiljer dem åt (§ Beslut 3). Det är samma svar som
+     * App\Http\Controllers\OwnershipTransferController::accept() ger en rad
+     * som inte pekar på användaren (issue 67b § Beslut 8).
+     *
+     * **Efter `assert()` är felkoderna tillbaka.** Det som återstår kan bara
+     * hända mellan kontrollen och skrivningen — engångsspärren i
+     * AcceptInvitation, eller en adress som hann bli overifierad — och de
+     * felen blir formulärfel som på tokenvägen, aldrig en rå JSON-kropp.
+     *
+     * Sessionen rörs INTE: det finns inget token att glömma, och ett token
+     * som ligger där tillhör tokenvägen. Är det samma inbjudan visar
+     * `/invitations` `unavailable` nästa gång, och det är rätt svar — den är
+     * besvarad.
+     */
+    public function acceptPending(
+        Request $request,
+        Invitation $invitation,
+        PendingInvitation $pendingInvitation,
+        AcceptInvitation $acceptInvitation,
+        ActiveContainer $activeContainer,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        /** @var User $user */
+        $user = $request->user();
+
+        try {
+            $invitation = $pendingInvitation->findForUser($user, $invitation->ulid);
+            $invitation = $pendingInvitation->assert($invitation, $user);
+        } catch (ApiException) {
+            abort(404);
+        }
+
+        try {
+            $container = $acceptInvitation->handle($invitation, $user);
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['invitation' => $translator->message($e)]);
+        }
+
+        $activeContainer->set($user, $container);
+
+        return redirect()
+            ->route('containers.index')
+            ->with('status', 'invitation-accepted');
+    }
+
+    /**
+     * POST /invitations/{invitation}/reject — 302 tillbaka till `/invitations`.
+     *
+     * Avvisandet för listan (issue 131), och samma upplägg som `acceptPending()`
+     * ovan: uppslaget är ULID:n, kontrollerna är
+     * PendingInvitation::assert(), och allt den säger nej till blir `404`.
+     * App\Actions\Invitation\RejectInvitation anropas oförändrad, så raden får
+     * samma `status` som via token.
+     *
+     * **Verifierad adress krävs INTE för att tacka nej**, precis som på
+     * tokenvägen (issue 10b § Beslut 7): att avvisa ger ingen behörighet. Men
+     * uppslaget går genom `findForUser()` och bär därför verifieringsgrinden
+     * ändå — en overifierad adress ger 404, samma svar som en rad som inte är
+     * hennes. Grinden står därför på ETT ställe för både listan och svaret,
+     * och en overifierad användare kan varken se raden eller svara på den.
+     * Tokenvägen är oförändrad: den bär sitt eget bevis och kräver ingen
+     * verifiering för att avvisa.
+     *
+     * **Tillbaka till listan och inte till startsidan.** Tokenvägen landar på
+     * `/` därför att mottagaren kom från ett mejl och inte har någon sida att
+     * återvända till; den som svarar ur listan står kvar i den, och
+     * App\Http\Controllers\OwnershipTransferController::reject() gör samma val
+     * av samma skäl.
+     */
+    public function rejectPending(
+        Request $request,
+        Invitation $invitation,
+        PendingInvitation $pendingInvitation,
+        RejectInvitation $rejectInvitation,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        /** @var User $user */
+        $user = $request->user();
+
+        try {
+            $invitation = $pendingInvitation->findForUser($user, $invitation->ulid);
+            $invitation = $pendingInvitation->assert($invitation, $user);
+        } catch (ApiException) {
+            abort(404);
+        }
+
+        try {
+            $rejectInvitation->handle($invitation, $user);
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['invitation' => $translator->message($e)]);
+        }
+
+        return redirect()
+            ->route('invitations.show')
+            ->with('status', 'invitation-rejected');
+    }
+
+    /**
      * Tillståndet när InvitationTokenRequest::invitation() sa nej.
      *
      * **Gästen är ett eget fall.** Adressjämförelsen är den SISTA kontrollen
@@ -286,8 +486,9 @@ class InvitationResponseController extends Controller
 
     /**
      * @param  array{container: string, inviter: string, level: string}|null  $invitation
+     * @param  list<array{ulid: string, container: string, inviter: string, level: string}>|null  $invitations
      */
-    private function page(string $state, ?array $invitation = null, ?string $token = null): Response
+    private function page(string $state, ?array $invitation = null, ?string $token = null, ?array $invitations = null): Response
     {
         return Inertia::render('Invitations/Show', [
             'state' => $state,
@@ -296,6 +497,10 @@ class InvitationResponseController extends Controller
             // lägga det i. Ett token i en prop är ett token i HTML:en, och de
             // övriga tillstånden har ingen användning för det.
             'token' => $token,
+            // Listan skickas bara till `pending`. Den bär ULID:n, och de har
+            // bara det tillståndet någon användning för — samma regel som för
+            // tokenet ovan.
+            'invitations' => $invitations,
         ]);
     }
 }

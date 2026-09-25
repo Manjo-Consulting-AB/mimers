@@ -1120,6 +1120,36 @@ Route::middleware('auth')->group(function () {
         ->name('invitations.reject');
 
     /*
+     * Issue 131 · Svar på en inbjudan ur listan, se
+     * App\Http\Controllers\InvitationResponseController § acceptPending och
+     * `GET /invitations` utan token.
+     *
+     * **ULID:n i sökvägen i stället för tokenet i kroppen.** Den som svarar
+     * här kom från listan och har inget token — hon hittade inbjudan på sin
+     * VERIFIERADE adress, och adressen är hela beviset
+     * (App\Support\Invitation\PendingInvitation). `{invitation}` binds på
+     * `ulid` via #[RouteKey('ulid')] på App\Models\Invitation, så ett okänt
+     * ulid blir 404 redan i uppslaget.
+     *
+     * **Ingen `scopeBindings()` och ingen grind**, av samma skäl som
+     * ägarbytets mottagarrutter: urvalet — är raden hennes, obesvarad och
+     * giltig — prövas i kontrollern, och en rad som inte pekar på henne ger
+     * 404 och aldrig 403. Att auktorisera mot raden vore att svara olika på
+     * "finns inte" och "är inte din", och det svaret bekräftar att raden
+     * finns.
+     *
+     * Namnen får `.pending` och inte ett eget ord: de två rutterna gör samma
+     * sak som `invitations.accept` och `invitations.reject` ovan, med ett
+     * annat uppslag, och ett namn som ljög om det hade varit värre än en
+     * olikhet.
+     */
+    Route::post('/invitations/{invitation:ulid}/accept', [InvitationResponseController::class, 'acceptPending'])
+        ->name('invitations.accept.pending');
+
+    Route::post('/invitations/{invitation:ulid}/reject', [InvitationResponseController::class, 'rejectPending'])
+        ->name('invitations.reject.pending');
+
+    /*
      * Issue 67b · Ägarbytet — avsändarens sida i containern och mottagarens
      * inkorg, se App\Http\Controllers\OwnershipTransferController.
      *
@@ -1403,6 +1433,14 @@ Route::middleware('auth')->group(function () {
  * App\Http\Controllers\InvitationResponseController::open() i stället, av ett
  * skäl som står där — en GET på `/invitations/accept` matchar den här rutten,
  * och den får inte skriva över en inbjudan sessionen redan bär.
+ *
+ * **`/invitations` renderar två olika sidor sedan issue 131.** Ligger ett
+ * token i sessionen gäller allt ovan oförändrat; ligger inget där visar
+ * App\Http\Controllers\InvitationResponseController::waiting() i stället
+ * användarens väntande inbjudningar, uppslagna på hennes verifierade adress.
+ * Rutten ligger kvar utanför `auth`-gruppen: en utloggad besökare ska mötas av
+ * det neutrala beskedet och inte av inloggningssidan, och en inloggad når
+ * listan utan att gå via ett mejl.
  */
 Route::get('/invitations', [InvitationResponseController::class, 'show'])
     ->name('invitations.show');

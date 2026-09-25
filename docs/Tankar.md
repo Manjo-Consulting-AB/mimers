@@ -30,6 +30,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Maila Mimers.** Att skicka in information via e-post till kontot, en container eller ett item. Diskussionen, det som är avgjort och det som är öppet samlas i [[Maila Mimers]] tills funktionen blir en ADR. Restes 2026-09-24.
 
+- **`invitation.received` finns som konstant men skrivs av ingen kod — ska den bort eller börja skrivas?** Tre ytor pekar i dag på en notis som aldrig kommer: `Notification::TYPE_INVITATION_RECEIVED`, ett webhookabonnemang på typen tar aldrig emot något (`WebhookEndpoint`), och inställningssidan visar en preferensrad för den (`NotificationPreferences`) medan mejlet i själva verket går direkt via `InvitationNotification` och aldrig genom outboxen. Issue 127 byggde klockan på de sex typer som faktiskt skrivs, och issue 131 gav den en rad per väntande inbjudan direkt ur `invitation` i stället — en inbjudan är obesvarad till dess att den besvarats, och en notisrad hade varit ett kvitto på ett mejl mottagaren redan fått. **Frågan är om konstanten ska bort jämte inställningsraden och webhook-typen, eller om `CreateInvitation` ska börja skriva raden** — och i så fall vad webhookabonnenterna får och om raden ska gå genom outboxen med leverans, preferenser och tysta timmar, som de sex andra typerna. Att ta bort den är billigast men stänger en väg någon redan förberett; att skriva den kräver att någon bestämmer vad en inbjudningsnotis BETYDER när klockan redan visar inbjudan ur sin egen tabell. Restes i issue 131, 2026-09-25.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
