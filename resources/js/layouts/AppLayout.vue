@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import FlashMessage from '../components/FlashMessage.vue';
+import NotificationBell from '../components/NotificationBell.vue';
 import SearchField from '../components/SearchField.vue';
 import UiListRow from '../components/UiListRow.vue';
 import VerifyEmailNotice from '../components/VerifyEmailNotice.vue';
@@ -105,6 +106,18 @@ import { useTranslations } from '../composables/useTranslations.js';
  * här sektionen hade lagt om varje sida i produkten — utanför den här
  * issuen. Sektionen ritas därför som sitt eget band i skalet, på samma plats
  * och i samma form som `FlashMessage` och verifieringspåminnelsen ovanför.
+ *
+ * **Notisklockan kom med issue 127** och ligger i sidhuvudet, bredvid
+ * sökfältet: båda är sidoberoende ytor som hör till skalet och inte till en
+ * sida, och en klocka som bara fanns på dashboarden hade varit osynlig på
+ * varje sida man faktiskt arbetar i. Den ritas bara för en inloggad
+ * användare — samma villkor och samma skäl som sökfältet: en gäst har inga
+ * notiser att läsa, och de delade propsen bär noll för henne.
+ *
+ * Klockan äger sin egen form och sin egen läsning
+ * (resources/js/components/NotificationBell.vue): den kostar en delad siffra
+ * per sidladdning och hämtar sin lista först när den öppnas. Skalet skickar
+ * ingenting till den och håller inget av dess tillstånd.
  */
 const { t } = useTranslations();
 const page = usePage();
@@ -142,8 +155,9 @@ const showsVerificationNotice = computed(
                      div och inte på komponenten: `SokvyTest` läser taggen
                      `<SearchField v-if="user" />` som den står, och villkoret
                      är det testet handlar om. -->
-                <div class="w-full md:ml-auto md:w-auto">
+                <div class="flex w-full items-center gap-2 md:ml-auto md:w-auto">
                     <SearchField v-if="user" />
+                    <NotificationBell v-if="user" />
                 </div>
 
                 <div

@@ -29,6 +29,7 @@ use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
 use App\Http\Controllers\LoanController;
+use App\Http\Controllers\NotificationInboxController;
 use App\Http\Controllers\OccurrenceDependencyController;
 use App\Http\Controllers\OwnershipTransferController;
 use App\Http\Controllers\ScheduleController;
@@ -201,6 +202,30 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/search', [SearchController::class, 'index'])
         ->name('search');
+
+    /*
+     * Issue 127 · Notisklockan, se
+     * App\Http\Controllers\NotificationInboxController.
+     *
+     * **EN rutt och ingen sida.** Klockan sitter i sidhuvudet
+     * (resources/js/layouts/AppLayout.vue) på varje sida, och både listan och
+     * siffran kommer ur de delade propsen — listan som en optional prop som
+     * en partiell omladdning hämtar. Här finns alltså bara det klockan
+     * SKRIVER: att den öppnades.
+     *
+     * **Sökvägen är `/notifications/read` och inte `/notifications`.** En
+     * POST mot samlingen hade lästs som "skapa en notis", och klockan skapar
+     * ingenting — den läser. `read` är handlingen, och den är den enda.
+     *
+     * Ingen `throttle`: skrivningen rör användarens egen rad och kostar
+     * ingenting någon annan kan råka ut för. Att hamra den är att sätta sin
+     * egen tidsstämpel till nu, om och om igen.
+     *
+     * Ingen FormRequest: rutten har ingen kropp att validera. Användaren
+     * kommer ur sessionen och tidsstämpeln ur serverns klocka.
+     */
+    Route::post('/notifications/read', [NotificationInboxController::class, 'store'])
+        ->name('notifications.read');
 
     /*
      * Issue 53a · Verifieringssidan. Namnet `verification.notice` är inte

@@ -398,34 +398,48 @@ it('rensar den aktiva containern när den raderas, och bara då', function () {
  *
  * Raderna kommer ur `TrashEntryResource`, samma sex nycklar som `/api` — vyn
  * hittar inte på någon egen form.
+ *
+ * **Tiden är frusen, och det är kravet och inte en stilfråga.** `expires_at`
+ * är `deleted_at` + retentionen, och raden raderas med ett `now()` medan
+ * förväntan räknas ur ett ANDRA `now()` — efter ett helt HTTP-anrop. Faller en
+ * sekundgräns däremellan skiljer de sig på sekunden, och provet är rött utan
+ * att något är fel (issue 477 § Frågeräkningens förutsättning; samma frysning
+ * som grannen nedanför och FiloriginTest § "länken lever i femton minuter").
+ * En fryst klocka gör båda anropen till samma tidpunkt.
  */
 it('listar raderade containers senast raderad först, med den återstående tiden', function () {
     withoutVite();
 
-    [$konto, $ägare, $container] = containerpapperskorgKontext();
+    Carbon::setTestNow('2026-09-02 12:00:00');
 
-    $först = Container::factory()->for($konto, 'account')->create(['name' => 'Först']);
-    containerpapperskorgRaderad($först, now()->subDays(3));
+    try {
+        [$konto, $ägare, $container] = containerpapperskorgKontext();
 
-    $senast = Container::factory()->for($konto, 'account')->create(['name' => 'Senast']);
-    containerpapperskorgRaderad($senast, now()->subDays(2));
+        $först = Container::factory()->for($konto, 'account')->create(['name' => 'Först']);
+        containerpapperskorgRaderad($först, now()->subDays(3));
 
-    $retention = (int) config('files.trash_retention_days');
+        $senast = Container::factory()->for($konto, 'account')->create(['name' => 'Senast']);
+        containerpapperskorgRaderad($senast, now()->subDays(2));
 
-    actingAs($ägare)
-        ->get('/trash/containers')
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('Trash/Containers')
-            ->has('entries', 2)
-            ->where('entries.0.type', 'container')
-            ->where('entries.0.ulid', $senast->ulid)
-            ->where('entries.0.label', 'Senast')
-            ->where('entries.0.context', null)
-            ->where('entries.0.expires_at', now()->subDays(2)->addDays($retention)->toIso8601String())
-            ->where('entries.1.ulid', $först->ulid)
-            ->where("canRestore.{$senast->ulid}", true)
-        );
+        $retention = (int) config('files.trash_retention_days');
+
+        actingAs($ägare)
+            ->get('/trash/containers')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Trash/Containers')
+                ->has('entries', 2)
+                ->where('entries.0.type', 'container')
+                ->where('entries.0.ulid', $senast->ulid)
+                ->where('entries.0.label', 'Senast')
+                ->where('entries.0.context', null)
+                ->where('entries.0.expires_at', now()->subDays(2)->addDays($retention)->toIso8601String())
+                ->where('entries.1.ulid', $först->ulid)
+                ->where("canRestore.{$senast->ulid}", true)
+            );
+    } finally {
+        Carbon::setTestNow();
+    }
 });
 
 /*

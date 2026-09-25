@@ -309,3 +309,48 @@ it('ritar favoritlistan i skalet för varje sida layouten wrappar', function () 
     expect(File::get(resource_path('js/layouts/AppLayout.vue')))
         ->toContain("import UiListRow from '../components/UiListRow.vue'");
 });
+
+/*
+ * Notisklockan, se issue 127 och resources/js/components/NotificationBell.vue.
+ *
+ * Klockan är sidhuvudets, som sökfältet: den hör till skalet och inte till en
+ * sida, och den ritas bara för en inloggad — en gäst har inga notiser, och de
+ * delade propsen bär noll för henne. Provet är samma form som länkprov
+ * ovanför: villkoret och placeringen läses ur layouten, och nycklarna ur de
+ * delade propsen på varje sida layouten wrappar.
+ */
+it('ritar notisklockan i sidhuvudet för en inloggad och ingen för en gäst', function () {
+    withoutVite();
+
+    // Gästen prövas FÖRST: actingAs() sätter guardens användare för resten av
+    // testet, och därefter är varje anrop inloggat.
+    get('/')->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('auth.user', null)
+    );
+
+    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+
+    expect($layout)
+        ->toContain("import NotificationBell from '../components/NotificationBell.vue'")
+        ->and($layout)->toContain('<NotificationBell v-if="user" />');
+
+    // Klockan står i sidhuvudet, bredvid sökfältet och ovanför <main> — den
+    // ritas på varje sida layouten wrappar.
+    $huvud = substr($layout, 0, (int) strpos($layout, '<main'));
+
+    expect($huvud)
+        ->toContain('<SearchField v-if="user" />')
+        ->and($huvud)->toContain('<NotificationBell v-if="user" />');
+
+    // Nycklarna följer med till varje sida. Siffran delas alltid; listan gör
+    // det inte — den är optional och hämtas först när klockan öppnas.
+    $anvandare = User::factory()->create();
+
+    foreach (['/dashboard', '/containers'] as $sida) {
+        actingAs($anvandare)->get($sida)->assertOk()->assertInertia(
+            fn (AssertableInertia $page) => $page
+                ->where('unreadNotificationCount', 0)
+                ->missing('notifications')
+        );
+    }
+});

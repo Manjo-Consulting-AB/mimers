@@ -151,39 +151,53 @@ it('listar alla fyra typerna med det senast raderade först', function () {
  * underkategorins förälder), när den raderades och hur många dagar som
  * återstår. Raderna kommer ur TrashEntryResource, samma sex nycklar som
  * `/api` — vyn hittar inte på någon egen form.
+ *
+ * **Tiden är frusen, och det är kravet och inte en stilfråga.** `expires_at`
+ * är `deleted_at` + retentionen: raderna raderas med ett `now()` och förväntan
+ * räknas ur ett ANDRA `now()` — efter ett helt HTTP-anrop. Faller en
+ * sekundgräns däremellan skiljer de sig på sekunden, och provet är rött utan
+ * att något är fel (samma frysning som ContainerpapperskorgTest § "listar
+ * raderade containers senast raderad först" och FiloriginTest § "länken lever
+ * i femton minuter").
  */
 it('bär vad raden är, sitt sammanhang och båda tiderna', function () {
     withoutVite();
 
-    [$konto, $ägare, $container] = papperskorgsvyKontext();
+    Carbon::setTestNow('2026-09-02 12:00:00');
 
-    $värd = papperskorgsItem($container, $konto, $ägare, ['name' => 'Växellådan']);
-    $bilaga = papperskorgsBilaga($värd, $konto, $ägare, ['filename' => 'faktura.pdf']);
-    papperskorgsvyRaderad($bilaga, now()->subDay());
+    try {
+        [$konto, $ägare, $container] = papperskorgsvyKontext();
 
-    $förälder = Category::factory()->for($container, 'container')->create(['name' => 'Elsystem']);
-    $barn = Category::factory()->for($container, 'container')->create(['name' => 'Startmotor', 'parent_id' => $förälder->id]);
-    papperskorgsvyRaderad($barn, now()->subDays(2));
+        $värd = papperskorgsItem($container, $konto, $ägare, ['name' => 'Växellådan']);
+        $bilaga = papperskorgsBilaga($värd, $konto, $ägare, ['filename' => 'faktura.pdf']);
+        papperskorgsvyRaderad($bilaga, now()->subDay());
 
-    $retention = (int) config('files.trash_retention_days');
+        $förälder = Category::factory()->for($container, 'container')->create(['name' => 'Elsystem']);
+        $barn = Category::factory()->for($container, 'container')->create(['name' => 'Startmotor', 'parent_id' => $förälder->id]);
+        papperskorgsvyRaderad($barn, now()->subDays(2));
 
-    actingAs($ägare)
-        ->get("/containers/{$container->ulid}/trash")
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('entries', 2)
-            // Bilagan: filnamnet som label, itemets namn som sammanhang.
-            ->where('entries.0.type', 'attachment')
-            ->where('entries.0.label', 'faktura.pdf')
-            ->where('entries.0.context', 'Växellådan')
-            ->where('entries.0.expires_at', now()->subDay()->addDays($retention)->toIso8601String())
-            // Underkategorin: sitt eget namn, förälderns namn som sammanhang —
-            // också när föräldern själv ligger i papperskorgen.
-            ->where('entries.1.type', 'category')
-            ->where('entries.1.label', 'Startmotor')
-            ->where('entries.1.context', 'Elsystem')
-            ->where('entries.1.deleted_at', now()->subDays(2)->toIso8601String())
-        );
+        $retention = (int) config('files.trash_retention_days');
+
+        actingAs($ägare)
+            ->get("/containers/{$container->ulid}/trash")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('entries', 2)
+                // Bilagan: filnamnet som label, itemets namn som sammanhang.
+                ->where('entries.0.type', 'attachment')
+                ->where('entries.0.label', 'faktura.pdf')
+                ->where('entries.0.context', 'Växellådan')
+                ->where('entries.0.expires_at', now()->subDay()->addDays($retention)->toIso8601String())
+                // Underkategorin: sitt eget namn, förälderns namn som sammanhang —
+                // också när föräldern själv ligger i papperskorgen.
+                ->where('entries.1.type', 'category')
+                ->where('entries.1.label', 'Startmotor')
+                ->where('entries.1.context', 'Elsystem')
+                ->where('entries.1.deleted_at', now()->subDays(2)->toIso8601String())
+            );
+    } finally {
+        Carbon::setTestNow();
+    }
 });
 
 /*

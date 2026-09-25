@@ -407,15 +407,76 @@ it('har en mening åt varje handling i händelseloggen', function () {
  * nyckel som byter namn följer med utan att provet skrivs om.
  */
 it('hämtar skalets strängar ur ui.php', function () {
-    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+    $nycklar = [];
 
-    preg_match_all("/t\('([a-z0-9_.]+)'/", $layout, $träffar);
+    /*
+     * Notisklockan kom med issue 127 och ligger i samma svep som layouten:
+     * den är sidhuvudets, och dess två egna nycklar — `inbox.label`
+     * och `inbox.empty` — är skalets. Radmeningarna står inte här:
+     * de byggs ur radens TYP och prövas i provet nedanför, där nycklarna
+     * räknas upp ur `Notification`-konstanterna i stället för ur en avskrift.
+     */
+    foreach (['js/layouts/AppLayout.vue', 'js/components/NotificationBell.vue'] as $fil) {
+        preg_match_all("/t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
 
     // Favoritlistans rubrik kom med issue 106 och är skalets enda nya nyckel.
-    expect($träffar[1])->toContain('nav.favorites');
+    expect($nycklar)->toContain('nav.favorites');
 
-    foreach ($träffar[1] as $nyckel) {
+    expect($nycklar)->toContain('inbox.label');
+    expect($nycklar)->toContain('inbox.empty');
+
+    foreach (array_unique($nycklar) as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+});
+
+/*
+ * Varje notistyp klockan visar har en mening (issue 127).
+ *
+ * Klockan formulerar raden ur typens EGET namn — `task.due` slås upp som
+ * `inbox.task.due`, se
+ * resources/js/components/notificationPresentation.js — och `translate()`
+ * skriver NYCKELN SJÄLV när uppslaget misslyckas (provet strax ovanför pinnar
+ * det). En typ utan mening syns därför inte som ett fel i vyn: den syns som
+ * `inbox.task.due` i en rad, på engelska, i en produkt vars enda
+ * katalog är engelsk ([[ADR-0034 Engelska vid lansering]]).
+ *
+ * **Typerna räknas upp ur konstanterna och inte ur en avskrift här.**
+ * Namnrummet är ÖPPET ([[Notiser]] § notification, Beslut 4) — `Notification`
+ * har därför ingen `TYPES`-lista, bara konstanterna — så en avskrift hade
+ * varit en andra lista att hålla i takt. En typ som läggs till och glöms i
+ * katalogen faller här, och det är samma form som provet för händelseloggens
+ * handlingar.
+ *
+ * **Inbjudningarna undantas med flit.** `invitation.received` finns som
+ * konstant men skrivs av ingen kod: `CreateInvitation` skickar mejlet direkt
+ * med `InvitationNotification`. Klockan visar de sex typer som faktiskt
+ * skrivs, och den sjunde är issue 131 ([[M20 Kontot]]). Undantaget står här
+ * som en rad och inte som en tystnad: börjar någon skriva typen faller provet
+ * till dess att meningen finns.
+ */
+it('har en mening åt varje notistyp klockan visar', function () {
+    $lov = sprakLov(sprakFil('en'));
+
+    $typer = [];
+
+    foreach ((new ReflectionClass(Notification::class))->getConstants() as $namn => $varde) {
+        if (str_starts_with($namn, 'TYPE_') && is_string($varde)) {
+            $typer[$namn] = $varde;
+        }
+    }
+
+    unset($typer['TYPE_INVITATION_RECEIVED']);
+
+    expect($typer)->toHaveCount(6);
+
+    foreach ($typer as $namn => $typ) {
+        $mening = $lov["inbox.{$typ}"] ?? '';
+
+        expect($mening)->not->toBe('', "ui.inbox.{$typ} saknas ({$namn})");
     }
 });
 

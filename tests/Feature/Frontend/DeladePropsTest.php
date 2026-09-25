@@ -233,3 +233,32 @@ it('delar favoritlistan och ger en gäst samma tomma svar som en utan favoriter'
         ->where('favorites.0.url', "/containers/{$container->ulid}/items/{$item->ulid}")
     );
 });
+
+/*
+ * Issue 127 · Notisklockan, se HandleInertiaRequests::unreadNotificationCount()
+ * och ::notifications() samt tests/Feature/Frontend/NotisklockaTest.php.
+ *
+ * De två nycklarna är olika slags props med flit: SIFFRAN delas som allt annat
+ * och ritas i sidhuvudet på varje sida, LISTAN är en optional prop som bara en
+ * partiell omladdning hämtar. Här prövas formen — att siffran finns, att en
+ * gäst får samma nolla som en inloggad utan olästa, och att listan inte kommer
+ * med av sig själv. Läsningen och räkningen prövas i NotisklockaTest.
+ */
+it('delar klockans siffra men aldrig listan på en vanlig sidladdning', function () {
+    withoutVite();
+
+    // Gästen först: actingAs() sätter guardens användare för resten av testet.
+    get('/')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('auth.user', null)
+        ->where('unreadNotificationCount', 0)
+        ->missing('notifications')
+    );
+
+    $anvandare = User::factory()->create();
+    Account::factory()->create()->users()->attach($anvandare, ['role' => 'owner']);
+
+    actingAs($anvandare)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('unreadNotificationCount', 0)
+        ->missing('notifications')
+    );
+});

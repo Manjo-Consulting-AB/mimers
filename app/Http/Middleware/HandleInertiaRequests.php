@@ -6,18 +6,26 @@ use App\Actions\Item\ListFavorites;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
+use App\Models\Container;
 use App\Models\Item;
+use App\Models\Loan;
+use App\Models\Notification;
+use App\Models\ScheduleOccurrence;
 use App\Support\Frontend\ActiveContainer;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Lang;
+use Inertia\Inertia;
 use Inertia\Middleware;
 
 /**
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Sju nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Nio nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
@@ -36,6 +44,22 @@ use Inertia\Middleware;
  * egen regel är att en sådan URL skickas som prop (issue 51 § Beslut 7).
  * Ingen `ItemResource`: sektionen visar ett namn och en länk, och resurserna
  * under `app/Http/Resources/` rörs inte av den här issuen.
+ *
+ * **Notisklockan kom med issue 127**, och de två nycklarna är med flit olika
+ * slags props. `unreadNotificationCount` är en SIFFRA och delas som allt
+ * annat: den ritas i sidhuvudet på varje sida, och den kostar EN fråga per
+ * sidladdning — indexet `(user_id, created_at)` finns för den.
+ * `notifications` är LISTAN, och den är `Inertia::optional()`: den hämtas
+ * först när klockan öppnas, genom en partiell omladdning av just den nyckeln,
+ * och en vanlig sidladdning rör den aldrig. Skillnaden är hela poängen —
+ * siffran är billig och behövs överallt, raderna är dyra och behövs sällan.
+ *
+ * **Klockan är ingen kanal.** Den läser `notification` som tabellen redan är
+ * ([[Notiser]] § notification) och rör varken `notification_delivery`,
+ * preferenserna eller de tysta timmarna — den som öppnar klockan har redan
+ * fått sina mejl. Inbjudningarna är INTE med: `invitation.received` finns som
+ * konstant men skrivs av ingen kod, och de sex typer som faktiskt skrivs är de
+ * klockan visar (issue 127 § Beslut, vägen dit är issue 131).
  *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
@@ -63,6 +87,9 @@ use Inertia\Middleware;
  */
 class HandleInertiaRequests extends Middleware
 {
+    /** Klockan visar de tjugo senaste — se klassens docblock (issue 127). */
+    private const INBOX_LIMIT = 20;
+
     /**
      * The root template that's loaded on the first page visit.
      *
@@ -101,6 +128,11 @@ class HandleInertiaRequests extends Middleware
             'auth' => fn (): array => $this->auth($request),
             'activeContainer' => fn (): ?string => $this->activeContainer->forUser($request->user()),
             'favorites' => fn (): array => $this->favorites($request),
+            'unreadNotificationCount' => fn (): int => $this->unreadNotificationCount($request),
+            // Ingen closure runt OptionalProp: den är redan lat, och en
+            // kapslad closure hade fått resolvern att packa upp den i två
+            // steg i stället för att filtrera den som den prop den är.
+            'notifications' => Inertia::optional(fn (): array => $this->notifications($request)),
             'locale' => fn (): string => App::getLocale(),
             'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
@@ -174,5 +206,157 @@ class HandleInertiaRequests extends Middleware
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Klockans siffra: antalet rader skapade EFTER `notifications_read_at`,
+     * eller alla användaren har när kolumnen är NULL — se klassens docblock.
+     *
+     * **Strikt efter, och det är inte en detalj.** Tidsstämpeln är sekundär,
+     * och den som öppnar klockan sätter den till `now()`. Med `>=` hade varje
+     * rad skapad i samma sekund som öppningen räknats som oläst, och siffran
+     * hade stått kvar på samma tal efter att användaren rensat den.
+     *
+     * **EN fråga, och ingen fråga alls för en gäst.** Tidsstämpeln ligger på
+     * användarraden som `auth()` redan har läst, så uppslaget `(user_id,
+     * created_at)` är hela kostnaden. En gäst har ingen att fråga för och får
+     * noll — samma form som en inloggad utan olästa, så klockan aldrig
+     * behöver två avpackningsvägar (samma regel som `auth()` och `favorites()`).
+     */
+    private function unreadNotificationCount(Request $request): int
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return 0;
+        }
+
+        return Notification::query()
+            ->where('user_id', $user->getKey())
+            ->when(
+                $user->notifications_read_at !== null,
+                fn (Builder $query): Builder => $query->where('created_at', '>', $user->notifications_read_at),
+            )
+            ->count();
+    }
+
+    /**
+     * Klockans lista: användarens tjugo senaste notiser, nyast först — den
+     * optional-propp som bara en partiell omladdning hämtar.
+     *
+     * **Ingen annan användares rad kan komma med**, och det är hela urvalet:
+     * klockan är personlig, och `user_id` är nyckeln. Raderna under den —
+     * containern, subjectet — är uppslag för LÄNKEN och aldrig ett filter;
+     * den som förlorat åtkomsten till ett item får sin rad ändå, för notisen
+     * handlar om något som hände HENNE ([[Notiser]] § notification). Sidan
+     * raden pekar på svarar 404 eller nekad åtkomst, och det är rätt svar:
+     * raden är sann, målet finns inte längre för henne.
+     *
+     * **Subjectet hämtas per typ, i förväg.** Payloaden bär namn och inga
+     * ULID:n (Beslut 5: data, aldrig text), så adressen till ett item måste
+     * byggas ur raden själv — och `morphWith` ger hela listan i ett konstant
+     * antal frågor i stället för en per rad.
+     *
+     * @return list<array{ulid: string, type: string, payload: array<string, mixed>, url: string|null, created_at: string}>
+     */
+    private function notifications(Request $request): array
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return [];
+        }
+
+        return Notification::query()
+            ->where('user_id', $user->getKey())
+            ->with([
+                'container',
+                // Relation och inte MorphTo i signaturen: `with()` tar en
+                // closure över vilken relation som helst, och en smalare
+                // parametertyp hade varit ett kontravariansk brott mot det
+                // kontraktet (phpstan). instanceof säger samma sak i kroppen.
+                'subject' => function (Relation $relation): void {
+                    if ($relation instanceof MorphTo) {
+                        $relation->morphWith([
+                            ScheduleOccurrence::class => ['schedule.item'],
+                            Loan::class => ['item'],
+                        ]);
+                    }
+                },
+            ])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit(self::INBOX_LIMIT)
+            ->get()
+            ->map(fn (Notification $notification): array => [
+                'ulid' => $notification->ulid,
+                'type' => $notification->type,
+                'payload' => $notification->payload,
+                'url' => $this->notificationUrl($notification),
+                'created_at' => $notification->created_at->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Adressen en rad pekar på, eller `null` när det inte finns någon sida.
+     *
+     * **Bara de tre typer som har ett mål länkar.** En kvotvarning och en
+     * inaktivitetsvarning gäller KONTOT, och kontosidan finns inte i M19 — en
+     * rad utan mål ritas därför som text (issue 127 § Beslut). Adressen
+     * byggs här och inte i JavaScript: den bär två ULID:n som bara servern
+     * känner (issue 51 § Beslut 7).
+     */
+    private function notificationUrl(Notification $notification): ?string
+    {
+        return match ($notification->type) {
+            Notification::TYPE_TASK_DUE, Notification::TYPE_TASK_OVERDUE => $this->taskUrl($notification),
+            Notification::TYPE_LOAN_DUE => $this->loanUrl($notification),
+            Notification::TYPE_TRANSFER_REQUESTED => route('transfers.index', [], false),
+            default => null,
+        };
+    }
+
+    /**
+     * Uppgiften till sitt item: förekomsten är radens subject, och vägen går
+     * genom schemat.
+     */
+    private function taskUrl(Notification $notification): ?string
+    {
+        $occurrence = $notification->subject;
+
+        return $occurrence instanceof ScheduleOccurrence
+            ? $this->itemUrl($occurrence->schedule->item, $notification->container)
+            : null;
+    }
+
+    /**
+     * Lånet till sitt item: lånet är radens subject (issue 127 § Beslut).
+     */
+    private function loanUrl(Notification $notification): ?string
+    {
+        $loan = $notification->subject;
+
+        return $loan instanceof Loan
+            ? $this->itemUrl($loan->item, $notification->container)
+            : null;
+    }
+
+    /**
+     * En itemväg, eller `null` när målet inte längre finns.
+     *
+     * Ett mjukraderat item — eller en container i papperskorgen — faller bort
+     * genom SoftDeletes' globala scope och ger `null`: raden blir en text i
+     * stället för en länk till en 404. Samma svar som händelseloggen ger en
+     * gallrad rad, och av samma skäl.
+     */
+    private function itemUrl(?Item $item, ?Container $container): ?string
+    {
+        if ($item === null || $container === null) {
+            return null;
+        }
+
+        return route('containers.items.show', [$container, $item], false);
     }
 }
