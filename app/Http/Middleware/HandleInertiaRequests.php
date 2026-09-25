@@ -50,8 +50,9 @@ use Inertia\Middleware;
  *
  * **Notisklockan kom med issue 127**, och de två nycklarna är med flit olika
  * slags props. `unreadNotificationCount` är en SIFFRA och delas som allt
- * annat: den ritas i sidhuvudet på varje sida, och den kostar EN fråga per
- * sidladdning — indexet `(user_id, created_at)` finns för den.
+ * annat: den ritas i sidhuvudet på varje sida, och den kostar EN fråga för
+ * notiserna — indexet `(user_id, created_at)` finns för den. Sedan 131
+ * tillkommer en fråga för de väntande inbjudningarna, se nedan.
  * `notifications` är LISTAN, och den är `Inertia::optional()`: den hämtas
  * först när klockan öppnas, genom en partiell omladdning av just den nyckeln,
  * och en vanlig sidladdning rör den aldrig. Skillnaden är hela poängen —

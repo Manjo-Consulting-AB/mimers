@@ -111,12 +111,18 @@ class PendingInvitation
      * Frågan går på det befintliga indexet `(email, status)`: `email` är
      * jämförelsen, `status` är `pending`, och `expires_at` silas på samma rad.
      *
-     * **`LOWER()` på båda sidor**, som `assert()` ovan: 10a normaliserar
-     * adressen vid lagring, men en rad behöver inte ha gått genom den vägen,
-     * och en adress som skiljer sig i versaler är samma adress. Jämförelsen
-     * står på två ställen med flit — SQL:en avgör vad som är SYNLIGT,
-     * `assert()` vad som är TILLÅTET — och den som ändrar den ena ska ändra
-     * den andra.
+     * **Värdet lowercasas, kolumnen lämnas orörd**, samma form som
+     * App\Http\Controllers\OwnershipTransferController::recipientQuery():
+     * `invitation.email` ligger på `utf8mb4_unicode_ci` och är redan
+     * skiftlägesokänsligt, så det räcker att `mb_strtolower()`a det jämförda
+     * värdet. Att i stället lägga `LOWER()` runt den INDEXERADE kolumnen —
+     * ofarligt i `assert()`, som jämför två strängar i PHP på en redan
+     * uppslagen rad — hindrar MariaDB från att använda `(email, status)` och
+     * tvingar fram en tabellscan, och den här frågan ställs på varje
+     * sidladdning (HandleInertiaRequests::pendingInvitationCount()).
+     * Jämförelsen står på två ställen med flit — SQL:en avgör vad som är
+     * SYNLIGT, `assert()` vad som är TILLÅTET — och den som ändrar den ena
+     * ska ändra den andra.
      *
      * **`whereHas('container')`:** containern kan vara mjukraderad sedan
      * inbjudan skickades, och en inbjudan till en container i papperskorgen
@@ -140,6 +146,6 @@ class PendingInvitation
         return Invitation::query()
             ->outstanding()
             ->whereHas('container')
-            ->whereRaw('LOWER(invitation.email) = ?', [mb_strtolower($user->email)]);
+            ->where('email', mb_strtolower($user->email));
     }
 }

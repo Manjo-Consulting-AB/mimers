@@ -416,38 +416,47 @@ it('ger 404 för en utgången, besvarad eller återkallad inbjudan', function ()
  * Klart när: adressjämförelsen är skiftlägesokänslig på samma sätt som
  * tokenvägens.
  *
- * Båda hållen: inbjudan kan stå i versaler och användaren i gemener, och
- * tvärtom. `LOWER()` i frågan avgör vad som är SYNLIGT, `mb_strtolower()` i
+ * Inbjudningens adress normaliseras vid lagring (10a,
+ * App\Actions\Invitation\CreateInvitation), så den lagrade raden står i
+ * gemener och det som varierar är användarens `User::email`. Provet lowercasar
+ * därför användarens adress i två former mot samma lagrade gemen-adress.
+ * `forUser()` avgör vad som är SYNLIGT, `mb_strtolower()` i
  * PendingInvitation::assert() vad som är TILLÅTET — och båda prövas här, för
  * glider de isär syns inbjudan men går inte att svara på.
+ *
+ * `forUser()` jämför `email = mb_strtolower($user->email)`: på MariaDB är
+ * kolumnen `utf8mb4_unicode_ci` och `=` skiftlägesokänsligt i sig, vilket är
+ * det som håller `(email, status)` användbart. sqlite, som CI kör, jämför `=`
+ * skiftlägeskänsligt, så där bär det lowercasade värdet hela likheten — samma
+ * drivrutinskillnad som ItemSokTest dokumenterar.
  */
-it('jämför adressen skiftlägesokänsligt åt båda hållen', function () {
+it('jämför användarens adress skiftlägesokänsligt', function () {
     withoutVite();
 
     $inbjudare = User::factory()->create();
 
-    $versalInbjudan = vantandeInbjudan(vantandeParm(), $inbjudare, 'NY@Exempel.se')[0];
-    $gemenInbjudan = vantandeInbjudan(vantandeParm(), $inbjudare, 'annan@exempel.se')[0];
+    $forstaInbjudan = vantandeInbjudan(vantandeParm(), $inbjudare, 'ny@exempel.se')[0];
+    $andraInbjudan = vantandeInbjudan(vantandeParm(), $inbjudare, 'annan@exempel.se')[0];
 
-    $mottagare = User::factory()->create(['email' => 'ny@exempel.se']);
-    $versalMottagare = User::factory()->create(['email' => 'ANNAN@EXEMPEL.SE']);
-
-    actingAs($mottagare)->get('/invitations')->assertInertia(fn (AssertableInertia $page) => $page
-        ->has('invitations', 1)
-        ->where('invitations.0.ulid', $versalInbjudan->ulid)
-    );
-
-    actingAs($mottagare)->post("/invitations/{$versalInbjudan->ulid}/accept")->assertRedirect('/containers');
+    $versalMottagare = User::factory()->create(['email' => 'NY@EXEMPEL.SE']);
+    $blandadMottagare = User::factory()->create(['email' => 'Annan@Exempel.SE']);
 
     actingAs($versalMottagare)->get('/invitations')->assertInertia(fn (AssertableInertia $page) => $page
         ->has('invitations', 1)
-        ->where('invitations.0.ulid', $gemenInbjudan->ulid)
+        ->where('invitations.0.ulid', $forstaInbjudan->ulid)
     );
 
-    actingAs($versalMottagare)->post("/invitations/{$gemenInbjudan->ulid}/reject")->assertRedirect('/invitations');
+    actingAs($versalMottagare)->post("/invitations/{$forstaInbjudan->ulid}/accept")->assertRedirect('/containers');
 
-    expect($versalInbjudan->refresh()->status)->toBe('accepted')
-        ->and($gemenInbjudan->refresh()->status)->toBe('rejected');
+    actingAs($blandadMottagare)->get('/invitations')->assertInertia(fn (AssertableInertia $page) => $page
+        ->has('invitations', 1)
+        ->where('invitations.0.ulid', $andraInbjudan->ulid)
+    );
+
+    actingAs($blandadMottagare)->post("/invitations/{$andraInbjudan->ulid}/reject")->assertRedirect('/invitations');
+
+    expect($forstaInbjudan->refresh()->status)->toBe('accepted')
+        ->and($andraInbjudan->refresh()->status)->toBe('rejected');
 });
 
 /*
