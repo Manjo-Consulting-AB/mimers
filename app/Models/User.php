@@ -141,6 +141,23 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     }
 
     /**
+     * Begärda adressändringar — en rad per begäran, se [[M20 Kontot]] § 130
+     * och [[Konton och åtkomst]] § email_change.
+     *
+     * **Raden hänger på personen och inte på adressen**, till skillnad från
+     * `magic_link_token`: den som bekräftar bytet måste vara samma användare
+     * som begärde det, och App\Actions\Account\ConfirmEmailChange jämför
+     * `user_id` innan något skrivs. En obekräftad rad är en pågående begäran;
+     * en bekräftad rad är historik över ett byte som redan skett.
+     *
+     * @return HasMany<EmailChange, $this>
+     */
+    public function emailChanges(): HasMany
+    {
+        return $this->hasMany(EmailChange::class);
+    }
+
+    /**
      * Tipsen personen kryssat bort i informationsytan — en rad per nyckel,
      * se [[M19 Dashboarden]] § 128 och App\Support\Tips.
      *

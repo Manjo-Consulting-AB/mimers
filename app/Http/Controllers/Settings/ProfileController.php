@@ -28,11 +28,16 @@ use Inertia\Response;
  * ANNANS uppgifter har ingen väg in här, för det finns ingen parameter att
  * peka med.
  *
- * **E-postadressen visas men ändras inte** (Beslut 3). `user.email` är unik,
- * verifieras med en signerad länk och är nyckeln magic link är bunden till;
- * ett byte kräver ett flöde som ingen issue i backloggen beskriver. Vyn visar
- * adressen och `email_verified_at`-status, och Request-klassen tar inte emot
- * fältet — en PATCH med `email` i kroppen får den ignorera.
+ * **Beslut 3 föll i issue 130.** Adressen visas fortfarande, men den går nu
+ * att byta — genom ett eget flöde, inte genom den här kontrollern:
+ * `App\Http\Controllers\Settings\EmailChangeController` äger de två rutter
+ * som begär och bekräftar ett byte, se [[M20 Kontot]] § 130. **`PATCH`
+ * /settings/profile tar fortfarande inte emot `email`**:
+ * App\Http\Requests\Settings\UpdateProfileRequest är orörd, och en kropp med
+ * `email` får den ignorera — mass assignment är stängd två gånger, av
+ * reglerna och av `#[Fillable]` på App\Models\User. Det är avsiktligt: en
+ * PATCH som såg ut att byta adressen hade bytt den utan den bekräftelse
+ * flödet finns för.
  *
  * Tidszonslistan skickas som en PROP (`DateTimeZone::listIdentifiers()`), inte
  * som en datafil i resources/js/ (Beslut 2): samma lista som valideringen
@@ -71,6 +76,18 @@ class ProfileController extends Controller
             'userLocale' => $user->locale,
             'userTimezone' => $user->timezone,
             'userUnitSystem' => $user->unit_system,
+
+            // E-postformulärets två lägen, se issue 130 och
+            // App\Http\Controllers\Settings\EmailChangeController. Samma
+            // proppar och samma villkor som säkerhetssidan ger
+            // lösenordsformuläret (App\Http\Controllers\Settings\
+            // SecurityController): ett JA/NEJ och inte hashen — `password_hash`
+            // är dold i serialiseringen sedan issue 3, och en sidprop är samma
+            // yta som ett svar. Ett konto utan lösenord kan inte begära ett
+            // byte, och vyn säger det i stället för att erbjuda ett formulär
+            // som servern ändå avvisar.
+            'hasPassword' => $user->password_hash !== null,
+            'totpEnabled' => $user->totp_confirmed_at !== null,
 
             'timezones' => DateTimeZone::listIdentifiers(),
             'accountDefaults' => $this->accountDefaults($user),

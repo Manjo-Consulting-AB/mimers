@@ -69,6 +69,26 @@ Ett utfärdat magic link-token — engångslänken som loggar in en användare u
 
 Ingen `deleted_at`: en kortlivad säkerhetsartefakt, inte användarskapat innehåll, samma undantag som `personal_access_tokens`.
 
+## email_change
+
+En begärd adressändring. Adressen byts aldrig i samma steg som den begärs: `user.email` står kvar tills länken i mejlet till den nya adressen öppnas, och det är den här raden som bär begäran fram till dess. Se [[M20 Kontot]] § 130.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` — raden exponeras aldrig som egen resurs i API:et |
+| user_id | FK → user, RESTRICT | **Raden binds till personen och inte till adressen**, till skillnad från `magic_link_token`: den som bekräftar bytet måste vara samma användare som begärde det, och länken får inte kunna flytta kontot när en session kapats. En annan inloggad användare får `404`, lika som för ett okänt token |
+| new_email | VARCHAR(255) | Adressen bytet gäller. Lagras i klartext — den är bytets subjekt och måste kunna jämföras och skickas till — och är det enda fält en vy någonsin skulle behöva |
+| token_hash | CHAR(64) UNIQUE | SHA-256 av slumpen i länken. Klartexten lagras aldrig, samma teknik som `magic_link_token` |
+| expires_at | TIMESTAMP | En timme efter begäran. **En ny begäran sätter en tidigare obekräftad rads `expires_at` till nu** i stället för att radera den: den gamla länken slutar gälla direkt, och raden ligger kvar som bevis på att begäran gjordes |
+| confirmed_at | TIMESTAMP NULL | Satt = förbrukad. Bytet genomfördes, och en andra öppning av samma länk är ett återanrop av ett engångstoken. Sätts med en villkorlig UPDATE, så två samtidiga klick aldrig båda lyckas |
+| created_at, updated_at | | |
+
+Unikheten mot `user.email` prövas **två gånger**: när begäran tas emot, och igen när länken öppnas. En adress som tas under timmen mellan de två ger ett fel vid bekräftelsen och ändrar ingenting.
+
+`confirmed_at` och inte `used_at`, som `magic_link_token` har: ett magic link är förbrukat av en inloggning, men ett adressbyte är inte förbrukat förrän adressen faktiskt skrivits om — kolumnen är kvittensen på att den skrivningen skedde.
+
+Ingen `deleted_at`: samma skäl som `magic_link_token`, en kortlivad säkerhetsartefakt och inte användarskapat innehåll.
+
 ## totp_recovery_code
 
 En utfärdad TOTP-återställningskod, en rad per engångskod. Se [[ADR-0011 Autentisering]].

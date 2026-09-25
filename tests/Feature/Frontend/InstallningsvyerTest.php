@@ -133,6 +133,31 @@ it('visar den overifierade adressen som overifierad', function () {
 });
 
 /*
+ * E-postformuläret, issue 130. Sidans andra formulär och det enda som behöver
+ * veta något om kontot för att ritas: `hasPassword` väljer mellan formuläret
+ * och hänvisningen till säkerhetssidan, och `totpEnabled` avgör om kodfältet
+ * finns. Serverns halva är propparna — att ett konto utan lösenord ändå
+ * avvisas prövas i tests/Feature/Auth/EpostbyteTest.php, och att fälten följer
+ * propparna är `v-if` i komponenten.
+ *
+ * Propparna är JA/NEJ och inte hashen: `password_hash` är dold i
+ * serialiseringen sedan issue 3, och en sidprop är samma yta som ett svar.
+ */
+it('säger att kontot har ett lösenord och om tvåfaktorn är på', function () {
+    withoutVite();
+
+    actingAs(User::factory()->create(['password_hash' => 'ratt-losenord']))
+        ->get('/settings/profile')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('hasPassword', true)
+            ->where('totpEnabled', false));
+
+    somAnvandare(User::factory()->create(['password_hash' => null]))
+        ->get('/settings/profile')
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('hasPassword', false));
+});
+
+/*
  * Parentesen i "Följ kontots språk (svenska)" kommer ur kontot — servern
  * skickar värdet, vyn hittar inte på det. Är användaren medlem i exakt ett
  * konto går värdet att avgöra; annars är `accountDefaults` null och valet
@@ -371,7 +396,13 @@ it('har Profil och Konton i inställningsnavigationen', function () {
 it('har profilens och kontots texter och läser dem ur lang/', function () {
     $nycklar = [
         'settings.profile.heading',
-        'settings.profile.email_no_change',
+        'settings.profile.email_change.heading',
+        'settings.profile.email_change.intro',
+        'settings.profile.email_change.new_label',
+        'settings.profile.email_change.current_label',
+        'settings.profile.email_change.submit',
+        'settings.profile.email_change.password_first',
+        'settings.profile.email_change.taken',
         'settings.profile.locale_follow',
         'settings.profile.locale_follow_plain',
         'settings.profile.timezone_follow',
@@ -386,6 +417,8 @@ it('har profilens och kontots texter och läser dem ur lang/', function () {
         'settings.units.imperial',
         'flash.profile-updated',
         'flash.account-updated',
+        'flash.email-change-requested',
+        'flash.email-changed',
     ];
 
     foreach ($nycklar as $nyckel) {
@@ -403,8 +436,18 @@ it('har profilens och kontots texter och läser dem ur lang/', function () {
     // de döda.
     $profil = File::get(resource_path('js/pages/Settings/Profile.vue'));
 
-    foreach (['settings.profile.locale_follow', 'settings.profile.timezone_follow', 'settings.profile.unit_follow', 'settings.profile.email_no_change'] as $nyckel) {
+    foreach (['settings.profile.locale_follow', 'settings.profile.timezone_follow', 'settings.profile.unit_follow'] as $nyckel) {
         expect($profil)->toContain($nyckel);
+    }
+
+    // E-postformuläret bor i sin egen komponent (issue 130) och renderas av
+    // profilsidan — en komponent ingen sida ritar är en yta ingen ser.
+    expect($profil)->toContain('EmailChangeForm');
+
+    $epostformulär = File::get(resource_path('js/components/EmailChangeForm.vue'));
+
+    foreach (['settings.profile.email_change.heading', 'settings.profile.email_change.submit', 'settings.profile.email_change.password_first'] as $nyckel) {
+        expect($epostformulär)->toContain($nyckel);
     }
 
     $konton = File::get(resource_path('js/pages/Settings/Accounts.vue'));
