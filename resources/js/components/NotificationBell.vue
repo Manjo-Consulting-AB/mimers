@@ -86,9 +86,9 @@ const unread = computed(() => page.props.unreadNotificationCount ?? 0);
  * en lista som är på väg hade varit ett svar komponenten inte har.
  *
  * De två listorna är två proppar och hämtas i samma partiella omladdning
- * (issue 131). `loaded` nedan är därför SANN först när båda finns: en panel
- * som visade inbjudningarna medan notiserna var på väg hade sagt "inget nytt"
- * om en lista den ännu inte fått.
+ * (issue 131), så villkoret gäller BÅDA: en panel som visade inbjudningarna
+ * medan notiserna var på väg hade sagt "inget nytt" om en lista den ännu inte
+ * fått.
  */
 const rows = computed(() => page.props.notifications);
 
