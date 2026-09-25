@@ -2274,6 +2274,53 @@ return [
         ],
     ],
 
+    // The information panel, see issue 128 and [[ADR-0039 Containerns
+    // översikt]] § Konsekvenser.
+    //
+    // A top-level section and not `dashboard.*`: the panel is ONE component,
+    // resources/js/components/InfoPanel.vue, and it stands on two pages — the
+    // dashboard and the container overview. The tips are the same on both, so
+    // a key under `dashboard.*` had claimed the container overview's surface
+    // for the dashboard.
+    //
+    // One title and one body per key, and the key IS the address: the order
+    // and the keys live in App\Support\Tips, and `App\Support\Tips::KEYS`
+    // names exactly the three below. A key without a string here is a visible
+    // gap in the panel and not a silent one — InformationsytaTest looks every
+    // tip up.
+    //
+    // The words are the product's own ([[ADR-0032 Produktens ord]]), and each
+    // tip is at most two sentences: the panel is a nudge and not a manual.
+    // `previous`, `next` and `dismiss` belong to the panel and not to a single
+    // tip, so they sit beside the keys that carry one.
+    'tips' => [
+        'previous' => 'Previous tip',
+        'next' => 'Next tip',
+        'dismiss' => 'Hide this tip',
+
+        // A container is the product's unit of "things that belong together"
+        // ([[ADR-0033 Produktens omfång]]), and the tip says what to do with
+        // it rather than what it is.
+        'containers' => [
+            'title' => 'A container holds everything that belongs together',
+            'body' => 'Create one for each thing you keep apart — a shelf, a drawer, a set of tools — and everything that belongs to it stays in one place.',
+        ],
+
+        // The hierarchy is an item inside an item ([[ADR-0041 Itemets vy]]),
+        // and the point is that the parts keep their own details.
+        'structure' => [
+            'title' => 'An item can hold other items',
+            'body' => 'Put the parts inside the whole: the camera bag holds the camera, the lenses and the charger. The parts keep their own details and their own schedules.',
+        ],
+
+        // The to-do view is where a due occurrence lands, and the tip names it
+        // by its own word rather than describing the screen.
+        'schedules' => [
+            'title' => 'A schedule reminds you before something is due',
+            'body' => 'Set one on an item — inspect the boiler, change the filter, renew the insurance — and it turns up under To do in time for you to act on it.',
+        ],
+    ],
+
     // The dashboard, see issue 122. The landing page after sign-in since 122:
     // the two pages were one until then, and `/dashboard` was the to-do view.
     //

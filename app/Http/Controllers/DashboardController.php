@@ -10,6 +10,7 @@ use App\Actions\Schedule\ListTodo;
 use App\Models\Container;
 use App\Models\User;
 use App\Support\Cost\CostReport;
+use App\Support\Tips;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -70,6 +71,14 @@ use Inertia\Response;
  * App\Actions\Audit\PresentAuditEvents, som också slår upp containernamnen:
  * en rad på den här sidan står utanför sin container och måste säga vilken
  * den gäller.
+ *
+ * **Informationsytan kom med issue 128**, som sin egen propp: `tips` bär
+ * nycklarna på de tips användaren inte kryssat bort, i App\Support\Tips
+ * ordning — det första är det ytan visar, och resten är det hon kan bläddra
+ * till. Kontrollern formulerar ingen egen lista och ingen egen fråga, precis
+ * som den inte formulerar någon annan panels urval. Texten bor i
+ * `lang/en/ui.php` och slås upp i klienten: servern skickar nycklar och
+ * aldrig färdiga meningar ([[ADR-0021 Frontendteknik]] § Beslut).
  */
 class DashboardController extends Controller
 {
@@ -122,6 +131,9 @@ class DashboardController extends Controller
             'events' => $presentAuditEvents->handle(
                 $listAuditEvents->forUser($user, self::ACTIVITY_LIMIT),
             ),
+            // Tipsen användaren inte dolt, i Tips ordning — samma propp och
+            // samma lista som containerns översikt bär (issue 128).
+            'tips' => app(Tips::class)->visibleFor($user),
         ]);
     }
 
