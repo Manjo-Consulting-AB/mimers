@@ -162,9 +162,11 @@ return Application::configure(basePath: dirname(__DIR__))
          * inloggningen — magic link-begäran delar samma begränsare, och det
          * är avsiktligt.
          *
-         * `except('password')` är inte en detalj: `old()`-värden hamnar i
-         * sessionen, och ett lösenord som ligger kvar där tills sessionen
-         * töms är en läcka utan nytta.
+         * Undantagen är inte en detalj: `old()`-värden hamnar i sessionen, och
+         * ett lösenord som ligger kvar där tills sessionen töms är en läcka
+         * utan nytta. Sedan issue 129 gäller det alla tre fälten i
+         * lösenordsbytet — det nya lösenordet, dess bekräftelse och det
+         * nuvarande — för formuläret skickar alla tre i samma kropp.
          */
         $exceptions->render(function (ThrottleRequestsException $e, Request $request) {
             // ThrottleRequests-middlewaret (Illuminate\Routing\Middleware\ThrottleRequests)
@@ -176,7 +178,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
             if (! $request->is('api/*')) {
                 return back()
-                    ->withInput($request->except('password'))
+                    ->withInput($request->except(['current_password', 'password', 'password_confirmation']))
                     ->withErrors(['email' => __('auth.throttle', ['seconds' => $retryAfterSeconds])]);
             }
 

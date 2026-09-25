@@ -50,6 +50,7 @@ use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\WebhookEndpointController;
 use App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin;
+use App\Support\Auth\BindsPasswordChangeThrottleToUser;
 use App\Support\Auth\LoginRateLimiter;
 use App\Support\Files\FileOrigin;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -319,27 +320,26 @@ Route::middleware('auth')->group(function () {
      * användare som ska byta lösenord letar på samma sida som hon slår på
      * tvåfaktorn.
      *
-     * **`throttle:login`, inloggningens egen begränsare** (issue 129,
+     * **Inloggningens egen begränsare** (issue 129,
      * App\Support\Auth\LoginRateLimiter). Formuläret prövar ett lösenord och
      * en engångskod, alltså samma två gissningsbara värden som inloggningen,
      * och ska mötas av samma tak. Namnet och inte en egen begränsare: en
      * andra hink med samma trösklar hade varit samma regel på två ställen.
      *
-     * **`throttle:`-nyckeln för kontot blir tom här**, och det är värt att
-     * veta: begränsaren bygger sin kontonyckel av `$request->string('email')`
-     * (se App\Providers\AppServiceProvider::configureLoginRateLimiting()), och
-     * den här kroppen bär ingen adress — användaren kommer ur sessionen. Kvar
-     * blir IP-nyckeln, som fungerar som den ska, och en kontonyckel som alla
-     * installationens byten delar. Se PR:ens "Frågor och antaganden": samma
-     * form som App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin
-     * löste för magic link-steget, men den klassen ligger i en katalog
-     * issuen stänger.
+     * **`BindsPasswordChangeThrottleToUser` i stället för `throttle:login`
+     * rakt av.** Begränsaren bygger sin kontonyckel av
+     * `$request->string('email')`, och den här kroppen bär ingen adress —
+     * användaren kommer ur sessionen. Rakt på hade nyckeln varit tom och
+     * blivit en hink hela installationen delade. Middlewaret sätter `email`
+     * till användarens adress och anropar samma begränsare; se dess
+     * docblock, och App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin
+     * för samma form på magic link-steget.
      *
      * Grinden är `auth`-gruppen ovan: en utloggad besökare har inget konto
      * att byta lösenordet på.
      */
     Route::put('/settings/security/password', [PasswordController::class, 'update'])
-        ->middleware('throttle:'.LoginRateLimiter::NAME)
+        ->middleware(BindsPasswordChangeThrottleToUser::class)
         ->name('settings.security.password');
 
     /*

@@ -405,14 +405,21 @@ it('skickar inget mejl när bytet avvisas', function () {
 });
 
 /*
- * Takgränsen: inloggningens egen begränsare (throttle:login, 5/minut per
- * kontonyckel och 10/minut per IP). Fem försök med fel lösenord släpps
+ * Takgränsen: inloggningens egen begränsare — samma namn och samma trösklar
+ * som inloggningen (5/minut per kontonyckel och 10/minut per IP), se
+ * App\Support\Auth\LoginRateLimiter. Fem försök med fel lösenord släpps
  * igenom till valideringen; det sjätte stoppas av begränsaren.
+ *
+ * Kontonyckeln sätts av App\Support\Auth\BindsPasswordChangeThrottleToUser ur
+ * den inloggade användarens adress och inte ur kroppen — rutten bär ingen
+ * adress, och utan middlewaret hade nyckeln varit tom och blivit en hink hela
+ * installationen delade.
  *
  * Webben svarar en omdirigering med ett formulärfel i stället för en tom
  * 429-sida (bootstrap/app.php, issue 53a § Beslut 6). Fältet felet hamnar på
  * är `email` — begränsaren är inloggningens och vet inget om det här
- * formulärets fält; se PR:ens "Frågor och antaganden".
+ * formulärets fält. PasswordForm.vue ritar det därför för hela formuläret,
+ * se tests/Feature/Frontend/SakerhetsvyTest.php.
  */
 it('har inloggningens takgräns', function () {
     Notification::fake();
@@ -444,4 +451,137 @@ it('har inloggningens takgräns', function () {
 it('skickar en utloggad besökare till inloggningen', function () {
     put('/settings/security/password', losenordsKropp(['current_password' => 'vad-som-helst']))
         ->assertRedirect('/login');
+});
+
+/*
+ * Nyckeln är kontots och inte en tom sträng. Två konton har var sin hink, och
+ * den enes förbrukade budget stänger inte den andres byte — utan middlewaret
+ * hade båda delat samma tomma nyckel och den andra användaren mötts av en 429.
+ */
+it('throttlar varje konto för sig', function () {
+    Notification::fake();
+
+    $en = User::factory()->create(['password_hash' => 'ratt-losenord']);
+    $annan = User::factory()->create(['password_hash' => 'ratt-losenord']);
+
+    actingAs($en);
+
+    for ($i = 0; $i < 5; $i++) {
+        from('/settings/security')->put('/settings/security/password', losenordsKropp([
+            'current_password' => 'fel-losenord',
+        ]))->assertSessionHasErrors('current_password');
+    }
+
+    // Den förstas hink är tömd: det sjätte försöket stoppas av begränsaren.
+    from('/settings/security')->put('/settings/security/password', losenordsKropp([
+        'current_password' => 'fel-losenord',
+    ]))->assertSessionHasErrors('email');
+
+    // Den andra har sin egen hink och når hela vägen till valideringen.
+    actingAs($annan);
+
+    from('/settings/security')->put('/settings/security/password', losenordsKropp([
+        'current_password' => 'fel-losenord',
+    ]))->assertSessionHasErrors('current_password');
+});
+
+/*
+ * Samma konto, samma hink. Att gissa det nuvarande lösenordet i
+ * bytesformuläret är samma angrepp som att gissa det vid inloggning och ska
+ * räknas mot samma gräns ([[ADR-0011 Autentisering]]). Nyckeln är därför
+ * användarens e-postadress och inte hennes id.
+ *
+ * Riktningen är den omvända av provet ovanför: fem misslyckade inloggningar
+ * tömmer kontots hink, och bytet stoppas av den — IP-nyckeln är långt ifrån
+ * tömd (sex anrop av tio), så det är kontonyckeln som prövas.
+ */
+it('räknar lösenordsbytet och inloggningen mot samma hink', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
+
+    for ($i = 0; $i < 5; $i++) {
+        from('/login')->post('/login', [
+            'email' => $user->email,
+            'password' => 'fel-losenord',
+        ]);
+    }
+
+    actingAs($user);
+
+    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
+        'current_password' => 'ratt-losenord',
+    ]));
+
+    $svar->assertSessionHasErrors('email');
+
+    // Meningen och inte nyckeln: `auth.throttle` med antalet sekunder i.
+    // Sekunderna läses ur meningen — fönstret har redan tickat ett steg när
+    // bytet görs, så 60 är inte givet.
+    $mening = session('errors')->get('email')[0];
+    preg_match('/(\d+)/', $mening, $träff);
+
+    expect($träff)->not->toBeEmpty('meddelandet saknar antal sekunder')
+        ->and($mening)->toBe(trans('auth.throttle', ['seconds' => (int) $träff[0]], 'en'));
+
+    // Det takgränsade försöket nådde aldrig valideringen.
+    expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
+});
+
+/*
+ * Vid en 429 ligger gamla inmatningen i sessionen (bootstrap/app.php). Ingen
+ * av lösenordsbytets tre känsliga fält får finnas där. `code` är med som
+ * motprov: det är de tre som undantas, inte hela kroppen.
+ */
+it('lämnar inga lösenordsfält i gamla inmatningen vid en 429', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
+    actingAs($user);
+
+    for ($i = 0; $i < 5; $i++) {
+        from('/settings/security')->put('/settings/security/password', losenordsKropp([
+            'current_password' => 'fel-losenord',
+        ]));
+    }
+
+    $svar = from('/settings/security')->put('/settings/security/password', [
+        'current_password' => 'gammalt-hemligt-7712',
+        'password' => 'nytt-hemligt-9930',
+        'password_confirmation' => 'nytt-hemligt-9930',
+        'code' => '123456',
+    ]);
+
+    $svar->assertSessionHasErrors('email');
+
+    $svar->assertSessionMissingInput('current_password');
+    $svar->assertSessionMissingInput('password');
+    $svar->assertSessionMissingInput('password_confirmation');
+
+    // Motprovet: ett fält som inte är ett lösenord fylls i igen.
+    $svar->assertSessionHasInput('code', '123456');
+});
+
+/*
+ * Ordningen lösenord före kod gäller också förbrukningen: en återställningskod
+ * som skickas med ett FEL nuvarande lösenord får inte gå förlorad. Koden
+ * prövas först efter att `current_password`-regeln har gått igenom — den är en
+ * valideringsregel och kastar innan UpdatePasswordRequest::authenticate() ens
+ * anropas.
+ */
+it('förbrukar inte återställningskoden när det nuvarande lösenordet är fel', function () {
+    Notification::fake();
+
+    [$user] = användareMedBekräftadTotp();
+    $koder = RecoveryCodeBroker::generate($user);
+
+    actingAs($user);
+
+    from('/settings/security')->put('/settings/security/password', losenordsKropp([
+        'current_password' => 'fel-losenord',
+        'code' => $koder[0],
+    ]))->assertSessionHasErrors('current_password');
+
+    expect(TotpRecoveryCode::query()->where('user_id', $user->id)->whereNull('used_at')->count())->toBe(10)
+        ->and(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
 });

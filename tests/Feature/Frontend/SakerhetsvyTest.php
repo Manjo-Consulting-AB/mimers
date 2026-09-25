@@ -110,6 +110,24 @@ it('renderar lösenordsformuläret och postar det till sin egen rutt', function 
 });
 
 /*
+ * Takgränsens fel hamnar på `email` — begränsaren är inloggningens och vet
+ * inget om det här formulärets fält. Vyn ritar det därför som ett fel för
+ * hela formuläret, ovanför knappen, och inte som ett fältfel: det finns inget
+ * `email`-fält att sätta det på. Att routten faktiskt svarar så prövas i
+ * tests/Feature/Auth/LosenordsbyteTest.php.
+ */
+it('visar takgränsens fel för hela formuläret, ovanför knappen', function () {
+    $form = File::get(resource_path('js/components/PasswordForm.vue'));
+
+    $felet = strpos($form, 'form.errors.email');
+    $knappen = strpos($form, '<button');
+
+    expect($felet)->not->toBeFalse()
+        ->and($knappen)->not->toBeFalse()
+        ->and($felet)->toBeLessThan($knappen);
+});
+
+/*
  * Läge 1. Att vyn därmed inte renderar något kodfält är `v-if` i komponenten;
  * serverns halva är att propsen inte bär något som kan öppna läge 2 eller 3.
  */

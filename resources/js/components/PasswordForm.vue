@@ -160,6 +160,21 @@ function submit() {
                 </FormField>
             </template>
 
+            <!-- Takgränsens fel, inte ett fältfel: begränsaren är
+                 inloggningens och lägger sitt fel på `email`, ett fält det
+                 här formuläret inte har. Meningen ritas därför för hela
+                 formuläret, ovanför knappen. `id`/`tabindex` följer FormField
+                 så att fokus hamnar här — se useErrorFocus.js. -->
+            <p
+                v-if="form.errors.email"
+                id="email-error"
+                role="alert"
+                tabindex="-1"
+                class="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
+            >
+                {{ form.errors.email }}
+            </p>
+
             <button
                 type="submit"
                 :disabled="form.processing"
