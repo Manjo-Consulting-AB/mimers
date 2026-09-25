@@ -1,31 +1,42 @@
 <script setup>
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
- * Mejlets landningssida, se issue 55b § Beslut 2, 3 och 4.
+ * Mejlets landningssida, se issue 55b § Beslut 2, 3 och 4, och listan över
+ * väntande inbjudningar, se issue 131.
  *
- * **Fem tillstånd, och vart och ett har ett svar.** Servern avgör vilket —
- * kontrollern anropar den delade InvitationTokenRequest::invitation() och
- * fångar dess ApiException — och den här filen renderar det. Ingen av
- * kontrollerna görs om här: formuläret finns i `ready`, och i varje annat
- * tillstånd hade en postning nekats av servern oavsett vad sidan visade.
+ * **Sex tillstånd, och vart och ett har ett svar.** Servern avgör vilket —
+ * kontrollern anropar den delade
+ * App\Support\Invitation\PendingInvitation och fångar dess ApiException — och
+ * den här filen renderar det. Ingen av kontrollerna görs om här: formuläret
+ * finns i `ready`, och i varje annat tillstånd hade en postning nekats av
+ * servern oavsett vad sidan visade.
  *
- *   ready       — inloggad, verifierad mottagare. Accept- och avvisa-formulären.
+ *   ready       — inloggad, verifierad mottagare med ett token i sessionen.
+ *                 Accept- och avvisa-formulären för DEN inbjudan.
+ *   pending     — inloggad, verifierad, inget token i sessionen. Listan över
+ *                 hennes väntande inbjudningar, en rad per inbjudan med
+ *                 samma två knappar. Här går svaret på inbjudans ULID i
+ *                 stället för på ett token.
  *   guest       — utloggad. Containerns namn, inbjudaren och nivån, plus vägarna
  *                 till inloggning och registrering. Adressen visas aldrig.
  *   unverified  — inloggad med rätt adress men overifierad. Ingenting eget
  *                 renderas: AppLayout visar redan verifieringspåminnelsen för
  *                 varje overifierad användare utom på /email/verify, och två
  *                 likadana knappar på samma sida är en bugg och inte en
- *                 påminnelse. Kvar blir inbjudningskontexten ovanför.
+ *                 påminnelse. Kvar blir inbjudningskontexten ovanför. Utan
+ *                 token i sessionen är det OCKSÅ svaret på listfrågan: en
+ *                 overifierad adress är inget bevis, så ingen lista ritas.
  *   mismatch    — inloggad med en annan adress. Beskedet säger INTE vilken
  *                 adress inbjudan gäller.
  *   unavailable — utgången, redan besvarad eller okänt token. ETT tillstånd
  *                 med EN mening, för de två får inte gå att skilja åt: ett
  *                 "finns inte" mot ett "är redan accepterad" är en orakelyta
- *                 mot giltiga token.
+ *                 mot giltiga token. Utan token i sessionen är det svaret en
+ *                 utloggad besökare får.
  *
  * **Tokenet ligger i formulärets data och inte i URL:en.** Sidan nås på
  * `/invitations`, dit `GET /invitations/{token}` omdirigerade efter att ha
@@ -34,6 +45,13 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * skickas bara till `ready`: de övriga tillstånden har inget formulär att
  * lägga det i.
  *
+ * **Listans två knappar postar ULID:n i sökvägen**, och den ligger i proppen
+ * därför att bara servern känner den (issue 51 § Beslut 7). Kroppen är tom:
+ * hela uppslaget är adressen, och servern prövar raden mot den inloggades
+ * verifierade adress innan något händer. En rad som inte är hennes ger 404,
+ * alltså samma svar som ett okänt ulid — därför finns inget felmeddelande
+ * per rad att visa.
+ *
  * Ingen egen text och ingen egen regel: allt går genom t(), och `level` slås
  * upp med samma nycklar som delningssidan använder.
  */
@@ -41,6 +59,7 @@ const props = defineProps({
     state: { type: String, required: true },
     invitation: { type: Object, default: null },
     token: { type: String, default: null },
+    invitations: { type: Array, default: null },
 });
 
 const { t } = useTranslations();
@@ -48,6 +67,15 @@ const page = usePage();
 
 const acceptForm = useForm({ token: props.token });
 const rejectForm = useForm({ token: props.token });
+
+/*
+ * Vänteläget runt en rads svar (GenomgangTest): en knapp som ser likadan ut
+ * medan svaret är på väg är en användare som trycker igen, och två POST:ar mot
+ * samma inbjudan är två onödiga anrop — den andra hade blivit ett 404 när
+ * raden inte längre är `pending`. Flaggan bär radens ULID, så bara den rad
+ * som svarar gråas ut, och den stängs i `onFinish` och alltså även vid fel.
+ */
+const busy = ref(null);
 
 /* Avvisa går till startsidan, accept till containerlistan — se kontrollern. */
 function accept() {
@@ -57,13 +85,24 @@ function accept() {
 function reject() {
     rejectForm.post('/invitations/reject');
 }
+
+/* Listans svar: ULID:n i sökvägen och ingenting i kroppen. */
+function answer(inbjudan, verb) {
+    router.post(`/invitations/${inbjudan.ulid}/${verb}`, {}, {
+        preserveScroll: true,
+        onStart: () => { busy.value = inbjudan.ulid; },
+        onFinish: () => { busy.value = null; },
+    });
+}
 </script>
 
 <template>
     <AppLayout>
-        <Head :title="t('invitation.title')" />
+        <Head :title="state === 'pending' ? t('invitation.pending.title') : t('invitation.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('invitation.heading') }}</h1>
+        <h1 class="text-2xl font-semibold">
+            {{ state === 'pending' ? t('invitation.pending.heading') : t('invitation.heading') }}
+        </h1>
 
         <!--
             Förhandsvisningen — containerns namn, inbjudaren och nivån — visas för
@@ -113,6 +152,55 @@ function reject() {
                     {{ rejectForm.processing ? t('common.pending.default') : t('invitation.reject') }}
                 </button>
             </form>
+        </div>
+
+        <!--
+            Listan: en rad per väntande inbjudan, med samma två svar som
+            `ready` och samma ord om inbjudan — containerns namn, inbjudaren
+            och nivån. Adressen finns inte i proppen alls, av samma skäl som i
+            förhandsvisningen ovan.
+
+            Tomt är ett svar och inte ett fel: en verifierad användare utan
+            väntande inbjudningar är det vanliga läget, och proppen är en tom
+            LISTA och inte `null` just därför.
+        -->
+        <div v-else-if="state === 'pending'" class="mt-6 flex max-w-sm flex-col gap-4">
+            <p v-if="invitations.length === 0" class="text-sm text-slate-600">
+                {{ t('invitation.pending.empty') }}
+            </p>
+
+            <div
+                v-for="inbjudan in invitations"
+                :key="inbjudan.ulid"
+                class="flex flex-col gap-2 rounded border border-slate-300 bg-white p-4 text-sm"
+            >
+                <p class="text-slate-700">
+                    {{ t('invitation.intro', { inviter: inbjudan.inviter, container: inbjudan.container }) }}
+                </p>
+                <p class="text-slate-600">
+                    {{ t('invitation.level', { level: t(`sharing.level.${inbjudan.level}.label`) }) }}
+                </p>
+
+                <div class="mt-1 flex flex-wrap gap-3">
+                    <button
+                        type="button"
+                        :disabled="busy === inbjudan.ulid"
+                        class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+                        @click="answer(inbjudan, 'accept')"
+                    >
+                        {{ busy === inbjudan.ulid ? t('common.pending.default') : t('invitation.accept') }}
+                    </button>
+
+                    <button
+                        type="button"
+                        :disabled="busy === inbjudan.ulid"
+                        class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
+                        @click="answer(inbjudan, 'reject')"
+                    >
+                        {{ busy === inbjudan.ulid ? t('common.pending.default') : t('invitation.reject') }}
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div v-else-if="state === 'guest'" class="mt-6 flex max-w-sm flex-col gap-2 text-sm">

@@ -451,12 +451,16 @@ it('hämtar skalets strängar ur ui.php', function () {
  * katalogen faller här, och det är samma form som provet för händelseloggens
  * handlingar.
  *
- * **Inbjudningarna undantas med flit.** `invitation.received` finns som
- * konstant men skrivs av ingen kod: `CreateInvitation` skickar mejlet direkt
- * med `InvitationNotification`. Klockan visar de sex typer som faktiskt
- * skrivs, och den sjunde är issue 131 ([[M20 Kontot]]). Undantaget står här
- * som en rad och inte som en tystnad: börjar någon skriva typen faller provet
- * till dess att meningen finns.
+ * **Inbjudningarna undantas med flit, men meningen finns.** `invitation.received`
+ * finns som konstant och skrivs fortfarande av ingen kod: `CreateInvitation`
+ * skickar mejlet direkt med `InvitationNotification`. Klockan visar de sex
+ * typer som faktiskt skrivs ur `notification`, och den sjunde raden — en rad
+ * per väntande inbjudan — kom med issue 131 och läses ur `invitation` i
+ * stället ([[M20 Kontot]] § 131). Nyckeln `inbox.invitation.received` finns
+ * därför, och prövas sist i provet: undantaget nedan gäller att ingen
+ * NOTISRAD skrivs, inte att ingen mening behövs. Börjar någon skriva typen
+ * faller provet ändå inte — men raden i klockan skulle stå utan text om
+ * nyckeln glömdes, och det är vad den sista raden fångar.
  */
 it('har en mening åt varje notistyp klockan visar', function () {
     $lov = sprakLov(sprakFil('en'));
@@ -478,6 +482,9 @@ it('har en mening åt varje notistyp klockan visar', function () {
 
         expect($mening)->not->toBe('', "ui.inbox.{$typ} saknas ({$namn})");
     }
+
+    // Den sjunde radens mening, ur `invitation` och inte ur `notification`.
+    expect($lov['inbox.invitation.received'] ?? '')->not->toBe('');
 });
 
 /*

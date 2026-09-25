@@ -7,11 +7,14 @@ use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\Loan;
 use App\Models\Notification;
 use App\Models\ScheduleOccurrence;
+use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
+use App\Support\Invitation\PendingInvitation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -57,9 +60,23 @@ use Inertia\Middleware;
  * **Klockan är ingen kanal.** Den läser `notification` som tabellen redan är
  * ([[Notiser]] § notification) och rör varken `notification_delivery`,
  * preferenserna eller de tysta timmarna — den som öppnar klockan har redan
- * fått sina mejl. Inbjudningarna är INTE med: `invitation.received` finns som
- * konstant men skrivs av ingen kod, och de sex typer som faktiskt skrivs är de
- * klockan visar (issue 127 § Beslut, vägen dit är issue 131).
+ * fått sina mejl. De sex typer som faktiskt skrivs är de klockan visar ur
+ * `notification` (issue 127 § Beslut).
+ *
+ * **Inbjudningarna kom med issue 131, och de läses ur `invitation`.** En
+ * väntande inbjudan är ingen notisrad — `Notification::TYPE_INVITATION_RECEIVED`
+ * finns som konstant men skrivs fortfarande av ingen kod — så klockan får sin
+ * rad per väntande inbjudan ur inbjudningstabellen i stället, och
+ * `pendingInvitations` är den andra optionala proppen. Raden ritar
+ * `inbox.invitation.received` och länkar till `/invitations`, där svaret går.
+ *
+ * **Siffran räknar dem också**, och det är därför `unreadNotificationCount`
+ * numera kan kosta TVÅ frågor på en sidladdning i stället för en: frågan går
+ * på `invitation`s index `(email, status)`, och en inbjudan är något
+ * användaren faktiskt behöver svara på. Att öppna klockan nollställer bara
+ * notisraden av de två — `notifications_read_at` är en tidsstämpel på
+ * användaren, och en inbjudan är obesvarad till dess att den besvarats, inte
+ * till dess att den setts (App\Http\Controllers\NotificationInboxController).
  *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
@@ -102,6 +119,7 @@ class HandleInertiaRequests extends Middleware
     public function __construct(
         private readonly ActiveContainer $activeContainer,
         private readonly ListFavorites $listFavorites,
+        private readonly PendingInvitation $pendingInvitation,
     ) {}
 
     /**
@@ -128,11 +146,16 @@ class HandleInertiaRequests extends Middleware
             'auth' => fn (): array => $this->auth($request),
             'activeContainer' => fn (): ?string => $this->activeContainer->forUser($request->user()),
             'favorites' => fn (): array => $this->favorites($request),
-            'unreadNotificationCount' => fn (): int => $this->unreadNotificationCount($request),
+            'unreadNotificationCount' => fn (): int => $this->unreadNotificationCount($request)
+                + $this->pendingInvitationCount($request),
             // Ingen closure runt OptionalProp: den är redan lat, och en
             // kapslad closure hade fått resolvern att packa upp den i två
             // steg i stället för att filtrera den som den prop den är.
             'notifications' => Inertia::optional(fn (): array => $this->notifications($request)),
+            // Den andra optionala proppen, av samma skäl som den första: en
+            // rad per väntande inbjudan behövs bara när klockan är öppen, och
+            // en vanlig sidladdning rör den aldri — se klassens docblock.
+            'pendingInvitations' => Inertia::optional(fn (): array => $this->pendingInvitations($request)),
             'locale' => fn (): string => App::getLocale(),
             'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
@@ -297,6 +320,89 @@ class HandleInertiaRequests extends Middleware
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Klockans inbjudningsrader: en per väntande inbjudan till användarens
+     * VERIFIERADE adress, se issue 131 og [[M20 Kontot]] § 131.
+     *
+     * **Ur `invitation` och inte ur `notification`.** Ingen notisrad skrivs
+     * för en inbjudan — `Notification::TYPE_INVITATION_RECEIVED` finns som
+     * konstant men har ingen skrivare — och frågan går därför mot
+     * inbjudningstabellen, genom SAMMA uppslag som listan på `/invitations`
+     * (App\Support\Invitation\PendingInvitation::forUser()). Två
+     * formuleringar av "vilka inbjudningar väntar för den här användaren"
+     * hade glidit isär, och klockan hade kunnat visa en rad som sidan inte
+     * visar.
+     *
+     * **Adressen byggs här och inte i JavaScript** (issue 51 § Beslut 7):
+     * `/invitations` är statisk, men samma regel gäller varje adress som
+     * lämnar servern, och den som en dag får en ULID i sig ska inte behöva
+     * flyttas.
+     *
+     * En overifierad användare får en tom lista — samma svar som en inloggad
+     * utan väntande, så klockan aldrig behöver två avpackningsvägar (samma
+     * regel som `auth()`, `favorites()` och `notifications()`).
+     *
+     * @return list<array{ulid: string, container: string, inviter: string, url: string}>
+     */
+    private function pendingInvitations(Request $request): array
+    {
+        $user = $this->verifiedUser($request);
+
+        if ($user === null) {
+            return [];
+        }
+
+        return $this->pendingInvitation->forUser($user)
+            ->with(['container', 'invitedBy'])
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (Invitation $invitation): array => [
+                'ulid' => $invitation->ulid,
+                'container' => $invitation->container->name,
+                'inviter' => $invitation->invitedBy->name,
+                'url' => route('invitations.show', [], false),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Siffrans inbjudningsdel: antalet väntande inbjudningar, eller noll för
+     * en gäst och för en overifierad adress.
+     *
+     * `count()` och inte listans längd: siffran ritas på varje sida och
+     * behöver inga rader, och en `COUNT(*)` mot indexet `(email, status)` är
+     * vad den frågan är till för.
+     */
+    private function pendingInvitationCount(Request $request): int
+    {
+        $user = $this->verifiedUser($request);
+
+        if ($user === null) {
+            return 0;
+        }
+
+        return $this->pendingInvitation->forUser($user)->count();
+    }
+
+    /**
+     * Användaren om hon är inloggad OCH har verifierat sin adress, annars
+     * `null`.
+     *
+     * Verifieringen är hela identitetsbeviset när ingen token finns
+     * ([[ADR-0003 Åtkomstmodell]]): klockan visar en inbjudan till en adress
+     * bara när adressen är bevisat hennes. Villkoret står här och inte i
+     * PendingInvitation::forUser(), för frågan är adressjämförelsen och
+     * ingenting mer — samma uppdelning som
+     * App\Http\Controllers\InvitationResponseController::waiting() gör.
+     */
+    private function verifiedUser(Request $request): ?User
+    {
+        $user = $request->user();
+
+        return $user instanceof User && $user->hasVerifiedEmail() ? $user : null;
     }
 
     /**

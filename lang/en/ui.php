@@ -142,6 +142,16 @@ return [
         'transfer' => [
             'requested' => ':container has been offered to you',
         ],
+
+        // Issue 131: the clock's invitation row. It is read from `invitation`
+        // and not from `notification` — no such row is ever written
+        // ([[M20 Kontot]] § 131, and the question in [[Tankar]] § Öppet) — but
+        // the key keeps the clock's rule that the TYPE is the key, so the day
+        // the type starts being written the sentence is already here.
+        'invitation' => [
+            'received' => ':inviter has invited you to :container',
+        ],
+
         'account' => [
             'inactive' => 'Your account has been inactive for :months months — it closes :close_at',
         ],
@@ -2731,6 +2741,19 @@ return [
 
         'mismatch' => 'This invitation is for a different email address than the one you are signed in with.',
         'unavailable' => 'This invitation can no longer be used.',
+
+        // Issue 131: the list a signed-in, VERIFIED recipient meets when no
+        // token sits in the session. The same words as the ownership transfer's
+        // inbox (ui.transfer.inbox) and for the same reason — the recipient
+        // finds these by identity and not by a link, so the page has to say
+        // that the email does not have to be around. The empty state is an
+        // answer and not a fault: no waiting invitations is the ordinary state
+        // for almost every user.
+        'pending' => [
+            'title' => 'Invitations to you',
+            'heading' => 'Invitations to you',
+            'empty' => 'No invitations are waiting for you.',
+        ],
 
         'accept' => 'Accept',
         'reject' => 'Decline',

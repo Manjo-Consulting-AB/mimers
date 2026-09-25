@@ -47,6 +47,20 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * `url` är `null` för de typer som inte har någon sida — en kvotvarning och
  * en inaktivitetsvarning gäller kontot, och kontosidan finns inte i M19. En
  * rad utan mål är text och inte en död länk.
+ *
+ * **Inbjudningarna står överst och kommer ur en annan tabell** (issue 131).
+ * `pendingInvitations` är den andra optionala proppen, läst ur `invitation`
+ * och inte ur `notification` — ingen notisrad skrivs för en inbjudan. Raden
+ * säger samma sak som listan på `/invitations` och länkar dit, för det är där
+ * hon svarar; klockan visar den bara. Ordningen är inte kosmetisk: en
+ * inbjudan väntar på ett svar och en notis är ett kvitto på något som redan
+ * hänt, och den som öppnar klockan ska mötas av det först som kräver något av
+ * henne.
+ *
+ * **Siffran räknar båda** (HandleInertiaRequests), men öppningen nollställer
+ * bara notiserna. En inbjudan är obesvarad till dess att den besvarats, så
+ * brickan faller med notiserna och står kvar med inbjudningarna — se
+ * App\Http\Controllers\NotificationInboxController.
  */
 const { t } = useTranslations();
 const { dueDate, eventDate } = useRelativeDate();
@@ -70,8 +84,22 @@ const unread = computed(() => page.props.unreadNotificationCount ?? 0);
  * hämtad än, den andra att den är hämtad och tom. Panelen ritar därför
  * varken listan eller tomtillståndet förrän proppen finns — "inget nytt" om
  * en lista som är på väg hade varit ett svar komponenten inte har.
+ *
+ * De två listorna är två proppar och hämtas i samma partiella omladdning
+ * (issue 131). `loaded` nedan är därför SANN först när båda finns: en panel
+ * som visade inbjudningarna medan notiserna var på väg hade sagt "inget nytt"
+ * om en lista den ännu inte fått.
  */
 const rows = computed(() => page.props.notifications);
+
+const invitations = computed(() => page.props.pendingInvitations);
+
+/* `loaded` ovan är "frågan är ställd"; den här är "svaret är här". */
+const bothLoaded = computed(() => rows.value !== undefined && invitations.value !== undefined);
+
+const empty = computed(() => bothLoaded.value
+    && rows.value.length === 0
+    && invitations.value.length === 0);
 
 /*
  * Meningen: typen ger nyckeln, payloaden ger värdena, och datumet skrivs av
@@ -91,7 +119,7 @@ function toggle() {
     loaded.value = true;
 
     if (unread.value === 0) {
-        router.reload({ only: ['notifications'] });
+        router.reload({ only: ['notifications', 'pendingInvitations'] });
 
         return;
     }
@@ -102,10 +130,11 @@ function toggle() {
         onStart: () => { busy.value = true; },
         onFinish: () => { busy.value = false; },
         // Svaret är en omdirigering och renderar om sidan fullt (mönstret
-        // från issue 51 § Beslut 5). Den renderingen bär inte den optionala
-        // listan, så den hämtas en gång till — annars hade panelen tömts i
-        // samma stund som siffran nollställdes.
-        onSuccess: () => router.reload({ only: ['notifications'] }),
+        // från issue 51 § Beslut 5). Den renderingen bär inte de optionala
+        // listorna, så de hämtas en gång till — annars hade panelen tömts i
+        // samma stund som siffran nollställdes. Inbjudningarna hade fallit
+        // bort med dem, fast de inte nollställs av skrivningen.
+        onSuccess: () => router.reload({ only: ['notifications', 'pendingInvitations'] }),
     });
 }
 </script>
@@ -156,11 +185,25 @@ function toggle() {
         >
             <h2 class="text-title font-semibold text-ink">{{ t('inbox.label') }}</h2>
 
-            <p v-if="rows && rows.length === 0" class="mt-2 text-slate-700">
+            <p v-if="empty" class="mt-2 text-slate-700">
                 {{ t('inbox.empty') }}
             </p>
 
-            <ul v-else-if="rows" class="mt-2 flex flex-col divide-y divide-slate-200">
+            <ul v-else-if="bothLoaded" class="mt-2 flex flex-col divide-y divide-slate-200">
+                <!--
+                    Inbjudningarna först (issue 131): de väntar på ett svar,
+                    notiserna är kvitton på något som redan hänt. Raden bär
+                    ingen tid — det som betyder något för en inbjudan är att
+                    den väntar, och hur länge den gör det står på /invitations.
+                -->
+                <UiListRow v-for="invitation in invitations" :key="invitation.ulid">
+                    <template #title>
+                        <Link :href="invitation.url" class="flex min-h-11 items-center hover:underline">
+                            {{ t('inbox.invitation.received', { inviter: invitation.inviter, container: invitation.container }) }}
+                        </Link>
+                    </template>
+                </UiListRow>
+
                 <UiListRow v-for="row in rows" :key="row.ulid">
                     <template #title>
                         <Link

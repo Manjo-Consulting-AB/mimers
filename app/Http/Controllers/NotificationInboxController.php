@@ -27,6 +27,14 @@ use Illuminate\Http\Request;
  * som öppnar klockan har läst allt som fanns i den, och en siffra räknad mot
  * den senaste radens tid hade lämnat de äldre olästa för alltid.
  *
+ * **Inbjudningarna nollställs inte här** (issue 131). Klockans siffra räknar
+ * två saker — olästa `notification`-rader och väntande inbjudningar — och den
+ * här skrivningen rör bara den första. En inbjudan är obesvarad till dess att
+ * den besvarats och inte till dess att den setts: att öppna klockan får
+ * siffran att falla med notiserna, men inbjudningarna står kvar tills de
+ * accepterats eller avvisats på `/invitations`. Att låta tidsstämpeln tysta
+ * dem hade varit att gömma en väntande inbjudan bakom ett klick på en klocka.
+ *
  * Svaret är `back()` och ingenting annat — mönstret från issue 51 § Beslut 5.
  * Klienten gör sin partiella omladdning i samma svep och behöver ingen
  * kropp tillbaka.
