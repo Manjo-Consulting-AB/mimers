@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\ScheduleOccurrence;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
@@ -20,9 +21,10 @@ use Illuminate\Support\Carbon;
  * `id` exponeras (Beslut 5).
  *
  * `overdue` är INTE en kolumn utan en BERÄKNAD boolean: `status = 'open' AND
- * due_at < CURDATE()` (dokumentet § schedule_occurrence, 22a § Beslut 2). Ett
- * lagrat tillstånd som klockan ändrar kräver ett jobb som förr eller senare
- * missar en körning — därför beräknas det per rad vid läsning.
+ * due_at < idag` (dokumentet § schedule_occurrence, 22a § Beslut 2), där idag
+ * är ANVÄNDARENS datum och inte serverns (issue 135, se `today()`). Ett lagrat
+ * tillstånd som klockan ändrar kräver ett jobb som förr eller senare missar en
+ * körning — därför beräknas det per rad vid läsning.
  *
  * `visible_from` och `due_at` är DATE-kolumner och serialiseras med
  * `toDateString()` ("2027-05-05"), aldrig `toIso8601String()` — ett
@@ -41,7 +43,7 @@ class TodoEntryResource extends JsonResource
             'ulid' => $this->ulid,
             'due_at' => $this->due_at->toDateString(),
             'visible_from' => $this->visible_from->toDateString(),
-            'overdue' => $this->status === ScheduleOccurrence::STATUS_OPEN && $this->due_at->lessThan(Carbon::today()),
+            'overdue' => $this->status === ScheduleOccurrence::STATUS_OPEN && $this->due_at->lessThan($this->today($request)),
             'schedule' => [
                 'ulid' => $this->schedule->ulid,
                 'title' => $this->schedule->title,
@@ -55,5 +57,24 @@ class TodoEntryResource extends JsonResource
                 'name' => $this->schedule->item->container->name,
             ],
         ];
+    }
+
+    /**
+     * Användarens kalenderdatum, eller appens när ingen är inloggad.
+     *
+     * `overdue` är per definition "före ANVÄNDARENS idag" (issue 135): servern
+     * är i UTC, och mellan midnatt och klockan två svensk tid är det ännu i går
+     * där. Anropet går via `User::today()`, som bygger om datumet till appens
+     * tidszon så att jämförelsen mot DATE-kolumnen blir en datumjämförelse och
+     * inte en ögonblicksjämförelse.
+     *
+     * Utan användare — en resurs som löses upp utanför en autentiserad request
+     * — gäller appens tidszon. Det är samma svar som före issue 135.
+     */
+    private function today(Request $request): Carbon
+    {
+        $user = $request->user();
+
+        return $user instanceof User ? $user->today() : Carbon::today();
     }
 }

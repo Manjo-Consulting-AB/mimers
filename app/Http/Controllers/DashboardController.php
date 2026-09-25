@@ -144,7 +144,7 @@ class DashboardController extends Controller
      * **Containrarna är samma urval som containerlistan**, `Container::
      * scopeAccessibleBy()`, formulerat på ett ställe och använt här — en
      * mottagare av en itemgrant ska se sin containers månad och ingenting
-     * annat. Månaden räknas ur användarens tidszon (se `timezoneFor()`), och
+     * annat. Månaden räknas ur användarens tidszon (se `currentMonth()`), och
      * servern är den enda som vet vad "innevarande" betyder: klientens klocka
      * får aldrig flytta en månadsgräns.
      *
@@ -181,31 +181,16 @@ class DashboardController extends Controller
      * `Carbon::now($timezone)` och inte `today()`: det är ögonblicket i
      * användarens tid som avgör vilken månad hon är i, och en användare i
      * Europe/Stockholm är i oktober redan när servern i UTC ännu är i
-     * september. Se `timezoneFor()`.
+     * september.
+     *
+     * Tidszonen kommer ur `User::preferredTimezone()` och inte ur en privat
+     * kopia här (issue 135): regeln *användarens tidszon, annars kontots,
+     * annars appens* bodde tidigare på två ställen — här och i
+     * App\Support\Notification\QuietHours — och två kopior av samma regel är
+     * förr eller senare två svar på samma fråga.
      */
     private function currentMonth(User $user): string
     {
-        return Carbon::now($this->timezoneFor($user))->format('Y-m');
-    }
-
-    /**
-     * Användarens tidszon, med kontots som reserv och appens som sista
-     * utväg — samma fallande ordning som `User::preferredLocale()` har för
-     * språk och App\Support\Notification\QuietHours::timezoneFor() har för
-     * den tysta timmen. `user.timezone` är nullable och `account.timezone`
-     * är det inte.
-     */
-    private function timezoneFor(User $user): string
-    {
-        $timezone = $user->timezone;
-
-        if ($timezone === null && $user->accounts->isNotEmpty()) {
-            // first() är godtyckligt när användaren har flera konton — accepterat
-            // här, en gissning är bättre än UTC (samma resonemang som
-            // User::preferredLocale() och QuietHours::timezoneFor()).
-            $timezone = $user->accounts->first()->timezone;
-        }
-
-        return $timezone ?? config('app.timezone');
+        return Carbon::now($user->preferredTimezone())->format('Y-m');
     }
 }

@@ -10,7 +10,6 @@ use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
@@ -34,10 +33,12 @@ use Illuminate\Support\Facades\Gate;
  * **Ordningen och grupperingen räknas på servern** (Beslut 3). `due_at`
  * stigande med `ulid` stigande — samma deterministiska ordning som
  * `Api\TodoController::index()` — och raden hamnar i `overdue`, `today` eller
- * `upcoming` efter en jämförelse mot SERVERNS datum. Klienten får tre listor
- * och ritar dem i den ordning de kommer; den räknar aldrig en grupp själv.
- * Samma regel som `overdue` i 63b § Beslut 3: en klient med fel klocka ska
- * inte kunna flytta en uppgift till fel hög.
+ * `upcoming` efter en jämförelse mot ANVÄNDARENS datum, `User::today()`
+ * (issue 135). Klienten får tre listor och ritar dem i den ordning de kommer;
+ * den räknar aldrig en grupp själv. Samma regel som `overdue` i 63b § Beslut 3:
+ * en klient med fel klocka ska inte kunna flytta en uppgift till fel hög — och
+ * av samma skäl räknas dagen i användarens tidszon och inte i serverns, som
+ * mellan midnatt och klockan två svensk tid ännu är i går.
  *
  * **`/tasks` är paginerad, dashboarden är det inte** (issue 123). `page()`
  * nedan ger en sida om högst `PER_PAGE` rader med en markör över
@@ -173,7 +174,7 @@ class ListTodo
      * andra nyckeln.
      *
      * **Grupperingen räknas per rad, på den här sidans rader** — `due_at` mot
-     * serverns datum och ingenting annat. En sida som börjar mitt i en grupp
+     * användarens datum och ingenting annat. En sida som börjar mitt i en grupp
      * får därför gruppens rubrik en gång till, och en rad hamnar i samma grupp
      * vilken sida den än står på. Klienten räknar aldrig en grupp själv, och
      * servern minns ingen föregående sida: det finns inget att minnas, för
@@ -286,7 +287,7 @@ class ListTodo
     /**
      * Raderna ur förekomsterna, grupperade och ogrupperade.
      *
-     * Grupperingen räknas per rad mot serverns datum (Beslut 3). En sida kan
+     * Grupperingen räknas per rad mot användarens datum (Beslut 3). En sida kan
      * därför börja mitt i en grupp, och rubriken upprepas på nästa sida — den
      * följer av raderna på just den sidan och aldrig av en räknare som minns
      * föregående sida.
@@ -307,7 +308,7 @@ class ListTodo
             $occurrences->pluck('schedule.item.container.id')->unique()->values()->all(),
         );
 
-        $today = Carbon::today();
+        $today = $user->today();
         $accountUlids = $user->accounts->pluck('ulid')->all();
 
         $groups = [
@@ -381,8 +382,8 @@ class ListTodo
     }
 
     /**
-     * Radens grupp. Jämförelsen görs mot serverns datum — den enda klocka som
-     * får avgöra vad som är försenat (Beslut 3).
+     * Radens grupp. Jämförelsen görs mot användarens datum, `User::today()` —
+     * den enda klocka som får avgöra vad som är försenat (Beslut 3, issue 135).
      */
     private function group(CarbonInterface $dueAt, CarbonInterface $today): string
     {
