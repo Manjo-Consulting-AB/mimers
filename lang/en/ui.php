@@ -213,6 +213,18 @@ return [
         // the first time — the user knows which of the two she did, and the
         // page she lands on shows which mode she is in.
         'password-changed' => 'Your password has been changed. Your other sessions have been signed out.',
+
+        /*
+         * Issue 130. Two codes and not one, because the two halves of the
+         * exchange happen at different times and mean different things:
+         * `email-change-requested` is what the profile page says right after
+         * the form was sent (nothing has changed yet — the address is only
+         * changed when the link in the mail is opened), and `email-changed` is
+         * what the profile page says when that link has been opened.
+         */
+        'email-change-requested' => 'We have sent a confirmation link to the new address, and the old address has been told that a change was requested. Nothing changes until the link is opened.',
+        'email-changed' => 'Your email address has been changed and verified.',
+
         'profile-updated' => 'Your profile has been saved.',
         'account-updated' => 'The account details have been saved.',
 
@@ -587,7 +599,37 @@ return [
             'email' => 'Email',
             'email_verified' => 'The address is verified.',
             'email_unverified' => 'The address is not verified yet.',
-            'email_no_change' => 'The email address cannot be changed here.',
+
+            /*
+             * Issue 130 · the address can be changed. The form is its own
+             * component (resources/js/components/EmailChangeForm.vue) and
+             * posts to its own route, so the strings live under their own key
+             * and not among the profile fields above. `intro` is the promise
+             * the flow has to keep: the address is NOT changed when the form
+             * is sent — it is changed when the link in the mail is opened.
+             */
+            'email_change' => [
+                'heading' => 'Change the email address',
+                'intro' => 'We send a link to the new address. Open it to move the account there — nothing changes until you do. The old address is told that a change was requested.',
+
+                'new_label' => 'New email address',
+                'current_label' => 'Current password',
+
+                'code_note' => 'Two-factor authentication is on. The change needs a code from your authenticator app, or one of your recovery codes.',
+
+                'submit' => 'Send the confirmation link',
+
+                // Ett konto som bara använt magic link har inget lösenord att
+                // ange, och kan därför inte flytta kontot. Samma mening som
+                // serverns valideringsfel bär — se App\Http\Requests\Settings\
+                // RequestEmailChangeRequest::messages().
+                'password_first' => 'You need a password before you can change your address.',
+                'password_first_link' => 'Set one under Security',
+
+                // Serverns valideringsfel vid bekräftelsen: adressen togs av
+                // någon annan under timmen mellan begäran och länken.
+                'taken' => 'That address is already in use. Try another one.',
+            ],
 
             'locale' => 'Language',
             'locale_follow' => 'Follow the account language (:account)',

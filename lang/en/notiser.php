@@ -92,6 +92,32 @@ return [
         'not_you' => 'If this was not you, someone else has access to your account. Log in again, change the password, and look through your recent logins under Settings → Security.',
     ],
 
+    /*
+     * Adressbytet, se [[M20 Kontot]] § 130. Två mejl och två helt olika
+     * uppdrag, så de delar bara namnutrymme och inga nycklar.
+     *
+     * `confirm` går till den NYA adressen och bär länken — den enda plats
+     * klartext-tokenet finns. `requested` går till den GAMLA adressen och har
+     * med flit ingen länk och ingen ny adress: den som läser den brevlådan
+     * behöver inte veta vart kontot är på väg, bara att något är på väg att
+     * hända. Båda är transaktionella utskick i samma form som
+     * `password_changed` ovan och står därför här och inte bland typerna.
+     */
+    'email_change' => [
+        'confirm' => [
+            'subject' => 'Confirm your new email address',
+            'line' => 'Click the link below to start using this address for your Mimers account. Until you do, nothing changes.',
+            'action' => 'Confirm the address',
+            'expires' => 'The link stops working in :minutes minutes and can only be used once.',
+            'not_you' => 'If you did not ask for this, you can ignore this email. The link only works for the account that made the request.',
+        ],
+        'requested' => [
+            'subject' => 'An email change has been requested',
+            'line' => 'Someone asked to change the email address of your Mimers account. The new address has been sent a link, and the change only happens if that link is opened.',
+            'not_you' => 'If this was not you, someone else has access to your account. Log in, change the password, and look through your recent logins under Settings → Security.',
+        ],
+    ],
+
     'invitation' => [
         'subject' => 'You have been invited to :container',
         'line' => 'You have been invited to share ":container".',

@@ -38,6 +38,7 @@ use App\Http\Controllers\ScheduleDependencyController;
 use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Settings\AccountSettingsController;
+use App\Http\Controllers\Settings\EmailChangeController;
 use App\Http\Controllers\Settings\NotificationSettingsController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PlanController;
@@ -370,6 +371,39 @@ Route::middleware('auth')->group(function () {
 
     Route::patch('/settings/profile', [ProfileController::class, 'update'])
         ->name('settings.profile.update');
+
+    /*
+     * Issue 130 · E-postadressen går att byta, se
+     * App\Http\Controllers\Settings\EmailChangeController och
+     * [[M20 Kontot]] § 130.
+     *
+     * **Två rutter, för adressen byts aldrig i samma steg som den begärs.**
+     * POST skickar mejlen och lämnar `user.email` orörd; GET är länken i
+     * mejlet till den NYA adressen och den enda väg som skriver kolumnen.
+     *
+     * **POST ligger bakom inloggningens takgräns**, av samma skäl som
+     * lösenordsbytet: kroppen prövar ett lösenord och en engångskod, alltså
+     * inloggningens två gissningsbara värden, och ska mötas av samma tak.
+     * `BindsPasswordChangeThrottleToUser` och inte `throttle:login` rakt av:
+     * begränsaren bygger sin kontonyckel av `$request->string('email')`, och
+     * kroppen bär den nya adressen under namnet `new_email` — se
+     * App\Http\Requests\Settings\RequestEmailChangeRequest. Middlewaret
+     * sätter `email` till användarens EGEN adress ur sessionen, så hinken är
+     * kontots och kan inte bytas genom att byta måladdress.
+     *
+     * **GET har ingen takgräns**, som magic link-inlösen: tokenet är 64
+     * tecken ur ett 62-teckensalfabet och går inte att gissa, och en
+     * begränsare hade fällt den som klickar en gammal länk två gånger.
+     *
+     * Namnen följer `settings.profile.*`: sidan, sedan handlingen, sedan
+     * undantaget — samma form som `settings.profile.update`.
+     */
+    Route::post('/settings/profile/email', [EmailChangeController::class, 'store'])
+        ->middleware(BindsPasswordChangeThrottleToUser::class)
+        ->name('settings.profile.email.request');
+
+    Route::get('/settings/profile/email/{token}', [EmailChangeController::class, 'confirm'])
+        ->name('settings.profile.email.confirm');
 
     Route::get('/settings/accounts', [AccountSettingsController::class, 'index'])
         ->name('settings.accounts');

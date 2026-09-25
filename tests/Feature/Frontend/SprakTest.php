@@ -574,6 +574,42 @@ it('hämtar lösenordsformulärets strängar ur ui.php', function () {
 });
 
 /*
+ * E-postformuläret, se [[M20 Kontot]] § 130. Samma form som proven ovanför:
+ * nycklarna läses ur källkoden i stället för att räknas upp här, så en mening
+ * som läggs till i komponenten och glöms i katalogen faller. En av nycklarna
+ * är en annans och ska förbli det: kodfältets etikett är inloggningens
+ * (`auth.code.label` — samma etikett, samma sak att skriva in).
+ *
+ * `password_first` är både en text i komponenten och serverns
+ * valideringsfel (App\Http\Requests\Settings\RequestEmailChangeRequest::
+ * messages()) — samma nyckel på båda ställena, så de två inte kan glida
+ * isär. Flashen prövas också: `flash.email-change-requested` och
+ * `flash.email-changed` sätts av EmailChangeController, och en kod utan
+ * mening syns i vyn som den råa nyckeln.
+ */
+it('hämtar e-postformulärets strängar ur ui.php', function () {
+    $vy = File::get(resource_path('js/components/EmailChangeForm.vue'));
+
+    // Fönstret `(?<![\w$.])`: form.reset('new_email') innehåller sekvensen
+    // `t('...`, och utan det hade fältnamn lästs som översättningsnycklar.
+    preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $vy, $träffar);
+
+    expect($träffar[1])->toContain('settings.profile.email_change.heading')
+        ->and($träffar[1])->toContain('settings.profile.email_change.password_first')
+        // Den lånade nyckeln, utskriven: byter någon den mot en egen kopia i
+        // ui.php faller raden, och det är meningen.
+        ->and($träffar[1])->toContain('auth.code.label');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    foreach (['ui.flash.email-change-requested', 'ui.flash.email-changed'] as $nyckel) {
+        expect(Lang::get($nyckel, [], 'en'))->not->toBe($nyckel);
+    }
+});
+
+/*
  * [[ADR-0033 Produktens omfång]] § Beslut: containern är ett sammanhang för
  * allt man äger, använder eller arbetar med — inte ett fordon eller ett
  * fritidshus. Det generiska svaret issue 81 lämnade efter sig är

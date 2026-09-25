@@ -94,6 +94,23 @@ class SecurityLog extends Model
     public const ACTION_PASSWORD_CHANGED = 'auth.password_changed';
 
     /**
+     * Ett adressbyte begärdes (issue 130).
+     *
+     * **Raden skrivs när begäran tas emot, inte när bytet sker.** Ett
+     * obekräftat byte är den händelse som är värd att upptäcka: ett kapat
+     * konto som försöker flytta adressen syns här, innan den nya adressen
+     * hunnit bekräftas. Ingen adress finns i `meta`, varken den gamla eller
+     * den nya — raden ska inte bli en kopia av det den beskriver.
+     */
+    public const ACTION_EMAIL_CHANGE_REQUESTED = 'auth.email_change_requested';
+
+    /**
+     * Ett adressbyte genomfördes (issue 130). `meta` är tom — ingen adress
+     * finns i raden, se konstanten ovan.
+     */
+    public const ACTION_EMAIL_CHANGED = 'auth.email_changed';
+
+    /**
      * En inbjudan skickades.
      */
     public const ACTION_INVITATION_CREATED = 'invitation.created';

@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
+import EmailChangeForm from '../../components/EmailChangeForm.vue';
 import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
@@ -20,10 +21,13 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * som servern skickar, och när den är null — användaren är medlem i flera
  * konton och värdet går inte att avgöra — står valet utan parentes.
  *
- * Ingår inte: e-postadressen. Den visas med sin verifieringsstatus och utan
- * inmatningsfält (Beslut 3) — ett byte kräver ett flöde som ingen issue i
- * backloggen beskriver, och en gråmarkerad inmatning hade sett ut som en yta
- * som inte fungerar.
+ * E-postadressen har ett eget formulär sedan issue 130. Adressen visas med
+ * sin verifieringsstatus i namnformuläret, och bytet begärs i
+ * resources/js/components/EmailChangeForm.vue, som postar till en EGEN rutt
+ * (`POST /settings/profile/email`) — adressen byts aldrig i samma steg som
+ * den begärs, och den här sidans PATCH tar fortfarande inte emot `email`.
+ * Vyn skickar bara vidare vad servern redan bestämt: `hasPassword` och
+ * `totpEnabled` är kontots tillstånd, och formuläret ritar fälten efter dem.
  *
  * Tidszonslistan kommer som prop från kontrollern, samma lista som validerar
  * (`DateTimeZone::listIdentifiers()`). Ingen datafil i resources/js/: två
@@ -40,6 +44,13 @@ const props = defineProps({
     userLocale: { type: String, default: null },
     userTimezone: { type: String, default: null },
     userUnitSystem: { type: String, default: null },
+
+    // E-postformulärets två lägen, se issue 130: ett konto utan lösenord kan
+    // inte begära ett byte, och ett konto med bekräftad tvåfaktor behöver
+    // koden. Samma proppar och samma namn som säkerhetssidan ger
+    // lösenordsformuläret.
+    hasPassword: { type: Boolean, required: true },
+    totpEnabled: { type: Boolean, required: true },
 
     timezones: { type: Array, required: true },
     accountDefaults: { type: Object, default: null },
@@ -107,15 +118,16 @@ function submit() {
                 >
             </FormField>
 
-            <!-- E-postadressen: visad, inte redigerbar (Beslut 3). Ingen
-                 FormField — det finns inget fält att sätta ett fel på. -->
+            <!-- E-postadressen: visad här, bytt i sitt eget formulär (issue
+                 130). Ingen FormField — den här PATCH:en tar inte emot
+                 fältet, och ett fält här hade sett ut som att det bytte
+                 adressen i samma steg. -->
             <div class="flex flex-col gap-1">
                 <p class="text-sm font-medium text-slate-800">{{ t('settings.profile.email') }}</p>
                 <p>{{ props.email }}</p>
                 <p class="text-sm text-slate-600">
                     {{ props.emailVerifiedAt ? t('settings.profile.email_verified') : t('settings.profile.email_unverified') }}
                 </p>
-                <p class="text-sm text-slate-600">{{ t('settings.profile.email_no_change') }}</p>
             </div>
 
             <FormField
@@ -184,5 +196,7 @@ function submit() {
                 {{ form.processing ? t('common.pending.default') : t('settings.profile.submit') }}
             </button>
         </form>
+
+        <EmailChangeForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
     </SettingsLayout>
 </template>
