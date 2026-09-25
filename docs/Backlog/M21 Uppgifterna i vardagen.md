@@ -2,7 +2,7 @@
 
 Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet — läs dem en gång, inte per issue.
 
-Tillagd 2026-09-25, efter Tonys test på staging. Ett dagligt schema bockades av, morgondagens förekomst dök upp i listan, bockades också av — och låg sedan kvar på *Tomorrow* medan historiken fick en rad till. Varje tryck gav en ny förekomst med samma förfallodag. Det är en bugg i hur nästa förfall räknas (132). De två andra issuerna kom ur samma genomgång: raden ska visa redan på knappen om uppgiften är försenad eller ligger framåt i tiden (133), och användaren ska kunna välja bort de framtida (134).
+Tillagd 2026-09-25, efter Tonys test på staging. Ett dagligt schema bockades av, morgondagens förekomst dök upp i listan, bockades också av — och låg sedan kvar på *Tomorrow* medan historiken fick en rad till. Varje tryck gav en ny förekomst med samma förfallodag. Det är en bugg i hur nästa förfall räknas (132). De andra kom ur samma genomgång: raden ska visa redan på knappen om uppgiften är försenad eller ligger framåt i tiden (133), användaren ska kunna välja bort de framtida (134), och *idag* ska vara användarens och inte serverns (135).
 
 **Orsaken till buggen.** `OpenNextOccurrence` räknar nästa förfall utan att veta vilken förekomst som just stängdes. `interval` räknar från `completed_at`, så en förekomst som bockas av *innan* den förfaller får samma förfallodag igen: morgondagens dagliga uppgift, avbockad idag, blir idag plus en dag — imorgon. `fixed` tar första datumet i serien som är `>= idag`, så en förekomst som bockas av på sin egen förfallodag får **idag** igen, och en som bockas av i förväg får sin egen dag igen. Befintliga tester bockar bara av förekomster som redan förfallit, därför syntes det inte.
 
@@ -39,4 +39,15 @@ Växeln står i rubrikraden på `/tasks` och på panelen, och är en `PUT` till 
 
 **Läs:** [[Konton och åtkomst]] § user, `app/Actions/Schedule/ListTodo.php` (docblocken), `app/Models/ScheduleOccurrence.php` (`scopeTodoFor`), `app/Http/Controllers/DashboardController.php`, `database/migrations/2026_09_24_030000_add_notifications_read_at_to_user_table.php` (förlagan för kolumnen)
 **Klart när:** med flaggan på visar `/tasks` och panelen samma rader som i dag; med flaggan av visas inga rader med `due_at` efter idag, på någon av sidorna; flaggan sparas på användaren och gäller i en ny session; växeln kräver inloggning; pagineringen på `/tasks` fungerar med flaggan av; brickorna räknar samma sak med flaggan av som på; migreringen följer konventionerna och går på MariaDB; [[Konton och åtkomst]] § user har kolumnen; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
+**Beror på:** -
+
+### 135. Idag är användarens idag
+Todo-listan räknar *idag* som serverns datum, alltså UTC. Mellan midnatt och klockan två svensk tid är det fortfarande gårdagen för servern. En uppgift som förfaller idag ligger då under *Upcoming*, en från igår är inte försenad, och det som blir synligt idag syns inte. Tidszonen finns redan: `user.timezone`, med `account.timezone` som reserv ([[Konton och åtkomst]] § user). Den används bara inte här.
+
+Regeln *användarens tidszon, annars kontots, annars appens* finns i dag som två privata kopior, i `DashboardController` och i `QuietHours`. Den flyttas till `User::preferredTimezone()`, bredvid `preferredLocale()`. `User::today()` ger användarens kalenderdatum. **Datumet jämförs som datum, inte som ögonblick:** `due_at` och `visible_from` är `DATE`, och midnatt i Stockholm är ett annat ögonblick än midnatt i UTC. Jämförelsen görs därför med `toDateString()` eller mot ett datum som byggts om i appens tidszon.
+
+Det här gäller todo-urvalet, grupperingen och `overdue` på förekomsterna. Nästa förfall i `OpenNextOccurrence` (132), notisjobben, ICS-flödet, itemträdets förfallomarkering och utlåningen räknar vidare i serverns datum. De får en egen issue om det behövs.
+
+**Läs:** [[Konton och åtkomst]] § user, `app/Http/Controllers/DashboardController.php` (`timezoneFor()`), `app/Models/ScheduleOccurrence.php` (`scopeTodoFor`), `app/Actions/Schedule/ListTodo.php` (docblocken)
+**Klart när:** `User::preferredTimezone()` ger användarens tidszon, annars kontots, annars appens; `User::today()` ger användarens kalenderdatum också när UTC-datumet är ett annat; klockan 01:30 svensk tid ligger en förekomst som förfaller samma dag under *today* på `/tasks` och i `/api/todo`; en förekomst från dagen innan är `overdue` i båda förekomstformerna; en förekomst med `visible_from` samma dag syns; en användare i `America/New_York` får sitt eget datum; mitt på dagen är utfallet detsamma som i dag; dashboardens månad räknas som förut; hela testsviten är grön.
 **Beror på:** -
