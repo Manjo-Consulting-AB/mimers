@@ -85,6 +85,21 @@ Index: `(user_id, used_at)`.
 
 Ingen `deleted_at`: samma skäl som `magic_link_token`. En omgenerering raderar kontots hela raduppsättning och skriver en ny.
 
+## dismissed_tip
+
+Ett tips användaren kryssat bort i informationsytan, en rad per tips och person. Se [[M19 Dashboarden]] § 128 och [[ADR-0039 Containerns översikt]] § Konsekvenser.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: raden syns aldrig i API:et, och ingen rutt, resurs eller vy identifierar en enskild rad |
+| user_id | FK → user, RESTRICT | **Tillståndet hör till personen och inte till webbläsaren** — ett tips som kryssats bort är borta i nästa webbläsare också. `RESTRICT` och inte `CASCADE`: tabellen hör till personen, och personraderingen finns inte än (se [[Registerförteckning]]). En kaskad hade inte rört något i dag men dolt att raden är personens |
+| tip_key | VARCHAR(60) | Nyckeln på tipset, t.ex. `containers`. **Nyckeln är också strängens adress**: rubriken och brödtexten ligger i `lang/en/ui.php` under `tips.{nyckel}.title` och `tips.{nyckel}.body`. Vilka nycklar som finns och i vilken ordning de visas står i `App\Support\Tips::KEYS` — ingen tabell håller tipsen |
+| created_at, updated_at | | |
+
+Uniknyckeln `(user_id, tip_key)` är det som gör doldmarkeringen till ett par: att kryssa samma tips två gånger ger ingen andra rad. Den är också hela skillnaden mot en flagga för ytan — **tillståndet är per tips**, så ett tips som läggs till senare har ingen rad och visas även för den som dolt allt som fanns förut.
+
+Ingen `deleted_at`: ett dolt tips är inget användarskapat innehåll att återställa, ingen papperskorg listar typen, och en mjukraderad rad hade legat kvar i det unika indexet och blockerat en ny rad för samma nyckel.
+
 ## container
 
 Det ägda objektet. Se [[Översikt]] för vad ordet betyder.

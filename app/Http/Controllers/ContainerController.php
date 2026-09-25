@@ -16,6 +16,7 @@ use App\Models\ScheduleOccurrence;
 use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
+use App\Support\Tips;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -155,6 +156,13 @@ class ContainerController extends Controller
      * Grinden är `view` på CONTAINERN — samma grind som itemlistan ställde när
      * den låg här, så en `read`-mottagare når översikten precis som förut, och
      * en främling får 403.
+     *
+     * **Informationsytan kom med issue 128 · [[ADR-0039 Containerns
+     * översikt]] § Konsekvenser**, som sin egen propp: `tips` bär samma lista
+     * som dashboarden bär, ur samma App\Support\Tips — komponenten är den
+     * samma (`InfoPanel.vue`), och två sidor som byggde var sin lista hade
+     * kunnat visa olika första tips. Den enda skillnaden mellan sidorna är
+     * vilken adress krysset postar tillbaka till, och det äger `back()`.
      */
     public function show(
         Request $request,
@@ -186,6 +194,9 @@ class ContainerController extends Controller
                 'items' => $listItems->handle($user, $container)->count(),
                 'todos' => $todos,
             ],
+            // Tipsen användaren inte dolt, i Tips ordning — samma propp och
+            // samma lista som dashboarden bär (issue 128).
+            'tips' => app(Tips::class)->visibleFor($user),
         ]);
     }
 

@@ -6,6 +6,7 @@ import CostDonut from '../components/CostDonut.vue';
 import DashboardActivityPanel from '../components/DashboardActivityPanel.vue';
 import DashboardStats from '../components/DashboardStats.vue';
 import DashboardTasksPanel from '../components/DashboardTasksPanel.vue';
+import InfoPanel from '../components/InfoPanel.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -49,6 +50,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * App\Actions\Audit\ListAuditEvents::forUser() och
  * App\Actions\Audit\PresentAuditEvents. Panelen filtrerar ingenting själv och
  * ritar heller ingen *Visa alla* — sidan med alla händelser finns inte.
+ *
+ * **Informationsytan kom med issue 128**, som sin egen propp: `tips` bär
+ * nycklarna på de tips användaren inte kryssat bort, i App\Support\Tips
+ * ordning. Panelen är resources/js/components/InfoPanel.vue, och den står
+ * också på containerns översikt — samma komponent, samma propp, samma lista
+ * ([[ADR-0039 Containerns översikt]] § Konsekvenser). Servern skickar
+ * nycklar och aldrig färdiga meningar; texten slås upp ur `lang/` i
+ * komponenten. Den ritas överst, där mockupens exempelbanner stod, och bara
+ * när listan har något kvar.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -63,6 +73,8 @@ const props = defineProps({
     costs: { type: Object, required: true },
     /* Högst fem rader ur händelseloggen, nyast först. */
     events: { type: Array, required: true },
+    /* Nycklarna på de tips användaren inte dolt, i serverns ordning. */
+    tips: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -73,6 +85,10 @@ const { t } = useTranslations();
         <Head :title="t('dashboard.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('dashboard.heading') }}</h1>
+
+        <!-- Panelen äger sin egen marginal: när alla tips är dolda ritas
+             ingenting alls, och en ram runt den hade lämnat kvar sin luft. -->
+        <InfoPanel :tips="props.tips" />
 
         <div class="mt-8">
             <DashboardStats :stats="props.stats" :costs="props.costs.totals" />

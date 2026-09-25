@@ -20,6 +20,7 @@ use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTrashController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DismissedTipController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\FavoriteController;
@@ -84,6 +85,29 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::get('/tasks', [TodoController::class, 'index'])
     ->middleware('auth')
     ->name('tasks');
+
+/*
+ * Issue 128 · Informationsytan, se App\Http\Controllers\
+ * DismissedTipController och [[M19 Dashboarden]] § 128.
+ *
+ * **En skrivning och ingen sida.** Krysset i informationsytan står på
+ * dashboarden och på containerns översikt, och ytan är densamma på båda — den
+ * ritas av resources/js/components/InfoPanel.vue ur `tips`-proppen som båda
+ * sidorna bär. Rutten ligger därför utanför containerfamiljen och tar nyckeln
+ * som ett segment: `/tips/{key}/dismiss` är samma skrivning vilken sida
+ * användaren än kryssade på, och `back()` svarar på den frågan.
+ *
+ * **Nyckeln binds inte till en modell.** Det finns ingen tipsrad att hämta —
+ * listan bor i App\Support\Tips (issuens krav 3) — så en okänd nyckel är
+ * ingenting routen kan lösa upp, och 404:an kommer ur kontrollern efter
+ * `Tips::knows()`. Ingen ruttmodellbindning, ingen FormRequest.
+ *
+ * Bakom `auth` som resten av webben: en utloggad besökare skickas till
+ * /login och når aldrig skrivningen.
+ */
+Route::post('/tips/{key}/dismiss', [DismissedTipController::class, 'store'])
+    ->middleware('auth')
+    ->name('tips.dismiss');
 
 Route::get('/', fn () => Inertia::render('Welcome'))->name('welcome');
 

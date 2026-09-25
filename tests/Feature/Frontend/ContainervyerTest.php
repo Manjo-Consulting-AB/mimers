@@ -12,6 +12,7 @@ use App\Models\ScheduleOccurrence;
 use App\Models\UsageCounter;
 use App\Models\User;
 use App\Support\Frontend\ApiErrorTranslator;
+use App\Support\Tips;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
@@ -950,6 +951,34 @@ it('svarar med översikten på containerns egen URL', function () {
     foreach (['kind', 'description', 'items', 'todos'] as $nyckel) {
         expect(trim($en['container']['overview'][$nyckel]))->not->toBe('', "container.overview.{$nyckel} är tom");
     }
+});
+
+/*
+ * Klart när: informationsytan står på containerns översikt och inte bara på
+ * dashboarden (issue 128 · [[ADR-0039 Containerns översikt]] § Konsekvenser:
+ * *"Informationsrutan är dashboardens. Samma komponent, samma fyra krav."*).
+ *
+ * Provet är sidans kontrakt: proppen `tips` FYLLS här, och den ritas av
+ * `InfoPanel` — samma komponent som dashboarden ritar. En översikt som bara
+ * ärvde layouten hade gett en tom yta utan att något annat prov föll.
+ * Ordningen och filtreringen prövas i InformationsytaTest; här prövas bara
+ * att sidan bär dem.
+ */
+it('bär informationsytans tips på containerns översikt', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Overview')
+            ->where('tips', Tips::KEYS)
+        );
+
+    expect(File::get(resource_path('js/pages/Containers/Overview.vue')))
+        ->toContain('import InfoPanel from')
+        ->toContain('<InfoPanel :tips="props.tips"');
 });
 
 /*

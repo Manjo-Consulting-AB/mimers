@@ -141,6 +141,26 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     }
 
     /**
+     * Tipsen personen kryssat bort i informationsytan — en rad per nyckel,
+     * se [[M19 Dashboarden]] § 128 och App\Support\Tips.
+     *
+     * **Per användare och per nyckel, och därför en tabell och ingen flagga.**
+     * Det dolda tillståndet följer personen mellan webbläsare (issuens krav 1)
+     * och gäller ett tips i taget (krav 2): ett tips som läggs till senare har
+     * ingen rad här och visas därför även för den som dolt allt som fanns
+     * förut. Relationen bär ingen åtkomst och ingen regel — vilka nycklar som
+     * finns står i App\Support\Tips, och
+     * App\Http\Controllers\DismissedTipController prövar den innan något
+     * skrivs hit.
+     *
+     * @return HasMany<DismissedTip, $this>
+     */
+    public function dismissedTips(): HasMany
+    {
+        return $this->hasMany(DismissedTip::class);
+    }
+
+    /**
      * Se [[ADR-0013 Språk och i18n]] § Konsekvenser: "användarens locale
      * åsidosätter kontots." Är `locale` satt på användaren används den
      * rakt av.

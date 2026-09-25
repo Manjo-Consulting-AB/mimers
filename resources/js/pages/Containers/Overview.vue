@@ -1,6 +1,7 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import InfoPanel from '../../components/InfoPanel.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -47,13 +48,25 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * ingen fråga själv. Det är därför bildens fyra rutor är två här: uppgifter
  * och underhåll är EN, och kostnaden har ingen källa i den här kontrollern.
  *
+ * **Informationsytan kom med issue 128**, som sin egen propp: `tips` bär
+ * samma lista som dashboarden bär, ur samma App\Support\Tips. Komponenten är
+ * den samma — `InfoPanel.vue` ser identisk ut på båda ytorna, och det är
+ * avsiktligt: [[ADR-0039 Containerns översikt]] § Konsekvenser säger att
+ * informationsrutan är EN ruta, och en andra upplaga här hade kunnat visa
+ * ett annat första tips. Texten kommer ur `tips.*` i `lang/`, alltså samma
+ * nycklar som på dashboarden och inte `container.overview.*`: tipsen handlar
+ * inte om containern man står i.
+ *
  * Ingen sträng i JavaScript (issue 52 · [[ADR-0013 Språk och i18n]]): varje
- * text kommer ur `t()` med en nyckel under `container.overview.*`.
+ * text kommer ur `t()` med en nyckel under `container.overview.*` eller
+ * `tips.*`.
  */
 const props = defineProps({
     container: { type: Object, required: true },
     /* `{ items, todos }` — antalet items respektive öppna uppgifter inom omfånget. */
     counts: { type: Object, required: true },
+    /* Nycklarna på de tips användaren inte dolt, i serverns ordning. */
+    tips: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
@@ -64,6 +77,10 @@ const { t } = useTranslations();
         <Head :title="container.name" />
 
         <h1 class="text-2xl font-semibold">{{ container.name }}</h1>
+
+        <!-- Panelen äger sin egen marginal: när alla tips är dolda ritas
+             ingenting alls, och en ram runt den hade lämnat kvar sin luft. -->
+        <InfoPanel :tips="props.tips" />
 
         <dl class="mt-2 flex flex-col gap-1 text-slate-700">
             <div v-if="container.kind" class="flex flex-wrap gap-x-2">

@@ -512,6 +512,11 @@ it('hämtar dashboardens strängar ur ui.php', function () {
         'js/components/ContainerCard.vue',
         'js/components/CostDonut.vue',
         'js/components/DashboardActivityPanel.vue',
+        // Informationsytan (issue 128) står på dashboarden och på containerns
+        // översikt. Dess rubrik och brödtext kommer ur `tips.{nyckel}.*` och
+        // är dynamiska — de prövas nyckel för nyckel i InformationsytaTest —
+        // men panelens egna tre ord står i filen och fångas här.
+        'js/components/InfoPanel.vue',
     ] as $fil) {
         preg_match_all("/t\\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
 
