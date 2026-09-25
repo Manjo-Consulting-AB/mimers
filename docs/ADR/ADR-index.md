@@ -1,6 +1,6 @@
 # ADR-index
 
-Fyrtiotvå beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Fyrtiofyra beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -49,6 +49,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0041 Itemets vy]] | Itemet bor i containern, strukturen har flera vägar till samma item, anteckningen är itemets egen text | [[Items och organisation]], [[Filer och lagring]] |
 | [[ADR-0042 Designsystemet]] | Tokens med roller före komponenter före sidor, designbilderna i `docs/Design/` | Allt |
 | [[ADR-0043 Tre loggar]] | Händelselogg, säkerhetslogg och anonym mätning med var sin livslängd, plus en rättslig spärr enligt DSA | [[Konton och åtkomst]], [[Registerförteckning]] |
+| [[ADR-0044 Användarens dag]] | En dag som användaren ser eller som sparas åt henne räknas i hennes tidszon; nästa förfall i den avbockandes; frontenden får dagen från servern | [[Scheman och uppgifter]], [[Konton och åtkomst]] |
 
 ## Om att ändra ett beslut
 

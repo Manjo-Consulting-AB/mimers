@@ -42,3 +42,7 @@ Att inte generera serier i förväg slipper frågan om hur långt in i framtiden
 **Task som flagga på item, en timer per item.** Ursprungsförslaget. Valdes bort av skälen ovan.
 
 **Egen task-entitet skild från item.** Valdes bort — uppgiften hör ihop med saken, och kopplingen item → schema uttrycker det utan en tredje entitet.
+
+## Uppföljning 2026-09-25 — vilken dag
+
+`overdue` härleds fortfarande och lagras aldrig. Men *idag* i formeln ovan är inte längre serverns `CURDATE()`: det är användarens kalenderdag. Se [[ADR-0044 Användarens dag]].
