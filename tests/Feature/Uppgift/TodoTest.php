@@ -279,6 +279,37 @@ it('förfallna uppgifter kommer med och står först', function () {
     expect($response->json('data.1.overdue'))->toBeFalse();
 });
 
+/*
+ * Klart när: en post som förfaller EFTER användarens dag bär `upcoming`, och
+ * en som förfaller i dag bär varken det eller `overdue`.
+ *
+ * `upcoming` är `overdue`s spegelbild (issue 133): samma `status = 'open'`,
+ * samma `today()` ur användarens dag, och bara riktningen på jämförelsen
+ * skiljer dem. Klockan är fryst till 2026-09-02 i filens `beforeEach`, så
+ * "i dag" är ett fast tal och inte den dag sviten råkar köras — samma skäl
+ * som proven för `overdue` ovan.
+ */
+it('upcoming härleds för en förekomst som förfaller efter användarens dag', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create(['name' => 'Bårösund']);
+
+    [, , $idag] = todoUppgift($container, $user, $account, 'I dag', '2026-09-02');
+
+    // Framförhållning 14 dagar: visible_from blir 2026-08-27, alltså synlig
+    // redan i dag. Utan den ligger raden utanför urvalet och prövar ingenting.
+    [, , $framtida] = todoUppgift($container, $user, $account, 'Framtida', '2026-09-10', 14);
+
+    $response = getJson('/api/todo', $headers);
+
+    $response->assertOk();
+    expect($response->json('data.0.ulid'))->toBe($idag->ulid)
+        ->and($response->json('data.0.overdue'))->toBeFalse()
+        ->and($response->json('data.0.upcoming'))->toBeFalse()
+        ->and($response->json('data.1.ulid'))->toBe($framtida->ulid)
+        ->and($response->json('data.1.overdue'))->toBeFalse()
+        ->and($response->json('data.1.upcoming'))->toBeTrue();
+});
+
 it('svaret bär schema, item och container', function () {
     [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create(['name' => 'Bårösund']);
@@ -300,6 +331,7 @@ it('svaret bär schema, item och container', function () {
         'due_at' => '2026-09-02',
         'visible_from' => '2026-09-02',
         'overdue' => false,
+        'upcoming' => false,
         'schedule' => [
             'ulid' => $schedule->ulid,
             'title' => 'Byt impeller',

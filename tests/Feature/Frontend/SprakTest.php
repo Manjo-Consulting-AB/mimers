@@ -538,6 +538,40 @@ it('hämtar dashboardens strängar ur ui.php', function () {
 });
 
 /*
+ * Avbockningsknappens prick, se issue 133 och
+ * resources/js/components/TodoRow.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här, så en mening som byter namn i komponenten följer med
+ * utan att provet skrivs om. Det betyder något särskilt för just den här
+ * pricken, för `sr-only`-texten är den ENDA bäraren av tillståndet för en
+ * skärmläsare: `translate()` skriver nyckeln själv när uppslaget misslyckas,
+ * så en glömd nyckel hörs som `todo.group.overdue` i stället för *Overdue*.
+ *
+ * **De två nycklarna är grupprubrikernas egna och ska förbli det** — samma ord
+ * om samma sak, och en egen kopia i ui.php hade varit den andra sanningen om
+ * vad gruppen heter. Byter någon mot en kopia faller raden, och det är
+ * meningen. Värdena prövas också, för *Overdue* och *Upcoming* är orden
+ * issuen namnger.
+ */
+it('hämtar prickens strängar ur ui.php', function () {
+    $rad = File::get(resource_path('js/components/TodoRow.vue'));
+
+    // Fönstret `(?<![\w$.])` är det som skiljer ett uppslag från ett anrop,
+    // samma som i proven för lösenords- och e-postformuläret.
+    preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $rad, $träffar);
+
+    expect($träffar[1])->toContain('todo.group.overdue')
+        ->and($träffar[1])->toContain('todo.group.upcoming')
+        ->and(Lang::get('ui.todo.group.overdue', [], 'en'))->toBe('Overdue')
+        ->and(Lang::get('ui.todo.group.upcoming', [], 'en'))->toBe('Upcoming');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+});
+
+/*
  * Lösenordsformuläret, se issue 129 och
  * resources/js/components/PasswordForm.vue.
  *

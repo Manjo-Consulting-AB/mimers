@@ -290,6 +290,39 @@ it('visar de fem första raderna ur samma urval och ordning som /tasks', functio
 });
 
 /*
+ * Klart när: raden på dashboarden bär samma tillstånd som raden på `/tasks` —
+ * `overdue` och `upcoming` — så att pricken (issue 133) blir densamma på båda
+ * ytorna.
+ *
+ * Panelen ritar `TodoRow` och inte en kopia (provet strax nedanför), så det
+ * som skiljer ytorna åt är bara vilka rader de får. Fälten kommer ur samma
+ * `TodoEntryResource`; en panel som byggde sin egen rad hade kunnat visa rätt
+ * text och fel prick.
+ */
+it('bär overdue och upcoming på panelens rader som på /tasks', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = panelvyKontext();
+
+    panelvyUppgift($item, panelvyDatum(-5), 'Försenad');
+    panelvyUppgift($item, panelvyDatum(0), 'I dag');
+    panelvyUppgift($item, panelvyDatum(10), 'Framtida');
+
+    $panel = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $lista = actingAs($anvandare)->get('/tasks')->assertOk();
+
+    $tillstand = fn (array $rader): array => array_map(
+        fn (array $rad): array => [$rad['overdue'], $rad['upcoming']],
+        $rader,
+    );
+
+    expect($tillstand(panelvyRader($panel)))->toBe([[true, false], [false, false], [false, true]])
+        // Samma rader i samma ordning, alltså samma svar på båda ytorna.
+        ->and($tillstand(panelvyTodoRader($lista)))->toBe($tillstand(panelvyRader($panel)))
+        ->and(array_column(panelvyRader($panel), 'ulid'))->toBe(array_column(panelvyTodoRader($lista), 'ulid'));
+});
+
+/*
  * Klart när: en omfångsbegränsad mottagare ser inga rader utanför omfånget,
  * varken på `/tasks` eller på dashboarden.
  *
