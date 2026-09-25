@@ -61,31 +61,42 @@ class PasswordController extends Controller
         // klassdocblock. Ingenting har skrivits när den kastar.
         $request->authenticate();
 
-        $user->update([
-            'password_hash' => $request->string('password')->toString(),
-        ]);
+        // **De fyra skrivningarna är en kedja och hör i samma transaktion.**
+        // Fallerar ett anrop mitt i — mellan update() och tokens()->delete()
+        // — blir resultatet exakt det tillståndet bytet finns för att
+        // förhindra: lösenordet är nytt, men en gammal session eller ett
+        // gammalt token lever kvar. RecordSecurityEvent skriver själv ingen
+        // transaktion och säger i sitt docblock att anroparen äger den;
+        // App\Actions\Invitation\CreateInvitation gör precis så här.
+        DB::transaction(function () use ($request, $user, $hadPassword, $recordSecurityEvent): void {
+            $user->update([
+                'password_hash' => $request->string('password')->toString(),
+            ]);
 
-        $this->logoutOtherSessions($request, $user);
+            $this->logoutOtherSessions($request, $user);
 
-        // Alla personal access tokens. Ett token är en väg in som inte går
-        // genom ett lösenord alls, och den som byter lösenord efter ett
-        // intrång menar att varje sådan väg ska stängas.
-        $user->tokens()->delete();
+            // Alla personal access tokens. Ett token är en väg in som inte går
+            // genom ett lösenord alls, och den som byter lösenord efter ett
+            // intrång menar att varje sådan väg ska stängas.
+            $user->tokens()->delete();
 
-        // Issue 113 och [[ADR-0043 Tre loggar]] § Säkerhetsloggen: raden
-        // skrivs av actionen, och `meta` bär bara om ett lösenord fanns före
-        // — aldrig ett lösenord eller en kod.
-        $recordSecurityEvent->handle(
-            action: SecurityLog::ACTION_PASSWORD_CHANGED,
-            user: $user,
-            ip: $request->ip(),
-            userAgent: $request->userAgent(),
-            meta: ['had_password' => $hadPassword],
-        );
+            // Issue 113 och [[ADR-0043 Tre loggar]] § Säkerhetsloggen: raden
+            // skrivs av actionen, och `meta` bär bara om ett lösenord fanns före
+            // — aldrig ett lösenord eller en kod.
+            $recordSecurityEvent->handle(
+                action: SecurityLog::ACTION_PASSWORD_CHANGED,
+                user: $user,
+                ip: $request->ip(),
+                userAgent: $request->userAgent(),
+                meta: ['had_password' => $hadPassword],
+            );
+        });
 
         // Transaktionellt mejl och ingen notisrad: användaren får veta att
         // bytet hände, och klockan i sidhuvudet får ingenting — hon gjorde
         // det själv, se App\Notifications\PasswordChangedNotification.
+        // **Efter commit**, utanför closuren: ett mejl som gick ut för ett
+        // byte som sedan rullades tillbaka vore ett löfte systemet inte höll.
         $user->notify(new PasswordChangedNotification);
 
         return back()->with('status', 'password-changed');
