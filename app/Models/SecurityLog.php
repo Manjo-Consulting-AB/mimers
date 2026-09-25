@@ -84,6 +84,16 @@ class SecurityLog extends Model
     public const ACTION_RECOVERY_CODES = 'auth.recovery_codes';
 
     /**
+     * Lösenordet byttes — eller sattes för första gången av ett konto som
+     * bara använt magic link (issue 129).
+     *
+     * **`meta` säger bara `had_password`**, alltså om ett lösenord fanns
+     * FÖRE bytet. Varken det gamla eller det nya lösenordet, och ingen kod,
+     * finns i raden — samma regel som för tvåfaktorraderna ovan.
+     */
+    public const ACTION_PASSWORD_CHANGED = 'auth.password_changed';
+
+    /**
      * En inbjudan skickades.
      */
     public const ACTION_INVITATION_CREATED = 'invitation.created';

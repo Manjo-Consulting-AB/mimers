@@ -39,6 +39,7 @@ use App\Http\Controllers\ScheduleOccurrenceController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\Settings\AccountSettingsController;
 use App\Http\Controllers\Settings\NotificationSettingsController;
+use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\PlanController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -306,6 +307,40 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/settings/security', SecurityController::class)
         ->name('settings.security');
+
+    /*
+     * Issue 129 · Lösenordsbytet, se App\Http\Controllers\Settings\
+     * PasswordController och [[M20 Kontot]] § 129.
+     *
+     * **PUT, för det är samma lösenord som skrivs om** — kroppen bär det nya
+     * lösenordet och ingenting annat av resursen, och en POST hade sagt
+     * "skapa" om en kolumn som redan finns. Sökvägen ligger under
+     * säkerhetssidan och inte på en egen yta: formuläret står där, och en
+     * användare som ska byta lösenord letar på samma sida som hon slår på
+     * tvåfaktorn.
+     *
+     * **`throttle:login`, inloggningens egen begränsare** (issue 129,
+     * App\Support\Auth\LoginRateLimiter). Formuläret prövar ett lösenord och
+     * en engångskod, alltså samma två gissningsbara värden som inloggningen,
+     * och ska mötas av samma tak. Namnet och inte en egen begränsare: en
+     * andra hink med samma trösklar hade varit samma regel på två ställen.
+     *
+     * **`throttle:`-nyckeln för kontot blir tom här**, och det är värt att
+     * veta: begränsaren bygger sin kontonyckel av `$request->string('email')`
+     * (se App\Providers\AppServiceProvider::configureLoginRateLimiting()), och
+     * den här kroppen bär ingen adress — användaren kommer ur sessionen. Kvar
+     * blir IP-nyckeln, som fungerar som den ska, och en kontonyckel som alla
+     * installationens byten delar. Se PR:ens "Frågor och antaganden": samma
+     * form som App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin
+     * löste för magic link-steget, men den klassen ligger i en katalog
+     * issuen stänger.
+     *
+     * Grinden är `auth`-gruppen ovan: en utloggad besökare har inget konto
+     * att byta lösenordet på.
+     */
+    Route::put('/settings/security/password', [PasswordController::class, 'update'])
+        ->middleware('throttle:'.LoginRateLimiter::NAME)
+        ->name('settings.security.password');
 
     /*
      * Issue 53c · Kontoinställningarna — profil och konton, se

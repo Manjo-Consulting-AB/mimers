@@ -531,6 +531,49 @@ it('hämtar dashboardens strängar ur ui.php', function () {
 });
 
 /*
+ * Lösenordsformuläret, se issue 129 och
+ * resources/js/components/PasswordForm.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här, så en mening som läggs till i komponenten och glöms i
+ * katalogen faller. Två av nycklarna är andras och ska förbli det: kravet på
+ * lösenordet är registreringens mening (`auth.register.password_hint` —
+ * [[ADR-0034 Engelska vid lansering]] ger en enda katalog, och två
+ * formuleringar av samma regel glider isär) och kodfältets etikett är
+ * inloggningens (`auth.code.label` — samma etikett, samma sak att skriva in).
+ *
+ * Flashen prövas också: `flash.password-changed` sätts av
+ * PasswordController, och `translate()` skriver NYCKELN SJÄLV när uppslaget
+ * misslyckas — en kod utan mening syns alltså inte som ett fel i vyn, utan
+ * som `flash.password-changed` i en grön ruta.
+ */
+it('hämtar lösenordsformulärets strängar ur ui.php', function () {
+    $vy = File::get(resource_path('js/components/PasswordForm.vue'));
+
+    /*
+     * Fönstret `(?<![\w$.])` är det som skiljer ett uppslag från ett anrop:
+     * form.reset('password_confirmation') innehåller sekvensen `t('...`, och
+     * utan fönstret hade fältnamn lästs som översättningsnycklar. Syskonproven
+     * ovanför behöver det inte — ingen av deras komponenter nollställer ett
+     * fält — men regeln är densamma.
+     */
+    preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $vy, $träffar);
+
+    expect($träffar[1])->toContain('settings.security.password.heading')
+        // De två lånade nycklarna, utskrivna: byter någon dem mot egna
+        // kopior i ui.php faller raden, och det är meningen.
+        ->and($träffar[1])->toContain('auth.register.password_hint')
+        ->and($träffar[1])->toContain('auth.code.label');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    expect(Lang::get('ui.flash.password-changed', [], 'en'))
+        ->not->toBe('ui.flash.password-changed');
+});
+
+/*
  * [[ADR-0033 Produktens omfång]] § Beslut: containern är ett sammanhang för
  * allt man äger, använder eller arbetar med — inte ett fordon eller ett
  * fritidshus. Det generiska svaret issue 81 lämnade efter sig är

@@ -62,6 +62,54 @@ it('omdirigerar /settings till profilen sedan 53c', function () {
 });
 
 /*
+ * Lösenordsformuläret, issue 129. Sidans femte formulär och det enda som
+ * behöver veta något om kontot för att ritas: `hasPassword` väljer mellan
+ * "sätt ett lösenord" och "byt ett". Serverns halva är proppen — att fältet
+ * för det nuvarande lösenordet därmed bara finns i det ena läget är `v-if` i
+ * komponenten, och att servern ändå kräver det när kontot har ett lösenord
+ * prövas i tests/Feature/Auth/LosenordsbyteTest.php.
+ *
+ * Proppen är ett JA/NEJ och inte hashen: `password_hash` är dold i
+ * serialiseringen sedan issue 3, och en sidprop är samma yta som ett svar.
+ */
+it('säger att kontot har ett lösenord', function () {
+    withoutVite();
+
+    actingAs(User::factory()->create(['password_hash' => 'ratt-losenord']))
+        ->get('/settings/security')
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('hasPassword', true));
+});
+
+it('säger att kontot saknar lösenord', function () {
+    withoutVite();
+
+    actingAs(User::factory()->create(['password_hash' => null]))
+        ->get('/settings/security')
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('hasPassword', false)
+            ->missing('password_hash')
+        );
+});
+
+/*
+ * Formuläret bor i sin egen komponent och postar till sin egen rutt. Den
+ * halvan går inte att se i ett serversvar — `useForm.put()` är klientens —
+ * så den läses ur källkoden, samma form som varningarna nedanför.
+ */
+it('renderar lösenordsformuläret och postar det till sin egen rutt', function () {
+    expect(File::get(resource_path('js/pages/Settings/Security.vue')))
+        ->toContain('<PasswordForm');
+
+    $form = File::get(resource_path('js/components/PasswordForm.vue'));
+
+    expect($form)->toContain("put('/settings/security/password'")
+        // De två lägena och kodfältet följer av propsen, inte av ett eget
+        // tillstånd i vyn.
+        ->and($form)->toContain('v-if="props.hasPassword"')
+        ->and($form)->toContain('v-if="props.totpEnabled"');
+});
+
+/*
  * Läge 1. Att vyn därmed inte renderar något kodfält är `v-if` i komponenten;
  * serverns halva är att propsen inte bär något som kan öppna läge 2 eller 3.
  */

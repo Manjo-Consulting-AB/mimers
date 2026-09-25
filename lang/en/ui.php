@@ -209,6 +209,10 @@ return [
         'magic-link-sent' => 'If the address exists with us, we have sent a link to it.',
         'totp-confirmed' => 'Two-factor authentication is on.',
         'totp-disabled' => 'Two-factor authentication is off.',
+        // Issue 129: the same code whether a password was changed or set for
+        // the first time — the user knows which of the two she did, and the
+        // page she lands on shows which mode she is in.
+        'password-changed' => 'Your password has been changed. Your other sessions have been signed out.',
         'profile-updated' => 'Your profile has been saved.',
         'account-updated' => 'The account details have been saved.',
 
@@ -627,6 +631,34 @@ return [
         'security' => [
             'title' => 'Security',
             'heading' => 'Security',
+
+            /*
+             * Lösenordsbytet, se [[M20 Kontot]] § 129. Two modes from one
+             * prop (`hasPassword`): an account that has a password states it
+             * and picks a new one, an account that has only used magic links
+             * sets its first. The two intros say which one you are in — the
+             * form is otherwise identical, and a user who has never had a
+             * password should not be asked for one.
+             *
+             * `intro_set` says the link still works: setting a password is
+             * not a replacement for magic links ([[ADR-0011 Autentisering]]
+             * § Motivering — both ways in, so that a mail outage does not
+             * lock everyone out).
+             */
+            'password' => [
+                'heading' => 'Password',
+                'intro' => 'Enter your current password to choose a new one.',
+                'intro_set' => 'You log in with a link today. Set a password here and you will be able to log in with it as well — the link keeps working.',
+
+                'current_label' => 'Current password',
+                'new_label' => 'New password',
+                'confirm_label' => 'Repeat the new password',
+
+                'code_note' => 'Two-factor authentication is on. The change needs a code from your authenticator app, or one of your recovery codes.',
+
+                'submit' => 'Change the password',
+                'submit_set' => 'Set a password',
+            ],
 
             'totp' => [
                 'heading' => 'Two-factor authentication',
