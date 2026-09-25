@@ -26,10 +26,13 @@ use Illuminate\Validation\ValidationException;
  *
  * **Kontrollen är två steg, och det andra är det som räknas.** Den här
  * metoden läser raden och kontrollerar tillståndet — men det som faktiskt
- * förbrukar tokenet är en VILLKORLIG UPDATE (`whereNull('confirmed_at')`),
- * och den ligger inuti transaktionen. Två samtidiga klick på samma länk kan
- * därför aldrig båda lyckas: databasen serialiserar UPDATE-satser mot samma
- * rad, och den andra får noll träffar och ett 404. Samma spärr som
+ * förbrukar tokenet är en VILLKORLIG UPDATE (`whereNull('confirmed_at')` och
+ * `expires_at` i framtiden), och den ligger inuti transaktionen. Två samtidiga
+ * klick på samma länk kan därför aldrig båda lyckas: databasen serialiserar
+ * UPDATE-satser mot samma rad, och den andra får noll träffar och ett 404.
+ * Samma spärr gäller mot en ny begäran som ogiltigförklarar raden genom att
+ * sätta `expires_at` till nu — även den committar in i samma villkor, så
+ * utgång och förbrukning avgörs i en och samma sats. Samma spärr som
  * App\Support\Auth\MagicLinkBroker § Beslut 3 och
  * App\Actions\Invitation\AcceptInvitation.
  *
@@ -90,9 +93,16 @@ class ConfirmEmailChange
         DB::transaction(function () use ($change, $user, $ip, $userAgent): void {
             // Förbrukningen: noll träffar betyder att en annan request hann
             // först, och svaret ska vara detsamma som för ett okänt token.
+            // `expires_at` prövas HÄR och inte bara i läsningen ovan: en ny
+            // begäran ogiltigförklarar den här raden genom att sätta
+            // `expires_at` till nu (RequestEmailChange), och hinner den
+            // commit:a mellan läsningen och den här satsen vore länken
+            // annars fortfarande lösbar. Bägge villkoren ligger i samma
+            // UPDATE, så utgång och förbrukning avgörs atomärt.
             $claimed = EmailChange::query()
                 ->whereKey($change->getKey())
                 ->whereNull('confirmed_at')
+                ->where('expires_at', '>', now())
                 ->update(['confirmed_at' => now()]);
 
             if ($claimed !== 1) {
