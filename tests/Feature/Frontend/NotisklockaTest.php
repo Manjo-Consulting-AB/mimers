@@ -422,3 +422,29 @@ it('gör ingen länk av en rad vars mål inte längre finns', function () {
 
     expect(klockaListan($anvandare)['notifications'][0]['url'])->toBeNull();
 });
+
+/*
+ * Mellansteget kan falla bort medan målet lever kvar: `Schedule` har
+ * SoftDeletes och förekomsterna stängs inte när schemat raderas — de följer
+ * med genom relationen. `$occurrence->schedule` blir då `null` (globala
+ * scopen) medan både förekomsten, itemet och containern finns kvar. Raden ska
+ * bli en text, inte en krasch.
+ */
+it('gör ingen länk när schemat är mjukraderat men förekomsten lever kvar', function () {
+    [$konto, $anvandare, $container, $item] = klockaKontext();
+
+    $schema = Schedule::factory()->for($item, 'item')->create();
+    $förekomst = ScheduleOccurrence::factory()->for($schema, 'schedule')->create();
+
+    klockaRad($anvandare, Notification::TYPE_TASK_DUE, now())->forceFill([
+        'account_id' => $konto->id,
+        'container_id' => $container->id,
+        'subject_type' => $förekomst->getMorphClass(),
+        'subject_id' => $förekomst->id,
+    ])->save();
+
+    $schema->delete();
+
+    expect($förekomst->fresh()->schedule)->toBeNull()
+        ->and(klockaListan($anvandare)['notifications'][0]['url'])->toBeNull();
+});

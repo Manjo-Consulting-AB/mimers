@@ -327,7 +327,7 @@ class HandleInertiaRequests extends Middleware
         $occurrence = $notification->subject;
 
         return $occurrence instanceof ScheduleOccurrence
-            ? $this->itemUrl($occurrence->schedule->item, $notification->container)
+            ? $this->itemUrl($occurrence->schedule?->item, $notification->container)
             : null;
     }
 
