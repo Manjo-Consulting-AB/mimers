@@ -90,6 +90,63 @@ return [
         'favorites' => 'Favourites',
     ],
 
+    /*
+     * Notisklockan i sidhuvudet, se issue 127 och
+     * resources/js/components/NotificationBell.vue.
+     *
+     * `label` är klockans ord och bär både panelens rubrik och knappens
+     * tillgängliga namn — knappen ritar en ikon och en siffra och har ingen
+     * text av sin egen, och en andra nyckel för aria-label hade varit samma
+     * ord på två ställen (samma grepp som `nav.favorites`).
+     *
+     * **De sex typerna är nycklade med sin egen typsträng.** Typen är ett
+     * öppet namnrum ([[Notiser]] § notification), och `translate()` slår upp
+     * punktnycklar rakt i den här arrayen — `task.due` blir alltså
+     * `inbox.task.due`. Det finns därför ingen översättningstabell i
+     * JavaScript som kan glida isär från `Notification`-konstanterna: nyckeln
+     * ÄR typen, och en typ som glöms här syns i vyn som sin egen nyckel.
+     *
+     * **Inbjudningarna står inte här, och det är inte ett förbiseende.**
+     * `invitation.received` finns som konstant men skrivs av ingen kod —
+     * `CreateInvitation` skickar mejlet direkt — så klockan visar de sex
+     * typer som faktiskt skrivs. Vägen dit är issue 131 ([[M20 Kontot]]).
+     *
+     * **Meningarna byggs ur radens `payload` och bär ingen färdig text**
+     * ([[Notiser]] § notification, Beslut 5). Fälten är generatorernas egna:
+     * `GeneratesTaskNotifications` bär titel, item och datum,
+     * `GeneratesLoanNotifications` item, låntagare och datum,
+     * `GeneratesQuotaWarnings` andelen, `OfferOwnershipTransfer` containern
+     * och `AdvancesAccountLifecycle` månaderna och stängningsdagen.
+     *
+     * **Datumet kommer färdigt ur datumregeln** (issue 104,
+     * resources/js/composables/useRelativeDate.js) och bär sina egna ord:
+     * *In 3 days*, *Today*, *Overdue by 3 days* eller ett absolut datum. Det
+     * är därför de två uppgiftsmeningarna har samma form och ändå läses olika
+     * — riktningsordet är datumets och aldrig radens, och en rad som sade
+     * "overdue" en gång till hade sagt samma sak två gånger.
+     */
+    'inbox' => [
+        'label' => 'Notifications',
+        'empty' => 'Nothing new.',
+
+        'task' => [
+            'due' => ':title on :item — :date',
+            'overdue' => ':title on :item — :date',
+        ],
+        'loan' => [
+            'due' => ':item is on loan to :borrower — :date',
+        ],
+        'quota' => [
+            'warning' => ':percent% of the storage is used',
+        ],
+        'transfer' => [
+            'requested' => ':container has been offered to you',
+        ],
+        'account' => [
+            'inactive' => 'Your account has been inactive for :months months — it closes :close_at',
+        ],
+    ],
+
     'auth' => [
         'login' => [
             'title' => 'Log in',

@@ -38,6 +38,14 @@ use Laravel\Sanctum\HasApiTokens;
  * plockar upp kontraktet självt vid rendering av notifikationer — se
  * `preferredLocale()`.
  *
+ * `notifications_read_at` kom med issue 127. Det är klockans "oläst": en
+ * TIDSSTÄMPEL på personen och ingen kolumn per notisrad, se
+ * [[M19 Dashboarden]] § 127 och migrationen. Är den NULL räknas varje rad
+ * användaren har som oläst. Den sätts av
+ * App\Http\Controllers\NotificationInboxController och läses av
+ * App\Http\Middleware\HandleInertiaRequests — ingen annan rör den, och den
+ * ligger därför utanför `#[Fillable]` som resten av tidsstämplarna.
+ *
  * `totp_secret` castas `encrypted` sedan issue #19 (TOTP-hemlighet:
  * aktivering och verifiering) — se [[Konton och åtkomst]] § user:
  * "Krypterad", och App\Support\Auth\TotpBroker § Beslut 1, som sätter och
@@ -80,6 +88,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'totp_secret' => 'encrypted',
             'totp_confirmed_at' => 'datetime',
             'last_active_at' => 'datetime',
+            'notifications_read_at' => 'datetime',
             'password_hash' => 'hashed',
         ];
     }
