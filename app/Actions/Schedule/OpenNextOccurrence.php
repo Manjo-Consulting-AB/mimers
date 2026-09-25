@@ -21,6 +21,11 @@ use RuntimeException;
  * en öppen förekomst (update), och när en förekomst stängs (issue 22b — som
  * anropar samma Action med `$from` satt).
  *
+ * Bara avslutsanropet har en stängd förekomst att förhålla sig till, och
+ * skickar då också dess `due_at` (132): nästa förfall ligger alltid strikt
+ * efter det stängda. Skapande och återaktivering har ingen stängd förekomst,
+ * skickar ingen, och räknar som förut.
+ *
  * Returvärdet är medvetet nullbart: `recurrence_type: none` har ingen nästa
  * när engångsförekomsten väl är stängd, och ett schema som redan har en öppen
  * förekomst ska inte få en andra. Det är dokumenterade returvärden, inte
@@ -34,9 +39,17 @@ use RuntimeException;
  */
 class OpenNextOccurrence
 {
-    public function handle(Schedule $schedule, ?Carbon $from = null): ?ScheduleOccurrence
+    /**
+     * @param  Carbon|null  $from  Nästa förfalls utgångspunkt: `completed_at` vid
+     *                             `complete`, den överhoppade förekomstens `due_at`
+     *                             vid `skip`. Null vid skapande och återaktivering.
+     * @param  Carbon|null  $closedDueAt  Den stängda förekomstens `due_at`, så att
+     *                                    nästa förfall hamnar strikt efter den (132).
+     *                                    Null när ingen förekomst har stängts.
+     */
+    public function handle(Schedule $schedule, ?Carbon $from = null, ?Carbon $closedDueAt = null): ?ScheduleOccurrence
     {
-        return DB::transaction(function () use ($schedule, $from): ?ScheduleOccurrence {
+        return DB::transaction(function () use ($schedule, $from, $closedDueAt): ?ScheduleOccurrence {
             $lockedSchedule = $schedule->newQuery()->whereKey($schedule->id)->lockForUpdate()->first();
 
             if ($lockedSchedule === null) {
@@ -47,7 +60,7 @@ class OpenNextOccurrence
                 return null;
             }
 
-            $dueAt = $this->dueAt($lockedSchedule, $from);
+            $dueAt = $this->dueAt($lockedSchedule, $from, $closedDueAt);
 
             if ($dueAt === null) {
                 return null;
@@ -123,14 +136,16 @@ class OpenNextOccurrence
      *   — när engångsuppgiften väl är stängd finns ingen nästa, inte heller
      *   vid en senare återaktivering (Beslut 3).
      * - `fixed`: räknar ALLTID från kalendern (`anchor_date`), framflyttat i
-     *   seriens steg tills det inte längre ligger i det förflutna — oavsett
-     *   `$from` och oavsett när jobbet gjordes.
+     *   seriens steg tills det är både `>= idag` och `> $closedDueAt` (132) —
+     *   oavsett `$from` och oavsett när jobbet gjordes.
      * - `interval`: `anchor_date` för den första förekomsten; `$from`
      *   (datumdelen) plus intervallet när 22b anropar med `completed_at`.
+     *   Ligger resultatet på eller före `$closedDueAt` stegas det fram med
+     *   intervallet tills det ligger efter (132).
      *
      * @return Carbon|null null när det inte finns någon nästa förekomst.
      */
-    private function dueAt(Schedule $schedule, ?Carbon $from): ?Carbon
+    private function dueAt(Schedule $schedule, ?Carbon $from, ?Carbon $closedDueAt): ?Carbon
     {
         $anchor = $schedule->anchor_date;
 
@@ -148,7 +163,7 @@ class OpenNextOccurrence
 
         if ($schedule->recurrence_type === 'interval') {
             if ($from !== null) {
-                return $this->addInterval($from->copy()->startOfDay(), $schedule);
+                return $this->nextIntervalDue($from->copy()->startOfDay(), $schedule, $closedDueAt);
             }
 
             if ($anchor === null) {
@@ -163,15 +178,80 @@ class OpenNextOccurrence
             throw $this->programmingError('Ett schema med recurrence_type fixed utan anchor_date kan inte öppna en förekomst.');
         }
 
-        return $this->nextCalendarDue($anchor, $schedule);
+        return $this->nextCalendarDue($anchor, $schedule, $closedDueAt);
     }
 
     /**
-     * Lägger schemats intervall till $date. `month`/`year` stegas med
-     * `addMonthsNoOverflow()`/`addYearsNoOverflow()`, aldrig `addMonths()` —
-     * 31 januari plus en månad är 28 februari, inte 3 mars (Beslut 6).
+     * Nästa `interval`-förfall: `$from` plus intervallet (Beslut 4), och
+     * därpå regeln i 132 — datumet ligger alltid STRIKT efter den stängda
+     * förekomstens `due_at`.
+     *
+     * Ett intervall som landar på eller före den stängda dagen stegas fram
+     * tills det ligger efter. En daglig uppgift som bockas av dagen innan
+     * sitt förfall hoppar därför till dagen efter sitt eget förfall i stället
+     * för att ge samma dag igen. Ett oljebyte som görs två månader i förväg
+     * räknas däremot fortfarande från bytet: tolv månader från `completed_at`
+     * ligger redan efter `due_at`. `skip` räknar från den överhoppade
+     * förekomstens `due_at` och uppfyller regeln redan — `due_at` plus
+     * intervallet är alltid efter `due_at`.
      */
-    private function addInterval(Carbon $date, Schedule $schedule): Carbon
+    private function nextIntervalDue(Carbon $from, Schedule $schedule, ?Carbon $closedDueAt): Carbon
+    {
+        $due = $this->addIntervals($from->copy(), $schedule, 1);
+
+        if ($closedDueAt === null || $due->greaterThan($closedDueAt)) {
+            return $due;
+        }
+
+        return $this->addIntervals($from->copy(), $schedule, $this->intervalsPast($from, $schedule, $closedDueAt));
+    }
+
+    /**
+     * Minsta antalet intervall från $from som ger ett datum STRIKT efter
+     * $closedDueAt. Anropas bara när ett enda intervall inte räcker, så $from
+     * ligger alltid före $closedDueAt.
+     *
+     * Framflyttningen RÄKNAS, den loopas inte intervall för intervall (§ Att
+     * se upp med, samma krav som `nextCalendarDue` har): en daglig uppgift
+     * avbockad långt före sitt förfall får inte bli tusentals varv.
+     */
+    private function intervalsPast(Carbon $from, Schedule $schedule, Carbon $closedDueAt): int
+    {
+        $unit = $schedule->interval_unit;
+        $count = $schedule->interval_count;
+
+        if ($unit === 'day' || $unit === 'week') {
+            $periodDays = $unit === 'day' ? $count : $count * 7;
+            $diffDays = (int) $from->diffInDays($closedDueAt);
+            $steps = intdiv($diffDays, $periodDays) + 1;
+
+            // diffInDays räknar hela dygn — en korrektion på sin höjd ett steg.
+            while ($this->addIntervals($from->copy(), $schedule, $steps)->lessThanOrEqualTo($closedDueAt)) {
+                $steps++;
+            }
+
+            return $steps;
+        }
+
+        $monthsPerStep = $unit === 'month' ? $count : $count * 12;
+        $steps = max(1, intdiv($this->wholeMonthsBetween($from, $closedDueAt), $monthsPerStep) + 1);
+
+        // Månadssluts-klampningen kan lägga ett steg utöver det räknade —
+        // ett fåtal korrektioner, aldrig en loop över dagar.
+        while ($this->addIntervals($from->copy(), $schedule, $steps)->lessThanOrEqualTo($closedDueAt)) {
+            $steps++;
+        }
+
+        return $steps;
+    }
+
+    /**
+     * Lägger `$steps` av schemats intervall till $date. `month`/`year` stegas
+     * med `addMonthsNoOverflow()`/`addYearsNoOverflow()`, aldrig
+     * `addMonths()` — 31 januari plus en månad är 28 februari, inte 3 mars
+     * (Beslut 6). $steps > 1 används bara av framflyttningen i 132.
+     */
+    private function addIntervals(Carbon $date, Schedule $schedule, int $steps): Carbon
     {
         $unit = $schedule->interval_unit;
         $count = $schedule->interval_count;
@@ -180,19 +260,26 @@ class OpenNextOccurrence
             throw $this->programmingError('Ett schema med recurrence_type fixed/interval utan positivt interval_count kan inte öppna en förekomst.');
         }
 
+        $total = $count * $steps;
+
         return match ($unit) {
-            'day' => $date->addDays($count),
-            'week' => $date->addWeeks($count),
-            'month' => $date->addMonthsNoOverflow($count),
-            'year' => $date->addYearsNoOverflow($count),
+            'day' => $date->addDays($total),
+            'week' => $date->addWeeks($total),
+            'month' => $date->addMonthsNoOverflow($total),
+            'year' => $date->addYearsNoOverflow($total),
             default => throw $this->programmingError('Okänd interval_unit på schemat: '.($unit ?? 'null')),
         };
     }
 
     /**
      * Nästa `fixed`-förfall räknat från KALENDERN: `anchor_date` framflyttat
-     * med `interval_count × interval_unit` tills `due_at >= today` (Beslut 4).
-     * Ett `anchor_date` som redan är idag används som det är.
+     * med `interval_count × interval_unit` tills det ligger både `>= today`
+     * och `> $closedDueAt` (Beslut 4, 132). Ett `anchor_date` som redan
+     * uppfyller båda används som det är.
+     *
+     * De två villkoren blir ett golv: den stängda förekomstens `due_at` plus
+     * en dag, lyft till idag när den ligger bakom. Utan en stängd förekomst
+     * är golvet idag, precis som förut.
      *
      * Framflyttningen RÄKNAS, inte loopas dag för dag (§ Att se upp med): för
      * dag/vecka direkt aritmetiskt på dagskillnaden, för månad/år som hela
@@ -200,7 +287,7 @@ class OpenNextOccurrence
      * månadssluts-klampningen). Ett `anchor_date` från 1990 med dagsintervall
      * blir inte 13 000 varv i en loop.
      */
-    private function nextCalendarDue(Carbon $anchor, Schedule $schedule): Carbon
+    private function nextCalendarDue(Carbon $anchor, Schedule $schedule, ?Carbon $closedDueAt): Carbon
     {
         $today = Carbon::today();
         $unit = $schedule->interval_unit;
@@ -210,19 +297,29 @@ class OpenNextOccurrence
             throw $this->programmingError('Ett schema med recurrence_type fixed/interval utan positivt interval_count kan inte öppna en förekomst.');
         }
 
-        if (! $anchor->lessThan($today)) {
+        $bound = $today->copy();
+
+        if ($closedDueAt !== null) {
+            $floor = $closedDueAt->copy()->startOfDay()->addDay();
+
+            if ($floor->greaterThan($bound)) {
+                $bound = $floor;
+            }
+        }
+
+        if (! $anchor->lessThan($bound)) {
             return $anchor->copy();
         }
 
         if ($unit === 'day' || $unit === 'week') {
             $periodDays = $unit === 'day' ? $count : $count * 7;
-            $diffDays = (int) $anchor->diffInDays($today);
+            $diffDays = (int) $anchor->diffInDays($bound);
             $steps = (int) ceil($diffDays / $periodDays);
 
             return $anchor->copy()->addDays($steps * $periodDays);
         }
 
-        $wholeMonths = $this->wholeMonthsBetween($anchor, $today);
+        $wholeMonths = $this->wholeMonthsBetween($anchor, $bound);
 
         if ($unit === 'month') {
             $steps = max(1, intdiv($wholeMonths, $count));
@@ -230,7 +327,7 @@ class OpenNextOccurrence
 
             // Månadssluts-klampningen kan lägga ett steg utöver det räknade —
             // ett fåtal korrektioner, aldrig en loop över dagar.
-            while ($due->lessThan($today)) {
+            while ($due->lessThan($bound)) {
                 $steps++;
                 $due = $anchor->copy()->addMonthsNoOverflow($steps * $count);
             }
@@ -241,7 +338,7 @@ class OpenNextOccurrence
         $steps = max(1, intdiv($wholeMonths, $count * 12));
         $due = $anchor->copy()->addYearsNoOverflow($steps * $count);
 
-        while ($due->lessThan($today)) {
+        while ($due->lessThan($bound)) {
             $steps++;
             $due = $anchor->copy()->addYearsNoOverflow($steps * $count);
         }

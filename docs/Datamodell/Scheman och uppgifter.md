@@ -77,9 +77,9 @@ I en transaktion:
 
 1. Kontrollera att inga öppna beroenden finns. Finns de, neka med felkod.
 2. Sätt `status = 'completed'`, `completed_at`, `completed_by_*`, ev. anteckning.
-3. Om `recurrence_type != 'none'`, beräkna nästa `due_at`:
-   - `fixed`: nästa datum i serien från `anchor_date`, framflyttat tills det ligger i framtiden.
-   - `interval`: `completed_at` plus intervallet.
+3. Om `recurrence_type != 'none'`, beräkna nästa `due_at`. Det ligger alltid **strikt efter** den stängda förekomstens:
+   - `fixed`: första datumet i serien från `anchor_date` som ligger både i dag eller senare och efter den stängda förekomstens `due_at`. En förekomst avbockad på sin egen förfallodag får alltså morgondagen, inte samma dag igen.
+   - `interval`: `completed_at` plus intervallet. Ligger det på eller före den stängda förekomstens `due_at` stegas det fram med intervallet tills det ligger efter — en daglig uppgift avbockad i förtid hoppar förbi sitt eget förfall, medan ett oljebyte gjort i förväg fortfarande räknas från bytet. Vid `skip` räknas i stället från den överhoppade förekomstens `due_at`, och regeln är redan uppfylld.
 4. Skapa den nya förekomsten med `visible_from = due_at - lead_days`.
 5. Avbryt eventuella oskickade notiser som hörde till den stängda förekomsten.
 
