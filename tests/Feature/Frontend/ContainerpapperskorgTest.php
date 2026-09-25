@@ -399,13 +399,14 @@ it('rensar den aktiva containern när den raderas, och bara då', function () {
  * Raderna kommer ur `TrashEntryResource`, samma sex nycklar som `/api` — vyn
  * hittar inte på någon egen form.
  *
- * **Tiden är frusen, och det är kravet och inte en stilfråga.** `expires_at`
- * är `deleted_at` + retentionen, och raden raderas med ett `now()` medan
- * förväntan räknas ur ett ANDRA `now()` — efter ett helt HTTP-anrop. Faller en
- * sekundgräns däremellan skiljer de sig på sekunden, och provet är rött utan
- * att något är fel (issue 477 § Frågeräkningens förutsättning; samma frysning
- * som grannen nedanför och FiloriginTest § "länken lever i femton minuter").
- * En fryst klocka gör båda anropen till samma tidpunkt.
+ * **Förväntan bärs med, den räknas inte om — och klockan är fryst.** `expires_at`
+ * är `deleted_at` + retentionen. Provet räknade förväntan ur ett ANDRA `now()`
+ * än det som raderade raden, och det efter ett helt HTTP-anrop: föll en
+ * sekundgräns däremellan skilde de sig på sekunden och provet var rött utan att
+ * något var fel (issue 477 § Frågeräkningens förutsättning, issue 499).
+ * Tidpunkten raden raderades med tas därför vara på, och förväntan räknas ur
+ * SAMMA tidpunkt; frysningen håller dessutom hjälparna och servern i samma nu
+ * (jfr grannen nedanför och FiloriginTest § "länken lever i femton minuter").
  */
 it('listar raderade containers senast raderad först, med den återstående tiden', function () {
     withoutVite();
@@ -419,7 +420,8 @@ it('listar raderade containers senast raderad först, med den återstående tide
         containerpapperskorgRaderad($först, now()->subDays(3));
 
         $senast = Container::factory()->for($konto, 'account')->create(['name' => 'Senast']);
-        containerpapperskorgRaderad($senast, now()->subDays(2));
+        $senastRaderad = now()->subDays(2);
+        containerpapperskorgRaderad($senast, $senastRaderad);
 
         $retention = (int) config('files.trash_retention_days');
 
@@ -433,7 +435,7 @@ it('listar raderade containers senast raderad först, med den återstående tide
                 ->where('entries.0.ulid', $senast->ulid)
                 ->where('entries.0.label', 'Senast')
                 ->where('entries.0.context', null)
-                ->where('entries.0.expires_at', now()->subDays(2)->addDays($retention)->toIso8601String())
+                ->where('entries.0.expires_at', $senastRaderad->copy()->addDays($retention)->toIso8601String())
                 ->where('entries.1.ulid', $först->ulid)
                 ->where("canRestore.{$senast->ulid}", true)
             );
