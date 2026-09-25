@@ -46,6 +46,12 @@ use RuntimeException;
  * | `interval` | `completed_at` | den överhoppade förekomstens `due_at` |
  * | `none` | ingen nästa | ingen nästa |
  *
+ * Båda rutterna skickar dessutom med den stängda förekomstens `due_at` (132):
+ * nästa förekomst ligger alltid strikt efter den som stängdes. För `fixed`
+ * blir det ett golv i kalenderräkningen — en förekomst avbockad på sin egen
+ * förfallodag får morgondagen, inte samma dag igen. För `interval` blir det
+ * en framflyttning när `completed_at` plus intervallet inte räcker förbi.
+ *
  * Låset ligger på SCHEMAT, inte på förekomsten (Beslut 9): schemaraden
  * `lockForUpdate()`:as först och förekomsten läses om inuti transaktionen.
  * Det är samma lås som OpenNextOccurrence tar (22a § Beslut 7), och det är
@@ -183,11 +189,16 @@ class CloseOccurrence
             // överhoppade förekomstens `due_at` — en knapptryckning får aldrig
             // flytta hela den framtida serien. `fixed` ignorerar `$from` och
             // räknar alltid från kalendern.
+            //
+            // Den stängda förekomstens `due_at` följer alltid med (132), för
+            // båda rutterna: nästa förfall ligger strikt efter det stängda.
+            // Det är det som gör att en daglig uppgift avbockad i förtid
+            // flyttar sig i stället för att komma tillbaka med samma dag.
             $from = $status === ScheduleOccurrence::STATUS_SKIPPED
                 ? $lockedOccurrence->due_at
                 : $lockedOccurrence->completed_at;
 
-            $next = $this->openNextOccurrence->handle($lockedSchedule, $from);
+            $next = $this->openNextOccurrence->handle($lockedSchedule, $from, $lockedOccurrence->due_at);
 
             // Steg 5 — Avbryt oskickade notiser för den stängda förekomsten
             // (M5). Byggs på exakt den här platsen, sist i flödet.

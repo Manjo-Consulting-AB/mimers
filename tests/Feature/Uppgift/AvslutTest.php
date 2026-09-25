@@ -157,6 +157,129 @@ it('ett överhoppat fixed-schema räknar likadant som ett avbockat', function ()
     expect($skip->json('data.next.due_at'))->toBe('2028-01-15');
 });
 
+/*
+ * 132: nästa förfall ligger alltid strikt efter det stängda. De fyra testen
+ * nedan prövar varsitt hörn av regeln; det sista prövar invarianten över
+ * varje kombination av typ, rutt och tidpunkt.
+ */
+
+it('en daglig intervallsförekomst som bockas av i förväg hoppar förbi sitt eget förfall', function () {
+    [$account, , $headers, , , , $occurrence, $url] = skapaAvslutKontext(forekomstSchemaKropp([
+        'interval_unit' => 'day',
+        'interval_count' => 1,
+        'anchor_date' => '2026-09-03',
+    ]));
+
+    // Förekomsten förfaller i morgon och bockas av i dag (2026-09-02).
+    // completed_at plus ett dygn är i morgon — samma dag som förekomsten
+    // redan hade — så nästa förfall stegas fram till i övermorgon (132).
+    expect($occurrence->due_at->toDateString())->toBe('2026-09-03');
+
+    $response = postJson("{$url}/complete", avslutKropp($account), $headers);
+
+    $response->assertOk();
+    expect($response->json('data.next.due_at'))->toBe('2026-09-04');
+});
+
+it('en daglig fixed-förekomst som bockas av på sin förfallodag ger nästa förfall i morgon', function () {
+    [$account, , $headers, , , , $occurrence, $url] = skapaAvslutKontext(forekomstSchemaKropp([
+        'recurrence_type' => 'fixed',
+        'interval_unit' => 'day',
+        'interval_count' => 1,
+        'anchor_date' => '2026-09-02',
+    ]));
+
+    expect($occurrence->due_at->toDateString())->toBe('2026-09-02');
+
+    $response = postJson("{$url}/complete", avslutKropp($account), $headers);
+
+    $response->assertOk();
+    // Kalendern ensam gav samma dag igen: första datumet i serien som är
+    // >= i dag är förekomstens egen dag. Golvet är den stängda dagen plus en
+    // dag (132).
+    expect($response->json('data.next.due_at'))->toBe('2026-09-03');
+});
+
+it('en fixed-förekomst som bockas av i förväg ger nästa datum i serien efter sitt eget', function (string $rutt) {
+    [$account, , $headers, , , , $occurrence, $url] = skapaAvslutKontext(forekomstSchemaKropp([
+        'recurrence_type' => 'fixed',
+        'interval_unit' => 'week',
+        'interval_count' => 1,
+        'anchor_date' => '2026-09-04',
+    ]));
+
+    // Serien är fredagar och förekomsten bockas av på onsdagen.
+    expect($occurrence->due_at->toDateString())->toBe('2026-09-04');
+
+    $response = postJson("{$url}/{$rutt}", avslutKropp($account), $headers);
+
+    $response->assertOk();
+    // Nästa förfall är fredagen EFTER den egna (2026-09-11), inte den egna
+    // dagen — och skip följer samma regel som complete (132).
+    expect($response->json('data.next.due_at'))->toBe('2026-09-11');
+})->with(['complete', 'skip']);
+
+it('en intervallsförekomst som bockas av i förväg räknas ändå från completed_at', function () {
+    [$account, , $headers, , , , $occurrence, $url] = skapaAvslutKontext(forekomstSchemaKropp([
+        'anchor_date' => '2027-01-15',
+    ]));
+
+    expect($occurrence->due_at->toDateString())->toBe('2027-01-15');
+
+    // Oljebytet görs två månader i förväg: tolv månader från avbockningen
+    // (2027-09-02) ligger efter den stängda förekomstens due_at, så nästa
+    // förfall räknas från completed_at och stegas inte fram (132) — det blev
+    // varken den egna dagen eller due_at plus ett år (2028-01-15).
+    $response = postJson("{$url}/complete", avslutKropp($account), $headers);
+
+    $response->assertOk();
+    expect($response->json('data.next.due_at'))->toBe('2027-09-02');
+});
+
+it('lägger nästa förfall strikt efter det stängda för varje typ, rutt och tidpunkt', function (string $typ, string $rutt, string $förfallodag) {
+    $kropp = forekomstSchemaKropp([
+        'interval_unit' => 'day',
+        'interval_count' => 1,
+        'anchor_date' => $förfallodag,
+    ]);
+
+    if ($typ === 'fixed') {
+        $kropp['recurrence_type'] = 'fixed';
+    }
+
+    [$account, , $headers, , , , $occurrence, $url] = skapaAvslutKontext($kropp);
+
+    // Ett fixed-schema flyttar fram ett förfallet anchor_date till i dag när
+    // förekomsten öppnas; raden sätts tillbaka till den dag testet vill pröva,
+    // så att avslutet kan ske både före, på och efter förfallodagen. Att bocka
+    // av en framtida förekomst är avsiktligt tillåtet (132).
+    $occurrence->due_at = Carbon::parse($förfallodag);
+    $occurrence->visible_from = Carbon::parse($förfallodag);
+    $occurrence->save();
+
+    $response = postJson("{$url}/{$rutt}", avslutKropp($account), $headers);
+
+    $response->assertOk();
+
+    $stängd = Carbon::parse($response->json('data.closed.due_at'));
+    $nästa = Carbon::parse($response->json('data.next.due_at'));
+
+    expect($nästa->greaterThan($stängd))->toBeTrue();
+})->with([
+    ['fixed', 'complete', '2026-09-03'],
+    ['fixed', 'complete', '2026-09-02'],
+    ['fixed', 'complete', '2026-09-01'],
+    ['fixed', 'skip', '2026-09-03'],
+    ['fixed', 'skip', '2026-09-02'],
+    ['fixed', 'skip', '2026-09-01'],
+    ['interval', 'complete', '2026-09-03'],
+    ['interval', 'complete', '2026-09-02'],
+    ['interval', 'complete', '2026-09-01'],
+    ['interval', 'skip', '2026-09-03'],
+    ['interval', 'skip', '2026-09-02'],
+    ['interval', 'skip', '2026-09-01'],
+]);
+
 it('ett engångsschema stängs utan att öppna en ny förekomst', function () {
     [$account, , $headers, , , $schedule, $occurrence, $url] = skapaAvslutKontext([
         'title' => 'Kontrollera brandsläckaren',
