@@ -122,13 +122,14 @@ class PendingInvitation
      * inbjudan skickades, och en inbjudan till en container i papperskorgen
      * ska varken synas eller kunna besvaras — samma villkor som
      * App\Http\Controllers\OwnershipTransferController::inboxQuery() ställer.
-     * Utan det hade raden blivit en trasig länk.
+     * Utan det hade `$invitation->container` varit `null` och listan fallit på
+     * `->name` — en 500:a i stället för en rad färre.
      *
      * **Anroparen har redan prövat verifieringen.** Kravet på verifierad
      * adress gäller listan ([[ADR-0003 Åtkomstmodell]]) och bor i
      * InvitationResponseController::waiting() och
-     * App\Http\Middleware\HandleInertiaRequests, som båda svarar med en tom
-     * lista för en overifierad användare. Frågan nedan är
+     * App\Http\Middleware\HandleInertiaRequests — den förra svarar tillståndet
+     * `unverified`, den senare en tom lista. Frågan nedan är
      * adressjämförelsen och ingenting mer; den är ingen grind.
      *
      * @param  User  $user  Den inloggade mottagaren.
