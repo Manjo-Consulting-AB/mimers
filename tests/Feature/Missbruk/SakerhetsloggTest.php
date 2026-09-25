@@ -345,6 +345,16 @@ it('varje uppräknad handling skriver exakt en rad via webben och via API:t', fu
     $exportWebbContainer = Container::factory()->for($exportWebbKonto, 'account')->create();
     actingAs($exportWebb)->post("/containers/{$exportWebbContainer->ulid}/export")->assertRedirect();
 
+    // ---- Lösenordsbytet -------------------------------------------------
+    // Bara webben: /api har ingen lösenordsrutt (issuens omfångsruta), och
+    // bytet är en kontohändelse som kräver en session.
+    $byter = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    actingAs($byter)->put('/settings/security/password', [
+        'current_password' => 'gammalt-losenord',
+        'password' => 'nytt-losenord-2026',
+        'password_confirmation' => 'nytt-losenord-2026',
+    ])->assertRedirect();
+
     // ---- Hämtad export -------------------------------------------------
     // Bara webben har en nedladdningsrutt (routes/web.php § /exports/…).
     [$hämtarExportKonto, $hämtarExport] = kontoMedMedlem();
@@ -390,6 +400,8 @@ it('varje uppräknad handling skriver exakt en rad via webben och via API:t', fu
         SecurityLog::ACTION_LOGIN => 2,
         SecurityLog::ACTION_LOGIN_FAILED => 2,
         SecurityLog::ACTION_MAGIC_LINK => 2,
+        // Alfabetiskt, som `ksort()` i sakerhetsFördelning() lägger dem.
+        SecurityLog::ACTION_PASSWORD_CHANGED => 1,
         SecurityLog::ACTION_RECOVERY_CODES => 2,
         SecurityLog::ACTION_TOTP_DISABLED => 2,
         SecurityLog::ACTION_TOTP_ENABLED => 2,
@@ -489,11 +501,26 @@ it('ingen rad bär lösenord, kod, token eller e-postadress', function () {
         'Authorization' => 'Bearer '.$koder->createToken('api')->plainTextToken,
     ])->assertNoContent();
 
+    // Lösenordsbytet (issue 129): det gamla och det nya lösenordet passerar
+    // samma request, och ingendera har någonstans att göra i raden. Koden
+    // prövas av `$aktiverarKod` ovan — samma väg genom TwoFactorChallenge.
+    $byterGammalt = 'gammalt-hemligt-7712';
+    $byterNytt = 'nytt-hemligt-9930';
+    $byter = User::factory()->create(['password_hash' => $byterGammalt]);
+
+    actingAs($byter)->put('/settings/security/password', [
+        'current_password' => $byterGammalt,
+        'password' => $byterNytt,
+        'password_confirmation' => $byterNytt,
+    ])->assertRedirect();
+
     $loggen = sakerhetsJson();
 
     expect($loggen)->not->toContain($lösenord)
         ->and($loggen)->not->toContain($adress)
         ->and($loggen)->not->toContain($aktiverarKod)
+        ->and($loggen)->not->toContain($byterGammalt)
+        ->and($loggen)->not->toContain($byterNytt)
         ->and($koderHemlighet)->not->toBeEmpty();
 
     foreach ($återställningskoder as $kod) {
@@ -505,7 +532,10 @@ it('ingen rad bär lösenord, kod, token eller e-postadress', function () {
     // göra i en `meta` som är tom.
     expect(sakerhetsRad(SecurityLog::ACTION_TOTP_ENABLED)->meta)->toBe([])
         ->and(sakerhetsRad(SecurityLog::ACTION_TOTP_DISABLED)->meta)->toBe([])
-        ->and(sakerhetsRad(SecurityLog::ACTION_RECOVERY_CODES)->meta)->toBe([]);
+        ->and(sakerhetsRad(SecurityLog::ACTION_RECOVERY_CODES)->meta)->toBe([])
+        // Lösenordsraden bär ett enda fält, och det säger bara om ett
+        // lösenord fanns FÖRE bytet (issue 129).
+        ->and(sakerhetsRad(SecurityLog::ACTION_PASSWORD_CHANGED)->meta)->toBe(['had_password' => true]);
 });
 
 it('ingen rad bär en rå IP-adress eller en rå webbläsarsträng', function () {

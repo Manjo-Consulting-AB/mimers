@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import FormField from '../../components/FormField.vue';
+import PasswordForm from '../../components/PasswordForm.vue';
 import UiListRow from '../../components/UiListRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
@@ -15,6 +16,13 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * Auth/Login. Ingen ny rutt tar emot något: varje formulär postar till de
  * rutter som redan finns sedan issue 6a–6c och som redan validerar, flashar
  * och testas. Serverns fel går genom FormField precis som på inloggningen.
+ *
+ * **Lösenordsformuläret kom med issue 129 och ligger i sin egen komponent**,
+ * PasswordForm.vue, överst på sidan: det är kontots första faktor. Det är
+ * det enda av sidans formulär som har två lägen (sätt ett lösenord, byt ett)
+ * och det enda som behöver veta något om kontot för att ritas rätt —
+ * `hasPassword` — så det äger sin egen form och sin egen rutt
+ * (PUT /settings/security/password).
  *
  * Sidan har tre lägen, och de följer av propsen (Beslut 5):
  *
@@ -53,6 +61,7 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * fält.
  */
 const props = defineProps({
+    hasPassword: { type: Boolean, required: true },
     totpEnabled: { type: Boolean, required: true },
     totpConfirmedAt: { type: String, default: null },
     recoveryCodesRemaining: { type: Number, required: true },
@@ -138,6 +147,8 @@ function outcomeLabel(login) {
         <Head :title="t('settings.security.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('settings.security.heading') }}</h1>
+
+        <PasswordForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
 
         <section class="mt-8 flex max-w-lg flex-col gap-4">
             <h2 class="text-lg font-semibold">{{ t('settings.security.totp.heading') }}</h2>

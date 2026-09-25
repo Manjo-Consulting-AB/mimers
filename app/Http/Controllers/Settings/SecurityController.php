@@ -14,15 +14,20 @@ use Inertia\Response;
  * Säkerhetssidan — ytan där tvåfaktorn slås på, stängs av och förses med
  * återställningskoder, se issue 53b.
  *
- * **Bara läsning.** Kontrollern renderar vyn och svarar med tre frågor:
- * har kontot en bekräftad TOTP, när bekräftades den, och hur många
- * oförbrukade återställningskoder finns kvar. Den skriver ingenting, och
- * den har ingen affärslogik — allt som ändrar tillstånd görs av
- * App\Support\Auth\TotpBroker och App\Support\Auth\RecoveryCodeBroker,
+ * **Bara läsning.** Kontrollern renderar vyn och svarar med fyra frågor:
+ * har kontot ett lösenord, har det en bekräftad TOTP, när bekräftades den,
+ * och hur många oförbrukade återställningskoder finns kvar. Den skriver
+ * ingenting, och den har ingen affärslogik — allt som ändrar tillstånd görs
+ * av App\Support\Auth\TotpBroker och App\Support\Auth\RecoveryCodeBroker,
  * bakom de fyra rutter som redan finns sedan issue 6a–6c
  * ([[ADR-0021 Frontendteknik]], [[ADR-0024 Tunna controllers och actions]]).
  * Formulären i vyn postar dit: POST /totp, POST /totp/confirm,
  * DELETE /totp, POST /totp/recovery-codes.
+ *
+ * **Lösenordsformuläret är undantaget sedan issue 129.** Det postar till
+ * PUT /settings/security/password, och skrivningen bor i
+ * App\Http\Controllers\Settings\PasswordController — den rör `user` och
+ * ingenting på den här sidan, och tvåfaktorns brokrar äger den inte.
  *
  * **De två engångshemligheterna, issue 53b § Beslut 3.** `totp_uri` och
  * `recovery_codes` ligger i sessionens *flash* — App\Http\Controllers\Auth\TotpController
@@ -88,6 +93,15 @@ class SecurityController extends Controller
         $user = $request->user();
 
         return Inertia::render('Settings/Security', [
+            // Lösenordsformulärets andra läge, se issue 129: en användare
+            // som bara använt magic link har `password_hash` NULL och ska
+            // mötas av "sätt ett lösenord" i stället för ett fält för ett
+            // nuvarande lösenord hon inte har. Vyn får ett JA/NEJ och inte
+            // hashen — `password_hash` är dold i serialiseringen
+            // (`#[Hidden]` på App\Models\User), och den ska inte heller
+            // finnas i en sidprop.
+            'hasPassword' => $user->password_hash !== null,
+
             'totpEnabled' => $user->totp_confirmed_at !== null,
             'totpConfirmedAt' => $user->totp_confirmed_at?->toDateString(),
 

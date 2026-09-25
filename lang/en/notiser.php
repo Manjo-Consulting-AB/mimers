@@ -73,6 +73,25 @@ return [
         'action' => 'Log in',
         'expires' => 'The link stops working in :minutes minutes and can only be used once.',
     ],
+    /*
+     * Lösenordsbytet, se [[M20 Kontot]] § 129. Transaktionellt och skickat av
+     * Notification-klassen själv, så det står här med de andra direkta
+     * utskicken och inte bland typerna ovan: det finns ingen notisrad att
+     * läsa och ingenting att avregistrera sig från — användaren gjorde det
+     * här själv.
+     *
+     * `not_you` är raden som gör mejlet värt att skicka: ett lösenordsbyte
+     * användaren inte har gjort är det tydligaste tecknet på ett kapat konto
+     * ([[ADR-0043 Tre loggar]] § Säkerhetsloggen), och av de två halvorna —
+     * loggen hos oss och det här hos henne — är det bara den här som når
+     * fram.
+     */
+    'password_changed' => [
+        'subject' => 'Your password has been changed',
+        'line' => 'The password for your account has been changed. Every other signed-in browser and every API token has been signed out.',
+        'not_you' => 'If this was not you, someone else has access to your account. Log in again, change the password, and look through your recent logins under Settings → Security.',
+    ],
+
     'invitation' => [
         'subject' => 'You have been invited to :container',
         'line' => 'You have been invited to share ":container".',
