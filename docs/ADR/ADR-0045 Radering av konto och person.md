@@ -53,9 +53,10 @@ Gränssnittet och API:et visar en nollställd författare som frånvarande. Det 
 - **Ett konto med andra medlemmar** lämnas: personens `account_user`-rad tas bort. **Är personen kontots enda `owner` spärras raderingen** tills en annan medlem har rollen.
 - **En delad container med aktiva medlemmar**, i ett konto som annars skulle raderas, spärrar på samma sätt som i livscykeln (29b § Beslut 4). Vägen ut är ägarbytet.
 - **En rättslig spärr** ([[ADR-0043 Tre loggar]]) som täcker något av personens konton spärrar hela raderingen.
-- **En aktiv prenumeration** (`active` eller `past_due`) på ett konto som skulle raderas spärrar, av samma skäl som den undantar i livscykeln ([[Planer och kvoter]] § Kontolivscykel).
 
 En spärrad radering gör ingenting. Personen ser vad som spärrar, och varför.
+
+**En aktiv prenumeration spärrar inte.** Rätten att bli glömd går före. Prenumerationen på ett konto som raderas avslutas utan återbetalning. Det skiljer sig med flit från livscykeln, där en aktiv prenumeration alltid undantar ([[Planer och kvoter]] § Kontolivscykel): där är det systemet som raderar, här är det personen som ber om det.
 
 **Det som bara är personens raderas:** medlemskap, åtkomster som mottagare, kalenderlänkar, notiser och notispreferenser, favoriter, avfärdade tips, inloggningslänkar, återställningskoder, väntande e-post- och lösenordsbyten, sessioner och API-token. Väntande inbjudningar och ägarbyten som personen startat dras tillbaka. Besvarade behåller sin rad, med författaren nollställd enligt beslut 2.
 
@@ -74,6 +75,7 @@ Beslut 3 följer mönstret från lösenordsbytet: den som sitter i en kapad sess
 - `DeletesDormantAccounts` tappar spärren för främmande bilagor (29b § Beslut 5). Spärren för delade containers finns kvar.
 - Varje vy och resurs som visar en författare måste klara `NULL`.
 - Integritetspolicyn ska säga att en radering är omedelbar i appen men lever kvar i backuperna under deras retention ([[ADR-0015 Backup]]), och att loggraderna lever sin frist ut.
+- Villkoren ska säga att en prenumeration avslutas utan återbetalning när personen raderar sig själv och kontot därmed raderas.
 - Personradering via API:et byggs inte nu. Mobilapparna får den när de byggs.
 
 ## Alternativ

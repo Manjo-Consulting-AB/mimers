@@ -43,13 +43,20 @@ Konsekvenser:
 
 ## Uppföljning 2026-09-26 — vad papperskorgen tar emot
 
-**Papperskorgen är till för saker, inte för egenskaper.** Tonys beslut vid planeringen av [[M22 Redo för testare]]: ett block man slänger hamnar i papperskorgen, men text som suddas ut på blocket är bara borta.
+**Papperskorgen är till för saker, inte för inställningar eller egenskaper.** Tonys beslut vid planeringen av [[M22 Redo för testare]]: ett block man slänger hamnar i papperskorgen, men text som suddas ut på blocket är bara borta.
 
-`schedule`, `loan` och `cost_entry` är egenskaper hos ett item. Raderas en av dem försvinner den ur användarens vy direkt, utan papperskorg och utan återställning. Uppräkningen under § Retentionstiden i MVP ovan tog med `schedule` bland det som omfattas av de trettio dagarna. Det gäller inte längre.
+| Sort | Vad | Vid radering |
+|---|---|---|
+| **Saker** | `container`, `item`, `attachment` | papperskorgen, trettio dagar, går att återställa |
+| **Inställningar** | `category`, `tag` | borta direkt |
+| **Egenskaper hos ett item** | `schedule`, `loan`, `cost_entry` | borta direkt |
 
-- **Soft delete finns kvar på raderna.** Den skyddar mot buggen, som § Motivering säger, även när ingen yta erbjuder en återställning. Det är också därför scheman, lån och kostnadsrader inte behöver någon egen gallring: de mjukraderade raderna följer sitt item och gallras med det, eller med containern.
-- **Papperskorgens fyra typer ändras inte.** `item`, `attachment`, `category` och `tag` exponeras som förut, och containern har sin egen papperskorg.
-- Frågan i [[Tankar]] om en femte typ i papperskorgen är därmed besvarad: det blir ingen.
+Uppräkningen under § Retentionstiden i MVP ovan tog med `category`, `tag` och `schedule` bland det som går att återställa. Det gäller inte längre.
+
+- **Soft delete finns kvar på raderna.** Den skyddar mot buggen, som § Motivering säger, även när ingen yta erbjuder en återställning.
+- **Gallringen ändras inte.** Kategorier och taggar gallras av samma jobb som i dag, trettio dagar efter `deleted_at`. Scheman, lån och kostnadsrader följer sitt item och gallras med det, eller med containern.
+- **Papperskorgen i containern visar items och bilagor**, och containrarna har sin egen. Kategorier och taggar lämnar den i issue 150.
+- Frågan i [[Tankar]] om en femte typ i papperskorgen är därmed besvarad: det blir ingen, och två av de fyra går.
 
 ## Alternativ
 

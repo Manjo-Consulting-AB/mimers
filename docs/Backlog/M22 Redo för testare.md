@@ -12,7 +12,7 @@ Tillagd 2026-09-26, när M21 var klar. MVP:n är i stort sett byggd, och det som
 
 **Testplanen (148–149).** [[Testplan filer]] säger vad som redan är bevisat om dedup och filåtkomst, och vad som saknas. De två issuerna skriver proven som saknas.
 
-**Utanför milstolpen, avgjort samtidigt.** Magic link kräver redan tvåfaktorkoden: det byggdes i issue 80, och frågan i [[Tankar]] hade bara inte flyttats. Papperskorgen tar emot saker, inte egenskaper: scheman, lån och kostnadsrader försvinner direkt ([[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26). Anmälningsvägen enligt DSA blir en egen milstolpe. Hela testsviten mot MariaDB i CI är ett pipelinearbete och går vid sidan av.
+**Utanför milstolpen, avgjort samtidigt.** Magic link kräver redan tvåfaktorkoden: det byggdes i issue 80, och frågan i [[Tankar]] hade bara inte flyttats. Papperskorgen tar emot saker, inte inställningar eller egenskaper ([[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26): scheman, lån och kostnadsrader försvinner redan direkt, och kategorier och taggar lämnar papperskorgen i 150. Anmälningsvägen enligt DSA blir en egen milstolpe. Hela testsviten mot MariaDB i CI är ett pipelinearbete och går vid sidan av.
 
 ---
 
@@ -57,12 +57,12 @@ En ny action, `App\Actions\User\DeleteUser`, gör det [[ADR-0045 Radering av kon
 
 **Ordningen i transaktionen:** spärrarna prövas, varje konto där personen är enda medlem raderas med `DeleteAccount`, personen lämnar övriga konton, författarkolumnerna mot `user` nollställs, personens egna rader raderas, väntande inbjudningar och ägarbyten som personen startat dras tillbaka, säkerhetsloggen får `user.deleted`, och sist raderas `user`-raden.
 
-**Spärrarna är fyra:** personen är enda `owner` i ett konto som har andra medlemmar; ett konto som skulle raderas har en delad container med aktiva medlemmar; en rättslig spärr täcker något av personens konton (`LegalHold::covers()`); personen har en prenumeration som är `active` eller `past_due` på ett konto som skulle raderas. Varje spärr har en maskinläsbar kod och det den gäller, så att 145 kan visa den.
+**Spärrarna är tre:** personen är enda `owner` i ett konto som har andra medlemmar; ett konto som skulle raderas har en delad container med aktiva medlemmar; en rättslig spärr täcker något av personens konton (`LegalHold::covers()`). **En aktiv prenumeration spärrar inte.** Den avslutas utan återbetalning när kontot raderas, genom att `DeleteAccount` tar bort `subscription`-raden som i dag. Varje spärr har en maskinläsbar kod och det den gäller, så att 145 kan visa den.
 
 **`user.deleted` bär inte e-postadressen**, bara `user_id` och antalet raderade och lämnade konton i `meta`.
 
 **Läs:** [[ADR-0045 Radering av konto och person]], [[ADR-0043 Tre loggar]] § Säkerhetsloggen och § Den rättsliga spärren, [[Konton och åtkomst]] § user och § account_user, `app/Actions/Account/DeleteAccount.php` (docblocken), `app/Console/DeletesDormantAccounts.php` (spärrarna), `app/Models/LegalHold.php`
-**Klart när:** en person som är enda medlem i sitt konto raderas, och kontot, dess containers och personens rader är borta; en person i ett konto med andra medlemmar lämnar kontot, och kontot står kvar orört; var och en av de fyra spärrarna gör att ingenting raderas och ger sin kod; innehåll som personen skapat i en annans container står kvar med författaren nollställd; väntande inbjudningar och ägarbyten som personen startat är tillbakadragna; säkerhetsloggen har en rad `user.deleted` utan e-postadress; loggraderna med personens `user_id` står kvar; e-postadressen kan registreras igen; allt sker i en transaktion; [[Konton och åtkomst]] och [[Registerförteckning]] beskriver raderingen; hela testsviten är grön.
+**Klart när:** en person som är enda medlem i sitt konto raderas, och kontot, dess containers och personens rader är borta; en person i ett konto med andra medlemmar lämnar kontot, och kontot står kvar orört; var och en av de tre spärrarna gör att ingenting raderas och ger sin kod; ett konto med en prenumeration som är `active` raderas ändå, och prenumerationen är borta; innehåll som personen skapat i en annans container står kvar med författaren nollställd; väntande inbjudningar och ägarbyten som personen startat är tillbakadragna; säkerhetsloggen har en rad `user.deleted` utan e-postadress; loggraderna med personens `user_id` står kvar; e-postadressen kan registreras igen; allt sker i en transaktion; [[Konton och åtkomst]] och [[Registerförteckning]] beskriver raderingen; hela testsviten är grön.
 **Beror på:** 142, 143
 
 ### 145. Personraderingen i inställningarna
@@ -118,4 +118,15 @@ Skriv proven A1–A8 i [[Testplan filer]] § Del 2, under samma regel som 148: *
 
 **Läs:** [[Testplan filer]], [[ADR-0019 Filleverans]], [[ADR-0028 Åtkomst på itemnivå]], `tests/Feature/Attachment/NedladdningTest.php`, `tests/Feature/Filleverans/FiloriginTest.php`, `tests/Feature/Omfang/ItemgrindTest.php`
 **Klart när:** A1–A8 har var sitt prov, namngivet så att bokstaven och siffran går att hitta; inget prov upprepar ett som tabellen *Redan bevisat* pekar på; ingen fil utanför `tests/` och [[Testplan filer]] ändras; ett prov som visar ett fel är markerat `->todo()` och beskrivet i PR-kroppen; [[Testplan filer]] pekar på de nya proven; hela testsviten är grön.
+**Beror på:** -
+
+### 150. Kategorier och taggar lämnar papperskorgen
+Kategorier och taggar är inställningar, inte saker ([[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26). Papperskorgen i containern visar i dag fyra typer. Den ska visa två: `item` och `attachment`.
+
+- **`ListTrash` och `FindTrashedInContainer`** tar inte längre med `category` och `tag`. `RestoreContent` tappar grenarna för dem, och `RestoreRequest` godtar bara `item` och `attachment`. En återställning av en kategori eller tagg nekas som vilken okänd typ som helst, i både webben och `/api`.
+- **Vyn** (`Containers/Trash.vue`, `TrashRow.vue`, `trashPresentation.js`) tappar typerna och deras strängar.
+- **Raderingen ändras inte:** kategorin och taggen mjukraderas som i dag och gallras av `PurgesExpiredTrash` trettio dagar efter `deleted_at`. Kvittona efter en radering nämner redan varken papperskorgen eller trettio dagar och ändras inte.
+
+**Läs:** [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26, `app/Actions/Trash/ListTrash.php` (docblocken), `app/Actions/Trash/RestoreContent.php`, `app/Http/Requests/Trash/RestoreRequest.php`, `resources/js/pages/Containers/Trash.vue`
+**Klart när:** papperskorgen visar mjukraderade items och bilagor men inga kategorier eller taggar, i både webben och `/api`; en återställning av typen `category` eller `tag` nekas och ändrar ingenting; en raderad kategori eller tagg gallras fortfarande efter trettio dagar; hela testsviten är grön.
 **Beror på:** -

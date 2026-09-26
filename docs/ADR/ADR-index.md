@@ -13,7 +13,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0005 Schema och förekomst]] | Regeln och den enskilda gången är olika saker | [[Scheman och uppgifter]] |
 | [[ADR-0006 Innehållsadresserad lagring]] | Dedup via SHA-256, osynlig för användaren | [[Filer och lagring]] |
 | [[ADR-0007 Fillagring hos inleed]] | Filer i Sverige och Frankrike, bakom Storage-abstraktion | [[Filer och lagring]] |
-| [[ADR-0008 Soft delete och papperskorg]] | Skyddar mot buggen, inte mot diskhaveriet; papperskorgen tar emot saker, inte egenskaper | Allt |
+| [[ADR-0008 Soft delete och papperskorg]] | Skyddar mot buggen, inte mot diskhaveriet; papperskorgen tar emot saker — container, item, bilaga — inte inställningar eller egenskaper | Allt |
 | [[ADR-0009 Kvoter och livscykel]] | Bilagor raderas, items aldrig | [[Planer och kvoter]] |
 | [[ADR-0010 Notisarkitektur]] | Outbox med utbytbara kanaler | [[Notiser]] |
 | [[ADR-0011 Autentisering]] | Sanctum, lösenord plus magic link; ett lösenordsbyte bekräftas via mejl, inte med det gamla lösenordet | [[Konton och åtkomst]] |
