@@ -26,6 +26,14 @@ use RuntimeException;
  * efter det stängda. Skapande och återaktivering har ingen stängd förekomst,
  * skickar ingen, och räknar som förut.
  *
+ * **Dagen är ett argument** ([[ADR-0044 Användarens dag]] § Beslut 3, issue
+ * 517): `fixed` räknar mot den dag anroparen skickar, aldrig mot serverns
+ * `Carbon::today()`. Åtgärden hämtar ingen användare själv — den som agerar
+ * räknar ut sin dag med `User::today()` och skickar den. Anroparen skickar
+ * också `$from` som en DAG: för `complete` den lokala dagen för
+ * `completed_at`, räknad i samma tidszon som dagen. Se CloseOccurrence, där
+ * båda räknas ut.
+ *
  * Returvärdet är medvetet nullbart: `recurrence_type: none` har ingen nästa
  * när engångsförekomsten väl är stängd, och ett schema som redan har en öppen
  * förekomst ska inte få en andra. Det är dokumenterade returvärden, inte
@@ -40,16 +48,23 @@ use RuntimeException;
 class OpenNextOccurrence
 {
     /**
-     * @param  Carbon|null  $from  Nästa förfalls utgångspunkt: `completed_at` vid
-     *                             `complete`, den överhoppade förekomstens `due_at`
-     *                             vid `skip`. Null vid skapande och återaktivering.
+     * @param  Carbon  $today  Den agerandes kalenderdatum, midnatt i appens
+     *                         tidszon — `User::today()` för den som agerar.
+     *                         Dagen avgör vad `fixed` räknar mot (Beslut 3).
+     *                         Stängs en förekomst utan användare faller dagen
+     *                         tillbaka på containerns ägarkonto,
+     *                         `account.timezone`; anroparen räknar ut den.
+     * @param  Carbon|null  $from  Nästa förfalls utgångspunkt: den lokala dagen
+     *                             för `completed_at` vid `complete`, den
+     *                             överhoppade förekomstens `due_at` vid `skip`.
+     *                             Null vid skapande och återaktivering.
      * @param  Carbon|null  $closedDueAt  Den stängda förekomstens `due_at`, så att
      *                                    nästa förfall hamnar strikt efter den (132).
      *                                    Null när ingen förekomst har stängts.
      */
-    public function handle(Schedule $schedule, ?Carbon $from = null, ?Carbon $closedDueAt = null): ?ScheduleOccurrence
+    public function handle(Schedule $schedule, Carbon $today, ?Carbon $from = null, ?Carbon $closedDueAt = null): ?ScheduleOccurrence
     {
-        return DB::transaction(function () use ($schedule, $from, $closedDueAt): ?ScheduleOccurrence {
+        return DB::transaction(function () use ($schedule, $today, $from, $closedDueAt): ?ScheduleOccurrence {
             $lockedSchedule = $schedule->newQuery()->whereKey($schedule->id)->lockForUpdate()->first();
 
             if ($lockedSchedule === null) {
@@ -60,7 +75,7 @@ class OpenNextOccurrence
                 return null;
             }
 
-            $dueAt = $this->dueAt($lockedSchedule, $from, $closedDueAt);
+            $dueAt = $this->dueAt($lockedSchedule, $today, $from, $closedDueAt);
 
             if ($dueAt === null) {
                 return null;
@@ -136,16 +151,17 @@ class OpenNextOccurrence
      *   — när engångsuppgiften väl är stängd finns ingen nästa, inte heller
      *   vid en senare återaktivering (Beslut 3).
      * - `fixed`: räknar ALLTID från kalendern (`anchor_date`), framflyttat i
-     *   seriens steg tills det är både `>= idag` och `> $closedDueAt` (132) —
-     *   oavsett `$from` och oavsett när jobbet gjordes.
+     *   seriens steg tills det är både `>= $today` och `> $closedDueAt` (132) —
+     *   oavsett `$from` och oavsett när jobbet gjordes. `$today` är den
+     *   agerandes dag och inte serverns (Beslut 3).
      * - `interval`: `anchor_date` för den första förekomsten; `$from`
-     *   (datumdelen) plus intervallet när 22b anropar med `completed_at`.
-     *   Ligger resultatet på eller före `$closedDueAt` stegas det fram med
-     *   intervallet tills det ligger efter (132).
+     *   (datumdelen) plus intervallet när 22b anropar med den lokala dagen för
+     *   `completed_at`. Ligger resultatet på eller före `$closedDueAt` stegas
+     *   det fram med intervallet tills det ligger efter (132).
      *
      * @return Carbon|null null när det inte finns någon nästa förekomst.
      */
-    private function dueAt(Schedule $schedule, ?Carbon $from, ?Carbon $closedDueAt): ?Carbon
+    private function dueAt(Schedule $schedule, Carbon $today, ?Carbon $from, ?Carbon $closedDueAt): ?Carbon
     {
         $anchor = $schedule->anchor_date;
 
@@ -178,7 +194,7 @@ class OpenNextOccurrence
             throw $this->programmingError('Ett schema med recurrence_type fixed utan anchor_date kan inte öppna en förekomst.');
         }
 
-        return $this->nextCalendarDue($anchor, $schedule, $closedDueAt);
+        return $this->nextCalendarDue($anchor, $schedule, $today, $closedDueAt);
     }
 
     /**
@@ -273,13 +289,13 @@ class OpenNextOccurrence
 
     /**
      * Nästa `fixed`-förfall räknat från KALENDERN: `anchor_date` framflyttat
-     * med `interval_count × interval_unit` tills det ligger både `>= today`
+     * med `interval_count × interval_unit` tills det ligger både `>= $today`
      * och `> $closedDueAt` (Beslut 4, 132). Ett `anchor_date` som redan
      * uppfyller båda används som det är.
      *
      * De två villkoren blir ett golv: den stängda förekomstens `due_at` plus
-     * en dag, lyft till idag när den ligger bakom. Utan en stängd förekomst
-     * är golvet idag, precis som förut.
+     * en dag, lyft till `$today` när den ligger bakom. Utan en stängd
+     * förekomst är golvet `$today`, precis som förut.
      *
      * Framflyttningen RÄKNAS, inte loopas dag för dag (§ Att se upp med): för
      * dag/vecka direkt aritmetiskt på dagskillnaden, för månad/år som hela
@@ -287,9 +303,8 @@ class OpenNextOccurrence
      * månadssluts-klampningen). Ett `anchor_date` från 1990 med dagsintervall
      * blir inte 13 000 varv i en loop.
      */
-    private function nextCalendarDue(Carbon $anchor, Schedule $schedule, ?Carbon $closedDueAt): Carbon
+    private function nextCalendarDue(Carbon $anchor, Schedule $schedule, Carbon $today, ?Carbon $closedDueAt): Carbon
     {
-        $today = Carbon::today();
         $unit = $schedule->interval_unit;
         $count = $schedule->interval_count;
 

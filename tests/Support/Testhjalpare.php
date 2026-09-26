@@ -278,6 +278,12 @@ function forekomstSchemaKropp(array $overrides = []): array
  *
  * Ursprungligen i tests/Feature/Uppgift/ForekomstBeroendeTest.php.
  *
+ * **Dagen** är containerns ägarkontos, `account.timezone` — hjälparen har
+ * ingen användare, och det är reserven [[ADR-0044 Användarens dag]]
+ * § Beslut 2 pekar ut för den som stänger eller skapar utan en. Den slår
+ * bara igenom för `fixed` med ett `anchor_date` bakom oss; `interval` och
+ * `none` öppnar på `anchor_date` oavsett dag.
+ *
  * @param  array<string, mixed>  $overrides
  * @return array{0: Schedule, 1: ScheduleOccurrence}
  */
@@ -291,7 +297,10 @@ function oppnaForekomst(Item $item, array $overrides = []): array
         'anchor_date' => '2027-05-05',
     ], $overrides));
 
-    $occurrence = app(OpenNextOccurrence::class)->handle($schedule);
+    $kontoTidszon = $item->container->account->timezone;
+    $idag = Carbon::parse(Carbon::now($kontoTidszon)->toDateString());
+
+    $occurrence = app(OpenNextOccurrence::class)->handle($schedule, $idag);
 
     if ($occurrence === null) {
         throw new RuntimeException('Öppnade ingen förekomst för ett aktivt schema med anchor_date.');

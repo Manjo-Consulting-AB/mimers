@@ -96,7 +96,9 @@ class UpdateSchedule
             }
 
             if ($reactivated && ! $schedule->openOccurrence()->exists()) {
-                $this->openNextOccurrence->handle($schedule);
+                // Dagen är den som aktiverar ([[ADR-0044 Användarens dag]]
+                // § Beslut 3, issue 517) — samma regel som i CreateSchedule.
+                $this->openNextOccurrence->handle($schedule, $actor->today());
             }
         });
     }

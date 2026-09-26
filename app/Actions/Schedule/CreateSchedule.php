@@ -62,7 +62,11 @@ class CreateSchedule
             );
 
             if ($schedule->is_active) {
-                $this->openNextOccurrence->handle($schedule);
+                // Dagen är skaparens ([[ADR-0044 Användarens dag]] § Beslut 3,
+                // issue 517): ett `fixed`-schema vars `anchor_date` ligger
+                // bakom oss får sin första förekomst på HENNES dag, inte på
+                // serverns.
+                $this->openNextOccurrence->handle($schedule, $actor->today());
             }
         });
 

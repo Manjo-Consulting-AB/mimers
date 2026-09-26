@@ -307,6 +307,42 @@ it('ett schema pausas och startas igen med is_active', function () {
     expect($startat->json('data.is_active'))->toBeTrue();
 });
 
+/*
+ * Issue 517 · En återaktivering öppnar sin förekomst på DEN AKTIVERANDES dag
+ * ([[ADR-0044 Användarens dag]] § Beslut 3). Vägen hit går genom
+ * App\Actions\Schedule\UpdateSchedule, som skickar `$actor->today()`.
+ *
+ * 2026-09-24 23:30 UTC är 2026-09-25 01:30 i Europe/Stockholm, som är både
+ * kontots tidszon (fabrikens förval) och användarens reserv. Serverns dag är
+ * den 24:e; före issuen öppnade förekomsten där.
+ */
+it('öppnar en återaktiverad förekomst på den aktiverandes dag', function () {
+    Carbon::setTestNow('2026-09-24 23:30:00');
+
+    [, , $headers, $container, $item] = skapaSchemaTestItem();
+    $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules";
+
+    $created = postJson($url, [
+        'title' => 'Byt impeller',
+        'recurrence_type' => 'fixed',
+        'interval_unit' => 'day',
+        'interval_count' => 1,
+        'anchor_date' => '2026-09-01',
+        'is_active' => false,
+    ], $headers);
+    $created->assertCreated();
+    $ulid = $created->json('data.ulid');
+
+    $schema = Schedule::where('ulid', $ulid)->firstOrFail();
+    expect($schema->openOccurrence()->exists())->toBeFalse();
+
+    patchJson("{$url}/{$ulid}", ['is_active' => true], $headers)->assertOk();
+
+    expect($schema->openOccurrence()->firstOrFail()->due_at->toDateString())->toBe('2026-09-25');
+
+    Carbon::setTestNow();
+});
+
 it('en patch som byter till none nollställer intervallkolumnerna', function () {
     [, , $headers, $container, $item] = skapaSchemaTestItem();
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules";

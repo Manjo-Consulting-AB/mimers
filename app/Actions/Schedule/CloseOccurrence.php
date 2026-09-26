@@ -43,7 +43,7 @@ use RuntimeException;
  * | Typ | complete räknar nästa från | skip räknar nästa från |
  * |---|---|---|
  * | `fixed` | kalendern, `anchor_date` | kalendern, `anchor_date` — identiskt |
- * | `interval` | `completed_at` | den överhoppade förekomstens `due_at` |
+ * | `interval` | den lokala dagen för `completed_at` | den överhoppade förekomstens `due_at` |
  * | `none` | ingen nästa | ingen nästa |
  *
  * Båda rutterna skickar dessutom med den stängda förekomstens `due_at` (132):
@@ -194,16 +194,47 @@ class CloseOccurrence
             // båda rutterna: nästa förfall ligger strikt efter det stängda.
             // Det är det som gör att en daglig uppgift avbockad i förtid
             // flyttar sig i stället för att komma tillbaka med samma dag.
+            //
+            // Dagen är HENNES ([[ADR-0044 Användarens dag]] § Beslut 3, issue
+            // 517): den som trycker avgör vilken dag det är, och `interval`
+            // räknar från den lokala dagen för `completed_at` — inte från
+            // UTC-datumet för tidsstämpeln. Se completionDay().
+            $today = $user->today();
+
             $from = $status === ScheduleOccurrence::STATUS_SKIPPED
                 ? $lockedOccurrence->due_at
-                : $lockedOccurrence->completed_at;
+                : $this->completionDay($lockedOccurrence, $user);
 
-            $next = $this->openNextOccurrence->handle($lockedSchedule, $from, $lockedOccurrence->due_at);
+            $next = $this->openNextOccurrence->handle($lockedSchedule, $today, $from, $lockedOccurrence->due_at);
 
             // Steg 5 — Avbryt oskickade notiser för den stängda förekomsten
             // (M5). Byggs på exakt den här platsen, sist i flödet.
 
             return ['closed' => $lockedOccurrence, 'next' => $next];
         });
+    }
+
+    /**
+     * Den lokala dagen för `completed_at` — dagen `interval` räknar nästa
+     * förfall från ([[ADR-0044 Användarens dag]] § Beslut 3).
+     *
+     * `completed_at` är en tidsstämpel i UTC, men en avbockning 01:30 svensk
+     * tid den 25:e är klockan 23:30 UTC den 24:e, och den som trycker räknar
+     * från den 25:e. Dagen tas därför ut i HENNES tidszon, precis som
+     * kostnadskrokens `incurred_on` (issue 136 § Beslut 3), och byggs sedan om
+     * till midnatt i APPENS tidszon — samma form som `User::today()` ger
+     * ([[ADR-0044 Användarens dag]] § Beslut 5): ett datum utan tidszon, så
+     * att den kan jämföras med `due_at` och `closedDueAt` som datum.
+     *
+     * För `complete` blir dagen identisk med `$user->today()`, eftersom
+     * `completed_at` sätts till `now()` i samma transaktion. Den räknas ändå
+     * ur tidsstämpeln och inte ur dagens datum: regeln är `completed_at`s dag,
+     * och två uttryck för samma regel driver isär.
+     */
+    private function completionDay(ScheduleOccurrence $occurrence, User $user): Carbon
+    {
+        return Carbon::parse(
+            $occurrence->completed_at->copy()->setTimezone($user->preferredTimezone())->toDateString()
+        );
     }
 }
