@@ -8,7 +8,7 @@ Tillagd 2026-09-24, efter retron för M18. Här samlas tre luckor som stod i [[A
 
 **Säkerhetsloggen väntar på dem.** Issue 113 skrev att *"byte av lösenord och e-post finns inte i produkten än; de loggas här när de byggs"*. De två handlingarna får var sin konstant på `SecurityLog`. Samma `meta`-regel gäller: aldrig ett lösenord, en kod, ett token eller en e-postadress.
 
-**Detta ingår inte:** `/api`, eftersom mobilappen inte finns än och webben är den enda klienten, och en återställning av glömt lösenord. Magic link är den vägen in, se [[ADR-0011 Autentisering]] § Motivering.
+**Detta ingår inte:** `/api`, eftersom mobilappen inte finns än och webben är den enda klienten, och en återställning av glömt lösenord från inloggningssidan. Magic link är den vägen in, och sedan issue 140 kan den som loggat in så också byta lösenordet utan att minnas det gamla, se [[ADR-0011 Autentisering]] § Uppföljning 2026-09-26.
 
 ---
 
@@ -22,6 +22,7 @@ Säkerhetssidan i kontoinställningarna får ett formulär för att byta löseno
 **Läs:** [[ADR-0011 Autentisering]], [[ADR-0043 Tre loggar]] § Säkerhetsloggen, `app/Http/Controllers/Settings/SecurityController.php`, `app/Http/Controllers/Auth/TotpController.php` (hur en kod prövas), `app/Http/Requests/Auth/RegisterRequest.php` (lösenordsregeln), `app/Notifications/MagicLinkNotification.php` (förlagan för mejlet)
 **Klart när:** en användare med lösenord kan byta det genom att ange det nuvarande; ett fel nuvarande lösenord ger ett valideringsfel och ändrar ingenting; en användare utan lösenord kan sätta ett; med tvåfaktor påslagen misslyckas bytet utan giltig kod, både med och utan befintligt lösenord; en återställningskod godtas och förbrukas; övriga sessioner och alla token är ogiltiga efteråt; säkerhetsloggen har exakt en rad `auth.password_changed` utan lösenord eller kod i `meta`; mejlet skickas; formuläret har inloggningens takgräns; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
 **Beror på:** -
+**Ändrad av 140:** kravet på det nuvarande lösenordet ersätts av en bekräftelse via mejl.
 
 ### 130. E-postadressen går att byta
 Profilsidan visar i dag adressen men ändrar den inte (`ProfileController` § Beslut 3). Den regeln faller här, men **adressen byts aldrig i samma steg som den begärs.**
@@ -51,3 +52,19 @@ En inbjudan som inte är användarens ger `404` och inte `403`, så att ett giss
 **Läs:** [[Konton och åtkomst]] § invitation, [[ADR-0003 Åtkomstmodell]], `app/Http/Controllers/InvitationResponseController.php` (docblocken), `app/Http/Requests/Invitation/InvitationTokenRequest.php`, `app/Actions/Invitation/AcceptInvitation.php`, [[M19 Dashboarden]] § 127
 **Klart när:** en inloggad, verifierad användare ser sina väntande inbjudningar på `/invitations` utan token; en utgången, återkallad eller besvarad inbjudan syns inte; en overifierad användare ser ingen lista; accept via `ulid` ger samma åtkomst som accept via token; en annan användares inbjudan ger `404` vid accept och avvisande; adressjämförelsen är skiftlägesokänslig på samma sätt som tokenvägens; tokenvägen fungerar oförändrad; klockan visar en rad per väntande inbjudan och länkar till `/invitations`; [[Tankar]] har frågan om `invitation.received`; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
 **Beror på:** 127
+
+### 140. Lösenordsbytet bekräftas via mejl
+*Tillagd 2026-09-26, efter att M20 byggts.* Issue 129 kräver det nuvarande lösenordet för att byta. Den som glömt sitt lösenord kan logga in med magic link men sedan inte byta det, och det finns ingen annan väg. **Kravet på det nuvarande lösenordet tas bort och ersätts av en bekräftelse via mejl**, se [[ADR-0011 Autentisering]] § Uppföljning 2026-09-26.
+
+**Flödet:**
+
+1. **Begäran** (`PUT /settings/security/password`, samma rutt som i dag): det nya lösenordet med bekräftelsefält, och en kod när tvåfaktorn är påslagen. Inget nuvarande lösenord, varken när kontot har ett eller inte. Koden prövas av `TwoFactorChallenge` som förut, och rutten behåller inloggningens takgräns. **`user.password_hash` ändras inte.**
+2. **Raden:** en ny tabell, `password_change`, i samma form som `email_change`: `user_id`, `password_hash` (det nya lösenordet, hashat; klartexten lagras aldrig), `token_hash`, `expires_at` (en timme) och `confirmed_at`. En ny begäran ogiltigförklarar en tidigare obekräftad.
+3. **Mejlet** går till `user.email` med en bekräftelselänk. Det säger att ingenting ändras om länken inte öppnas.
+4. **Bekräftelsen:** länken måste öppnas av en inloggad användare som är samma användare, annars `404`, som i 130. Först då skrivs `password_hash`, och resten av 129:s kedja körs som i dag: övriga sessioner loggas ut, sessionen får nytt id, alla token tas bort, `auth.password_changed` skrivs och `PasswordChangedNotification` skickas.
+
+Säkerhetsloggen får `auth.password_change_requested`. **E-postbytet (130) ändras inte** och kräver fortfarande det nuvarande lösenordet.
+
+**Läs:** [[ADR-0011 Autentisering]] § Uppföljning 2026-09-26, [[Konton och åtkomst]] § email_change, `app/Http/Controllers/Settings/PasswordController.php`, `app/Http/Requests/Settings/UpdatePasswordRequest.php`, `app/Actions/Account/ConfirmEmailChange.php` (förlagan för bekräftelsen)
+**Klart när:** en begäran ändrar inte `password_hash`; en begäran kräver inget nuvarande lösenord, med eller utan befintligt; med tvåfaktor påslagen misslyckas begäran utan giltig kod; länken sätter det nya lösenordet och kör 129:s kedja; länken fungerar en gång och inte efter en timme; en annan inloggad användare får `404`; en ny begäran gör den gamla länken ogiltig; tabellen innehåller aldrig lösenordet i klartext; säkerhetsloggen har `auth.password_change_requested` och `auth.password_changed` utan lösenord, kod eller token i `meta`; e-postbytet kräver fortfarande det nuvarande lösenordet; [[Konton och åtkomst]] har ett avsnitt `password_change`; [[Registerförteckning]] har en rad för tabellen; strängarna ligger i `lang/en/`; hela testsviten är grön.
+**Beror på:** 129, 130

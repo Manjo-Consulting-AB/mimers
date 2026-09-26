@@ -16,7 +16,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0008 Soft delete och papperskorg]] | Skyddar mot buggen, inte mot diskhaveriet | Allt |
 | [[ADR-0009 Kvoter och livscykel]] | Bilagor raderas, items aldrig | [[Planer och kvoter]] |
 | [[ADR-0010 Notisarkitektur]] | Outbox med utbytbara kanaler | [[Notiser]] |
-| [[ADR-0011 Autentisering]] | Sanctum, lösenord plus magic link | [[Konton och åtkomst]] |
+| [[ADR-0011 Autentisering]] | Sanctum, lösenord plus magic link; ett lösenordsbyte bekräftas via mejl, inte med det gamla lösenordet | [[Konton och åtkomst]] |
 | [[ADR-0012 Sök]] | Scout med databasdrivern tills vidare | [[Items och organisation]] |
 | [[ADR-0013 Språk och i18n]] | *Språkuppsättningen ersatt av ADR-0034.* Svenska och engelska, felkoder aldrig meningar | Allt |
 | [[ADR-0014 Prismodell]] | Gratis, Pro 39–49 €/år, tre B2B-spår | [[Planer och kvoter]] |

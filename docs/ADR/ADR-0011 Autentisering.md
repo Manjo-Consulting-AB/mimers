@@ -1,6 +1,6 @@
 # ADR-0011 Autentisering
 
-**Status:** Antagen 2026-08-03 · Ändrad av [[ADR-0020 Plattformsidentitet och frontendgräns]] på punkten om vilka domäner cookie-läget gäller · Ändrad av [[ADR-0021 Frontendteknik]] på punkten om vad webbfrontenden använder · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Ändrad av [[ADR-0020 Plattformsidentitet och frontendgräns]] på punkten om vilka domäner cookie-läget gäller · Ändrad av [[ADR-0021 Frontendteknik]] på punkten om vad webbfrontenden använder · Uppföljning 2026-09-26 om lösenordsbytet · [[ADR-index]]
 
 ## Kontext
 
@@ -43,3 +43,11 @@ Social inloggning valdes bort tills vidare — den sänker registreringströskel
 **Enbart lösenord.** Enklast. Valdes bort — säsongsmönstret garanterar många glömda lösenord.
 
 **Google- och Apple-inloggning.** Uppskjutet, inte avfärdat.
+
+## Uppföljning 2026-09-26 — att byta lösenord
+
+**Ett lösenordsbyte kräver inte det nuvarande lösenordet. Det kräver att användaren når sin adress.** Bytet begärs i inställningarna och träder i kraft först när en länk i ett mejl till `user.email` öppnas. Har kontot tvåfaktor påslagen krävs fortfarande en giltig kod när bytet begärs.
+
+Issue 129 byggde bytet med det nuvarande lösenordet som återautentisering. Det stängde den enda vägen ut för den som glömt sitt lösenord: hon kan logga in med magic link, men sedan inte byta. Säsongsmönstret som motiverar magic link under § Alternativ garanterar att det händer ofta. Att bara ta bort kravet valdes bort. Då räcker en kapad session för att sätta ett lösenord, och därefter uppfyller angriparen e-postbytets lösenordskrav och kan flytta kontot. Mejlbekräftelsen stänger båda: den som sitter i sessionen kan begära, men bara den som når brevlådan kan genomföra.
+
+**E-postbytet kräver fortfarande det nuvarande lösenordet**, se [[M20 Kontot]] § 130. Där är det inkorgen som byts, och den kan inte vara beviset. Se [[M20 Kontot]] § 140.
