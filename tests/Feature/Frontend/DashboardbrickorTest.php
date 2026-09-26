@@ -42,7 +42,22 @@ use function Pest\Laravel\withoutVite;
  *
  * Hjälparna har prefixet `bricka` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
+ *
+ * **Klockan pinnas till mitt på dagen UTC** ([[ADR-0044 Användarens dag]]).
+ * Servern går i UTC och användaren i `Europe/Stockholm`, och mellan klockan 22
+ * och 24 UTC är hennes datum redan i morgondagen. Brickan räknar de försenade
+ * mot HENNES dag sedan issue 135 medan `brickaDatum()` räknar ur serverns
+ * klocka — utan pinnen är filen alltså väggklockeberoende, grön på dagen och
+ * röd på natten. Vid tolv UTC sammanfaller de två datumen, så proven är
+ * oförändrade.
  */
+beforeEach(function () {
+    Carbon::setTestNow(Carbon::today()->setTime(12, 0));
+});
+
+afterEach(function () {
+    Carbon::setTestNow();
+});
 
 /**
  * En dag relativt serverns idag, som DATE-sträng.

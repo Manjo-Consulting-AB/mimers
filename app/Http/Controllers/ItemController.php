@@ -42,7 +42,6 @@ use App\Support\Item\ItemTree;
 use App\Support\Item\ItemTreeNode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -263,7 +262,7 @@ class ItemController extends Controller
             // förekomsterna hämtas en gång och slutningen sker i minnet, se
             // App\Support\Item\ItemStatus. En vandring per rad vore den N+1
             // hela åtkomstlösningen byggdes för att undvika.
-            'statuses' => $itemStatus->forItems($container, $items),
+            'statuses' => $itemStatus->forItems($container, $user, $items),
             'tags' => TagResource::collection($tags)->resolve($request),
             'categoryTree' => CategoryResource::collection($categories)->resolve($request),
             'filter' => [
@@ -541,14 +540,16 @@ class ItemController extends Controller
             // resursen och inte i den: `app/Http/Resources/**` är `/api`:s
             // format och rörs inte av den här issuen — samma linje som
             // `variants()` och `openOccurrences()` ovan.
-            'openLoanOverdue' => $openLoan !== null && $this->isOverdue($openLoan),
+            'openLoanOverdue' => $openLoan !== null && $this->isOverdue($openLoan, $user),
 
-            // Serverns datum, av samma skäl: "Tillbaka idag" (Beslut 3) sätter
-            // `returned_at` till dagens datum, och vilken dag det är får
-            // komma ur samma klocka som avgör vad som är försenat. Annars
-            // kunde en klient med fel datum registrera en återlämning före
-            // utlåningen och få ett fältfel hon inte förstår.
-            'today' => Carbon::today()->toDateString(),
+            // Användarens datum, av samma skäl: "Tillbaka idag" (Beslut 3)
+            // sätter `returned_at` till dagens datum, och vilken dag det är
+            // får komma ur samma klocka som avgör vad som är försenat — hennes
+            // egen, inte serverns ([[ADR-0044 Användarens dag]] § Beslut 1).
+            // Annars kunde en klient med fel datum registrera en återlämning
+            // före utlåningen och få ett fältfel hon inte förstår, och mellan
+            // midnatt och klockan två svensk tid vore "idag" gårdagen.
+            'today' => $user->today()->toDateString(),
 
             // Sant när användarfiler levereras från en egen origin (Beslut 2).
             // Vyn ritar bildvisaren och PDF-ramen bara då; annars faller
@@ -1208,16 +1209,18 @@ class ItemController extends Controller
      * **Beräknad, aldrig lagrad** — samma regel som `overdue` i
      * App\Http\Resources\ScheduleOccurrenceResource: ett tillstånd klockan
      * ändrar kräver annars ett jobb som förr eller senare missar en körning.
-     * Jämförelsen görs mot `Carbon::today()`, alltså serverns datum, och
-     * aldrig mot klientens — en telefon med fel datum ska inte kunna färga en
-     * utlåning röd.
+     * Jämförelsen görs mot användarens kalenderdag, `$user->today()`
+     * ([[ADR-0044 Användarens dag]] § Beslut 1), och aldrig mot klientens —
+     * en telefon med fel datum ska inte kunna färga en utlåning röd. Serverns
+     * datum vore fel mellan midnatt och klockan två svensk tid, då det ännu
+     * är gårdagen i UTC.
      *
      * En öppen utlåning utan `due_at` är inte försenad: ingen har sagt när
      * den skulle tillbaka.
      */
-    private function isOverdue(Loan $loan): bool
+    private function isOverdue(Loan $loan, User $user): bool
     {
-        return $loan->due_at !== null && $loan->due_at->lessThan(Carbon::today());
+        return $loan->due_at !== null && $loan->due_at->lessThan($user->today());
     }
 
     /**

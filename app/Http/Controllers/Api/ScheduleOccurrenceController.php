@@ -116,7 +116,8 @@ class ScheduleOccurrenceController extends Controller
      *
      * `cost_prompt` är kostnadskroken (issue 47): när förekomsten stängdes som
      * `completed` bär svaret ett erbjudande att registrera en kostnad på
-     * itemet, med `incurred_on` förifyllt till `completed_at`:ets datum. Vid
+     * itemet, med `incurred_on` förifyllt till den dag användaren bockade av,
+     * i hennes tidszon (issue 136 § Beslut 3). Vid
      * `skip` är värdet null — nyckeln finns alltid, samma regel som `next`
      * (issue 47 § Beslut 2). Erbjudandet är bara en extra nyckel i svaret:
      * ingenting skrivs, ingen relation lagras mellan kostnaden och
@@ -157,10 +158,19 @@ class ScheduleOccurrenceController extends Controller
 
         // Kostnadskroken (issue 47 § Beslut 1): en KEY till i data, bredvid
         // closed och next. completed_at är en tidsstämpel och incurred_on en
-        // DATE, så uttaget är $closed->completed_at->toDateString() — en dag,
-        // aldrig en tidsstämpel (Beslut 3, jfr LoanResource).
+        // DATE, så uttaget är en dag, aldrig en tidsstämpel (Beslut 3, jfr
+        // LoanResource). Dagen är den användaren bockade av PÅ, i hennes
+        // tidszon ([[ADR-0044 Användarens dag]] § Beslut 1 och issue 136
+        // § Beslut 3): en avbockning 01:30 svensk tid den 25:e föreslår den
+        // 25:e, inte den 24:e som UTC-datumet vore.
         $costPrompt = $status === ScheduleOccurrence::STATUS_COMPLETED
-            ? ['item' => $item->ulid, 'incurred_on' => $closed->completed_at->toDateString()]
+            ? [
+                'item' => $item->ulid,
+                'incurred_on' => $closed->completed_at
+                    ->copy()
+                    ->setTimezone($request->user()->preferredTimezone())
+                    ->toDateString(),
+            ]
             : null;
 
         return response()->json([

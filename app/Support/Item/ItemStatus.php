@@ -6,7 +6,7 @@ use App\Actions\Item\ResolveItemDescendants;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\ScheduleOccurrence;
-use Illuminate\Support\Carbon;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -28,10 +28,15 @@ use Illuminate\Support\Facades\DB;
  *
  * **Förfallen är datamodellens begrepp och inte en egen regel.**
  * [[Scheman och uppgifter]] § Förekomster definierar det som
- * `status = 'open' AND due_at < CURDATE()`, och det är exakt den formel
+ * `status = 'open' AND due_at < idag`, och det är exakt den formel
  * App\Http\Resources\ScheduleOccurrenceResource bär som `overdue`. Att
- * formulera om den här hade gett två svar på samma fråga. Två saker följer
- * av det, och båda är med flit:
+ * formulera om den här hade gett två svar på samma fråga. **`idag` är
+ * ANVÄNDARENS kalenderdag** och inte serverns ([[ADR-0044 Användarens dag]]
+ * § Beslut 1): servern går i UTC, och mellan midnatt och klockan två svensk
+ * tid är det ännu i går där. Klassen får användaren som argument i
+ * forItems() och hämtar den aldrig själv ur requesten eller `auth()` — den
+ * anropas också utanför en request. Två saker följer av formeln, och båda är
+ * med flit:
  *
  * - **Ett pausat schema räknas.** En pausad rad behåller sin öppna förekomst
  *   (issue 22a § Beslut 3), och den förekomsten är förfallen om datumet har
@@ -87,10 +92,13 @@ class ItemStatus
      * kan inte inträffa för en rad ur listan, eftersom varje efterfrågat item
      * är sin eget underträds första element.
      *
+     * `$user` är den inloggade användaren och bär dagens kalenderdatum —
+     * klassen slår aldrig upp den själv, se klassdocblocket.
+     *
      * @param  iterable<Item>  $items  raderna i listan, levande och inom användarens omfång
      * @return array<string, string> itemets ULID → self::OK eller self::OVERDUE
      */
-    public function forItems(Container $container, iterable $items): array
+    public function forItems(Container $container, User $user, iterable $items): array
     {
         $ulidById = [];
 
@@ -104,7 +112,7 @@ class ItemStatus
 
         $subtrees = $this->resolveItemDescendants->forItems($container->id, array_keys($ulidById));
 
-        $overdue = array_flip($this->overdueItems($this->subtreeIds($subtrees)));
+        $overdue = array_flip($this->overdueItems($this->subtreeIds($subtrees), $user->today()->toDateString()));
 
         $statuses = [];
 
@@ -154,10 +162,16 @@ class ItemStatus
      * på klockslaget när frågan körs — samma skäl och samma form som
      * ScheduleOccurrence::scopeTodoFor().
      *
+     * Jämförelsen sker mot användarens kalenderdatum som `$today` — en
+     * `Y-m-d`-sträng ur `User::today()->toDateString()`, aldrig mot ett
+     * `Carbon`-ögonblick ([[ADR-0044 Användarens dag]] § Beslut 5). Antalet
+     * frågor är detsamma som före issue 136: dagens datum räknas i minnet.
+     *
      * @param  list<int>  $itemIds
+     * @param  string  $today  användarens dag, `Y-m-d`
      * @return list<int>
      */
-    private function overdueItems(array $itemIds): array
+    private function overdueItems(array $itemIds, string $today): array
     {
         if ($itemIds === []) {
             return [];
@@ -168,7 +182,7 @@ class ItemStatus
             ->whereIn('schedule.item_id', $itemIds)
             ->whereNull('schedule.deleted_at')
             ->where('schedule_occurrence.status', ScheduleOccurrence::STATUS_OPEN)
-            ->whereDate('schedule_occurrence.due_at', '<', Carbon::today())
+            ->whereDate('schedule_occurrence.due_at', '<', $today)
             ->distinct()
             ->pluck('schedule.item_id')
             ->all();
