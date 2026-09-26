@@ -24,6 +24,7 @@ Systemet heter **Mimers** och bor på `mimers.app`. Namnet syftar på Mimer i no
 | sätta upp eller ändra CI och deploy | [[Pipeline]] |
 | återställa data ur en backup | [[Återläsning]] |
 | veta vilka personuppgifter systemet behandlar | [[Registerförteckning]] |
+| veta vad som är bevisat om dedup och filåtkomst | [[Testplan filer]] |
 
 ## Datamodell
 

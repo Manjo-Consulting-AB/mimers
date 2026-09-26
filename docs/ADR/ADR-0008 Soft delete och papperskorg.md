@@ -41,6 +41,22 @@ Konsekvenser:
 - **Talet hör hemma i integritetspolicyn**, enligt konsekvenslistan ovan.
 - **Retentionen är inte en plangräns.** Free och Pro har samma 30 dagar. Skulle den någon gång skilja sig åt per plan är det en gräns i `plan.limits` och ett eget beslut.
 
+## Uppföljning 2026-09-26 — vad papperskorgen tar emot
+
+**Papperskorgen är till för det man kan vilja ångra, inte för egenskaper.** Tonys beslut vid planeringen av [[M22 Redo för testare]]: ett block man slänger hamnar i papperskorgen, men text som suddas ut på blocket är bara borta. Kategorier och taggar fördes först till den andra sorten. Testarna ville ha dem kvar i papperskorgen, så att en radering går att ångra, och så blev det samma dag.
+
+| Sort | Vad | Vid radering |
+|---|---|---|
+| **Saker** | `container`, `item`, `attachment` | papperskorgen, trettio dagar, går att återställa |
+| **Inställningar** | `category`, `tag` | papperskorgen, trettio dagar, går att återställa |
+| **Egenskaper hos ett item** | `schedule`, `loan`, `cost_entry` | borta direkt |
+
+Uppräkningen under § Retentionstiden i MVP ovan tog med `schedule` bland det som går att återställa. Det gäller inte längre.
+
+- **Soft delete finns kvar på egenskaperna.** Den skyddar mot buggen, som § Motivering säger, även när ingen yta erbjuder en återställning. De mjukraderade raderna följer sitt item och gallras med det, eller med containern.
+- **En kategori som används kan raderas, efter en varning.** Issue 11 § Beslut 7 nekade raderingen så länge kategorin satt på ett item, för att en radering inte skulle tömma klassificeringen tyst. Med papperskorgen är raderingen inte tyst längre och går att ångra: vyn säger hur många items kategorin eller taggen sitter på och frågar först. Items behåller sin `category_id` medan kategorin ligger i papperskorgen och får den tillbaka vid en återställning. Gallringen nollställer den som i dag. **En kategori raderas med hela sitt underträd:** underkategorierna mjukraderas i samma transaktion och med samma `deleted_at`. Papperskorgen visar bara den översta, och en återställning av den tar tillbaka de underkategorier som raderades med den — inte en som låg i papperskorgen sedan tidigare. Issue 150.
+- Frågan i [[Tankar]] om en femte typ i papperskorgen är därmed besvarad: det blir ingen.
+
 ## Alternativ
 
 **Hård radering med enbart backup som skydd.** Enklare frågor och mindre databas. Valdes bort — återläsning från backup för att rädda ett enskilt item är opraktiskt, och felet upptäcks ofta för sent.

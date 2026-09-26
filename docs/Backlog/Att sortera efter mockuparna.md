@@ -84,15 +84,15 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 
 **Händelseinstrumenteringen har lämnat listan 2026-09-23.** Besluten står i [[ADR-0043 Tre loggar]] och arbetet har issues i [[M18 Loggarna]] — 107 till 117. Dashboardens händelsepanel är issue 126 i [[M19 Dashboarden]].
 
-**Anmälningsvägen enligt DSA.** Mimers är en värdtjänst, och artikel 16 kräver att vem som helst kan anmäla innehåll som den anser vara olagligt. Artikel 17 kräver att en användare vars innehåll begränsas får en motivering. Båda är egna ytor med egna flöden och hör ihop med den rättsliga spärren i [[ADR-0043 Tre loggar]]. Ingen av dem har en issue.
+**Anmälningsvägen enligt DSA.** Mimers är en värdtjänst, och artikel 16 kräver att vem som helst kan anmäla innehåll som den anser vara olagligt. Artikel 17 kräver att en användare vars innehåll begränsas får en motivering. Båda är egna ytor med egna flöden och hör ihop med den rättsliga spärren i [[ADR-0043 Tre loggar]]. Ingen av dem har en issue. **Blir en egen milstolpe**, beslutat 2026-09-26: vägen drar med sig anmälningsformulär, handläggning, motiveringar och spärrens koppling, och ryms inte i [[M22 Redo för testare]].
 
 **Containerns karta.** En graf över containerns alla items och deras relationer. Datat finns; layouten över hundratals noder är arbetet, och den delar ingenting med fokuskartan på itemet utom namnet.
 
 **Luckorna i kontot har lämnat listan 2026-09-24.** Lösenordet, e-postadressen och inbjudningarna har issues i [[M20 Kontot]] — 129 till 131.
 
-**Verifieringarna.** Att en uppladdning bara lagras en gång (dedup och referensräkning) och att filer inte går att nå obehörigt ska bevisas av bestående tester, inte av en genomgång per release. Båda ytorna är `risk_class: elevated` enligt [[AGENTS.md]] § De tre axlarna.
+**Verifieringarna har lämnat listan 2026-09-26.** Vad som redan är bevisat och vad som saknas står i [[Testplan filer]], och luckorna är issue 148 och 149 i [[M22 Redo för testare]].
 
-**Kalenderfeedens namn** hämtas från URL:en i stället för produktnamnet och containerns namn.
+**Kalenderfeedens namn har lämnat listan 2026-09-26** och är issue 147 i [[M22 Redo för testare]].
 
 **Notiser vid uppgift.** När skickas de? Frågan är först en uppslagning i [[Notiser]] och blir en issue bara om svaret och beteendet går isär.
 
