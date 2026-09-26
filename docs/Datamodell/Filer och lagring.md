@@ -36,7 +36,7 @@ En rad per unikt innehåll i hela systemet.
 | stored_file_id | FK | |
 | filename | VARCHAR(255) | Användarens namn på filen |
 | kind | VARCHAR(20) | `image` \| `document` \| `other` |
-| uploaded_by_user_id | FK | |
+| uploaded_by_user_id | FK NULL | `NULL` när personen raderats — filen står kvar, utan avsändare |
 | **billed_account_id** | FK → account | **Kontot som betalar för bytena** |
 | deleted_at | | |
 

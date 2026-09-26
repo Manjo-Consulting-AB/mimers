@@ -74,6 +74,16 @@ export function accessKindLabel(t, access) {
  * Det är inte den fallback `ParticipantResource` förbjuder — den handlar om
  * en kolumn som aldrig är tom, den här om en rad som inte längre finns.
  *
+ * **Beviljaren kan dessutom vara nollställd, och det är två olika fall som
+ * ger samma mening.** `container_access.granted_by_user_id` är nullbar sedan
+ * issue 142 ([[ADR-0045 Radering av konto och person]] § Beslut 2): en
+ * beviljare som raderats har lämnat `null` efter sig, och `access.granted_by`
+ * är då `null` — uppslaget saknar nyckel av samma skäl som ovan, och raden
+ * får `sharing.accesses.granted_by_unknown`. Ingen gren behövs här: båda
+ * fallen betyder "beviljaren finns inte", och meningen är densamma. Den som
+ * ska bli förvånad över något är den som läser `granted_by` som en ULID —
+ * den är `string|null` sedan 142.
+ *
  * Ingen e-postadress någonsin: [[Konton och åtkomst]] § Behörighetsregler,
  * sista stycket.
  */
@@ -83,7 +93,7 @@ export function granteeLabel(t, granteeNames, access) {
     return granteeNames[access.grantee] ?? t('sharing.accesses.grantee_unknown');
 }
 
-/** Beviljarens namn — alltid en `User`. */
+/** Beviljarens namn — alltid en `User`, `null` när författaren nollställts. */
 export function grantedByLabel(t, grantedByNames, access) {
     return grantedByNames[access.granted_by] ?? t('sharing.accesses.granted_by_unknown');
 }

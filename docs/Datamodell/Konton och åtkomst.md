@@ -170,7 +170,7 @@ De fyra åtkomstformerna utöver ägarskap. En rad per beviljad åtkomst — och
 | level | VARCHAR(20) | `read` \| `create` \| `write` \| `delete`. En ladder, inte fria flaggor |
 | kind | VARCHAR(20) | `member` \| `managed` \| `guest` |
 | expires_at | TIMESTAMP NULL | Satt för `guest`. Utgången access nekas i kod, raderas av städjobb. |
-| granted_by_user_id | FK | |
+| granted_by_user_id | FK NULL | `NULL` när personen raderats |
 | revoked_at | TIMESTAMP NULL | |
 
 Index: `(container_id, revoked_at)`, `(grantee_type, grantee_id, revoked_at)`, `(item_id, revoked_at)`.
@@ -191,7 +191,7 @@ Delning med någon som inte har konto.
 | token_hash | CHAR(64) | SHA-256 av token. Klartexten skickas i mejlet och lagras aldrig. |
 | status | VARCHAR(20) | `pending` \| `accepted` \| `rejected` \| `expired` \| `revoked` |
 | expires_at | TIMESTAMP | |
-| invited_by_user_id | FK | |
+| invited_by_user_id | FK NULL | `NULL` när personen raderats |
 
 `revoked` är avsändarens ånger — inbjudan drogs tillbaka innan den besvarades, typiskt för att den skickades till fel adress. Raden raderas aldrig; utestående och tillbakadragna inbjudningar är underlaget för [[ADR-0017 Missbruksvektorer]] och M9.
 
@@ -212,7 +212,7 @@ Mottagaren måste skapa konto och verifiera sin e-post för att acceptera. Det �
 | retain_access_level | VARCHAR(20) NULL | Varvet behåller ofta `write` efter överlämning |
 | status | VARCHAR(20) | `pending` \| `accepted` \| `rejected` \| `expired` \| `revoked` |
 | accepted_at | TIMESTAMP NULL | |
-| initiated_by_user_id | FK | Speglar `invitation.invited_by_user_id`; accepten sätter den som `granted_by_user_id` på en kvarhållen åtkomst |
+| initiated_by_user_id | FK NULL | Speglar `invitation.invited_by_user_id`; accepten sätter den som `granted_by_user_id` på en kvarhållen åtkomst. `NULL` när personen raderats |
 
 `revoked` är avsändarens ånger, av samma skäl som på `invitation`: en överlåtelse som skickats till fel adress måste gå att dra tillbaka. Raden raderas aldrig. Utgången härleds ur `created_at` i kod — `status` står kvar på `pending` när tiden passerat, samma princip som `container_access` och `invitation`. **Ingen `token_hash`:** en inbjudan ger läsrätt, ett ägarbyte överlåter hela pärmen, och en bärartoken i ett mejl till en overifierad adress vore en kapabilitet att ta emot någon annans pärm. Mottagaren hittar sitt inkommande ägarbyte på identitet — konto eller verifierad adress — inte på hemlighet.
 

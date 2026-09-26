@@ -26,6 +26,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * anställde"). Relationen ska vara förladdad (index: `->with(...)`, övriga:
  * `load(...)`) — annars blir listan N+1 (§ Beslut 14).
  *
+ * `created_by_account` är `null` sedan issue 142, när kontot raderats och
+ * kolumnen nollställts ([[ADR-0045 Radering av konto och person]]
+ * § Beslut 2) — samma regel som ItemResource: nyckeln står kvar med sitt
+ * `null`, och resursen hittar inget namn.
+ *
  * @mixin CostEntry
  */
 class CostEntryResource extends JsonResource
@@ -42,7 +47,7 @@ class CostEntryResource extends JsonResource
             'currency' => $this->currency,
             'description' => $this->description,
             'supplier' => $this->supplier,
-            'created_by_account' => $this->createdByAccount->ulid,
+            'created_by_account' => $this->createdByAccount?->ulid,
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),
         ];

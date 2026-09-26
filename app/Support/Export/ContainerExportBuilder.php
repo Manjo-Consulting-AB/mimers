@@ -13,6 +13,7 @@ use App\Models\Loan;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\Tag;
+use App\Support\Access\ItemScope;
 use App\Support\Notification\LocaleResolver;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
@@ -85,7 +86,18 @@ class ContainerExportBuilder
         // memon mellan kö-jobb, vilket är precis vad den finns till för — en
         // property hade burit en användares omfång vidare till nästa jobb i
         // samma worker (issue 74 § Beslut 10, issue 70 § Beslut 10).
-        $scope = app(ResolveItemScope::class)->handle($export->requestedBy, $container);
+        //
+        // En nollställd beställare (issue 142, [[ADR-0045 Radering av konto och
+        // person]] § Beslut 2) har ingen rad att lösa omfånget ur. Exporten
+        // byggs då för ett tomt omfång: innehållet får aldrig bli containerns
+        // hela för att beställaren försvann, och jobbet får inte falla på en
+        // `User` som inte finns. Filen blir kvar utan läsare — nedladdningen
+        // kräver beställaren — så det tomma svaret kostar ingenting.
+        $requester = $export->requestedBy;
+
+        $scope = $requester === null
+            ? ItemScope::restricted([])
+            : app(ResolveItemScope::class)->handle($requester, $container);
 
         $items = $container->items()
             ->inScope($scope)

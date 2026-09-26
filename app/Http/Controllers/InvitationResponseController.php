@@ -211,7 +211,9 @@ class InvitationResponseController extends Controller
             ->map(fn (Invitation $invitation): array => [
                 'ulid' => $invitation->ulid,
                 'container' => $invitation->container->name,
-                'inviter' => $invitation->invitedBy->name,
+                'inviter' => $invitation->invitedBy === null
+                    ? trans('ui.invitation.removed_inviter')
+                    : $invitation->invitedBy->name,
                 'level' => $invitation->level,
             ])
             ->values()
@@ -473,13 +475,21 @@ class InvitationResponseController extends Controller
      * mottagaren redan, och en bärare som inte är mottagaren ska inte få veta
      * den.
      *
+     * `inviter` är en TEXT, inte ett namn: kolumnen är nullbar sedan issue 142
+     * ([[ADR-0045 Radering av konto och person]] § Beslut 2), och vyn stoppar
+     * värdet i en mening (`invitation.intro` interpolerar `:inviter`). Ett
+     * `null` där hade lämnat ett hål i meningen — *Removed user* står i
+     * stället, samma ord som klockan använder.
+     *
      * @return array{container: string, inviter: string, level: string}
      */
     private function preview(Invitation $invitation): array
     {
         return [
             'container' => $invitation->container->name,
-            'inviter' => $invitation->invitedBy->name,
+            'inviter' => $invitation->invitedBy === null
+                ? trans('ui.invitation.removed_inviter')
+                : $invitation->invitedBy->name,
             'level' => $invitation->level,
         ];
     }
