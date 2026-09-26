@@ -37,6 +37,10 @@ Två halvor, med olika säkerhet:
    inte står i tabellen. Precisionen kommer ur att svaret verifieras mot
    filsystemet, inte ur att frågan är snäv.
 
+Därtill läslistan (`lasfynd`, M21-retron): det `Läs` pekar på slås upp i
+trädet kön grenar ur. En ADR som ligger på en omergad gren, eller en rubrik
+som aldrig fanns, syns då före sessionen och inte i dess frågeavsnitt.
+
 Linten blockerar aldrig kön. Ett falskt positivt utfall som stoppar arbetet är
 dyrare än det den ska spara, och rutan är fortfarande bindande — den som skriver
 issuen bestämmer, linten upplyser.
@@ -310,21 +314,132 @@ def fynd_ur_modellsvar(svar: str, innanfor: list[str], rot: str = REPO_ROOT) -> 
     return fynd
 
 
+# Läslistans två former: en wikilänk, eller en sökväg från repots rot. Båda
+# kan följas av `§ Rubrik` och en parentes. Sökvägen får innehålla mellanslag
+# (`docs/ADR/ADR-0044 Användarens dag.md`), så den avgränsas av filändelsen.
+LAS_WIKILANK = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\](?:\s*§\s*([^(\[\n]+))?")
+LAS_SOKVAG = re.compile(
+    r"^(?:[-*]\s+)?`?(?P<sokvag>[\w.][\w./ -]*?\.(?:md|php|vue|js|ts|py|yml|yaml|json|css|sh))`?"
+    r"(?:\s*§\s*(?P<rubrik>[^(\n]+))?"
+)
+MD_RUBRIK = re.compile(r"^(?:#{1,6}\s+(.+?)|\*\*(.+?)\*\*.*?)\s*$", re.MULTILINE)
+# `§ Beslut och § Konsekvenser`, `§ 101, § 102`, `§ Beslut — stycket om …`:
+# hänvisningen delas bara på `§`. Resten av varje del kan vara en läsanvisning
+# (`— särskilt stycket om …`), så en del godtas när den BÖRJAR med en rubrik i
+# filen — inte när den är lika med en.
+DELSLUT = re.compile(r"(?:,|\s+och)\s*$")
+
+
+def _rubriktext(text: str) -> str:
+    return text.replace("`", "").replace("*", "").strip().rstrip(".:").casefold()
+
+
+def _rubriker_i_hanvisning(hanvisning: str) -> list[str]:
+    """`Beslut och § Konsekvenser — varför …` -> ["beslut", "konsekvenser — varför …"]."""
+    delar = []
+    for del_ in hanvisning.split("§"):
+        del_ = _rubriktext(DELSLUT.sub("", del_.strip()))
+        if del_:
+            delar.append(del_)
+    return delar
+
+
+def _har_rubrik(fil: str, hanvisning: str) -> bool:
+    """Börjar hänvisningen med en rubrik — eller ett fetstilat tabellnamn, som
+    datamodellen skriver sina tabeller — i filen? Milstolpefilerna skriver
+    `### 133. Knappen visar …` och läslistan `§ 133`; en delad issue skriver
+    `§ 57a` mot rubriken `57.`, eftersom delningen bara finns i GitHub."""
+    with open(fil, encoding="utf-8") as f:
+        rubriker = [_rubriktext(a or b) for a, b in MD_RUBRIK.findall(f.read())]
+    kandidater = {hanvisning}
+    numrerad = re.match(r"^(\d+)[a-z]?(?=\W|$)", hanvisning)
+    if numrerad:
+        kandidater.add(numrerad.group(1))
+    for sokt in kandidater:
+        for r in rubriker:
+            if not r:
+                continue
+            if r == sokt or any(r.startswith(sokt + tecken) for tecken in " .,"):
+                return True
+            if sokt.startswith(r) and (len(sokt) == len(r) or not sokt[len(r)].isalnum()):
+                return True
+    return False
+
+
+def _valvets_filer(rot: str) -> dict[str, str]:
+    """Filnamn utan `.md` -> sökväg, för allt under docs/. Wikilänkarna är
+    namnbaserade (CLAUDE.md § Kartan över valvet)."""
+    filer: dict[str, str] = {}
+    for katalog, _, namn in os.walk(os.path.join(rot, "docs")):
+        for n in namn:
+            if n.endswith(".md"):
+                filer.setdefault(n[:-3], os.path.join(katalog, n))
+    return filer
+
+
+def lasfynd(kropp: str, rot: str = REPO_ROOT) -> list[str]:
+    """Det läslistan pekar på men som inte finns i det träd kön grenar ur.
+
+    Tredje träffen i Lärdomar § Bekräftat, posten om `Notification::TYPES`:
+    issuetexten citerar en tidigare issues plan i stället för dess utfall. M13
+    pekade på två ADR:er som låg på en omergad gren, issue 92 på en rubrik som
+    aldrig fanns, och issue 133 (PR #520) på ADR-0044 en timme innan den
+    mergades. Deterministiskt — filen och rubriken finns eller finns inte.
+    """
+    valvet = _valvets_filer(rot)
+    fynd: list[str] = []
+    for rad in o.avsnitt(kropp, "Läs").splitlines():
+        rad = rad.strip()
+        if not rad or rad.startswith("```"):
+            continue
+        mal: list[tuple[str, str | None, str]] = []
+        for namn, rubrik in LAS_WIKILANK.findall(rad):
+            namn = namn.strip()
+            fil = valvet.get(namn)
+            if fil is None and os.path.exists(os.path.join(rot, namn)):
+                fil = os.path.join(rot, namn)  # [[AGENTS.md]] - en fil i roten
+            mal.append((f"[[{namn}]]", fil, rubrik))
+        if not mal:
+            traff = LAS_SOKVAG.match(rad)
+            if traff and "/" in traff.group("sokvag"):
+                sokvag = traff.group("sokvag").strip()
+                absolut = os.path.join(rot, sokvag)
+                mal.append((f"`{sokvag}`", absolut if os.path.exists(absolut) else None,
+                            traff.group("rubrik") or ""))
+        for visning, fil, rubrik in mal:
+            rubrik = (rubrik or "").strip()
+            if fil is None:
+                fynd.append(f"- {visning} finns inte på `main`.")
+            elif rubrik and fil.endswith(".md"):
+                for namn in _rubriker_i_hanvisning(rubrik):
+                    if not _har_rubrik(fil, namn):
+                        fynd.append(f"- {visning} finns, men inte rubriken `§ {namn}`.")
+    return fynd
+
+
 RUBRIK = "### Omfångslinten"
 
 
-def rapport(mekaniska: list[str], modellfynd: list[str], lage: str) -> str | None:
+def rapport(mekaniska: list[str], modellfynd: list[str], lage: str,
+            lasluckor: list[str] | None = None) -> str | None:
     """Kommentaren, eller None när det inte finns något att säga.
 
     Tyst när rutan ser hel ut. En lint som skriver en kommentar på varje issue
     slutar läsas, precis som en grind som är röd på allt slutar betyda något
     (se ci.yml om ordbudgeten).
     """
-    if not mekaniska and not modellfynd:
+    if not mekaniska and not modellfynd and not lasluckor:
         return None
-    rader = [RUBRIK, "", "Rutan verkar sakna filer som bär det issuen beskriver. "
-             "Linten fäller ingenting — den läser `routes/` innan sessionen startar, "
-             "så att rutan går att rätta medan det kostar en redigering.", ""]
+    rader = [RUBRIK, ""]
+    if lasluckor:
+        rader += ["**Läslistan pekar på något som inte finns på `main`:**", ""] + lasluckor + [
+            "", "Ligger dokumentet på en gren som ännu inte är mergad — merga den först, "
+            "annars bygger sessionen mot en plan den inte kan läsa.", ""]
+        if not mekaniska and not modellfynd:
+            return "\n".join(rader).rstrip()
+    rader += ["Rutan verkar sakna filer som bär det issuen beskriver. "
+              "Linten fäller ingenting — den läser `routes/` innan sessionen startar, "
+              "så att rutan går att rätta medan det kostar en redigering.", ""]
     if mekaniska:
         rader += ["**Nämnda rutter, upplösta mot ruttabellen:**", ""] + mekaniska + [""]
     if modellfynd:
