@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Sedan 2026-09-07 bygger staging på versionstaggen, inte på varje push
       # till main. Ordningen i releaseritualen är därför bindande och inte bara

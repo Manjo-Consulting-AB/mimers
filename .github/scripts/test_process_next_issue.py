@@ -856,6 +856,191 @@ def test_omforsoket_packar_forst():
     assert "underhall_objektlagret(tvinga=True)" in kropp
 
 
+# =====================================================================
+# PR #522 - mergespärren, arkitektsvarets markör och röd bas
+# =====================================================================
+
+def test_arkitektsvarsmarkoren_ar_synkad_med_omfangsrutan():
+    """Markören skrivs här och läses i omfangsruta.py. Glider de isär beviljar
+    arkitekten undantag som grinden aldrig ser."""
+    import omfangsruta
+    assert p.ARKITEKTSVAR_MARKOR == omfangsruta.ARKITEKTSVAR_MARKOR
+
+
+def test_arkitektkommentaren_las_av_grinden():
+    """Hela kedjan: det pipelinen postar är det grinden godtar."""
+    import omfangsruta
+    svar = ("Undantag beviljat.\n\nBeviljat undantag från omfångsrutan:\n"
+            "```\ntests/Feature/Frontend/TodovyTest.php\n```")
+    kropp = p.arkitektkommentar("Opus 5 - arkitektsvar på omfångsgrinden", svar)
+    assert omfangsruta.undantag_ur_kommentar(kropp) == ["tests/Feature/Frontend/TodovyTest.php"]
+
+
+def test_alla_arkitektsvar_postas_via_arkitektkommentar():
+    """Tripwire: ett arkitektsvar som postas med en egen f-sträng saknar
+    markören, och dess undantag läses aldrig av grinden."""
+    kalla = _kalla()
+    rader = [r.strip() for r in kalla.splitlines()
+             if ('"### Opus' in r or 'f"### {rubrik}' in r) and not r.strip().startswith("#")
+             and "ARKITEKTSVAR_MARKOR" not in r]
+    assert rader == [], f"arkitektsvar postas förbi arkitektkommentar(): {rader}"
+
+
+def test_ci_stegnamnen_finns_i_ci_yml():
+    """klassa_ci_fel() jämför mot stegnamnen. Byter ci.yml namn på ett steg
+    ska det här fällas, inte klassningen tyst bli 'annat'."""
+    ci = _kalla(os.path.join("..", "workflows", "ci.yml"))
+    assert f"- name: {p.CI_STEG_OMFANG}\n" in ci
+    assert f"- name: {p.CI_STEG_TESTER}\n" in ci
+
+
+def test_klassa_ci_fel():
+    assert p.klassa_ci_fel([]) == "okand"
+    assert p.klassa_ci_fel([("test", p.CI_STEG_OMFANG)]) == "omfang"
+    assert p.klassa_ci_fel([("test", p.CI_STEG_TESTER)]) == "tester"
+    # Blandningar och okända steg går alltid till Tony.
+    assert p.klassa_ci_fel([("test", p.CI_STEG_OMFANG), ("test", p.CI_STEG_TESTER)]) == "annat"
+    assert p.klassa_ci_fel([("test", "Statisk analys")]) == "annat"
+    assert p.klassa_ci_fel([("test", None)]) == "annat"
+
+
+def test_mergesparren_forsoker_atgarda_innan_den_eskalerar():
+    """PR #522: spärren gick rakt till eskalera() och låste kön, fast det enda
+    röda var omfångsgrinden. Åtgärdsförsöket ska ligga före beskedet."""
+    for funktion, notis in (("los_fraga_och_merga", "Mergespärren slog till efter godkännande"),
+                            ("atgarda_arkitektsvar", "NOTIS_MERGESPARR}")):
+        kropp = _funktionskropp(funktion)
+        assert "hantera_mergesparr(" in kropp, funktion
+        assert kropp.index("hantera_mergesparr(") < kropp.index(notis), funktion
+
+
+def test_omfangsgrinden_gar_till_arkitekten_trots_fraga_besvarad():
+    """Mergespärrens väg till arkitekten får inte dämpas av etiketten - den
+    röda grinden är beviset på att granskarens bedömning inte räckte."""
+    kropp = _funktionskropp("arkitektsvar_pa_oppen_fraga")
+    gren = kropp.split("if underlag_fran_ci:")[1].split("else:")[0]
+    assert "ska_eskalera_till_arkitekt" not in gren
+    assert "ska_eskalera_till_arkitekt" in kropp.split("else:", 1)[1]
+
+
+def test_granskningsprompten_sager_att_undantag_kraver_arkitekten():
+    prompt = p.bygg_granskningsprompt("ISSUE", "DIFF", fragor="Får jag behålla filen?", pr_number="522")
+    assert "undantag från omfångsrutan" in prompt
+    assert "ALLTID ett sådant arkitekturbeslut" in prompt
+
+
+def test_alla_merger_ar_bundna_till_head():
+    """En push mellan CI-läsningen och mergen ska få GitHub att vägra, inte
+    merga ogranskad kod. Alla merger går genom merga_om_tillatet()."""
+    rader = [r.strip() for r in _kalla().splitlines()
+             if '"gh", "pr", "merge"' in r and not r.strip().startswith("#")]
+    assert len(rader) == 1, rader
+    assert "--match-head-commit" in rader[0]
+    assert '"gh", "pr", "merge"' in _funktionskropp("merga_om_tillatet")
+
+
+def test_granskad_sha_som_inte_ar_head_spärrar():
+    """Vet körningen vilken commit den godkände räcker en jämförelse."""
+    original_run_cmd = p.run_cmd
+
+    class _Etiketter:
+        stdout = json.dumps({"labels": [{"name": "review:approved"}]})
+
+    p.run_cmd = lambda args, **kw: _Etiketter()
+    p.GRANSKAD_SHA["999"] = "a" * 40
+    try:
+        assert p.pr_far_mergas("999", "b" * 40) is False
+    finally:
+        p.run_cmd = original_run_cmd
+        p.GRANSKAD_SHA.pop("999", None)
+
+
+def test_godkannande_foraldrat():
+    godkant = {"event": "labeled", "label": {"name": "review:approved"}, "created_at": "2026-09-25T23:05:00Z"}
+    fore = {"event": "committed", "committer": {"date": "2026-09-25T22:58:00Z"}}
+    efter = {"event": "head_ref_force_pushed", "created_at": "2026-09-25T23:10:00Z"}
+    assert p.godkannande_foraldrat([fore]) is None
+    assert p.godkannande_foraldrat([fore, godkant]) == ()
+    assert p.godkannande_foraldrat([fore, godkant, efter])[1] == "head_ref_force_pushed"
+
+
+def test_bas_rod_paus_galler():
+    t = {"sha": "abc", "tid": 1000.0}
+    assert p.bas_rod_paus_galler(t, "abc", 1000.0 + 60) is True
+    # main har flyttat - kan vara lagat, pröva igen
+    assert p.bas_rod_paus_galler(t, "def", 1000.0 + 60) is False
+    # pausen har gått ut - en klockberoende röd bas kan ha blivit grön
+    assert p.bas_rod_paus_galler(t, "abc", 1000.0 + p.BAS_ROD_PAUS + 1) is False
+    # oläsbart tillstånd pausar ingenting
+    assert p.bas_rod_paus_galler({}, "abc", 1000.0) is False
+    assert p.bas_rod_paus_galler({"sha": "abc", "tid": "igår"}, "abc", 1000.0) is False
+    assert p.bas_rod_paus_galler(t, "", 1000.0) is False
+
+
+def test_rod_bas_proves_bara_pa_testsvitens_steg():
+    """PHPStan eller rott-pa-basen kan aldrig bero på att main är röd."""
+    kropp = _funktionskropp("_process_in_worktree")
+    assert "steg == STEG_TESTER and not bas_provad" in kropp
+    assert "stanna_pa_rod_bas(" in kropp
+
+
+def test_rod_bas_markerar_inte_needs_human():
+    """Issuen har inte gjort något fel - en röd bas ska inte låsa den hos Tony."""
+    kropp = _funktionskropp("stanna_pa_rod_bas")
+    assert '"--add-label", "needs-human"' not in kropp
+    assert "sys.exit(0)" in kropp
+
+
+def test_sviten_pa_basen_felar_oppet():
+    """Kan prövningen inte göras ska kön göra som förut, inte pausa."""
+    original = p.run_cmd
+
+    def _kraschar(args, **kw):
+        raise Exception("nätet är nere")
+
+    p.run_cmd = _kraschar
+    try:
+        rod, _, _ = p.sviten_ar_rod_pa_basen(".")
+    finally:
+        p.run_cmd = original
+    assert rod is False
+
+
+def test_sonnet_fasen_borjar_fran_basen():
+    """`reset --hard HEAD` lät Sonnet börja ovanpå DeepSeeks egna commits."""
+    kropp = _funktionskropp("_process_in_worktree")
+    assert '"reset", "--hard", "HEAD"' not in kropp
+    assert '"reset", "--hard", bas' in kropp
+
+
+def test_tillfalliga_commiten_backas_aven_vid_fel():
+    kropp = _funktionskropp("run_local_tests")
+    finally_del = kropp.split("finally:")[1]
+    assert '"reset", "--soft", "HEAD~1"' in finally_del
+    assert 'git_natverk(["git", "fetch", "origin", "main"]' in kropp
+
+
+def test_modellanropen_har_tak():
+    """Ett anrop som aldrig kommer tillbaka ska bli en krasch, inte ett
+    evigt hållet lås."""
+    assert "timeout=AGENT_TIMEOUT" in _funktionskropp("call_deepseek")
+    assert "timeout=AGENT_TIMEOUT" in _funktionskropp("call_claude_direct")
+    assert "timeout=CI_VANT_TIMEOUT" in _funktionskropp("pr_far_mergas")
+
+
+def test_usage_vakten_tal_ett_nytt_format():
+    original = p.run_cmd
+
+    class _Svar:
+        stdout = json.dumps({"type": "rate_limit_event", "rate_limit_info": {"annat": 1}})
+
+    p.run_cmd = lambda args, **kw: _Svar()
+    try:
+        assert p.usage_ok_to_proceed() is True
+    finally:
+        p.run_cmd = original
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())

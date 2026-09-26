@@ -38,6 +38,15 @@
 # ett befintligt testfall med oförändrat namn; den läses av granskaren.
 # Tillagda filer prövas som förut.
 #
+# En fil som är röd på basen är röd så fort ETT av dess testfall faller. De
+# andra nya testfallen i samma fil är då obevisade: ett test som av misstag går
+# igenom även utan koden åker med på grannens röda utfall. Därför körs varje nytt
+# testfall i en röd fil också för sig (`--filter`), och det som går igenom på
+# basen skrivs ut som en VARNING - inte ett fel. Vissa testfall ska vara gröna på
+# basen med flit (en regressionsvakt som "oförändrat utfall dagtid"), och
+# markören ovan är per fil, inte per testfall. Varningen syns i CI-loggen och för
+# granskaren; blir det mest riktiga fynd kan den skärpas till ett fel senare.
+#
 # Läser BASE_SHA ur miljön. Avslutar 0 om alla nya tester är röda på basen (eller
 # undantagna) eller om PR:en inte lägger till några tester, 1 om något
 # icke-undantaget test går igenom utan koden.
@@ -73,6 +82,25 @@ har_nya_testfall() {
     local fil="$1"
     git cat-file -e "$BASE_SHA:$fil" 2>/dev/null || return 0
     [ -n "$(comm -13 <(git show "$BASE_SHA:$fil" | testnamn) <(git show "HEAD:$fil" | testnamn))" ]
+}
+
+# De testfall filen lägger till jämfört med baskommiten, ett per rad - alla, om
+# filen inte fanns på basen. Läser via ROT, så att den fungerar även efter `cd`
+# in i basträdet, som inte är ett git-repo.
+nya_testnamn() {
+    local fil="$1"
+    if git -C "$ROT" cat-file -e "$BASE_SHA:$fil" 2>/dev/null; then
+        comm -13 <(git -C "$ROT" show "$BASE_SHA:$fil" | testnamn) <(git -C "$ROT" show "HEAD:$fil" | testnamn)
+    else
+        git -C "$ROT" show "HEAD:$fil" | testnamn
+    fi
+}
+
+# Namnet som ett Pest-filter. --filter tolkas som ett reguljärt uttryck och
+# matchar delsträngar, så varje specialtecken escapas; prövat mot Pest med
+# bakåtcitat, parenteser, punkt, frågetecken, dollartecken och snedstreck.
+som_filter() {
+    printf '%s' "$1" | sed -e 's/[][\.*^$+?(){}|/]/\\&/g'
 }
 
 # Följdändringar sorteras bort innan något byggs - består PR:en bara av sådana
@@ -127,6 +155,7 @@ php artisan key:generate --quiet
 # så ett falskt rött kan aldrig fälla den här kontrollen. Motsatsen, ett grönt
 # test som borde varit rött, är den enda signal vi letar efter.
 GRONA=()
+ROTA=()
 for fil in "${TESTER[@]}"; do
     echo "--- $fil"
 
@@ -145,8 +174,31 @@ for fil in "${TESTER[@]}"; do
         tail -n 20 "$ARBETE/utfall.log"
     else
         echo "rött på basen, som det ska"
+        ROTA+=("$fil")
     fi
 done
+
+# Testfall för testfall i de röda filerna, se filhuvudet. Bara en varning:
+# utfallet ändrar inte exitkoden. Ett filter som inte hittar sitt testfall
+# ("No tests found", t.ex. ett namn som kapats vid en escapad fnutt) räknas
+# inte som grönt.
+GRONA_FALL=0
+for fil in "${ROTA[@]}"; do
+    while IFS= read -r namn; do
+        [ -n "$namn" ] || continue
+        # testnamn() behåller fnuttarna runt namnet; filtret ska ha texten.
+        namn="${namn#\'}"
+        namn="${namn%\'}"
+        if php artisan test "$fil" --filter="$(som_filter "$namn")" > "$ARBETE/fall.log" 2>&1 \
+            && ! grep -q "No tests found" "$ARBETE/fall.log"; then
+            GRONA_FALL=$((GRONA_FALL + 1))
+            echo "::warning file=$fil::testfallet '$namn' går igenom på basen, utan PR:ens implementation. Filen är röd på grund av ett annat testfall, så det här bevisar inget om sitt kriterium - skärp det, eller skriv i PR:en varför det ska vara grönt på basen."
+        fi
+    done < <(nya_testnamn "$fil")
+done
+if [ "$GRONA_FALL" -gt 0 ]; then
+    echo "$GRONA_FALL nytt/nya testfall i röda filer går igenom på basen - se varningarna ovan."
+fi
 
 if [ ${#GRONA[@]} -gt 0 ]; then
     # Sammanfattningen skrivs sist med flit: den som bara läser svansen av

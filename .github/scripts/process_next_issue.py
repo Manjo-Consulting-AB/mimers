@@ -22,6 +22,8 @@ import sys
 import os
 import re
 import fcntl
+import shutil
+import tempfile
 import time
 from datetime import datetime, timezone
 
@@ -125,6 +127,38 @@ PEAK_BESKED_RUBRIK = "### Åtgärdsloopen väntar på peak hours"
 # själv, efter samma etikett-mönster som review:approved (se run_review()s
 # docstring om varför en label och inte fritext).
 ARKITEKTFRAGA_BESVARAD = "fraga:besvarad"
+
+# Osynlig markör sist i varje arkitektsvar pipelinen själv postar. omfangsruta.py
+# godtar ett beviljat undantag bara i en kommentar som bär den, eftersom rubriken
+# ensam kan skrivas av vem som helst med `gh` - alla kommentarer postas under samma
+# konto. Speglad, inte importerad, av samma skäl som UNDANTAGSMARKOR nedan.
+ARKITEKTSVAR_MARKOR = "<!-- mimers-pipeline: arkitektsvar -->"
+
+# Bortre gräns för ett enskilt modellanrop (DeepSeek, Sonnet, Opus). Ett normalt
+# anrop tar minuter, en hel implementation sällan över en halvtimme. Taket finns
+# för det anrop som aldrig kommer tillbaka: utan det håller körningen flock:en för
+# evigt, och varje cron-körning därefter skriver bara "lock upptagen" och avslutar
+# - kön står still utan en enda notis. Med taket blir det en krasch, och en krasch
+# har redan sin väg till Tony.
+AGENT_TIMEOUT = 90 * 60
+
+# Bortre gräns för att vänta in CI (`gh pr checks --watch`). CI tar ~4 minuter; en
+# körning som står i kö i en halvtimme är ett problem hos GitHub, inte ett skäl att
+# hålla låset.
+CI_VANT_TIMEOUT = 30 * 60
+
+# CI-stegen mergespärren kan åtgärda själv. Namnen måste vara exakt de i
+# .github/workflows/ci.yml - test_process_next_issue.py vaktar det.
+CI_STEG_OMFANG = "Diffen ligger innanför omfångsrutan"
+CI_STEG_TESTER = "Tester"
+
+# När sviten är röd redan på main kan inget issue bli klart: varje försök fälls av
+# samma fel, och CI på PR:en blir röd av samma skäl. Kön pausar då i stället för
+# att bränna försök, och tillståndet sparas här så att nästa cron-körning inte
+# kör om samma prövning var tionde minut. Se stanna_pa_rod_bas().
+BAS_ROD_TILLSTAND = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))), ".claude", "bas-rod.json")
+BAS_ROD_PAUS = 60 * 60
 
 # =====================================================================
 # KONFIGURATION & HJÄLPFUNKTIONER
@@ -308,11 +342,26 @@ def kora_om_ci_efter_undantag(pr_number, svar):
 
     Felar omkörningen är det inte värt att fälla PR-flödet på: grinden var röd
     redan, och värsta utfallet är det vi hade förut. Därför bara en varning.
+
+    Returnerar id:t på den omstartade körningen, eller None.
     """
     if not beviljar_undantag(svar):
-        return
+        return None
 
     print(f"--> Arkitektsvaret beviljar undantag från omfångsrutan - kör om CI på #{pr_number}.")
+    return kor_om_ci(pr_number)
+
+
+def kor_om_ci(pr_number):
+    """Kör om de fallerade jobben i grenens senaste CI-körning och vänta tills
+    omkörningen syns. Returnerar körningens id, eller None om den inte gick att
+    starta.
+
+    Väntan behövs för att anroparen ofta ska läsa CI direkt efteråt: `gh pr
+    checks --watch` direkt efter `gh run rerun` kan hinna se den gamla, röda
+    slutsatsen innan GitHub registrerat omkörningen, och svarar då rött utan
+    att vänta.
+    """
     try:
         gren = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefName"],
                                   cwd=REPO_ROOT).stdout)["headRefName"]
@@ -321,10 +370,21 @@ def kora_om_ci_efter_undantag(pr_number, svar):
              "--json", "databaseId"], cwd=REPO_ROOT).stdout)
         if not korningar:
             print("⚠️ Ingen CI-körning på grenen - grinden läser undantaget först vid nästa push.")
-            return
-        run_cmd(["gh", "run", "rerun", str(korningar[0]["databaseId"]), "--failed"], cwd=REPO_ROOT)
+            return None
+        korning = str(korningar[0]["databaseId"])
+        run_cmd(["gh", "run", "rerun", korning, "--failed"], cwd=REPO_ROOT)
     except Exception as e:
         print(f"⚠️ Kunde inte köra om CI på #{pr_number}: {e}")
+        return None
+
+    for _ in range(12):
+        status = run_cmd(["gh", "api", f"repos/{GH_REPO}/actions/runs/{korning}", "--jq", ".status"],
+                         check=False, cwd=REPO_ROOT).stdout.strip()
+        if status and status != "completed":
+            return korning
+        time.sleep(5)
+    print(f"⚠️ Omkörningen {korning} syntes inte inom en minut - läser CI ändå.")
+    return korning
 
 
 def kapa_felutskrift(text, grans):
@@ -345,6 +405,11 @@ def kapa_felutskrift(text, grans):
     return f"{text[:huvud]}\n[... {utelamnat} tecken utelämnade ...]\n{text[-svans:]}"
 
 
+STEG_ANALYS = "analys"
+STEG_TESTER = "tester"
+STEG_ROTT_PA_BASEN = "rott-pa-basen"
+
+
 def run_local_tests(cwd):
     """
     Kvalitetsgrind: Pint (auto-fix, aldrig ett skäl att fela), PHPStan
@@ -361,18 +426,22 @@ def run_local_tests(cwd):
     arbetsträd) oavsett utfall - STEG 5:s enda riktiga commit ska vara
     opåverkad.
 
-    Returnerar (passed: bool, output: str).
+    Returnerar (passed: bool, output: str, steg: str). `steg` säger vilket led
+    som fällde - STEG_ANALYS, STEG_TESTER eller STEG_ROTT_PA_BASEN - och är tom
+    när allt är grönt. Anroparen behöver skilja dem åt: bara ett rött
+    testsvitsled kan bero på att sviten är röd redan på main (se
+    sviten_ar_rod_pa_basen()).
     """
     run_cmd(["composer", "fix"], check=False, cwd=cwd)
 
     analyse = run_cmd(["composer", "analyse"], check=False, cwd=cwd)
     if analyse.returncode != 0:
         output = (analyse.stdout or "") + "\n" + (analyse.stderr or "")
-        return False, f"PHPStan (composer analyse) hittade fel:\n{output}"
+        return False, f"PHPStan (composer analyse) hittade fel:\n{output}", STEG_ANALYS
 
     res = run_cmd(["composer", "test"], check=False, cwd=cwd)
     if res.returncode != 0:
-        return False, (res.stdout or "") + "\n" + (res.stderr or "")
+        return False, (res.stdout or "") + "\n" + (res.stderr or ""), STEG_TESTER
 
     # Den tillfälliga commiten behövs bara för att få ocommittat arbete in i
     # HEAD. Har agenten committat själv ligger ändringarna redan där, och
@@ -384,29 +453,172 @@ def run_local_tests(cwd):
         run_cmd(["git", "add", "."], cwd=cwd)
         run_cmd(["git", "commit", "-m", "Tillfällig commit för rott-pa-basen-kontroll"], cwd=cwd)
 
-    run_cmd(["git", "fetch", "origin", "main"], cwd=cwd)
-    base_sha = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=cwd).stdout.strip()
-    head_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=cwd).stdout.strip()
-    if head_sha == base_sha:
-        # Varken arbetsträd eller commits skiljer sig från basen - rott-pa-basen
-        # har inget nytt/ändrat test att pröva. Om det här var det enda försöket
-        # fångar STEG 5:s egen "ingen ändring alls"-kontroll det separat.
-        return True, ""
+    # Allt mellan den tillfälliga commiten och återställningen står i try: ett
+    # nätfel i fetchen (eller något annat som reser) lämnade annars
+    # "Tillfällig commit" kvar i grenens historik, och STEG 5 pushade den.
+    try:
+        git_natverk(["git", "fetch", "origin", "main"], cwd=cwd)
+        base_sha = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=cwd).stdout.strip()
+        head_sha = run_cmd(["git", "rev-parse", "HEAD"], cwd=cwd).stdout.strip()
+        if head_sha == base_sha:
+            # Varken arbetsträd eller commits skiljer sig från basen - rott-pa-basen
+            # har inget nytt/ändrat test att pröva. Om det här var det enda försöket
+            # fångar STEG 5:s egen "ingen ändring alls"-kontroll det separat.
+            return True, "", ""
 
-    rott_res = run_cmd(
-        ["bash", ".github/scripts/rott-pa-basen.sh"], check=False, cwd=cwd,
-        env={**os.environ, "BASE_SHA": base_sha},
-    )
+        rott_res = run_cmd(
+            ["bash", ".github/scripts/rott-pa-basen.sh"], check=False, cwd=cwd,
+            env={**os.environ, "BASE_SHA": base_sha},
+        )
+    finally:
+        if tillfallig_commit:
+            run_cmd(["git", "reset", "--soft", "HEAD~1"], cwd=cwd)
+
     rott_ok = (rott_res.returncode == 0)
     rott_output = (rott_res.stdout or "") + "\n" + (rott_res.stderr or "")
-
-    if tillfallig_commit:
-        run_cmd(["git", "reset", "--soft", "HEAD~1"], cwd=cwd)
-
     if not rott_ok:
-        return False, f"Nya/ändrade tester är gröna redan på basen (rott-pa-basen.sh):\n{rott_output}"
+        return (False,
+                f"Nya/ändrade tester är gröna redan på basen (rott-pa-basen.sh):\n{rott_output}",
+                STEG_ROTT_PA_BASEN)
 
-    return True, ""
+    return True, "", ""
+
+
+def sviten_ar_rod_pa_basen(worktree_path):
+    """Kör testsviten på baskommiten, utan någon av försökets ändringar.
+
+    Finns för att "sviten är röd" hittills alltid lästs som "försöket är fel".
+    Issue 136 (PR #522) visar vad det kostar när det inte stämmer: fem testfiler
+    räknade sina förväntade datum ur serverns UTC-dygn medan produkten räknade
+    användarens, så sviten var röd på main mellan 22:00 och 24:00 UTC. Körningen
+    22:44 fick tre DeepSeek-försök med prompten "Tidigare kodförsök misslyckades",
+    och felen låg i precis det område issuen ändrade - omöjliga att skilja från
+    en regression utan att köra om dem utan issuens kod.
+
+    Samma teknik som rott-pa-basen.sh: basens träd exporteras med `git archive`
+    (en worktree skulle dela objektdatabas och index med försöket), vendor och
+    den byggda frontenden lånas från försökets worktree när låsfilen är
+    oförändrad. Katalogen ligger i /tmp, inte på NFS-mounten.
+
+    Felar öppet: kan prövningen inte göras, eller fälls sviten av att miljön inte
+    är uppsatt (testforutsattningar.php) i stället för av ett test, returneras
+    "inte röd" - utfallet blir då exakt det kön hade innan kontrollen fanns.
+
+    Returnerar (rod: bool, bas_sha: str, utskrift: str).
+    """
+    bas_sha = ""
+    tmp = tempfile.mkdtemp(prefix="mimers-bas-")
+    try:
+        bas_sha = run_cmd(["git", "merge-base", "HEAD", "origin/main"],
+                          cwd=worktree_path).stdout.strip()
+        print(f"--> Sviten är röd - prövar den på basen {bas_sha[:8]} utan försökets ändringar...")
+        arkiv = os.path.join(tmp, "bas.tar")
+        run_cmd(["git", "archive", "--output", arkiv, bas_sha], cwd=worktree_path)
+        run_cmd(["tar", "-xf", arkiv, "-C", tmp])
+        os.remove(arkiv)
+
+        vendor = os.path.join(worktree_path, "vendor")
+        las_oforandrad = run_cmd(["git", "diff", "--quiet", bas_sha, "--", "composer.lock"],
+                                 check=False, cwd=worktree_path).returncode == 0
+        if las_oforandrad and os.path.isdir(vendor):
+            run_cmd(["cp", "-r", vendor, os.path.join(tmp, "vendor")])
+            run_cmd(["composer", "dump-autoload", "--quiet", "--no-interaction", "--no-scripts"], cwd=tmp)
+        else:
+            run_cmd(["composer", "install", "--prefer-dist", "--no-interaction", "--no-progress",
+                     "--quiet", "--no-scripts"], cwd=tmp)
+
+        bygge = os.path.join(worktree_path, "public", "build")
+        if os.path.isdir(bygge):
+            run_cmd(["cp", "-r", bygge, os.path.join(tmp, "public", "build")])
+        shutil.copy(os.path.join(tmp, ".env.example"), os.path.join(tmp, ".env"))
+        run_cmd(["php", "artisan", "key:generate", "--quiet"], cwd=tmp)
+
+        res = run_cmd(["composer", "test"], check=False, cwd=tmp, timeout=AGENT_TIMEOUT)
+        utskrift = (res.stdout or "") + "\n" + (res.stderr or "")
+        if res.returncode == 0:
+            print("  ✓ Sviten är grön på basen - felet hör till försöket.")
+            return False, bas_sha, ""
+        if "Testmiljön är inte uppsatt" in utskrift:
+            print("  ⚠ Basens testmiljö gick inte att sätta upp - kan inte avgöra, fortsätter som förut.")
+            return False, bas_sha, ""
+        print("  ✗ Sviten är röd även på basen.")
+        return True, bas_sha, utskrift
+    except Exception as e:
+        print(f"  ⚠ Kunde inte pröva sviten på basen: {e}. Fortsätter som förut.")
+        return False, bas_sha, ""
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def las_bas_rod_tillstand():
+    """Sparat tillstånd från den senaste röda basen, eller {} om inget finns."""
+    try:
+        with open(BAS_ROD_TILLSTAND, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def bas_rod_paus_galler(tillstand, main_sha, nu):
+    """Ska kön stå still för att main var röd nyss?
+
+    Ren funktion. Pausen gäller bara samma main-commit och bara BAS_ROD_PAUS
+    sekunder: har main flyttat kan felet vara lagat, och en röd bas som beror
+    på klockan (issue 136) blir grön av sig själv. Ett tillstånd som inte går
+    att läsa pausar ingenting.
+    """
+    sha = tillstand.get("sha")
+    tid = tillstand.get("tid")
+    if not sha or not main_sha or not isinstance(tid, (int, float)):
+        return False
+    return sha == main_sha and 0 <= nu - tid < BAS_ROD_PAUS
+
+
+def bas_rod_paus_pagar():
+    """Läser tillståndet och mains aktuella commit - se bas_rod_paus_galler()."""
+    tillstand = las_bas_rod_tillstand()
+    if not tillstand:
+        return False
+    res = git_natverk(["git", "ls-remote", "origin", "refs/heads/main"], cwd=REPO_ROOT, check=False)
+    main_sha = (res.stdout or "").split()[0] if (res.stdout or "").split() else ""
+    return bas_rod_paus_galler(tillstand, main_sha, time.time())
+
+
+def stanna_pa_rod_bas(issue_num, worktree_path, branch_name, bas_sha, utskrift):
+    """Pausa kön för att sviten är röd på main - inte för att issuen är svår.
+
+    Issuen märks inte `needs-human`: den har inte gjort något fel, och en
+    klockberoende röd bas blir grön av sig själv. Den lämnas som vilken
+    obehandlad issue som helst, och nästa körning efter BAS_ROD_PAUS tar den från
+    början. Kommentar och notis postas bara första gången för en given
+    main-commit, så att en bas som är röd i två timmar inte ger en notis var
+    tionde minut.
+    """
+    forra = las_bas_rod_tillstand()
+    ny = forra.get("sha") != bas_sha
+    try:
+        os.makedirs(os.path.dirname(BAS_ROD_TILLSTAND), exist_ok=True)
+        with open(BAS_ROD_TILLSTAND, "w", encoding="utf-8") as f:
+            json.dump({"sha": bas_sha, "tid": time.time()}, f)
+    except OSError as e:
+        print(f"  ⚠ Kunde inte spara tillståndet för röd bas: {e}")
+
+    cleanup_worktree(worktree_path, branch_name)
+    run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress"],
+            check=False, cwd=REPO_ROOT)
+    if ny:
+        run_cmd(["gh", "issue", "comment", issue_num, "--body",
+                 f"### Kön pausar: testsviten är röd på main\n"
+                 f"Sviten föll i första försöket, och samma svit är röd på baskommiten "
+                 f"`{bas_sha[:8]}` utan en rad av försökets kod. Felet hör alltså inte till "
+                 f"den här issuen, och inget försök kan bli grönt förrän main är det. Kön "
+                 f"försöker igen om {BAS_ROD_PAUS // 60} minuter, eller direkt när main får en ny "
+                 f"commit. Issuen är inte märkt `needs-human`.\n\n"
+                 f"Svansen av basens körning:\n```\n{kapa_felutskrift(utskrift, 3000)}\n```"],
+                check=False, cwd=REPO_ROOT)
+        send_pushover(f"⏸️ Testsviten är röd på main ({bas_sha[:8]}) - kön pausar. "
+                      f"Issue #{issue_num} väntar, nytt försök om {BAS_ROD_PAUS // 60} min.")
+    sys.exit(0)
 
 
 def call_deepseek(prompt, cwd):
@@ -434,8 +646,10 @@ def call_deepseek(prompt, cwd):
     # (issue #430, 2026-09-22). Wrappern reser proxyn igen i början av nästa
     # anrop, så omtaget räcker. Går det inte andra gången heller är det ett
     # riktigt fel och undantaget bär nu både stdout och koden.
+    # Ett anrop som timeoutar tas inte om: det är inte earlyooms signatur (den
+    # dödar snabbt), och ett andra varv på samma tak hade dubblat väntan.
     for forsok in (1, 2):
-        result = run_cmd(cmd, check=False, cwd=cwd, input=prompt)
+        result = run_cmd(cmd, check=False, cwd=cwd, input=prompt, timeout=AGENT_TIMEOUT)
         if result.returncode == 0:
             return result.stdout
         print(f"  ⚠ claude-subagent slutade med kod {result.returncode}.")
@@ -488,7 +702,7 @@ def call_claude_direct(model, prompt, cwd):
         # ovan.
         "--setting-sources", "user,project",
     ]
-    result = run_cmd(cmd, check=True, cwd=cwd, input=prompt)
+    result = run_cmd(cmd, check=True, cwd=cwd, input=prompt, timeout=AGENT_TIMEOUT)
     return result.stdout
 
 
@@ -515,14 +729,26 @@ def usage_ok_to_proceed():
         "--verbose",
         "--max-turns", "1",
     ]
-    result = run_cmd(cmd, check=False, input="ok")
+    try:
+        result = run_cmd(cmd, check=False, input="ok", timeout=300)
+    except TimeoutError as e:
+        print(f"⚠️ Usage-kollen svarade inte ({e}) - fortsätter ändå.")
+        return True
     for line in result.stdout.splitlines():
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
             continue
         if event.get("type") == "rate_limit_event":
-            utilization = event["rate_limit_info"]["unifiedWindows"]["five_hour"]["utilization"]
+            # Formatet är CLI:ns, inte vårt. Byter det form ska vakten falla
+            # tillbaka på samma "fortsätt ändå" som när eventet saknas - inte
+            # krascha körningen med ett KeyError innan den ens börjat.
+            try:
+                utilization = float(
+                    event["rate_limit_info"]["unifiedWindows"]["five_hour"]["utilization"])
+            except (KeyError, TypeError, ValueError):
+                print("⚠️ rate_limit_event hade oväntad form - fortsätter ändå.")
+                return True
             remaining = 1 - utilization
             if remaining < MIN_USAGE_REMAINING:
                 print(f"⏸️ Endast {remaining:.0%} kvar av 5-timmarsfönstret "
@@ -609,6 +835,12 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_nu
             f"Kräver en punkt ett arkitekturbeslut som varken issuen eller läslistan ger, "
             f"sätt INTE etiketten. Den frågan går då till arkitekten i stället, och det är "
             f"rätt utfall - inte ett misslyckande.\n"
+            f"En begäran om undantag från omfångsrutan - en ändrad fil utanför 'In scope' "
+            f"som implementeraren ber att få behålla - är ALLTID ett sådant arkitekturbeslut, "
+            f"även när du håller med i sak. Bara ett arkitektsvar kan bevilja undantaget så "
+            f"att CI:s omfångsgrind släpper igenom filen; din bekräftelse gör det inte, och "
+            f"sätter du etiketten når frågan aldrig arkitekten (PR #522). Sätt INTE etiketten "
+            f"då, och skriv din bedömning i svaret så att arkitekten får den.\n"
             f"Kräver en punkt en kodändring är den ett vanligt fynd i din numrerade lista "
             f"nedan, inte en etikett.\n"
             f"Vid minsta tvekan: sätt inte etiketten.\n"
@@ -754,7 +986,7 @@ def run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, fin
         if head_efter != head_fore:
             print(f"  i {agent_namn} committade själv på varv {round_num} - behåller den commiten.")
 
-        passed, test_output = run_local_tests(cwd=worktree_path)
+        passed, test_output, _ = run_local_tests(cwd=worktree_path)
         if not passed:
             print(f"  ✗ Åtgärden bröt testsviten på varv {round_num}.")
             findings = f"{findings}\n\nÅtgärden bröt testsviten:\n```\n{kapa_felutskrift(test_output, 1500)}\n```"
@@ -837,6 +1069,12 @@ def har_label(pr_number, label):
     return any(l["name"] == label for l in pr["labels"])
 
 
+# PR-nummer -> den commit ett godkännande i den här körningen gavs på. Se
+# pr_far_mergas(). Bara det här processlivet: en PR som godkändes i en tidigare
+# körning faller tillbaka på tidslinjen i godkannandet_galler_koden().
+GRANSKAD_SHA = {}
+
+
 def run_review(model, review_prompt, pr_number, worktree_path, min_text=MIN_GRANSKNINGSTEXT):
     """
     Kör en granskning och avgör godkännande via en GitHub-label modellen själv
@@ -867,6 +1105,12 @@ def run_review(model, review_prompt, pr_number, worktree_path, min_text=MIN_GRAN
     """
     run_cmd(["gh", "api", "--method", "DELETE", f"repos/{GH_REPO}/issues/{pr_number}/labels/review:approved"],
              check=False, cwd=REPO_ROOT)
+    GRANSKAD_SHA.pop(str(pr_number), None)
+    # Commiten granskningen läser. Anroparen har redan väntat in PR:ens head och
+    # läst diffen mot den, så det här är den kod ett godkännande gäller - se
+    # pr_far_mergas().
+    granskad = run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefOid", "-q", ".headRefOid"],
+                       check=False, cwd=REPO_ROOT).stdout.strip()
 
     full_prompt = (
         f"{review_prompt}\n\n"
@@ -903,6 +1147,8 @@ def run_review(model, review_prompt, pr_number, worktree_path, min_text=MIN_GRAN
                 check=False, cwd=REPO_ROOT)
         return False, f"{review_text}\n\n_{notera}_", True
 
+    if approved and granskad:
+        GRANSKAD_SHA[str(pr_number)] = granskad
     return approved, review_text, False
 
 
@@ -969,6 +1215,13 @@ def run_opus_answer(issue_body, fragor, pr_number, worktree_path):
         kraver_kodandring = True
 
     return svar, kraver_kodandring
+
+
+def arkitektkommentar(rubrik, svar):
+    """Kroppen för ett arkitektsvar pipelinen postar: rubrik, svar och
+    ARKITEKTSVAR_MARKOR sist. Alla tre arkitektbanorna går hit, så att ingen av
+    dem glömmer markören - utan den läser omfångsgrinden inget undantag."""
+    return f"### {rubrik}\n{svar}\n\n{ARKITEKTSVAR_MARKOR}"
 
 
 def arkitektfraga_ur_kommentarer(comments):
@@ -1097,7 +1350,7 @@ def besvara_arkitektfraga(pr_number):
         send_pushover(f"🏛️ PR #{pr_number}: arkitektsvar från Opus postat.")
 
     run_cmd(["gh", "pr", "comment", pr_number, "--body",
-             f"### Opus 5 - arkitektsvar på din fråga\n{svar}"], cwd=REPO_ROOT)
+             arkitektkommentar("Opus 5 - arkitektsvar på din fråga", svar)], cwd=REPO_ROOT)
 
     kora_om_ci_efter_undantag(pr_number, svar)
 
@@ -1335,8 +1588,9 @@ def atgarda_arkitektsvar(pr_number):
             return
 
         print("--> Åtgärdat - väntar in CI innan automatisk merge...")
-        if pr_far_mergas(pr_number):
-            run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
+        if (merga_om_tillatet(pr_number)
+                or hantera_mergesparr(issue_num, issue_body, pr_number, pr["body"],
+                                      branch_name, worktree_path)):
             send_pushover(f"✅ Issue #{issue_num} ('{issue_title}') mergad efter arkitektsvar, PR #{pr_number}!")
             cleanup_worktree(worktree_path, branch_name)
         else:
@@ -1431,7 +1685,10 @@ def extract_risk_class(issue_body):
         # utan att någon läser diffen - den bana som har minst kontroll, vald av ett
         # regex som inte träffade. Samma fail-open-klass som omfångsrutans grind, och
         # issue-mallen säger själv "vid tvekan: elevated". Se docs/Process/Lärdomar.md.
-        print("!! risk_class gick inte att läsa ur issuen - kör som 'high' (manuell merge).")
+        # Sedan ADR-0026:s uppföljning 2026-09-05 mergas även 'high' automatiskt
+        # efter godkännande, så värdet styr i dag bara loggning och notiser - men
+        # det är rätt värde den dag gaten för manuell merge återinförs.
+        print("!! risk_class gick inte att läsa ur issuen - kör som 'high'.")
         return "high"
 
     value = m.group(1).strip().lower()
@@ -1561,7 +1818,8 @@ def ska_eskalera_till_arkitekt(fragor, labels):
     return bool(fragor) and ARKITEKTFRAGA_BESVARAD not in labels
 
 
-def arkitektsvar_pa_oppen_fraga(issue_body, pr_number, pr_body, worktree_path, rubrik):
+def arkitektsvar_pa_oppen_fraga(issue_body, pr_number, pr_body, worktree_path, rubrik,
+                                underlag_fran_ci=""):
     """Eskalerar PR-kroppens obesvarade '## Frågor och antaganden' till Opus och
     postar svaret - eller returnerar None om det inte finns något att eskalera.
 
@@ -1591,17 +1849,31 @@ def arkitektsvar_pa_oppen_fraga(issue_body, pr_number, pr_body, worktree_path, r
     byter. Undantagsvägen (`Beviljat undantag från omfångsrutan:`) fanns redan
     och hade löst det på ett varv - men bara Tony kunde nå den, för hand.
 
+    Ett tredje håll sedan PR #522: MERGESPÄRREN, när omfångsgrinden är det
+    enda som föll (hantera_mergesparr). Då skickas grindens felrader med som
+    `underlag_fran_ci`, och dämparen `fraga:besvarad` gäller inte - en röd
+    omfångsgrind är i sig beviset på att frågan krävde ett arkitektbeslut,
+    oavsett vad granskaren bedömde.
+
     Returnerar (svar, kraver_kodandring) när Opus svarade, annars None.
     """
     fragor = oppna_fragor(pr_body)
-    pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"],
-                            cwd=REPO_ROOT).stdout)
-    labels = [label["name"] for label in pr["labels"]]
-    if not ska_eskalera_till_arkitekt(fragor, labels):
-        return None
+    if underlag_fran_ci:
+        fragor = (
+            f"{fragor or '(PR-kroppen har inget frågeavsnitt - implementeraren motiverade inte filerna.)'}"
+            f"\n\n=== OMFÅNGSGRINDEN I CI FÄLLDE PR:EN PÅ DET HÄR ===\n{underlag_fran_ci}\n\n"
+            "Granskningen har godkänt koden; det enda som står i vägen för mergen är rutan. "
+            "Avgör om filerna ska beviljas som undantag, eller om ändringarna i dem ska backas."
+        )
+    else:
+        pr = json.loads(run_cmd(["gh", "pr", "view", pr_number, "--json", "labels"],
+                                cwd=REPO_ROOT).stdout)
+        labels = [label["name"] for label in pr["labels"]]
+        if not ska_eskalera_till_arkitekt(fragor, labels):
+            return None
 
     opus_svar, kraver_kodandring = run_opus_answer(issue_body, fragor, pr_number, worktree_path)
-    run_cmd(["gh", "pr", "comment", pr_number, "--body", f"### {rubrik}\n{opus_svar}"],
+    run_cmd(["gh", "pr", "comment", pr_number, "--body", arkitektkommentar(rubrik, opus_svar)],
             cwd=REPO_ROOT)
 
     # Beviljar svaret ett undantag måste CI läsa om kommentarerna, annars står
@@ -1670,57 +1942,65 @@ def godkannandet_galler_koden(pr_number):
     Villkoret är deterministiskt: kom en `committed` eller `head_ref_force_pushed`
     efter den senaste `labeled review:approved`, gäller godkännandet inte HEAD.
 
+    Tidslinjen läses sida för sida (`--paginate` med `--jq '.[]'`, en händelse
+    per rad). Förr lästes den i ett stycke och, när det inte gick att tolka,
+    bara första sidan om 100 händelser - i en lång tråd alltså just inte de
+    senaste commitarna. Den här kontrollen används bara när körningen inte själv
+    vet vilken commit som granskades (se GRANSKAD_SHA och pr_far_mergas()).
+
     Felar öppet med en varning, inte stängt: kan tidslinjen inte läsas blir
     utfallet det kön hade innan kontrollen fanns. En trasig API-läsning ska inte
     låsa kön, men den ska heller inte tiga - se docs/Process/Lärdomar.md om
     grindar som inte kan skilja "inget att göra" från "jag tittade åt fel håll".
     """
-    res = run_cmd(["gh", "api", "--paginate",
-                   f"repos/{GH_REPO}/issues/{pr_number}/timeline"],
+    res = run_cmd(["gh", "api", "--paginate", "--jq", ".[]",
+                   f"repos/{GH_REPO}/issues/{pr_number}/timeline?per_page=100"],
                   check=False, cwd=REPO_ROOT)
     if res.returncode != 0:
         print(f"?? Kunde inte läsa tidslinjen för PR #{pr_number}: {res.stderr.strip()} "
               "- kan inte avgöra om godkännandet gäller HEAD. Fortsätter.")
         return True
     try:
-        handelser = json.loads(res.stdout)
+        handelser = [json.loads(rad) for rad in res.stdout.splitlines() if rad.strip()]
     except json.JSONDecodeError:
-        # --paginate limmar ihop flera JSON-arrayer; enklare att be om en sida.
-        res = run_cmd(["gh", "api",
-                       f"repos/{GH_REPO}/issues/{pr_number}/timeline?per_page=100"],
-                      check=False, cwd=REPO_ROOT)
-        if res.returncode != 0:
-            print(f"?? Kunde inte läsa tidslinjen för PR #{pr_number} - fortsätter.")
-            return True
-        try:
-            handelser = json.loads(res.stdout)
-        except json.JSONDecodeError:
-            print(f"?? Tidslinjen för PR #{pr_number} gick inte att tolka - fortsätter.")
-            return True
+        print(f"?? Tidslinjen för PR #{pr_number} gick inte att tolka - fortsätter.")
+        return True
 
+    utfall = godkannande_foraldrat(handelser)
+    if utfall is None:
+        print(f"?? Hittade ingen `labeled review:approved` i tidslinjen för PR "
+              f"#{pr_number}, trots att etiketten sitter - fortsätter.")
+        return True
+    if utfall:
+        godkant, handelse, nar = utfall
+        print(f"!! PR #{pr_number}: `review:approved` sattes {godkant}, men grenen "
+              f"fick `{handelse}` {nar}. Godkännandet gäller inte den kod som "
+              "ligger på HEAD - mergar inte. Kör granskningen igen på den nya "
+              "commiten (issue 221 / PR #229, se docs/Process/Lärdomar.md).")
+        return False
+    return True
+
+
+def godkannande_foraldrat(handelser):
+    """Ren halva av godkannandet_galler_koden(): None om tidslinjen saknar ett
+    godkännande, () om det står sig, annars (godkänt, händelse, när) för den
+    första commit eller force-push som kom efter det senaste godkännandet."""
     godkant = ""
     for h in handelser:
         if h.get("event") == "labeled" and (h.get("label") or {}).get("name") == "review:approved":
             godkant = max(godkant, h.get("created_at") or "")
     if not godkant:
-        print(f"?? Hittade ingen `labeled review:approved` i tidslinjen för PR "
-              f"#{pr_number}, trots att etiketten sitter - fortsätter.")
-        return True
-
+        return None
     for h in handelser:
         if h.get("event") not in ("committed", "head_ref_force_pushed"):
             continue
         nar = h.get("created_at") or ((h.get("committer") or {}).get("date") or "")
         if nar and nar > godkant:
-            print(f"!! PR #{pr_number}: `review:approved` sattes {godkant}, men grenen "
-                  f"fick `{h['event']}` {nar}. Godkännandet gäller inte den kod som "
-                  "ligger på HEAD - mergar inte. Kör granskningen igen på den nya "
-                  "commiten (issue 221 / PR #229, se docs/Process/Lärdomar.md).")
-            return False
-    return True
+            return (godkant, h["event"], nar)
+    return ()
 
 
-def pr_far_mergas(pr_number):
+def pr_far_mergas(pr_number, head_sha=""):
     """Den enda spärren före merge: `review:approved` sitter på PR:en, och CI är
     grönt. Båda merge-ställena går genom den här funktionen, så det finns ett
     ställe att hålla korrekt - inte tre som glider isär (se PR #163 och issue
@@ -1757,19 +2037,178 @@ def pr_far_mergas(pr_number):
               "mergas (ADR-0026).")
         return False
 
-    if not godkannandet_galler_koden(pr_number):
+    # Vet körningen själv vilken commit den godkände räcker en jämförelse, och
+    # den är exakt. Tidslinjen är reserven för godkännanden från en tidigare
+    # körning (en PR som återupptas via en etikett).
+    granskad = GRANSKAD_SHA.get(str(pr_number))
+    if granskad and head_sha:
+        if granskad != head_sha:
+            print(f"!! PR #{pr_number}: godkännandet gavs på {granskad[:8]}, men HEAD är "
+                  f"{head_sha[:8]}. Godkännandet gäller inte den kod som ligger på grenen - "
+                  "mergar inte.")
+            return False
+    elif not godkannandet_galler_koden(pr_number):
         return False
 
     for attempt in range(3):
-        result = run_cmd(
-            ["gh", "pr", "checks", pr_number, "--watch", "--interval", "15"],
-            check=False, cwd=REPO_ROOT,
-        )
+        try:
+            result = run_cmd(
+                ["gh", "pr", "checks", pr_number, "--watch", "--interval", "15"],
+                check=False, cwd=REPO_ROOT, timeout=CI_VANT_TIMEOUT,
+            )
+        except TimeoutError as e:
+            print(f"!! CI blev inte klar inom {CI_VANT_TIMEOUT // 60} minuter: {e} - mergar inte.")
+            return False
         output = ((result.stdout or "") + (result.stderr or "")).lower()
         if "no checks reported" in output and attempt < 2:
             time.sleep(15)
             continue
         return result.returncode == 0
+    return False
+
+
+def merga_om_tillatet(pr_number):
+    """pr_far_mergas() och mergen i ett, bundna till samma commit.
+
+    HEAD läses FÖRE spärren och mergen görs med `--match-head-commit`: kommer en
+    push mellan CI-läsningen och mergen vägrar GitHub, i stället för att merga
+    kod som varken granskats eller testats. Utan bindningen fanns ett fönster
+    på upp till en halvtimme (`gh pr checks --watch`) där det kunde hända.
+
+    Returnerar True om PR:en mergades.
+    """
+    head_sha = run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefOid", "-q", ".headRefOid"],
+                       check=False, cwd=REPO_ROOT).stdout.strip()
+    if not head_sha:
+        print(f"!! Kunde inte läsa HEAD för PR #{pr_number} - mergar inte.")
+        return False
+    if not pr_far_mergas(pr_number, head_sha):
+        return False
+    res = run_cmd(["gh", "pr", "merge", pr_number, "--squash", "--match-head-commit", head_sha],
+                  check=False, cwd=REPO_ROOT)
+    if res.returncode != 0:
+        print(f"!! `gh pr merge` vägrade: {(res.stderr or res.stdout or '').strip()}")
+        return False
+    return True
+
+
+def misslyckade_ci_steg(sha):
+    """Vilka CI-steg föll på `sha`, och vad de fallerade stegen skrev som fel?
+
+    Returnerar (steg, anteckningar): steg är en lista av (check, stegnamn) -
+    stegnamn None när checken föll utan att ett enskilt steg gjorde det -
+    och anteckningar felraderna (`::error`) ur de fallerade checkarna.
+    Omfångsgrindens rader namnger filerna utanför rutan, och det är just dem
+    arkitekten behöver se.
+
+    Felar mot "vet inte": går något inte att läsa blir svaret tomma listor,
+    och klassa_ci_fel() gör det till "okand" - alltså samma väg till Tony som
+    innan den här klassningen fanns.
+    """
+    try:
+        res = run_cmd(["gh", "api", f"repos/{GH_REPO}/commits/{sha}/check-runs?per_page=100"],
+                      cwd=REPO_ROOT)
+        checkar = json.loads(res.stdout).get("check_runs") or []
+        steg, anteckningar = [], []
+        for c in checkar:
+            if c.get("conclusion") in ("success", "skipped", "neutral"):
+                continue
+            jobb = run_cmd(["gh", "api", f"repos/{GH_REPO}/actions/jobs/{c['id']}"],
+                           check=False, cwd=REPO_ROOT)
+            fallna = []
+            if jobb.returncode == 0:
+                fallna = [st.get("name") for st in (json.loads(jobb.stdout).get("steps") or [])
+                          if st.get("conclusion") == "failure"]
+            steg.extend((c.get("name"), namn) for namn in (fallna or [None]))
+            ann = run_cmd(["gh", "api", f"repos/{GH_REPO}/check-runs/{c['id']}/annotations"],
+                          check=False, cwd=REPO_ROOT)
+            if ann.returncode == 0:
+                anteckningar.extend(a.get("message") or "" for a in json.loads(ann.stdout)
+                                    if a.get("annotation_level") == "failure")
+        return steg, anteckningar
+    except Exception as e:
+        print(f"?? Kunde inte läsa vilka CI-steg som föll: {e}")
+        return [], []
+
+
+def klassa_ci_fel(steg):
+    """Vad för sorts rött är det? Ren funktion.
+
+    "omfang"  - bara omfångsgrinden föll. Det är ett arkitekturbeslut, inte ett
+                kodfel: arkitekten kan bevilja undantaget (PR #522, där
+                granskaren bekräftade undantagsbegäran och frågan aldrig nådde
+                arkitekten).
+    "tester"  - bara teststeget föll. Sviten var grön lokalt före pushen, så
+                det röda beror på något i CI:s miljö eller klocka.
+    "annat"   - allt annat, och alla blandningar.
+    "okand"   - inga fallerade steg gick att läsa.
+    """
+    if not steg:
+        return "okand"
+    namn = {stegnamn for _, stegnamn in steg}
+    if namn == {CI_STEG_OMFANG}:
+        return "omfang"
+    if namn == {CI_STEG_TESTER}:
+        return "tester"
+    return "annat"
+
+
+def hantera_mergesparr(issue_num, issue_body, pr_number, pr_body, branch_name, worktree_path):
+    """Försök lösa en slagen mergespärr innan den når Tony. Returnerar True om
+    PR:en blev mergad.
+
+    Förut gick varje spärr till `eskalera()`, och eftersom kön är strikt FIFO
+    stod hela kön still tills Tony kom - också när orsaken var något kön själv
+    kunde ha åtgärdat. PR #522 är fallet: koden var godkänd, sviten grön, och
+    det enda röda var omfångsgrinden på fem filer implementeraren bett om
+    undantag för. Frågan nådde aldrig arkitekten, eftersom granskaren satt
+    `fraga:besvarad`.
+
+    Två sorters rött åtgärdas, ett försök var:
+
+      - Omfångsgrinden: arkitekten får frågeavsnittet och grindens felrader. Ett
+        beviljat undantag kör om CI; ett svar som kräver kodändring går genom
+        åtgärdsloopen. Sedan en ny merge-prövning.
+      - Teststeget: kör om de fallerade jobben EN gång. Sviten var grön lokalt,
+        så rött i CI pekar på miljön eller klockan. Faller den igen är det
+        riktigt, och går till Tony.
+
+    Allt annat - och en PR utan `review:approved` - går till Tony som förut.
+    """
+    if not har_label(pr_number, "review:approved"):
+        return False
+    head_sha = run_cmd(["gh", "pr", "view", pr_number, "--json", "headRefOid", "-q", ".headRefOid"],
+                       check=False, cwd=REPO_ROOT).stdout.strip()
+    steg, anteckningar = misslyckade_ci_steg(head_sha) if head_sha else ([], [])
+    typ = klassa_ci_fel(steg)
+    print(f"--> Mergespärren: CI-felet klassat som '{typ}' ({steg}).")
+
+    if typ == "omfang":
+        send_pushover(f"🏛️ Issue #{issue_num}: omfångsgrinden fällde PR #{pr_number} - frågar arkitekten.")
+        svar, kraver_kodandring = arkitektsvar_pa_oppen_fraga(
+            issue_body, pr_number, pr_body, worktree_path,
+            "Opus 5 - arkitektsvar på omfångsgrinden",
+            underlag_fran_ci="\n".join(anteckningar[:30]) or "(grinden lämnade inga felrader)",
+        )
+        # arkitektsvar_pa_oppen_fraga() har redan kört om CI om svaret beviljade.
+        if beviljar_undantag(svar):
+            return merga_om_tillatet(pr_number)
+        if kraver_kodandring:
+            resolved, _ = run_findings_fix_loop(issue_body, pr_number, branch_name, worktree_path, svar)
+            return resolved and merga_om_tillatet(pr_number)
+        return False
+
+    if typ == "tester":
+        run_cmd(["gh", "pr", "comment", pr_number, "--body",
+                 "### CI körs om en gång\nTeststeget i CI föll, men sviten var grön lokalt "
+                 "före pushen. Det pekar på något i CI:s miljö eller klocka snarare än i koden "
+                 "(se PR #522). De fallerade jobben körs om en gång; faller de igen går PR:en "
+                 "till Tony."], cwd=REPO_ROOT)
+        send_pushover(f"🔁 Issue #{issue_num}: teststeget föll i CI på PR #{pr_number} men var grönt lokalt - kör om en gång.")
+        if kor_om_ci(pr_number) is None:
+            return False
+        return merga_om_tillatet(pr_number)
+
     return False
 
 
@@ -1884,6 +2323,11 @@ def process_next_issue(issue_number=None):
                  cwd=REPO_ROOT)
         run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"], cwd=REPO_ROOT)
         send_pushover(f"⚠️ Issue #{issue_num} var 'in-progress' utan öppen PR. Märkt needs-human.")
+        sys.exit(0)
+
+    if issue_number is None and bas_rod_paus_pagar():
+        print("⏸️ Testsviten var röd på main nyss, och main har inte flyttat - väntar. "
+              f"Se {BAS_ROD_TILLSTAND}.")
         sys.exit(0)
 
     if not usage_ok_to_proceed():
@@ -2011,6 +2455,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         "fältet är det enda som överlever sessionen; det läses vid milstolpsretro."
     )
     agent_summary = ""
+    bas_provad = False
 
     omfangsnotis = kor_omfangslint(issue_num, issue_body, worktree_path)
 
@@ -2061,7 +2506,16 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
             )
             continue
 
-        passed, test_output = run_local_tests(cwd=worktree_path)
+        passed, test_output, steg = run_local_tests(cwd=worktree_path)
+        if not passed and steg == STEG_TESTER and not bas_provad:
+            # Första röda svitskörningen: är sviten röd redan på main är det
+            # inte försökets fel, och inget av de följande försöken kan bli
+            # grönt. Prövas en gång per issue - svaret ändras inte mellan
+            # försöken, och en körning av sviten på basen kostar minuter.
+            bas_provad = True
+            rod, bas_sha, bas_utskrift = sviten_ar_rod_pa_basen(worktree_path)
+            if rod:
+                stanna_pa_rod_bas(issue_num, worktree_path, branch_name, bas_sha, bas_utskrift)
         if passed:
             print("  ✓ Tester GRÖNA med DeepSeek!")
             send_pushover(f"🧩 Issue #{issue_num}: DeepSeek löste testerna på försök {attempt}/3. Skapar PR...")
@@ -2081,7 +2535,12 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
 
         run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "model:deepseek", "--add-label", "model:sonnet"], cwd=REPO_ROOT)
 
-        run_cmd(["git", "reset", "--hard", "HEAD"], cwd=worktree_path)
+        # Tillbaka till basen, inte till HEAD. DeepSeek kör med
+        # bypassPermissions och committar ibland själv (PR #163, issue #172) -
+        # `reset --hard HEAD` tog bara bort det ocommittade och lät Sonnet börja
+        # ovanpå tre underkända försök.
+        bas = run_cmd(["git", "merge-base", "HEAD", "origin/main"], cwd=worktree_path).stdout.strip()
+        run_cmd(["git", "reset", "--hard", bas], cwd=worktree_path)
         run_cmd(["git", "clean", "-fd"], cwd=worktree_path)
 
         sonnet_prompt = (
@@ -2091,7 +2550,7 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         )
 
         agent_summary = call_claude_direct("sonnet", sonnet_prompt, cwd=worktree_path)
-        passed, test_output = run_local_tests(cwd=worktree_path)
+        passed, test_output, _ = run_local_tests(cwd=worktree_path)
 
         if passed:
             send_pushover(f"🧩 Issue #{issue_num}: Sonnet löste testerna efter DeepSeeks 3 försök. Skapar PR...")
@@ -2381,16 +2840,20 @@ def los_fraga_och_merga(issue_num, issue_title, issue_body, pr_number, pr_body,
     # godkänd men fel PR låg nog att en genomförd granskning räcker, oavsett
     # axel. Gaten återinförs inför produktionssättning/testare - se ADR-0026.
     print(f"--> risk_class: {risk_class}, godkänd av {godkand_av} - väntar in CI innan automatisk merge...")
-    if pr_far_mergas(pr_number):
-        run_cmd(["gh", "pr", "merge", pr_number, "--squash"], cwd=REPO_ROOT)
+    if merga_om_tillatet(pr_number):
         send_pushover(
             f"✅ Issue #{issue_num} ('{issue_title}') godkänd av {godkand_av} och mergad, PR #{pr_number}!"
+        )
+    elif hantera_mergesparr(issue_num, issue_body, pr_number, pr_body, branch_name, worktree_path):
+        send_pushover(
+            f"✅ Issue #{issue_num} ('{issue_title}') mergad efter att mergespärren åtgärdats, PR #{pr_number}!"
         )
     else:
         run_cmd(["gh", "pr", "comment", pr_number, "--body",
                   "### Mergespärren slog till efter godkännande\nGranskningen godkände PR:en, men "
                   "antingen blev CI inte grönt eller så satt inte `review:approved` kvar vid "
-                  "mergetillfället. Mergar inte automatiskt."],
+                  "mergetillfället, och felet var inte ett kön kan åtgärda själv. Mergar inte "
+                  "automatiskt."],
                  cwd=REPO_ROOT)
         eskalera(
             issue_num, pr_number, worktree_path, branch_name,
@@ -2550,8 +3013,7 @@ def resume_question(pr_number):
     print("--> Bootstrappar worktree (composer setup)...")
     run_cmd(["composer", "setup"], cwd=worktree_path)
 
-    modellnamn = "Opus 5" if risk_class == "high" else "Sonnet 5"
-    godkand_av = f"{modellnamn} (tidigare granskning, PR återupptagen för obesvarad fråga)"
+    godkand_av = "Sonnet 5 (tidigare granskning, PR återupptagen för obesvarad fråga)"
 
     ta_bort_label(pr_number, ARKITEKTFRAGA_BESVARAD)
 
