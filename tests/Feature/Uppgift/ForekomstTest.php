@@ -242,12 +242,12 @@ it('en månad från den trettionde januari blir sista februari', function () {
 });
 
 it('exakt en öppen förekomst finns per aktivt schema', function () {
-    [, , , , $item] = skapaForekomstKontext();
+    [, $user, , , $item] = skapaForekomstKontext();
     $schedule = Schedule::factory()->for($item, 'item')->create();
 
-    $open = app(OpenNextOccurrence::class)->handle($schedule);
-    $igen = app(OpenNextOccurrence::class)->handle($schedule);
-    $tredje = app(OpenNextOccurrence::class)->handle($schedule);
+    $open = app(OpenNextOccurrence::class)->handle($schedule, $user->today());
+    $igen = app(OpenNextOccurrence::class)->handle($schedule, $user->today());
+    $tredje = app(OpenNextOccurrence::class)->handle($schedule, $user->today());
 
     expect($open)->toBeInstanceOf(ScheduleOccurrence::class);
     expect($igen)->toBeNull();
@@ -259,7 +259,7 @@ it('exakt en öppen förekomst finns per aktivt schema', function () {
 });
 
 it('en förekomst öppnas på det anropade schemat, inte på den första raden i tabellen', function () {
-    [, , , , $item] = skapaForekomstKontext();
+    [, $user, , , $item] = skapaForekomstKontext();
     $första = Schedule::factory()->for($item, 'item')->create([
         'title' => 'Första schemat',
         'anchor_date' => '2026-01-01',
@@ -272,7 +272,7 @@ it('en förekomst öppnas på det anropade schemat, inte på den första raden i
     // $första är den första raden i schedule-tabellen och saknar öppen
     // förekomst. Låser Actionen fel rad — newQuery()->first() utan whereKey —
     // hamnar förekomsten på $första i stället för på $andra (granskningsfynd).
-    $förekomst = app(OpenNextOccurrence::class)->handle($andra);
+    $förekomst = app(OpenNextOccurrence::class)->handle($andra, $user->today());
 
     expect($förekomst)->toBeInstanceOf(ScheduleOccurrence::class);
     expect($förekomst->schedule_id)->toBe($andra->id);
@@ -287,7 +287,7 @@ it('en förekomst öppnas på det anropade schemat, inte på den första raden i
 it('intervalschemats nästa förfall lagras utan tidskomponent', function () {
     Carbon::setTestNow('2027-05-05 14:30:00');
 
-    [, , , , $item] = skapaForekomstKontext();
+    [, $user, , , $item] = skapaForekomstKontext();
     $schedule = Schedule::factory()->for($item, 'item')->create([
         'interval_unit' => 'day',
         'interval_count' => 1,
@@ -297,7 +297,7 @@ it('intervalschemats nästa förfall lagras utan tidskomponent', function () {
     // 22b complete() anropar OpenNextOccurrence med $from = completed_at =
     // now() — en tidsstämpel mitt på dagen. Intervalgrenen ska bara ta
     // datumdelen med sig in i due_at (Beslut 10 / issue 22 § Beslut 4).
-    $nasta = app(OpenNextOccurrence::class)->handle($schedule, now());
+    $nasta = app(OpenNextOccurrence::class)->handle($schedule, $user->today(), now());
 
     expect($nasta)->toBeInstanceOf(ScheduleOccurrence::class);
 
@@ -446,6 +446,7 @@ it('ett schema som inte kan öppna en förekomst rullar tillbaka hela skapandet'
 
 it('ett schema på ett annat item nås inte via det här itemets rutt', function () {
     [$account, $user, $headers, $container] = skapaForekomstKontext();
+
     $itemA = Item::factory()->for($container, 'container')->create([
         'name' => 'Motor',
         'created_by_user_id' => $user->id,
@@ -457,7 +458,7 @@ it('ett schema på ett annat item nås inte via det här itemets rutt', function
         'created_by_account_id' => $account->id,
     ]);
     $schedule = Schedule::factory()->for($itemB, 'item')->create();
-    app(OpenNextOccurrence::class)->handle($schedule);
+    app(OpenNextOccurrence::class)->handle($schedule, $user->today());
 
     $response = getJson(
         "/api/containers/{$container->ulid}/items/{$itemA->ulid}/schedules/{$schedule->ulid}/occurrences",
@@ -477,7 +478,7 @@ it('en read-deltagare får läsa listan', function () {
         'created_by_account_id' => $egetKonto->id,
     ]);
     $schedule = Schedule::factory()->for($item, 'item')->create();
-    app(OpenNextOccurrence::class)->handle($schedule);
+    app(OpenNextOccurrence::class)->handle($schedule, $user->today());
 
     $response = getJson(
         "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules/{$schedule->ulid}/occurrences",
@@ -556,9 +557,9 @@ it('svaret bär aldrig ett löpnummer', function () {
  * deterministiskt (issue 80).
  */
 it('listningen gör ett konstant antal frågor', function () {
-    [, , $headers, $container, $item] = skapaForekomstKontext();
+    [, $user, $headers, $container, $item] = skapaForekomstKontext();
     $schedule = Schedule::factory()->for($item, 'item')->create();
-    app(OpenNextOccurrence::class)->handle($schedule);
+    app(OpenNextOccurrence::class)->handle($schedule, $user->today());
 
     $skapaHistorik = fn (int $antal) => ScheduleOccurrence::factory()
         ->for($schedule, 'schedule')

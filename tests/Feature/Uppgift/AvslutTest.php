@@ -491,7 +491,7 @@ it('en read-deltagare kan inte bocka av', function () {
         'created_by_account_id' => $egetKonto->id,
     ]);
     $schedule = Schedule::factory()->for($item, 'item')->create();
-    $occurrence = app(OpenNextOccurrence::class)->handle($schedule);
+    $occurrence = app(OpenNextOccurrence::class)->handle($schedule, $user->today());
 
     $response = postJson(
         "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules/{$schedule->ulid}/occurrences/{$occurrence->ulid}/complete",
@@ -504,11 +504,11 @@ it('en read-deltagare kan inte bocka av', function () {
 });
 
 it('en användare utan åtkomst nekas', function () {
-    [$account, , $headers] = kontoMedMedlem();
+    [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for(Account::factory()->create(), 'account')->create();
     $item = Item::factory()->for($container, 'container')->create();
     $schedule = Schedule::factory()->for($item, 'item')->create();
-    $occurrence = app(OpenNextOccurrence::class)->handle($schedule);
+    $occurrence = app(OpenNextOccurrence::class)->handle($schedule, $user->today());
 
     $response = postJson(
         "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules/{$schedule->ulid}/occurrences/{$occurrence->ulid}/complete",
@@ -521,11 +521,11 @@ it('en användare utan åtkomst nekas', function () {
 });
 
 it('oautentiserad begäran ger 401', function () {
-    [$account] = kontoMedMedlem();
+    [$account, $user] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();
     $item = Item::factory()->for($container, 'container')->create();
     $schedule = Schedule::factory()->for($item, 'item')->create();
-    $occurrence = app(OpenNextOccurrence::class)->handle($schedule);
+    $occurrence = app(OpenNextOccurrence::class)->handle($schedule, $user->today());
 
     $response = postJson(
         "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules/{$schedule->ulid}/occurrences/{$occurrence->ulid}/complete",
