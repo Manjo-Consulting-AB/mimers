@@ -44,11 +44,22 @@ import { useTranslations } from './useTranslations.js';
  * avgörs av vad kolumnen är, och båda bor här: en panel som skrev sitt eget
  * datum hade varit den blandning regeln finns för att ta bort.
  *
+ * **Dagen och tidszonen kommer från servern** (issue 137, [[ADR-0044
+ * Användarens dag]] § Beslut 4). Servern skickar användarens `today` som
+ * `Y-m-d` och hennes `timezone` som IANA-namn till varje sida, och relativa
+ * datum och klockslag räknas mot dem i stället för mot webbläsarens klocka.
+ * Det är därför brickan och serverns `overdue`-flagga aldrig kan säga emot
+ * varandra: de lever på samma dag. Saknas propparna, som på en utloggad sida,
+ * är dagen webbläsarens och klockslaget skrivs i webbläsarens tidszon —
+ * dagens beteende, och det enda en sida utan användare kan göra.
+ *
  * En DATE-sträng till `dueDate()` och en tidsstämpel till `eventDate()`.
  * Fel form ger `null` och inte ett påhittat datum: `parseDateOnly()` läser
  * `Y-m-d` och ingenting annat, och `parseTimestamp()` tar en ISO-sträng.
  * Datumen byggs i LOKAL tid, som formatDateOnly(): `new Date("2027-05-05")`
- * tolkas som UTC midnatt och visar i en negativ offset dagen FÖRE.
+ * tolkas som UTC midnatt och visar i en negativ offset dagen FÖRE. Det gäller
+ * DATE-formen, som inte har någon tidszon att räknas om över; en TIDSSTÄMPEL
+ * är ett ögonblick och skrivs ut i användarens tidszon.
  *
  * **Beroenderiktningen är enkelriktad.** Presentationsmodulerna
  * (`itemPresentation.js`, `accessPresentation.js`) importerar komposabeln för
@@ -70,22 +81,30 @@ export const RELATIVE_DAYS = 30;
  *   const { dueDate, eventDate } = useRelativeDate()
  *   dueDate('2027-05-05', false)                        // { text: 'In 24 days', state: 'warning', … }
  *   eventDate('2026-09-24T08:24:00+00:00')              // { text: 'Today 10:24', relative: true }
+ *
+ * Dagen och tidszonen läses ur de delade propparna (issue 137, [[ADR-0044
+ * Användarens dag]] § Beslut 4) — se docblocken ovan. `now()` står kvar som
+ * reserv: på en utloggad sida är `today` null, och då är webbläsarens dag den
+ * enda som finns.
  */
 export function useRelativeDate() {
     const { t } = useTranslations();
     const locale = computed(() => usePage().props.locale);
 
+    const today = () => parseDateOnly(usePage().props.today) ?? now();
+
     return {
         dueDate: (value, overdue = false) => formatDueDate(value, {
             t,
             locale: locale.value,
-            today: now(),
+            today: today(),
             overdue,
         }),
         eventDate: (value) => formatEventDate(value, {
             t,
             locale: locale.value,
-            today: now(),
+            today: today(),
+            timezone: usePage().props.timezone,
         }),
     };
 }
@@ -102,7 +121,7 @@ export function useRelativeDate() {
  */
 export function formatDueDate(value, { t, locale, today, overdue = false }) {
     const date = parseDateOnly(value);
-    const reference = parseDateOnly(today) ?? now();
+    const reference = referenceDay(today);
 
     if (date === null) {
         return { text: null, state: 'neutral', relative: false, days: null };
@@ -164,6 +183,12 @@ export function formatDueDate(value, { t, locale, today, overdue = false }) {
  * och inte klockslaget som är upplysningen, och samma form som `dueDate()`
  * ger. Tiden skrivs i användarens `locale`, som datumet.
  *
+ * **Både klockslaget och dagen räknas i användarens `timezone`** (issue 137,
+ * [[ADR-0044 Användarens dag]] § Beslut 4). En händelse 23:30 UTC är *Idag
+ * 01:30* för en användare i Stockholm: hennes `today` är då dagen efter
+ * UTC-datumet, och klockan skrivs i hennes zon. Saknas tidszonen, som på en
+ * utloggad sida, är båda webbläsarens.
+ *
  * En framtida tidsstämpel — en klocka som går fel — behandlas som dagens rad
  * och inte som *-2 dagar sedan*: antalet dagar får räknas fel, meningen får
  * inte bli osann, och det är samma ordning som `formatDueDate()` väljer
@@ -174,7 +199,7 @@ export function formatDueDate(value, { t, locale, today, overdue = false }) {
  * självt, medan det absoluta är ett datum någon annan kan sätta en
  * preposition framför.
  */
-export function formatEventDate(value, { t, locale, today }) {
+export function formatEventDate(value, { t, locale, today, timezone }) {
     const date = parseTimestamp(value);
 
     if (date === null) {
@@ -182,7 +207,7 @@ export function formatEventDate(value, { t, locale, today }) {
     }
 
     // Dagens rad är dag 0, gårdagens är -1, och en framtid kläms till 0.
-    const days = Math.min(0, Math.round((midnight(date) - today) / 86400000));
+    const days = Math.min(0, Math.round((midnight(date, timezone) - referenceDay(today)) / 86400000));
 
     if (days < -RELATIVE_DAYS) {
         return { text: formatLocaleDate(date, locale), relative: false };
@@ -194,15 +219,21 @@ export function formatEventDate(value, { t, locale, today }) {
             ? t('date.yesterday')
             : t('date.days_ago', { days: -days });
 
-    return { text: `${day} ${formatLocaleTime(date, locale)}`, relative: true };
+    return { text: `${day} ${formatLocaleTime(date, locale, timezone)}`, relative: true };
 }
 
 /*
- * Klockan i användarens `locale`, `HH:MM`. Anropas bara av `formatEventDate()`
- * och bara medan datumet är relativt — se docblocken ovan.
+ * Klockan i användarens `locale`, `HH:MM`, i hennes `timezone` när den finns
+ * ([[ADR-0044 Användarens dag]] § Beslut 4) — en utloggad sida har ingen och
+ * får webbläsarens. Anropas bara av `formatEventDate()` och bara medan
+ * datumet är relativt — se docblocken ovan.
  */
-export function formatLocaleTime(date, locale) {
-    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+export function formatLocaleTime(date, locale, timezone) {
+    return date.toLocaleTimeString(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: timezone ?? undefined,
+    });
 }
 
 /*
@@ -247,15 +278,51 @@ function parseTimestamp(value) {
 }
 
 /*
- * Midnatt i lokal tid för ett Date — den form dagräkningen jämför i, så att
- * en rad skriven 23:59 och en läst 00:01 hamnar på var sin dag och inte på
- * var sin sida om ett dygn.
+ * Midnatt i användarens tidszon för ett Date — den form dagräkningen jämför
+ * i, så att en rad skriven 23:59 och en läst 00:01 hamnar på var sin dag och
+ * inte på var sin sida om ett dygn.
+ *
+ * **Med en `timezone` är det kalenderdatumet i HENNES zon som byggs** (issue
+ * 137, [[ADR-0044 Användarens dag]] § Beslut 4): en händelse 23:30 UTC hör
+ * till nästa dygn för en användare i Stockholm. Datumet byggs ändå i
+ * webbläsarens lokala tid — det är formen `parseDateOnly()` ger, och
+ * dagräkningen jämför två sådana och aldrig två ögonblick. Zonen är giltig:
+ * `user.timezone` och `account.timezone` prövas mot DateTimeZone::
+ * listIdentifiers() när de sparas.
  */
-function midnight(date) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function midnight(date, timezone = null) {
+    if (timezone === null) {
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+
+    // Bara de numeriska delarna läses, så locale-valet är en formsak.
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(date);
+
+    const field = (type) => Number(parts.find((part) => part.type === type)?.value);
+
+    return new Date(field('year'), field('month') - 1, field('day'));
 }
 
 /* Dagens datum i lokal tid, midnatt — samma form som parseDateOnly ger. */
 function now() {
     return midnight(new Date());
+}
+
+/*
+ * Dagen ett datum räknas mot, i den form `midnight()` ger. Komposabeln skickar
+ * användarens dag som ett Date — den har redan läst serverns `today` — och
+ * proven skickar den som `Y-m-d`; båda betyder samma dag, och `null` betyder
+ * webbläsarens, som på en utloggad sida.
+ */
+function referenceDay(value) {
+    if (value instanceof Date) {
+        return midnight(value);
+    }
+
+    return parseDateOnly(value) ?? now();
 }

@@ -76,6 +76,34 @@ function datumregelKälla(): string
     return File::get(resource_path('js/composables/useRelativeDate.js'));
 }
 
+/**
+ * Vad händelseformen svarar för en tidsstämpel, som en array.
+ *
+ * Tidszonen utelämnas när den är `null`: då är anropet det gamla, utan den
+ * nyckel issue 137 lade till i options-bagen.
+ *
+ * @return array{text: ?string, relative: bool}
+ */
+function datumregelHändelse(string $värde, string $idag, ?string $tidszon = null): array
+{
+    $options = ['t', 'locale: "sv-SE"', 'today: '.json_encode($idag)];
+
+    if ($tidszon !== null) {
+        $options[] = 'timezone: '.json_encode($tidszon);
+    }
+
+    $json = datumregelKör(sprintf(
+        'process.stdout.write(JSON.stringify(m.formatEventDate(%s, { %s })));',
+        json_encode($värde),
+        implode(', ', $options),
+    ));
+
+    /** @var array{text: ?string, relative: bool} $svar */
+    $svar = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+
+    return $svar;
+}
+
 /** Gränsen i dagar, läst ur källkoden — det enda stället talet står. */
 function datumregelGräns(): int
 {
@@ -297,4 +325,88 @@ it('låter ingen panel formatera ett datum själv', function () {
             ->and($kod)->not->toContain('toISOString')
             ->and($kod)->toContain('useRelativeDate');
     }
+});
+
+// --- användarens dag (issue 137) -------------------------------------------
+
+/*
+ * Klart när: förfallodagen räknas mot användarens dag och inte mot
+ * webbläsarens klocka.
+ *
+ * Dagen kommer från serverns `today` ([[ADR-0044 Användarens dag]] § Beslut
+ * 4). Komposabeln ger den som ett Date — den har redan läst proppen — och
+ * proven ger den som `Y-m-d`; båda ska peka ut samma dag. Saknas den, som på
+ * en utloggad sida, är webbläsarens dag referensen: det ledet bygger dagens
+ * datum ur samma klocka som regeln läser, så det gäller oavsett vilken
+ * tidszon sviten kör i.
+ */
+it('räknar förfallodagen mot den givna dagen och inte mot klockan', function () {
+    $somText = datumregel('2027-05-25', '2027-05-01');
+
+    /** @var array{text: ?string, days: ?int} $somDatum */
+    $somDatum = json_decode(datumregelKör(
+        'process.stdout.write(JSON.stringify(m.formatDueDate("2027-05-25", '
+        .'{ t, locale: "sv-SE", today: new Date(2027, 4, 1), overdue: false })));'
+    ), true, 512, JSON_THROW_ON_ERROR);
+
+    expect($somText['text'])->toBe('date.in_days:24')
+        ->and($somDatum['text'])->toBe('date.in_days:24')
+        ->and($somDatum['days'])->toBe(24);
+
+    /** @var array{text: ?string} $utanDag */
+    $utanDag = json_decode(datumregelKör(implode("\n", [
+        'const nu = new Date();',
+        'const idag = [nu.getFullYear(), String(nu.getMonth() + 1).padStart(2, "0"), String(nu.getDate()).padStart(2, "0")].join("-");',
+        'process.stdout.write(JSON.stringify(m.formatDueDate(idag, { t, locale: "sv-SE", today: null })));',
+    ])), true, 512, JSON_THROW_ON_ERROR);
+
+    expect($utanDag['text'])->toBe('date.today');
+});
+
+/*
+ * Klart när: händelsens klockslag skrivs i användarens tidszon och dagen
+ * räknas i samma zon.
+ *
+ * Samma ögonblick — 23:30 UTC — är *Idag 01:30* för en användare i Stockholm,
+ * vars dag är den 27:e, och *Idag 19:30* för en i New York, vars dag är den
+ * 26:e. Hade klockan varit webbläsarens hade båda visat samma tal, och hade
+ * dagen räknats i webbläsarens zon hade Stockholmaren fått fel dag
+ * ([[ADR-0044 Användarens dag]] § Beslut 4).
+ */
+it('skriver händelsens klockslag i användarens tidszon', function () {
+    $stockholm = datumregelHändelse('2026-09-26T23:30:00Z', '2026-09-27', 'Europe/Stockholm');
+    $newYork = datumregelHändelse('2026-09-26T23:30:00Z', '2026-09-26', 'America/New_York');
+    $utc = datumregelHändelse('2026-09-26T23:30:00Z', '2026-09-26', 'UTC');
+
+    expect($stockholm['text'])->toBe('date.today 01:30')
+        ->and($newYork['text'])->toBe('date.today 19:30')
+        ->and($utc['text'])->toBe('date.today 23:30')
+        ->and($stockholm['relative'])->toBeTrue();
+
+    // Utan tidszon — en utloggad sida — är klockan webbläsarens, och anropet
+    // är det gamla: samma options-bag som före issue 137.
+    expect(datumregelHändelse('2026-09-26T23:30:00Z', '2026-09-26')['text'])
+        ->toStartWith('date.today ');
+
+    // Bortom gränsen står datumet ensamt, och ÄVEN den grenen avgörs i
+    // användarens zon: 1 jan 2026 är mer än trettio dagar före den 27 sep.
+    expect(datumregelHändelse('2026-01-01T02:00:00Z', '2026-09-27', 'Europe/Stockholm')['relative'])
+        ->toBeFalse();
+});
+
+/*
+ * Klart när: `formatDueDate()` och `formatEventDate()` har samma signatur som
+ * före issuen.
+ *
+ * De tar värdet och en options-bag, och komposabelns egen yta — det panelerna
+ * anropar — är oförändrad. Tidszonen är en ny NYCKEL i bagen, inte en ny
+ * parameter, så ingen anropare behöver skrivas om; komponenterna är orörda av
+ * issuen.
+ */
+it('behåller formatDueDate() och formatEventDate() anropssätt', function () {
+    expect(datumregelKälla())
+        ->toContain('export function formatDueDate(value, { t, locale, today, overdue = false })')
+        ->toContain('export function formatEventDate(value, { t, locale, today, timezone })')
+        ->toContain('dueDate: (value, overdue = false) =>')
+        ->toContain('eventDate: (value) =>');
 });
