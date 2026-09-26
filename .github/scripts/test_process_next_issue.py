@@ -836,7 +836,8 @@ def test_omfangslinten_stoppar_aldrig_kon():
     """Fail-open i varje led: ett falskt positivt utfall som stoppar arbetet
     kostar mer än linten sparar."""
     kropp = _funktionskropp("kor_omfangslint")
-    assert kropp.count("except Exception") == 2
+    # Ruttabellen, modellanropet och läslistan - tre led, tre fångade fel.
+    assert kropp.count("except Exception") == 3
     assert "sys.exit" not in kropp and "eskalera(" not in kropp
 
 

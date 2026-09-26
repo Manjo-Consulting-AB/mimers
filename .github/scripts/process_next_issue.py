@@ -2433,12 +2433,19 @@ def kor_omfangslint(issue_num, issue_body, worktree_path):
             run_cmd(["git", "reset", "--hard", head_fore], check=False, cwd=worktree_path)
             run_cmd(["git", "clean", "-fd"], check=False, cwd=worktree_path)
 
-    text = omfangslint.rapport(mekaniska, modellfynd, lage)
+    try:
+        lasluckor = omfangslint.lasfynd(issue_body, worktree_path)
+    except Exception as fel:
+        print(f"!! Omfångslinten kunde inte läsa läslistan: {fel}. Fortsätter utan den.")
+        lasluckor = []
+
+    text = omfangslint.rapport(mekaniska, modellfynd, lage, lasluckor)
     if not text:
-        print("--> Omfångslinten: rutan täcker det issuen beskriver.")
+        print("--> Omfångslinten: rutan och läslistan täcker det issuen beskriver.")
         return ""
 
-    print(f"--> Omfångslinten hittade {len(mekaniska) + len(modellfynd)} möjlig(a) lucka(or) i rutan.")
+    print(f"--> Omfångslinten hittade {len(mekaniska) + len(modellfynd)} möjlig(a) lucka(or) i rutan "
+          f"och {len(lasluckor)} i läslistan.")
     run_cmd(["gh", "issue", "comment", issue_num, "--body", text], check=False, cwd=REPO_ROOT)
     return f"\n\n=== OMFÅNGSLINTEN, körd innan du fick uppgiften ===\n{text}{OMFANGSLINT_INSTRUKTION}"
 
