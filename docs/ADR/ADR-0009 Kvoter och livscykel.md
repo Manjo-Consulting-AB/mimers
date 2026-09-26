@@ -46,3 +46,11 @@ Att radering går via containern skyddar mot att en inaktiv ägares konto tar me
 **Radera hela items vid nedgradering.** Valdes bort av skälen ovan.
 
 **Låt gratiskonton behålla allt.** Valdes bort — kostnaden bärs då av betalande kunder i all framtid.
+
+## Uppföljning 2026-09-26 — webben räknas som aktivitet
+
+**Aktivitet är aktivitet i webben eller API:et, inte bara API-anrop.** Middlewaren `UpdateLastActiveAt` satt bara i `api`-gruppen, så en person som enbart använde webben räknades som inaktiv sedan kontot skapades, hur ofta hen än loggade in. Den ligger nu i båda grupperna. Den gällande formuleringen står i [[Planer och kvoter]] § Kontolivscykel.
+
+**Skrivningen stryps till en per dygn.** Livscykeln räknar i månader, och en UPDATE per sidvisning ger den ingenting — kolumnen skrivs bara när den är NULL eller äldre än ett dygn.
+
+**Säkerhetsloggen övervägdes som källa och valdes bort:** den gallras efter tolv månader, och livscykeln behöver se arton månader bakåt.

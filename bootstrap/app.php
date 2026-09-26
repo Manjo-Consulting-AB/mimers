@@ -41,9 +41,16 @@ return Application::configure(basePath: dirname(__DIR__))
         // HandleInertiaRequests så att en 404 på filoriginet får samma
         // felsida som allt annat, och i api-gruppen för att `/api` är en av
         // ytorna som inte ska finnas där (Beslut 3).
+        //
+        // Issue 141: UpdateLastActiveAt i webbgruppen, efter sessionen —
+        // den läser $request->user(), som först finns när StartSession har
+        // kört. Utan den räknades den som bara använde webben som inaktiv
+        // sedan kontot skapades, hur ofta hen än loggade in. Se
+        // App\Http\Middleware\UpdateLastActiveAt.
         $middleware->web(append: [
             SetLocale::class,
             HandleInertiaRequests::class,
+            UpdateLastActiveAt::class,
             RestrictFileOriginToDelivery::class,
         ]);
 

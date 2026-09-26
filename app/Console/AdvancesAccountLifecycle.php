@@ -28,10 +28,10 @@ use Throwable;
  *   per medlem (Beslut 4 och 34b § Beslut 8), via App\Actions\Notification\
  *   CreateNotification. Loggraden finns kvar bredvid: den är det enda spåret
  *   i produktion om notisen inte går fram.
- * - En medlem som gjort ett API-anrop inom gränsen öppnar ett stängt konto
- *   igen (Beslut 7): `active` med `read_only_reason = null`. Bara konton
- *   stängda för inaktivitet öppnas — ett `read_only`-konto (utebliven
- *   betalning) öppnas aldrig av att någon loggar in.
+ * - En medlem med aktivitet i webben eller API:et inom gränsen öppnar ett
+ *   stängt konto igen (Beslut 7): `active` med `read_only_reason = null`.
+ *   Bara konton stängda för inaktivitet öppnas — ett `read_only`-konto
+ *   (utebliven betalning) öppnas aldrig av att någon loggar in.
  *
  * Kontots aktivitet är den senaste aktiviteten bland dess medlemmar
  * (`MAX(user.last_active_at)` över account_user), härledd och aldrig lagrad
@@ -160,12 +160,13 @@ class AdvancesAccountLifecycle
     }
 
     /**
-     * Steg 3: ett `closed`-konto vars medlemmar gjort ett API-anrop inom
-     * gränsen öppnas igen (Beslut 7). Utan det finns ingen väg tillbaka —
-     * det finns ingen administratörsyta i MVP. Läsning är aldrig spärrad,
-     * så en återvändande medlems anrop syns i `last_active_at`, och det är
-     * den signalen som räcker. Bara `read_only_reason = 'inactivity'`
-     * öppnas; ett konto fruset för utebliven betalning öppnas aldrig här.
+     * Steg 3: ett `closed`-konto vars medlemmar varit aktiva i webben eller
+     * API:et inom gränsen öppnas igen (Beslut 7). Utan det finns ingen väg
+     * tillbaka — det finns ingen administratörsyta i MVP. Läsning är aldrig
+     * spärrad, så en återvändande medlems aktivitet syns i `last_active_at`,
+     * och det är den signalen som räcker. Bara konton stängda för inaktivitet
+     * (`read_only_reason = 'inactivity'`) öppnas; ett konto fruset för
+     * utebliven betalning öppnas aldrig här.
      */
     private function reopenReturnedAccounts(Carbon $closeCutoff): void
     {
