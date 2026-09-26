@@ -51,3 +51,7 @@ Social inloggning valdes bort tills vidare — den sänker registreringströskel
 Issue 129 byggde bytet med det nuvarande lösenordet som återautentisering. Det stängde den enda vägen ut för den som glömt sitt lösenord: hon kan logga in med magic link, men sedan inte byta. Säsongsmönstret som motiverar magic link under § Alternativ garanterar att det händer ofta. Att bara ta bort kravet valdes bort. Då räcker en kapad session för att sätta ett lösenord, och därefter uppfyller angriparen e-postbytets lösenordskrav och kan flytta kontot. Mejlbekräftelsen stänger båda: den som sitter i sessionen kan begära, men bara den som når brevlådan kan genomföra.
 
 **E-postbytet kräver fortfarande det nuvarande lösenordet**, se [[M20 Kontot]] § 130. Där är det inkorgen som byts, och den kan inte vara beviset. Se [[M20 Kontot]] § 140.
+
+## Uppföljning 2026-09-26 — webben räknas som aktivitet
+
+**`UpdateLastActiveAt` sitter nu i både `api`- och `web`-gruppen**, så att också den som bara använder webben räknas som aktiv. Motiveringen står i [[ADR-0009 Kvoter och livscykel]] § Uppföljning 2026-09-26 — webben räknas som aktivitet, som också bär den gällande formuleringen.
