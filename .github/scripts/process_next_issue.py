@@ -1301,7 +1301,7 @@ def besvara_arkitektfraga(pr_number):
     för retron.
     """
     pr = json.loads(run_cmd(
-        ["gh", "pr", "view", pr_number, "--json", "number,title,body,state,comments"],
+        ["gh", "pr", "view", pr_number, "--json", "number,title,body,state,comments,headRefName"],
         cwd=REPO_ROOT).stdout)
 
     if pr["state"] != "OPEN":
@@ -1352,7 +1352,20 @@ def besvara_arkitektfraga(pr_number):
     run_cmd(["gh", "pr", "comment", pr_number, "--body",
              arkitektkommentar("Opus 5 - arkitektsvar på din fråga", svar)], cwd=REPO_ROOT)
 
-    kora_om_ci_efter_undantag(pr_number, svar)
+    korning = kora_om_ci_efter_undantag(pr_number, svar)
+
+    # Ett beviljat undantag på en köns egen, redan godkända PR är det sista som
+    # stod i vägen. Förut kördes CI om och sedan hände ingenting: issuen stod
+    # kvar på `needs-human` tills Tony mergade för hand. Mergen går genom samma
+    # spärr som alla andra (godkännande på HEAD, grön CI, bunden till commiten).
+    # Andra PR:er (retro, process, skuld) mergar Tony själv, som förut.
+    if (korning and pr["headRefName"].startswith("feature/issue-")
+            and har_label(pr_number, "review:approved")):
+        print(f"--> Undantaget beviljat och PR #{pr_number} är godkänd - väntar in CI och mergar.")
+        if merga_om_tillatet(pr_number):
+            send_pushover(f"✅ PR #{pr_number} mergad efter beviljat undantag från omfångsrutan.")
+        else:
+            print(f"--> PR #{pr_number} mergades inte - spärren står kvar, se loggen ovan.")
 
 
 def besvara_arkitektfragor(pr_number=None):
@@ -2965,8 +2978,15 @@ def resume_pr(pr_number):
             raise
         sys.exit(1)
 
-    if resolved:
-        send_pushover(f"🔍 PR #{pr_number} (Issue #{issue_num}) är klar för din manuella merge! Fynd åtgärdade via --resume-pr.")
+    # Samma merge som varje annan bana sedan ADR-0026:s uppföljning 2026-09-05.
+    # --resume-pr bad förut om en manuell merge, en kvarleva från tiden då
+    # high-axeln mergades av Tony.
+    if resolved and merga_om_tillatet(pr_number):
+        send_pushover(f"✅ PR #{pr_number} (Issue #{issue_num}) mergad efter --resume-pr.")
+    elif resolved:
+        run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
+                 check=False, cwd=REPO_ROOT)
+        send_pushover(f"🚨 PR #{pr_number} (Issue #{issue_num}): fynden åtgärdade via --resume-pr, men mergespärren slog till.")
     else:
         run_cmd(["gh", "issue", "edit", issue_num, "--remove-label", "in-progress", "--add-label", "needs-human"],
                  check=False, cwd=REPO_ROOT)

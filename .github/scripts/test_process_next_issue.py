@@ -1028,6 +1028,23 @@ def test_modellanropen_har_tak():
     assert "timeout=CI_VANT_TIMEOUT" in _funktionskropp("pr_far_mergas")
 
 
+def test_arkitektbanan_mergar_bara_kons_egna_godkanda_pr_efter_undantag():
+    """Ett beviljat undantag ska låsa upp en köns egen, godkänd PR - men aldrig
+    en retro-, process- eller skuld-PR som Tony mergar själv, och aldrig utan
+    att svaret faktiskt beviljade något."""
+    kropp = _funktionskropp("besvara_arkitektfraga")
+    villkor = kropp.split("merga_om_tillatet(")[0]
+    assert "korning = kora_om_ci_efter_undantag(" in villkor
+    assert 'startswith("feature/issue-")' in villkor
+    assert 'har_label(pr_number, "review:approved")' in villkor
+
+
+def test_resume_pr_mergar_genom_sparren():
+    kropp = _funktionskropp("resume_pr")
+    assert "merga_om_tillatet(pr_number)" in kropp
+    assert "manuella merge" not in kropp
+
+
 def test_usage_vakten_tal_ett_nytt_format():
     original = p.run_cmd
 
