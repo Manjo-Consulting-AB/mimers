@@ -84,12 +84,27 @@ class SecurityLog extends Model
     public const ACTION_RECOVERY_CODES = 'auth.recovery_codes';
 
     /**
+     * Ett lösenordsbyte begärdes (issue 140).
+     *
+     * **Raden skrivs när begäran tas emot, inte när bytet sker.** Ett
+     * obekräftat byte är den händelse som är värd att upptäcka: ett kapat
+     * konto som försöker sätta ett nytt lösenord syns här, innan länken i
+     * mejlet hunnit öppnas. `meta` bär bara `had_password`, alltså om ett
+     * lösenord fanns FÖRE begäran — **varken lösenordet, hashen, koden eller
+     * tokenet finns i raden** ([[ADR-0043 Tre loggar]] § Säkerhetsloggen).
+     */
+    public const ACTION_PASSWORD_CHANGE_REQUESTED = 'auth.password_change_requested';
+
+    /**
      * Lösenordet byttes — eller sattes för första gången av ett konto som
      * bara använt magic link (issue 129).
      *
      * **`meta` säger bara `had_password`**, alltså om ett lösenord fanns
-     * FÖRE bytet. Varken det gamla eller det nya lösenordet, och ingen kod,
-     * finns i raden — samma regel som för tvåfaktorraderna ovan.
+     * FÖRE bytet. Sedan issue 140 räknas fältet vid BEKRÄFTELSEN: bytet sker
+     * först när länken i mejlet öppnas (App\Actions\Account\
+     * ConfirmPasswordChange), och raden beskriver den skrivningen. Varken det
+     * gamla eller det nya lösenordet, hashen, koden eller tokenet finns i
+     * raden — samma regel som för tvåfaktorraderna ovan.
      */
     public const ACTION_PASSWORD_CHANGED = 'auth.password_changed';
 

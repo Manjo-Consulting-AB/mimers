@@ -7,6 +7,7 @@ use App\Models\Container;
 use App\Models\Export;
 use App\Models\Item;
 use App\Models\Notification as NotificationModel;
+use App\Models\PasswordChange;
 use App\Models\Plan;
 use App\Models\SecurityLog;
 use App\Models\StoredFile;
@@ -14,6 +15,7 @@ use App\Models\Subscription;
 use App\Models\User;
 use App\Models\WebhookEndpoint;
 use App\Notifications\MagicLinkNotification;
+use App\Notifications\PasswordChangeConfirmationNotification;
 use App\Support\Notification\UrlSafetyValidator;
 use App\Support\Security\DeviceName;
 use App\Support\Security\IpGroup;
@@ -348,12 +350,28 @@ it('varje uppräknad handling skriver exakt en rad via webben och via API:t', fu
     // ---- Lösenordsbytet -------------------------------------------------
     // Bara webben: /api har ingen lösenordsrutt (issuens omfångsruta), och
     // bytet är en kontohändelse som kräver en session.
+    //
+    // **Två anrop sedan issue 140.** PUT begär bytet och skriver
+    // `auth.password_change_requested`; länken i mejlet bekräftar och skriver
+    // `auth.password_changed`. Ingen av dem rör lösenordet i raden.
     $byter = User::factory()->create(['password_hash' => 'gammalt-losenord']);
     actingAs($byter)->put('/settings/security/password', [
-        'current_password' => 'gammalt-losenord',
         'password' => 'nytt-losenord-2026',
         'password_confirmation' => 'nytt-losenord-2026',
     ])->assertRedirect();
+
+    $bytLänk = null;
+    Notification::assertSentTo(
+        $byter,
+        PasswordChangeConfirmationNotification::class,
+        function (PasswordChangeConfirmationNotification $notis) use (&$bytLänk): bool {
+            $bytLänk = $notis->url;
+
+            return true;
+        }
+    );
+
+    actingAs($byter)->get($bytLänk)->assertRedirect(route('settings.security'));
 
     // ---- Hämtad export -------------------------------------------------
     // Bara webben har en nedladdningsrutt (routes/web.php § /exports/…).
@@ -400,7 +418,9 @@ it('varje uppräknad handling skriver exakt en rad via webben och via API:t', fu
         SecurityLog::ACTION_LOGIN => 2,
         SecurityLog::ACTION_LOGIN_FAILED => 2,
         SecurityLog::ACTION_MAGIC_LINK => 2,
-        // Alfabetiskt, som `ksort()` i sakerhetsFördelning() lägger dem.
+        // Alfabetiskt, som `ksort()` i sakerhetsFördelning() lägger dem —
+        // `_requested` före `d`, för '_' ligger före 'd' i teckenuppsättningen.
+        SecurityLog::ACTION_PASSWORD_CHANGE_REQUESTED => 1,
         SecurityLog::ACTION_PASSWORD_CHANGED => 1,
         SecurityLog::ACTION_RECOVERY_CODES => 2,
         SecurityLog::ACTION_TOTP_DISABLED => 2,
@@ -501,18 +521,31 @@ it('ingen rad bär lösenord, kod, token eller e-postadress', function () {
         'Authorization' => 'Bearer '.$koder->createToken('api')->plainTextToken,
     ])->assertNoContent();
 
-    // Lösenordsbytet (issue 129): det gamla och det nya lösenordet passerar
-    // samma request, och ingendera har någonstans att göra i raden. Koden
-    // prövas av `$aktiverarKod` ovan — samma väg genom TwoFactorChallenge.
+    // Lösenordsbytet (issue 129 och 140): det nya lösenordet passerar
+    // begäran och tokenet ur länken passerar bekräftelsen, och ingen av dem
+    // har någonstans att göra i en rad. Koden prövas av `$aktiverarKod` ovan
+    // — samma väg genom TwoFactorChallenge.
     $byterGammalt = 'gammalt-hemligt-7712';
     $byterNytt = 'nytt-hemligt-9930';
     $byter = User::factory()->create(['password_hash' => $byterGammalt]);
 
     actingAs($byter)->put('/settings/security/password', [
-        'current_password' => $byterGammalt,
         'password' => $byterNytt,
         'password_confirmation' => $byterNytt,
     ])->assertRedirect();
+
+    $bytLänk = null;
+    Notification::assertSentTo(
+        $byter,
+        PasswordChangeConfirmationNotification::class,
+        function (PasswordChangeConfirmationNotification $notis) use (&$bytLänk): bool {
+            $bytLänk = $notis->url;
+
+            return true;
+        }
+    );
+
+    actingAs($byter)->get($bytLänk)->assertRedirect(route('settings.security'));
 
     $loggen = sakerhetsJson();
 
@@ -521,6 +554,10 @@ it('ingen rad bär lösenord, kod, token eller e-postadress', function () {
         ->and($loggen)->not->toContain($aktiverarKod)
         ->and($loggen)->not->toContain($byterGammalt)
         ->and($loggen)->not->toContain($byterNytt)
+        // Tokenet ur länken finns inte heller i raden, och inte hashen av det
+        // nya lösenordet — den ligger i `password_change` och inte här.
+        ->and($loggen)->not->toContain(basename($bytLänk))
+        ->and($loggen)->not->toContain(PasswordChange::query()->where('user_id', $byter->id)->sole()->password_hash)
         ->and($koderHemlighet)->not->toBeEmpty();
 
     foreach ($återställningskoder as $kod) {
@@ -533,8 +570,9 @@ it('ingen rad bär lösenord, kod, token eller e-postadress', function () {
     expect(sakerhetsRad(SecurityLog::ACTION_TOTP_ENABLED)->meta)->toBe([])
         ->and(sakerhetsRad(SecurityLog::ACTION_TOTP_DISABLED)->meta)->toBe([])
         ->and(sakerhetsRad(SecurityLog::ACTION_RECOVERY_CODES)->meta)->toBe([])
-        // Lösenordsraden bär ett enda fält, och det säger bara om ett
-        // lösenord fanns FÖRE bytet (issue 129).
+        // Lösenordsraderna bär ett enda fält var, och det säger bara om ett
+        // lösenord fanns FÖRE händelsen (issue 129 och 140).
+        ->and(sakerhetsRad(SecurityLog::ACTION_PASSWORD_CHANGE_REQUESTED)->meta)->toBe(['had_password' => true])
         ->and(sakerhetsRad(SecurityLog::ACTION_PASSWORD_CHANGED)->meta)->toBe(['had_password' => true]);
 });
 

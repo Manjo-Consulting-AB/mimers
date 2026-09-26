@@ -1,8 +1,11 @@
 <?php
 
+use App\Actions\Account\RequestPasswordChange;
+use App\Models\PasswordChange;
 use App\Models\SecurityLog;
 use App\Models\TotpRecoveryCode;
 use App\Models\User;
+use App\Notifications\PasswordChangeConfirmationNotification;
 use App\Notifications\PasswordChangedNotification;
 use App\Support\Auth\RecoveryCodeBroker;
 use Illuminate\Support\Facades\DB;
@@ -11,17 +14,28 @@ use Illuminate\Support\Facades\Notification;
 use PragmaRX\Google2FA\Google2FA;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\assertAuthenticatedAs;
 use function Pest\Laravel\from;
+use function Pest\Laravel\get;
+use function Pest\Laravel\post;
 use function Pest\Laravel\put;
+use function Pest\Laravel\travel;
 use function Pest\Laravel\withCookie;
 
 /*
- * Issue 129 · Lösenordet går att byta, se [[M20 Kontot]] § 129,
+ * Issue 140 · Lösenordsbytet bekräftas via mejl, se [[M20 Kontot]] § 140,
  * App\Http\Controllers\Settings\PasswordController,
- * App\Http\Requests\Settings\UpdatePasswordRequest och
- * [[ADR-0011 Autentisering]].
+ * App\Http\Requests\Settings\UpdatePasswordRequest,
+ * App\Actions\Account\RequestPasswordChange,
+ * App\Actions\Account\ConfirmPasswordChange och
+ * [[ADR-0011 Autentisering]] § Uppföljning 2026-09-26.
  *
  * Varje "Klart när"-punkt i issuen motsvarar ett namngivet test här.
+ *
+ * **Flödet är två anrop och det är hela poängen:** PUT begär, GET bekräftar.
+ * Lösenordet byts aldrig i samma steg som det begärs, och därför prövar proven
+ * nedan både att begäran lämnar `password_hash` orörd och att bara länken i
+ * mejlet skriver om den.
  *
  * Hjälparna heter losenords* för att inte krocka med de globala i
  * tests/Support/Testhjalpare.php eller med grannfilernas — Pests funktioner
@@ -29,9 +43,9 @@ use function Pest\Laravel\withCookie;
  */
 
 /**
- * Kroppen ett komplett byte skickar: det nya lösenordet och dess bekräftelse.
- * Det nuvarande och koden läggs till av det enskilda provet, för det är de
- * två som skiljer lägena åt.
+ * Kroppen en begäran skickar: det nya lösenordet och dess bekräftelse. Koden
+ * läggs till av det enskilda provet, för det är den som skiljer kontona med
+ * tvåfaktor åt.
  *
  * @param  array<string, string>  $overrides
  * @return array<string, string>
@@ -42,6 +56,48 @@ function losenordsKropp(array $overrides = []): array
         'password' => 'nytt-losenord-2026',
         'password_confirmation' => 'nytt-losenord-2026',
     ], $overrides);
+}
+
+/**
+ * Länken ur mejlet till kontots egen adress. Tokenet finns bara där — svaret
+ * på PUT bär det aldrig.
+ */
+function losenordsLänk(User $user): string
+{
+    $url = null;
+
+    Notification::assertSentTo(
+        $user,
+        PasswordChangeConfirmationNotification::class,
+        function (PasswordChangeConfirmationNotification $notis) use (&$url): bool {
+            $url = $notis->url;
+
+            return true;
+        }
+    );
+
+    if ($url === null) {
+        throw new RuntimeException('Ingen bekräftelselänk hittades.');
+    }
+
+    return $url;
+}
+
+/**
+ * Begär ett byte och returnerar länken ur mejlet. Kastar om begäran inte gick
+ * igenom — varje prov som använder hjälparen förväntar sig ett lyckat utskick,
+ * och ett tyst misslyckande hade gjort provet grönt av fel skäl.
+ *
+ * @param  array<string, string>  $overrides
+ */
+function losenordsBegär(User $user, array $overrides = []): string
+{
+    from('/settings/security')
+        ->put('/settings/security/password', losenordsKropp($overrides))
+        ->assertRedirect('/settings/security')
+        ->assertSessionHas('status', 'password-change-requested');
+
+    return losenordsLänk($user);
 }
 
 /**
@@ -63,60 +119,49 @@ function losenordsTotpUtanLosenord(): array
     return [$user, $secret];
 }
 
-it('byter lösenordet för ett konto som anger sitt nuvarande', function () {
+// --- Begäran -------------------------------------------------------------
+
+it('byter inte lösenordet när begäran tas emot', function () {
     Notification::fake();
 
     $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
     actingAs($user);
 
-    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'gammalt-losenord',
-        // Formulärets kodfält finns med även utan tvåfaktor, och är tomt.
-        'code' => '',
-    ]));
+    losenordsBegär($user);
 
-    $svar->assertRedirect('/settings/security');
-    $svar->assertSessionHas('status', 'password-changed');
-
-    expect(Hash::check('nytt-losenord-2026', $user->fresh()->password_hash))->toBeTrue()
-        ->and(Hash::check('gammalt-losenord', $user->fresh()->password_hash))->toBeFalse();
-});
-
-it('avvisar ett fel nuvarande lösenord och ändrar ingenting', function () {
-    Notification::fake();
-
-    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
-    $user->createToken('api');
-    actingAs($user);
-
-    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'fel-losenord',
-    ]));
-
-    $svar->assertRedirect('/settings/security');
-    $svar->assertSessionHasErrors('current_password');
-
-    // Ingenting rört: lösenordet står kvar, tokenet finns kvar, och ingen
-    // rad skrevs i säkerhetsloggen — ett gissningsförsök är inte ett byte.
+    // Hashen står kvar: begäran skickar bara mejlet, och bytet sker först när
+    // länken öppnas. Det är hela tvåstegsflödet.
     expect(Hash::check('gammalt-losenord', $user->fresh()->password_hash))->toBeTrue()
-        ->and($user->tokens()->count())->toBe(1)
-        ->and(SecurityLog::query()->count())->toBe(0);
-
-    Notification::assertNothingSent();
+        ->and(PasswordChange::query()->where('user_id', $user->id)->count())->toBe(1);
 });
 
-it('kräver det nuvarande lösenordet när kontot har ett', function () {
+it('kräver inget nuvarande lösenord för ett konto som har ett', function () {
     Notification::fake();
 
     $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
     actingAs($user);
 
-    // Ingen `current_password` alls: regeln är `requiredIf` och läser kontot,
-    // inte ett fält i kroppen.
+    // Ingen `current_password` i kroppen alls — fältet finns inte i reglerna
+    // längre, och kravet var det som stängde vägen ut för den som glömt sitt.
     $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp());
 
-    $svar->assertSessionHasErrors('current_password');
-    expect(Hash::check('gammalt-losenord', $user->fresh()->password_hash))->toBeTrue();
+    $svar->assertRedirect('/settings/security');
+    $svar->assertSessionHas('status', 'password-change-requested');
+    $svar->assertSessionDoesntHaveErrors();
+});
+
+it('ignorerar ett nuvarande lösenord som skickas med och är fel', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    actingAs($user);
+
+    // Motprov mot en "optional"-regel: fältet är inte prövat alls, så ett fel
+    // värde fäller ingenting. Är regeln kvar någonstans faller provet här.
+    from('/settings/security')
+        ->put('/settings/security/password', losenordsKropp(['current_password' => 'fel-losenord']))
+        ->assertRedirect('/settings/security')
+        ->assertSessionDoesntHaveErrors();
 });
 
 it('sätter ett första lösenord för ett konto som bara använt magic link', function () {
@@ -125,21 +170,21 @@ it('sätter ett första lösenord för ett konto som bara använt magic link', f
     $user = User::factory()->create(['password_hash' => null]);
     actingAs($user);
 
-    // Exakt den kropp PasswordForm.vue skickar i det här läget: fälten finns
-    // med, men tomma. Ett tomt fält blir null (ConvertEmptyStringsToNull),
-    // och requesten måste tåla både det och att fältet saknas helt.
-    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => '',
-        'code' => '',
-    ]));
+    $länk = losenordsBegär($user);
 
-    $svar->assertRedirect('/settings/security');
-    $svar->assertSessionHas('status', 'password-changed');
+    // Begäran rör ingenting, allra minst den tomma kolumnen.
+    expect($user->fresh()->password_hash)->toBeNull();
+
+    get($länk)
+        ->assertRedirect('/settings/security')
+        ->assertSessionHas('status', 'password-changed');
 
     expect(Hash::check('nytt-losenord-2026', $user->fresh()->password_hash))->toBeTrue();
 
     // `meta` säger att ett lösenord inte fanns förut — det enda raden får bära.
-    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_PASSWORD_CHANGED)->sole()->meta)
+    expect(SecurityLog::query()->where('action', SecurityLog::ACTION_PASSWORD_CHANGE_REQUESTED)->sole()->meta)
+        ->toBe(['had_password' => false])
+        ->and(SecurityLog::query()->where('action', SecurityLog::ACTION_PASSWORD_CHANGED)->sole()->meta)
         ->toBe(['had_password' => false]);
 });
 
@@ -166,25 +211,29 @@ it('validerar det nya lösenordet med registreringens regel och kräver bekräft
         ])
         ->assertSessionHasErrors('password');
 
-    expect($user->fresh()->password_hash)->toBeNull();
+    expect($user->fresh()->password_hash)->toBeNull()
+        ->and(PasswordChange::query()->count())->toBe(0);
+
+    Notification::assertNothingSent();
 });
 
-it('kräver en kod när tvåfaktorn är på, också med ett nuvarande lösenord', function () {
+// --- Tvåfaktorn ----------------------------------------------------------
+
+it('kräver en kod när tvåfaktorn är på', function () {
     Notification::fake();
 
     [$user] = användareMedBekräftadTotp();
     actingAs($user);
 
-    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'ratt-losenord',
-    ]));
+    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp());
 
     $svar->assertSessionHasErrors('code');
 
     // Meningen, inte nyckeln — samma fältfel som inloggningen ger.
     expect(session('errors')->get('code')[0])->toBe(trans('auth.totp_required', [], 'en'));
 
-    expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
+    expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue()
+        ->and(PasswordChange::query()->count())->toBe(0);
 });
 
 it('kräver en kod när tvåfaktorn är på och kontot saknar lösenord', function () {
@@ -208,36 +257,14 @@ it('avvisar en fel kod och ändrar ingenting', function () {
     actingAs($user);
 
     $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'ratt-losenord',
         'code' => '000000',
     ]));
 
     $svar->assertSessionHasErrors('code');
     expect(session('errors')->get('code')[0])->toBe(trans('auth.totp_invalid', [], 'en'));
 
-    expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
-});
-
-/*
- * Ett fel nuvarande lösenord får aldrig avslöja om kontot har tvåfaktor
- * påslagen — samma ordning som LoginRequest::authenticate(): lösenordet
- * först. Provet är att felet hamnar på `current_password` och att `code`
- * inte får något alls, trots att ingen kod skickades.
- */
-it('avslöjar inte tvåfaktorn när det nuvarande lösenordet är fel', function () {
-    Notification::fake();
-
-    [$user] = användareMedBekräftadTotp();
-    actingAs($user);
-
-    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'fel-losenord',
-    ]));
-
-    $svar->assertSessionHasErrors('current_password');
-    $svar->assertSessionDoesntHaveErrors('code');
-
-    expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
+    expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue()
+        ->and(PasswordChange::query()->count())->toBe(0);
 });
 
 it('godtar en återställningskod och förbrukar den', function () {
@@ -249,31 +276,150 @@ it('godtar en återställningskod och förbrukar den', function () {
     actingAs($user);
 
     from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'ratt-losenord',
         'code' => $koder[0],
     ]))->assertRedirect('/settings/security');
 
-    expect(Hash::check('nytt-losenord-2026', $user->fresh()->password_hash))->toBeTrue()
+    expect(PasswordChange::query()->where('user_id', $user->id)->count())->toBe(1)
         // Nio kvar: koden är prövad genom TwoFactorChallenge, som förbrukar
         // den — ingen egen kopia av kontrollen finns här.
-        ->and(TotpRecoveryCode::query()->where('user_id', $user->id)->whereNull('used_at')->count())->toBe(9);
+        ->and(TotpRecoveryCode::query()->where('user_id', $user->id)->whereNull('used_at')->count())->toBe(9)
+        // Och lösenordet står kvar: begäran byter ingenting.
+        ->and(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
+});
+
+// --- Bekräftelsen --------------------------------------------------------
+
+it('sätter det nya lösenordet via länken och användaren kan logga in med det', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    actingAs($user);
+
+    $länk = losenordsBegär($user);
+
+    get($länk)
+        ->assertRedirect('/settings/security')
+        ->assertSessionHas('status', 'password-changed');
+
+    // **Hashen skrivs som hash.** `User::$casts['password_hash']` är `hashed`,
+    // och castet hashar inte om ett värde som redan är en hash. Vore värdet
+    // dubbelhashat hade `Hash::check()` fallerat — och inloggningen nedan med.
+    expect(Hash::check('nytt-losenord-2026', $user->fresh()->password_hash))->toBeTrue()
+        ->and(Hash::check('gammalt-losenord', $user->fresh()->password_hash))->toBeFalse();
+
+    // Och vägen in fungerar: en riktig inloggning med det nya lösenordet.
+    auth()->forgetGuards();
+
+    post('/login', ['email' => $user->email, 'password' => 'nytt-losenord-2026'])
+        ->assertRedirect();
+
+    assertAuthenticatedAs($user->fresh());
+
+    // Raden är kvittensen: bekräftad, och därmed förbrukad.
+    expect(PasswordChange::query()->where('user_id', $user->id)->sole()->confirmed_at)->not->toBeNull();
+});
+
+it('fungerar en gång och inte en andra gång', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    actingAs($user);
+
+    $länk = losenordsBegär($user);
+
+    get($länk)->assertRedirect('/settings/security');
+    get($länk)->assertNotFound();
+
+    expect($user->fresh()->password_hash)->not->toBeNull()
+        ->and(PasswordChange::query()->where('user_id', $user->id)->count())->toBe(1);
+});
+
+it('går ut efter en timme', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    actingAs($user);
+
+    $länk = losenordsBegär($user);
+
+    travel(RequestPasswordChange::TTL_MINUTES + 1)->minutes();
+
+    get($länk)->assertNotFound();
+
+    expect(Hash::check('gammalt-losenord', $user->fresh()->password_hash))->toBeTrue();
+});
+
+it('gör den tidigare länken ogiltig när en ny begäran tas emot', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    actingAs($user);
+
+    $första = losenordsBegär($user);
+    $andra = losenordsBegär($user);
+
+    get($första)->assertNotFound();
+
+    expect(Hash::check('gammalt-losenord', $user->fresh()->password_hash))->toBeTrue();
+
+    get($andra)->assertRedirect('/settings/security');
+
+    expect(Hash::check('nytt-losenord-2026', $user->fresh()->password_hash))->toBeTrue();
+});
+
+it('ger en annan inloggad användare 404 och ändrar ingenting', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    $annan = User::factory()->create(['password_hash' => 'annans-losenord']);
+
+    actingAs($user);
+    $länk = losenordsBegär($user);
+
+    somAnvandare($annan);
+
+    get($länk)->assertNotFound();
+
+    expect(Hash::check('gammalt-losenord', $user->fresh()->password_hash))->toBeTrue()
+        ->and(Hash::check('annans-losenord', $annan->fresh()->password_hash))->toBeTrue()
+        ->and(PasswordChange::query()->where('user_id', $user->id)->sole()->confirmed_at)->toBeNull();
 });
 
 /*
- * Sessionerna: kontots ÖVRIGA webbsessioner ska vara borta och den egna ha
- * ett nytt id. `SESSION_DRIVER` är `array` i sviten (phpunit.xml), så
- * raderna i `sessions` fylls på för hand — raderingen är densamma, den går
- * mot tabellen oavsett vilken drivrutin som skriver den.
- *
- * Den egna sessionen skickas in med sin kaka, så `regenerate()` har något
- * att byta ut: svaret bär ett annat id än det som kom in, och den gamla
- * raden är borta med de andra.
+ * Ett okänt token ger samma svar som ett främmande, utgånget eller förbrukat:
+ * `404` och ingenting annat. Skillnaden får inte synas — en gissad sträng ska
+ * inte kunna skiljas från en utgången.
  */
-it('loggar ut kontots övriga sessioner och ger den egna ett nytt id', function () {
+it('ger 404 för ett okänt token', function () {
     Notification::fake();
 
-    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
-    $annan = User::factory()->create(['password_hash' => 'ratt-losenord']);
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    actingAs($user);
+
+    get('/settings/security/password/'.str_repeat('x', 64))->assertNotFound();
+
+    expect(Hash::check('gammalt-losenord', $user->fresh()->password_hash))->toBeTrue();
+});
+
+/*
+ * Sessionerna: kontots ÖVRIGA webbsessioner ska vara borta, den egna ha ett
+ * nytt id, och alla Sanctum-token bort. `SESSION_DRIVER` är `array` i sviten
+ * (phpunit.xml), så raderna i `sessions` fylls på för hand — raderingen är
+ * densamma, den går mot tabellen oavsett vilken drivrutin som skriver den.
+ *
+ * Den egna sessionen skickas in med sin kaka, så `regenerate()` har något att
+ * byta ut: svaret bär ett annat id än det som kom in, och den gamla raden är
+ * borta med de andra.
+ */
+it('loggar ut övriga sessioner, ger den egna ett nytt id och tar bort alla token', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    $annan = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+
+    $user->createToken('mobil');
+    $user->createToken('integration');
+    $annan->createToken('annans');
 
     // Sessionsid:n är fyrtio alfanumeriska tecken och ingenting annat:
     // `Store::setId()` förkastar allt annat och drar ett eget, och då hade
@@ -293,42 +439,113 @@ it('loggar ut kontots övriga sessioner och ger den egna ett nytt id', function 
     withCookie(config('session.cookie'), $egenGammal);
     actingAs($user);
 
-    from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'ratt-losenord',
-    ]))->assertRedirect('/settings/security');
+    $länk = losenordsBegär($user);
 
-    // Den egna gamla raden och den andra enhetens rad är borta — kvar finns
-    // bara den nya sessionen, som skrivs när requesten avslutas och därför
-    // inte syns här.
-    expect(DB::table('sessions')->where('user_id', $user->id)->count())->toBe(0);
+    get($länk)->assertRedirect('/settings/security');
 
-    // En annan användares session rörs inte.
-    expect(DB::table('sessions')->where('id', $annansSession)->exists())->toBeTrue();
+    // Den egna gamla raden och den andra enhetens rad är borta.
+    expect(DB::table('sessions')->where('user_id', $user->id)->count())->toBe(0)
 
-    // Och den egna sessionen har bytt id: requesten kom in med
-    // `$egenGammal` och lämnar med ett annat.
-    expect(session()->getId())->not->toBe($egenGammal);
+        // En annan användares session rörs inte.
+        ->and(DB::table('sessions')->where('id', $annansSession)->exists())->toBeTrue()
+
+        // Alla kontots token är borta, och bara kontots.
+        ->and($user->tokens()->count())->toBe(0)
+        ->and($annan->tokens()->count())->toBe(1)
+
+        // Och den egna sessionen har bytt id: requesten kom in med
+        // `$egenGammal` och lämnar med ett annat.
+        ->and(session()->getId())->not->toBe($egenGammal);
 });
 
-it('tar bort kontots alla Sanctum-token', function () {
+// --- Mejlen och loggen ---------------------------------------------------
+
+it('mejlar bekräftelselänken till kontots adress och kvittensen först efter bekräftelsen', function () {
+    Notification::fake();
+
+    $user = User::factory()->create([
+        'email' => 'agaren@example.com',
+        'password_hash' => 'gammalt-losenord',
+    ]);
+    actingAs($user);
+
+    $länk = losenordsBegär($user);
+
+    Notification::assertSentTo(
+        $user,
+        PasswordChangeConfirmationNotification::class,
+        // Adressen är användarens: notisen bär ingen mottagare själv, och
+        // kanalen är `mail` — alltså den adress kontot har.
+        fn (PasswordChangeConfirmationNotification $notis): bool => $notis->via($user) === ['mail']
+    );
+
+    // Kvittensen har inte gått ut: lösenordet är inte bytt än.
+    Notification::assertNotSentTo($user, PasswordChangedNotification::class);
+
+    get($länk)->assertRedirect('/settings/security');
+
+    Notification::assertSentTo($user, PasswordChangedNotification::class);
+
+    // Transaktionella utskick: ingen rad i `notification`.
+    expect(DB::table('notification')->count())->toBe(0);
+});
+
+/*
+ * Mejlet renderas på riktigt och inte bara fångas av faken: `toMail()` körs
+ * aldrig när notisen är faked, så en nyckel som saknas i `notiser.php` hade
+ * gått tyst förbi. Samma form som EpostbyteTest:s motsvarande prov.
+ */
+it('renderar bekräftelsemejlet med länken och löftet att ingenting ändras', function () {
+    Notification::fake();
+
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
+    actingAs($user);
+
+    $länk = losenordsBegär($user);
+
+    $innehåll = null;
+    $ämne = null;
+
+    Notification::assertSentTo(
+        $user,
+        PasswordChangeConfirmationNotification::class,
+        function (PasswordChangeConfirmationNotification $notis, array $kanaler, object $mottagare) use (&$innehåll, &$ämne, $user): bool {
+            $meddelande = $notis->toMail($user);
+
+            $ämne = $meddelande->subject;
+            $innehåll = (string) $meddelande->render();
+
+            // Kanalen är `mail`, alltså den adress kontot har.
+            return $kanaler === ['mail'] && $mottagare->is($user);
+        }
+    );
+
+    // Länken står i mejlet — det är den ENDA plats klartext-tokenet finns.
+    expect($innehåll)->toContain($länk)
+        ->and($innehåll)->toContain(trans('notiser.password_change.confirm.action', [], 'en'))
+        // Löftet flödet vilar på: den som tror att formuläret redan bytt
+        // lösenordet stänger mejlet och står utan väg in.
+        ->and($innehåll)->toContain('nothing changes')
+        // Ämnesraden står inte i kroppen och prövas för sig.
+        ->and($ämne)->toBe(trans('notiser.password_change.confirm.subject', [], 'en'))
+        ->and($ämne)->not->toBe('notiser.password_change.confirm.subject');
+});
+
+it('skickar inget mejl när begäran avvisas', function () {
     Notification::fake();
 
     $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
-    $user->createToken('mobil');
-    $user->createToken('integration');
-
-    expect($user->tokens()->count())->toBe(2);
-
     actingAs($user);
 
     from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'ratt-losenord',
-    ]))->assertRedirect('/settings/security');
+        'password' => 'kort',
+        'password_confirmation' => 'kort',
+    ]));
 
-    expect($user->tokens()->count())->toBe(0);
+    Notification::assertNothingSent();
 });
 
-it('skriver exakt en rad i säkerhetsloggen, utan lösenord och utan kod', function () {
+it('skriver en rad per begäran och en per bekräftelse, utan hemligheter i meta', function () {
     Notification::fake();
 
     [$user, $secret] = användareMedBekräftadTotp();
@@ -339,76 +556,69 @@ it('skriver exakt en rad i säkerhetsloggen, utan lösenord och utan kod', funct
 
     $kod = totpKodFör($secret);
 
-    from('/settings/security')->put('/settings/security/password', [
-        'current_password' => $gammalt,
+    $länk = losenordsBegär($user, [
         'password' => $nytt,
         'password_confirmation' => $nytt,
         'code' => $kod,
-    ])->assertRedirect('/settings/security');
+    ]);
 
-    $rader = SecurityLog::query()->where('action', SecurityLog::ACTION_PASSWORD_CHANGED)->get();
+    get($länk)->assertRedirect('/settings/security');
 
-    expect($rader)->toHaveCount(1)
-        ->and($rader->first()->meta)->toBe(['had_password' => true])
-        ->and($rader->first()->user_id)->toBe($user->id)
-        // Ingen annan rad skrevs av bytet.
-        ->and(SecurityLog::query()->count())->toBe(1);
+    $begäran = SecurityLog::query()->where('action', SecurityLog::ACTION_PASSWORD_CHANGE_REQUESTED)->get();
+    $bytet = SecurityLog::query()->where('action', SecurityLog::ACTION_PASSWORD_CHANGED)->get();
 
-    // Varken det gamla eller det nya lösenordet eller koden finns i raden.
+    expect($begäran)->toHaveCount(1)
+        ->and($begäran->first()->meta)->toBe(['had_password' => true])
+        ->and($begäran->first()->user_id)->toBe($user->id)
+        ->and($bytet)->toHaveCount(1)
+        ->and($bytet->first()->meta)->toBe(['had_password' => true])
+        ->and($bytet->first()->user_id)->toBe($user->id)
+        // Ingen annan rad skrevs av flödet.
+        ->and(SecurityLog::query()->count())->toBe(2);
+
+    // Varken lösenorden, koden, tokenet eller hashen finns i någon rad.
     $json = json_encode(SecurityLog::query()->get()->toArray(), JSON_THROW_ON_ERROR);
+    $hash = PasswordChange::query()->where('user_id', $user->id)->sole()->password_hash;
 
     expect($json)->not->toContain($nytt)
         ->and($json)->not->toContain($gammalt)
-        ->and($json)->not->toContain($kod);
+        ->and($json)->not->toContain($kod)
+        ->and($json)->not->toContain($hash)
+        ->and($json)->not->toContain(basename($länk))
+        ->and($hash)->not->toBeEmpty();
 });
 
-/*
- * Mejlet: en Laravel-notis till användarens egen adress, och INGEN rad i
- * `notification` — det är ett transaktionellt utskick, inte en notis i
- * klockan ([[Notiser]] § notification). `via()` är `['mail']`, så ingen
- * leveransrad skapas av App\Actions\Notification\CreateNotification.
- */
-it('mejlar användaren om att lösenordet har ändrats', function () {
+it('lagrar aldrig lösenordet i klartext', function () {
     Notification::fake();
 
-    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
+    $user = User::factory()->create(['password_hash' => 'gammalt-losenord']);
     actingAs($user);
 
-    from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'ratt-losenord',
-    ]))->assertRedirect('/settings/security');
+    $hemligt = 'hemligt-nytt-losenord-4471';
 
-    Notification::assertSentTo(
-        $user,
-        PasswordChangedNotification::class,
-        function (PasswordChangedNotification $notification) use ($user): bool {
-            // Adressen är användarens: notisen bär ingen mottagare själv, och
-            // kanalen är `mail` — alltså den adress kontot har.
-            return $notification->via($user) === ['mail'];
-        }
-    );
+    $länk = losenordsBegär($user, [
+        'password' => $hemligt,
+        'password_confirmation' => $hemligt,
+    ]);
 
-    expect(DB::table('notification')->count())->toBe(0);
+    $rad = PasswordChange::query()->where('user_id', $user->id)->sole();
+    $json = json_encode($rad->getAttributes(), JSON_THROW_ON_ERROR);
+
+    expect($json)->not->toContain($hemligt)
+        // Länkens klartext finns inte heller i raden, bara dess SHA-256.
+        ->and($json)->not->toContain(basename($länk))
+        // Och det som står där är en hash av det nya lösenordet.
+        ->and(Hash::check($hemligt, $rad->password_hash))->toBeTrue();
 });
 
-it('skickar inget mejl när bytet avvisas', function () {
-    Notification::fake();
-
-    $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
-    actingAs($user);
-
-    from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'fel-losenord',
-    ]));
-
-    Notification::assertNotSentTo($user, PasswordChangedNotification::class);
-});
+// --- Takgränsen ----------------------------------------------------------
 
 /*
- * Takgränsen: inloggningens egen begränsare — samma namn och samma trösklar
- * som inloggningen (5/minut per kontonyckel och 10/minut per IP), se
- * App\Support\Auth\LoginRateLimiter. Fem försök med fel lösenord släpps
- * igenom till valideringen; det sjätte stoppas av begränsaren.
+ * Inloggningens egen begränsare — samma namn och samma trösklar som
+ * inloggningen (5/minut per kontonyckel och 10/minut per IP), se
+ * App\Support\Auth\LoginRateLimiter. Sedan issue 140 finns inget nuvarande
+ * lösenord att gissa; kvar att gissa är engångskoden, och formuläret möts av
+ * samma tak som förut (issuens flödespunkt 1).
  *
  * Kontonyckeln sätts av App\Support\Auth\BindsPasswordChangeThrottleToUser ur
  * den inloggade användarens adress och inte ur kroppen — rutten bär ingen
@@ -427,17 +637,18 @@ it('har inloggningens takgräns', function () {
     $user = User::factory()->create(['password_hash' => 'ratt-losenord']);
     actingAs($user);
 
+    // Ett för kort lösenord fälls av valideringen och skriver ingen rad — men
+    // anropet räknas, precis som ett gissningsförsök gjorde förut.
     for ($i = 0; $i < 5; $i++) {
         from('/settings/security')
             ->put('/settings/security/password', losenordsKropp([
-                'current_password' => 'fel-losenord',
+                'password' => 'kort',
+                'password_confirmation' => 'kort',
             ]))
-            ->assertSessionHasErrors('current_password');
+            ->assertSessionHasErrors('password');
     }
 
-    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'ratt-losenord',
-    ]));
+    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp());
 
     $svar->assertRedirect('/settings/security');
     $svar->assertSessionHasErrors('email');
@@ -445,8 +656,6 @@ it('har inloggningens takgräns', function () {
     // Meningen och inte nyckeln: `auth.throttle` med antalet sekunder i.
     // Sekunderna läses ur meningen och pinnas inte till 60 — takgränsen räknar
     // hela sekunder, så ett prov vars sex anrop korsar en sekundgräns får 59.
-    // Samma form som provet längre ned i filen och som
-    // tests/Feature/Frontend/TakgransTest.php.
     $mening = session('errors')->get('email')[0];
     preg_match('/(\d+)/', $mening, $träff);
 
@@ -454,13 +663,12 @@ it('har inloggningens takgräns', function () {
         ->and((int) $träff[0])->toBeGreaterThan(0)->toBeLessThanOrEqual(60)
         ->and($mening)->toBe(trans('auth.throttle', ['seconds' => (int) $träff[0]], 'en'));
 
-    // Det sjätte försöket nådde aldrig valideringen: lösenordet står kvar.
-    expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
+    // Det sjätte försöket nådde aldrig fram: ingen rad skrevs.
+    expect(PasswordChange::query()->count())->toBe(0);
 });
 
 it('skickar en utloggad besökare till inloggningen', function () {
-    put('/settings/security/password', losenordsKropp(['current_password' => 'vad-som-helst']))
-        ->assertRedirect('/login');
+    put('/settings/security/password', losenordsKropp())->assertRedirect('/login');
 });
 
 /*
@@ -478,28 +686,31 @@ it('throttlar varje konto för sig', function () {
 
     for ($i = 0; $i < 5; $i++) {
         from('/settings/security')->put('/settings/security/password', losenordsKropp([
-            'current_password' => 'fel-losenord',
-        ]))->assertSessionHasErrors('current_password');
+            'password' => 'kort',
+            'password_confirmation' => 'kort',
+        ]))->assertSessionHasErrors('password');
     }
 
     // Den förstas hink är tömd: det sjätte försöket stoppas av begränsaren.
     from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'fel-losenord',
+        'password' => 'kort',
+        'password_confirmation' => 'kort',
     ]))->assertSessionHasErrors('email');
 
     // Den andra har sin egen hink och når hela vägen till valideringen.
-    actingAs($annan);
+    somAnvandare($annan);
 
     from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'fel-losenord',
-    ]))->assertSessionHasErrors('current_password');
+        'password' => 'kort',
+        'password_confirmation' => 'kort',
+    ]))->assertSessionHasErrors('password');
 });
 
 /*
- * Samma konto, samma hink. Att gissa det nuvarande lösenordet i
- * bytesformuläret är samma angrepp som att gissa det vid inloggning och ska
- * räknas mot samma gräns ([[ADR-0011 Autentisering]]). Nyckeln är därför
- * användarens e-postadress och inte hennes id.
+ * Ett konto, en hink. Att gissa engångskoden i bytesformuläret är samma
+ * angrepp som att gissa ett lösenord vid inloggning och ska räknas mot samma
+ * gräns ([[ADR-0011 Autentisering]]). Nyckeln är därför användarens
+ * e-postadress och inte hennes id.
  *
  * Riktningen är den omvända av provet ovanför: fem misslyckade inloggningar
  * tömmer kontots hink, och bytet stoppas av den — IP-nyckeln är långt ifrån
@@ -519,9 +730,7 @@ it('räknar lösenordsbytet och inloggningen mot samma hink', function () {
 
     actingAs($user);
 
-    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'ratt-losenord',
-    ]));
+    $svar = from('/settings/security')->put('/settings/security/password', losenordsKropp());
 
     $svar->assertSessionHasErrors('email');
 
@@ -534,14 +743,14 @@ it('räknar lösenordsbytet och inloggningen mot samma hink', function () {
     expect($träff)->not->toBeEmpty('meddelandet saknar antal sekunder')
         ->and($mening)->toBe(trans('auth.throttle', ['seconds' => (int) $träff[0]], 'en'));
 
-    // Det takgränsade försöket nådde aldrig valideringen.
-    expect(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
+    // Det takgränsade försöket nådde aldrig fram.
+    expect(PasswordChange::query()->count())->toBe(0);
 });
 
 /*
  * Vid en 429 ligger gamla inmatningen i sessionen (bootstrap/app.php). Ingen
- * av lösenordsbytets tre känsliga fält får finnas där. `code` är med som
- * motprov: det är de tre som undantas, inte hela kroppen.
+ * av lösenordsbytets känsliga fält får finnas där. `code` är med som motprov:
+ * det är lösenordsfälten som undantas, inte hela kroppen.
  */
 it('lämnar inga lösenordsfält i gamla inmatningen vid en 429', function () {
     Notification::fake();
@@ -551,12 +760,12 @@ it('lämnar inga lösenordsfält i gamla inmatningen vid en 429', function () {
 
     for ($i = 0; $i < 5; $i++) {
         from('/settings/security')->put('/settings/security/password', losenordsKropp([
-            'current_password' => 'fel-losenord',
+            'password' => 'kort',
+            'password_confirmation' => 'kort',
         ]));
     }
 
     $svar = from('/settings/security')->put('/settings/security/password', [
-        'current_password' => 'gammalt-hemligt-7712',
         'password' => 'nytt-hemligt-9930',
         'password_confirmation' => 'nytt-hemligt-9930',
         'code' => '123456',
@@ -564,34 +773,9 @@ it('lämnar inga lösenordsfält i gamla inmatningen vid en 429', function () {
 
     $svar->assertSessionHasErrors('email');
 
-    $svar->assertSessionMissingInput('current_password');
     $svar->assertSessionMissingInput('password');
     $svar->assertSessionMissingInput('password_confirmation');
 
     // Motprovet: ett fält som inte är ett lösenord fylls i igen.
     $svar->assertSessionHasInput('code', '123456');
-});
-
-/*
- * Ordningen lösenord före kod gäller också förbrukningen: en återställningskod
- * som skickas med ett FEL nuvarande lösenord får inte gå förlorad. Koden
- * prövas först efter att `current_password`-regeln har gått igenom — den är en
- * valideringsregel och kastar innan UpdatePasswordRequest::authenticate() ens
- * anropas.
- */
-it('förbrukar inte återställningskoden när det nuvarande lösenordet är fel', function () {
-    Notification::fake();
-
-    [$user] = användareMedBekräftadTotp();
-    $koder = RecoveryCodeBroker::generate($user);
-
-    actingAs($user);
-
-    from('/settings/security')->put('/settings/security/password', losenordsKropp([
-        'current_password' => 'fel-losenord',
-        'code' => $koder[0],
-    ]))->assertSessionHasErrors('current_password');
-
-    expect(TotpRecoveryCode::query()->where('user_id', $user->id)->whereNull('used_at')->count())->toBe(10)
-        ->and(Hash::check('ratt-losenord', $user->fresh()->password_hash))->toBeTrue();
 });

@@ -6,19 +6,29 @@ use App\Support\Auth\TotpInvalidException;
 use App\Support\Auth\TotpRequiredException;
 use App\Support\Auth\TwoFactorChallenge;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 /**
- * PUT /settings/security/password — lösenordsbytet, se [[M20 Kontot]] § 129.
- * Kroppen bär det nya lösenordet (och dess bekräftelse), det nuvarande
- * lösenordet när kontot har ett, och engångskoden när tvåfaktorn är på.
+ * PUT /settings/security/password — begäran om ett lösenordsbyte, se
+ * [[M20 Kontot]] § 140. Kroppen bär det nya lösenordet (och dess bekräftelse)
+ * och engångskoden när tvåfaktorn är på.
  *
  * Ingen auktorisering här. Rutten ligger bakom `auth` och raden som skrivs är
  * den inloggade användarens EGEN — `$request->user()` är både subjekt och
  * objekt, precis som i App\Http\Requests\Settings\UpdateProfileRequest. Det
  * finns alltså inget annat objekt att pröva mot, och ingen policy att anropa.
+ *
+ * **Inget `current_password`, varken när kontot har ett lösenord eller inte.**
+ * Fram till issue 140 krävdes det när `password_hash` var satt, som
+ * återautentisering. Det kravet tog bort den enda vägen ut för den som glömt
+ * sitt lösenord: hon kan logga in med magic link, men kunde sedan inte byta
+ * ([[ADR-0011 Autentisering]] § Uppföljning 2026-09-26). Beviset flyttas i
+ * stället till mejlet — bytet träder i kraft först när länken till
+ * `user.email` öppnas (App\Actions\Account\ConfirmPasswordChange) — och då är
+ * ett nuvarande lösenord varken nödvändigt eller tillräckligt. Att bara ta
+ * bort kravet utan den flytten valdes bort: en kapad session hade då räckt för
+ * att sätta ett lösenord och därefter flytta kontot via e-postbytet.
  *
  * **Det nya lösenordet valideras med registreringens regel**
  * (`Password::defaults()`, se App\Http\Requests\Auth\RegisterRequest) och med
@@ -26,22 +36,11 @@ use Illuminate\Validation\ValidationException;
  * en andra sanning om samma krav, och den hade glidit isär från
  * registreringen den dag `Password::defaults()` konfigureras.
  *
- * **`current_password` krävs bara när kontot HAR ett lösenord.**
- * `Rule::requiredIf` läser användaren, och `nullable` gör fältet frivilligt
- * för den som bara använt magic link — `password_hash` är NULL och det finns
- * ingenting att jämföra mot. Själva prövningen är ramverkets egen
- * `current_password`-regel och inte en `Hash::check()` här: den läser
- * `getAuthPasswordName()` på App\Models\User, alltså `password_hash` och
- * inte Laravels standardkolumn, och felmeddelandet kommer ur
- * `validation.current_password` som varje annat valideringsfel.
- *
- * **Ordningen — lösenord före kod — är inloggningens** (se
- * App\Http\Requests\Auth\LoginRequest::authenticate()): ett fel nuvarande
- * lösenord ska aldrig avslöja om kontot har tvåfaktor påslagen. Den hålls
- * här av att `current_password` är en VALIDERINGSREGEL och koden prövas i
- * authenticate() nedanför: valideringen körs först och kastar innan den
- * metoden någonsin anropas. Fel lösenord ger alltså ett fel på
- * `current_password` och ingenting om tvåfaktorn.
+ * **Tvåfaktorn prövas oförändrat.** Den som har en bekräftad andra faktor
+ * måste ange en giltig kod, eller en återställningskod, även när hon saknar
+ * lösenord: en väg som satte ett lösenord utan koden hade varit ett
+ * kringgående av tvåfaktorn ([[ADR-0011 Autentisering]], issue 80). Koden
+ * prövas i authenticate() nedanför och `TwoFactorChallenge` ändras inte.
  */
 class UpdatePasswordRequest extends FormRequest
 {
@@ -56,16 +55,10 @@ class UpdatePasswordRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'current_password' => [
-                Rule::requiredIf(fn (): bool => $this->user()->password_hash !== null),
-                'nullable',
-                'current_password',
-            ],
             'password' => ['required', 'string', Password::defaults(), 'confirmed'],
             // Koden är bara obligatorisk för ett konto med bekräftad
             // tvåfaktor, vilket inte går att uttrycka statiskt här — se
-            // authenticate() nedan, som gör den kontrollen efter att
-            // lösenordet redan är prövat.
+            // authenticate() nedan.
             //
             // `nullable` därför att formuläret skickar fältet även när
             // kontot saknar tvåfaktor: ett tomt fält blir null
@@ -77,14 +70,14 @@ class UpdatePasswordRequest extends FormRequest
     }
 
     /**
-     * Återautentiseringens andra steg: engångskoden, eller
-     * återställningskoden, för ett konto med bekräftad tvåfaktor.
+     * Återautentiseringens enda steg: engångskoden, eller återställningskoden,
+     * för ett konto med bekräftad tvåfaktor.
      *
      * **Kontrollen är App\Support\Auth\TwoFactorChallenge och inte en kopia**
      * (issue 80): villkoret för när en kod alls krävs, ordningen mellan
      * engångskod och återställningskod — och förbrukningen av en
-     * återställningskod — bor där, och både inloggningen och magic
-     * link-vägen går genom samma klass. Klassen ändras inte här; behövde
+     * återställningskod — bor där, och både inloggningen, magic link-vägen och
+     * lösenordsbytet går genom samma klass. Klassen ändras inte här; behövde
      * den en ny form vore det en fråga i PR:en och inte en andra
      * implementation.
      *

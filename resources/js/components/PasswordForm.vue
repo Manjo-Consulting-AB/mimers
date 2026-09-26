@@ -5,16 +5,20 @@ import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
 /*
- * Lösenordsbytet, se [[M20 Kontot]] § 129.
+ * Lösenordsbytet, se [[M20 Kontot]] § 140.
  *
  * **ETT formulär och EN PUT mot /settings/security/password, i två lägen.**
- * Läget kommer ur `hasPassword`: ett konto med lösenord anger det nuvarande
- * och väljer ett nytt, ett konto som bara använt magic link sätter sitt
- * första. Fälten är desamma och routten är densamma — servern äger frågan om
- * ett nuvarande lösenord alls krävs (App\Http\Requests\Settings\
- * UpdatePasswordRequest), och vyn frågar bara efter det fält hon faktiskt
- * kan svara på. Ett `current_password`-fält i läget utan lösenord hade bett
- * om något som inte finns.
+ * Läget kommer ur `hasPassword`: ett konto med lösenord byter det, ett konto
+ * som bara använt magic link sätter sitt första. Fälten är desamma och rutten
+ * är densamma — skillnaden är bara vad knappen och introt säger.
+ *
+ * **Fältet för det nuvarande lösenordet finns inte längre**, i något av
+ * lägena. Fram till issue 140 krävdes det när kontot hade ett lösenord, vilket
+ * stängde den enda vägen ut för den som glömt sitt: hon kan logga in med magic
+ * link, men kunde sedan inte byta ([[ADR-0011 Autentisering]] § Uppföljning
+ * 2026-09-26). Nu begär formuläret bytet och servern skickar en länk till
+ * kontots adress — lösenordet byts först när länken öppnas, och därför ber
+ * vyn aldrig om ett nuvarande lösenord.
  *
  * **Kodfältet finns bara när tvåfaktorn är på**, och det följer av
  * `totpEnabled` — samma prop och samma villkor (`totp_confirmed_at`) som
@@ -23,16 +27,15 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * är den som prövar den. Är kontot utan tvåfaktor avvisas en inskickad kod
  * ingenstans ifrån — fältet finns inte att skicka.
  *
- * **Fälten töms vid lyckat byte.** `form.reset()` och inte en omladdning:
+ * **Fälten töms vid lyckad begäran.** `form.reset()` och inte en omladdning:
  * servern svarar `back()` med en flash-kod, och ett lösenord som ligger kvar
  * i fältet efteråt är ett lösenord i klartext på skärmen för nästa person
  * som går förbi. `useForm` skickar också `password_confirmation`, som
  * valideringsregeln `confirmed` kräver.
  *
- * **`autocomplete` är satt för lösenordshanterarens skull** och inte för
- * vyn: `current-password` och `new-password` är vad en webbläsare behöver
- * för att erbjuda rätt sak i rätt fält, och `one-time-code` på kodfältet är
- * samma val som inloggningens.
+ * **`autocomplete="new-password"` är satt för lösenordshanterarens skull** och
+ * inte för vyn: det är vad en webbläsare behöver för att erbjuda ett nytt
+ * lösenord, och `one-time-code` på kodfältet är samma val som inloggningens.
  */
 const props = defineProps({
     hasPassword: { type: Boolean, required: true },
@@ -43,7 +46,6 @@ const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
 
 const form = useForm({
-    current_password: '',
     password: '',
     password_confirmation: '',
     code: '',
@@ -62,7 +64,7 @@ function describedByWith(errorId, note) {
 function submit() {
     form.put('/settings/security/password', {
         onError: focusFirstError,
-        onSuccess: () => form.reset('current_password', 'password', 'password_confirmation', 'code'),
+        onSuccess: () => form.reset('password', 'password_confirmation', 'code'),
     });
 }
 </script>
@@ -78,24 +80,6 @@ function submit() {
         </p>
 
         <form class="flex flex-col gap-4" @submit.prevent="submit">
-            <FormField
-                v-if="props.hasPassword"
-                v-slot="{ describedBy }"
-                :label="t('settings.security.password.current_label')"
-                id="current_password"
-                :error="form.errors.current_password"
-            >
-                <input
-                    id="current_password"
-                    v-model="form.current_password"
-                    :aria-describedby="describedBy"
-                    type="password"
-                    name="current_password"
-                    autocomplete="current-password"
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-            </FormField>
-
             <FormField
                 v-slot="{ describedBy }"
                 :label="t('settings.security.password.new_label')"

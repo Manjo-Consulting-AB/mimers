@@ -2,137 +2,119 @@
 
 namespace App\Http\Controllers\Settings;
 
-use App\Actions\Security\RecordSecurityEvent;
+use App\Actions\Account\ConfirmPasswordChange;
+use App\Actions\Account\RequestPasswordChange;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\UpdatePasswordRequest;
-use App\Models\SecurityLog;
-use App\Models\User;
-use App\Notifications\PasswordChangedNotification;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 
 /**
- * Lösenordsbytet — den skrivande halvan av säkerhetssidan, se
- * [[M20 Kontot]] § 129. Den läsande halvan är
+ * Lösenordsbytet — de två skrivande halvorna av säkerhetssidans
+ * lösenordsformulär, se [[M20 Kontot]] § 140. `update()` tar emot begäran,
+ * `confirm()` genomför bytet när länken i mejlet öppnas. Den läsande halvan är
  * App\Http\Controllers\Settings\SecurityController, som renderar sidan och
  * säger om kontot har ett lösenord alls.
  *
- * **Ett formulär, två ärenden.** Att byta sitt lösenord och att sätta ett
- * första är samma skrivning mot samma kolumn — skillnaden är bara om
- * `password_hash` var NULL — och de delar därför rutt, validering och
- * återautentisering. Ett eget flöde för "sätt ett lösenord" hade varit en
- * andra väg till samma kolumn, med en andra chans att glömma tvåfaktorn.
+ * **Två rutter och inte en**, och det är issue 140: lösenordet byts aldrig i
+ * samma steg som det begärs. Rutt 1 skickar mejlet och lämnar
+ * `user.password_hash` orörd; rutt 2 är den enda som skriver kolumnen. Fram
+ * till issue 140 krävdes det nuvarande lösenordet i stället, vilket stängde
+ * den enda vägen ut för den som glömt sitt: hon kan logga in med magic link,
+ * men kunde sedan inte byta. Nu kan den som sitter i en kapad session begära
+ * bytet, men bara den som når brevlådan genomföra det
+ * ([[ADR-0011 Autentisering]] § Uppföljning 2026-09-26).
  *
- * **Objektet är anroparen själv.** Ingen ruttparameter och ingen policy:
- * raden som skrivs är `$request->user()`, precis som i
- * App\Http\Controllers\Settings\ProfileController. Den som vill byta någon
- * ANNANS lösenord har ingen väg in här, för det finns ingen parameter att
- * peka med.
+ * **Objektet är anroparen själv.** Ingen ruttparameter och ingen policy på
+ * `update()`: raden som skrivs är `$request->user()`, precis som i
+ * App\Http\Controllers\Settings\ProfileController och
+ * App\Http\Controllers\Settings\EmailChangeController.
+ *
+ * **`confirm()` har en ruttparameter — tokenet — men den är ingen
+ * objektidentifierare.** `{token}` pekar inte ut en resurs användaren kan
+ * auktorisera mot; den är beviset på att hon når sin adress, och kontrollen
+ * att den hör till just henne bor i App\Actions\Account\
+ * ConfirmPasswordChange (§ user_id-jämförelsen). Ett okänt, utgånget,
+ * förbrukat eller främmande token ger `404` och ingenting annat — se
+ * actionens docblock.
  *
  * **Återautentiseringen ligger i App\Http\Requests\Settings\
- * UpdatePasswordRequest** — det nuvarande lösenordet som en
- * valideringsregel, engångskoden genom App\Support\Auth\TwoFactorChallenge.
- * Kontrollern anropar den och gör ingenting själv: regeln om vad som krävs
- * för att byta ett lösenord hör till requesten, och en kontroller som
- * prövade den igen vore en andra plats att glömma den på
+ * UpdatePasswordRequest** — engångskoden genom App\Support\Auth\
+ * TwoFactorChallenge. Kontrollern anropar den och gör ingenting själv: regeln
+ * om vad som krävs för att byta ett lösenord hör till requesten, och en
+ * kontroller som prövade den igen vore en andra plats att glömma den på
  * ([[ADR-0024 Tunna controllers och actions]]).
  *
- * **Efter bytet städas kontots andra vägar in** (issue 129). Det är hela
- * poängen med att byta ett lösenord man misstänker är röjt: den som sitter i
- * en gammal session eller med ett gammalt token ska inte överleva bytet.
- *
- * Rutten bakom `auth` (routes/web.php) — en utloggad besökare skickas till
- * /login av middlewaren och når aldrig den här metoden.
+ * Rutterna bakom `auth` (routes/web.php) — en utloggad besökare skickas till
+ * /login av middlewaren och når aldrig de här metoderna.
  */
 class PasswordController extends Controller
 {
+    /**
+     * PUT /settings/security/password — begäran.
+     *
+     * Takgränsen sitter på rutten och inte här: engångskoden är ett
+     * gissningsbart värde, alltså ett av inloggningens två, och rutten möts av
+     * inloggningens begränsare via App\Support\Auth\
+     * BindsPasswordChangeThrottleToUser — se routes/web.php.
+     *
+     * **`back()` och en flash-kod, ingenting mer.** Formuläret står på
+     * säkerhetssidan, och svaret säger bara att begäran togs emot — att
+     * lösenordet ÄR bytt vore en lögn: det byts först när länken i mejlet
+     * öppnas. Texten (`ui.flash.password-change-requested`) säger att ett
+     * mejl har skickats till adressen.
+     */
     public function update(
         UpdatePasswordRequest $request,
-        RecordSecurityEvent $recordSecurityEvent,
+        RequestPasswordChange $requestPasswordChange,
     ): RedirectResponse {
-        $user = $request->user();
-
-        // Före skrivningen: `meta` säger om ett lösenord fanns förut, och
-        // efter update() går det inte att se.
-        $hadPassword = $user->password_hash !== null;
-
-        // Kastar ValidationException vid fel kod — och körs först efter att
-        // valideringen redan prövat det nuvarande lösenordet, se requestens
-        // klassdocblock. Ingenting har skrivits när den kastar.
+        // Kastar ValidationException vid fel kod. Ingenting har skrivits när
+        // den kastar.
         $request->authenticate();
 
-        // **De fyra skrivningarna är en kedja och hör i samma transaktion.**
-        // Fallerar ett anrop mitt i — mellan update() och tokens()->delete()
-        // — blir resultatet exakt det tillståndet bytet finns för att
-        // förhindra: lösenordet är nytt, men en gammal session eller ett
-        // gammalt token lever kvar. RecordSecurityEvent skriver själv ingen
-        // transaktion och säger i sitt docblock att anroparen äger den;
-        // App\Actions\Invitation\CreateInvitation gör precis så här.
-        DB::transaction(function () use ($request, $user, $hadPassword, $recordSecurityEvent): void {
-            $user->update([
-                'password_hash' => $request->string('password')->toString(),
-            ]);
+        $requestPasswordChange->handle(
+            $request->user(),
+            $request->string('password')->toString(),
+            $request->ip(),
+            $request->userAgent(),
+        );
 
-            $this->logoutOtherSessions($request, $user);
-
-            // Alla personal access tokens. Ett token är en väg in som inte går
-            // genom ett lösenord alls, och den som byter lösenord efter ett
-            // intrång menar att varje sådan väg ska stängas.
-            $user->tokens()->delete();
-
-            // Issue 113 och [[ADR-0043 Tre loggar]] § Säkerhetsloggen: raden
-            // skrivs av actionen, och `meta` bär bara om ett lösenord fanns före
-            // — aldrig ett lösenord eller en kod.
-            $recordSecurityEvent->handle(
-                action: SecurityLog::ACTION_PASSWORD_CHANGED,
-                user: $user,
-                ip: $request->ip(),
-                userAgent: $request->userAgent(),
-                meta: ['had_password' => $hadPassword],
-            );
-        });
-
-        // Transaktionellt mejl och ingen notisrad: användaren får veta att
-        // bytet hände, och klockan i sidhuvudet får ingenting — hon gjorde
-        // det själv, se App\Notifications\PasswordChangedNotification.
-        // **Efter commit**, utanför closuren: ett mejl som gick ut för ett
-        // byte som sedan rullades tillbaka vore ett löfte systemet inte höll.
-        $user->notify(new PasswordChangedNotification);
-
-        return back()->with('status', 'password-changed');
+        return back()->with('status', 'password-change-requested');
     }
 
     /**
-     * Loggar ut kontots övriga webbsessioner och ger den egna ett nytt id.
+     * GET /settings/security/password/{token} — bekräftelsen, länken ur
+     * mejlet.
      *
-     * **Sessionerna ligger i databasen** (`SESSION_DRIVER=database`, se
-     * config/session.php) och `sessions.user_id` är den koppling som gör
-     * städningen möjlig: en webbsession är en rad, och kontots andra rader är
-     * kontots andra enheter. Laravels egen `logoutOtherDevices()` hade
-     * krävt ett lösenord att jämföra med, och den finns inte för ett konto
-     * som bara använt magic link — den vägen är alltså stängd av samma skäl
-     * som issuen skriver ut.
+     * En GET och inte en PUT: länken klickas i en mejlklient, och en
+     * mejlklient kan inte skicka ett formulär. Samma form som
+     * /settings/profile/email/{token} och /login/magic-link/consume —
+     * engångslänkar i mejl är GET-rutter i den här appen, och skyddet ligger i
+     * att tokenet är hemligt, engångs och kortlivat, inte i HTTP-metoden.
      *
-     * **Ordningen är avsiktlig.** `regenerate()` ger den HÄR sessionen ett
-     * nytt id först — skyddet mot sessionsfixering, samma anrop som
-     * App\Http\Controllers\Auth\RegisteredUserController gör vid inloggning
-     * — och raderingen tar sedan varje rad som inte är det nya id:et. Den
-     * egna gamla raden försvinner med de andras, och den nya skrivs när
-     * requesten avslutas. Raden som gör bytet är alltså kvar, inloggad, medan
-     * varje annan webbläsare möts av en tom session nästa gång.
+     * Sessionen går in i actionen som ett argument: den egna sessionen ska ha
+     * ett nytt id och kontots övriga rader bort, och den städningen hör till
+     * kedjan som actionen äger.
      *
-     * Ingen `session()->invalidate()`: den tömmer sessionen, och då hade
-     * flashkoden tillbaka till formuläret försvunnit med den.
+     * Omdirigeringen går till säkerhetssidan och inte till `back()`:
+     * webbläsarens `Referer` är mejlklienten, och den som just bytt lösenord
+     * ska landa där nästa steg finns.
      */
-    private function logoutOtherSessions(UpdatePasswordRequest $request, User $user): void
-    {
-        $session = $request->session();
+    public function confirm(
+        Request $request,
+        string $token,
+        ConfirmPasswordChange $confirmPasswordChange,
+    ): RedirectResponse {
+        $confirmPasswordChange->handle(
+            $request->user(),
+            $token,
+            $request->session(),
+            $request->ip(),
+            $request->userAgent(),
+        );
 
-        $session->regenerate();
-
-        DB::table(config('session.table'))
-            ->where('user_id', $user->id)
-            ->where('id', '!=', $session->getId())
-            ->delete();
+        return redirect()
+            ->route('settings.security')
+            ->with('status', 'password-changed');
     }
 }
