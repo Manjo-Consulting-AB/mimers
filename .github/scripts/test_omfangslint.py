@@ -236,6 +236,57 @@ def test_rapporten_namner_inte_deklarationen_i_fast_lage():
     assert o.DEKLARATIONSMARKOR not in text
 
 
+# =====================================================================
+# Läslistan
+# =====================================================================
+
+def _las(*rader):
+    return "### Läs\n\n```\n" + "\n".join(rader) + "\n```\n\n### In scope\n\n```\nx\n```\n"
+
+
+def test_las_befintliga_mal_ger_inga_fynd():
+    kropp = _las(
+        "docs/Backlog/M21 Uppgifterna i vardagen.md § 133",
+        "[[ADR-0042 Designsystemet]] § Beslut och § Konsekvenser",
+        "docs/ADR/ADR-0044 Användarens dag.md § Beslut",
+        "app/Models/User.php (preferredTimezone, today)",
+        "[[AGENTS.md]]",
+    )
+    assert l.lasfynd(kropp, ROT) == [], l.lasfynd(kropp, ROT)
+
+
+def test_las_saknad_fil_pekas_ut():
+    # Issue 133 (PR #520) läste ADR-0044 en timme innan den mergades.
+    fynd = l.lasfynd(_las("docs/ADR/ADR-9999 Finns inte.md § Beslut", "lang/sv/ui.php"), ROT)
+    assert len(fynd) == 2 and "ADR-9999" in fynd[0] and "lang/sv/ui.php" in fynd[1], fynd
+
+
+def test_las_saknad_wikilank_pekas_ut():
+    fynd = l.lasfynd(_las("[[ADR-9999 Finns inte]]"), ROT)
+    assert fynd and "finns inte" in fynd[0], fynd
+
+
+def test_las_saknad_rubrik_pekas_ut():
+    # Issue 92 (PR #417) pekade på en rubrik som aldrig fanns.
+    fynd = l.lasfynd(_las("[[Scheman och uppgifter]] § Förekomster"), ROT)
+    assert fynd and "förekomster" in fynd[0], fynd
+
+
+def test_las_delad_issue_och_lasanvisning_godtas():
+    # `§ 57a` pekar på rubriken `57.`; allt efter rubriken är en läsanvisning.
+    kropp = _las(
+        "[[M10 Webbfrontend]] § 57a",
+        "docs/ADR/ADR-0017 Missbruksvektorer.md § 4 Ägarbytesbonusen — vektorn och motmedlet",
+        "[[ADR-0042 Designsystemet]] § Bildernas avvikelser",
+    )
+    assert l.lasfynd(kropp, ROT) == [], l.lasfynd(kropp, ROT)
+
+
+def test_rapporten_bar_lasluckor_utan_rutfynd():
+    text = l.rapport([], [], "fast", ["- `docs/x.md` finns inte på `main`."])
+    assert text.startswith(l.RUBRIK) and "Läslistan" in text and "Rutan verkar" not in text
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
