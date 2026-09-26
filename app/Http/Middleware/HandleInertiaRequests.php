@@ -28,11 +28,26 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Nio nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Elva nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
  * App\Support\Frontend\ActiveContainer och `flash.status` ur sessionen.
+ *
+ * **`today` och `timezone` kom med issue 137.** Frontenden ska inte räkna sin
+ * egen dag ([[ADR-0044 Användarens dag]] § Beslut 4): servern skickar
+ * användarens kalenderdatum som `Y-m-d` och hennes IANA-zon, och
+ * `useRelativeDate()` räknar relativa datum och klockslag mot dem i stället
+ * för mot webbläsarens klocka. Regeln bor i User::today() och
+ * User::preferredTimezone(); middlewaren läser den bara. `null` för en gäst,
+ * så komposabeln faller tillbaka på webbläsarens dag på en utloggad sida —
+ * samma form som för en inloggad, och samma regel som `auth()` och
+ * `favorites()`.
+ *
+ * De ligger direkt efter `auth` med flit: `preferredTimezone()` läser
+ * `user.accounts` när användaren inte valt en egen zon, och `auth()` har
+ * redan laddat kontona med sina planer — de två kostar därför ingen egen
+ * fråga på en sidladdning.
  *
  * **`favorites` kom med issue 106** — sidopanelens `FAVORITER`-sektion,
  * se [[M17 Designsystemet]] § 106 och [[ADR-0042 Designsystemet]]
@@ -145,6 +160,10 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'auth' => fn (): array => $this->auth($request),
+            // Användarens dag och tidszon ([[ADR-0044 Användarens dag]]
+            // § Beslut 4) — se klassens docblock om varför de står här.
+            'today' => fn (): ?string => $request->user()?->today()->toDateString(),
+            'timezone' => fn (): ?string => $request->user()?->preferredTimezone(),
             'activeContainer' => fn (): ?string => $this->activeContainer->forUser($request->user()),
             'favorites' => fn (): array => $this->favorites($request),
             'unreadNotificationCount' => fn (): int => $this->unreadNotificationCount($request)
