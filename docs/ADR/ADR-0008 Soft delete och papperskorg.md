@@ -43,20 +43,19 @@ Konsekvenser:
 
 ## Uppföljning 2026-09-26 — vad papperskorgen tar emot
 
-**Papperskorgen är till för saker, inte för inställningar eller egenskaper.** Tonys beslut vid planeringen av [[M22 Redo för testare]]: ett block man slänger hamnar i papperskorgen, men text som suddas ut på blocket är bara borta.
+**Papperskorgen är till för det man kan vilja ångra, inte för egenskaper.** Tonys beslut vid planeringen av [[M22 Redo för testare]]: ett block man slänger hamnar i papperskorgen, men text som suddas ut på blocket är bara borta. Kategorier och taggar fördes först till den andra sorten. Testarna ville ha dem kvar i papperskorgen, så att en radering går att ångra, och så blev det samma dag.
 
 | Sort | Vad | Vid radering |
 |---|---|---|
 | **Saker** | `container`, `item`, `attachment` | papperskorgen, trettio dagar, går att återställa |
-| **Inställningar** | `category`, `tag` | borta direkt |
+| **Inställningar** | `category`, `tag` | papperskorgen, trettio dagar, går att återställa |
 | **Egenskaper hos ett item** | `schedule`, `loan`, `cost_entry` | borta direkt |
 
-Uppräkningen under § Retentionstiden i MVP ovan tog med `category`, `tag` och `schedule` bland det som går att återställa. Det gäller inte längre.
+Uppräkningen under § Retentionstiden i MVP ovan tog med `schedule` bland det som går att återställa. Det gäller inte längre.
 
-- **Soft delete finns kvar på raderna.** Den skyddar mot buggen, som § Motivering säger, även när ingen yta erbjuder en återställning.
-- **Gallringen ändras inte.** Kategorier och taggar gallras av samma jobb som i dag, trettio dagar efter `deleted_at`. Scheman, lån och kostnadsrader följer sitt item och gallras med det, eller med containern.
-- **Papperskorgen i containern visar items och bilagor**, och containrarna har sin egen. Kategorier och taggar lämnar den i issue 150.
-- Frågan i [[Tankar]] om en femte typ i papperskorgen är därmed besvarad: det blir ingen, och två av de fyra går.
+- **Soft delete finns kvar på egenskaperna.** Den skyddar mot buggen, som § Motivering säger, även när ingen yta erbjuder en återställning. De mjukraderade raderna följer sitt item och gallras med det, eller med containern.
+- **En kategori som används kan raderas, efter en varning.** Issue 11 § Beslut 7 nekade raderingen så länge kategorin satt på ett item, för att en radering inte skulle tömma klassificeringen tyst. Med papperskorgen är raderingen inte tyst längre och går att ångra: vyn säger hur många items kategorin eller taggen sitter på och frågar först. Items behåller sin `category_id` medan kategorin ligger i papperskorgen och får den tillbaka vid en återställning. Gallringen nollställer den som i dag. **En kategori med underkategorier nekas fortfarande**; strukturen flyttas först. Issue 150.
+- Frågan i [[Tankar]] om en femte typ i papperskorgen är därmed besvarad: det blir ingen.
 
 ## Alternativ
 

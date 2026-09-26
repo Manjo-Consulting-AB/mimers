@@ -40,7 +40,7 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M19 Dashboarden]] | **122–128** | todo-vyn flyttar, brickorna och containerkorten, kostnaderna, händelsepanelen, notisklockan och informationsytan |
 | [[M20 Kontot]] | **129–131, 140** | byta lösenord, byta e-postadress, väntande inbjudningar för inloggade och lösenordsbytet via mejl |
 | [[M21 Uppgifterna i vardagen]] | **132–139** | nästa förfall efter det stängda, prickarna på knappen, växeln för framtida uppgifter och användarens dag överallt |
-| [[M22 Redo för testare]] | **141–150** | webben räknas som aktivitet, konto- och personraderingen, inbjudningsnotisen som aldrig skickas, kalenderns namn, testplanen för filerna och papperskorgen utan inställningar |
+| [[M22 Redo för testare]] | **141–150** | webben räknas som aktivitet, konto- och personraderingen, inbjudningsnotisen som aldrig skickas, kalenderns namn, testplanen för filerna och varningen innan en tagg eller kategori kastas |
 | [[Att sortera efter mockuparna]] | — | identifierat arbete som ännu inte fått en plats — ingen milstolpe |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
 

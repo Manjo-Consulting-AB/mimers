@@ -12,7 +12,7 @@ Tillagd 2026-09-26, när M21 var klar. MVP:n är i stort sett byggd, och det som
 
 **Testplanen (148–149).** [[Testplan filer]] säger vad som redan är bevisat om dedup och filåtkomst, och vad som saknas. De två issuerna skriver proven som saknas.
 
-**Utanför milstolpen, avgjort samtidigt.** Magic link kräver redan tvåfaktorkoden: det byggdes i issue 80, och frågan i [[Tankar]] hade bara inte flyttats. Papperskorgen tar emot saker, inte inställningar eller egenskaper ([[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26): scheman, lån och kostnadsrader försvinner redan direkt, och kategorier och taggar lämnar papperskorgen i 150. Anmälningsvägen enligt DSA blir en egen milstolpe. Hela testsviten mot MariaDB i CI är ett pipelinearbete och går vid sidan av.
+**Utanför milstolpen, avgjort samtidigt.** Magic link kräver redan tvåfaktorkoden: det byggdes i issue 80, och frågan i [[Tankar]] hade bara inte flyttats. Papperskorgen tar emot det man kan vilja ångra, inte egenskaper: scheman, lån och kostnadsrader försvinner direkt, medan kategorier och taggar ligger kvar i papperskorgen på testarnas begäran ([[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26). Anmälningsvägen enligt DSA blir en egen milstolpe. Hela testsviten mot MariaDB i CI är ett pipelinearbete och går vid sidan av.
 
 ---
 
@@ -120,13 +120,15 @@ Skriv proven A1–A8 i [[Testplan filer]] § Del 2, under samma regel som 148: *
 **Klart när:** A1–A8 har var sitt prov, namngivet så att bokstaven och siffran går att hitta; inget prov upprepar ett som tabellen *Redan bevisat* pekar på; ingen fil utanför `tests/` och [[Testplan filer]] ändras; ett prov som visar ett fel är markerat `->todo()` och beskrivet i PR-kroppen; [[Testplan filer]] pekar på de nya proven; hela testsviten är grön.
 **Beror på:** -
 
-### 150. Kategorier och taggar lämnar papperskorgen
-Kategorier och taggar är inställningar, inte saker ([[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26). Papperskorgen i containern visar i dag fyra typer. Den ska visa två: `item` och `attachment`.
+### 150. Varning innan en tagg eller kategori kastas
+Testarnas önskemål 2026-09-26: innan en tagg eller kategori raderas ska vyn säga hur många items den sitter på och fråga. *"This tag is used on 12 items. Move it to the trash? You can restore it within 30 days."* Sitter den inte på något item raderas den utan fråga, som i dag.
 
-- **`ListTrash` och `FindTrashedInContainer`** tar inte längre med `category` och `tag`. `RestoreContent` tappar grenarna för dem, och `RestoreRequest` godtar bara `item` och `attachment`. En återställning av en kategori eller tagg nekas som vilken okänd typ som helst, i både webben och `/api`.
-- **Vyn** (`Containers/Trash.vue`, `TrashRow.vue`, `trashPresentation.js`) tappar typerna och deras strängar.
-- **Raderingen ändras inte:** kategorin och taggen mjukraderas som i dag och gallras av `PurgesExpiredTrash` trettio dagar efter `deleted_at`. Kvittona efter en radering nämner redan varken papperskorgen eller trettio dagar och ändras inte.
+**Taggen.** `TagRow.vue` raderar i dag direkt med en `<Link method="delete">`. Den frågar med `window.confirm()` när taggens tal i `counts` är större än noll, samma mönster som bilagan i `ItemAttachmentSection.vue`. Talet finns redan på taggsidan (`ListTags::counts()`).
 
-**Läs:** [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26, `app/Actions/Trash/ListTrash.php` (docblocken), `app/Actions/Trash/RestoreContent.php`, `app/Http/Requests/Trash/RestoreRequest.php`, `resources/js/pages/Containers/Trash.vue`
-**Klart när:** papperskorgen visar mjukraderade items och bilagor men inga kategorier eller taggar, i både webben och `/api`; en återställning av typen `category` eller `tag` nekas och ändrar ingenting; en raderad kategori eller tagg gallras fortfarande efter trettio dagar; hela testsviten är grön.
+**Kategorin.** `DeleteCategory` nekar i dag med `category.has_items` så länge kategorin sitter på ett item (issue 11 § Beslut 7). **Det villkoret utgår** ([[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26): kategorin mjukraderas, items behåller sin `category_id`, och en återställning ur papperskorgen ger tillbaka klassificeringen. `category.has_children` står kvar. Kategorisidan får ett tal per kategori i samma form som taggsidans `counts`, räknat i en fråga, och `CategoryRow.vue` frågar på samma sätt som taggen. Talet räknar items som sitter direkt på kategorin, inte i underkategorierna, eftersom en kategori med underkategorier ändå inte kan raderas.
+
+**Talet är containerns.** Bara den som får hantera containern kan radera, och hen når alla items i den.
+
+**Läs:** [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26, `app/Actions/Category/DeleteCategory.php` (docblocken), `app/Actions/Tag/ListTags.php` (`counts()`), `app/Http/Controllers/CategoryController.php`, `resources/js/components/TagRow.vue`, `resources/js/components/CategoryRow.vue`, `resources/js/components/ItemAttachmentSection.vue` (förlagan för frågan)
+**Klart när:** en tagg som sitter på items raderas först efter en fråga som säger hur många; en kategori som sitter på items raderas efter samma fråga och nekas inte längre, i både webben och `/api`; en tagg eller kategori utan items raderas utan fråga; en kategori med underkategorier nekas som förut; items som hade en raderad kategori visar ingen kategori medan den ligger i papperskorgen och får tillbaka den när den återställs; kategorisidans tal räknas i en fråga oavsett antal kategorier; kategorier och taggar syns fortfarande i papperskorgen; strängarna ligger i `lang/en/ui.php`; hela testsviten är grön.
 **Beror på:** -
