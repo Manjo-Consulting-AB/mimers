@@ -39,11 +39,11 @@ use function Pest\Laravel\withoutVite;
  *    tabellen men redan nullbar — den prövas därför bara för att nyckeln ska
  *    stå kvar, inte för nullbarheten.
  * 2. **Migreringen rör inga rader.** `up()` körs en andra gång ovanpå rader
- *    som redan finns, och varje författarvärde jämförs före och efter. Att
- *    `MODIFY COLUMN ... NULL` är en metadataändring på MariaDB bevisas av
- *    .github/workflows/migreringar.yml mot en riktig server — sqlite-sviten
- *    kan bara visa att DDL:en bevarar raderna, och det är vad provet nedan
- *    gör.
+ *    som redan finns, och varje författarvärde jämförs före och efter — på
+ *    sqlite, den enda dialekt sviten har. Vad provet visar är att `change()`:s
+ *    tabellombyggnad bevarar raderna. Hur MariaDB utför samma steg är inte
+ *    prövat någonstans: .github/workflows/migreringar.yml kör filen mot en tom
+ *    databas, vilket är vad dess egen kommentar säger att jobbet bevisar.
  * 3. **Läsarna.** Varje yta som bär en författare svarar `null` — eller
  *    *Removed user* där meningen annars blir obegriplig — i stället för att
  *    falla på en relation som inte finns.
@@ -168,9 +168,12 @@ it('gör varje författarkolumn nullbar med nyckeln kvar på RESTRICT', function
  * nycklar, och då faller `change()`:s tabellommbyggnad på att `item` har barn.
  * Utanför transaktionen går den igenom, precis som `php artisan migrate` gör.
  *
- * Att körningen dessutom går på MariaDB — dialekten som faktiskt tar emot
- * migreringen — bevisas av .github/workflows/migreringar.yml, som kör samma
- * fil mot mariadb:10.6.
+ * Provet kör på sqlite, den enda dialekt sviten har. Att samma migreringsfil
+ * går igenom på MariaDB — dialekten som faktiskt tar emot den — visas av
+ * .github/workflows/migreringar.yml; det jobbet kör `migrate --force` mot en
+ * tom databas och säger inget om `up()` ovanpå rader som redan finns. Att
+ * raderna bevaras genom steget är alltså visat här, på sqlite — inte på
+ * MariaDB.
  */
 it('kör migreringen över befintliga rader utan att röra ett enda värde', function () {
     $tidigare = DB::getDefaultConnection();
