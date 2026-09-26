@@ -269,6 +269,18 @@ def hamta_redigeringshistorik(repo: str, nummer: str, token: str) -> dict:
 UNDANTAGSMARKOR = "Beviljat undantag från omfångsrutan:"
 ARKITEKTRUBRIK = re.compile(r"^###\s+.*arkitektsvar", re.IGNORECASE)
 
+# Rubriken ensam avgör inte vem som skrev kommentaren. Alla kommentarer i tråden
+# postas under samma konto (`manjo-me`), och implementeraren och åtgärdsloopen kör
+# med fungerande `gh` - en agent som härmar formen den ser i tråden kan alltså
+# skriva ett "arkitektsvar" som beviljar den själv. Det har inte hänt, men grinden
+# ska inte bygga på att det inte händer. Därför kräver ett beviljande också den här
+# osynliga markören, som bara pipelinens arkitektbanor skriver
+# (process_next_issue.py, ARKITEKTSVAR_MARKOR - test_process_next_issue.py vaktar
+# att de två är lika). Beviljar en människa ett undantag för hand skriver hon
+# markören själv. Det är ett skydd mot misstag, inte mot en agent som medvetet
+# vill runt grinden - den har samma token som pipelinen.
+ARKITEKTSVAR_MARKOR = "<!-- mimers-pipeline: arkitektsvar -->"
+
 # Rutan skrivs innan koden lästs. För en issue som börjar i datamodellen är den
 # därför billig och träffsäker - valvet namnger filerna. För en issue som börjar
 # i en skärm är den en gissning om implementationen, och den missar samma sak
@@ -316,7 +328,7 @@ def beviljade_undantag(repo: str, pr_nummer: str, token: str) -> list[tuple[str,
 
     Formen är avsiktligt stel: en rad som är exakt UNDANTAGSMARKOR, följd av ett
     kodblock med en sökväg per rad, i en kommentar vars rubrik är ett
-    arkitektsvar. Stelheten är poängen - en grind som gissar vad ett svar menade
+    arkitektsvar och som bär ARKITEKTSVAR_MARKOR. Stelheten är poängen - en grind som gissar vad ett svar menade
     är ingen grind. Står markören inte där finns inget undantag, och rutan gäller
     som förut.
 
@@ -324,19 +336,30 @@ def beviljade_undantag(repo: str, pr_nummer: str, token: str) -> list[tuple[str,
     lista, vilket ger exakt det utfall skriptet hade innan den här funktionen
     fanns. Ett tappat API-anrop ska inte vidga rutan.
     """
-    url = f"https://api.github.com/repos/{repo}/issues/{pr_nummer}/comments?per_page=100"
-    begaran = urllib.request.Request(url, headers={
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "omfangsruta",
-    })
-    try:
-        with urllib.request.urlopen(begaran, timeout=30) as svar:
-            kommentarer = json.load(svar)
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as fel:
-        notis("warning", f"Kunde inte läsa PR #{pr_nummer}s kommentarer: {fel}. "
-                         "Beviljade undantag kan inte läsas - rutan gäller som skriven.")
-        return []
+    # Sida för sida: en tråd med åtgärdsvarv, verifieringar och notiser kan bli
+    # längre än 100 kommentarer, och arkitektsvaret står då sist - just den sida
+    # en enda läsning missar.
+    kommentarer: list[dict] = []
+    sida = 1
+    while True:
+        url = (f"https://api.github.com/repos/{repo}/issues/{pr_nummer}/comments"
+               f"?per_page=100&page={sida}")
+        begaran = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "omfangsruta",
+        })
+        try:
+            with urllib.request.urlopen(begaran, timeout=30) as svar:
+                del_sida = json.load(svar)
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError) as fel:
+            notis("warning", f"Kunde inte läsa PR #{pr_nummer}s kommentarer: {fel}. "
+                             "Beviljade undantag kan inte läsas - rutan gäller som skriven.")
+            return []
+        kommentarer.extend(del_sida)
+        if len(del_sida) < 100:
+            break
+        sida += 1
 
     beviljade: list[tuple[str, str]] = []
     for kommentar in kommentarer:
@@ -346,7 +369,8 @@ def beviljade_undantag(repo: str, pr_nummer: str, token: str) -> list[tuple[str,
 
 
 def undantag_ur_kommentar(kropp: str) -> list[str]:
-    """Sökvägarna EN kommentar beviljar - tom lista om den inte är ett arkitektsvar.
+    """Sökvägarna EN kommentar beviljar - tom lista om den inte är ett arkitektsvar
+    med pipelinens markör (ARKITEKTSVAR_MARKOR).
 
     Markören får stå i fetstil. Opus skrev den så på PR #436 (issue 98):
     `**Beviljat undantag från omfångsrutan:**`, med rätt rubrik och rätt kodblock.
@@ -358,7 +382,7 @@ def undantag_ur_kommentar(kropp: str) -> list[str]:
     och kodblocket direkt under.
     """
     forsta = kropp.lstrip().splitlines()[0] if kropp.strip() else ""
-    if not ARKITEKTRUBRIK.match(forsta):
+    if not ARKITEKTRUBRIK.match(forsta) or ARKITEKTSVAR_MARKOR not in kropp:
         return []
     sokvagar: list[str] = []
     for block in re.findall(
