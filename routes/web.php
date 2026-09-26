@@ -345,6 +345,30 @@ Route::middleware('auth')->group(function () {
         ->name('settings.security.password');
 
     /*
+     * Issue 140 · Lösenordsbytet bekräftas via mejl, se
+     * App\Http\Controllers\Settings\PasswordController::confirm() och
+     * [[M20 Kontot]] § 140.
+     *
+     * **Två rutter, för lösenordet byts aldrig i samma steg som det begärs.**
+     * PUT ovan skickar mejlet och lämnar `user.password_hash` orörd; den här
+     * GET:en är länken i mejlet och den enda väg som skriver kolumnen. Fram
+     * till issue 140 krävdes det nuvarande lösenordet i stället, vilket
+     * stängde vägen ut för den som glömt sitt; nu kan den som sitter i en
+     * kapad session begära bytet, men bara den som når brevlådan genomföra det
+     * ([[ADR-0011 Autentisering]] § Uppföljning 2026-09-26).
+     *
+     * **GET har ingen takgräns**, som magic link-inlösen och
+     * /settings/profile/email/{token}: tokenet är 64 tecken ur ett
+     * 62-teckensalfabet och går inte att gissa, och en begränsare hade fällt
+     * den som klickar en gammal länk två gånger.
+     *
+     * Namnet följer `settings.profile.email.confirm`: sidan, handlingen,
+     * undantaget.
+     */
+    Route::get('/settings/security/password/{token}', [PasswordController::class, 'confirm'])
+        ->name('settings.security.password.confirm');
+
+    /*
      * Issue 53c · Kontoinställningarna — profil och konton, se
      * App\Http\Controllers\Settings\ProfileController och
      * App\Http\Controllers\Settings\AccountSettingsController.

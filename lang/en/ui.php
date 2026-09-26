@@ -225,6 +225,17 @@ return [
         'password-changed' => 'Your password has been changed. Your other sessions have been signed out.',
 
         /*
+         * Issue 140. Two codes and not one, of the same reason as the email
+         * pair below: the two halves happen at different times.
+         * `password-change-requested` is what the security page says right
+         * after the form was sent — nothing has changed yet, the password is
+         * only written when the link in the mail is opened — and
+         * `password-changed` above is what it says when that link has been
+         * opened.
+         */
+        'password-change-requested' => 'We have sent a confirmation link to your email address. Nothing changes until you open it.',
+
+        /*
          * Issue 130. Two codes and not one, because the two halves of the
          * exchange happen at different times and mean different things:
          * `email-change-requested` is what the profile page says right after
@@ -685,12 +696,20 @@ return [
             'heading' => 'Security',
 
             /*
-             * Lösenordsbytet, se [[M20 Kontot]] § 129. Two modes from one
-             * prop (`hasPassword`): an account that has a password states it
-             * and picks a new one, an account that has only used magic links
-             * sets its first. The two intros say which one you are in — the
-             * form is otherwise identical, and a user who has never had a
-             * password should not be asked for one.
+             * Lösenordsbytet, se [[M20 Kontot]] § 140. Two modes from one
+             * prop (`hasPassword`): an account that has a password changes
+             * it, an account that has only used magic links sets its first.
+             * The two intros say which one you are in — the submit label
+             * differs too, and a user who has never had a password should
+             * not think she is replacing one.
+             *
+             * **Both intros promise the same thing: nothing changes until
+             * the link is opened.** Since issue 140 the current password is
+             * no longer asked for ([[ADR-0011 Autentisering]]
+             * § Uppföljning 2026-09-26) — the request only sends a mail to
+             * the account address, and the password is written when that
+             * link is opened. A user who believes the form already changed
+             * it would close the mail and be locked out.
              *
              * `intro_set` says the link still works: setting a password is
              * not a replacement for magic links ([[ADR-0011 Autentisering]]
@@ -699,10 +718,9 @@ return [
              */
             'password' => [
                 'heading' => 'Password',
-                'intro' => 'Enter your current password to choose a new one.',
-                'intro_set' => 'You log in with a link today. Set a password here and you will be able to log in with it as well — the link keeps working.',
+                'intro' => 'Choose a new password. We send a link to your email address — the password is not changed until you open it.',
+                'intro_set' => 'You log in with a link today. Set a password here and you will be able to log in with it as well — the link keeps working. We send a confirmation link to your email address, and the password is not set until you open it.',
 
-                'current_label' => 'Current password',
                 'new_label' => 'New password',
                 'confirm_label' => 'Repeat the new password',
 

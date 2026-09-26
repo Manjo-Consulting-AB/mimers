@@ -93,6 +93,30 @@ return [
     ],
 
     /*
+     * Lösenordsbytets bekräftelselänk, se [[M20 Kontot]] § 140. Mejlet går
+     * till kontots EGEN adress — till skillnad från `email_change.confirm`
+     * nedan, som går till den NYA adressen — och är beviset att den som
+     * begärde bytet når brevlådan. Fram till issue 140 krävdes det nuvarande
+     * lösenordet i stället, vilket stängde vägen ut för den som glömt sitt
+     * ([[ADR-0011 Autentisering]] § Uppföljning 2026-09-26).
+     *
+     * `line` är det löfte flödet måste hålla: **ingenting ändras förrän
+     * länken öppnas.** Den som tror att formuläret redan bytt lösenordet
+     * stänger mejlet och står utan väg in. Samma uppdrag som
+     * `email_change.confirm` och samma form som `password_changed` ovan, och
+     * står därför här och inte bland typerna.
+     */
+    'password_change' => [
+        'confirm' => [
+            'subject' => 'Confirm your new password',
+            'line' => 'Click the link below to start using the new password for your Mimers account. Until you do, nothing changes.',
+            'action' => 'Confirm the new password',
+            'expires' => 'The link stops working in :minutes minutes and can only be used once.',
+            'not_you' => 'If you did not ask for this, you can ignore this email. The link only works for the account that made the request, and your password is not changed until it is opened.',
+        ],
+    ],
+
+    /*
      * Adressbytet, se [[M20 Kontot]] § 130. Två mejl och två helt olika
      * uppdrag, så de delar bara namnutrymme och inga nycklar.
      *

@@ -601,7 +601,7 @@ it('hämtar växelns strängar ur ui.php', function () {
 });
 
 /*
- * Lösenordsformuläret, se issue 129 och
+ * Lösenordsformuläret, se issue 129 och 140 och
  * resources/js/components/PasswordForm.vue.
  *
  * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
@@ -612,10 +612,13 @@ it('hämtar växelns strängar ur ui.php', function () {
  * formuleringar av samma regel glider isär) och kodfältets etikett är
  * inloggningens (`auth.code.label` — samma etikett, samma sak att skriva in).
  *
- * Flashen prövas också: `flash.password-changed` sätts av
- * PasswordController, och `translate()` skriver NYCKELN SJÄLV när uppslaget
- * misslyckas — en kod utan mening syns alltså inte som ett fel i vyn, utan
- * som `flash.password-changed` i en grön ruta.
+ * Flashen prövas också, och båda koderna: `flash.password-change-requested`
+ * sätts av PasswordController::update() när begäran tagits emot (ingenting
+ * har ändrats än — lösenordet skrivs först när länken i mejlet öppnas), och
+ * `flash.password-changed` sätts av confirm() när den länken har öppnats.
+ * `translate()` skriver NYCKELN SJÄLV när uppslaget misslyckas — en kod utan
+ * mening syns alltså inte som ett fel i vyn, utan som
+ * `flash.password-change-requested` i en grön ruta.
  */
 it('hämtar lösenordsformulärets strängar ur ui.php', function () {
     $vy = File::get(resource_path('js/components/PasswordForm.vue'));
@@ -639,7 +642,9 @@ it('hämtar lösenordsformulärets strängar ur ui.php', function () {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
 
-    expect(Lang::get('ui.flash.password-changed', [], 'en'))
+    expect(Lang::get('ui.flash.password-change-requested', [], 'en'))
+        ->not->toBe('ui.flash.password-change-requested')
+        ->and(Lang::get('ui.flash.password-changed', [], 'en'))
         ->not->toBe('ui.flash.password-changed');
 });
 

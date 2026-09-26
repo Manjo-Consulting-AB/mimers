@@ -90,6 +90,26 @@ Unikheten mot `user.email` prövas **två gånger**: när begäran tas emot, och
 
 Ingen `deleted_at`: samma skäl som `magic_link_token`, en kortlivad säkerhetsartefakt och inte användarskapat innehåll.
 
+## password_change
+
+En begärd lösenordsändring. Lösenordet byts aldrig i samma steg som det begärs: `user.password_hash` står kvar tills länken i mejlet till `user.email` öppnas, och det är den här raden som bär begäran fram till dess. Se [[M20 Kontot]] § 140 och [[ADR-0011 Autentisering]] § Uppföljning 2026-09-26.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` — raden exponeras aldrig som egen resurs i API:et |
+| user_id | FK → user, RESTRICT | **Raden binds till personen och inte till adressen**, som `email_change`: den som bekräftar bytet måste vara samma användare som begärde det, och länken får inte kunna sätta ett lösenord när en session kapats. En annan inloggad användare får `404`, lika som för ett okänt token |
+| password_hash | VARCHAR(255) | **Det nya lösenordet, hashat med `Hash::make()`.** Klartexten lagras aldrig — den finns bara i mejlets länk, och den bär den inte. Samma bredd som `user.password_hash`, och samma hash skrivs dit när länken öppnas: `User::$casts['password_hash']` är `hashed`, och det castet hashar inte om ett värde som redan är en hash |
+| token_hash | CHAR(64) UNIQUE | SHA-256 av slumpen i länken. Klartexten lagras aldrig, samma teknik som `magic_link_token` och `email_change` |
+| expires_at | TIMESTAMP | En timme efter begäran. **En ny begäran sätter en tidigare obekräftad rads `expires_at` till nu** i stället för att radera den: den gamla länken slutar gälla direkt, och raden ligger kvar som bevis på att begäran gjordes |
+| confirmed_at | TIMESTAMP NULL | Satt = förbrukad. Lösenordet skrevs, och en andra öppning av samma länk är ett återanrop av ett engångstoken. Sätts med en villkorlig UPDATE, så två samtidiga klick aldrig båda lyckas |
+| created_at, updated_at | | |
+
+Ett nuvarande lösenord krävs **inte**, varken när kontot har ett eller inte: det kravet tog bort den enda vägen ut för den som glömt sitt, och beviset flyttas i stället till inkorgen. Har kontot tvåfaktor påslagen krävs fortfarande en giltig kod, eller en återställningskod, när bytet begärs.
+
+`confirmed_at` och inte `used_at`, som `magic_link_token` har: samma skäl som `email_change` — ett lösenordsbyte är inte förbrukat förrän kolumnen faktiskt skrivits, och `confirmed_at` är kvittensen på att den skrivningen skedde.
+
+Ingen `deleted_at` och ingen automatisk gallring: samma avvägning som `email_change` — en kortlivad säkerhetsartefakt, inte användarskapat innehåll, och raden får sin frist den dag den blir ett problem.
+
 ## totp_recovery_code
 
 En utfärdad TOTP-återställningskod, en rad per engångskod. Se [[ADR-0011 Autentisering]].

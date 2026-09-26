@@ -62,12 +62,12 @@ it('omdirigerar /settings till profilen sedan 53c', function () {
 });
 
 /*
- * Lösenordsformuläret, issue 129. Sidans femte formulär och det enda som
- * behöver veta något om kontot för att ritas: `hasPassword` väljer mellan
- * "sätt ett lösenord" och "byt ett". Serverns halva är proppen — att fältet
- * för det nuvarande lösenordet därmed bara finns i det ena läget är `v-if` i
- * komponenten, och att servern ändå kräver det när kontot har ett lösenord
- * prövas i tests/Feature/Auth/LosenordsbyteTest.php.
+ * Lösenordsformuläret, issue 129 och 140. Sidans femte formulär och det enda
+ * som behöver veta något om kontot för att ritas: `hasPassword` väljer mellan
+ * "sätt ett lösenord" och "byt ett" — sedan issue 140 bara i vad introt och
+ * knappen säger, för fältet för det nuvarande lösenordet finns inte längre i
+ * något av lägena. Serverns halva är proppen, och flödet prövas i
+ * tests/Feature/Auth/LosenordsbyteTest.php.
  *
  * Proppen är ett JA/NEJ och inte hashen: `password_hash` är dold i
  * serialiseringen sedan issue 3, och en sidprop är samma yta som ett svar.
@@ -103,10 +103,28 @@ it('renderar lösenordsformuläret och postar det till sin egen rutt', function 
     $form = File::get(resource_path('js/components/PasswordForm.vue'));
 
     expect($form)->toContain("put('/settings/security/password'")
-        // De två lägena och kodfältet följer av propsen, inte av ett eget
-        // tillstånd i vyn.
-        ->and($form)->toContain('v-if="props.hasPassword"')
+        // Kodfältet följer av proppen, inte av ett eget tillstånd i vyn.
         ->and($form)->toContain('v-if="props.totpEnabled"');
+});
+
+/*
+ * Issue 140: fältet för det nuvarande lösenordet är borta, i BÅDA lägena.
+ * Kravet ersattes av en bekräftelse via mejl, och ett fält som ber om något
+ * servern inte längre prövar vore en lögn mot användaren — den som glömt sitt
+ * lösenord skulle tro att hon inte kan byta.
+ *
+ * Prövningen är en frånvaro i källkoden: `current_password` får inte
+ * förekomma någonstans i komponenten, varken som fält, regel eller
+ * feluppslag. Serverns halva — att inget nuvarande lösenord krävs — prövas i
+ * tests/Feature/Auth/LosenordsbyteTest.php.
+ */
+it('visar inget fält för nuvarande lösenord', function () {
+    $form = File::get(resource_path('js/components/PasswordForm.vue'));
+
+    expect($form)->not->toContain('current_password')
+        // Och fältet för det nya finns kvar, så frånvaron inte är hela
+        // formulärets frånvaro.
+        ->and($form)->toContain('name="password"');
 });
 
 /*
