@@ -364,6 +364,20 @@ class HandleInertiaRequests extends Middleware
      * utan väntande, så klockan aldrig behöver två avpackningsvägar (samma
      * regel som `auth()`, `favorites()` och `notifications()`).
      *
+     * `inviter` är en TEXT och inte ett namn: `invitation.invited_by_user_id`
+     * är nullbar sedan issue 142 ([[ADR-0045 Radering av konto och person]]
+     * § Beslut 2), och en nollställd inbjudare har ingen rad att hämta ett
+     * namn ur. Meningen som bär namnet ligger i lang-filen
+     * (`inbox.types.invitation.received` interpolerar `:inviter`), så
+     * platshållaren måste ha ett värde — *Removed user* står där namnet
+     * annars hade stått, och raden förblir begriplig.
+     *
+     * Jämförelsen mot `null` är rak och inte `?->`: Larastan ser
+     * relationsproppar som aldrig nullbara, så `$invitation->invitedBy?->name
+     * ?? ...` fälls av phpstan som onödigt — samma form som
+     * App\Http\Resources\ScheduleOccurrenceResource använder för
+     * `completedByAccount`.
+     *
      * @return list<array{ulid: string, container: string, inviter: string, url: string}>
      */
     private function pendingInvitations(Request $request): array
@@ -381,7 +395,9 @@ class HandleInertiaRequests extends Middleware
             ->map(fn (Invitation $invitation): array => [
                 'ulid' => $invitation->ulid,
                 'container' => $invitation->container->name,
-                'inviter' => $invitation->invitedBy->name,
+                'inviter' => $invitation->invitedBy === null
+                    ? trans('ui.invitation.removed_inviter')
+                    : $invitation->invitedBy->name,
                 'url' => route('invitations.show', [], false),
             ])
             ->values()

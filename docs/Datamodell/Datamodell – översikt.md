@@ -56,7 +56,7 @@ audit_log
 
 **Teckenuppsättning.** `utf8mb4` med `utf8mb4_unicode_ci` genomgående. Emoji i itemnamn ska fungera. Databaserna hos inleed skapas med `latin1_swedish_ci` som standard, så teckenuppsättningen måste sättas explicit och inte ärvas — se [[Pipeline]] § Läget på GitHub och hos inleed.
 
-**Främmande nycklar.** Alltid deklarerade. `ON DELETE RESTRICT` som standard — hård radering ska vara ett medvetet beslut, inte en kaskad. Undantag anges explicit i respektive fil.
+**Främmande nycklar.** Alltid deklarerade. `ON DELETE RESTRICT` som standard — hård radering ska vara ett medvetet beslut, inte en kaskad. Undantag anges explicit i respektive fil. **Nyckeln står kvar på `RESTRICT` även när kolumnen är `NULL`-bar:** en författarkolumn — vem som skapat, laddat upp, bockat av eller bjudit in — blir `NULL` när kontot eller personen raderas, och det är raderingen som nollställer den, aldrig databasen. Se [[ADR-0045 Radering av konto och person]] § Beslut 2.
 
 **Pengar.** Aldrig flyttal. `BIGINT` i minsta valutaenhet plus `currency CHAR(3)`.
 

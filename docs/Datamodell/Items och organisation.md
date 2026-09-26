@@ -21,8 +21,8 @@ Grundenheten. Allt användaren vill komma ihåg är ett item — en MPPT-regulat
 | purchased_at | DATE NULL | |
 | warranty_until | DATE NULL | |
 | position_note | VARCHAR(255) NULL | Fritext, t.ex. "bakom panelen i akterruffen" |
-| created_by_user_id | FK | |
-| created_by_account_id | FK | Vilket *konto* posten tillskrivs — varvet, inte den anställde |
+| created_by_user_id | FK NULL | `NULL` när personen raderats |
+| created_by_account_id | FK NULL | Vilket *konto* posten tillskrivs — varvet, inte den anställde. `NULL` när kontot raderats |
 | deleted_at | | |
 
 Index: `(container_id, deleted_at)`, `(container_id, category_id, deleted_at)`, FULLTEXT på `(name, description, manufacturer, model, serial_number)`.
@@ -134,8 +134,8 @@ Kostnader som hör till ett item. En rad per kostnad, precis som i en huvudbok �
 | currency | CHAR(3) | |
 | description | VARCHAR(255) | |
 | supplier | VARCHAR(255) NULL | Fritext med autocomplete, se nedan |
-| created_by_user_id | FK | |
-| created_by_account_id | FK | Vilket *konto* posten tillskrivs — varvet, inte den anställde |
+| created_by_user_id | FK NULL | `NULL` när personen raderats |
+| created_by_account_id | FK NULL | Vilket *konto* posten tillskrivs — varvet, inte den anställde. `NULL` när kontot raderats |
 | deleted_at | | |
 
 Index: `(item_id, deleted_at, incurred_on)`, `(container_id, deleted_at, incurred_on)`, `(container_id, deleted_at, supplier)`.

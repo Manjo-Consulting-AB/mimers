@@ -2758,6 +2758,15 @@ return [
         'intro' => ':inviter has invited you to the container :container.',
         'level' => 'Level: :level',
 
+        // Issue 142: the inviter's column is nullable since ADR-0045 § Beslut 2,
+        // and a nulled author has no row to fetch a name from. The sentence
+        // around the name stays — `intro` and the clock's
+        // `inbox.types.invitation.received` both interpolate `:inviter` — so the
+        // placeholder gets a phrase instead of going empty. Same words as
+        // `sharing.accesses.granted_by_unknown`, and for the same reason: the
+        // sender is gone, the invitation is not.
+        'removed_inviter' => 'Removed user',
+
         // A guest has no address to compare with and therefore no form to
         // answer in — the way goes through signing in or registering, and the
         // token stays in the session until then.

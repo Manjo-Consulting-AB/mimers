@@ -33,6 +33,13 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * is pure account data already visible in the participant list, see
  * § Beslut 8.
  *
+ * `created_by_account` är `null` sedan issue 142, när kontot posten
+ * tillskrevs har raderats och kolumnen nollställts ([[ADR-0045 Radering av
+ * konto och person]] § Beslut 2). Nyckeln står kvar med sitt `null`, som
+ * varje annan nullbar nyckel här: klienten ska aldrig behöva skilja
+ * "saknas" från "tomt". Resursen hittar inget namn åt den — den som vill
+ * visa *Removed account* formulerar det själv.
+ *
  * Dates: `purchased_at`/`warranty_until` are DATE columns and serialize
  * with `toDateString()` ("2024-05-17"), never `toIso8601String()` — see
  * § Beslut 5. `created_at`/`updated_at` are timestamps and keep
@@ -73,7 +80,7 @@ class ItemResource extends JsonResource
             'warranty_until' => $this->warranty_until?->toDateString(),
             'position_note' => $this->position_note,
             'category' => $this->category?->ulid,
-            'created_by_account' => $this->createdByAccount->ulid,
+            'created_by_account' => $this->createdByAccount?->ulid,
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),
             'tags' => $this->tags
