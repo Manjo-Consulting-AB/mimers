@@ -41,6 +41,16 @@ Konsekvenser:
 - **Talet hör hemma i integritetspolicyn**, enligt konsekvenslistan ovan.
 - **Retentionen är inte en plangräns.** Free och Pro har samma 30 dagar. Skulle den någon gång skilja sig åt per plan är det en gräns i `plan.limits` och ett eget beslut.
 
+## Uppföljning 2026-09-26 — vad papperskorgen tar emot
+
+**Papperskorgen är till för saker, inte för egenskaper.** Tonys beslut vid planeringen av [[M22 Redo för testare]]: ett block man slänger hamnar i papperskorgen, men text som suddas ut på blocket är bara borta.
+
+`schedule`, `loan` och `cost_entry` är egenskaper hos ett item. Raderas en av dem försvinner den ur användarens vy direkt, utan papperskorg och utan återställning. Uppräkningen under § Retentionstiden i MVP ovan tog med `schedule` bland det som omfattas av de trettio dagarna. Det gäller inte längre.
+
+- **Soft delete finns kvar på raderna.** Den skyddar mot buggen, som § Motivering säger, även när ingen yta erbjuder en återställning. Det är också därför scheman, lån och kostnadsrader inte behöver någon egen gallring: de mjukraderade raderna följer sitt item och gallras med det, eller med containern.
+- **Papperskorgens fyra typer ändras inte.** `item`, `attachment`, `category` och `tag` exponeras som förut, och containern har sin egen papperskorg.
+- Frågan i [[Tankar]] om en femte typ i papperskorgen är därmed besvarad: det blir ingen.
+
 ## Alternativ
 
 **Hård radering med enbart backup som skydd.** Enklare frågor och mindre databas. Valdes bort — återläsning från backup för att rädda ett enskilt item är opraktiskt, och felet upptäcks ofta för sent.

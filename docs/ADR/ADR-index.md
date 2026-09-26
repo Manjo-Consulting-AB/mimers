@@ -1,6 +1,6 @@
 # ADR-index
 
-Fyrtiofyra beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
+Fyrtiofem beslut, de femton första fattade i planeringsfasen, augusti 2026. Slå upp när du undrar **varför** något ser ut som det gör — datamodellen beskriver *vad*.
 
 Tillbaka till [[00 Index]].
 
@@ -13,7 +13,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0005 Schema och förekomst]] | Regeln och den enskilda gången är olika saker | [[Scheman och uppgifter]] |
 | [[ADR-0006 Innehållsadresserad lagring]] | Dedup via SHA-256, osynlig för användaren | [[Filer och lagring]] |
 | [[ADR-0007 Fillagring hos inleed]] | Filer i Sverige och Frankrike, bakom Storage-abstraktion | [[Filer och lagring]] |
-| [[ADR-0008 Soft delete och papperskorg]] | Skyddar mot buggen, inte mot diskhaveriet | Allt |
+| [[ADR-0008 Soft delete och papperskorg]] | Skyddar mot buggen, inte mot diskhaveriet; papperskorgen tar emot saker, inte egenskaper | Allt |
 | [[ADR-0009 Kvoter och livscykel]] | Bilagor raderas, items aldrig | [[Planer och kvoter]] |
 | [[ADR-0010 Notisarkitektur]] | Outbox med utbytbara kanaler | [[Notiser]] |
 | [[ADR-0011 Autentisering]] | Sanctum, lösenord plus magic link; ett lösenordsbyte bekräftas via mejl, inte med det gamla lösenordet | [[Konton och åtkomst]] |
@@ -50,6 +50,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0042 Designsystemet]] | Tokens med roller före komponenter före sidor, designbilderna i `docs/Design/` | Allt |
 | [[ADR-0043 Tre loggar]] | Händelselogg, säkerhetslogg och anonym mätning med var sin livslängd, plus en rättslig spärr enligt DSA | [[Konton och åtkomst]], [[Registerförteckning]] |
 | [[ADR-0044 Användarens dag]] | En dag som användaren ser eller som sparas åt henne räknas i hennes tidszon; nästa förfall i den avbockandes; frontenden får dagen från servern | [[Scheman och uppgifter]], [[Konton och åtkomst]] |
+| [[ADR-0045 Radering av konto och person]] | Främmande bilagor följer containern, författarkolumnerna nollställs, en person raderar sig själv via mejlbekräftelse | [[Konton och åtkomst]], [[Planer och kvoter]], [[Registerförteckning]] |
 
 ## Om att ändra ett beslut
 
