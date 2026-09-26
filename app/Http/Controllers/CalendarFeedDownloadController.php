@@ -122,10 +122,15 @@ class CalendarFeedDownloadController extends Controller
         try {
             App::setLocale($this->locales->forUser($feed->user));
 
+            // Försenad-prefixet räknas mot FEEDENS användares dag, samma dag
+            // som omfånget ovan löstes mot ([[ADR-0044 Användarens dag]]
+            // § Beslut 2). Dokumentet tar dagen som argument och hämtar
+            // ingen användare själv.
             $ics = (new IcsDocument(
                 trans('notiser.calendar.name', ['container' => $container->name]),
                 trans('notiser.calendar.overdue_prefix'),
                 $occurrences,
+                $feed->user->today(),
             ))->render();
         } finally {
             App::setLocale($tidigare);

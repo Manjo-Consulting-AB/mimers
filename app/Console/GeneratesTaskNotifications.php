@@ -8,7 +8,6 @@ use App\Models\Notification;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
 use App\Support\Access\AccessLevel;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -136,12 +135,19 @@ class GeneratesTaskNotifications
      * `due_at` passerats är `task.overdue`, annars `task.due`. Båda kan
      * alltså skapas för samma förekomst över tid — först en `due` när den blir
      * synlig, sedan en `overdue` när datumet passerats — med två dedupe-nycklar.
+     *
+     * **Klockan är mottagarens, inte serverns** ([[ADR-0044 Användarens dag]]
+     * § Beslut 2): `due_at` jämförs mot `$user->today()`, samma dag som
+     * `scopeTodoFor()` valde ut förekomsten med. Serverns `Carbon::today()`
+     * ligger en dag efter hennes mellan midnatt och klockan två svensk tid,
+     * och gav då en `task.due` om en uppgift todo-listan redan visade som
+     * försenad.
      */
     private function notifyForOccurrence(ScheduleOccurrence $occurrence, User $user): void
     {
         $container = $occurrence->schedule->item->container;
 
-        $type = $occurrence->due_at->lessThan(Carbon::today())
+        $type = $occurrence->due_at->lessThan($user->today())
             ? Notification::TYPE_TASK_OVERDUE
             : Notification::TYPE_TASK_DUE;
 

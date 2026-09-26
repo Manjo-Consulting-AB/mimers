@@ -140,6 +140,32 @@ it('jobbet kört två gånger samma dygn ger fortfarande en notisrad och en leve
     expect(NotificationDelivery::query()->count())->toBe(1);
 });
 
+/*
+ * Klart när (issue 516): klockan 23:30 UTC räknas påminnelsefönstret från
+ * användarens dag, både vid kanten innanför och vid kanten utanför.
+ * Serverns datum är den 24:e, den svenska användarens är den 25:e, så
+ * fönstret är `due_at <= 2026-09-28` — en dag längre fram än serverns
+ * `Carbon::today()` gav. Två lån läggs ut på var sin sida om gränsen för att
+ * visa att det är just kanten som flyttats och inte filtret i sig
+ * ([[ADR-0044 Användarens dag]] § Beslut 2).
+ */
+it('räknar påminnelsefönstret från användarens dag klockan 23:30 UTC', function () {
+    Carbon::setTestNow('2026-09-24 23:30:00');
+
+    [$account, $user, $container, $item] = utlaningsnotisKontext();
+
+    expect($user->today()->toDateString())->toBe('2026-09-25')
+        ->and(Carbon::today()->toDateString())->toBe('2026-09-24');
+
+    $innanfor = utlaningsnotisLan($item, ['due_at' => '2026-09-28']);
+    utlaningsnotisLan($item, ['due_at' => '2026-09-29']);
+
+    utlaningsnotisKor();
+
+    expect(Notification::query()->count())->toBe(1);
+    expect(Notification::query()->firstOrFail()->subject_id)->toBe($innanfor->id);
+});
+
 it('en registrerad användare med låntagarens adress och utan åtkomst får noll notiser och noll mejl', function () {
     Mail::fake();
     Carbon::setTestNow('2026-09-04 12:00:00');

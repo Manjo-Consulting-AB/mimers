@@ -327,6 +327,28 @@ it('en försenad förekomst får prefix i SUMMARY', function () {
 });
 
 /*
+ * Klart när (issue 516): klockan 23:30 UTC sätter ICS-flödet försenad-
+ * prefixet på en förekomst vars `due_at` är feedens användares gårdag.
+ * Serverns datum är den 24:e, hennes är den 25:e, så prefixet följer hennes
+ * kalender och inte serverns klocka ([[ADR-0044 Användarens dag]] § Beslut 2).
+ */
+it('sätter försenad-prefixet mot feedens användares dag klockan 23:30 UTC', function () {
+    Carbon::setTestNow('2026-09-24 23:30:00');
+
+    [, $user, $container] = kalenderkonto('sv_SE');
+
+    expect($user->today()->toDateString())->toBe('2026-09-25')
+        ->and(Carbon::today()->toDateString())->toBe('2026-09-24');
+
+    [, $token] = kalenderfeedMedToken($container, $user);
+    kalenderuppgift($container, ['title' => 'Byt impeller', 'due_at' => '2026-09-24']);
+
+    $kropp = get("/kalender/{$token}.ics")->assertOk()->getContent();
+
+    expect($kropp)->toContain('SUMMARY:Overdue: Byt impeller');
+});
+
+/*
  * Kalendern är enspråkig. Två mottagare med olika locale i samma konto får
  * samma namn, och dokumentet blandar inte in ett svenskt produktnamn i den
  * engelska texten — `PRODID` bar `//SV` och "Kalenderfeed" fram till M13.

@@ -32,6 +32,14 @@ use Illuminate\Support\Collection;
  * (issue 36b § Beslut 6). UID:en måste vara stabil mellan hämtningar: samma
  * förekomst ger samma UID, annars visar klienten en ny händelse varje gång i
  * stället för att uppdatera den gamla (Beslut 4).
+ *
+ * **Dagen kommer in som argument, dokumentet hämtar ingen användare själv**
+ * ([[ADR-0044 Användarens dag]] § Beslut 2): vilken dag `due_at` jämförs mot
+ * för försenad-prefixet är FEEDENS användares dag, och den räknar
+ * CalendarFeedDownloadController med `$feed->user->today()` — samma anrop som
+ * löste upp omfånget. Hade dokumentet kallat `Carbon::today()` själv hade
+ * prefixet följt serverns klocka och sagt "försenad" om en uppgift som
+ * användaren ännu ser som dagens.
  */
 final class IcsDocument
 {
@@ -42,18 +50,19 @@ final class IcsDocument
 
     /**
      * @param  Collection<int, ScheduleOccurrence>  $occurrences  containerns öppna förekomster
+     * @param  Carbon  $today  feedens användares kalenderdag, se klassdocblocket
      */
     public function __construct(
         private readonly string $calendarName,
         private readonly string $overduePrefix,
         private readonly Collection $occurrences,
+        private readonly Carbon $today,
     ) {}
 
     public function render(): string
     {
         $host = (string) parse_url((string) config('app.url'), PHP_URL_HOST);
         $dtstamp = Carbon::now()->utc()->format('Ymd\THis\Z');
-        $idag = Carbon::today();
 
         $rader = [
             'BEGIN:VCALENDAR',
@@ -69,7 +78,7 @@ final class IcsDocument
 
         foreach ($this->occurrences as $occurrence) {
             $dueAt = $occurrence->due_at;
-            $summary = ($dueAt->lessThan($idag) ? $this->overduePrefix : '').$occurrence->schedule->title;
+            $summary = ($dueAt->lessThan($this->today) ? $this->overduePrefix : '').$occurrence->schedule->title;
 
             array_push($rader,
                 'BEGIN:VEVENT',
