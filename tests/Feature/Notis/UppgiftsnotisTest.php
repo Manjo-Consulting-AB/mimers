@@ -180,6 +180,36 @@ it('payloaden bär titel, item, container och datum — inga färdiga meningar',
     ]);
 });
 
+/*
+ * Klart när (issue 516): klockan 23:30 UTC får en användare i
+ * Europe/Stockholm en task.overdue för en förekomst vars `due_at` är hennes
+ * gårdag. Serverns datum är den 24:e, hennes är den 25:e — mot serverns
+ * `Carbon::today()` såg samma rad ut som dagens och gav en task.due, medan
+ * todo-listan redan visade den som försenad ([[ADR-0044 Användarens dag]]
+ * § Beslut 2). Jobbet körs två gånger för att visa att dedupliceringen står
+ * kvar oförändrad (Beslut 3).
+ */
+it('ger en försenad notis klockan 23:30 UTC när due_at är användarens gårdag', function () {
+    Carbon::setTestNow('2026-09-24 23:30:00');
+
+    [$account, $user, $container] = uppgiftsnotisBas();
+
+    // Kontots tidszon är Europe/Stockholm (Account::factory), användarens är
+    // NULL: reserven ger henne den svenska dagen.
+    expect($user->today()->toDateString())->toBe('2026-09-25')
+        ->and(Carbon::today()->toDateString())->toBe('2026-09-24');
+
+    $occurrence = uppgiftsnotisSkapa($container, $user, $account, 'Byt impeller', '2026-09-24');
+
+    app(GeneratesTaskNotifications::class)->handle();
+    app(GeneratesTaskNotifications::class)->handle();
+
+    expect(Notification::query()->count())->toBe(1);
+    $notis = Notification::query()->firstOrFail();
+    expect($notis->type)->toBe(Notification::TYPE_TASK_OVERDUE);
+    expect($notis->dedupe_key)->toBe('task.overdue:'.$occurrence->ulid.':'.$user->ulid);
+});
+
 it('samma förekomst får först en task.due och sedan en task.overdue', function () {
     [$account, $user, $container] = uppgiftsnotisBas();
     uppgiftsnotisSkapa($container, $user, $account, 'Byt impeller', '2026-09-02');

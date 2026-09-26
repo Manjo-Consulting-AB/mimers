@@ -8,7 +8,6 @@ use App\Models\Loan;
 use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -101,10 +100,17 @@ class GeneratesLoanNotifications
      * Hämtar och notifierar de utlåningar i $account som uppfyller Beslut 1.
      * SoftDeletes-scopen på Loan, Item och Container gäller genom
      * relationerna, så mjukraderade rader dyker aldrig upp här.
+     *
+     * **Fönstret räknas per mottagare** ([[ADR-0044 Användarens dag]] §
+     * Beslut 2): gränsen är `$user->today()` plus `remind_days_before`, inte
+     * serverns dag. Loopen går redan en användare i taget, så frågorna blir
+     * inte fler — bara rätt dag. Två medlemmar i samma konto kan alltså få
+     * olika svar under de timmar deras kalenderdatum skiljer sig, och det är
+     * rätt: de lever på var sin dag.
      */
     private function notifyLoansForAccount(Account $account, User $user): void
     {
-        $deadline = Carbon::today()->addDays((int) config('notiser.loan.remind_days_before'));
+        $deadline = $user->today()->addDays((int) config('notiser.loan.remind_days_before'));
 
         $loans = Loan::query()
             ->with('item.container.account')
