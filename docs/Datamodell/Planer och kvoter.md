@@ -119,7 +119,7 @@ Tre villkor som **måste** kontrolleras innan något raderas:
 
 **Aktiv prenumeration undantar alltid.** Hur sällan någon än loggar in.
 
-**Aktivitet räknas som API-anrop från vilken klient som helst**, inte bara inloggning.
+**Aktivitet räknas som aktivitet i webben eller API:et**, inte bara inloggning.
 
 Skicka fler än en varning. Radering av flera års dokumentation efter ett enda mejl som fastnade i skräpposten blir en riktigt dålig historia.
 

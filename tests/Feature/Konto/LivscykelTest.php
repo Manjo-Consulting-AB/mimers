@@ -14,8 +14,10 @@ use Illuminate\Support\Facades\Route;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\artisan;
+use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
+use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 29 · Kontolivscykeln, steg 12 och 15 månader — 29a. Se
@@ -280,6 +282,29 @@ it('ett stängt konto öppnas igen när en medlem återvänder', function () {
     // Medlemmen kommer tillbaka och läser en container. Läsning är aldrig
     // spärrad, så anropet går fram och UpdateLastActiveAt skriver ned tiden.
     getJson("/api/containers/{$container->ulid}", livscykelHeaders($medlem))->assertOk();
+
+    (new AdvancesAccountLifecycle)->handle();
+
+    $konto->refresh();
+    expect($konto->status)->toBe('active');
+    expect($konto->read_only_reason)->toBeNull();
+});
+
+it('ett stängt konto öppnas igen när en medlem öppnar en webbsida', function () {
+    withoutVite();
+
+    Carbon::setTestNow('2024-06-01 12:00:00');
+    [$konto, $medlem] = livscykelKontoMedMedlem();
+
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    (new AdvancesAccountLifecycle)->handle();
+    expect($konto->refresh()->status)->toBe('closed');
+
+    // Medlemmen öppnar en webbsida. Läsning är aldrig spärrad, så sidan
+    // renderas och UpdateLastActiveAt skriver ned tiden ur web gruppen —
+    // samma signal som API-anropet ovan ger (issue 141).
+    actingAs($medlem);
+    get('/dashboard')->assertOk();
 
     (new AdvancesAccountLifecycle)->handle();
 
