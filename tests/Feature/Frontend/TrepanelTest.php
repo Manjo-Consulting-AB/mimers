@@ -305,6 +305,19 @@ it('visar trädet ur issue 94 utan att ställa en egen fråga', function () {
         ->toContain(':nodes="structure"')
         ->toContain(':active-trail="activeTrail"');
 
+    // **Fällningen är trädLÄGETS och inte panelens** (issue 154). Panelen
+    // ritar hela trädet öppet — den är vänsterpanelen i trepanelslayouten,
+    // och en hopfälld gren där hade gömt strukturen på den breda skärmen —
+    // och väljaren i issue 153 ritar det av samma skäl öppet. Flaggan är
+    // därför opt-in med standarden `false`, och de två ytorna lämnar den
+    // orörd: hade de ärvt trädlägets fällning hade itemets vänsterpanel tyst
+    // blivit en annan yta.
+    expect($panelen)->not->toContain('collapsible');
+
+    expect(trepanelKod('components/ParentPicker.vue'))->not->toContain('collapsible');
+
+    expect($trädet)->toContain('collapsible: { type: Boolean, default: false }');
+
     Carbon::setTestNow();
 });
 

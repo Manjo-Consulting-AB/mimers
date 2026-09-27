@@ -68,3 +68,35 @@ export function itemFields(item, locale) {
         { key: 'position_note', value: item.position_note },
     ].filter((field) => field.value !== null && field.value !== undefined && field.value !== '');
 }
+
+/*
+ * Fälten itemets översikt sammanfattar i *Snabbfakta* (issue 154 ·
+ * [[M23 Mobilen och kartan]] § 154): tillverkare, modell och serienummer —
+ * uppgifterna om VAD itemet är, och de tre en läsare letar efter först.
+ *
+ * **Samma regel som `itemFields` och ingen andra.** Listan är ett urval UR
+ * `itemFields` och inte en avskrift av den: ett tomt fält utelämnas på samma
+ * sätt (`null`, `undefined` och tom sträng), och ordningen är `itemFields`
+ * egen — samma ordning som `[[Items och organisation]] § item` räknar
+ * kolumnerna i. En egen avskrift hade glidit ifrån den första så snart ett
+ * fält bytte namn eller formatering, och de två listorna hade visat olika
+ * värden för samma item.
+ *
+ * `serial_number` är inte ett artikelnummer ([[ADR-0041 Itemets vy]]
+ * § Beslut): serienumret identifierar exemplaret och hör därför till
+ * snabbfakta, medan leverantören och artikelnumret förblir strukna ur
+ * detaljrutan.
+ *
+ * **Informationsfliken ritar `itemFields` oförfiltrerat** (Show.vue), och dit
+ * leder *Visa alla fält*: de tre snabbfakta står alltså även där, vid sidan av
+ * inköpsdatum, garanti, placering och kategorin. Överlappningen är avsiktlig —
+ * översikten är urvalet läsaren möts av först, och etiketten lovar ALLA fält
+ * och inte de övriga. `itemQuickFacts` filtrerar därför ur översikten och
+ * lämnar `itemFields` orört; den som vill ha ytorna disjunkta får lova något
+ * annat i etiketten.
+ */
+const QUICK_FACT_KEYS = ['manufacturer', 'model', 'serial_number'];
+
+export function itemQuickFacts(item, locale) {
+    return itemFields(item, locale).filter((field) => QUICK_FACT_KEYS.includes(field.key));
+}

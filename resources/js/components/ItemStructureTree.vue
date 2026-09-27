@@ -1,5 +1,7 @@
 <script setup>
+import { ref } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Trädet ur issue 94, ritat av en komponent som renderar sig SJÄLV — se
@@ -48,6 +50,30 @@ import { Link } from '@inertiajs/vue3';
  * väljaren har ingen förekomst att markera och ingen adress att bygga — och
  * de är därför valfria. `trail` fylls ändå av rekursionen i båda lägena:
  * den är nodens nyckel i listan.
+ *
+ * **`collapsible` är ett TREDJE läge och inte en andra komponent** (issue 154
+ * · [[ADR-0046 Containerns karta]]). Trädläget i itemfliken ritar hela
+ * containern, och en container med sjuhundra items får inte stå mellan
+ * användaren och sidan: varje nod med barn får därför en fällknapp, och
+ * grenen under den ritas först när den är öppen. Panelen (issue 103) och
+ * föräldraväljaren (issue 153) är oförändrade — de ritar trädet öppet, och
+ * standarden är `false` med flit: en andra trädkomponent hade varit en andra
+ * regel om ordning, indrag och tomhet, och den hade glidit ifrån den här vid
+ * första ändringen.
+ *
+ * **Tillståndet bor hos den instans som ritar nivån.** Varje nivå är en egen
+ * instans av komponenten, och `open` håller den här nivåns noder — nycklade på
+ * hela ledet, samma sträng som `:key`, så samma item på två ställen fälls upp
+ * var för sig. Ingen propp och inget event uppåt: en karta i roten hade tvingat
+ * varje nivå att skicka sitt klick genom alla leden mellan.
+ *
+ * **Stängt är utgångsläget.** Rötterna syns, grenarna väntar — det är
+ * containerns översikt och inte dess innehåll, och den som vill se allt på en
+ * gång har listan ([[ADR-0046 Containerns karta]] § Motivering).
+ *
+ * Fällknappen är en `<button>` och ingenting annat: en gren är inte en adress,
+ * och `aria-expanded` bär tillståndet medan `aria-label` säger vad trycket GÖR
+ * — nodens namn står redan på raden bredvid. Träffytan är `min-h-11`.
  */
 const props = defineProps({
     /*
@@ -70,9 +96,33 @@ const props = defineProps({
     pick: { type: Boolean, default: false },
     /* ULID:n för det valda itemet i pick-läget, eller null för inget val. */
     selected: { type: String, default: null },
+    /*
+     * Sant i trädläget: varje nod med barn får en fällknapp och grenen under
+     * den ritas bara när den är öppen. Panelen och väljaren ritar trädet
+     * öppet och lämnar flaggan falsk.
+     */
+    collapsible: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['choose']);
+
+const { t } = useTranslations();
+
+/*
+ * Den här nivåns öppna noder, nycklade på ledet. Varje nivå är en egen instans
+ * — se docblocken — så tabellen behöver bara rymma de noder som ritas här.
+ */
+const open = ref({});
+
+function isOpen(node) {
+    return open.value[nodeTrail(node).join('.')] === true;
+}
+
+function toggle(node) {
+    const key = nodeTrail(node).join('.');
+
+    open.value[key] = ! isOpen(node);
+}
 
 /*
  * Ledet från roten NED till noden: förfäderna plus noden själv. Det är både
@@ -112,34 +162,72 @@ function isChosen(node) {
 <template>
     <ul class="flex flex-col gap-1">
         <li v-for="node in nodes" :key="nodeTrail(node).join('.')" class="flex flex-col gap-1">
-            <button
-                v-if="pick"
-                type="button"
-                :disabled="!node.can_create"
-                :aria-current="isChosen(node) ? 'true' : null"
-                class="inline-flex min-h-11 items-center rounded-control px-2 text-left text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
-                :class="isChosen(node)
-                    ? 'bg-accent-soft font-semibold text-accent'
-                    : 'text-ink-muted hover:bg-surface-sunken'"
-                @click="emit('choose', node)"
-            >
-                {{ node.name }}
-            </button>
+            <div class="flex items-center gap-1">
+                <!--
+                    Fällknappen (issue 154). Bara i trädläget, och bara på en
+                    nod som har något att fälla upp: en knapp på ett löv hade
+                    varit en knapp som inte gör något. Den står FÖRE ledet, så
+                    att raden börjar med grenen och inte med namnet — samma
+                    ordning som mockupen ritar den.
+                -->
+                <button
+                    v-if="collapsible && node.children.length > 0"
+                    type="button"
+                    :aria-expanded="isOpen(node) ? 'true' : 'false'"
+                    :aria-label="isOpen(node)
+                        ? t('item.structure.collapse', { name: node.name })
+                        : t('item.structure.expand', { name: node.name })"
+                    class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    @click="toggle(node)"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-4 w-4"
+                        :class="isOpen(node) ? 'rotate-90' : ''"
+                        aria-hidden="true"
+                    >
+                        <path d="m9 6 6 6-6 6"></path>
+                    </svg>
+                </button>
 
-            <Link
-                v-else
-                :href="nodeHref(node)"
-                :aria-current="isCurrent(node) ? 'true' : null"
-                class="inline-flex min-h-11 items-center rounded-control px-2 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                :class="isCurrent(node)
-                    ? 'bg-accent-soft font-semibold text-accent'
-                    : 'text-ink-muted hover:bg-surface-sunken'"
-            >
-                {{ node.name }}
-            </Link>
+                <button
+                    v-if="pick"
+                    type="button"
+                    :disabled="!node.can_create"
+                    :aria-current="isChosen(node) ? 'true' : null"
+                    class="inline-flex min-h-11 items-center rounded-control px-2 text-left text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                    :class="isChosen(node)
+                        ? 'bg-accent-soft font-semibold text-accent'
+                        : 'text-ink-muted hover:bg-surface-sunken'"
+                    @click="emit('choose', node)"
+                >
+                    {{ node.name }}
+                </button>
 
+                <Link
+                    v-else
+                    :href="nodeHref(node)"
+                    :aria-current="isCurrent(node) ? 'true' : null"
+                    class="inline-flex min-h-11 items-center rounded-control px-2 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    :class="isCurrent(node)
+                        ? 'bg-accent-soft font-semibold text-accent'
+                        : 'text-ink-muted hover:bg-surface-sunken'"
+                >
+                    {{ node.name }}
+                </Link>
+            </div>
+
+            <!--
+                Grenen under noden, och bara när den är öppen i trädläget.
+                Löv ritar ingenting: ett barnlöst led har inget att fälla upp.
+            -->
             <ItemStructureTree
-                v-if="node.children.length > 0"
+                v-if="node.children.length > 0 && (! collapsible || isOpen(node))"
                 class="ml-6 border-l border-border pl-4"
                 :nodes="node.children"
                 :container-ulid="containerUlid"
@@ -147,6 +235,7 @@ function isChosen(node) {
                 :active-trail="activeTrail"
                 :pick="pick"
                 :selected="selected"
+                :collapsible="collapsible"
                 @choose="emit('choose', $event)"
             />
         </li>

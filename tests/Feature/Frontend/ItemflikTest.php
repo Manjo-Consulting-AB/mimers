@@ -21,19 +21,20 @@ use function Pest\Laravel\withoutVite;
  * **Filen prövar en omfördelning och ett krav.** Omfördelningen är att de sex
  * propar som i dag renderas på en enda lång sida — fälten, relationerna,
  * bilagorna, schemana, utlåningen och taggarna — nu ligger i var sin flik.
- * "Fälten" ur de sex proparna är översiktsfliken, och anteckningen och
- * beskrivningen står överst på den med fältlistan under sig. Kravet är att
- * **utlåningen får en flik trots att bilden inte ritar någon**: en yta ingen
- * hittar är samma sak som en yta som inte finns, och det är 62a:s och 67c:s
- * egen motivering.
+ * Kravet är att **utlåningen får en flik trots att bilden inte ritar någon**:
+ * en yta ingen hittar är samma sak som en yta som inte finns, och det är
+ * 62a:s och 67c:s egen motivering.
  *
- * **Raden hade sex flikar och har sju sedan issue 116.** Den sjunde är
- * historiken — bildens sista flik, den som issue 102 lämnade utanför därför
- * att `audit_log` ännu inte instrumenterats. Den är det ENDA undantaget från
- * satsen att ingen ny ändpunkt tillkommer: hennes rader är en ny prop ur
- * App\Http\Controllers\ItemController::show(), och den hämtas bara när fliken
- * är aktiv (HistorikflikTest § *"itemets rader hämtas bara när
- * historikfliken är aktiv"*).
+ * **Raden hade sex flikar, fick sju i issue 116 och åtta i issue 154.**
+ * Historiken är den som kom med 116 — bildens sista flik, den som issue 102
+ * lämnade utanför därför att `audit_log` ännu inte instrumenterats — och hon
+ * är det ENDA undantaget från satsen att ingen ny ändpunkt tillkommer: hennes
+ * rader är en ny prop ur App\Http\Controllers\ItemController::show(), och den
+ * hämtas bara när fliken är aktiv (HistorikflikTest § *"itemets rader hämtas
+ * bara när historikfliken är aktiv"*). **Informationsfliken är den åttonde och
+ * kostar ingenting**: den ritar samma `item`-prop som översikten, och fälten
+ * flyttade dit från översikten i issue 154 — det är därför proven om fälten
+ * nedanför byter flik och inte förväntan.
  *
  * **`history` är därför inte längre en av bildens GLOBALa rader**, och det är
  * en ändring i det här provet: listan över rader som inte får bli flikar
@@ -275,12 +276,18 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         // namn rubriken bär, och det som säger vilket item raden hör till.
         ->toContain(':label="item.name"');
 
-    // Sju flikar: översikten är fältens flik, och historiken (issue 116) är
-    // den sjunde och sista. Bildens sju minus kostnaden, plus utlåningen —
-    // och taggarna, som inte heller har någon rad i bilden. Kostnaden har
-    // ingen flik: den väntar på trepanelslayouten (issue 103).
+    // Åtta flikar sedan issue 154: informationsfliken är fältens, och
+    // historiken (issue 116) är den sista. Bildens sju minus kostnaden, plus
+    // utlåningen — och taggarna, som inte heller har någon rad i bilden.
+    // Kostnaden har ingen flik: den väntar på trepanelslayouten (issue 103).
+    //
+    // **Informationsfliken kom med issue 154** och är bildens *Detaljer* — på
+    // mobilmockupen *Information*, och den flik *Visa alla fält* öppnar. Den
+    // ligger näst efter översikten, i bildens ordning, och den är därför den
+    // enda ändringen i den här listan sedan issue 116.
     expect(itemflikNycklar($vy))->toBe([
         'overview',
+        'information',
         'relations',
         'attachments',
         'schedules',
@@ -294,6 +301,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
     // fliken och rubriken strax under den ska inte kunna säga olika saker.
     expect(itemflikEtiketter($vy))->toBe([
         'item.show.overview',
+        'item.show.information',
         'item.links.heading',
         'item.attachment.heading',
         'item.schedule.heading',
@@ -327,7 +335,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     preg_match_all("/tabHref\('(\w+)'\)/", $bar, $träffar);
 
-    expect($träffar[1])->toBe(['relations', 'attachments', 'schedules', 'loans', 'tags', 'history']);
+    expect($träffar[1])->toBe(['information', 'relations', 'attachments', 'schedules', 'loans', 'tags', 'history']);
 
     // Och varje flik svarar. Ingen ny ändpunkt: adresserna är itemets egen
     // rutt med en querysträng på, och kontrollern är orörd av issuen.
@@ -353,15 +361,18 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
  * felet den här tabellen finns för att fånga. Att den står här i stället för i
  * ett eget prov är med flit: det är samma påstående.
  *
- * Fälten hör till översikten och inte till en egen detaljflik: raden har
- * ingen flik som bara bär två stycken text (arkitektens svar på punkt 4).
+ * **Fälten flyttade till informationsfliken i issue 154**, och den flytten är
+ * det här provets ärende i den här sessionen: en yta som byter flik är precis
+ * vad tabellen finns för att fånga, och den som blev kvar på översikten —
+ * snabbfakta — prövas där den nu står.
  */
 it('alla sex befintliga propar når sin flik', function () {
     $vy = itemflikKod('pages/Containers/Items/Show.vue');
 
     // Panel för panel: markören är den prop eller det anrop som bär ytan.
     $ytor = [
-        'overview' => ['v-for="field in fields"', 'field.value'],
+        'overview' => ['<ItemQuickFacts', ':item="item"', "t('item.show.all_fields')"],
+        'information' => ['v-for="field in fields"', 'field.value'],
         'relations' => ['<ItemLinkSection', ':links="links"', ':counterparts="counterparts"'],
         'attachments' => ['<ItemAttachmentSection', ':attachments="attachments"', ':variants="variants"'],
         'schedules' => ['<ScheduleListSection', ':schedules="schedules"', ':open-occurrences="openOccurrences"'],
@@ -401,6 +412,14 @@ it('alla sex befintliga propar når sin flik', function () {
     // props — se ItemController::show().
     expect($vy)->toContain("import { itemFields } from '../../../components/itemPresentation.js'")
         ->toContain('itemFields(props.item, locale.value)');
+
+    // *Visa alla fält* står på översikten och pekar på informationsflikens
+    // EGEN adress — hämtad ur `tabs` och inte byggd en gång till — så raden
+    // bär den aktuella förekomsten precis som flikraden gör (issue 154).
+    expect(itemflikPaneler($vy)['overview'])->toContain('t(\'item.show.all_fields\')')
+        ->toContain(':href="informationHref"');
+
+    expect($vy)->toContain('tabs.value.find((tab) => tab.key === \'information\')?.href');
 });
 
 /*
@@ -423,6 +442,10 @@ it('räknar raderna på fliken och bär inget tal där ingen lista finns', funct
     expect($rader['overview'])->toContain('count: null');
 
     $listor = [
+        // Informationsfliken ritar fältraderna och kategorin, och räknaren är
+        // deras antal — `fields` ur itemPresentation.js plus kategorin, som är
+        // ett strukturerat fält och ingen tagg (issue 154).
+        'information' => ['fields.value.length', 'categoryName'],
         'relations' => ['props.links'],
         'attachments' => ['props.attachments'],
         'schedules' => ['props.schedules'],
@@ -588,16 +611,20 @@ it('står anteckningen och beskrivningen på översiktsfliken', function () {
         ->toContain('item.notes')
         ->toContain("t('item.show.notes')");
 
-    // Och fältlistan står på SAMMA flik, under dem. Ingen av de två är en rad
-    // bland tillverkare och modell: listan ritar `fields` och kategorin, och
-    // ingenting annat.
-    expect($paneler['overview'])->toContain('v-for="field in fields"');
+    // **Fältlistan står på informationsfliken sedan issue 154** — det är
+    // bildens *Information*, och dit leder *Visa alla fält*. Översikten bär
+    // snabbfakta och de två styckena; fälten bor på ett ställe och inte i två
+    // avskrifter.
+    expect($paneler['information'])->toContain('v-for="field in fields"');
+
+    expect(str_contains($paneler['overview'], 'v-for="field in fields"'))->toBeFalse(
+        'fältlistan står både på översikten och på informationsfliken',
+    );
+
     expect(itemflikNycklar($vy))->not->toContain('details');
 
     foreach (['item.description', 'item.notes'] as $falt) {
-        $bit = substr($paneler['overview'], (int) strpos($paneler['overview'], 'v-for="field in fields"'));
-
-        expect(str_contains($bit, $falt))->toBeFalse("{$falt} står i fältlistan");
+        expect(str_contains($paneler['information'], $falt))->toBeFalse("{$falt} står i fältlistan");
     }
 
     // Regeln bor i modulen. Ett item med både beskrivning och anteckning ger

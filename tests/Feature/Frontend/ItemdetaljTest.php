@@ -90,6 +90,23 @@ function itemdetaljMottagare(Container $container, ?Item $item = null, string $n
 }
 
 /**
+ * Källkoden med kommentarer borta — samma tre slag som GenomgangTest rensar.
+ *
+ * Mallen går inte att köra och en webbläsare finns inte i sviten; det som går
+ * att läsa är formen. Docblocken är svenska med flit (AGENTS.md § Språk i
+ * koden), och en regel som letar efter en markup ska inte kunna nöjas av en
+ * mening i ett docblock.
+ */
+function itemdetaljKomponent(string $sokvag): string
+{
+    $kod = File::get(resource_path("js/{$sokvag}"));
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    return (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
+}
+
+/**
  * Kör en snutt mot resources/js/components/itemPresentation.js i node och
  * returnerar det som skrivs på stdout.
  *
@@ -364,6 +381,109 @@ it('utelämnar tomma fält i stället för att hitta på ett värde', function (
     $rader = itemdetaljKör("process.stdout.write(JSON.stringify(m.itemFields({$item}, 'sv-SE')));");
 
     expect($rader)->toBe('[{"key":"manufacturer","value":"Yanmar"}]');
+});
+
+/*
+ * Klart när: itemets översikt visar bara de snabbfakta som har värde, och
+ * ingen rubrik när alla saknas.
+ *
+ * **Fälten flyttade till informationsfliken i issue 154**, och översikten
+ * sammanfattar dem i stället: `manufacturer`, `model` och `serial_number` —
+ * uppgifterna om VAD itemet är — och bara de som har ett värde. Urvalet bor i
+ * `itemQuickFacts()` i resources/js/components/itemPresentation.js och prövas
+ * därför i node på exakt den modul klienten importerar.
+ *
+ * Den andra halvan är rubriken och är MALLENS: raden över en tom lista hade
+ * sagt att något fattas, och fälten är frivilliga ([[ADR-0041 Itemets vy]]
+ * § Beslut: ett tomt fält utelämnas, aldrig påhittat). Rubriken står därför
+ * innanför komponentens egen `v-if`, och komponenten ritar ingenting alls när
+ * inget av de tre fälten är satt.
+ */
+it('visar bara de snabbfakta som har värde och ingen rubrik när alla saknas', function () {
+    $item = json_encode([
+        'description' => 'En diesel.',
+        'notes' => 'Bytte impeller 2024.',
+        'manufacturer' => 'Yanmar',
+        'model' => '3YM30',
+        'serial_number' => null,
+        // Fälten som INTE är snabbfakta: de hör till informationsfliken, och
+        // att de har värden här är hela beviset — hade de varit kvar i urvalet
+        // hade de synts i svaret.
+        'purchased_at' => '2024-05-17',
+        'warranty_until' => '2027-05-17',
+        'position_note' => 'Bakom panelen',
+    ], JSON_UNESCAPED_UNICODE);
+
+    $rader = itemdetaljKör("process.stdout.write(JSON.stringify(m.itemQuickFacts({$item}, 'sv-SE')));");
+
+    expect($rader)->toBe('[{"key":"manufacturer","value":"Yanmar"},{"key":"model","value":"3YM30"}]');
+
+    // Ett item utan de tre fälten ger en tom lista och inte en rad med tomma
+    // värden — samma regel som `itemFields`, och det som gör att rubriken kan
+    // villkoras på listans längd.
+    $utan = json_encode([
+        'manufacturer' => null,
+        'model' => '',
+        'serial_number' => null,
+        'purchased_at' => '2024-05-17',
+    ], JSON_UNESCAPED_UNICODE);
+
+    expect(itemdetaljKör("process.stdout.write(JSON.stringify(m.itemQuickFacts({$utan}, 'sv-SE')));"))
+        ->toBe('[]');
+
+    // Och komponenten ritar rubriken innanför sin egen grind: en rubrik över
+    // en tom lista når aldrig fram.
+    $komponent = itemdetaljKomponent('components/ItemQuickFacts.vue');
+
+    expect($komponent)->toMatch('/<section v-if="facts\.length > 0">/')
+        ->toContain("t('item.show.quick_facts')")
+        ->toContain('v-for="fact in facts"')
+        ->toContain('{{ fact.value }}');
+});
+
+/*
+ * Klart när: *Visa alla fält* leder till informationsfliken.
+ *
+ * Raden står på översikten (issue 154), och adressen är informationsflikens
+ * EGEN — hämtad ur flikraden i Show.vue och inte byggd en gång till, så den
+ * bär den aktuella förekomsten precis som flikarna gör (`?path=` före `tab=`,
+ * se ItemflikTest). Provet följer raden hela vägen: ur vyns `tabs`, ut i
+ * mallen, och sedan mot servern — en rad som pekar på en flik som inte svarar
+ * är en död länk.
+ */
+it('låter Visa alla fält leda till informationsfliken', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemdetaljKontext();
+
+    $motorn = itemdetaljItem($container, 'Motorn', $anvandare, [
+        'manufacturer' => 'Yanmar',
+        'purchased_at' => '2024-05-17',
+    ]);
+
+    $vy = itemdetaljKomponent('pages/Containers/Items/Show.vue');
+
+    expect($vy)->toContain("t('item.show.all_fields')")
+        ->toContain(':href="informationHref"')
+        // Adressen kommer ur flikraden: informationsfliken finns där, och
+        // raden bygger ingen egen sträng.
+        ->toContain('const informationHref = computed(')
+        ->toContain("tab.key === 'information'");
+
+    // Och fliken svarar, med fältraderna på plats: fältet som inte är
+    // snabbfakta står här, och det gör det på samma sida som översikten.
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items/{$motorn->ulid}?tab=information")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Items/Show')
+            ->where('item.purchased_at', '2024-05-17')
+        );
+
+    // Översikten är frånvaron av `tab` och svarar som förut.
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}/items/{$motorn->ulid}")
+        ->assertOk();
 });
 
 /*

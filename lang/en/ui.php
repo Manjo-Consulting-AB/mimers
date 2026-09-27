@@ -1881,16 +1881,36 @@ return [
         ],
 
         'show' => [
-            // The one tab with no section of its own to borrow a word from,
-            // see issue 102 · [[M17 Designsystemet]] § 102. The other five
-            // read the heading of the section they carry — one surface, one
-            // word, and no second place for *Relations* to drift from.
+            // The tab with no section of its own to borrow a word from, see
+            // issue 102 · [[M17 Designsystemet]] § 102. The other six read the
+            // heading of the section they carry — one surface, one word, and
+            // no second place for *Relations* to drift from.
             //
             // `overview` is the item's own text and the resting tab: it is
-            // written without `tab`, and it is also the mockup's *Detaljer* —
-            // the rows `itemFields` returns stand under the two paragraphs,
-            // on this tab and on no other.
+            // written without `tab`, and it carries the two paragraphs and
+            // *Quick facts*. The rows `itemFields` returns stood here until
+            // issue 154 and stand on the information tab now.
             'overview' => 'Overview',
+
+            // The second tab, and the one *Show all fields* opens (issue 154 ·
+            // [[M23 Mobilen och kartan]] § 154). The mobile mockup draws the
+            // item as *Overview · Information · Documents*, and the word is
+            // the mockup's: the tab carries the field rows the overview
+            // summarises in *Quick facts*.
+            'information' => 'Information',
+            // The item's summary on the overview: manufacturer, model and
+            // serial number — the three fields a reader looks for first, and
+            // only the ones that carry a value. The heading is not drawn when
+            // none of them does.
+            'quick_facts' => 'Quick facts',
+            // The row that opens the information tab. Not a tab of its own:
+            // the fields live there once, and this is the way to them.
+            'all_fields' => 'Show all fields',
+            // The information tab with no field filled in at all. The row
+            // says the item is unwritten and not that the page is broken —
+            // the tab is reached by pressing a row, and an empty panel there
+            // had said the same thing as an empty overview had.
+            'information_empty' => 'No fields are filled in for this item yet.',
 
             'description' => 'Description',
             // Issue 96. `description` says what the item IS, `notes` what the
@@ -1960,6 +1980,31 @@ return [
         // are deliberately indistinguishable (issue 73 decision 6).
         'structure' => [
             'heading' => 'Structure',
+            'tree' => 'Tree',
+            // The disclosure in the tree, and it is the ACTION and not the
+            // node: an icon-only button needs a name that says what a press
+            // does, and the node's own name is already on the row beside it
+            // (issue 154 · [[ADR-0046 Containerns karta]]).
+            'expand' => 'Expand :name',
+            'collapse' => 'Collapse :name',
+        ],
+
+        // The switch on the container's item tab, see issue 154 ·
+        // [[ADR-0046 Containerns karta]]. *List* is the tab's list as it was
+        // and stays the default; *Tree* is the whole container drawn as the
+        // structure tree. *Map* is the third mode in the ADR and is NOT here:
+        // it arrives with the map itself, in § 157, and until then the mode is
+        // not in the switch at all.
+        //
+        // `label` is the switch's accessible name and not a visible word: the
+        // two modes name themselves, and a third row saying "View" above two
+        // rows would be a heading over a two-word list. *List* and *Tree* are
+        // the product's words for the two modes ([[ADR-0032 Produktens ord]]),
+        // and `tree` deliberately reads the same word as the disclosure in the
+        // structure panel: it is the same tree, seen as a whole surface.
+        'view' => [
+            'label' => 'Item view',
+            'list' => 'List',
             'tree' => 'Tree',
         ],
 
