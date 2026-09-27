@@ -28,6 +28,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * skickar en nyckel och ingen färdig mening ([[ADR-0021 Frontendteknik]]).
  * Nycklarna står i den ordning CreateTarget sänder dem, och det är ADR:ens
  * ordning: *Item under*, *Relation*, *Bild eller dokument*, *Uppgift*.
+ *
+ * **Rubriken kan namnges av anroparen** (issue 156 · [[M23 Mobilen och kartan]]
+ * § 156). Skalets meny heter *Create* och ingenting mer — den hör till sidan
+ * man står på — men fokuskartans meny hör till EN nod: raderna under rubriken
+ * (*Item under*, *Relation*) är relativa till den noden, och en meny som inte
+ * säger vilken nod den gäller är en meny man gissar på. `heading` bär därför
+ * nodens namn, och standarden är skalets ord — rubriken är en prop och ingen
+ * egen sträng i den här filen.
  */
 defineProps({
     /* Sant medan menyn är öppen. AppLayout äger tillståndet. */
@@ -36,6 +44,8 @@ defineProps({
     trigger: { type: Object, default: null },
     /* `[{ key, href }]` ur App\Support\Frontend\CreateTarget. */
     rows: { type: Array, required: true },
+    /* Arkets rubrik, eller null för skalets ord. */
+    heading: { type: String, default: null },
 });
 
 const emit = defineEmits(['close']);
@@ -47,7 +57,7 @@ const { t } = useTranslations();
     <UiSheet
         :open="open"
         :trigger="trigger"
-        :heading="t('create.heading')"
+        :heading="heading ?? t('create.heading')"
         @close="emit('close')"
     >
         <ul class="flex flex-col">

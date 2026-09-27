@@ -739,6 +739,68 @@ it('hämtar fällknappens strängar ur ui.php', function () {
 });
 
 /*
+ * Fokuskartan, se issue 156 · [[M23 Mobilen och kartan]] § 156 och
+ * resources/js/components/FocusMap.vue, FocusMapNode.vue och
+ * ItemMapPanel.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här, så en mening som läggs till i en komponent och glöms i
+ * katalogen faller. Det betyder något särskilt för två av dem:
+ *
+ *   - **Teckenförklaringen** har tre sorter, och `translate()` skriver NYCKELN
+ *     SJÄLV när uppslaget misslyckas — en glömd nyckel står alltså som
+ *     `item.map.kind.parent` i förklaringen i stället för *Parent*.
+ *   - **Plusknappen på en nod** ritar ett plustecken och ingenting mer, så
+ *     `item.map.node_menu` är det ENDA en skärmläsare hör. Den fylls med
+ *     nodens namn, och provet prövar att parametern finns i meningen.
+ *
+ * Två av uppslagen är BYGGDA — ``t(`item.map.kind.${kind}`)`` — och fångas
+ * därför inte av mönstret; de tre slagen räknas upp uttryckligen, och orden
+ * prövas ordagrant, för det är de sorterna issuen namnger.
+ */
+it('hämtar fokuskartans strängar ur ui.php', function () {
+    $nycklar = [];
+
+    foreach ([
+        'js/components/FocusMap.vue',
+        'js/components/FocusMapNode.vue',
+        'js/components/ItemMapPanel.vue',
+        // Växelns eget namn slås upp av relationsfliken, som äger läget, och
+        // lägenas etiketter av vyn, som bygger deras adresser.
+        'js/components/ItemLinkSection.vue',
+        'js/pages/Containers/Items/Show.vue',
+    ] as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    expect($nycklar)->toContain('item.map.heading')
+        ->toContain('item.map.view.label')
+        ->toContain('item.map.view.focus')
+        ->toContain('item.map.view.list')
+        ->toContain('item.map.node_menu')
+        ->toContain('item.map.more');
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Teckenförklaringens tre sorter, ordagrant, och växelns två lägen.
+    expect(Lang::get('ui.item.map.kind.parent', [], 'en'))->toBe('Parent')
+        ->and(Lang::get('ui.item.map.kind.child', [], 'en'))->toBe('Child')
+        ->and(Lang::get('ui.item.map.kind.related', [], 'en'))->toBe('Related')
+        ->and(Lang::get('ui.item.map.view.list', [], 'en'))->toBe('List')
+        ->and(Lang::get('ui.item.map.view.focus', [], 'en'))->toBe('Focus');
+
+    // *+N till* bär talet, och nodens knapp namnger noden.
+    expect(Lang::get('ui.item.map.more', ['count' => 2], 'en'))->toBe('+2 more')
+        ->and(Lang::get('ui.item.map.node_menu', ['name' => 'Motor'], 'en'))->toBe('Create in Motor');
+});
+
+/*
  * Lösenordsformuläret, se issue 129 och 140 och
  * resources/js/components/PasswordForm.vue.
  *

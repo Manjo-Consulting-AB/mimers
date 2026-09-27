@@ -402,6 +402,23 @@ class ItemController extends Controller
      * att slippa. Ingen räknare följer med, och ingen markering av vad som
      * filtrerats bort (issue 73 § Beslut 6).
      *
+     * **Fokuskartan får en prop och ingen egen fråga** (issue 156 ·
+     * [[M23 Mobilen och kartan]] § 156). `map` är itemet i mitten, föräldrarna
+     * ovanför, barnen under och de relaterade på sidorna — noderna ÄR
+     * App\Actions\Item\ListItemLinks svar, så en motpart utanför omfånget
+     * finns inte i kartan heller (issue 73 § Beslut 7). Varje nod bär dessutom
+     * sin egen plusmeny, ur App\Support\Frontend\CreateTarget::forNode(): de
+     * rader anroparen får använda PÅ DEN NODEN, prövade mot samma policyer som
+     * rutterna. Noderna ligger BREDVID resursen, samma linje som `paths` och
+     * `structure`: `ItemResource` är `/api`:s format och har inte bett om
+     * fältet.
+     *
+     * **Relationsflikens läge ligger i querysträngen** (issue 156): `?view=`
+     * väljer *Fokus* eller *Lista* under `md:`, och proppen `linkView` är
+     * serverns läsning av samma sträng — den väljer vilken yta fliken visar
+     * och ingenting i svaret. Samma konstruktion som `?view=` i itemfliken
+     * (issue 154) och `?path=` i issue 95.
+     *
      * **`max_upload_bytes` är det TEKNISKA taket och en prop** (issue 60b
      * § Beslut 5). Det är samma tal som `StoreAttachmentRequest` prövar med
      * `max:` — vyn avvisar en för stor fil innan bytena lämnar webbläsaren,
@@ -426,6 +443,20 @@ class ItemController extends Controller
         $user = $request->user();
 
         $links = $listItemLinks->handle($user, $container, $item);
+
+        // Kandidaterna: containerns items inom anroparens omfång, EN fråga
+        // (App\Actions\Item\ListItems). Både motpartsväljaren och kartans
+        // noder väljer ur samma lista — noderna ÄR redan filtrerade av
+        // App\Actions\Item\ListItemLinks, och uppslaget här gäller deras
+        // menyrader (issue 156). Ingen ny fråga för kartan: den läser samma
+        // svar som väljaren redan bad om.
+        //
+        // `container` sätts ur den redan hämtade containern, så att
+        // `ItemPolicy::allows()` slipper slå upp den per nod — policyn läser
+        // `$item->container->account`, och kontot är laddat ovan. Samma
+        // resonemang som i `counterparts()` och `creatable()`.
+        $candidates = $listItems->handle($user, $container)
+            ->each(fn (Item $candidate) => $candidate->setRelation('container', $container));
 
         // Förekomsterna i strukturen (issue 95 · [[ADR-0041 Itemets vy]]
         // § Beslut): alla vägar från en rot ned till itemet, i serverns
@@ -533,6 +564,11 @@ class ItemController extends Controller
         $path = $request->query('path');
         $path = is_string($path) ? $path : null;
 
+        // Relationerna i sitt resursformat, EN gång: `links`-proppen grupperar
+        // de här raderna och fokuskartan bygger sina noder ur dem (issue 156),
+        // så relationsfliken och kartan bevisligen ritar samma lista.
+        $linkRows = ItemLinkResource::collection($links)->resolve($request);
+
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
@@ -620,8 +656,22 @@ class ItemController extends Controller
             // mot samma URL vore i bästa fall tom. Flaggan räknas här och
             // läses aldrig ur window.location i klienten.
             'inlineEnabled' => FileOrigin::host() !== null,
-            'links' => $this->groupLinks(ItemLinkResource::collection($links)->resolve($request)),
-            'counterparts' => $this->counterparts($user, $container, $item, $links, $listItems),
+            'links' => $this->groupLinks($linkRows),
+            'counterparts' => $this->counterparts($user, $item, $links, $candidates),
+
+            // Fokuskartan (issue 156 · [[M23 Mobilen och kartan]] § 156).
+            // Noderna ÄR relationerna — App\Actions\Item\ListItemLinks — och
+            // uppslaget mot kandidaterna ger varje nods plusknapp dess rader.
+            // Ligger BREDVID resursen och inte i den, samma linje som
+            // `paths`, `structure` och `counterparts`: `ItemResource` är
+            // `/api`:s format och har inte bett om fältet.
+            'map' => $this->map($user, $container, $item, $linkRows, $candidates, $path, $createTarget),
+
+            // Relationsflikens läge (issue 156): *Lista* är förvalet och
+            // *Fokus* är kartan. Läget står i querysträngen och ingenstans
+            // annat — samma konstruktion som `?view=` i itemfliken (issue
+            // 154) och `?path=` i issue 95.
+            'linkView' => $this->linkView($request),
 
             // Är itemet en av användarens favoriter? Se issue 105 och
             // [[ADR-0042 Designsystemet]] § Konsekvenser. Frågan är per
@@ -1366,15 +1416,18 @@ class ItemController extends Controller
      * och den prövar samma sak igen — en kandidat som slinker igenom här
      * nekas där.
      *
-     * **Noll extra frågor per kandidat.** `container` sätts ur den redan
-     * hämtade containern, så ItemPolicy slipper slå upp den per rad, och
+     * **Kandidaterna kommer färdiga och hämtas inte här** (issue 156).
+     * `show()` läser dem en gång ur App\Actions\Item\ListItems, för
+     * fokuskartans noder väljer ur samma lista — `container` är redan satt på
+     * dem, så ItemPolicy slipper slå upp den per rad, och
      * App\Actions\Access\ResolveItemScope är memoiserad per
      * `{user}:{container}` — samma resonemang som `can`-flaggorna i klassen.
      *
      * @param  Collection<int, ItemLink>  $links
+     * @param  Collection<int, Item>  $candidates  containerns items inom omfånget
      * @return list<array{ulid: string, name: string}>
      */
-    private function counterparts(?User $user, Container $container, Item $item, Collection $links, ListItems $listItems): array
+    private function counterparts(?User $user, Item $item, Collection $links, Collection $candidates): array
     {
         // $user är nollbar därför att Request::user() är det; rutten ligger
         // bakom `auth`, så i drift är svaret aldrig tomt av den anledningen.
@@ -1384,14 +1437,122 @@ class ItemController extends Controller
 
         $linked = $links->pluck('counterpart_ulid')->all();
 
-        return $listItems->handle($user, $container)
+        return $candidates
             ->reject(fn (Item $candidate): bool => $candidate->id === $item->id
                 || in_array($candidate->ulid, $linked, true))
-            ->each(fn (Item $candidate) => $candidate->setRelation('container', $container))
             ->filter(fn (Item $candidate): bool => Gate::forUser($user)->allows('update', $candidate))
             ->map(fn (Item $candidate): array => ['ulid' => $candidate->ulid, 'name' => $candidate->name])
             ->values()
             ->all();
+    }
+
+    /**
+     * Fokuskartans noder (issue 156 · [[M23 Mobilen och kartan]] § 156).
+     *
+     * **Noderna är relationslistan och ingen ny fråga.** Varje nod kommer ur
+     * App\Actions\Item\ListItemLinks — samma svar som relationsfliken ritar —
+     * så en motpart utanför anroparens omfång finns inte här heller: den
+     * föll bort i Actionens namnfråga och lämnar varken namn, ULID eller en
+     * räknare efter sig (issue 73 § Beslut 7). Vyn lägger ingenting ovanpå,
+     * och det finns därför ingen `v-if` i kartan som gömmer en nod.
+     *
+     * **Ordningen är Actionens**, alltså motpartens namn stigande inom varje
+     * grupp. Kartan sorterar inte om något: den fasta layouten ritar de
+     * första noderna i den ordning de kom, och en andra sortering hade gjort
+     * "den första" till två olika noder på två ytor.
+     *
+     * **Varje nod bär sin egen plusmeny.** Raderna är
+     * App\Support\Frontend\CreateTarget::forNode() prövad på NODEN, så en nod
+     * anroparen bara får läsa ritas utan plus, och en `create`-mottagare får
+     * *Item under* men inte *Relation* (som kräver `update` i båda ändar).
+     *
+     * **Itemet självt är noden i mitten**, och den är ingen länk: den ÄR
+     * sidan man står på. Den bär `href => null` och ritas som aktuell i
+     * stället.
+     *
+     * **Noderna byggs ur samma radform som `links`-proppen**, alltså ur
+     * `ItemLinkResource` och inte ur modellerna: de tre minnesattributen
+     * (`counterpart_ulid`, `counterpart_name`, `relation_to_item`) är otypade
+     * och läses på ett ställe i klassen. Kartan och relationsfliken ritar
+     * därmed bevisligen samma lista.
+     *
+     * @param  list<array{item: array{ulid: string, name: string}, relation: string}>  $links
+     * @param  Collection<int, Item>  $candidates
+     * @return array{self: array<string, mixed>, parent: list<array<string, mixed>>, child: list<array<string, mixed>>, related: list<array<string, mixed>>}
+     */
+    private function map(?User $user, Container $container, Item $item, array $links, Collection $candidates, ?string $path, CreateTarget $createTarget): array
+    {
+        $byUlid = $candidates->keyBy('ulid');
+
+        $groups = ['parent' => [], 'child' => [], 'related' => []];
+
+        foreach ($links as $link) {
+            $ulid = $link['item']['ulid'];
+
+            $groups[$link['relation']][] = [
+                'ulid' => $ulid,
+                'name' => $link['item']['name'],
+                'href' => route('containers.items.show', [$container, $ulid], absolute: false),
+                'rows' => $this->nodeRows($user, $container, $byUlid->get($ulid), $createTarget),
+            ];
+        }
+
+        return [
+            'self' => [
+                'ulid' => $item->ulid,
+                'name' => $item->name,
+                'href' => null,
+                'rows' => $this->nodeRows($user, $container, $item, $createTarget, $path),
+            ],
+            ...$groups,
+        ];
+    }
+
+    /**
+     * Plusknappens rader för EN nod, eller en tom lista: noden ritas utan
+     * plus när ingen av policyerna tillåter något ([[ADR-0048 Mobilen och
+     * plusknappen]] § 2 — blir menyn tom visas inte knappen).
+     *
+     * `$node` är nollbar därför att modellen slås upp i kandidatlistan medan
+     * noden kommer ur länklistan. Faller uppslaget bort ritas noden utan plus
+     * i stället för att sidan faller; de två listorna löser upp SAMMA omfång
+     * (båda genom App\Actions\Access\ResolveItemScope), så i drift gör de
+     * aldrig olika svar.
+     *
+     * @return list<array{key: string, href: string}>
+     */
+    private function nodeRows(?User $user, Container $container, ?Item $node, CreateTarget $createTarget, ?string $path = null): array
+    {
+        if ($user === null || $node === null) {
+            return [];
+        }
+
+        return $createTarget->forNode($user, $container, $node, $path);
+    }
+
+    /**
+     * Relationsflikens läge ur querysträngen — issue 156 ·
+     * [[M23 Mobilen och kartan]] § 156.
+     *
+     * `list` är flikens sektion och förvalet; `focus` är fokuskartan, som
+     * under `md:` är ett läge i samma flik. Läget är en LÄNK och inget
+     * tillstånd i vyn, samma konstruktion som `?view=` i itemfliken (issue
+     * 154) och `?path=` i issue 95: ett läge man kan länka till är ett läge
+     * man kan dela, och det överlever en omladdning.
+     *
+     * **Ett okänt värde är listan, aldrig ett fel** — samma linje som
+     * `view()` och `filter()` och av samma skäl: den som klickade på en gammal
+     * länk är inte här.
+     *
+     * Servern räknar ingenting på svaret: kartans noder behövs i BÅDA lägena
+     * — högerpanelen ritar dem över `md:` — så strängen väljer bara vilken yta
+     * fliken visar. Läsningen finns ändå här, för att klienten inte ska bära
+     * en andra upplaga av en regel om vad ett läge är (samma skäl som
+     * `ItemViewSwitch` upprepar).
+     */
+    private function linkView(Request $request): string
+    {
+        return $request->query('view') === 'focus' ? 'focus' : 'list';
     }
 
     /**

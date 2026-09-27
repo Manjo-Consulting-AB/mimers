@@ -16,10 +16,12 @@ use Illuminate\Contracts\Auth\Access\Gate;
  * Svaret blir sidans `create`-propp, och skalet ritar knappen ur den. En sida
  * som inte frågar får ingen propp — och därmed ingen knapp.
  *
- * **Vad knappen gör avgörs av sidan, inte av knappen.** Därför tre metoder och
+ * **Vad knappen gör avgörs av sidan, inte av knappen.** Därför fyra metoder och
  * inte en: `forContainers()` för dashboarden och containerlistan,
- * `forContainer()` för en sida inuti en container, och `forItem()` för ett
- * item — där knappen öppnar en meny i stället för att leda någonstans.
+ * `forContainer()` för en sida inuti en container, `forItem()` för ett item —
+ * där knappen öppnar en meny i stället för att leda någonstans — och
+ * `forNode()` för en nod i fokuskartan, som bär de två raderna om noden själv
+ * (issue 156).
  *
  * **Adresserna är relativa** (`route(..., absolute: false)`), som varje annan
  * href i skalet: `AppLayout` skriver `href="/dashboard"` och flikarna bygger
@@ -168,6 +170,41 @@ final class CreateTarget
         }
 
         return ['kind' => 'menu', 'rows' => $rows];
+    }
+
+    /**
+     * Grafens meny för EN nod (issue 156 · [[M23 Mobilen och kartan]] § 156):
+     * *Item under* och *Relation*, och ingenting mer.
+     *
+     * **Urvalet är [[ADR-0048 Mobilen och plusknappen]] § 4.** Raden för ett
+     * item med samma förälder finns inte i gränssnittet, och bilagan och
+     * uppgiften hör till itemets egen sida — en nod i kartan bär de två rader
+     * som handlar om noden själv. Ordningen är `forItem()`:s, så menyn i
+     * kartan och menyn i skalet inte kan visa samma rader i olika ordning.
+     *
+     * **Rader och ingen `kind`.** Nodens plus är alltid en meny, och en meny
+     * utan rader ritas inte — en tom lista är svaret när ingen av de två
+     * policyerna tillåter något, precis som `forItem()` svarar null.
+     *
+     * `$path` hör bara till den nod som ÄR itemet, alltså den i kartans mitt:
+     * `forItem()` bär den aktuella förekomsten vidare till flikadresserna. För
+     * en motpart är förekomsten okänd, och raden leder därför till motpartens
+     * egen sida utan `?path=`.
+     *
+     * @return list<array{key: string, href: string}>
+     */
+    public function forNode(User $user, Container $container, Item $item, ?string $path = null): array
+    {
+        $menu = $this->forItem($user, $container, $item, $path);
+
+        if ($menu === null) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            $menu['rows'],
+            fn (array $row): bool => in_array($row['key'], ['item', 'relation'], true),
+        ));
     }
 
     /**

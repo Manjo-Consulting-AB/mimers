@@ -401,51 +401,58 @@ it('markerar den aktuella förekomsten ur querysträngen', function () {
 });
 
 /*
- * Klart när: kartans panel är tom och annonserar sig inte som trasig.
+ * Klart när: kartans panel visar fokuskartan — och den är ett LÄGE i
+ * relationsfliken under `md:` (issue 156 · [[M23 Mobilen och kartan]] § 156).
  *
- * Fokuskartan är inte beslutad, och panelen är därför en plats som väntar —
- * inte en yta som saknas. Provet är negativt med flit: det som fälls är varje
- * ord som säger att något är fel eller på väg. Ingen tom-tillståndsruta
- * (`UiEmptyState` skiljer *inget alls* från *inget som matchar*, och båda vore
- * ett påstående om innehållet), ingen länk, ingen knapp, ingen ikon och ingen
- * räknare. Rubriken är panelens enda ord, och den namnger platsen.
+ * **Provet var negativt med flit från issue 103 till issue 156.** Panelen var
+ * en plats som väntade — fokuskartan behövde en layout, och den är eget arbete
+ * som inte var beslutat — och det som föll då var varje ord som sade att något
+ * var fel eller på väg. Nu är kartan byggd, och det som prövas är i stället att
+ * panelen ritar den ur `map`-proppen och fortfarande inte ställer en egen
+ * fråga: noderna kommer ur samma svar som resten av sidan.
+ *
+ * Att panelen är dold UNDER `md:` är samma beslut: där är kartan ett läge i
+ * itemets relationsflik, och samma karta två gånger på samma skärm hade varit
+ * samma nod två gånger. Formen prövas i tests/Feature/Frontend/FokuskartaTest.
  */
-it('lämnar kartans panel tom utan att annonsera att något är trasigt', function () {
+it('fyller kartans panel med fokuskartan ur samma svar som resten av sidan', function () {
     withoutVite();
 
     [$container, $anvandare] = trepanelKonto();
     $motorn = trepanelItem($container, 'Motorn');
+    $impellern = trepanelItem($container, 'Impellern');
 
-    $kartan = trepanelKod('components/ItemMapPanel.vue');
+    trepanelKant($motorn, $impellern);
 
-    foreach (['<UiEmptyState', '<Link', '<button', 'role=', 'alert'] as $innehåll) {
-        expect($kartan)->not->toContain($innehåll);
+    $panelen = trepanelKod('components/ItemMapPanel.vue');
+
+    expect($panelen)->toContain("t('item.map.heading')")
+        ->toContain("import FocusMap from './FocusMap.vue'")
+        ->toContain('<FocusMap')
+        ->toContain(':map="map"')
+        ->toContain(':overflow-href="overflowHref"');
+
+    // Panelen ställer ingen egen fråga: den läser inte adressen, hämtar
+    // ingenting och navigerar ingenstans. Allt den ritar kommer i propparna.
+    foreach (['usePage', 'fetch(', 'axios', 'router.'] as $hämtning) {
+        expect($panelen)->not->toContain($hämtning);
     }
 
-    // Ett enda ord: rubriken. Ingen andra `t()`-nyckel finns i filen, och
-    // alltså ingen mening om att kartan saknas eller kommer.
-    preg_match_all("/t\('([\w.]+)'\)/", $kartan, $träffar);
-
-    expect($träffar[1])->toBe(['item.map.heading']);
-
-    // Panelen tar ingen propp och ställer ingen fråga: den har ingenting att
-    // rita, och därför ingenting att hämta.
-    expect($kartan)->not->toContain('defineProps');
-
-    // Den ritar en yta med höjd, så att kolumnen håller ihop i layouten, och
-    // ytan är tom och dold för skärmläsaren.
-    expect($kartan)->toContain('min-h-')
-        ->toContain('aria-hidden="true"');
+    // Och vyn skickar kartan vidare — panelen bygger ingen själv.
+    expect(trepanelKod('pages/Containers/Items/Show.vue'))
+        ->toContain('<ItemMapPanel')
+        ->toContain(':map="map"')
+        ->toContain(':overflow-href="relationsHref"');
 
     expect(Lang::get('ui.item.map.heading', [], 'en'))->toBe('Map');
 
-    // Och vyn skickar ingenting till den — ingen prop, ingen fråga.
-    expect(trepanelKod('pages/Containers/Items/Show.vue'))->toContain('<ItemMapPanel />');
-
+    // Noderna kommer ur samma svar som relationerna, och kostar ingen egen
+    // fråga: de ÄR App\Actions\Item\ListItemLinks.
     actingAs($anvandare)->get(trepanelUrl($container, $motorn))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->component('Containers/Items/Show')
-            ->missing('map')
+            ->where('map.self.name', 'Motorn')
+            ->where('map.child.0.name', 'Impellern')
     );
 });
 

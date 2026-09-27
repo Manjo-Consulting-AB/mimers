@@ -279,6 +279,30 @@ const props = defineProps({
      * den som står på en väg ska stanna på den.
      */
     create: { type: Object, default: null },
+    /*
+     * Fokuskartan (issue 156 · [[M23 Mobilen och kartan]] § 156), ur
+     * `ItemController::map()`: `{self, parent, child, related}`, där varje nod
+     * är `{ulid, name, href, rows}`.
+     *
+     * Noderna ÄR relationerna — App\Actions\Item\ListItemLinks, samma svar som
+     * `links` ovan ritar — så en motpart utanför användarens omfång finns inte
+     * här heller (issue 73 § Beslut 7). `href` är null för `self`, som är
+     * itemet självt och ingen länk, och `rows` är nodens plusmeny: de rader
+     * App\Support\Frontend\CreateTarget::forNode() tillät på DEN noden. En nod
+     * utan rader ritar ingen knapp.
+     *
+     * Vyn vandrar inte i grafen, sorterar inte om en grupp och räknar
+     * ingenting: kartans fasta layout ritar de första noderna i serverns
+     * ordning och säger *+N till* om resten.
+     */
+    map: { type: Object, required: true },
+    /*
+     * Relationsflikens läge (issue 156): `list` eller `focus`, ur serverns
+     * läsning av `?view=`. Läget väljer vilken yta fliken visar under `md:` —
+     * kartan eller sektionen — och ingenting i svaret: noderna behövs i båda
+     * lägena, för högerpanelen ritar dem över `md:`.
+     */
+    linkView: { type: String, required: true },
 });
 
 const { t } = useTranslations();
@@ -335,6 +359,37 @@ const informationHref = computed(
     () => tabs.value.find((tab) => tab.key === 'information')?.href
         ?? `/containers/${props.container.ulid}/items/${props.item.ulid}`,
 );
+
+/*
+ * Adressen till relationsfliken — den flik fokuskartans *+N till* leder till
+ * (issue 156 · [[M23 Mobilen och kartan]] § 156).
+ *
+ * Hämtad ur `tabs` och inte byggd en gång till, av samma skäl som
+ * `informationHref` ovan: flikens adress bär den aktuella förekomsten
+ * (`?path=` skrivs före `tab=`), och en egen sträng här hade varit en andra
+ * upplaga av samma regel. Reservvärdet är itemets egen sökväg och kan bara nås
+ * om fliken tagits bort ur raden, vilket ItemflikTest fäller.
+ */
+const relationsHref = computed(
+    () => tabs.value.find((tab) => tab.key === 'relations')?.href
+        ?? `/containers/${props.container.ulid}/items/${props.item.ulid}?tab=relations`,
+);
+
+/*
+ * Relationsflikens två lägen (issue 156), till växeln under `md:`: *Lista* är
+ * sektionen och förvalet — adressen UTAN `view`, samma val som översiktsfliken
+ * gör med `tab` (issue 100) — och *Fokus* är kartan.
+ *
+ * Läget står i querysträngen (`?view=focus`), som varje annat läge i den här
+ * produkten: ett läge man kan länka till är ett läge man kan dela. Adressen
+ * byggs ur `relationsHref`, så den bär den aktuella förekomsten och
+ * `ItemViewSwitch` får samma sträng som flikraden står i — den väljer den
+ * aktuella raden genom att jämföra adresser.
+ */
+const linkViews = computed(() => [
+    { key: 'list', label: t('item.map.view.list'), href: relationsHref.value },
+    { key: 'focus', label: t('item.map.view.focus'), href: `${relationsHref.value}&view=focus` },
+]);
 
 /*
  * Flikraden i den form `UiTabs` vill ha: `{ key, label, href, count }`.
@@ -848,6 +903,10 @@ function toggleFavorite() {
                     :links="links"
                     :counterparts="counterparts"
                     :can="can"
+                    :map="map"
+                    :overflow-href="relationsHref"
+                    :view="linkView"
+                    :views="linkViews"
                 />
 
                 <!-- Bilagorna (issue 60 § Beslut 1): itemets innehåll och inte en egen
@@ -947,8 +1006,18 @@ function toggleFavorite() {
                 </section>
             </div>
 
-            <!-- Kartans plats: tom med flit, se ItemMapPanel.vue. -->
-            <ItemMapPanel />
+            <!--
+                Kartans plats (issue 156): fokuskartan i högerpanelen över
+                `md:`. Under brytpunkten är panelen dold med flit — där är
+                kartan ett LÄGE i itemets relationsflik i stället (se
+                ItemLinkSection.vue), och samma karta två gånger på samma
+                skärm hade varit samma nod två gånger.
+            -->
+            <ItemMapPanel
+                class="hidden md:block"
+                :map="map"
+                :overflow-href="relationsHref"
+            />
         </div>
     </ContainerLayout>
 </template>
