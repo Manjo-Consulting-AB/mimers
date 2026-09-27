@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\User\DeleteUser;
 use App\Console\ReportsAbuseSignals;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -689,4 +690,42 @@ it('Registerförteckningen har en rad för security_log', function () {
         ->and($rad)->toContain('[[ADR-0043 Tre loggar]]')
         ->and($rad)->toContain('Berättigat intresse')
         ->and($rad)->toContain('12 månader');
+});
+
+/*
+ * Issue 144 · personraderingen. Se App\Actions\User\DeleteUser och
+ * [[ADR-0045 Radering av konto och person]] § Beslut 3.
+ *
+ * Raden är den sista om personen, och den enda i loggen som skrivs av en
+ * radering och inte av en handling: därför prövas både vad den bär
+ * (`user_id` och antalen) och vad den inte bär (adressen).
+ */
+it('personraderingen skriver user.deleted med antalen och utan e-postadressen', function () {
+    $person = User::factory()->create(['email' => 'raderad-person@exempel.se']);
+
+    // Ett konto där personen är enda medlem — det raderas — och ett med en
+    // annan medlem, som lämnas. Antalen i raden är hela kvittot.
+    $eget = Account::factory()->create();
+    $eget->users()->attach($person, ['role' => 'owner']);
+
+    $delat = Account::factory()->create();
+    $delat->users()->attach($person, ['role' => 'member']);
+    $delat->users()->attach(User::factory()->create(), ['role' => 'owner']);
+
+    app(DeleteUser::class)->handle($person);
+
+    $rad = sakerhetsRad(SecurityLog::ACTION_USER_DELETED);
+
+    expect($rad->user_id)->toBe($person->id)
+        // Ingen enskild konto- eller containerkoppling: raderingen rör flera.
+        ->and($rad->account_id)->toBeNull()
+        ->and($rad->meta)->toBe([
+            'user_id' => $person->id,
+            'deleted_accounts' => 1,
+            'left_accounts' => 1,
+        ])
+        // Ingen request bakom en radering som kommer från en bekräftad länk:
+        // actionen tar ingen request, och raden bär därför ingen pseudonym.
+        ->and($rad->ip_group)->toBeNull()
+        ->and(sakerhetsJson())->not->toContain('raderad-person@exempel.se');
 });

@@ -40,7 +40,9 @@ use Illuminate\Support\Facades\DB;
  * `container_access`, `invitation` och `calendar_feed` (issue 36a § Beslut
  * 7) pekar på containern och har ingen mening utan den, så de tas hårt
  * (Beslut 5 punkt 5) — glöms de faller `forceDelete()` på ett
- * främmandenyckelfel varje natt.
+ * främmandenyckelfel varje natt. `ownership_transfer` hör till samma grupp
+ * (ADR-0045 § Beslut 3): raden överlever att ett ägarbyte dras tillbaka, men
+ * inte att containern gallras.
  *
  * Hela containern hanteras i EN transaktion (Beslut 7): misslyckas något
  * rullas allt tillbaka och nästa natt tar om containern. En halvt raderad
@@ -110,6 +112,15 @@ class PurgeContainer
             DB::table('container_access')->where('container_id', $container->id)->delete();
             DB::table('invitation')->where('container_id', $container->id)->delete();
             DB::table('calendar_feed')->where('container_id', $container->id)->delete();
+
+            // Ägarbytena på containern (ADR-0045 § Beslut 3). Raden är
+            // historik och dras tillbaka med `status = 'revoked'` — den
+            // "raderas aldrig" — men den har ingen mening utan sin container,
+            // och `container_id` är ON DELETE RESTRICT. Utan städningen
+            // fastnar en container som någon gång varit till salu i
+            // papperskorgen för alltid. Historiken går inte förlorad: accepten
+            // finns kvar i `audit_log` utan främmande nyckel (issue 107).
+            DB::table('ownership_transfer')->where('container_id', $container->id)->delete();
 
             // issue 26a § Beslut 6 — containerräknaren minskas bara för en
             // container som fortfarande var LEVANDE precis innan forceDelete.

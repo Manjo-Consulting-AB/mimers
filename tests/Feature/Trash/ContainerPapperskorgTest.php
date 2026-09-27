@@ -395,6 +395,28 @@ it('gallringen faller aldrig på ett främmandenyckelfel', function () {
     expect(Container::query()->whereKey($annanContainer->id)->exists())->toBeTrue();
 });
 
+it('en container som haft ett ägarbyte går att gallra', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    // Ett ägarbyte lämnar sin rad kvar när det dras tillbaka (den raderas
+    // aldrig då), men raden pekar på containern med RESTRICT. Utan
+    // städningen kunde en container som någon gång varit till salu aldrig
+    // gallras — gallringen hade fallit varje natt.
+    $ägarbyte = skapaÄgarbyteRad($container, [
+        'from_account_id' => $account->id,
+        'initiated_by_user_id' => $user->id,
+        'status' => 'revoked',
+    ]);
+
+    containerKorgMjukradera($container, Carbon::parse('2026-08-01 12:00:00'));
+
+    expect(fn () => gallringKör())->not->toThrow(Throwable::class);
+
+    expect(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse()
+        ->and(DB::table('ownership_transfer')->where('id', $ägarbyte->id)->exists())->toBeFalse();
+});
+
 it('en container yngre än retentionen gallras inte', function () {
     Carbon::setTestNow('2026-09-02 12:00:00');
     [$account, $user, $container] = gallringContainer();

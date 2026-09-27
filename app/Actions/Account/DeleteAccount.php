@@ -34,10 +34,13 @@ use Illuminate\Support\Facades\Log;
  *    skäl: raden är någon annans innehåll och står kvar, utan avsändare,
  * 4. varje container kontot äger, genom PurgeContainer — med withTrashed(),
  *    en mjukraderad container ska också bort,
- * 5. usage_counter-raden och webhook_endpoint-raderna (issue 37a § Beslut 8),
- * 6. subscription-raden om den finns,
- * 7. account_user-raderna,
- * 8. account-raden.
+ * 5. ägarbyten där kontot är avsändare eller mottagare, och åtkomster som
+ *    getts till kontot — raderna på kontots EGNA containers tog steg 4,
+ *    kvar är de på någon annans (ADR-0045 § Beslut 3),
+ * 6. usage_counter-raden och webhook_endpoint-raderna (issue 37a § Beslut 8),
+ * 7. subscription-raden om den finns,
+ * 8. account_user-raderna,
+ * 9. account-raden.
  *
  * Steg 2 och 3 ligger FÖRE containergallringen och rör bara rader i ANDRAS
  * containers: kontots egna containers gallras i steg 4, och deras bilagor och
@@ -113,6 +116,30 @@ class DeleteAccount
             foreach ($containers as $container) {
                 $this->purgeContainer->handle($container);
             }
+
+            // Ägarbyten där kontot är avsändare eller mottagare (ADR-0045
+            // § Beslut 3). Raderna på kontots EGNA containers tog
+            // PurgeContainer precis — kvar är de på någon ANNANS container,
+            // och ett typiskt fall är varvet som redan lämnat över en båt och
+            // sedan raderas. Båda nycklarna är ON DELETE RESTRICT, så utan
+            // städningen faller account-raderingen längst ned. Raden är
+            // historik som redan spelat ut sin roll, och accepten finns kvar i
+            // `audit_log` utan främmande nyckel ([[ADR-0043 Tre loggar]]).
+            DB::table('ownership_transfer')
+                ->where(fn ($query) => $query
+                    ->where('from_account_id', $accountId)
+                    ->orWhere('to_account_id', $accountId))
+                ->delete();
+
+            // Åtkomster som getts till kontot som mottagare. `grantee_id` är
+            // en identifierare i en polymorph kolumn utan främmande nyckel
+            // (issue 9a § Beslut 3), så den blockerar ingenting — men en
+            // åtkomst till ett konto som inte finns ska inte ligga kvar.
+            // Åtkomsterna på kontots egna containers tog PurgeContainer ovan.
+            DB::table('container_access')
+                ->where('grantee_type', 'account')
+                ->where('grantee_id', $accountId)
+                ->delete();
 
             // calendar_feed behöver ingen egen rad här (issue 36a § Beslut
             // 7): feederna på kontots EGNA containers togs av PurgeContainer

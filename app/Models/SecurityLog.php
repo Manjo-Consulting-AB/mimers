@@ -173,6 +173,19 @@ class SecurityLog extends Model
     public const ACTION_LEGAL_HOLD_LIFTED = 'legal_hold.lifted';
 
     /**
+     * En person raderade sig själv (issue 144 · [[ADR-0045 Radering av konto
+     * och person]] § Beslut 3). Skrivs av App\Actions\User\DeleteUser, före
+     * commit i samma transaktion som raderingen.
+     *
+     * **Den sista raden om personen, och den bär ingen e-postadress.**
+     * `user_id` står i kolumnen och i `meta` tillsammans med antalet konton
+     * som raderades och antalet som lämnades — kolumnen är en identifierare
+     * utan främmande nyckel, så raden överlever sin person och gallras som
+     * vanligt efter tolv månader ([[ADR-0043 Tre loggar]] § Säkerhetsloggen).
+     */
+    public const ACTION_USER_DELETED = 'user.deleted';
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
