@@ -1,6 +1,6 @@
 # ADR-0045 Radering av konto och person
 
-**Status:** Antagen 2026-09-26 · Besvarar tre frågor i [[Tankar]] från granskningen av issue 29b · Bygger vidare på [[ADR-0009 Kvoter och livscykel]] och [[ADR-0043 Tre loggar]] · [[ADR-index]]
+**Status:** Antagen 2026-09-26 · Besvarar tre frågor i [[Tankar]] från granskningen av issue 29b · Bygger vidare på [[ADR-0009 Kvoter och livscykel]] och [[ADR-0043 Tre loggar]] · Uppföljning 2026-09-27 om nyligen besökta och containerns bild · [[ADR-index]]
 
 Tonys beslut 2026-09-26, vid planeringen av [[M22 Redo för testare]].
 
@@ -85,3 +85,12 @@ Beslut 3 följer mönstret från lösenordsbytet: den som sitter i en kapad sess
 **En mjukraderad person, anonymiserad.** Behåller nycklarna intakta, men lämnar kvar en rad som GDPR ändå kräver bort, och e-postadressen går inte att använda igen.
 
 **Ångerfrist på trettio dagar.** Skyddar mot ett förhastat beslut, men mejlbekräftelsen är redan ett andra steg. En frist betyder också att data som personen bett om att få raderad ligger kvar.
+
+## Uppföljning 2026-09-27 — två nya tabeller
+
+Två beslut i [[M23 Mobilen och kartan]] lägger till rader som raderingen måste känna till.
+
+- **`recent_visit` är bara personens** ([[ADR-0049 Nyligen besökta]]). Den läggs till i listan i beslut 3 över det som raderas med personen, bredvid favoriterna.
+- **En containerbilaga följer containern** ([[ADR-0047 Containerns bild]]). Beslut 1 gäller den på samma sätt som en itembilaga: betalar det raderade kontot för en bild på en annans container, får containerns ägarkonto den som `billed_account_id`.
+
+Båda byggs i sina egna issues, § 158 och § 160, och prövas där mot `DeleteUser` och `DeleteAccount`.
