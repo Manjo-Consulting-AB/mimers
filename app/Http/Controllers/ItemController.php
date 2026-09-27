@@ -190,6 +190,15 @@ class ItemController extends Controller
      * inget filtervärde lägger till en fråga — uppslagen sker i minnet mot de
      * redan hämtade listorna.
      *
+     * **Fliken har två lägen sedan issue 154** ([[ADR-0046 Containerns karta]]):
+     * listan, som är den här metoden oförändrad, och *Träd*, som ritar
+     * containerns struktur i stället. Läget står i querysträngen (`?view=tree`,
+     * se `view()` nedan) och filtrerar ingenting: trädet är containern som
+     * användaren når, medan filtret hör till listan. Strukturen hämtas därför
+     * BARA i trädläget — den som öppnar listan ska inte betala två frågor för
+     * en yta hon inte ser — och den kostar sina två oavsett hur många items
+     * containern har (App\Actions\Item\ResolveItemTree).
+     *
      * `can.create` är `ContainerPolicy::createItem()` — samma grind som
      * `Api\ItemController::store()` prövar för ett toppnivå-item, och bara en
      * presentationsflagga för 57b:s knapp. En omfångsbegränsad mottagare får
@@ -222,6 +231,7 @@ class ItemController extends Controller
         ActiveContainer $activeContainer,
         ItemStatus $itemStatus,
         CreateTarget $createTarget,
+        ResolveItemTree $resolveItemTree,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -244,6 +254,8 @@ class ItemController extends Controller
             'category' => $filter['category'],
             'q' => $filter['q'],
         ]);
+
+        $view = $this->view($request);
 
         return Inertia::render('Containers/Items/Index', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -281,6 +293,27 @@ class ItemController extends Controller
             // och går tillsammans, och flaggan är presentation medan
             // App\Support\Frontend\CreateTarget bär målet.
             'create' => $createTarget->forContainer($user, $container),
+
+            // Läget i itemfliken (issue 154 · [[ADR-0046 Containerns karta]]).
+            // *Lista* är förvalet och den här sidan som den var; *Träd* ritar
+            // containerns struktur i stället. Läget står i querysträngen och
+            // ingenstans annat — vyn håller inget eget tillstånd — och därför
+            // är proppen svaret på samma fråga som `structure` nedan.
+            'view' => $view,
+
+            // Strukturen, och BARA i trädläget (samma linje som historikens
+            // rader i show(): en yta som inte ritas ska inte kosta en fråga).
+            // Upplösningen är issue 94:s — App\Actions\Item\ResolveItemTree,
+            // samma rotregel och samma omfångsfilter som detaljvyns
+            // vänsterpanel, så de två inte kan säga olika saker om samma graf.
+            //
+            // `null` och inte en tom lista när läget är listan: en tom lista
+            // är ett svar servern HAR gett — "hon når ingenting" — och vyn
+            // ska kunna skilja det från "inte hämtad" (samma form och samma
+            // skäl som `history`-proppen i show()).
+            'structure' => $view === 'tree'
+                ? $this->structure($resolveItemTree->handle($user, $container))
+                : null,
         ]);
     }
 
@@ -1148,6 +1181,31 @@ class ItemController extends Controller
             ['q' => $q, 'tags' => $keptTags, 'category' => $keptCategory],
             $dropped,
         ];
+    }
+
+    /**
+     * Läget i itemfliken ur querysträngen — issue 154 ·
+     * [[ADR-0046 Containerns karta]].
+     *
+     * `list` är dagens lista och förvalet; `tree` är containerns struktur ritad
+     * som träd. Läget är en LÄNK och inget tillstånd i vyn, samma konstruktion
+     * som filtret i issue 59a § Beslut 1 och förekomsten i issue 95: en flik
+     * man kan länka till är en flik man kan dela, och den överlever en
+     * omladdning därför att servern läser samma sträng igen.
+     *
+     * **Ett okänt värde är listan, aldrig ett fel** — samma linje som
+     * `filter()` ovan och av samma skäl: den som klickade på en gammal länk är
+     * inte här. `?view[]=…`, `?view=` och skräp läses som "inget läge", och
+     * `map` hör hit med flit: kartan är § 157, och fram till dess finns läget
+     * varken i växeln eller i svaret.
+     *
+     * Ingen FormRequest: värdet är en sträng ur adressen och regeln är en rad.
+     */
+    private function view(Request $request): string
+    {
+        $view = $request->query('view');
+
+        return is_string($view) && in_array($view, ['list', 'tree'], true) ? $view : 'list';
     }
 
     /**

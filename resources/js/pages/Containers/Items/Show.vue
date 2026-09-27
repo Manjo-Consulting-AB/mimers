@@ -7,6 +7,7 @@ import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemMapPanel from '../../../components/ItemMapPanel.vue';
+import ItemQuickFacts from '../../../components/ItemQuickFacts.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import ScheduleListSection from '../../../components/ScheduleListSection.vue';
@@ -83,15 +84,17 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * flit (ItemMapPanel.vue). Under `md:` staplas panelerna, och strukturen blir
  * en utfällbar yta och inte en egen sida.
  *
- * **Sidan är en flikrad med sju flikar** (issue 102 och 116 ·
+ * **Sidan är en flikrad med åtta flikar** (issue 102, 116 och 154 ·
  * [[M17 Designsystemet]] § 102). Fram till issue 102 renderades fälten,
  * taggarna, relationerna, utlåningen, schemana och bilagorna på en enda lång
- * sida; nu ligger var och en i sin flik — fälten på översikten, som är radens
- * första — och raden byggs av `UiTabs` (issue 100) precis som containerns.
- * Issue 102 var en omfördelning av det som redan hämtas: ingen prop tillkom,
- * ingen fråga ställdes och kontrollern rördes inte. Issue 116 lägger till den
- * SJUNDE fliken — historiken — och den är det enda undantaget från den regeln:
- * dess rader är en ny prop, och den frågan ställs bara när fliken är aktiv.
+ * sida; nu ligger var och en i sin flik, och raden byggs av `UiTabs` (issue
+ * 100) precis som containerns. Issue 102 var en omfördelning av det som redan
+ * hämtas: ingen prop tillkom, ingen fråga ställdes och kontrollern rördes
+ * inte. Issue 116 lade till historiken — den första fliken med en egen prop,
+ * och den frågan ställs bara när fliken är aktiv. **Issue 154 flyttade
+ * fältlistan från översikten till informationsfliken** (mobilmockupens
+ * *Information*) och gav översikten *Snabbfakta* i stället: ingen ny prop,
+ * ingen ny fråga — samma `item` som förut, läst på två ytor.
  *
  * **Flikraden ligger inuti containerns ram** ([[ADR-0041 Itemets vy]]
  * § Beslut). Itemet bor i containern, och bildens globala vänstermeny med
@@ -304,34 +307,55 @@ const categoryName = computed(() => props.categories[props.item.category] ?? nul
 
 /*
  * Översikten med ingenting i: varken ledande stycken eller ett enda fält.
- * Raden är HELA panelens tillstånd och inte de två styckenas — ett item med
- * en tillverkare men utan beskrivning är skrivet, och "ingenting är skrivet om
- * det här itemet än" över en fylld fältlista hade varit osant.
+ * Raden är HELA ITEMETS tillstånd och inte den här panelens — ett item med en
+ * tillverkare men utan beskrivning är skrivet, och "ingenting är skrivet om
+ * det här itemet än" hade varit osant.
+ *
+ * Sedan issue 154 räknas fälten med även när de ritas på informationsfliken:
+ * frågan är om itemet är oskrivet, inte om just den här fliken är tom. Ett
+ * item vars enda uppgift är inköpsdatum visar därför ingen rad här — och
+ * *Visa alla fält* leder till det som står.
  */
 const overviewEmpty = computed(
     () => ! props.item.description && ! props.item.notes && fields.value.length === 0 && categoryName.value === null,
 );
 
 /*
+ * Adressen till informationsfliken — *Visa alla fält* på översikten (issue
+ * 154 · [[M23 Mobilen och kartan]] § 154).
+ *
+ * Hämtad ur `tabs` och inte byggd en gång till: flikens adress bär den
+ * aktuella förekomsten (`?path=` skrivs före `tab=`), och en egen sträng här
+ * hade varit en andra upplaga av samma regel — den som glider ifrån den
+ * första så snart ordningen eller parametern byter namn. Reservvärdet är
+ * itemets egen sökväg och kan bara nås om fliken tagits bort ur raden, vilket
+ * ItemflikTest fäller.
+ */
+const informationHref = computed(
+    () => tabs.value.find((tab) => tab.key === 'information')?.href
+        ?? `/containers/${props.container.ulid}/items/${props.item.ulid}`,
+);
+
+/*
  * Flikraden i den form `UiTabs` vill ha: `{ key, label, href, count }`.
  *
- * **Raden har SJU flikar, och översikten ÄR fältens flik.** Bilden ritar sju
- * — översikt, detaljer, relationer, dokument, kostnader, uppgifter och
- * historik — och raden är bildens, med två namn bytta: "detaljer" är ingen
- * egen rad (fälten hör till översikten, se nedan) och "dokument" är bilagorna.
- * Utlåningen och taggarna har ingen rad i bilden men måste ändå få en plats —
- * en yta ingen hittar är samma sak som en yta som inte finns (issue 62a:s och
- * 67c:s motivering) — så de står efter de fem, i den ordning issue 102 räknar
- * dem. Det finns alltså ingen flik som bär två stycken text: anteckningen och
- * beskrivningen står överst på översikten och fältlistan under dem
- * ([[ADR-0041 Itemets vy]] § Beslut, issue 96).
+ * **Raden har åtta flikar, och fälten har en egen sedan issue 154.**
+ * `docs/Design/struktur - item.jpeg` ritar översikt, detaljer, relationer,
+ * dokument, kostnader, uppgifter och historik, och mobilmockupen ritar
+ * Översikt · Information · Dokument. Raden är bildens, med två namn bytta:
+ * "detaljer" är **informationsfliken** — fältraderna, dit *Visa alla fält* på
+ * översikten leder — och "dokument" är bilagorna. Utlåningen och taggarna har
+ * ingen rad i bilden men måste ändå få en plats — en yta ingen hittar är samma
+ * sak som en yta som inte finns (issue 62a:s och 67c:s motivering) — så de
+ * står efter de fem, i den ordning issue 102 räknar dem. Ingen flik bär två
+ * stycken text: anteckningen och beskrivningen står överst på översikten,
+ * snabbfakta under dem ([[ADR-0041 Itemets vy]] § Beslut, issue 96 och 154).
  *
  * **Ordningen är översikten först, sedan bildens, och de egna sist.**
- * `docs/Design/struktur - item.jpeg` ritar översikt, detaljer, relationer,
- * dokument, kostnader, uppgifter och historik. Kostnaden har ingen flik (den
- * väntar på trepanelslayouten, issue 103), och historiken kom med issue 116
- * och ligger SIST — efter utlåningen och taggarna, som containerns egen
- * historikflik: den är vad som HAR hänt och inte en yta man arbetar i.
+ * Kostnaden har ingen flik (den väntar på trepanelslayouten, issue 103), och
+ * historiken kom med issue 116 och ligger SIST — efter utlåningen och
+ * taggarna, som containerns egen historikflik: den är vad som HAR hänt och
+ * inte en yta man arbetar i.
  *
  * **Etiketten är sektionens eget ord.** Sex av flikarna bär samma rubrik som
  * sektionen de visar — `item.links.heading`, `item.attachment.heading`,
@@ -365,6 +389,14 @@ const tabs = computed(() => {
 
     return [
         { key: 'overview', label: t('item.show.overview'), href: `${base}${here}`, count: null },
+        /*
+         * Informationsfliken (issue 154): fältraderna, som flyttade hit från
+         * översikten när den fick *Snabbfakta* och *Visa alla fält*. Det är
+         * bildens *Information* — mobilmockupen ritar raden Översikt ·
+         * Information · Dokument — och räknaren är antalet rader den ritar:
+         * fälten plus kategorin, som är ett strukturerat fält och ingen tagg.
+         */
+        { key: 'information', label: t('item.show.information'), href: tabHref('information'), count: fields.value.length + (categoryName.value === null ? 0 : 1) },
         { key: 'relations', label: t('item.links.heading'), href: tabHref('relations'), count: props.links.parent.length + props.links.child.length + props.links.related.length },
         { key: 'attachments', label: t('item.attachment.heading'), href: tabHref('attachments'), count: props.attachments.length },
         { key: 'schedules', label: t('item.schedule.heading'), href: tabHref('schedules'), count: props.schedules.length },
@@ -710,24 +742,28 @@ function toggleFavorite() {
                 <UiTabs class="mt-8" :tabs="tabs" :label="item.name" />
 
                 <!--
-                    Översikten (issue 102 · [[ADR-0041 Itemets vy]] § Beslut):
-                    anteckningen och beskrivningen som vyns ledande stycken, inte som
-                    rader bland tillverkare och modell, och fältlistan under dem. De är
-                    två fält sedan issue 96 — beskrivningen säger vad itemet ÄR,
-                    anteckningen vad användaren VET om det — och de står därför var för
-                    sig med sin egen etikett, och aldrig som en sammanslagen text.
+                    Översikten (issue 102 och 154 · [[ADR-0041 Itemets vy]]
+                    § Beslut): anteckningen och beskrivningen som vyns ledande
+                    stycken — de är två fält sedan issue 96, beskrivningen
+                    säger vad itemet ÄR och anteckningen vad användaren VET om
+                    det — och sedan *Snabbfakta*, som sammanfattar itemet.
 
-                    **Översikten ÄR fältens flik.** Bildens *Detaljer* är ingen egen
-                    rad: raden har ingen flik som bär två stycken
-                    text, så tillverkaren, modellen, kategorin och resten står här,
-                    under styckena. Kategorin hör hemma i listan — den är ett
-                    strukturerat fält och ingen tagg — och ett tomt fält utelämnas
-                    (se itemPresentation.js).
+                    **Fältlistan flyttade till informationsfliken i issue
+                    154.** Översikten är den sammanfattning en läsare möter
+                    först: tillverkaren, modellen och serienumret ur
+                    `ItemQuickFacts`, och raden *Visa alla fält* som öppnar
+                    fliken där resten står. Formen är mobilmockupens — bild 4
+                    ritar omslaget, *Snabbfakta*, raden och uppgifterna — och
+                    fälten bor därmed på ETT ställe: en avskrift här hade varit
+                    samma uppgifter i två vyer som glider isär.
 
-                    Ett item utan både stycken och fält är oskrivet och inte trasigt,
-                    och raden i stället för innehållet säger vilket: fliken är den
-                    första en läsare möter, och en tom panel där hade sagt att sidan
-                    är sönder.
+                    Ett item utan både stycken och fält är oskrivet och inte
+                    trasigt, och raden i stället för innehållet säger vilket:
+                    fliken är den första en läsare möter, och en tom panel där
+                    hade sagt att sidan är sönder. Raden är kvar sedan issue 102
+                    och svarar på HELA itemet — inte på den här fliken — så ett
+                    item vars enda uppgift är inköpsdatum är fortfarande
+                    skrivet, även om ingenting av det står här.
                 -->
                 <section v-if="activeTab === 'overview'" class="mt-8 space-y-8">
                     <dl v-if="item.description || item.notes" class="flex flex-col gap-6">
@@ -742,6 +778,43 @@ function toggleFavorite() {
                         </div>
                     </dl>
 
+                    <!--
+                        Snabbfakta (issue 154). Komponenten ritar ingenting när
+                        ingen av de tre uppgifterna har ett värde — ingen
+                        rubrik över en tom lista — och urvalet bor i
+                        itemPresentation.js så att regeln går att pröva i node.
+                    -->
+                    <ItemQuickFacts :item="item" :locale="locale" />
+
+                    <!--
+                        Vägen till resten av fälten (issue 154). Adressen är
+                        informationsflikens egen, ur `tabs` ovan, så den bär
+                        den aktuella förekomsten precis som flikraden gör.
+                    -->
+                    <Link
+                        :href="informationHref"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                    >
+                        {{ t('item.show.all_fields') }}
+                    </Link>
+
+                    <p v-if="overviewEmpty" class="text-sm text-slate-600">{{ t('item.show.overview_empty') }}</p>
+                </section>
+
+                <!--
+                    Informationsfliken (issue 154 · [[M23 Mobilen och kartan]]
+                    § 154): itemets fältrader, kategorin inräknad — den är ett
+                    strukturerat fält och ingen tagg — och ingenting annat.
+                    Fälten kommer ur `fields` (itemPresentation.js), som
+                    utelämnar varje tomt fält i stället för att visa en tom
+                    etikett eller ett streck (issue 57a § Beslut 8).
+
+                    Fliken nås genom *Visa alla fält* på översikten, och en
+                    panel som vore tom hade mött en läsare som just tryckt på
+                    en rad — därför raden i stället, samma val som översikten
+                    gör (issue 102).
+                -->
+                <section v-if="activeTab === 'information'" class="mt-8">
                     <dl
                         v-if="fields.length > 0 || categoryName"
                         class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2"
@@ -757,7 +830,7 @@ function toggleFavorite() {
                         </div>
                     </dl>
 
-                    <p v-if="overviewEmpty" class="text-sm text-slate-600">{{ t('item.show.overview_empty') }}</p>
+                    <p v-else class="text-sm text-slate-600">{{ t('item.show.information_empty') }}</p>
                 </section>
 
                 <!-- Relationerna (issue 58 § Beslut 9), i sin egen flik: sektionen

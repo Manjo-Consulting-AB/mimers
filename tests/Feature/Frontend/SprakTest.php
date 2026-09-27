@@ -677,6 +677,68 @@ it('hämtar växelns strängar ur ui.php', function () {
 });
 
 /*
+ * Växeln i containerns itemflik, se issue 154 ·
+ * [[ADR-0046 Containerns karta]] och
+ * resources/js/components/ItemViewSwitch.vue samt
+ * resources/js/pages/Containers/Items/Index.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här. Det betyder något särskilt för de två LÄGENA, för
+ * etiketten är all text de bär, och `translate()` skriver NYCKELN SJÄLV när
+ * uppslaget misslyckas — en glömd nyckel står då som `item.view.tree` i växeln
+ * i stället för *Tree*.
+ *
+ * **Komponenten bär ingen egen mening** och slår inte upp någonting själv:
+ * etiketterna kommer som proppar, och det är Index.vue som äger uppslagen.
+ * Provet läser därför båda filerna — den ena för formen, den andra för orden —
+ * och prövar att *Karta* inte har någon nyckel någon av dem: läget är § 157
+ * och får inte visas förrän kartan finns.
+ */
+it('hämtar itemväxelns strängar ur ui.php', function () {
+    $vaxeln = File::get(resource_path('js/components/ItemViewSwitch.vue'));
+    $fliken = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
+
+    expect($vaxeln)->not->toMatch("/(?<![\w$.])t\('([a-z0-9_.]+)'/");
+
+    preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $fliken, $träffar);
+
+    foreach (['item.view.label', 'item.view.list', 'item.view.tree'] as $nyckel) {
+        expect($träffar[1])->toContain($nyckel);
+    }
+
+    expect(Lang::get('ui.item.view.list', [], 'en'))->toBe('List')
+        ->and(Lang::get('ui.item.view.tree', [], 'en'))->toBe('Tree');
+
+    // *Karta* finns inte som nyckel: läget ritas inte, och ett ord utan yta är
+    // ett löfte katalogen inte kan hålla.
+    expect(Lang::get('ui.item.view.map', [], 'en'))->toBe('ui.item.view.map');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+});
+
+/*
+ * Fällknappen i trädet, se issue 154 och
+ * resources/js/components/ItemStructureTree.vue.
+ *
+ * Nycklarna är de ENDA två orden i komponenten, och de är åtgärden och inte
+ * noden: knappen bär en ikon och inget namn av eget, så etiketten måste säga
+ * vad trycket gör. `:name` fylls med nodens namn, och provet prövar att
+ * parametern finns i meningen — en nyckel utan `:name` hade gett varje
+ * fällknapp i trädet samma namn.
+ */
+it('hämtar fällknappens strängar ur ui.php', function () {
+    $trädet = File::get(resource_path('js/components/ItemStructureTree.vue'));
+
+    expect($trädet)->toContain("t('item.structure.expand', { name: node.name })")
+        ->toContain("t('item.structure.collapse', { name: node.name })");
+
+    expect(Lang::get('ui.item.structure.expand', [], 'en'))->toBe('Expand :name')
+        ->and(Lang::get('ui.item.structure.collapse', [], 'en'))->toBe('Collapse :name');
+});
+
+/*
  * Lösenordsformuläret, se issue 129 och 140 och
  * resources/js/components/PasswordForm.vue.
  *

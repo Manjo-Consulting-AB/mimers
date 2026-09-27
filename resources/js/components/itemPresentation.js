@@ -68,3 +68,31 @@ export function itemFields(item, locale) {
         { key: 'position_note', value: item.position_note },
     ].filter((field) => field.value !== null && field.value !== undefined && field.value !== '');
 }
+
+/*
+ * Fälten itemets översikt sammanfattar i *Snabbfakta* (issue 154 ·
+ * [[M23 Mobilen och kartan]] § 154): tillverkare, modell och serienummer —
+ * uppgifterna om VAD itemet är, och de tre en läsare letar efter först.
+ *
+ * **Samma regel som `itemFields` och ingen andra.** Listan är ett urval UR
+ * `itemFields` och inte en avskrift av den: ett tomt fält utelämnas på samma
+ * sätt (`null`, `undefined` och tom sträng), och ordningen är `itemFields`
+ * egen — samma ordning som `[[Items och organisation]] § item` räknar
+ * kolumnerna i. En egen avskrift hade glidit ifrån den första så snart ett
+ * fält bytte namn eller formatering, och de två listorna hade visat olika
+ * värden för samma item.
+ *
+ * `serial_number` är inte ett artikelnummer ([[ADR-0041 Itemets vy]]
+ * § Beslut): serienumret identifierar exemplaret och hör därför till
+ * snabbfakta, medan leverantören och artikelnumret förblir strukna ur
+ * detaljrutan.
+ *
+ * De fyra övriga fälten — inköpsdatum, garanti, placering och kategorin — står
+ * kvar på informationsfliken, dit *Visa alla fält* leder. Översikten sammanfattar
+ * och informationsfliken räknar upp; ingen av dem är den andras kopia.
+ */
+const QUICK_FACT_KEYS = ['manufacturer', 'model', 'serial_number'];
+
+export function itemQuickFacts(item, locale) {
+    return itemFields(item, locale).filter((field) => QUICK_FACT_KEYS.includes(field.key));
+}
