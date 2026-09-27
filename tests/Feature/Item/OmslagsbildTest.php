@@ -487,19 +487,36 @@ it('känner inte igen omslagsbilden i /api', function () {
  * dokumentets ([[Filer och lagring]] § attachment), och testet faller om en
  * kolumn läggs till — det är hela punkten: vilken bild som är itemets är ett
  * faktum om ITEMET.
+ *
+ * `container_id` kom med issue 158 ([[ADR-0047 Containerns bild]]), av
+ * samma skäl som gjorde att pekaren hamnade på `item` och inte här: vilken
+ * bild som är itemets — eller containerns — är ett faktum om ägaren.
+ * `attachment` bär bara VEM raden hör till, och listan uppdaterades av den
+ * som lade till kolumnen, precis som regeln ovan säger.
+ *
+ * **Listan sorteras innan den jämförs**, och det är inte kosmetika: var en ny
+ * kolumn hamnar skiljer sig mellan drivrutinerna. Migreringen skriver
+ * `after('item_id')` och MariaDB lyder — sqlite lägger den sist, för
+ * `ALTER TABLE ADD COLUMN` kan bara lägga till på slutet. Provet handlar om
+ * MÄNGDEN kolumner och inte om ordningen, och en osorterad jämförelse hade
+ * varit grön på sqlite och röd i migreringsjobbet, eller tvärtom.
  */
 it('har ingen ny kolumn på attachment', function () {
-    expect(Schema::getColumnListing('attachment'))->toBe([
-        'id',
-        'ulid',
-        'item_id',
-        'stored_file_id',
-        'filename',
-        'kind',
-        'uploaded_by_user_id',
+    $kolumner = Schema::getColumnListing('attachment');
+    sort($kolumner);
+
+    expect($kolumner)->toBe([
         'billed_account_id',
-        'deleted_at',
+        'container_id',
         'created_at',
+        'deleted_at',
+        'filename',
+        'id',
+        'item_id',
+        'kind',
+        'stored_file_id',
+        'ulid',
         'updated_at',
+        'uploaded_by_user_id',
     ]);
 });

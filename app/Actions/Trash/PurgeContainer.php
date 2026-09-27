@@ -5,6 +5,7 @@ namespace App\Actions\Trash;
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Category;
 use App\Models\Container;
@@ -81,6 +82,24 @@ class PurgeContainer
             // raderats för sig ska också med.
             foreach (Item::withTrashed()->where('container_id', $container->id)->get() as $item) {
                 $this->purgeContent->item($item);
+            }
+
+            // Containerns BILD (issue 158 · [[ADR-0047 Containerns bild]]
+            // § Beslut, "Livscykeln följer containern"): en bilaga som hör
+            // till containern själv och inte till något item, alltså den
+            // enda som `item()`-loopen ovan inte når. Rensas genom
+            // PurgeAttachment som alla andra bilagor — den minskar
+            // `reference_count` och lämnar bytena på disken med
+            // `purge_after` satt.
+            //
+            // FÖRE `forceDelete()` nedan: `attachment.container_id` är ON
+            // DELETE RESTRICT, så containern kan inte tas bort medan raden
+            // pekar på den. `container.cover_attachment_id` är ON DELETE SET
+            // NULL och hade nollställts av sig själv — men bara den ena av
+            // de två nycklarna, och en kvarlämnad containerbild hade fällt
+            // hela gallringen varje natt.
+            foreach (Attachment::withTrashed()->where('container_id', $container->id)->get() as $bilaga) {
+                $this->purgeContent->attachment($bilaga);
             }
 
             foreach (Category::withTrashed()->where('container_id', $container->id)->get() as $category) {

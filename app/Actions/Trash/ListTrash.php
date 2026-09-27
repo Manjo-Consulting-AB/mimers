@@ -155,6 +155,12 @@ class ListTrash
         // kvalificerad för att joinen mot `item` gör `id` tvetydig.
         $itemIds = $scope->itemIds();
 
+        // Den inre joinen mot item är sedan issue 158 också det som håller
+        // containerns bild UTANFÖR papperskorgen: en containerbilaga har
+        // `item_id = NULL`, matchar aldrig en inre join, och kan därför
+        // varken listas eller återställas härifrån
+        // ([[ADR-0047 Containerns bild]] § Beslut: en borttagen bild rensas
+        // direkt och går inte att ångra).
         foreach (Attachment::query()->onlyTrashed()
             ->join('item', 'item.id', '=', 'attachment.item_id')
             ->where('item.container_id', $container->id)

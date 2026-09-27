@@ -199,9 +199,14 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 | name | VARCHAR(255) | |
 | kind | VARCHAR(40) | `boat`, `caravan`, `house`, `car`, `other`. Endast för presentation och mallval — systemet beter sig inte olika. |
 | template_source_id | FK → container NULL | Om utstämplad från mall, se [[ADR-0002 Konto äger container]] |
+| cover_attachment_id | FK → attachment NULL | Containerns bild, se [[ADR-0047 Containerns bild]] och [[Filer och lagring]] § attachment |
 | deleted_at | | |
 
 Index: `(account_id, deleted_at)`.
+
+`cover_attachment_id` är en pekare till en av containerns **egna** bilagor — en rad i `attachment` vars `container_id` är den här containerns. Ett CHECK-villkor kan inte uttrycka "egen", så regeln upprätthålls i `SetContainerCover`, den enda vägen som sätter pekaren. Pekaren är nullbar och frivillig: en container utan bild har ingen, och det finns ingen upplösning med återfall som för itemets omslag — en container har högst en bild.
+
+Nyckeln är `ON DELETE SET NULL`, en medveten avvikelse från husets RESTRICT och samma som `item.cover_attachment_id`: en preferens får aldrig hindra papperskorgens gallring. Gallringen rensar bilden först och nollställer pekaren själv.
 
 ## container_access
 

@@ -88,3 +88,25 @@ jobs:
           cp .env.example .env
           php artisan key:generate
           php artisan migrate --force --no-interaction
+
+      # Issue 158 · CHECK-villkoret på `attachment` finns bara på MariaDB:
+      # sqlite kan bara bära ett CHECK från CREATE TABLE, och migreringen
+      # lägger till sitt i en befintlig tabell. Provet i den här filen hoppar
+      # därför över i sviten, som kör sqlite i minnet - och ett prov som
+      # aldrig kör är ingen bevisning. Här körs det mot samma motor som
+      # staging och produktion.
+      #
+      # Miljövariablerna sätts i steget och inte i .env: phpunit.xml pekar
+      # DB_CONNECTION på sqlite, och en variabel som redan finns i miljön vinner
+      # över den (samma mekanism som gör att sviten kan köras mot MariaDB
+      # lokalt). RefreshDatabase gör `migrate:fresh` på `mimers`, vilket är
+      # ofarligt - databasen är tjänstens och slängs med jobbet.
+      - name: CHECK-villkoret prövas mot MariaDB
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: mimers
+          DB_USERNAME: root
+          DB_PASSWORD: ''
+        run: php artisan test tests/Feature/Attachment/ContainerbildTest.php

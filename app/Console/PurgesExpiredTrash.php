@@ -174,8 +174,13 @@ class PurgesExpiredTrash
             return $row->account;
         }
 
+        // En bilaga når sin container på två vägar sedan issue 158: genom
+        // itemet för en itembilaga, och genom sin EGEN kolumn för en
+        // containerbilaga — containerns bild. Utan den första grenen hade en
+        // containerbild svarat "ingen ägare att fråga om", och den rättsliga
+        // spärren (issue 112) hade tyst hoppats över för just den raden.
         $containerId = $row instanceof Attachment
-            ? Item::withTrashed()->whereKey($row->item_id)->value('container_id')
+            ? ($row->container_id ?? Item::withTrashed()->whereKey($row->item_id)->value('container_id'))
             : $row->container_id;
 
         if ($containerId === null) {

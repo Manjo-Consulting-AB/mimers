@@ -324,6 +324,44 @@ it('ett konto med bilagor i en främmande container raderas, och ägaren tar öv
     expect(Item::query()->whereKey($item->id)->exists())->toBeTrue();
 });
 
+/*
+ * Issue 158 · [[ADR-0047 Containerns bild]] § Beslut, "Livscykeln följer
+ * containern", och [[ADR-0045 Radering av konto och person]] § Uppföljning
+ * 2026-09-27: en containerbild följer containern vid kontoraderingen på samma
+ * sätt som en främmande itembilaga. Containern hittas i bilagans EGEN kolumn
+ * — `item_id` är null — så utan den grenen hade det raderade kontot behållit
+ * betalningen och blockerat raderingen på RESTRICT-nyckeln.
+ */
+it('kontoraderingen flyttar billed_account_id för en främmande containerbild', function () {
+    [$konto, $medlem] = kontoraderingVilande();
+    $agare = Account::factory()->create();
+    $container = kontoraderingContainer($agare);
+
+    $storedFile = StoredFile::factory()->create(['byte_size' => 4096, 'reference_count' => 1]);
+    $bild = Attachment::factory()->create([
+        'item_id' => null,
+        'container_id' => $container->id,
+        'stored_file_id' => $storedFile->id,
+        'filename' => 'båten.png',
+        'kind' => 'image',
+        'uploaded_by_user_id' => $medlem->id,
+        'billed_account_id' => $konto->id,
+    ]);
+
+    $container->cover_attachment_id = $bild->id;
+    $container->save();
+
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    kontoraderingKör();
+
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse();
+
+    // Bilden står kvar med containern — bara betalaren har bytts, och
+    // pekaren är orörd.
+    expect($bild->refresh()->billed_account_id)->toBe($agare->id);
+    expect($container->refresh()->cover_attachment_id)->toBe($bild->id);
+});
+
 it('ägarkontots förbrukning ökar med exakt bilagornas byte_size', function () {
     [$konto, $medlem] = kontoraderingVilande();
     $agare = Account::factory()->create();

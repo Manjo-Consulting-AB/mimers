@@ -32,7 +32,8 @@ En rad per unikt innehåll i hela systemet.
 | Kolumn | Typ | Not |
 |---|---|---|
 | id, ulid | | |
-| item_id | FK | |
+| item_id | FK → item NULL | Itemet bilagan hör till, eller `NULL` för en containerbilaga |
+| container_id | FK → container NULL | Containern bilagan hör till, eller `NULL` för en itembilaga |
 | stored_file_id | FK | |
 | filename | VARCHAR(255) | Användarens namn på filen |
 | kind | VARCHAR(20) | `image` \| `document` \| `other` |
@@ -40,9 +41,15 @@ En rad per unikt innehåll i hela systemet.
 | **billed_account_id** | FK → account | **Kontot som betalar för bytena** |
 | deleted_at | | |
 
-Index: `(item_id, deleted_at)`, `(billed_account_id, deleted_at)`, `(stored_file_id)`.
+Index: `(item_id, deleted_at)`, `(container_id, deleted_at)`, `(billed_account_id, deleted_at)`, `(stored_file_id)`.
+
+**Exakt en av `item_id` och `container_id` är satt.** Ett CHECK-villkor upprätthåller det: en bilaga hör till ett item eller till en container, aldrig till båda och aldrig till ingen. Villkoret är det som gör den nullbarheten säker — utan det vore "ingen ägare" ett tillstånd databasen tillät.
+
+**En bilaga kan tillhöra en container** ([[ADR-0047 Containerns bild]]). Det är containerns bild, och den sitter på `container.cover_attachment_id` — se [[Konton och åtkomst]] § container. En containerbilaga är **alltid en bild**: uppladdningen godtar bara det `StoreAttachment` klassar som `kind = image`, och det finns högst en levande per container, för den som byter ersätter den förra. Att ta bort den går inte via papperskorgen — den rensas direkt med `PurgeAttachment` — och ingenting annat än bilden hänger på kolumnen i dag. Allt övrigt är som för en vanlig bilaga: samma dedup, samma `reference_count`, samma miniatyrer och samma leverans.
 
 `billed_account_id` är det uppladdande kontot, inte containerns ägare. Laddar varvet upp 200 MB servicebilder i en gratisanvändares container ska det belasta varvet. Se [[Planer och kvoter]].
+
+Läsarna frågar **vilket item eller vilken container** bilagan hör till genom `Attachment::accessSubject()` och `Attachment::owningContainer()`, inte genom `$attachment->item`. Papperskorgen listar aldrig en containerbilaga: uppslaget joinar mot `item`, och en containerbilaga har `item_id = NULL`.
 
 ## image_derivative
 

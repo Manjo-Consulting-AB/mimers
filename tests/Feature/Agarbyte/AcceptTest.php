@@ -265,6 +265,43 @@ it('usage_counter för säljare och köpare summerar till samma tal efteråt, oc
         ->toBe(collect([$köparkonto->id, $tredje->id])->sort()->values()->all());
 });
 
+/*
+ * Issue 158 · [[ADR-0047 Containerns bild]] § Beslut, "Livscykeln följer
+ * containern": en containerbild följer containern vid ägarbytet, precis som
+ * en främmande itembilaga. Containern hittas i bilagans EGEN kolumn —
+ * `item_id` är null — så utan den grenen hade säljaren fortsatt betala för
+ * köparens bild, och `usage_counter` hade inte summerat.
+ */
+it('en containerbild följer containern och byter betalare vid accept', function () {
+    [$säljarkonto, $säljarAnvändare, $container] = acceptSäljare();
+    [$köparkonto, , $köparHeaders] = kontoMedMedlem();
+
+    $storedFile = StoredFile::factory()->create(['byte_size' => 7000]);
+    $bild = Attachment::factory()->create([
+        'item_id' => null,
+        'container_id' => $container->id,
+        'stored_file_id' => $storedFile->id,
+        'filename' => 'båten.png',
+        'kind' => 'image',
+        'uploaded_by_user_id' => $säljarAnvändare->id,
+        'billed_account_id' => $säljarkonto->id,
+    ]);
+    (new AdjustUsage)->handle($säljarkonto->id, bytesDelta: 7000);
+
+    $container->cover_attachment_id = $bild->id;
+    $container->save();
+
+    $överföring = skapaÄgarbyteRad($container, ['to_account_id' => $köparkonto->id, 'to_email' => null]);
+    postJson("/api/transfers/{$överföring->ulid}/accept", [], $köparHeaders)->assertOk();
+
+    expect($bild->refresh()->billed_account_id)->toBe($köparkonto->id);
+    expect((int) DB::table('usage_counter')->where('account_id', $säljarkonto->id)->value('storage_bytes'))->toBe(0);
+
+    // Pekaren är orörd: containern har samma bild, det är bara betalaren som
+    // bytts.
+    expect($container->refresh()->cover_attachment_id)->toBe($bild->id);
+});
+
 it('alla container_access-rader återkallas och öppna inbjudningar sätts till revoked', function () {
     [$container, $köparkonto, $köparHeaders, $överföring] = acceptUtgångsläge();
 

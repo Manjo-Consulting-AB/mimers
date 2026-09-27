@@ -522,12 +522,18 @@ it('bär beskrivningen som en nullbar kolumn på containern', function () {
  * "inga andra kolumner" är ett påstående om mängden, och en ny kolumn får
  * gärna vara medveten — men då ska det här provet uppdateras av den som
  * lägger till den.
+ *
+ * `cover_attachment_id` lades till av issue 158 ([[ADR-0047 Containerns
+ * bild]]): containerns bild är ett faktum om containern och hör därför här,
+ * precis som `description` gör. Listan uppdaterades av samma skäl som regeln
+ * ovan anger.
  */
 it('har inte fått någon annan kolumn än description', function () {
     $kolumner = collect(Schema::getColumns('container'))->pluck('name')->sort()->values()->all();
 
     expect($kolumner)->toBe([
         'account_id',
+        'cover_attachment_id',
         'created_at',
         'currency',
         'deleted_at',
