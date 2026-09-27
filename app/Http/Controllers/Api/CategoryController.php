@@ -125,16 +125,23 @@ class CategoryController extends Controller
 
     /**
      * DELETE /api/containers/{container}/categories/{category} — 204, no
-     * body. Soft deletion (SoftDeletes), denied if the category has at
-     * least one non-deleted child — `category.has_children`, 422, with the
-     * count in `data` (issue 11 § Beslut 7). No cascade.
+     * body. Soft deletion of the category AND its entire subtree, in one
+     * transaction with one `deleted_at` (issue 150, [[ADR-0008 Soft delete
+     * och papperskorg]] § Uppföljning 2026-09-26).
      *
-     * Also denied if at least one non-deleted item points at the category —
-     * `category.has_items`, 422, with the count in `data` (issue 13a §
-     * Beslut 9). No cascade, no silent nulling of `category_id`: a deletion
-     * silently emptying the classification of twenty items without anyone
-     * asking is exactly the kind of silent data loss [[ADR-0008 Soft delete
-     * och papperskorg]] exists for.
+     * Until issue 150 this was denied when the category had at least one
+     * non-deleted child (`category.has_children`, 422) or at least one
+     * non-deleted item pointing at it (`category.has_items`, 422) — issue 11
+     * § Beslut 7 and issue 13a § Beslut 9. Both conditions are gone with the
+     * trash: items keep their `category_id` while the category sits in the
+     * trash and get it back on restore, and the warning that used to be the
+     * refusal is now a question in the web view, which is the only surface
+     * that can ask it. `/api` gets no counts; the numbers live in the web
+     * controller, as the tag's do.
+     *
+     * A descendant already in the trash is left alone — its `deleted_at`
+     * stands and it is not restored with the top. Every deleted category
+     * gets its own `category.deleted` row in the event log.
      */
     public function destroy(Request $request, Container $container, Category $category, DeleteCategory $deleteCategory): Response
     {

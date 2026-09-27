@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Attachment\PurgeAttachment;
+use App\Actions\Category\DeleteCategory;
 use App\Actions\Trash\PurgeContainer;
 use App\Actions\Trash\PurgeContent;
 use App\Console\PurgesExpiredTrash;
@@ -792,4 +793,36 @@ it('jobbet är schemalagt dagligen med Schedule::call', function () {
     // till skillnad från Schedule::command() som bygger en "php artisan
     // ..."-sträng avsedd att köras via Symfony Process.
     expect($händelse->command ?? null)->toBeNull();
+});
+
+/*
+ * Klart när: underträdet gallras i samma körning (issue 150). Raderna delar
+ * `deleted_at`, alltså passerar de retentionen tillsammans och plockas av
+ * samma `chunkById`-svep. Gallringen själv ändras inte: `PurgeContent::category()`
+ * nollställer `category_id` och `parent_id` som förut.
+ */
+it('gallrar hela kategorins underträd i samma körning', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $rot = gallringKategori($container, ['name' => 'Elsystem']);
+    $barn = gallringKategori($container, ['name' => 'Startmotor', 'parent_id' => $rot->id]);
+    $item = gallringItem($container, $account, $user, ['category_id' => $barn->id, 'name' => 'Motorn']);
+
+    // Raderingsvägen och inte en handskriven deleted_at: det är kaskaden som
+    // prövas, med EN tidsstämpel för hela trädet.
+    app(DeleteCategory::class)->handle($container, $rot, $user);
+
+    expect($rot->refresh()->trashed())->toBeTrue();
+    expect($barn->refresh()->trashed())->toBeTrue();
+
+    // Klockan förbi retentionen, och EN körning.
+    Carbon::setTestNow('2026-10-05 12:00:00');
+
+    $antal = gallringKör();
+
+    expect($antal['category'])->toBe(2);
+    expect(Category::withTrashed()->whereKey($rot->id)->exists())->toBeFalse();
+    expect(Category::withTrashed()->whereKey($barn->id)->exists())->toBeFalse();
+    expect(DB::table('item')->where('id', $item->id)->value('category_id'))->toBeNull();
 });

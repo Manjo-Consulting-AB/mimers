@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
+use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\postJson;
 
@@ -524,4 +525,104 @@ it('listningen gör ett konstant antal frågor', function () {
     } finally {
         Carbon::setTestNow();
     }
+});
+
+/*
+ * Issue 150 · [[ADR-0008 Soft delete och papperskorg]] § Uppföljning
+ * 2026-09-26: en kategori raderas med hela sitt underträd, och papperskorgen
+ * visar bara den ÖVERSTA raden. En underkategori vars förälder raderades
+ * samtidigt listas inte för sig — det är `deleted_at` som binder dem samman.
+ */
+it('visar bara den översta kategorin när underträdet raderades samtidigt', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+
+    $rot = Category::factory()->for($container, 'container')->create(['name' => 'Elsystem']);
+    Category::factory()->for($container, 'container')->create(['name' => 'Startmotor', 'parent_id' => $rot->id]);
+    $barnbarn = Category::factory()->for($container, 'container')->create(['name' => 'Kolborste', 'parent_id' => $rot->children()->firstOrFail()->id]);
+
+    deleteJson("/api/containers/{$container->ulid}/categories/{$rot->ulid}", [], $headers)->assertNoContent();
+
+    $response = getJson("/api/containers/{$container->ulid}/trash", $headers);
+
+    $response->assertOk();
+
+    $rader = collect($response->json('data'));
+
+    expect($rader)->toHaveCount(1);
+    expect($rader->first()['type'])->toBe('category');
+    expect($rader->first()['ulid'])->toBe($rot->ulid);
+    expect($rader->first()['context'])->toBeNull();
+
+    // Underträdet ligger i papperskorgen, men syns bara genom den översta.
+    expect($barnbarn->refresh()->trashed())->toBeTrue();
+});
+
+/*
+ * Klart när: en återställning tar tillbaka underträdet men inte en ättling
+ * som raderades tidigare — och items får tillbaka sin kategori, medan ett
+ * item som under tiden fått en annan kategori, eller ingen, behåller den.
+ */
+it('återställer underträdet men inte en ättling som raderades tidigare', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+
+    $rot = Category::factory()->for($container, 'container')->create(['name' => 'Elsystem']);
+    $barn = Category::factory()->for($container, 'container')->create(['name' => 'Startmotor', 'parent_id' => $rot->id]);
+    $tidigare = Category::factory()->for($container, 'container')->create(['name' => 'Gammal', 'parent_id' => $rot->id]);
+
+    mjukraderaPapperskorg($tidigare, now()->subDays(5));
+
+    deleteJson("/api/containers/{$container->ulid}/categories/{$rot->ulid}", [], $headers)->assertNoContent();
+
+    postJson("/api/containers/{$container->ulid}/trash/restore", [
+        'type' => 'category',
+        'ulid' => $rot->ulid,
+    ], $headers)->assertOk();
+
+    expect($rot->refresh()->trashed())->toBeFalse();
+    expect($barn->refresh()->trashed())->toBeFalse();
+    expect($tidigare->refresh()->trashed())->toBeTrue();
+
+    // Den tidigare raderade ligger kvar i papperskorgen, för sig.
+    $rader = collect(getJson("/api/containers/{$container->ulid}/trash", $headers)->json('data'));
+
+    expect($rader->pluck('ulid')->all())->toBe([$tidigare->ulid]);
+});
+
+it('ger items tillbaka sin kategori vid återställning, men inte de som bytt', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+
+    $kategori = Category::factory()->for($container, 'container')->create(['name' => 'Motor']);
+    $annan = Category::factory()->for($container, 'container')->create(['name' => 'Rigg']);
+
+    $kvar = papperskorgsItem($container, $account, $user, ['name' => 'Motorn']);
+    $bytt = papperskorgsItem($container, $account, $user, ['name' => 'Seglet']);
+    $utan = papperskorgsItem($container, $account, $user, ['name' => 'Åran']);
+
+    foreach ([$kvar, $bytt, $utan] as $item) {
+        $item->category_id = $kategori->id;
+        $item->save();
+    }
+
+    deleteJson("/api/containers/{$container->ulid}/categories/{$kategori->ulid}", [], $headers)->assertNoContent();
+
+    // Medan kategorin ligger i papperskorgen: ett item flyttas, ett tappar sin.
+    $bytt->category_id = $annan->id;
+    $bytt->save();
+
+    $utan->category_id = null;
+    $utan->save();
+
+    postJson("/api/containers/{$container->ulid}/trash/restore", [
+        'type' => 'category',
+        'ulid' => $kategori->ulid,
+    ], $headers)->assertOk();
+
+    // Den som stod kvar får sin kategori tillbaka utan att någon rörde den.
+    expect($kvar->refresh()->category_id)->toBe($kategori->id);
+    // De andra behåller det de har — ingen skrivning nådde dem.
+    expect($bytt->refresh()->category_id)->toBe($annan->id);
+    expect($utan->refresh()->category_id)->toBeNull();
 });

@@ -8,6 +8,8 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Item;
 use App\Models\User;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
@@ -467,57 +469,133 @@ it('avvisar en sjätte nivå med ett meddelande som bär djupgränsen', function
 });
 
 /*
- * Klart när: DELETE på en kategori med barn nekas med antalet barn i
- * meddelandet; på en med items med antalet items.
+ * Klart när: DELETE på en kategori med barn eller items lyckas och tar med
+ * hela underträdet — den nekas inte längre, och items behåller sin kategori.
+ *
+ * Issue 150 och [[ADR-0008 Soft delete och papperskorg]] § Uppföljning
+ * 2026-09-26: villkoren `category.has_children` och `category.has_items`
+ * utgick. Varningen är i stället frågan i vyn, som `counts`-proppen bär
+ * talen till — se nästa prov.
  */
-it('nekas radera en kategori med barn eller items, med talet i meddelandet', function () {
+it('raderar en kategori med barn och items och tar med hela underträdet', function () {
     withoutVite();
 
     [, $anvandare, $container] = kategorivyKontext();
 
     $förälder = kategorivyKategori($container, 'Båten');
-    kategorivyKategori($container, 'Riggen', $förälder);
-    kategorivyKategori($container, 'Masten', $förälder);
+    $barn = kategorivyKategori($container, 'Riggen', $förälder);
 
     $medItems = kategorivyKategori($container, 'Framdrivning');
     kategorivyItem($container, 'Motorn', $medItems);
-    kategorivyItem($container, 'Impellern', $medItems);
-    kategorivyItem($container, 'Oljefiltret', $medItems);
 
-    // Barnen: felet hamnar på formulärnyckeln `category` (Beslut 4).
-    $barnSvar = actingAs($anvandare)
+    actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
-        ->delete("/containers/{$container->ulid}/categories/{$förälder->ulid}");
+        ->delete("/containers/{$container->ulid}/categories/{$förälder->ulid}")
+        ->assertRedirect("/containers/{$container->ulid}/categories")
+        ->assertSessionHas('status', 'category-deleted')
+        ->assertSessionHasNoErrors();
 
-    $barnSvar->assertRedirect("/containers/{$container->ulid}/categories");
-    $barnSvar->assertSessionHasErrors('category');
-    expect(session('errors')->get('category')[0])->toContain('2');
+    expect($förälder->refresh()->trashed())->toBeTrue();
+    expect($barn->refresh()->trashed())->toBeTrue();
+    expect($förälder->deleted_at->toDateTimeString())->toBe($barn->deleted_at->toDateTimeString());
 
-    // Ingen kaskad: raden finns kvar.
-    expect($förälder->refresh()->trashed())->toBeFalse();
-
-    $itemSvar = actingAs($anvandare)
+    actingAs($anvandare)
         ->from("/containers/{$container->ulid}/categories")
-        ->delete("/containers/{$container->ulid}/categories/{$medItems->ulid}");
+        ->delete("/containers/{$container->ulid}/categories/{$medItems->ulid}")
+        ->assertSessionHas('status', 'category-deleted')
+        ->assertSessionHasNoErrors();
 
-    $itemSvar->assertRedirect();
-    $itemSvar->assertSessionHasErrors('category');
-    expect(session('errors')->get('category')[0])->toContain('3');
-
-    expect($medItems->refresh()->trashed())->toBeFalse();
-    expect($itemSvar->getContent())->not->toContain('error.code');
+    expect($medItems->refresh()->trashed())->toBeTrue();
 
     // Ingen tyst nollning av `category_id` — items ligger kvar där de låg.
-    expect(Item::query()->where('category_id', $medItems->id)->count())->toBe(3);
+    expect(Item::query()->where('category_id', $medItems->id)->count())->toBe(1);
+});
 
-    // Meningarna finns och ritar talet.
-    $sv = require lang_path('en/ui.php');
+/*
+ * Klart när: kategorisidans tal räknas i en fråga oavsett antal kategorier,
+ * och de säger hur många underkategorier och items en radering skulle ta med
+ * sig. Formen är taggsidans: ett uppslag ULID → tal, utanför `CategoryResource`
+ * som är delad med `/api`.
+ */
+it('bär raderingstalen per kategori, räknade i en fråga', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = kategorivyKontext();
+
+    $rot = kategorivyKategori($container, 'Båten');
+    $barn = kategorivyKategori($container, 'Riggen', $rot);
+    $barnbarn = kategorivyKategori($container, 'Masten', $barn);
+    $lös = kategorivyKategori($container, 'Dokument');
+
+    kategorivyItem($container, 'Motorn', $rot);
+    kategorivyItem($container, 'Seglet', $barn);
+    kategorivyItem($container, 'Vanten', $barnbarn);
+
+    $svar = actingAs($anvandare)->get("/containers/{$container->ulid}/categories");
+
+    $svar->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
+        // Roten: två underkategorier i underträdet, tre items — dess eget och
+        // båda ättlingarnas.
+        ->where("counts.{$rot->ulid}.subcategories", 2)
+        ->where("counts.{$rot->ulid}.items", 3)
+        ->where("counts.{$barn->ulid}.subcategories", 1)
+        ->where("counts.{$barn->ulid}.items", 2)
+        ->where("counts.{$barnbarn->ulid}.subcategories", 0)
+        ->where("counts.{$barnbarn->ulid}.items", 1)
+        ->where("counts.{$lös->ulid}.subcategories", 0)
+        ->where("counts.{$lös->ulid}.items", 0)
+    );
+
+    // Talen bor i kontrollerns prop och INTE i resursen: `/api` har inte bett
+    // om dem, och CategoryResource är delad.
+    $api = actingAs($anvandare)->getJson("/api/containers/{$container->ulid}/categories");
+
+    $api->assertOk();
+    expect($api->json('data.0'))->not->toHaveKey('counts');
+    expect($api->json('data.0'))->not->toHaveKey('subcategories');
+});
+
+/*
+ * Klart när: frågan är i vyn, med talen ur `counts` — och bara när det finns
+ * något att varna för.
+ *
+ * Mönstret är ItemAttachmentSection.vue: `router.delete` och `window.confirm`
+ * FÖRE anropet, så att en avbruten bekräftelse inte navigerar. Länken är bytt
+ * mot en knapp av samma skäl. Strängarna ligger i `lang/en/ui.php` och inte i
+ * JavaScript.
+ */
+it('frågar i CategoryRow med talen, och bara när det finns något att varna för', function () {
+    $rad = File::get(resource_path('js/components/CategoryRow.vue'));
+
+    expect($rad)->toContain('window.confirm(destroyConfirm.value)')
+        ->toContain("t('container.categories.destroy_confirm', { items })")
+        ->toContain("t('container.categories.destroy_confirm_tree', { subcategories, items })")
+        ->toContain("t('container.categories.destroy_confirm_tree_empty', { subcategories })")
+        ->toContain('subcategories > 0 || items > 0')
+        ->toContain('router.delete(');
+
+    // Ingen Inertia-länk kvar: bekräftelsen måste kunna avbryta, och det kan
+    // bara en window.confirm() före anropet.
+    expect($rad)->not->toContain('Link');
+
+    $träd = File::get(resource_path('js/components/CategoryTree.vue'));
+
+    expect($träd)->toContain(':counts="counts"');
+
+    $sida = File::get(resource_path('js/pages/Containers/Categories.vue'));
+
+    expect($sida)->toContain(':counts="counts"');
+
     $en = require lang_path('en/ui.php');
 
-    foreach (['has_children', 'has_items'] as $nyckel) {
-        expect($sv['error']['category'][$nyckel])->not->toBe('');
-        expect($en['error']['category'][$nyckel])->not->toBe('');
+    foreach (['destroy_confirm', 'destroy_confirm_tree', 'destroy_confirm_tree_empty'] as $nyckel) {
+        expect($en['container']['categories'][$nyckel])->not->toBe('');
     }
+
+    expect($en['container']['categories']['destroy_confirm'])->toContain(':items');
+    expect($en['container']['categories']['destroy_confirm_tree'])->toContain(':subcategories');
+    expect($en['container']['categories']['destroy_confirm_tree'])->toContain(':items');
+    expect($en['container']['categories']['destroy_confirm_tree_empty'])->toContain(':subcategories');
 });
 
 /*
@@ -736,4 +814,75 @@ it('renderar en fallback-ruta för kategori-felet på sidan', function () {
 
     expect($sida)->toContain('errors.category')
         ->toContain('role="alert"');
+});
+
+/**
+ * Antalet frågor en request kostar, mätt med DB::listen — samma mätning som
+ * TaggvyTest::taggvyFrågor().
+ */
+function kategorivyFrågor(Closure $anrop): int
+{
+    app()->forgetScopedInstances();
+
+    $frågor = 0;
+    DB::listen(function () use (&$frågor) {
+        $frågor++;
+    });
+
+    $anrop();
+
+    return $frågor;
+}
+
+/*
+ * Klart när: kategorisidans tal räknas i en fråga oavsett antal kategorier,
+ * mätt med DB::listen.
+ *
+ * Talen räknas i App\Actions\Category\ListCategories::counts(): EN fråga för
+ * trädet och EN grupperad fråga för itemtalen, och fördelningen på underträd
+ * sker i minnet. En fråga per kategori vore den N+1 mätningen ska fånga — och
+ * ett antal som växer med antalet kategorier hade synts här.
+ */
+it('räknar raderingstalen med ett konstant antal frågor, oavsett antal kategorier', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = kategorivyKontext();
+
+    $rot = kategorivyKategori($container, 'Båten');
+    $barn = kategorivyKategori($container, 'Riggen', $rot);
+    kategorivyItem($container, 'Motorn', $barn);
+
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
+    actingAs($anvandare);
+
+    // En uppvärmningsrequest först: den inloggade användaren ligger kvar i
+    // minnet mellan anropen i samma test, så den första mätningen hade annars
+    // betalat för laddningar den andra får gratis.
+    get("/containers/{$container->ulid}/categories")->assertOk();
+
+    DB::flushQueryLog();
+
+    $faKategorier = kategorivyFrågor(function () use ($container) {
+        get("/containers/{$container->ulid}/categories")->assertOk();
+    });
+
+    $förälder = null;
+
+    foreach (range(1, 8) as $i) {
+        $förälder = kategorivyKategori($container, "Nivå {$i}", $förälder);
+        kategorivyItem($container, "Item {$i}", $förälder);
+    }
+
+    $flerKategorier = kategorivyFrågor(function () use ($container) {
+        get("/containers/{$container->ulid}/categories")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page->has('categories', 10));
+    });
+
+    expect($flerKategorier)->toBe($faKategorier);
+
+    Carbon::setTestNow();
 });

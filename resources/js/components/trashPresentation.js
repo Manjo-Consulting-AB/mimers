@@ -29,3 +29,30 @@ export function remainingLabel(t, expiresAt, now = new Date()) {
 
     return t('trash.expires.days', { days });
 }
+
+/*
+ * Antalet underkategorier som följde med en raderad kategori, se issue 150
+ * och [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26.
+ *
+ * **En kategori raderas med hela sitt underträd**, och papperskorgen visar
+ * bara den översta raden. Talet är det enda som säger att raden bär mer än
+ * sitt eget namn, och det är samma tal som återställningen tar tillbaka.
+ *
+ * **Noll ger ingen rad.** En kategori som raderades för sig själv ska inte
+ * mötas av "0 underkategorier" — tomheten är svaret.
+ *
+ * **Valet av nyckel ligger här och inte i mallen**, av exakt samma skäl som
+ * `remainingLabel` ovan: `t()` har ingen pluralisering (issue 52 § Beslut 4),
+ * så singular och plural är två nycklar, och en mall går inte att pröva.
+ */
+export function subcategoryLabel(t, count) {
+    if (count < 1) {
+        return null;
+    }
+
+    if (count === 1) {
+        return t('trash.subcategories.one');
+    }
+
+    return t('trash.subcategories.many', { count });
+}

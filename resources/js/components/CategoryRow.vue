@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue';
-import { Link, useForm, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { router, useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import { parentOptions } from './categoryTree.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -29,22 +29,41 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * filtreringen är en artighet: `MoveCategory` prövar cykeln och djupet på
  * servern, och dess svar är det som gäller (Beslut 3).
  *
- * **Radera är en <Link method="delete">**, inte ett eget formulär: rutten är en
- * DELETE och Inertia skickar CSRF-tokenet åt oss, samma mönster som
- * ContainerAccessRow. Ingen knapp döljs — behörighetskontroller görs i
- * policies, aldrig genom att gömma en knapp.
+ * **Radera är en knapp, inte ett eget formulär**: rutten är en DELETE och
+ * Inertia skickar CSRF-tokenet åt oss, samma mönster som ContainerAccessRow.
+ * Ingen knapp döljs — behörighetskontroller görs i policies, aldrig genom att
+ * gömma en knapp.
+ *
+ * **Sedan issue 150 frågar raden först, och kategorin raderas med sitt
+ * underträd.** `router.delete` och inte Inertias länkkomponent med
+ * `method`-attributet, av exakt samma skäl som ItemAttachmentSection.vue: en
+ * bekräftelse måste kunna AVBRYTA navigeringen, och det kan bara en
+ * `window.confirm()` före anropet. Talen kommer ur `counts`-proppen, samma
+ * uppslag ULID → tal som taggsidan bär: antalet levande underkategorier i
+ * underträdet och antalet items som sitter på kategorin eller någon av dem.
+ *
+ * **Frågan ställs bara när det finns något att varna för.** En kategori utan
+ * underkategorier och utan items raderas utan fråga, som i dag — där finns
+ * ingenting att ångra som användaren inte redan ser. Formuleringen väljs i
+ * tre steg (barn och items, bara barn, bara items) eftersom `t()` inte
+ * pluraliserar och en mening som säger "används på 0 items" vore sämre än
+ * ingen mening alls; nycklarna bor i `lang/en/ui.php`.
  *
  * **Nekas raderingen ritas felet HÄR**, vid den berörda raden (Beslut 4).
  * Felpåsen bär felet på formulärnyckeln `category` och kan inte säga vilken rad
  * det gäller, så sidan håller reda på ULID:n för den rad vars radering senast
  * skickades och skickar den hit. Ett träd om fem nivåer kan ha många noder som
  * heter något kort: "Kategorin har 3 items och kan inte raderas" högst upp
- * lämnar användaren att gissa vilken av dem som nekades.
+ * lämnar användaren att gissa vilken av dem som nekades. Sedan issue 150
+ * nekande raderingar är borta ur den här ytan, men rutan står kvar för de
+ * domänfel som fortfarande kan komma ur rutten.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
     category: { type: Object, required: true },
     categories: { type: Array, required: true },
+    /* ULID → { subcategories, items }, ur kontrollerns `counts`-prop. */
+    counts: { type: Object, required: true },
     /* ULID:n för den rad vars radering senast skickades, eller null. */
     deleteErrorUlid: { type: String, default: null },
 });
@@ -56,6 +75,27 @@ const { focusFirstError } = useErrorFocus();
 const page = usePage();
 
 const deleteFailed = computed(() => props.deleteErrorUlid === props.category.ulid);
+
+/* ULID:n för den nod vars radering väntar på svar, annars null — knappen
+   stängs medan den väntar, så samma nod inte kan skickas två gånger. */
+const pending = ref(null);
+
+/* Talen för DEN HÄR raden. Saknas raden i uppslaget finns inget att varna för. */
+const tally = computed(() => props.counts[props.category.ulid] ?? { subcategories: 0, items: 0 });
+
+const destroyConfirm = computed(() => {
+    const { subcategories, items } = tally.value;
+
+    if (subcategories > 0 && items > 0) {
+        return t('container.categories.destroy_confirm_tree', { subcategories, items });
+    }
+
+    if (subcategories > 0) {
+        return t('container.categories.destroy_confirm_tree_empty', { subcategories });
+    }
+
+    return t('container.categories.destroy_confirm', { items });
+});
 
 /* Fältens id:n måste vara unika i trädet — varje nod har samma fältnamn. */
 const field = (name) => `category-${props.category.ulid}-${name}`;
@@ -72,6 +112,22 @@ function submit() {
     form.patch(`/containers/${props.containerUlid}/categories/${props.category.ulid}`, {
         preserveScroll: true,
         onError: focusFirstError,
+    });
+}
+
+function destroy() {
+    const { subcategories, items } = tally.value;
+
+    if ((subcategories > 0 || items > 0) && ! window.confirm(destroyConfirm.value)) {
+        return;
+    }
+
+    emit('delete', props.category.ulid);
+
+    router.delete(`/containers/${props.containerUlid}/categories/${props.category.ulid}`, {
+        preserveScroll: true,
+        onStart: () => { pending.value = props.category.ulid; },
+        onFinish: () => { pending.value = null; },
     });
 }
 </script>
@@ -141,16 +197,14 @@ function submit() {
             </button>
         </form>
 
-        <Link
-            :href="`/containers/${containerUlid}/categories/${category.ulid}`"
-            method="delete"
-            as="button"
-            preserve-scroll
-            class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline"
-            @click="emit('delete', category.ulid)"
+        <button
+            type="button"
+            :disabled="pending !== null"
+            class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline disabled:opacity-50"
+            @click="destroy"
         >
             {{ t('container.categories.destroy') }}
-        </Link>
+        </button>
 
         <p
             v-if="deleteFailed && page.props.errors.category"

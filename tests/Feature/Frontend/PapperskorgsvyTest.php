@@ -787,3 +787,69 @@ it('gör ett konstant antal frågor på sidan, oavsett antal rader', function ()
 
     expect($flerRader)->toBe($faRader);
 });
+
+/*
+ * Klart när: papperskorgen visar bara den översta kategorin, med antalet
+ * underkategorier som raderades med den (issue 150).
+ *
+ * Talet bor i `subcategoryCounts` BREDVID raderna, av samma skäl som
+ * `canRestore`: `TrashEntryResource` är delad med `/api` och får inget fält
+ * bara webben behöver.
+ */
+it('visar bara den översta kategorin, med underträdets tal', function () {
+    withoutVite();
+
+    [$konto, $ägare, $container] = papperskorgsvyKontext();
+
+    $rot = Category::factory()->for($container, 'container')->create(['name' => 'Elsystem']);
+    $barn = Category::factory()->for($container, 'container')->create(['name' => 'Startmotor', 'parent_id' => $rot->id]);
+    $barnbarn = Category::factory()->for($container, 'container')->create(['name' => 'Kolborste', 'parent_id' => $barn->id]);
+
+    actingAs($ägare)
+        ->from("/containers/{$container->ulid}/categories")
+        ->delete("/containers/{$container->ulid}/categories/{$rot->ulid}")
+        ->assertRedirect("/containers/{$container->ulid}/categories");
+
+    actingAs($ägare)
+        ->get("/containers/{$container->ulid}/trash")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Trash')
+            ->has('entries', 1)
+            ->where('entries.0.type', 'category')
+            ->where('entries.0.ulid', $rot->ulid)
+            ->where('entries.0.context', null)
+            ->where("subcategoryCounts.{$rot->ulid}", 2)
+        );
+
+    expect($barnbarn->refresh()->trashed())->toBeTrue();
+});
+
+/*
+ * Klart när: raden säger hur många underkategorier som följde med, och tiger
+ * när det inte följde med någon. Valet av nyckel bor i
+ * resources/js/components/trashPresentation.js, för `t()` inte pluraliserar
+ * (issue 52 § Beslut 4) och en mall går inte att pröva.
+ */
+it('formulerar underträdets tal och tiger när det är noll', function () {
+    $modul = File::get(resource_path('js/components/trashPresentation.js'));
+
+    expect($modul)->toContain("t('trash.subcategories.one')")
+        ->toContain("t('trash.subcategories.many', { count })")
+        ->toContain('count < 1');
+
+    $raden = File::get(resource_path('js/components/TrashRow.vue'));
+
+    expect($raden)->toContain('subcategoryLabel(t, subcategoryCount)')
+        ->toContain('subcategoryCount: { type: Number, default: 0 }');
+
+    $sidan = File::get(resource_path('js/pages/Containers/Trash.vue'));
+
+    expect($sidan)->toContain('subcategoryCounts[entry.ulid] ?? 0')
+        ->toContain('subcategoryCounts: { type: Object, required: true }');
+
+    $en = require lang_path('en/ui.php');
+
+    expect($en['trash']['subcategories']['one'])->not->toBe('');
+    expect($en['trash']['subcategories']['many'])->toContain(':count');
+});

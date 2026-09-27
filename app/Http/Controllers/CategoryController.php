@@ -98,6 +98,15 @@ class CategoryController extends Controller
      * servern får aldrig veta vad orden betyder ([[ADR-0004 Fria taggar och
      * kategorier]]). Att tomheten avgör om kortet ritas är sidans sak: den
      * frågan är redan ställd av listan.
+     *
+     * **`counts` är räknaren som raderingsfrågan ritar talen ur** (issue 150),
+     * samma form som taggsidans prop: ett uppslag ULID → tal, skickat som
+     * objekt och aldrig som en tom PHP-lista (`[]` blir `[]` i JSON och `{}`
+     * blir `{}`, och en prop vars form skiftar med innehållet måste prövas två
+     * gånger på klientsidan). Talen bor i kontrollerns prop och INTE i
+     * `CategoryResource` — `/api` har inte bett om dem. De räknas av
+     * App\Actions\Category\ListCategories::counts() i två frågor oavsett
+     * antal kategorier, och de är containerns, inte mottagarens omfång.
      */
     public function index(Request $request, Container $container, ListCategories $listCategories): Response
     {
@@ -110,6 +119,7 @@ class CategoryController extends Controller
         return Inertia::render('Containers/Categories', [
             'container' => ContainerResource::make($container)->resolve($request),
             'categories' => CategoryResource::collection($listCategories->handle($user, $container))->resolve($request),
+            'counts' => (object) $listCategories->counts($container),
             'can' => [
                 'manage' => Gate::forUser($user)->allows('update', $container),
             ],
@@ -168,7 +178,7 @@ class CategoryController extends Controller
      *
      * Felet är en MENING ur `lang/`, inte en API-felkod: rutten finns bara på
      * webben och har ingen motsvarighet i `/api` att hålla koden i takt med,
-     * till skillnad från `category.has_children` och de andra i
+     * till skillnad från `category.cycle` och de andra i
      * App\Http\Controllers\Api\CategoryController.
      *
      * **Mallen skriver EN loggrad, inte en per kategori** (issue 111). Att
@@ -338,26 +348,28 @@ class CategoryController extends Controller
     /**
      * DELETE /containers/{container}/categories/{category} — 302 tillbaka.
      *
-     * **Ingen kaskad och ingen "radera ändå"-knapp** (Beslut 4). En kategori
-     * med barn nekas med antalet barn, en med items med antalet items, och
-     * meddelandet bär talet ur `data`. Det är hela poängen med att API:et
-     * nekar (issue 11 § Beslut 7 och issue 13a § Beslut 9): en radering som
-     * tyst tömmer klassificeringen på tjugo items är precis den tysta
-     * dataförlusten [[ADR-0008 Soft delete och papperskorg]] finns till för
-     * att undvika.
+     * **Kategorin raderas med hela sitt underträd** (issue 150,
+     * [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26).
+     * Fram till issue 150 nekades en kategori med barn (`category.has_children`)
+     * och en med items (`category.has_items`), med talet i `data` — en radering
+     * som tyst tömde klassificeringen på tjugo items var den dataförlust
+     * papperskorgen finns för att undvika (issue 11 § Beslut 7 och issue 13a
+     * § Beslut 9). Med papperskorgen är raderingen inte tyst längre och går att
+     * ångra, så båda villkoren utgick. Vyn frågar i stället, med talen ur
+     * `counts`-proppen, och det är den frågan som bär varningen nu.
      *
-     * **Villkoren står på ett ställe sedan issue 111**: de två `count()`-en bor
-     * i App\Actions\Category\DeleteCategory, som `/api` anropar på samma sätt.
-     * Fram till dess stod de med flit i båda kontrollerna — issue 56a:s fyra
-     * utbrytningar räknade inte upp någon `DeleteCategory` — men den dagen
-     * docblocken pekade ut ("den dag de glider isär är det den gemensamma
-     * Actionen som ska till") är här: loggraden ska skrivas i handlingens
-     * transaktion.
+     * **Kaskaden bor i App\Actions\Category\DeleteCategory**, som `/api`
+     * anropar på samma sätt: EN transaktion, EN `deleted_at` för hela
+     * underträdet, en `category.deleted`-rad per raderad kategori, och items
+     * som behåller sin `category_id`.
      *
-     * Felet hamnar på formulärnyckeln `category`, inte på ett fältnamn: det
-     * hör inte till vad användaren skrev. Sidan renderar det som en ruta över
-     * trädet — felpåsen kan inte säga vilken rad felet gäller, och en ruta per
-     * rad hade upprepat samma mening lika många gånger som trädet har noder.
+     * `try`/`catch` står kvar för de koder som FORTFARANDE kan komma ur
+     * actionen och dess grannar — en framtida domänregel ska bli en mening på
+     * webben, inte en JSON-kropp mitt i en sida. Felet hamnar på
+     * formulärnyckeln `category`, inte på ett fältnamn: det hör inte till vad
+     * användaren skrev. Sidan renderar det som en ruta vid den berörda raden —
+     * felpåsen kan inte säga vilken rad felet gäller, och en ruta per rad hade
+     * upprepat samma mening lika många gånger som trädet har noder.
      */
     public function destroy(
         Request $request,

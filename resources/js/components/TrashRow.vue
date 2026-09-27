@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import { formatDate } from './accessPresentation.js';
-import { remainingLabel } from './trashPresentation.js';
+import { remainingLabel, subcategoryLabel } from './trashPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -36,6 +36,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * samma grind som rutten prövar. Flaggan är presentation: `POST`
  * auktoriserar ändå, och den som postar förbi vyn får 403.
  *
+ * **`subcategoryCount` är underträdet som följde med raden** (issue 150). En
+ * kategori raderas med hela sitt underträd och listas som EN rad — den
+ * översta — så talet är det enda som skiljer en ensam kategori från en gren
+ * på fyra. Det kommer ur `subcategoryCounts`-proppen BREDVID raderna, av
+ * samma skäl som `canRestore`: `TrashEntryResource` är delad med `/api` och
+ * får inget fält bara webben behöver. Noll ger ingen rad — se
+ * resources/js/components/trashPresentation.js.
+ *
  * Ingen bekräftelseruta: återställningen är den ogörliga handlingens
  * motsats — den lägger tillbaka något, och den går att ångra med en ny
  * radering.
@@ -44,6 +52,7 @@ const props = defineProps({
     entry: { type: Object, required: true },
     containerUlid: { type: String, default: null },
     canRestore: { type: Boolean, default: false },
+    subcategoryCount: { type: Number, default: 0 },
 });
 
 const restoreTarget = computed(() => props.entry.type === 'container'
@@ -71,6 +80,10 @@ const page = usePage();
         </span>
 
         <span class="text-xs text-slate-600">{{ remainingLabel(t, entry.expires_at) }}</span>
+
+        <span v-if="subcategoryLabel(t, subcategoryCount)" class="text-xs text-slate-600">
+            {{ subcategoryLabel(t, subcategoryCount) }}
+        </span>
 
         <Link
             v-if="canRestore"

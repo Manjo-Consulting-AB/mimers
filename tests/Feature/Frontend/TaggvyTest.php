@@ -650,3 +650,28 @@ it('skiljer taggen från kategorin med en mening', function () {
     expect($sida)->toContain("t('container.tags.description')")
         ->toContain('counts[tag.ulid]');
 });
+
+/*
+ * Klart när: en tagg som sitter på items raderas först efter en fråga som
+ * säger hur många; en tagg utan items raderas utan fråga.
+ *
+ * Frågan bor i vyn — raderingen på servern är oförändrad (issue 150) — och
+ * talet är SAMMA träffräknare raden redan visar, alltså per omfång. Mönstret
+ * är ItemAttachmentSection.vue: `router.delete` och `window.confirm` FÖRE
+ * anropet, så att en avbruten bekräftelse inte navigerar; länken är bytt mot
+ * en knapp av samma skäl. Strängen ligger i `lang/en/ui.php`.
+ */
+it('frågar i TagRow med träffräknaren, och bara när taggen sitter på något', function () {
+    $rad = File::get(resource_path('js/components/TagRow.vue'));
+
+    expect($rad)->toContain('window.confirm(')
+        ->toContain("t('container.tags.destroy_confirm', { count: props.count })")
+        ->toContain('props.count > 0')
+        ->toContain('router.delete(')
+        ->toContain('@click="destroy"');
+
+    $en = require lang_path('en/ui.php');
+
+    expect($en['container']['tags']['destroy_confirm'])->not->toBe('')
+        ->toContain(':count');
+});

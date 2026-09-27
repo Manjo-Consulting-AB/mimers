@@ -28,11 +28,18 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * `trash` och inte ett fältnamn: felet handlar inte om vad användaren
  * skrev, och det gäller en rad som redan står i listan — samma mönster som
  * delningssidan valde för en obesvarad inbjudan.
+ *
+ * **`subcategoryCounts` är uppslaget `ulid → antal` BREDVID raderna** (issue
+ * 150), samma form och samma skäl som `canRestore`: en kategori som raderades
+ * med sitt underträd listas som EN rad, och talet säger hur många
+ * underkategorier som följde med den. Det bor utanför `TrashEntryResource`,
+ * som är delad med `/api`.
  */
 defineProps({
     container: { type: Object, required: true },
     entries: { type: Array, required: true },
     canRestore: { type: Object, required: true },
+    subcategoryCounts: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
@@ -61,6 +68,7 @@ const page = usePage();
                 :container-ulid="container.ulid"
                 :entry="entry"
                 :can-restore="canRestore[entry.ulid] === true"
+                :subcategory-count="subcategoryCounts[entry.ulid] ?? 0"
             />
         </ul>
 

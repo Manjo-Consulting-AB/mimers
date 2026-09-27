@@ -434,15 +434,15 @@ return [
             'email_not_verified' => 'Verify your email address first, then try again.',
         ],
 
-        // The category error codes, see issue 56a decision 4. The first three
-        // belong to a MOVE and land on the `parent` field; the last two belong
-        // to a DELETION and land on the `category` form key.
+        // The category error codes, see issue 56a decision 4. The three
+        // belong to a MOVE and land on the `parent` field. The two deletion
+        // codes — `has_children` and `has_items` — were retired by issue 150:
+        // a category is deleted with its whole subtree after a question in
+        // the view, so there is no refusal left to translate.
         'category' => [
             'max_depth_exceeded' => 'A category can be at most :max_depth levels deep.',
             'cycle' => 'A category cannot be moved into itself or into one of its own subcategories.',
             'parent_not_in_container' => 'The chosen parent category is not in this container.',
-            'has_children' => 'The category has :children subcategories and cannot be deleted.',
-            'has_items' => 'The category has :items items and cannot be deleted.',
         ],
 
         // The relation form's four domain errors, see issue 58 decision 6.
@@ -1451,6 +1451,24 @@ return [
             'destroy' => 'Delete',
             'empty' => 'No categories yet.',
 
+            // The question before a deletion, see issue 150 and CategoryRow.vue.
+            // A category is deleted with its whole subtree, so the sentence
+            // says both numbers: how many subcategories follow and how many
+            // items the category or any of them sits on. `DeleteCategory`
+            // refuses nothing any more — this question is the warning, and the
+            // trash is the undo.
+            //
+            // Three keys and not one because `t()` has no pluralisation (issue
+            // 52 decision 4) and a sentence that says "used on 0 items" is
+            // worse than no sentence at all: `destroy_confirm` is the plain
+            // category with items, `destroy_confirm_tree` the one that also
+            // carries subcategories, `destroy_confirm_tree_empty` the subtree
+            // with no items on any of it. A category with neither is deleted
+            // without a question, and `destroy` stays the button's word.
+            'destroy_confirm' => 'This category is used on :items items. Move it to the trash? You can restore it within 30 days.',
+            'destroy_confirm_tree' => 'This category and its :subcategories subcategories are used on :items items. Move them to the trash? You can restore them within 30 days.',
+            'destroy_confirm_tree_empty' => 'This category and its :subcategories subcategories will be moved to the trash. You can restore them within 30 days.',
+
             // The suggestion on an empty container, see issue 56b decision 4. The
             // words in the set itself are NOT here and never will be: they live
             // in resources/js/data/categoryPresets.js, per language. Since issue
@@ -1487,6 +1505,14 @@ return [
             'save' => 'Save',
             'destroy' => 'Delete',
             'empty' => 'No tags yet.',
+
+            // The question before a deletion, see issue 150 and TagRow.vue.
+            // The count is the SAME scoped hit counter the row shows
+            // (`container.tags.item_count`): a recipient who reaches four
+            // items is asked about her four, never about the container's
+            // ninety. Only asked when the count is greater than zero — a tag
+            // on nothing is deleted without a question, as before.
+            'destroy_confirm' => 'This tag is used on :count items. Move it to the trash? You can restore it within 30 days.',
         ],
     ],
 
@@ -3037,6 +3063,17 @@ return [
             'today' => 'Disappears today',
             'day' => '1 day left',
             'days' => ':days days left',
+        ],
+
+        // Issue 150: a category is deleted with its whole subtree and the
+        // trash lists only the top row, so the row says how many subcategories
+        // followed it. Two keys and not one, for the same reason as `expires`
+        // above: `t()` has no pluralisation (issue 52 decision 4). Zero gets
+        // no line at all — the emptiness is the answer, and the choice lives
+        // in resources/js/components/trashPresentation.js.
+        'subcategories' => [
+            'one' => '1 subcategory was deleted with it',
+            'many' => ':count subcategories were deleted with it',
         ],
 
         'restore' => 'Restore',
