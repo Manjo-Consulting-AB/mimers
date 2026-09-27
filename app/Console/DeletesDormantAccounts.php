@@ -4,10 +4,8 @@ namespace App\Console;
 
 use App\Actions\Account\DeleteAccount;
 use App\Models\Account;
-use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\ContainerAccess;
-use App\Models\Item;
 use App\Models\LegalHold;
 use App\Models\Subscription;
 use Closure;
@@ -30,7 +28,7 @@ use Throwable;
  * aldrig. Formuleringen av inaktivitet återanvänder
  * Account::scopeInactiveSince() utan att skrivas om.
  *
- * Innan något raderas prövas de villkor ADR-0009 kräver (Beslut 2–5), igen
+ * Innan något raderas prövas de villkor ADR-0009 kräver (Beslut 2–4), igen
  * under radlås i samma transaktion som raderingen:
  *
  * - Aktiv prenumeration undantar alltid (Beslut 2).
@@ -39,11 +37,15 @@ use Throwable;
  *   3–4). Ägarskapet ska erbjudas dem först, och det är M6 issue 39; tills
  *   dess är det enda korrekta svaret att låta kontot vara. Delvis radering
  *   är förbjuden: inte heller de containers som saknar medlemmar rörs.
- * - Bilagor kontot betalar för i andras containers blockerar (Beslut 5):
- *   de är kundens innehåll, och FK:n tillåter inte att kontot raderas medan
- *   de finns kvar. Radera aldrig i en främmande container — hoppa över kontot
- *   och lämna frågan om vad som ska hända med innehållet till [[Tankar]]
- *   (se Frågor och antaganden i PR:n för 29b).
+ *
+ * Beslut 5 — bilagor kontot betalar för i andras containers — spärrade
+ * tidigare också (29b). Den spärren är BORTTAGEN (issue 143 · [[ADR-0045
+ * Radering av konto och person]] § Beslut 1): innehållet i en främmande
+ * container hindrar inte längre raderingen, för DeleteAccount flyttar
+ * `billed_account_id` till containerns ägarkonto i stället. Samma sak gäller
+ * författarkolumnerna mot kontot (ADR-0045 § Beslut 2), som nollställs av
+ * samma action. Jobbet är fortfarande grinden och actionen verktyget — men
+ * det finns inget kvar att spärra på.
  *
  * Den rättsliga spärren (issue 112) prövas först av alla, direkt efter
  * statuskontrollen: ett konto som är spärrat raderas inte, hur vilande det
@@ -171,21 +173,6 @@ class DeletesDormantAccounts
                 return;
             }
 
-            // Beslut 5 — bilagor kontot betalar för i containers det inte äger.
-            // De är kundens innehåll och kan inte raderas här, men FK:n
-            // (`attachment.billed_account_id`, RESTRICT) hindrar kontoraderingen
-            // medan de finns kvar. Radera ingenting; frågan om vad som ska hända
-            // med dem hör hemma i [[Tankar]] (se Frågor och antaganden i PR:n
-            // för 29b).
-            if ($this->hasForeignBilledAttachment($row)) {
-                Log::warning('account.deletion_blocked', [
-                    'account_ulid' => $row->ulid,
-                    'reason' => 'foreign_billed_attachments',
-                ]);
-
-                return;
-            }
-
             $this->deleteAccount->handle($row);
         });
     }
@@ -219,32 +206,5 @@ class DeletesDormantAccounts
                 });
             })
             ->pluck('ulid');
-    }
-
-    /**
-     * Har kontot lämnat en RESTRICT-referens i en container det inte äger: en
-     * bilaga det betalar för (Beslut 5) — kundens innehåll i en främmande
-     * container. Den kan inte raderas av den här raderingen men hindrar
-     * account-raden från att försvinna. Svaret är att hoppa över kontot,
-     * aldrig att städa i främmande containers.
-     *
-     * Under implementeringen hittades ytterligare två RESTRICT-referenser av
-     * samma sort — `item.created_by_account_id` och
-     * `schedule_occurrence.completed_by_account_id` — som inte står i Beslut
-     * 5. De är noterade i Frågor och antaganden (PR:n för 29b) som en fråga
-     * för [[Tankar]], inte implementerade här.
-     */
-    private function hasForeignBilledAttachment(Account $account): bool
-    {
-        return Attachment::withTrashed()
-            ->where('billed_account_id', $account->id)
-            ->whereHas('item', function (Builder $query) use ($account): void {
-                /** @var Builder<Item> $query */
-                $query->withTrashed()->whereHas('container', function (Builder $query) use ($account): void {
-                    /** @var Builder<Container> $query */
-                    $query->withTrashed()->where('account_id', '!=', $account->id);
-                });
-            })
-            ->exists();
     }
 }

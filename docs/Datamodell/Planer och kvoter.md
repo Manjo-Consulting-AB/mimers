@@ -121,6 +121,8 @@ Tre villkor som **måste** kontrolleras innan något raderas:
 
 **Aktivitet räknas som aktivitet i webben eller API:et**, inte bara inloggning.
 
+**Innehåll i någon annans container hindrar inte raderingen.** Ett item, en kostnadsrad eller en avbockad förekomst i en främmande container står kvar, med författarkolumnen mot kontot nollställd. Bilagor kontot betalar för i en främmande container får **containerns ägarkonto** som `billed_account_id`, och bytena flyttar mellan kontonas `usage_counter` i samma transaktion. Kvoten kontrolleras inte vid flytten: hamnar ägarkontot över sin gräns gäller samma regel som för en vanlig överskriden kvot — nya uppladdningar nekas med `quota.storage_exceeded`, ingen nedgradering startar. Se [[ADR-0045 Radering av konto och person]] § Beslut 1 och 2.
+
 Skicka fler än en varning. Radering av flera års dokumentation efter ett enda mejl som fastnade i skräpposten blir en riktigt dålig historia.
 
 ## Ägarbyte och kvot
