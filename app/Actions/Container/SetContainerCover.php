@@ -9,6 +9,7 @@ use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -44,10 +45,24 @@ use Illuminate\Support\Facades\Gate;
  * (ADR-0047 § Beslut, andra stycket) — den enda vägen till en sådan bilaga
  * är den här actionen, som just har skapat den.
  *
- * Actionen öppnar ingen egen transaktion: StoreAttachment och
- * PurgeAttachment har var sin, och pekarskrivningen däremellan är en enda
- * UPDATE. Misslyckas uppladdningen lämnas containerns förra bild orörd — den
- * rensas först när den nya raden finns.
+ * **Pekaren läses och skrivs under radlås** (granskningsfynd 1). Bytet
+ * ligger i en transaktion och den gamla pekaren läses ur en färsk rad med
+ * `lockForUpdate` — inte ur instansen anroparen skickade in. Två samtidiga
+ * anrop på samma container läste annars båda samma gamla pekare, och den ena
+ * av de två nya bilagorna blev aldrig någons utpekade `$forra`: den rensades
+ * aldrig och låg kvar på kontots `reference_count` och kvot, oåtkomlig för
+ * ytan. `lockForUpdate` är en current read, så den som kommer sist ser den
+ * förstas skrivning och rensar den. Samma mönster som PurgeAttachment,
+ * RestoreContent och PurgeContainer.
+ *
+ * Rensningen ligger INNANFÖR transaktionen: kastar den rullas pekaren och
+ * räkningen tillbaka tillsammans, och containerns förra bild är fortfarande
+ * dess bild. Utanför hade ett avbrott mellan bytet och rensningen lämnat
+ * exakt den föräldralösa bilaga låset finns för att förhindra.
+ * StoreAttachment behåller sin egen transaktion — uppladdningen rör ingen
+ * pekare och behöver inte hållas under containerns lås. Misslyckas den
+ * lämnas containerns förra bild orörd: den rensas först när den nya raden
+ * finns.
  */
 class SetContainerCover
 {
@@ -62,21 +77,40 @@ class SetContainerCover
 
         $bilaga = $this->storeAttachment->handleForContainer($container, $file, $user, $account);
 
-        $forra = $container->cover_attachment_id;
+        DB::transaction(function () use ($container, $bilaga): void {
+            // withTrashed() — containern kan ha mjukraderats mellan anroparens
+            // uppslag och det här låset, och pekaren skrivs på raden oavsett:
+            // det är samma uppdatering som före låset, bara inte längre ur en
+            // förlegad instans.
+            $rad = Container::withTrashed()
+                ->whereKey($container->getKey())
+                ->lockForUpdate()
+                ->first();
 
-        $container->cover_attachment_id = $bilaga->id;
-        $container->save();
-
-        if ($forra !== null && $forra !== $bilaga->id) {
-            // withTrashed() och find() — pekaren kan peka på en bilaga som
-            // redan mjukraderats eller rensats; PurgeAttachment är idempotent
-            // per rad och en saknad rad är inget att städa.
-            $gammal = Attachment::withTrashed()->find($forra);
-
-            if ($gammal !== null) {
-                $this->purgeAttachment->handle($gammal);
+            if ($rad === null) {
+                return;
             }
-        }
+
+            $forra = $rad->cover_attachment_id;
+
+            $rad->cover_attachment_id = $bilaga->id;
+            $rad->save();
+
+            if ($forra !== null && $forra !== $bilaga->id) {
+                // withTrashed() och find() — pekaren kan peka på en bilaga som
+                // redan mjukraderats eller rensats; PurgeAttachment är idempotent
+                // per rad och en saknad rad är inget att städa.
+                $gammal = Attachment::withTrashed()->find($forra);
+
+                if ($gammal !== null) {
+                    $this->purgeAttachment->handle($gammal);
+                }
+            }
+
+            // Instansen anroparen skickade in bär den nya pekaren — annars vore
+            // den en förlegad läsning av samma slag som låset stänger.
+            $container->refresh();
+        });
 
         return $bilaga;
     }

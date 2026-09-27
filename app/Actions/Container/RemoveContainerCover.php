@@ -5,6 +5,7 @@ namespace App\Actions\Container;
 use App\Actions\Attachment\PurgeAttachment;
 use App\Models\Attachment;
 use App\Models\Container;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -27,6 +28,15 @@ use Illuminate\Support\Facades\Gate;
  * satt så. Att nollställa först gör ordningen till actionens egen regel i
  * stället för en bieffekt av en främmande nyckel.
  *
+ * **Pekaren läses och nollställs under radlås** (granskningsfynd 1), av
+ * samma skäl som i SetContainerCover: en samtidig rensning och ett samtidigt
+ * bildbyte som båda läste pekaren ur sina egna instanser kunde lämna den ena
+ * bilagan föräldralös — aldrig nollställd, aldrig rensad, kvar på kontots
+ * `reference_count` och kvot. `lockForUpdate` är en current read, så den som
+ * kommer sist ser den förstas skrivning. Rensningen ligger INNANFÖR
+ * transaktionen: kastar den rullas nollställningen tillbaka tillsammans med
+ * räkningen.
+ *
  * En container UTAN bild är inget fel: anropet är en no-op och returnerar
  * false, så ytan kan visa "ta bort bilden" utan att först behöva veta om
  * det finns någon.
@@ -43,21 +53,40 @@ class RemoveContainerCover
     {
         Gate::authorize('update', $container);
 
-        $bilagaId = $container->cover_attachment_id;
+        return DB::transaction(function () use ($container): bool {
+            // withTrashed() — containern kan ha mjukraderats mellan anroparens
+            // uppslag och det här låset. Är raden redan gallrad finns ingen
+            // pekare att nollställa.
+            $rad = Container::withTrashed()
+                ->whereKey($container->getKey())
+                ->lockForUpdate()
+                ->first();
 
-        if ($bilagaId === null) {
-            return false;
-        }
+            if ($rad === null) {
+                return false;
+            }
 
-        $container->cover_attachment_id = null;
-        $container->save();
+            $bilagaId = $rad->cover_attachment_id;
 
-        $bilaga = Attachment::withTrashed()->find($bilagaId);
+            if ($bilagaId === null) {
+                return false;
+            }
 
-        if ($bilaga !== null) {
-            $this->purgeAttachment->handle($bilaga);
-        }
+            $rad->cover_attachment_id = null;
+            $rad->save();
 
-        return true;
+            $bilaga = Attachment::withTrashed()->find($bilagaId);
+
+            if ($bilaga !== null) {
+                $this->purgeAttachment->handle($bilaga);
+            }
+
+            // Instansen anroparen skickade in bär den nollställda pekaren —
+            // annars vore den en förlegad läsning av samma slag som låset
+            // stänger.
+            $container->refresh();
+
+            return true;
+        });
     }
 }

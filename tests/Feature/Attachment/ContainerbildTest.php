@@ -274,6 +274,41 @@ it('byter bild och minskar den gamla filens reference_count exakt en gång', fun
 });
 
 /*
+ * Granskningsfynd 1: pekaren läses ur raden och inte ur instansen anroparen
+ * skickade in.
+ *
+ * Provet är mutationsvägen för radlåset, och det är samtidigheten som skrivs
+ * om till en enda tråd: den andra kallelsen får en instans som lästes INNAN
+ * den första bilden fanns, precis det tillstånd en samtidig begäran hade burit
+ * med sig in i actionen. Läste actionen `$container->cover_attachment_id` blev
+ * den första bilagan aldrig någons `$forra` — aldrig rensad, kvar på kontots
+ * `reference_count` och kvot och oåtkomlig för ytan. Nu läses pekaren ur den
+ * låsta raden, som bär den första bilagan, och den rensas.
+ */
+it('byter bild även när den anropande instansen är förlegad', function () {
+    [$konto, $användare, $container] = containerbildKontext();
+
+    // Läst före den första bilden: samma nolla som en samtidig begäran såg.
+    $förlegad = Container::find($container->id);
+    expect($förlegad->cover_attachment_id)->toBeNull();
+
+    $första = containerbildSätt($användare, $container, $konto, containerbildFil('första.png', 255, 0, 0));
+    $förstaFil = $första->storedFile;
+
+    actingAs($användare);
+
+    $andra = app(SetContainerCover::class)->handle($förlegad, containerbildFil('andra.png', 0, 0, 255), $användare, $konto);
+
+    expect(Container::find($container->id)->cover_attachment_id)->toBe($andra->id);
+    expect(Attachment::withTrashed()->whereKey($första->id)->exists())->toBeFalse();
+    expect($förstaFil->refresh()->reference_count)->toBe(0);
+
+    // Instansen som skickades in bär den nya pekaren — annars vore den en
+    // förlegad läsning av samma slag som låset stänger.
+    expect($förlegad->cover_attachment_id)->toBe($andra->id);
+});
+
+/*
  * Klart när: en containerbild kan tas bort.
  *
  * Pekaren nollställs och bilagan rensas. Ett andra anrop är en no-op och
@@ -295,6 +330,34 @@ it('tar bort bilden, nollställer pekaren och tål att köras igen', function ()
     expect($fil->refresh()->reference_count)->toBe(0);
 
     expect(app(RemoveContainerCover::class)->handle($container))->toBeFalse();
+});
+
+/*
+ * Granskningsfynd 1, omvända riktningen: en förlegad instans ser inte den
+ * pekare en samtidig kallelse hann sätta, och en borttagning som läste ur
+ * instansen blev en tyst no-op — bilden låg kvar som containerns bild.
+ *
+ * Samma en-trådade samtidighet som provet ovan: instansen lästes innan bilden
+ * fanns. Provet faller om nollställningen grundas på instansen i stället för
+ * på raden.
+ */
+it('tar bort bilden även när den anropande instansen är förlegad', function () {
+    [$konto, $användare, $container] = containerbildKontext();
+
+    $förlegad = Container::find($container->id);
+
+    $bilaga = containerbildSätt($användare, $container, $konto, containerbildFil());
+    $fil = $bilaga->storedFile;
+
+    expect($förlegad->cover_attachment_id)->toBeNull();
+
+    actingAs($användare);
+
+    expect(app(RemoveContainerCover::class)->handle($förlegad))->toBeTrue();
+
+    expect(Container::find($container->id)->cover_attachment_id)->toBeNull();
+    expect(Attachment::withTrashed()->whereKey($bilaga->id)->exists())->toBeFalse();
+    expect($fil->refresh()->reference_count)->toBe(0);
 });
 
 /*
