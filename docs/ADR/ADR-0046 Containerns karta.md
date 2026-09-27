@@ -16,7 +16,7 @@ Trädet finns redan. `ItemStructureTree` ritar containerns rötter enligt [[ADR-
 
 **Kartan är strukturträdet ritat som noder, med en öppen gren per nivå.** Den läser samma träd som strukturpanelen och ingenting annat: föräldra- och barnrelationerna i `item_link`, rötterna enligt ADR-0041 och omfångsfiltret enligt [[ADR-0028 Åtkomst på itemnivå]]. Relationer av typen `related` ritas inte i containerkartan. De hör hemma i itemets fokuskarta, som är en egen vy med en egen fråga (`ListItemLinks`).
 
-**Bara en gren är öppen per nivå.** När man öppnar en nod stängs den öppna syskonnoden. Därför ritas aldrig mer än den öppna vägen plus syskonen på varje nivå längs den, hur stor containern än är. Det gör layouten trivial: kolumner på desktop och ett rutnät på mobil. Ingen grafalgoritm och inget nytt npm-paket behövs.
+**Bara en gren är öppen per nivå.** När man öppnar en nod stängs den nod som var öppen på samma nivå. Därför ritas aldrig mer än den öppna vägen plus syskonen på varje nivå längs den, hur stor containern än är. Det gör layouten trivial: kolumner på desktop och ett rutnät på mobil. Ingen grafalgoritm och inget nytt npm-paket behövs.
 
 - **Desktop:** en kolumn per nivå från vänster till höger. Den öppna noden i varje kolumn är markerad, och en linje leder till nästa kolumn. Till höger om den sista kolumnen visas en ruta med den markerade nodens namn, antal ättlingar och närmaste uppgift, plus en länk till itemet.
 - **Mobil:** noden man står på visas stor överst med sin förälder som en knapp ovanför, och barnen i ett rutnät med två kolumner under. Man trycker på ett barn för att gå ett steg ner. En sökväg ovanför kartan visar var man är, och varje led i den går att trycka på.

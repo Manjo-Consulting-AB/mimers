@@ -21,7 +21,7 @@ Under `md:` får `AppLayout` ett eget skal i stället för den hopfällda deskto
 
 **Sidomenyn visar samma innehåll som desktopskalets sidopanel.** Sektionerna ritas ur samma data, så att ingenting finns i den ena och saknas i den andra. Sektionen *Nyligen besökta* kommer i 160, och i den här issuen lämnas bara dess plats i ordningen.
 
-Inne i en container visar toppraden containerns namn och antal items, plus en tillbakaknapp. Bilden kommer i 159. Containerns flikrad (`UiTabs`) går att skrolla i sidled under `md:` i stället för att bryta rader.
+Inne i en container visar toppraden containerns namn och en tillbakaknapp. Antalet items som bilden visar tas inte med: det finns inte i skalets props, och att lägga dit det vore en fråga per sida. Bilden kommer i 159. Containerns flikrad (`UiTabs`) går att skrolla i sidled under `md:` i stället för att bryta rader.
 
 Plusknappens plats i flikraden är tom i den här issuen. Knappen kommer i 152. Notisernas taltuta är densamma som klockans i issue 127.
 
@@ -94,7 +94,7 @@ Läget *Karta* i itemfliken, enligt [[ADR-0046 Containerns karta]]. Det är stru
 Plusknappen i en öppen karta skapar ett item under den markerade noden (152).
 
 **Läs:** [[ADR-0046 Containerns karta]], [[ADR-0040 Underträdets summor]], [[ADR-0041 Itemets vy]], `docs/Design/mobil.png` (bild 3), `resources/js/components/ItemStructureTree.vue`, [[M15 Containerns översikt]] § 92 (statusfrågan)
-**Klart när:** *Karta* visas i växeln; bara en gren är öppen per nivå, och att öppna en syskonnod stänger den förra; varje nod visar grenens status med samma regel som översikten och antalet barn; ett item med två föräldrar markeras med antalet platser; den öppna vägen överlever en omladdning och bakåtknappen; ett item utanför omfånget syns inte och räknas inte i någon status; antalet frågor per öppnad nod är konstant oavsett antal barn; plusknappen skapar ett item under den markerade noden; hela testsviten är grön.
+**Klart när:** *Karta* visas i växeln; bara en gren är öppen per nivå, och att öppna en annan nod på samma nivå stänger den förra; varje nod visar grenens status med samma regel som översikten och antalet barn; ett item med två föräldrar markeras med antalet platser; den öppna vägen överlever en omladdning och bakåtknappen; ett item utanför omfånget syns inte och räknas inte i någon status; antalet frågor per öppnad nod är konstant oavsett antal barn; plusknappen skapar ett item under den markerade noden; hela testsviten är grön.
 **Beror på:** 152, 154
 
 ### 158. En bilaga kan tillhöra en container
