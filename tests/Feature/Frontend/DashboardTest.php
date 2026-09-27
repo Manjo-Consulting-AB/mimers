@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
@@ -255,6 +256,25 @@ it('skickar en utloggad besökare till inloggningen från båda sidorna', functi
 
     get('/dashboard')->assertRedirect('/login');
     get('/tasks')->assertRedirect('/login');
+});
+
+/*
+ * Plusknappens mål på startsidan, se issue 152 · [[ADR-0048 Mobilen och
+ * plusknappen]] § 2: på en sida utanför en container skapar knappen en
+ * container. Målet byggs av App\Support\Frontend\CreateTarget, och den här
+ * filen prövar bara att SIDAN bär det — att raden följer med i skalet och
+ * vad som händer när ingen får skapa prövas i
+ * tests/Feature/Frontend/PlusknappTest.php.
+ */
+it('bär plusknappens mål till skapandeformuläret för en container', function () {
+    withoutVite();
+
+    [, $anvandare] = panelvyKonto();
+
+    actingAs($anvandare)->get('/dashboard')->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'container')
+            ->where('create.href', '/containers/create'),
+    );
 });
 
 // --- urvalet ---------------------------------------------------------------

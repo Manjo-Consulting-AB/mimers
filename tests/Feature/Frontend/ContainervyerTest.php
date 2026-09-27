@@ -954,6 +954,26 @@ it('svarar med översikten på containerns egen URL', function () {
 });
 
 /*
+ * Plusknappens mål på de två sidorna i containern, se issue 152 ·
+ * [[ADR-0048 Mobilen och plusknappen]] § 2: inuti en container skapar knappen
+ * ett item i containern. Målet byggs av App\Support\Frontend\CreateTarget;
+ * den här filen prövar att SIDORNA bär det, och PlusknappTest prövar grindarna
+ * — vem som får ett mål, och vad menyn på ett item innehåller.
+ */
+it('bär plusknappens mål till skapandeformuläret för ett item', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = containerKontext();
+
+    foreach (["/containers/{$container->ulid}", "/containers/{$container->ulid}/items"] as $url) {
+        actingAs($anvandare)->get($url)->assertInertia(
+            fn (AssertableInertia $page) => $page->where('create.kind', 'item')
+                ->where('create.href', "/containers/{$container->ulid}/items/create"),
+        );
+    }
+});
+
+/*
  * Klart när: informationsytan står på containerns översikt och inte bara på
  * dashboarden (issue 128 · [[ADR-0039 Containerns översikt]] § Konsekvenser:
  * *"Informationsrutan är dashboardens. Samma komponent, samma fyra krav."*).

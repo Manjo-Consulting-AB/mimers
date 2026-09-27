@@ -10,6 +10,7 @@ use App\Actions\Schedule\ListTodo;
 use App\Models\Container;
 use App\Models\User;
 use App\Support\Cost\CostReport;
+use App\Support\Frontend\CreateTarget;
 use App\Support\Tips;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -123,6 +124,7 @@ class DashboardController extends Controller
         CostReport $report,
         ListAuditEvents $listAuditEvents,
         PresentAuditEvents $presentAuditEvents,
+        CreateTarget $createTarget,
     ): Response {
         $user = $request->user();
 
@@ -156,6 +158,11 @@ class DashboardController extends Controller
             // Tipsen användaren inte dolt, i Tips ordning — samma propp och
             // samma lista som containerns översikt bär (issue 128).
             'tips' => app(Tips::class)->visibleFor($user),
+            // Plusknappens mål (issue 152): här skapar den en container.
+            // Grinden — `ContainerPolicy::create()` på ett av användarens
+            // konton — bor i App\Support\Frontend\CreateTarget, och
+            // kontrollern vidarebefordrar bara svaret.
+            'create' => $createTarget->forContainers($user),
         ]);
     }
 

@@ -37,6 +37,14 @@ import { useTranslations } from '../../composables/useTranslations.js';
  */
 defineProps({
     containers: { type: Array, required: true },
+    /*
+     * Plusknappens mål, ur App\Support\Frontend\CreateTarget (issue 152 ·
+     * [[ADR-0048 Mobilen och plusknappen]] § 2), eller null. Här skapar
+     * knappen en container — samma formulär som raden i huvudet redan leder
+     * till, och samma grind: `ContainerPolicy::create()` på ett av
+     * användarens konton.
+     */
+    create: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -55,7 +63,7 @@ const isShared = (container) => accountName(container) === null;
 </script>
 
 <template>
-    <AppLayout>
+    <AppLayout :create="create">
         <Head :title="t('container.index.title')" />
 
         <div class="flex items-center justify-between gap-4">

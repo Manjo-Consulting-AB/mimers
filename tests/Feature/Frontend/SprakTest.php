@@ -423,6 +423,14 @@ it('hämtar skalets strängar ur ui.php', function () {
      * glöms i katalogen renderas som sin egen nyckel — `nav.tabbar` i en
      * etikett — och det är vad raden nedan fångar.
      */
+    /*
+     * Plusknappen och arket kom med issue 152 och ligger i samma svep: knappen,
+     * arket och menyn är skalets ytor precis som flikraden och sidomenyn, och
+     * deras ord — `create.label`, `create.close`, `create.heading` — är
+     * skalets. Menyradernas etiketter byggs ur radens nyckel och fångas därför
+     * inte av mönstret nedan; de prövas i tests/Feature/Frontend/
+     * PlusknappTest.php.
+     */
     foreach ([
         'js/layouts/AppLayout.vue',
         'js/layouts/ContainerLayout.vue',
@@ -430,6 +438,9 @@ it('hämtar skalets strängar ur ui.php', function () {
         'js/components/ShellSections.vue',
         'js/components/MobileTabBar.vue',
         'js/components/MobileMenu.vue',
+        'js/components/CreateButton.vue',
+        'js/components/CreateMenu.vue',
+        'js/components/UiSheet.vue',
     ] as $fil) {
         /*
          * Fönstret `(?<![\w$.])` är det som skiljer ett uppslag från ett
@@ -910,11 +921,12 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
 it('har ingen hårdkodad text i Ui-komponenterna', function () {
     $filer = File::glob(resource_path('js/components/Ui*.vue'));
 
-    // Elva: de fem primitiverna (issue 425), de fem ytorna (issue 426) och
-    // flikraden (issue 100). Räkningen är en spärr och inte en bekvämlighet —
-    // en tolfte `Ui*.vue` är en komponent någon byggt utan att en issue bad om
-    // den, och den ska mötas av det här provet och inte av tystnad.
-    expect($filer)->toHaveCount(11);
+    // Tolv: de fem primitiverna (issue 425), de fem ytorna (issue 426),
+    // flikraden (issue 100) och arket (issue 152). Räkningen är en spärr och
+    // inte en bekvämlighet — en trettonde `Ui*.vue` är en komponent någon
+    // byggt utan att en issue bad om den, och den ska mötas av det här provet
+    // och inte av tystnad.
+    expect($filer)->toHaveCount(12);
 
     foreach ($filer as $fil) {
         $kod = (string) preg_replace('#/\*.*?\*/#s', '', File::get($fil));

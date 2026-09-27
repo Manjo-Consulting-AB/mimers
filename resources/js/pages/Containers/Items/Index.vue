@@ -87,6 +87,14 @@ const props = defineProps({
     /* Filtret som servern tillämpade: { q, tags, category, dropped }. */
     filter: { type: Object, required: true },
     can: { type: Object, required: true },
+    /*
+     * Plusknappens mål, ur App\Support\Frontend\CreateTarget (issue 152 ·
+     * [[ADR-0048 Mobilen och plusknappen]] § 2), eller null. Här skapar
+     * knappen ett item i containern — samma grind som `can.create` nedan
+     * (`ContainerPolicy::createItem()`), så knappen och raden *Nytt item*
+     * kommer och går tillsammans.
+     */
+    create: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -103,7 +111,7 @@ const summary = computed(() => filterSummary(activeFilters(props.filter, props.t
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerLayout :container="container" :create="create">
         <Head :title="t('item.index.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('item.index.heading') }}</h1>

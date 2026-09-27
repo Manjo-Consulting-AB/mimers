@@ -443,6 +443,33 @@ it('ger can.create efter container-bred create och aldrig efter en itemgrant', f
 });
 
 /*
+ * Plusknappens mål på itemlistan, se issue 152 · [[ADR-0048 Mobilen och
+ * plusknappen]] § 2. Målet är sidans och kommer ur
+ * App\Support\Frontend\CreateTarget, med SAMMA grind som `can.create` ovan:
+ * knappen i skalet och raden *Nytt item* i vyn kommer och går tillsammans, och
+ * en mottagare som inte får skapa ett toppnivå-item får ingen knapp.
+ * Menyn på ett item prövas i tests/Feature/Frontend/PlusknappTest.php.
+ */
+it('bär plusknappens mål efter samma grind som can.create', function () {
+    withoutVite();
+
+    [, , $container] = itemlistaKontext();
+    $motorn = itemlistaItem($container, 'Motorn');
+
+    $bred = itemlistaMottagare($container, null, 'create');
+    $begränsad = itemlistaMottagare($container, $motorn, 'delete');
+
+    actingAs($bred)->get("/containers/{$container->ulid}/items")->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'item')
+            ->where('create.href', "/containers/{$container->ulid}/items/create"),
+    );
+
+    actingAs($begränsad)->get("/containers/{$container->ulid}/items")->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create', null),
+    );
+});
+
+/*
  * Klart när: en tom container säger att den är tom — inte att den kanske är det.
  *
  * Meningen ligger i `lang/`, aldrig i vyn (Beslut 10), och den får inte

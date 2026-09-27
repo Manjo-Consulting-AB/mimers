@@ -79,13 +79,20 @@ const props = defineProps({
     events: { type: Array, required: true },
     /* Nycklarna på de tips användaren inte dolt, i serverns ordning. */
     tips: { type: Array, required: true },
+    /*
+     * Plusknappens mål, ur App\Support\Frontend\CreateTarget (issue 152 ·
+     * [[ADR-0048 Mobilen och plusknappen]] § 2), eller null. På den här sidan
+     * skapar knappen en container; `null` när ingen av användarens konton får
+     * skapa, och då ritar skalet ingen knapp.
+     */
+    create: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
 </script>
 
 <template>
-    <AppLayout>
+    <AppLayout :create="create">
         <Head :title="t('dashboard.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('dashboard.heading') }}</h1>
