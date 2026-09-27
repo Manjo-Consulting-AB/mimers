@@ -201,9 +201,7 @@ const filterQuery = computed(() => {
 
 /*
  * Växelns lägen, i ritad ordning. Det FÖRSTA är förvalet och skrivs utan
- * `view` — samma val som ItemTabs gör med `tab` (issue 100 och 102) — och
- * `map` står inte här: kartan är § 157, och läget visas först när den finns
- * ([[ADR-0046 Containerns karta]] § Beslut).
+ * `view` — samma val som ItemTabs gör med `tab` (issue 100 och 102).
  */
 const views = computed(() => {
     const query = filterQuery.value;
