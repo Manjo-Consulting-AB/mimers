@@ -638,6 +638,57 @@ it('usage_counter, subscription och medlemskap försvinner med kontot', function
     expect(DB::table('account_user')->where('account_id', $konto->id)->exists())->toBeFalse();
 });
 
+/*
+ * Issue 144 · Ägarbyten och kontoåtkomster städas när kontot raderas. Se
+ * [[ADR-0045 Radering av konto och person]] § Beslut 3.
+ *
+ * Ägarbytesraden överlever att ett ägarbyte dras tillbaka — men inte att
+ * containern gallras eller att ett av kontona raderas. `from_account_id` och
+ * `to_account_id` är ON DELETE RESTRICT, och ett varv som redan lämnat över
+ * en båt hade annars fällt sin egen radering för alltid.
+ */
+
+it('ett konto som varit avsändare eller mottagare i ett ägarbyte raderas', function () {
+    [$konto] = kontoraderingVilande();
+    $agare = Account::factory()->create();
+    $container = kontoraderingContainer($agare);
+
+    // Avsändaren: varvet har redan lämnat över båten, och raden pekar nu på
+    // ett konto som raderas medan containern ägs av någon annan.
+    $avsandare = skapaÄgarbyteRad($container, [
+        'from_account_id' => $konto->id,
+        'status' => 'accepted',
+    ]);
+
+    // Mottagaren: ett inkommande ägarbyte som avslogs.
+    $mottagare = skapaÄgarbyteRad($container, [
+        'from_account_id' => $agare->id,
+        'to_account_id' => $konto->id,
+        'status' => 'rejected',
+    ]);
+
+    // En åtkomst som getts till kontot. `grantee_id` är en identifierare utan
+    // främmande nyckel, så den blockerar ingenting — men en åtkomst till ett
+    // konto som inte finns ska inte ligga kvar.
+    $atkomst = ContainerAccess::factory()->for($container, 'container')->create([
+        'grantee_type' => 'account',
+        'grantee_id' => $konto->id,
+        'level' => 'read',
+        'kind' => 'guest',
+    ]);
+
+    Carbon::setTestNow('2026-09-04 12:00:00');
+    kontoraderingKör();
+
+    expect(Account::query()->whereKey($konto->id)->exists())->toBeFalse()
+        ->and(DB::table('ownership_transfer')->where('id', $avsandare->id)->exists())->toBeFalse()
+        ->and(DB::table('ownership_transfer')->where('id', $mottagare->id)->exists())->toBeFalse()
+        ->and(ContainerAccess::query()->whereKey($atkomst->id)->exists())->toBeFalse()
+        // Den främmande containern och dess ägarkonto är orörda.
+        ->and(Container::query()->whereKey($container->id)->exists())->toBeTrue()
+        ->and(Account::query()->whereKey($agare->id)->exists())->toBeTrue();
+});
+
 it('användarraden finns kvar', function () {
     [$konto, $medlem] = kontoraderingVilande();
 

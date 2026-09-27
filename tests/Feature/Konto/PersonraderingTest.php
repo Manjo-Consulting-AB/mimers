@@ -232,6 +232,28 @@ it('en person som är enda medlem i sitt konto raderas med kontot, containern oc
         ->and(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
 });
 
+it('en person som är enda medlem raderas även när kontot startat ett ägarbyte', function () {
+    $person = User::factory()->create();
+    $konto = personraderingEgetKonto($person);
+    $container = personraderingContainer($konto);
+
+    // Ett ägarbyte spärrar inte (spärrarna räknar aktiva medlemmar, inte
+    // pågående överlåtelser) — men raden bär en RESTRICT-nyckel mot både
+    // containern och kontot, och utan städningen hade hela raderingen fallit.
+    $ägarbyte = skapaÄgarbyteRad($container, [
+        'from_account_id' => $konto->id,
+        'initiated_by_user_id' => $person->id,
+        'status' => 'pending',
+    ]);
+
+    app(DeleteUser::class)->handle($person);
+
+    expect(User::query()->whereKey($person->id)->exists())->toBeFalse()
+        ->and(Account::query()->whereKey($konto->id)->exists())->toBeFalse()
+        ->and(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse()
+        ->and(DB::table('ownership_transfer')->where('id', $ägarbyte->id)->exists())->toBeFalse();
+});
+
 it('personens egna rader raderas, och ingen främmandenyckel lämnas kvar', function () {
     $person = User::factory()->create();
     $konto = personraderingEgetKonto($person);
@@ -383,7 +405,9 @@ it('en rättslig spärr på ett av personens konton spärrar raderingen', functi
 
     expect($blockers)->toHaveCount(1)
         ->and($blockers[0]->code)->toBe(DeletionBlocker::CODE_LEGAL_HOLD)
-        ->and($blockers[0]->data)->toBe(['account' => $konto->ulid]);
+        // Ingen `$data`: spärren får inte peka ut kontot den gäller
+        // ([[ADR-0043 Tre loggar]] § Den rättsliga spärren, issue 145).
+        ->and($blockers[0]->data)->toBe([]);
 
     expect(fn () => app(DeleteUser::class)->handle($person))
         ->toThrow(UserDeletionBlocked::class);

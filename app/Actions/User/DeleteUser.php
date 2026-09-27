@@ -105,9 +105,10 @@ class DeleteUser
             // Den rättsliga spärren frågas med LegalHold::covers() — samma
             // enda formulering som papperskorgens gallring och livscykeln
             // använder. Ett kontos innehåll är bevis, och en person som är
-            // medlem i ett spärrat konto raderas inte.
+            // medlem i ett spärrat konto raderas inte. Spärren bär bara sin
+            // kod — aldrig kontot den gäller (se DeletionBlocker::legalHold).
             if (LegalHold::covers($account)) {
-                $blockers[] = DeletionBlocker::legalHold($account);
+                $blockers[] = DeletionBlocker::legalHold();
             }
 
             if ($this->isSoleMember($account, $user)) {

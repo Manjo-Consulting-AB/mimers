@@ -22,7 +22,9 @@ use Illuminate\Support\Collection;
  * konto och frågar aldrig efter en ensam ägare.
  *
  * **`$data` bär bara identifierare, aldrig personuppgifter**: konton och
- * containrar som ULID. Ingenting i den hamnar i en logg.
+ * containrar som ULID. Ingenting i den hamnar i en logg. Den rättsliga
+ * spärren är undantaget som bekräftar regeln — den bär ingen `$data` alls,
+ * se `legalHold()`.
  */
 final readonly class DeletionBlocker
 {
@@ -43,6 +45,13 @@ final readonly class DeletionBlocker
      * En rättslig spärr täcker ett av personens konton ([[ADR-0043 Tre
      * loggar]] § Den rättsliga spärren). Spärren gäller kontots innehåll och
      * stoppar hela raderingen.
+     *
+     * **Den bär bara koden — ingen `$data`.** Till skillnad från de två andra
+     * spärrarna får ingenting här peka ut vilket konto eller vilket innehåll
+     * spärren gäller: ytan (issue 145) visar ett neutralt besked om att
+     * raderingen inte kan göras just nu, och en tom `$data` gör det omöjligt
+     * att avslöja spärren av misstag. Att veta att ett konto är spärrat är i
+     * sig en uppgift om en pågående utredning.
      */
     public const CODE_LEGAL_HOLD = 'user.deletion_blocked.legal_hold';
 
@@ -70,8 +79,8 @@ final readonly class DeletionBlocker
         ]);
     }
 
-    public static function legalHold(Account $account): self
+    public static function legalHold(): self
     {
-        return new self(self::CODE_LEGAL_HOLD, ['account' => $account->ulid]);
+        return new self(self::CODE_LEGAL_HOLD, []);
     }
 }
