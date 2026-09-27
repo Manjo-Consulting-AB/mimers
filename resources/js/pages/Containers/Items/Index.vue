@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
+import ContainerMap from '../../../components/ContainerMap.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
 import ItemStructureTree from '../../../components/ItemStructureTree.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
@@ -75,21 +76,30 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * ligger bredvid `ItemResource` av samma skäl som `categories` gör det:
  * resursen delas med `/api`, som inte har bett om fältet.
  *
- * **Fliken har två lägen sedan issue 154** · [[ADR-0046 Containerns karta]]:
- * *Lista*, som är sidan som den var och förblir förval, och *Träd*, som ritar
- * containerns struktur med `ItemStructureTree`. Läget står i querysträngen
- * (`?view=tree`) och `view`-proppen är serverns läsning av den — vyn håller
- * inget eget tillstånd, och därför överlever läget en omladdning och en delad
- * länk. `ItemViewSwitch` ritar växeln; *Karta* är § 157 och finns inte i den
- * förrän kartan finns.
+ * **Fliken har tre lägen sedan issue 154 och 157** · [[ADR-0046 Containerns
+ * karta]]: *Lista*, som är sidan som den var och förblir förval, *Träd*, som
+ * ritar containerns struktur med `ItemStructureTree`, och *Karta*, som ritar
+ * samma struktur som noder med en öppen gren per nivå (`ContainerMap`). Läget
+ * står i querysträngen (`?view=tree`, `?view=map`) och `view`-proppen är
+ * serverns läsning av den — vyn håller inget eget tillstånd, och därför
+ * överlever läget en omladdning och en delad länk. `ItemViewSwitch` ritar
+ * växeln, och ordningen i `views` är bindande: det första läget är förvalet.
  *
- * **Trädläget filtrerar ingenting.** Trädet är containern som användaren når
- * (App\Actions\Item\ResolveItemTree, samma rotregel som detaljvyns
+ * **Trädläget och kartläget filtrerar ingenting.** Trädet och kartan är
+ * containern som användaren når (App\Actions\Item\ResolveItemTree och
+ * App\Actions\Item\ResolveItemMap, samma rotregel som detaljvyns
  * vänsterpanel), medan filtret hör till listan — därför ritas filterraden
  * bara i listläget, och därför bär växelns länkar filtret med sig: ett
- * flikbyte ska kunna gå tillbaka till samma träfflista. Strukturen kommer i
- * `structure`-proppen, och den finns BARA i trädläget — `null` betyder "inte
- * hämtad", och en tom lista hade varit ett svar servern hade gett.
+ * flikbyte ska kunna gå tillbaka till samma träfflista. Strukturen och kartan
+ * kommer i `structure`- och `map`-propparna, och de finns BARA i sina egna
+ * lägen — `null` betyder "inte hämtad", och en tom lista hade varit ett svar
+ * servern hade gett.
+ *
+ * **Kartans öppna väg bor i adressen och inte i vyn.** `?path=` bär ledet från
+ * roten ned till noden man står på, och `ContainerMap` bygger den nya adressen
+ * när en nod öppnas. Servern läser samma sträng igen, så en omladdning och en
+ * bakåtknapp landar i samma läge — samma konstruktion som `?path=` i itemvyn
+ * (issue 95).
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -125,6 +135,16 @@ const props = defineProps({
      * § Beslut 6).
      */
     structure: { type: Array, default: null },
+    /*
+     * Kartan i kartläget, ur App\Actions\Item\ResolveItemMap: `{trail, levels}`.
+     * `trail` är den LÖSTA öppna vägen — en begärd väg som inte längre finns är
+     * kapad där den brister, så markeringen pekar alltid på en nod som finns —
+     * och `levels` är nivåerna i ritad ordning, rötterna först.
+     *
+     * `null` betyder INTE HÄMTAD, på samma villkor och av samma skäl som
+     * `structure` ovan.
+     */
+    map: { type: Object, default: null },
     /*
      * Plusknappens mål, ur App\Support\Frontend\CreateTarget (issue 152 ·
      * [[ADR-0048 Mobilen och plusknappen]] § 2), eller null. Här skapar
@@ -187,11 +207,20 @@ const filterQuery = computed(() => {
  */
 const views = computed(() => {
     const query = filterQuery.value;
-    const withView = query === '' ? '?view=tree' : `?view=tree&${query}`;
+
+    /*
+     * Filtreret hänger efter läget, som `tab` gör i `ItemTabs`: `view` först
+     * och `q`, `tags[]` och `category` efter. Adressen skrivs ut per läge i
+     * listan nedan i stället för att byggas av en hjälpare — listan ÄR
+     * förteckningen över lägena, och ett läge vars adress byggs någon
+     * annanstans är ett läge man inte ser.
+     */
+    const filterTail = query === '' ? '' : `&${query}`;
 
     return [
         { key: 'list', label: t('item.view.list'), href: query === '' ? base.value : `${base.value}?${query}` },
-        { key: 'tree', label: t('item.view.tree'), href: `${base.value}${withView}` },
+        { key: 'tree', label: t('item.view.tree'), href: `${base.value}?view=tree${filterTail}` },
+        { key: 'map', label: t('item.view.map'), href: `${base.value}?view=map${filterTail}` },
     ];
 });
 </script>
@@ -300,10 +329,30 @@ const views = computed(() => {
             tom" här hade varit samma sak som listans rad, och att säga något
             om vad som dolts är förbjudet (issue 73 § Beslut 6).
         -->
-        <section v-else class="mt-6">
+        <section v-else-if="view === 'tree'" class="mt-6">
             <ItemStructureTree
                 collapsible
                 :nodes="structure ?? []"
+                :container-ulid="container.ulid"
+            />
+        </section>
+
+        <!--
+            Kartläget (issue 157 · [[ADR-0046 Containerns karta]]). Samma
+            struktur som trädet, ritad som noder med en öppen gren per nivå:
+            kolumner över `md:` och ett rutnät med sökväg under. Den öppna
+            vägen står i adressen, och `trail` är serverns LÖSTA väg — en
+            begärd väg som inte längre finns är kapad där den brister, så
+            markeringen pekar alltid på en nod som finns.
+
+            Ingen rubrik och ingen egen tom-text, av samma skäl som trädet: en
+            tom karta ritar ingenting, och ett ord om vad som dolts är förbjudet
+            (issue 73 § Beslut 6).
+        -->
+        <section v-else class="mt-6">
+            <ContainerMap
+                :map="map ?? { trail: [], levels: [] }"
+                :statuses="statuses"
                 :container-ulid="container.ulid"
             />
         </section>

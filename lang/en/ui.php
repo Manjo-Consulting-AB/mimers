@@ -1989,23 +1989,52 @@ return [
             'collapse' => 'Collapse :name',
         ],
 
-        // The switch on the container's item tab, see issue 154 ·
+        // The switch on the container's item tab, see issue 154 and 157 ·
         // [[ADR-0046 Containerns karta]]. *List* is the tab's list as it was
         // and stays the default; *Tree* is the whole container drawn as the
-        // structure tree. *Map* is the third mode in the ADR and is NOT here:
-        // it arrives with the map itself, in § 157, and until then the mode is
-        // not in the switch at all.
+        // structure tree; *Map* is the same structure drawn as nodes with one
+        // open branch per level. *Map* is NOT the same word as `item.map.*`
+        // below: that is the item's own focus map, a different surface with a
+        // different question ([[ADR-0032 Produktens ord]] — one word, one
+        // thing), and the two live in separate namespaces for that reason.
         //
         // `label` is the switch's accessible name and not a visible word: the
-        // two modes name themselves, and a third row saying "View" above two
-        // rows would be a heading over a two-word list. *List* and *Tree* are
-        // the product's words for the two modes ([[ADR-0032 Produktens ord]]),
-        // and `tree` deliberately reads the same word as the disclosure in the
-        // structure panel: it is the same tree, seen as a whole surface.
+        // three modes name themselves, and a fourth row saying "View" above
+        // three rows would be a heading over a three-word list. *List*, *Tree*
+        // and *Map* are the product's words for the modes ([[ADR-0032
+        // Produktens ord]]), and `tree` deliberately reads the same word as the
+        // disclosure in the structure panel: it is the same tree, seen as a
+        // whole surface.
         'view' => [
             'label' => 'Item view',
             'list' => 'List',
             'tree' => 'Tree',
+            'map' => 'Map',
+        ],
+
+        // The container map (issue 157 · [[M23 Mobilen och kartan]] § 157):
+        // the structure tree drawn as nodes, one open branch per level.
+        //
+        // `label` is the region's accessible name — the map has no heading of
+        // its own, since the switch already says which mode one is in.
+        // `path` names the breadcrumb on a narrow screen, where the map shows
+        // one level at a time and the trail above it says where one is.
+        // `up` is the parent button's accessible name: the button shows the
+        // parent's NAME as its visible text, so the name alone would not say
+        // that the press moves up a level.
+        //
+        // `children` and `placements` are the two counts a node carries, and
+        // they are written as sentences rather than bare numbers because a
+        // lone digit says nothing to a screen reader. `placements` is the same
+        // word as `item.show.placements` and counts the same thing — how many
+        // spots in the structure an item occupies — so the badge and the
+        // occurrence list on the item page cannot drift apart.
+        'board' => [
+            'label' => 'Container map',
+            'path' => 'Path',
+            'up' => 'Up to :name',
+            'children' => ':count children',
+            'placements' => ':count placements',
         ],
 
         // The right-hand panel: the focus map (issue 156 · [[M23 Mobilen och

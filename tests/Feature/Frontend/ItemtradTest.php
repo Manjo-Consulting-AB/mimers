@@ -22,11 +22,12 @@ use function Pest\Laravel\withoutVite;
  * resources/js/components/ItemViewSwitch.vue och
  * resources/js/components/ItemStructureTree.vue.
  *
- * **Växeln har två lägen och inte tre.** [[ADR-0046 Containerns karta]] ritar
- * *Lista*, *Träd* och *Karta*, men kartan byggs i § 157 — och fram till dess
- * finns läget varken i växeln eller i svaret. Det är därför `?view=map` inte
- * är ett fel utan listan: samma svar som ett okänt värde, samma linje som
- * filtret i issue 59a § Beslut 3 (en gammal länk är ingen felsida).
+ * **Växeln har tre lägen sedan issue 157.** [[ADR-0046 Containerns karta]]
+ * ritar *Lista*, *Träd* och *Karta*, och kartan kom i § 157 — den ägs av
+ * tests/Feature/Frontend/ContainerkartaTest.php. Här står regeln som gäller
+ * alla lägen: det FÖRSTA är förvalet, och ett värde som inte är ett läge är
+ * samma sak som inget läge — samma linje som filtret i issue 59a § Beslut 3
+ * (en gammal länk är ingen felsida).
  *
  * **Läget är en adress.** Det står i querysträngen och ingenstans annat, och
  * `view`-proppen är serverns läsning av samma sträng som avgör vilken yta
@@ -212,27 +213,29 @@ it('har växeln med Lista som förval', function () {
 
     $lagen = itemtradLagen($vy);
 
-    // Listan först, och den skrivs utan `view`.
-    expect(strpos($lagen, "key: 'list'"))->toBeLessThan(strpos($lagen, "key: 'tree'"));
+    // Listan först, och den skrivs utan `view`. Trädet står före kartan: de två
+    // ritar samma struktur, och den som läser växeln från vänster möter den
+    // enkla formen först.
+    expect(strpos($lagen, "key: 'list'"))->toBeLessThan(strpos($lagen, "key: 'tree'"))
+        ->and(strpos($lagen, "key: 'tree'"))->toBeLessThan(strpos($lagen, "key: 'map'"));
 
     preg_match_all("/key: '(\w+)'/", $lagen, $träffar);
 
-    expect($träffar[1])->toBe(['list', 'tree']);
+    expect($träffar[1])->toBe(['list', 'tree', 'map']);
 });
 
 /*
- * Klart när: *Karta* visas inte i växeln.
+ * Klart när: ett okänt läge är listan, aldrig ett fel.
  *
- * Kartan är § 157 ([[ADR-0046 Containerns karta]] § Beslut), och läget får
- * inte visas förrän den finns: en flik som leder till en tom yta är ett löfte
- * vyn inte kan hålla (samma svar som historikfliken fick i issue 116, och
- * motsatsen till dashboardens händelsepanel).
+ * Sedan issue 157 finns *Karta* i växeln, och den ägs av
+ * tests/Feature/Frontend/ContainerkartaTest.php. Kvar här står regeln som
+ * gäller varje läge: `?view[]=…`, `?view=` och skräp läses som "inget läge",
+ * och svaret är listan — den som klickat på en gammal länk är inte här.
  *
- * Provet prövar de två vägarna in. Ingen `map` i lägeslistan — och servern
- * svarar listan för `?view=map`, eftersom ett värde som inte är ett läge är
- * samma sak som inget läge: den som klickat på en gammal länk är inte här.
+ * Provet prövar båda halvorna: att lägeslistan ÄR de tre lägena, i ordning,
+ * och att ett värde utanför den ger listan med dess rader.
  */
-it('visar inte Karta i växeln', function () {
+it('svarar listan för ett okänt läge', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemtradKontext();
@@ -240,16 +243,19 @@ it('visar inte Karta i växeln', function () {
 
     $lagen = itemtradLagen(itemtradKod('pages/Containers/Items/Index.vue'));
 
-    // Varken nyckeln eller ordet: etiketten kommer ur `lang/`, och en nyckel
-    // ingen ritar är ingen genväg in i läget.
-    expect($lagen)->not->toContain('map');
+    preg_match_all("/key: '(\w+)'/", $lagen, $träffar);
 
-    actingAs($anvandare)->get(itemtradUrl($container, 'view=map'))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->component('Containers/Items/Index')
-            ->where('view', 'list')
-            ->where('structure', null)
-    );
+    expect($träffar[1])->toBe(['list', 'tree', 'map']);
+
+    foreach (['view=skräp', 'view=', 'view[]=map'] as $fråga) {
+        actingAs($anvandare)->get(itemtradUrl($container, $fråga))->assertOk()->assertInertia(
+            fn (AssertableInertia $page) => $page
+                ->component('Containers/Items/Index')
+                ->where('view', 'list')
+                ->where('structure', null)
+                ->has('items', 1)
+        );
+    }
 });
 
 /*

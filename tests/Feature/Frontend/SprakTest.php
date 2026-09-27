@@ -690,9 +690,12 @@ it('hämtar växelns strängar ur ui.php', function () {
  *
  * **Komponenten bär ingen egen mening** och slår inte upp någonting själv:
  * etiketterna kommer som proppar, och det är Index.vue som äger uppslagen.
- * Provet läser därför båda filerna — den ena för formen, den andra för orden —
- * och prövar att *Karta* inte har någon nyckel någon av dem: läget är § 157
- * och får inte visas förrän kartan finns.
+ * Provet läser därför båda filerna — den ena för formen, den andra för orden.
+ *
+ * **`item.view.map` kom med issue 157**, då kartan byggdes — läget fanns inte
+ * förrän dess, och ett ord utan yta är ett löfte katalogen inte kan hålla. Det
+ * är inte samma ord som `item.map.*`: den senare är itemets EGEN fokusgraf, en
+ * annan yta med en annan fråga ([[ADR-0032 Produktens ord]]).
  */
 it('hämtar itemväxelns strängar ur ui.php', function () {
     $vaxeln = File::get(resource_path('js/components/ItemViewSwitch.vue'));
@@ -702,20 +705,69 @@ it('hämtar itemväxelns strängar ur ui.php', function () {
 
     preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $fliken, $träffar);
 
-    foreach (['item.view.label', 'item.view.list', 'item.view.tree'] as $nyckel) {
+    foreach (['item.view.label', 'item.view.list', 'item.view.tree', 'item.view.map'] as $nyckel) {
         expect($träffar[1])->toContain($nyckel);
     }
 
     expect(Lang::get('ui.item.view.list', [], 'en'))->toBe('List')
-        ->and(Lang::get('ui.item.view.tree', [], 'en'))->toBe('Tree');
-
-    // *Karta* finns inte som nyckel: läget ritas inte, och ett ord utan yta är
-    // ett löfte katalogen inte kan hålla.
-    expect(Lang::get('ui.item.view.map', [], 'en'))->toBe('ui.item.view.map');
+        ->and(Lang::get('ui.item.view.tree', [], 'en'))->toBe('Tree')
+        ->and(Lang::get('ui.item.view.map', [], 'en'))->toBe('Map');
 
     foreach (array_unique($träffar[1]) as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
+});
+
+/*
+ * Containerkartans strängar, se issue 157 · [[M23 Mobilen och kartan]] § 157
+ * och resources/js/components/ContainerMap.vue samt ContainerMapNode.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här, så en mening som läggs till i en komponent och glöms i
+ * katalogen faller. Det betyder något särskilt för de två talen, för
+ * `translate()` skriver NYCKELN SJÄLV när uppslaget misslyckas — en glömd
+ * nyckel står då som `item.board.children` i en nod i stället för *3 children*.
+ *
+ * `status`-uppslaget är BYGGT — ``t(`item.index.status_${status}`) `` — och
+ * fångas därför inte av mönstret. Det prövas i stället för sig, och det är
+ * översiktens nycklar: samma regel ska heta samma sak på båda ytorna, och en
+ * egen kopia här hade varit den andra sanningen om vad OK heter.
+ */
+it('hämtar containerkartans strängar ur ui.php', function () {
+    $nycklar = [];
+
+    foreach ([
+        'js/components/ContainerMap.vue',
+        'js/components/ContainerMapNode.vue',
+    ] as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    expect($nycklar)->toContain('item.board.label')
+        ->toContain('item.board.path')
+        ->toContain('item.board.up')
+        ->toContain('item.board.children')
+        ->toContain('item.board.placements');
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Talen bär sitt värde, och förälderns knapp namnger noden den leder till.
+    expect(Lang::get('ui.item.board.children', ['count' => 3], 'en'))->toBe('3 children')
+        ->and(Lang::get('ui.item.board.placements', ['count' => 2], 'en'))->toBe('2 placements')
+        ->and(Lang::get('ui.item.board.up', ['name' => 'Båten'], 'en'))->toBe('Up to Båten');
+
+    // Statusordet är översiktens, och det finns bara på ett ställe.
+    expect(File::get(resource_path('js/components/ContainerMapNode.vue')))
+        ->toContain('item.index.status_${status}');
+
+    expect(Lang::get('ui.item.index.status_ok', [], 'en'))->toBe('OK')
+        ->and(Lang::get('ui.item.index.status_overdue', [], 'en'))->toBe('Overdue');
 });
 
 /*
