@@ -105,7 +105,7 @@ it('en giltig token ger en kalender', function () {
 
     $response->assertOk();
     $response->assertHeader('Content-Type', 'text/calendar; charset=utf-8');
-    $response->assertHeader('Content-Disposition', 'inline; filename="mimers.ics"');
+    $response->assertHeader('Content-Disposition', 'inline; filename="mimers-vindil.ics"');
     $cacheControl = $response->headers->get('Cache-Control');
     expect($cacheControl)->toContain('private');
     expect($cacheControl)->toContain('max-age=3600');
@@ -113,9 +113,39 @@ it('en giltig token ger en kalender', function () {
     $kropp = $response->getContent();
     expect($kropp)->toStartWith('BEGIN:VCALENDAR');
     expect($kropp)->toContain('END:VCALENDAR');
-    expect($kropp)->toContain('X-WR-CALNAME:Maintenance: Vindil');
+    expect($kropp)->toContain('NAME:Mimers · Vindil');
+    expect($kropp)->toContain('X-WR-CALNAME:Mimers · Vindil');
+    expect($kropp)->toContain('DESCRIPTION:Upcoming maintenance for the container "Vindil".');
+    expect($kropp)->toContain('X-WR-CALDESC:Upcoming maintenance for the container "Vindil".');
     expect($kropp)->toContain('SUMMARY:Byt impeller');
     expect($kropp)->toContain('DESCRIPTION:Impeller');
+});
+
+/*
+ * Filnamnet bär containerns namn så att två prenumerationer går att skilja
+ * åt i en nedladdningslista. Namnet går genom Str::slug(), så `å` blir `a`
+ * och skiljetecknen blir bindestreck.
+ */
+it('filnamnet är mimers- plus containerns slug', function () {
+    [, $user, $container] = kalenderkonto('sv_SE', 'Bårösund, S/Y');
+    [, $token] = kalenderfeedMedToken($container, $user);
+
+    get("/kalender/{$token}.ics")
+        ->assertOk()
+        ->assertHeader('Content-Disposition', 'inline; filename="mimers-barosund-sy.ics"');
+});
+
+/*
+ * Ett namn utan latinska bokstäver ger en tom slug. Ett tomt filnamn
+ * (`mimers-.ics`) vore sämre än produktnamnet, så det är fallbacken.
+ */
+it('filnamnet faller tillbaka på mimers.ics när sluggen blir tom', function () {
+    [, $user, $container] = kalenderkonto('sv_SE', '日本語');
+    [, $token] = kalenderfeedMedToken($container, $user);
+
+    get("/kalender/{$token}.ics")
+        ->assertOk()
+        ->assertHeader('Content-Disposition', 'inline; filename="mimers.ics"');
 });
 
 it('en återkallad token ger 404', function () {
@@ -230,7 +260,7 @@ it('en container i papperskorgen ger en tom kalender', function () {
 
     expect($kropp)->toContain('BEGIN:VCALENDAR');
     expect($kropp)->toContain('END:VCALENDAR');
-    expect($kropp)->toContain('X-WR-CALNAME:Maintenance: Vindil');
+    expect($kropp)->toContain('X-WR-CALNAME:Mimers · Vindil');
     expect($kropp)->not->toContain('BEGIN:VEVENT');
 });
 
@@ -271,6 +301,26 @@ it('kommatecken och semikolon i namn flyktas', function () {
     kalenderuppgift($container, ['title' => 'Växel\\justering', 'item_name' => 'Växel']);
     $kropp = get("/kalender/{$token}.ics")->assertOk()->getContent();
     expect($kropp)->toContain('SUMMARY:Växel\\\\justering');
+});
+
+/*
+ * Alla fyra raderna med kalenderns namn och beskrivning är TEXT-värden och
+ * flyktas lika: `,` → `\,` och `;` → `\;`. Kroppen viks upp först (samma
+ * grepp som i vikningstestet nedan) — påståendet gäller flykten, inte var
+ * 75-oktettsgränsen råkade hamna.
+ */
+it('flyktar kommatecken, semikolon och å i namn och beskrivning', function () {
+    [, $user, $container] = kalenderkonto('sv_SE', 'Vega, S/Y; Båten');
+    [, $token] = kalenderfeedMedToken($container, $user);
+    kalenderuppgift($container, ['title' => 'Byt segel']);
+
+    $kropp = str_replace("\r\n ", '', get("/kalender/{$token}.ics")->assertOk()->getContent());
+
+    expect($kropp)
+        ->toContain('NAME:Mimers · Vega\, S/Y\; Båten')
+        ->toContain('X-WR-CALNAME:Mimers · Vega\, S/Y\; Båten')
+        ->toContain('DESCRIPTION:Upcoming maintenance for the container "Vega\, S/Y\; Båten".')
+        ->toContain('X-WR-CALDESC:Upcoming maintenance for the container "Vega\, S/Y\; Båten".');
 });
 
 it('långa rader viks utan att dela ett tecken', function () {
@@ -370,7 +420,7 @@ it('skriver kalendern på engelska för varje mottagare', function () {
         $kropp = get("/kalender/{$token}.ics")->assertOk()->getContent();
 
         expect($kropp)->toContain('PRODID:-//Mimers//Calendar feed//EN');
-        expect($kropp)->toContain('X-WR-CALNAME:Maintenance: Vindil');
+        expect($kropp)->toContain('X-WR-CALNAME:Mimers · Vindil');
     }
 });
 
