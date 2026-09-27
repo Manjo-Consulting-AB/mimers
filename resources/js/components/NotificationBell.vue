@@ -61,7 +61,29 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * bara notiserna. En inbjudan är obesvarad till dess att den besvarats, så
  * brickan faller med notiserna och står kvar med inbjudningarna — se
  * App\Http\Controllers\NotificationInboxController.
+ *
+ * **Två former, en klocka** (issue 151). `variant` skiljer sidhuvudets knapp
+ * från fliken i bottenraden: fliken bär en synlig etikett under ikonen och
+ * panelen öppnas uppåt, eftersom raden ligger vid skärmens nederkant. Allt
+ * annat är detsamma — siffran, listan, taltutan och läsningen — och det är
+ * hela skälet till att formen är en propp och inte en andra komponent:
+ * notisernas taltuta är klockans ([[M23 Mobilen och kartan]] § 151).
+ *
+ * Panelens id skiljer sig mellan formerna. Båda klockorna sitter i DOM:en
+ * samtidigt — sidhuvudet döljs under `md:` med CSS och inte med `v-if` — och
+ * två element med samma id hade gett `aria-controls` två mål.
  */
+const props = defineProps({
+    /*
+     * `header` (förval) är sidhuvudets klocka; `tab` är fliken i bottenraden.
+     */
+    variant: { type: String, default: 'header' },
+});
+
+const isTab = computed(() => props.variant === 'tab');
+
+const panelId = computed(() => (isTab.value ? 'notification-list-tab' : 'notification-list'));
+
 const { t } = useTranslations();
 const { dueDate, eventDate } = useRelativeDate();
 const page = usePage();
@@ -149,39 +171,55 @@ function toggle() {
         -->
         <button
             type="button"
-            class="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-slate-300 text-slate-700 disabled:opacity-60"
+            class="relative inline-flex min-h-11 min-w-11 items-center justify-center text-slate-700 disabled:opacity-60"
+            :class="
+                isTab
+                    ? 'w-full flex-col gap-0.5 px-2 py-1 text-meta'
+                    : 'rounded border border-slate-300'
+            "
             :aria-label="t('inbox.label')"
-            aria-controls="notification-list"
+            :aria-controls="panelId"
             :aria-expanded="isOpen"
             :disabled="busy"
             @click="toggle"
         >
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="h-5 w-5"
-                aria-hidden="true"
-            >
-                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-            </svg>
+            <!-- Ikonen är sin egen box i flikformen, så att siffran hamnar på
+                 klockan och inte i flikens hörn. I sidhuvudet är den inte
+                 positionerad, och siffran hänger kvar på knappens hörn precis
+                 som förut. -->
+            <span class="inline-flex" :class="isTab ? 'relative' : ''">
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                >
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
 
-            <span
-                v-if="unread > 0"
-                class="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-pill bg-danger px-1 text-meta font-semibold text-ink-on-danger"
-            >
-                {{ unread }}
+                <span
+                    v-if="unread > 0"
+                    class="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-pill bg-danger px-1 text-meta font-semibold text-ink-on-danger"
+                >
+                    {{ unread }}
+                </span>
             </span>
+
+            <!-- Flikens etikett. Sidhuvudets klocka bär ingen text: där är
+                 `inbox.label` det tillgängliga namnet och ingenting annat. -->
+            <span v-if="isTab">{{ t('inbox.label') }}</span>
         </button>
 
         <section
             v-if="isOpen"
-            id="notification-list"
-            class="absolute right-0 z-10 mt-1 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-border bg-surface p-4 shadow-lg"
+            :id="panelId"
+            class="absolute right-0 z-10 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-border bg-surface p-4 shadow-lg"
+            :class="isTab ? 'bottom-full mb-1' : 'mt-1'"
         >
             <h2 class="text-title font-semibold text-ink">{{ t('inbox.label') }}</h2>
 

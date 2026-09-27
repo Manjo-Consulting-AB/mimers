@@ -416,8 +416,28 @@ it('hämtar skalets strängar ur ui.php', function () {
      * de byggs ur radens TYP och prövas i provet nedanför, där nycklarna
      * räknas upp ur `Notification`-konstanterna i stället för ur en avskrift.
      */
-    foreach (['js/layouts/AppLayout.vue', 'js/components/NotificationBell.vue'] as $fil) {
-        preg_match_all("/t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+    /*
+     * Mobilskalet kom med issue 151 och ligger i samma svep: toppraden,
+     * flikraden och sidomenyn är skalets ytor precis som sidhuvudet, och
+     * sektionerna flyttade ur AppLayout till ShellSections. Ett uppslag som
+     * glöms i katalogen renderas som sin egen nyckel — `nav.tabbar` i en
+     * etikett — och det är vad raden nedan fångar.
+     */
+    foreach ([
+        'js/layouts/AppLayout.vue',
+        'js/layouts/ContainerLayout.vue',
+        'js/components/NotificationBell.vue',
+        'js/components/ShellSections.vue',
+        'js/components/MobileTabBar.vue',
+        'js/components/MobileMenu.vue',
+    ] as $fil) {
+        /*
+         * Fönstret `(?<![\w$.])` är det som skiljer ett uppslag från ett
+         * anrop — samma som i proven för lösenords- och e-postformuläret.
+         * Sidomenyn stänger sig med `emit('close')`, och utan fönstret hade
+         * `t('close')` inuti det anropet lästs som en översättningsnyckel.
+         */
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
 
         $nycklar = [...$nycklar, ...$träffar[1]];
     }
@@ -430,6 +450,22 @@ it('hämtar skalets strängar ur ui.php', function () {
 
     foreach (array_unique($nycklar) as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    /*
+     * Sektionernas etiketter slås upp med en BYGGD nyckel —
+     * ``t(`nav.${section.key}`)`` — och fångas därför inte av mönstret ovan.
+     * Nycklarna läses ur listan i stället för att skrivas av här, av samma
+     * skäl som proven ovanför: en rad som läggs till i skalet och glöms i
+     * katalogen ska falla, och en rad som byter namn ska följa med utan att
+     * provet skrivs om.
+     */
+    preg_match_all("/key: '([a-z0-9_]+)', href/", File::get(resource_path('js/components/ShellSections.vue')), $sektioner);
+
+    expect($sektioner[1])->toContain('dashboard')->toContain('settings');
+
+    foreach ($sektioner[1] as $nyckel) {
+        expect(Lang::get("ui.nav.{$nyckel}", [], 'en'))->not->toBe("ui.nav.{$nyckel}", "ui.nav.{$nyckel} saknas");
     }
 });
 
