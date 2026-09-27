@@ -245,6 +245,38 @@ it('ger en read-innehavare en detaljvy utan skrivytor', function () {
 
     expect($vy)->toContain('v-if="can.update"');
     expect($vy)->toContain('v-if="can.delete"');
+
+    // Och plusknappen i skalet får inget mål: en tom meny ger ingen knapp
+    // (issue 152 · [[ADR-0048 Mobilen och plusknappen]] § 2). `can.create` är
+    // falskt, alltså blir varje menyrad utanför `update`-raden struken — och
+    // den är också struken, för `can.update` är falskt. Raderna prövas i
+    // tests/Feature/Frontend/PlusknappTest.php.
+    expect($vy)->toContain(':create="create"');
+});
+
+/*
+ * Plusknappens mål på ett item, se issue 152: en MENY med de rader användaren
+ * får använda, byggd av App\Support\Frontend\CreateTarget. Ägaren ser alla
+ * fyra; att rader faller bort när en policy nekar prövas i
+ * tests/Feature/Frontend/PlusknappTest.php.
+ */
+it('bär plusknappens meny med radadresser på ett item', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemdetaljKontext();
+    $motorn = itemdetaljItem($container, 'Motorn');
+
+    $bas = "/containers/{$container->ulid}/items/{$motorn->ulid}";
+
+    actingAs($anvandare)->get($bas)->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.kind', 'menu')
+            ->where('create.rows', [
+                ['key' => 'item', 'href' => "/containers/{$container->ulid}/items/create?parent={$motorn->ulid}"],
+                ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
+                ['key' => 'attachment', 'href' => "{$bas}?tab=attachments"],
+                ['key' => 'schedule', 'href' => "{$bas}/schedules/create"],
+            ]),
+    );
 });
 
 /*

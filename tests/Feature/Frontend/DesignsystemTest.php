@@ -501,8 +501,8 @@ it('de fem ytkomponenterna finns och bär bara tokens', function () {
     // att en tolfte `Ui*.vue` möts av den och inte av tystnad; SprakTest räknar
     // samma katalog och fäller den som en övertalig komponent.
     //
-    // Elva i dag: de fem primitiverna (issue 425), de fem ytorna (issue 426)
-    // och flikraden (issue 100).
+    // Tolv i dag: de fem primitiverna (issue 425), de fem ytorna (issue 426),
+    // flikraden (issue 100) och arket (issue 152).
     $granskade = 0;
 
     foreach (File::glob(resource_path('js/components/Ui*.vue')) as $fil) {
@@ -514,7 +514,7 @@ it('de fem ytkomponenterna finns och bär bara tokens', function () {
         ))->toBe([]);
     }
 
-    expect($granskade)->toBe(11);
+    expect($granskade)->toBe(12);
 });
 
 it('kortet tar rubrik och åtgärd som slots', function () {

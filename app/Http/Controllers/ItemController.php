@@ -37,6 +37,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Support\Files\FileOrigin;
 use App\Support\Frontend\ActiveContainer;
+use App\Support\Frontend\CreateTarget;
 use App\Support\Item\ItemStatus;
 use App\Support\Item\ItemTree;
 use App\Support\Item\ItemTreeNode;
@@ -220,6 +221,7 @@ class ItemController extends Controller
         ListTags $listTags,
         ActiveContainer $activeContainer,
         ItemStatus $itemStatus,
+        CreateTarget $createTarget,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -274,6 +276,11 @@ class ItemController extends Controller
             'can' => [
                 'create' => Gate::forUser($user)->allows('createItem', $container),
             ],
+            // Plusknappens mål (issue 152): i itemlistan skapar den ett item i
+            // containern. Samma grind som `can.create` ovan — de två kommer
+            // och går tillsammans, och flaggan är presentation medan
+            // App\Support\Frontend\CreateTarget bär målet.
+            'create' => $createTarget->forContainer($user, $container),
         ]);
     }
 
@@ -355,7 +362,7 @@ class ItemController extends Controller
      * där de hör hemma — på servern — och kommer tillbaka som fältfelet på
      * `file`.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget): Response
     {
         Gate::authorize('view', $item);
 
@@ -470,6 +477,12 @@ class ItemController extends Controller
             ? $presentAuditEvents->handle($listAuditEvents->forItem($user, $item))
             : null;
 
+        // Den aktuella förekomsten, som en sträng eller ingenting. `?path[]=x`
+        // är en array, och en array ska bli samma svar som en okänd väg: ingen
+        // väg. Utan raden hade `forItem()` fått en array mot en `?string`.
+        $path = $request->query('path');
+        $path = is_string($path) ? $path : null;
+
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => (new ItemResource($item))->resolve($request),
@@ -582,6 +595,18 @@ class ItemController extends Controller
                 'delete' => Gate::forUser($user)->allows('delete', $item),
                 'create' => Gate::forUser($user)->allows('create', $item),
             ],
+
+            // Plusknappens mål (issue 152 · [[ADR-0048 Mobilen och
+            // plusknappen]] § 2): på ett item är det en MENY, och raderna är
+            // de användaren får använda. `can` ovan ritar sidans skrivytor och
+            // den här proppen ritar skalets knapp — samma policyer prövas i
+            // båda fallen, men bara den här bär adresserna.
+            //
+            // `?path=` följer med ur adressen, av samma skäl som flikarnas
+            // `href` bär den (issue 95 och 102): menyraden *Relation* och
+            // *Bild eller dokument* pekar på flikar, och ett flikbyte ska
+            // stanna på samma förekomst.
+            'create' => $createTarget->forItem($user, $container, $item, $path),
 
             // Historikfliken (issue 116). Proppen finns BARA när fliken är
             // aktiv — se `$auditRows` ovan — och vyn ritar sin tomma rad när

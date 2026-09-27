@@ -261,6 +261,21 @@ const props = defineProps({
      * något annat, och ett klick märker itemet.
      */
     isFavorite: { type: Boolean, default: false },
+    /*
+     * Plusknappens mål, ur App\Support\Frontend\CreateTarget (issue 152 ·
+     * [[ADR-0048 Mobilen och plusknappen]] § 2), eller null. På ett item är
+     * målet en MENY: `{ kind: 'menu', rows }`, där raderna är de användaren
+     * får använda — *Item under*, *Relation*, *Bild eller dokument* och
+     * *Uppgift*. Servern prövar dem mot samma policyer som flikarna och
+     * formulären nedan, och en användare med bara `read` får inga rader: då är
+     * proppen null och skalet ritar ingen knapp.
+     *
+     * Vyn bygger inga rader själv. Adresserna — som `?parent=` till
+     * skapandeformuläret och `?tab=` till relations- och bilageflikarna — är
+     * flikarnas egna, och `?path=` följer med ur samma skäl som i `tabs` ovan:
+     * den som står på en väg ska stanna på den.
+     */
+    create: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -489,7 +504,7 @@ function toggleFavorite() {
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerLayout :container="container" :create="create">
         <Head :title="item.name" />
 
         <!--

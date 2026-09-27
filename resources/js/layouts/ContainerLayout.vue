@@ -69,9 +69,25 @@ import { useTranslations } from '../composables/useTranslations.js';
  * namn är en knapp en skärmläsare inte kan läsa. Antalet items som bilden visar
  * tas inte med; det finns inte i den här layoutens props, och att hämta det
  * vore en fråga per sida (issue 159 ritar bilden).
+ *
+ * **Plusknappen förmedlas och byggs inte här** (issue 152 · [[ADR-0048
+ * Mobilen och plusknappen]] § 2). Layouten tar emot `create` och skickar den
+ * vidare till `AppLayout`, som ritar knappen i sidhuvudet och i flikraden. Vad
+ * knappen gör — skapa ett item i den här containern, eller öppna en meny — är
+ * sidans svar, prövat på servern mot samma policyer som rutterna. Att bygga
+ * målet här hade varit en andra formulering av samma fråga, och den hade
+ * svarat likadant på varje sida i containern även när sidan vet bättre.
  */
 const props = defineProps({
     container: { type: Object, required: true },
+    /*
+     * Plusknappens mål, ur App\Support\Frontend\CreateTarget, eller null.
+     * Skalet ritar knappen (issue 152 · [[ADR-0048 Mobilen och plusknappen]]
+     * § 2), och den här layouten skickar bara vidare det sidan gav den: vad
+     * knappen gör bestäms av sidan, och containerns skal lägger ingenting
+     * till. En sida som inte skickar något får ingen knapp.
+     */
+    create: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -96,7 +112,7 @@ const tabs = computed(() =>
 </script>
 
 <template>
-    <AppLayout>
+    <AppLayout :create="create">
         <template #topbar>
             <Link
                 href="/containers"

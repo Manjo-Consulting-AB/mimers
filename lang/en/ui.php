@@ -98,6 +98,41 @@ return [
     ],
 
     /*
+     * Plusknappen och dess meny, se issue 152 ·
+     * [[ADR-0048 Mobilen och plusknappen]] § 2 och resources/js/components/
+     * CreateButton.vue, UiSheet.vue och CreateMenu.vue.
+     *
+     * `label` är knappens tillgängliga namn och det enda en skärmläsare möter:
+     * knappen är ett plustecken och bär inget synligt ord, i flikraden lika
+     * lite som i sidhuvudet. `close` är arkets stängknapp och tryckytan
+     * utanför det, samma ord som sidomenyns `nav.menu_close` och av samma skäl
+     * — en ikon utan namn är en knapp en skärmläsare inte kan läsa.
+     *
+     * `rows` är menyraderna, nycklade med radens `key` ur
+     * App\Support\Frontend\CreateTarget. Fyra rader och inte fem: den femte —
+     * *Kostnad* — har ingen yta att leda till i dag, se klassens docblock och
+     * PR:ens `## Frågor och antaganden`. Ordningen står i ADR-0048 § 2, och
+     * raderna kommer i den ordningen ur CreateTarget::forItem().
+     */
+    'create' => [
+        'label' => 'Create',
+        'close' => 'Close',
+        // Arkets rubrik. Samma ord som knappens — ytan är knappens meny, och
+        // två ord för samma sak hade glidit isär.
+        'heading' => 'Create',
+        'rows' => [
+            // Ett child till itemet man står på.
+            'item' => 'Item below',
+            // En `related`-länk till ett annat item.
+            'relation' => 'Relation',
+            // En bilaga.
+            'attachment' => 'Image or document',
+            // Ett schema.
+            'schedule' => 'Task',
+        ],
+    ],
+
+    /*
      * Notisklockan i sidhuvudet, se issue 127 och
      * resources/js/components/NotificationBell.vue.
      *

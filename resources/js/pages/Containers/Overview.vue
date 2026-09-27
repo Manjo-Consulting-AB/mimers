@@ -67,13 +67,19 @@ const props = defineProps({
     counts: { type: Object, required: true },
     /* Nycklarna på de tips användaren inte dolt, i serverns ordning. */
     tips: { type: Array, required: true },
+    /*
+     * Plusknappens mål, ur App\Support\Frontend\CreateTarget (issue 152 ·
+     * [[ADR-0048 Mobilen och plusknappen]] § 2), eller null. Här skapar
+     * knappen ett item i containern, med `?parent` när man står på en nod.
+     */
+    create: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerLayout :container="container" :create="create">
         <Head :title="container.name" />
 
         <h1 class="text-2xl font-semibold">{{ container.name }}</h1>

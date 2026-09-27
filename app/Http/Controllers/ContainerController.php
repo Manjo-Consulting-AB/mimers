@@ -16,6 +16,7 @@ use App\Models\ScheduleOccurrence;
 use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
+use App\Support\Frontend\CreateTarget;
 use App\Support\Tips;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -91,7 +92,7 @@ class ContainerController extends Controller
      * Flaggan är presentation; grinden är policyn. `edit` och `update`
      * auktoriserar med `Gate::authorize()` oavsett vad listan visade.
      */
-    public function index(Request $request): Response
+    public function index(Request $request, CreateTarget $createTarget): Response
     {
         $user = $request->user();
         $accountIds = $user->accounts->pluck('id')->values()->all();
@@ -112,6 +113,13 @@ class ContainerController extends Controller
                     'update' => Gate::forUser($user)->allows('update', $container),
                 ],
             ])->all(),
+            // Plusknappens mål (issue 152 · [[ADR-0048 Mobilen och
+            // plusknappen]] § 2): i en containerlista skapar den en container,
+            // precis som raden i huvudet redan gör. Formuleringen bor i
+            // App\Support\Frontend\CreateTarget — samma anrop som
+            // DashboardController::index() gör, så de två ytorna inte kan
+            // svara olika på samma fråga.
+            'create' => $createTarget->forContainers($user),
         ]);
     }
 
@@ -169,6 +177,7 @@ class ContainerController extends Controller
         Container $container,
         ListItems $listItems,
         ActiveContainer $activeContainer,
+        CreateTarget $createTarget,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -197,6 +206,11 @@ class ContainerController extends Controller
             // Tipsen användaren inte dolt, i Tips ordning — samma propp och
             // samma lista som dashboarden bär (issue 128).
             'tips' => app(Tips::class)->visibleFor($user),
+            // Plusknappens mål (issue 152): på översikten skapar den ett item
+            // i containern, med samma grind som itemlistans skapaknapp.
+            // `$parent` är null — ingen sida står på en nod ännu; trädet och
+            // kartan som gör det är 154, 156 och 157.
+            'create' => $createTarget->forContainer($user, $container),
         ]);
     }
 

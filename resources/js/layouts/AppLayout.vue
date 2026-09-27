@@ -1,6 +1,8 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
+import CreateButton from '../components/CreateButton.vue';
+import CreateMenu from '../components/CreateMenu.vue';
 import FlashMessage from '../components/FlashMessage.vue';
 import MobileMenu from '../components/MobileMenu.vue';
 import MobileTabBar from '../components/MobileTabBar.vue';
@@ -105,7 +107,33 @@ import { useTranslations } from '../composables/useTranslations.js';
  * per sidladdning och hämtar sin lista först när den öppnas. Skalet skickar
  * ingenting till den och håller inget av dess tillstånd — utom i flikraden,
  * där den ritas i sin flikform (issue 151).
+ *
+ * **Plusknappen kom med issue 152** · [[ADR-0048 Mobilen och plusknappen]] § 2.
+ * Den ritas i flikradens mitt på mobilen och i sidhuvudet över `md:`, och den
+ * är samma komponent på båda ställena (resources/js/components/CreateButton.vue).
+ *
+ *   - **Målet är sidans och kommer som en prop.** `create` bär svaret från
+ *     App\Support\Frontend\CreateTarget — en `<Link>` till ett formulär, eller
+ *     en meny — och en sida som inte skickar något får ingen knapp. Skalet
+ *     räknar alltså inte ut vad knappen gör, och det finns ingen sida vars
+ *     knapp kan göra fel sak: de två följs åt i samma kontroller.
+ *   - **Menyns öppna-läge bor här**, av samma skäl som sidomenyns: knappen är
+ *     en knapp och menyn en yta (CreateMenu), och den som äger båda är
+ *     layouten. `createTrigger` är elementet som öppnade menyn — arket fästs
+ *     under det över `md:` och lämnar tillbaka fokus till det när det stängs.
+ *   - **Knappen ritas bara för en inloggad.** Målet kräver ett konto att skapa
+ *     i, och varje sida som bär en knapp ligger bakom `auth`; `user`-villkoret
+ *     är detsamma som för flikraden och menyn.
  */
+defineProps({
+    /*
+     * Plusknappens mål, ur App\Support\Frontend\CreateTarget, eller null.
+     * Formen är `{ kind, href }` för ett mål och `{ kind: 'menu', rows }` för
+     * en meny — se CreateButton.
+     */
+    create: { type: Object, default: null },
+});
+
 const { t } = useTranslations();
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -120,6 +148,18 @@ function openMenu(element) {
 
 function closeMenu() {
     menuOpen.value = false;
+}
+
+const createMenuOpen = ref(false);
+const createTrigger = ref(null);
+
+function openCreateMenu(element) {
+    createTrigger.value = element;
+    createMenuOpen.value = true;
+}
+
+function closeCreateMenu() {
+    createMenuOpen.value = false;
 }
 
 const showsVerificationNotice = computed(
@@ -148,6 +188,15 @@ const showsVerificationNotice = computed(
                      `<SearchField v-if="user" />` som den står, och villkoret
                      är det testet handlar om. -->
                 <div class="flex w-full items-center gap-2 md:ml-auto md:w-auto">
+                    <!--
+                        Plusknappen i sidhuvudet, se issue 152. Den står först i
+                        skalets åtgärdsgrupp — före sökfältet och klockan — för
+                        att skapa är det man gör och de två andra är ytor man
+                        tittar i. Över `md:` finns ingen flikrad, och det här är
+                        samma knapp på samma plats i skalet.
+                    -->
+                    <CreateButton v-if="create" :create="create" @open="openCreateMenu" />
+
                     <SearchField v-if="user" />
                     <NotificationBell v-if="user" />
                 </div>
@@ -214,8 +263,24 @@ const showsVerificationNotice = computed(
             hennes mål de bär.
         -->
         <template v-if="user">
-            <MobileTabBar :menu-open="menuOpen" @open-menu="openMenu" />
+            <MobileTabBar
+                :create="create"
+                :menu-open="menuOpen"
+                @open-create="openCreateMenu"
+                @open-menu="openMenu"
+            />
             <MobileMenu :open="menuOpen" :trigger="menuTrigger" @close="closeMenu" />
         </template>
+
+        <!-- Menyn ritas bara när målet ÄR en meny. En sida vars knapp leder
+             till ett formulär har ingenting att öppna, och ett ark utan rader
+             vore en tom yta. -->
+        <CreateMenu
+            v-if="create && create.kind === 'menu'"
+            :open="createMenuOpen"
+            :trigger="createTrigger"
+            :rows="create.rows"
+            @close="closeCreateMenu"
+        />
     </div>
 </template>

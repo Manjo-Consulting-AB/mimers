@@ -199,8 +199,8 @@ it('ger varje mål i flikraden en träffyta på minst 44 px och en plats i tabor
     $mal = mobilskalMal($flikrad);
 
     // Tre mål i flikraden själv: Översikt, Sök och Meny. Det fjärde —
-    // Notiser — är klockan, alltså en komponent och ingen rå tagg; den prövas
-    // strax nedanför. Plusknappens plats är tom med flit.
+    // Notiser — är klockan, och det femte är plusknappen: båda är komponenter
+    // och inga råa taggar, och de prövas strax nedanför.
     expect($mal)->toHaveCount(3);
 
     foreach ($mal as $tag) {
@@ -220,11 +220,13 @@ it('ger varje mål i flikraden en träffyta på minst 44 px och en plats i tabor
     expect($flikrad)->not->toMatch('/tabindex="[1-9]/');
     expect($flikrad)->not->toContain('@keydown');
 
-    // Plusknappens plats står kvar, tom. Kommentaren läses ur den råa filen:
-    // `mobilskalKod` rensar bort den, och markören är en kommentar just för
-    // att platsen inte ska rita något förrän issue 152 fyller den.
-    expect(File::get(resource_path('js/components/MobileTabBar.vue')))
-        ->toContain('Plusknappens plats, tom till issue 152');
+    // Plusknappens plats fylldes i issue 152, och den ritas av `CreateButton`
+    // — alltså en komponent och ingen rå tagg. Det är därför de tre målen
+    // ovan fortfarande är tre: platsen bär en knapp, men knappen bor i sin
+    // egen fil med sin egen träffyta, och den ritas bara när sidan har ett mål
+    // (tests/Feature/Frontend/PlusknappTest.php).
+    expect($flikrad)->toContain("import CreateButton from './CreateButton.vue'")
+        ->and($flikrad)->toContain('<CreateButton');
 });
 
 it('visar containerns namn och en tillbakaknapp i toppraden', function () {

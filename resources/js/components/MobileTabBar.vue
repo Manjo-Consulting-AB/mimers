@@ -1,5 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import CreateButton from './CreateButton.vue';
 import NotificationBell from './NotificationBell.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -11,9 +12,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * bara under `md:` (`md:hidden`), och skalet över brytpunkten möter exakt den
  * navigering det mötte före genomgången.
  *
- * **Plusknappens plats är tom med flit.** Knappen kommer i issue 152, och en
- * plats som fylls i förväg hade varit en knapp utan mål. Platsen står kvar så
- * att de fyra andra inte flyttar sig när den kommer.
+ * **Plusknappen står i mitten sedan issue 152** · [[ADR-0048 Mobilen och
+ * plusknappen]] § 2. Den är `CreateButton` och får sitt mål som en prop av
+ * skalet — samma `create`-propp som sidhuvudets knapp, så de två kan inte göra
+ * olika saker. En sida utan mål får ingen knapp, och platsen står kvar tom:
+ * de fyra andra flyttar sig inte för att en sida inte får skapa något.
  *
  * **Notiserna är klockan själv** (issue 127), inte en avskrift av den:
  * `NotificationBell` ritas i sin flikform, så taltutan, siffran och panelen är
@@ -31,9 +34,11 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /* Sant medan sidomenyn är öppen — knappen annonserar sitt läge. */
     menuOpen: { type: Boolean, default: false },
+    /* Plusknappens mål, ur App\Support\Frontend\CreateTarget, eller null. */
+    create: { type: Object, default: null },
 });
 
-const emit = defineEmits(['open-menu']);
+const emit = defineEmits(['open-menu', 'open-create']);
 
 const { t } = useTranslations();
 </script>
@@ -90,8 +95,20 @@ const { t } = useTranslations();
                 </Link>
             </li>
 
-            <!-- Plusknappens plats, tom till issue 152. -->
-            <li class="flex-1" aria-hidden="true"></li>
+            <!--
+                Plusknappens plats, se issue 152. Tom när sidan inte har ett
+                mål: en plats som fylls med en knapp utan mål vore en knapp
+                som inte gör något.
+            -->
+            <li v-if="create" class="flex-1">
+                <CreateButton
+                    class="w-full"
+                    :create="create"
+                    @open="emit('open-create', $event)"
+                />
+            </li>
+
+            <li v-else class="flex-1" aria-hidden="true"></li>
 
             <li class="flex-1">
                 <NotificationBell variant="tab" />
