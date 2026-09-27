@@ -281,6 +281,11 @@ it('visar bara kategorier inom omfånget, plus deras förfäder', function () {
         // Skrivytorna ritas inte för en `read`-mottagare: flaggan är
         // presentation, grinden är policyn.
         ->where('can.manage', false)
+        // Och raderingstalen uteblir helt. De är containerns, och för en
+        // omfångsbegränsad mottagare vore de antalet items hon inte når — det
+        // läckage issue 73 § Beslut 6 förbjuder. Bara den som klarar
+        // `update()` får dem, och `update()` ger ett obegränsat omfång.
+        ->where('counts', [])
     );
 
     // "Rigg" och "Dokument" läcker inte ens som text — kategorinamnet är

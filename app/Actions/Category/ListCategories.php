@@ -83,6 +83,15 @@ class ListCategories
      * App\Actions\Tag\ListTags::counts() är avsiktlig: taggen räknas per
      * omfång, kategorin per container.
      *
+     * **Men bara för den mottagaren.** Skillnaden håller bara om containertalet
+     * aldrig når någon annan: för en omfångsbegränsad mottagare vore talet
+     * antalet dolda items, och det är det läckage issue 73 § Beslut 6 förbjuder.
+     * Anroparen ansvarar för det — App\Http\Controllers\CategoryController::
+     * index() skickar `counts()` vidare bara när `ContainerPolicy::update()`
+     * släpper igenom, och `update()` ger ett obegränsat omfång (containerbred
+     * grant på minst `write`, eller ägarkontomedlemskap). Den som lägger en ny
+     * anropare på den här metoden måste bära samma grind.
+     *
      * **Två frågor, oavsett antal kategorier.** Trädet hämtas i EN fråga för
      * sig i stället för ur `$categories`-argumentet, eftersom den samlingen
      * kan vara omfångsfiltrerad och därmed ha hål — ett hål hade gett en

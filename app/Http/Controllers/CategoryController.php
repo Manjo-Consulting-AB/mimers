@@ -107,6 +107,20 @@ class CategoryController extends Controller
      * `CategoryResource` — `/api` har inte bett om dem. De räknas av
      * App\Actions\Category\ListCategories::counts() i två frågor oavsett
      * antal kategorier, och de är containerns, inte mottagarens omfång.
+     *
+     * **Talen går bara till den som klarar `update()`** — samma grind som
+     * raderingen själv. Det är inte en optimering utan issue 73 § Beslut 6:
+     * ett kategori- eller taggtal får inte låta en omfångsbegränsad mottagare
+     * sluta sig till hur många items hon inte når, och `view()` släpper
+     * igenom varje nivå (issue 69 § Beslut 4). Att skicka containertalet till
+     * alla `view()`-godkända vore precis det läckage `ListTags::counts()`
+     * undviker genom att räkna per omfång. För den som FÅR radera sammanfaller
+     * de två talen: `update()` kräver en containerbred grant på minst `write`
+     * eller ägarkontomedlemskap, och båda ger ett obegränsat omfång
+     * (App\Actions\Access\ResolveItemScope, regel 1 och 2). Därför kan
+     * containertalet skickas oförändrat — men bara dit. Alla andra får `{}`,
+     * och raderingsfrågan ställs ändå aldrig för dem: knappen de ser leder
+     * till en 403, inte till en radering.
      */
     public function index(Request $request, Container $container, ListCategories $listCategories): Response
     {
@@ -115,13 +129,14 @@ class CategoryController extends Controller
         $container->loadMissing('account');
 
         $user = $request->user();
+        $canManage = Gate::forUser($user)->allows('update', $container);
 
         return Inertia::render('Containers/Categories', [
             'container' => ContainerResource::make($container)->resolve($request),
             'categories' => CategoryResource::collection($listCategories->handle($user, $container))->resolve($request),
-            'counts' => (object) $listCategories->counts($container),
+            'counts' => (object) ($canManage ? $listCategories->counts($container) : []),
             'can' => [
-                'manage' => Gate::forUser($user)->allows('update', $container),
+                'manage' => $canManage,
             ],
             'presetDismissed' => $this->presetDismissed($container),
         ]);
