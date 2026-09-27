@@ -76,7 +76,7 @@ export function valuesFor(mode) {
  *
  * Typen är ett ÖPPET namnrum ([[Notiser]] § notification, Beslut 4): en typ
  * som ingen skrivit en mening åt får sin egen nyckel tillbaka av `translate()`
- * och syns i raden som `inbox.invitation.received`. Det är samma svar
+ * och syns i raden som `inbox.future.type`. Det är samma svar
  * appen ger varje uppslag som misslyckas — en tyst tom rad hade varit ett fel
  * ingen upptäcker (translate.js).
  *

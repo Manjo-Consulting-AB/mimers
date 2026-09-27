@@ -35,11 +35,12 @@ use Inertia\Response;
  * en inbjudan ger läsrätt till en container, och en rad som inte är
  * användarens ska vara osynlig (404) i stället för att bekräftas med 403.
  *
- * **`invitation.received` skrivs fortfarande inte.** Klockan ritar en rad per
- * väntande inbjudan direkt ur `invitation`
- * (App\Http\Middleware\HandleInertiaRequests::pendingInvitations()), och om
- * konstanten ska bort eller börja skrivas står som fråga i [[Tankar]]
- * § Öppet.
+ * **En inbjudan är ingen notis.** Klockan ritar en rad per väntande inbjudan
+ * direkt ur `invitation`
+ * (App\Http\Middleware\HandleInertiaRequests::pendingInvitations()), och
+ * sedan issue 146 finns ingen notistyp för en inbjudan: mejlet går direkt via
+ * App\Notifications\InvitationNotification och väntar inte på mottagarens
+ * tysta timmar.
  *
  * **Tokenet lämnar URL:en direkt** (§ Beslut 2). `open()` lägger det i
  * sessionen och omdirigerar till `/invitations`; ingenting renderas på

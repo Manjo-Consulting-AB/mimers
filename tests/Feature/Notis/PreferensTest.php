@@ -123,3 +123,62 @@ it('en användare kan inte ha två rader för samma typ och kanal', function () 
     expect(fn () => NotificationPreference::factory()->create($attribut))
         ->toThrow(UniqueConstraintViolationException::class);
 });
+
+/*
+ * Issue 146 · Inbjudningsnotisen som aldrig skickades är borta.
+ *
+ * `invitation.received` var en notistyp utan skrivare. Inbjudningsmejlet går
+ * direkt via App\Notifications\InvitationNotification — en inbjudan kommer
+ * från en människa och ska inte vänta på tysta timmar — och klockan ritar sin
+ * rad ur `invitation` (issue 131). Här prövas att konstanten och
+ * preferensraden är borta, och att migreringen städar de rader som fanns.
+ *
+ * Webhooklistan prövas i tests/Feature/Notis/WebhookRegistreringTest.php,
+ * klockan i tests/Feature/Frontend/VantandeInbjudningarTest.php och katalogen
+ * i tests/Feature/Frontend/SprakTest.php.
+ */
+
+/**
+ * En färsk instans av 146:s migrering, så ett prov kan köra `up()` mot rader
+ * det själv har lagt in. `require` (inte `require_once`) gör att filen
+ * evalueras på nytt varje gång och ger en ny anonym klass — samma form som
+ * ladderMigreringen() i tests/Feature/Omfang/MigreringTest.php.
+ */
+function inbjudningstypMigreringen(): object
+{
+    return require database_path('migrations/2026_09_27_010000_remove_invitation_received_type.php');
+}
+
+it('har ingen konstant och ingen preferensrad för inbjudningar', function () {
+    $konstanter = (new ReflectionClass(Notification::class))->getConstants();
+
+    expect($konstanter)->not->toHaveKey('TYPE_INVITATION_RECEIVED');
+
+    // Listan preferensytan ritar är nycklarna i EMAIL_DEFAULTS, i
+    // konstanternas ordning — sex typer, ingen för en inbjudan.
+    $preferences = app(NotificationPreferences::class);
+
+    expect($preferences->types())->toHaveCount(6);
+    expect($preferences->types())->not->toContain('invitation.received');
+});
+
+it('migreringen raderar preferensrader för inbjudningstypen', function () {
+    $user = User::factory()->create();
+
+    NotificationPreference::factory()->create([
+        'user_id' => $user->id,
+        'type' => 'invitation.received',
+        'channel' => NotificationDelivery::CHANNEL_EMAIL,
+    ]);
+    // En rad för en typ som finns kvar rörs inte.
+    NotificationPreference::factory()->create([
+        'user_id' => $user->id,
+        'type' => Notification::TYPE_TASK_DUE,
+        'channel' => NotificationDelivery::CHANNEL_EMAIL,
+    ]);
+
+    inbjudningstypMigreringen()->up();
+
+    expect(NotificationPreference::query()->where('type', 'invitation.received')->exists())->toBeFalse();
+    expect(NotificationPreference::query()->where('type', Notification::TYPE_TASK_DUE)->exists())->toBeTrue();
+});

@@ -54,8 +54,8 @@ it('listan bär varje typ med förvalet ifyllt', function () {
 
     $karta = preferensKarta(getJson('/api/me/notification-preferences', $headers));
 
-    // Sju typer, alla med is_default true — inga rader finns, allt är förval.
-    expect($karta)->toHaveCount(7);
+    // Sex typer, alla med is_default true — inga rader finns, allt är förval.
+    expect($karta)->toHaveCount(6);
     foreach ($karta as $typ => $rad) {
         expect($typ)->toBeString();
         expect($rad['channel'])->toBe(NotificationDelivery::CHANNEL_EMAIL);
@@ -76,10 +76,24 @@ it('listan bär inte kanalen webhook', function () {
 
     // Precis en rad per typ, alla för kanalen email — ingen webhook-rad som
     // inte gör något (31a § Beslut 4).
-    expect($karta)->toHaveCount(7);
+    expect($karta)->toHaveCount(6);
     foreach ($karta as $rad) {
         expect($rad['channel'])->toBe(NotificationDelivery::CHANNEL_EMAIL);
     }
+});
+
+/*
+ * Issue 146: inbjudningstypen är borta, och med den raden i preferensytan.
+ * Listan kommer ur NotificationPreferences::types() — nycklarna i
+ * EMAIL_DEFAULTS — så raden försvinner när konstanten gör det. Provet pinnar
+ * att den inte kommer tillbaka genom någon annan väg.
+ */
+it('listan bär ingen rad för inbjudningar', function () {
+    [, $user, $headers] = preferensYtaKontext();
+
+    $karta = preferensKarta(getJson('/api/me/notification-preferences', $headers));
+
+    expect($karta)->not->toHaveKey('invitation.received');
 });
 
 it('en sparad preferens visas med is_default false', function () {

@@ -29,8 +29,8 @@ use Illuminate\Support\Facades\DB;
  * ([[Notiser]] § notification). En nyckel i `dedupe_key` betyder "samma
  * logiska händelse" — finns raden redan returneras den befintliga, utan ny
  * notis, utan nya leveransrader, utan undantag. `dedupe_key = null`
- * dedupliceras aldrig: flera rader är rätt för en engångshändelse
- * (`invitation.received`), fel för allt en cron skapar.
+ * dedupliceras aldrig: flera rader är rätt för en engångshändelse, fel för
+ * allt en cron skapar.
  *
  * Allt sker i EN transaktion (Beslut 7): notisraden och leveransraderna
  * skapas tillsammans eller inte alls. Två samtidiga cronkörningar kan båda se

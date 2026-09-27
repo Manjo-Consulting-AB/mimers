@@ -80,9 +80,9 @@ use Inertia\Middleware;
  * `notification` (issue 127 § Beslut).
  *
  * **Inbjudningarna kom med issue 131, och de läses ur `invitation`.** En
- * väntande inbjudan är ingen notisrad — `Notification::TYPE_INVITATION_RECEIVED`
- * finns som konstant men skrivs fortfarande av ingen kod — så klockan får sin
- * rad per väntande inbjudan ur inbjudningstabellen i stället, och
+ * väntande inbjudan är ingen notisrad — en inbjudan har ingen notistyp alls
+ * sedan issue 146, eftersom mejlet går direkt — så klockan får sin rad per
+ * väntande inbjudan ur inbjudningstabellen i stället, och
  * `pendingInvitations` är den andra optionala proppen. Raden ritar
  * `inbox.invitation.received` och länkar till `/invitations`, där svaret går.
  *
@@ -347,9 +347,9 @@ class HandleInertiaRequests extends Middleware
      * VERIFIERADE adress, se issue 131 og [[M20 Kontot]] § 131.
      *
      * **Ur `invitation` och inte ur `notification`.** Ingen notisrad skrivs
-     * för en inbjudan — `Notification::TYPE_INVITATION_RECEIVED` finns som
-     * konstant men har ingen skrivare — och frågan går därför mot
-     * inbjudningstabellen, genom SAMMA uppslag som listan på `/invitations`
+     * för en inbjudan — typen togs bort i issue 146, eftersom mejlet går
+     * direkt — och frågan går därför mot inbjudningstabellen, genom SAMMA
+     * uppslag som listan på `/invitations`
      * (App\Support\Invitation\PendingInvitation::forUser()). Två
      * formuleringar av "vilka inbjudningar väntar för den här användaren"
      * hade glidit isär, och klockan hade kunnat visa en rad som sidan inte
@@ -368,7 +368,7 @@ class HandleInertiaRequests extends Middleware
      * är nullbar sedan issue 142 ([[ADR-0045 Radering av konto och person]]
      * § Beslut 2), och en nollställd inbjudare har ingen rad att hämta ett
      * namn ur. Meningen som bär namnet ligger i lang-filen
-     * (`inbox.types.invitation.received` interpolerar `:inviter`), så
+     * (`inbox.invitation.received` interpolerar `:inviter`), så
      * platshållaren måste ha ett värde — *Removed user* står där namnet
      * annars hade stått, och raden förblir begriplig.
      *
