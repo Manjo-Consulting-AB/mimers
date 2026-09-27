@@ -30,16 +30,28 @@ Planen utgår från sviten som den ser ut i dag. Mycket är redan bevisat. Tabel
 | 2, ett gallrat item tar med sig sina bilagor | `Trash/GallringTest` — *ett gallrat item tar med sig sina bilagor* |
 | 4, förbrukningen | `Kvot/ForbrukningTest`, `Kvot/AvstamningTest` |
 
-### Luckor, issue 148
+### Skrivna i issue 148
 
-- **R1. Samma bytes från två olika konton** delar `stored_file`, och båda kontonas förbrukning räknar hela `byte_size`.
-- **R2. Samma bytes i två olika containers** delar `stored_file`. Gallras den ena containern står bytena kvar och räknaren är ett.
-- **R3. Återställning ur papperskorgen** ändrar inte räknaren, varken för en bilaga eller för ett item med bilagor.
-- **R4. Containergallringen** (`PurgeContainer`) minskar räknaren en gång per bilaga, också för bilagor på mjukraderade items i containern.
-- **R5. Kontoraderingen** (`DeleteAccount`) lämnar räknaren rätt för bytes som ett annat konto också refererar.
-- **R6. Nedgraderingens radering** (`EnforcesDowngrades`) går genom samma väg som en vanlig radering och minskar räknaren därefter.
-- **R7. Invarianten 2 som helhet:** efter en blandad följd av uppladdningar, raderingar, återställningar och gallringar över två konton är `reference_count` lika med antalet ogallrade `attachment`-rader, för varje `stored_file`. Ett prov, inte ett per väg: det är provet som fångar en väg ingen har tänkt på.
-- **R8. Derivaten:** när bytena raderas fysiskt försvinner också miniatyrens rad och fil.
+Proven R1–R8 bor i `Attachment/ReferensrakningLivscykelTest`, ett prov per
+rad. Proven prövar invarianten genom de vägar som leder fram till den —
+papperskorgen, containergallringen, kontoraderingen, nedgraderingen och den
+fysiska raderingen — och rör ingen produktionskod.
+
+R7 är invariantprovet: en fast följd av operationer över två konton, med en
+kontroll av `reference_count` mot antalet ogallrade `attachment`-rader för
+varje `stored_file` efter varje steg. Följden är fast, inte slumpad, så att
+ett rött prov går att köra om.
+
+| Prov | Vad det bevisar |
+|---|---|
+| R1 · *samma bytes från två olika konton delar stored_file…* | Invariant 1 över kontogränsen, och invariant 4: båda kontona räknar hela `byte_size`. |
+| R2 · *samma bytes i två containers delar stored_file…* | Invariant 1 över containergränsen. Gallras den ena står bytena kvar och räknaren är ett. |
+| R3 · *återställning ur papperskorgen rör inte räknaren…* | Invariant 2: varken en återställd bilaga eller ett återställt item med bilagor rör räknaren. |
+| R4 · *containergallringen minskar räknaren en gång per bilaga…* | `PurgeContainer` minskar räknaren en gång per bilaga, också för bilagor på mjukraderade items i containern. |
+| R5 · *kontoraderingen lämnar räknaren rätt…* | `DeleteAccount` lämnar räknaren rätt för bytes som ett annat konto också refererar. |
+| R6 · *nedgraderingens radering går genom papperskorgen…* | `EnforcesDowngrades` går genom `TrashAttachment`; räknaren minskar först vid gallringen. |
+| R7 · *invarianten håller efter varje steg i en fast följd över två konton* | Invariant 2 som helhet, efter varje steg. Provet fångar en väg ingen har tänkt på. |
+| R8 · *när bytena raderas fysiskt försvinner miniatyrens rad och fil* | Invariant 5: derivatens rader och filer följer sina byten hela vägen till den fysiska raderingen. |
 
 ---
 
