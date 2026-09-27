@@ -2009,11 +2009,38 @@ return [
             // (decision 4).
             'account' => 'Account',
 
-            // The parent, when the child item is created from the detail
-            // view's link (issue 58 decision 7). A line of text and not a
-            // selector: the link has already answered the question, and
-            // `parent` is only sent on creation.
-            'parent' => 'Created under: :name',
+            /*
+             * The placement row (issue 153 · [[ADR-0048 Mobilen och
+             * plusknappen]] § 3). Where the item is created is a CHOICE now,
+             * so the answer is a row and not a sentence: the container and
+             * the parent, with a button that opens the picker. `location_root`
+             * is the container itself — the item is created at the top level,
+             * which is a place and not an empty field, the same way
+             * `category_none` is a choice. `location_hint` is the line the
+             * mockup writes under it ("created as a child of X"), and it
+             * replaced the single sentence issue 58 decision 7 gave the link
+             * ("Created under: X"): the row names the parent above it now, so
+             * the line under it names the relationship instead.
+             */
+            'location' => 'Placement',
+            'location_root' => 'Top level',
+            'location_hint' => 'Created as a child of :name',
+            'location_change' => 'Change',
+
+            /*
+             * The picker behind *Change*. `parent_heading` names what is
+             * being chosen — an item, and one of the three relations
+             * (ADR-0048 § 4) — and `parent_choose` confirms the highlighted
+             * row, because a tap on a row in a tree that can be searched is
+             * not necessarily a decision. `parent_empty` is about the tree
+             * the user can see and says nothing about what was filtered away
+             * (issue 73 decision 6).
+             */
+            'parent_heading' => 'Choose a parent item',
+            'parent_search' => 'Search items',
+            'parent_choose' => 'Choose here',
+            'parent_cancel' => 'Cancel',
+            'parent_empty' => 'No items match.',
 
             // The cover image (issue 93, [[ADR-0041 Itemets vy]]). One
             // selector over the item's own images, and only in the edit form:

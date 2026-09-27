@@ -35,22 +35,44 @@ import { Link } from '@inertiajs/vue3';
  * ingenting: svaret får inte avslöja hur många items som filtrerats bort
  * (issue 73 § Beslut 6), och en rad om att grenen är slut hade varit precis
  * den upplysningen.
+ *
+ * **Två lägen: `link` och `pick`** (issue 153 · [[ADR-0048 Mobilen och
+ * plusknappen]] § 3). I detaljvyn är ett led en LÄNK till förekomsten; i
+ * föräldraväljaren är samma led ett VAL. Bara elementet skiljer: `<Link>`
+ * mot `<button>`, och i pick-läget bär noden `can_create` ur `structure` —
+ * ett item hon får se men inte skapa under ritas och går inte att välja
+ * (`:disabled`). Komponenten frågar aldrig servern om lov: flaggan kommer i
+ * proppen, och rutten prövar samma policy på nytt när formuläret skickas.
+ *
+ * `containerUlid`, `trail` och `activeTrail` används bara i link-läget —
+ * väljaren har ingen förekomst att markera och ingen adress att bygga — och
+ * de är därför valfria. `trail` fylls ändå av rekursionen i båda lägena:
+ * den är nodens nyckel i listan.
  */
 const props = defineProps({
-    /* Noderna på den här nivån, ur `structure`-proppen — `{ulid, name, children}`. */
+    /*
+     * Noderna på den här nivån, ur `structure`-proppen — `{ulid, name,
+     * children}`, och i pick-läget också `can_create`.
+     */
     nodes: { type: Array, required: true },
-    containerUlid: { type: String, required: true },
+    containerUlid: { type: String, default: '' },
     /*
      * ULID:na från roten ned till den nivå noderna står på, alltså ledet
      * ovanför varje nod här. Tom för rötterna.
      */
-    trail: { type: Array, required: true },
+    trail: { type: Array, default: () => [] },
     /*
      * ULID:na längs den AKTUELLA vägen, ur `paths` (issue 95) — inte ur
-     * adressen, se docblocken ovan.
+     * adressen, se docblocken ovan. Bara link-läget.
      */
-    activeTrail: { type: Array, required: true },
+    activeTrail: { type: Array, default: () => [] },
+    /* Sant i föräldraväljaren: leden är valbara knappar i stället för länkar. */
+    pick: { type: Boolean, default: false },
+    /* ULID:n för det valda itemet i pick-läget, eller null för inget val. */
+    selected: { type: String, default: null },
 });
+
+const emit = defineEmits(['choose']);
 
 /*
  * Ledet från roten NED till noden: förfäderna plus noden själv. Det är både
@@ -75,12 +97,37 @@ function isCurrent(node) {
     return trail.length === props.activeTrail.length
         && trail.every((ulid, index) => ulid === props.activeTrail[index]);
 }
+
+/*
+ * Är det här det valda ledet? Samma ULID två gånger i trädet är samma item på
+ * två ställen — ett item med två föräldrar — och båda leden markeras. Att
+ * markera bara ett av dem hade påstått att valet gällde en förekomst, och en
+ * förälder är ett item och inte en väg.
+ */
+function isChosen(node) {
+    return props.selected !== null && props.selected === node.ulid;
+}
 </script>
 
 <template>
     <ul class="flex flex-col gap-1">
         <li v-for="node in nodes" :key="nodeTrail(node).join('.')" class="flex flex-col gap-1">
+            <button
+                v-if="pick"
+                type="button"
+                :disabled="!node.can_create"
+                :aria-current="isChosen(node) ? 'true' : null"
+                class="inline-flex min-h-11 items-center rounded-control px-2 text-left text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                :class="isChosen(node)
+                    ? 'bg-accent-soft font-semibold text-accent'
+                    : 'text-ink-muted hover:bg-surface-sunken'"
+                @click="emit('choose', node)"
+            >
+                {{ node.name }}
+            </button>
+
             <Link
+                v-else
                 :href="nodeHref(node)"
                 :aria-current="isCurrent(node) ? 'true' : null"
                 class="inline-flex min-h-11 items-center rounded-control px-2 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
@@ -98,6 +145,9 @@ function isCurrent(node) {
                 :container-ulid="containerUlid"
                 :trail="nodeTrail(node)"
                 :active-trail="activeTrail"
+                :pick="pick"
+                :selected="selected"
+                @choose="emit('choose', $event)"
             />
         </li>
     </ul>

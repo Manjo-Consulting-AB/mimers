@@ -30,9 +30,17 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  *
  * **`parent` kommer ur `?parent={ulid}`** (issue 58 § Beslut 7) och är `null`
  * för ett item på toppnivån. Det är samma sida och samma formulär: den enda
- * skillnaden är raden med förälderns namn och att det nya itemet knyts som
- * barn i samma transaktion. Kontrollern auktoriserar mot föräldern när den
- * finns — den här filen ritar bara vad den fick.
+ * skillnaden är att placeringsraden visar en förälder och att det nya itemet
+ * knyts som barn i samma transaktion. Kontrollern auktoriserar mot föräldern
+ * när den finns — den här filen ritar bara vad den fick.
+ *
+ * **Placeringen går att ändra** (issue 153 · [[ADR-0048 Mobilen och
+ * plusknappen]] § 3). `structure` är väljarens träd ur
+ * App\Actions\Item\ResolveItemTree — samma upplösning som detaljvyns
+ * vänsterpanel — och `can_create_root` säger om användaren får lägga itemet
+ * på toppnivån. Sidan skickar dem vidare orörda: trädet är redan
+ * omfångsfiltrerat och varje nod bär sin egen `can_create`, och den här filen
+ * varken filtrerar eller prövar något.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -40,6 +48,10 @@ const props = defineProps({
     tags: { type: Array, required: true },
     /* Föräldern ur `?parent`, eller null för ett item på toppnivån. */
     parent: { type: Object, default: null },
+    /* Väljarens träd, med `can_create` per nod (issue 153). */
+    structure: { type: Array, default: () => [] },
+    /* Får användaren lägga itemet på toppnivån? Ur `can_create_root`. */
+    canCreateRoot: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -64,11 +76,14 @@ const account = computed(() => {
         <ItemForm
             class="mt-8"
             :container-ulid="container.ulid"
+            :container-name="container.name"
             :categories="categories"
             :tags="tags"
             :accounts="accounts"
             :account="account"
             :parent="parent"
+            :structure="structure"
+            :can-create-root="canCreateRoot"
         />
     </ContainerLayout>
 </template>

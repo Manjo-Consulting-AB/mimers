@@ -648,27 +648,148 @@ class ItemController extends Controller
      * `auth.accounts`, och en egen fråga för samma lista är en fråga för
      * mycket. Sidan förvalt containerns ägarkonto ur `container.account` när
      * användaren är medlem i det, annars hennes första konto.
+     *
+     * **Föräldern är ett VAL sedan issue 153** ([[ADR-0048 Mobilen och
+     * plusknappen]] § 3). Raden med förälderns namn bär en *Ändra*-knapp, och
+     * den öppnar en väljare som ritar containerns träd ur `structure` — samma
+     * upplösning som detaljvyns vänsterpanel, alltså samma omfångsregel och
+     * samma rotregel (App\Actions\Item\ResolveItemTree). Noderna bär därför
+     * `can_create`, som är `ItemPolicy::create` prövad på itemet: ett item hon
+     * får se men inte skapa under syns i trädet och går inte att välja.
+     *
+     * Flaggan är en bekvämlighet ovanpå grinden och inte en ny grind.
+     * `store()` prövar samma policy på nytt, och ett förfalskat `parent`
+     * avvisas där precis som förut — 404 när ULID:n ligger i en annan
+     * container, 403 när hon inte får skapa under den.
+     *
+     * **`can_create_root` är containern som plats.** Den som kom med
+     * `?parent` har `ItemPolicy::create` på föräldern och behöver inte ha
+     * `ContainerPolicy::createItem` på containern — en omfångsbegränsad
+     * mottagare når ingen rot. Väljarens översta rad är containern själv, och
+     * den raden är valbar bara när den här flaggan är sann; annars hade
+     * väljaren erbjudit ett val `store()` svarar 403 på.
      */
-    public function create(Request $request, Container $container, ListCategories $listCategories, ListTags $listTags): Response
+    public function create(Request $request, Container $container, ListCategories $listCategories, ListTags $listTags, ResolveItemTree $resolveItemTree): Response
     {
         $parent = $this->parent($container, $this->parentUlid($request));
 
+        $user = $request->user();
+
         if ($parent !== null) {
             Gate::authorize('create', $parent);
+
+            // Vägen in var en förälder, så containerns egen grind är inte
+            // prövad: `can_create_root` står och faller med den.
+            $canCreateRoot = Gate::forUser($user)->allows('createItem', $container);
         } else {
             Gate::authorize('createItem', $container);
+
+            // Utan förälder ÄR `createItem` grinden ovan, och svaret är
+            // därför givet — ingen andra prövning av samma policy.
+            $canCreateRoot = true;
         }
 
         $container->loadMissing('account');
 
-        $user = $request->user();
+        $tree = $resolveItemTree->handle($user, $container);
 
         return Inertia::render('Containers/Items/Create', [
             'container' => ContainerResource::make($container)->resolve($request),
             'categories' => CategoryResource::collection($listCategories->handle($user, $container))->resolve($request),
             'tags' => TagResource::collection($listTags->handle($user, $container))->resolve($request),
             'parent' => $parent === null ? null : ['ulid' => $parent->ulid, 'name' => $parent->name],
+            'structure' => $this->pickableStructure($tree->roots(), $this->creatable($user, $container, $tree)),
+            'can_create_root' => $canCreateRoot,
         ]);
+    }
+
+    /**
+     * Trädet till föräldraväljaren (issue 153): samma noder som
+     * `structure()` ger detaljvyn, och varje nod bär dessutom `can_create`.
+     *
+     * Egen metod och inte en flagga på `structure()`, av samma skäl som
+     * `structure()` själv är en avskrift av `ItemTreeNode`: detaljvyns svar
+     * ska vara ordagrant det den var, och en nod som plötsligt bar en
+     * behörighetsflagga hade ändrat en yta ingen issue rörde.
+     *
+     * @param  list<ItemTreeNode>  $nodes
+     * @param  array<string, bool>  $canCreate  item-ULID → får anroparen skapa ett barn?
+     * @return list<array{ulid: string, name: string, can_create: bool, children: list<array<string, mixed>>}>
+     */
+    private function pickableStructure(array $nodes, array $canCreate): array
+    {
+        return array_map(
+            fn (ItemTreeNode $node): array => [
+                'ulid' => $node->ulid(),
+                'name' => $node->name(),
+                'can_create' => $canCreate[$node->ulid()] ?? false,
+                'children' => $this->pickableStructure($node->children(), $canCreate),
+            ],
+            $nodes,
+        );
+    }
+
+    /**
+     * item-ULID → får anroparen skapa ett barn under itemet? — EN fråga, och
+     * samma policy som `store()` prövar på föräldern.
+     *
+     * Bara noderna i trädet prövas, aldrig containerns alla items: trädet är
+     * redan omfångsfiltrerat, och frågan ställs därför inte om ett item
+     * anroparen inte når.
+     *
+     * `container.account` laddas med flit: ItemPolicy::allows() läser
+     * `$item->container->account` för regel 4, och en lat hämtning per nod
+     * hade varit en fråga per nod. Omfånget självt kostar inga frågor —
+     * ResolveItemScope memoiserar per `{user, container}` och
+     * ResolveItemTree har redan löst upp det.
+     *
+     * @return array<string, bool>
+     */
+    private function creatable(User $user, Container $container, ItemTree $tree): array
+    {
+        $ulids = $this->treeUlids($tree->roots());
+
+        if ($ulids === []) {
+            return [];
+        }
+
+        $items = Item::query()
+            ->where('container_id', $container->id)
+            ->whereIn('ulid', $ulids)
+            ->with('container.account')
+            ->get(['id', 'ulid', 'container_id']);
+
+        $gate = Gate::forUser($user);
+        $canCreate = [];
+
+        foreach ($items as $item) {
+            $canCreate[$item->ulid] = $gate->allows('create', $item);
+        }
+
+        return $canCreate;
+    }
+
+    /**
+     * ULID:na i trädet, i den ordning noderna står — samma vandring som
+     * `pickableStructure()`, och svaret används bara för att pröva policyn på
+     * varje nod en gång.
+     *
+     * @param  list<ItemTreeNode>  $nodes
+     * @return list<string>
+     */
+    private function treeUlids(array $nodes): array
+    {
+        $ulids = [];
+
+        foreach ($nodes as $node) {
+            $ulids[] = $node->ulid();
+
+            foreach ($this->treeUlids($node->children()) as $ulid) {
+                $ulids[] = $ulid;
+            }
+        }
+
+        return $ulids;
     }
 
     /**
