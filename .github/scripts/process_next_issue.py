@@ -1914,8 +1914,7 @@ def setup_worktree(branch_name):
     os.makedirs(WORKTREE_BASE, exist_ok=True)
     worktree_path = os.path.join(WORKTREE_BASE, branch_name.replace("/", "-"))
     git_natverk(["git", "fetch", "origin", "main"], cwd=REPO_ROOT)
-    if os.path.isdir(worktree_path):
-        run_cmd(["git", "worktree", "remove", "--force", worktree_path], check=False, cwd=REPO_ROOT)
+    ta_bort_worktree(worktree_path)
     run_cmd(["git", "branch", "-D", branch_name], check=False, cwd=REPO_ROOT)
     run_cmd(["git", "worktree", "add", worktree_path, "-b", branch_name, "origin/main"], cwd=REPO_ROOT)
     return worktree_path
@@ -1927,15 +1926,28 @@ def setup_worktree_for_existing_branch(branch_name):
     os.makedirs(WORKTREE_BASE, exist_ok=True)
     worktree_path = os.path.join(WORKTREE_BASE, branch_name.replace("/", "-"))
     git_natverk(["git", "fetch", "origin", branch_name], cwd=REPO_ROOT)
-    if os.path.isdir(worktree_path):
-        run_cmd(["git", "worktree", "remove", "--force", worktree_path], check=False, cwd=REPO_ROOT)
+    ta_bort_worktree(worktree_path)
     run_cmd(["git", "branch", "-D", branch_name], check=False, cwd=REPO_ROOT)
     run_cmd(["git", "worktree", "add", worktree_path, "-b", branch_name, f"origin/{branch_name}"], cwd=REPO_ROOT)
     return worktree_path
 
 
-def cleanup_worktree(worktree_path, branch_name):
+def ta_bort_worktree(worktree_path):
+    """Ta bort worktreen, även när git inte längre känner igen den.
+
+    Issue 536: earlyoom dödade agenten, städningen lämnade `.env`, `vendor/`
+    och `node_modules/` kvar utan git-koppling. `worktree remove` rör inte en
+    oregistrerad katalog, så varje följande `worktree add` föll på att sökvägen
+    fanns och kön stod på `needs-human` utan att något behövde en människa.
+    """
     run_cmd(["git", "worktree", "remove", "--force", worktree_path], check=False, cwd=REPO_ROOT)
+    if os.path.isdir(worktree_path):
+        shutil.rmtree(worktree_path, ignore_errors=True)
+    run_cmd(["git", "worktree", "prune"], check=False, cwd=REPO_ROOT)
+
+
+def cleanup_worktree(worktree_path, branch_name):
+    ta_bort_worktree(worktree_path)
     run_cmd(["git", "branch", "-D", branch_name], check=False, cwd=REPO_ROOT)
 
 
