@@ -6,13 +6,25 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
 /*
  * Relationssektionen på itemets detaljvy — se issue 58 § Beslut 3, 4, 5, 8
- * och 9.
+ * och 9, och issue 155 · [[M23 Mobilen och kartan]] § 155.
  *
- * **Tre grupper och varje rad är en länk** (§ Beslut 9). Överordnade,
- * underordnade, relaterade — i den ordningen, och sorterade som servern
- * levererade dem (motpartens namn). Raden länkar till motpartens detaljvy,
- * och det är hela navigeringen backlogfilen ber om. En tom grupp ritas inte:
- * tre tomma rubriker säger mindre än en rad om att ingenting är kopplat.
+ * **Fyra ytor i en ordning** (§ 155): föräldrarna överst, itemet självt i
+ * mitten, barnen under och de relaterade i en lista sist. Det är
+ * mobilmockupens bild 5 med tre relationer i stället för fyra: bildens
+ * fjärde grupp är struken ([[ADR-0048 Mobilen och plusknappen]] § 4), och de
+ * objekten syns i trädet i stället för här.
+ *
+ * **Itemet självt är ingen grupp.** `self` i `rows` är itemet och inte en
+ * nyckel i `links`: noden ritas för sin egen skull, bär ingen motpart och har
+ * ingenting att knyta upp. Den är figurens mitt — utan den vore fliken tre
+ * listor utan ett subjekt.
+ *
+ * **Varje rad är en länk** (§ Beslut 9), sorterad som servern levererade
+ * listan (motpartens namn). Raden länkar till motpartens detaljvy, och det är
+ * hela navigeringen backlogfilen ber om. En tom grupp ritas inte: tre tomma
+ * rubriker säger mindre än en rad om att ingenting är kopplat. Noden för
+ * itemet ritas däremot alltid när något är kopplat — den är subjektet
+ * grupperna hänger under.
  *
  * **Motparten får inte finnas i vyn utanför omfånget** (§ Beslut 3). Servern
  * har redan filtrerat bort den ur `links` — App\Actions\Item\ListItemLinks
@@ -48,6 +60,8 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 const props = defineProps({
     containerUlid: { type: String, required: true },
     itemUlid: { type: String, required: true },
+    /* Itemets namn — noden i figurens mitt (§ 155). */
+    itemName: { type: String, required: true },
     /* Relationerna grupperade per riktning — nycklarna är relationens värden. */
     links: { type: Object, required: true },
     /* Items användaren får ändra och som inte redan är kopplade. */
@@ -58,10 +72,15 @@ const props = defineProps({
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
 
-/* Överordnade, underordnade, relaterade — i den ordningen (§ Beslut 9). */
-const groups = ['parent', 'child', 'related'];
+/*
+ * Ordningen på fliken (§ 155): föräldrarna, itemet självt, barnen och de
+ * relaterade. `self` är itemet och inte en nyckel i `links` — se docblocken
+ * ovan.
+ */
+const rows = ['parent', 'self', 'child', 'related'];
 
-const hasAny = computed(() => groups.some((group) => props.links[group].length > 0));
+/* En tom grupp ritas inte. `self` räknas inte: itemet är inget man är kopplad till. */
+const hasAny = computed(() => rows.some((row) => row !== 'self' && props.links[row].length > 0));
 
 /*
  * Formuläret. `relation` börjar TOMT och inte på ett förvalt värde: parent
@@ -120,15 +139,28 @@ function remove(counterpart) {
         <p class="mt-1 text-sm text-slate-600">{{ t('item.links.description') }}</p>
 
         <template v-if="hasAny">
-            <div v-for="group in groups" :key="group">
-                <template v-if="links[group].length > 0">
+            <template v-for="row in rows" :key="row">
+                <!--
+                    Itemet självt, figurens mitt (§ 155). Ingen motpart och
+                    ingen upp-knytning: noden är subjektet de andra grupperna
+                    hänger under, och etiketten säger vilken nod det är.
+                -->
+                <div
+                    v-if="row === 'self'"
+                    class="mx-auto mt-6 flex w-full max-w-sm flex-col items-center rounded border border-slate-400 bg-slate-100 px-4 py-3 text-center"
+                >
+                    <span class="font-semibold text-slate-900">{{ itemName }}</span>
+                    <span class="mt-1 text-xs text-slate-600">{{ t('item.links.current') }}</span>
+                </div>
+
+                <div v-else-if="links[row].length > 0">
                     <h3 class="mt-6 text-sm font-medium text-slate-600">
-                        {{ t(`item.links.group.${group}`) }}
+                        {{ t(`item.links.group.${row}`) }}
                     </h3>
 
                     <ul class="mt-2 flex flex-col gap-2">
                         <li
-                            v-for="link in links[group]"
+                            v-for="link in links[row]"
                             :key="link.item.ulid"
                             class="flex flex-wrap items-center gap-3 rounded border border-slate-300 bg-white px-4 py-2"
                         >
@@ -150,8 +182,8 @@ function remove(counterpart) {
                             </button>
                         </li>
                     </ul>
-                </template>
-            </div>
+                </div>
+            </template>
         </template>
 
         <p v-else class="mt-4 text-sm text-slate-600">{{ t('item.links.empty') }}</p>

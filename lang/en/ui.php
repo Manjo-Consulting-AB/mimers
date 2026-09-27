@@ -2123,8 +2123,8 @@ return [
             'confirm' => 'The item goes to the trash and can be restored within 30 days. Continue?',
         ],
 
-        // The relation section, see issue 58 decisions 3, 4, 8, 9 and 10. It
-        // lives in resources/js/components/ItemLinkSection.vue.
+        // The relation section, see issue 58 decisions 3, 4, 8, 9 and 10, and
+        // issue 155. It lives in resources/js/components/ItemLinkSection.vue.
         //
         // `group` is the three headings and `relation` the labels in the
         // direction selector — both seen from the COUNTERPART's side
@@ -2132,9 +2132,18 @@ return [
         // counterpart outside the scope has no key at all: it is not drawn
         // (decision 3), and a line describing something hidden would be the
         // leak itself.
+        //
+        // `current` is the label on the item's OWN node in the figure (issue
+        // 155): the section draws the parents, the item itself, the children
+        // and the related items, and the node in the middle needs a word that
+        // says it is the subject and not a counterpart. The relations are
+        // three — parent, child and related — and the mockup's fourth group
+        // is struck ([[ADR-0035 Relationen mellan objekt]],
+        // [[ADR-0048 Mobilen och plusknappen]] § 4).
         'links' => [
             'heading' => 'Relations',
             'description' => 'What this item belongs to, and what belongs to it.',
+            'current' => 'Current item',
 
             'group' => [
                 'parent' => 'Parent items',

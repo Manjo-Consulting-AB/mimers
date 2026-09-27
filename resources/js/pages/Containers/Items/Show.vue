@@ -192,8 +192,8 @@ const props = defineProps({
      */
     maxUploadBytes: { type: Number, required: true },
     /*
-     * Relationerna grupperade i överordnade, underordnade och syskon — redan
-     * filtrerade per omfång av servern (issue 58 § Beslut 2 och 3).
+     * Relationerna grupperade i överordnade, underordnade och relaterade —
+     * redan filtrerade per omfång av servern (issue 58 § Beslut 2 och 3).
      */
     links: { type: Object, required: true },
     /* Items användaren får ändra och som inte redan är kopplade. */
@@ -833,12 +833,18 @@ function toggleFavorite() {
                     <p v-else class="text-sm text-slate-600">{{ t('item.show.information_empty') }}</p>
                 </section>
 
-                <!-- Relationerna (issue 58 § Beslut 9), i sin egen flik: sektionen
-                     finns redan och byter bara plats. -->
+                <!--
+                    Relationerna (issue 58 § Beslut 9), i sin egen flik. Sedan
+                    issue 155 ritar sektionen dem som en figur — föräldrarna,
+                    itemet självt, barnen och de relaterade — och får därför
+                    itemets namn till noden i mitten ([[M23 Mobilen och kartan]]
+                    § 155).
+                -->
                 <ItemLinkSection
                     v-if="activeTab === 'relations'"
                     :container-ulid="container.ulid"
                     :item-ulid="item.ulid"
+                    :item-name="item.name"
                     :links="links"
                     :counterparts="counterparts"
                     :can="can"
