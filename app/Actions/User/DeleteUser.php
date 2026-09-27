@@ -135,6 +135,37 @@ class DeleteUser
     }
 
     /**
+     * Kontona som raderas med personen — de där hon är den enda medlemmen.
+     *
+     * Bara en läsväg: samma uppdelning som `handle()` gör, ur samma privata
+     * metod, så att ytan (issue 145) kan säga vad som kommer att hända utan
+     * att formulera "enda medlem" en andra gång. En avskrift i en kontroller
+     * hade varit en andra sanning om vilka konton som försvinner, och den
+     * hade glidit isär från den här.
+     *
+     * @return Collection<int, Account>
+     */
+    public function accountsToDelete(User $user): Collection
+    {
+        return $this->accountsWhereSoleMember($user);
+    }
+
+    /**
+     * Kontona som lämnas — de där någon annan är medlem kvar. Personen
+     * lämnar dem; kontot står kvar orört (ADR-0045 § Beslut 3).
+     *
+     * Samma läsväg och samma skäl som `accountsToDelete()`.
+     *
+     * @return Collection<int, Account>
+     */
+    public function accountsToLeave(User $user): Collection
+    {
+        return $this->accounts($user)
+            ->reject(fn (Account $account): bool => $this->isSoleMember($account, $user))
+            ->values();
+    }
+
+    /**
      * Raderar personen, eller kastar med listan över det som spärrar.
      *
      * @throws UserDeletionBlocked när `blockers()` inte är tom; ingenting har
@@ -371,6 +402,14 @@ class DeleteUser
         DB::table('dismissed_tip')->where('user_id', $userId)->delete();
         DB::table('email_change')->where('user_id', $userId)->delete();
         DB::table('password_change')->where('user_id', $userId)->delete();
+
+        // Den här raden är bekräftelsen som ledde hit (issue 145): den bär
+        // `user_id` med RESTRICT, och utan den hade personraderingen fastnat
+        // på sitt eget engångstoken. Den ligger i samma transaktion som
+        // resten, och `confirmed_at` rullas tillbaka med den om något senare
+        // i raderingen fallerar.
+        DB::table('user_deletion')->where('user_id', $userId)->delete();
+
         DB::table('totp_recovery_code')->where('user_id', $userId)->delete();
 
         // Åtkomster som mottagare: raden ger personen rätt till någon annans

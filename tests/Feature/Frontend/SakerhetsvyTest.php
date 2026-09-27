@@ -385,6 +385,31 @@ it('bär båda varningarna som text', function () {
 });
 
 /*
+ * Personraderingen, issue 145. Sektionen är en egen komponent, som
+ * lösenordsformuläret, och sidan skickar in underlaget orört — uppdelningen av
+ * konton och spärrarna kommer färdiga ur `deletion` och räknas inte om i vyn.
+ * Själva flödet prövas i tests/Feature/Konto/PersonraderingsytaTest.php; här
+ * prövas att sektionen alls renderas på säkerhetssidan.
+ */
+it('renderar personraderingen på säkerhetssidan', function () {
+    $vy = File::get(resource_path('js/pages/Settings/Security.vue'));
+
+    expect($vy)->toContain("import UserDeletionForm from '../../components/UserDeletionForm.vue'")
+        ->and($vy)->toContain(':accounts-to-delete="props.deletion.accountsToDelete"')
+        ->and($vy)->toContain(':accounts-to-leave="props.deletion.accountsToLeave"')
+        ->and($vy)->toContain(':blockers="props.deletion.blockers"')
+        // Kodfältet följer samma prop som tvåfaktorns eget formulär: kontot
+        // har en andra faktor, eller så har det inte.
+        ->and($vy)->toContain(':totp-enabled="props.totpEnabled"');
+
+    // Texten är katalogens och inte komponentens.
+    $formulär = File::get(resource_path('js/components/UserDeletionForm.vue'));
+
+    expect($formulär)->toContain('settings.security.deletion.heading')
+        ->and($formulär)->toContain('settings.security.deletion.blocked_heading');
+});
+
+/*
  * Navigationen är en lista, inte fyra hårdkodade länkar: en post till (53c,
  * 65, 66) läggs i settingsSections.js och kräver ingen ändring i layouten.
  */

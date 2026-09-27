@@ -239,10 +239,21 @@ it('kör migreringen över befintliga rader utan att röra ett enda värde', fun
         DB::setDefaultConnection($tidigare);
     }
 
-    // Rulla tillbaka sista steget — `down()` sätter tillbaka NOT NULL — och
+    // Rulla tillbaka migreringen — `down()` sätter tillbaka NOT NULL — och
     // kör `up()` igen. Det är samma DDL som produktionen körde, en gång till,
     // ovanpå rader som redan finns.
-    artisan('migrate:rollback', ['--database' => 'nollstalld', '--step' => 1, '--force' => true]);
+    //
+    // Filen pekas ut med `--path` och inte med `--step 1`: `--step` räknar
+    // från den SENASTE migreringen, och den är ett rörligt mål — varje ny
+    // migrering flyttar den och gör provet till ett prov av fel sak. Den här
+    // raden var `--step 1` till dess att issue 145 lade
+    // `create_user_deletion_table` efter den, och rullade då tillbaka fel
+    // migrering.
+    artisan('migrate:rollback', [
+        '--database' => 'nollstalld',
+        '--path' => 'database/migrations/2026_09_26_010000_make_author_columns_nullable.php',
+        '--force' => true,
+    ]);
 
     // Kolumnen är NOT NULL igen: utan det här hade provet varit nöjt med att
     // `rollback` gjorde ingenting, och jämförelsen efteråt hade bevisat noll.

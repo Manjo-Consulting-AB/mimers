@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\Settings;
 
+use App\Actions\User\DeleteUser;
 use App\Http\Controllers\Controller;
+use App\Models\Account;
+use App\Models\Container;
 use App\Models\SecurityLog;
 use App\Models\TotpRecoveryCode;
 use App\Models\User;
+use App\Support\User\DeletionBlocker;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -14,10 +18,11 @@ use Inertia\Response;
  * Säkerhetssidan — ytan där tvåfaktorn slås på, stängs av och förses med
  * återställningskoder, se issue 53b.
  *
- * **Bara läsning.** Kontrollern renderar vyn och svarar med fyra frågor:
+ * **Bara läsning.** Kontrollern renderar vyn och svarar med fem frågor:
  * har kontot ett lösenord, har det en bekräftad TOTP, när bekräftades den,
- * och hur många oförbrukade återställningskoder finns kvar. Den skriver
- * ingenting, och den har ingen affärslogik — allt som ändrar tillstånd görs
+ * hur många oförbrukade återställningskoder finns kvar, och vad en
+ * personradering skulle göra (issue 145). Den skriver ingenting, och den har
+ * ingen affärslogik — allt som ändrar tillstånd görs
  * av App\Support\Auth\TotpBroker och App\Support\Auth\RecoveryCodeBroker,
  * bakom de fyra rutter som redan finns sedan issue 6a–6c
  * ([[ADR-0021 Frontendteknik]], [[ADR-0024 Tunna controllers och actions]]).
@@ -61,6 +66,14 @@ use Inertia\Response;
  * återställningskoder är kontohändelser och inte inloggningar, och de hör
  * till resten.
  *
+ * **Personraderingens underlag, issue 145.** `deletion` bär vilka konton som
+ * raderas med personen, vilka som lämnas, och vad som i så fall spärrar —
+ * räknat av App\Actions\User\DeleteUser, som äger frågan. Vyn visar det och
+ * formulerar ingenting själv: spärrarnas koder blir meningar i
+ * `lang/en/ui.php`, och kontonas och containrarnas namn slås upp i
+ * `deletion()` nedan. Det är samma upplysning som prövningen när länken
+ * öppnas vilar på — den som ser en spärr här ser samma spärr där.
+ *
  * Rutten bakom `auth` (routes/web.php) — en utloggad besökare skickas till
  * /login av middlewaren och når aldrig den här metoden.
  */
@@ -88,7 +101,7 @@ class SecurityController extends Controller
      */
     private const LOGIN_LIMIT = 20;
 
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request, DeleteUser $deleteUser): Response
     {
         $user = $request->user();
 
@@ -117,7 +130,125 @@ class SecurityController extends Controller
             'recoveryCodes' => $request->session()->get('recovery_codes'),
 
             'logins' => $this->logins($user),
+
+            'deletion' => $this->deletion($user, $deleteUser),
         ]);
+    }
+
+    /**
+     * Personraderingens underlag, se [[M22 Redo för testare]] § 145 och
+     * resources/js/components/UserDeletionForm.vue: vilka konton som raderas,
+     * vilka som lämnas, och vad som i så fall spärrar.
+     *
+     * **Uppdelningen räknas av App\Actions\User\DeleteUser, inte här.** Vilka
+     * konton som försvinner är samma fråga som raderingen ställer, och en
+     * avskrift i en kontroller hade varit en andra sanning om den — den hade
+     * glidit isär från raderingen den beskriver. `accountsToDelete()` och
+     * `accountsToLeave()` är samma privata uppdelning som `handle()` gör.
+     *
+     * **Spärrarna kommer som koder med data, och bara det som får visas
+     * följer med.** App\Support\User\DeletionBlocker bär konton och containrar
+     * som ULID; vyn behöver namnen, och de slås upp här — i en enda fråga per
+     * spärr, och bara för de koder som bär data. `legal_hold` är undantaget:
+     * den har ingen `$data` alls, och `account`/`containers` blir null och
+     * tomt. Att ett konto är spärrat är i sig en uppgift om en pågående
+     * utredning, och den ska inte gå att läsa ur en sidprop
+     * (DeletionBlocker::legalHold()).
+     *
+     * Ingen `withTrashed()` på kontona: en person är inte medlem i ett
+     * mjukraderat konto — `account` har ingen `deleted_at` — så uppslaget är
+     * ett vanligt. Containrarna däremot kan vara mjukraderade, och
+     * `containersWithActiveMembers()` räknar dem med flit: en mjukraderad
+     * container med aktiva medlemmar spärrar lika mycket som en levande, och
+     * en spärr vars namn inte går att slå upp vore en spärr utan väg ut.
+     *
+     * @return array{
+     *     accountsToDelete: list<array{ulid: string, name: string}>,
+     *     accountsToLeave: list<array{ulid: string, name: string}>,
+     *     blockers: list<array{code: string, account: string|null, containers: list<string>}>
+     * }
+     */
+    private function deletion(User $user, DeleteUser $deleteUser): array
+    {
+        /** @var list<array{ulid: string, name: string}> $toDelete */
+        $toDelete = $deleteUser->accountsToDelete($user)
+            ->map(fn (Account $account): array => [
+                'ulid' => $account->ulid,
+                'name' => $account->name,
+            ])
+            ->values()
+            ->all();
+
+        /** @var list<array{ulid: string, name: string}> $toLeave */
+        $toLeave = $deleteUser->accountsToLeave($user)
+            ->map(fn (Account $account): array => [
+                'ulid' => $account->ulid,
+                'name' => $account->name,
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'accountsToDelete' => $toDelete,
+            'accountsToLeave' => $toLeave,
+            'blockers' => array_map(
+                fn (DeletionBlocker $blocker): array => [
+                    'code' => $blocker->code,
+                    // `data` är tom för legal_hold, och då blir båda null
+                    // respektive tomma — se docblocket ovan.
+                    'account' => $this->accountName($blocker->data['account'] ?? null),
+                    'containers' => $this->containerNames($blocker->data['containers'] ?? []),
+                ],
+                $deleteUser->blockers($user),
+            ),
+        ];
+    }
+
+    /**
+     * Kontots namn ur dess ULID, eller null när inget ULID följde med.
+     *
+     * ULID:et och inte `id`: App\Support\User\DeletionBlocker bär bara
+     * identifierare utåt, och löpnummer läcker aldrig ut (AGENTS.md
+     * § Databaskonventioner).
+     */
+    private function accountName(mixed $ulid): ?string
+    {
+        if (! is_string($ulid)) {
+            return null;
+        }
+
+        $name = Account::query()->where('ulid', $ulid)->value('name');
+
+        return is_string($name) ? $name : null;
+    }
+
+    /**
+     * Containrarnas namn ur deras ULID:er. `withTrashed()` av samma skäl som i
+     * DeleteUser::containersWithActiveMembers(): en mjukraderad container med
+     * aktiva medlemmar är en spärr, och en spärr ska gå att läsa.
+     *
+     * @return list<string>
+     */
+    private function containerNames(mixed $ulids): array
+    {
+        if (! is_array($ulids)) {
+            return [];
+        }
+
+        $ulids = array_values(array_filter($ulids, is_string(...)));
+
+        if ($ulids === []) {
+            return [];
+        }
+
+        /** @var list<string> $names */
+        $names = Container::withTrashed()
+            ->whereIn('ulid', $ulids)
+            ->pluck('name')
+            ->values()
+            ->all();
+
+        return $names;
     }
 
     /**

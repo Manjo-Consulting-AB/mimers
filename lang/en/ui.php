@@ -236,6 +236,22 @@ return [
         'password-change-requested' => 'We have sent a confirmation link to your email address. Nothing changes until you open it.',
 
         /*
+         * Issue 145. Three codes, one per half of the deletion flow and one
+         * for the brake. `user-deletion-requested` is the security page right
+         * after the form was sent — nothing is deleted yet, and the copy says
+         * so, because a user who believes the form already deleted her would
+         * close the mail and still be here. `user-deletion-blocked` is the
+         * security page after a link was opened and something turned out to
+         * be in the way: nothing was deleted, and the page below the message
+         * shows exactly what it was. `user-deleted` is the receipt, and the
+         * only one of the three a guest ever sees — she lands on the front
+         * page with no session.
+         */
+        'user-deletion-requested' => 'We have sent a confirmation link to your email address. Nothing is deleted until you open it.',
+        'user-deletion-blocked' => 'Nothing was deleted — something is in the way. The page below shows what, and the link in the email still works for a while.',
+        'user-deleted' => 'You have been deleted, along with every account where you were the only member. Accounts you shared with others are still there, without you.',
+
+        /*
          * Issue 130. Two codes and not one, because the two halves of the
          * exchange happen at different times and mean different things:
          * `email-change-requested` is what the profile page says right after
@@ -779,6 +795,61 @@ return [
                 'unknown_device' => 'unknown device',
                 'succeeded' => 'Succeeded',
                 'failed' => 'Failed',
+            ],
+
+            /*
+             * Personraderingen, se [[M22 Redo för testare]] § 145,
+             * [[ADR-0045 Radering av konto och person]] § Beslut 3 och
+             * resources/js/components/UserDeletionForm.vue.
+             *
+             * **Ordet.** The account is `account` in the interface and is
+             * something other than the person: an account with other members
+             * is kept and only the membership goes (ADR-0045 § Beslut 3). The
+             * copy therefore never says *Delete account*. It says what is
+             * deleted — **you**, and the accounts where you are the only
+             * member. `intro` carries that in one sentence and the two lists
+             * below it carry it in names, so a user who reads only the
+             * heading and the button has still been told the truth about the
+             * accounts she shares.
+             *
+             * **Ingen ångerfrist, och texten lovar ingen.** There is no undo
+             * and no grace period; the two steps (the request, then the link
+             * in the mail) are the only brake there is, and the intro does
+             * not dress the deletion up as something reversible.
+             *
+             * **Spärrarna är egna meningar, med `:account` och `:containers`
+             * ifyllda av vyn.** The codes come from
+             * App\Support\User\DeletionBlocker and are spelled in one place;
+             * the view picks a sentence per code and never formulates the
+             * reason itself. `legal_hold` is the exception that confirms the
+             * rule: it carries no data at all, and its sentence names nothing
+             * — that a container is under legal hold is itself information
+             * about an investigation (DeletionBlocker::legalHold()).
+             */
+            'deletion' => [
+                'heading' => 'Delete yourself',
+
+                'intro' => 'This deletes you, and every account where you are the only member. An account you share with others is kept, and only your membership in it is removed. We send you a link by email — nothing is deleted until you open it.',
+
+                'accounts_deleted_heading' => 'Accounts that are deleted',
+                'accounts_left_heading' => 'Accounts that are kept',
+                'accounts_none' => 'None.',
+
+                'blocked_heading' => 'The deletion is stopped',
+                'blocked' => 'Something is in the way, so no request can be made right now.',
+                'blocked_button' => 'Deletion is not possible',
+
+                'blocker' => [
+                    'sole_owner' => 'You are the only owner of :account, which has other members. An account cannot be left without an owner — hand the ownership over to another member first.',
+                    'shared_container' => 'The account :account has containers with active members: :containers. The ownership has to be handed over before the account can be deleted.',
+                    // Neutralt med flit: spärren bär ingen data, och meningen
+                    // får inte avslöja vilket konto den gäller.
+                    'legal_hold' => 'The deletion is stopped by a legal hold. Contact us if you want to know more.',
+                ],
+
+                'code_note' => 'Two-factor authentication is on. The deletion needs a code from your authenticator app, or one of your recovery codes.',
+
+                'submit' => 'Request deletion',
             ],
         ],
     ],

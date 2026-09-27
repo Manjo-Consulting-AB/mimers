@@ -685,6 +685,64 @@ it('hämtar e-postformulärets strängar ur ui.php', function () {
 });
 
 /*
+ * Raderingsformuläret, se [[M22 Redo för testare]] § 145 och
+ * resources/js/components/UserDeletionForm.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här, så en mening som läggs till i komponenten och glöms i
+ * katalogen faller. En av nycklarna är en annans och ska förbli det:
+ * kodfältets etikett är inloggningens (`auth.code.label` — samma etikett,
+ * samma sak att skriva in).
+ *
+ * **Spärrarnas meningar nås med en dynamisk nyckel** —
+ * ``t(`…blocker.${blocker.code.split('.').pop()}`)`` — och fångas därför inte
+ * av mönstret som läser de literala uppslagen. De tre leden räknas upp
+ * uttryckligen här, och de är desamma som App\Support\User\DeletionBlocker
+ * stavar: en spärr utan mening syns i vyn som den råa nyckeln.
+ *
+ * **Ordet prövas.** Kontot heter *account* i gränssnittet och är något annat
+ * än personen (ett konto med andra medlemmar lämnas), så copyn får inte säga
+ * "Delete account" — den ska säga vad som raderas.
+ */
+it('hämtar raderingsformulärets strängar ur ui.php', function () {
+    $vy = File::get(resource_path('js/components/UserDeletionForm.vue'));
+
+    // Fönstret `(?<![\w$.])`: form.reset('code') och
+    // blocker.code.split('.') innehåller sekvensen `t('…`, och utan det hade
+    // fältnamn lästs som översättningsnycklar.
+    preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", $vy, $träffar);
+
+    expect($träffar[1])->toContain('settings.security.deletion.heading')
+        ->and($träffar[1])->toContain('settings.security.deletion.blocked')
+        // Den lånade nyckeln, utskriven: byter någon den mot en egen kopia i
+        // ui.php faller raden, och det är meningen.
+        ->and($träffar[1])->toContain('auth.code.label');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    foreach (['sole_owner', 'shared_container', 'legal_hold'] as $led) {
+        $nyckel = "ui.settings.security.deletion.blocker.{$led}";
+
+        expect(Lang::get($nyckel, [], 'en'))->not->toBe($nyckel);
+    }
+
+    foreach ([
+        'ui.flash.user-deletion-requested',
+        'ui.flash.user-deletion-blocked',
+        'ui.flash.user-deleted',
+    ] as $nyckel) {
+        expect(Lang::get($nyckel, [], 'en'))->not->toBe($nyckel);
+    }
+
+    foreach (['heading', 'intro', 'submit', 'blocked', 'blocked_button'] as $nyckel) {
+        expect(Lang::get("ui.settings.security.deletion.{$nyckel}", [], 'en'))
+            ->not->toContain('Delete account');
+    }
+});
+
+/*
  * [[ADR-0033 Produktens omfång]] § Beslut: containern är ett sammanhang för
  * allt man äger, använder eller arbetar med — inte ett fordon eller ett
  * fritidshus. Det generiska svaret issue 81 lämnade efter sig är

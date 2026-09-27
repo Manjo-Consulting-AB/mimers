@@ -72,12 +72,14 @@ En spärrad radering gör ingenting. **En aktiv prenumeration spärrar inte** �
 Kontona avgörs först, i samma transaktion: ett konto där personen är enda medlem raderas med `DeleteAccount` (med samma innehåll, kvoter och prenumeration som i livscykeln), ett konto med andra medlemmar lämnas orört och personens `account_user`-rad tas bort. Därefter, i den ordning de främmande nycklarna kräver:
 
 1. författarkolumnerna mot `user` nollställs — `item`, `attachment`, `schedule_occurrence`, `cost_entry`, `container_access` och `export` (ADR-0045 § Beslut 2); raderna är någon annans innehåll och står kvar utan avsändare,
-2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `dismissed_tip`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `sessions` och `personal_access_tokens`,
+2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `dismissed_tip`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `user_deletion`, `sessions` och `personal_access_tokens`,
 3. väntande inbjudningar och ägarbyten som personen startat dras tillbaka (`status = 'revoked'`), och författarkolumnen nollställs på dem alla — besvarade behåller sin rad,
 4. säkerhetsloggen får en rad `user.deleted`, utan e-postadressen,
 5. `user`-raden raderas **på riktigt**. Ingen mjukradering: en mjukraderad person vore en person som inte är raderad. `email` blir ledig och kan registreras igen som ett nytt konto.
 
 `audit_log.user_id` och `security_log.user_id` är identifierare utan främmande nyckel (issue 107) och står kvar — raderna lever sin frist ut och gallras som vanligt.
+
+**Ytan är inställningarna** (issue 145), och den följer samma två steg som lösenordsbytet: säkerhetssidan visar vilka konton som raderas och vilka som lämnas — uppdelningen kommer ur `DeleteUser` själv och räknas inte om i vyn — och vad som i så fall spärrar. Begäran (`POST /settings/delete-user`) skriver en rad i [`user_deletion`](#user_deletion) och skickar en länk till `user.email`; **ingenting raderas förrän länken öppnas**, och spärrarna prövas en gång till då. En spärr som uppstått mellan begäran och länken stoppar raderingen, och ingenting har då hänt — länken är fortfarande lösbar inom sin timme. Raderas personen avslutas sessionen, och hon hamnar på startsidan med ett kvitto.
 
 ## magic_link_token
 
@@ -133,6 +135,27 @@ Ett nuvarande lösenord krävs **inte**, varken när kontot har ett eller inte: 
 `confirmed_at` och inte `used_at`, som `magic_link_token` har: samma skäl som `email_change` — ett lösenordsbyte är inte förbrukat förrän kolumnen faktiskt skrivits, och `confirmed_at` är kvittensen på att den skrivningen skedde.
 
 Ingen `deleted_at` och ingen automatisk gallring: samma avvägning som `email_change` — en kortlivad säkerhetsartefakt, inte användarskapat innehåll, och raden får sin frist den dag den blir ett problem.
+
+## user_deletion
+
+En begärd personradering. Personen raderas aldrig i samma steg som raderingen begärs: hon finns kvar tills länken i mejlet till `user.email` öppnas, och det är den här raden som bär begäran fram till dess. Se [[M22 Redo för testare]] § 145 och [[ADR-0045 Radering av konto och person]] § Beslut 3.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid` — raden exponeras aldrig som egen resurs i API:et |
+| user_id | FK → user, RESTRICT | **Raden binds till personen och inte till adressen**, som `password_change` och `email_change`: den som bekräftar måste vara samma användare som begärde raderingen, och länken får inte kunna radera ett konto när en session kapats. En annan inloggad användare får `404`, lika som för ett okänt token |
+| token_hash | CHAR(64) UNIQUE | SHA-256 av slumpen i länken. Klartexten lagras aldrig, samma teknik som `magic_link_token`, `email_change` och `password_change` |
+| expires_at | TIMESTAMP | En timme efter begäran, samma timme som de andra engångslänkarna i mejl. **En ny begäran sätter en tidigare obekräftad rads `expires_at` till nu** i stället för att radera den: den gamla länken slutar gälla direkt, och raden ligger kvar som bevis på att begäran gjordes |
+| confirmed_at | TIMESTAMP NULL | Satt = förbrukad. Sätts med en villkorlig UPDATE, så två samtidiga klick aldrig båda lyckas. **Rullas tillbaka om en spärr fäller raderingen** — ingenting har då hänt, och länken är fortfarande lösbar |
+| created_at, updated_at | | |
+
+**Raden bär ingen nyttolast.** `password_change` lagrar det nya lösenordet och `email_change` den nya adressen; en personradering har ingenting att komma med. Vad som ska raderas står i `user`-raden och i medlemskapen, och `DeleteUser` räknar om det när länken öppnas — en kopia här hade kunnat glida isär från det den beskrev.
+
+**Spärrarna ligger inte i raden.** De prövas av `DeleteUser` vid begäran (för ytan) och en gång till när länken öppnas (auktoritativt). En spärr som uppstått mellan de två stoppar raderingen, och `App\Support\User\UserDeletionBlocked` fäller då hela transaktionen — förbrukningen av raden med den.
+
+**Raden raderas med personen.** Den är en av personens egna rader i `DeleteUser`, och `ON DELETE RESTRICT` är därför inget hinder: raden tas bort före `user`-raden, i samma transaktion. En personradering som fastnade på sitt eget bekräftelsetoken vore en spärr ingen kunde häva.
+
+Ingen `deleted_at`: en kortlivad säkerhetsartefakt, inte användarskapat innehåll, samma undantag som `magic_link_token` och `password_change`.
 
 ## totp_recovery_code
 

@@ -46,6 +46,7 @@ use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\Settings\StorageController;
 use App\Http\Controllers\Settings\TaskPreferenceController;
+use App\Http\Controllers\Settings\UserDeletionController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
@@ -367,6 +368,41 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/settings/security/password/{token}', [PasswordController::class, 'confirm'])
         ->name('settings.security.password.confirm');
+
+    /*
+     * Issue 145 · Personraderingen, se App\Http\Controllers\Settings\
+     * UserDeletionController och [[M22 Redo för testare]] § 145.
+     *
+     * **Två rutter, för personen raderas aldrig i samma steg som raderingen
+     * begärs.** POST skickar mejlet och lämnar `user`-raden orörd; GET:en är
+     * länken i mejlet och den enda väg som raderar. En enda rutt hade gjort en
+     * kapad session tillräcklig för att radera ett konto
+     * ([[ADR-0045 Radering av konto och person]] § Beslut 3).
+     *
+     * **Sökvägen ligger direkt under /settings och inte under /settings/
+     * security**, till skillnad från lösenordsbytets rutter: adressen står i
+     * ett mejl och ska gå att läsa upp och skriva av. Att radera sig själv är
+     * dessutom inte en säkerhetsinställning bland de andra — det är den sista
+     * handlingen i kontot. Formuläret står fortfarande på säkerhetssidan.
+     *
+     * **Inloggningens egen begränsare** (issue 129, App\Support\Auth\
+     * LoginRateLimiter), av samma skäl som på lösenordsbytets PUT: kroppen
+     * prövar en engångskod, alltså samma gissningsbara värde som inloggningen,
+     * och ska mötas av samma tak. En POST är den enda av de två rutter som
+     * prövar något som går att gissa — GET:en bär ett 64-teckenstoken ur ett
+     * 62-teckensalfabet och har därför ingen takgräns, som magic
+     * link-inlösen och /settings/profile/email/{token}.
+     *
+     * Namnen följer `settings.profile.email.confirm`: handlingen, sedan
+     * undantaget — men i singular och utan `request`, eftersom sökvägen är
+     * densamma för båda och det bara finns en begäran att göra.
+     */
+    Route::post('/settings/delete-user', [UserDeletionController::class, 'store'])
+        ->middleware(BindsPasswordChangeThrottleToUser::class)
+        ->name('settings.delete-user');
+
+    Route::get('/settings/delete-user/{token}', [UserDeletionController::class, 'confirm'])
+        ->name('settings.delete-user.confirm');
 
     /*
      * Issue 53c · Kontoinställningarna — profil och konton, se
