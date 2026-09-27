@@ -4,6 +4,7 @@ namespace App\Actions\Account;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Trash\PurgeContainer;
+use App\Actions\Usage\AdjustUsage;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
@@ -25,12 +26,24 @@ use Illuminate\Support\Facades\Log;
  *    först av alla: raderna pekar på både notification och webhook_endpoint,
  *    båda ON DELETE RESTRICT, och containergallringen nedan raderar
  *    container-notiser som leveransrader kan peka på,
- * 2. varje container kontot äger, genom PurgeContainer — med withTrashed(),
+ * 2. bilagor kontot betalar för i containers det inte äger: `billed_account_id`
+ *    flyttas till containerns ägarkonto (issue 143 · [[ADR-0045 Radering av
+ *    konto och person]] § Beslut 1) — innehållet tillhör containern och
+ *    gallras inte här,
+ * 3. författarkolumnerna mot kontot nollställs (ADR-0045 § Beslut 2) — samma
+ *    skäl: raden är någon annans innehåll och står kvar, utan avsändare,
+ * 4. varje container kontot äger, genom PurgeContainer — med withTrashed(),
  *    en mjukraderad container ska också bort,
- * 3. usage_counter-raden och webhook_endpoint-raderna (issue 37a § Beslut 8),
- * 4. subscription-raden om den finns,
- * 5. account_user-raderna,
- * 6. account-raden.
+ * 5. usage_counter-raden och webhook_endpoint-raderna (issue 37a § Beslut 8),
+ * 6. subscription-raden om den finns,
+ * 7. account_user-raderna,
+ * 8. account-raden.
+ *
+ * Steg 2 och 3 ligger FÖRE containergallringen och rör bara rader i ANDRAS
+ * containers: kontots egna containers gallras i steg 4, och deras bilagor och
+ * författarrader försvinner med dem. Utan de två stegen fastnar raderingen på
+ * en ON DELETE RESTRICT-nyckel i en främmande container, transaktionen rullas
+ * tillbaka och `account.deletion_failed` loggas (29b § Beslut 5).
  *
  * `user`-rader raderas inte (issue 29b § Beslut 6): en användare är en
  * person som kan vara medlem i andra konton. Personen raderas i en egen
@@ -76,6 +89,11 @@ class DeleteAccount
                 ->get();
 
             $containerIds = $containers->pluck('id');
+
+            // Steg 2 och 3 — innehållet i ANDRAS containers. Före
+            // containergallringen nedan, som bara rör kontots egna.
+            $this->flyttaFrammandeBilagor($account);
+            $this->nollstallFattarkolumner($accountId);
 
             // Antalen till loggen läses INNAN raderingen — efteråt finns
             // inget kvar att beskriva den med (issue 29b § Beslut 8).
@@ -148,5 +166,89 @@ class DeleteAccount
 
             DB::table('account')->where('id', $accountId)->delete();
         });
+    }
+
+    /**
+     * ADR-0045 § Beslut 1: en bilaga kontot betalar för i en container det
+     * inte äger får containerns ÄGARKONTO som `billed_account_id`. Bytena
+     * flyttar mellan kontonas `usage_counter` i samma transaktion, och
+     * förlagan är App\Actions\OwnershipTransfer\AcceptOwnershipTransfer —
+     * samma två steg, samma enda väg in i räknaren (AdjustUsage).
+     *
+     * KONTOT SOM RADERAS TAR INGEN FRÅGA OM KVOTEN. Ägarkontot har inte valt
+     * bilagorna och ska inte förlora dem för att en gäst försvann; hamnar det
+     * över sin gräns gäller samma regel som för en vanlig överskriden kvot —
+     * nya uppladdningar nekas med `quota.storage_exceeded`, ingen
+     * nedgradering startar (ADR-0045 § Beslut 1). Därför anropas
+     * Entitlements inte här.
+     *
+     * Ingen soft-delete-scope på någon av sidorna: en mjukraderad bilaga, ett
+     * mjukraderat item eller en mjukraderad container är fortfarande rader
+     * med RESTRICT-nycklar, och en kvarlämnad `billed_account_id` blockerar
+     * account-raderingen precis som en levande. ENDAST LEVANDE BILAGOR
+     * påverkar räknaren — en mjukraderad bilaga är redan avdragen från
+     * kontots `storage_bytes` (issue 26a), och att flytta dess byten hade
+     * debiterat ägarkontot för något ingen räknar.
+     */
+    private function flyttaFrammandeBilagor(Account $account): void
+    {
+        $rader = DB::table('attachment')
+            ->join('item', 'item.id', '=', 'attachment.item_id')
+            ->join('container', 'container.id', '=', 'item.container_id')
+            ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
+            ->where('attachment.billed_account_id', $account->id)
+            ->where('container.account_id', '!=', $account->id)
+            ->get([
+                'attachment.id',
+                'attachment.deleted_at',
+                'container.account_id as agarkonto_id',
+                'stored_file.byte_size',
+            ]);
+
+        foreach ($rader->groupBy('agarkonto_id') as $agarkontoId => $grupp) {
+            $agarkontoId = (int) $agarkontoId;
+            $bytes = (int) $grupp->whereNull('deleted_at')->sum('byte_size');
+
+            if ($bytes > 0) {
+                (new AdjustUsage)->handle($account->id, bytesDelta: -$bytes);
+                (new AdjustUsage)->handle($agarkontoId, bytesDelta: +$bytes);
+            }
+
+            DB::table('attachment')
+                ->whereIn('id', $grupp->pluck('id'))
+                ->update([
+                    'billed_account_id' => $agarkontoId,
+                    'updated_at' => now(),
+                ]);
+        }
+    }
+
+    /**
+     * ADR-0045 § Beslut 2: författarkolumnerna mot kontot nollställs.
+     * Historiken står kvar, utan avsändare — raden är containerns innehåll och
+     * gallras inte för att en gäst försvunnit. Kolumnerna mot `user` rörs
+     * inte: personen raderas i en egen fråga (issue 144).
+     *
+     * Ingen soft-delete-scope, av samma skäl som i flyttaFrammandeBilagor():
+     * även en mjukraderad rad bär en RESTRICT-nyckel mot kontot.
+     *
+     * `updated_at` stämplas som vid varje annan skrivning — raden HAR ändrats,
+     * och en rad vars tidsstämpel inte följer med sina egna ändringar ljuger
+     * för den som granskar den. Innehållet är däremot orört: det är bara
+     * avsändaren som försvunnit.
+     */
+    private function nollstallFattarkolumner(int $accountId): void
+    {
+        DB::table('item')
+            ->where('created_by_account_id', $accountId)
+            ->update(['created_by_account_id' => null, 'updated_at' => now()]);
+
+        DB::table('cost_entry')
+            ->where('created_by_account_id', $accountId)
+            ->update(['created_by_account_id' => null, 'updated_at' => now()]);
+
+        DB::table('schedule_occurrence')
+            ->where('completed_by_account_id', $accountId)
+            ->update(['completed_by_account_id' => null, 'updated_at' => now()]);
     }
 }
