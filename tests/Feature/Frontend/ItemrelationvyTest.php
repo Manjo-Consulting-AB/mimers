@@ -26,7 +26,10 @@ use function Pest\Laravel\withoutVite;
  * Filen bevisar de tre gränserna issuen är byggd kring:
  *
  * 1. **Navigeringen** — relationerna i tre grupper, sorterade på motpartens
- *    namn, varje rad en länk till motpartens detaljvy (Beslut 9).
+ *    namn, varje rad en länk till motpartens detaljvy (Beslut 9). Sedan issue
+ *    155 ritas de som en figur: föräldrarna överst, itemet självt i mitten,
+ *    barnen under och de relaterade i en lista sist ([[M23 Mobilen och kartan]]
+ *    § 155).
  * 2. **Omfånget** — en motpart utanför mottagarens omfång finns inte i vyn
  *    alls: varken namn, ULID, platshållare eller räknare (Beslut 3). Servern
  *    filtrerar i App\Actions\Item\ListItemLinks och vyn lägger ingenting
@@ -178,11 +181,55 @@ it('visar relationerna i tre grupper sorterade på motpartens namn', function ()
     );
 });
 
-it('renderar grupperna i ordningen överordnade, underordnade, relaterade', function () {
+it('renderar föräldrarna, itemet, barnen och de relaterade i den ordningen', function () {
     $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
 
-    // Ordningen är en del av Beslut 9, och den bor i komponenten.
-    expect($vy)->toContain("const groups = ['parent', 'child', 'related'];");
+    // Ordningen är issue 155:s ärende och den bor i `rows`: föräldrarna,
+    // itemet självt, barnen och de relaterade ([[M23 Mobilen och kartan]]
+    // § 155). `self` är itemet och ingen nyckel i `links` — noden har ingen
+    // motpart och ingenting att knyta upp.
+    expect($vy)->toContain("const rows = ['parent', 'self', 'child', 'related'];");
+
+    // Och mallen ritar raderna i den ordningen i stället för att skriva
+    // grupperna för hand: en mall som listade dem själv kunde säga en annan
+    // sak än `rows`, och ordningen hade stått två ställen.
+    expect($vy)->toContain('v-for="row in rows"');
+});
+
+it('visar itemet självt som en nod mellan föräldrarna och barnen', function () {
+    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
+
+    // Noden i figurens mitt (§ 155): itemets EGET namn, ur `itemName`, och
+    // etiketten ur `lang/`. Utan den vore fliken tre listor utan ett subjekt.
+    expect($vy)->toContain('{{ itemName }}')
+        ->toContain("t('item.links.current')");
+});
+
+it('visar båda föräldrarna när itemet har två', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemrelationKontext();
+
+    $motorn = itemrelationItem($container, 'Motorn');
+    $baten = itemrelationItem($container, 'Båten');
+    $riggen = itemrelationItem($container, 'Riggen');
+
+    // Två vägar upp. Ingen kolumn pekar ut en huvudplats ([[ADR-0041 Itemets
+    // vy]] § Beslut), så båda är föräldrar och båda ska ritas.
+    itemrelationKant($baten, $motorn, 'parent');
+    itemrelationKant($riggen, $motorn, 'parent');
+
+    actingAs($anvandare)->get(itemrelationUrl($container, $motorn))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->has('links.parent', 2)
+            ->where('links.parent.0.item.name', 'Båten')
+            ->where('links.parent.1.item.name', 'Riggen')
+    );
+
+    // Och raden ritas per motpart — gruppen är en slinga och inte ett index.
+    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
+
+    expect($vy)->toContain('v-for="link in links[row]"');
 });
 
 it('länkar varje rad till motpartens detaljvy', function () {
@@ -208,9 +255,12 @@ it('visar en rad om itemet inte är kopplat till något', function () {
 
     // Tre tomma rubriker säger mindre än en rad: en tom grupp ritas inte
     // alls, och är alla tre tomma står raden om att ingenting är kopplat.
+    // Itemets egen nod ritas inte heller — figuren finns bara när något
+    // hänger på itemet (§ 155).
     $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
 
-    expect($vy)->toContain('v-if="links[group].length > 0"');
+    expect($vy)->toContain('v-if="hasAny"');
+    expect($vy)->toContain('v-else-if="links[row].length > 0"');
     expect($vy)->toContain("t('item.links.empty')");
 });
 
