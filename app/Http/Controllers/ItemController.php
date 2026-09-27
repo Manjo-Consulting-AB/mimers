@@ -249,21 +249,36 @@ class ItemController extends Controller
 
         [$filter, $dropped] = $this->filter($request, $tags, $categories);
 
-        $items = $listItems->handle($user, $container, [
-            'tags' => $filter['tags'],
-            'category' => $filter['category'],
-            'q' => $filter['q'],
-        ]);
-
         $view = $this->view($request);
+
+        // Listan och dess statusar ritas BARA i listläget (issue 154), och
+        // därför hämtas de bara där — samma linje som `structure` nedan: en
+        // yta ingen ser ska inte kosta en fråga. Trädläget läser varken
+        // `items`, `statuses` eller `categories` (Index.vue ritar trädet ur
+        // `structure`), och en tom lista är det svar vyn ska se: propparna
+        // finns kvar med sina tomma värden i stället för att försvinna.
+        //
+        // Tag- och kategorilistorna ovan hämtas i BÅDA lägena: de är
+        // filterradens innehåll OCH det `filter()` löser upp de inskickade
+        // ULID:na mot (Beslut 3 och 5), och `filter`-proppen bygger växelns
+        // adresser i vyn. Grinden gäller därför bara raderna och deras
+        // statusar, inte uppslagen.
+        $items = $view === 'list'
+            ? $listItems->handle($user, $container, [
+                'tags' => $filter['tags'],
+                'category' => $filter['category'],
+                'q' => $filter['q'],
+            ])
+            : collect();
 
         return Inertia::render('Containers/Items/Index', [
             'container' => ContainerResource::make($container)->resolve($request),
             'items' => ItemResource::collection($items)->resolve($request),
             // `categories` är ULID → namn för RADERNA (57a § Beslut 1 och 6) —
             // ett annat uppslag än `categoryTree` nedan, som är filterradens
-            // väljare och bär hela trädet.
-            'categories' => $this->categoryNames($items),
+            // väljare och bär hela trädet. Raderna finns bara i listläget, och
+            // uppslaget följer dem.
+            'categories' => $view === 'list' ? $this->categoryNames($items) : [],
 
             // Statusen är HÄRLEDD och ligger BREDVID resursen (issue 92 ·
             // [[ADR-0040 Underträdets summor]]), samma linje som
@@ -275,8 +290,10 @@ class ItemController extends Controller
             // Två frågor per lista, oavsett antal rader: kanterna och
             // förekomsterna hämtas en gång och slutningen sker i minnet, se
             // App\Support\Item\ItemStatus. En vandring per rad vore den N+1
-            // hela åtkomstlösningen byggdes för att undvika.
-            'statuses' => $itemStatus->forItems($container, $user, $items),
+            // hela åtkomstlösningen byggdes för att undvika. Ingen rad, ingen
+            // status: trädläget ritar inga rader och betalar därför inte ens
+            // de två fasta frågorna.
+            'statuses' => $view === 'list' ? $itemStatus->forItems($container, $user, $items) : [],
             'tags' => TagResource::collection($tags)->resolve($request),
             'categoryTree' => CategoryResource::collection($categories)->resolve($request),
             'filter' => [

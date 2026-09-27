@@ -87,9 +87,13 @@ export function itemFields(item, locale) {
  * snabbfakta, medan leverantören och artikelnumret förblir strukna ur
  * detaljrutan.
  *
- * De fyra övriga fälten — inköpsdatum, garanti, placering och kategorin — står
- * kvar på informationsfliken, dit *Visa alla fält* leder. Översikten sammanfattar
- * och informationsfliken räknar upp; ingen av dem är den andras kopia.
+ * **Informationsfliken ritar `itemFields` oförfiltrerat** (Show.vue), och dit
+ * leder *Visa alla fält*: de tre snabbfakta står alltså även där, vid sidan av
+ * inköpsdatum, garanti, placering och kategorin. Överlappningen är avsiktlig —
+ * översikten är urvalet läsaren möts av först, och etiketten lovar ALLA fält
+ * och inte de övriga. `itemQuickFacts` filtrerar därför ur översikten och
+ * lämnar `itemFields` orört; den som vill ha ytorna disjunkta får lova något
+ * annat i etiketten.
  */
 const QUICK_FACT_KEYS = ['manufacturer', 'model', 'serial_number'];
 
