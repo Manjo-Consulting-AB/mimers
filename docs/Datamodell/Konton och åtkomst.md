@@ -55,6 +55,30 @@ Ingen `ulid` — medlemskapet exponeras aldrig som egen resurs i API:et, det nå
 | role | VARCHAR(20) | `owner` \| `admin` \| `member` |
 | created_at, updated_at | | Medlem sedan, och när rollen senast ändrades |
 
+### Personradering
+
+En person kan radera sig själv, och raderingen sker när länken i bekräftelsemejlet öppnas — ingen ångerfrist. Verktyget är `App\Actions\User\DeleteUser`, ytan är inställningarna (issue 145), och beslutet står i [[ADR-0045 Radering av konto och person]] § Beslut 3.
+
+`DeleteUser` har två ingångar: `blockers()` ger det som står i vägen och `handle()` raderar. **Tre spärrar**, var och en med en maskinläsbar kod i `App\Support\User\DeletionBlocker`:
+
+| Kod | Vad den gäller |
+|---|---|
+| `user.deletion_blocked.sole_owner` | Personen är enda `owner` i ett konto som har andra medlemmar |
+| `user.deletion_blocked.shared_container` | Ett konto där personen är enda medlem äger en container med aktiva medlemmar |
+| `user.deletion_blocked.legal_hold` | En rättslig spärr ([[ADR-0043 Tre loggar]]) täcker ett av personens konton |
+
+En spärrad radering gör ingenting. **En aktiv prenumeration spärrar inte** — den avslutas utan återbetalning när kontot raderas.
+
+Kontona avgörs först, i samma transaktion: ett konto där personen är enda medlem raderas med `DeleteAccount` (med samma innehåll, kvoter och prenumeration som i livscykeln), ett konto med andra medlemmar lämnas orört och personens `account_user`-rad tas bort. Därefter, i den ordning de främmande nycklarna kräver:
+
+1. författarkolumnerna mot `user` nollställs — `item`, `attachment`, `schedule_occurrence`, `cost_entry`, `container_access` och `export` (ADR-0045 § Beslut 2); raderna är någon annans innehåll och står kvar utan avsändare,
+2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `dismissed_tip`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `sessions` och `personal_access_tokens`,
+3. väntande inbjudningar och ägarbyten som personen startat dras tillbaka (`status = 'revoked'`), och författarkolumnen nollställs på dem alla — besvarade behåller sin rad,
+4. säkerhetsloggen får en rad `user.deleted`, utan e-postadressen,
+5. `user`-raden raderas **på riktigt**. Ingen mjukradering: en mjukraderad person vore en person som inte är raderad. `email` blir ledig och kan registreras igen som ett nytt konto.
+
+`audit_log.user_id` och `security_log.user_id` är identifierare utan främmande nyckel (issue 107) och står kvar — raderna lever sin frist ut och gallras som vanligt.
+
 ## magic_link_token
 
 Ett utfärdat magic link-token — engångslänken som loggar in en användare utan lösenord. Se [[ADR-0011 Autentisering]] § Konsekvenser.
