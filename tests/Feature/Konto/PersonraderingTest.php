@@ -589,6 +589,31 @@ it('besvarade inbjudningar och ägarbyten behåller sin rad med författaren nol
         ->and($accepteratÄgarbyte->initiated_by_user_id)->toBeNull();
 });
 
+it('en inbjudan på en container i papperskorgen dras också tillbaka', function () {
+    $person = User::factory()->create();
+    [$konto] = personraderingDelatKonto($person, 'member', 'owner');
+    $container = personraderingContainer($konto);
+
+    $inbjudan = Invitation::factory()->create([
+        'container_id' => $container->id,
+        'email' => 'kvarglomd@exempel.se',
+        'status' => 'pending',
+        'expires_at' => now()->addDays(Invitation::TTL_DAYS),
+        'invited_by_user_id' => $person->id,
+    ]);
+
+    // En mjukradering återkallar inte inbjudan — raden ligger kvar tills
+    // gallringen tar containern. Utan withTrashed() på containern svarar
+    // relationen null och hela raderingen faller.
+    $container->delete();
+
+    app(DeleteUser::class)->handle($person);
+
+    expect(User::query()->whereKey($person->id)->exists())->toBeFalse()
+        ->and($inbjudan->refresh()->status)->toBe('revoked')
+        ->and($inbjudan->invited_by_user_id)->toBeNull();
+});
+
 /*
  * Klart när: loggraderna med personens `user_id` står kvar.
  */

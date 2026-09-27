@@ -405,6 +405,13 @@ class DeleteUser
      * Bara `pending` raderas tillbaka. En utgången rad står fortfarande på
      * `pending` (utgången härleds ur `created_at`), och den dras tillbaka på
      * samma sätt som en levande.
+     *
+     * **Containern hämtas med `withTrashed()`.** En mjukraderad container
+     * återkallar varken sina inbjudningar eller sina ågarbyten — raderna
+     * ligger kvar tills gallringen tar dem — och en vanlig `belongsTo` mot en
+     * mjukraderad förälder svarar null. Utan `withTrashed()` hade en
+     * kvarlämnad inbjudan på en container i papperskorgen fällt hela
+     * raderingen på en null.
      */
     private function draTillbakaStartade(User $user): void
     {
@@ -413,7 +420,7 @@ class DeleteUser
         $invitations = Invitation::query()
             ->where('invited_by_user_id', $userId)
             ->where('status', 'pending')
-            ->with('container')
+            ->with(['container' => fn ($query) => $query->withTrashed()])
             ->get();
 
         foreach ($invitations as $invitation) {
@@ -423,7 +430,7 @@ class DeleteUser
         $transfers = OwnershipTransfer::query()
             ->where('initiated_by_user_id', $userId)
             ->where('status', 'pending')
-            ->with('container')
+            ->with(['container' => fn ($query) => $query->withTrashed()])
             ->get();
 
         foreach ($transfers as $transfer) {
