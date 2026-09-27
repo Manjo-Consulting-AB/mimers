@@ -78,16 +78,35 @@ ett rött prov går att köra om.
 | Exportens nedladdning | `Export/ExportNedladdningTest` |
 | Webbrotens skydd på servern | `FilleveransUtrullningTest` |
 
-### Luckor, issue 149
+### Skrivna i issue 149
 
-- **A1. Omfånget gäller varianten också:** `variant=thumb` på ett item utanför omfånget ger 403, och ingen signerad länk präglas.
-- **A2. En utgången tidsbegränsad åtkomst** (`container_access.expires_at` passerat) nekas, både vid nedladdning och vid präglingen.
-- **A3. Ett konto som lämnats:** en användare vars `account_user`-rad är borttagen når inte längre bilagor i kontots containers.
-- **A4. En bilaga i en mjukraderad container** ger 404 också för `variant=thumb`, och också via `/api`.
-- **A5. En signerad länk efter återkallelse:** en länk som präglats före en återkallelse fungerar tills den går ut, högst femton minuter. Provet dokumenterar gränsen, så att den som ändrar den ser det.
-- **A6. 403 och 404 läcker inget:** svaret på en bilaga man inte når innehåller varken filnamn, typ eller storlek. Att 403 och 404 skiljer sig åt, och därmed avslöjar att en ULID finns, är accepterat: en ULID går inte att gissa.
-- **A7. Bilagelistorna läcker inte:** varken itemets bilagelista, lagringsvyn (`/settings/storage`) eller exporten tar med en bilaga på ett item utanför omfånget.
-- **A8. Invarianten 5 i alla svar:** ingen resurs som bär en bilaga (`AttachmentResource`, `StorageEntryResource`, bilagelistan i webben) innehåller `content_hash` eller `storage_path`.
+Proven A1–A8 bor i `Attachment/FilatkomstTest`, ett prov per rad. Proven
+prövar invarianten genom de vägar in som inte var bevisade — varianten, den
+utgångna åtkomsten, det lämnade kontot, den mjukraderade containern på varje
+yta, länken som överlever en återkallelse, vad ett nekat svar bär, listorna
+och resursernas fält — och rör ingen produktionskod.
+
+Omfånget i proven är en itemgrant på ett item, och det item som ligger
+utanför är ett annat på toppnivå i samma container. Fixturen är platt med
+flit: att slutningen går nedåt genom förälderkanter prövas av
+`Omfang/ItemgrindTest` och `Omfang/OmfangsupplosningTest`, och den frågan
+ställs inte om här.
+
+| Prov | Vad det bevisar |
+|---|---|
+| A1 · *variant=thumb på ett item utanför omfånget ger 403 och präglar ingen länk* | Invariant 1 för varianten: miniatyren prövas mot samma omfång som originalet, och präglingen ligger efter grinden. Miniatyren finns på båda bilagorna, så 403:an kommer av omfånget och inte av en saknad variant. |
+| A2 · *en utgången tidsbegränsad åtkomst nekas, både vid leveransen och vid präglingen* | Invariant 3 för den andra spärren: ett passerat `expires_at` nekar både när appdomänen strömmar bytena själv och när den präglar en länk. |
+| A3 · *en användare vars account_user-rad tagits bort når inte längre kontots bilagor* | Invariant 3: medlemskapet ÄR behörigheten. Raden borttagen ger 403, och ingen grant finns kvar som andra väg in. |
+| A4 · *en bilaga i en mjukraderad container ger 404 för varianten, för token och i listan* | Invariant 2 på varje yta: varianten, API-klientens token och bilagelistan nekar alla när containern ligger i papperskorgen. |
+| A5 · *en länk som präglats före en återkallelse fungerar till den går ut* | Invariant 4 och gränsen för den: signaturen är den enda grinden på filoriginet, så en länk som präglats före en återkallelse lever till den går ut — högst femton minuter. Provet dokumenterar gränsen. |
+| A6 · *403 och 404 läcker varken filnamn, typ eller storlek* | Invariant 5 i det nekade svaret: varken kroppen eller rubrikerna bär filnamn, typ, storlek, hash eller sökväg. |
+| A7 · *ingen av listorna tar med en bilaga på ett item utanför omfånget* | Invariant 1 i listorna: itemets bilagelista i webben och `/api`, exporten och lagringsvyn. Exporten beställs av en itemgrant-innehavare — grinden är containerns `view`, som en itemgrant passerar — och bär ändå bara beställarens omfång. |
+| A8 · *ingen resurs som bär en bilaga innehåller content_hash eller storage_path* | Invariant 5 i resurserna: `StorageEntryResource` i lagringsvyn och bilagelistan i webben (samma `AttachmentResource`). `/api`:s bilagelista är redan bevisad av `Attachment/BilagelistaTest` och skrivs inte om. |
+
+Två gränser står kvar med flit, och proven dokumenterar dem i stället för att
+kräva dem ändrade: att 403 och 404 skiljer sig åt — en ULID går inte att
+gissa — och att en redan präglad länk överlever en återkallelse under sin
+livstid.
 
 ---
 
