@@ -196,6 +196,39 @@ it('flyttar mellan flikar med piltangenter och lämnar raden med Tab', function 
     expect($tabindex)->toMatch('/-1/', 'alla flikar är tabbbara — Tab lämnar då inte raden');
 });
 
+/*
+ * Issue 151 · Mobilskalet. Raden skrollar i sidled under `md:` i stället för
+ * att bryta rader — på en telefon blev itemets sju flikar tre rader ovanför
+ * innehållet, alltså samma vägg som den fällda menyn en gång var svaret på.
+ * Över brytpunkten bryter bandet som förut, och etiketten står kvar på en rad
+ * i stället för att radbrytas inuti fliken.
+ *
+ * Källkodsprov som de andra i filen: CSS:en går inte att mäta på serversidan,
+ * och det som prövas är att de fyra klasserna finns och sitter på rätt element
+ * — raden och fliken. Att skrollen känns rätt i handen står i PR-kroppen.
+ */
+it('skrollar flikraden i sidled under md: och bryter rader över', function () {
+    $mall = flikradMall(flikradKod());
+
+    $rader = flikradTaggar($mall, 'ul');
+
+    expect($rader)->toHaveCount(1, 'UiTabs ritar ingen <ul> — raden är ingen rad');
+
+    expect($rader[0])->toMatch('/\bflex-nowrap\b/', 'raden bryter rader även under md:')
+        ->and($rader[0])->toMatch('/\boverflow-x-auto\b/', 'raden skrollar inte i sidled under md:')
+        ->and($rader[0])->toMatch('/\bmd:flex-wrap\b/', 'raden bryter inte rader över md:')
+        ->and($rader[0])->toMatch('/\bmd:overflow-x-visible\b/', 'raden skrollar i sidled även över md:');
+
+    $flikar = flikradTaggar($mall, 'Link');
+
+    expect($flikar)->toHaveCount(1);
+
+    expect($flikar[0])->toMatch(
+        '/\bwhitespace-nowrap\b/',
+        'etiketten radbryts inuti fliken — då är fliken två rader hög',
+    );
+});
+
 it('sätter aria-selected på den aktiva fliken', function () {
     $kod = flikradKod();
     $mall = flikradMall($kod);

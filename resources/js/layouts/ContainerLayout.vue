@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { Link } from '@inertiajs/vue3';
 import AppLayout from './AppLayout.vue';
 import UiTabs from '../components/UiTabs.vue';
 import { containerTabs } from './containerSections.js';
@@ -52,9 +53,22 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Ingen ihopfällning längre** (issue 68a § Beslut 2). Den fällda menyn fanns
  * för att nio rader ovanför innehållet är nio rader man skrollar förbi; flikraden
- * är ett enda band som bryter (`flex-wrap`) i stället för att skrolla i sidled,
- * och då behövs ingen meny att fälla upp. Träffytan är `min-h-11` — 44 px ur
- * issue 68a § Beslut 3 — och den bor i `UiTabs`, som i varje annan radåtgärd.
+ * är ett enda band, och då behövs ingen meny att fälla upp. Träffytan är
+ * `min-h-11` — 44 px ur issue 68a § Beslut 3 — och den bor i `UiTabs`, som i
+ * varje annan radåtgärd.
+ *
+ * **Flikraden skrollar i sidled under `md:`** (issue 151 · [[M23 Mobilen och
+ * kartan]]). Bandet bröt rader förut, och på en telefon blev containerns fyra
+ * flikar och itemets sju till tre rader ovanför innehållet — samma vägg som
+ * den fällda menyn var svaret på. Skrollen bor i `UiTabs` och gäller varje
+ * flikrad; över `md:` bryter bandet som förut.
+ *
+ * **Toppraden på mobilen bär containerns namn och en tillbakaknapp** (issue
+ * 151). Adressen tillbaka är `/containers` — listan man kom ifrån — och
+ * etiketten är skalets egen (`nav.back`): knappen är en ikon, och en ikon utan
+ * namn är en knapp en skärmläsare inte kan läsa. Antalet items som bilden visar
+ * tas inte med; det finns inte i den här layoutens props, och att hämta det
+ * vore en fråga per sida (issue 159 ritar bilden).
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -83,6 +97,29 @@ const tabs = computed(() =>
 
 <template>
     <AppLayout>
+        <template #topbar>
+            <Link
+                href="/containers"
+                class="inline-flex min-h-11 min-w-11 items-center justify-center"
+                :aria-label="t('nav.back')"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="h-5 w-5"
+                    aria-hidden="true"
+                >
+                    <path d="M15 5l-7 7 7 7"></path>
+                </svg>
+            </Link>
+
+            <p class="text-title font-semibold">{{ heading }}</p>
+        </template>
+
         <div class="flex flex-col gap-8">
             <div>
                 <p class="px-3 py-2 font-medium text-title">{{ heading }}</p>

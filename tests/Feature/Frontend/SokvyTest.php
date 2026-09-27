@@ -632,8 +632,10 @@ it('ritar sökfältet i layouten för en inloggad användare och inte för en g�
  *
  * Fältet i headern är en väg in, men bara för den som redan vet att sökningen
  * finns. Raden ligger därför innanför `#huvudmenyn` — samma div som de andra
- * länkarna fälls ihop i (issue 68a § Beslut 2) — och en länk utanför den vore
- * en länk som försvinner på en telefon.
+ * länkarna (issue 68a § Beslut 2) — och en länk utanför den vore en länk som
+ * försvinner på en telefon. Sedan issue 151 ritas raden ur skalets sektionslista
+ * (resources/js/components/ShellSections.vue), som sidomenyn och flikraden
+ * också läser: sökningen ligger ett tryck bort på båda skärmstorlekarna.
  */
 it('har en väg till sökningen i navigeringen för en inloggad och ingen för en gäst', function () {
     withoutVite();
@@ -647,13 +649,18 @@ it('har en väg till sökningen i navigeringen för en inloggad och ingen för e
     );
 
     $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+    $sektioner = File::get(resource_path('js/components/ShellSections.vue'));
 
-    expect($layout)->toContain('id="huvudmenyn"')
-        ->toContain('<Link v-if="user" href="/search"');
+    // Raden bor i skalets sektionslista (issue 151), innanför samma
+    // `v-if="user"` som de andra raderna.
+    expect($sektioner)->toContain("{ key: 'search', href: '/search' }")
+        ->and($sektioner)->toContain('v-if="user"')
+        ->and($sektioner)->toContain('t(`nav.${section.key}`)');
 
-    $menyn = substr($layout, (int) strpos($layout, 'id="huvudmenyn"'));
+    $start = (int) strpos($layout, 'id="huvudmenyn"');
+    $menyn = substr($layout, $start, (int) strpos($layout, '</nav>', $start) - $start);
 
-    expect($menyn)->toContain("t('nav.search')");
+    expect($menyn)->toContain('<ShellSections');
 
     // Nyckeln finns, med ordet ur katalogen (Beslut 8).
     expect(trans('ui.nav.search', [], 'en'))->toBe('Search');

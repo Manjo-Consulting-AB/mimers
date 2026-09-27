@@ -290,21 +290,25 @@ it('använder md: som enda brytpunkt', function () {
     expect($avvikelser)->toBe([]);
 });
 
-it('fäller ihop navigeringen på en telefon i skalets båda layouter', function () {
-    // De ytor beslutet namnger: AppLayouts toppnavigering och SettingsLayouts
-    // sidlista (Beslut 2). Var och en ska ha en menyknapp som bara syns under
-    // `md:` (`md:hidden`), annonsera sitt läge (`aria-expanded`) och peka ut
-    // listan den styr (`aria-controls`) — och listan ska stå framme över `md:`
-    // (`md:flex`) och vara fälld under den.
+it('fäller ihop navigeringen på en telefon i inställningslayouten', function () {
+    // Den yta beslutet namnger: SettingsLayouts sidlista (Beslut 2). Den ska ha
+    // en menyknapp som bara syns under `md:` (`md:hidden`), annonsera sitt läge
+    // (`aria-expanded`) och peka ut listan den styr (`aria-controls`) — och
+    // listan ska stå framme över `md:` (`md:flex`) och vara fälld under den.
     //
     // **ContainerLayout står inte längre här** (issue 101). Dess sektionsmeny
     // är en flikrad byggd av `UiTabs`, och den fälls inte ihop: ett band flikar
-    // bryter (`flex-wrap`) i stället för att skrolla i sidled, vilket är
-    // samma svar på samma problem — nio rader man skrollar förbi är en vägg,
-    // ett band är en rad. Att raden inte skrollar i sidled prövas av testet
-    // ovan, som gäller varje fil under resources/js.
+    // är samma svar på samma problem — nio rader man skrollar förbi är en vägg,
+    // ett band är en rad.
+    //
+    // **AppLayout står inte längre här** (issue 151). Den hopfällda raden är
+    // borta: under `md:` ritar skalet en flikrad i botten och en sidomeny
+    // (resources/js/components/MobileTabBar.vue och MobileMenu.vue), och ingen
+    // av dem fäller upp en lista — menyn är en `<dialog>` och flikraden en rad
+    // mål. Att de två finns, att menyn går att stänga och att varje mål är
+    // 44 px prövas i tests/Feature/Frontend/MobilskalTest.php, som äger
+    // mobilskalet.
     $layouter = [
-        'layouts/AppLayout.vue',
         'layouts/SettingsLayout.vue',
     ];
 
@@ -391,7 +395,22 @@ it('ger varje flik i flikraden en träffyta på minst 44 px', function () {
 });
 
 it('skrollar ingen sida i sidled', function () {
+    // **Flikraden är undantaget, och det är ett beslut och inte ett
+    // kryphål** (issue 151). Issue 101 svarade på samma problem genom att låta
+    // bandet bryta rader i stället för att skrolla; på en telefon blev itemets
+    // sju flikar tre rader ovanför innehållet, alltså samma vägg som menyn en
+    // gång var svaret på. Under `md:` skrollar raden därför i sidled, och över
+    // brytpunkten bryter den som förut — undantaget gäller alltså bara den
+    // ena sidan av brytpunkten, och båda halvorna står i provet nedan.
     foreach (genomgangKod() as $sokvag => $kod) {
+        if ($sokvag === 'components/UiTabs.vue') {
+            expect($kod)->toMatch('/overflow-x-auto/', 'flikraden skrollar inte i sidled under md:')
+                ->and($kod)->toMatch('/md:overflow-x-visible/', 'flikraden slutar inte skrolla över md:')
+                ->and($kod)->toMatch('/md:flex-wrap/', 'flikraden bryter inte rader över md:');
+
+            continue;
+        }
+
         // En sida som skrollar i sidled är det enklaste provet på att den inte
         // fungerar i en hand. Ett `<code>`-block som skrollade internt är
         // samma fel i miniatyr: det radbryts i stället (`break-all`).

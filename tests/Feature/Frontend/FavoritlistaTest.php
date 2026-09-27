@@ -360,9 +360,12 @@ it('en användare utan favoriter ser ingen sektion', function () {
 
     expect(favoritlistaNamn(actingAs($ägare)->get('/dashboard')->assertOk()))->toBe(['Motorn']);
 
-    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+    // Sektionen ritas av `ShellSections part="favorites"` sedan issue 151:
+    // samma komponent ritar den i skalets band över `md:` och i sidomenyn
+    // under `md:`, så den finns på båda ställena eller på inget av dem.
+    $sektionen = File::get(resource_path('js/components/ShellSections.vue'));
 
-    expect($layout)->toContain('v-if="favorites.length"')
+    expect($sektionen)->toContain('v-else-if="favorites.length"')
         // Villkoret är listans längd — inte `user`, som redan är sant för en
         // inloggad utan favoriter.
         ->toContain('const favorites = computed(() => page.props.favorites ?? [])')

@@ -137,22 +137,26 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
     );
 
     $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+    $sektioner = File::get(resource_path('js/components/ShellSections.vue'));
 
-    // Villkoret är den inloggade användaren ur den delade propen — samma
+    // Raden bor i skalets sektionslista sedan issue 151 — samma lista som
+    // sidomenyn ritar ur — och ritas bara för en inloggad användare, samma
     // `v-if="user"` som de fyra raderna ovanför (Beslut 2).
-    expect($layout)->toContain('<Link v-if="user" href="/settings"');
+    expect($sektioner)->toContain("{ key: 'settings', href: '/settings' }")
+        ->and($sektioner)->toContain('v-if="user"');
 
-    // Raden ligger innanför `#huvudmenyn` — samma div som de andra länkarna
-    // fälls ihop i (issue 68a § Beslut 2). En länk utanför den vore en länk
-    // som försvinner på en telefon (Beslut 3).
-    $menyn = substr($layout, (int) strpos($layout, 'id="huvudmenyn"'));
+    // Listan ritas innanför `#huvudmenyn` — samma div som raderna låg i förut
+    // (issue 68a § Beslut 2) — och den ritas av samma komponent som sidomenyn
+    // (issue 151). En rad utanför den vore en rad som försvinner på en telefon.
+    $start = (int) strpos($layout, 'id="huvudmenyn"');
+    $menyn = substr($layout, $start, (int) strpos($layout, '</nav>', $start) - $start);
 
-    expect($menyn)->toContain("t('nav.settings')");
+    expect($menyn)->toContain('<ShellSections');
 
     // Före utloggningen (Beslut 1), och som en <Link> med samma träffyta som
     // grannarna (Beslut 4) — ingen <div> med @click, som tappar tangentbordet.
-    expect(strpos($menyn, "t('nav.settings')"))->toBeLessThan(strpos($menyn, "t('auth.logout')"))
-        ->and($menyn)->toContain('href="/settings" class="inline-flex min-h-11 items-center');
+    expect(strpos($sektioner, "{ key: 'settings'"))->toBeLessThan(strpos($sektioner, "t('auth.logout')"))
+        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center hover:underline"');
 
     // Texten bor i lang/ (Beslut 5).
     expect(trans('ui.nav.settings', [], 'en'))->toBe('Settings');
@@ -187,17 +191,13 @@ it('har en väg till uppgifterna i navigeringen för en inloggad och ingen för 
         fn (AssertableInertia $page) => $page->where('auth.user', null)
     );
 
-    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+    $sektioner = File::get(resource_path('js/components/ShellSections.vue'));
 
-    // Villkoret är den inloggade användaren ur den delade propen, och raden
-    // ligger innanför `#huvudmenyn` — samma div som de andra länkarna fälls
-    // ihop i (issue 68a § Beslut 2).
-    expect($layout)->toContain('<Link v-if="user" href="/tasks"');
-
-    $menyn = substr($layout, (int) strpos($layout, 'id="huvudmenyn"'));
-
-    expect($menyn)->toContain("t('nav.tasks')")
-        ->and($menyn)->toContain('href="/tasks" class="inline-flex min-h-11 items-center');
+    // Raden ligger i skalets sektionslista, innanför samma `v-if="user"` som
+    // de andra raderna (issue 68a § Beslut 2) och i samma lista som sidomenyn
+    // ritar (issue 151).
+    expect($sektioner)->toContain("{ key: 'tasks', href: '/tasks' }")
+        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center hover:underline"');
 
     // Texten bor i lang/, och ordet är sidans eget (`todo.heading`) och inte
     // ruttens — användaren ska möta samma ord i menyn som på sidan.
@@ -306,8 +306,14 @@ it('ritar favoritlistan i skalet för varje sida layouten wrappar', function () 
     // UiListRow — samma form som resten av skalet (issue 99).
     expect(trans('ui.nav.favorites', [], 'en'))->toBe('Favourites');
 
+    // Sektionen ritas av `ShellSections part="favorites"` sedan issue 151:
+    // samma komponent ritar den i skalets band över `md:` och i sidomenyn
+    // under `md:`, så sektionen finns på båda ställena eller på inget av dem.
+    expect(File::get(resource_path('js/components/ShellSections.vue')))
+        ->toContain("import UiListRow from './UiListRow.vue'");
+
     expect(File::get(resource_path('js/layouts/AppLayout.vue')))
-        ->toContain("import UiListRow from '../components/UiListRow.vue'");
+        ->toContain('<ShellSections part="favorites" />');
 });
 
 /*

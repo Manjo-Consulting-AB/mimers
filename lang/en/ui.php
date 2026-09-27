@@ -88,6 +88,13 @@ return [
         // carries no other text, and a second key for the aria-label would be
         // the same word in two places.
         'favorites' => 'Favourites',
+        // The mobile shell, see issue 151 and
+        // resources/js/components/MobileTabBar.vue. `tabbar` is the bottom
+        // bar's accessible name and never a visible word; `back` is the label
+        // of the arrow in the container's top bar, which carries an icon and
+        // nothing else (resources/js/layouts/ContainerLayout.vue).
+        'tabbar' => 'Main navigation',
+        'back' => 'Back',
     ],
 
     /*

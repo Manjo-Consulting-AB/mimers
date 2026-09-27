@@ -86,8 +86,14 @@ import UiBadge from './UiBadge.vue';
  * kontrollerna: en flik man klickar på behöver ingen ring, en man tabbar till
  * behöver den.
  *
- * Träffytan är `min-h-11` — 44 px ur issue 68a § Beslut 3 — och raden bryter
- * (`flex-wrap`) i stället för att skrolla i sidled på en telefon.
+ * Träffytan är `min-h-11` — 44 px ur issue 68a § Beslut 3.
+ *
+ * **Raden skrollar i sidled på en telefon och bryter över `md:`** (issue 151).
+ * Den bröt rader på båda sidor om brytpunkten förut, och på en telefon blev
+ * itemets sju flikar tre rader ovanför innehållet — samma vägg som den fällda
+ * menyn en gång var svaret på. Över `md:` finns bredden, och där bryter bandet
+ * som förut; under den skrollar det, och etiketten står kvar på en rad
+ * (`whitespace-nowrap`) i stället för att radbrytas inuti fliken.
  */
 const props = defineProps({
     /*
@@ -224,7 +230,7 @@ function onKeydown(event, index) {
     <ul
         role="tablist"
         :aria-label="label"
-        class="flex flex-wrap gap-x-1 border-b border-border"
+        class="flex flex-nowrap gap-x-1 overflow-x-auto border-b border-border md:flex-wrap md:overflow-x-visible"
     >
         <li v-for="(tab, index) in tabs" :key="tab.key" role="presentation">
             <Link
@@ -233,7 +239,7 @@ function onKeydown(event, index) {
                 role="tab"
                 :aria-selected="isActive(tab) ? 'true' : 'false'"
                 :tabindex="isTabbable(index) ? 0 : -1"
-                class="inline-flex min-h-11 items-center gap-2 border-b-2 px-3 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="inline-flex min-h-11 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-body outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :class="
                     isActive(tab)
                         ? 'border-accent font-medium text-accent'

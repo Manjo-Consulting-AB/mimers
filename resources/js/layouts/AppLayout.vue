@@ -2,9 +2,11 @@
 import { computed, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import FlashMessage from '../components/FlashMessage.vue';
+import MobileMenu from '../components/MobileMenu.vue';
+import MobileTabBar from '../components/MobileTabBar.vue';
 import NotificationBell from '../components/NotificationBell.vue';
 import SearchField from '../components/SearchField.vue';
-import UiListRow from '../components/UiListRow.vue';
+import ShellSections from '../components/ShellSections.vue';
 import VerifyEmailNotice from '../components/VerifyEmailNotice.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -18,7 +20,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * Layouten läser de delade propsen (auth och flash) och skickar ingenting
  * vidare nedåt — en sida som behöver användaren läser usePage().props själv.
- * Den håller inget eget tillstånd.
+ * Den håller nästan inget eget tillstånd: `menuOpen` och elementet som
+ * öppnade menyn är allt.
  *
  * URL:er skrivs som strängar i <Link href="/dashboard">. Ingen
  * routinghjälpare i JavaScript, se issue 51 § Beslut 7: en URL som bara
@@ -42,19 +45,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * sidan bär samma komponent själv, och två likadana knappar på samma sida
  * är en bugg och inte en påminnelse.
  *
- * Utloggningsknappen är en <Link method="post">, inte ett eget formulär:
- * /logout är en POST-rutt (routes/web.php) och Inertia skickar CSRF-tokenet
- * åt oss. Utan den går det att logga in men inte ut i webbläsaren.
- *
  * **Länken till sökningen kom med issue 78 § Beslut 2.** Fältet i headern är
  * en väg in, men bara för den som redan vet att sökningen finns; den som
- * letar efter den letar i menyn. Raden ligger därför innanför `#huvudmenyn`
- * och följer med i hopfällningen.
+ * letar efter den letar i menyn. Raden ligger därför bland skalets sektioner
+ * och följer med både sidhuvudet och sidomenyn.
  *
  * **Länken till inställningarna kom med issue 79 § Beslut 1.** Sju
  * inställningssidor var byggda och nåddes bara av den som redan stod inne i
  * dem: sektionslistan i SettingsLayout renderas först på en inställningssida.
- * En rad här räcker — den pekar på `/settings`, som omdirigerar till profilen
+ * En rad räcker — den pekar på `/settings`, som omdirigerar till profilen
  * (issue 53c), och därifrån ligger varje sektion ett klick bort. Ingen
  * användarmeny med utfällning: det är en egen designfråga.
  *
@@ -62,68 +61,67 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `/dashboard` till `/tasks` när dashboarden tog över startsidan, och en vy
  * som bara nås genom att skriva adressen är en vy ingen hittar. Raden ligger
  * bredvid dashboarden — de två sidorna var en fram till dess — och bär sidans
- * eget ord (`todo.heading`) i stället för ruttens: användaren ska möta samma
- * ord i menyn som på sidan.
+ * eget ord (`todo.heading`) i stället för ruttens.
  *
- * **Navigeringen fälls ihop på en telefon** (issue 68a § Beslut 2). Vid
- * 375 px ryms varken märket, sökfältet och de sju länkarna i en rad, och en
- * rad som inte ryms är en rad som klipps av. Länkarna ligger därför bakom en
- * menyknapp och sökfältet på sin egen rad; `menuOpen` är den enda
- * tillståndsvariabeln layouten har. Över `md:` ritas allt som förut och
- * knappen försvinner (`md:hidden`) — den breda skärmen möter exakt den
- * navigering den mötte före genomgången.
+ * **Raderna är `ShellSections` sedan issue 151.** Navigeringen var förut
+ * skriven här, rad för rad. Nu ritas den ur en lista i
+ * resources/js/components/ShellSections.vue, och samma komponent ritar
+ * sidomenyn under `md:` — sektionen finns på båda ställena eller på inget av
+ * dem, och ordningen kan inte glida isär. Det är `Klart när`-punkten *"samma
+ * sektioner i samma ordning ur samma data"*, och den är skälet att raderna
+ * flyttade ut.
  *
- * Länkarna bär `min-h-11` (44 px, issue 68a § Beslut 3). I den hopfällda
- * listan står de under varandra och träffas med tummen, och en rad som är
- * 36 px hög är en rad man missar.
+ * **Mobilskalet kom med issue 151** · [[M23 Mobilen och kartan]] och
+ * [[ADR-0048 Mobilen och plusknappen]] § 1. Under `md:` ritas i stället för
+ * den hopfällda desktopraden (issue 68a § Beslut 2):
  *
- * **`FAVORITER` kom med issue 106** — sidopanelens sektion ur bilden, se
- * [[M17 Designsystemet]] § 106 och [[ADR-0042 Designsystemet]]
- * § Konsekvenser. Den ritas ur den delade proppen `favorites` och ställer
- * ingen egen fråga: listan är redan filtrerad genom `ResolveItemScope` på
- * servern, och en vy som prövade omfånget en gång till vore den andra regeln
- * om vad man når.
+ *   - **En mörk topprad** (`--color-shell`) med sidans titel. Sidor som vet
+ *     vad de heter skickar in den i sloten `topbar` — ContainerLayout lägger
+ *     containerns namn och en tillbakaknapp där. Utan slot ritas märket, som i
+ *     bildens första skärm; ingen sida behöver göra något för att få en rad.
+ *   - **En flikrad i botten** (MobileTabBar) med *Översikt*, *Sök*,
+ *     plusknappens plats, *Notiser* och *Meny*.
+ *   - **En sidomeny bakom *Meny*** (MobileMenu), med skalets sektioner.
  *
- * **Sektionen ritas bara när det finns något i den.** En rubrik över en tom
- * lista är en yta som lovar något den inte har, och en användare utan
- * favoriter ska inte mötas av ett tomt fack. Villkoret är listans längd och
- * ingenting annat — ingen egen flagga, och ingen rad som säger att listan är
- * tom.
+ * Desktopraden är kvar oförändrad och döljs (`hidden md:block`): över `md:`
+ * möter användaren exakt den navigering hon mötte före genomgången. Att
+ * sökfältet och klockan flyttar ner i flikraden på mobilen är samma beslut —
+ * de är sidoberoende ytor, och flikraden är där tummen är.
  *
- * **Raden är `UiListRow`** (issue 99), samma form som resten av skalet, och
- * titeln är en `<Link>` till itemets detaljvy. Adressen kommer färdig i
- * proppen: den bär två ULID:n, och skalet bygger inga adresser av delar.
+ * **Menyns öppna-läge bor här** och inte i knappen eller i menyn: knappen är
+ * en knapp (MobileTabBar) och menyn en yta (MobileMenu), och den som äger
+ * båda är layouten. `menuTrigger` är elementet som öppnade menyn — fokus ska
+ * tillbaka till *Meny* när menyn stängs, och det elementet känner bara
+ * knappen.
  *
- * **Ingen räknare och ingen antydan.** Antalet favoriter står ingenstans —
- * varken som tal, som "dolda rader" eller som en gråad rad — eftersom servern
- * redan utelämnat det användaren inte når och en siffra hade läckt skillnaden
- * (issue 73 § Beslut 6). Sektionen är listan, och listan är det man når.
- *
- * **Sektionen ligger i skalet och inte i en sidorail.** Bilden ritar
- * `FAVORITER` i en mörk vänsterkolumn, men den globala vänstermenyn tas inte
- * in ([[ADR-0042 Designsystemet]] § Beslut: raderna för Struktur, Karta,
- * Uppgifter, Dokument och Kostnader avvisas), och en rail som bara bar den
- * här sektionen hade lagt om varje sida i produkten — utanför den här
- * issuen. Sektionen ritas därför som sitt eget band i skalet, på samma plats
- * och i samma form som `FlashMessage` och verifieringspåminnelsen ovanför.
- *
- * **Notisklockan kom med issue 127** och ligger i sidhuvudet, bredvid
- * sökfältet: båda är sidoberoende ytor som hör till skalet och inte till en
- * sida, och en klocka som bara fanns på dashboarden hade varit osynlig på
- * varje sida man faktiskt arbetar i. Den ritas bara för en inloggad
- * användare — samma villkor och samma skäl som sökfältet: en gäst har inga
- * notiser att läsa, och de delade propsen bär noll för henne.
+ * **Notisklockan kom med issue 127** och ligger i sidhuvudet över `md:`,
+ * bredvid sökfältet: båda är sidoberoende ytor som hör till skalet och inte
+ * till en sida, och en klocka som bara fanns på dashboarden hade varit osynlig
+ * på varje sida man faktiskt arbetar i. Den ritas bara för en inloggad
+ * användare — samma villkor och samma skäl som sökfältet.
  *
  * Klockan äger sin egen form och sin egen läsning
  * (resources/js/components/NotificationBell.vue): den kostar en delad siffra
  * per sidladdning och hämtar sin lista först när den öppnas. Skalet skickar
- * ingenting till den och håller inget av dess tillstånd.
+ * ingenting till den och håller inget av dess tillstånd — utom i flikraden,
+ * där den ritas i sin flikform (issue 151).
  */
 const { t } = useTranslations();
 const page = usePage();
-const menuOpen = ref(false);
 const user = computed(() => page.props.auth.user);
-const favorites = computed(() => page.props.favorites ?? []);
+
+const menuOpen = ref(false);
+const menuTrigger = ref(null);
+
+function openMenu(element) {
+    menuTrigger.value = element;
+    menuOpen.value = true;
+}
+
+function closeMenu() {
+    menuOpen.value = false;
+}
+
 const showsVerificationNotice = computed(
     () => Boolean(user.value) && user.value.email_verified_at === null && !page.url.startsWith('/email/verify'),
 );
@@ -131,23 +129,17 @@ const showsVerificationNotice = computed(
 
 <template>
     <div class="flex min-h-full flex-col bg-slate-50 text-slate-900">
-        <header class="border-b border-slate-200 bg-white">
+        <!--
+            Desktopraden. Dold under `md:`, där mobilskalet tar över: en rad
+            som fälls ihop kräver två tryck för allt, och flikraden i botten
+            gör de fyra vanligaste målen nåbara med tummen.
+        -->
+        <header class="hidden border-b border-slate-200 bg-white md:block">
             <nav class="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
                 <div class="flex w-full items-center justify-between gap-4 md:w-auto">
                     <Link href="/" class="inline-flex min-h-11 items-center text-lg font-semibold">
                         {{ t('common.brand') }}
                     </Link>
-
-                    <button
-                        v-if="user"
-                        type="button"
-                        class="inline-flex min-h-11 min-w-11 items-center justify-center rounded border border-slate-300 px-3 text-sm font-medium md:hidden"
-                        aria-controls="huvudmenyn"
-                        :aria-expanded="menuOpen"
-                        @click="menuOpen = !menuOpen"
-                    >
-                        {{ menuOpen ? t('nav.menu_close') : t('nav.menu') }}
-                    </button>
                 </div>
 
                 <!-- Sökfältet ligger på sin egen rad under `md:` och skjuts
@@ -160,48 +152,33 @@ const showsVerificationNotice = computed(
                     <NotificationBell v-if="user" />
                 </div>
 
-                <div
-                    id="huvudmenyn"
-                    class="w-full flex-col gap-1 text-sm md:w-auto md:flex-row md:items-center md:gap-4"
-                    :class="menuOpen ? 'flex' : 'hidden md:flex'"
-                >
-                    <Link v-if="user" href="/dashboard" class="inline-flex min-h-11 items-center hover:underline">
-                        {{ t('nav.dashboard') }}
-                    </Link>
-                    <Link v-if="user" href="/tasks" class="inline-flex min-h-11 items-center hover:underline">
-                        {{ t('nav.tasks') }}
-                    </Link>
-                    <Link v-if="user" href="/containers" class="inline-flex min-h-11 items-center hover:underline">
-                        {{ t('nav.containers') }}
-                    </Link>
-                    <Link v-if="user" href="/transfers" class="inline-flex min-h-11 items-center hover:underline">
-                        {{ t('nav.transfers') }}
-                    </Link>
-                    <Link v-if="user" href="/search" class="inline-flex min-h-11 items-center hover:underline">
-                        {{ t('nav.search') }}
-                    </Link>
-                    <Link v-if="user" href="/settings" class="inline-flex min-h-11 items-center hover:underline">
-                        {{ t('nav.settings') }}
-                    </Link>
-                    <span v-if="user" class="inline-flex min-h-11 items-center text-slate-600">{{ user.name }}</span>
-                    <Link
-                        v-if="user"
-                        href="/logout"
-                        method="post"
-                        as="button"
-                        class="inline-flex min-h-11 items-center hover:underline"
-                    >
-                        {{ t('auth.logout') }}
-                    </Link>
-                    <Link
-                        v-else
-                        href="/login"
-                        class="inline-flex min-h-11 items-center hover:underline"
-                    >
-                        {{ t('nav.login') }}
-                    </Link>
+                <div id="huvudmenyn" class="hidden w-full md:flex md:w-auto">
+                    <ShellSections />
                 </div>
             </nav>
+        </header>
+
+        <!--
+            Toppraden på mobilen. Titeln kommer ur sloten när sidan har en
+            egen — ContainerLayout lägger containerns namn och en
+            tillbakaknapp där — och är märket annars.
+        -->
+        <header class="bg-shell text-white md:hidden">
+            <div class="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-2">
+                <slot name="topbar">
+                    <p class="text-title font-semibold">{{ t('common.brand') }}</p>
+                </slot>
+
+                <!-- Gästen har ingen flikrad (den är mål för en inloggad) och
+                     behöver ändå en väg in. -->
+                <Link
+                    v-if="!user"
+                    href="/login"
+                    class="ml-auto inline-flex min-h-11 items-center text-body hover:underline"
+                >
+                    {{ t('nav.login') }}
+                </Link>
+            </div>
         </header>
 
         <div v-if="showsVerificationNotice" class="mx-auto w-full max-w-3xl px-4 pt-6">
@@ -211,34 +188,34 @@ const showsVerificationNotice = computed(
 
         <FlashMessage />
 
-        <!-- Sektionen ritas bara när listan har rader: en tom rubrik är en yta
-             som lovar något den inte har (issue 106). -->
-        <nav
-            v-if="favorites.length"
-            :aria-label="t('nav.favorites')"
-            class="mx-auto w-full max-w-3xl px-4 pt-6"
-        >
-            <h2 class="text-meta font-semibold uppercase tracking-wide text-ink-subtle">
-                {{ t('nav.favorites') }}
-            </h2>
+        <!--
+            FAVORITER över `md:`, se issue 106. Sektionen är den samma i
+            sidomenyn under `md:` och ritas där av samma komponent, samma
+            anrop — se MobileMenu.
 
-            <ul class="flex flex-col">
-                <UiListRow v-for="favorite in favorites" :key="favorite.url">
-                    <template #title>
-                        <Link :href="favorite.url" class="flex min-h-11 items-center hover:underline">
-                            {{ favorite.name }}
-                        </Link>
-                    </template>
-                </UiListRow>
-            </ul>
-        </nav>
+            Sektionen ritas bara när listan har rader: en tom rubrik är en yta
+            som lovar något den inte har.
+        -->
+        <div class="hidden md:block">
+            <ShellSections part="favorites" />
+        </div>
 
-        <main class="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+        <main class="mx-auto w-full max-w-3xl flex-1 px-4 pt-8 pb-24 md:pb-8">
             <slot />
         </main>
 
-        <footer class="border-t border-slate-200 py-4 text-center text-xs text-slate-600">
+        <footer class="hidden border-t border-slate-200 py-4 text-center text-xs text-slate-600 md:block">
             {{ t('common.brand') }}
         </footer>
+
+        <!--
+            Mobilskalet, se issue 151. Flikraden ligger fast i botten och
+            menyn är en dialog; båda ritas bara för en inloggad, för det är
+            hennes mål de bär.
+        -->
+        <template v-if="user">
+            <MobileTabBar :menu-open="menuOpen" @open-menu="openMenu" />
+            <MobileMenu :open="menuOpen" :trigger="menuTrigger" @close="closeMenu" />
+        </template>
     </div>
 </template>
