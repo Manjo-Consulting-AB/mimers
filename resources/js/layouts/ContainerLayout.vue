@@ -122,7 +122,11 @@ const tabs = computed(() =>
 
         <div class="flex flex-col gap-8">
             <div>
-                <p class="px-3 py-2 font-medium text-title">{{ heading }}</p>
+                <!-- Rubriken över flikraden ritas bara över `md:`. Under
+                     brytpunkten bär den mörka toppraden samma namn (sloten
+                     `topbar` ovan), och två rubriker med samma text är både
+                     en synlig dubblett och en skärmläsare som läser fel. -->
+                <p class="hidden px-3 py-2 font-medium text-title md:block">{{ heading }}</p>
 
                 <UiTabs :tabs="tabs" :label="heading" />
             </div>
