@@ -25,13 +25,18 @@ use Illuminate\Support\Collection;
  *   och aldrig mitt i ett UTF-8-tecken. Räkna oktetter, inte tecken — ett
  *   `ö` är två.
  *
+ * Kalenderns namn och beskrivning skrivs två gånger var, och det är inte ett
+ * misstag. `X-WR-*` är Googles och Apples utvidgning; `NAME` och `DESCRIPTION`
+ * är RFC 7986 och läses av de klienter som följer standarden. En klient som
+ * förstår båda tar den senare — värdena är därför identiska, inte varianter.
+ *
  * Klassens enda ansvar är texten. Språkvalet (och återställningen av
  * appens locale) ägs av CalendarFeedDownloadController, som översätter
- * `calendarName` och `overduePrefix` INNAN dokumentet byggs — schematitel,
- * itemnamn och containernamn är användarens egna data och översätts aldrig
- * (issue 36b § Beslut 6). UID:en måste vara stabil mellan hämtningar: samma
- * förekomst ger samma UID, annars visar klienten en ny händelse varje gång i
- * stället för att uppdatera den gamla (Beslut 4).
+ * `calendarName`, `calendarDescription` och `overduePrefix` INNAN dokumentet
+ * byggs — schematitel, itemnamn och containernamn är användarens egna data och
+ * översätts aldrig (issue 36b § Beslut 6). UID:en måste vara stabil mellan
+ * hämtningar: samma förekomst ger samma UID, annars visar klienten en ny
+ * händelse varje gång i stället för att uppdatera den gamla (Beslut 4).
  *
  * **Dagen kommer in som argument, dokumentet hämtar ingen användare själv**
  * ([[ADR-0044 Användarens dag]] § Beslut 2): vilken dag `due_at` jämförs mot
@@ -54,6 +59,7 @@ final class IcsDocument
      */
     public function __construct(
         private readonly string $calendarName,
+        private readonly string $calendarDescription,
         private readonly string $overduePrefix,
         private readonly Collection $occurrences,
         private readonly Carbon $today,
@@ -73,7 +79,12 @@ final class IcsDocument
             'PRODID:-//Mimers//Calendar feed//EN',
             'CALSCALE:GREGORIAN',
             'METHOD:PUBLISH',
+            // Namn och beskrivning står både som RFC 7986-egenskap och som
+            // `X-WR-*`-utvidgning, med samma värde — se klassdocblocket.
+            'NAME:'.$this->escape($this->calendarName),
             'X-WR-CALNAME:'.$this->escape($this->calendarName),
+            'DESCRIPTION:'.$this->escape($this->calendarDescription),
+            'X-WR-CALDESC:'.$this->escape($this->calendarDescription),
         ];
 
         foreach ($this->occurrences as $occurrence) {

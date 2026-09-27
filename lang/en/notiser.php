@@ -190,7 +190,8 @@ return [
     ],
 
     'calendar' => [
-        'name' => 'Maintenance: :container',
+        'name' => 'Mimers · :container',
+        'description' => 'Upcoming maintenance for the container ":container".',
         'overdue_prefix' => 'Overdue: ',
     ],
 ];

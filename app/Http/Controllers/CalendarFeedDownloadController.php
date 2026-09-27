@@ -12,6 +12,7 @@ use App\Support\Notification\LocaleResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -36,10 +37,10 @@ use Symfony\Component\HttpFoundation\Response;
  *   `whereIn('container_id', ...)`-lista mot löpnummer.
  * - En mjukraderad container ger en TOM kalender, inte 404 — samma regel
  *   som ovan: tokenet lever, innehållet gör det inte. Containern hämtas
- *   med `withTrashed()` för namnet (`X-WR-CALNAME`), och förekomstfrågan
- *   tömmer sig själv genom att `scopeAccessibleBy()` går igenom SoftDeletes'
- *   globala scope. 404 reserveras för att containerraden faktiskt är borta
- *   (purge).
+ *   med `withTrashed()` för namnet (`NAME` och `X-WR-CALNAME`), och
+ *   förekomstfrågan tömmer sig själv genom att `scopeAccessibleBy()` går
+ *   igenom SoftDeletes' globala scope. 404 reserveras för att containerraden
+ *   faktiskt är borta (purge).
  * - `visible_from` filtreras INTE: en kalender visar framtiden, så en
  *   förekomst som förfaller om fyra månader ska stå i kalendern. Därför
  *   används inte scopeTodoFor(), som också filtrerar på blockerande
@@ -128,6 +129,7 @@ class CalendarFeedDownloadController extends Controller
             // ingen användare själv.
             $ics = (new IcsDocument(
                 trans('notiser.calendar.name', ['container' => $container->name]),
+                trans('notiser.calendar.description', ['container' => $container->name]),
                 trans('notiser.calendar.overdue_prefix'),
                 $occurrences,
                 $feed->user->today(),
@@ -144,9 +146,17 @@ class CalendarFeedDownloadController extends Controller
             'last_fetched_at' => now(),
         ]);
 
+        // Filnamnet bär containerns namn så att två prenumerationer i samma
+        // kalenderapp går att skilja åt i en nedladdningslista. Namnet är
+        // användarinput, så det går genom Str::slug(): ASCII, utan citattecken
+        // och utan radbrytning, vilket är vad en header tål. Blir sluggen tom
+        // — ett namn helt utan latinska bokstäver — faller den tillbaka på
+        // produktnamnet i stället för ett tomt `mimers-.ics`.
+        $slug = Str::slug($container->name);
+
         return response($ics, 200, [
             'Content-Type' => 'text/calendar; charset=utf-8',
-            'Content-Disposition' => 'inline; filename="mimers.ics"',
+            'Content-Disposition' => 'inline; filename="'.($slug === '' ? 'mimers.ics' : 'mimers-'.$slug.'.ics').'"',
             'Cache-Control' => 'private, max-age=3600',
         ]);
     }
