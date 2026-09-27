@@ -186,6 +186,23 @@ class SecurityLog extends Model
     public const ACTION_USER_DELETED = 'user.deleted';
 
     /**
+     * En person bad om att bli raderad (issue 145 · [[ADR-0045 Radering av
+     * konto och person]] § Beslut 3). Skrivs av App\Actions\User\
+     * RequestUserDeletion, före commit i samma transaktion som raden i
+     * `user_deletion`.
+     *
+     * **Begäran och raderingen är två rader, inte en.** Den här skrivs när
+     * mejlet går ut och personen fortfarande finns; `user.deleted` ovan
+     * skrivs först när länken öppnas. En begäran som aldrig bekräftas lämnar
+     * alltså ett spår — och det är skillnaden mellan ett försök och en
+     * genomförd radering.
+     *
+     * `meta` är tom: raden bär `user_id` i kolumnen, och det finns ingenting
+     * mer att säga om en begäran som ännu inte gjort något.
+     */
+    public const ACTION_USER_DELETION_REQUESTED = 'user.deletion_requested';
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

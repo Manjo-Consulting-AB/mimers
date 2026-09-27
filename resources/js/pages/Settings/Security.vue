@@ -5,6 +5,7 @@ import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import FormField from '../../components/FormField.vue';
 import PasswordForm from '../../components/PasswordForm.vue';
 import UiListRow from '../../components/UiListRow.vue';
+import UserDeletionForm from '../../components/UserDeletionForm.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
@@ -68,6 +69,7 @@ const props = defineProps({
     totpUri: { type: String, default: null },
     recoveryCodes: { type: Array, default: null },
     logins: { type: Array, required: true },
+    deletion: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
@@ -320,5 +322,20 @@ function outcomeLabel(login) {
                 </UiListRow>
             </ul>
         </section>
+
+        <!--
+            Personraderingen, issue 145. Sist på sidan och inte bland
+            inställningarna ovanför: det är den enda handlingen här som inte
+            går att ångra, och den ska inte ligga där en tumme landar när
+            någon söker tvåfaktorn. Formuläret äger sin egen form och sin egen
+            rutt, som lösenordsformuläret — uppdelningen av konton och
+            spärrarna kommer färdiga ur `deletion` och räknas inte om här.
+        -->
+        <UserDeletionForm
+            :accounts-to-delete="props.deletion.accountsToDelete"
+            :accounts-to-leave="props.deletion.accountsToLeave"
+            :blockers="props.deletion.blockers"
+            :totp-enabled="props.totpEnabled"
+        />
     </SettingsLayout>
 </template>

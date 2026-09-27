@@ -117,6 +117,40 @@ return [
     ],
 
     /*
+     * Personraderingens bekräftelselänk, se [[M22 Redo för testare]] § 145,
+     * [[ADR-0045 Radering av konto och person]] § Beslut 3 och
+     * App\Notifications\UserDeletionConfirmationNotification. Mejlet går till
+     * kontots EGEN adress, som `password_change.confirm` ovan, och är beviset
+     * att den som begärde raderingen når brevlådan.
+     *
+     * **`line` säger vad som raderas, och `action` är det enda stället i
+     * produkten där ordet "Delete me" står.** Kontot heter *account* i
+     * gränssnittet och är något annat än personen: ett konto med andra
+     * medlemmar lämnas kvar. Texten säger därför inte "Delete account" — den
+     * säger vad som försvinner, och vad som står kvar.
+     *
+     * **`expires` lovar en gång, och det är bokstavligt sant här.** Länken
+     * förbrukas av App\Actions\User\ConfirmUserDeletion, och en ny begäran
+     * ogiltigförklarar den gamla. Skillnaden mot de andra bekräftelsemejlen är
+     * att ett återanrop inte får något andra försök: personen finns inte längre.
+     *
+     * **`not_you` uppmanar till handling och inte till att ignorera**, till
+     * skillnad från syskonen ovan. Ett lösenordsbyte kan göras om av den som
+     * äger kontot; en personradering har ingen ångerfrist, och den som får
+     * det här mejlet oombett sitter i ett kapat konto. Den enda nyttiga
+     * uppmaningen är att byta lösenordet och läsa sin inloggningshistorik.
+     */
+    'user_deletion' => [
+        'confirm' => [
+            'subject' => 'Confirm that you want to be deleted',
+            'line' => 'Click the link below to delete yourself, and every account where you are the only member. An account you share with others is kept. Nothing is deleted until you open the link.',
+            'action' => 'Delete me',
+            'expires' => 'The link stops working in :minutes minutes and can only be used once.',
+            'not_you' => 'If you did not ask for this, do not open the link — and change your password, because someone else has access to your account. Look through your recent logins under Settings → Security.',
+        ],
+    ],
+
+    /*
      * Adressbytet, se [[M20 Kontot]] § 130. Två mejl och två helt olika
      * uppdrag, så de delar bara namnutrymme och inga nycklar.
      *
