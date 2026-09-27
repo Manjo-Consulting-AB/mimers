@@ -165,10 +165,6 @@ it('har en nullbar item_id, en container_id med RESTRICT och en nullbar pekare p
  * runt omkring.
  */
 it('CHECK-villkoret avvisar en rad med båda eller ingen satt', function () {
-    if (DB::connection()->getDriverName() !== 'mysql') {
-        $this->markTestSkipped('CHECK-villkoret finns bara på MariaDB; sviten kör sqlite.');
-    }
-
     [$konto, $användare, $container] = containerbildKontext();
 
     $stored = StoredFile::factory()->create();
@@ -202,7 +198,10 @@ it('CHECK-villkoret avvisar en rad med båda eller ingen satt', function () {
     DB::table('attachment')->insert($rad('01DDDDDDDDDDDDDDDDDDDDDDDD', null, $container->id));
 
     expect(Attachment::withTrashed()->count())->toBe(2);
-});
+})->skip(
+    fn (): bool => DB::connection()->getDriverName() !== 'mysql',
+    'CHECK-villkoret finns bara på MariaDB; sviten kör sqlite.',
+);
 
 /*
  * Klart när: en containerbild kan sättas.
