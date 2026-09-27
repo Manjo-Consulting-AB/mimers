@@ -1,7 +1,8 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import ParentPicker from './ParentPicker.vue';
 import UiButton from './UiButton.vue';
 import UiCheckbox from './UiCheckbox.vue';
 import UiInput from './UiInput.vue';
@@ -61,12 +62,20 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * Ingen egen validering: reglerna bor i StoreItemRequest/UpdateItemRequest och
  * felen renderas av FormField vid sitt fält ([[ADR-0021 Frontendteknik]]).
  *
- * **Föräldern kommer ur länken och är inget val** (issue 58 § Beslut 7).
- * Detaljvyns *Nytt item under det här* skickar `?parent={ulid}`, kontrollern
- * har redan auktoriserat mot föräldern, och formuläret visar den som en rad
- * text — en väljare hade varit en andra fråga om något användaren redan
- * besvarat. `parent` skickas bara i skapandeläget: `UpdateItemRequest` tar
- * inte emot fältet, och ett item som redan finns byter inte förälder här.
+ * **Placeringen är ett val** (issue 58 § Beslut 7, issue 153 ·
+ * [[ADR-0048 Mobilen och plusknappen]] § 3). Detaljvyns *Nytt item under det
+ * här* skickar `?parent={ulid}`, och länken fyller därför placeringsraden:
+ * containern, föräldern och hur raden ska läsas. Sedan issue 153 går valet
+ * att ändra — *Ändra* öppnar ParentPicker, som ritar containerns träd ur
+ * `structure`-proppen och skriver sitt svar i samma `parent`-fält. Servern
+ * prövar det valet på nytt i `store()`: `can_create` per nod är
+ * `ItemPolicy::create`, samma grind som förut, och en förfalskad `parent`
+ * avvisas där.
+ *
+ * Raden ritas bara i skapandeläget: `UpdateItemRequest` tar inte emot
+ * `parent`, och ett item som redan finns byter inte förälder här. Ett item
+ * utan förälder visar containern och *Top level* — toppnivån är en plats och
+ * inte ett tomt fält, samma linje som `category_none`.
  *
  * **Omslagsbilden är en väljare och bara i redigeringsläget** (issue 93 ·
  * [[ADR-0041 Itemets vy]] § Beslut). `images` är itemets bilder ur
@@ -106,6 +115,12 @@ const props = defineProps({
     item: { type: Object, default: null },
     /* Föräldern ur `?parent`, eller null för ett item på toppnivån. */
     parent: { type: Object, default: null },
+    /* Containerns namn, till placeringsraden och väljarens översta rad. */
+    containerName: { type: String, default: '' },
+    /* Väljarens träd, med `can_create` per nod (issue 153). */
+    structure: { type: Array, default: () => [] },
+    /* Får användaren lägga itemet på toppnivån? Ur `can_create_root`. */
+    canCreateRoot: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -154,6 +169,32 @@ const form = useForm(props.item === null
     : fields);
 
 /*
+ * Platsen: containern och föräldern, och det val väljaren gör (issue 153).
+ * Den egna ref:en och inte `props.parent` direkt, därför att valet ändrar
+ * raden medan formuläret står öppet — proppen är vad länken gav, och den
+ * ritas bara en gång.
+ */
+const location = ref(props.parent);
+
+const pickerOpen = ref(false);
+const changeTrigger = ref(null);
+
+function openPicker(element) {
+    changeTrigger.value = element;
+    pickerOpen.value = true;
+}
+
+/*
+ * Valet ur väljaren: en nod ur trädet, eller null för toppnivån. Både raden
+ * och det postade fältet skrivs här, så att de två aldrig kan visa olika
+ * saker — raden är vad användaren ser, `parent` vad `store()` prövar.
+ */
+function chooseParent(node) {
+    location.value = node;
+    form.parent = node?.ulid ?? null;
+}
+
+/*
  * Taggfelet ligger på `tags.0`, `tags.1`, ... och inte på `tags` — regeln bor
  * på `tags.*` i den delade FormRequesten (issue 13b § Beslut 5). Kryssrutorna
  * är en grupp och inte ett fält, så den första taggnyckeln i felpåsen blir
@@ -164,6 +205,22 @@ const tagError = computed(() => {
 
     return key === undefined ? null : form.errors[key];
 });
+
+/*
+ * Även platsen kan komma tillbaka med ett fel: `parent` prövas av
+ * StoreItemRequest mot containern och mot mjukradering, och `store()` prövar
+ * ItemPolicy::create på nytt — så en ULID som hunnit bli ogiltig mellan
+ * sidladdning och postning (itemet kastat, eller åtkomsten indragen medan
+ * formuläret stod öppet) ger ett äkta 422 på `parent`. Sedan issue 153 är
+ * fältet användarvalt ur en väljare man kan bläddra i, så fönstret är reellt;
+ * före dess kom det bara från en nyss auktoriserad länk.
+ *
+ * Platsraden är komponentens enda fält utan FormField, och därför den enda
+ * felraden som måste ritas för hand. Id:t är `parent-error`, samma som
+ * FormField hade gett, så att useErrorFocus.focusFirstError hittar hit — utan
+ * det blir ett avvisat val en tyst omladdning.
+ */
+const parentError = computed(() => form.errors.parent ?? null);
 
 /*
  * Knappens ord byter medan servern svarar (issue 68a § Beslut 4 och 5): en
@@ -189,12 +246,6 @@ function submit() {
 
 <template>
     <form class="flex max-w-lg flex-col gap-4" @submit.prevent="submit">
-        <!-- Föräldern ur länken, som en rad text och inte som en väljare
-             (issue 58 § Beslut 7). Värdet är ändå med i postningen. -->
-        <p v-if="item === null && parent" class="text-body text-ink-muted">
-            {{ t('item.form.parent', { name: parent.name }) }}
-        </p>
-
         <FormField
             v-slot="{ describedBy }"
             :label="t('item.form.name')"
@@ -209,6 +260,68 @@ function submit() {
                 required
             />
         </FormField>
+
+        <!--
+            Placeringen: containern, föräldern och vägen till väljaren
+            (issue 153 · [[ADR-0048 Mobilen och plusknappen]] § 3, bild 7 i
+            docs/Design/mobil.png: namnet först och platsen under det). Raden
+            står i skapandeläget också när länken inte gav någon förälder —
+            toppnivån är en plats och inte ett tomt fält, och *Ändra* ska
+            kunna ge itemet en förälder även då.
+        -->
+        <div v-if="item === null" class="flex items-start justify-between gap-2">
+            <div class="flex flex-col gap-1">
+                <p class="text-body font-medium text-ink">{{ t('item.form.location') }}</p>
+                <p class="text-body">
+                    {{ containerName }} /
+                    {{ location ? location.name : t('item.form.location_root') }}
+                </p>
+                <p v-if="location" class="text-body text-ink-muted">
+                    {{ t('item.form.location_hint', { name: location.name }) }}
+                </p>
+
+                <!-- Serverns fel på `parent`, på samma form som FormFields
+                     rad: `role="alert"` läser upp det när det ritas, och
+                     `tabindex="-1"` låter focusFirstError flytta hit. -->
+                <p
+                    v-if="parentError"
+                    id="parent-error"
+                    role="alert"
+                    tabindex="-1"
+                    class="text-body text-danger outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
+                >
+                    {{ parentError }}
+                </p>
+            </div>
+
+            <!--
+                En rå `<button>` och inte en UiButton, av samma skäl som
+                plusknappen i skalet: knappen skickar sitt EGET element vidare
+                till väljaren, och den som fångar det är den som ritade den.
+                Klassen är sekundärvariantens — linje, yta och 44 px
+                träffyta — så ytan är densamma som UiButtons.
+            -->
+            <button
+                type="button"
+                class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                :aria-describedby="parentError ? 'parent-error' : undefined"
+                @click="openPicker($event.currentTarget)"
+            >
+                {{ t('item.form.location_change') }}
+            </button>
+        </div>
+
+        <ParentPicker
+            v-if="item === null"
+            :open="pickerOpen"
+            :container-name="containerName"
+            :structure="structure"
+            :selected="location?.ulid ?? null"
+            :can-create-root="canCreateRoot"
+            :trigger="changeTrigger"
+            @choose="chooseParent"
+            @close="pickerOpen = false"
+        />
 
         <!-- Omslagsbilden: en väljare ur itemets bilder, med "inget val" överst
              (issue 93). Fältet ritas bara i redigeringsläget och bara när

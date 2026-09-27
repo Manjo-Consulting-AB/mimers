@@ -731,6 +731,32 @@ it('lämnar /api-skrivningarna oförändrade', function () {
 });
 
 /*
+ * Klart när (issue 153): placeringsraden står i SKAPANDELÄGET och inte i
+ * redigeringsläget.
+ *
+ * `parent` är inget ett item byter — `UpdateItemRequest` tar inte emot
+ * fältet — och raden ritas därför bara när `item` är null. Formuläret skickar
+ * det i samma gren: skapandet bär `account` och `parent`, redigeringen bär
+ * varken eller. Väljaren (resources/js/components/ParentPicker.vue) prövas i
+ * tests/Feature/Frontend/ForaldervaljareTest.php; här prövas bara att den här
+ * filen håller de två lägena åtskilda.
+ */
+it('ritar placeringsraden bara i skapandeläget', function () {
+    $kod = File::get(resource_path('js/components/ItemForm.vue'));
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+    $kod = (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
+
+    expect($kod)->toContain('v-if="item === null"')
+        ->toContain("t('item.form.location')");
+
+    // Fältet finns bara i skapandets gren av `useForm`, aldrig i fälten som
+    // delas mellan lägena.
+    expect($kod)->toContain('parent: props.parent?.ulid ?? null');
+    expect($kod)->not->toContain('parent: props.item');
+});
+
+/*
  * Klart när: ingen svensk sträng står kvar i en `.vue`-fil; varje ny nyckel
  * finns på `sv` och `en`.
  *

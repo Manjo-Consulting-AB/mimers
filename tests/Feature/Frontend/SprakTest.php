@@ -481,6 +481,39 @@ it('hämtar skalets strängar ur ui.php', function () {
 });
 
 /*
+ * Formulärets och föräldraväljarens strängar (issue 153), samma form som
+ * skalets prov ovanför: nycklarna läses ur källkoden i stället för att räknas
+ * upp här, så en mening som läggs till i formuläret och glöms i katalogen
+ * faller — och den syns annars som sin egen nyckel, `item.form.location`, i
+ * placeringsraden.
+ *
+ * `ParentPicker` är ingen `Ui*.vue` och prövas därför inte av provet för
+ * hårdkodad text; den bär sina ord i `t()` som varje annan komponent, och det
+ * är vad raden nedan håller fast.
+ */
+it('hämtar formulärets och väljarens strängar ur ui.php', function () {
+    $nycklar = [];
+
+    foreach ([
+        'js/components/ItemForm.vue',
+        'js/components/ParentPicker.vue',
+    ] as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    expect($nycklar)->toContain('item.form.location')
+        ->toContain('item.form.location_change')
+        ->toContain('item.form.parent_heading')
+        ->toContain('item.form.parent_choose');
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+});
+
+/*
  * Varje notistyp klockan visar har en mening (issue 127).
  *
  * Klockan formulerar raden ur typens EGET namn — `task.due` slås upp som
