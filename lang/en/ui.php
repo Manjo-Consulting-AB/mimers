@@ -106,10 +106,11 @@ return [
      * JavaScript som kan glida isär från `Notification`-konstanterna: nyckeln
      * ÄR typen, och en typ som glöms här syns i vyn som sin egen nyckel.
      *
-     * **Inbjudningarna står inte här, och det är inte ett förbiseende.**
-     * `invitation.received` finns som konstant men skrivs av ingen kod —
-     * `CreateInvitation` skickar mejlet direkt — så klockan visar de sex
-     * typer som faktiskt skrivs. Vägen dit är issue 131 ([[M20 Kontot]]).
+     * **Inbjudningarna har ingen typrad, och det är inte ett förbiseende.**
+     * En inbjudan är ingen notis: `CreateInvitation` skickar mejlet direkt,
+     * och sedan issue 146 finns ingen notistyp för den. Klockan visar ändå en
+     * rad per väntande inbjudan — den ligger under `inbox.invitation.received`
+     * och läses ur `invitation` (issue 131, [[M20 Kontot]] § 131).
      *
      * **Meningarna byggs ur radens `payload` och bär ingen färdig text**
      * ([[Notiser]] § notification, Beslut 5). Fälten är generatorernas egna:
@@ -143,11 +144,10 @@ return [
             'requested' => ':container has been offered to you',
         ],
 
-        // Issue 131: the clock's invitation row. It is read from `invitation`
-        // and not from `notification` — no such row is ever written
-        // ([[M20 Kontot]] § 131, and the question in [[Tankar]] § Öppet) — but
-        // the key keeps the clock's rule that the TYPE is the key, so the day
-        // the type starts being written the sentence is already here.
+        // Issue 131: the clock's invitation row, read from `invitation` and
+        // not from `notification`. An invitation has no notification type —
+        // issue 146 removed `invitation.received`, since the email goes
+        // directly — so the key is the row's own name and not a type.
         'invitation' => [
             'received' => ':inviter has invited you to :container',
         ],
@@ -2832,7 +2832,7 @@ return [
         // Issue 142: the inviter's column is nullable since ADR-0045 § Beslut 2,
         // and a nulled author has no row to fetch a name from. The sentence
         // around the name stays — `intro` and the clock's
-        // `inbox.types.invitation.received` both interpolate `:inviter` — so the
+        // `inbox.invitation.received` both interpolate `:inviter` — so the
         // placeholder gets a phrase instead of going empty. Same words as
         // `sharing.accesses.granted_by_unknown`, and for the same reason: the
         // sender is gone, the invitation is not.

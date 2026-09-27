@@ -54,7 +54,6 @@ return [
             'task_overdue' => 'overdue task alerts',
             'loan_due' => 'loan reminders',
             'quota_warning' => 'storage quota warnings',
-            'invitation_received' => 'container invitations',
             'transfer_requested' => 'ownership transfer requests',
             'account_inactive' => 'inactive account warnings',
         ],

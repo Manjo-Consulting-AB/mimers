@@ -42,7 +42,6 @@ final class NotificationPreferences
         Notification::TYPE_TASK_OVERDUE => ['enabled' => true, 'digest' => true],
         Notification::TYPE_LOAN_DUE => ['enabled' => true, 'digest' => false],
         Notification::TYPE_QUOTA_WARNING => ['enabled' => true, 'digest' => false],
-        Notification::TYPE_INVITATION_RECEIVED => ['enabled' => true, 'digest' => false],
         Notification::TYPE_TRANSFER_REQUESTED => ['enabled' => true, 'digest' => false],
         Notification::TYPE_ACCOUNT_INACTIVE => ['enabled' => true, 'digest' => false],
     ];

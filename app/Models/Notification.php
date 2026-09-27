@@ -28,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  *
  * `payload` bär data, aldrig text (Beslut 5): den renderas per kanal och
  * språk vid leverans (32a). `type` är ett ÖPPET namnrum (Beslut 4) — listan i
- * [[Notiser]] räknar upp sju kända värden men fler kan komma, så det finns
+ * [[Notiser]] räknar upp sex kända värden men fler kan komma, så det finns
  * ingen `TYPES`-lista här, bara konstanterna så att generatorerna (34b)
  * aldrig stavar en sträng.
  *
@@ -55,8 +55,6 @@ class Notification extends Model
     public const TYPE_LOAN_DUE = 'loan.due';
 
     public const TYPE_QUOTA_WARNING = 'quota.warning';
-
-    public const TYPE_INVITATION_RECEIVED = 'invitation.received';
 
     public const TYPE_TRANSFER_REQUESTED = 'transfer.requested';
 

@@ -51,7 +51,7 @@ class WebhookEndpoint extends Model
     protected $table = 'webhook_endpoint';
 
     /**
-     * De kända notistyperna en endpoint kan prenumerera på — de sju
+     * De kända notistyperna en endpoint kan prenumerera på — de sex
      * typkonstanterna i App\Models\Notification. Listan finns här (och inte på
      * Notification) därför att Notification medvetet saknar en TYPES-lista:
      * typnamnrymden är öppen (issue 30 § Beslut 4). Se Frågor och antaganden i
@@ -64,7 +64,6 @@ class WebhookEndpoint extends Model
         Notification::TYPE_TASK_OVERDUE,
         Notification::TYPE_LOAN_DUE,
         Notification::TYPE_QUOTA_WARNING,
-        Notification::TYPE_INVITATION_RECEIVED,
         Notification::TYPE_TRANSFER_REQUESTED,
         Notification::TYPE_ACCOUNT_INACTIVE,
     ];

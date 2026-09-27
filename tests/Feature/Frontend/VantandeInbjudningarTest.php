@@ -7,15 +7,21 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Invitation;
 use App\Models\User;
+use App\Notifications\InvitationNotification;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Invitation\PendingInvitation;
+use App\Support\Notification\QuietHours;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
+use function Pest\Laravel\postJson;
 use function Pest\Laravel\withoutVite;
 
 /*
@@ -499,8 +505,8 @@ it('jämför användarens adress skiftlägesokänsligt', function () {
  * `/invitations`.
  *
  * Raden läses ur `invitation` och inte ur `notification`: ingen notisrad
- * skrivs för en inbjudan, och `Notification::TYPE_INVITATION_RECEIVED` har
- * fortfarande ingen skrivare. Adressen byggs på servern (issue 51 § Beslut 7).
+ * skrivs för en inbjudan — typen togs bort i issue 146, eftersom mejlet går
+ * direkt. Adressen byggs på servern (issue 51 § Beslut 7).
  */
 it('visar en rad per väntande inbjudan i klockan, med länk till /invitations', function () {
     $inbjudare = User::factory()->create(['name' => 'Inbjudaren']);
@@ -611,4 +617,50 @@ it('nollställer inte inbjudningarna när klockan öppnas', function () {
     actingAs($mottagare)->get('/dashboard')->assertInertia(
         fn (AssertableInertia $page) => $page->where('unreadNotificationCount', 1)
     );
+});
+
+/*
+ * Klart när (issue 146): inbjudningsmejlet går fortfarande direkt, också under
+ * mottagarens tysta timmar.
+ *
+ * En inbjudan är ingen notis och går därför inte genom
+ * App\Actions\Notification\CreateNotification — den enda vägen in i
+ * `notification` och den enda platsen de tysta timmarna läses
+ * (App\Support\Notification\QuietHours). `CreateInvitation` skickar mejlet
+ * med `Notification::route('mail', ...)->notify(...)` inne i requesten, och
+ * provet pinnar att den vägen är oförändrad: mottagaren har ett fönster som
+ * täcker nuet, och mejlet går ändå.
+ *
+ * Provet bevisar sin egen förutsättning först — att fönstret VERKLIGEN är
+ * aktivt, så att "mejlet gick" inte är tomt. Utan den raden hade provet
+ * passerat även om mottagarens tysta timmar aldrig läste något.
+ */
+it('mejlar inbjudan direkt även under mottagarens tysta timmar', function () {
+    Notification::fake();
+    Carbon::setTestNow(Carbon::parse('2026-09-16 23:00:00', 'UTC'));
+
+    // Mottagaren finns, med ett fönster som täcker nuet. Hade mejlet gått
+    // genom outboxen hade det fått en `available_at` vid fönstrets slut.
+    $mottagare = User::factory()->create([
+        'email' => 'ny@exempel.se',
+        'quiet_hours_start' => '22:00:00',
+        'quiet_hours_end' => '07:00:00',
+    ]);
+
+    expect(app(QuietHours::class)->availableAt($mottagare, now()))->toBeGreaterThan(now());
+
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+
+    postJson("/api/containers/{$container->ulid}/invitations", [
+        'email' => 'ny@exempel.se',
+        'level' => 'read',
+    ], $headers)->assertCreated();
+
+    // Mejlet gick i requesten, och ingen utboksrad skapades — inbjudan är
+    // ingen notis och väntar inte på tysta timmar.
+    Notification::assertSentOnDemand(InvitationNotification::class);
+    expect(DB::table('notification')->count())->toBe(0);
+
+    Carbon::setTestNow();
 });

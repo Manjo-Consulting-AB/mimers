@@ -54,6 +54,8 @@ use function Pest\Laravel\postJson;
  * - en avvikande port avvisas
  * - en tom event_types avvisas
  * - en okänd notistyp i event_types avvisas
+ * - en inbjudningstyp i event_types avvisas som okänd (issue 146)
+ * - migreringen tar bort typen ur en endpoints event_types (issue 146)
  * - en endpoint i ett annat konto går inte att ändra
  * - en återaktivering nollställer consecutive_failures
  * - ett raderat konto tar med sig sina endpoints
@@ -402,6 +404,55 @@ it('en okänd notistyp i event_types avvisas', function () {
     expect($fields)->toHaveKey('event_types.0');
     expect($fields['event_types.0'][0]['code'])->toBe('validation.in');
     expect(DB::table('webhook_endpoint')->count())->toBe(0);
+});
+
+/*
+ * Issue 146: `invitation.received` är borta ur WebhookEndpoint::EVENT_TYPES,
+ * och ett abonnemang på den nekas därför som vilken okänd typ som helst —
+ * samma `validation.in` på `event_types.0`. Provet pinnar att typen inte
+ * smyger tillbaka genom en egen gren i valideringen.
+ */
+it('en inbjudningstyp i event_types avvisas som okänd', function () {
+    [$account, , $headers] = webhookProKonto();
+
+    $response = postJson("/api/accounts/{$account->ulid}/webhooks", [
+        'url' => 'https://example.com/notiser',
+        'event_types' => ['invitation.received'],
+    ], $headers);
+
+    $response->assertStatus(422);
+    expect($response->json('error.code'))->toBe('validation.failed');
+    $fields = $response->json('error.data.fields');
+    expect($fields)->toHaveKey('event_types.0');
+    expect($fields['event_types.0'][0]['code'])->toBe('validation.in');
+    expect(DB::table('webhook_endpoint')->count())->toBe(0);
+});
+
+/*
+ * Issue 146: en endpoint som redan prenumererade på typen får den bortplockad
+ * av migreringen. En endpoint som därefter står utan typer STÅR KVAR — den är
+ * fortfarande en registrerad mottagare, och en tom prenumeration är ett
+ * giltigt tillstånd.
+ */
+it('migreringen tar bort typen ur en endpoints event_types', function () {
+    [$account] = webhookProKonto();
+
+    $blandad = webhookRad($account, ['event_types' => ['task.due', 'invitation.received']]);
+    $baraInbjudan = webhookRad($account, ['event_types' => ['invitation.received']]);
+    $orörd = webhookRad($account, ['event_types' => ['task.due']]);
+
+    // `require` (inte `require_once`) ger en ny anonym klass, så `up()` kan
+    // köras mot rader provet själv har lagt in — samma form som
+    // ladderMigreringen() i tests/Feature/Omfang/MigreringTest.php.
+    $migration = require database_path('migrations/2026_09_27_010000_remove_invitation_received_type.php');
+    $migration->up();
+
+    expect($blandad->fresh()->event_types)->toBe(['task.due']);
+    expect($orörd->fresh()->event_types)->toBe(['task.due']);
+
+    // Kvar, med sin url och sin hemlighet — bara utan typer.
+    expect($baraInbjudan->fresh())->not->toBeNull();
+    expect($baraInbjudan->fresh()->event_types)->toBe([]);
 });
 
 it('en endpoint i ett annat konto går inte att ändra', function () {

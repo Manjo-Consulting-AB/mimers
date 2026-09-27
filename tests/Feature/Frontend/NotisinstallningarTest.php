@@ -118,7 +118,7 @@ it('renderar Settings/Notifications med varje typ i konstanternas ordning', func
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/Notifications')
-            ->has('preferences', 7)
+            ->has('preferences', 6)
             ->where('preferences', fn ($rader) => collect($rader)->pluck('type')->all()
                 === app(NotificationPreferences::class)->types())
             ->where('preferences', fn ($rader) => collect($rader)->every(
@@ -549,7 +549,7 @@ it('lämnar /api-rutterna oförändrade', function () {
 
     $svar = getJson('/api/me/notification-preferences', $headers)->assertOk();
 
-    expect($svar->json('data'))->toHaveCount(7);
+    expect($svar->json('data'))->toHaveCount(6);
     expect(collect($svar->json('data'))->pluck('type')->all())
         ->toBe(app(NotificationPreferences::class)->types());
     expect(collect($svar->json('data'))->every(fn (array $rad) => $rad['is_default'] === true))->toBeTrue();
