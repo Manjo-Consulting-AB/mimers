@@ -2008,14 +2008,42 @@ return [
             'tree' => 'Tree',
         ],
 
-        // The right-hand panel, and it is EMPTY ON PURPOSE: the focus map is
-        // its own piece of work and nothing about it is decided yet, so the
-        // panel waits instead of drawing nodes. It is not a broken surface,
-        // and nothing here may say that it is — no empty state, no "coming
-        // soon", no counter. The heading is the only word in it, and it names
-        // the place that will be filled.
+        // The right-hand panel: the focus map (issue 156 · [[M23 Mobilen och
+        // kartan]] § 156). The item sits in the middle, its parents above it,
+        // its children below and the related items on the two sides, and the
+        // nodes are App\Actions\Item\ListItemLinks' own answer — the map asks
+        // no question of its own.
+        //
+        // `heading` names the place and is the only word on the wide screen's
+        // panel. `view` is the switch the relations tab carries under `md:`:
+        // *Focus* is the map and *List* is the section as it was, and the mode
+        // is read in the querystring (`?view=focus`) like every other mode in
+        // this product. Its `label` is the group's accessible name and not a
+        // visible word — the two modes name themselves.
+        //
+        // `kind` is the legend: three sorts, one word each, and the SAME three
+        // keys label the nodes themselves, so the legend and the node under it
+        // cannot drift apart. `node_menu` is the plus on a node — the button
+        // draws an icon, so its accessible name is the only word it carries —
+        // and `more` is the row that appears when a row is full and leads to
+        // the relations tab.
         'map' => [
             'heading' => 'Map',
+
+            'view' => [
+                'label' => 'Relations view',
+                'focus' => 'Focus',
+                'list' => 'List',
+            ],
+
+            'kind' => [
+                'parent' => 'Parent',
+                'child' => 'Child',
+                'related' => 'Related',
+            ],
+
+            'node_menu' => 'Create in :name',
+            'more' => '+:count more',
         ],
 
         // The form's field labels, see issue 57b decision 9. The product's

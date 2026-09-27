@@ -232,6 +232,41 @@ it('visar båda föräldrarna när itemet har två', function () {
     expect($vy)->toContain('v-for="link in links[row]"');
 });
 
+/*
+ * Klart när: "på mobil växlar relationsfliken mellan *Fokus* och *Lista*"
+ * (issue 156 · [[M23 Mobilen och kartan]] § 156).
+ *
+ * Fliken har två ytor under `md:`: sektionen — listan, figuren och formuläret
+ * — och fokuskartan. Växeln är `ItemViewSwitch`, samma komponent som itemfliken
+ * använder (issue 154), och den är `md:hidden`: över brytpunkten står kartan i
+ * högerpanelen, och där visar fliken alltid listan.
+ *
+ * Läget kommer från servern (`view`-proppen) och läses aldrig ur adressen här:
+ * två läsningar av samma sträng är två regler som kan glida isär. Adresserna
+ * byggs i vyn, ur relationsflikens egen `href`, så de bär den aktuella
+ * förekomsten.
+ */
+it('växlar fliken mellan fokus och lista under md:', function () {
+    $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
+
+    expect($vy)->toContain("import ItemViewSwitch from './ItemViewSwitch.vue'")
+        ->toContain('<ItemViewSwitch')
+        ->toContain(':views="views"')
+        ->toContain(':current="view"')
+        ->toContain('md:hidden');
+
+    // Fokusläget ritar kartan, och bara under `md:`.
+    expect($vy)->toContain("import FocusMap from './FocusMap.vue'")
+        ->toContain('<FocusMap')
+        ->toContain(':map="map"')
+        ->toContain(':overflow-href="overflowHref"');
+
+    // Och listan viker för kartan i samma läge — men bara under brytpunkten:
+    // över `md:` står den kvar, för läget är mobilens.
+    expect($vy)->toContain("const focusing = computed(() => props.view === 'focus');")
+        ->toContain("focusing ? 'hidden md:block' : ''");
+});
+
 it('länkar varje rad till motpartens detaljvy', function () {
     $vy = File::get(resource_path('js/components/ItemLinkSection.vue'));
 

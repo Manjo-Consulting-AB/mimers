@@ -1,12 +1,27 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
+import FocusMap from './FocusMap.vue';
+import ItemViewSwitch from './ItemViewSwitch.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
 /*
  * Relationssektionen på itemets detaljvy — se issue 58 § Beslut 3, 4, 5, 8
- * och 9, och issue 155 · [[M23 Mobilen och kartan]] § 155.
+ * och 9, issue 155 och issue 156 · [[M23 Mobilen och kartan]] § 155 och § 156.
+ *
+ * **Fliken har två lägen under `md:`** (§ 156): *Lista* är sektionen nedan och
+ * förvalet, och *Fokus* är fokuskartan. Växeln är `ItemViewSwitch` — samma
+ * komponent som itemfliken använder — och läget står i querysträngen
+ * (`?view=focus`), som varje annat läge i den här produkten: ett läge man kan
+ * länka till är ett läge man kan dela, och ett val i minnet försvinner vid en
+ * omladdning eller pekar fel när webbläsaren går bakåt.
+ *
+ * **Kartan är ett läge i fliken, inte en andra sektion** (§ 156). Över `md:`
+ * står kartan i högerpanelen (resources/js/components/ItemMapPanel.vue), och
+ * där ritar den här fliken alltid listan: växeln och fokuskartan är därför
+ * `md:hidden`, och listan är dold UNDER `md:` när fokus är valt. Formen är
+ * densamma på båda ställena — bara platsen skiljer.
  *
  * **Fyra ytor i en ordning** (§ 155): föräldrarna överst, itemet självt i
  * mitten, barnen under och de relaterade i en lista sist. Det är
@@ -67,10 +82,25 @@ const props = defineProps({
     /* Items användaren får ändra och som inte redan är kopplade. */
     counterparts: { type: Array, required: true },
     can: { type: Object, required: true },
+    /* Kartan ur `map`-proppen (issue 156): `{self, parent, child, related}`. */
+    map: { type: Object, required: true },
+    /* Relationsfliken — målet för *+N till*, ur `tabs` i Show.vue. */
+    overflowHref: { type: String, required: true },
+    /* Läget som gäller: `list` eller `focus`, ur serverns läsning. */
+    view: { type: String, required: true },
+    /* Lägena i ritad ordning till växeln: `{key, label, href}`. */
+    views: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
+
+/*
+ * Är fokusläget valt? Läget kommer färdigläst från servern — `ItemViewSwitch`
+ * läser det aldrig ur adressen själv, och den här filen gör det inte heller:
+ * två läsningar av samma sträng är två regler som kan glida isär.
+ */
+const focusing = computed(() => props.view === 'focus');
 
 /*
  * Ordningen på fliken (§ 155): föräldrarna, itemet självt, barnen och de
@@ -138,134 +168,166 @@ function remove(counterpart) {
         <h2 class="text-lg font-semibold">{{ t('item.links.heading') }}</h2>
         <p class="mt-1 text-sm text-slate-600">{{ t('item.links.description') }}</p>
 
-        <template v-if="hasAny">
-            <template v-for="row in rows" :key="row">
-                <!--
-                    Itemet självt, figurens mitt (§ 155). Ingen motpart och
-                    ingen upp-knytning: noden är subjektet de andra grupperna
-                    hänger under, och etiketten säger vilken nod det är.
-                -->
-                <div
-                    v-if="row === 'self'"
-                    class="mx-auto mt-6 flex w-full max-w-sm flex-col items-center rounded border border-slate-400 bg-slate-100 px-4 py-3 text-center"
-                >
-                    <span class="font-semibold text-slate-900">{{ itemName }}</span>
-                    <span class="mt-1 text-xs text-slate-600">{{ t('item.links.current') }}</span>
-                </div>
+        <!--
+            Växeln (§ 156). Den ritas bara under `md:`: över brytpunkten står
+            kartan i högerpanelen, och där är listan det enda fliken visar.
+            Träffytan och tangentbordet bor i ItemViewSwitch.
+        -->
+        <ItemViewSwitch
+            class="mt-4 md:hidden"
+            :views="views"
+            :current="view"
+            :label="t('item.map.view.label')"
+        />
 
-                <div v-else-if="links[row].length > 0">
-                    <h3 class="mt-6 text-sm font-medium text-slate-600">
-                        {{ t(`item.links.group.${row}`) }}
-                    </h3>
+        <!--
+            Fokusläget (§ 156): kartan, i fliken och bara under `md:`. Över
+            brytpunkten ritas den av högerpanelen, och två kopior av samma
+            karta på samma skärm hade varit samma nod två gånger.
+        -->
+        <FocusMap
+            v-if="focusing"
+            class="mt-4 md:hidden"
+            :map="map"
+            :overflow-href="overflowHref"
+        />
 
-                    <ul class="mt-2 flex flex-col gap-2">
-                        <li
-                            v-for="link in links[row]"
-                            :key="link.item.ulid"
-                            class="flex flex-wrap items-center gap-3 rounded border border-slate-300 bg-white px-4 py-2"
-                        >
-                            <Link
-                                :href="`/containers/${containerUlid}/items/${link.item.ulid}`"
-                                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+        <!--
+            Listan. Under `md:` viker den för kartan när fokus är valt, och
+            över `md:` står den kvar oavsett läge — läget är mobilens, och en
+            flik som tömdes på sin lista för att någon valt ett mobilt läge
+            hade varit en tom yta på en bred skärm.
+        -->
+        <div :class="focusing ? 'hidden md:block' : ''">
+            <template v-if="hasAny">
+                <template v-for="row in rows" :key="row">
+                    <!--
+                        Itemet självt, figurens mitt (§ 155). Ingen motpart och
+                        ingen upp-knytning: noden är subjektet de andra grupperna
+                        hänger under, och etiketten säger vilken nod det är.
+                    -->
+                    <div
+                        v-if="row === 'self'"
+                        class="mx-auto mt-6 flex w-full max-w-sm flex-col items-center rounded border border-slate-400 bg-slate-100 px-4 py-3 text-center"
+                    >
+                        <span class="font-semibold text-slate-900">{{ itemName }}</span>
+                        <span class="mt-1 text-xs text-slate-600">{{ t('item.links.current') }}</span>
+                    </div>
+
+                    <div v-else-if="links[row].length > 0">
+                        <h3 class="mt-6 text-sm font-medium text-slate-600">
+                            {{ t(`item.links.group.${row}`) }}
+                        </h3>
+
+                        <ul class="mt-2 flex flex-col gap-2">
+                            <li
+                                v-for="link in links[row]"
+                                :key="link.item.ulid"
+                                class="flex flex-wrap items-center gap-3 rounded border border-slate-300 bg-white px-4 py-2"
                             >
-                                {{ link.item.name }}
-                            </Link>
+                                <Link
+                                    :href="`/containers/${containerUlid}/items/${link.item.ulid}`"
+                                    class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                                >
+                                    {{ link.item.name }}
+                                </Link>
 
-                            <button
-                                v-if="can.update"
-                                type="button"
-                                :disabled="pending === link.item.ulid"
-                                class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
-                                @click="remove(link.item)"
-                            >
-                                {{ pending === link.item.ulid ? t('common.pending.default') : t('item.links.remove') }}
-                            </button>
-                        </li>
-                    </ul>
-                </div>
+                                <button
+                                    v-if="can.update"
+                                    type="button"
+                                    :disabled="pending === link.item.ulid"
+                                    class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
+                                    @click="remove(link.item)"
+                                >
+                                    {{ pending === link.item.ulid ? t('common.pending.default') : t('item.links.remove') }}
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </template>
             </template>
-        </template>
 
-        <p v-else class="mt-4 text-sm text-slate-600">{{ t('item.links.empty') }}</p>
+            <p v-else class="mt-4 text-sm text-slate-600">{{ t('item.links.empty') }}</p>
 
-        <template v-if="can.update">
-            <h3 class="mt-8 text-base font-semibold">{{ t('item.links.form_heading') }}</h3>
+            <template v-if="can.update">
+                <h3 class="mt-8 text-base font-semibold">{{ t('item.links.form_heading') }}</h3>
 
-            <p v-if="counterparts.length === 0" class="mt-2 text-sm text-slate-600">
-                {{ t('item.links.no_counterparts') }}
-            </p>
+                <p v-if="counterparts.length === 0" class="mt-2 text-sm text-slate-600">
+                    {{ t('item.links.no_counterparts') }}
+                </p>
 
-            <form v-else class="mt-4 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
-                <!--
-                    Felet på `item` kommer från StoreItemLinkRequest
-                    (okänd ULID) eller ur LinkItems (item_link.self,
-                    item_link.cross_container, item_link.pair_exists) —
-                    kontrollern lägger de tre sista på just den här nyckeln.
-                    Ett meddelande som slänger bort `data` är sämre än
-                    felkoden det ersatte, så pair_exists säger vilken relation
-                    paret redan har.
-                -->
-                <div class="flex flex-col gap-1">
-                    <label for="item-link-counterpart" class="text-sm font-medium text-slate-800">
-                        {{ t('item.links.counterpart') }}
-                    </label>
+                <form v-else class="mt-4 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
+                    <!--
+                        Felet på `item` kommer från StoreItemLinkRequest
+                        (okänd ULID) eller ur LinkItems (item_link.self,
+                        item_link.cross_container, item_link.pair_exists) —
+                        kontrollern lägger de tre sista på just den här nyckeln.
+                        Ett meddelande som slänger bort `data` är sämre än
+                        felkoden det ersatte, så pair_exists säger vilken relation
+                        paret redan har.
+                    -->
+                    <div class="flex flex-col gap-1">
+                        <label for="item-link-counterpart" class="text-sm font-medium text-slate-800">
+                            {{ t('item.links.counterpart') }}
+                        </label>
 
-                    <select
-                        id="item-link-counterpart"
-                        v-model="form.item"
-                        :aria-describedby="form.errors.item ? 'item-link-counterpart-error' : undefined"
-                        name="item"
-                        required
-                        class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+                        <select
+                            id="item-link-counterpart"
+                            v-model="form.item"
+                            :aria-describedby="form.errors.item ? 'item-link-counterpart-error' : undefined"
+                            name="item"
+                            required
+                            class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+                        >
+                            <option value="">{{ t('item.links.counterpart_none') }}</option>
+                            <option v-for="candidate in counterparts" :key="candidate.ulid" :value="candidate.ulid">
+                                {{ candidate.name }}
+                            </option>
+                        </select>
+
+                        <p v-if="form.errors.item" id="item-link-counterpart-error" role="alert" class="text-sm text-red-700">
+                            {{ form.errors.item }}
+                        </p>
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label for="item-link-relation" class="text-sm font-medium text-slate-800">
+                            {{ t('item.links.relation.label') }}
+                        </label>
+
+                        <select
+                            id="item-link-relation"
+                            v-model="form.relation"
+                            :aria-describedby="form.errors.relation ? 'item-link-relation-error' : undefined"
+                            name="relation"
+                            required
+                            class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+                        >
+                            <option value="">{{ t('item.links.relation.none') }}</option>
+                            <option value="parent">{{ t('item.links.relation.parent') }}</option>
+                            <option value="child">{{ t('item.links.relation.child') }}</option>
+                            <option value="related">{{ t('item.links.relation.related') }}</option>
+                        </select>
+
+                        <p class="text-sm text-slate-600">{{ t('item.links.relation_note') }}</p>
+
+                        <!-- Riktningen och inte motparten: en cykel handlar om
+                             vilket håll kanten går åt, och `item_link.cycle` läggs
+                             därför på den här nyckeln (Beslut 6). -->
+                        <p v-if="form.errors.relation" id="item-link-relation-error" role="alert" class="text-sm text-red-700">
+                            {{ form.errors.relation }}
+                        </p>
+                    </div>
+
+                    <button
+                        type="submit"
+                        :disabled="form.processing"
+                        class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
                     >
-                        <option value="">{{ t('item.links.counterpart_none') }}</option>
-                        <option v-for="candidate in counterparts" :key="candidate.ulid" :value="candidate.ulid">
-                            {{ candidate.name }}
-                        </option>
-                    </select>
-
-                    <p v-if="form.errors.item" id="item-link-counterpart-error" role="alert" class="text-sm text-red-700">
-                        {{ form.errors.item }}
-                    </p>
-                </div>
-
-                <div class="flex flex-col gap-1">
-                    <label for="item-link-relation" class="text-sm font-medium text-slate-800">
-                        {{ t('item.links.relation.label') }}
-                    </label>
-
-                    <select
-                        id="item-link-relation"
-                        v-model="form.relation"
-                        :aria-describedby="form.errors.relation ? 'item-link-relation-error' : undefined"
-                        name="relation"
-                        required
-                        class="self-start rounded border border-slate-300 bg-white px-3 py-2"
-                    >
-                        <option value="">{{ t('item.links.relation.none') }}</option>
-                        <option value="parent">{{ t('item.links.relation.parent') }}</option>
-                        <option value="child">{{ t('item.links.relation.child') }}</option>
-                        <option value="related">{{ t('item.links.relation.related') }}</option>
-                    </select>
-
-                    <p class="text-sm text-slate-600">{{ t('item.links.relation_note') }}</p>
-
-                    <!-- Riktningen och inte motparten: en cykel handlar om
-                         vilket håll kanten går åt, och `item_link.cycle` läggs
-                         därför på den här nyckeln (Beslut 6). -->
-                    <p v-if="form.errors.relation" id="item-link-relation-error" role="alert" class="text-sm text-red-700">
-                        {{ form.errors.relation }}
-                    </p>
-                </div>
-
-                <button
-                    type="submit"
-                    :disabled="form.processing"
-                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                >
-                    {{ form.processing ? t('common.pending.default') : t('item.links.submit') }}
-                </button>
-            </form>
-        </template>
+                        {{ form.processing ? t('common.pending.default') : t('item.links.submit') }}
+                    </button>
+                </form>
+            </template>
+        </div>
     </section>
 </template>
