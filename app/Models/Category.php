@@ -72,11 +72,14 @@ class Category extends Model
 
     /**
      * Direkta barn, icke-mjukraderade (Eloquents globala SoftDeletes-scope
-     * filtrerar automatiskt). Används av
-     * App\Http\Controllers\Api\CategoryController::destroy() för
-     * `category.has_children`, se issue 11 § Beslut 7 — inte av
-     * App\Actions\Category\MoveCategory, som läser hela trädet i en fråga
-     * i stället (§ Beslut 8).
+     * filtrerar automatiskt). Hela underträdet — kategorin och allt under
+     * den, det en radering tar med sig — löses i stället av
+     * App\Actions\Category\ResolveCategoryDescendants, som läser trädet i en
+     * fråga.
+     *
+     * Fram till issue 150 var den här relationen vägen till
+     * `category.has_children`, kontrollen som nekade en radering av en
+     * kategori med barn. Det villkoret utgick med papperskorgen.
      *
      * @return HasMany<Category, $this>
      */
@@ -87,10 +90,13 @@ class Category extends Model
 
     /**
      * Items pointing at this category, none of them soft-deleted (Eloquent's
-     * global SoftDeletes scope filters automatically). Used by
-     * App\Http\Controllers\Api\CategoryController::destroy() for the
-     * `category.has_items` check, see issue 13a § Beslut 9 — a category
-     * that classifies at least one item cannot be deleted.
+     * global SoftDeletes scope filters automatically).
+     *
+     * Fram till issue 150 var den här relationen vägen till
+     * `category.has_items`, kontrollen som nekade en radering av en kategori
+     * som satt på ett item. Det villkoret utgick med papperskorgen: items
+     * behåller sin `category_id` medan kategorin ligger i papperskorgen, och
+     * först gallringen nollställer den.
      *
      * @return HasMany<Item, $this>
      */

@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\Access\ItemScope;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
  * Papperskorgen för innehållet i en levande container: de mjukraderade
@@ -60,6 +61,16 @@ use Illuminate\Database\Eloquent\Builder;
  * kolumnlistorna: de behövs för att bygga grindobjektet, och de syns
  * aldrig i svaret — `TrashEntryResource` läser sex namngivna nycklar.
  *
+ * **`subcategory_counts` är det tredje svaret, och bara webben läser det**
+ * (issue 150). En kategori som raderades med sitt underträd listas som EN rad
+ * — den översta — och talet i `counts` är hur många underkategorier som följer
+ * med i den raden. Det kan inte bo i `TrashEntryResource`, som är delad med
+ * `/api` (och som läser sex namngivna nycklar), av samma skäl som
+ * `can_restore` bor utanför den: en delad resurs får inte ett fält bara den
+ * ena ytan behöver, och `app/Http/Resources/**` ligger utanför issue 150:s
+ * omfång. Nycklarna är de översta radernas ULID:n; en rad utan underträd
+ * saknas i uppslaget och blir noll.
+ *
  * **`$user` är nollbar** därför att `Illuminate\Http\Request::user()` är
  * det. Skulle den ändå vara null blir omfånget `restricted([])` — "når
  * ingenting". Ett saknat omfång får aldrig bli ett obegränsat, samma linje
@@ -70,7 +81,7 @@ class ListTrash
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
     /**
-     * @return array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>}
+     * @return array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>, subcategory_counts: array<string, int>}
      */
     public function handle(?User $user, Container $container): array
     {
@@ -83,6 +94,7 @@ class ListTrash
 
         $entries = [];
         $subjects = [];
+        $subcategoryCounts = [];
 
         // `inScope()` och inte en handskriven `whereIn`: formuleringen av
         // "vad mottagaren når" bor i App\Models\Item (issue 73 § Beslut 1).
@@ -96,21 +108,31 @@ class ListTrash
         }
 
         if ($scope->isUnrestricted()) {
-            // Vänsterjoin mot category på parent_id: en underkategori ska bära
-            // förälderns namn som context även när föräldern själv ligger i
-            // papperskorgen — joinen ser mjukraderade rader, som den ska här.
-            // Alias-kolumnen läses med getAttribute() (den är ingen kolumn på
-            // modellen) och normaliseras till ?string.
-            foreach (Category::query()->onlyTrashed()
+            // Kategorierna hämtas i EN fråga med förälderns namn OCH dess
+            // deleted_at som alias (issue 150): namnet är sammanhanget, och
+            // tidsstämpeln avgör om raden raderades SAMTIDIGT som sin
+            // förälder. Joinen ser mjukraderade rader, som den ska här — en
+            // underkategori ska bära förälderns namn som context även när
+            // föräldern själv ligger i papperskorgen. Alias-kolumnerna läses
+            // med getAttribute() (de är inga kolumner på modellen).
+            $categoryRows = Category::query()->onlyTrashed()
                 ->leftJoin('category as parent_category', 'parent_category.id', '=', 'category.parent_id')
                 ->where('category.container_id', $container->id)
                 ->where('category.deleted_at', '>=', $cutoff)
-                ->get(['category.ulid', 'category.name', 'category.deleted_at', 'parent_category.name as parent_name']) as $category) {
-                $parentName = $category->getAttribute('parent_name');
+                ->get([
+                    'category.id',
+                    'category.ulid',
+                    'category.name',
+                    'category.parent_id',
+                    'category.deleted_at',
+                    'parent_category.name as parent_name',
+                ]);
 
-                $entries[] = self::entry('category', $category->ulid, $category->name, is_string($parentName) ? $parentName : null, $category->deleted_at, $retentionDays);
-                $subjects[$category->ulid] = $category;
-            }
+            $categoryList = $this->categories($categoryRows, $retentionDays);
+
+            $entries = [...$entries, ...$categoryList['entries']];
+            $subjects += $categoryList['subjects'];
+            $subcategoryCounts = $categoryList['counts'];
 
             foreach (Tag::query()->onlyTrashed()
                 ->where('container_id', $container->id)
@@ -151,7 +173,106 @@ class ListTrash
             return $byDeletedAt !== 0 ? $byDeletedAt : strcmp($a['ulid'], $b['ulid']);
         });
 
-        return ['entries' => $entries, 'subjects' => $subjects];
+        return ['entries' => $entries, 'subjects' => $subjects, 'subcategory_counts' => $subcategoryCounts];
+    }
+
+    /**
+     * Kategoriraderna i papperskorgen, med underträdet hopfällt — issue 150
+     * och [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26.
+     *
+     * **Bara den ÖVERSTA kategorin listas.**
+     * App\Actions\Category\DeleteCategory raderar ett helt underträd i en
+     * transaktion med EN `deleted_at`, och den tidsstämpeln är vad som binder
+     * trädet samman: en rad vars förälder ligger i papperskorgen med SAMMA
+     * `deleted_at` raderades samtidigt som sin förälder och listas inte för
+     * sig. En underkategori som raderades vid ett annat tillfälle — föräldern
+     * lever, eller ligger i papperskorgen sedan tidigare — har en annan
+     * tidsstämpel och listas, precis som förut, med förälderns namn som
+     * `context`.
+     *
+     * **Antalet underkategorier är hela det hopfällda underträdet**, inte bara
+     * de direkta barnen: det är vad raden lovar att återställningen tar med
+     * sig. Talet räknas i minnet ur den redan hämtade samlingen, i EN fråga
+     * för hela listan.
+     *
+     * Memoiseringen är ingen optimering utan en nödvändighet: trädet är högst
+     * `Category::MAX_DEPTH` nivåer, och en vandring uppåt per rad hade varit
+     * kvadratisk i en container med många kategorier.
+     *
+     * @param  Collection<int, Category>  $rows
+     * @return array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Category>, counts: array<string, int>}
+     */
+    private function categories(Collection $rows, int $retentionDays): array
+    {
+        $byId = [];
+
+        foreach ($rows as $row) {
+            $byId[(int) $row->getAttribute('id')] = $row;
+        }
+
+        // Föräldern i SAMMA papperskorgskast: bara när förälderns rad ligger i
+        // den hämtade mängden och delar tidsstämpeln. En förälder utanför
+        // retentionen är inte med i mängden och räknas därför inte som
+        // samtidig — den raderades förr, och barnet listas för sig.
+        $sameCastParent = [];
+
+        foreach ($rows as $row) {
+            $id = (int) $row->getAttribute('id');
+            $parentId = $row->getAttribute('parent_id');
+            $parent = $parentId !== null ? ($byId[(int) $parentId] ?? null) : null;
+
+            $sameCastParent[$id] = $parent !== null && $parent->deleted_at->equalTo($row->deleted_at)
+                ? (int) $parentId
+                : null;
+        }
+
+        $entries = [];
+        $subjects = [];
+        $counts = [];
+
+        foreach ($rows as $row) {
+            $id = (int) $row->getAttribute('id');
+
+            if ($sameCastParent[$id] !== null) {
+                // Hopfälld: listas inte för sig, men räknas på sin översta rad.
+                $topId = $this->topId($id, $sameCastParent);
+                $topUlid = $byId[$topId]->ulid;
+
+                $counts[$topUlid] = ($counts[$topUlid] ?? 0) + 1;
+
+                continue;
+            }
+
+            $parentName = $row->getAttribute('parent_name');
+
+            $entries[] = self::entry(
+                'category',
+                $row->ulid,
+                $row->name,
+                is_string($parentName) ? $parentName : null,
+                $row->deleted_at,
+                $retentionDays,
+            );
+            $subjects[$row->ulid] = $row;
+        }
+
+        return ['entries' => $entries, 'subjects' => $subjects, 'counts' => $counts];
+    }
+
+    /**
+     * Den översta raden i en samtidigt kastad kedja — se `categories()`. Kedjan
+     * är ändlig: `sameCastParent` pekar bara på rader i samma hämtade mängd,
+     * och `MoveCategory` avvisar cykler.
+     *
+     * @param  array<int, int|null>  $sameCastParent
+     */
+    private function topId(int $id, array $sameCastParent): int
+    {
+        while ($sameCastParent[$id] !== null) {
+            $id = $sameCastParent[$id];
+        }
+
+        return $id;
     }
 
     /**

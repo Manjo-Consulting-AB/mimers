@@ -13,6 +13,7 @@ use App\Models\Item;
 use App\Models\Tag;
 use App\Models\User;
 use App\Support\Plan\Entitlements;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -27,6 +28,15 @@ use Illuminate\Support\Facades\DB;
  * papperskorgen när itemet återställs; en tagg kommer tillbaka på sina
  * items automatiskt eftersom pivotraderna ligger kvar och det är SoftDeletes
  * globala scope som gömt taggen.
+ *
+ * **Undantaget är kategorins underträd (issue 150).** En kategori raderas med
+ * hela sitt underträd i EN transaktion med EN `deleted_at`
+ * (App\Actions\Category\DeleteCategory), och återställningen tar tillbaka
+ * exakt de rader som delar den tidsstämpeln — se `restoreSubtree()`. En
+ * ättling som raderades vid ett annat tillfälle ligger kvar. Items behåller
+ * sin `category_id` hela tiden och får alltså sin kategori tillbaka utan att
+ * någon rör dem; ett item som under tiden pekats om, eller mist sin kategori,
+ * behåller det den har.
  *
  * Det enda som kan blockera är en förälder som FORTFARANDE ligger i
  * papperskorgen (§ Beslut 8): en bilaga vars item är raderat, eller en
@@ -131,6 +141,17 @@ class RestoreContent
             // synkar instansens deleted_at för den som anropar.
             $model->restore();
 
+            // Kategorin kom med ett underträd i papperskorgen (issue 150), och
+            // återställningen tar med exakt de rader som kastades SAMTIDIGT:
+            // samma `deleted_at` som raden hade. En ättling som raderades
+            // tidigare har en annan tidsstämpel och ligger kvar — och släpps
+            // inte in här, för då hade den blivit levande under en förälder
+            // som just blivit det, vilket är precis det `trash.parent_deleted`
+            // finns för att hindra i den andra riktningen.
+            if ($model instanceof Category && $varMjukraderad && $rad->deleted_at !== null) {
+                $this->restoreSubtree($model, $rad->deleted_at);
+            }
+
             if ($model instanceof Attachment && $varMjukraderad) {
                 (new AdjustUsage)->handle($model->billed_account_id, bytesDelta: $byteSize);
             }
@@ -169,5 +190,47 @@ class RestoreContent
                 );
             }
         });
+    }
+
+    /**
+     * Återställer de ättlingar till $category som kastades samtidigt — samma
+     * `deleted_at` — i anroparens transaktion, så att trädet kommer tillbaka
+     * som en enhet eller inte alls. Se klassens docblock och issue 150.
+     *
+     * Uppslaget är container-scopat och nycklat på tidsstämpeln, inte på en
+     * vandring nedåt i flera frågor: hela den samtidigt kastade mängden är
+     * exakt de rader återställningen kan komma att röra, och den är liten.
+     * Vandringen nedåt från $category i minnet ser sedan till att bara DESS
+     * ättlingar följer med — två oberoende träd som råkade kastas inom samma
+     * sekund ska inte återställas ihop.
+     *
+     * Ingen egen `Gate::authorize()` och ingen egen loggrad: behörigheten är
+     * prövad av anroparen på den översta raden, och händelseloggen har ingen
+     * `category.restored` (issue 111 loggar raderingen, inte återställningen
+     * av en kategori — se klassens docblock).
+     */
+    private function restoreSubtree(Category $category, Carbon $deletedAt): void
+    {
+        $rows = Category::query()->onlyTrashed()
+            ->where('container_id', $category->container_id)
+            ->where('deleted_at', $deletedAt)
+            ->get();
+
+        $childrenByParent = [];
+
+        foreach ($rows as $row) {
+            $childrenByParent[$row->parent_id ?? 0][] = $row;
+        }
+
+        $pending = $childrenByParent[$category->id] ?? [];
+
+        while ($pending !== []) {
+            $row = array_pop($pending);
+            $row->restore();
+
+            foreach ($childrenByParent[$row->id] ?? [] as $child) {
+                $pending[] = $child;
+            }
+        }
     }
 }

@@ -70,6 +70,131 @@ class ListCategories
     }
 
     /**
+     * Vad en radering av varje kategori skulle ta med sig, nycklat på
+     * kategori-ULID — det vyn slår upp på. Talet är antalet LEVANDE
+     * underkategorier i hela underträdet under kategorin, och antalet items
+     * som sitter på kategorin eller någon av dem. Se issue 150.
+     *
+     * **Talen är containerns, inte mottagarens omfång.** Raderingen kräver
+     * `ContainerPolicy::update()`, och den som får radera når alla items i
+     * containern — att visa henne antalet hon själv råkar se vore att
+     * underdriva vad knappen gör, och den underdriften är precis den tysta
+     * dataförlust issue 11 § Beslut 7 ville undvika. Skillnaden mot
+     * App\Actions\Tag\ListTags::counts() är avsiktlig: taggen räknas per
+     * omfång, kategorin per container.
+     *
+     * **Men bara för den mottagaren.** Skillnaden håller bara om containertalet
+     * aldrig når någon annan: för en omfångsbegränsad mottagare vore talet
+     * antalet dolda items, och det är det läckage issue 73 § Beslut 6 förbjuder.
+     * Anroparen ansvarar för det — App\Http\Controllers\CategoryController::
+     * index() skickar `counts()` vidare bara när `ContainerPolicy::update()`
+     * släpper igenom, och `update()` ger ett obegränsat omfång (containerbred
+     * grant på minst `write`, eller ägarkontomedlemskap). Den som lägger en ny
+     * anropare på den här metoden måste bära samma grind.
+     *
+     * **Två frågor, oavsett antal kategorier.** Trädet hämtas i EN fråga för
+     * sig i stället för ur `$categories`-argumentet, eftersom den samlingen
+     * kan vara omfångsfiltrerad och därmed ha hål — ett hål hade gett en
+     * underkategori som inte räknades. Itemtalen hämtas i EN grupperad fråga
+     * och fördelas på underträden i minnet; en fråga per kategori vore den
+     * N+1 mätningen ska fånga.
+     *
+     * **Ett item vars kategori ligger i papperskorgen räknas inte**, och det
+     * är rätt: raden är levande men pekar på en kategori som inte syns, och
+     * den kategorin går inte att radera igen.
+     *
+     * @return array<string, array{subcategories: int, items: int}>
+     */
+    public function counts(Container $container): array
+    {
+        $categories = $container->categories()->orderBy('id')->get(['id', 'ulid', 'parent_id']);
+
+        $childrenByParent = [];
+
+        foreach ($categories as $category) {
+            $childrenByParent[$category->parent_id ?? 0][] = (int) $category->id;
+        }
+
+        $itemsPerCategory = $this->itemsPerCategory($container);
+
+        $memo = [];
+        $counts = [];
+
+        foreach ($categories as $category) {
+            [$subcategories, $items] = $this->subtreeTotals(
+                (int) $category->id,
+                $childrenByParent,
+                $itemsPerCategory,
+                $memo,
+            );
+
+            $counts[$category->ulid] = ['subcategories' => $subcategories, 'items' => $items];
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Antalet items per kategori i EN fråga — grupperat på `category_id` över
+     * containerns levande items. Itemets globala SoftDeletes-scope filtrerar
+     * mjukraderade rader, samma linje som i App\Actions\Tag\ListTags.
+     *
+     * @return array<int, int> category_id → antal items
+     */
+    private function itemsPerCategory(Container $container): array
+    {
+        $rows = Item::query()
+            ->where('container_id', $container->id)
+            ->whereNotNull('category_id')
+            ->groupBy('category_id')
+            ->selectRaw('category_id, count(*) as item_count')
+            ->get();
+
+        $counts = [];
+
+        // `getAttribute()` och inte egenskapsåtkomst: raden är en projektion
+        // över `item`, och `category_id`/`item_count` är alias ur `selectRaw`
+        // som inte finns som cast på App\Models\Item — samma läsning som
+        // App\Actions\Tag\ListTags::itemsPerTag().
+        foreach ($rows as $row) {
+            $counts[(int) $row->getAttribute('category_id')] = (int) $row->getAttribute('item_count');
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Antalet underkategorier och items i underträdet under $id, räknat i
+     * minnet ur de två redan hämtade samlingarna och memoiserat per nod —
+     * varje nod besöks en gång, oavsett hur många föräldrar som frågar efter
+     * den. Djupet är taket (`Category::MAX_DEPTH`) och `MoveCategory` avvisar
+     * cykler, så rekursionen kan inte bli oändlig.
+     *
+     * @param  array<int, list<int>>  $childrenByParent
+     * @param  array<int, int>  $itemsPerCategory
+     * @param  array<int, array{0: int, 1: int}>  $memo
+     * @return array{0: int, 1: int} [underkategorier, items]
+     */
+    private function subtreeTotals(int $id, array $childrenByParent, array $itemsPerCategory, array &$memo): array
+    {
+        if (isset($memo[$id])) {
+            return $memo[$id];
+        }
+
+        $subcategories = 0;
+        $items = $itemsPerCategory[$id] ?? 0;
+
+        foreach ($childrenByParent[$id] ?? [] as $childId) {
+            [$childSubcategories, $childItems] = $this->subtreeTotals($childId, $childrenByParent, $itemsPerCategory, $memo);
+
+            $subcategories += $childSubcategories + 1;
+            $items += $childItems;
+        }
+
+        return $memo[$id] = [$subcategories, $items];
+    }
+
+    /**
      * Omfånget för $user i $container, eller "når ingenting" när ingen
      * användare finns — se klassens docblock.
      */

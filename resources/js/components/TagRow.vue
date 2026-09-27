@@ -1,5 +1,6 @@
 <script setup>
-import { Link, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
+import { router, useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import TagColorField from './TagColorField.vue';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -30,6 +31,15 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * **Radera är en <Link method="delete">**, som i ContainerAccessRow. Taggen är
  * platt, så raderingen nekas aldrig och ingen domänfelkod kan komma ur den —
  * ingen felruta hör hit.
+ *
+ * **Sedan issue 150 frågar raden först när taggen sitter på något.** Raderingen
+ * på servern är oförändrad; det är bara frågan som är ny. `router.delete` och
+ * inte en `<Link method="delete">`, av samma skäl som ItemAttachmentSection.vue:
+ * en bekräftelse måste kunna AVBRYTA navigeringen. Talet är `count`, alltså
+ * SAMMA träffräknare som raden redan visar — den är per omfång, och en mottagare
+ * som når fyra items får frågan om sina fyra, inte om containerns nittio. En
+ * tagg utan items raderas utan fråga, som i dag: där finns ingenting att ångra
+ * som användaren inte redan ser.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -39,6 +49,10 @@ const props = defineProps({
 
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
+
+/* ULID:n för den tagg vars radering väntar på svar, annars null — knappen
+   stängs medan den väntar, så samma rad inte kan skickas två gånger. */
+const pending = ref(null);
 
 /* Fältens id:n måste vara unika i listan — varje rad har samma fältnamn. */
 const field = (name) => `tag-${props.tag.ulid}-${name}`;
@@ -58,6 +72,18 @@ function submit() {
             preserveScroll: true,
             onError: focusFirstError,
         });
+}
+
+function destroy() {
+    if (props.count > 0 && ! window.confirm(t('container.tags.destroy_confirm', { count: props.count }))) {
+        return;
+    }
+
+    router.delete(`/containers/${props.containerUlid}/tags/${props.tag.ulid}`, {
+        preserveScroll: true,
+        onStart: () => { pending.value = props.tag.ulid; },
+        onFinish: () => { pending.value = null; },
+    });
 }
 </script>
 
@@ -108,14 +134,13 @@ function submit() {
             </button>
         </form>
 
-        <Link
-            :href="`/containers/${containerUlid}/tags/${tag.ulid}`"
-            method="delete"
-            as="button"
-            preserve-scroll
-            class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline"
+        <button
+            type="button"
+            :disabled="pending !== null"
+            class="inline-flex min-h-11 items-center self-start text-sm text-red-700 underline disabled:opacity-50"
+            @click="destroy"
         >
             {{ t('container.tags.destroy') }}
-        </Link>
+        </button>
     </li>
 </template>

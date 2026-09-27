@@ -49,6 +49,9 @@ import { useTranslations } from '../../composables/useTranslations.js';
 const props = defineProps({
     container: { type: Object, required: true },
     categories: { type: Array, required: true },
+    /* ULID → { subcategories, items }, ur App\Http\Controllers\CategoryController
+       — talen raderingsfrågan ritar (issue 150). Samma form som taggsidans. */
+    counts: { type: Object, required: true },
     can: { type: Object, required: true },
     /* Sant när användaren tackat nej till förslaget för den här containern i den
        här sessionen — se App\Http\Controllers\CategoryController. */
@@ -99,6 +102,7 @@ const showsPreset = computed(
                 :nodes="tree"
                 :container-ulid="container.ulid"
                 :categories="categories"
+                :counts="counts"
                 :delete-error-ulid="deleteErrorUlid"
                 @delete="deleteErrorUlid = $event"
             />

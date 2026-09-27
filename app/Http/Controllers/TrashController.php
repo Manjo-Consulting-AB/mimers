@@ -78,6 +78,14 @@ class TrashController extends Controller
      * resursen är delad med `/api` och får inget nytt fält, samma regel som
      * kategorinamnen i issue 57a § Beslut 1.
      *
+     * `subcategoryCounts` är uppslaget `ulid → antal` BREDVID raderna av
+     * EXAKT samma skäl (issue 150): en kategori som raderades med sitt
+     * underträd listas som EN rad — den översta — och raden säger hur många
+     * underkategorier som följde med. Talet kan inte bo i
+     * `TrashEntryResource`, som är delad med `/api`, och `app/Http/Resources/**`
+     * ligger utanför issuen. Det kommer ur App\Actions\Trash\ListTrash, som
+     * räknar det ur den redan hämtade kategorisamlingen — ingen fråga per rad.
+     *
      * Ägarkontot laddas uttryckligen: `ContainerResource::make()` läser
      * `$container->account`, och `ItemPolicy` läser samma relation genom
      * varje rads grindobjekt — utan den hade den kostat ett uppslag.
@@ -96,6 +104,7 @@ class TrashController extends Controller
             'container' => ContainerResource::make($container)->resolve($request),
             'entries' => TrashEntryResource::collection($list['entries'])->resolve($request),
             'canRestore' => (object) $this->canRestore($user, $container, $list),
+            'subcategoryCounts' => (object) $list['subcategory_counts'],
         ]);
     }
 
@@ -200,7 +209,7 @@ class TrashController extends Controller
      * registrerad `scoped` och memoiserad per `{user}:{container}`, och
      * ListTrash har redan löst upp det.
      *
-     * @param  array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>}  $list
+     * @param  array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>, subcategory_counts: array<string, int>}  $list
      * @return array<string, bool>
      */
     private function canRestore(?User $user, Container $container, array $list): array
@@ -237,7 +246,7 @@ class TrashController extends Controller
      * samma skäl som i `authorizeRestore()` och i
      * App\Actions\Trash\RestoreContent.
      *
-     * @param  array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>}  $list
+     * @param  array{entries: list<array{type: string, ulid: string, label: string, context: string|null, deleted_at: Carbon|null, expires_at: Carbon|null}>, subjects: array<string, Item|Attachment|Category|Tag>, subcategory_counts: array<string, int>}  $list
      * @return array<int, Item>
      */
     private function attachmentItems(array $list): array

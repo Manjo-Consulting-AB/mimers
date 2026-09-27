@@ -46,6 +46,8 @@ Index: `(container_id, parent_id, deleted_at)`.
 
 Djupet bör begränsas i applikationslagret — säg fem nivåer — och cykler måste avvisas vid flytt av en kategori. En kategori som får sin egen ättling som förälder gör listningen till en oändlig loop.
 
+**En kategori raderas med hela sitt underträd.** Raderna mjukraderas i en transaktion och får samma `deleted_at`, och det är tidsstämpeln som binder dem samman: papperskorgen listar bara den översta kategorin, och en återställning av den tar tillbaka exakt de rader som delar tidsstämpeln. En ättling som raderades tidigare har en annan och ligger kvar. `item.category_id` rörs inte av raderingen — ett item behåller sin kategori medan den ligger i papperskorgen och får den tillbaka när den återställs; först gallringen nollställer pekaren. Se [[ADR-0008 Soft delete och papperskorg]] § Uppföljning 2026-09-26.
+
 ## tag
 
 Platt, per container. Inga undertaggar, medvetet.

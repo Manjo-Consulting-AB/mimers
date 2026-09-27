@@ -18,11 +18,15 @@ import CategoryRow from './CategoryRow.vue';
  *
  * `deleteErrorUlid` och `delete` färdas genom rekursionen på samma sätt: raden
  * som nekades kan sitta på vilken nivå som helst, och sidan äger tillståndet.
+ *
+ * `counts` färdas likadant (issue 150): varje rad behöver sitt eget tal för
+ * raderingsfrågan, och raden kan sitta på vilken nivå som helst.
  */
 defineProps({
     nodes: { type: Array, required: true },
     containerUlid: { type: String, required: true },
     categories: { type: Array, required: true },
+    counts: { type: Object, required: true },
     deleteErrorUlid: { type: String, default: null },
 });
 
@@ -36,6 +40,7 @@ const emit = defineEmits(['delete']);
                 :container-ulid="containerUlid"
                 :category="node"
                 :categories="categories"
+                :counts="counts"
                 :delete-error-ulid="deleteErrorUlid"
                 @delete="emit('delete', $event)"
             />
@@ -46,6 +51,7 @@ const emit = defineEmits(['delete']);
                 :nodes="node.children"
                 :container-ulid="containerUlid"
                 :categories="categories"
+                :counts="counts"
                 :delete-error-ulid="deleteErrorUlid"
                 @delete="emit('delete', $event)"
             />
