@@ -16,7 +16,7 @@ Bilden bygger på tokens och komponenter ur [[ADR-0042 Designsystemet]] och säg
 
 Under `md:` får appen ett eget skal i stället för den hopfällda desktopraden:
 
-- **En mörk topprad** (`--color-shell`) med sidans titel. Inne i en container visas containerns namn, bild och antal items, och en tillbakaknapp.
+- **En mörk topprad** (`--color-shell`) med sidans titel. Inne i en container visas containerns namn och bild, och en tillbakaknapp.
 - **En flikrad i botten** med fem platser: *Översikt*, *Sök*, plusknappen i mitten, *Notiser* och *Meny*. Notisklockans taltuta från issue 127 följer med.
 - **En sidomeny bakom *Meny*.** Den innehåller det desktopskalets sidopanel redan har, i samma ordning, plus en sektion. Överst *Översikt* och *Sök*, sedan *Nyligen besökta* enligt [[ADR-0049 Nyligen besökta]], sedan favoriterna från issue 106, därefter sidorna i den container man står i, sedan de övriga containrarna och sist *Inställningar*.
 
