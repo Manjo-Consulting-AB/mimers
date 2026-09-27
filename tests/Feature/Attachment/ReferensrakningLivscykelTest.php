@@ -1,5 +1,9 @@
 <?php
 
+// rott-pa-basen: issue 148 är en ren testissue — proven R1–R8 dokumenterar
+// beteendet som byggdes i 143, och ingen produktionskod ändras. Bas och head
+// delar alltså applikationskod, och filen kan aldrig bli röd på basen.
+
 use App\Actions\Account\DeleteAccount;
 use App\Actions\Attachment\PurgeAttachment;
 use App\Actions\Attachment\StoreAttachment;
