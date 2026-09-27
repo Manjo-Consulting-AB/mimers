@@ -1,6 +1,6 @@
 # ADR-0035 Relationen mellan objekt
 
-**Status:** Antagen 2026-09-17 · Kompletterar [[ADR-0032 Produktens ord]] · [[ADR-index]]
+**Status:** Antagen 2026-09-17 · Kompletterar [[ADR-0032 Produktens ord]] · Uppföljning 2026-09-27 om mobilmockupen · [[ADR-index]]
 
 Fattat vid genomgången av den första omgången mockuper. [[ADR-0032 Produktens ord]] satte produktens ordförråd men kom aldrig ned på relationsnivå — den slog fast att *relationer* heter så, inte vad de enskilda relationerna heter.
 
@@ -59,3 +59,7 @@ Att `related` beskriver relationen bättre är inte en smaksak. `sibling` är et
 **Införa `related` som en fjärde relation vid sidan av `sibling`.** Hade följt mockupens teckenförklaring bokstavligt. Valdes bort — de två skulle betyda exakt samma sak, och två namn för en relation är precis det problem ADR-0032 finns till för att lösa.
 
 **Låta det vara.** Valdes bort — ordet har redan kostat ett designutkast en dubblett, och det är det billigaste felet det kommer att orsaka.
+
+## Uppföljning 2026-09-27 — sibling i mobilmockupen
+
+Mobilmockupen (`docs/Design/mobil.png`) återinför *Sibling* två gånger: som en grupp i relationsvyn och som *Skapa sibling*, *"nytt item med samma parent"*. Beslutet ovan står sig. Ordet används inte, och relationsvyn visar parent, child och related. Se [[ADR-0048 Mobilen och plusknappen]] § 4.
