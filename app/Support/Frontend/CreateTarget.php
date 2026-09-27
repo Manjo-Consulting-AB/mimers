@@ -88,14 +88,22 @@ final class CreateTarget
      * issuen står på en nod; trädet och kartan som gör det byggs i 154, 156 och
      * 157, och de skickar sin nod hit.
      *
-     * Grinden är `createItem` på CONTAINERN — samma grind som itemlistans
-     * skapaknapp prövar — och en omfångsbegränsad mottagare får därför ingen
-     * knapp här: hon skapar barn-items under det hon nått, och den ytan är
-     * menyraden *Item under*.
+     * **Grinden följer `$parent`, för det gör serverns grind också.**
+     * `ItemController::create()` prövar `create` på föräldern när en sådan
+     * finns och `createItem` på containern annars — samma två grenar står
+     * här. En omfångsbegränsad mottagare som nått en nod får därför sin knapp
+     * (hon får skapa barn under det hon nått), medan samma mottagare utan nod
+     * inte får någon: hon når inte containern själv.
      */
     public function forContainer(User $user, Container $container, ?Item $parent = null): ?array
     {
-        if (! $this->gate->forUser($user)->allows('createItem', $container)) {
+        $gate = $this->gate->forUser($user);
+
+        $allows = $parent !== null
+            ? $gate->allows('create', $parent)
+            : $gate->allows('createItem', $container);
+
+        if (! $allows) {
             return null;
         }
 
