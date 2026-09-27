@@ -16,14 +16,15 @@ import { Link } from '@inertiajs/vue3';
  * har redan läst läget en gång — samma sträng avgör vilken yta sidan ritade —
  * och en andra läsning i klienten vore en andra regel som kan glida ifrån den
  * första. UiTabs löser samma sak genom att jämföra adresser, men den bär sex
- * flikar på samma sökväg och behöver rangordningen; här finns två lägen och
- * ett svar.
+ * flikar på samma sökväg och behöver rangordningen; här finns ett läge och ett
+ * svar.
  *
  * **Ordningen är anroparens**, och den är bindande på ett sätt: det FÖRSTA
  * läget är förvalet, och dess adress är den utan `view` — samma val som
  * översiktsfliken gör med `tab` (issue 100 och 102). Komponenten skriver
- * ingen adress själv och vet inte vilka lägen som finns: *Karta* är § 157 och
- * dyker upp här först när den är byggd, utan att den här filen ändras.
+ * ingen adress själv och vet inte vilka lägen som finns: *Karta* är § 157, och
+ * den dök upp i växeln utan att den här filen ändrades — vilket är hela
+ * poängen med att lägena kommer som en propp.
  *
  * **Träffytan är `min-h-11`** — 44 px ur issue 68a § Beslut 3 — och raden
  * följer varandra i en grupp med ett gemensamt namn, så en skärmläsare säger

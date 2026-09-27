@@ -10,6 +10,7 @@ use App\Actions\Item\DeleteItem;
 use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ResolveItemCover;
+use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Item\ResolveItemTree;
 use App\Actions\Item\UpdateItem;
@@ -190,14 +191,16 @@ class ItemController extends Controller
      * inget filtervärde lägger till en fråga — uppslagen sker i minnet mot de
      * redan hämtade listorna.
      *
-     * **Fliken har två lägen sedan issue 154** ([[ADR-0046 Containerns karta]]):
-     * listan, som är den här metoden oförändrad, och *Träd*, som ritar
-     * containerns struktur i stället. Läget står i querysträngen (`?view=tree`,
-     * se `view()` nedan) och filtrerar ingenting: trädet är containern som
-     * användaren når, medan filtret hör till listan. Strukturen hämtas därför
-     * BARA i trädläget — den som öppnar listan ska inte betala två frågor för
-     * en yta hon inte ser — och den kostar sina två oavsett hur många items
-     * containern har (App\Actions\Item\ResolveItemTree).
+     * **Fliken har tre lägen sedan issue 154 och 157** ([[ADR-0046 Containerns
+     * karta]]): listan, som är den här metoden oförändrad, *Träd*, som ritar
+     * containerns struktur, och *Karta*, som ritar samma struktur som noder med
+     * en öppen gren per nivå. Läget står i querysträngen (`?view=tree`,
+     * `?view=map`, se `view()` nedan) och filtrerar ingenting: trädet och
+     * kartan är containern som användaren når, medan filtret hör till listan.
+     * Strukturen och kartan hämtas därför BARA i sina egna lägen — den som
+     * öppnar listan ska inte betala två frågor för en yta hon inte ser — och
+     * båda kostar sina två oavsett hur många items containern har
+     * (App\Actions\Item\ResolveItemTree och App\Actions\Item\ResolveItemMap).
      *
      * `can.create` är `ContainerPolicy::createItem()` — samma grind som
      * `Api\ItemController::store()` prövar för ett toppnivå-item, och bara en
@@ -232,6 +235,7 @@ class ItemController extends Controller
         ItemStatus $itemStatus,
         CreateTarget $createTarget,
         ResolveItemTree $resolveItemTree,
+        ResolveItemMap $resolveItemMap,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -271,6 +275,45 @@ class ItemController extends Controller
             ])
             : collect();
 
+        // Kartan (issue 157 · [[ADR-0046 Containerns karta]]): den öppna vägen
+        // står i querysträngen, och upplösningen svarar med de nivåer som ska
+        // ritas — den öppna vägen plus syskonen på varje nivå. Bara i kartläget,
+        // samma linje som `structure` nedan: en yta ingen ser ska inte kosta en
+        // fråga. Upplösningen kostar sina två oavsett hur många barn en nod har
+        // (App\Actions\Item\ResolveItemMap).
+        //
+        // `path` är samma parameter och samma sträng som itemvyns förekomst
+        // (issue 95): item-ULID:n skilda av punkter. Läsningen är `requestedPath()`
+        // — samma metod, samma gräns mot skräp och samma svar på en väg som inte
+        // finns: den kapas, den felar aldrig.
+        $map = $view === 'map'
+            ? $resolveItemMap->handle($user, $container, $this->requestedPath($request))
+            : null;
+
+        // Statusen hör till det som RITAS ([[ADR-0040 Underträdets summor]]
+        // och issue 92): listans rader i listläget, kartans noder i kartläget.
+        // Samma klass, samma regel och samma två frågor — det är avgränsningen
+        // som skiljer, och den är kartans: en nod utanför omfånget ritas inte
+        // och får därför ingen status att räknas i.
+        //
+        // Trädläget ritar inga statusar och betalar därför inte ens de två
+        // fasta frågorna.
+        $statuses = match ($view) {
+            'list' => $itemStatus->forItems($container, $user, $items),
+            'map' => $itemStatus->forItems($container, $user, array_values($map['drawn'])),
+            default => [],
+        };
+
+        // Noden man står på, för plusknappens mål nedan. Modellen kommer ur
+        // kartans upplösning — en fråga som bara valde id, ulid och namn — och
+        // `ItemPolicy::allows()` läser `$item->container->account`. Containern
+        // är redan uppslagen och kontot laddat (`loadMissing('account')` ovan),
+        // så att hänga den på modellen kostar inga frågor i stället för två.
+        // Samma handgrepp och samma skäl som ScheduleController::store() gör
+        // för sina kandidater.
+        $marked = $map['marked'] ?? null;
+        $marked?->setRelation('container', $container);
+
         return Inertia::render('Containers/Items/Index', [
             'container' => ContainerResource::make($container)->resolve($request),
             'items' => ItemResource::collection($items)->resolve($request),
@@ -290,10 +333,9 @@ class ItemController extends Controller
             // Två frågor per lista, oavsett antal rader: kanterna och
             // förekomsterna hämtas en gång och slutningen sker i minnet, se
             // App\Support\Item\ItemStatus. En vandring per rad vore den N+1
-            // hela åtkomstlösningen byggdes för att undvika. Ingen rad, ingen
-            // status: trädläget ritar inga rader och betalar därför inte ens
-            // de två fasta frågorna.
-            'statuses' => $view === 'list' ? $itemStatus->forItems($container, $user, $items) : [],
+            // hela åtkomstlösningen byggdes för att undvika. Se `$statuses`
+            // ovan för vad som räknas i vilket läge.
+            'statuses' => $statuses,
             'tags' => TagResource::collection($tags)->resolve($request),
             'categoryTree' => CategoryResource::collection($categories)->resolve($request),
             'filter' => [
@@ -309,13 +351,22 @@ class ItemController extends Controller
             // containern. Samma grind som `can.create` ovan — de två kommer
             // och går tillsammans, och flaggan är presentation medan
             // App\Support\Frontend\CreateTarget bär målet.
-            'create' => $createTarget->forContainer($user, $container),
+            //
+            // **I en öppen karta skapar den under den markerade noden**
+            // (issue 152 · [[M23 Mobilen och kartan]] § 157): `$marked` är den
+            // nod man står på, och `forContainer()` lägger den på
+            // adressen som `?parent` och prövar `create` på den i stället för
+            // `createItem` på containern — samma två grenar som
+            // `ItemController::create()` prövar. En tom väg markerar ingen
+            // nod, och då är målet containern, precis som i listan.
+            'create' => $createTarget->forContainer($user, $container, $marked),
 
-            // Läget i itemfliken (issue 154 · [[ADR-0046 Containerns karta]]).
-            // *Lista* är förvalet och den här sidan som den var; *Träd* ritar
-            // containerns struktur i stället. Läget står i querysträngen och
+            // Läget i itemfliken (issue 154 och 157 · [[ADR-0046 Containerns
+            // karta]]). *Lista* är förvalet och den här sidan som den var;
+            // *Träd* ritar containerns struktur; *Karta* ritar samma struktur
+            // som noder, en öppen gren per nivå. Läget står i querysträngen och
             // ingenstans annat — vyn håller inget eget tillstånd — och därför
-            // är proppen svaret på samma fråga som `structure` nedan.
+            // är proppen svaret på samma fråga som `structure` och `map` nedan.
             'view' => $view,
 
             // Strukturen, och BARA i trädläget (samma linje som historikens
@@ -331,6 +382,24 @@ class ItemController extends Controller
             'structure' => $view === 'tree'
                 ? $this->structure($resolveItemTree->handle($user, $container))
                 : null,
+
+            // Kartan, och BARA i kartläget (samma linje som `structure` ovan).
+            // `trail` är den LÖSTA vägen — den begärda strängen kapad där den
+            // brister — så vyn markerar en nod som faktiskt finns, och `levels`
+            // är nivåerna i ritad ordning: rötterna först, därefter barnen till
+            // vägens led.
+            //
+            // `null` och inte en tom lista när läget är ett annat: en tom lista
+            // är ett svar servern HAR gett — hon når ingenting — och vyn ska
+            // kunna skilja det från "inte hämtad".
+            //
+            // `marked` och `drawn` följer INTE med hit: de är upplösningens
+            // arbetsmaterial — modellen bakom plusknappens mål och
+            // statusfrågan — och `levels` bär redan allt vyn ritar.
+            'map' => $map === null ? null : [
+                'trail' => $map['trail'],
+                'levels' => $map['levels'],
+            ],
         ]);
     }
 
@@ -1255,16 +1324,15 @@ class ItemController extends Controller
      * [[ADR-0046 Containerns karta]].
      *
      * `list` är dagens lista och förvalet; `tree` är containerns struktur ritad
-     * som träd. Läget är en LÄNK och inget tillstånd i vyn, samma konstruktion
-     * som filtret i issue 59a § Beslut 1 och förekomsten i issue 95: en flik
-     * man kan länka till är en flik man kan dela, och den överlever en
-     * omladdning därför att servern läser samma sträng igen.
+     * som träd; `map` är samma struktur ritad som noder, en öppen gren per nivå
+     * (issue 157). Läget är en LÄNK och inget tillstånd i vyn, samma
+     * konstruktion som filtret i issue 59a § Beslut 1 och förekomsten i issue
+     * 95: en flik man kan länka till är en flik man kan dela, och den överlever
+     * en omladdning därför att servern läser samma sträng igen.
      *
      * **Ett okänt värde är listan, aldrig ett fel** — samma linje som
      * `filter()` ovan och av samma skäl: den som klickade på en gammal länk är
-     * inte här. `?view[]=…`, `?view=` och skräp läses som "inget läge", och
-     * `map` hör hit med flit: kartan är § 157, och fram till dess finns läget
-     * varken i växeln eller i svaret.
+     * inte här. `?view[]=…`, `?view=` och skräp läses som "inget läge".
      *
      * Ingen FormRequest: värdet är en sträng ur adressen och regeln är en rad.
      */
@@ -1272,7 +1340,7 @@ class ItemController extends Controller
     {
         $view = $request->query('view');
 
-        return is_string($view) && in_array($view, ['list', 'tree'], true) ? $view : 'list';
+        return is_string($view) && in_array($view, ['list', 'tree', 'map'], true) ? $view : 'list';
     }
 
     /**
