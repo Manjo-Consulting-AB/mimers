@@ -207,6 +207,22 @@ const tagError = computed(() => {
 });
 
 /*
+ * Även platsen kan komma tillbaka med ett fel: `parent` prövas av
+ * StoreItemRequest mot containern och mot mjukradering, och `store()` prövar
+ * ItemPolicy::create på nytt — så en ULID som hunnit bli ogiltig mellan
+ * sidladdning och postning (itemet kastat, eller åtkomsten indragen medan
+ * formuläret stod öppet) ger ett äkta 422 på `parent`. Sedan issue 153 är
+ * fältet användarvalt ur en väljare man kan bläddra i, så fönstret är reellt;
+ * före dess kom det bara från en nyss auktoriserad länk.
+ *
+ * Platsraden är komponentens enda fält utan FormField, och därför den enda
+ * felraden som måste ritas för hand. Id:t är `parent-error`, samma som
+ * FormField hade gett, så att useErrorFocus.focusFirstError hittar hit — utan
+ * det blir ett avvisat val en tyst omladdning.
+ */
+const parentError = computed(() => form.errors.parent ?? null);
+
+/*
  * Knappens ord byter medan servern svarar (issue 68a § Beslut 4 och 5): en
  * knapp vars etikett står still medan svaret är på väg ser ut som en död sida.
  * Ordet "Skapa"/"Spara" kommer tillbaka när anropet är klart.
@@ -263,6 +279,19 @@ function submit() {
                 <p v-if="location" class="text-body text-ink-muted">
                     {{ t('item.form.location_hint', { name: location.name }) }}
                 </p>
+
+                <!-- Serverns fel på `parent`, på samma form som FormFields
+                     rad: `role="alert"` läser upp det när det ritas, och
+                     `tabindex="-1"` låter focusFirstError flytta hit. -->
+                <p
+                    v-if="parentError"
+                    id="parent-error"
+                    role="alert"
+                    tabindex="-1"
+                    class="text-body text-danger outline-none focus:ring-2 focus:ring-focus focus:ring-offset-2"
+                >
+                    {{ parentError }}
+                </p>
             </div>
 
             <!--
@@ -275,6 +304,7 @@ function submit() {
             <button
                 type="button"
                 class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                :aria-describedby="parentError ? 'parent-error' : undefined"
                 @click="openPicker($event.currentTarget)"
             >
                 {{ t('item.form.location_change') }}

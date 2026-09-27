@@ -350,6 +350,25 @@ it('ritar placeringsraden och öppnar väljaren med Ändra', function () {
         ->toContain(':container-name="container.name"');
 });
 
+it('visar förälderfelet vid platsraden och låter fokus hamna där', function () {
+    // Platsraden är formulärets enda fält utan FormField, och därför den enda
+    // felraden som måste ritas för hand. Utan den blir ett 422 på `parent` —
+    // en ULID som hunnit bli ogiltig mellan sidladdning och postning, se
+    // StoreItemRequest — en tyst omladdning: ingen text att läsa, och
+    // focusFirstError letar efter `parent-error` som inte finns.
+    $formuläret = foralderKod('components/ItemForm.vue');
+
+    expect($formuläret)->toContain('form.errors.parent')
+        ->toContain('v-if="parentError"')
+        ->toContain('id="parent-error"')
+        ->toContain('tabindex="-1"')
+        ->toContain(":aria-describedby=\"parentError ? 'parent-error' : undefined\"");
+
+    // Felraden ligger i platsradens vänstra kolumn, under platsen — samma
+    // ordning som FormFields fel under sitt fält.
+    expect($formuläret)->toContain('item.form.location_hint');
+});
+
 it('filtrerar trädet på namn i väljaren', function () {
     $väljaren = foralderKod('components/ParentPicker.vue');
 
