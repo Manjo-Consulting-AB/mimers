@@ -99,10 +99,11 @@ class ContainerController extends Controller
 
         $containers = Container::query()
             ->accessibleBy($user, $accountIds)
-            // ContainerResource::toArray() läser $this->account->ulid för
-            // varje rad — utan eager loading blir listan N+1, samma
-            // resonemang som API-kontrollerns index().
-            ->with('account')
+            // ContainerResource::toArray() läser $this->account->ulid och
+            // containerns bild för varje rad — utan eager loading blir listan
+            // N+1, samma resonemang som API-kontrollerns index(). Bilden
+            // kostar två led: bilagan och dess derivat (issue 159).
+            ->with(['account', 'coverAttachment.storedFile.derivatives'])
             ->orderBy('name')
             ->get();
 
@@ -181,7 +182,11 @@ class ContainerController extends Controller
     ): Response {
         Gate::authorize('view', $container);
 
-        $container->loadMissing('account');
+        // Ägarkontot OCH bilden: skalsidans topprad ritar miniatyren ur
+        // `cover`, som resursen läser genom `coverAttachment` (issue 159).
+        // Utan den här raden hade den blivit en oplanerad lazy-load per
+        // sidladdning.
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $user = $request->user();
 
@@ -199,6 +204,14 @@ class ContainerController extends Controller
 
         return Inertia::render('Containers/Overview', [
             'container' => ContainerResource::make($container)->resolve($request),
+            // `can.update` räknas med en policyfråga, samma mönster som
+            // index() och edit() (issue 54 § Beslut 9): flaggan ritar pennan
+            // på containerns bild (issue 159 · [[ADR-0047 Containerns bild]]
+            // § Beslut, "Vem som får göra vad") och läggs BREDVID resursen.
+            // Den är presentation — ruttens `update` prövas ändå.
+            'can' => [
+                'update' => Gate::forUser($user)->allows('update', $container),
+            ],
             'counts' => [
                 'items' => $listItems->handle($user, $container)->count(),
                 'todos' => $todos,
@@ -370,10 +383,11 @@ class ContainerController extends Controller
     {
         Gate::authorize('view', $container);
 
-        // En enda rad, men ladda ägarkontot uttryckligen ändå så resursen
-        // aldrig kör en oplanerad lazy-load — samma resonemang som
-        // API-kontrollern. Policyn läser samma relation.
-        $container->loadMissing('account');
+        // En enda rad, men ladda ägarkontot och bilden uttryckligen ändå så
+        // resursen aldrig kör en oplanerad lazy-load — samma resonemang som
+        // API-kontrollern. Policyn läser samma relation, och skalets topprad
+        // ritar miniatyren ur `cover` (issue 159).
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         return Inertia::render('Containers/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),

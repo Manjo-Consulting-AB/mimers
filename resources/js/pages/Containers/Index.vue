@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerCover from '../../components/ContainerCover.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
@@ -34,6 +35,17 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *
  * Containernamnet är en länk till containerns EGEN sida — itemlistan, se issue 57a
  * § Beslut 1.
+ *
+ * **Bilden kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut.** Raden
+ * ritas som bild 1 i `docs/Design/mobil.png`: en liten miniatyr först, sedan
+ * namnet och resten. Bilden är containerns egen och kommer färdig i
+ * `container.cover` ur `ContainerResource` — kontrollern eager-loadar den, så
+ * listan kostar ett konstant antal frågor oavsett antal containers. Utan bild
+ * ritar `ContainerCover` den neutrala ytan, aldrig en tom ram.
+ *
+ * Miniatyren är INTE en länk: raden har redan två mål (namnet och
+ * redigeringslänken), och en tredje väg till samma sida hade varit ett mål en
+ * tumme kan träffa i misstag.
  */
 defineProps({
     containers: { type: Array, required: true },
@@ -80,6 +92,10 @@ const isShared = (container) => accountName(container) === null;
 
         <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
             <li v-for="container in containers" :key="container.ulid" class="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
+                <span class="h-12 w-12 shrink-0 overflow-hidden rounded-control">
+                    <ContainerCover :cover="container.cover" />
+                </span>
+
                 <!-- Namnlänken går till ITEMLISTAN och inte till översikten
                      (issue 89 · [[ADR-0039 Containerns översikt]]
                      § Konsekvenser). Den menade listan redan före flytten, och

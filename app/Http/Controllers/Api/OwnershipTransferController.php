@@ -231,7 +231,7 @@ class OwnershipTransferController extends Controller
             $this->resolveReceiver($transfer, $request),
         );
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         return new ContainerResource($container);
     }

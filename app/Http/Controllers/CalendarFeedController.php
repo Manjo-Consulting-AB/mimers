@@ -82,7 +82,7 @@ class CalendarFeedController extends Controller
     {
         Gate::authorize('view', $container);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $feeds = $container->calendarFeeds()
             ->where('user_id', $request->user()->id)

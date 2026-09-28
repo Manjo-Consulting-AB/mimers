@@ -63,6 +63,14 @@ import { useTranslations } from '../../composables/useTranslations.js';
  */
 const props = defineProps({
     container: { type: Object, required: true },
+    /*
+     * `{ update }` — samma flagga som inställningssidan ritar sitt formulär ur.
+     * Här styr den pennan på bilden i skalets topprad (issue 159 ·
+     * [[ADR-0047 Containerns bild]] § Beslut): den som bara får läsa ser
+     * varken penna eller ark. Flaggan är presentation; rutten prövar
+     * `ContainerPolicy::update` på nytt.
+     */
+    can: { type: Object, required: true },
     /* `{ items, todos }` — antalet items respektive öppna uppgifter inom omfånget. */
     counts: { type: Object, required: true },
     /* Nycklarna på de tips användaren inte dolt, i serverns ordning. */
@@ -79,7 +87,7 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerLayout :container="container" :create="create">
+    <ContainerLayout :container="container" :create="create" :can="can">
         <Head :title="container.name" />
 
         <h1 class="text-2xl font-semibold">{{ container.name }}</h1>
