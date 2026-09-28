@@ -36,10 +36,10 @@ class InvitationResponseController extends Controller
      *
      * Klienten har just fått åtkomst till en container den inte kände
      * till; att svara med den är det enda användbara (§ Beslut 10).
-     * `loadMissing('account')` innan resursen renderas, samma skäl som
-     * ContainerController::show() — ContainerResource läser
-     * `$this->account->ulid` och ska aldrig behöva en oplanerad
-     * lazy-load-fråga.
+     * `loadMissing()` (ägarkontot och bilden) innan resursen renderas, samma
+     * skäl som ContainerController::show() — ContainerResource läser
+     * `$this->account->ulid` och `cover` (issue 159) och ska aldrig behöva en
+     * oplanerad lazy-load-fråga.
      */
     public function accept(InvitationTokenRequest $request, AcceptInvitation $action): ContainerResource
     {
@@ -48,7 +48,7 @@ class InvitationResponseController extends Controller
 
         $container = $action->handle($request->invitation(), $user);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         return new ContainerResource($container);
     }

@@ -130,9 +130,10 @@ class OwnershipTransferController extends Controller
     ): Response {
         Gate::authorize('viewTransfers', $container);
 
-        // Ladda ägarkontot uttryckligen: planfrågan läser det, och policyn
-        // läser samma relation — samma resonemang som ContainerController.
-        $container->loadMissing('account');
+        // Ladda ägarkontot och bilden uttryckligen: planfrågan läser kontot,
+        // och policyn läser samma relation — samma resonemang som
+        // ContainerController (bilden kom med issue 159).
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $transfers = $container->transfers()
             ->with(['container', 'toAccount'])

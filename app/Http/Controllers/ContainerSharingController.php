@@ -120,9 +120,10 @@ class ContainerSharingController extends Controller
 
         $user = $request->user();
 
-        // Ladda ägarkontot uttryckligen så ContainerResource aldrig kör en
-        // oplanerad lazy-load — samma resonemang som ContainerController.
-        $container->loadMissing('account');
+        // Ladda ägarkontot och bilden uttryckligen så ContainerResource aldrig
+        // kör en oplanerad lazy-load — samma resonemang som ContainerController
+        // (bilden kom med issue 159).
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $mayViewAccesses = Gate::allows('viewAccesses', $container);
 

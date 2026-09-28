@@ -35,11 +35,20 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * variant som saknas är en trasig bild (issue 19a § Beslut 5), och en
  * nyuppladdad bild har inga derivat förrän kön har kört.
  *
- * **Relationen måste vara eager-laddad i listor.** `coverAttachment` och dess
- * `storedFile.derivatives` läses här, och en lista med N containers hade
- * annars blivit N+1. Se `->with(...)` i App\Http\Controllers\
- * ContainerController::index(), App\Http\Controllers\Api\ContainerController::
- * index() och App\Actions\Container\ListContainerSummaries.
+ * **Varje anropare eager-loadar relationen.** `cover` läses ovillkorligt av
+ * `toArray()`, så varje kontroller som renderar den här resursen måste ha
+ * laddat `coverAttachment.storedFile.derivatives` i förväg. Containrar UTAN
+ * bild kostar ingenting — en nullbar främmande nyckel slår inte upp något
+ * (BelongsTo::getResults()) — men en lista med N containrar MED bild blir
+ * N+1, och en enkelradssida med bild får tre oplanerade lazy-load-frågor:
+ * bilagan, filen och dess derivat. Det senare gäller varje sida under
+ * containerns skal, eftersom skalets topprad ritar `cover` — inte bara
+ * listorna. Mönstret finns i två former:
+ * `->with([...])` i listorna (App\Http\Controllers\ContainerController::index(),
+ * App\Http\Controllers\Api\ContainerController::index() och
+ * App\Actions\Container\ListContainerSummaries) och `->loadMissing([...])` i
+ * enkelradsvägarna (App\Http\Controllers\ContainerController::show/edit() och
+ * de övriga kontrollerna som renderar containern).
  *
  * @mixin Container
  */

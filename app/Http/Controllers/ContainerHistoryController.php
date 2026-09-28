@@ -53,7 +53,7 @@ class ContainerHistoryController extends Controller
     {
         Gate::authorize('viewAuditLog', $container);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         return Inertia::render('Containers/History', [
             'container' => ContainerResource::make($container)->resolve($request),

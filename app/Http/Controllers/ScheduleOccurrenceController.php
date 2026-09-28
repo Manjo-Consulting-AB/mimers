@@ -83,7 +83,7 @@ class ScheduleOccurrenceController extends Controller
     {
         Gate::authorize('view', $schedule->item);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $occurrences = $schedule->occurrences()
             ->with('completedByAccount')

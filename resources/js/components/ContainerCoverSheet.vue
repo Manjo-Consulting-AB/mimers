@@ -58,9 +58,13 @@ const open = ref(false);
 const trigger = ref(null);
 
 /*
- * Fältens id:n, unika per instans. Arket ritas mer än en gång på samma sida —
+ * Fältens id:n, unika per instans. GenomgangTest § Beslut 3 kräver ett `id` på
+ * varje `<input>` i skalet, och arket ritas mer än en gång på samma sida —
  * pennan i skalets topprad och avsnittet på inställningssidan är två instanser
- * — och två `<input>` med samma id är två fält en skärmläsare pekar fel på.
+ * — så `useId()` håller dem åtskilda i stället för att två `<input>` delar id.
+ *
+ * Ingen `<label for>` pekar på dem, och det ska ingen göra: fälten är `hidden`
+ * och knapparna nedan är målet. Id:t är formens krav, inte en etikettkoppling.
  */
 const uid = useId();
 const cameraId = `container-cover-camera-${uid}`;

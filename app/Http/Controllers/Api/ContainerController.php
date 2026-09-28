@@ -133,10 +133,11 @@ class ContainerController extends Controller
     {
         Gate::authorize('view', $container);
 
-        // En enda rad — inte N+1, men laddar ägarkontot uttryckligen ändå
-        // så ContainerResource aldrig kör en oplanerad lazy-load-fråga,
-        // samma resonemang som index() (PR #43-uppföljningen).
-        $container->loadMissing('account');
+        // En enda rad — inte N+1, men laddar ägarkontot och bilden
+        // uttryckligen ändå så ContainerResource aldrig kör en oplanerad
+        // lazy-load-fråga, samma resonemang som index() (PR #43-uppföljningen
+        // och issue 159 — `cover` läses ovillkorligt av resursen).
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         return new ContainerResource($container);
     }
@@ -154,7 +155,7 @@ class ContainerController extends Controller
         $updateContainer->handle($container, $request->user(), $request->validated());
 
         // Se show() ovan — samma resonemang, en enda rad.
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         return new ContainerResource($container);
     }

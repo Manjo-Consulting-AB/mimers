@@ -88,7 +88,7 @@ class ExportController extends Controller
     {
         Gate::authorize('view', $container);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $exports = $container->exports()
             ->orderByDesc('created_at')

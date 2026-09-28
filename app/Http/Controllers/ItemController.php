@@ -239,7 +239,7 @@ class ItemController extends Controller
     ): Response {
         Gate::authorize('view', $container);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $user = $request->user();
 
@@ -307,7 +307,7 @@ class ItemController extends Controller
         // Noden man står på, för plusknappens mål nedan. Modellen kommer ur
         // kartans upplösning — en fråga som bara valde id, ulid och namn — och
         // `ItemPolicy::allows()` läser `$item->container->account`. Containern
-        // är redan uppslagen och kontot laddat (`loadMissing('account')` ovan),
+        // är redan uppslagen och kontot laddat (`loadMissing()` ovan),
         // så att hänga den på modellen kostar inga frågor i stället för två.
         // Samma handgrepp och samma skäl som ScheduleController::store() gör
         // för sina kandidater.
@@ -502,7 +502,7 @@ class ItemController extends Controller
     {
         Gate::authorize('view', $item);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         // En enda rad, men ladda relationerna uttryckligen ändå så resursen
         // aldrig kör en oplanerad lazy-load — samma resonemang som
@@ -858,7 +858,7 @@ class ItemController extends Controller
             $canCreateRoot = true;
         }
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $tree = $resolveItemTree->handle($user, $container);
 
@@ -1054,7 +1054,7 @@ class ItemController extends Controller
     {
         Gate::authorize('update', $item);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         // En enda rad, men ladda relationerna uttryckligen ändå så resursen
         // aldrig kör en oplanerad lazy-load — samma resonemang som show().

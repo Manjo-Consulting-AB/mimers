@@ -96,7 +96,7 @@ class TrashController extends Controller
 
         $user = $request->user();
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $list = $listTrash->handle($user, $container);
 

@@ -126,7 +126,7 @@ class CategoryController extends Controller
     {
         Gate::authorize('view', $container);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $user = $request->user();
         $canManage = Gate::forUser($user)->allows('update', $container);

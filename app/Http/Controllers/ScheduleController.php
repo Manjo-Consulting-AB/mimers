@@ -144,7 +144,7 @@ class ScheduleController extends Controller
     {
         Gate::authorize('create', $item);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         return Inertia::render('Containers/Items/Schedules/Create', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -198,7 +198,7 @@ class ScheduleController extends Controller
     {
         Gate::authorize('update', $item);
 
-        $container->loadMissing('account');
+        $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         return Inertia::render('Containers/Items/Schedules/Edit', [
             'container' => ContainerResource::make($container)->resolve($request),
