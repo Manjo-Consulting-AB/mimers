@@ -399,6 +399,16 @@ class DeleteUser
         DB::table('notification_preference')->where('user_id', $userId)->delete();
         DB::table('calendar_feed')->where('user_id', $userId)->delete();
         DB::table('favorite')->where('user_id', $userId)->delete();
+
+        // Besöksraderna är personuppgifter och bara personens (issue 160 ·
+        // [[ADR-0049 Nyligen besökta]] § Beslut, [[ADR-0045 Radering av konto
+        // och person]] § Uppföljning 2026-09-27). Främmandenyckeln mot `item`
+        // är RESTRICT, så raden måste bort innan itemet kan gallras — och de
+        // items som hörde till ett konto personen var enda medlem i försvann
+        // redan i steg 2, genom PurgeContent::item(). Kvar här är besöken på
+        // items i andras containers, och de är hennes.
+        DB::table('recent_visit')->where('user_id', $userId)->delete();
+
         DB::table('dismissed_tip')->where('user_id', $userId)->delete();
         DB::table('email_change')->where('user_id', $userId)->delete();
         DB::table('password_change')->where('user_id', $userId)->delete();

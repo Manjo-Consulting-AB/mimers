@@ -12,6 +12,7 @@ use App\Models\ContainerAccess;
 use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\ItemLink;
+use App\Models\RecentVisit;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -307,6 +308,14 @@ it('en gallrad container tar med sig hela sitt innehåll', function () {
         'invited_by_user_id' => $user->id,
     ]);
 
+    // En besöksrad på itemet (issue 160 · [[ADR-0049 Nyligen besökta]]
+    // § Beslut): `recent_visit.item_id` är ON DELETE RESTRICT, så containern
+    // går inte att gallra medan raden pekar in i den.
+    $besok = new RecentVisit;
+    $besok->item_id = $item->id;
+    $besok->visited_at = now();
+    $user->recentVisits()->save($besok);
+
     containerKorgMjukradera($container, Carbon::parse('2026-08-01 12:00:00'));
 
     expect(fn () => gallringKör())->not->toThrow(Throwable::class);
@@ -320,6 +329,7 @@ it('en gallrad container tar med sig hela sitt innehåll', function () {
     expect(Tag::withTrashed()->whereKey($tagg->id)->exists())->toBeFalse();
     expect(ContainerAccess::query()->whereKey($access->id)->exists())->toBeFalse();
     expect(Invitation::query()->whereKey($inbjudan->id)->exists())->toBeFalse();
+    expect(RecentVisit::query()->whereKey($besok->id)->exists())->toBeFalse();
     expect(DB::table('item_tag')->where('item_id', $item->id)->exists())->toBeFalse();
     expect(DB::table('item_tag')->where('tag_id', $tagg->id)->exists())->toBeFalse();
     expect(DB::table('item_link')
@@ -375,12 +385,20 @@ it('gallringen faller aldrig på ett främmandenyckelfel', function () {
 
     beviljaAccess($container, $user, 'read', 'member');
 
+    // En besöksrad på itemet (issue 160): samma främmandenyckel som resten,
+    // och den faller gallringen på om PurgeContent::item() inte tar den först.
+    $besok = new RecentVisit;
+    $besok->item_id = $item->id;
+    $besok->visited_at = now();
+    $user->recentVisits()->save($besok);
+
     containerKorgMjukradera($container, Carbon::parse('2026-08-01 12:00:00'));
 
     expect(fn () => gallringKör())->not->toThrow(Throwable::class);
 
     expect(Container::withTrashed()->whereKey($container->id)->exists())->toBeFalse();
     expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+    expect(RecentVisit::query()->whereKey($besok->id)->exists())->toBeFalse();
     expect(Category::withTrashed()->whereKey($kategori->id)->exists())->toBeFalse();
     expect(Category::withTrashed()->whereKey($barn->id)->exists())->toBeFalse();
     expect(Tag::withTrashed()->whereKey($tagg->id)->exists())->toBeFalse();

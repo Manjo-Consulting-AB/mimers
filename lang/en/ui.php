@@ -88,6 +88,11 @@ return [
         // carries no other text, and a second key for the aria-label would be
         // the same word in two places.
         'favorites' => 'Favourites',
+        // The RECENTLY VISITED section in the shell, see issue 160 and
+        // [[ADR-0049 Nyligen besökta]]. Same two jobs as `favorites` above —
+        // heading and accessible name — and the row's own words about time
+        // come from the `date.*` keys, written by useRelativeDate().
+        'recent_visits' => 'Recently visited',
         // The mobile shell, see issue 151 and
         // resources/js/components/MobileTabBar.vue. `tabbar` is the bottom
         // bar's accessible name and never a visible word; `back` is the label

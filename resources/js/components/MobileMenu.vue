@@ -1,5 +1,6 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue';
+import RecentVisitList from './RecentVisitList.vue';
 import ShellSections from './ShellSections.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -9,9 +10,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Innehållet är skalets sektioner och ingenting eget.** Raderna ritas av
  * ShellSections — samma komponent som sidhuvudet över `md:` — så menyn och
- * sidopanelen visar samma sektioner i samma ordning ur samma data. Favoriterna
- * är samma sektion med samma anrop, och *Nyligen besökta* får sin plats i
- * issue 160.
+ * sidopanelen visar samma sektioner i samma ordning ur samma data.
+ * Favoriterna är samma sektion med samma anrop.
+ *
+ * **Att öppna menyn hämtar *Nyligen besökta*** (issue 160 · [[ADR-0049
+ * Nyligen besökta]] § Beslut). Listan är en optional prop i skalet, och menyn
+ * är den yta som bär den under `md:`: `:load="props.open"` gör att frågan
+ * ställs när menyn öppnas och aldrig annars. Komponenten ser själv till att
+ * den bara ställs en gång, så en stängd och åter öppnad meny inte frågar
+ * servern igen om samma lista.
  *
  * **Menyn är webbläsarens `<dialog>`** (issue 68b § Beslut 2): `showModal()`
  * ger fokusfällan, Esc stänger, och fokus lämnas tillbaka till det element som
@@ -119,6 +126,8 @@ function onClosed() {
                 </div>
 
                 <ShellSections />
+
+                <RecentVisitList :load="props.open" />
 
                 <ShellSections part="favorites" />
             </aside>

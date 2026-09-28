@@ -94,9 +94,22 @@ function personraderingContainer(Account $konto): Container
  */
 function personraderingPersonensRader(User $person, Container $container): int
 {
+    $item = Item::factory()->for($container, 'container')->create();
+
     DB::table('favorite')->insert([
         'user_id' => $person->id,
-        'item_id' => Item::factory()->for($container, 'container')->create()->id,
+        'item_id' => $item->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Besöksraden (issue 160 · [[ADR-0049 Nyligen besökta]] § Beslut): raden
+    // är personens och bara hennes, och den bär samma RESTRICT-nyckel mot
+    // `item` som favoriten gör mot samma rad.
+    DB::table('recent_visit')->insert([
+        'user_id' => $person->id,
+        'item_id' => $item->id,
+        'visited_at' => now(),
         'created_at' => now(),
         'updated_at' => now(),
     ]);
@@ -188,8 +201,8 @@ function personraderingPersonensRader(User $person, Container $container): int
         'webhook_endpoint_id' => $endpoint->id,
     ]);
 
-    // Tolv rader ovan plus notisen, leveranserna och token.
-    return 12;
+    // Tretton räknade rader: de tolv ovan plus besöksraden (issue 160).
+    return 13;
 }
 
 /**
@@ -198,6 +211,7 @@ function personraderingPersonensRader(User $person, Container $container): int
 function personraderingKvarvarandeRader(User $person): int
 {
     return (int) DB::table('favorite')->where('user_id', $person->id)->count()
+        + (int) DB::table('recent_visit')->where('user_id', $person->id)->count()
         + (int) DB::table('dismissed_tip')->where('user_id', $person->id)->count()
         + (int) DB::table('calendar_feed')->where('user_id', $person->id)->count()
         + (int) DB::table('notification_preference')->where('user_id', $person->id)->count()
@@ -277,6 +291,47 @@ it('personens egna rader raderas, och ingen främmandenyckel lämnas kvar', func
         // Containern personen hade åtkomst till är orörd — det var bara
         // åtkomsten som var hennes.
         ->and(Container::query()->whereKey($frammande->id)->exists())->toBeTrue();
+});
+
+/*
+ * Klart när: personraderingen tar bort besöksraderna — även de som pekar på
+ * någon ANNANS item.
+ *
+ * Raden i personens egen container försvinner redan med kontot:
+ * DeleteAccount gallrar items genom PurgeContent::item(), och den metoden tar
+ * besöksraderna (issue 160). Det är därför den FRÄMMANDE raden är provet —
+ * den bär personens `user_id` och en RESTRICT-nyckel mot ett item som står
+ * kvar, och bara DeleteUser:s eget steg kan ta den.
+ */
+it('personens besöksrader raderas även på någon annans item', function () {
+    $person = User::factory()->create();
+    $konto = personraderingEgetKonto($person);
+    personraderingContainer($konto);
+
+    $agare = Account::factory()->create();
+    $frammande = personraderingContainer($agare);
+    $item = Item::factory()->for($frammande, 'container')->create([
+        'created_by_user_id' => User::factory()->create()->id,
+        'created_by_account_id' => $agare->id,
+    ]);
+
+    beviljaAccess($frammande, $person, 'read', 'guest');
+
+    DB::table('recent_visit')->insert([
+        'user_id' => $person->id,
+        'item_id' => $item->id,
+        'visited_at' => now(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    app(DeleteUser::class)->handle($person);
+
+    expect(User::query()->whereKey($person->id)->exists())->toBeFalse()
+        ->and(DB::table('recent_visit')->where('item_id', $item->id)->exists())->toBeFalse()
+        // Itemet är någon annans och står kvar — det var bara besöksraden som
+        // var personens.
+        ->and(Item::query()->whereKey($item->id)->exists())->toBeTrue();
 });
 
 /*
