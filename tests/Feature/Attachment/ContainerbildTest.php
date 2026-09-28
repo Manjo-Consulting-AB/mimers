@@ -41,7 +41,11 @@ use function Pest\Laravel\withoutVite;
  * 1. **CHECK-villkoret körs bara mot MariaDB.** sqlite kan inte lägga till ett
  *    CHECK i efterhand, så provet hoppar över där — och CI:s migreringsjobb
  *    kör därför den här filen mot MariaDB, se .github/workflows/migreringar.yml.
- *    Ett prov som aldrig kör är ingen bevisning.
+ *    Ett prov som aldrig kör är ingen bevisning. Av samma skäl varnar
+ *    röd-på-bas-kontrollen för just det provet: den kör sviten mot sqlite, där
+ *    provet hoppas över och alltså går igenom oavsett implementation. Det är
+ *    inte ett svagt prov utan ett prov i fel miljö för den kontrollen —
+ *    bevisningen är migreringsjobbet, som kör filen mot MariaDB 10.6.
  * 2. **Byten räknas mot det UPPLADDANDE kontot** och `reference_count` rörs
  *    bara av den gamla bildens rensning — exakt en gång.
  * 3. **En containerbild är alltid en bild.** Ett dokument avvisas av
