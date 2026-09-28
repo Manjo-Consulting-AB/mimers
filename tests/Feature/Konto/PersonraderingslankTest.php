@@ -249,6 +249,8 @@ it('renderar en egen sida med 404 för ett okänt token', function () {
         ->assertNotFound()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Settings/UserDeletionLinkInvalid'));
+
+    post($okänt)->assertNotFound();
 });
 
 it('ger 404 för ett utgånget token, och raderar ingenting på POST', function () {
