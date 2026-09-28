@@ -1,6 +1,6 @@
 # ADR-0045 Radering av konto och person
 
-**Status:** Antagen 2026-09-26 · Besvarar tre frågor i [[Tankar]] från granskningen av issue 29b · Bygger vidare på [[ADR-0009 Kvoter och livscykel]] och [[ADR-0043 Tre loggar]] · Uppföljning 2026-09-27 om nyligen besökta och containerns bild · [[ADR-index]]
+**Status:** Antagen 2026-09-26 · Besvarar tre frågor i [[Tankar]] från granskningen av issue 29b · Bygger vidare på [[ADR-0009 Kvoter och livscykel]] och [[ADR-0043 Tre loggar]] · Uppföljning 2026-09-27 om nyligen besökta och containerns bild · Uppföljning 2026-09-28 om länken som bär sig själv · [[ADR-index]]
 
 Tonys beslut 2026-09-26, vid planeringen av [[M22 Redo för testare]].
 
@@ -94,3 +94,38 @@ Två beslut i [[M23 Mobilen och kartan]] lägger till rader som raderingen måst
 - **En containerbilaga följer containern** ([[ADR-0047 Containerns bild]]). Beslut 1 gäller den på samma sätt som en itembilaga: betalar det raderade kontot för en bild på en annans container, får containerns ägarkonto den som `billed_account_id`.
 
 Båda byggs i sina egna issues, § 158 och § 160, och prövas där mot `DeleteUser` och `DeleteAccount`.
+
+## Uppföljning 2026-09-28 — länken bär sig själv
+
+Tonys beslut 2026-09-28, med anledning av testarens bugg #577. Det ersätter regeln i [[M22 Redo för testare]] § 145 om att länken måste öppnas av samma inloggade användare.
+
+**Felet.** § 145 lade `GET /settings/delete-user/{token}` i `auth`-gruppen och krävde samma inloggade person. En testare som öppnade länken i mejlappens inbyggda webbläsare, eller på en annan enhet, hamnade på `/login`. Loggade hen in med en magic link som öppnades i ännu en webbläsare tappades `url.intended`, och raderingen kördes aldrig. Det gav alla tre symptomen i #577: ingen kvittens, andra sessioner levde vidare, och datan fanns kvar. Lyckovägen i `PersonraderingsytaTest` var grön, men den prövade bara det fall där länken öppnades i samma inloggade session.
+
+### 1. Tokenet räcker
+
+Länken kräver ingen inloggning. Den som når brevlådan får genomföra raderingen, i linje med § Motivering ovan: den som sitter i en kapad session kan begära raderingen, men bara den som når brevlådan kan genomföra den. Är någon annan inloggad i webbläsaren spelar det ingen roll — tokenet avgör vem som raderas, och den inloggades egen session rörs inte.
+
+`GET` och `POST` flyttas därför ut ur `auth`-gruppen men stannar i `web`. Ingen takgräns: tokenet är 64 tecken ur ett 62-teckensalfabet, samma resonemang som för `/settings/profile/email/{token}`. Begäran, `POST /settings/delete-user`, ligger kvar i `auth`-gruppen oförändrad.
+
+### 2. `GET` raderar ingenting
+
+`GET /settings/delete-user/{token}` renderar `Settings/ConfirmUserDeletion` med samma tre listor som säkerhetssidan — `accountsToDelete`, `accountsToLeave` och `blockers`, ur `DeleteUser` — för tokenets person, plus en knapp. Finns en spärr är knappen avstängd och spärren visas, precis som i `UserDeletionForm.vue`.
+
+Mellansteget behövs av två skäl: en mejlskanner som förhandshämtar länkar gör en `GET` och får inte radera någon, och `POST`:en får en CSRF-skyddad sida att utgå ifrån.
+
+### 3. `POST` raderar
+
+`POST /settings/delete-user/{token}` raderar. Spärrarna prövas igen i `DeleteUser::handle()`. Vid en spärr: tillbaka till `GET`-sidan för samma token med `status` = `user-deletion-blocked`. Tokenet är då **inte** förbrukat, eftersom `confirmed_at` rullas tillbaka med transaktionen som i dag.
+
+Vid lyckad radering: tillhör den aktuella sessionen den raderade personen loggas den ut (`logout`, `invalidate`, `regenerateToken`). Sedan redirect till `/` med `status` = `user-deleted`. Kvittensen visas för en gäst också — den som raderat sig har ingen session kvar, och den som var inloggad som någon annan är fortfarande inloggad.
+
+### 4. En ogiltig länk ger `404`
+
+Okänt token, utgånget, redan använt, eller en person som inte längre finns: `404`, både på `GET` och `POST`. `GET` renderar `Settings/UserDeletionLinkInvalid` med en mening om att länken har gått ut eller redan använts, och att en ny begäran görs under Inställningar → Säkerhet. Sidan avslöjar inte vilken av orsakerna det är, och inte vems token det var — samma skäl som gör att `ConfirmUserDeletion` inte skiljer fallen åt: ett "finns inte" mot ett "är redan använt" är en orakelyta mot giltiga token.
+
+### Konsekvenser
+
+- `ConfirmUserDeletion::handle()` tar ett token och ingen `User`, och returnerar den raderade modellen så att kontrollern kan jämföra med `$request->user()`. En ny metod, `ConfirmUserDeletion::pending()`, ger personen bakom ett giltigt token utan att röra raden, och bär `GET`-sidan.
+- Mejlet är oförändrat. Det pekar fortfarande på samma adress.
+- Listan och spärrarna skrivs en gång: `resources/js/components/UserDeletionSummary.vue`, som både säkerhetssidan och bekräftelsesidan använder.
+- Beslut 3 ovan står kvar i övrigt. Det är bara kravet på samma inloggade användare som faller.

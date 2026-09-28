@@ -10,31 +10,27 @@ use App\Support\User\DeletionBlocker;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
-use function Pest\Laravel\assertGuest;
 use function Pest\Laravel\from;
-use function Pest\Laravel\get;
-use function Pest\Laravel\travel;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 145 · Personraderingen i inställningarna. Se
+ * Issue 145 · Personraderingens yta i inställningarna. Se
  * app/Http/Controllers/Settings/UserDeletionController.php,
  * app/Actions/User/RequestUserDeletion.php,
- * app/Actions/User/ConfirmUserDeletion.php,
  * resources/js/components/UserDeletionForm.vue,
  * [[M22 Redo för testare]] § 145 och [[ADR-0045 Radering av konto och
  * person]] § Beslut 3.
  *
- * Varje "Klart när"-punkt i issuen motsvarar ett namngivet test här.
- *
- * **Två anrop och det är hela poängen:** POST begär, GET bekräftar.
- * Personraderingen sker aldrig i samma steg som den begärs, och därför prövar
- * proven nedan både att begäran lämnar `user`-raden orörd och att bara länken
- * i mejlet raderar.
+ * **Två anrop, och det första är det här filens:** POST
+ * /settings/delete-user begär, och lämnar `user`-raden orörd. Länken i mejlet
+ * — bekräftelsesidan och raderingen — prövas i
+ * tests/Feature/Konto/PersonraderingslankTest.php sedan 2026-09-28, då den
+ * vägen slutade kräva inloggning ([[ADR-0045 Radering av konto och person]]
+ * § Uppföljning 2026-09-28). Hjälparna `raderingsyta*` nedan används av båda
+ * filerna.
  *
  * Själva raderingen — kontona, författarkolumnerna, loggraden — prövas i
  * tests/Feature/Konto/PersonraderingTest.php (issue 144). Den här filen prövar
@@ -306,154 +302,40 @@ it('vägrar begäran utan giltig kod när tvåfaktorn är på', function () {
     expect(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(1);
 });
 
-it('gör den tidigare länken ogiltig när en ny begäran görs', function () {
-    Notification::fake();
+// --- Komponenten ----------------------------------------------------------
 
-    $person = User::factory()->create();
-    raderingsytaEgetKonto($person);
+/*
+ * Klart när: säkerhetssidan visar listan och spärrarna som förut, nu genom
+ * UserDeletionSummary.vue. Provet läser filerna och inte en rendering: det
+ * som ska vara sant är att listorna ritas på ETT ställe och används av båda
+ * ytorna, och det syns bara i källkoden.
+ */
+it('ritar listan och spärrarna med UserDeletionSummary', function () {
+    $formulär = File::get(resource_path('js/components/UserDeletionForm.vue'));
+    $bekräftelse = File::get(resource_path('js/pages/Settings/ConfirmUserDeletion.vue'));
+    $sammanfattning = File::get(resource_path('js/components/UserDeletionSummary.vue'));
 
-    actingAs($person);
+    expect($formulär)->toContain("import UserDeletionSummary from './UserDeletionSummary.vue'")
+        ->and($formulär)->toContain('<UserDeletionSummary')
+        // Spärrens rubrik och mening är formulärets egna: det är BEGÄRAN som
+        // inte kan göras, och bekräftelsesidan säger samma sak om raderingen.
+        ->and($formulär)->toContain('settings.security.deletion.blocked')
+        // Och den gemensamma komponenten används av båda ytorna.
+        ->and($bekräftelse)->toContain("import UserDeletionSummary from '../../components/UserDeletionSummary.vue'")
+        ->and($bekräftelse)->toContain('<UserDeletionSummary')
+        // Klart när: spärren stänger av knappen på bekräftelsesidan. En
+        // avstängd knapp hindrar ett klick men inte Enter i ett fält, och
+        // därför vaktar submit() också — samma två rader som i formuläret.
+        ->and($bekräftelse)->toContain('const blocked = computed(() => props.deletion.blockers.length > 0)')
+        ->and($bekräftelse)->toContain(':disabled="blocked || form.processing"')
+        ->and($bekräftelse)->toContain('if (blocked.value) {');
 
-    $första = raderingsytaBegär($person);
-
-    travel(1)->minutes();
-
-    $andra = raderingsytaBegär($person);
-
-    // Den gamla länken slutar gälla direkt, och den nya gäller. Raden ligger
-    // kvar — den är beviset på att begäran gjordes — men `expires_at` sattes
-    // till nu, och `isFuture()` är strängt.
-    get($första)->assertNotFound();
-
-    expect(User::query()->whereKey($person->id)->exists())->toBeTrue();
-
-    get($andra)->assertRedirect('/');
-
-    expect(User::query()->whereKey($person->id)->exists())->toBeFalse();
-});
-
-// --- Länken --------------------------------------------------------------
-
-it('raderar personen, avslutar sessionen och kvitterar på startsidan', function () {
-    Notification::fake();
-
-    $person = User::factory()->create(['password_hash' => 'losenord']);
-    $konto = raderingsytaEgetKonto($person);
-
-    actingAs($person);
-
-    $länk = raderingsytaBegär($person);
-
-    get($länk)
-        ->assertRedirect('/')
-        ->assertSessionHas('status', 'user-deleted');
-
-    assertGuest();
-
-    // Personen, kontot där hon var ensam, och raden som bar bekräftelsen.
-    expect(User::query()->whereKey($person->id)->exists())->toBeFalse()
-        ->and(Account::query()->whereKey($konto->id)->exists())->toBeFalse()
-        ->and(UserDeletion::query()->where('user_id', $person->id)->count())->toBe(0);
-});
-
-it('fungerar inte efter en timme', function () {
-    Notification::fake();
-
-    $person = User::factory()->create();
-    raderingsytaEgetKonto($person);
-
-    actingAs($person);
-
-    $länk = raderingsytaBegär($person);
-
-    travel(61)->minutes();
-
-    get($länk)->assertNotFound();
-
-    expect(User::query()->whereKey($person->id)->exists())->toBeTrue();
-});
-
-it('fungerar bara en gång', function () {
-    $person = User::factory()->create();
-
-    actingAs($person);
-
-    // En förbrukad rad, som den ser ut efter en genomförd radering. Provet
-    // ställer upp tillståndet direkt: i det verkliga flödet raderas raden med
-    // personen, så en andra öppning är en gäst och möts av /login i stället.
-    // Grenen finns för säkerhets skull, och den ska svara som ett okänt token.
-    $raw = Str::random(64);
-
-    UserDeletion::query()->create([
-        'user_id' => $person->id,
-        'token_hash' => hash('sha256', $raw),
-        'expires_at' => now()->addHour(),
-        'confirmed_at' => now(),
-    ]);
-
-    get(route('settings.delete-user.confirm', ['token' => $raw]))->assertNotFound();
-
-    expect(User::query()->whereKey($person->id)->exists())->toBeTrue();
-});
-
-it('ger en annan inloggad användare 404 och raderar ingenting', function () {
-    Notification::fake();
-
-    $person = User::factory()->create();
-    raderingsytaEgetKonto($person);
-
-    actingAs($person);
-
-    $länk = raderingsytaBegär($person);
-
-    $annan = User::factory()->create();
-    actingAs($annan);
-
-    // Samma svar som för ett okänt token: skillnaden mellan "någon annans
-    // länk" och "ingen länk alls" får inte synas.
-    get($länk)->assertNotFound();
-
-    expect(User::query()->whereKey($person->id)->exists())->toBeTrue()
-        ->and(UserDeletion::query()->where('user_id', $person->id)->whereNull('confirmed_at')->count())->toBe(1);
-});
-
-it('stoppar raderingen när en spärr uppstått mellan begäran och länken', function () {
-    Notification::fake();
-
-    $person = User::factory()->create();
-    $konto = raderingsytaEgetKonto($person);
-
-    actingAs($person);
-
-    $länk = raderingsytaBegär($person);
-
-    // Spärren uppstår EFTER begäran: en container i kontot får en aktiv
-    // medlem. Begäran kunde tas emot — spärren fanns inte då.
-    $container = raderingsytaContainer($konto);
-    $atkomst = beviljaAccess($container, Account::factory()->create(), 'read', 'managed');
-
-    get($länk)
-        ->assertRedirect('/settings/security')
-        ->assertSessionHas('status', 'user-deletion-blocked');
-
-    expect(User::query()->whereKey($person->id)->exists())->toBeTrue()
-        ->and(Account::query()->whereKey($konto->id)->exists())->toBeTrue();
-
-    // Förbrukningen rullades tillbaka med allt annat: ingenting hände, och
-    // länken är fortfarande lösbar. Spärren kan ju hävas inom timmen.
-    expect(UserDeletion::query()
-        ->where('user_id', $person->id)
-        ->whereNull('confirmed_at')
-        ->count())->toBe(1);
-
-    // Hävs spärren går samma länk igenom. `revoked_at` är inte `#[Fillable]`
-    // (ContainerAccess § docblock: återkallningen har en egen åtgärd), så
-    // raden skrivs direkt — samma väg som gallringen tar.
-    DB::table('container_access')->where('id', $atkomst->id)->update(['revoked_at' => now()]);
-
-    get($länk)->assertRedirect('/');
-
-    expect(User::query()->whereKey($person->id)->exists())->toBeFalse();
+    // Listorna står i sammanfattningen och ingen annanstans — en avskrift i
+    // någon av ytorna hade varit en andra sanning om vad raderingen gör.
+    expect($sammanfattning)->toContain('settings.security.deletion.accounts_deleted_heading')
+        ->and($sammanfattning)->toContain('settings.security.deletion.accounts_left_heading')
+        ->and($formulär)->not->toContain('accounts_deleted_heading')
+        ->and($bekräftelse)->not->toContain('accounts_deleted_heading');
 });
 
 // --- Raden ---------------------------------------------------------------

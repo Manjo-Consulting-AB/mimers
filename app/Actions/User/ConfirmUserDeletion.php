@@ -9,27 +9,42 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Genomför en begärd personradering, se [[M22 Redo för testare]] § 145 och
- * [[Konton och åtkomst]] § user_deletion. Anropas när länken i mejlet till
- * `user.email` öppnas — det är först här någonting raderas.
+ * Personraderingen bakom länken i mejlet, se [[M22 Redo för testare]] § 145,
+ * [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-09-28 och
+ * [[Konton och åtkomst]] § user_deletion.
+ *
+ * **Tokenet är beviset, och det räcker.** Sedan Tonys beslut 2026-09-28
+ * (ADR-0045 § Uppföljning 2026-09-28, beslut 1) kräver länken ingen
+ * inloggning: den som når brevlådan får genomföra raderingen. Är någon ANNAN
+ * inloggad i webbläsaren spelar det ingen roll — tokenet avgör vem som raderas,
+ * och den inloggade förblir inloggad. Före beslutet jämfördes tokenet mot
+ * `$request->user()`, och en testare som öppnade länken i mejlappens inbyggda
+ * webbläsare möttes av `/login` och fick aldrig sin radering (bugg #577).
+ *
+ * **Två ingångar, och bara den ena rör raden.** `pending()` svarar på vem
+ * länken gäller och läser raden utan att skriva någonting — den bär `GET`-sidan,
+ * som visar vad en radering skulle göra och ingenting mer. `handle()` förbrukar
+ * tokenet och raderar. Mellansteget är inte bara artigt: en mejlskanner som
+ * förhandshämtar länkar gör en `GET`, och en `GET` som raderade hade låtit en
+ * skanner radera ett konto.
  *
  * **Fyra saker gör att länken inte gäller, och de ger alla samma svar.**
- * Tokenet finns inte, det hör till en annan användare, det har gått ut, eller
- * det är redan förbrukat. Skillnaden mellan dem får inte synas: en gissad
- * tokensträng ska inte kunna skiljas från en utgången, och en annan inloggad
- * användare ska inte kunna avgöra om länken var någon annans (issuens
- * flödespunkt 3). Alla fyra blir `404`, och det är därför ingen av dem får en
- * egen felväg. Samma form som App\Actions\Account\ConfirmPasswordChange.
+ * Tokenet finns inte, det har gått ut, det är redan förbrukat, eller personen
+ * bakom det finns inte längre. Skillnaden mellan dem får inte synas: en gissad
+ * tokensträng ska inte kunna skiljas från en utgången, och en okänd länk ska
+ * inte avslöja vems den var. Alla blir `404` — se
+ * App\Http\Controllers\Settings\UserDeletionController, som renderar samma
+ * sida för samtliga. Samma form som App\Actions\Account\ConfirmPasswordChange.
  *
- * **Kontrollen är två steg, och det andra är det som räknas.** Den här
- * metoden läser raden och kontrollerar tillståndet — men det som faktiskt
- * förbrukar tokenet är en VILLKORLIG UPDATE (`whereNull('confirmed_at')` och
+ * **Kontrollen är två steg, och det andra är det som räknas.** `pending()`
+ * läser raden och kontrollerar tillståndet — men det som faktiskt förbrukar
+ * tokenet är en VILLKORLIG UPDATE (`whereNull('confirmed_at')` och
  * `expires_at` i framtiden), och den ligger inuti transaktionen. Två samtidiga
  * klick på samma länk kan därför aldrig båda lyckas: databasen serialiserar
  * UPDATE-satser mot samma rad, och den andra får noll träffar och ett 404.
  *
  * **Spärrarna prövas av `DeleteUser`, inte här.** Det är samma enda
- * formulering som ytan läste innan begäran gjordes, och den ligger i
+ * formulering som ytorna läste innan länken öppnades, och den ligger i
  * `DeleteUser::handle()` — en kontroll som förlitar sig på att anroparen
  * gjorde rätt är ingen kontroll. Skillnaden mot begäran är att den nu är
  * auktoritativ: en spärr som uppstått mellan begäran och länken stoppar
@@ -47,6 +62,11 @@ use Illuminate\Support\Facades\DB;
  * **`DeleteUser` äger hela raderingen.** Ordningen, kontona, författarkolumnerna
  * och loggraden `user.deleted` står i dess docblock och rörs inte här; den
  * här actionen är bara den villkorliga förbrukningen framför den.
+ *
+ * **Den raderade modellen returneras.** `handle()` ger `user`-raden som den
+ * såg ut, så att anroparen kan avgöra om den aktuella sessionen var den
+ * raderades — och bara då logga ut den (ADR-0045 § Uppföljning 2026-09-28,
+ * beslut 3).
  */
 class ConfirmUserDeletion
 {
@@ -55,28 +75,42 @@ class ConfirmUserDeletion
     ) {}
 
     /**
+     * Personen bakom ett giltigt, obekräftat och ej utgånget token — utan att
+     * röra raden.
+     *
+     * `null` för alla fallen i docblocket ovan, och det är anroparens `404`.
+     * Ingen jämförelse mot en inloggad användare: tokenet är hela beviset.
+     */
+    public function pending(string $rawToken): ?User
+    {
+        return $this->validDeletion($rawToken)?->user;
+    }
+
+    /**
+     * Förbruka tokenet och radera personen.
+     *
      * @param  string  $rawToken  Klartexten ur länken. Hashen är det enda
      *                            som finns i databasen.
+     * @return User Den raderade modellen. Raden är borta; modellen bär
+     *              fortfarande sitt id, så anroparen kan jämföra den med
+     *              `$request->user()`.
      *
-     * @throws ModelNotFoundException Tokenet är okänt, utgånget, förbrukat,
-     *                                eller hör till en annan användare. Blir
-     *                                `404` och ingenting annat.
+     * @throws ModelNotFoundException Tokenet är okänt, utgånget eller
+     *                                förbrukat. Blir `404` och ingenting
+     *                                annat.
      * @throws UserDeletionBlocked En spärr står i vägen. Ingenting har
      *                             raderats, och länken är fortfarande
      *                             lösbar.
      */
-    public function handle(User $user, string $rawToken): void
+    public function handle(string $rawToken): User
     {
-        $deletion = UserDeletion::query()
-            ->where('token_hash', hash('sha256', $rawToken))
-            ->first();
+        $deletion = $this->validDeletion($rawToken);
 
-        if (! $deletion instanceof UserDeletion
-            || $deletion->user_id !== $user->id
-            || $deletion->isConfirmed()
-            || $deletion->isExpired()) {
+        if (! $deletion instanceof UserDeletion) {
             $this->notFound();
         }
+
+        $user = $deletion->user;
 
         DB::transaction(function () use ($deletion, $user): void {
             // Förbrukningen: noll träffar betyder att en annan request hann
@@ -101,12 +135,37 @@ class ConfirmUserDeletion
             // transaktionen — förbrukningen ovan med den.
             $this->deleteUser->handle($user);
         });
+
+        return $user;
     }
 
     /**
-     * Samma svar för alla fyra fallen, och samma klass som ramverket självt
-     * kastar när en modell inte hittas — Laravels undantagshanterare gör
-     * `404` av den, i både webb och API, utan en egen felsida.
+     * Raden bakom tokenet, om den gäller. `null` för okänt, utgånget och
+     * förbrukat — de tre får inte gå att skilja åt, och `pending()` och
+     * `handle()` ställer därför samma fråga.
+     *
+     * Ingen `User`-parameter: personen följer med raden, och det är
+     * skillnaden mot flödet före 2026-09-28.
+     */
+    private function validDeletion(string $rawToken): ?UserDeletion
+    {
+        $deletion = UserDeletion::query()
+            ->where('token_hash', hash('sha256', $rawToken))
+            ->first();
+
+        if (! $deletion instanceof UserDeletion
+            || $deletion->isConfirmed()
+            || $deletion->isExpired()) {
+            return null;
+        }
+
+        return $deletion;
+    }
+
+    /**
+     * Samma svar för alla fall, och samma klass som ramverket självt kastar
+     * när en modell inte hittas — Laravels undantagshanterare gör `404` av
+     * den, i både webb och API, utan en egen felsida.
      *
      * Inget id följer med modellnamnet: undantagets mening hamnar i loggen,
      * och varken tokenet eller dess hash har där att göra.
