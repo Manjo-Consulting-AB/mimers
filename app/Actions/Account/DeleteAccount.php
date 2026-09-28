@@ -8,8 +8,10 @@ use App\Actions\Usage\AdjustUsage;
 use App\Models\Account;
 use App\Models\AuditLog;
 use App\Models\Container;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Raderar ett konto — sista steget i kontolivscykeln (issue 29b). Se
@@ -33,7 +35,8 @@ use Illuminate\Support\Facades\Log;
  * 3. författarkolumnerna mot kontot nollställs (ADR-0045 § Beslut 2) — samma
  *    skäl: raden är någon annans innehåll och står kvar, utan avsändare,
  * 4. varje container kontot äger, genom PurgeContainer — med withTrashed(),
- *    en mjukraderad container ska också bort,
+ *    en mjukraderad container ska också bort — och exportraderna på dem med
+ *    sina artefakter (issue 579, se raderaContainerExporter()),
  * 5. ägarbyten där kontot är avsändare eller mottagare, och åtkomster som
  *    getts till kontot — raderna på kontots EGNA containers tog steg 4,
  *    kvar är de på någon annans (ADR-0045 § Beslut 3),
@@ -123,6 +126,19 @@ class DeleteAccount
                     ->orWhereIn('attachment.container_id', $containerIds))
                 ->sum('stored_file.byte_size');
 
+            // Exportraderna på kontots EGNA containers (issue 579). Raden är
+            // en beställning och håller sin container med ON DELETE RESTRICT;
+            // den hör till containern och följer den i graven, precis som
+            // bilagorna och notiserna i PurgeContainer. Utan den här raden
+            // faller `forceDelete()` nedan på ett främmandenyckelfel, och
+            // ingen container som någon exporterat går att radera.
+            //
+            // Bara de EGNA: en export i någon annans container står kvar och
+            // får sin `requested_by_user_id` nollställd av personraderingen
+            // (ADR-0045 § Beslut 2). Det är därför raden sitter här och inte
+            // bland personens egna rader — den hör till containern.
+            $this->raderaContainerExporter($containerIds);
+
             foreach ($containers as $container) {
                 $this->purgeContainer->handle($container);
             }
@@ -203,6 +219,40 @@ class DeleteAccount
 
             DB::table('account')->where('id', $accountId)->delete();
         });
+    }
+
+    /**
+     * ADR-0045 § Beslut 3: innehållet i kontots egna containers raderas med
+     * containern. Exportraderna hör dit — `export.container_id` är ON DELETE
+     * RESTRICT, och `PurgeContainer` känner inte tabellen, så utan den här
+     * raden går ingen container som någon exporterat att ta bort (issue 579).
+     *
+     * **Artefakten tas med, och det är därför raden ligger här och inte i
+     * `PurgeContainer`:** en `stored_file` överlever sin bilaga med
+     * `purge_after` och städas av `PurgesExpiredStoredFiles`, men en
+     * exportfil har ingen sådan kö — `export.storage_path` är den enda
+     * pekaren, och när raden försvinner finns ingen kvar som kan nå filen.
+     * `PurgesExpiredExports` tar samma fil när den gallrar en `ready`-rad, av
+     * samma skäl.
+     *
+     * **Samma lucka finns i papperskorgens väg** (`PurgesExpiredTrash` →
+     * `PurgeContainer::handle()`), som inte går genom den här actionen. Den
+     * är utanför den här issuen och står i PR:ens frågor.
+     *
+     * @param  Collection<int, int>  $containerIds
+     */
+    private function raderaContainerExporter(Collection $containerIds): void
+    {
+        $sökvägar = DB::table('export')
+            ->whereIn('container_id', $containerIds)
+            ->whereNotNull('storage_path')
+            ->pluck('storage_path');
+
+        foreach ($sökvägar as $sökväg) {
+            Storage::disk('files')->delete((string) $sökväg);
+        }
+
+        DB::table('export')->whereIn('container_id', $containerIds)->delete();
     }
 
     /**
