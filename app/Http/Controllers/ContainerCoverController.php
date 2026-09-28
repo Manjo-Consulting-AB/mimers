@@ -6,6 +6,7 @@ use App\Actions\Container\RemoveContainerCover;
 use App\Actions\Container\SetContainerCover;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\ContainerCoverRequest;
+use App\Models\Account;
 use App\Models\Container;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Plan\Entitlements;
@@ -25,22 +26,29 @@ use RuntimeException;
  * App\Actions\Container\RemoveContainerCover nollställer pekaren och rensar
  * bilagan. Den här kontrollern anropar dem, den skriver inte om dem.
  *
- * **Kontot som betalar är containerns ägarkonto, inte ett fält i kroppen.**
- * En container har exakt en ägare, och ägaren är ett konto (AGENTS.md §
- * Sådant som är lätt att göra fel). Arket som öppnar uppladdningen har tre
- * rader och ingen kontoväljare (ADR-0047 § Beslut), så det finns ingen yta
- * som kunde välja ett annat konto — och samma regel som för PATCH
- * /containers/{container}: containerns egna uppgifter ändras genom
- * containerns egen rutt, utan ett konto i kroppen. Se
- * App\Http\Requests\Container\ContainerCoverRequest.
+ * **Kontot som betalar är det UPPLADDANDE kontot, och det kommer ur kroppen.**
+ * `billed_account_id` är det uppladdande kontot, och bytena räknas mot dess
+ * kvot ([[ADR-0047 Containerns bild]] § Beslut) — inte containerns ägarkonto.
+ * En container-bred `write`-mottagare som är främmande för ägarkontot belastar
+ * sitt EGET konto; annars vore varje mottagares uppladdning en väg in i
+ * ägarkontots kvot, vilket är exakt den vektor [[ADR-0017 Missbruksvektorer]]
+ * stänger. Kontot kommer i fältet `account` ur
+ * App\Http\Requests\Container\ContainerCoverRequest — samma fält, samma regel
+ * och samma medlemsprövning som webbens itembilaga i
+ * App\Http\Controllers\AttachmentController: en ULID som inte finns är ett
+ * valideringsfel, ett konto användaren inte är medlem i är 403. Arket
+ * (resources/js/components/ContainerCoverSheet.vue) skickar samma förval som
+ * itemets uppladdning, dolt; det har fortfarande tre rader och ingen
+ * kontoväljare (ADR-0047 § Beslut).
  *
- * **Tre grindar, och den första är behörigheten.** `ContainerPolicy::update`
+ * **Fyra grindar, och den första är behörigheten.** `ContainerPolicy::update`
  * — samma pinne som att byta containerns namn — prövas först, så en användare
  * som inte får ändra containern får 403 och aldrig veta något om kontots
  * kvot (samma ordning som App\Http\Controllers\AttachmentController § Beslut
- * 4 och 5). Actionen prövar samma grind en gång till; den ligger där för att
- * den är ytan för varje anropare, och en andra prövning av samma policy är
- * billigare än två formuleringar av samma regel.
+ * 4 och 5). Sedan medlemsprövningen på det anropade kontot. Actionen prövar
+ * samma container-grind en gång till; den ligger där för att den är ytan för
+ * varje anropare, och en andra prövning av samma policy är billigare än två
+ * formuleringar av samma regel.
  *
  * **Kvot- och storleksfel blir formulärfel, aldrig en JSON-kropp** (Beslut 5).
  * App\Support\Plan\Entitlements kastar App\Exceptions\Api\ApiException, som
@@ -76,7 +84,15 @@ class ContainerCoverController extends Controller
     ): RedirectResponse {
         Gate::authorize('update', $container);
 
-        $container->loadMissing('account');
+        // Kontot som betalar är det uppladdande kontot (ADR-0047 § Beslut).
+        // Uppslagsformen och medlemsprövningen är
+        // App\Http\Controllers\AttachmentController:s, ordagrant: samma
+        // fält, samma 404-fria validering och samma 403.
+        $account = Account::where('ulid', $request->validated('account'))->firstOrFail();
+
+        if (! $account->users()->whereKey($request->user()->id)->exists()) {
+            abort(403);
+        }
 
         $file = $request->file('file');
         assert($file instanceof UploadedFile); // krävd och storleksvaliderad i requesten ovan
@@ -90,10 +106,10 @@ class ContainerCoverController extends Controller
             // Styckstorleken prövas bara här; totalkvoten prövas här som en
             // billig avvisning och en gång till, auktoritativt, inne i
             // StoreAttachments transaktion (issue 27b § Beslut 4).
-            $entitlements->assertFileWithinLimit($container->account, $byteSize);
-            $entitlements->assertStorageWithinLimit($container->account, $byteSize);
+            $entitlements->assertFileWithinLimit($account, $byteSize);
+            $entitlements->assertStorageWithinLimit($account, $byteSize);
 
-            $setContainerCover->handle($container, $file, $request->user(), $container->account);
+            $setContainerCover->handle($container, $file, $request->user(), $account);
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['file' => $translator->message($e)]);
         }

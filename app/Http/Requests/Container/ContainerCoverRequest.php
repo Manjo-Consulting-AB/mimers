@@ -3,22 +3,37 @@
 namespace App\Http\Requests\Container;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * POST /containers/{container}/cover — containerns bild, se [[ADR-0047
  * Containerns bild]] § Beslut och [[M23 Mobilen och kartan]] § 159.
  * multipart/form-data, en fil per anrop i fältet `file`.
  *
- * **Formen är StoreAttachmentRequest:s, och skillnaden är vad som INTE står
- * här.** Ingen `account`-regel: en containerbild hör till containern, och
- * containern har exakt en ägare (AGENTS.md § Sådant som är lätt att göra fel).
- * Kontot som betalar är därför containerns eget och slås upp på servern i
- * App\Http\Controllers\ContainerCoverController — ett fält i kroppen hade
- * varit ett val utan yta, för arket som öppnar uppladdningen
- * (resources/js/components/ContainerCoverSheet.vue) har tre rader och ingen
- * kontoväljare (ADR-0047 § Beslut: *Ta ett foto*, *Välj från enheten* och
- * *Ta bort bilden*). Samma linje som PATCH /containers/{container}, vars
- * request heller aldrig tar emot ett konto.
+ * **Formen är StoreAttachmentRequest:s, och `account` står här av samma skäl
+ * som där.** Kontot som betalar för bytena är det UPPLADDANDE kontot
+ * ([[ADR-0047 Containerns bild]] § Beslut: *"`billed_account_id` är det
+ * uppladdande kontot, och bytena räknas mot dess kvot"*, och samma regel i
+ * [[ADR-0003 Åtkomstmodell]], [[Filer och lagring]] § attachment och [[Planer
+ * och kvoter]]). Det är inte containerns ägarkonto: en container-bred
+ * `write`-mottagare som är främmande för ägarkontot skulle annars belasta
+ * ägarkontots kvot med sina egna byten, vilket är exakt den vektor
+ * [[ADR-0017 Missbruksvektorer]] stänger.
+ *
+ * Arket har fortfarande TRE rader och ingen kontoväljare (ADR-0047 § Beslut,
+ * sista stycket). Fältet är alltså inte ett val någon gör i vyn:
+ * resources/js/components/ContainerCoverSheet.vue skickar samma förval som
+ * itemets bilageuppladdning (resources/js/components/ItemAttachmentSection.vue)
+ * — containerns ägarkonto när användaren är medlem i det, annars hennes eget
+ * första konto — och fältet ligger dolt. Servern prövar medlemskapet och nekar
+ * ett konto användaren inte är medlem i, precis som
+ * App\Http\Controllers\AttachmentController gör för en itembilaga.
+ *
+ * `account` är ett obligatoriskt konto-ULID, och bara `active`-konton duger
+ * som betalkonto — samma `exists`-regel som StoreAttachmentRequest, av samma
+ * skäl: ett `read_only`- eller `closed`-konto ska inte kunna belastas för nya
+ * byten. Ett konto som finns men som användaren inte är medlem i är ett
+ * behörighetsfel (403) som kontrollern kastar, inte här.
  *
  * **`file` valideras för närvaro och storlek.** Taket är en TEKNISK spärr
  * (issue 16a § Beslut 9), inte en plangräns — `max` räknar kilobyte, därav
@@ -47,6 +62,7 @@ class ContainerCoverRequest extends FormRequest
     {
         return [
             'file' => ['required', 'file', 'max:'.(int) (config('files.max_upload_bytes') / 1024)],
+            'account' => ['required', 'string', Rule::exists('account', 'ulid')->where(fn ($query) => $query->where('status', 'active'))],
         ];
     }
 }

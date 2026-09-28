@@ -252,7 +252,7 @@ it('visar inte pennan för den som bara läser, och nekar skrivningen', function
         ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', true));
 
     actingAs($läsare)
-        ->post("/containers/{$container->ulid}/cover", ['file' => bildvyFoto()])
+        ->post("/containers/{$container->ulid}/cover", ['file' => bildvyFoto(), 'account' => $konto->ulid])
         ->assertForbidden();
 
     actingAs($läsare)
@@ -321,6 +321,7 @@ it('gör en fil som inte är en bild till ett fältfel med översatt mening', fu
         ->actingAs($anvandare)
         ->post("/containers/{$container->ulid}/cover", [
             'file' => UploadedFile::fake()->createWithContent('manual.txt', 'inte en bild'),
+            'account' => $konto->ulid,
         ]);
 
     $svar->assertRedirect("/containers/{$container->ulid}");
@@ -345,6 +346,7 @@ it('gör en för stor fil till ett fältfel med gräns och filstorlek', function
         ->actingAs($anvandare)
         ->post("/containers/{$container->ulid}/cover", [
             'file' => UploadedFile::fake()->createWithContent('stor.png', bildvyPng().str_repeat('a', 2048)),
+            'account' => $konto->ulid,
         ]);
 
     $svar->assertSessionHasErrors('file');
@@ -362,12 +364,13 @@ it('gör en för stor fil till ett fältfel med gräns och filstorlek', function
 });
 
 /*
- * Kvoten går på containerns ÄGARKONTO.
+ * Kvoten går på det UPPLADDANDE kontot (ADR-0047 § Beslut).
  *
- * Arket har tre rader och ingen kontoväljare (ADR-0047 § Beslut), så det finns
- * ingen yta som kunde välja ett annat konto — och en container har exakt en
- * ägare. Provet stänger den billiga avvisningen: en medlem i kontot får ett
- * fältfel i stället för en 500 när kvoten är slut.
+ * Här är uppladdaren medlem i ägarkontot, och då är ägarkontot det uppladdande
+ * — arket skickar samma förval som itemets bilageuppladdning. Provet stänger
+ * den billiga avvisningen: en medlem får ett fältfel i stället för en 500 när
+ * kvoten är slut. Att en främmande mottagare i stället belastar sitt EGET
+ * konto prövas för sig.
  */
 it('gör en sprängd totalkvot till ett fältfel', function () {
     sättPlangräns('free', 'storage_bytes', 3000);
@@ -380,13 +383,64 @@ it('gör en sprängd totalkvot till ett fältfel', function () {
 
     $svar = from("/containers/{$container->ulid}")
         ->actingAs($anvandare)
-        ->post("/containers/{$container->ulid}/cover", ['file' => bildvyFoto()]);
+        ->post("/containers/{$container->ulid}/cover", [
+            'file' => bildvyFoto(),
+            'account' => $konto->ulid,
+        ]);
 
     $svar->assertSessionHasErrors('file');
 
     expect(session('errors')->get('file')[0])
         ->toContain(Number::fileSize(3000))
         ->and($container->refresh()->cover_attachment_id)->toBeNull();
+});
+
+/*
+ * Klart när: kontot som betalar är det UPPLADDANDE kontot, inte ägarkontot.
+ *
+ * En container-bred `write`-mottagare som är främmande för ägarkontot sätter
+ * bilden genom RUTTEN och belastar sitt EGET kontos räknare — aldrig
+ * ägarkontots ([[ADR-0047 Containerns bild]] § Beslut, [[ADR-0017
+ * Missbruksvektorer]]). Provet stänger den vektor där varje mottagares
+ * uppladdning hamnar på ägarkontots kvot.
+ *
+ * Kontot kommer i fältet `account`; arket skickar samma förval som itemets
+ * bilageuppladdning — ägarkontot när användaren är medlem i det, annars hennes
+ * eget första konto. Mottagaren här är medlem i ett annat konto, så det är det
+ * som skickas, och det är det som ska bära bytena.
+ */
+it('låter en främmande write-mottagare belasta sitt eget konto', function () {
+    [$ägarkonto, $ägaren, $container] = bildvyKontext();
+
+    [$mottagarkonto, $mottagare] = kontoMedMedlem();
+
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'grantee_type' => 'user',
+        'grantee_id' => $mottagare->id,
+        'level' => 'write',
+        'kind' => 'member',
+        'granted_by_user_id' => $ägaren->id,
+    ]);
+
+    from("/containers/{$container->ulid}")
+        ->actingAs($mottagare)
+        ->post("/containers/{$container->ulid}/cover", [
+            'file' => bildvyFoto(),
+            'account' => $mottagarkonto->ulid,
+        ])
+        ->assertSessionHasNoErrors();
+
+    $bilaga = $container->refresh()->coverAttachment;
+
+    expect($bilaga)->not->toBeNull()
+        ->and($bilaga->billed_account_id)->toBe($mottagarkonto->id);
+
+    // Räknaren följer bilagans konto: mottagarens rad bär bytena, och
+    // ägarkontot har ingen rad alls — containern skapades utan AdjustUsage.
+    expect((int) DB::table('usage_counter')->where('account_id', $mottagarkonto->id)->value('storage_bytes'))
+        ->toBe($bilaga->storedFile->byte_size)
+        ->and(DB::table('usage_counter')->where('account_id', $ägarkonto->id)->value('storage_bytes'))->toBeNull();
 });
 
 /*
@@ -489,7 +543,7 @@ it('sätter och byter bilden genom webbens rutt', function () {
 
     $första = from("/containers/{$container->ulid}")
         ->actingAs($anvandare)
-        ->post("/containers/{$container->ulid}/cover", ['file' => bildvyFoto(10)]);
+        ->post("/containers/{$container->ulid}/cover", ['file' => bildvyFoto(10), 'account' => $konto->ulid]);
 
     $första->assertRedirect("/containers/{$container->ulid}");
     $första->assertSessionHasNoErrors();
@@ -499,7 +553,7 @@ it('sätter och byter bilden genom webbens rutt', function () {
 
     $andra = from("/containers/{$container->ulid}")
         ->actingAs($anvandare)
-        ->post("/containers/{$container->ulid}/cover", ['file' => bildvyFoto(200)]);
+        ->post("/containers/{$container->ulid}/cover", ['file' => bildvyFoto(200), 'account' => $konto->ulid]);
 
     $andra->assertSessionHasNoErrors();
     expect($container->refresh()->cover_attachment_id)->not->toBe($pekarPå);

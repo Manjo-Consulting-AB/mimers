@@ -1,6 +1,6 @@
 <script setup>
-import { ref, useId } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { computed, ref, useId } from 'vue';
+import { router, usePage } from '@inertiajs/vue3';
 import UiSheet from './UiSheet.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -44,6 +44,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * knapparna inaktiveras medan anropet är i luften — en andra filval innan det
  * första svarat hade blivit två byten i rad, och bara det sista hade synts.
  *
+ * **Kontot som betalar skickas med, dolt.** Bytena räknas mot det UPPLADDANDE
+ * kontots kvot ([[ADR-0047 Containerns bild]] § Beslut), och förvalet är
+ * itemets bilageuppladdnings (resources/js/components/ItemAttachmentSection.vue,
+ * issue 60 § Beslut 4): containerns ägarkonto när användaren är medlem i det,
+ * annars hennes eget första konto. Arket har fortfarande TRE rader — kontot är
+ * inget val någon gör här, och raden syns därför inte. Servern prövar
+ * medlemskapet och nekar ett konto användaren inte är medlem i.
+ *
  * Ingen sträng står i filen ([[ADR-0013 Språk och i18n]]): varje text kommer
  * ur `t()` med en nyckel under `container.cover.*`.
  */
@@ -53,9 +61,26 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
+const page = usePage();
 
 const open = ref(false);
 const trigger = ref(null);
+
+/*
+ * Kontot som betalar. `auth.accounts` är den inloggades egna konton, alltså
+ * exakt dem hon är medlem i — samma lista och samma förval som itemets
+ * bilageuppladdning räknar ur (issue 60 § Beslut 4). Är hon medlem i
+ * containerns ägarkonto blir det kontot det uppladdande; annars hennes eget
+ * första, så en främmande `write`-mottagare aldrig belastar ägarkontot
+ * ([[ADR-0017 Missbruksvektorer]]).
+ */
+const accounts = computed(() => page.props.auth?.accounts ?? []);
+
+const account = computed(() => {
+    const owner = accounts.value.find((candidate) => candidate.ulid === props.container.account);
+
+    return owner?.ulid ?? accounts.value[0]?.ulid ?? '';
+});
 
 /*
  * Fältens id:n, unika per instans. GenomgangTest § Beslut 3 kräver ett `id` på
@@ -120,7 +145,7 @@ function onSelected(event) {
 function upload(file) {
     error.value = null;
 
-    router.post(`/containers/${props.container.ulid}/cover`, { file }, {
+    router.post(`/containers/${props.container.ulid}/cover`, { file, account: account.value }, {
         forceFormData: true,
         preserveScroll: true,
         onStart: () => {
