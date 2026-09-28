@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Actions\Item\ListFavorites;
+use App\Actions\Item\ListRecentVisits;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
@@ -11,6 +12,7 @@ use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\Loan;
 use App\Models\Notification;
+use App\Models\RecentVisit;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
@@ -28,7 +30,7 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Elva nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Tolv nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
@@ -94,6 +96,21 @@ use Inertia\Middleware;
  * användaren, och en inbjudan är obesvarad till dess att den besvarats, inte
  * till dess att den setts (App\Http\Controllers\NotificationInboxController).
  *
+ * **`recentVisits` kom med issue 160** — skalets sektion *Nyligen besökta*,
+ * se [[ADR-0049 Nyligen besökta]] och [[M23 Mobilen och kartan]] § 160. Listan
+ * byggs av App\Actions\Item\ListRecentVisits, som filtrerar den genom
+ * ResolveItemScope som varje annan listning: ett item användaren förlorat
+ * åtkomsten till — eller som ligger i papperskorgen — försvinner i stället för
+ * att bli en trasig länk, och ingenting i svaret berättar hur många som föll
+ * bort (issue 73 § Beslut 6). Raden står kvar, så en återfådd åtkomst gör den
+ * synlig igen.
+ *
+ * Proppen är den TREDJE optionala, och av samma skäl som de två första: raden
+ * behövs bara när ytan som bär den ritas. På mobilen är det sidomenyn bakom
+ * *Meny*, över `md:` är det sidopanelen — och en sida där ingen av dem ritas
+ * frågar aldrig efter listan. Skrivningen som matar den ligger i
+ * App\Http\Controllers\ItemController::show(), efter grinden.
+ *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
  * `web`-gruppen, så `App::getLocale()` är redan rätt när `share()` körs.
@@ -135,6 +152,7 @@ class HandleInertiaRequests extends Middleware
     public function __construct(
         private readonly ActiveContainer $activeContainer,
         private readonly ListFavorites $listFavorites,
+        private readonly ListRecentVisits $listRecentVisits,
         private readonly PendingInvitation $pendingInvitation,
     ) {}
 
@@ -176,6 +194,10 @@ class HandleInertiaRequests extends Middleware
             // rad per väntande inbjudan behövs bara när klockan är öppen, och
             // en vanlig sidladdning rör den aldri — se klassens docblock.
             'pendingInvitations' => Inertia::optional(fn (): array => $this->pendingInvitations($request)),
+            // Den tredje optionala proppen, av samma skäl som de två andra:
+            // listan ritas först när menyn eller sidopanelen ritas, och en
+            // vanlig sidladdning ska inte bära den — se klassens docblock.
+            'recentVisits' => Inertia::optional(fn (): array => $this->recentVisits($request)),
             'locale' => fn (): string => App::getLocale(),
             'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
@@ -246,6 +268,55 @@ class HandleInertiaRequests extends Middleware
             ->map(fn (Item $item): array => [
                 'name' => $item->name,
                 'url' => route('containers.items.show', [$item->container, $item], false),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Användarens senast besökta items som raddata åt skalet, eller tomt för
+     * en gäst — se klassens docblock.
+     *
+     * **OPTIONAL, och det är skillnaden mot `favorites` ovan.** Favoriterna
+     * delas med varje sida; den här listan hämtas bara när ytan som bär den
+     * ritas — sidomenyn på mobilen eller sidopanelen över `md:` — genom en
+     * partiell omladdning av just den här nyckeln ([[ADR-0049 Nyligen
+     * besökta]] § Beslut). En sida där menyn aldrig öppnats frågar därför
+     * aldrig efter den, och en vanlig sidladdning betalar ingenting.
+     *
+     * Ett tidigt `return []` och inte en tom lista ur actionen: en gäst har
+     * ingen att fråga för, och ListRecentVisits tar en `User`. Formen på
+     * svaret är densamma som för en inloggad utan besök, så skalet aldrig
+     * behöver två avpackningsvägar — samma regel som `auth()` och
+     * `favorites()`.
+     *
+     * **`visited_at` följer med som ISO 8601**, och det är skalet som räknar
+     * om den till *Idag 10:24* eller *3 dagar sedan*: tidsstämpeln är ett
+     * ögonblick, och regeln för hur den skrivs bor i
+     * resources/js/composables/useRelativeDate.js och ingen annanstans
+     * (issue 104 · [[ADR-0042 Designsystemet]]). Servern skickar därför
+     * datumet och aldrig en färdig mening — samma linje som
+     * `notifications()` ovan.
+     *
+     * `route(..., false)` ger en relativ adress, samma form som `favorites()`
+     * och skalets egna `<Link href="/dashboard">`.
+     *
+     * @return list<array{name: string, container: string, url: string, visited_at: string}>
+     */
+    private function recentVisits(Request $request): array
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return [];
+        }
+
+        return $this->listRecentVisits->handle($user)
+            ->map(fn (RecentVisit $visit): array => [
+                'name' => $visit->item->name,
+                'container' => $visit->item->container->name,
+                'url' => route('containers.items.show', [$visit->item->container, $visit->item], false),
+                'visited_at' => $visit->visited_at->toIso8601String(),
             ])
             ->values()
             ->all();

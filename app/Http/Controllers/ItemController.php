@@ -9,6 +9,7 @@ use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
 use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
+use App\Actions\Item\RecordRecentVisit;
 use App\Actions\Item\ResolveItemCover;
 use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemPaths;
@@ -497,8 +498,17 @@ class ItemController extends Controller
      * och en siffra i vyn hade varit fel så fort väljaren rördes. De prövas
      * där de hör hemma — på servern — och kommer tillbaka som fältfelet på
      * `file`.
+     *
+     * **Att öppna itemet är att besöka det** (issue 160 · [[ADR-0049 Nyligen
+     * besökta]] § Beslut). Metoden skriver en rad i `recent_visit` efter
+     * grinden, och det är den enda skrivningen här som inte är en
+     * användarhandling: den följer med sidan. Listan den matar är en OPTIONAL
+     * prop i skalet — `recentVisits` i App\Http\Middleware\
+     * HandleInertiaRequests, hämtad med en partiell omladdning när menyn eller
+     * sidopanelen ritas — så en vanlig sidladdning betalar ingenting för den,
+     * och sidan här räknar varken frågor eller rader för den.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget): Response
     {
         Gate::authorize('view', $item);
 
@@ -510,6 +520,20 @@ class ItemController extends Controller
         $item->loadMissing(['category', 'createdByAccount', 'tags']);
 
         $user = $request->user();
+
+        // Besöket skrivs EFTER grinden (issue 160 · [[ADR-0049 Nyligen
+        // besökta]] § Beslut). Det är hela skillnaden mellan en visning och
+        // ett försök: en nekad visning kastade ovan och lämnar varken en rad
+        // eller ett spår, och anropet kan därför inte ligga före
+        // `Gate::authorize()`.
+        //
+        // Skrivningen bor i App\Actions\Item\RecordRecentVisit: en upsert på
+        // `(user_id, item_id)` — ett nytt besök flyttar `visited_at` i stället
+        // för att skriva en andra rad — och städningen som håller personen vid
+        // tjugo rader, i samma förfrågan. Ingen middleware gör det här: bara
+        // itemsidan räknas, och containerns sidor, sökträffar och kartan är
+        // andra ytor.
+        $recordRecentVisit->handle($user, $item);
 
         $links = $listItemLinks->handle($user, $container, $item);
 

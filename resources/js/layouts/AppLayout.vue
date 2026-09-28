@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import CreateButton from '../components/CreateButton.vue';
 import CreateMenu from '../components/CreateMenu.vue';
@@ -7,6 +7,7 @@ import FlashMessage from '../components/FlashMessage.vue';
 import MobileMenu from '../components/MobileMenu.vue';
 import MobileTabBar from '../components/MobileTabBar.vue';
 import NotificationBell from '../components/NotificationBell.vue';
+import RecentVisitList from '../components/RecentVisitList.vue';
 import SearchField from '../components/SearchField.vue';
 import ShellSections from '../components/ShellSections.vue';
 import VerifyEmailNotice from '../components/VerifyEmailNotice.vue';
@@ -124,6 +125,25 @@ import { useTranslations } from '../composables/useTranslations.js';
  *   - **Knappen ritas bara för en inloggad.** Målet kräver ett konto att skapa
  *     i, och varje sida som bär en knapp ligger bakom `auth`; `user`-villkoret
  *     är detsamma som för flikraden och menyn.
+ *
+ * **Sektionen *Nyligen besökta* kom med issue 160** · [[ADR-0049 Nyligen
+ * besökta]]. Den står i skalets band över `md:` — direkt ovanför favoriterna —
+ * och i sidomenyn under `md:`, och ritas av
+ * resources/js/components/RecentVisitList.vue på båda ställena.
+ *
+ *   - **Listan är en OPTIONAL prop och hämtas först när ytan ritas.** Skalet
+ *     äger svaret på "ritas panelen?": `isDesktopPanel` läser brytpunkten ur
+ *     `matchMedia` vid monteringen, och komponenten ställer sin fråga en gång
+ *     när den blir sann. En sida där menyn aldrig öppnats — och en telefon,
+ *     där bandet är dolt — frågar aldrig efter listan.
+ *   - **Gästen har ingen lista att fråga om.** Villkoret är `v-if="user"`,
+ *     som för `SearchField` och `NotificationBell` i samma skal: en gäst har
+ *     ingen meny att öppna, men `isDesktopPanel` blir sann ändå på en bred
+ *     skärm, och utan villkoret hade varje sidnavigering ställt frågan.
+ *   - **Skrivningen som matar listan ligger på servern**, i
+ *     App\Http\Controllers\ItemController::show(), efter grinden. Skalet
+ *     varken skriver eller filtrerar: raden är redan omfångsprövad när den
+ *     kommer hit.
  */
 defineProps({
     /*
@@ -165,6 +185,28 @@ function closeCreateMenu() {
 const showsVerificationNotice = computed(
     () => Boolean(user.value) && user.value.email_verified_at === null && !page.url.startsWith('/email/verify'),
 );
+
+/*
+ * Ritas desktopens sidopanel? — frågan *Nyligen besökta* ställs bara när
+ * svaret är ja (issue 160 · [[ADR-0049 Nyligen besökta]] § Beslut).
+ *
+ * Panelen är `hidden md:block` och alltså alltid i DOM:en: CSS avgör om den
+ * syns, och `v-if` hade tvingat fram en andra brytpunkt i JavaScript.
+ * Brytpunkten läses därför ur `matchMedia` i stället — samma 768 px som
+ * Tailwinds `md:` — och den läses vid monteringen och inte vid varje
+ * omskrivning: fönstret får byta storlek utan att listan frågas om igen.
+ *
+ * **`false` till dess att svaret är här**, alltså på en telefon. Fönstret
+ * finns inte vid en serverrendering, och den här appen renderas i klienten —
+ * men en `ref` som startade sant hade ställt frågan en gång för mycket på en
+ * telefon, och det är den ena frågan hela den optionala proppen finns för att
+ * spara.
+ */
+const isDesktopPanel = ref(false);
+
+onMounted(() => {
+    isDesktopPanel.value = window.matchMedia('(min-width: 768px)').matches;
+});
 </script>
 
 <template>
@@ -238,14 +280,20 @@ const showsVerificationNotice = computed(
         <FlashMessage />
 
         <!--
-            FAVORITER över `md:`, se issue 106. Sektionen är den samma i
-            sidomenyn under `md:` och ritas där av samma komponent, samma
-            anrop — se MobileMenu.
+            SKALETS LISTOR över `md:`, se issue 106 och 160. *Nyligen
+            besökta* står direkt ovanför favoriterna ([[ADR-0049 Nyligen
+            besökta]] § Beslut), och båda återkommer i sidomenyn under `md:`
+            med samma komponenter och samma data — se MobileMenu.
 
-            Sektionen ritas bara när listan har rader: en tom rubrik är en yta
-            som lovar något den inte har.
+            **RecentVisitList får sin `load` av den här layouten**, som är
+            den som vet att panelen ritas: listan är en optional prop och
+            hämtas först då. Favoriterna är delade och behöver inget besked.
+
+            Sektionerna ritas bara när listan har rader: en tom rubrik är en
+            yta som lovar något den inte har.
         -->
         <div class="hidden md:block">
+            <RecentVisitList v-if="user" :load="isDesktopPanel" />
             <ShellSections part="favorites" />
         </div>
 

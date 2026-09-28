@@ -12,11 +12,13 @@ use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\Loan;
 use App\Models\OccurrenceDependency;
+use App\Models\RecentVisit;
 use App\Models\Schedule as Schema;
 use App\Models\ScheduleDependency;
 use App\Models\ScheduleOccurrence;
 use App\Models\StoredFile;
 use App\Models\Tag;
+use App\Models\User;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -295,6 +297,40 @@ it('ett gallrat item tar med sig sina kostnadsrader', function () {
 
     expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
     expect(CostEntry::withTrashed()->where('item_id', $item->id)->exists())->toBeFalse();
+});
+
+it('ett gallrat item tar med sig sina besöksrader', function () {
+    Carbon::setTestNow('2026-09-02 12:00:00');
+    [$account, $user, $container] = gallringContainer();
+
+    $item = gallringItem($container, $account, $user, ['name' => 'Gallras']);
+    gallringMjukradera($item, Carbon::parse('2026-08-01 12:00:00'));
+
+    // Två personer har besökt itemet (issue 160 · [[ADR-0049 Nyligen
+    // besökta]] § Beslut): `recent_visit.item_id` är ON DELETE RESTRICT, och
+    // ALLA rader på itemet ska bort — inte bara den som råkar gallra.
+    $besok = [];
+
+    foreach ([$user, User::factory()->create()] as $besokare) {
+        $rad = new RecentVisit;
+        $rad->item_id = $item->id;
+        $rad->visited_at = now();
+        $besokare->recentVisits()->save($rad);
+
+        $besok[] = $rad;
+    }
+
+    expect(fn () => gallringKör())->not->toThrow(Throwable::class);
+
+    expect(Item::withTrashed()->whereKey($item->id)->exists())->toBeFalse();
+
+    foreach ($besok as $rad) {
+        expect(RecentVisit::query()->whereKey($rad->id)->exists())->toBeFalse();
+    }
+
+    // Och ingenting annat rördes: besöksraderna på ett item som lever kvar
+    // står kvar.
+    expect(RecentVisit::query()->count())->toBe(0);
 });
 
 it('ett gallrat item tar med sig sina utlåningar', function () {

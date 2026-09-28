@@ -28,10 +28,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * ([[ADR-0013 Språk och i18n]]): texten formuleras på servern och slås bara
  * upp på klienten, precis som `container.nav.<key>` i ContainerLayout.
  *
- * **Nyligen besökta hör hit och kommer i issue 160.** Den ritas mellan
- * `search` och `settings`, på samma plats i båda ytorna — [[ADR-0049 Nyligen
- * besökta]] § Beslut lägger den direkt ovanför favoriterna, och den här issuen
- * lämnar bara platsen i ordningen.
+ * **Nyligen besökta är INGEN av de två delarna** (issue 160 · [[ADR-0049
+ * Nyligen besökta]] § Beslut). Den är en lista över items och inte en rad i
+ * navigeringen, och den bor därför i
+ * resources/js/components/RecentVisitList.vue — skalet ritar den direkt
+ * ovanför favoriterna, i bandet över `md:` och i sidomenyn under det. Att
+ * lägga den i `sections` hade gett en rad som pekade på en sida som inte finns
+ * och en rubrik i navigeringen; ordningen här är oförändrad sedan issue 151.
  *
  * `part` skiljer de två blocken åt. `rows` är navigeringen, `favorites` är
  * `FAVORITER`-sektionen ur issue 106. De ritas i olika delar av skalet — raden
@@ -64,7 +67,6 @@ const sections = [
     { key: 'containers', href: '/containers' },
     { key: 'transfers', href: '/transfers' },
     { key: 'search', href: '/search' },
-    // Här ritas *Nyligen besökta* — issue 160, se docblocken ovan.
     { key: 'settings', href: '/settings' },
 ];
 </script>

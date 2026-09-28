@@ -72,7 +72,7 @@ En spärrad radering gör ingenting. **En aktiv prenumeration spärrar inte** �
 Kontona avgörs först, i samma transaktion: ett konto där personen är enda medlem raderas med `DeleteAccount` (med samma innehåll, kvoter och prenumeration som i livscykeln), ett konto med andra medlemmar lämnas orört och personens `account_user`-rad tas bort. Därefter, i den ordning de främmande nycklarna kräver:
 
 1. författarkolumnerna mot `user` nollställs — `item`, `attachment`, `schedule_occurrence`, `cost_entry`, `container_access` och `export` (ADR-0045 § Beslut 2); raderna är någon annans innehåll och står kvar utan avsändare,
-2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `dismissed_tip`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `user_deletion`, `sessions` och `personal_access_tokens`,
+2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `recent_visit`, `dismissed_tip`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `user_deletion`, `sessions` och `personal_access_tokens`,
 3. väntande inbjudningar och ägarbyten som personen startat dras tillbaka (`status = 'revoked'`), och författarkolumnen nollställs på dem alla — besvarade behåller sin rad,
 4. säkerhetsloggen får en rad `user.deleted`, utan e-postadressen,
 5. `user`-raden raderas **på riktigt**. Ingen mjukradering: en mjukraderad person vore en person som inte är raderad. `email` blir ledig och kan registreras igen som ett nytt konto.
@@ -187,6 +187,28 @@ Ett tips användaren kryssat bort i informationsytan, en rad per tips och person
 Uniknyckeln `(user_id, tip_key)` är det som gör doldmarkeringen till ett par: att kryssa samma tips två gånger ger ingen andra rad. Den är också hela skillnaden mot en flagga för ytan — **tillståndet är per tips**, så ett tips som läggs till senare har ingen rad och visas även för den som dolt allt som fanns förut.
 
 Ingen `deleted_at`: ett dolt tips är inget användarskapat innehåll att återställa, ingen papperskorg listar typen, och en mjukraderad rad hade legat kvar i det unika indexet och blockerat en ny rad för samma nyckel.
+
+## recent_visit
+
+Personens senast besökta items — en rad per item hon öppnat, med tiden för besöket. Se [[ADR-0049 Nyligen besökta]] och [[M23 Mobilen och kartan]] § 160.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: raden syns aldrig utåt, och ingen rutt, resurs eller vy identifierar en enskild besöksrad — listan visar itemets ULID och namn |
+| user_id | FK → user, RESTRICT | **Raden är personens och bara hennes**, som `favorite` och `dismissed_tip`. `RESTRICT` och inte `CASCADE`: raden städas av `DeleteUser` (issue 144), och en kaskad hade varit en radering ingen action har bett om |
+| item_id | FK → item, RESTRICT | Itemet besöket gäller. Kolumnen är itemets och inte besökarens: när itemet gallras ur papperskorgen försvinner ALLA personers rader på det, genom `PurgeContent::item()` |
+| visited_at | TIMESTAMP | UTC. Flyttas fram vid varje nytt besök — se upserten nedan |
+| created_at, updated_at | | |
+
+Uniknyckeln `(user_id, item_id)` är det som gör besöket till ett PAR: skrivningen är en upsert på den, så att öppna samma item igen flyttar `visited_at` i stället för att lägga en andra rad. Indexet `(user_id, visited_at)` bär både läsningen och taket — de tjugo senaste för en person.
+
+**Taket är tjugo rader per person, och det upprätthålls vid skrivningen.** `App\Actions\Item\RecordRecentVisit` raderar det som ligger utanför de tjugo senaste i samma förfrågan som upserten, så tabellen är begränsad per person utan ett gallringsjobb. Listan visar de tio översta (`App\Actions\Item\ListRecentVisits`); de tio emellan finns kvar som buffert, så att en lista som filtrerats av omfånget fortfarande har något att fylla på ur.
+
+**Skrivningen sker när itemsidan visas, i `ItemController::show` och efter `ItemPolicy::view`.** En nekad visning skriver ingenting, och ingen middleware gör det här: containerns sidor, sökträffar och kartan räknas inte som besök.
+
+**Läsningen filtreras, och den filtreras när den läses.** Listan går genom `ResolveItemScope` som favoritlistan (issue 106): ett item man förlorat åtkomsten till, eller som ligger i papperskorgen, försvinner ur listan utan att en räknare avslöjar det. Raden står kvar och blir synlig igen om åtkomsten eller itemet kommer tillbaka.
+
+Ingen `deleted_at`: raden är inget innehåll att återställa, papperskorgen listar fyra typer (issue 76 § Beslut 3), och en mjukraderad rad hade legat kvar i det unika indexet och blockerat ett nytt besök på samma item.
 
 ## container
 

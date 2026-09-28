@@ -164,12 +164,13 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
     expect($layout)->toContain('<ShellSections part="favorites" />')
         ->and($meny)->toContain('<ShellSections part="favorites" />');
 
-    // Och platsen för *Nyligen besökta* (issue 160) står i ordningen — den
-    // ritas inte ännu, men raden den ska ligga på är utpekad. Kommentaren
-    // läses ur den råa filen: `mobilskalKod` rensar bort den, och markören är
-    // en kommentar just för att ingen rad ska ritas förrän issue 160 gör det.
-    expect(File::get(resource_path('js/components/ShellSections.vue')))
-        ->toContain('Nyligen besökta');
+    // *Nyligen besökta* är INGEN rad i den här listan — den är en egen lista
+    // och inte en navigeringsrad (issue 160 · [[ADR-0049 Nyligen besökta]]
+    // § Beslut), och den ritas av RecentVisitList direkt ovanför favoriterna i
+    // båda ytorna. Se tests/Feature/Frontend/NyligenBesoktaTest.php.
+    expect($sektioner)->not->toContain('recent_visits')
+        ->and($layout)->toContain('<RecentVisitList')
+        ->and($meny)->toContain('<RecentVisitList');
 });
 
 it('lämnar fokus tillbaka till Meny när menyn stängs', function () {

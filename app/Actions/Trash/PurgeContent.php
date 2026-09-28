@@ -81,14 +81,19 @@ class PurgeContent
      *    PurgeAttachment,
      * 7. item_tag-raderna för itemet, hårt (pivoten har varken `ulid` eller
      *    `deleted_at`, issue 13b § Beslut 3),
-     * 8. item_link-raderna där itemet är `from_item_id` ELLER `to_item_id`,
+     * 8. besöksraderna på itemet, hårt (issue 160 · [[ADR-0049 Nyligen
+     *    besökta]] § Beslut): `recent_visit.item_id` är ON DELETE RESTRICT,
+     *    och ett item som inte finns ska inte ha någon historik. ALLA
+     *    personers rader på itemet och inte bara den som gallrar — nyckeln
+     *    gäller itemet, och raden är inget innehåll att återställa,
+     * 9. item_link-raderna där itemet är `from_item_id` ELLER `to_item_id`,
      *    hårt — en länk kan peka på itemet från andra hållet, och en hasMany
      *    i en riktning hittar bara hälften,
-     * 9. kostnadsraderna på itemet, hårt — ÄVEN de mjukraderade, med
+     * 10. kostnadsraderna på itemet, hårt — ÄVEN de mjukraderade, med
      *    withTrashed() (issue 45a § Beslut 10): cost_entry.item_id är
      *    ON DELETE RESTRICT, så utan den här raden skulle forceDelete på
      *    itemet falla på ett främmandenyckelfel,
-     * 10. itemåtkomsterna — container_access- och invitation-raderna med
+     * 11. itemåtkomsterna — container_access- och invitation-raderna med
      *    `item_id` satt, hårt (issue 69). Båda kolumnerna är ON DELETE
      *    RESTRICT, och PurgeContainer::handle() gallrar items FÖRE
      *    container_access-raderna, så utan den här raden faller den
@@ -97,7 +102,12 @@ class PurgeContent
      *    haft åtkomst till ett item som fysiskt inte längre finns är inte
      *    historik värd att bevara, och `audit_log` har kvar sin rad — den
      *    pekar på ULID:er som strängar och har ingen FK hit,
-     * 11. forceDelete på itemet.
+     * 12. forceDelete på itemet.
+     *
+     * **Containerbilden rörs inte här** (issue 158): den hör till containern
+     * och inte till itemet, och den enda vägen till den är
+     * PurgeContainer::handle() — de bilagor den här metoden når har ett
+     * `item_id`.
      *
      * Lån och scheman är oberoende av varandra — ordningen dem emellan
      * spelar ingen roll — men kedjan under ett schema (förekomster och
@@ -156,6 +166,19 @@ class PurgeContent
             }
 
             DB::table('item_tag')->where('item_id', $itemId)->delete();
+
+            // Besöksraderna (issue 160 · [[ADR-0049 Nyligen besökta]]
+            // § Beslut): `recent_visit.item_id` är ON DELETE RESTRICT, och
+            // utan den här raden faller forceDelete nedan på ett
+            // främmandenyckelfel. Hårt och inte mjukt — raden är inget
+            // innehåll att återställa. Alla personers rader på itemet, inte
+            // bara den som gallrar: nyckeln gäller itemet.
+            //
+            // Den här raden bär också containerns gallring: PurgeContainer
+            // går genom den här metoden för varje item med `withTrashed()`,
+            // så en rensad container tar sina besöksrader med sig utan att
+            // PurgeContainer behöver veta att tabellen finns.
+            DB::table('recent_visit')->where('item_id', $itemId)->delete();
 
             ItemLink::query()
                 ->where('from_item_id', $itemId)

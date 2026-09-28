@@ -167,6 +167,31 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     }
 
     /**
+     * Personens besökta items — en rad per item hon öppnat, se
+     * [[ADR-0049 Nyligen besökta]] och [[M23 Mobilen och kartan]] § 160.
+     *
+     * **Per användare och per item, alltså en pivot och ingen kolumn på
+     * `item`**: vad en person tittat på är inte ett faktum om itemet, och i en
+     * delad container hade en kolumn gjort en persons historik till allas.
+     * Paret är unikt — ett nytt besök uppdaterar raden i stället för att
+     * skriva en andra.
+     *
+     * Relationen bär ingen åtkomst. Den säger vad användaren öppnat, inte vad
+     * hon får se — skrivningen ligger efter grinden i
+     * App\Http\Controllers\ItemController::show(), och
+     * App\Actions\Item\ListRecentVisits filtrerar läsningen genom
+     * App\Actions\Access\ResolveItemScope som allt annat. Ett item hon
+     * förlorat åtkomsten till försvinner därför ur listan medan raden ligger
+     * kvar, och den blir synlig igen om åtkomsten kommer tillbaka.
+     *
+     * @return HasMany<RecentVisit, $this>
+     */
+    public function recentVisits(): HasMany
+    {
+        return $this->hasMany(RecentVisit::class);
+    }
+
+    /**
      * Begärda adressändringar — en rad per begäran, se [[M20 Kontot]] § 130
      * och [[Konton och åtkomst]] § email_change.
      *

@@ -441,6 +441,10 @@ it('hämtar skalets strängar ur ui.php', function () {
         'js/components/CreateButton.vue',
         'js/components/CreateMenu.vue',
         'js/components/UiSheet.vue',
+        // *Nyligen besökta* kom med issue 160 och ligger i samma svep: raden
+        // är skalets, och `nav.recent_visits` är dess enda nya nyckel —
+        // ordet om tiden kommer ur `date.*` och skrivs av useRelativeDate().
+        'js/components/RecentVisitList.vue',
     ] as $fil) {
         /*
          * Fönstret `(?<![\w$.])` är det som skiljer ett uppslag från ett
