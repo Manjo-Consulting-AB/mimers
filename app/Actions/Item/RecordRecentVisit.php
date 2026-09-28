@@ -32,6 +32,15 @@ use Illuminate\Support\Facades\DB;
  * fallande med `id` fallande som skiljedomare, så två besök inom samma sekund
  * ändå får en stabil ordning och den senast skrivna raden vinner.
  *
+ * **Låset ligger på personens rad, och det tas före upserten.** Två nästan
+ * samtidiga besök av samma person — två flikar — är två transaktioner som
+ * var för sig bara ser sina egna ocommittade rader; utan låset kunde båda
+ * räkna fram "tjugo att behålla" och lämna en tjugoförsta kvar. Den enskilda
+ * personraden är en punkt att serialisera på: den finns alltid, och den har
+ * inga gap som två insertioner kan krocka i, till skillnad från en låsning
+ * över besöksraderna. Låset är en current read, så den som kommer sist ser
+ * den förstas rader och gallrar mot dem.
+ *
  * **Ingen `Gate::authorize()`.** Behörigheten är anroparens ansvar — samma
  * linje som ListFavorites och ListItems: actionen är verktyget, inte grinden,
  * och en grind här hade varit en andra prövning av samma policy som
@@ -52,6 +61,10 @@ class RecordRecentVisit
         DB::transaction(function () use ($user, $item): void {
             $userId = $user->getKey();
             $now = now();
+
+            // Serialiserar personens egna besök, så att taket nedan räknas
+            // mot ett tillstånd som inte samtidigt ändras av en annan flik.
+            DB::table($user->getTable())->where('id', $userId)->lockForUpdate()->first();
 
             // Upserten är en INSERT ... ON DUPLICATE KEY UPDATE mot det unika
             // paret. `created_at` står inte med bland de uppdaterade

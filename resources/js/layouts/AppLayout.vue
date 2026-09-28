@@ -136,6 +136,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  *     `matchMedia` vid monteringen, och komponenten ställer sin fråga en gång
  *     när den blir sann. En sida där menyn aldrig öppnats — och en telefon,
  *     där bandet är dolt — frågar aldrig efter listan.
+ *   - **Gästen har ingen lista att fråga om.** Villkoret är `v-if="user"`,
+ *     som för `SearchField` och `NotificationBell` i samma skal: en gäst har
+ *     ingen meny att öppna, men `isDesktopPanel` blir sann ändå på en bred
+ *     skärm, och utan villkoret hade varje sidnavigering ställt frågan.
  *   - **Skrivningen som matar listan ligger på servern**, i
  *     App\Http\Controllers\ItemController::show(), efter grinden. Skalet
  *     varken skriver eller filtrerar: raden är redan omfångsprövad när den
@@ -289,7 +293,7 @@ onMounted(() => {
             yta som lovar något den inte har.
         -->
         <div class="hidden md:block">
-            <RecentVisitList :load="isDesktopPanel" />
+            <RecentVisitList v-if="user" :load="isDesktopPanel" />
             <ShellSections part="favorites" />
         </div>
 

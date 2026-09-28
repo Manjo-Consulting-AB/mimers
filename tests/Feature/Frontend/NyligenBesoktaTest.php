@@ -533,7 +533,7 @@ it('ritar sektionen i båda skalets ytor och bara när listan har rader', functi
     // Samma komponent på båda ställena, och `load` kommer ur den yta som vet
     // att den ritas: layouten läser brytpunkten, menyn sin egen öppning.
     expect($layout)->toContain("import RecentVisitList from '../components/RecentVisitList.vue'")
-        ->toContain('<RecentVisitList :load="isDesktopPanel" />')
+        ->toContain('<RecentVisitList v-if="user" :load="isDesktopPanel" />')
         ->toContain("window.matchMedia('(min-width: 768px)')");
 
     expect($meny)->toContain("import RecentVisitList from './RecentVisitList.vue'")
