@@ -916,6 +916,41 @@ return [
 
                 'submit' => 'Request deletion',
             ],
+
+            /*
+             * Länken i mejlet, se [[M22 Redo för testare]] § 145,
+             * [[ADR-0045 Radering av konto och person]] § Uppföljning
+             * 2026-09-28 och resources/js/pages/Settings/ConfirmUserDeletion.vue.
+             *
+             * **Sidan är den andra halvan av flödet och möts av en gäst.**
+             * `heading` och `intro` är bekräftelsesidans egna — de säger att
+             * det är NU det händer, till skillnad från formulärets inledning,
+             * som säger att ingenting hänt än. Listorna och spärrarnas egna
+             * meningar lånas ur `deletion` ovan: samma sak visas på båda
+             * ställena, och UserDeletionSummary ritar dem åt båda.
+             *
+             * **`blocked` är sidans egen mening, och det är avsiktligt.**
+             * Formulärets `deletion.blocked` säger att ingen BEGÄRAN kan
+             * göras; här finns ingen begäran att göra, bara en radering som
+             * inte kan genomföras. Samma spärr, samma ruta, olika besked.
+             *
+             * **`invalid` avslöjar inte vilket skäl det är.** Okänt, utgånget
+             * och redan använt ger samma sida, och texten nämner därför båda
+             * möjligheterna utan att säga vilken — se
+             * App\Actions\User\ConfirmUserDeletion::validDeletion().
+             */
+            'deletion_link' => [
+                'heading' => 'Confirm the deletion',
+
+                'intro' => 'This is the last step. The button below deletes you, and every account where you are the only member. An account you share with others is kept, and only your membership in it is removed.',
+
+                'blocked' => 'Something is in the way, so the deletion cannot be carried out right now. The link still works once it has been cleared.',
+
+                'submit' => 'Delete me now',
+
+                'invalid_heading' => 'This link no longer works',
+                'invalid' => 'The link has expired, or it has already been used. You can request a new one under Settings → Security.',
+            ],
         ],
     ],
 

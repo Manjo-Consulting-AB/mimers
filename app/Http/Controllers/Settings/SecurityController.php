@@ -131,14 +131,23 @@ class SecurityController extends Controller
 
             'logins' => $this->logins($user),
 
-            'deletion' => $this->deletion($user, $deleteUser),
+            'deletion' => self::deletionSummary($user, $deleteUser),
         ]);
     }
 
     /**
      * Personraderingens underlag, se [[M22 Redo för testare]] § 145 och
-     * resources/js/components/UserDeletionForm.vue: vilka konton som raderas,
-     * vilka som lämnas, och vad som i så fall spärrar.
+     * resources/js/components/UserDeletionSummary.vue: vilka konton som
+     * raderas, vilka som lämnas, och vad som i så fall spärrar.
+     *
+     * **`public static`, för att två sidor visar samma sak.** Sedan
+     * 2026-09-28 renderar också bekräftelsesidan bakom mejlets länk de här tre
+     * listorna
+     * (App\Http\Controllers\Settings\UserDeletionController::confirm()), och
+     * det ska vara samma underlag ur samma källa — en avskrift där hade varit
+     * en andra sanning om vad raderingen gör. Formen är statisk för att ingen
+     * av sidorna äger metoden: den läser `DeleteUser` och slår upp namn, och
+     * den rör inget tillstånd.
      *
      * **Uppdelningen räknas av App\Actions\User\DeleteUser, inte här.** Vilka
      * konton som försvinner är samma fråga som raderingen ställer, och en
@@ -168,7 +177,7 @@ class SecurityController extends Controller
      *     blockers: list<array{code: string, account: string|null, containers: list<string>}>
      * }
      */
-    private function deletion(User $user, DeleteUser $deleteUser): array
+    public static function deletionSummary(User $user, DeleteUser $deleteUser): array
     {
         /** @var list<array{ulid: string, name: string}> $toDelete */
         $toDelete = $deleteUser->accountsToDelete($user)
@@ -196,8 +205,8 @@ class SecurityController extends Controller
                     'code' => $blocker->code,
                     // `data` är tom för legal_hold, och då blir båda null
                     // respektive tomma — se docblocket ovan.
-                    'account' => $this->accountName($blocker->data['account'] ?? null),
-                    'containers' => $this->containerNames($blocker->data['containers'] ?? []),
+                    'account' => self::accountName($blocker->data['account'] ?? null),
+                    'containers' => self::containerNames($blocker->data['containers'] ?? []),
                 ],
                 $deleteUser->blockers($user),
             ),
@@ -211,7 +220,7 @@ class SecurityController extends Controller
      * identifierare utåt, och löpnummer läcker aldrig ut (AGENTS.md
      * § Databaskonventioner).
      */
-    private function accountName(mixed $ulid): ?string
+    private static function accountName(mixed $ulid): ?string
     {
         if (! is_string($ulid)) {
             return null;
@@ -229,7 +238,7 @@ class SecurityController extends Controller
      *
      * @return list<string>
      */
-    private function containerNames(mixed $ulids): array
+    private static function containerNames(mixed $ulids): array
     {
         if (! is_array($ulids)) {
             return [];

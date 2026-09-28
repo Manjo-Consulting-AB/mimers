@@ -371,14 +371,15 @@ Route::middleware('auth')->group(function () {
         ->name('settings.security.password.confirm');
 
     /*
-     * Issue 145 · Personraderingen, se App\Http\Controllers\Settings\
-     * UserDeletionController och [[M22 Redo för testare]] § 145.
+     * Issue 145 · Personraderingen — begäran, se App\Http\Controllers\
+     * Settings\UserDeletionController::store() och [[M22 Redo för testare]]
+     * § 145.
      *
-     * **Två rutter, för personen raderas aldrig i samma steg som raderingen
-     * begärs.** POST skickar mejlet och lämnar `user`-raden orörd; GET:en är
-     * länken i mejlet och den enda väg som raderar. En enda rutt hade gjort en
-     * kapad session tillräcklig för att radera ett konto
-     * ([[ADR-0045 Radering av konto och person]] § Beslut 3).
+     * **Begäran ligger bakom `auth`, och stannar där.** Bara den som sitter i
+     * en session kan be om en radering, och objektet är hon själv: ingen
+     * ruttparameter och ingen policy. De två rutter som FÖLJER av begäran —
+     * länken i mejlet — ligger utanför gruppen, se längre ned i filen och
+     * [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-09-28.
      *
      * **Sökvägen ligger direkt under /settings och inte under /settings/
      * security**, till skillnad från lösenordsbytets rutter: adressen står i
@@ -389,21 +390,18 @@ Route::middleware('auth')->group(function () {
      * **Inloggningens egen begränsare** (issue 129, App\Support\Auth\
      * LoginRateLimiter), av samma skäl som på lösenordsbytets PUT: kroppen
      * prövar en engångskod, alltså samma gissningsbara värde som inloggningen,
-     * och ska mötas av samma tak. En POST är den enda av de två rutter som
-     * prövar något som går att gissa — GET:en bär ett 64-teckenstoken ur ett
-     * 62-teckensalfabet och har därför ingen takgräns, som magic
-     * link-inlösen och /settings/profile/email/{token}.
+     * och ska mötas av samma tak. Av flödets tre rutter är det bara den här
+     * som prövar något som går att gissa — de två andra bär ett
+     * 64-teckenstoken ur ett 62-teckensalfabet och har därför ingen takgräns,
+     * som magic link-inlösen och /settings/profile/email/{token}.
      *
-     * Namnen följer `settings.profile.email.confirm`: handlingen, sedan
+     * Namnet följer `settings.profile.email.confirm`: handlingen, sedan
      * undantaget — men i singular och utan `request`, eftersom sökvägen är
      * densamma för båda och det bara finns en begäran att göra.
      */
     Route::post('/settings/delete-user', [UserDeletionController::class, 'store'])
         ->middleware(BindsPasswordChangeThrottleToUser::class)
         ->name('settings.delete-user');
-
-    Route::get('/settings/delete-user/{token}', [UserDeletionController::class, 'confirm'])
-        ->name('settings.delete-user.confirm');
 
     /*
      * Issue 53c · Kontoinställningarna — profil och konton, se
@@ -1530,6 +1528,49 @@ Route::middleware('auth')->group(function () {
     Route::post('/trash/containers/restore', [ContainerTrashController::class, 'restore'])
         ->name('trash.containers.restore');
 });
+
+/*
+ * Issue 145 · Personraderingen — länken i mejlet, se
+ * App\Http\Controllers\Settings\UserDeletionController::confirm() och
+ * ::destroy(), [[M22 Redo för testare]] § 145 och [[ADR-0045 Radering av
+ * konto och person]] § Uppföljning 2026-09-28.
+ *
+ * **Utanför `auth`-gruppen, och det är rättelsen av bugg #577.** Tokenet är
+ * beviset: den som når brevlådan får genomföra raderingen, vare sig hon är
+ * inloggad, är inloggad som någon annan, eller öppnar länken på en annan
+ * enhet (ADR-0045 § Uppföljning 2026-09-28, beslut 1). Låg de kvar bakom
+ * `auth` möttes en testare som öppnade mejlet i sin mejlklients inbyggda
+ * webbläsare av /login, och loggade hon in med en magic link i ännu en
+ * webbläsare tappades `url.intended` och raderingen kördes aldrig.
+ *
+ * **Rutterna stannar i `web`.** Sessionen behövs: CSRF-skyddet på POST:en
+ * hänger på den, och kvittot efter en genomförd radering ligger i flash.
+ * Formuläret på bekräftelsesidan postar till POST:en, och GET:en är den enda
+ * väg som leder dit — det är den som ger en gäst en CSRF-skyddad sida att
+ * utgå ifrån.
+ *
+ * **Två rutter, för en GET får inte radera.** GET:en renderar vad en radering
+ * skulle göra och en knapp; POST:en raderar. En mejlskanner som
+ * förhandshämtar länkar gör en GET, och en GET som raderade hade låtit en
+ * skanner radera ett konto (beslut 2). Samma form som
+ * `notifications.unsubscribe.confirm` och `notifications.unsubscribe`.
+ *
+ * **Spärrarna prövas igen på POST:en**, av App\Actions\User\DeleteUser — en
+ * spärr som uppstått mellan begäran och länken stoppar raderingen, och svaret
+ * blir tillbaka till GET-sidan för samma token med `user-deletion-blocked`
+ * (beslut 3).
+ *
+ * **Ingen takgräns på någon av dem.** Tokenet är 64 tecken ur ett
+ * 62-teckensalfabet och går inte att gissa; en begränsare hade fällt den som
+ * klickar en gammal länk två gånger, och hade dessutom lagt en räknare på en
+ * yta en gäst når. Samma resonemang som för /settings/profile/email/{token}
+ * och magic link-inlösen.
+ */
+Route::get('/settings/delete-user/{token}', [UserDeletionController::class, 'confirm'])
+    ->name('settings.delete-user.confirm');
+
+Route::post('/settings/delete-user/{token}', [UserDeletionController::class, 'destroy'])
+    ->name('settings.delete-user.destroy');
 
 /*
  * Issue 55b § Beslut 1 och 2 · Mejlets landningssida, och den ENDA ytan i M10
