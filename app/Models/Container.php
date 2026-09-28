@@ -76,6 +76,28 @@ class Container extends Model
     }
 
     /**
+     * Containerns bild — en pekare till en av containerns EGNA bilagor, se
+     * [[ADR-0047 Containerns bild]] och issue 158. Nullbar och frivillig,
+     * som itemets omslag ([[ADR-0041 Itemets vy]] § Beslut).
+     *
+     * Pekaren är en PREFERENS och inte data: den som inte väljer någon bild
+     * får ingen. Ingen upplösning med fallback som för itemet — en container
+     * har ingen samling bilder att falla tillbaka på, den har högst en
+     * (ADR-0047 § Beslut, tredje stycket).
+     *
+     * Relationen läses av App\Actions\Container\SetContainerCover och
+     * RemoveContainerCover, som är de enda som sätter den; att bilagan
+     * verkligen är containerns egen upprätthålls där, eftersom ett
+     * CHECK-villkor inte kan uttrycka "egen".
+     *
+     * @return BelongsTo<Attachment, $this>
+     */
+    public function coverAttachment(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'cover_attachment_id');
+    }
+
+    /**
      * Valutan en ny kostnadsrad i den här containern föreslås — containerns
      * egen om den har en, annars kontots. Se [[ADR-0037 Valutans arv]] och
      * issue 85.

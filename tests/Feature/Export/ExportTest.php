@@ -412,6 +412,53 @@ it('en bilaga vars byten saknas på disken fäller inte exporten utan märks mis
     expect($attachments[$saknad->ulid])->not->toHaveKey('path');
 });
 
+/*
+ * Issue 158 · [[ADR-0047 Containerns bild]] § Beslut, "Exporten tar med
+ * bilden". Bilden skrivs till ZIP:en i containerns egen mapp, och raden i
+ * container.json bär samma fält som en itembilaga.
+ *
+ * **Även för en omfångsbegränsad beställare.** Bilden hör till containern och
+ * inte till itemen, och den som får beställa en export når containern — att
+ * filtrera den på `$items` hade dolt containerns ansikte för just den läsare
+ * bilden finns till för. Provet beställer som containerns ägare, där omfånget
+ * är obegränsat; det är samma gren som en begränsad beställare möter.
+ */
+it('exporten tar med containerns bild', function () {
+    [$account, $user, $headers, $container] = exporteringKontext();
+
+    $item = exporteringItem($container, $account, $user, ['name' => 'Prylen']);
+    $innehåll = 'containerns bild';
+
+    $bild = exporteringsBilaga($item, $account, $user, 'båten.png', $innehåll, [
+        'item_id' => null,
+        'container_id' => $container->id,
+        'kind' => 'image',
+    ]);
+
+    $container->cover_attachment_id = $bild->id;
+    $container->save();
+
+    $export = exporteringBeställOchKör($headers, $container);
+
+    expect($export->status)->toBe(Export::STATUS_READY);
+
+    $zip = new ZipArchive;
+    expect($zip->open(Storage::disk('files')->path($export->storage_path)))->toBeTrue();
+
+    $payload = json_decode($zip->getFromName('container.json'), true);
+    $sökväg = 'filer/'.$container->ulid.'/båten.png';
+
+    expect($payload['container']['cover']['ulid'])->toBe($bild->ulid);
+    expect($payload['container']['cover']['path'])->toBe($sökväg);
+    expect($zip->getFromName($sökväg))->toBe($innehåll);
+
+    // Itemets bilagelista är orörd: bilden hör till containern och syns inte
+    // där (den har inget item).
+    expect($payload['items'][0]['attachments'])->toBe([]);
+
+    $zip->close();
+});
+
 it('ett fel i byggaren lämnar raden failed med failure_reason och ingen .part-fil', function () {
     [$account, $user, , $container] = exporteringKontext();
     $export = Export::factory()->create([

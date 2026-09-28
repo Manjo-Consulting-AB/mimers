@@ -102,15 +102,25 @@ class DeleteAccount
             // inget kvar att beskriva den med (issue 29b § Beslut 8).
             // DB-frågorna ser även mjukraderade bilagor och items: de
             // force-raderas av PurgeContainer oavsett eget tillstånd.
+            // Bilagorna på kontots EGNA containers räknas över BÅDA slagen
+            // (issue 158): en itembilaga hittas genom itemet, en
+            // containerbilaga — containerns bild — genom sin egen kolumn.
+            // leftJoin, inte join: en containerbilaga har `item_id = NULL`
+            // och hade fallit bort i en inre join, och då hade antalet och
+            // bytena i loggraden varit fel.
             $attachmentCount = (int) DB::table('attachment')
-                ->join('item', 'item.id', '=', 'attachment.item_id')
-                ->whereIn('item.container_id', $containerIds)
+                ->leftJoin('item', 'item.id', '=', 'attachment.item_id')
+                ->where(fn ($query) => $query
+                    ->whereIn('item.container_id', $containerIds)
+                    ->orWhereIn('attachment.container_id', $containerIds))
                 ->count();
 
             $bytes = (int) DB::table('attachment')
-                ->join('item', 'item.id', '=', 'attachment.item_id')
+                ->leftJoin('item', 'item.id', '=', 'attachment.item_id')
                 ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
-                ->whereIn('item.container_id', $containerIds)
+                ->where(fn ($query) => $query
+                    ->whereIn('item.container_id', $containerIds)
+                    ->orWhereIn('attachment.container_id', $containerIds))
                 ->sum('stored_file.byte_size');
 
             foreach ($containers as $container) {
@@ -209,6 +219,12 @@ class DeleteAccount
      * nedgradering startar (ADR-0045 § Beslut 1). Därför anropas
      * Entitlements inte här.
      *
+     * **Containerns bild följer containern** (issue 158 · [[ADR-0047
+     * Containerns bild]] § Beslut, "Livscykeln följer containern"). Den är
+     * en bilaga som vilken som helst och flyttas på samma villkor; det som
+     * skiljer är att dess container hittas i bilagans EGEN kolumn i stället
+     * för genom itemet.
+     *
      * Ingen soft-delete-scope på någon av sidorna: en mjukraderad bilaga, ett
      * mjukraderat item eller en mjukraderad container är fortfarande rader
      * med RESTRICT-nycklar, och en kvarlämnad `billed_account_id` blockerar
@@ -219,9 +235,15 @@ class DeleteAccount
      */
     private function flyttaFrammandeBilagor(Account $account): void
     {
+        // Containern kommer ur BÅDA slagen (issue 158): genom itemet för en
+        // itembilaga, ur bilagans egen kolumn för en containerbilaga.
+        // coalesce() i stället för två joins — en containerbild har
+        // `item_id = NULL` och hade fallit bort i en inre join mot item,
+        // alltså hade en främmande containerbild behållit det raderade
+        // kontot som betalare och blockerat raderingen på RESTRICT-nyckeln.
         $rader = DB::table('attachment')
-            ->join('item', 'item.id', '=', 'attachment.item_id')
-            ->join('container', 'container.id', '=', 'item.container_id')
+            ->leftJoin('item', 'item.id', '=', 'attachment.item_id')
+            ->join('container', 'container.id', '=', DB::raw('coalesce(item.container_id, attachment.container_id)'))
             ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
             ->where('attachment.billed_account_id', $account->id)
             ->where('container.account_id', '!=', $account->id)

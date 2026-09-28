@@ -399,7 +399,12 @@ class ReportsAbuseSignals
      * distinkta konton och containers, inte om kontona är "orelaterade".
      *
      * Bara LEVANDE bilagor räknas (`attachment.deleted_at IS NULL`) — det är
-     * de som bär spridningen nu. Containrar räknas via `item.container_id`.
+     * de som bär spridningen nu. Containrar räknas via `item.container_id`,
+     * eller — för en containerbilaga, issue 158 — via bilagans egen
+     * `container_id`. leftJoin mot item: en containerbild har
+     * `item_id = NULL` och hade fallit bort i en inre join, alltså hade en
+     * fil som sprids som containerns bild på flera containers inte synts i
+     * rapporten.
      *
      * @return list<array{content_hash: string, reference_count: int, distinct_accounts: int, distinct_containers: int}>
      */
@@ -410,7 +415,7 @@ class ReportsAbuseSignals
 
         return DB::table('stored_file')
             ->join('attachment', 'attachment.stored_file_id', '=', 'stored_file.id')
-            ->join('item', 'item.id', '=', 'attachment.item_id')
+            ->leftJoin('item', 'item.id', '=', 'attachment.item_id')
             ->whereNull('attachment.deleted_at')
             ->where('stored_file.reference_count', '>=', $referenceMin)
             ->groupBy('stored_file.id', 'stored_file.content_hash', 'stored_file.reference_count')
@@ -419,7 +424,7 @@ class ReportsAbuseSignals
                 'stored_file.content_hash,'
                 .' stored_file.reference_count,'
                 .' COUNT(DISTINCT attachment.billed_account_id) as distinct_accounts,'
-                .' COUNT(DISTINCT item.container_id) as distinct_containers'
+                .' COUNT(DISTINCT coalesce(item.container_id, attachment.container_id)) as distinct_containers'
             )
             ->orderByDesc('stored_file.reference_count')
             ->orderBy('stored_file.content_hash')

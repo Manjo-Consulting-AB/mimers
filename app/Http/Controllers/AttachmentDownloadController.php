@@ -41,14 +41,22 @@ use Symfony\Component\HttpFoundation\Response;
  * egenskap som en presignerad S3-URL har. Behörigheten prövades när länken
  * präglades; på originet finns ingen användare att pröva den mot.
  *
- * INGEN behörighetslogik utöver det bor här: efter att itemet visat sig inte
- * vara mjukraderat anropas bara Gate::authorize('view', ...) — sedan issue 71
+ * INGEN behörighetslogik utöver det bor här: efter att ägaren visat sig inte
+ * vara mjukraderad anropas bara Gate::authorize('view', ...) — sedan issue 71
  * mot BILAGANS ITEM, App\Policies\ItemPolicy::view() (Beslut 5). Läsning
  * räcker för att ladda ner; det är aldrig `update` och aldrig containern. Det
  * här är filleverans, och en containergrind där itemets skulle stått är exakt
  * det fel [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser räknar upp: en
  * omfångsbegränsad mottagare hade kunnat hämta en bilaga på ett item hon inte
  * ser.
+ *
+ * **Sedan issue 158 har en bilaga två slag** ([[ADR-0047 Containerns bild]]).
+ * Ägaren kommer ur App\Models\Attachment::accessSubject() — itemet för en
+ * itembilaga, containern för en containerbilaga — och grinden ställs mot
+ * exakt det som kom tillbaka. Containern för en itembilaga grindas alltså
+ * fortfarande INTE: dess `view` hade släppt igenom varje medlem i ägarkontot
+ * och därmed också en itemgrant-innehavare förbi itemets omfång. Valet av
+ * ägare är det enda som avgör, och det valet bor i modellen och inte här.
  *
  * `{attachment}` binds på bilagans ULID via #[RouteKey('ulid')] — en
  * mjukraderad bilaga syns inte av bindningen och ger 404 (Beslut 7).
@@ -63,25 +71,42 @@ class AttachmentDownloadController extends Controller
         Attachment $attachment,
         RecordSecurityEvent $recordSecurityEvent,
     ): Response {
-        $attachment->load(['storedFile', 'item.container']);
+        $attachment->load(['storedFile', 'item.container', 'container']);
 
-        // SoftDeletes' globala scope gäller även genom relationerna: item()
-        // är en belongsTo mot en mjukraderingsmodell, så ett raderat item ger
-        // null här och 404 redan i === null-grenen. Detsamma gäller containern,
-        // som laddas via itemets container-relation. trashed()-anropen är
-        // bälte-och-hängslen om någon senare lägger withTrashed() i bindningen
-        // — de är inte det som skyddar i dag (Beslut 7).
-        if ($attachment->item === null || $attachment->item->trashed()) {
+        // Vilket item eller vilken container bilagan hör till avgörs på ETT
+        // ställe, i modellen ([[ADR-0047 Containerns bild]] § Beslut, sista
+        // stycket) — inte här. Sedan issue 158 finns två slag av bilaga, och
+        // den här raden var den enda som frågade "vilket item?".
+        //
+        // SoftDeletes' globala scope gäller genom relationerna: båda är
+        // belongsTo mot mjukraderingsmodeller, så ett raderat item eller en
+        // raderad container ger null här och 404 redan i === null-grenen.
+        // trashed()-anropet är bälte-och-hängslen om någon senare lägger
+        // withTrashed() i bindningen — det är inte det som skyddar i dag
+        // (Beslut 7).
+        $subject = $attachment->accessSubject();
+
+        if ($subject === null || $subject->trashed()) {
             abort(404);
         }
 
-        $container = $attachment->item->container;
+        // Containern i säkerhetsloggen nedan. För en itembilaga är det
+        // itemets container, för en containerbilaga containern själv.
+        $container = $attachment->owningContainer();
 
         if ($container === null || $container->trashed()) {
             abort(404);
         }
 
-        Gate::authorize('view', $attachment->item);
+        // Grinden blir `view` på containern när `container_id` är satt och
+        // `view` på itemet när `item_id` är satt (ADR-0047 § Beslut). För en
+        // itembilaga är det alltså alltjämt itemgrinden, och
+        // [[ADR-0028 Åtkomst på itemnivå]] gäller oförändrat: en
+        // omfångsbegränsad mottagare når sitt item och inget annat. För en
+        // containerbilaga är det containergrinden, som en itemgrant passerar
+        // — bilden är containerns ansikte, och den som ser containerns namn
+        // ser också dess bild.
+        Gate::authorize('view', $subject);
 
         $variant = $request->query('variant');
         $filorigin = FileOrigin::host();

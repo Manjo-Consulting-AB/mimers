@@ -78,8 +78,11 @@ class ContainerExportBuilder
     {
         $disk = Storage::disk('files');
 
+        // `coverAttachment.storedFile` eagras: containerns bild följer alltid
+        // med i ZIP:en (issue 158), och en lat läsning per bilaga vore en
+        // fråga per export i stället för två.
         $container = Container::query()
-            ->with(['categories', 'tags'])
+            ->with(['categories', 'tags', 'coverAttachment.storedFile'])
             ->findOrFail($export->container_id);
 
         // Upplösningen sker här och inte i konstruktorn: `scoped()` tömmer
@@ -131,7 +134,7 @@ class ContainerExportBuilder
 
             $this->addLinks($itemArrays, $items);
 
-            $payload = $this->payload($container, $itemArrays, $categories, $tags);
+            $payload = $this->payload($container, $itemArrays, $categories, $tags, $this->addCover($container, $zip, $disk));
 
             $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
@@ -221,6 +224,52 @@ class ContainerExportBuilder
     }
 
     /**
+     * Containerns bild, skriven till ZIP:en under
+     * `filer/{container-ulid}/{filnamn}` — samma plats som itemens filer,
+     * men i containerns egen mapp (issue 158 · [[ADR-0047 Containerns
+     * bild]]).
+     *
+     * **Bilden följer ALLTID med, även för en omfångsbegränsad beställare.**
+     * Den är inte en del av omfånget så som itemen är: den som når
+     * containern ser dess bild, och den som får beställa en export når
+     * containern (ADR-0047 § Beslut, "Vem som får göra vad"). Att filtrera
+     * den på `$items` hade dolt containerns ansikte för just den läsare
+     * bilden finns till för.
+     *
+     * `uniqueFilename()` med en egen, tom uppsättning: containern har högst
+     * en bild, så det finns inget att krocka med — anropet sanerar namnet
+     * och ger det en ändelse, samma väg som itemens filer tar.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function addCover(Container $container, ZipArchive $zip, FilesystemAdapter $disk): ?array
+    {
+        $attachment = $container->coverAttachment;
+
+        if ($attachment === null) {
+            return null;
+        }
+
+        $entry = $this->attachmentEntry($attachment);
+        $stored = $attachment->storedFile;
+
+        if ($stored === null || ! $disk->exists($stored->storage_path)) {
+            $entry['missing'] = true;
+
+            return $entry;
+        }
+
+        $used = [];
+        $innerPath = 'filer/'.$container->ulid.'/'.$this->uniqueFilename($attachment->filename, $used);
+
+        $this->addFile($zip, $disk->path($stored->storage_path), $innerPath);
+
+        $entry['path'] = $innerPath;
+
+        return $entry;
+    }
+
+    /**
      * Fyller varje items `links` med item_link-raderna där itemet är ena
      * änden, sedda från just det itemet. En fråga för hela containern
      * (Beslut 14). En länk vars motpart är mjukraderad följer inte med —
@@ -274,9 +323,10 @@ class ContainerExportBuilder
      * @param  array<int, array<string, mixed>>  $itemArrays
      * @param  Collection<int, Category>  $categories
      * @param  Collection<int, Tag>  $tags
+     * @param  array<string, mixed>|null  $cover  containerns bild, ur addCover()
      * @return array<string, mixed>
      */
-    private function payload(Container $container, array $itemArrays, $categories, $tags): array
+    private function payload(Container $container, array $itemArrays, $categories, $tags, ?array $cover): array
     {
         $categoryUlidById = $categories->keyBy('id')->map(fn (Category $category): string => $category->ulid);
 
@@ -288,6 +338,9 @@ class ContainerExportBuilder
                 'name' => $container->name,
                 'kind' => $container->kind,
                 'created_at' => self::toTime($container->created_at),
+                // Containerns bild, eller null (issue 158). Alltid med som
+                // nyckel — samma regel som `kind` i ContainerResource.
+                'cover' => $cover,
             ],
             'categories' => $categories->map(fn (Category $category): array => [
                 'ulid' => $category->ulid,

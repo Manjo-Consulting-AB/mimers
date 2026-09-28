@@ -200,10 +200,32 @@ class AcceptOwnershipTransfer
     {
         return (int) DB::table('attachment')
             ->join('stored_file', 'stored_file.id', '=', 'attachment.stored_file_id')
-            ->whereIn('attachment.item_id', $this->containerItemsSubquery($container))
+            ->where(fn ($query) => $this->begransaTillContainern($query, $container))
             ->where('attachment.billed_account_id', $fromAccount->id)
             ->whereNull('attachment.deleted_at')
             ->sum('stored_file.byte_size');
+    }
+
+    /**
+     * Bilagorna som HÖR till containern, över båda slagen (issue 158 ·
+     * [[ADR-0047 Containerns bild]]): en itembilaga genom sitt item, en
+     * containerbilaga — containerns bild — genom sin egen kolumn.
+     *
+     * Formuleringen bor här och inte på de två anropsställena: `bytesAttFlytta()`
+     * och `flyttaBokfordaByten()` måste se EXAKT samma mängd, annars glider
+     * summan och raderna som bokförs om isär och räknarna stämmer inte.
+     *
+     * Containerbilden FÖLJER containern vid ägarbytet, precis som en
+     * främmande itembilaga (ADR-0047 § Beslut, "Livscykeln följer
+     * containern"). Utan den andra grenen hade säljaren fortsatt betala för
+     * köparens bild.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     */
+    private function begransaTillContainern($query, Container $container): void
+    {
+        $query->whereIn('attachment.item_id', $this->containerItemsSubquery($container))
+            ->orWhere('attachment.container_id', $container->id);
     }
 
     /**
@@ -221,7 +243,7 @@ class AcceptOwnershipTransfer
         (new AdjustUsage)->handle($toAccount->id, bytesDelta: +$bytes);
 
         DB::table('attachment')
-            ->whereIn('item_id', $this->containerItemsSubquery($container))
+            ->where(fn ($query) => $this->begransaTillContainern($query, $container))
             ->where('billed_account_id', $fromAccount->id)
             ->whereNull('deleted_at')
             ->update([

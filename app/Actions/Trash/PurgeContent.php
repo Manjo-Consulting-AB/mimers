@@ -48,6 +48,12 @@ class PurgeContent
      * väg som går genom PurgeAttachment (Beslut 3), som minskar räknaren och
      * markerar bytena för fysisk radering — den här metoden vet inget om
      * varken raden eller räknaren.
+     *
+     * Metoden tar vilken bilaga som helst och behövde därför ingen ändring när
+     * `item_id` blev nullbar (issue 158): en containerbilaga — containerns
+     * bild — gallras genom SAMMA väg. Det som skiljer är vem som anropar:
+     * `item()` nedan når bara bilagor med ett item, och containerns bild tas
+     * av App\Actions\Trash\PurgeContainer, som letar på `container_id`.
      */
     public function attachment(Attachment $attachment): void
     {

@@ -384,6 +384,37 @@ it('shared_stored_files listar en fil över tre konton men inte en inom ett kont
     expect($lista[0]['distinct_containers'])->toBe(3);
 });
 
+/*
+ * Issue 158 · [[ADR-0047 Containerns bild]]: en containerbilaga bär sin
+ * container i sin EGEN kolumn och inte genom ett item. Rapporten räknar
+ * distinkta containers, och utan `coalesce(item.container_id,
+ * attachment.container_id)` hade en bild som sprids mellan containers fallit
+ * bort ur joinen mot item — alltså precis den spridning rapporten finns för
+ * att se.
+ */
+it('shared_stored_files räknar containers för en bild utan item', function () {
+    $delad = StoredFile::factory()->create(['reference_count' => 12]);
+
+    foreach (range(1, 3) as $i) {
+        $konto = Account::factory()->create();
+        $container = Container::factory()->for($konto, 'account')->create();
+
+        Attachment::factory()->create([
+            'item_id' => null,
+            'container_id' => $container->id,
+            'stored_file_id' => $delad->id,
+            'kind' => 'image',
+            'billed_account_id' => $konto->id,
+        ]);
+    }
+
+    $lista = (new ReportsAbuseSignals)->handle()['shared_stored_files'];
+
+    expect($lista)->toHaveCount(1);
+    expect($lista[0]['distinct_accounts'])->toBe(3);
+    expect($lista[0]['distinct_containers'])->toBe(3);
+});
+
 it('loggen innehåller ingen rå IP-adress, ingen e-postadress och inget filnamn', function () {
     $ip = '203.0.113.99';
 

@@ -123,6 +123,13 @@ class StorageController extends Controller
                 'item' => fn ($query) => $query->withTrashed()->with([
                     'container' => fn ($query) => $query->withTrashed(),
                 ]),
+                // En containerbilaga (issue 158) har inget item: dess container
+                // kommer ur den här relationen i stället, och den måste vara
+                // eagrad av samma skäl som itemets — annars gör listan en
+                // fråga per containerbild. withTrashed() av samma skäl som
+                // ovan: en bilaga i en container i papperskorgen räknas
+                // fortfarande mot kontot.
+                'container' => fn ($query) => $query->withTrashed(),
             ])
             ->orderByDesc('stored_file.byte_size')
             ->orderByDesc('attachment.id')
@@ -142,7 +149,13 @@ class StorageController extends Controller
             'attachments' => $attachments->map(fn (Attachment $bilaga): array => [
                 ...StorageEntryResource::make($bilaga)->resolve($request),
 
-                'inTrash' => $bilaga->item->trashed() || $bilaga->item->container->trashed(),
+                // Samma regel som leveransens 404 (issue 158): raden är i
+                // papperskorgen när dess ÄGARE ligger där — itemet eller
+                // containern — eller när containern gör det. `accessSubject()`
+                // är ägaren, `owningContainer()` containern, och för en
+                // containerbilaga är de samma rad.
+                'inTrash' => $bilaga->accessSubject()?->trashed() === true
+                    || $bilaga->owningContainer()?->trashed() === true,
             ])->all(),
 
             'usage' => $readPlanUsage->handle($account)['usage']['storage'],

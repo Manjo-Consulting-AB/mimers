@@ -4,10 +4,12 @@ namespace App\Actions\Attachment;
 
 use App\Actions\Audit\RecordAuditEvent;
 use App\Actions\Usage\AdjustUsage;
+use App\Exceptions\Api\ApiException;
 use App\Jobs\GenerateImageDerivatives;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\AuditLog;
+use App\Models\Container;
 use App\Models\Item;
 use App\Models\StoredFile;
 use App\Models\User;
@@ -19,9 +21,10 @@ use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 /**
- * Sparar en uppladdad fil och kopplar den till ett item, med dedupen från
- * issue 16a § Beslut 10 — en instansklass med handle(), injicerad i
- * kontrollermetoden, se [[ADR-0024 Tunna controllers och actions]].
+ * Sparar en uppladdad fil och kopplar den till ett item eller en container,
+ * med dedupen från issue 16a § Beslut 10 — en instansklass med handle(),
+ * injicerad i kontrollermetoden, se [[ADR-0024 Tunna controllers och
+ * actions]].
  *
  * Flödet, i ordning: hash och sniffning UTANFÖR transaktionen (dyrt, rör
  * inte databasen), sedan bytena till disken UTANFÖR transaktionen (disk-I/O
@@ -53,8 +56,9 @@ use RuntimeException;
  *
  * `uploaded_by_user_id` kommer från token (§ Beslut 14), `billed_account_id`
  * från kroppens `account` efter medlemskapskontrollen (§ Beslut 2). Båda,
- * liksom `item_id` och `stored_file_id`, sätts explicit — aldrig via
- * massildelning.
+ * liksom `item_id`/`container_id` och `stored_file_id`, sätts explicit —
+ * aldrig via massildelning. Ägaren kommer från `handle()` (ett item) eller
+ * `handleForContainer()` (en container, issue 158).
  *
  * `AdjustUsage` anropas här med `new`, inte konstruktorinjicering — medvetet,
  * se [[ADR-0024 Tunna controllers och actions]]. Räknaren är en beroendefri,
@@ -72,6 +76,37 @@ class StoreAttachment
     public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
 
     public function handle(Item $item, UploadedFile $file, User $user, Account $account): Attachment
+    {
+        return $this->store($item, $file, $user, $account);
+    }
+
+    /**
+     * Samma flöde, men bilagan hamnar på en CONTAINER i stället för på ett
+     * item — containerns bild ([[ADR-0047 Containerns bild]] § Beslut).
+     *
+     * Egen ingång och inte en uppvidgad `handle()`: `handle()`:s `$item`
+     * anropas med namngivna argument från två kontrollers utanför den här
+     * issuen (App\Http\Controllers\AttachmentController och
+     * App\Http\Controllers\Api\AttachmentController), och en
+     * `Item|Container`-parameter hade tvingat fram en ändring där som
+     * issuen inte ber om. Båda ingångarna leder till SAMMA privata flöde —
+     * dedup, kvot, referensräkning, logg och derivat är identiska; det enda
+     * som skiljer är vilken kolumn som sätts.
+     *
+     * Skillnaden mot en itembilaga i övrigt: `container_id` sätts i stället
+     * för `item_id`, och händelseloggen skriver containern men inget item —
+     * raden hör till containern (issue 107, `item_id` är nullbar).
+     */
+    public function handleForContainer(Container $container, UploadedFile $file, User $user, Account $account): Attachment
+    {
+        // `image` och ingenting annat: en containerbilaga är alltid en bild
+        // ([[ADR-0047 Containerns bild]] § Beslut, tredje stycket). Kravet
+        // ställs på den SNIFFADE typen och prövas innan något skrivs — en
+        // avvisad fil lämnar varken rad, loggrad eller byten på disken.
+        return $this->store($container, $file, $user, $account, requiredKind: 'image');
+    }
+
+    private function store(Item|Container $owner, UploadedFile $file, User $user, Account $account, ?string $requiredKind = null): Attachment
     {
         // Hashen beräknas alltid på servern, ur den mottagna temporära
         // filen (Beslut 3); MIME-typen sniffas ur innehållet, aldrig ur
@@ -92,6 +127,17 @@ class StoreAttachment
         $byteSize = $file->getSize();
         $storagePath = $this->storagePathFromHash($hash);
         $filename = $this->cleanFilename($file->getClientOriginalName());
+        $kind = $this->kindFromMime($mimeType);
+
+        // Kravet på slaget prövas HÄR, efter sniffningen och före varje
+        // skrivning: en fil som avvisas ska varken få byten på disken, en
+        // `stored_file`-rad, en `attachment`-rad eller en loggrad. Att
+        // pröva på filändelsen i förväg vore en andra sanning om vad filen
+        // är (Beslut 5), och att pröva EFTER den här punkten hade kostat en
+        // städning av allt som hann skrivas.
+        if ($requiredKind !== null && $kind !== $requiredKind) {
+            throw ApiException::make('attachment.not_image', [], 422);
+        }
 
         // Bytena skrivs UTANFÖR transaktionen — en skrivning på upp till
         // taket (64 MiB) får inte hålla radlåset och serialisera samtidiga
@@ -117,7 +163,7 @@ class StoreAttachment
         // stored_file skapades; se dispatchen efter transaktionen (Beslut 3).
         $nyStoredFile = null;
 
-        $attachment = DB::transaction(function () use ($item, $user, $account, $hash, $mimeType, $byteSize, $storagePath, $filename, &$nyStoredFile): Attachment {
+        $attachment = DB::transaction(function () use ($owner, $user, $account, $hash, $mimeType, $byteSize, $storagePath, $filename, $kind, &$nyStoredFile): Attachment {
             // Nollställs per försök: retryar DB::transaction hela stängningen
             // (dödläge 40001) får inte en skapad stored_file från ett
             // rullat tillbaka försök dispatchen — den raden finns inte.
@@ -180,10 +226,19 @@ class StoreAttachment
             (new Entitlements)->assertStorageWithinLimit($account, $storedFile->byte_size);
 
             $attachment = new Attachment;
-            $attachment->item_id = $item->id;
+
+            // Exakt en av de två kolumnerna sätts — CHECK-villkoret i
+            // 2026_09_27_020000 upprätthåller det, och den här grenen är den
+            // enda som skriver dem.
+            if ($owner instanceof Container) {
+                $attachment->container_id = $owner->id;
+            } else {
+                $attachment->item_id = $owner->id;
+            }
+
             $attachment->stored_file_id = $storedFile->id;
             $attachment->filename = $filename;
-            $attachment->kind = $this->kindFromMime($mimeType);
+            $attachment->kind = $kind;
             $attachment->uploaded_by_user_id = $user->id;
             $attachment->billed_account_id = $account->id;
             $attachment->save();
@@ -206,12 +261,18 @@ class StoreAttachment
             // beskriva en bilaga som inte finns. `meta` bär `kind` och aldrig
             // filnamnet — namnet är användarens fritext och slås upp ur
             // raden när historiken visas (issue 116).
+            // Containern raden hör till, oavsett slag: itemets för en
+            // itembilaga, ägarcontainern för en containerbilaga.
+            $container = $owner instanceof Container ? $owner : $owner->container;
+
             $this->recordAuditEvent->handle(
                 action: AuditLog::ACTION_ATTACHMENT_CREATED,
-                account: $item->container->account,
+                account: $container->account,
                 user: $user,
-                container: $item->container,
-                item: $item,
+                container: $container,
+                // Null för en containerbilaga: händelsen hör till containern
+                // och inte till något item (issue 107, item_id är nullbar).
+                item: $owner instanceof Item ? $owner : null,
                 subjectType: 'attachment',
                 subjectUlid: $attachment->ulid,
                 meta: ['kind' => $attachment->kind],
