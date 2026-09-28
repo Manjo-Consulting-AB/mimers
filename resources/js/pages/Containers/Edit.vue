@@ -2,6 +2,8 @@
 import { ref } from 'vue';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerCover from '../../components/ContainerCover.vue';
+import ContainerCoverSheet from '../../components/ContainerCoverSheet.vue';
 import FormField from '../../components/FormField.vue';
 import { containerSettingsSections } from '../../layouts/containerSections.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -73,6 +75,17 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * `delete()` som förut, och en `read`-mottagare som postar förbi vyn får 403.
  * Rubriken och sidtiteln följer samma gren som formuläret — att mötas av
  * *Redigera container* när man inte får redigera är en osanning.
+ *
+ * **Bildavsnittet kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut**
+ * och är den andra av de två vägarna till samma val: pennan på bilden i
+ * containerns topprad (resources/js/layouts/ContainerLayout.vue) och det här
+ * avsnittet öppnar SAMMA ark ur SAMMA komponent,
+ * `ContainerCoverSheet`. Att avsnittet ligger HÄR och inte i formuläret är
+ * med flit: bilden är inte ett fält i `PATCH /containers/{container}` utan sin
+ * egen rutt, och att blanda in den i formulärets `useForm` hade gett en
+ * sparning två mål. Det ritas ur `can.update`, samma flagga som formuläret —
+ * den som bara får läsa ser varken pennan eller avsnittet, och rutten prövar
+ * `ContainerPolicy::update` på nytt.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -133,7 +146,7 @@ async function destroy() {
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerLayout :container="container" :can="can">
         <!-- Sidtiteln och rubriken följer samma gren som formuläret: *Redigera
              container* åt någon som inte får redigera är en osanning, och den
              som kommer hit för sektionernas skull möts av listans namn i
@@ -248,6 +261,33 @@ async function destroy() {
                 {{ form.processing ? t('common.pending.default') : t('container.edit.submit') }}
             </button>
         </form>
+
+        <!--
+            Bilden (issue 159). Eget avsnitt och inte ett fält i formuläret
+            ovan: den har sin egen rutt, och en sparande knapp som gjorde två
+            saker hade varit två svar på frågan vad knappen gör.
+        -->
+        <section v-if="can.update" class="mt-12 border-t border-border pt-6">
+            <h2 class="text-title">{{ t('container.cover.heading') }}</h2>
+
+            <p class="mt-1 text-sm text-ink-subtle">{{ t('container.cover.description') }}</p>
+
+            <div class="mt-4 flex flex-wrap items-center gap-4">
+                <span class="h-16 w-16 shrink-0 overflow-hidden rounded-control">
+                    <ContainerCover :cover="container.cover" />
+                </span>
+
+                <ContainerCoverSheet :container="container" v-slot="{ open }">
+                    <button
+                        type="button"
+                        class="inline-flex min-h-11 items-center rounded border border-border px-4 text-sm font-medium text-ink hover:bg-surface-muted"
+                        @click="open"
+                    >
+                        {{ t('container.cover.edit') }}
+                    </button>
+                </ContainerCoverSheet>
+            </div>
+        </section>
 
         <nav :aria-label="t('container.edit.sections')" class="mt-12 border-t border-border pt-6">
             <h2 class="text-title">{{ t('container.edit.sections') }}</h2>

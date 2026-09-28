@@ -685,7 +685,10 @@ it('renderar redigeringssidan i ContainerLayout med containerns namn', function 
     $vy = File::get(resource_path('js/pages/Containers/Edit.vue'));
     $layout = File::get(resource_path('js/layouts/ContainerLayout.vue'));
 
-    expect($vy)->toContain('<ContainerLayout :container="container">');
+    // `:can` kom med issue 159: skalet ritar pennan på containerns bild ur
+    // samma flagga som formuläret ritas ur ([[ADR-0047 Containerns bild]]
+    // § Beslut, "Vem som får göra vad").
+    expect($vy)->toContain('<ContainerLayout :container="container" :can="can">');
     expect($layout)->toContain('container.name');
 });
 

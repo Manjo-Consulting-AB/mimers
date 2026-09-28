@@ -66,7 +66,13 @@ class ContainerController extends Controller
             // gör en lista med N containers N+1 frågor — en extra fråga
             // per rad för ägarkontot. Låst av
             // ContainerCrudTest::it('listningen laddar ägarkontot i förväg').
-            ->with('account')
+            //
+            // Bilden (issue 159) är samma sak en gång till: `cover` läser
+            // `coverAttachment.storedFile.derivatives`, och utan den här
+            // raden hade varje container MED bild kostat två frågor till.
+            // Containrar utan bild kostar ingenting — en nullbar främmande
+            // nyckel slår inte upp något.
+            ->with(['account', 'coverAttachment.storedFile.derivatives'])
             ->orderBy('name')
             ->get();
 

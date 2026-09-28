@@ -4,6 +4,7 @@ namespace App\Actions\Container;
 
 use App\Actions\Access\ResolveItemScope;
 use App\Actions\Schedule\ListTodo;
+use App\Http\Resources\ContainerResource;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
@@ -52,9 +53,12 @@ use Illuminate\Support\Collection;
  * och artens sträng för de andra, så att vyn kan se skillnaden: en sträng som
  * kommer ur användarens tangentbord ska aldrig slås upp i `lang/`.
  *
- * **Foto, undertitel och framdriftsstapel finns inte i svaret.** Ingen av dem
- * har en datakälla (issue 124 § Klart när, [[ADR-0042 Designsystemet]]), och
- * ett fält utan källa är ett påstående om att något finns.
+ * **Fotot kom med issue 159 · [[ADR-0047 Containerns bild]]**; undertitel och
+ * framdriftsstapel finns fortfarande inte. Ingen av dem har en datakälla
+ * (issue 124 § Klart när, [[ADR-0042 Designsystemet]]), och ett fält utan
+ * källa är ett påstående om att något finns. Kortets `cover` är samma form som
+ * containerlistans, ur App\Http\Resources\ContainerResource::cover() — se
+ * `group()` nedan.
  */
 class ListContainerSummaries
 {
@@ -70,7 +74,13 @@ class ListContainerSummaries
      *     stats: array{containers: int, tasks: int, overdue: int},
      *     groups: list<array{
      *         kind: string|null,
-     *         containers: list<array{ulid: string, name: string, items: int, todos: int}>
+     *         containers: list<array{
+     *             ulid: string,
+     *             name: string,
+     *             items: int,
+     *             todos: int,
+     *             cover: array{ulid: string, variants: list<string>}|null
+     *         }>
      *     }>
      * }
      */
@@ -78,10 +88,17 @@ class ListContainerSummaries
     {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
+        // `cover_attachment_id` MÅSTE stå i urvalet: `ContainerResource::
+        // cover()` läser pekaren, och en kolumn som inte hämtats är null —
+        // korten hade tyst tappat sina bilder. Bilden och dess derivat
+        // eager-loadas av samma skäl som ägarkontot i API:et: utan det blir
+        // dashboarden N+1, och kravet är ett KONSTANT antal frågor oavsett
+        // antal containrar (issue 159 § Klart när, issue 70 § Beslut 2).
         $containers = Container::query()
             ->accessibleBy($user, $accountIds)
+            ->with('coverAttachment.storedFile.derivatives')
             ->orderBy('name')
-            ->get(['id', 'ulid', 'name', 'kind']);
+            ->get(['id', 'ulid', 'name', 'kind', 'cover_attachment_id']);
 
         $itemCounts = $this->itemCounts(
             $user,
@@ -200,7 +217,13 @@ class ListContainerSummaries
      * @param  array<string, int>  $todoCounts
      * @return list<array{
      *     kind: string|null,
-     *     containers: list<array{ulid: string, name: string, items: int, todos: int}>
+     *     containers: list<array{
+     *         ulid: string,
+     *         name: string,
+     *         items: int,
+     *         todos: int,
+     *         cover: array{ulid: string, variants: list<string>}|null
+     *     }>
      * }>
      */
     private function group(Collection $containers, array $itemCounts, array $todoCounts): array
@@ -233,6 +256,11 @@ class ListContainerSummaries
                 'name' => $container->name,
                 'items' => $itemCounts[$container->id] ?? 0,
                 'todos' => $todoCounts[$container->ulid] ?? 0,
+                // Bilden (issue 159). Formen kommer ur
+                // App\Http\Resources\ContainerResource::cover() och skrivs
+                // inte av här: kortet och containerlistan bär samma bild i
+                // samma form, och två formuleringar av den hade glidit isär.
+                'cover' => ContainerResource::cover($container),
             ];
 
             if (in_array($container->kind, $egnaArter, true)) {

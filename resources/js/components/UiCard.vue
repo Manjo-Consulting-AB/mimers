@@ -14,6 +14,14 @@
  * slotten FINNS och aldrig om den är tom: en tom rad till höger är samma sak
  * som ingen rad, men med luft omkring sig.
  *
+ * **Bilden kom med issue 159 · [[ADR-0047 Containerns bild]].** `media` är en
+ * tredje valfri slot, och den ligger ÖVER rubrikraden och kant i kant med
+ * kortets ram — så kortets foto ser ut som i `docs/Design/main.jpeg`, där
+ * bilden fyller kortets överkant. Kortet väljer ingen höjd och ingen bild: är
+ * slotten tom ritas ingenting, och den som skickar en bild äger dess mått.
+ * Kortet har fortfarande inga proppar, och de sex anropare som inte skickar
+ * `media` ritas precis som förut.
+ *
  * Rubriken är en `<h2>`. Sidan äger sin `<h1>` (GenomgangTest), och korten
  * ligger under den — därför ingen rubriknivå som propp.
  *
@@ -23,19 +31,29 @@
 </script>
 
 <template>
-    <section class="rounded-card border border-border bg-surface p-4">
-        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-            <h2 class="text-title font-semibold text-ink">
-                <slot name="heading" />
-            </h2>
-
-            <div v-if="$slots.action" class="text-meta">
-                <slot name="action" />
-            </div>
+    <section class="overflow-hidden rounded-card border border-border bg-surface">
+        <!--
+            Kortets bild. `overflow-hidden` på ramen skär hörnen, så bilden
+            följer kortets radie utan att klippas i en egen ruta.
+        -->
+        <div v-if="$slots.media" class="border-b border-border bg-surface-sunken">
+            <slot name="media" />
         </div>
 
-        <div class="mt-3">
-            <slot />
+        <div class="p-4">
+            <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <h2 class="text-title font-semibold text-ink">
+                    <slot name="heading" />
+                </h2>
+
+                <div v-if="$slots.action" class="text-meta">
+                    <slot name="action" />
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <slot />
+            </div>
         </div>
     </section>
 </template>

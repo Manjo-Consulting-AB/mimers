@@ -1,5 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import ContainerCover from './ContainerCover.vue';
 import UiCard from './UiCard.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -26,11 +27,23 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Ramen är `UiCard`** (issue 99): rubriken är kortets rubrikrad och talen är
  * innehållet. Ingen egen ram och ingen egen rubriknivå.
  *
+ * **Fotot kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut**, i
+ * `UiCard`s `media`-slot över rubrikraden — så kortet ser ut som i
+ * `docs/Design/main.jpeg`, där bilden fyller kortets överkant. Bilden är
+ * containerns egen och kommer färdig i `container.cover`, ur
+ * App\Actions\Container\ListContainerSummaries. Kortet väljer varken bild
+ * eller storlek: `ContainerCover` fyller rutan, och rutan är kortets.
+ *
+ * **Även utan bild ritas ytan** (ADR-0047 § Beslut: en neutral yta med
+ * ikonen, aldrig en tom ram). Kortet hade kunnat utelämna raden helt och blivit
+ * lägre — men då hade två kort i samma rad olika höjd, och en container utan
+ * bild sett ut som ett annat slags kort än de andra.
+ *
  * **Ingen sträng står i filen** (issue 52 · [[ADR-0013 Språk och i18n]]): varje
  * text kommer ur `t()` med en nyckel under `dashboard.containers.*`.
  */
 const props = defineProps({
-    /* `{ ulid, name, items, todos }` — talen är antalet inom användarens omfång. */
+    /* `{ ulid, name, items, todos, cover }` — talen är antalet inom användarens omfång. */
     container: { type: Object, required: true },
 });
 
@@ -39,6 +52,12 @@ const { t } = useTranslations();
 
 <template>
     <UiCard class="min-w-64 flex-1">
+        <template #media>
+            <div class="aspect-video w-full">
+                <ContainerCover :cover="props.container.cover" />
+            </div>
+        </template>
+
         <template #heading>
             <Link
                 :href="`/containers/${props.container.ulid}`"

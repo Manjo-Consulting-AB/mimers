@@ -15,6 +15,7 @@ use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
+use App\Http\Controllers\ContainerCoverController;
 use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
@@ -1093,6 +1094,36 @@ Route::middleware('auth')->group(function () {
      */
     Route::delete('/containers/{container}', [ContainerController::class, 'destroy'])
         ->name('containers.destroy');
+
+    /*
+     * Issue 159 · Containerns bild i gränssnittet, se [[ADR-0047 Containerns
+     * bild]] § Beslut och App\Http\Controllers\ContainerCoverController.
+     *
+     * Två rutter och ingen sida: bilden kommer med containerns egen prop ur
+     * App\Http\Resources\ContainerResource, och en egen läsrutt hade varit en
+     * andra väg till samma svar. Den här rutten är den enda klienten —
+     * `/api` får ingen bildyta, eftersom webben är den enda klienten och
+     * actionen bakom (SetContainerCover) redan är byggd och prövad i 158.
+     *
+     * **`throttle:uploads` på POST:en** — samma begränsare som
+     * itemuppladdningen och `/api` använder
+     * (App\Providers\AppServiceProvider::configureUploadRateLimiting()), och
+     * den är nycklad på användaren och inte på rutten, så webben och API:et
+     * delar tak (issue 60 § Beslut 1).
+     *
+     * Båda svarar `back()` med en flash-kod, och ett kvot-, storleks- eller
+     * slagfel blir ett fältfel på `file` — aldrig en JSON-kropp (issue 60
+     * § Beslut 5).
+     *
+     * Ingen `scopeBindings()`: rutterna har bara ett rutt-parameter, som
+     * containerrutterna ovan.
+     */
+    Route::post('/containers/{container}/cover', [ContainerCoverController::class, 'store'])
+        ->middleware('throttle:uploads')
+        ->name('containers.cover.store');
+
+    Route::delete('/containers/{container}/cover', [ContainerCoverController::class, 'destroy'])
+        ->name('containers.cover.destroy');
 
     /*
      * Issue 65b § Beslut 1 och 2 · Containerns kalenderlänk, se

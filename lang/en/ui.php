@@ -349,6 +349,14 @@ return [
         'attachment-uploaded' => 'The attachment has been uploaded.',
         'attachment-deleted' => 'The attachment is in the trash. It can be restored within 30 days.',
 
+        // Issue 159 · [[ADR-0047 Containerns bild]]. Two codes and not one:
+        // setting and removing are two different things, and the removal is
+        // NOT "deleted" — a container image never enters the trash, it is
+        // purged at once (ADR-0047 § Beslut, fjärde stycket), so the sentence
+        // must not promise a restore that does not exist.
+        'container-cover-updated' => 'The container image has been saved.',
+        'container-cover-removed' => 'The container image has been removed.',
+
         // Issue 67a decision 1. Three codes and not one: the three buttons do
         // three different things, and "saved" without saying what would have
         // been true but not an answer to what happened. `loan-deleted` says the
@@ -456,6 +464,16 @@ return [
         // `container_access.revoked` on /api and this sentence in the web.
         'container_access' => [
             'revoked' => 'The access has been revoked or has expired and cannot be changed.',
+        ],
+
+        // Issue 159 · [[ADR-0047 Containerns bild]]. A container image is
+        // always an image, and the refusal comes from
+        // App\Actions\Attachment\StoreAttachment::handleForContainer() as
+        // `attachment.not_image` — after the file is sniffed, never from the
+        // filename. On the web it becomes a field error on `file` and this
+        // sentence; the code itself never reaches a browser (ADR-0013).
+        'attachment' => [
+            'not_image' => 'That file is not an image. A container image must be a picture.',
         ],
 
         // Issue 62a decision 7: `RestoreContent` throws `trash.parent_deleted`
@@ -1474,6 +1492,34 @@ return [
         'destroy' => [
             'action' => 'Delete the container',
             'confirm' => ':name and everything in it moves to the trash. It stays there for 30 days and can be restored from there. Do you want to continue?',
+        ],
+
+        // The container's image, see issue 159 · [[ADR-0047 Containerns bild]]
+        // § Beslut — the surface. Two ways lead to the same choice: the pencil
+        // on the image at the top of the container, and the section under the
+        // container's settings. Both open the same sheet with the same three
+        // rows, always all three, and `heading` is the name both the sheet and
+        // the section carry — a user who meets the two surfaces should not
+        // have to wonder whether they do the same thing.
+        //
+        // `camera` says what the row DOES, not what it opens: there is no
+        // camera in the app — the row is a file picker with `capture`, and the
+        // phone's own camera answers. A word promising a built-in camera would
+        // be untrue. `device` is the other half of the same pair: the same
+        // picker without `capture`, which on a phone opens the photo library.
+        //
+        // `remove` is the third row and is always there, also on a container
+        // without an image: the sheet is one choice with three answers
+        // (ADR-0047 § Beslut), and a row that comes and goes is a second shape
+        // of the same sheet. App\Actions\Container\RemoveContainerCover makes
+        // the call a no-op, so nothing breaks.
+        'cover' => [
+            'heading' => 'Container image',
+            'edit' => 'Change the image',
+            'camera' => 'Take a photo',
+            'device' => 'Choose from your device',
+            'remove' => 'Remove the image',
+            'description' => 'The image is the container\'s face. It is shown in the container list, on the dashboard and at the top of the container.',
         ],
 
         // The category tree, see issue 56a decisions 1, 2, 3 and 4.

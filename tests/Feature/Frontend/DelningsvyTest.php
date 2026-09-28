@@ -1088,6 +1088,11 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/items/{item}/schedules/{schedule}/dependencies',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/dependencies',
         'containers',
+        // Issue 159: containerns bild. Den sätter en bilaga på containern och
+        // rör inga `container_access`-rader alls — grinden är
+        // `ContainerPolicy::update`, samma pinne som att byta containerns
+        // namn. Ingen ny läsare och ingen ny mottagare läggs till.
+        'containers/{container}/cover',
         'containers/{container}/calendar',
         'containers/{container}/invitations',
         'containers/{container}/transfer',

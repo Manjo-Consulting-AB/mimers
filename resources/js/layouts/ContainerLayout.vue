@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import AppLayout from './AppLayout.vue';
+import ContainerCover from '../components/ContainerCover.vue';
+import ContainerCoverSheet from '../components/ContainerCoverSheet.vue';
 import UiTabs from '../components/UiTabs.vue';
 import { containerTabs } from './containerSections.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -63,12 +65,27 @@ import { useTranslations } from '../composables/useTranslations.js';
  * den fällda menyn var svaret på. Skrollen bor i `UiTabs` och gäller varje
  * flikrad; över `md:` bryter bandet som förut.
  *
- * **Toppraden på mobilen bär containerns namn och en tillbakaknapp** (issue
- * 151). Adressen tillbaka är `/containers` — listan man kom ifrån — och
+ * **Toppraden på mobilen bär containerns bild, namn och en tillbakaknapp**
+ * (issue 151). Adressen tillbaka är `/containers` — listan man kom ifrån — och
  * etiketten är skalets egen (`nav.back`): knappen är en ikon, och en ikon utan
  * namn är en knapp en skärmläsare inte kan läsa. Antalet items som bilden visar
  * tas inte med; det finns inte i den här layoutens props, och att hämta det
- * vore en fråga per sida (issue 159 ritar bilden).
+ * vore en fråga per sida.
+ *
+ * **Bilden kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut**, och
+ * det är den tredje av de tre ytor bilden ritas på: containerlistan,
+ * dashboardens kort och containerns topprad. Den ritas bara här — över `md:`
+ * står namnraden kvar som den var, för den bild desktopmockupen ritar
+ * (`docs/Design/container.jpeg`) är containerns hjälte, och den är en egen yta
+ * som ingen issue byggt ännu.
+ *
+ * **Pennan öppnar arket, och den ritas bara för den som får ändra containern**
+ * (ADR-0047 § Beslut, "Vem som får göra vad"). Flaggan kommer som `can` från
+ * sidan och läses ur samma policyfråga som formuläret på inställningssidan —
+ * `ContainerPolicy::update` — och den är presentation: rutten prövar samma
+ * grind på nytt. Arket ligger i `ContainerCoverSheet` och är detsamma som
+ * avsnittet under containerns inställningar öppnar
+ * (resources/js/pages/Containers/Edit.vue): två vägar till samma val.
  *
  * **Plusknappen förmedlas och byggs inte här** (issue 152 · [[ADR-0048
  * Mobilen och plusknappen]] § 2). Layouten tar emot `create` och skickar den
@@ -88,11 +105,26 @@ const props = defineProps({
      * till. En sida som inte skickar något får ingen knapp.
      */
     create: { type: Object, default: null },
+    /*
+     * `{ update }` — samma flagga som inställningssidan ritar sitt formulär ur
+     * (issue 159). Den styr om pennan på bilden ritas; arket och rutten prövar
+     * behörigheten ändå.
+     *
+     * Flaggan kan inte bo i `container`-proppen: `can` är webbens fält och
+     * läggs BREDVID `ContainerResource`, aldrig inuti den (issue 54 § Beslut
+     * 9). Den kommer därför från sidan — och en sida som inte skickar den får
+     * ingen penna. I den här issuen skickar översikten och inställningssidan
+     * den; de övriga containernsidorna gör det inte, och deras topprad visar
+     * bilden utan penna.
+     */
+    can: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
 
 const heading = computed(() => props.container.name);
+
+const canUpdate = computed(() => props.can?.update === true);
 
 /*
  * Flikarna i den form `UiTabs` vill ha: `{ key, label, href, count }`. `count`
@@ -133,7 +165,43 @@ const tabs = computed(() =>
                 </svg>
             </Link>
 
+            <!--
+                Containerns bild, i samma fyrkant som bild 2 i
+                docs/Design/mobil.png. Utan bild ritar `ContainerCover` den
+                neutrala ytan med containertecknet (ADR-0047 § Beslut).
+            -->
+            <span class="h-10 w-10 shrink-0 overflow-hidden rounded-control">
+                <ContainerCover :cover="container.cover" />
+            </span>
+
             <p class="text-title font-semibold">{{ heading }}</p>
+
+            <ContainerCoverSheet
+                v-if="canUpdate"
+                :container="container"
+                v-slot="{ open }"
+            >
+                <button
+                    type="button"
+                    class="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center"
+                    :aria-label="t('container.cover.edit')"
+                    @click="open"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-5 w-5"
+                        aria-hidden="true"
+                    >
+                        <path d="M4 20h4l10-10-4-4L4 16z"></path>
+                        <path d="m14 6 4 4"></path>
+                    </svg>
+                </button>
+            </ContainerCoverSheet>
         </template>
 
         <div class="flex flex-col gap-8">
