@@ -20,11 +20,16 @@ use function Pest\Laravel\getJson;
  * ångra, inte egenskaper ([[ADR-0008 Soft delete och papperskorg]]
  * § Uppföljning 2026-09-26).
  *
- * Två saker bevisas, och de hänger ihop:
+ * Tre saker bevisas, och de hänger ihop:
  *
  * - **Papperskorgen visar ingen containerbilaga.** Uppslaget i ListTrash
  *   joinar mot `item`, och en containerbilaga har `item_id = NULL` — den
  *   matchar aldrig och kan därför varken listas eller återställas.
+ * - **TrashAttachment rensar en containerbilaga direkt** i stället för att
+ *   mjukradera den, och släpper containerns pekare. Det är grenen som gör att
+ *   nedgraderingen och lagringsrensningen kan välja en bild alls — bytena
+ *   räknas mot kontots kvot (ADR-0047 § Beslut), och en bild deras urval inte
+ *   kunde röra vore en del av kvoten ingen kunde frigöra.
  * - **En container som gallras tar sin bild med sig**, genom PurgeContainer.
  *   `attachment.container_id` är ON DELETE RESTRICT, så utan den raden hade
  *   hela den nattliga gallringen fallit på containern.
@@ -109,32 +114,37 @@ it('svarar utan containerbilagan på /api', function () {
 });
 
 /*
- * FYND — en containerbilaga kan inte mjukraderas.
+ * Klart när: en containerbilaga som väljs för borttagning rensas direkt,
+ * pekaren nollställs, och den syns inte i papperskorgen.
  *
- * `TrashAttachment::handle()` slår upp bilagans item med
- * `Item::withTrashed()->findOrFail($rad->item_id)`. För en containerbilaga är
- * `item_id` NULL, och anropet kastar ModelNotFoundException i stället för att
- * mjukradera.
+ * Vägen dit i drift är två ytor: lagringsrensningen (AccountStorageController
+ * och Settings\StorageController, båda genom TrashAttachment) och
+ * nedgraderingen (App\Console\EnforcesDowngrades). Bytena räknas mot kontots
+ * kvot (ADR-0047 § Beslut), så en bild deras urval inte kunde röra vore en
+ * del av kvoten ingen kunde frigöra — därför samma utfall som
+ * RemoveContainerCover: raden försvinner på riktigt och pekaren släpps.
  *
- * Vägen dit finns i dag i två ytor utanför den här issuen omfång:
- * `App\Console\EnforcesDowngrades` väljer rader ur `attachment` på
- * `billed_account_id` (via App\Actions\Plan\ReadPlanUsage) och skickar dem
- * till TrashAttachment, och `Settings\StorageController::destroy` gör samma
- * sak för det användaren kryssar för. Ingen av dem kan träffa en
- * containerbilaga förrän § 159 ger ytan som skapar en — därför är det här ett
- * `->todo()` och inte en röd svit.
- *
- * Provet är skrivet och inte lagat: [[Testplan filer]] § Ingressen säger att
- * ett fel ett prov hittar inte lagas i samma PR, och båda filerna ligger
- * utanför omfångsrutan. Se `## Frågor och antaganden` i PR:en.
+ * Att raden INTE får någon `deleted_at` är hela skillnaden mot en itembilaga,
+ * och den syns i samma prov: `withTrashed()` hittar den inte, och
+ * papperskorgens lista bär den inte. Pekaren nollställs av actionen och inte
+ * av `ON DELETE SET NULL` — den räddar bara en pekare som råkar vara satt,
+ * och provet faller om nollställningen glöms.
  */
-it('kan mjukradera en containerbilaga genom TrashAttachment', function () {
-    [$konto, $medlem, , $bild] = bildpapperskorgKontext();
+it('rensar en containerbilaga direkt, nollställer pekaren och visar den inte i papperskorgen', function () {
+    [, $medlem, $container, $bild] = bildpapperskorgKontext();
 
-    app(TrashAttachment::class)->handle($bild, $medlem);
+    $fil = $bild->storedFile;
 
-    expect($bild->refresh()->deleted_at)->not->toBeNull();
-})->todo('TrashAttachment::handle() gör findOrFail($rad->item_id) och item_id är NULL för en containerbilaga — ModelNotFoundException. Vägen dit: EnforcesDowngrades och StorageController::destroy, båda utanför omfångsrutan.');
+    expect(app(TrashAttachment::class)->handle($bild, $medlem))->toBeTrue();
+
+    expect(Attachment::withTrashed()->whereKey($bild->id)->exists())->toBeFalse();
+    expect($container->refresh()->cover_attachment_id)->toBeNull();
+    expect($fil->refresh()->reference_count)->toBe(0);
+
+    $lista = app(ListTrash::class)->handle($medlem, $container);
+
+    expect(collect($lista['entries'])->pluck('ulid')->all())->not->toContain($bild->ulid);
+});
 
 /*
  * Klart när: en container som rensas tar sin bild med sig.

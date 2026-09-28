@@ -19,8 +19,11 @@ use Illuminate\Support\Facades\Gate;
  * 30 dagar enligt [[Filer och lagring]] § Radering.
  *
  * **Grinden är `ContainerPolicy::update`**, samma pinne som att sätta
- * bilden. Den ligger här och inte hos anroparen, av samma skäl som i
- * SetContainerCover.
+ * bilden. Den ligger i `handle()` och inte hos anroparen, av samma skäl som
+ * i SetContainerCover. `purge()` är kärnan utan grind — den delas med
+ * App\Actions\Attachment\TrashAttachment, vars anropare redan har sin egen.
+ * Samma uppdelning som PurgeAttachment gör: verktyget prövar inte vem som
+ * får, det gör den som äger ytan.
  *
  * **Ordningen: pekaren först, bilagan sedan.** Hade bilagan rensats först
  * hade `cover_attachment_id` pekat på en rad som inte finns — och
@@ -54,26 +57,11 @@ class RemoveContainerCover
         Gate::authorize('update', $container);
 
         return DB::transaction(function () use ($container): bool {
-            // withTrashed() — containern kan ha mjukraderats mellan anroparens
-            // uppslag och det här låset. Är raden redan gallrad finns ingen
-            // pekare att nollställa.
-            $rad = Container::withTrashed()
-                ->whereKey($container->getKey())
-                ->lockForUpdate()
-                ->first();
-
-            if ($rad === null) {
-                return false;
-            }
-
-            $bilagaId = $rad->cover_attachment_id;
+            $bilagaId = $this->clearPointer($container);
 
             if ($bilagaId === null) {
                 return false;
             }
-
-            $rad->cover_attachment_id = null;
-            $rad->save();
 
             $bilaga = Attachment::withTrashed()->find($bilagaId);
 
@@ -81,12 +69,83 @@ class RemoveContainerCover
                 $this->purgeAttachment->handle($bilaga);
             }
 
-            // Instansen anroparen skickade in bär den nollställda pekaren —
-            // annars vore den en förlegad läsning av samma slag som låset
-            // stänger.
-            $container->refresh();
-
             return true;
         });
+    }
+
+    /**
+     * Kärnan, utan grind: den bilaga som anroparen pekar ut rensas, och
+     * containerns pekare nollställs om den pekar på just den raden.
+     *
+     * App\Actions\Attachment\TrashAttachment tar den här vägen när en
+     * containerbilaga väljs för borttagning — av lagringsytan eller av
+     * nedgraderingen. En sådan bilaga går INTE till papperskorgen (ADR-0047
+     * § Beslut, fjärde stycket): den rensas direkt. Grinden ligger hos
+     * anroparen där (AccountPolicy::manageStorage, eller systemet vid
+     * nedgraderingen), precis som ContainerPolicy::update ligger hos
+     * handle() — kärnan prövar ingen.
+     *
+     * Villkoret på pekaren är det som skiljer den här vägen från handle():
+     * TrashAttachment rensar en BESTÄMD rad, och en containerbilaga som inte
+     * är containerns bild ska inte släppa en pekare som går någon annanstans.
+     * Containern slås upp med `withTrashed()` — en bilaga i en container i
+     * papperskorgen kan väljas, och pekaren ska nollställas ändå.
+     *
+     * Ingen egen kontroll av om bilagan finns: PurgeAttachment är idempotent
+     * per rad och en redan rensad rad är inget att städa.
+     */
+    public function purge(Attachment $attachment): void
+    {
+        DB::transaction(function () use ($attachment): void {
+            if ($attachment->container_id !== null) {
+                $container = Container::withTrashed()->find($attachment->container_id);
+
+                if ($container !== null) {
+                    $this->clearPointer($container, $attachment->getKey());
+                }
+            }
+
+            $this->purgeAttachment->handle($attachment);
+        });
+    }
+
+    /**
+     * Nollställer pekaren under radlås och lämnar tillbaka id:t som stod där.
+     * Null när det inte fanns något att nollställa: containern är gallrad,
+     * pekaren var redan tom, eller `$endast` namnger en annan rad.
+     *
+     * @param  int|null  $endast  Nollställ bara när pekaren är just den här
+     *                            bilagan — TrashAttachment rensar en bestämd
+     *                            rad och får inte släppa någon annans pekare.
+     */
+    private function clearPointer(Container $container, ?int $endast = null): ?int
+    {
+        // withTrashed() — containern kan ha mjukraderats mellan anroparens
+        // uppslag och det här låset. Är raden redan gallrad finns ingen
+        // pekare att nollställa.
+        $rad = Container::withTrashed()
+            ->whereKey($container->getKey())
+            ->lockForUpdate()
+            ->first();
+
+        if ($rad === null) {
+            return null;
+        }
+
+        $bilagaId = $rad->cover_attachment_id;
+
+        if ($bilagaId === null || ($endast !== null && $bilagaId !== $endast)) {
+            return null;
+        }
+
+        $rad->cover_attachment_id = null;
+        $rad->save();
+
+        // Instansen anroparen skickade in bär den nollställda pekaren —
+        // annars vore den en förlegad läsning av samma slag som låset
+        // stänger.
+        $container->refresh();
+
+        return $bilagaId;
     }
 }

@@ -2,6 +2,7 @@
 
 use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Container\RemoveContainerCover;
 use App\Console\EnforcesDowngrades;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -577,7 +578,7 @@ it('ett fallerande konto stoppar inte körningen', function () {
     {
         public function __construct(private readonly int $trasigtKontoId, RecordAuditEvent $recordAuditEvent)
         {
-            parent::__construct($recordAuditEvent);
+            parent::__construct($recordAuditEvent, app(RemoveContainerCover::class));
         }
 
         public function handle(Attachment $attachment, ?User $actor = null): bool

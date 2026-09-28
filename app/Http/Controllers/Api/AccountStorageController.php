@@ -68,6 +68,14 @@ class AccountStorageController extends Controller
                 'item' => fn ($query) => $query->withTrashed()->with([
                     'container' => fn ($query) => $query->withTrashed(),
                 ]),
+                // En containerbilaga (issue 158) har inget item: dess container
+                // kommer ur den här relationen i stället, och den måste vara
+                // eagrad av samma skäl som itemets — annars gör listan en
+                // fråga per containerbild. Samma with() som
+                // Settings\StorageController::index(), vars fråga den här är
+                // ordagrant. withTrashed() av samma skäl som ovan: en bilaga i
+                // en container i papperskorgen räknas fortfarande mot kontot.
+                'container' => fn ($query) => $query->withTrashed(),
             ])
             ->orderByDesc('stored_file.byte_size')
             ->orderByDesc('attachment.id')
