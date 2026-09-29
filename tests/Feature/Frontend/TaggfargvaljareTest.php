@@ -452,4 +452,19 @@ it('kräver inga ändringar i formulären som använder fältet', function () {
         ->toContain('id: { type: String, required: true }')
         ->toContain('error: { type: String, default: null }')
         ->toContain("defineEmits(['update:modelValue'])");
+
+    /*
+     * Och värdet når dem på samma event som förut: hjulet skriver
+     * `update:modelValue`, fältet skickar det vidare oförändrat, och
+     * `v-model="form.color"` i de två formulären lyssnar på just det. Det är
+     * därför ingen av dem behöver röras.
+     *
+     * Raden står här och inte i provet för hjulet av ett skäl: utan den vore
+     * det här provet grönt redan på basen — konsumenterna ÄR oförändrade, och
+     * allt det säger om fältet är att dess props står still. Det är
+     * vidarebefordran som binder dem till den nya väljaren, och därför är det
+     * den som gör provet rött utan implementationen (CI:s kontroll i
+     * .github/scripts/rott-pa-basen.sh).
+     */
+    expect($falt)->toContain('@update:model-value="emit(\'update:modelValue\', $event)"');
 });
