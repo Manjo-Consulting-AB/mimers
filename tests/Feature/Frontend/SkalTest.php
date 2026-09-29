@@ -174,6 +174,72 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
 });
 
 /*
+ * Issue 163 · Namnet i stället för ordet. Raden *Settings* i skalets
+ * navigering bar ordet *Settings*, och den inloggade användarens namn stod som
+ * en egen, oklickbar text bredvid. Namnet är data och ordet tog plats ingen
+ * behövde: raden ritar nu namnet som sin text och pekar fortfarande på
+ * `/settings`. Raden står kvar i `sections` på samma plats, och båda ytorna —
+ * sidhuvudet över `md:` och sidomenyn under — ritas av samma komponent, så
+ * ordningen är oförändrad.
+ *
+ * Klart när: namnet är länkens text och ordet *Settings* inte är det, namnet
+ * ritas inte längre som en egen text utanför länken, länken bär `nav.settings`
+ * som `title`, nyckeln finns kvar med värdet `Settings`, och en gäst ser
+ * varken länken eller något namn.
+ */
+it('visar användarens namn som länken till inställningarna', function () {
+    withoutVite();
+
+    // Gästen prövas FÖRST, som i provet ovanför: actingAs() sätter guardens
+    // användare för resten av testet, och därefter är varje anrop inloggat.
+    get('/')->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('auth.user', null)
+    );
+
+    $sektioner = File::get(resource_path('js/components/ShellSections.vue'));
+
+    // Raden i mallen: samma `v-for` som grannarna, så ordningen är listans.
+    // Fönstret är radens egen markup och inte filen i stort — etiketten och
+    // `title` ska sitta på DEN raden.
+    $start = (int) strpos($sektioner, 'v-for="section in sections"');
+    $raden = substr($sektioner, $start, (int) strpos($sektioner, '</li>', $start) - $start);
+
+    // Namnet är radens text. Grannarna väljer sin etikett ur nyckeln, och
+    // raden för inställningarna väljer `user.name` i stället — ingen ny
+    // översättningsnyckel, för namnet är data och inte text.
+    expect($raden)->toContain('{{ section.key === \'settings\' ? user.name : t(`nav.${section.key}`) }}');
+
+    // Ordet *Settings* är därför INTE radens text, men nyckeln bär vad raden
+    // GÖR, och länken får den som `title` — samma uppslag som etiketten, byggt
+    // ur radens nyckel. Ingen `aria-label`, som hade ersatt det synliga namnet.
+    expect($raden)->toContain(':title="t(`nav.${section.key}`)"')
+        ->and($raden)->not->toContain('aria-label');
+
+    // Målet är oförändrat, och raden ritas bara för en inloggad användare:
+    // `user` är `auth.user` ur den delade proppen, som är null för en gäst, så
+    // en gäst ser varken länken eller något namn.
+    expect($raden)->toContain('v-if="user"')
+        ->and($sektioner)->toContain("{ key: 'settings', href: '/settings' }")
+        ->and($sektioner)->toContain('const user = computed(() => page.props.auth.user)');
+
+    // Namnet ritas på ETT ställe i filen — i länkens etikett — och inte i en
+    // egen rad: `<li>`-raden med namnet i en `<span>` är borta.
+    expect(substr_count($sektioner, 'user.name'))->toBe(1)
+        ->and($raden)->not->toContain('<span')
+        ->and($sektioner)->not->toContain('text-slate-600');
+
+    // Nyckeln finns kvar med ordet ur katalogen: den bär fortfarande vad raden
+    // gör, och två befintliga prov läser den.
+    expect(trans('ui.nav.settings', [], 'en'))->toBe('Settings');
+
+    // Och namnet kommer ur den delade proppen, inte ur en egen fråga på
+    // klientsidan — samma `auth.user` som skalet ritar på varje sida.
+    actingAs(User::factory()->create(['name' => 'Ada Lovelace']))->get('/dashboard')->assertInertia(
+        fn (AssertableInertia $page) => $page->where('auth.user.name', 'Ada Lovelace')
+    );
+});
+
+/*
  * Issue 122 · Vägen till uppgifterna. Todo-vyn flyttade från `/dashboard` till
  * `/tasks` när dashboarden tog över startsidan, och en vy som bara nås genom
  * att skriva adressen är en vy ingen hittar — samma skäl som länken till
