@@ -27,6 +27,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Etiketten slås upp ur `nav.<key>`** och kommer aldrig ur en sträng här
  * ([[ADR-0013 Språk och i18n]]): texten formuleras på servern och slås bara
  * upp på klienten, precis som `container.nav.<key>` i ContainerLayout.
+ * Undantaget är raden för inställningarna (issue 163): dess text är
+ * användarens namn — data ur den delade proppen och ingen mening — och nyckeln
+ * `nav.settings` bor kvar som radens `title`, bara där, eftersom den är det
+ * enda som säger vad raden GÖR. Grannradernas `title` hade bara upprepat deras
+ * synliga text och gett dem en tooltip ingen beställt.
  *
  * **Nyligen besökta är INGEN av de två delarna** (issue 160 · [[ADR-0049
  * Nyligen besökta]] § Beslut). Den är en lista över items och inte en rad i
@@ -80,14 +85,11 @@ const sections = [
             <Link
                 v-if="user"
                 :href="section.href"
+                :title="section.key === 'settings' ? t('nav.settings') : undefined"
                 class="inline-flex min-h-11 items-center hover:underline"
             >
-                {{ t(`nav.${section.key}`) }}
+                {{ section.key === 'settings' ? user.name : t(`nav.${section.key}`) }}
             </Link>
-        </li>
-
-        <li v-if="user">
-            <span class="inline-flex min-h-11 items-center text-slate-600">{{ user.name }}</span>
         </li>
 
         <!--
