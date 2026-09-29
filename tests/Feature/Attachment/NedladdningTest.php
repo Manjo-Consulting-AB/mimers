@@ -474,6 +474,68 @@ it('en saknad variant ger 404 och aldrig originalet', function () {
     $response->assertNotFound();
 });
 
+/*
+ * Issue 167 · Bytena borta, raden kvar.
+ *
+ * Det femte stället i issuen där ett 404 kan uppstå är disken: raden och
+ * sökvägen är riktiga medan filen inte ligger där den ska. Det läget uppstår
+ * av en gallring som hann före, av en återläsning ur backup som stannade vid
+ * databasen, eller av att `_protected`-symlänken inte löser ut.
+ *
+ * Provet slår fast vad svaret SKA vara — 404 — och det är inte vad koden
+ * svarade före rättelsen: den strömmande grenen gav 500 (Storage::disk
+ * ('files')->response() hämtar filens storlek när svaret byggs, och ett
+ * saknat filuppslag kastar), och den interna omdirigeringen gav 200 med en
+ * X-LiteSpeed-Location som webbservern sedan svarade 404 på. Den senare är
+ * den tysta felmoden: appen påstod att leveransen lyckades, och 404:an såg
+ * för användaren likadan ut som appens egen — utan ett spår i appens logg.
+ */
+it('en bilaga vars byten saknas på disken ger 404 och inte 500', function (bool $internalRedirect) {
+    config(['files.internal_redirect' => $internalRedirect]);
+
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    [$attachment, $storedFile] = laddaUppGenomRutten(
+        $container, $item, $account, $headers,
+        'manual.pdf', "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF",
+    );
+
+    // Raden och sökvägen är orörda — bara bytena försvinner.
+    Storage::disk('files')->delete($storedFile->storage_path);
+    expect(Storage::disk('files')->exists($storedFile->storage_path))->toBeFalse();
+
+    $response = actingAs($user)->get("/files/{$attachment->ulid}");
+
+    $response->assertNotFound();
+})->with([
+    'strömning' => [false],
+    'intern omdirigering' => [true],
+]);
+
+it('en variant vars byten saknas på disken ger 404', function () {
+    [$account, $user] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    [, $attachment, $storedFile] = nedladdningFörberedelse($container, filnamn: 'bild.jpg', innehåll: 'originalets byten', mime: 'image/jpeg');
+
+    // Derivatraden finns — det är bara filen den pekar på som är borta. Det
+    // är skillnaden mot "en saknad variant ger 404": där saknas raden, här
+    // saknas byten, och svaret ska vara detsamma.
+    $derivative = ImageDerivative::factory()->create([
+        'stored_file_id' => $storedFile->id,
+        'variant' => 'thumb',
+        'storage_path' => $storedFile->storage_path.'_thumb.jpg',
+        'byte_size' => strlen('miniatyrens byten'),
+    ]);
+
+    expect(Storage::disk('files')->exists($derivative->storage_path))->toBeFalse();
+
+    $response = actingAs($user)->get("/files/{$attachment->ulid}?variant=thumb");
+
+    $response->assertNotFound();
+});
+
 it('ett okänt variant-värde ger 404', function () {
     [$account, $user] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create();

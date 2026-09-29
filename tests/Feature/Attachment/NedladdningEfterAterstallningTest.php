@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: proven är gröna på basen med flit - radering och återställning rör inte leveransvägen, och issue 167 slår fast att "kan inte återskapas i koden" är ett giltigt svar. Filen är en regressionsvakt för den rapporterade vägen (radera, hämta, återställ, hämta), inte ett bevis för en kodändring.
+
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;

@@ -593,6 +593,8 @@ Options -Indexes
 
 `FILES_URL=https://files.mimers.app` sätts på samma sätt, en gång per miljö, och är det som slår på filoriginet: den registrerar rutten `files.deliver` och gör att `files.download` svarar 302 i stället för att leverera bytena själv. Osatt är appen oförändrad och allt är `attachment`, se [[ADR-0019 Filleverans]] § Uppföljning 2026-09-15. Eftersom rutten registreras när ruttabellen byggs slår raden igenom först vid nästa utrullning — `deploy.sh` kör `config:cache` och `route:cache` i varje release.
 
+**Två felmoder ser ut som appens egen 404.** Saknas `_protected`-symlänken svarar LiteSpeed 404 på en `X-LiteSpeed-Location` appen själv kallade 200, och svaret är identiskt med appens 404 — utan ett spår i appens logg. Sedan issue 167 prövar `App\Support\Files\AttachmentDelivery` att sökvägen finns innan svaret byggs, så en bilaga vars byten är borta svarar 404 ur appen i båda grenarna; före den kontrollen blev den strömmande grenen ett 500 (filens storlek hämtas när svaret byggs, och ett saknat filuppslag kastar) och den interna omdirigeringen ett 200 utan täckning. En 404 på en leverans är alltså fortfarande värt att skilja åt: punkt 4 nedan fångar en `files.deliver` som inte finns, och punkt 7 en leverans som inte kommer fram.
+
 Skyddet bevisas mot en utrullad miljö med `deploy/verifiera-filleverans.sh <app-url> <filorigin-url> <ulid-bild> <ulid-svg>`, som gör nio anrop med `curl` och avslutar med kod 1 så fort något avviker:
 
 1. `GET <app>/_protected/` → **403**
