@@ -1626,6 +1626,27 @@ return [
             // The colour is optional and `null` is an answer — no default
             // colour is chosen for the user (decision 8).
             'no_color' => 'No colour',
+
+            // The colour picker, see issue 165. The dot beside the text field
+            // is the button that opens the wheel, and the wheel is a dialog
+            // with a hue ring, a saturation centre and a lightness slider.
+            //
+            // `color_open` and `color_heading` carry the same words on
+            // purpose, as `title` and `heading` do above: one is the button's
+            // accessible name and the other the surface's, and they are two
+            // roles even when they read alike.
+            'color_open' => 'Choose a colour',
+            'color_heading' => 'Choose a colour',
+            // The wheel's accessible name. It says what the two dimensions
+            // are, because the lightness the third one needs has a control of
+            // its own right below.
+            'color_wheel' => 'Hue and saturation',
+            'color_lightness' => 'Lightness',
+            // The button that closes the picker and keeps the value. Escape
+            // and a press outside do the same thing.
+            'color_done' => 'Done',
+            'color_close' => 'Close',
+
             'item_count' => 'On :count items',
 
             'create_heading' => 'New tag',
