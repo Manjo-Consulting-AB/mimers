@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
-import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import CategoryCreateForm from '../../components/CategoryCreateForm.vue';
 import CategoryPresetCard from '../../components/CategoryPresetCard.vue';
 import CategoryTree from '../../components/CategoryTree.vue';
@@ -11,8 +11,8 @@ import { useTranslations } from '../../composables/useTranslations.js';
 /*
  * Kategoriträdet, se issue 56a § Beslut 1, 2, 4 och 8.
  *
- * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
- * ur App\Http\Resources\ContainerResource.
+ * Sidan ligger i ContainerSettingsLayout och bär den prop layouten kräver:
+ * `container` ur App\Http\Resources\ContainerResource.
  *
  * **Trädet byggs här, ur en platt lista** (Beslut 2). `categories` är exakt vad
  * `/api/containers/{container}/categories` svarar — sorterat, platt, med
@@ -83,7 +83,7 @@ const showsPreset = computed(
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerSettingsLayout :container="container">
         <Head :title="t('container.categories.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('container.categories.heading') }}</h1>
@@ -120,5 +120,5 @@ const showsPreset = computed(
 
             <CategoryCreateForm class="mt-4" :container-ulid="container.ulid" :categories="categories" />
         </section>
-    </ContainerLayout>
+    </ContainerSettingsLayout>
 </template>

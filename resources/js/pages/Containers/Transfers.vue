@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import TransferForm from '../../components/TransferForm.vue';
 import { formatDate } from '../../components/accessPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -9,8 +9,8 @@ import { useTranslations } from '../../composables/useTranslations.js';
 /*
  * Containerns ägarbytessida, se issue 67b § Beslut 1, 2, 3 och 4.
  *
- * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
- * ur App\Http\Resources\ContainerResource.
+ * Sidan ligger i ContainerSettingsLayout och bär den prop layouten kräver:
+ * `container` ur App\Http\Resources\ContainerResource.
  *
  * **Raden `transfer` i navigationen ligger sist**, se containerSections.js —
  * ett ägarbyte är den mest konsekvensrika handlingen i produkten och inte
@@ -74,7 +74,7 @@ const planHref = computed(() => `/settings/plan?account=${props.container.accoun
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerSettingsLayout :container="container">
         <Head :title="t('transfer.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('transfer.heading') }}</h1>
@@ -170,5 +170,5 @@ const planHref = computed(() => `/settings/plan?account=${props.container.accoun
                 </li>
             </ul>
         </section>
-    </ContainerLayout>
+    </ContainerSettingsLayout>
 </template>

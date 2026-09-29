@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerAccessRow from '../../components/ContainerAccessRow.vue';
 import InvitationForm from '../../components/InvitationForm.vue';
 import { accessKindLabel, accessScopeLabel, formatDate, granteeLabel } from '../../components/accessPresentation.js';
@@ -10,7 +10,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
 /*
  * Delningssidan, se issue 55a § Beslut 3 och 7.
  *
- * Sidan ligger i ContainerLayout och bär den prop layouten kräver:
+ * Sidan ligger i ContainerSettingsLayout och bär den prop layouten kräver:
  * `container` ur App\Http\Resources\ContainerResource.
  *
  * **Två sektioner med olika publik, och den ena datan kommer inte alls.**
@@ -102,7 +102,7 @@ const invitationInviter = (invitation) =>
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerSettingsLayout :container="container">
         <Head :title="t('sharing.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('sharing.heading') }}</h1>
@@ -230,5 +230,5 @@ const invitationInviter = (invitation) =>
 
             <p v-else class="mt-4 text-sm text-slate-600">{{ t('sharing.invitations.empty') }}</p>
         </section>
-    </ContainerLayout>
+    </ContainerSettingsLayout>
 </template>

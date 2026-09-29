@@ -1,13 +1,13 @@
 <script setup>
 import { Head, usePage } from '@inertiajs/vue3';
-import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import TrashRow from '../../components/TrashRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
  * Containerns papperskorg, se issue 62a § Beslut 1, 4, 5, 6 och 7.
  *
- * Sidan ligger i ContainerLayout och bär den prop layouten kräver:
+ * Sidan ligger i ContainerSettingsLayout och bär den prop layouten kräver:
  * `container` ur App\Http\Resources\ContainerResource.
  *
  * **`entries` är `TrashEntryResource`-rader**, samma sex nycklar som
@@ -47,7 +47,7 @@ const page = usePage();
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerSettingsLayout :container="container">
         <Head :title="t('trash.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('trash.heading') }}</h1>
@@ -73,5 +73,5 @@ const page = usePage();
         </ul>
 
         <p v-else class="mt-6 text-sm text-slate-600">{{ t('trash.empty') }}</p>
-    </ContainerLayout>
+    </ContainerSettingsLayout>
 </template>
