@@ -96,12 +96,18 @@ Route::get('/tasks', [TodoController::class, 'index'])
  * Issue 128 · Informationsytan, se App\Http\Controllers\
  * DismissedTipController och [[M19 Dashboarden]] § 128.
  *
- * **En skrivning och ingen sida.** Krysset i informationsytan står på
- * dashboarden och på containerns översikt, och ytan är densamma på båda — den
- * ritas av resources/js/components/InfoPanel.vue ur `tips`-proppen som båda
- * sidorna bär. Rutten ligger därför utanför containerfamiljen och tar nyckeln
- * som ett segment: `/tips/{key}/dismiss` är samma skrivning vilken sida
- * användaren än kryssade på, och `back()` svarar på den frågan.
+ * **Två skrivningar och ingen sida.** Informationsytan står på dashboarden
+ * och på containerns översikt, och ytan är densamma på båda — den ritas av
+ * resources/js/components/InfoPanel.vue ur `tips`-proppen som båda sidorna
+ * bär. Krysset stänger hela ytan och postar därför till `/tips/dismiss`, som
+ * döljer varje nyckel i App\Support\Tips; `store` nedan döljer ett enskilt
+ * tips och behålls oförändrad. Båda ligger utanför containerfamiljen, för
+ * `back()` ska svara på frågan *var kryssade hon* och ytan finns på två
+ * adresser.
+ *
+ * **Rutterna kolliderar inte.** `/tips/dismiss` är två segment och
+ * `/tips/{key}/dismiss` är tre, så den senare kan aldrig fånga det förra —
+ * ordningen här är läsordning och inte en grind.
  *
  * **Nyckeln binds inte till en modell.** Det finns ingen tipsrad att hämta —
  * listan bor i App\Support\Tips (issuens krav 3) — så en okänd nyckel är
@@ -111,6 +117,10 @@ Route::get('/tasks', [TodoController::class, 'index'])
  * Bakom `auth` som resten av webben: en utloggad besökare skickas till
  * /login och når aldrig skrivningen.
  */
+Route::post('/tips/dismiss', [DismissedTipController::class, 'dismissAll'])
+    ->middleware('auth')
+    ->name('tips.dismiss.all');
+
 Route::post('/tips/{key}/dismiss', [DismissedTipController::class, 'store'])
     ->middleware('auth')
     ->name('tips.dismiss');
