@@ -3,15 +3,19 @@
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
+use App\Models\ContainerAccess;
 use App\Models\ImageDerivative;
 use App\Models\Item;
 use App\Models\StoredFile;
+use App\Models\User;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
+use function Pest\Laravel\postJson;
 
 /*
  * Issue 19a · Nedladdning av bilagor. Se
@@ -84,6 +88,214 @@ function nedladdningFörberedelse(
 
     return [$item, $attachment, $storedFile];
 }
+
+/**
+ * Laddar upp en bilaga på ett item GENOM RUTTEN — POST
+ * /api/containers/{container}/items/{item}/attachments — och ger tillbaka
+ * raden så som den blev, inte som en fabrik hade byggt den (issue 167).
+ *
+ * Skillnaden är hela poängen med proven nedan. `nedladdningFörberedelse`
+ * ovan bygger raden med `Attachment::factory()`, och en sådan rad har
+ * fabrikens standardvärden för varje kolumn. En rad som
+ * App\Actions\Attachment\StoreAttachment har skrivit bär de värden
+ * produktionen faktiskt ger den: `container_id = NULL`, `item_id` satt,
+ * `storage_path` ur innehållets hash. Ett fel som bara syns på den ena
+ * formen är precis vad de här proven letar efter.
+ *
+ * Bytena skrivs av actionen, så `Storage::fake('files')` i beforeEach räcker
+ * — inget behöver läggas på disken för hand.
+ *
+ * @return array{0: Attachment, 1: StoredFile}
+ */
+function laddaUppGenomRutten(
+    Container $container,
+    Item $item,
+    Account $account,
+    array $headers,
+    string $filnamn,
+    string $innehåll,
+): array {
+    $response = postJson("/api/containers/{$container->ulid}/items/{$item->ulid}/attachments", [
+        'file' => UploadedFile::fake()->createWithContent($filnamn, $innehåll),
+        'account' => $account->ulid,
+    ], $headers)->assertCreated();
+
+    $attachment = Attachment::query()->where('ulid', $response->json('data.ulid'))->firstOrFail();
+
+    return [$attachment, $attachment->storedFile];
+}
+
+/*
+ * Issue 167 · Bilagor på ett item går att ladda ner och förhandsvisa.
+ *
+ * Den rapporterade raden var att BÅDE nedladdningslänken och
+ * förhandsvisningen gav 404 — de bygger samma URL, `/files/{ulid}`
+ * (resources/js/components/attachmentPresentation.js), så ett fel på den
+ * vägen förklarar båda. Proven nedan bygger fallet så som användaren gör
+ * det: bilagan laddas upp genom rutten, inte med `Attachment::factory()`,
+ * och hämtas sedan som medlemmen. Kombinationerna är de fem ställen i
+ * issuen där ett 404 kan uppstå: rutten utan egen origin, samma rutt med
+ * `FILES_URL` satt och 302:an följd, och förhandsvisningens variant.
+ */
+it('en itembilaga som laddats upp genom rutten kan hämtas av medlemmen', function () {
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    // En riktig PDF, så typen sniffas till application/pdf precis som i
+    // drift — en påhittad fil hade blivit text/plain.
+    [$attachment] = laddaUppGenomRutten(
+        $container, $item, $account, $headers,
+        'victron-manual.pdf', "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF",
+    );
+
+    // Raden är en itembilaga: container_id är NULL, item_id satt. Det är
+    // förutsättningen Attachment::accessSubject() väljer gren på
+    // ([[ADR-0047 Containerns bild]] § Beslut).
+    expect($attachment->item_id)->not->toBeNull();
+    expect($attachment->container_id)->toBeNull();
+
+    $response = actingAs($user)->get("/files/{$attachment->ulid}");
+
+    $response->assertOk();
+    expect($response->streamedContent())->toBe("%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF");
+    $response->assertHeader('Content-Type', 'application/pdf');
+});
+
+it('en itembilaga som laddats upp genom rutten omdirigeras till filoriginet och kan hämtas där', function (bool $internalRedirect) {
+    config(['files.internal_redirect' => $internalRedirect]);
+
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    $innehåll = "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF";
+
+    [$attachment, $storedFile] = laddaUppGenomRutten($container, $item, $account, $headers, 'manual.pdf', $innehåll);
+
+    // Egen origin påslagen: appdomänens rutt levererar inte bytena själv utan
+    // präglar en signerad länk. Rutten files.deliver finns eftersom filens
+    // beforeAll satte FILES_URL innan appen byggdes — samma villkor som i
+    // drift, där deploy.sh bygger ruttabellen med FILES_URL i shared/.env
+    // ([[Pipeline]] § Filleverans).
+    config(['files.url' => 'https://files.test']);
+
+    $omdirigerad = actingAs($user)->get("/files/{$attachment->ulid}");
+
+    $omdirigerad->assertRedirect();
+
+    // Målet är filoriginet och samma sökväg — värdnamnet är det som skiljer
+    // rutterna åt, och det är där ett fel i registreringen hade synts.
+    // Scheme och port kommer ur appens URL i testsviten och prövas därför
+    // inte; värden och sökväg är det som är rutten.
+    $mål = $omdirigerad->headers->get('location');
+    expect(parse_url($mål, PHP_URL_HOST))->toBe('files.test');
+    expect(parse_url($mål, PHP_URL_PATH))->toBe("/files/{$attachment->ulid}");
+    expect($mål)->toContain('signature=');
+
+    // Följ 302:an hela vägen: signaturen är den enda grinden på originet.
+    $leverans = get($mål);
+
+    $leverans->assertOk();
+
+    if ($internalRedirect) {
+        // Samma svar som appdomänen hade gett, och samma sökväg under
+        // /_protected. Det är den sökvägen deploy.sh symlänkar till
+        // shared/storage/files — finns länken inte på servern ger LiteSpeed
+        // 404 på ett svar appen själv kallade 200 ([[Pipeline]]
+        // § Filleverans). Provet namnger målet; att länken finns är en
+        // driftfråga, inte en kodfråga.
+        $leverans->assertHeader('X-LiteSpeed-Location', '/_protected/'.$storedFile->storage_path);
+        expect($leverans->getContent())->toBe('');
+    } else {
+        expect($leverans->streamedContent())->toBe($innehåll);
+    }
+})->with([
+    'strömning' => [false],
+    'intern omdirigering' => [true],
+]);
+
+it('förhandsvisningen av en uppladdad bild ger 200 för variant thumb och medium', function (string $variant, int $förväntadLängstaSida) {
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    // En riktig PNG, större än båda målen, så att det synkrona
+    // derivatjobbet (QUEUE_CONNECTION=sync) skriver BÅDA varianterna.
+    // Det är skillnaden mot en liten bild: en bild under målet får inget
+    // derivat alls, och då är 404:an på `?variant=` korrekt.
+    $bild = imagecreatetruecolor(1200, 800);
+    imagefill($bild, 0, 0, imagecolorallocate($bild, 10, 20, 30));
+    ob_start();
+    imagepng($bild);
+    $png = (string) ob_get_clean();
+    imagedestroy($bild);
+
+    [$attachment, $storedFile] = laddaUppGenomRutten($container, $item, $account, $headers, 'foto.png', $png);
+
+    $derivat = ImageDerivative::query()
+        ->where('stored_file_id', $storedFile->id)
+        ->where('variant', $variant)
+        ->first();
+
+    // Utan raden hade provet varit tomt: 404:an det letar efter kommer ur
+    // AttachmentDelivery::storagePath(), och den grenen nås bara när
+    // varianten efterfrågas.
+    expect($derivat)->not->toBeNull();
+    expect(Storage::disk('files')->exists($derivat->storage_path))->toBeTrue();
+
+    $response = actingAs($user)->get("/files/{$attachment->ulid}?variant={$variant}");
+
+    $response->assertOk();
+    $response->assertHeader('Content-Type', 'image/png');
+
+    $byten = $response->streamedContent();
+    $mått = getimagesizefromstring($byten);
+
+    // Rätt variant, inte originalet: längsta sidan är skalad till målet.
+    expect($mått)->not->toBeFalse();
+    expect(max($mått[0], $mått[1]))->toBe($förväntadLängstaSida);
+})->with([
+    'thumb' => ['thumb', 320],
+    'medium' => ['medium', 1024],
+]);
+
+it('en itembilaga i en container som medlemmen ser men inte äger kan hämtas', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $item = Item::factory()->for($container, 'container')->create();
+
+    $innehåll = "%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\n%%EOF";
+
+    [$attachment] = laddaUppGenomRutten($container, $item, $account, $headers, 'manual.pdf', $innehåll);
+
+    // Gästen är medlem i ett ANNAT konto och når itemet bara genom en
+    // itemgrant — den omfångsbegränsade mottagaren i [[ADR-0028 Åtkomst på
+    // itemnivå]] § Konsekvenser. Grinden är ItemPolicy::view på itemet och
+    // är oförändrad; provet vaktar att leveransvägen inte börjar grinda mot
+    // containern i stället.
+    $gäst = User::factory()->create();
+    $gästKonto = Account::factory()->create();
+    $gästKonto->users()->attach($gäst, ['role' => 'member']);
+
+    // Raden byggs här i stället för med OmfangsupplosningTest.php:s
+    // itemgrant(): den hjälparen är global och nås i hela sviten, men inte
+    // när filen körs ensam med --filter. Provet ska stå på egna ben.
+    ContainerAccess::factory()->create([
+        'container_id' => $container->id,
+        'item_id' => $item->id,
+        'grantee_type' => 'user',
+        'grantee_id' => $gäst->id,
+        'level' => 'read',
+        'kind' => 'member',
+        'granted_by_user_id' => User::factory()->create()->id,
+    ]);
+
+    $response = actingAs($gäst)->get("/files/{$attachment->ulid}");
+
+    $response->assertOk();
+    expect($response->streamedContent())->toBe($innehåll);
+});
 
 it('en behörig användare får filen', function () {
     [$account, $user] = kontoMedMedlem();
