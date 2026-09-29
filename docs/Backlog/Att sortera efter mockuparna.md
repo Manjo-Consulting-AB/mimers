@@ -6,7 +6,7 @@ Listan kommer ur genomgången av MVP:n 2026-09-17. Första omgången mockuper gi
 
 **En post lämnar den här filen när den blir en issue i en milstolpe** — eller, för ett beslut, när det står i en ADR. Står något kvar här som redan är byggt blir filen värdelös, precis som [[Tankar]] § Öppet.
 
-**Designern lämnade fyra bilder 2026-09-22, och en femte med tio mobilskärmar 2026-09-27.** De ligger i `docs/Design/` och är den första designkällan valvet haft. Det de avgjorde — tokens, kärnkomponenterna, och fem ställen där bilden säger emot ett tidigare beslut — står i [[ADR-0042 Designsystemet]], och arbetet har issues i [[M17 Designsystemet]]. **Bilderna är nyare än besluten men inte mer genomtänkta:** vädret, framdriftsstapeln, leverantören och artikelnumret är strukna i ADR:en, och den globala navigeringen är fortfarande avvisad av [[ADR-0041 Itemets vy]]. Mobilbilden gicks igenom 2026-09-27; besluten står i [[ADR-0046 Containerns karta]], [[ADR-0047 Containerns bild]], [[ADR-0048 Mobilen och plusknappen]] och [[ADR-0049 Nyligen besökta]], och arbetet har issues i [[M23 Mobilen och kartan]] — 151 till 160.
+**Designern lämnade fyra bilder 2026-09-22, en femte med tio mobilskärmar 2026-09-27 och fyra till för containerns flikar 2026-09-30.** De ligger i `docs/Design/` och är den första designkällan valvet haft. Det de avgjorde — tokens, kärnkomponenterna, och fem ställen där bilden säger emot ett tidigare beslut — står i [[ADR-0042 Designsystemet]], och arbetet har issues i [[M17 Designsystemet]]. **Bilderna är nyare än besluten men inte mer genomtänkta:** vädret, framdriftsstapeln, leverantören och artikelnumret är strukna i ADR:en, och den globala navigeringen är fortfarande avvisad av [[ADR-0041 Itemets vy]]. Mobilbilden gicks igenom 2026-09-27; besluten står i [[ADR-0046 Containerns karta]], [[ADR-0047 Containerns bild]], [[ADR-0048 Mobilen och plusknappen]] och [[ADR-0049 Nyligen besökta]], och arbetet har issues i [[M23 Mobilen och kartan]] — 151 till 160. Desktopskalet och de fyra flikbilderna gicks igenom 2026-09-29 och 30; besluten står i [[ADR-0050 Desktopdesignen]] och [[ADR-0051 Senast öppnade filer]], och arbetet har issues i [[M24 Desktopdesignen]] — 168 till 182.
 
 ---
 
@@ -42,7 +42,7 @@ Den del som inte väntar på designen har issues i [[M16 Itemets vy]] — 93 til
 
 **Har lämnat listan 2026-09-24.** Punkterna från genomgången av dashboardmockupen har issues i [[M19 Dashboarden]] — 122 till 128. Två av dem stämde inte när de skrevs in där. Händelsepanelen visar läsregeln över alla användarens konton och inte bara hennes egna rader, som [[ADR-0043 Tre loggar]] § Konsekvenser beslutade. Inbjudningarna fanns inte *"redan"* bakom klockan: `invitation.received` skrivs av ingen kod, och vägen dit är issue 131 i [[M20 Kontot]].
 
-**Dessa är kvar utan datakälla:** containerns undertitel och kortens framdriftsstapel. Vädret är struket. Containerns foto fick sin datakälla 2026-09-27 i [[ADR-0047 Containerns bild]] och är issue 158 och 159 i [[M23 Mobilen och kartan]].
+**Kortens framdriftsstapel är kvar utan datakälla.** Containerns undertitel fick sin 2026-09-30: den är hela `description`, se [[ADR-0050 Desktopdesignen]] § 2. Vädret är struket. Containerns foto fick sin datakälla 2026-09-27 i [[ADR-0047 Containerns bild]] och är issue 158 och 159 i [[M23 Mobilen och kartan]].
 
 ---
 
@@ -50,7 +50,7 @@ Den del som inte väntar på designen har issues i [[M16 Itemets vy]] — 93 til
 
 Genomgången av containermockupen mot datamodellen. Det som blev beslut står i [[ADR-0039 Containerns översikt]] och [[ADR-0040 Underträdets summor]]; punkterna nedan är avgjorda men har varken ADR eller issue.
 
-**Väntar på designen:** dokumentfliken och bildpanelen. Flikradens indelning och exportens flytt har sedan 2026-09-22 issue 101 i [[M17 Designsystemet]]; containerns hjältebild kräver ett datamodellbeslut och inte en vy-issue, se [[ADR-0042 Designsystemet]] § Bildernas avvikelser. Översiktens skelett, beskrivningen, ättlingsupplösningen, kostnadsnedbrytningen och OK-statusen ligger i [[M15 Containerns översikt]].
+**Dokumentfliken och bildpanelen har lämnat listan 2026-09-30** och är issue 178 och 173 i [[M24 Desktopdesignen]]. Flikradens indelning och exportens flytt har sedan 2026-09-22 issue 101 i [[M17 Designsystemet]]; containerns hjältebild kräver ett datamodellbeslut och inte en vy-issue, se [[ADR-0042 Designsystemet]] § Bildernas avvikelser. Översiktens skelett, beskrivningen, ättlingsupplösningen, kostnadsnedbrytningen och OK-statusen ligger i [[M15 Containerns översikt]].
 
 **Navigeringens gruppering är ADR-0036:s regel, oberoende uppfunnen.** Mockupens sidomeny har *Mina containers* med fyra arter à en container och *Projekt* med tre. Det är exakt vad *gruppera vid minst två* ger: bara en art når två, resten ligger löst i en hög som behöver ett namn. Namnet på högen är det enda ADR-0036 lämnade öppet, och mockupen svarade.
 
@@ -58,7 +58,7 @@ Genomgången av containermockupen mot datamodellen. Det som blev beslut står i 
 
 **Detta finns däremot redan:** `attachment.kind` är `image`, `document` eller `other`, så dokumentfliken och bildpanelen behöver inget nytt fält. Historikfliken är indexerad på `(container_id, created_at)`, vilket är precis dess fråga. Informationsrutan är dashboardens, med samma fyra krav.
 
-**"Lägg till i denna container" nämner en anteckning.** Något sådant finns inte; `item.description` är det närmaste. Antingen stryks ordet eller så är det en egen fråga.
+**"Lägg till i denna container" är struken 2026-09-30**, och ordet *anteckning* med den. Plusknappen gör samma sak, se [[ADR-0050 Desktopdesignen]] § 5.
 
 ---
 
@@ -66,7 +66,7 @@ Genomgången av containermockupen mot datamodellen. Det som blev beslut står i 
 
 Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut står i [[ADR-0041 Itemets vy]]; punkterna nedan är avgjorda men har varken ADR eller issue.
 
-**Väntar på designen:** itemets kostnadsflik. Fokuskartan fick sin design i mobilbilden och är issue 156 i [[M23 Mobilen och kartan]]. Omslagsbilden, strukturupplösningen och förekomsterna ligger i [[M16 Itemets vy]]; flikraden och trepanelslayouten har sedan 2026-09-22 issue 102 och 103 i [[M17 Designsystemet]].
+**Itemets kostnadsflik har lämnat listan 2026-09-30** och är issue 168 i [[M24 Desktopdesignen]]. Fokuskartan fick sin design i mobilbilden och är issue 156 i [[M23 Mobilen och kartan]]. Omslagsbilden, strukturupplösningen och förekomsterna ligger i [[M16 Itemets vy]]; flikraden och trepanelslayouten har sedan 2026-09-22 issue 102 och 103 i [[M17 Designsystemet]].
 
 **Fokuskartan behöver ingen ny fråga.** `ListItemLinks` ger redan motparterna med relationen sedd från itemet och med omfångsfiltret i samma fråga — en graf över närmaste relationer är den listan ritad som noder. Det som kostar är layouten. Teckenförklaringen ska vara tre sorter, *Parent · Child · Related*, enligt [[ADR-0035 Relationen mellan objekt]]; den ena mockupen säger fortfarande *Syskon*.
 
@@ -84,7 +84,7 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 
 **Händelseinstrumenteringen har lämnat listan 2026-09-23.** Besluten står i [[ADR-0043 Tre loggar]] och arbetet har issues i [[M18 Loggarna]] — 107 till 117. Dashboardens händelsepanel är issue 126 i [[M19 Dashboarden]].
 
-**Anmälningsvägen enligt DSA.** Mimers är en värdtjänst, och artikel 16 kräver att vem som helst kan anmäla innehåll som den anser vara olagligt. Artikel 17 kräver att en användare vars innehåll begränsas får en motivering. Båda är egna ytor med egna flöden och hör ihop med den rättsliga spärren i [[ADR-0043 Tre loggar]]. Ingen av dem har en issue. **Blir en egen milstolpe**, beslutat 2026-09-26: vägen drar med sig anmälningsformulär, handläggning, motiveringar och spärrens koppling, och ryms inte i [[M22 Redo för testare]]. **Går efter designen**, beslutat 2026-09-27: [[M23 Mobilen och kartan]] kommer först.
+**Anmälningsvägen enligt DSA.** Mimers är en värdtjänst, och artikel 16 kräver att vem som helst kan anmäla innehåll som den anser vara olagligt. Artikel 17 kräver att en användare vars innehåll begränsas får en motivering. Båda är egna ytor med egna flöden och hör ihop med den rättsliga spärren i [[ADR-0043 Tre loggar]]. Ingen av dem har en issue. **Blir en egen milstolpe**, beslutat 2026-09-26: vägen drar med sig anmälningsformulär, handläggning, motiveringar och spärrens koppling, och ryms inte i [[M22 Redo för testare]]. **Går efter designen**, beslutat 2026-09-27: [[M23 Mobilen och kartan]] kommer först. **Ligger på is**, beslutat 2026-09-29: den byggs när testgruppen ska utvidgas och inte före, och desktopdesignen går före den.
 
 **Containerns karta har lämnat listan 2026-09-27** och är issue 157 i [[M23 Mobilen och kartan]], se [[ADR-0046 Containerns karta]].
 
