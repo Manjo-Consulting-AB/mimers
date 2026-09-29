@@ -2757,11 +2757,15 @@ return [
     // The words are the product's own ([[ADR-0032 Produktens ord]]), and each
     // tip is at most two sentences: the panel is a nudge and not a manual.
     // `previous`, `next` and `dismiss` belong to the panel and not to a single
-    // tip, so they sit beside the keys that carry one.
+    // tip, so they sit beside the keys that carry one. `dismiss` is the
+    // cross's own word and it closes the WHOLE panel — it hides every tip,
+    // not the one on screen — so the label says `the tips` and not `this tip`
+    // (issue 583): a screen reader that heard *this tip* would be told the
+    // next one was still coming.
     'tips' => [
         'previous' => 'Previous tip',
         'next' => 'Next tip',
-        'dismiss' => 'Hide this tip',
+        'dismiss' => 'Hide the tips',
 
         // A container is the product's unit of "things that belong together"
         // ([[ADR-0033 Produktens omfång]]), and the tip says what to do with

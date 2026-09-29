@@ -14,6 +14,7 @@ use Inertia\Testing\AssertableInertia;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\flushSession;
 use function Pest\Laravel\post;
+use function Pest\Laravel\travel;
 use function Pest\Laravel\withoutVite;
 
 /*
@@ -37,6 +38,12 @@ use function Pest\Laravel\withoutVite;
  * `tips.{nyckel}.body`. Provet prövar därför både att nycklarna kommer i rätt
  * ordning OCH att var och en har en sträng — en nyckel utan text är en tom
  * ruta i webbläsaren och ingenting en server-sida kan se.
+ *
+ * **Issue 583 skiljer krysset från bläddringen.** Krysset döljer hela listan
+ * (`POST /tips/dismiss`) och stänger ytan; `POST /tips/{key}/dismiss` finns
+ * kvar och döljer ett enskilt tips. Proven nedan prövar båda: de gamla
+ * använder den enskilda rutten för att bygga ett tillstånd, och de nya
+ * kryssar och kräver att ytan försvinner i stället för att visa nästa tips.
  *
  * Hjälparna har prefixet `informationsyta` — Pest lägger alla testfiler i
  * samma namnrymd när hela sviten körs.
@@ -79,6 +86,15 @@ function informationsytaTips(TestResponse $svar): array
 function informationsytaDolj(User $anvandare, string $nyckel, string $fran = '/dashboard'): TestResponse
 {
     return actingAs($anvandare)->from($fran)->post("/tips/{$nyckel}/dismiss");
+}
+
+/**
+ * Kryssar stängt hela ytan genom rutten, som krysset gör — `POST /tips/dismiss`
+ * och ingen nyckel. Skillnaden mot `informationsytaDolj()` är hela issue 583.
+ */
+function informationsytaKryssa(User $anvandare, string $fran = '/dashboard'): TestResponse
+{
+    return actingAs($anvandare)->from($fran)->post('/tips/dismiss');
 }
 
 /**
@@ -298,13 +314,189 @@ it('ritar inte ytan när alla tips är dolda', function () {
     $panel = File::get(resource_path('js/components/InfoPanel.vue'));
 
     expect($panel)->toContain('v-if="props.tips.length"')
-        // Och krysset postar till ruttens nyckel och ingenting annat.
+        // Och krysset postar till stängningen av hela ytan och ingenting
+        // annat — inte till den enskilda nyckeln som stod framme (issue 583).
         ->toContain('router.post(')
-        ->toContain('`/tips/${current.value}/dismiss`')
+        ->toContain("'/tips/dismiss'")
         // Vänteläget runt skrivningen (GenomgangTest): en knapp som går att
         // trycka två gånger är två onödiga anrop.
         ->toContain('onStart:')
         ->toContain('onFinish:');
+
+    expect($panel)->not->toContain('`/tips/${current.value}/dismiss`');
+});
+
+/*
+ * Klart när: ett klick på krysset döljer alla tips — en rad per nyckel i
+ * `dismissed_tip`, och `visibleFor()` är tom efteråt.
+ *
+ * Krysset postar till `POST /tips/dismiss` och inte till nyckeln som står
+ * framme. Raderna prövas mot `Tips::KEYS` och inte mot en avskrift: en lista
+ * som skrevs av i provet hade kunnat vara rätt medan klassen var fel.
+ */
+it('döljer alla tips med ett kryss', function () {
+    withoutVite();
+
+    [, $ägare] = informationsytaKontext();
+
+    informationsytaKryssa($ägare)->assertRedirect('/dashboard');
+
+    $dolda = DismissedTip::query()->where('user_id', $ägare->id)->pluck('tip_key')->all();
+    $vardade = Tips::KEYS;
+
+    sort($dolda);
+    sort($vardade);
+
+    expect($dolda)->toBe($vardade)
+        ->and(app(Tips::class)->visibleFor($ägare))->toBe([]);
+
+    // Och raderna hör till personen: en kollega är opåverkad.
+    expect(app(Tips::class)->visibleFor(User::factory()->create()))->toBe(Tips::KEYS);
+});
+
+/*
+ * Klart när: efter kryssning ritas ytan inte alls, varken på dashboarden
+ * eller containerns översikt.
+ *
+ * Samma svar på båda adresserna, för ytan är EN komponent och listan EN
+ * lista. Och villkoret i källan: en tom `tips`-propp ritar ingenting — Inertia
+ * renderar mallen i klienten, så den ritade ytan når aldrig svarskroppen i en
+ * testsvit (samma grepp som FavoritlistaTest).
+ */
+it('ritar ingen yta efter kryss på någon av sidorna', function () {
+    withoutVite();
+
+    [, $ägare, $container] = informationsytaKontext();
+
+    informationsytaKryssa($ägare)->assertRedirect('/dashboard');
+
+    expect(informationsytaTips(actingAs($ägare)->get('/dashboard')->assertOk()))->toBe([])
+        ->and(informationsytaTips(actingAs($ägare)->get(informationsytaOversikt($container))->assertOk()))->toBe([]);
+
+    expect(File::get(resource_path('js/components/InfoPanel.vue')))
+        ->toContain('v-if="props.tips.length"');
+});
+
+/*
+ * Klart när: krysset visar inte nästa tips — efter kryssning är `tips`-proppen
+ * tom.
+ *
+ * Det är hela skillnaden mot `POST /tips/{key}/dismiss`, som svarar med
+ * listan UTAN den nyckeln och alltså lämnar nästa tips framme. Provet jämför
+ * de två svaren: den enskilda rutten ger två kvar, krysset ger noll. Källan
+ * prövas också, för proppen är tom bara om krysset postar till rätt rutt.
+ */
+it('visar inte nästa tips efter kryss', function () {
+    withoutVite();
+
+    [, $ägare] = informationsytaKontext();
+
+    // Den enskilda rutten lämnar nästa tips framme — det är kryssets gamla
+    // beteende, och det är därför den rutten inte är kryssets.
+    informationsytaDolj($ägare, 'containers')->assertRedirect('/dashboard');
+
+    expect(informationsytaTips(actingAs($ägare)->get('/dashboard')->assertOk()))
+        ->toBe(['structure', 'schedules']);
+
+    informationsytaKryssa($ägare)->assertRedirect('/dashboard');
+
+    expect(informationsytaTips(actingAs($ägare)->get('/dashboard')->assertOk()))->toBe([]);
+
+    $panel = File::get(resource_path('js/components/InfoPanel.vue'));
+
+    expect($panel)->toContain("'/tips/dismiss'")
+        ->and($panel)->not->toContain('`/tips/${current.value}/dismiss`');
+});
+
+/*
+ * Klart när: att kryssa två gånger ger inga dubbletter och inget fel.
+ *
+ * Det unika paret `(user_id, tip_key)` är garanten, och `insertOrIgnore`
+ * möter indexet i stället för att svara 500 — samma form som `store()`, som
+ * fångar `UniqueConstraintViolationException`. Båda svaren är
+ * omdirigeringen tillbaka.
+ */
+it('ger inga extra rader när alla tips döljs två gånger', function () {
+    withoutVite();
+
+    [, $ägare] = informationsytaKontext();
+
+    informationsytaKryssa($ägare)->assertRedirect('/dashboard');
+    informationsytaKryssa($ägare)->assertRedirect('/dashboard');
+
+    expect(DismissedTip::query()->where('user_id', $ägare->id)->count())->toBe(count(Tips::KEYS))
+        ->and(app(Tips::class)->visibleFor($ägare))->toBe([]);
+});
+
+/*
+ * Klart när: tips som redan är dolda behåller sina rader och skrivs inte om.
+ *
+ * En `upsert()` eller en `updateOrCreate()` hade gett den befintliga raden
+ * `updated_at` = nu och alltså skrivit om ett kvitto som redan var satt.
+ * Klockan flyttas därför fram mellan de två anropen: står tidsstämpeln still
+ * är raden orörd, och ett `created_at` som flyttat sig hade betytt att raden
+ * skrevs om i stället för att lämnas.
+ */
+it('rör inte redan dolda tips vid kryss', function () {
+    withoutVite();
+
+    [, $ägare] = informationsytaKontext();
+
+    informationsytaDolj($ägare, 'structure')->assertRedirect('/dashboard');
+
+    $före = DismissedTip::query()->where('user_id', $ägare->id)->where('tip_key', 'structure')->sole();
+
+    travel(1)->hours();
+
+    informationsytaKryssa($ägare)->assertRedirect('/dashboard');
+
+    $efter = DismissedTip::query()->where('user_id', $ägare->id)->where('tip_key', 'structure')->sole();
+
+    expect($efter->created_at->equalTo($före->created_at))->toBeTrue('created_at skrevs om')
+        ->and($efter->updated_at->equalTo($före->updated_at))->toBeTrue('updated_at skrevs om')
+        ->and(DismissedTip::query()->where('user_id', $ägare->id)->count())->toBe(count(Tips::KEYS));
+});
+
+/*
+ * Klart när: ett tips som läggs till efter att användaren kryssat visas.
+ *
+ * Krysset döljer de nycklar som fanns, inte ytan (issuens krav 2): det finns
+ * ingen rad som säger "användaren har stängt panelen", bara en rad per
+ * nyckel. Klassen får listan en senare release hade haft — det är hela
+ * skillnaden mellan en ny nyckel och en gammal, och den frågan går inte att
+ * ställa mot dagens `Tips::KEYS` utan att ändra den.
+ */
+it('visar ett nytt tips för den som stängt ytan', function () {
+    withoutVite();
+
+    [, $ägare] = informationsytaKontext();
+
+    informationsytaKryssa($ägare)->assertRedirect('/dashboard');
+
+    expect(app(Tips::class)->visibleFor($ägare))->toBe([]);
+
+    $senare = new Tips([...Tips::KEYS, 'loans']);
+
+    expect($senare->visibleFor($ägare))->toBe(['loans']);
+
+    // Och den nya nyckeln står på sin plats i ordningen, inte i slutet.
+    expect((new Tips(['loans', ...Tips::KEYS]))->visibleFor($ägare))->toBe(['loans']);
+});
+
+/*
+ * Klart när: en utloggad besökare skickas till inloggningen vid kryss av
+ * alla.
+ *
+ * Rutten ligger bakom `auth`, som resten av webben. Eget prov och inte en rad
+ * i provet ovan — `actingAs` autentiserar resten av testet, så en gästkontroll
+ * där hade mötts av en inloggad session.
+ */
+it('skickar en utloggad besökare till inloggningen vid kryss av alla', function () {
+    withoutVite();
+
+    post('/tips/dismiss')->assertRedirect('/login');
+
+    expect(DismissedTip::query()->count())->toBe(0);
 });
 
 /*

@@ -271,6 +271,40 @@ it('sätter ett vänteläge runt varje router-anrop', function () {
     expect($granskade)->toBeGreaterThan(10);
 });
 
+/*
+ * Klart när: "Previous tip" och "Next tip" bläddrar som förut utan att skriva
+ * något — issue 583 gjorde krysset till en stängning av hela ytan, och
+ * bläddringen ska inte ha följt med dit.
+ *
+ * Källkodsprov av samma skäl som resten av filen: bläddringen är klientsidans,
+ * och det som går att avgöra på serversidan är att den inte leder till en
+ * skrivning. Krysset är filens ENDA `router`-anrop — en bläddringsknapp som
+ * postade hade varit ett "Next tip" som skrev till `dismissed_tip`.
+ */
+it('bläddrar i informationsytan utan att skriva något', function () {
+    $kod = genomgangKod()['components/InfoPanel.vue'] ?? null;
+
+    expect($kod)->not->toBeNull('components/InfoPanel.vue saknas');
+
+    // Bläddringsknapparna finns kvar och kallar på var sin funktion.
+    expect($kod)->toContain('@click="showPrevious"')
+        ->toContain('@click="showNext"');
+
+    // Och deras kroppar rör ingen rutt. Kropparna läses ut för sig: finns
+    // `router.` någon annanstans i filen — krysset — ska det inte kunna nöja
+    // provet.
+    foreach (['showPrevious', 'showNext'] as $namn) {
+        preg_match('/function '.$namn.'\(\)\s*\{(.*?)\n\}/s', $kod, $traff);
+
+        expect($traff)->toHaveCount(2, "{$namn} saknas i InfoPanel.vue");
+        expect($traff[1])->not->toContain('router.');
+    }
+
+    // Filens enda router-anrop är kryssets, och det stänger hela ytan.
+    expect(substr_count($kod, 'router.'))->toBe(1)
+        ->and($kod)->toContain("'/tips/dismiss'");
+});
+
 it('använder md: som enda brytpunkt', function () {
     $avvikelser = [];
 

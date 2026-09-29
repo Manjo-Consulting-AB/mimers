@@ -48,6 +48,21 @@ final class Tips
     public function __construct(private readonly array $keys = self::KEYS) {}
 
     /**
+     * Hela listan i visningsordning, oavsett vad användaren dolt.
+     *
+     * Krysset stänger hela ytan och döljer därför allt `visibleFor()` kunde
+     * visa — det är samma lista, och den frågan ställs till samma klass i
+     * stället för till konstanten, så en `Tips` med en annan lista (provets
+     * skarv) döljer sin lista och inte standardlistan.
+     *
+     * @return list<string>
+     */
+    public function keys(): array
+    {
+        return $this->keys;
+    }
+
+    /**
      * Finns nyckeln bland tipsen? Grinden för `POST /tips/{key}/dismiss` —
      * en okänd nyckel är en 404 och inte en rad i `dismissed_tip`.
      */

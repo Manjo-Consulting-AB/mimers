@@ -25,10 +25,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * filtrerad av servern, så framåt och bakåt rör sig i den listan och aldrig
  * in i något dolt. Ordningen är serverns och komponenten sorterar ingenting.
  *
- * **Krysset postar och lämnar ifrån sig svaret.** `POST /tips/{key}/dismiss`
- * är idempotent (App\Http\Controllers\DismissedTipController), och servern
- * svarar med listan utan den nyckeln. Den nya proppen nollställer positionen,
- * så nästa tips står först — samma svar som `back()` landar i.
+ * **Krysset stänger ytan.** `POST /tips/dismiss` döljer varje nyckel
+ * användaren ännu inte dolt (App\Http\Controllers\DismissedTipController),
+ * och servern svarar med en tom lista — alltså ritas ingen yta alls. Att
+ * posta det frammevarande tipset till `POST /tips/{key}/dismiss` hade gjort
+ * krysset till ännu en "Next tip": servern hade svarat med listan utan just
+ * den nyckeln, och nästa tips hade stått där i stället. Krysset och
+ * bläddringen är två olika saker, och rutten de postar till är skillnaden.
  *
  * **Ramen är `UiCard`** (issue 99), som de andra panelerna: rubriken är
  * kortets rubrikrad och krysset står i kortets åtgärdsrad.
@@ -56,9 +59,10 @@ const index = ref(0);
 const busy = ref(false);
 
 /*
- * Servern svarar med listan UTAN det dolda tipset. Den nya proppen är vad som
- * gör att nästa tips står först, och positionen nollställs därför — annars
- * hade ytan kunnat stå kvar på en plats som inte längre finns.
+ * Servern svarar med en ny lista — tom efter en kryssning, eller listan utan
+ * det tips som enskilt doldes. Positionen nollställs därför vid varje ny
+ * propp: efter en kryssning finns ingen plats kvar att stå på, och annars
+ * hade indexet kunnat peka på en plats som inte längre finns.
  */
 watch(
     () => props.tips,
@@ -85,7 +89,7 @@ function showNext() {
 
 function dismiss() {
     router.post(
-        `/tips/${current.value}/dismiss`,
+        '/tips/dismiss',
         {},
         {
             preserveScroll: true,
