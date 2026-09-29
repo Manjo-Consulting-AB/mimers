@@ -275,10 +275,10 @@ it('var och en av de tio sektionerna går att nå', function () {
         'transfer',
     ]);
 
-    // Och inställningssidan ritar dem. Listan kommer ur modulen och renderas
-    // med `v-for` — en ny sektion är en ny rad där och ingen ändring i vyn —
-    // och varje rad är en länk byggd ur containerns ULID.
-    $vy = containerflikKod('pages/Containers/Edit.vue');
+    // Och inställningslayouten ritar dem. Listan kommer ur modulen och
+    // renderas med `v-for` — en ny sektion är en ny rad där och ingen ändring
+    // i layouten — och varje rad är en länk byggd ur containerns ULID.
+    $vy = containerflikKod('layouts/ContainerSettingsLayout.vue');
 
     expect($vy)->toContain('import { containerSettingsSections }')
         ->toContain('v-for="section in containerSettingsSections"')
@@ -287,7 +287,7 @@ it('var och en av de tio sektionerna går att nå', function () {
 
     $lankar = containerflikLanktaggar($vy);
 
-    expect($lankar)->toHaveCount(1, 'inställningssidan ritar ingen egen länkrad');
+    expect($lankar)->toHaveCount(1, 'inställningslayouten ritar ingen egen länkrad');
     expect($lankar[0])->toContain('section.href(container.ulid)');
     expect($lankar[0])->toContain('min-h-11');
 });

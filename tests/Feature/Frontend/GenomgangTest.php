@@ -460,11 +460,11 @@ it('renderar sektionslistorna ur samma moduler som förut', function () {
     // Sedan issue 101 finns sektionerna på TVÅ ytor, och båda läser sin lista
     // ur samma modul som förut: flikraden i ContainerLayout ritar
     // `containerTabs` (och mappar den till UiTabs i stället för att rendera
-    // länkar själv), och inställningssidan ritar `containerSettingsSections`
+    // länkar själv), och inställningslayouten ritar `containerSettingsSections`
     // med `v-for` precis som SettingsLayout ritar `settingsSections`.
     $ytor = [
         'layouts/ContainerLayout.vue' => ['containerTabs', 'containerTabs.map('],
-        'pages/Containers/Edit.vue' => ['containerSettingsSections', 'v-for="section in containerSettingsSections"'],
+        'layouts/ContainerSettingsLayout.vue' => ['containerSettingsSections', 'v-for="section in containerSettingsSections"'],
         'layouts/SettingsLayout.vue' => ['settingsSections', 'v-for="section in settingsSections"'],
     ];
 

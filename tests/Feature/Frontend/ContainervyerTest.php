@@ -667,7 +667,7 @@ it('nekar en itemåtkomst på write att redigera containern', function () {
  * Layouten är skalet fem issues fyller (Beslut 7), och redigeringssidan är
  * den första som bor i den. Sidpropen `container` är kontraktet.
  */
-it('renderar redigeringssidan i ContainerLayout med containerns namn', function () {
+it('renderar redigeringssidan i ContainerSettingsLayout med containerns namn', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerKontext();
@@ -688,7 +688,7 @@ it('renderar redigeringssidan i ContainerLayout med containerns namn', function 
     // `:can` kom med issue 159: skalet ritar pennan på containerns bild ur
     // samma flagga som formuläret ritas ur ([[ADR-0047 Containerns bild]]
     // § Beslut, "Vem som får göra vad").
-    expect($vy)->toContain('<ContainerLayout :container="container" :can="can">');
+    expect($vy)->toContain('<ContainerSettingsLayout :container="container" :can="can">');
     expect($layout)->toContain('container.name');
 });
 

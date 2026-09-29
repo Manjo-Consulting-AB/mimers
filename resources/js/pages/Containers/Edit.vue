@@ -1,11 +1,10 @@
 <script setup>
 import { ref } from 'vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
 import ContainerCoverSheet from '../../components/ContainerCoverSheet.vue';
 import FormField from '../../components/FormField.vue';
-import { containerSettingsSections } from '../../layouts/containerSections.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
@@ -13,8 +12,9 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * Containerns inställningar, se issue 54 § Beslut 7, 8 och 9 och issue 62b
  * § Beslut 4, 5 och 6.
  *
- * Sidan ligger i ContainerLayout och bär den prop layouten kräver:
- * `container` ur App\Http\Resources\ContainerResource.
+ * Sidan ligger i ContainerSettingsLayout, som wrappar ContainerLayout, och
+ * bär den prop layouten kräver: `container` ur
+ * App\Http\Resources\ContainerResource.
  *
  * EN PATCH mot /containers/{ulid}, och bara `name`, `kind`, `description` —
  * sedan issue 88 · [[ADR-0039 Containerns översikt]] — och `currency` (issue
@@ -55,13 +55,17 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * **Sidan är containerns samlingsplats sedan issue 101** ·
  * [[ADR-0042 Designsystemet]]. Flikraden ritar de ytor man arbetar i, och de
  * sju sektionerna som inte fick plats där — kategorier, taggar, delning,
- * kalender, export, papperskorg och överlåtelse — listas här i stället, som
+ * kalender, export, papperskorg och överlåtelse — listades här i stället, som
  * länkar med samma etikett och samma adress som de hade i sektionsmenyn.
- * Listan kommer ur `containerSettingsSections` och renderas med `v-for`: en ny
- * sektion är en ny rad i containerSections.js och ingen ändring i den här
- * filen, precis som i SettingsLayout.
  *
- * **Ingen rad får försvinna, och det är därför listan finns.** En yta ingen
+ * **Listan bor i `ContainerSettingsLayout` och inte här.** Den låg under
+ * formuläret och fanns därför bara på den här sidan; de sex andra nåddes bara
+ * via den. Nu är den en sidokolumn som står på alla åtta sidor, ritad ur
+ * samma `containerSettingsSections` — en ny sektion är en ny rad i
+ * containerSections.js och ingen ändring i vare sig layouten eller den här
+ * filen.
+ *
+ * **Ingen rad får försvinna, och det är därför kolumnen finns.** En yta ingen
  * hittar är samma sak som en yta som inte finns — det var 62a:s motivering för
  * papperskorgen och 67c:s för exporten, och de två är just de rader som hade
  * varit lätta att tappa när menyn blev en flikrad.
@@ -146,7 +150,7 @@ async function destroy() {
 </script>
 
 <template>
-    <ContainerLayout :container="container" :can="can">
+    <ContainerSettingsLayout :container="container" :can="can">
         <!-- Sidtiteln och rubriken följer samma gren som formuläret: *Redigera
              container* åt någon som inte får redigera är en osanning, och den
              som kommer hit för sektionernas skull möts av listans namn i
@@ -289,21 +293,6 @@ async function destroy() {
             </div>
         </section>
 
-        <nav :aria-label="t('container.edit.sections')" class="mt-12 border-t border-border pt-6">
-            <h2 class="text-title">{{ t('container.edit.sections') }}</h2>
-
-            <ul class="mt-2 flex flex-col gap-1 text-body">
-                <li v-for="section in containerSettingsSections" :key="section.key">
-                    <Link
-                        :href="section.href(container.ulid)"
-                        class="flex min-h-11 items-center rounded px-3 hover:bg-surface-sunken"
-                    >
-                        {{ t(`container.nav.${section.key}`) }}
-                    </Link>
-                </li>
-            </ul>
-        </nav>
-
         <div v-if="can.delete" class="mt-12 border-t border-slate-200 pt-6">
             <button
                 type="button"
@@ -314,5 +303,5 @@ async function destroy() {
                 {{ pending ? t('common.pending.default') : t('container.destroy.action') }}
             </button>
         </div>
-    </ContainerLayout>
+    </ContainerSettingsLayout>
 </template>

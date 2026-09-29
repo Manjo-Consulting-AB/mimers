@@ -1,6 +1,6 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
-import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import TagCreateForm from '../../components/TagCreateForm.vue';
 import TagRow from '../../components/TagRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -8,8 +8,8 @@ import { useTranslations } from '../../composables/useTranslations.js';
 /*
  * Tagglistan, se issue 56a § Beslut 1, 6 och 8.
  *
- * Sidan ligger i ContainerLayout och bär den prop layouten kräver: `container`
- * ur App\Http\Resources\ContainerResource.
+ * Sidan ligger i ContainerSettingsLayout och bär den prop layouten kräver:
+ * `container` ur App\Http\Resources\ContainerResource.
  *
  * **Skillnaden mot kategorin syns på sidan** (Beslut 8).
  * [[ADR-0004 Fria taggar och kategorier]]: kategorin är var saken hör hemma,
@@ -38,7 +38,7 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerSettingsLayout :container="container">
         <Head :title="t('container.tags.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('container.tags.heading') }}</h1>
@@ -61,5 +61,5 @@ const { t } = useTranslations();
 
             <TagCreateForm class="mt-4" :container-ulid="container.ulid" />
         </section>
-    </ContainerLayout>
+    </ContainerSettingsLayout>
 </template>

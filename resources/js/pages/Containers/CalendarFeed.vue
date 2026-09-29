@@ -1,6 +1,6 @@
 <script setup>
 import { Head, useForm } from '@inertiajs/vue3';
-import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import CalendarFeedRow from '../../components/CalendarFeedRow.vue';
 import SecretOnce from '../../components/SecretOnce.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -58,7 +58,7 @@ function create() {
 </script>
 
 <template>
-    <ContainerLayout :container="props.container">
+    <ContainerSettingsLayout :container="props.container">
         <Head :title="t('calendar.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('calendar.heading') }}</h1>
@@ -100,5 +100,5 @@ function create() {
                 />
             </ul>
         </section>
-    </ContainerLayout>
+    </ContainerSettingsLayout>
 </template>

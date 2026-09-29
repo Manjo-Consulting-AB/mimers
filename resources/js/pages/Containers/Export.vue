@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
-import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ExportRow from '../../components/ExportRow.vue';
 import { isOpenExport } from '../../components/exportPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -113,7 +113,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerSettingsLayout :container="container">
         <Head :title="t('export.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('export.heading') }}</h1>
@@ -166,5 +166,5 @@ onUnmounted(() => {
                 <ExportRow v-for="row in exports" :key="row.ulid" :row="row" />
             </ul>
         </section>
-    </ContainerLayout>
+    </ContainerSettingsLayout>
 </template>
