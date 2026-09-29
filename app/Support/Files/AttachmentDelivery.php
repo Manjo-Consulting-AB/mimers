@@ -45,6 +45,13 @@ use Symfony\Component\HttpFoundation\Response;
 final class AttachmentDelivery
 {
     /**
+     * 404 är hela svaret för varje bilaga vars byten inte går att leverera:
+     * ett okänt variant-värde, en variant utan derivat-rad (storagePath
+     * ovan), och en sökväg som inte finns på disken — den sista oavsett gren
+     * och oavsett om det är originalet eller ett derivat. Ingen av dem blir
+     * ett 500 och ingen av dem blir ett 200 som inte håller, se kontrollen
+     * nedan.
+     *
      * @param  mixed  $variant  det råa värdet ur querysträngen. Allt utom
      *                          `null` och strängarna `thumb`/`medium` är 404 —
      *                          `?variant[]=thumb` når hit som en array och
@@ -59,6 +66,32 @@ final class AttachmentDelivery
     {
         $storedFile = $attachment->storedFile;
         $storagePath = self::storagePath($storedFile, $variant);
+
+        // Bytena måste finnas på disken innan något svar byggs (issue 167).
+        // Kontrollen ligger före BÅDA grenarna, för båda svarade fel utan den:
+        //
+        // - Den strömmande grenen gick rakt in i Storage::disk('files')
+        //   ->response(), och den hämtar filens storlek till Content-Length
+        //   redan när svaret byggs. Saknas filen kastar uppslaget
+        //   UnableToRetrieveMetadata, och resultatet blev en 500 — ett haveri
+        //   där kontraktet säger 404.
+        // - Den interna omdirigeringen svarade 200 med en X-LiteSpeed-Location
+        //   ingen kontrollerade, och 404:an kom i stället från webbservern.
+        //   Appen påstod alltså att leveransen lyckades medan användaren fick
+        //   en 404 — samma svar som appens egen 404, utan ett spår i appens
+        //   logg. Det är den tysta felmoden [[ADR-0019 Filleverans]]
+        //   § Konsekvenser varnar för, och den enda av de fem punkterna i
+        //   issue 167 där appen aldrig fick chansen att svara själv.
+        //
+        // Raden och varianten kan alltså vara helt riktiga medan bytena är
+        // borta: en gallring som hann före, en återläsning ur backup som
+        // stannade vid databasen, eller en _protected-symlänk som inte
+        // löser ut. Alla tre ska svara 404 — "filen finns inte" — och aldrig
+        // 500 eller ett 200 som inte håller. Ett stat-anrop per leverans är
+        // vad det kostar; det är samma uppslag webbservern gör ändå.
+        if (! Storage::disk('files')->exists($storagePath)) {
+            abort(404);
+        }
 
         $disposition = $inline && self::isInlineAllowed($storedFile->mime_type)
             ? HeaderUtils::DISPOSITION_INLINE
