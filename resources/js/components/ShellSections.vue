@@ -28,8 +28,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * ([[ADR-0013 Språk och i18n]]): texten formuleras på servern och slås bara
  * upp på klienten, precis som `container.nav.<key>` i ContainerLayout.
  * Undantaget är raden för inställningarna (issue 163): dess text är
- * användarens namn — data ur den delade proppen och ingen mening — och ordet
- * *Settings* bor kvar i radens `title`, där det säger vad raden GÖR.
+ * användarens namn — data ur den delade proppen och ingen mening — och nyckeln
+ * `nav.settings` bor kvar som radens `title`, bara där, eftersom den är det
+ * enda som säger vad raden GÖR. Grannradernas `title` hade bara upprepat deras
+ * synliga text och gett dem en tooltip ingen beställt.
  *
  * **Nyligen besökta är INGEN av de två delarna** (issue 160 · [[ADR-0049
  * Nyligen besökta]] § Beslut). Den är en lista över items och inte en rad i
