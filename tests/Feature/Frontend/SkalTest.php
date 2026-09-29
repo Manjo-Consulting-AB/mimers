@@ -210,9 +210,10 @@ it('visar användarens namn som länken till inställningarna', function () {
     expect($raden)->toContain('{{ section.key === \'settings\' ? user.name : t(`nav.${section.key}`) }}');
 
     // Ordet *Settings* är därför INTE radens text, men nyckeln bär vad raden
-    // GÖR, och länken får den som `title` — samma uppslag som etiketten, byggt
-    // ur radens nyckel. Ingen `aria-label`, som hade ersatt det synliga namnet.
-    expect($raden)->toContain(':title="t(`nav.${section.key}`)"')
+    // GÖR, och länken får den som `title` — bara inställningsraden, så att
+    // grannarna inte får en tooltip de aldrig haft. Ingen `aria-label`, som
+    // hade ersatt det synliga namnet.
+    expect($raden)->toContain(':title="section.key === \'settings\' ? t(\'nav.settings\') : undefined"')
         ->and($raden)->not->toContain('aria-label');
 
     // Målet är oförändrat, och raden ritas bara för en inloggad användare:

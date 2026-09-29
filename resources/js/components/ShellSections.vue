@@ -83,7 +83,7 @@ const sections = [
             <Link
                 v-if="user"
                 :href="section.href"
-                :title="t(`nav.${section.key}`)"
+                :title="section.key === 'settings' ? t('nav.settings') : undefined"
                 class="inline-flex min-h-11 items-center hover:underline"
             >
                 {{ section.key === 'settings' ? user.name : t(`nav.${section.key}`) }}
