@@ -102,6 +102,20 @@ class ListAuditEvents
      */
     private const TOP_ITEMS = 5;
 
+    /**
+     * Taket för hur många dagar `perDay` fyller ut — ett år och en dag, så
+     * ett skottår ryms.
+     *
+     * **Utan taket vore intervallet en kostnad i sig.** `from` och `to`
+     * prövas bara som datum (App\Http\Requests\Audit\ContainerHistoryFilterRequest
+     * sätter ingen gräns för hur långt ifrån varandra de får ligga), så
+     * `?from=0001-01-01&to=9999-12-31` hade byggt en lista på miljontals
+     * dagar — och varje dag blir en `<rect>` och en tabellrad i vyn. Talet
+     * hade då vuxit med INTERVALLET och inte med antalet händelser, tvärtemot
+     * löftet att aggregaten kostar ett konstant antal frågor.
+     */
+    private const MAX_PERIOD_DAYS = 366;
+
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
     /**
@@ -201,12 +215,29 @@ class ListAuditEvents
      * topplistan — oavsett hur många händelser loggen bär.
      *
      * **Dagsgränsen räknas som i 179** ([[ADR-0044 Användarens dag]]).
-     * `perDay` hinkas på TIMME i SQL — ett portabelt `substr`, samma grepp
+     * `perDay` hinkas på MINUT i SQL — ett portabelt `substr`, samma grepp
      * och samma skäl som CostReport::groupByPeriod, eftersom sviten kör
      * sqlite och produktionen MariaDB och `DATE_FORMAT`/`strftime` inte finns
-     * i båda — och timmen viks till användarens dag i PHP med
+     * i båda — och minuten viks till användarens dag i PHP med
      * `setTimezone()`. Att hinka på dag i SQL hade gett UTC-dygn, och en
      * händelse 23:30 UTC hör till nästa dygn för en användare i Stockholm.
+     *
+     * **Minuten och inte timmen**, för att en hink måste ligga HELT inom en
+     * lokal dag för att kunna vikas till en. En timhink som innehåller lokal
+     * midnatt gör det inte, och för en zon med :30- eller :45-offset
+     * (Asia/Kolkata, Asia/Kathmandu) infaller midnatt mitt i timmen varje
+     * dygn: hinkens första ögonblick hamnar då på fel dag och dagssiffrorna
+     * blir fel. Alla tidszoner har hela minuters offset, så minuthinken är
+     * exakt för varje zon. Kostnaden är fler grupperade rader — högst antalet
+     * distinkta minuter med händelser — men `COUNT(*)` görs fortfarande i
+     * databasen och det är fortfarande EN fråga.
+     *
+     * **`perDay` och `perType` spänner olika fönster** när inget datumfilter
+     * är satt: `perDay` fyller ut de senaste trettio dagarna (DEFAULT_DAYS),
+     * `perType` räknar hela den läsbara mängden. Det följer Beslut 1 — grafen
+     * över tid är till för att visa NÄR något hände, ringen för att visa
+     * fördelningen — men de två talen är därför inte summan av varandra, och
+     * ingen yta får förutsätta att de är det.
      *
      * `topItems` frågar efter items inom `ResolveItemScope` och utanför
      * papperskorgen genom `Item::inScope()` som underfråga — samma omfång som
@@ -235,11 +266,19 @@ class ListAuditEvents
     /**
      * Antal händelser per dag i användarens tidszon — `perDay`.
      *
-     * Timhinkarna kommer ur databasen och viks till dagar här, med SAMMA
+     * Minuthinkarna kommer ur databasen och viks till dagar här, med SAMMA
      * `setTimezone()` som kontrollern gör för listan: en händelse 23:30 UTC
      * hör till nästa dygn för en användare i Stockholm, och en gruppering på
-     * UTC-dygn hade lagt den på fel dag. En timhink som innehåller lokal
-     * midnatt hör till den dag hinkens FÖRSTA ögonblick faller på.
+     * UTC-dygn hade lagt den på fel dag.
+     *
+     * **Minuten och inte timmen.** En hink måste ligga helt inom en lokal dag
+     * för att kunna vikas till en, och en timhink som innehåller lokal midnatt
+     * gör inte det. För en zon med :30- eller :45-offset (Asia/Kolkata,
+     * Asia/Kathmandu) infaller midnatt mitt i timmen varje dygn, och
+     * timhinkens första ögonblick hade då lagt hela hinken — och därmed
+     * händelser på båda sidor om midnatt — på dagen före. Alla tidszoner har
+     * hela minuters offset, så minuthinken är exakt för varje zon. Se
+     * `statsForContainer()` om kostnaden.
      *
      * @param  Builder<AuditLog>  $base
      * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
@@ -250,19 +289,19 @@ class ListAuditEvents
         $timezone = $viewer->preferredTimezone();
 
         $rows = $base
-            ->selectRaw('substr(created_at, 1, 13) AS hour_key')
+            ->selectRaw('substr(created_at, 1, 16) AS minute_key')
             ->selectRaw('COUNT(*) AS count')
-            ->groupBy('hour_key')
+            ->groupBy('minute_key')
             ->get();
 
         $counts = [];
 
         // `getAttribute()` och inte egenskapsåtkomst: raden är en projektion
-        // över `audit_log`, och `hour_key`/`count` är alias ur `selectRaw` som
-        // varken finns som kolumn eller cast på App\Models\AuditLog. Samma
+        // över `audit_log`, och `minute_key`/`count` är alias ur `selectRaw`
+        // som varken finns som kolumn eller cast på App\Models\AuditLog. Samma
         // grepp och samma skäl som ListTags.
         foreach ($rows as $row) {
-            $day = Carbon::parse($row->getAttribute('hour_key').':00:00', 'UTC')
+            $day = Carbon::parse($row->getAttribute('minute_key').':00', 'UTC')
                 ->setTimezone($timezone)
                 ->toDateString();
 
@@ -284,6 +323,14 @@ class ListAuditEvents
      * hade ritat två grannar som grannar även när de låg ett år isär, och
      * grafen är till för att visa när något hände.
      *
+     * **Intervallens början klipps mot MAX_PERIOD_DAYS.** Datumfiltret sätter
+     * ingen gräns för hur långt `from` och `to` får ligga ifrån varandra, och
+     * `?from=0001-01-01&to=9999-12-31` hade annars fyllt ut miljontals dagar.
+     * Änden står kvar och början flyttas fram: den som ber om ett orimligt
+     * intervall får de senaste dagarna, inte de första, och de senaste är de
+     * diagrammet är till för. Ett intervall inom taket rörs inte — också det
+     * utan datumfilter, där DEFAULT_DAYS redan ligger under taket.
+     *
      * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
      * @return list<string>
      */
@@ -296,6 +343,12 @@ class ListAuditEvents
         $start = isset($filters['from'])
             ? Carbon::parse($filters['from'], $timezone)->startOfDay()
             : $end->copy()->subDays(self::DEFAULT_DAYS - 1);
+
+        $earliest = $end->copy()->subDays(self::MAX_PERIOD_DAYS - 1);
+
+        if ($start->lessThan($earliest)) {
+            $start = $earliest;
+        }
 
         $days = [];
 
@@ -359,8 +412,16 @@ class ListAuditEvents
      * den byts hellre mot ett uppslag av högst fem namn. Antalet frågor är
      * fortfarande konstant.
      *
-     * Ordningen är antal fallande med namnet stigande som sekundär, så två
-     * items med lika många händelser får en stabil ordning.
+     * **Urvalet har en annan sekundärnyckel än presentationen.** `LIMIT 5`
+     * ligger i SQL och prövas före namnen, så vid lika antal på femte plats
+     * avgör `item_id` stigande vilken post som kommer med. Först därefter,
+     * bland de fem utvalda, sorteras listan om på antal fallande med namnet
+     * stigande. De två ordningarna är alltså inte samma, och det är avsiktligt:
+     * att välja på namn hade krävt en join mot `item` före `LIMIT` — samma
+     * join som motiverats bort ovan — och namnet är en presentationsuppgift som
+     * inte bör styra vilka fem rader läsregeln lämnar ifrån sig. Urvalet är
+     * deterministiskt (item_id är unikt), och de fem posterna presenteras i
+     * namnordning.
      *
      * @param  Builder<AuditLog>  $base
      * @return list<array{ulid: string, name: string, count: int}>

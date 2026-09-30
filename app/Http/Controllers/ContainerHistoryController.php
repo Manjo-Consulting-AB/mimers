@@ -115,7 +115,10 @@ class ContainerHistoryController extends Controller
             'days' => $this->days($logs, $user->preferredTimezone()),
             // Diagrammens tre tal (issue 180 § Beslut 2): samma läsregel och
             // samma filter som `days`, men utan gränsen på hundra — se
-            // ListAuditEvents::statsForContainer().
+            // ListAuditEvents::statsForContainer(). Utan datumfilter spänner
+            // `perDay` de senaste trettio dagarna medan `perType` och
+            // `topItems` räknar hela den läsbara mängden; de två talen är
+            // därför inte summan av varandra.
             'stats' => $this->listAuditEvents->statsForContainer($user, $container, $filters),
             // Filtret så som servern tillämpade det. `null` för ett fält
             // användaren inte satte, och vyn ritar fälten ur det: ett tomt

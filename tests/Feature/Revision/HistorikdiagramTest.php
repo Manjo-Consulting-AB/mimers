@@ -386,6 +386,154 @@ it('perDay följer användarens tidszon', function () {
 });
 
 /*
+ * Minuten och inte timmen: en zon med :30-offset får rätt dygnsgräns.
+ *
+ * Provet ovan fäster en hel timmes offset (Stockholm), och där räcker en
+ * timhink. För Asia/Kolkata (UTC+5:30) infaller lokal midnatt mitt i en
+ * UTC-timme varje dygn: 18:00–19:00 UTC är 23:30–00:30 lokal tid, alltså två
+ * dygn i samma hink. Hinkades det på timme skulle BÅDA händelserna hamna på
+ * den 26:e — hinkens första ögonblick är 23:30 den 26:e — och dagssiffrorna
+ * vore fel för en verklig användargrupp. Minuthinkarna (18:29 och 18:31)
+ * delar dem rätt.
+ */
+it('perDay delar en timme som spänner över midnatt i en halvtimmeszon', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikdiagramKontext('Asia/Kolkata');
+
+    // 23:59 lokal tid den 26:e.
+    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-26 18:29:00', 'UTC'));
+    // 00:01 lokal tid den 27:e — samma UTC-timme som raden ovan.
+    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-26 18:31:00', 'UTC'));
+
+    $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm, [
+        'from' => '2026-09-26',
+        'to' => '2026-09-27',
+    ]));
+
+    expect($stats['perDay'])->toBe([
+        ['date' => '2026-09-26', 'count' => 1],
+        ['date' => '2026-09-27', 'count' => 1],
+    ]);
+});
+
+/*
+ * Klart när: en dag utan händelser får noll i `perDay`.
+ *
+ * Grafen är SAMMANHÄNGANDE (Beslut 1): en dag mitt i perioden utan händelser
+ * får räknaren noll i stället för att saknas, annars hade två grannar ritats
+ * som grannar även när de låg en månad isär. Provet lägger händelser två dagar
+ * isär och fäster dagen mellan dem — ett diagram som hoppade över tomma dagar
+ * hade gett två poster och fallit här.
+ */
+it('en dag utan händelser får noll i perDay', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikdiagramKontext('UTC');
+
+    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-26 12:00:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-28 12:00:00', 'UTC'));
+
+    $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm, [
+        'from' => '2026-09-26',
+        'to' => '2026-09-28',
+    ]));
+
+    expect($stats['perDay'])->toBe([
+        ['date' => '2026-09-26', 'count' => 1],
+        ['date' => '2026-09-27', 'count' => 0],
+        ['date' => '2026-09-28', 'count' => 1],
+    ]);
+});
+
+/*
+ * Klart när: `from` utan `to` och `to` utan `from` ger var sin ände.
+ *
+ * Filtret sätter de två ändarna var för sig: `from` utan `to` sträcker sig
+ * till användarens idag, `to` utan `from` trettio dagar bakåt från sin egen
+ * dag (DEFAULT_DAYS). Klockan är fryst, så "idag" inte beror på när sviten
+ * körs — `User::today()` läser användarens kalenderdatum
+ * ([[ADR-0044 Användarens dag]]).
+ */
+it('from utan to och to utan from ger var sin ände', function () {
+    withoutVite();
+    Carbon::setTestNow('2026-09-30 12:00:00');
+
+    [$konto, $ägare, $pärm] = historikdiagramKontext('UTC');
+
+    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-20 12:00:00', 'UTC'));
+
+    // `from` ensam: börjar där och slutar i användarens idag.
+    $från = historikdiagramStats(historikdiagramProps($ägare, $pärm, ['from' => '2026-09-19']))['perDay'];
+
+    expect($från)->toHaveCount(12)
+        ->and($från[0])->toBe(['date' => '2026-09-19', 'count' => 0])
+        ->and($från[1])->toBe(['date' => '2026-09-20', 'count' => 1])
+        ->and($från[11])->toBe(['date' => '2026-09-30', 'count' => 0]);
+
+    // `to` ensam: slutar där och sträcker sig trettio dagar bakåt.
+    $till = historikdiagramStats(historikdiagramProps($ägare, $pärm, ['to' => '2026-09-21']))['perDay'];
+
+    expect($till)->toHaveCount(30)
+        ->and($till[0])->toBe(['date' => '2026-08-23', 'count' => 0])
+        ->and($till[28])->toBe(['date' => '2026-09-20', 'count' => 1])
+        ->and($till[29])->toBe(['date' => '2026-09-21', 'count' => 0]);
+});
+
+/*
+ * Klart när: en rad utan `subject_type` räknas som sin egen post i `perType`.
+ *
+ * `subject_type` är ett öppet namnrum och en rad behöver inte ha något
+ * ([[ADR-0043 Tre loggar]] § Händelseloggen). Raden räknas som sin egen post
+ * och inte bort, så ringen summerar till samma tal som rubriken visar; vyn ger
+ * den ordet `audit.history.type_other`. Posten får ett HÖGRE tal än den
+ * namngivna typen, så ordningen är bestämd utan att hänga på hur databasen
+ * sorterar NULL.
+ */
+it('en rad utan subject_type räknas som sin egen post i perType', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikdiagramKontext('UTC');
+
+    historikdiagramRad($pärm, $konto, $ägare, null, null);
+    historikdiagramRad($pärm, $konto, $ägare, null, null);
+    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry');
+
+    $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm));
+
+    expect($stats['perType'])->toBe([
+        ['type' => null, 'count' => 2],
+        ['type' => 'cost_entry', 'count' => 1],
+    ]);
+});
+
+/*
+ * Klart när: ett intervall över flera år fyller inte ut hela spannet.
+ *
+ * Datumfiltret sätter ingen gräns för hur långt `from` och `to` får ligga
+ * ifrån varandra, och utan taket hade det här intervallet byggt en lista på
+ * sjuttiotusentals dagar — en propp, en `<rect>` och en tabellrad per dag.
+ * Kostnaden hade då vuxit med INTERVALLET och inte med antalet händelser,
+ * tvärtemot löftet att aggregaten kostar ett konstant antal frågor. Taket
+ * (MAX_PERIOD_DAYS) klipper början och behåller änden: den som ber om ett
+ * orimligt intervall får de senaste dagarna.
+ */
+it('ett intervall över flera år klipps till taket', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikdiagramKontext('UTC');
+
+    $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm, [
+        'from' => '1900-01-01',
+        'to' => '2100-01-01',
+    ]));
+
+    expect($stats['perDay'])->toHaveCount(366)
+        ->and($stats['perDay'][0]['date'])->toBe('2099-01-01')
+        ->and($stats['perDay'][365]['date'])->toBe('2100-01-01');
+});
+
+/*
  * Klart när: aggregaten kostar ett konstant antal frågor.
  *
  * Talen räknas med `GROUP BY` i databasen (Beslut 1) och inte genom att hämta
