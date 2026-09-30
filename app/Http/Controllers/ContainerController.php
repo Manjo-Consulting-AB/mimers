@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Actions\Attachment\ListRecentImages;
 use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Container\CreateContainer;
@@ -16,6 +17,7 @@ use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ItemResource;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\User;
 use App\Support\Cost\CostReport;
@@ -23,6 +25,7 @@ use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Frontend\CreateTarget;
 use App\Support\Tips;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -103,6 +106,16 @@ class ContainerController extends Controller
      * hade varit en andra sanning om vilka items användaren når.
      */
     public const ITEM_LIMIT = 6;
+
+    /**
+     * Antalet bilder översiktens *Senaste bilder*-panel visar (issue 173).
+     *
+     * Fem enligt `docs/Design/container.jpeg`, som ritar en stor bild och
+     * fyra små. Gränsen går in i anropet till
+     * App\Actions\Attachment\ListRecentImages::handle(); urvalet har inget
+     * eget femtal, och en yta som vill se fler säger det i sin egen ände.
+     */
+    public const IMAGE_LIMIT = 5;
 
     /**
      * GET /containers — alla containers användaren når, sorterade på namn.
@@ -221,9 +234,11 @@ class ContainerController extends Controller
      * vilken adress krysset postar tillbaka till, och det äger `back()`.
      *
      * **Panelerna kom med issue 172 · [[ADR-0050 Desktopdesignen]] § 7**, som
-     * fem egna proppar — en per panel, samma form som M19 gav dashboarden
+     * egna proppar — en per panel, samma form som M19 gav dashboarden
      * (issue 122) och av samma skäl: en ny panel krockar om en rad här och en
-     * rad i vyn, inte om varandras innehåll.
+     * rad i vyn, inte om varandras innehåll. Fem av dem kom med issue 172,
+     * den sjätte (*Senaste bilder*) med issue 173 — och den sjätte kostade en
+     * rad i signaturen, en rad i anropet och en rad i svaret.
      *
      * - `tasks` är containerns todo-urval, högst `TASK_LIMIT` rader, ur
      *   App\Actions\Schedule\ListTodo::forContainer() — samma urval, samma
@@ -236,6 +251,10 @@ class ContainerController extends Controller
      *   svarar på båda frågorna.
      * - `events` är containerns händelselogg genom läsregeln, högst
      *   `ACTIVITY_LIMIT` rader ([[ADR-0043 Tre loggar]]).
+     * - `recentImages` är de senaste bildbilagorna på containerns items, högst
+     *   `IMAGE_LIMIT` rader, ur App\Actions\Attachment\ListRecentImages — den
+     *   enda panel vars urval är bilagor och inte items (issue 173). Panelen
+     *   ritas bara när listan har något i sig.
      * - `details` är art, valuta, ägarkontots namn och skapandedatum.
      *
      * **Kontrollern räknar fortfarande ingenting själv.** Uppgiftstalet kommer
@@ -252,6 +271,24 @@ class ContainerController extends Controller
      * frågekostnaden inte beror på vad processen råkade lösa upp tidigare.
      * Panelen ritas bara när containern har minst en kostnadsrad, och det
      * avgör vyn ur `costs.totals`.
+     *
+     * **`recentImages` är den enda panel vars urval är BILAGOR** (issue 173 ·
+     * [[ADR-0050 Desktopdesignen]] § 7). Frågan bor i
+     * App\Actions\Attachment\ListRecentImages, och den går genom
+     * `ResolveItemScope` som varje annan listning: en bild på ett item
+     * användaren inte når — eller i papperskorgen, eller på ett item i
+     * papperskorgen — försvinner ur listan utan att en räknare avslöjar det.
+     * Containerns EGEN bild räknas aldrig ([[ADR-0047 Containerns bild]]): den
+     * hör till containern och inte till något item, och den sitter redan i
+     * skalets topprad.
+     *
+     * **De fyra fälten är allt vyn behöver för att rita och navigera.** Varje
+     * bild är en länk till SITT item, och adressen kräver båda ULID:na — därför
+     * bär `item` både ULID och namn. `hasThumb` är samma svar som
+     * `variants`-tabellen i App\Http\Controllers\ItemController::show ger: en
+     * miniatyr ritas bara när `thumb`-varianten FINNS, för `?variant=thumb`
+     * mot en bilaga utan derivat svarar 404 (issue 61b § Beslut 1). Vyn ska
+     * aldrig gissa, och den ska inte heller känna till derivattabellen.
      */
     public function show(
         Request $request,
@@ -260,6 +297,7 @@ class ContainerController extends Controller
         ListTodo $listTodo,
         ListAuditEvents $listAuditEvents,
         PresentAuditEvents $presentAuditEvents,
+        ListRecentImages $listRecentImages,
         CostReport $report,
         ActiveContainer $activeContainer,
         CreateTarget $createTarget,
@@ -315,6 +353,10 @@ class ContainerController extends Controller
             'events' => $presentAuditEvents->handle(
                 $listAuditEvents->forContainer($user, $container, self::ACTIVITY_LIMIT),
             ),
+            // Bilderna (issue 173). Proppen är en LISTA och inte ett
+            // `{ulid: …}`-uppslag som `variants` i itemvyn: panelen ritar
+            // raderna i serverns ordning, och ett uppslag hade tappat den.
+            'recentImages' => $this->recentImages($listRecentImages->handle($user, $container, self::IMAGE_LIMIT)),
             // Containerns egna fakta. `kind` skrivs ut ordagrant av vyn —
             // fältet är fritt och har ingen översättningsnyckel
             // ([[ADR-0036 Containerns art]]).
@@ -640,6 +682,39 @@ class ContainerController extends Controller
             ->distinct()
             ->orderBy('kind')
             ->pluck('kind')
+            ->all();
+    }
+
+    /**
+     * Bildpanelen på översikten: `{ulid, filename, hasThumb, item}` per rad,
+     * i serverns ordning (issue 173).
+     *
+     * **Formen är radens eget svar och ingenting mer.** Vyn ritar en miniatyr
+     * eller en neutral yta, länkar till itemet och skriver filnamnet som
+     * bildtext — fler fält hade frestat panelen att bygga en andra väg vid
+     * sidan av itemets egen sida, och den vägen finns inte här.
+     *
+     * `hasThumb` räknas ur de EAGERLADDADE derivaten, precis som `variants()`
+     * i App\Http\Controllers\ItemController: noll extra frågor per rad, och
+     * samma regel som itemvyn — en miniatyr ritas bara när varianten finns
+     * (issue 61b § Beslut 1).
+     *
+     * @param  Collection<int, Attachment>  $attachments
+     * @return list<array{ulid: string, filename: string, hasThumb: bool, item: array{ulid: string, name: string}}>
+     */
+    private function recentImages(Collection $attachments): array
+    {
+        return $attachments
+            ->map(fn (Attachment $attachment): array => [
+                'ulid' => $attachment->ulid,
+                'filename' => $attachment->filename,
+                'hasThumb' => $attachment->storedFile->derivatives->contains('variant', 'thumb'),
+                'item' => [
+                    'ulid' => $attachment->item->ulid,
+                    'name' => $attachment->item->name,
+                ],
+            ])
+            ->values()
             ->all();
     }
 }

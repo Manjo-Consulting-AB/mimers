@@ -7,6 +7,7 @@ import ContainerTasksPanel from '../../components/ContainerTasksPanel.vue';
 import CostDonut from '../../components/CostDonut.vue';
 import HistoryRow from '../../components/HistoryRow.vue';
 import InfoPanel from '../../components/InfoPanel.vue';
+import RecentImagesPanel from '../../components/RecentImagesPanel.vue';
 import UiCard from '../../components/UiCard.vue';
 import UiListRow from '../../components/UiListRow.vue';
 import UiStat from '../../components/UiStat.vue';
@@ -100,6 +101,10 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *   dashboardens panel, och ett upprepat containernamn hade sagt samma sak två
  *   gånger (issue 116 § Beslut, issue 126).
  * - *Containerdetaljer* är sin egen komponent och en definitionslista.
+ * - *Senaste bilder* kom med issue 173 och är sin egen komponent. Panelen
+ *   ritas inte alls när containern saknar bilder — samma regel som
+ *   kostnadspanelen, och av samma skäl: en rubrik över ingenting påstår att
+ *   det finns något att visa.
  *
  * **Rutnätet följer bilden över `lg:` och staplar panelerna under den.**
  * Behållaren är ett vanligt block tills `lg:` gör den till ett rutnät om tre
@@ -112,8 +117,10 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * Rutnätet är fullt: uppgifterna, kostnaderna och detaljerna på första raden,
  * itemen över två kolumner med aktiviteterna i den tredje, och
  * informationsytan sist i högerspalten — där bilden har den. *Senaste bilder*
- * är issue 173 och flyttar in i rutnätet när den byggs; den här issuen lämnar
- * ingen tom cell efter sig.
+ * (issue 173) flyttade in i den tredje radens lediga två kolumner, bredvid
+ * informationsytan, och ingen panel flyttade för den: rutnätet hade platsen
+ * kvar, och en omflyttning av panelerna hade varit en ändring av issue 172:s
+ * yta som den här issuen inte har bett om.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -135,6 +142,12 @@ const props = defineProps({
     items: { type: Array, required: true },
     /* Högst fem rader ur containerns händelselogg, nyast först (issue 172). */
     events: { type: Array, required: true },
+    /*
+     * Högst fem bilder på containerns items, nyast först (issue 173):
+     * `{ulid, filename, hasThumb, item: {ulid, name}}`. Tom när containern
+     * saknar bilder — och då ritas panelen inte alls.
+     */
+    recentImages: { type: Array, required: true },
     /* `{ kind, currency, account, created_at }` — containerns egna fakta (issue 172). */
     details: { type: Object, required: true },
     /* Nycklarna på de tips användaren inte dolt, i serverns ordning. */
@@ -303,6 +316,21 @@ const itemUrl = (item) => `/containers/${props.container.ulid}/items/${item.ulid
                         />
                     </ul>
                 </UiCard>
+            </div>
+
+            <!-- Senaste bilder (issue 173). Panelen ritas inte alls när
+                 containern saknar bilder, och den ritas av sin egen komponent:
+                 sidan äger bara platsen i rutnätet. Bilderna är länkar till
+                 sina items, och miniatyren kräver att servern sagt att
+                 `thumb`-varianten finns. -->
+            <div
+                v-if="props.recentImages.length"
+                class="mt-8 lg:col-span-2 lg:col-start-1 lg:row-start-3"
+            >
+                <RecentImagesPanel
+                    :images="props.recentImages"
+                    :container-ulid="props.container.ulid"
+                />
             </div>
         </div>
     </ContainerLayout>
