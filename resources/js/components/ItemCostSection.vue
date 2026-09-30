@@ -31,6 +31,13 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * sina tal med, så samma summa inte kan se olika ut på två ytor. Talet skrivs
  * aldrig om här.
  *
+ * **En ändring skickar bara de fält som ändrats** (se patchBody()). Det är
+ * inte en optimering utan en pengaregel: fältet förifylls med beloppet
+ * omräknat till huvudenhet med CLDR:s decimalsiffror, och servern tolkar
+ * decimalerna enligt husets konvention. För de valutor där de två inte är
+ * överens — IQD, RSD och LAK — hade en ändrad beskrivning annars skrivit om
+ * beloppet med en faktor 100 eller 1000.
+ *
  * **Datumet är `<input type="date">`**, som skickar `Y-m-d` — exakt den form
  * `date`-regeln i den delade StoreCostEntryRequest tar emot. Serverns
  * `incurred_on` är redan `Y-m-d` (CostEntryResource), så förvalet och fältet
@@ -171,9 +178,12 @@ function submit() {
  * vad en krona är. Omvandlingen är strängaritmetik och aldrig en division,
  * så ett belopp kan inte tappa ett öre på vägen in i fältet.
  *
- * Fältet MÅSTE vara förifyllt: `amount` och `currency` följs åt i
- * UpdateCostEntryRequest, så en rad kan inte ändra sin beskrivning utan att
- * beloppet följer med — och ett tomt beloppsfält hade tystat raden.
+ * **Fältet är förifyllt, men strängen skickas bara om användaren har rört
+ * det** — se patchBody(). CLDR och ISO 4217 är inte överens om antalet
+ * decimaler för alla valutor (IQD, RSD och LAK), och servern räknar enligt
+ * husets konvention ([[Datamodell – översikt]] § Pengar, `MinorUnits::parse`).
+ * Fältet måste ändå vara förifyllt: den som bara rättar beskrivningen ska se
+ * vilket belopp raden bär.
  */
 function amountInput(amount, currency) {
     const digits = decimals(currency);
@@ -202,6 +212,15 @@ function decimals(currency) {
  */
 const editing = ref(null);
 
+/*
+ * Radens belopp och valuta så som formuläret öppnades. Läses bara av
+ * patchBody(): har ingen av dem rörts får den förifyllda strängen — som är
+ * omräknad med CLDR:s decimalsiffror, se amountInput() — aldrig lämna
+ * webbläsaren.
+ */
+let savedAmount = '';
+let savedCurrency = '';
+
 const editForm = useForm({
     incurred_on: '',
     amount: '',
@@ -219,6 +238,9 @@ function startEdit(cost) {
     editForm.currency = cost.currency;
     editForm.description = cost.description;
     editForm.supplier = cost.supplier ?? '';
+
+    savedAmount = editForm.amount;
+    savedCurrency = editForm.currency;
 }
 
 function cancelEdit() {
@@ -226,18 +248,65 @@ function cancelEdit() {
     editForm.clearErrors();
 }
 
+/*
+ * Kroppen för en ändring: bara de fält som skiljer sig från raden.
+ *
+ * **Beloppet och valutan följs åt.** Har någon av dem rörts skickas båda, och
+ * servern tolkar det användaren skrev mot valutan i fältet — samma väg som
+ * när en rad skapas. `UpdateCostEntryRequest` kräver paret med
+ * `required_with` åt båda hållen, så den ena utan den andra är inget giltigt
+ * svar.
+ *
+ * **Har ingen av dem rörts skickas ingen av dem**, och då rör servern varken
+ * beloppet eller valutan. Det är pengaregeln i filens docblock: det
+ * förifyllda beloppet är omräknat med CLDR:s decimalsiffror, och servern
+ * räknar enligt husets konvention — för IQD, RSD och LAK hade en
+ * beskrivningsändring annars skrivit om beloppet med en faktor 100 eller
+ * 1000 och loggat det som en riktig ändring.
+ *
+ * De övriga fälten är `sometimes` i requesten och skickas bara när de
+ * ändrats, av samma skäl: en PATCH som inte ändrar något ska inte skriva en
+ * loggrad.
+ */
+function patchBody(cost) {
+    const body = {};
+
+    if (editForm.incurred_on !== cost.incurred_on) {
+        body.incurred_on = editForm.incurred_on;
+    }
+
+    if (editForm.description !== cost.description) {
+        body.description = editForm.description;
+    }
+
+    if ((editForm.supplier ?? '') !== (cost.supplier ?? '')) {
+        body.supplier = editForm.supplier;
+    }
+
+    if (editForm.amount !== savedAmount || editForm.currency !== savedCurrency) {
+        body.amount = editForm.amount;
+        body.currency = editForm.currency;
+    }
+
+    return body;
+}
+
 function submitEdit(cost) {
-    editForm.patch(url(cost), {
-        preserveScroll: true,
-        onSuccess: () => {
-            editing.value = null;
-            loadSuppliers();
-        },
-        onError: () => {
-            focusFirstError();
-            loadSuppliers();
-        },
-    });
+    const body = patchBody(cost);
+
+    editForm
+        .transform(() => body)
+        .patch(url(cost), {
+            preserveScroll: true,
+            onSuccess: () => {
+                editing.value = null;
+                loadSuppliers();
+            },
+            onError: () => {
+                focusFirstError();
+                loadSuppliers();
+            },
+        });
 }
 
 /*

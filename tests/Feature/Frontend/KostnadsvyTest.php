@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Account;
+use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\CostEntry;
@@ -340,6 +341,55 @@ it('ändrar en kostnad från webben', function () {
     expect($kostnad->description)->toBe('Ny impeller');
     expect($kostnad->supplier)->toBe('Biltema');
     expect($kostnad->incurred_on->toDateString())->toBe('2026-05-01');
+});
+
+it('rör inte beloppet vid en ändring av bara beskrivningen', function () {
+    withoutVite();
+
+    [, $anvandare, $container, $item] = kostnadsvyKontext();
+
+    $kostnad = kostnadsvyRad($item, ['amount' => 120050, 'currency' => 'SEK']);
+
+    // Kroppen bär bara beskrivningen — det är vad ItemCostSection.vue skickar
+    // när varken beloppet eller valutan har rörts (se `patchBody()` där).
+    // Fältet är förifyllt med beloppet omräknat till huvudenhet, och för en
+    // valuta där CLDR och servern inte är överens om decimalerna (IQD, RSD,
+    // LAK) hade den strängen skrivit om beloppet med en faktor 100 eller 1000.
+    actingAs($anvandare)
+        ->patch(kostnadsvyUrl($container, $item)."/costs/{$kostnad->ulid}", [
+            'description' => 'Ny impeller',
+        ])
+        ->assertRedirect(kostnadsvyUrl($container, $item).'?tab=costs')
+        ->assertSessionHas('status', 'cost-updated')
+        ->assertSessionHasNoErrors();
+
+    $kostnad->refresh();
+
+    expect($kostnad->description)->toBe('Ny impeller');
+    expect($kostnad->amount)->toBe(120050);
+    expect($kostnad->currency)->toBe('SEK');
+    expect($kostnad->incurred_on->toDateString())->toBe('2026-04-12');
+
+    // Händelseloggen nämner bara beskrivningen — beloppet och valutan står
+    // inte i `changed`, och deras värden följer inte med i `meta`
+    // ([[ADR-0017 Missbruksvektorer]] § 7).
+    $meta = AuditLog::query()
+        ->where('action', AuditLog::ACTION_COST_ENTRY_UPDATED)
+        ->firstOrFail()
+        ->meta;
+
+    expect($meta['changed'])->toBe(['description']);
+    expect($meta)->not->toHaveKey('values');
+
+    // Och vyn skickar bara de fält som ändrats: beloppet och valutan följer
+    // med först när någon av dem har rört det sparade värdet.
+    $vy = kostnadsvyKomponent();
+
+    expect($vy)->toContain('savedAmount')
+        ->toContain('savedCurrency');
+
+    expect($vy)->toMatch('/body\.amount = editForm\.amount;\s+body\.currency = editForm\.currency;/');
+    expect($vy)->toMatch('/editForm\.amount !== savedAmount \|\| editForm\.currency !== savedCurrency/');
 });
 
 it('tar bort en kostnad från webben', function () {

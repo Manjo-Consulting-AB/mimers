@@ -97,8 +97,18 @@ class CostEntryController extends Controller
      *
      * `amount` och `currency` kommer alltid tillsammans:
      * UpdateCostEntryRequest kräver paret med `required_with` åt båda
-     * hållen, så formuläret skickar båda så snart beloppet rörs. En PATCH som
-     * inte ändrar något skriver ingen loggrad — det avgörs i actionen.
+     * hållen, så formuläret skickar båda så snart någon av dem rörs.
+     *
+     * **Formuläret skickar bara de fält som ändrats** (ItemCostSection.vue,
+     * `patchBody()`). Rörs varken beloppet eller valutan följer ingen av dem
+     * med, och requestens `required_with` slår inte — den ena krävs bara när
+     * den andra finns. Det är en pengaregel och inte en optimering: fältet
+     * förifylls med beloppet omräknat till huvudenhet med CLDR:s
+     * decimalsiffror, och servern tolkar decimalerna enligt husets konvention
+     * ([[Datamodell – översikt]] § Pengar), så för IQD, RSD och LAK hade en
+     * ändrad beskrivning annars skrivit om beloppet med en faktor 100 eller
+     * 1000. En PATCH som inte ändrar något skriver ingen loggrad — det avgörs
+     * i actionen.
      */
     public function update(
         UpdateCostEntryRequest $request,
