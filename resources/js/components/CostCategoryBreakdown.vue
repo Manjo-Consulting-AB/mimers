@@ -1,17 +1,29 @@
 <script setup>
 import { computed } from 'vue';
-import CostDonut from './CostDonut.vue';
+import { formatAmount } from './CostDonut.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Kostnader per kategori — Pro-delen, se issue 176 · [[ADR-0050
  * Desktopdesignen]] § 9 och `docs/Design/kostnader.png`.
  *
- * **Ringen är CostDonut, axeln är kategorierna.** Diagrammet är SVG för hand
- * och inget npm-paket (Beslut 4), men ritreglerna bor i CostDonut: en ring är
- * en ring, och två kopior av samma båggeometri glider isär. Den här
- * komponenten äger det som SKILJER kategorinedbrytningen från item-donuten —
- * översättningen av motorns grupper till ringens kontrakt, och ordet *Övrigt*.
+ * **Staplar och ingen ring.** Motorn rullar upp kategorin över underträdet
+ * (CostReport::groupByCategory, [[ADR-0040 Underträdets summor]]): en kostnad
+ * räknas i sin egen kategori OCH i varje förfader, så grupperna ÖVERLAPPAR.
+ * En ring eller en tårta fördelar det den får och påstår därmed en partition —
+ * Kylsystem 800 och Impeller 800 hade blivit 50 % var i en period vars total
+ * är 800 — och en procentandel av totalen per rad är samma påstående i text.
+ * [[Items och organisation]] § Kostnadsrapporter säger *per kategori, inklusive
+ * underkategorier*: det är samma rullning uppåt som ADR-0040 motiverar för
+ * items, och mockupens hundra procent är en läsning av bilden och inte av
+ * modellen. Här ritas därför belopp per kategori, med stapellängden relativ
+ * till periodens största rad, och ingen andel av någonting. En
+ * icke-överlappande indelning är en annan gruppering och ett eget beslut.
+ *
+ * **Komponenten räknar ingenting.** `totals` och `groups` kommer
+ * färdigsummerade ur CostReport::build(), och det enda som beräknas här är
+ * stapellängden, som är en ritregel och ingen summa. Alla motorns grupper ritas
+ * — att välja bort några hade varit att gömma ett svar användaren frågade efter.
  *
  * **Kategorin är ITEMETS** ([[ADR-0040 Underträdets summor]]): `cost_entry`
  * har ingen kategorikolumn, och `group_by=category` grupperar på
@@ -19,72 +31,104 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `key: null`, och de ritas här som *Övrigt* — en grupp och inte ett fel. Den
  * är inte en kategori i containern: den är de rader som inte har någon.
  *
- * **Bara de ÖVERSTA grupperna ritas, och det är vad som gör bitarna till en
- * partition.** Motorn rullar upp kategorin över underträdet
- * (CostReport::groupByCategory, [[ADR-0040 Underträdets summor]]): en kostnad
- * räknas i sin egen kategori OCH i varje förfader. Grupperna överlappar
- * därför, och CostDonut — som fördelar det den får och normaliserar mot
- * summan av bitarna — hade gett varje bit en för stor andel så snart en
- * kostnad sitter i en underkategori: Kylsystem 800 och Impeller 800 hade
- * blivit 50 % var i en period vars total är 800.
+ * **En graf per valuta, och aldrig ett tal över två.** Valutor summeras inte
+ * ihop ([[ADR-0040 Underträdets summor]] § Konsekvenser), så `totals` bär en
+ * post per valuta och varje post får sin egen skala. Att skala två valutor mot
+ * samma bredd hade varit en växelkurs som ingenstans står.
  *
- * En grupp vars förälder OCKSÅ är en grupp är alltså redan räknad i den och
- * ritas inte. Kvar blir grupperna som ingen annan grupp hänger under, och de
- * är exakt en per kostnadsrad: varje rad hör till ett item med EN kategori,
- * och den kategorin har EN översta förfader bland grupperna. Bitarna summerar
- * därför till periodens total och andelen betyder vad den säger — samma
- * egenskap [[ADR-0040 Underträdets summor]] föreskriver för item-donuten,
- * tillämpad på kategoriaxeln.
+ * **Staplarna är dekorativa och dolda för skärmläsaren.** Listan under dem bär
+ * samma sak som text — namn och belopp, i serverns ordning — och den är också
+ * grafens axel: motorns sortering är namn stigande med null-gruppen sist, så en
+ * läsare känner igen raden och inte bara längden. En negativ rad (en
+ * återbetalning) ritas inte som en stapel, av samma skäl som i CostTimeChart:
+ * en stapel med negativ längd är ingen stapel. Beloppet står kvar i listan.
  *
- * **Komponenten räknar ingenting.** `totals` och `groups` kommer
- * färdigsummerade ur CostReport::build(), och `ulid` är `'other'` för
- * null-gruppen bara för att ringen behöver en nyckel att rita med — den
- * lämnar aldrig vyn. Att välja grupper är ingen summa: underkategoriernas tal
- * står kvar i serverns svar och ritas bara inte här.
+ * **Ingen sträng i JavaScript** (issue 52 · [[ADR-0013 Språk och i18n]]):
+ * *Övrigt* kommer ur `t()` under `container.costs.other`, och valutakoden är
+ * serverns data och inte en etikett.
  */
 const props = defineProps({
     /* Periodens total per valuta: `[{currency, amount, count}]`. */
     totals: { type: Array, required: true },
     /* Periodens nedbrytning: `[{key: {ulid, name}|null, totals: [...]}]`. */
     groups: { type: Array, required: true },
-    /*
-     * Containerns kategoriträd, platt med `parent` — samma lista som
-     * filterfältets väljare får (CategoryResource). Det är det enda stället
-     * föräldraskapet står: motorns grupper bär bara ULID och namn.
-     */
-    categories: { type: Array, default: () => [] },
 });
 
 const { t } = useTranslations();
 
-const OTHER_ULID = 'other';
+/* Nyckeln null-gruppen ritas med. En ULID är tjugosex tecken och kan aldrig
+   vara `other`, så nyckeln kolliderar inte med en riktig kategori. */
+const OTHER_KEY = 'other';
 
-/*
- * Föräldern per kategori-ULID. En kategori som saknas i listan — eller vars
- * förälder är mjukraderad och därför inte finns där — svarar `undefined` och
- * räknas som överst, samma svar som motorns upprullning ger: kedjan bryts där
- * föräldern tar slut.
- */
-const breakdown = computed(() => {
-    const parentOf = new Map(props.categories.map((category) => [category.ulid, category.parent]));
+/* Radhöjd och stapelhöjd i viewBox-enheter: stapeln ligger mitt i sin rad, så
+   att läsaren ser vilken rad i listan den hör till. */
+const ROW_HEIGHT = 6;
+const BAR_HEIGHT = 3;
 
-    /* ULID:n för de kategorier som BÄR en grupp — de enda en grupp kan hänga under. */
-    const grouped = new Set(
-        props.groups.map((group) => group.key?.ulid).filter((ulid) => ulid !== undefined),
-    );
+const charts = computed(() => props.totals
+    .map((total) => {
+        const bars = props.groups.map((group) => ({
+            key: group.key?.ulid ?? OTHER_KEY,
+            name: group.key?.name ?? t('container.costs.other'),
+            amount: group.totals.find((row) => row.currency === total.currency)?.amount ?? 0,
+        }));
 
-    return props.groups
-        .map((group) => ({
-            key: {
-                ulid: group.key?.ulid ?? OTHER_ULID,
-                name: group.key?.name ?? t('container.costs.other'),
-            },
-            totals: group.totals,
-        }))
-        .filter((group) => ! grouped.has(parentOf.get(group.key.ulid)));
-});
+        // Skalan är periodens största rad i DEN här valutan. Noll rader ger en
+        // nämnare på 1 i stället för en division med noll.
+        const peak = Math.max(1, ...bars.map((bar) => Math.abs(bar.amount)));
+
+        return {
+            currency: total.currency,
+            height: bars.length * ROW_HEIGHT,
+            bars: bars.map((bar, index) => ({
+                ...bar,
+                text: formatAmount(bar.amount, total.currency),
+                y: index * ROW_HEIGHT + (ROW_HEIGHT - BAR_HEIGHT) / 2,
+                width: bar.amount > 0 ? Math.max((bar.amount / peak) * 100, 0.5) : 0,
+            })),
+        };
+    })
+    .filter((chart) => chart.bars.length > 0));
 </script>
 
 <template>
-    <CostDonut :totals="totals" :breakdown="breakdown" :label="t('container.costs.total')" />
+    <div class="flex flex-col gap-6">
+        <div v-for="chart in charts" :key="chart.currency" class="flex flex-col gap-2">
+            <p class="text-meta font-medium text-ink-subtle">{{ chart.currency }}</p>
+
+            <!--
+                Staplarna. Etiketterna står i listan under och inte i SVG:n:
+                ett kategorinamn är godtyckligt långt, och en text inuti en
+                viewBox klipps eller flyter ut över kanten.
+            -->
+            <svg
+                :viewBox="`0 0 100 ${chart.height}`"
+                class="h-auto w-full"
+                aria-hidden="true"
+            >
+                <rect
+                    v-for="bar in chart.bars"
+                    :key="bar.key"
+                    x="0"
+                    :y="bar.y"
+                    :width="bar.width"
+                    :height="BAR_HEIGHT"
+                    rx="0.4"
+                    class="fill-accent"
+                />
+            </svg>
+
+            <!-- Listan bär grafen som text: namn och belopp, i serverns ordning. -->
+            <ul class="flex flex-col gap-1">
+                <li
+                    v-for="bar in chart.bars"
+                    :key="bar.key"
+                    class="flex flex-wrap items-baseline justify-between gap-x-4 text-meta"
+                >
+                    <span class="text-ink">{{ bar.name }}</span>
+                    <span class="text-ink-subtle">{{ bar.text }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
 </template>

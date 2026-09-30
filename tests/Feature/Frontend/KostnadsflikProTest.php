@@ -222,46 +222,6 @@ function kostnadsflikProBelopp(?array $grupp, string $valuta): int
     return 0;
 }
 
-/**
- * Grupperna som RINGEN ritar, och speglar urvalet i CostCategoryBreakdown.vue:
- * en grupp vars förälder också är en grupp är redan räknad i den och ritas
- * inte. Kvar blir de översta, och de är en partition av periodens total.
- *
- * @param  list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>  $grupper
- * @param  list<array<string, mixed>>  $kategorier  CategoryResource-rader, med `ulid` och `parent`
- * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
- */
-function kostnadsflikProOversta(array $grupper, array $kategorier): array
-{
-    $parentOf = [];
-
-    foreach ($kategorier as $kategori) {
-        $parentOf[(string) $kategori['ulid']] = $kategori['parent'];
-    }
-
-    $gruppUlider = array_map(
-        static fn (array $grupp): ?string => $grupp['key']['ulid'] ?? null,
-        $grupper,
-    );
-
-    return array_values(array_filter(
-        $grupper,
-        static function (array $grupp) use ($parentOf, $gruppUlider): bool {
-            $ulid = $grupp['key']['ulid'] ?? null;
-
-            // Null-gruppen är raderna utan kategori — ingen kategori i
-            // containern, alltså ingenting den kan hänga under.
-            if ($ulid === null) {
-                return true;
-            }
-
-            $parent = $parentOf[$ulid] ?? null;
-
-            return $parent === null || ! in_array($parent, $gruppUlider, true);
-        },
-    ));
-}
-
 /** Månadens första och sista dag, som förvalet räknar dem. */
 function kostnadsflikProManad(): array
 {
@@ -344,6 +304,68 @@ it('en Pro-användare utan period får innevarande kalendermånad', function () 
         ->and($proppar['report']['filter']['to'])->toBe($sista)
         ->and($proppar['rows']['total'])->toBe(1)
         ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 700, 'count' => 1]]);
+});
+
+/*
+ * Klart när: en Pro-användare som bara namnger SLUTET får en öppen start.
+ *
+ * Beslut 1: förvalet *innevarande kalendermånad* gäller bara när VARKEN `from`
+ * eller `to` finns i querysträngen. Skickas bara den ena är den andra ÖPPEN —
+ * `?to=…` betyder *allt till och med det datumet*, en rimlig fråga som ska
+ * besvaras och inte tystas av ett förval som gjorde perioden omvänd och sidan
+ * tom. Jämförelsen kräver en ÄNDLIG period och är därför tom, och
+ * filterproppen bär `null` så att väljaren inte visar ett datum som inte
+ * gäller.
+ */
+it('en Pro-användare som bara väljer ett slutdatum får en öppen start', function () {
+    withoutVite();
+
+    [, $anvandare, $container, $motorn] = kostnadsflikProKontext();
+    $slutet = Carbon::today()->toDateString();
+
+    kostnadsflikProRad($motorn, 100, Carbon::today()->subMonths(3)->toDateString());
+    kostnadsflikProRad($motorn, 200, $slutet);
+    kostnadsflikProRad($motorn, 400, Carbon::today()->addMonthNoOverflow()->toDateString());
+
+    $proppar = kostnadsflikProProps(actingAs($anvandare)->get(kostnadsflikProUrl($container, [
+        'to' => $slutet,
+    ]))->assertOk());
+
+    expect($proppar['report']['filter']['from'])->toBeNull()
+        ->and($proppar['report']['filter']['to'])->toBe($slutet)
+        // Raden före innevarande månad kommer med; raden efter slutet gör det inte.
+        ->and($proppar['rows']['total'])->toBe(2)
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 300, 'count' => 2]])
+        ->and($proppar['report']['comparison'])->toBe([]);
+});
+
+/*
+ * Klart när: en Pro-användare som bara namnger STARTEN får ett öppet slut.
+ *
+ * Samma regel och samma skäl som provet ovanför, speglat: `?from=…` betyder
+ * *allt från och med det datumet*, och en rad efter innevarande månad räknas.
+ * Jämförelsen är tom också här — en öppen period har ingen längd att mäta en
+ * föregångare med.
+ */
+it('en Pro-användare som bara väljer ett startdatum får ett öppet slut', function () {
+    withoutVite();
+
+    [, $anvandare, $container, $motorn] = kostnadsflikProKontext();
+    $starten = Carbon::today()->toDateString();
+
+    kostnadsflikProRad($motorn, 100, Carbon::today()->subDay()->toDateString());
+    kostnadsflikProRad($motorn, 200, $starten);
+    kostnadsflikProRad($motorn, 400, Carbon::today()->addMonthNoOverflow()->toDateString());
+
+    $proppar = kostnadsflikProProps(actingAs($anvandare)->get(kostnadsflikProUrl($container, [
+        'from' => $starten,
+    ]))->assertOk());
+
+    expect($proppar['report']['filter']['from'])->toBe($starten)
+        ->and($proppar['report']['filter']['to'])->toBeNull()
+        ->and($proppar['rows']['total'])->toBe(2)
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 600, 'count' => 2]])
+        ->and($proppar['report']['comparison'])->toBe([]);
 });
 
 /*
@@ -632,28 +654,28 @@ it('nedbrytningen grupperar på itemets kategori och rader utan kategori hamnar 
 
     expect($vy)->toContain("t('container.costs.other')")
         ->toContain('group.key?.ulid ??')
-        ->toContain('<CostDonut');
+        ->toContain('<rect');
 });
 
 /*
- * Ringen ritar bara de ÖVERSTA kategorierna, så att bitarna blir en partition
- * av periodens total.
+ * Nedbrytningen ritar motorns ALLA grupper, som staplar — ingen ring och
+ * ingen andel av totalen.
  *
- * CostDonut fördelar det den får och normaliserar mot summan av bitarna —
- * andelen är en ritregel och ingen summa — medan motorns kategorigrupper
- * överlappar med flit: CostReport::groupByCategory rullar upp över underträdet
- * ([[ADR-0040 Underträdets summor]]), så en kostnad räknas i sin egen kategori
- * OCH i varje förfader. Ritas de allihop blir varje bit för stor: med
- * Kylsystem 800 (förälder) och Impeller 800 (barn) får båda 50 % av en ring
- * vars mitten-tal är periodens 800.
+ * Motorns kategorigrupper överlappar med flit: CostReport::groupByCategory
+ * rullar upp över underträdet ([[ADR-0040 Underträdets summor]]), så en
+ * kostnad räknas i sin egen kategori OCH i varje förfader — Kylsystem 1100 och
+ * Impeller 800 för en period på 1300. En ring eller en tårta fördelar det den
+ * får och påstår därmed en partition, och en procentandel av totalen per rad
+ * är samma påstående i text; mockupens hundra procent är en läsning av bilden
+ * och inte av modellen ([[ADR-0050 Desktopdesignen]] § Motivering). Här ritas
+ * belopp per kategori, med stapellängden relativ till periodens största rad.
  *
- * Provet prövar båda halvorna: att motorns hela lista summerar till MER än
- * perioden, och att urvalet komponenten gör ger exakt periodens total. Raden
- * DIREKT på föräldern finns med därför att den skiljer de två vägarna åt: att
- * rita barnet i stället för föräldern hade tappat förälderns egen rad, medan
- * att rita föräldern räknar barnets rad en gång — i den kategori den hör till.
+ * Provet prövar båda halvorna: att motorns lista summerar till MER än perioden,
+ * och att komponenten ritar den listan som den är. Raden DIREKT på föräldern
+ * finns med därför att den skiljer de två axlarna åt: en komponent som gömde
+ * överlappande grupper hade tappat antingen förälderns egen rad eller barnets.
  */
-it('nedbrytningens bitar summerar till periodens total', function () {
+it('nedbrytningen ritar motorns alla grupper som staplar och ingen andel av totalen', function () {
     withoutVite();
 
     [, $anvandare, $container] = kostnadsflikProKontext();
@@ -685,18 +707,15 @@ it('nedbrytningens bitar summerar till periodens total', function () {
         ->and($proppar['report']['category']['totals'])
         ->toBe([['currency' => 'SEK', 'amount' => 1300, 'count' => 3]]);
 
-    // Bitarna som ritas är de översta, och de summerar precis till totalen.
-    $oversta = kostnadsflikProOversta($grupper, $proppar['filterOptions']['categories']);
-
-    expect(kostnadsflikProGruppnycklar($oversta, 'name'))->toBe(['Kylsystem', ''])
-        ->and(array_sum(array_map($belopp, $oversta)))->toBe(1300);
-
-    // Och urvalet är komponentens: `parent` ur kategoriträdet, och en grupp
-    // vars förälder också är en grupp ritas inte.
+    // Och komponenten ritar staplar för den listan, allihop: ingen ring, ingen
+    // procentandel och inget kategoriträd att gömma överlappande grupper med.
     $vy = File::get(resource_path('js/components/CostCategoryBreakdown.vue'));
 
-    expect($vy)->toContain('props.categories')
-        ->toContain('! grouped.has(parentOf.get(group.key.ulid))');
+    expect($vy)->toContain('props.groups')
+        ->toContain('<svg')
+        ->toContain('<rect')
+        ->and($vy)->not->toContain('<CostDonut')
+        ->and($vy)->not->toContain('props.categories');
 });
 
 /*
@@ -747,10 +766,12 @@ it('jämförelsen räknar en lika lång period direkt före, per valuta', functi
  * Klart när: jämförelsen saknas i en valuta utan rader föregående period.
  *
  * Beslut 3: *"saknas föregående periods total i en valuta ritas ingen
- * procent"*. Kvoten är odefinierad både när valutan inte finns alls i
- * perioden före och när dess total är noll — en återbetalning kan nolla en
- * månad — och då är `percent` null i stället för en oändlighet. Posten finns
- * kvar: det är procenten som saknas, inte valutan.
+ * procent"*. Kvoten är odefinierad när valutan inte finns alls i perioden före
+ * och när dess total är NOLL — en återbetalning kan nolla en månad — och
+ * oläsbar när totalen är NEGATIV: en procent mot ett negativt jämförelsetal
+ * har inget tecken att visa. I alla tre fallen är `percent` null i stället för
+ * en oändlighet eller ett tal med omöjligt tecken. Posten finns kvar: det är
+ * procenten som saknas, inte valutan. `previous` bär talet som det är.
  */
 it('jämförelsen saknas i en valuta utan rader föregående period', function () {
     withoutVite();
@@ -768,12 +789,17 @@ it('jämförelsen saknas i en valuta utan rader föregående period', function (
     kostnadsflikProRad($motorn, 200, '2026-02-12', 'NOK');
     kostnadsflikProRad($motorn, -200, '2026-02-13', 'NOK');
 
+    // DKK har ett NEGATIVT jämförelsetal: en återbetalning större än köpet.
+    kostnadsflikProRad($motorn, 500, '2026-03-13', 'DKK');
+    kostnadsflikProRad($motorn, -200, '2026-02-13', 'DKK');
+
     $proppar = kostnadsflikProProps(actingAs($anvandare)->get(kostnadsflikProUrl($container, [
         'from' => '2026-03-01',
         'to' => '2026-03-31',
     ]))->assertOk());
 
     expect($proppar['report']['comparison'])->toBe([
+        ['currency' => 'DKK', 'current' => 500, 'previous' => -200, 'percent' => null],
         ['currency' => 'EUR', 'current' => 300, 'previous' => null, 'percent' => null],
         ['currency' => 'NOK', 'current' => 200, 'previous' => 0, 'percent' => null],
         ['currency' => 'SEK', 'current' => 1000, 'previous' => 1000, 'percent' => 0],
@@ -970,8 +996,8 @@ it('den valda leverantören står i filterfältet även utanför de femtio vanli
  *
  * Samma form som KategorivyTest prövar *inget dragbibliotek*: paketfilen läses
  * och beroendenamnen sållas på det Beslut 4 förbjuder. Att staplarna ritas för
- * hand prövas i källkoden — `<rect>` i en `viewBox` — och ringen är CostDonuts
- * egen, delad och inte kopierad.
+ * hand prövas i källkoden — `<rect>` i en `viewBox` — och båda diagrammen gör
+ * det: grafen över tid och kategorinedbrytningen.
  */
 it('ritar diagrammen som SVG utan ett nytt npm-paket', function () {
     $paket = json_decode(File::get(base_path('package.json')), true);
@@ -1000,6 +1026,10 @@ it('ritar diagrammen som SVG utan ett nytt npm-paket', function () {
         ->toContain('MAX_LABELS')
         ->toContain('v-if="bar.showLabel"');
 
-    expect($nedbrytning)->toContain('<CostDonut')
-        ->and($nedbrytning)->not->toContain('<svg');
+    // Nedbrytningen är staplar och ingen ring: motorns kategorigrupper
+    // överlappar, och en ring hade påstått en partition (se provet ovanför).
+    expect($nedbrytning)->toContain('<svg')
+        ->toContain('<rect')
+        ->toContain('viewBox')
+        ->and($nedbrytning)->not->toContain('<CostDonut');
 });

@@ -28,10 +28,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * i presentationen och ingen grind.
  *
  * **Fälten speglas ur `filter`-proppen med `watch`**, inte bara vid montering:
- * servern fyller de gränser användaren inte skickade ur innevarande
- * kalendermånad, så ett tomt `from` blir månadens första dag i svaret. Utan
- * speglingen hade fältet stått tomt medan tabellen visade månaden — vyn och
- * talen hade sagt olika saker om samma fråga.
+ * servern fyller BÅDA gränserna ur innevarande kalendermånad först när
+ * användaren inte namngav någon, och lämnar den andra öppen — `null` — när
+ * bara den ena skickades. Ett öppet fält står därför tomt, och väljaren visar
+ * aldrig ett datum som inte gäller. Utan speglingen hade fältet stått tomt
+ * medan tabellen visade månaden — vyn och talen hade sagt olika saker om
+ * samma fråga.
  *
  * **Ett fält utan alternativ ritas inte.** Är items, kategorier eller
  * leverantörer tomma ritas ingen väljare för den: en meny med bara *Alla* är

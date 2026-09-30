@@ -1890,9 +1890,11 @@ return [
              * The Pro part, see issue 176 and [[ADR-0050 Desktopdesignen]] § 9.
              *
              * `from`/`to` name the two ends of the period, and the picker is a
-             * range and not a preset list: the server fills a missing end from
-             * the current calendar month, so an empty field means "this month"
-             * and never "unbounded".
+             * range and not a preset list: the server fills both ends from the
+             * current calendar month only when neither was given. An empty
+             * field therefore means "open" — the question *everything up to
+             * this date* is answered as asked and never silently made into a
+             * reversed, empty period.
              *
              * `category` is the item's category — `cost_entry` has no category
              * column ([[ADR-0040 Underträdets summor]]) — and `other` is the

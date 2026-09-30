@@ -218,11 +218,15 @@ class ContainerCostController extends Controller
     /**
      * Pro-delen: perioden, grafen, nedbrytningen och jämförelsen (Beslut 3).
      *
-     * **Perioden är användarens, och förvalet är innevarande kalendermånad**
-     * (Beslut 1) — räknad i användarens tidszon, som *I år* ovan (issue 135).
-     * En gräns som användaren inte skickar fylls ur månaden: `from` blir
-     * månadens första dag och `to` dess sista. En period som slutar före den
-     * börjar ger tomma tal, vilket är rätt svar på en omöjlig fråga.
+     * **Förvalet är innevarande kalendermånad — men bara när användaren inte
+     * namnger NÅGON gräns** (Beslut 1), och månaden räknas i användarens
+     * tidszon, som *I år* ovan (issue 135). Skickas bara den ena gränsen är
+     * den andra ÖPPEN och lämnas vidare som saknad till
+     * CostReport::build(): `?to=2024-12-31` betyder *allt till och med 2024*
+     * och ska besvaras som den frågan, inte tystas av ett förval som gjorde
+     * perioden omvänd och sidan tom. En omvänd period kan därför bara uppstå
+     * när BÅDA gränserna är utskrivna, och då avgör de gemensamma reglerna i
+     * CostReportRequest::filterRules() — ingen egen regel läggs ovanpå.
      *
      * **Talen kommer ur CostReport::build() och ingenting räknas för hand**
      * (Beslut 3). `period` är `group_by=period&period=month` — en post per
@@ -230,8 +234,9 @@ class ContainerCostController extends Controller
      * nedbrytningen per ITEMETS kategori ([[ADR-0040 Underträdets summor]]:
      * ingen kategorikolumn på `cost_entry`), och rader på items utan kategori
      * kommer ur motorn med `key: null` och ritas av vyn som *Övrigt*.
-     * `comparison` jämför periodens total per valuta med en lika lång period
-     * direkt före.
+     * `comparison` är CostReport::comparison(), som anropar `build()` två
+     * gånger och räknar kvoten: regeln är en pengaregel och bor i motorn, inte
+     * i kontrollern ([[ADR-0024 Tunna controllers och actions]]).
      *
      * **`summary()` och `yearForContainer()` rörs inte.** Brickorna är fasta
      * och påverkas inte av filtret (ADR-0038 § Beslut); det är hela skillnaden
@@ -247,14 +252,20 @@ class ContainerCostController extends Controller
         User $user,
         array $filter,
     ): array {
-        $month = Carbon::now($user->preferredTimezone());
+        $from = $filter['from'] ?? null;
+        $to = $filter['to'] ?? null;
 
-        $from = $filter['from'] ?? $month->copy()->startOfMonth()->toDateString();
-        $to = $filter['to'] ?? $month->copy()->endOfMonth()->toDateString();
+        if ($from === null && $to === null) {
+            $month = Carbon::now($user->preferredTimezone());
+
+            $from = $month->copy()->startOfMonth()->toDateString();
+            $to = $month->copy()->endOfMonth()->toDateString();
+        }
 
         // Bara de nycklar som har ett värde: ett `null` i parametrarna är
         // samma sak som en utelämnad parameter i CostReport::baseQuery(), men
-        // en explicit `null` i URL:en vore brus.
+        // en explicit `null` i URL:en vore brus. En öppen gräns faller bort
+        // här och lämnas vidare som saknad — det är den som är öppen.
         $params = array_filter([
             'from' => $from,
             'to' => $to,
@@ -267,8 +278,10 @@ class ContainerCostController extends Controller
         $category = $report->build($container, $params + ['group_by' => 'category'], $scope);
 
         return [
-            // Filtret som det APPLICERADES, med förvalen ifyllda — vyn ritar
-            // fälten ur det och behöver inte känna till serverns klocka.
+            // Filtret som det APPLICERADES: förvalen ifyllda, och en öppen
+            // gräns som `null` — vyn ritar fälten ur det och visar därför
+            // aldrig ett datum som inte gäller, och känner aldrig serverns
+            // klocka.
             'filter' => [
                 'from' => $from,
                 'to' => $to,
@@ -278,85 +291,8 @@ class ContainerCostController extends Controller
             ],
             'period' => $period,
             'category' => $category,
-            'comparison' => $this->comparison($report, $container, $scope, $params, $period['totals'], $from, $to),
+            'comparison' => $report->comparison($container, $params, $scope),
         ];
-    }
-
-    /**
-     * Periodens total per valuta mot en LIKA LÅNG period direkt före, som
-     * procent per valuta (Beslut 3).
-     *
-     * **Längden är antalet dagar i perioden, båda gränserna inklusive**, och
-     * perioden före slutar dagen innan den här börjar: 1–31 mars jämförs med
-     * 29 januari–28 februari i ett skottår. Det är samma längd och inte samma
-     * månad — en jämförelse mot "förra månaden" hade varit kortare i februari
-     * och gjort en ökning som inte finns.
-     *
-     * **Talen kommer ur `build()`**, som alla andra tal på fliken: föregående
-     * periods total är rapportens egen `totals` för ett annat datumspann, med
-     * SAMMA filter i övrigt — annars jämfördes två olika frågor. Procenten är
-     * en kvot mellan två av motorns svar och ingen egen summering.
-     *
-     * **Ingen jämförelse över två valutor.** `comparison` bär en post per
-     * valuta i DEN HÄR perioden, och procenten räknas bara när föregående
-     * period har en total i samma valuta: saknas valutan helt, eller är dess
-     * total noll, är kvoten odefinierad och `percent` är `null` — vyn ritar
-     * då ingen procent. Att dividera med noll hade gett en oändlighet som
-     * varken går att visa eller att lita på.
-     *
-     * @param  array<string, mixed>  $params  periodens parametrar, med `from` och `to`
-     * @param  list<array{currency: string, amount: int, count: int}>  $totals  periodens total per valuta
-     * @return list<array{currency: string, current: int, previous: int|null, percent: int|null}>
-     */
-    private function comparison(
-        CostReport $report,
-        Container $container,
-        ItemScope $scope,
-        array $params,
-        array $totals,
-        string $from,
-        string $to,
-    ): array {
-        $start = Carbon::parse($from);
-        $end = Carbon::parse($to);
-
-        if ($end->lessThan($start)) {
-            return [];
-        }
-
-        $length = (int) $start->diffInDays($end) + 1;
-        $previousTo = $start->copy()->subDay();
-
-        $previous = $report->build($container, array_merge($params, [
-            'group_by' => 'item',
-            'from' => $previousTo->copy()->subDays($length - 1)->toDateString(),
-            'to' => $previousTo->toDateString(),
-        ]), $scope)['totals'];
-
-        $comparison = [];
-
-        foreach ($totals as $total) {
-            $previousAmount = null;
-
-            foreach ($previous as $row) {
-                if ($row['currency'] === $total['currency']) {
-                    $previousAmount = $row['amount'];
-
-                    break;
-                }
-            }
-
-            $comparison[] = [
-                'currency' => $total['currency'],
-                'current' => $total['amount'],
-                'previous' => $previousAmount,
-                'percent' => ($previousAmount === null || $previousAmount === 0)
-                    ? null
-                    : (int) round((($total['amount'] - $previousAmount) / $previousAmount) * 100),
-            ];
-        }
-
-        return $comparison;
     }
 
     /**

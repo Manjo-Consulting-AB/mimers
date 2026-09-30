@@ -81,6 +81,12 @@ use Illuminate\Support\Facades\DB;
  * Sedan issue 175 bär `yearForContainer()` containerns *I år*-bricka: samma
  * fasta summering igen, avgränsad till innevarande kalenderår. Också där
  * kommer perioden ur anroparen, av samma skäl — se metoden.
+ *
+ * Sedan issue 176 bär `comparison()` kostnadsflikens jämförelse mot
+ * föregående period ([[ADR-0050 Desktopdesignen]] § 9). Den är den enda
+ * metoden här som anropar `build()` i stället för att formulera sin egen
+ * fråga: jämförelsen är två rapporter och en kvot, och regeln hörde tidigare
+ * i kontrollern — se metoden.
  */
 final class CostReport
 {
@@ -118,6 +124,93 @@ final class CostReport
             'groups' => $groups,
             'totals' => $this->totals($base),
         ];
+    }
+
+    /**
+     * Periodens total per valuta mot en LIKA LÅNG period direkt före, som
+     * procent per valuta, issue 176 — kostnadsflikens jämförelse
+     * ([[ADR-0050 Desktopdesignen]] § 9). Metoden bor här och inte i
+     * kontrollern därför att den är en pengaregel och inte en översättning av
+     * en fråga till ett svar ([[ADR-0024 Tunna controllers och actions]]);
+     * kontrollern anropar den och räknar ingenting själv.
+     *
+     * **Två anrop till `build()`**, och ingen egen summering: den här periodens
+     * total och föregående periods total är rapportens egen `totals` för två
+     * datumspann, med SAMMA filter i övrigt — annars jämfördes två olika
+     * frågor. `group_by` sätts till `item` bara för att `build()` kräver en
+     * gruppering; bara `totals` läses, och den räknas alltid med en egen
+     * `GROUP BY currency` över hela mängden (Beslut 6).
+     *
+     * **Längden är antalet dagar i perioden, båda gränserna inklusive**, och
+     * perioden före slutar dagen innan den här börjar: 1–31 mars jämförs med
+     * 29 januari–28 februari i ett skottår. Det är samma längd och inte samma
+     * månad — en jämförelse mot "förra månaden" hade varit kortare i februari
+     * och gjort en ökning som inte finns.
+     *
+     * **En öppen period har ingen jämförelse.** Saknas `from` eller `to` finns
+     * ingen längd att mäta en föregångare med, och svaret är en tom lista —
+     * vyn ritar då ingen procent. Det är samma svar som för en period utan
+     * rader, och det är avsiktligt: frågan *hur mycket mer än förra gången* är
+     * odefinierad så länge perioden inte är ändlig.
+     *
+     * **Ingen jämförelse över två valutor.** Svaret bär en post per valuta i
+     * DEN HÄR perioden, och procenten räknas bara när föregående period har ett
+     * positivt total i samma valuta. Är valutan frånvarande är `previous` null;
+     * är totalen noll eller NEGATIV är kvoten odefinierad eller oläsbar — en
+     * procent mot ett negativt jämförelsetal har inget tecken att visa — och
+     * `percent` är null. En valuta som bara finns i föregående period får
+     * ingen post alls.
+     *
+     * @param  array<string, mixed>  $params  periodens parametrar, med `from` och `to` när de finns
+     * @return list<array{currency: string, current: int, previous: int|null, percent: int|null}>
+     */
+    public function comparison(Container $container, array $params, ItemScope $scope): array
+    {
+        $from = $params['from'] ?? null;
+        $to = $params['to'] ?? null;
+
+        if ($from === null || $to === null) {
+            return [];
+        }
+
+        $start = Carbon::parse($from);
+        $end = Carbon::parse($to);
+
+        $length = (int) $start->diffInDays($end) + 1;
+        $previousTo = $start->copy()->subDay();
+
+        $current = $this->build($container, array_merge($params, ['group_by' => 'item']), $scope)['totals'];
+
+        $previous = $this->build($container, array_merge($params, [
+            'group_by' => 'item',
+            'from' => $previousTo->copy()->subDays($length - 1)->toDateString(),
+            'to' => $previousTo->toDateString(),
+        ]), $scope)['totals'];
+
+        $comparison = [];
+
+        foreach ($current as $total) {
+            $previousAmount = null;
+
+            foreach ($previous as $row) {
+                if ($row['currency'] === $total['currency']) {
+                    $previousAmount = $row['amount'];
+
+                    break;
+                }
+            }
+
+            $comparison[] = [
+                'currency' => $total['currency'],
+                'current' => $total['amount'],
+                'previous' => $previousAmount,
+                'percent' => ($previousAmount === null || $previousAmount <= 0)
+                    ? null
+                    : (int) round((($total['amount'] - $previousAmount) / $previousAmount) * 100),
+            ];
+        }
+
+        return $comparison;
     }
 
     /**

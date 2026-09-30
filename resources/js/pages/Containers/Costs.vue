@@ -136,10 +136,10 @@ const props = defineProps({
     canUpgrade: { type: Boolean, required: true },
     /*
      * Pro-delen (issue 176): `{ filter, period, category, comparison }` ur
-     * CostReport::build(), eller `null` för en gratisanvändare. `filter` är
-     * perioden så som servern tillämpade den — med de gränser användaren inte
-     * skickade ifyllda ur innevarande kalendermånad — och är den enda källa
-     * vyn har till vilket filter som gäller.
+     * CostReport, eller `null` för en gratisanvändare. `filter` är perioden så
+     * som servern tillämpade den — innevarande kalendermånad när ingen gräns
+     * namngavs, och `null` för en gräns användaren lämnade öppen — och är den
+     * enda källa vyn har till vilket filter som gäller.
      */
     report: { type: Object, default: null },
     /*
@@ -332,10 +332,10 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
             </div>
 
             <!-- Nedbrytningen per itemets kategori, med *Övrigt* för raderna
-                 utan kategori ([[ADR-0040 Underträdets summor]]). Kategoriträdet
-                 följer med: motorns grupper rullas upp över underträdet och
-                 överlappar, så komponenten behöver `parent` för att kunna rita
-                 bara de översta — se CostCategoryBreakdown. -->
+                 utan kategori ([[ADR-0040 Underträdets summor]]). Staplar och
+                 ingen ring: motorns grupper rullas upp över underträdet och
+                 överlappar, så en andel av totalen hade påstått en partition —
+                 se CostCategoryBreakdown. -->
             <div v-if="report.category.groups.length > 0" class="mt-8">
                 <UiCard>
                     <template #heading>{{ t('container.costs.breakdown') }}</template>
@@ -343,7 +343,6 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
                     <CostCategoryBreakdown
                         :totals="report.category.totals"
                         :groups="report.category.groups"
-                        :categories="filterOptions.categories"
                     />
                 </UiCard>
             </div>
