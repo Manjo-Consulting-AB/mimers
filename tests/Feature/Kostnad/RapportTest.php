@@ -5,7 +5,6 @@ use App\Models\Category;
 use App\Models\Container;
 use App\Models\CostEntry;
 use App\Models\Item;
-use App\Models\ItemLink;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Tag;
@@ -417,50 +416,6 @@ it('from/to filtrerar på incurred_on med båda gränserna inklusive', function 
     );
     $endaDag->assertOk();
     expect($endaDag->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 2000, 'count' => 1]]);
-});
-
-/*
- * Issue 176: kostnadsflikens filter lånar motorns regler, och item-filtret
- * fanns i `baseQuery()` redan från issue 46 — men prövades bara genom att ett
- * ULID ur en annan container ger 422. Här prövas vad det GÖR: det tar det
- * enskilda itemet och inte dess underträd. Skillnaden mot `category` är med
- * flit — en kategori är ett begrepp och ett item är en rad — och fliken
- * (ContainerCostController) läser samma regel, så de två inte kan glida isär.
- */
-it('item-filtret tar det enskilda itemet och inte dess underträd', function () {
-    [$account, $user, $headers, $container] = rapportProKontext();
-    $motor = rapportItem($container, $account, $user, ['name' => 'Motor']);
-    $impeller = rapportItem($container, $account, $user, ['name' => 'Impeller']);
-    $drev = rapportItem($container, $account, $user, ['name' => 'Drev']);
-
-    // Underträdet hänger i `item_link` och inte i en kolumn på itemet.
-    ItemLink::factory()->create([
-        'from_item_id' => $motor->id,
-        'to_item_id' => $impeller->id,
-        'relation' => 'parent',
-    ]);
-
-    rapportKostnad($motor, ['amount' => 1000]);
-    rapportKostnad($impeller, ['amount' => 4000]);
-    rapportKostnad($drev, ['amount' => 500]);
-
-    $response = getJson(
-        "/api/containers/{$container->ulid}/costs/report?group_by=item&item={$motor->ulid}",
-        $headers
-    );
-
-    $response->assertOk();
-    expect(collect($response->json('data.groups'))->pluck('key.name')->all())->toBe(['Motor']);
-    expect($response->json('data.totals'))->toBe([['currency' => 'EUR', 'amount' => 1000, 'count' => 1]]);
-
-    // Och tillsammans med ett datumspann, som fliken skickar dem.
-    $spann = getJson(
-        "/api/containers/{$container->ulid}/costs/report?group_by=item&item={$impeller->ulid}&from=2026-04-01&to=2026-04-30",
-        $headers
-    );
-
-    $spann->assertOk();
-    expect($spann->json('data.totals'))->toBe([]);
 });
 
 it('category-filtret tar med hela underträdet', function () {

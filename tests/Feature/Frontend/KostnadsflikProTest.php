@@ -6,6 +6,7 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\CostEntry;
 use App\Models\Item;
+use App\Models\ItemLink;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
@@ -370,6 +371,50 @@ it('filtren på item, kategori och leverantör kan kombineras', function () {
 
     expect($ingen['rows']['total'])->toBe(0)
         ->and($ingen['report']['period']['totals'])->toBe([]);
+});
+
+/*
+ * Item-filtret tar det ENSKILDA itemet och inte dess underträd.
+ *
+ * Skillnaden mot `category` är med flit — en kategori är ett begrepp och ett
+ * item är en rad — och regeln är motorns (CostReport::baseQuery), som fliken
+ * lånar. Underträdet hänger i `item_link` och inte i en kolumn på itemet
+ * ([[ADR-0040 Underträdets summor]] § den DAG `LinkItems` tillåter), så ett
+ * barn vars rader räknades in hade gett en tabell som visade fler rader än
+ * filtret frågade efter.
+ *
+ * Provet ligger här och inte i RapportTest: API:et är OFÖRÄNDRAT i den här
+ * issuen, och ett prov som är grönt redan på baskommiten bevisar ingenting om
+ * sitt kriterium. Den här filen är ny och faller utan koden.
+ */
+it('item-filtret tar det enskilda itemet och inte dess underträd', function () {
+    withoutVite();
+
+    [, $anvandare, $container, $motorn] = kostnadsflikProKontext();
+    $impeller = kostnadsflikProItem($container, 'Impeller');
+    $drev = kostnadsflikProItem($container, 'Drev');
+
+    ItemLink::factory()->create([
+        'from_item_id' => $motorn->id,
+        'to_item_id' => $impeller->id,
+        'relation' => 'parent',
+    ]);
+
+    kostnadsflikProRad($motorn, 1000, '2026-04-01');
+    kostnadsflikProRad($impeller, 4000, '2026-04-02');
+    kostnadsflikProRad($drev, 500, '2026-04-03');
+
+    $proppar = kostnadsflikProProps(actingAs($anvandare)->get(kostnadsflikProUrl($container, [
+        'item' => $motorn->ulid,
+        'from' => '2026-04-01',
+        'to' => '2026-04-30',
+    ]))->assertOk());
+
+    // Tabellen visar den egna raden och inte barnets, och rapporten räknar
+    // samma radmängd.
+    expect($proppar['rows']['total'])->toBe(1)
+        ->and($proppar['rows']['data'][0]['item']['name'])->toBe('Motorn')
+        ->and($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 1000, 'count' => 1]]);
 });
 
 /*
