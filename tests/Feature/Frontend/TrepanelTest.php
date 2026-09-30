@@ -114,6 +114,27 @@ function trepanelKod(string $sökväg): string
 }
 
 /**
+ * Proppnamnen i en panels `defineProps`, i källordning.
+ *
+ * Läses ur källkoden och inte ur en rendering: det som prövas är att panelen
+ * inte fick en NY propp, och en propp som ingen skickar syns inte i svaret.
+ *
+ * @return list<string>
+ */
+function trepanelProps(string $sökväg): array
+{
+    $kod = trepanelKod($sökväg);
+
+    preg_match('/defineProps\(\{([\s\S]*?)\n\}\)/', $kod, $block);
+
+    expect($block)->not->toBeEmpty("{$sökväg} deklarerar inga proppar");
+
+    preg_match_all('/^\s*([A-Za-z_$][\w$]*)\s*:\s*\{/m', $block[1], $namn);
+
+    return $namn[1];
+}
+
+/**
  * Antalet frågor itemets sida ställer, mätt efter ett omätt anrop.
  *
  * Omfånget kommer ur ResolveItemScope, som är `scoped` och memoiserar per
@@ -521,4 +542,123 @@ it('staplar panelerna på smal skärm med strukturen utfällbar', function () {
     expect($panelen)->not->toContain('<Link');
 
     actingAs($anvandare)->get(trepanelUrl($container, trepanelItem($container, 'Motorn')))->assertOk();
+});
+
+/*
+ * Klart när: över `lg:` står tre kolumner med fasta gränser för sidopanelerna.
+ *
+ * Skalet från issue 169 släppte innehållsytan från `max-w-3xl`, och här får
+ * trepanelen sin fulla bredd (issue 181 · `docs/Design/struktur - item.jpeg`).
+ * Formen är tre spår: strukturen, itemet, kartan — och sidopanelerna har ett
+ * GOLV och ett TAK i `rem` i stället för en andel. Det är hela poängen: en
+ * andel hade krympt strukturträdet under läsbarhet på en smalare skärm och
+ * låtit itemet svälla på en bredare. Mitten är `1fr` och tar resten.
+ *
+ * Provet läser rutnätet ur källkoden — det som kräver en webbläsare är att
+ * spåren faktiskt hamnar sida vid sida, och det står i filhuvudet.
+ */
+it('över lg står tre kolumner med fasta gränser för sidopanelerna', function () {
+    $vy = trepanelKod('pages/Containers/Items/Show.vue');
+
+    expect($vy)->toContain(
+        'lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]',
+    );
+
+    preg_match('/lg:grid-cols-\[([^\]]+)\]/', $vy, $träff);
+
+    expect($träff)->not->toBeEmpty('vyn sätter ingen lg:grid-cols-');
+
+    $spår = explode('_', $träff[1]);
+
+    expect($spår)->toHaveCount(3, 'rutnätet över lg: har inte tre spår');
+
+    // Fasta gränser på båda sidorna, resten i mitten.
+    expect($spår[0])->toStartWith('minmax(')->toEndWith('rem)')
+        ->and($spår[2])->toStartWith('minmax(')->toEndWith('rem)')
+        ->and($spår[1])->toContain('1fr');
+});
+
+/*
+ * Klart när: mellan `md:` och `lg:` står kartan under itemet.
+ *
+ * Under `lg:` ryms inte tre kolumner, och kartan faller då ned i itemets
+ * kolumn i stället för att bli en tredje spalt. Rutnätet är fyra spår — det är
+ * `md:`-formen från issue 103 och den rörs inte — och kartan tar samma två
+ * spår som mittkolumnen. Att den börjar i spår 2 är det som ger en EGEN rad:
+ * spår 1 är strukturens, och rutnätet fyller inte spår 4 med en panel som
+ * hör hemma under itemet.
+ *
+ * Ordningen i markupen är oförändrad ([[ADR-0041 Itemets vy]] § Beslut):
+ * placeringen görs med klasserna, aldrig genom att flytta elementen.
+ */
+it('mellan md och lg står kartan under itemet', function () {
+    $vy = trepanelKod('pages/Containers/Items/Show.vue');
+
+    // Mittkolumnen är två av fyra spår över `md:` — itemets kolumn.
+    expect($vy)->toContain('min-w-0 md:col-span-2');
+
+    // Kartans omslutande element, alltså rutnätets barn — spåren sätts där
+    // och inte på panelen, vars proppar och innehåll är orörda (Beslut 3).
+    preg_match('#<div class="([^"]*)">\s*<ItemMapPanel\b#', $vy, $träff);
+
+    expect($träff)->not->toBeEmpty('kartan har inget omslutande rutnätselement');
+
+    $kartan = $träff[1];
+
+    // Samma startspår och samma bredd som itemet, alltså raden under det.
+    expect($kartan)->toContain('md:col-start-2')
+        ->toContain('md:col-span-2');
+
+    // Och över `lg:` tar kartan det tredje spåret i stället — den har inte
+    // kvar mittkolumnens två.
+    expect($kartan)->toContain('lg:col-start-3')
+        ->toContain('lg:col-span-1');
+});
+
+/*
+ * Klart när: panelernas ordning i markupen är struktur, item, karta.
+ *
+ * Beslut 2 i issue 181: ordningen ändras inte, och tangentbordsordningen
+ * följer markupen. Placeringen görs uteslutande med grid-klasser, så en
+ * framtida bredd kan läggas till utan att någon panel flyttar sig i källan —
+ * och därmed utan att tabbordningen tyst blir en annan.
+ */
+it('panelernas ordning i markupen är struktur, item, karta', function () {
+    $vy = trepanelKod('pages/Containers/Items/Show.vue');
+
+    $strukturen = strpos($vy, '<ItemStructurePanel');
+    $itemet = strpos($vy, '<UiTabs');
+    $kartan = strpos($vy, '<ItemMapPanel');
+
+    expect($strukturen)->not->toBeFalse('vänsterpanelen saknas')
+        ->and($itemet)->not->toBeFalse('mittenpanelen saknas')
+        ->and($kartan)->not->toBeFalse('högerpanelen saknas');
+
+    expect((int) $strukturen)->toBeLessThan((int) $itemet)
+        ->and((int) $itemet)->toBeLessThan((int) $kartan);
+
+    // Alla tre ligger i SAMMA rutnät: ordningen är rutnätets och inte tre
+    // ytor som råkar stå under varandra i källan.
+    expect((int) strpos($vy, 'grid-cols-1'))->toBeLessThan((int) $strukturen)
+        ->and((int) $kartan)->toBeLessThan((int) strpos($vy, '</ContainerLayout>'));
+});
+
+/*
+ * Klart när: `ItemStructurePanel` och `ItemMapPanel` har samma props som förut.
+ *
+ * Beslut 3 i issue 181: ingen panel ändrar innehåll. Den nya bredden är en
+ * layoutfråga, och en panel som plötsligt frågade efter något — en höjd, en
+ * brytpunkt, ett läge — hade flyttat layouten in i panelen och gjort trepanelen
+ * till tre ytor som var för sig vet vilken skärm de står på. Panelen ritar
+ * proppen den får; `Show.vue` äger placeringen.
+ *
+ * Provet läser deklarationen och inte en rendering: en propp som ingen skickar
+ * syns inte i svaret, och det är just den som vore felet.
+ */
+it('ItemStructurePanel och ItemMapPanel har samma props som förut', function () {
+    expect(trepanelProps('components/ItemStructurePanel.vue'))
+        ->toBe(['nodes', 'containerUlid', 'activeTrail']);
+
+    expect(trepanelProps('components/ItemMapPanel.vue'))
+        ->toBe(['map', 'overflowHref']);
 });

@@ -618,30 +618,46 @@ function toggleFavorite() {
         <Head :title="item.name" />
 
         <!--
-            Trepanelslayouten (issue 103 · [[ADR-0042 Designsystemet]] § Beslut
-            och [[ADR-0041 Itemets vy]] § Beslut): strukturen till vänster,
-            itemet i mitten, kartans plats till höger — allt inuti containerns
-            ram.
+            Trepanelslayouten (issue 103, 181 · [[ADR-0042 Designsystemet]]
+            § Beslut och [[ADR-0041 Itemets vy]] § Beslut): strukturen till
+            vänster, itemet i mitten, kartan till höger — allt inuti containerns
+            ram, som i `docs/Design/struktur - item.jpeg`.
 
-            `md:` är den ENDA brytpunkten (issue 68a § Beslut 2), och under den
-            staplas panelerna i dokumentordningen: strukturen först, itemet
-            sedan, kartan sist. Strukturen blir där en utfällbar yta — se
-            ItemStructurePanel.vue — och aldrig en egen sida: en andra sida
-            hade varit bildens globala navigering, som är avvisad två gånger.
+            Under `md:` staplas panelerna i dokumentordningen: strukturen
+            först, itemet sedan, kartan sist. Strukturen blir där en utfällbar
+            yta — se ItemStructurePanel.vue — och aldrig en egen sida: en andra
+            sida hade varit bildens globala navigering, som är avvisad två
+            gånger. Där är vyn oförändrad sedan issue 154.
 
-            Mittkolumnen är två fjärdedelar och de två sidopanelerna en var.
+            Brytpunkterna är två: `md:` (issue 68a § Beslut 2) och `lg:`
+            (M24 · [[ADR-0050 Desktopdesignen]]).
+
+            **`md:` till `lg:` — fyra spår.** Strukturen ett, itemet två,
+            kartan två. Kartan börjar i mittkolumnens första spår och får
+            därför en EGEN rad under itemet i stället för en tredje kolumn:
+            1 + 2 + 2 ryms inte i fyra spår, och det är med flit att kartan
+            hamnar under itemet och inte vid sidan om det.
+
+            **`lg:` och uppåt — tre spår:**
+            `minmax(16rem,20rem) minmax(0,1fr) minmax(18rem,24rem)`, alltså
+            struktur, item, karta. Sidopanelerna har ett golv och ett tak i
+            rem i stället för en andel: strukturträdets längsta rad bestämmer
+            golvet, kartans teckenförklaring taket, och itemet tar resten. En
+            andel hade krympt trädet under läsbarhet på en smalare skärm och
+            låtit itemet svälla på en bredare.
+
             `min-w-0` behövs för att en lång rad i itemet ska brytas i stället
             för att tvinga ut kolumnen — samma skäl som ContainerLayouts egen
             slot bär den.
         -->
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-4">
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-4 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]">
             <ItemStructurePanel
                 :nodes="structure"
                 :container-ulid="container.ulid"
                 :active-trail="activeTrail"
             />
 
-            <div class="min-w-0 md:col-span-2">
+            <div class="min-w-0 md:col-span-2 lg:col-span-1">
                 <!--
                     Brödsmulan (issue 95): vägen från roten ned till itemet, den
                     aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
@@ -1052,17 +1068,35 @@ function toggleFavorite() {
             </div>
 
             <!--
-                Kartans plats (issue 156): fokuskartan i högerpanelen över
+                Kartans plats (issue 156, 181): fokuskartan i högerpanelen över
                 `md:`. Under brytpunkten är panelen dold med flit — där är
                 kartan ett LÄGE i itemets relationsflik i stället (se
                 ItemLinkSection.vue), och samma karta två gånger på samma
                 skärm hade varit samma nod två gånger.
+
+                Placeringen sker med klasserna och inte genom att flytta
+                markupen: strukturen, itemet och kartan står i samma ordning i
+                källan på varje bredd ([[ADR-0041 Itemets vy]] § Beslut), och
+                tangentbordsordningen följer den. Över `lg:` tar kartan det
+                tredje spåret; mellan `md:` och `lg:` är rutnätet fyra spår och
+                kartan börjar i mittkolumnens första — samma två spår som
+                itemet och alltså en egen rad under det. Kartan får ingen egen
+                höjdberäkning: FocusMap växer med sitt innehåll, och den
+                smalare kolumnen bryter rader i stället för att klippa.
+
+                Spåren sätts på det omslutande elementet och inte på panelen:
+                panelen bär kvar `hidden md:block` från issue 156, och dess
+                innehåll och proppar är orörda (Beslut 3). Omslaget bär samma
+                `hidden md:block`, så den dolda panelen inte lämnar en tom
+                rad med ett `gap-6` efter sig på en telefon.
             -->
-            <ItemMapPanel
-                class="hidden md:block"
-                :map="map"
-                :overflow-href="relationsHref"
-            />
+            <div class="hidden md:block md:col-span-2 md:col-start-2 lg:col-span-1 lg:col-start-3">
+                <ItemMapPanel
+                    class="hidden md:block"
+                    :map="map"
+                    :overflow-href="relationsHref"
+                />
+            </div>
         </div>
     </ContainerLayout>
 </template>
