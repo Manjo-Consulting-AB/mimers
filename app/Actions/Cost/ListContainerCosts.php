@@ -3,8 +3,10 @@
 namespace App\Actions\Cost;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Actions\Category\ResolveCategoryDescendants;
 use App\Models\Container;
 use App\Models\User;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
@@ -64,6 +66,16 @@ use Illuminate\Support\Facades\DB;
  * MariaDB, precis som `groupByPeriod()` i CostReport redan gör av samma skäl —
  * och en kostnads dag har ingen tidszon att visa ([[ADR-0016
  * Kostnadsregistrering]] § Konsekvenser).
+ *
+ * **Sedan issue 176 följer tabellen Pro-filtret.** `$filters` är de fem
+ * validerade parametrarna ur App\Http\Requests\Cost\ContainerCostFilterRequest
+ * — `from`, `to`, `item`, `category` och `supplier` — och de tillämpas med
+ * EXAKT samma betydelse som CostReport::baseQuery() ger dem, så att tabellen
+ * och talen ovanför den svarar på samma fråga. Särskilt `category`: filtret
+ * tar hela underträdet, precis som i rapporten, för en tabell som visade färre
+ * rader än nedbrytningen räknar hade varit två svar på *vilka rader finns*.
+ * Tomt `$filters` är den fria fliken oförändrad (issue 175) — en gratisanvändare
+ * når den här metoden utan filter, och raderna är då containerns.
  */
 final class ListContainerCosts
 {
@@ -72,7 +84,10 @@ final class ListContainerCosts
      */
     public const PER_PAGE = 25;
 
-    public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
+    public function __construct(
+        private readonly ResolveItemScope $resolveItemScope,
+        private readonly ResolveCategoryDescendants $resolveCategoryDescendants,
+    ) {}
 
     /**
      * Formen på varje rad, led för led — tabellens kontrakt:
@@ -86,8 +101,10 @@ final class ListContainerCosts
      * som en rad i docblocken och inte som ett `@return`-märke: `through()`
      * byter radtyp men behåller paginatorns nyckeltyp, och det paret kan
      * PHPStan inte bevisa — märket hade varit en påstådd typ ingen prövar.
+     *
+     * @param  array{from?: string|null, to?: string|null, item?: string|null, category?: string|null, supplier?: string|null}  $filters
      */
-    public function handle(User $user, Container $container): LengthAwarePaginator
+    public function handle(User $user, Container $container, array $filters = []): LengthAwarePaginator
     {
         $query = DB::table('cost_entry')
             ->join('item', 'item.id', '=', 'cost_entry.item_id')
@@ -100,6 +117,8 @@ final class ListContainerCosts
         if ($itemIds !== null) {
             $query->whereIn('item.id', $itemIds);
         }
+
+        $this->applyFilters($query, $container, $filters);
 
         $sidor = $query
             ->select([
@@ -128,5 +147,53 @@ final class ListContainerCosts
             'currency' => (string) $rad->currency,
             'item' => ['ulid' => (string) $rad->item_ulid, 'name' => (string) $rad->item_name],
         ]);
+    }
+
+    /**
+     * Filtren, i samma form och med samma betydelse som
+     * CostReport::baseQuery() ger dem (issue 176).
+     *
+     * `item` jämförs på `item.ulid` och inte på ett uppslaget löpnummer:
+     * joinen mot `item` ligger redan i frågan, och ULID:n är bevisad av
+     * ContainerCostFilterRequest — ett uppslag till hade varit en fråga för
+     * att byta ut en kolumn mot en annan i en join som redan är gjord.
+     *
+     * `category` tar hela underträdet, som i rapporten: en underkategori är
+     * en kategori, och fliken filtrerar på samma begrepp som nedbrytningen
+     * grupperar på. Kategorin slås upp i containern — `firstOrFail()` och inte
+     * en tyst null, för ett ULID som försvunnit mellan valideringen och
+     * frågan ska ge ett fel och inte en tabell som tyst visar allt.
+     *
+     * `from`/`to` jämförs med `whereDate()`, av samma skäl som i CostReport:
+     * sqlite lagrar en DATE-kolumn med en tidskomponent, och en datumgräns ska
+     * inte bero på klockslaget när frågan körs.
+     *
+     * @param  array{from?: string|null, to?: string|null, item?: string|null, category?: string|null, supplier?: string|null}  $filters
+     */
+    private function applyFilters(Builder $query, Container $container, array $filters): void
+    {
+        if (! empty($filters['item'])) {
+            $query->where('item.ulid', $filters['item']);
+        }
+
+        if (! empty($filters['category'])) {
+            $category = $container->categories()
+                ->where('ulid', $filters['category'])
+                ->firstOrFail();
+
+            $query->whereIn('item.category_id', $this->resolveCategoryDescendants->handle($category));
+        }
+
+        if (($filters['supplier'] ?? null) !== null) {
+            $query->where('cost_entry.supplier', $filters['supplier']);
+        }
+
+        if (($filters['from'] ?? null) !== null) {
+            $query->whereDate('cost_entry.incurred_on', '>=', $filters['from']);
+        }
+
+        if (($filters['to'] ?? null) !== null) {
+            $query->whereDate('cost_entry.incurred_on', '<=', $filters['to']);
+        }
     }
 }

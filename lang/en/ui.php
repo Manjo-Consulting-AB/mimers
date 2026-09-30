@@ -1885,6 +1885,45 @@ return [
             'upgrade' => 'Reports and filters require the Pro plan.',
             'upgrade_owner' => 'The account owner can upgrade the plan.',
             'upgrade_link' => 'See plans',
+
+            /*
+             * The Pro part, see issue 176 and [[ADR-0050 Desktopdesignen]] § 9.
+             *
+             * `from`/`to` name the two ends of the period, and the picker is a
+             * range and not a preset list: the server fills a missing end from
+             * the current calendar month, so an empty field means "this month"
+             * and never "unbounded".
+             *
+             * `category` is the item's category — `cost_entry` has no category
+             * column ([[ADR-0040 Underträdets summor]]) — and `other` is the
+             * bucket the engine returns with a null key for rows on items
+             * without one. It is not a category in the container: it is the
+             * rows that have none.
+             *
+             * `comparison_percent` carries the sign in its value, so `+12%` and
+             * `-4%` are the same sentence with different numbers and the view
+             * never assembles it from a plus sign and a unit.
+             */
+            'filter_aria' => 'Filter the report',
+            'filter_from' => 'From',
+            'filter_to' => 'To',
+            'filter_category' => 'Category',
+            'filter_all' => 'All',
+            'filter_submit' => 'Apply',
+            'filter_clear' => 'Clear',
+
+            'chart' => 'Costs over time',
+            'breakdown' => 'Costs per category',
+            'other' => 'Other',
+
+            'comparison' => 'Compared with the previous period',
+            'comparison_percent' => ':percent%',
+
+            // A Pro user's table always follows the period, so its empty state
+            // is a statement about the filter and never about the container:
+            // *The container has no costs registered* would be false the moment
+            // a month without rows was selected.
+            'empty_filtered' => 'No costs in the selected period.',
         ],
     ],
 

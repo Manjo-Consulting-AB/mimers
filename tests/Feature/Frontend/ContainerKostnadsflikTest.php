@@ -158,11 +158,11 @@ function kostnadsflikUrl(Container $container, ?int $sida = null): string
 /**
  * Propparna ur svaret, med de nycklar proven läser.
  *
- * @return array{costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}, yearCosts: list<array{currency: string, amount: int, count: int}>, year: int, rows: array{data: list<array<string, mixed>>, current_page: int, last_page: int, total: int, prev_page_url: string|null, next_page_url: string|null}, items: list<array{ulid: string, name: string}>, canReport: bool, canUpgrade: bool}
+ * @return array{costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}, yearCosts: list<array{currency: string, amount: int, count: int}>, year: int, rows: array{data: list<array<string, mixed>>, current_page: int, last_page: int, total: int, prev_page_url: string|null, next_page_url: string|null}, items: list<array{ulid: string, name: string}>, canReport: bool, canUpgrade: bool, report: array<string, mixed>|null, filterOptions: array<string, mixed>|null}
  */
 function kostnadsflikProps(TestResponse $svar): array
 {
-    /** @var array{costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}, yearCosts: list<array{currency: string, amount: int, count: int}>, year: int, rows: array{data: list<array<string, mixed>>, current_page: int, last_page: int, total: int, prev_page_url: string|null, next_page_url: string|null}, items: list<array{ulid: string, name: string}>, canReport: bool, canUpgrade: bool} $proppar */
+    /** @var array{costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}, yearCosts: list<array{currency: string, amount: int, count: int}>, year: int, rows: array{data: list<array<string, mixed>>, current_page: int, last_page: int, total: int, prev_page_url: string|null, next_page_url: string|null}, items: list<array{ulid: string, name: string}>, canReport: bool, canUpgrade: bool, report: array<string, mixed>|null, filterOptions: array<string, mixed>|null} $proppar */
     $proppar = $svar->inertiaProps();
 
     return $proppar;
@@ -424,7 +424,14 @@ it('donuten grupperar per item enligt ADR-0040', function () {
  *
  * Flaggan är serverns svar och inte en gissning i klienten; ytan prövas i
  * källkoden, där den ritas på `! canReport` och innehåller både meningen och
- * vägen vidare. Ingen periodväljare ritas: Pro-delen är issue 176.
+ * vägen vidare.
+ *
+ * **Pro-delen prövas på proppen och inte på ord i källkoden** (issue 176).
+ * Fram till 176 var *ingen periodväljare* samma sak som *ordet period finns
+ * inte i filen*; nu finns Pro-delen i SAMMA fil och renderas på
+ * `canReport && report`. Det som avgör vad en gratisanvändare möter är därför
+ * att `report` och `filterOptions` är null — servern har inte ens läst
+ * querysträngen — och att blocket är stängt för henne.
  */
 it('en gratisanvändare får canReport falsk och ser uppgraderingsytan', function () {
     withoutVite();
@@ -433,7 +440,11 @@ it('en gratisanvändare får canReport falsk och ser uppgraderingsytan', functio
 
     $proppar = kostnadsflikProps(actingAs($anvandare)->get(kostnadsflikUrl($container))->assertOk());
 
-    expect($proppar['canReport'])->toBeFalse();
+    expect($proppar['canReport'])->toBeFalse()
+        // Inga Pro-proppar alls: ingen period, ingen graf, ingen nedbrytning,
+        // ingen jämförelse och inget filterfält att fylla.
+        ->and($proppar['report'])->toBeNull()
+        ->and($proppar['filterOptions'])->toBeNull();
 
     $vy = kostnadsflikVy('js/pages/Containers/Costs.vue');
 
@@ -441,9 +452,10 @@ it('en gratisanvändare får canReport falsk och ser uppgraderingsytan', functio
         ->and($vy)->toContain("t('container.costs.upgrade')")
         ->and($vy)->toContain("t('container.costs.upgrade_link')")
         ->and($vy)->toContain("t('container.costs.upgrade_owner')")
-        // Ingen periodväljare, inget filter och ingen graf (Beslut 4).
-        ->and($vy)->not->toContain('period')
-        ->and($vy)->not->toContain('<select');
+        // Och Pro-delen står inuti ett block som är stängt när flaggan är
+        // falsk: varken filterfältet, grafen, nedbrytningen eller
+        // jämförelsen når en gratisanvändare (issue 176, Beslut 2).
+        ->and($vy)->toContain('v-if="canReport && report"');
 });
 
 /*

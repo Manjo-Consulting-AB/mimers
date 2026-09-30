@@ -718,9 +718,10 @@ it('hämtar uppgiftsflikens strängar ur ui.php', function () {
  *
  * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
  * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
- * skrivs om. Två filer läses, för tabellen är sin egen komponent (CostTable) —
- * och en rubrik som glöms i den ena hade blivit `container.costs.supplier` på
- * skärmen.
+ * skrivs om. Fem filer läses, för tabellen och Pro-delens tre delar är sina
+ * egna komponenter (CostTable, CostFilterBar, CostTimeChart,
+ * CostCategoryBreakdown) — och en rubrik som glöms i den ena hade blivit
+ * `container.costs.supplier` på skärmen.
  *
  * **`container.costs.this_year` bär `:year`**, och det prövas inte bara att
  * nyckeln finns: etiketten säger vilket år brickan räknar, och årtalet kommer
@@ -730,7 +731,16 @@ it('hämtar uppgiftsflikens strängar ur ui.php', function () {
 it('hämtar kostnadsflikens strängar ur ui.php', function () {
     $nycklar = [];
 
-    foreach (['js/pages/Containers/Costs.vue', 'js/components/CostTable.vue'] as $fil) {
+    $filer = [
+        'js/pages/Containers/Costs.vue',
+        'js/components/CostTable.vue',
+        // Pro-delen, issue 176.
+        'js/components/CostFilterBar.vue',
+        'js/components/CostTimeChart.vue',
+        'js/components/CostCategoryBreakdown.vue',
+    ];
+
+    foreach ($filer as $fil) {
         preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
 
         expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
@@ -745,11 +755,17 @@ it('hämtar kostnadsflikens strängar ur ui.php', function () {
     // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
     // katalogen ska falla här och inte som `container.costs.upgrade_link` i
     // uppgraderingsytan.
-    foreach (['container.nav.costs', 'container.costs.title', 'container.costs.heading', 'container.costs.add', 'container.costs.add_choose_item', 'container.costs.total', 'container.costs.this_year', 'container.costs.donut', 'container.costs.empty', 'container.costs.date', 'container.costs.description', 'container.costs.item', 'container.costs.supplier', 'container.costs.amount', 'container.costs.previous', 'container.costs.next', 'container.costs.page', 'container.costs.upgrade', 'container.costs.upgrade_owner', 'container.costs.upgrade_link'] as $nyckel) {
+    foreach (['container.nav.costs', 'container.costs.title', 'container.costs.heading', 'container.costs.add', 'container.costs.add_choose_item', 'container.costs.total', 'container.costs.this_year', 'container.costs.donut', 'container.costs.empty', 'container.costs.empty_filtered', 'container.costs.date', 'container.costs.description', 'container.costs.item', 'container.costs.supplier', 'container.costs.amount', 'container.costs.previous', 'container.costs.next', 'container.costs.page', 'container.costs.upgrade', 'container.costs.upgrade_owner', 'container.costs.upgrade_link', 'container.costs.filter_aria', 'container.costs.filter_from', 'container.costs.filter_to', 'container.costs.filter_category', 'container.costs.filter_all', 'container.costs.filter_submit', 'container.costs.filter_clear', 'container.costs.chart', 'container.costs.breakdown', 'container.costs.other', 'container.costs.comparison', 'container.costs.comparison_percent'] as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
     }
 
     expect(Lang::get('ui.container.costs.this_year', ['year' => 2026], 'en'))->toBe('This year (2026)');
+
+    // Pro-delens procent bär sitt tecken i VÄRDET och inte i vyn: "+12 %" och
+    // "−4 %" är samma mening med olika tal, och vyn sätter aldrig ihop ett
+    // plustecken och en enhet själv (issue 176).
+    expect(Lang::get('ui.container.costs.comparison_percent', ['percent' => '+12'], 'en'))->toBe('+12%')
+        ->and(Lang::get('ui.container.costs.comparison_percent', ['percent' => '-4'], 'en'))->toBe('-4%');
 });
 
 /*
