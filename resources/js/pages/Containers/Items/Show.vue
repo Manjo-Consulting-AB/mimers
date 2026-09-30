@@ -632,11 +632,11 @@ function toggleFavorite() {
             Brytpunkterna är två: `md:` (issue 68a § Beslut 2) och `lg:`
             (M24 · [[ADR-0050 Desktopdesignen]]).
 
-            **`md:` till `lg:` — fyra spår.** Strukturen ett, itemet två,
-            kartan två. Kartan börjar i mittkolumnens första spår och får
+            **`md:` till `lg:` — fyra spår.** Strukturen ett, itemet tre,
+            kartan tre. Kartan börjar i mittkolumnens första spår och får
             därför en EGEN rad under itemet i stället för en tredje kolumn:
-            1 + 2 + 2 ryms inte i fyra spår, och det är med flit att kartan
-            hamnar under itemet och inte vid sidan om det.
+            1 + 3 fyller fyra spår, och kartan hamnar under itemet och inte
+            vid sidan om det.
 
             **`lg:` och uppåt — tre spår:**
             `minmax(16rem,20rem) minmax(0,1fr) minmax(18rem,24rem)`, alltså
@@ -657,7 +657,7 @@ function toggleFavorite() {
                 :active-trail="activeTrail"
             />
 
-            <div class="min-w-0 md:col-span-2 lg:col-span-1">
+            <div class="min-w-0 md:col-span-3 lg:col-span-1">
                 <!--
                     Brödsmulan (issue 95): vägen från roten ned till itemet, den
                     aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
@@ -1079,7 +1079,7 @@ function toggleFavorite() {
                 källan på varje bredd ([[ADR-0041 Itemets vy]] § Beslut), och
                 tangentbordsordningen följer den. Över `lg:` tar kartan det
                 tredje spåret; mellan `md:` och `lg:` är rutnätet fyra spår och
-                kartan börjar i mittkolumnens första — samma två spår som
+                kartan börjar i mittkolumnens första — samma tre spår som
                 itemet och alltså en egen rad under det. Kartan får ingen egen
                 höjdberäkning: FocusMap växer med sitt innehåll, och den
                 smalare kolumnen bryter rader i stället för att klippa.
@@ -1090,7 +1090,7 @@ function toggleFavorite() {
                 `hidden md:block`, så den dolda panelen inte lämnar en tom
                 rad med ett `gap-6` efter sig på en telefon.
             -->
-            <div class="hidden md:block md:col-span-2 md:col-start-2 lg:col-span-1 lg:col-start-3">
+            <div class="hidden md:block md:col-start-2 md:col-span-3 lg:col-start-3 lg:col-span-1">
                 <ItemMapPanel
                     class="hidden md:block"
                     :map="map"

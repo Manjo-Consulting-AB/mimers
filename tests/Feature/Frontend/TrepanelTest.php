@@ -200,9 +200,9 @@ it('renderar de tre panelerna inuti containerns ram', function () {
     expect((int) $itemet)->toBeLessThan((int) $kartan);
 
     // Rutan runt dem: en kolumn på en telefon, fyra över `md:` — mittkolumnen
-    // är två av dem, och sidopanelerna en var.
+    // är tre av dem, och strukturen en.
     expect($ram)->toContain('grid grid-cols-1 gap-6 md:grid-cols-4')
-        ->toContain('md:col-span-2');
+        ->toContain('md:col-span-3');
 
     // Skalet deklareras inte om här: containerns ram bär det. Och
     // navigeringen i vyn är fortfarande brödsmulan och ingenting annat.
@@ -497,12 +497,12 @@ it('staplar panelerna på smal skärm med strukturen utfällbar', function () {
     $panelen = trepanelKod('components/ItemStructurePanel.vue');
 
     // Staplad i källan och sida vid sida över `md:` — en kolumn först, fyra
-    // sedan, och mittkolumnen två av dem.
+    // sedan, och mittkolumnen tre av dem.
     $vy = trepanelKod('pages/Containers/Items/Show.vue');
 
     expect($vy)->toContain('grid-cols-1')
         ->toContain('md:grid-cols-4')
-        ->toContain('md:col-span-2');
+        ->toContain('md:col-span-3');
 
     // Utfällbar: `<details>` med en `<summary>`, och öppen i källan så att den
     // breda skärmen visar trädet som bilden gör.
@@ -583,10 +583,10 @@ it('över lg står tre kolumner med fasta gränser för sidopanelerna', function
  *
  * Under `lg:` ryms inte tre kolumner, och kartan faller då ned i itemets
  * kolumn i stället för att bli en tredje spalt. Rutnätet är fyra spår — det är
- * `md:`-formen från issue 103 och den rörs inte — och kartan tar samma två
- * spår som mittkolumnen. Att den börjar i spår 2 är det som ger en EGEN rad:
- * spår 1 är strukturens, och rutnätet fyller inte spår 4 med en panel som
- * hör hemma under itemet.
+ * `md:`-formen från issue 103, och endast mittkolumnens bredd ändras — och
+ * kartan tar samma tre spår som mittkolumnen. Att den börjar i spår 2 är det
+ * som ger en EGEN rad: spår 1 är strukturens, och itemet fyller resten så att
+ * ingen rad står tom.
  *
  * Ordningen i markupen är oförändrad ([[ADR-0041 Itemets vy]] § Beslut):
  * placeringen görs med klasserna, aldrig genom att flytta elementen.
@@ -594,8 +594,8 @@ it('över lg står tre kolumner med fasta gränser för sidopanelerna', function
 it('mellan md och lg står kartan under itemet', function () {
     $vy = trepanelKod('pages/Containers/Items/Show.vue');
 
-    // Mittkolumnen är två av fyra spår över `md:` — itemets kolumn.
-    expect($vy)->toContain('min-w-0 md:col-span-2');
+    // Mittkolumnen är tre av fyra spår över `md:` — itemets kolumn.
+    expect($vy)->toContain('min-w-0 md:col-span-3');
 
     // Kartans omslutande element, alltså rutnätets barn — spåren sätts där
     // och inte på panelen, vars proppar och innehåll är orörda (Beslut 3).
@@ -607,10 +607,10 @@ it('mellan md och lg står kartan under itemet', function () {
 
     // Samma startspår och samma bredd som itemet, alltså raden under det.
     expect($kartan)->toContain('md:col-start-2')
-        ->toContain('md:col-span-2');
+        ->toContain('md:col-span-3');
 
     // Och över `lg:` tar kartan det tredje spåret i stället — den har inte
-    // kvar mittkolumnens två.
+    // kvar mittkolumnens tre.
     expect($kartan)->toContain('lg:col-start-3')
         ->toContain('lg:col-span-1');
 });
