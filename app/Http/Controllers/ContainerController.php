@@ -305,8 +305,10 @@ class ContainerController extends Controller
                 'items' => $items->count(),
                 'todos' => $todo['count'],
             ],
-            // De fem panelernas innehåll (issue 172). Ordningen är M19:s:
-            // proppen är panelens, och vyn monterar dem.
+            // De fem panelernas innehåll (issue 172), i issuens ordning: en
+            // propp per panel, och vyn monterar dem — samma form som M19 gav
+            // dashboarden (issue 122), så en sjätte panel krockar om en rad
+            // här och en rad i vyn och inte om varandras innehåll.
             'tasks' => $todo['rows'],
             'costs' => $report->summary($container, $scope),
             'items' => ItemResource::collection($items->take(self::ITEM_LIMIT))->resolve($request),
