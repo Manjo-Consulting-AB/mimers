@@ -61,6 +61,19 @@ import { useTranslations } from '../composables/useTranslations.js';
  * nycklar och aldrig färdiga meningar; texten slås upp ur `lang/` i
  * komponenten. Den ritas överst, där mockupens exempelbanner stod, och bara
  * när listan har något kvar.
+ *
+ * **Rutnätet kom med issue 171** ([[ADR-0050 Desktopdesignen]] § 6): över
+ * `lg:` står brickorna, kortraderna och kostnaderna i en vänsterdel och
+ * uppgifterna, händelserna och informationsytan i en högerspalt. Det är hela
+ * ändringen — panelerna är M19:s, propparna är desamma och servern får ingen
+ * ny fråga.
+ *
+ * **Rutnätet är platt och ordningen är källans.** Panelerna ligger kvar i
+ * markupen i samma ordning som före issue 171: under `lg:` är behållaren ett
+ * vanligt block och staplar dem som förut, så mobilens startsida flyttar sig
+ * inte för att skrivbordet fick ett rutnät. Placeringen sker med klasser —
+ * högerspalten är tredje kolumnen med en uttalad rad per panel, vänsterdelens
+ * block spänner två kolumner och hamnar i de lediga raderna.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -97,48 +110,64 @@ const { t } = useTranslations();
 
         <h1 class="text-2xl font-semibold">{{ t('dashboard.heading') }}</h1>
 
-        <!-- Panelen äger sin egen marginal: när alla tips är dolda ritas
-             ingenting alls, och en ram runt den hade lämnat kvar sin luft. -->
-        <InfoPanel :tips="props.tips" />
+        <!--
+            Rutnätet (issue 171). Behållaren är ett vanligt block tills `lg:`
+            gör den till en grid om tre kolumner: barnen ligger kvar i
+            källordningen, och under `lg:` staplas de precis som förut.
+            Marginalen sitter kvar på varje panel — rutnätet lägger bara till
+            kolumnavståndet, så radrytmen är den samma på båda sidor om
+            brytpunkten.
+        -->
+        <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
+            <!--
+                Informationsytan äger sin egen marginal (se InfoPanel.vue), så
+                ramen bär ingen: den placerar panelen sist i högerspalten och
+                lämnar ingenting kvar när panelen inte ritas — en tom ram har
+                ingen höjd.
+            -->
+            <div class="lg:col-start-3 lg:row-start-3">
+                <InfoPanel :tips="props.tips" />
+            </div>
 
-        <div class="mt-8">
-            <DashboardStats :stats="props.stats" :costs="props.costs.totals" />
-        </div>
+            <div class="mt-8 lg:col-span-2">
+                <DashboardStats :stats="props.stats" :costs="props.costs.totals" />
+            </div>
 
-        <section v-for="group in props.containerGroups" :key="group.kind ?? 'others'" class="mt-8">
-            <h2 class="text-title font-semibold text-ink">
-                {{ group.kind ?? t('dashboard.containers.others') }}
-            </h2>
+            <section v-for="group in props.containerGroups" :key="group.kind ?? 'others'" class="mt-8 lg:col-span-2">
+                <h2 class="text-title font-semibold text-ink">
+                    {{ group.kind ?? t('dashboard.containers.others') }}
+                </h2>
 
-            <div class="mt-3 flex flex-wrap items-stretch gap-4">
-                <ContainerCard
-                    v-for="container in group.containers"
-                    :key="container.ulid"
-                    :container="container"
+                <div class="mt-3 flex flex-wrap items-stretch gap-4 lg:grid lg:grid-cols-2">
+                    <ContainerCard
+                        v-for="container in group.containers"
+                        :key="container.ulid"
+                        :container="container"
+                    />
+                </div>
+            </section>
+
+            <section v-if="props.costs.totals.length" class="mt-8 lg:col-span-2">
+                <h2 class="text-title font-semibold text-ink">
+                    {{ t('dashboard.costs.heading') }}
+                </h2>
+
+                <div class="mt-3">
+                    <CostDonut :totals="props.costs.totals" :breakdown="props.costs.breakdown" />
+                </div>
+            </section>
+
+            <div class="mt-8 lg:col-start-3 lg:row-start-1">
+                <DashboardTasksPanel
+                    :tasks="props.tasks"
+                    :has-containers="props.hasContainers"
+                    :show-upcoming-tasks="props.showUpcomingTasks"
                 />
             </div>
-        </section>
 
-        <section v-if="props.costs.totals.length" class="mt-8">
-            <h2 class="text-title font-semibold text-ink">
-                {{ t('dashboard.costs.heading') }}
-            </h2>
-
-            <div class="mt-3">
-                <CostDonut :totals="props.costs.totals" :breakdown="props.costs.breakdown" />
+            <div class="mt-8 lg:col-start-3 lg:row-start-2">
+                <DashboardActivityPanel :events="props.events" />
             </div>
-        </section>
-
-        <div class="mt-8">
-            <DashboardTasksPanel
-                :tasks="props.tasks"
-                :has-containers="props.hasContainers"
-                :show-upcoming-tasks="props.showUpcomingTasks"
-            />
-        </div>
-
-        <div class="mt-8">
-            <DashboardActivityPanel :events="props.events" />
         </div>
     </AppLayout>
 </template>
