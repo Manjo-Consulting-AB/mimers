@@ -2077,8 +2077,28 @@ return [
             // would be untrue, and the two states mean different things.
             'empty_filtered' => 'No events match the filter.',
             // The day's heading, with the day's own count under it: the row
-            // says when, the heading says how many that day held.
+            // says when, the heading says how many that day held. It is also
+            // the count on an active item's row (issue 180), where the thing
+            // counted is the item's events — same words, same thing.
             'day_count' => ':count events',
+            // The three charts (issue 180 · [[ADR-0050 Desktopdesignen]]
+            // § 17): the headings of the two cards, and the panel's own. The
+            // words name the set the numbers are drawn from, like
+            // `container.overview.*` does for its panels.
+            'activity_over_time' => 'Activity over time',
+            'activity_types' => 'Activity types',
+            'recent_items' => 'Recently active items',
+            // The two column headings of the bar chart's text alternative, and
+            // the word under the donut's total. *Events* is the noun the rest
+            // of the tab counts in; a chart that said *count* would be the
+            // only place in the product that does.
+            'chart_date' => 'Day',
+            'chart_events' => 'Events',
+            // A row without a `subject_type` ([[ADR-0043 Tre loggar]]
+            // § Händelseloggen — the name space is open). It is counted as its
+            // own slice rather than dropped, so the donut sums to the total
+            // the heading promises, and this is the word it is drawn with.
+            'type_other' => 'Other',
             // The filter field (issue 179 § Beslut 4). The query string carries
             // the values; these are their names in the form.
             'filter_aria' => 'Filter the history',

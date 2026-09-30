@@ -2,8 +2,12 @@
 import { computed } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import ActiveItemsPanel from '../../components/ActiveItemsPanel.vue';
+import ActivityTimeChart from '../../components/ActivityTimeChart.vue';
+import ActivityTypeChart from '../../components/ActivityTypeChart.vue';
 import HistoryFilterBar from '../../components/HistoryFilterBar.vue';
 import HistoryRow from '../../components/HistoryRow.vue';
+import UiCard from '../../components/UiCard.vue';
 import { formatLocaleDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -30,6 +34,13 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * App\Actions\Audit\ListAuditEvents i kontrollern (issue 108), och den regeln
  * upprepas inte här: en gäst ser sina egna rader och ägaren allas, ur samma
  * svar, och vyn kan inte se skillnad på dem.
+ *
+ * **Diagrammen räknar inte här** (issue 180 § Beslut 3). Proppen `stats` bär
+ * `perDay`, `perType` och `topItems` färdigräknade av
+ * App\Actions\Audit\ListAuditEvents::statsForContainer() — samma läsregel och
+ * samma filter som listan, men utan gränsen på hundra rader — och de tre
+ * komponenterna ritar bara talen. En gästs diagram räknar därför bara det hon
+ * får se, utan att vyn vet att hon är gäst.
  *
  * **Filtren står i querysträngen** (Beslut 4) och ritas av
  * resources/js/components/HistoryFilterBar.vue. Vyn filtrerar ingenting själv:
@@ -70,6 +81,13 @@ const props = defineProps({
      * App\Actions\Audit\PresentAuditEvents.
      */
     days: { type: Array, required: true },
+    /*
+     * Diagrammens tre tal (issue 180 § Beslut 2), ur samma läsregel och samma
+     * filter som `days` men utan gränsen på hundra rader:
+     * `{perDay: [{date, count}], perType: [{type, count}], topItems: [{ulid,
+     * name, count}]}`.
+     */
+    stats: { type: Object, required: true },
     /* Filtret så som servern tillämpade det: { type, user, item, from, to }. */
     filter: { type: Object, required: true },
     /* Filterfältets val: { types, users, items }, redan filtrerade av servern. */
@@ -152,27 +170,63 @@ function dayLabel(date) {
             :options="options"
         />
 
-        <p v-if="days.length === 0" class="mt-6 text-body text-ink-muted">
-            {{ filtered ? t('audit.history.empty_filtered') : t('audit.history.empty') }}
-        </p>
-
         <!--
-            En dag är en grupp med sin egen rubrik, och raderna är <li> — samma
-            form `UiListRow` kräver, och av samma skäl som i varje annan lista:
-            en skärmläsare ska höra hur många rader det finns innan den läser
-            den första.
+            Rutnätet (issue 180 · [[ADR-0050 Desktopdesignen]] § 17): listan
+            till vänster och diagrammen till höger, som i
+            docs/Design/Historik.png. Under `lg:` är behållaren ett vanligt
+            block och panelerna staplas under listan — källordningen är
+            läsordningen.
         -->
-        <section v-for="day in days" :key="day.date" class="mt-6">
-            <h2 class="flex items-baseline gap-2 text-title font-semibold text-ink">
-                {{ dayLabel(day.date) }}
-                <span class="text-meta font-normal text-ink-subtle">
-                    {{ t('audit.history.day_count', { count: day.rows.length }) }}
-                </span>
-            </h2>
+        <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
+            <div class="lg:col-span-2">
+                <p v-if="days.length === 0" class="mt-6 text-body text-ink-muted">
+                    {{ filtered ? t('audit.history.empty_filtered') : t('audit.history.empty') }}
+                </p>
 
-            <ul class="mt-2">
-                <HistoryRow v-for="row in day.rows" :key="row.ulid" :row="row" />
-            </ul>
-        </section>
+                <!--
+                    En dag är en grupp med sin egen rubrik, och raderna är <li>
+                    — samma form `UiListRow` kräver, och av samma skäl som i
+                    varje annan lista: en skärmläsare ska höra hur många rader
+                    det finns innan den läser den första.
+                -->
+                <section v-for="day in days" :key="day.date" class="mt-6">
+                    <h2 class="flex items-baseline gap-2 text-title font-semibold text-ink">
+                        {{ dayLabel(day.date) }}
+                        <span class="text-meta font-normal text-ink-subtle">
+                            {{ t('audit.history.day_count', { count: day.rows.length }) }}
+                        </span>
+                    </h2>
+
+                    <ul class="mt-2">
+                        <HistoryRow v-for="row in day.rows" :key="row.ulid" :row="row" />
+                    </ul>
+                </section>
+            </div>
+
+            <!--
+                Diagrammen. Var och en ritar en propp ur `stats` och ställer
+                ingen egen fråga; talen kommer ur samma läsregel och samma
+                filter som listan bredvid (issue 180 § Beslut 1).
+            -->
+            <aside class="mt-8 flex flex-col gap-6 lg:col-start-3 lg:mt-0">
+                <UiCard>
+                    <template #heading>{{ t('audit.history.activity_over_time') }}</template>
+
+                    <ActivityTimeChart :days="stats.perDay" />
+                </UiCard>
+
+                <UiCard v-if="stats.perType.length > 0">
+                    <template #heading>{{ t('audit.history.activity_types') }}</template>
+
+                    <ActivityTypeChart :types="stats.perType" />
+                </UiCard>
+
+                <ActiveItemsPanel
+                    v-if="stats.topItems.length > 0"
+                    :container-ulid="container.ulid"
+                    :items="stats.topItems"
+                />
+            </aside>
+        </div>
     </ContainerLayout>
 </template>

@@ -50,6 +50,13 @@ use Inertia\Response;
  * tidszon. Gruppen behöver ingen egen fråga — raderna är redan hämtade i
  * ordning, och grupperingen är en vikning av dem.
  *
+ * **Diagrammens tal kommer ur samma action** (issue 180 § Beslut 1–2).
+ * Proppen `stats` ligger bredvid `days` och byggs av
+ * `ListAuditEvents::statsForContainer()` — samma läsregel och samma filter,
+ * men utan gränsen på hundra rader. Kontrollern räknar ingenting själv: en
+ * egen `GROUP BY` här hade varit en andra sanning om vilka händelser
+ * användaren får se, och den hade inte kunnat ärva filtren.
+ *
  * **Valen i filterfältet kommer ur läsregeln** (Beslut 2), genom
  * `ListAuditEvents::facets()`: användarna och typerna som förekommer i
  * containerns läsbara rader. Itemslistan är containerns items inom omfånget —
@@ -106,6 +113,10 @@ class ContainerHistoryController extends Controller
             // Händelserna grupperade per dag i användarens tidszon, nyast
             // först — ordningen ListAuditEvents gav dem.
             'days' => $this->days($logs, $user->preferredTimezone()),
+            // Diagrammens tre tal (issue 180 § Beslut 2): samma läsregel och
+            // samma filter som `days`, men utan gränsen på hundra — se
+            // ListAuditEvents::statsForContainer().
+            'stats' => $this->listAuditEvents->statsForContainer($user, $container, $filters),
             // Filtret så som servern tillämpade det. `null` för ett fält
             // användaren inte satte, och vyn ritar fälten ur det: ett tomt
             // fält är ett filter som inte gäller.

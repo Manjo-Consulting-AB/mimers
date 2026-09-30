@@ -79,6 +79,10 @@ use Illuminate\Support\Carbon;
  * `facets()` svarar på den andra halvan av samma fråga — vilka VAL filtret får
  * bjuda — och läser dem ur samma läsregel, aldrig ur tabellen: en användare
  * som bara förekommer i rader man inte får läsa ska inte gå att välja.
+ *
+ * `statsForContainer()` räknar historikflitens diagram (issue 180) över samma
+ * läsregel och samma filter, men UTAN gränsen på hundra: ett tal över de
+ * senaste raderna vore ett annat tal än rubriken lovar.
  */
 class ListAuditEvents
 {
@@ -86,6 +90,17 @@ class ListAuditEvents
      * De hundra senaste raderna — issue 40 § Beslut 8 och issue 116.
      */
     private const LIMIT = 100;
+
+    /**
+     * Antalet dagar `perDay` spänner över när inget datumfilter är satt
+     * (issue 180 § Beslut 1).
+     */
+    private const DEFAULT_DAYS = 30;
+
+    /**
+     * De items *Senaste aktiva items* visar (issue 180 § Beslut 1).
+     */
+    private const TOP_ITEMS = 5;
 
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
@@ -165,6 +180,233 @@ class ListAuditEvents
             // ovan).
             'users' => User::query()->whereIn('id', $userIds)->orderBy('name')->get(),
         ];
+    }
+
+    /**
+     * De tre talen historikflitens diagram ritar — issue 180 · [[ADR-0050
+     * Desktopdesignen]] § 17.
+     *
+     * **Samma läsregel och samma filter som `forContainer()`** (Beslut 1).
+     * Frågan byggs av `readableQuery()` och `filtered()`, alltså de tre leden
+     * med filtren ovanpå, och ett filter kan därför aldrig vidga läsregeln
+     * här hellre än i listan: en gäst räknar bara de händelser hon får se.
+     * Det som skiljer är att `LIMIT` inte finns med. Ett tal över de hundra
+     * senaste vore ett annat tal än rubriken lovar, och diagrammet svarar
+     * över hela den läsbara mängden — listan ovanför är klippt, talen är det
+     * inte.
+     *
+     * **Aggregaten räknas i databasen** med `GROUP BY` och `COUNT(*)`, aldrig
+     * genom att hämta raderna och vika dem i PHP (som kontrollerns `days()`
+     * gör med de hundra): fyra frågor — en per dag, en per typ och två för
+     * topplistan — oavsett hur många händelser loggen bär.
+     *
+     * **Dagsgränsen räknas som i 179** ([[ADR-0044 Användarens dag]]).
+     * `perDay` hinkas på TIMME i SQL — ett portabelt `substr`, samma grepp
+     * och samma skäl som CostReport::groupByPeriod, eftersom sviten kör
+     * sqlite och produktionen MariaDB och `DATE_FORMAT`/`strftime` inte finns
+     * i båda — och timmen viks till användarens dag i PHP med
+     * `setTimezone()`. Att hinka på dag i SQL hade gett UTC-dygn, och en
+     * händelse 23:30 UTC hör till nästa dygn för en användare i Stockholm.
+     *
+     * `topItems` frågar efter items inom `ResolveItemScope` och utanför
+     * papperskorgen genom `Item::inScope()` som underfråga — samma omfång som
+     * varje annan listning, och SoftDeletes' globala scope filtrerar bort det
+     * gallrade itemet. Ett item utanför omfånget eller i papperskorgen blir
+     * därför ingen rad alls, inte en namnlös.
+     *
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return array{perDay: list<array{date: string, count: int}>, perType: list<array{type: string|null, count: int}>, topItems: list<array{ulid: string, name: string, count: int}>}
+     */
+    public function statsForContainer(User $viewer, Container $container, array $filters = []): array
+    {
+        $base = $this->filtered(
+            $this->readableQuery($viewer)->where('container_id', $container->id),
+            $viewer,
+            $filters,
+        );
+
+        return [
+            'perDay' => $this->perDay(clone $base, $viewer, $filters),
+            'perType' => $this->perType(clone $base),
+            'topItems' => $this->topItems(clone $base, $viewer, $container),
+        ];
+    }
+
+    /**
+     * Antal händelser per dag i användarens tidszon — `perDay`.
+     *
+     * Timhinkarna kommer ur databasen och viks till dagar här, med SAMMA
+     * `setTimezone()` som kontrollern gör för listan: en händelse 23:30 UTC
+     * hör till nästa dygn för en användare i Stockholm, och en gruppering på
+     * UTC-dygn hade lagt den på fel dag. En timhink som innehåller lokal
+     * midnatt hör till den dag hinkens FÖRSTA ögonblick faller på.
+     *
+     * @param  Builder<AuditLog>  $base
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return list<array{date: string, count: int}>
+     */
+    private function perDay(Builder $base, User $viewer, array $filters): array
+    {
+        $timezone = $viewer->preferredTimezone();
+
+        $rows = $base
+            ->selectRaw('substr(created_at, 1, 13) AS hour_key')
+            ->selectRaw('COUNT(*) AS count')
+            ->groupBy('hour_key')
+            ->get();
+
+        $counts = [];
+
+        // `getAttribute()` och inte egenskapsåtkomst: raden är en projektion
+        // över `audit_log`, och `hour_key`/`count` är alias ur `selectRaw` som
+        // varken finns som kolumn eller cast på App\Models\AuditLog. Samma
+        // grepp och samma skäl som ListTags.
+        foreach ($rows as $row) {
+            $day = Carbon::parse($row->getAttribute('hour_key').':00:00', 'UTC')
+                ->setTimezone($timezone)
+                ->toDateString();
+
+            $counts[$day] = ($counts[$day] ?? 0) + (int) $row->getAttribute('count');
+        }
+
+        return array_map(
+            static fn (string $date): array => ['date' => $date, 'count' => $counts[$date] ?? 0],
+            $this->periodDays($viewer, $filters, $timezone),
+        );
+    }
+
+    /**
+     * Dagarna diagrammet ritar: perioden i filtret, eller de senaste
+     * trettio när inget datumfilter är satt (Beslut 1).
+     *
+     * Listan är SAMMANHÄNGANDE och stigande. En dag utan händelser får
+     * räknaren noll i stället för att saknas: ett diagram över tid med hål
+     * hade ritat två grannar som grannar även när de låg ett år isär, och
+     * grafen är till för att visa när något hände.
+     *
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return list<string>
+     */
+    private function periodDays(User $viewer, array $filters, string $timezone): array
+    {
+        $end = isset($filters['to'])
+            ? Carbon::parse($filters['to'], $timezone)->startOfDay()
+            : $viewer->today()->copy()->startOfDay();
+
+        $start = isset($filters['from'])
+            ? Carbon::parse($filters['from'], $timezone)->startOfDay()
+            : $end->copy()->subDays(self::DEFAULT_DAYS - 1);
+
+        $days = [];
+
+        for ($day = $start->copy(); $day->lessThanOrEqualTo($end); $day->addDay()) {
+            $days[] = $day->toDateString();
+        }
+
+        return $days;
+    }
+
+    /**
+     * Antal händelser per `subject_type` — `perType`.
+     *
+     * Raden utan `subject_type` räknas som sin egen post och inte bort: den
+     * är en händelse som alla andra, och diagrammet summerar till samma tal
+     * som rubriken visar. Vyn ger den sitt eget ord ([[ADR-0043 Tre loggar]]
+     * § Händelseloggen — `subject_type` är ett öppet namnrum, och en rad
+     * behöver inte ha något).
+     *
+     * @param  Builder<AuditLog>  $base
+     * @return list<array{type: string|null, count: int}>
+     */
+    private function perType(Builder $base): array
+    {
+        $rows = $base
+            ->selectRaw('subject_type AS subject_type')
+            ->selectRaw('COUNT(*) AS count')
+            ->groupBy('subject_type')
+            ->orderByDesc('count')
+            ->orderBy('subject_type')
+            ->get();
+
+        // `getAttribute()` av samma skäl som i `perDay(): `count` är ett alias
+        // ur `selectRaw` och ingen egenskap på App\Models\AuditLog.
+        return $rows->map(static function ($row): array {
+            $type = $row->getAttribute('subject_type');
+
+            return [
+                'type' => $type === null ? null : (string) $type,
+                'count' => (int) $row->getAttribute('count'),
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * De fem items med flest händelser — `topItems` (Beslut 1).
+     *
+     * **Omfånget och papperskorgen prövas FÖRE `LIMIT`**, i `whereIn`-under-
+     * frågan: ett item användaren inte når, eller ett gallrat, får inte ta en
+     * av de fem platserna och tränga ut ett item hon ser. `Item::inScope()`
+     * är samma omfång som varje annan listning (issue 70), och SoftDeletes'
+     * globala scope filtrerar bort det gallrade på samma gång — en item i
+     * papperskorgen blir ingen rad alls, inte en namnlös.
+     *
+     * **Namnen hämtas i en andra fråga** och inte genom att joina `item` i
+     * den första. En join hade varit möjlig — CostReport::groupByItem gör
+     * precis så — men `readableQuery()` skriver `container_id` okvalificerat,
+     * och `item` bär samma kolumn: joinen gör den tvetydig och får MariaDB
+     * att vägra. Att kvalificera läsregelns kolumner för en presentations
+     * skull är en ändring i den fråga som avgör vad användaren får LÄSA, och
+     * den byts hellre mot ett uppslag av högst fem namn. Antalet frågor är
+     * fortfarande konstant.
+     *
+     * Ordningen är antal fallande med namnet stigande som sekundär, så två
+     * items med lika många händelser får en stabil ordning.
+     *
+     * @param  Builder<AuditLog>  $base
+     * @return list<array{ulid: string, name: string, count: int}>
+     */
+    private function topItems(Builder $base, User $viewer, Container $container): array
+    {
+        $scope = $this->resolveItemScope->handle($viewer, $container);
+
+        $rows = $base
+            ->whereIn('item_id', Item::query()->inScope($scope)->select('id'))
+            ->selectRaw('item_id AS item_id')
+            ->selectRaw('COUNT(*) AS count')
+            ->groupBy('item_id')
+            ->orderByDesc('count')
+            ->orderBy('item_id')
+            ->limit(self::TOP_ITEMS)
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $items = Item::query()
+            ->whereIn('id', $rows->pluck('item_id')->all())
+            ->get(['id', 'ulid', 'name'])
+            ->keyBy('id');
+
+        $top = [];
+
+        foreach ($rows as $row) {
+            $item = $items->get((int) $row->getAttribute('item_id'));
+
+            if ($item === null) {
+                continue;
+            }
+
+            $top[] = [
+                'ulid' => (string) $item->ulid,
+                'name' => (string) $item->name,
+                'count' => (int) $row->getAttribute('count'),
+            ];
+        }
+
+        usort($top, static fn (array $a, array $b): int => ($b['count'] <=> $a['count']) ?: strcmp($a['name'], $b['name']));
+
+        return $top;
     }
 
     /**
