@@ -10,7 +10,9 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 24 · Todo-listan — "vad ska jag göra?". Se
@@ -477,4 +479,91 @@ it('listningen gör ett konstant antal frågor', function () {
     $frågorTreContainers = $frågor;
 
     expect($frågorTreContainers)->toBe($frågorEnContainer);
+});
+
+// --- oförändrad efter issue 174 --------------------------------------------
+
+/*
+ * Klart när (issue 174): todo-listan är oförändrad.
+ *
+ * Issue 174 bygger containerns uppgiftsflik ovanpå App\Actions\Schedule\
+ * ListTodo — fliken läser samma urval, grupperar mot samma dag och får ett
+ * filter och en avbockad lista ovanpå. **Listan själv rörs inte**: `/api/todo`
+ * svarar med exakt de rader, i den ordning och med de nycklar den svarade med
+ * före issuen, och det är vad det här provet håller fast.
+ *
+ * Fixturen är vald för att vara värstingfallet: den bär precis de rader den
+ * nya fliken lägger till — en AVBOCKAD förekomst (Klart-kolumnen), en
+ * engångsuppgift (`recurrence_type = none`, som underhållsfiltret sållar bort)
+ * och en uppgift i en container användaren inte når. Ingen av dem hör i
+ * `/api/todo`, och en `where` som läckte från flikens fråga in i urvalet hade
+ * synts här och inte i något annat prov.
+ *
+ * Den andra halvan är den delade frågan: fliken svarar med SAMMA öppna rader
+ * för samma container. Att de två ytorna är ense om urvalet är hela skälet att
+ * fliken fick låna `ListTodo` i stället för att formulera sin egen fråga
+ * (Beslut 2) — och provet fäster det vid API:ets egna ULID:n i stället för vid
+ * en avskrift.
+ */
+it('todo-listan är oförändrad', function () {
+    withoutVite();
+
+    [$account, $user, $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create(['name' => 'Bårösund']);
+
+    // Lead 30 dagar på de tre senare: urvalet kräver `visible_from <= idag`,
+    // och en uppgift som förfaller framåt är synlig NU — det är vad lead_days
+    // är till för (se provet om `visible_from` ovanför).
+    [, , $först] = todoUppgift($container, $user, $account, 'Byt impeller', '2026-09-02');
+    [, , $senare] = todoUppgift($container, $user, $account, 'Byt olja', '2026-09-05', 30);
+
+    // Den avbockade: flikens *Klart*-kolumn bär den, urvalet gör det inte.
+    [, , $avbockad] = todoUppgift($container, $user, $account, 'Bytt filter', '2026-09-03', 30);
+    $avbockad->status = ScheduleOccurrence::STATUS_COMPLETED;
+    $avbockad->completed_at = now();
+    $avbockad->save();
+
+    // Engångsuppgiften: `none` är återkommandetypen underhållsfiltret sållar
+    // bort, och filtret är flikens — urvalet är detsamma som förut.
+    [, $engång, $engångsRad] = todoUppgift($container, $user, $account, 'Engångsuppgift', '2026-09-04', 30);
+    $engång->recurrence_type = 'none';
+    $engång->save();
+
+    $främmande = Container::factory()->for(Account::factory()->create(), 'account')->create(['name' => 'Någon annans']);
+    todoUppgift($främmande, $user, $account, 'Hemlig uppgift', '2026-09-02');
+
+    $response = getJson('/api/todo', $headers);
+
+    $response->assertOk();
+
+    expect(todoUlidLista($response))->toBe([$först->ulid, $engångsRad->ulid, $senare->ulid])
+        ->and($response->json('data'))->toHaveCount(3);
+
+    // Nycklarna är de åtta API:et alltid svarat med. Webbens `account` och
+    // `can` ligger BREDVID resursen och läggs på i vyn — en nyckel som
+    // flyttade in i resursen hade ändrat API:ets kontrakt utan att någon rört
+    // det.
+    expect(array_keys($response->json('data.0')))->toBe([
+        'ulid',
+        'due_at',
+        'visible_from',
+        'overdue',
+        'upcoming',
+        'schedule',
+        'item',
+        'container',
+    ]);
+
+    // Och den delade frågan: fliken svarar med samma öppna rader, i samma
+    // ordning, medan den avbockade står i sin egen kolumn.
+    $flik = actingAs($user)->get("/containers/{$container->ulid}/tasks")->assertOk();
+
+    $grupper = $flik->inertiaProps()['groups'];
+
+    expect(array_merge(
+        array_column($grupper['overdue'], 'ulid'),
+        array_column($grupper['today'], 'ulid'),
+        array_column($grupper['upcoming'], 'ulid'),
+    ))->toBe(todoUlidLista($response))
+        ->and(array_column($flik->inertiaProps()['completed'], 'ulid'))->toBe([$avbockad->ulid]);
 });

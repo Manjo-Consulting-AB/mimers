@@ -16,7 +16,7 @@
  * texten formuleras på servern och slås bara upp på klienten, se
  * [[ADR-0021 Frontendteknik]] och resources/js/composables/useTranslations.js.
  *
- * **Tio rader, och varken fler eller färre.** Listan är containerns sidor, och
+ * **Elva rader, och varken fler eller färre.** Listan är containerns sidor, och
  * issue 101 · [[ADR-0042 Designsystemet]] § Konsekvenser delar dem i två ytor:
  * flikraden (`containerTabs`) och inställningssidan
  * (`containerSettingsSections`). Ingen rad får försvinna — en yta ingen hittar
@@ -80,6 +80,7 @@
  */
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}/items` },
+    { key: 'tasks', href: (ulid) => `/containers/${ulid}/tasks` },
     { key: 'categories', href: (ulid) => `/containers/${ulid}/categories` },
     { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
@@ -98,12 +99,17 @@ export const containerSections = [
  * och `history` är vad som har hänt (116). `settings` stod här från issue 101
  * och lämnade raden i issue 170 · [[ADR-0050 Desktopdesignen]] § 3: hjälten
  * bär *Redigera container*, som är samma adress och samma yta, och en flik
- * jämte den hade varit två vägar till samma val. Flikraden är därmed
- * *Översikt · Items · Historik*, och 174, 175 och 178 lägger till sina flikar
- * i ordningen *Översikt, Items, Dokument, Uppgifter, Kostnader, Historik*
- * (ADR-0050 § 4).
+ * jämte den hade varit två vägar till samma val.
+ *
+ * `tasks` kom med issue 174 · ADR-0050 § 4 och 16 och ligger efter `items`,
+ * före `history` — den plats raden anger (*Översikt, Items, Dokument,
+ * Uppgifter, Kostnader, Historik*). Dokument och kostnader hoppas över så
+ * länge deras sidor inte finns (175 och 178); ordningen är ADR:ens och inte
+ * den ordning issues råkade bli klara, så att 175 och 178 lägger sina rader
+ * omkring den här utan att flytta den. Flikraden är därmed
+ * *Översikt · Items · Uppgifter · Historik*.
  */
-const TAB_KEYS = ['items', 'history'];
+const TAB_KEYS = ['items', 'tasks', 'history'];
 
 /*
  * Flikraden, se issue 101 · [[ADR-0042 Designsystemet]] § Beslut och
@@ -119,13 +125,15 @@ const TAB_KEYS = ['items', 'history'];
  * från issue 101 till issue 170, då hjälten tog över vägen till dem
  * (ADR-0050 § 3).
  *
- * **Dokument, uppgifter och kostnader har ingen sida.** Ingen rutt svarar på
- * dem, ingen kontrollermetod hämtar dem och ingen prop bär dem, så en flik för
- * dem hade varit en död länk — och en yta ingen hittar är samma sak som en yta
- * som inte finns (62a, 67c). De byggs därför inte här: issue 101 får ingen ny
+ * **Dokument och kostnader har ingen sida.** Ingen rutt svarar på dem, ingen
+ * kontrollermetod hämtar dem och ingen prop bär dem, så en flik för dem hade
+ * varit en död länk — och en yta ingen hittar är samma sak som en yta som inte
+ * finns (62a, 67c). De byggs därför inte här: issue 101 får ingen ny
  * ändpunkt, och en flik som kräver en ny kontrollermetod är ett fynd i PR:ens
- * `## Frågor och antaganden` och inte en ändpunkt i smyg. 174, 175 och 178
- * lägger till dem i den ordning ADR-0050 § 4 anger.
+ * `## Frågor och antaganden` och inte en ändpunkt i smyg. **Uppgifterna
+ * lämnade den listan i issue 174**, som byggde både rutten och sidan;
+ * dokument och kostnader kommer med 175 och 178 i den ordning ADR-0050 § 4
+ * anger.
  *
  * **Översikten skrivs här och inte i listan ovan**, för den är containerns egen
  * sida och ingen undersida (`containers.show`, issue 89). `items` och `history`

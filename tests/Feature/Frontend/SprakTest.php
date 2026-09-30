@@ -679,6 +679,40 @@ it('hämtar containerns översiktssträngar ur ui.php', function () {
 });
 
 /*
+ * Containerns uppgiftsflik, se issue 174 · [[ADR-0050 Desktopdesignen]] § 16
+ * och resources/js/pages/Containers/Tasks.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här, så en mening som byter namn i vyn följer med utan att
+ * provet skrivs om — och en nyckel som glöms i katalogen faller här i stället
+ * för att synas som `container.tasks.done` på skärmen.
+ *
+ * **Tre av de fyra kolumnrubrikerna står inte i listan och ska inte göra
+ * det.** De byggs som ``t(`todo.group.${group}`)`` ur gruppens eget namn —
+ * samma ord om samma grupp som på `/tasks` — och mönstret nedan fångar bara
+ * ett uppslag med en skriven nyckel. Att de nycklarna finns prövas där de
+ * hör hemma, i tests/Feature/Frontend/TodovyTest.php.
+ */
+it('hämtar uppgiftsflikens strängar ur ui.php', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Tasks.vue'));
+
+    preg_match_all("/(?<![\w$.])t\\('([a-z0-9_.]+)'/", $vy, $träffar);
+
+    expect($träffar[1])->not->toBeEmpty('Containers/Tasks.vue slår inte upp någon nyckel');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
+    // katalogen ska falla här och inte som `container.tasks.shortcuts` i
+    // rubriken.
+    foreach (['container.nav.tasks', 'container.tasks.title', 'container.tasks.heading', 'container.tasks.filter_maintenance', 'container.tasks.done', 'container.tasks.shortcuts'] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+    }
+});
+
+/*
  * Avbockningsknappens prick, se issue 133 och
  * resources/js/components/TodoRow.vue.
  *

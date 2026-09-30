@@ -265,7 +265,7 @@ it('länkar containernamnet i containerlistan till itemlistan', function () {
 
 /*
  * Klart när: `items` är den första raden i containerns undernavigering, och
- * listan har fortfarande TIO rader.
+ * listan har fortfarande ELVA rader.
  *
  * Navigationen renderas ur containerSections, så raden är beviset — och
  * ordningen ligger i listan, inte i layouten. Raden pekar på itemlistan sedan
@@ -280,12 +280,16 @@ it('länkar containernamnet i containerlistan till itemlistan', function () {
  * Provet fångade den med flit: raden är tillagd av en issue som bad om den,
  * och räkningen är vad som skiljer det från en rad någon lagt till i smyg.
  *
+ * **Tio blev elva i issue 174.** Uppgiftsfliken är samma sorts rad: en ny
+ * sida, en ny rutt och en ny kontrollermetod, bokförd i
+ * resources/js/layouts/containerSections.js på den plats ADR-0050 § 4 anger.
+ *
  * **Räkningen gäller `containerSections` och ingenting annat.** Sedan issue 101
  * bär filen också `containerTabs`, och översiktsraden där är en adress utan
  * sektion — den hör till flikraden och räknas inte hit. En räkning över hela
  * filen hade räknat den som en sektion.
  */
-it('lägger itemlistan först i containerns navigation och behåller tio rader', function () {
+it('lägger itemlistan först i containerns navigation och behåller elva rader', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'items'")
@@ -297,7 +301,7 @@ it('lägger itemlistan först i containerns navigation och behåller tio rader',
     preg_match('#export const containerSections = \[(.*?)\n\];#s', $sektioner, $träff);
 
     expect($träff[1] ?? '')->not->toBe('', 'containerSections finns inte i filen');
-    expect(substr_count($träff[1], 'href: (ulid) =>'))->toBe(10);
+    expect(substr_count($träff[1], 'href: (ulid) =>'))->toBe(11);
 });
 
 /*
