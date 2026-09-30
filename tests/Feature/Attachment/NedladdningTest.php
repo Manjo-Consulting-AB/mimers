@@ -684,14 +684,30 @@ it('nedladdningen gör ett konstant antal frågor', function () {
     $frågorAndra = count(DB::getQueryLog());
     DB::disableQueryLog();
 
-    // Sju frågor för en helt vanlig nedladdning: bindningen, de tre
-    // eagerladdade relationerna (stored_file, item, container) och de tre som
-    // omfångsupplösningen kostar (användarens konton, containerns ägare och
-    // grant-raderna — ingen itemgrant finns, så graf-frågan hoppas över).
-    // Inget löst tak med glapp där en N+1 kan gömma sig — variant-begäran ovan
-    // lägger exakt en fråga till.
-    expect($frågorFörsta)->toBe(7);
-    expect($frågorAndra)->toBe($frågorFörsta + 1);
+    // Elva frågor för en helt vanlig nedladdning. De sju första är de
+    // ursprungliga: bindningen, de tre eagerladdade relationerna
+    // (stored_file, item, container) och de tre som omfångsupplösningen
+    // kostar (användarens konton, containerns ägare och grant-raderna — ingen
+    // itemgrant finns, så graf-frågan hoppas över).
+    //
+    // Sedan issue 177 kommer FYRA till, och de är öppningen
+    // (App\Actions\Attachment\RecordAttachmentOpen): radlåset på personen,
+    // upserten mot `(user_id, attachment_id)`, uppslaget av de femtio id:n
+    // som behålls och raderingen av resten. Varken variantvalideringen eller
+    // något annat lägger till något: `variant` saknas här, och
+    // AttachmentDelivery::storagePath() svarar utan att fråga då.
+    //
+    // Den andra mätningen är ÅTTA, alltså den ursprungliga basen (sju) plus
+    // derivatuppslaget — och ingenting mer. Miniatyren skriver ingen öppning,
+    // så de fyra frågorna från RecordAttachmentOpen saknas här; skillnaden
+    // mellan de två talen är hela skrivningen. Båda talen står utskrivna och
+    // inte som `+ 1`, eftersom de två mätningarna inte längre skiljer sig
+    // genom en enda fråga.
+    //
+    // Inget löst tak med glapp där en N+1 kan gömma sig: elva och åtta är
+    // exakta, och en ny fråga på någon av vägarna fäller provet.
+    expect($frågorFörsta)->toBe(11);
+    expect($frågorAndra)->toBe(8);
 
     Carbon::setTestNow();
 });

@@ -409,6 +409,17 @@ class DeleteUser
         // items i andras containers, och de är hennes.
         DB::table('recent_visit')->where('user_id', $userId)->delete();
 
+        // Öppningsraderna är personuppgifter och bara personens, av samma
+        // skäl som besöksraderna ovan (issue 177 · [[ADR-0051 Senast öppnade
+        // filer]] § Beslut, [[ADR-0045 Radering av konto och person]]
+        // § Uppföljning 2026-09-27). Främmandenyckeln mot `attachment` är
+        // RESTRICT, så raden måste bort innan bilagan kan gallras — och de
+        // bilagor som låg i personens egna containers försvann redan i steg 2,
+        // genom PurgeContainer → PurgeAttachment, som tar sina egna
+        // öppningsrader. Kvar här är öppningarna av bilagor i andras
+        // containers, och de är hennes.
+        DB::table('attachment_open')->where('user_id', $userId)->delete();
+
         DB::table('dismissed_tip')->where('user_id', $userId)->delete();
         DB::table('email_change')->where('user_id', $userId)->delete();
         DB::table('password_change')->where('user_id', $userId)->delete();

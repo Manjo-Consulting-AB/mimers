@@ -509,11 +509,17 @@ it('präglingen lägger ingen fråga', function () {
     $frågor = count(DB::getQueryLog());
     DB::disableQueryLog();
 
-    // Samma sju som appdomänens leverans kostar: bindningen, de tre
-    // eagerladdade relationerna (stored_file, item, container) och de tre
-    // omfångsupplösningen kostar. Att prägla en signerad URL är ren
-    // strängmatematik — ingen fråga till, ingen kontroll av något slag.
-    expect($frågor)->toBe(7);
+    // Samma elva som appdomänens leverans kostar (NedladdningTest): de sju
+    // ursprungliga — bindningen, de tre eagerladdade relationerna
+    // (stored_file, item, container) och de tre omfångsupplösningen kostar —
+    // och de FYRA som öppningen kostar sedan issue 177
+    // (App\Actions\Attachment\RecordAttachmentOpen: radlåset på personen,
+    // upserten, uppslaget av de femtio id:n och raderingen av resten).
+    //
+    // Att prägla en signerad URL är fortfarande ren strängmatematik — ingen
+    // fråga till, ingen kontroll av något slag. Det provet påstår är
+    // oförändrat; bara baslinjen har flyttat sig.
+    expect($frågor)->toBe(11);
 
     Carbon::setTestNow();
 });
