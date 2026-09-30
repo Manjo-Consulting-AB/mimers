@@ -132,10 +132,9 @@ it('leder till formuläret för ett nytt item i containern', function () {
 });
 
 /*
- * Menyn på ett item. Fyra rader och inte fem: den femte — *Kostnad* — har
- * ingen webbyta att leda till i dag, och en död länk är värre än en rad som
- * inte finns. Se App\Support\Frontend\CreateTargets docblock och PR:ens
- * `## Frågor och antaganden`.
+ * Menyn på ett item. Fem rader sedan issue 168, då *Kostnad* fick sin yta —
+ * itemets kostnadsflik — och menyns sista döda länk försvann. Se
+ * App\Support\Frontend\CreateTarget.
  */
 it('öppnar menyn med de rader användaren får använda på ett item', function () {
     withoutVite();
@@ -158,6 +157,42 @@ it('öppnar menyn med de rader användaren får använda på ett item', function
                 // en webbyta som inte finns är en död länk.
                 ['key' => 'cost', 'href' => "{$bas}?tab=costs"],
             ]),
+    );
+});
+
+/*
+ * Klart när: "plusknappens meny har raden Kostnad som leder till fliken".
+ *
+ * Raden är den femte ur [[ADR-0048 Mobilen och plusknappen]] § 2 och kom med
+ * issue 168, när ytan den leder till byggdes: före det hade den varit en död
+ * länk, och en yta ingen hittar är samma sak som en yta som inte finns.
+ * Adressen är itemets egen med `?tab=costs`, samma form *Relation* och *Bild
+ * eller dokument* bär — menyn byter flik, den lämnar inte itemet.
+ *
+ * Grinden är itemets `create`, samma pinne som `ItemController::show()` ritar
+ * raden ur och `CostEntryController::store()` prövar på nytt. En läsare får
+ * därför ingen meny alls, och alltså ingen rad: `create`-proppen är null.
+ */
+it('har raden Kostnad som leder till fliken', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = plusknappKontext();
+    $item = plusknappItem($container);
+
+    $bas = "/containers/{$container->ulid}/items/{$item->ulid}";
+
+    actingAs($anvandare)->get($bas)->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.rows.4', [
+            'key' => 'cost',
+            'href' => "{$bas}?tab=costs",
+        ]),
+    );
+
+    $lasare = User::factory()->create();
+    plusknappGrant($container, $lasare, 'read');
+
+    actingAs($lasare)->get($bas)->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create', null),
     );
 });
 

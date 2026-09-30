@@ -114,10 +114,10 @@ return [
      * — en ikon utan namn är en knapp en skärmläsare inte kan läsa.
      *
      * `rows` är menyraderna, nycklade med radens `key` ur
-     * App\Support\Frontend\CreateTarget. Fyra rader och inte fem: den femte —
-     * *Kostnad* — har ingen yta att leda till i dag, se klassens docblock och
-     * PR:ens `## Frågor och antaganden`. Ordningen står i ADR-0048 § 2, och
-     * raderna kommer i den ordningen ur CreateTarget::forItem().
+     * App\Support\Frontend\CreateTarget. Fem rader sedan issue 168, då
+     * *Kostnad* fick sin yta — itemets kostnadsflik — och menyns sista döda
+     * länk försvann. Ordningen står i ADR-0048 § 2, och raderna kommer i den
+     * ordningen ur CreateTarget::forItem().
      */
     'create' => [
         'label' => 'Create',

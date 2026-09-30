@@ -349,6 +349,42 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 });
 
 /*
+ * Klart när: "fliken Kostnader finns i itemets flikrad".
+ *
+ * Fliken är bildens *Kostnader* och kom med issue 168, när ytan den visar
+ * byggdes — den rad issue 102 lämnade utanför därför att `cost_entry` bara
+ * nåddes genom `/api`. Den ligger näst sist, före historiken, precis som i
+ * containerns egen flikrad ([[ADR-0050 Desktopdesignen]] § 4), och den bär
+ * sitt eget ord: etiketten är `item.cost.heading`, samma rubrik som sektionen
+ * strax under den, så fliken och ytan inte kan säga olika saker.
+ *
+ * Provet läser vyns EGEN lista, som proven ovan, och fäster raden vid tre
+ * saker: nyckeln `costs`, adressen `tabHref('costs')` och panelen
+ * `ItemCostSection`. Räknaren är `costs`-proppens längd — en flik som visar en
+ * lista räknar den, och en nolla säger att listan är tom.
+ */
+it('har fliken Kostnader i itemets flikrad', function () {
+    $vy = itemflikKod('pages/Containers/Items/Show.vue');
+
+    $nycklar = itemflikNycklar($vy);
+
+    expect($nycklar)->toContain('costs');
+
+    // Näst sist: historiken (issue 116) ligger efter den, och det är ordningen
+    // bilden och containerns egen flikrad ger.
+    expect(array_search('costs', $nycklar, true))->toBe(count($nycklar) - 2);
+    expect($nycklar[count($nycklar) - 1])->toBe('history');
+
+    $rad = itemflikRader($vy)['costs'];
+
+    expect($rad)->toContain("label: t('item.cost.heading')")
+        ->toContain("href: tabHref('costs')")
+        ->toContain('count: props.costs.length');
+
+    expect(itemflikPaneler($vy)['costs'])->toContain('<ItemCostSection');
+});
+
+/*
  * Klart när: alla sex befintliga propar når sin flik.
  *
  * Fälten, relationerna, bilagorna, schemana, utlåningen och taggarna ritas

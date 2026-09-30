@@ -23,14 +23,15 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * ur App\Http\Resources\ContainerResource.
  *
  * **Itemets egna fält, kategorin, taggarna, relationerna, utlåningen,
- * schemana och bilagorna.** Bilagesektionen kom med issue 60 och bor i
- * resources/js/components/ItemAttachmentSection.vue; listan kommer med
+ * schemana, bilagorna och kostnaderna.** Bilagesektionen kom med issue 60 och
+ * bor i resources/js/components/ItemAttachmentSection.vue; listan kommer med
  * detaljvyns props och har ingen egen rutt. Schemana kom med issue 63a och
  * gör detsamma — ScheduleListSection.vue, proparna `schedules` och
  * `openOccurrences`. Utlåningen kom med issue 67a och gör detsamma —
  * ItemLoanSection.vue, proparna `openLoan`, `loanHistory`, `openLoanOverdue`
- * och `today`.
- * Kostnaderna 45–47 har fortfarande ingen yta här.
+ * och `today`. Kostnaderna kom med issue 168 och gör detsamma —
+ * ItemCostSection.vue, proparna `costs` och `costDefaults`, och
+ * leverantörslistan som en optional `costSuppliers`.
  * Relationssektionen bor i resources/js/components/ItemLinkSection.vue: alla
  * tre bär sitt eget formulär och sina egna fel, precis som ContainerAccessRow
  * gör för åtkomsterna, så ett fältfel på en relation, ett schema eller en fil
