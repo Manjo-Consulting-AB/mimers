@@ -38,6 +38,13 @@ use Inertia\Response;
  * **De hundra senaste, och ingen paginering.** Gränsen står i ListAuditEvents
  * och är API:ets egen (issue 40 § Beslut 8). Behövs mer är det ett eget
  * beslut, inte en parameter här.
+ *
+ * **`can.update` kom med issue 170** · [[ADR-0050 Desktopdesignen]] § 2–3.
+ * Fliken bär samma hjälte som itemlistan — `compact` — och hjälten ritar
+ * *Redigera container* ur samma flagga som översikten och inställningssidan
+ * ritar sina ur. Den räknas med en policyfråga per sida och läggs BREDVID
+ * `ContainerResource`, precis som i ContainerController::show() (issue 54
+ * § Beslut 9): flaggan är presentation, och ruttens `update` prövas ändå.
  */
 class ContainerHistoryController extends Controller
 {
@@ -57,6 +64,11 @@ class ContainerHistoryController extends Controller
 
         return Inertia::render('Containers/History', [
             'container' => ContainerResource::make($container)->resolve($request),
+            // Flaggan ritar hjältens *Redigera container* (issue 170); rutten
+            // prövar `ContainerPolicy::update` på nytt.
+            'can' => [
+                'update' => Gate::forUser($request->user())->allows('update', $container),
+            ],
             'rows' => $this->presentAuditEvents->handle(
                 $this->listAuditEvents->forContainer($request->user(), $container),
             ),

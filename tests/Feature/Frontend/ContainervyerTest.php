@@ -1160,6 +1160,13 @@ it('räknar ingen kostnadssummering på översikten', function () {
  * kostnaden är issue 86:s ändpunkt och räknas inte i den här kontrollern.
  * Ett tal som saknas byggs inte här; det är skrivet i PR:ens
  * `## Frågor och antaganden`.
+ *
+ * **Två tal, fyra taggar, sedan issue 170.** Hjälten bär talen över `md:` och
+ * sidans eget band bär dem under, där hjälten inte ritas ([[ADR-0050
+ * Desktopdesignen]] § 2) — samma två tal ur samma `counts`, på två ställen.
+ * Provet räknar därför VÄRDENA och inte taggarna, och kräver att varje värde är
+ * ett av `counts` egna: en fjärde ruta hade fallit, och det var hela poängen
+ * med räkningen.
  */
 it('containerns tal renderas av taltutan', function () {
     withoutVite();
@@ -1180,8 +1187,21 @@ it('containerns tal renderas av taltutan', function () {
         ->toContain('<UiStat :value="counts.items"')
         ->toContain('<UiStat :value="counts.todos"');
 
-    // En taltuta per tal, och ingen tredje: vyn hittar inte på en ruta.
-    expect(substr_count($vy, '<UiStat'))->toBe(count($svar->inertiaProps()['counts']));
+    // En taltuta per tal, och ingen tredje: vyn hittar inte på en ruta. Sedan
+    // issue 170 ritas de två talen på TVÅ ställen — i hjälten över `md:` och i
+    // sidans flöde under `md:`, där hjälten inte ritas ([[ADR-0050
+    // Desktopdesignen]] § 2) — så provet räknar VÄRDENA och inte taggarna:
+    // exakt de nycklar `counts` bär, och aldrig en fjärde.
+    preg_match_all('/<UiStat\s+:value="([^"]+)"/', $vy, $träffar);
+
+    expect(array_values(array_unique($träffar[1])))->toBe(array_map(
+        fn (string $nyckel): string => "counts.{$nyckel}",
+        array_keys($svar->inertiaProps()['counts']),
+    ));
+
+    // Två ställen, och båda är bundna till en brytpunkt: hjälten över `md:`
+    // och sidans egen rad under den.
+    expect($träffar[1])->toHaveCount(2 * count($svar->inertiaProps()['counts']));
 });
 
 /*

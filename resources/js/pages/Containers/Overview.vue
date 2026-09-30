@@ -60,6 +60,18 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * Ingen sträng i JavaScript (issue 52 · [[ADR-0013 Språk och i18n]]): varje
  * text kommer ur `t()` med en nyckel under `container.overview.*` eller
  * `tips.*`.
+ *
+ * **Hjälten kom med issue 170 · [[ADR-0050 Desktopdesignen]] § 2–3**, och
+ * översikten är den sida som skickar `hero="large"`: bilden, arten, namnet och
+ * hela beskrivningen står ovanpå containerns bild över `md:`, och talen står
+ * ovanpå den. `ContainerHero` äger formen; hit hör bara vilken form sidan vill
+ * ha och vilka tal som ska in i `hero-stats`.
+ *
+ * **Talen ritas på två ställen och är därför skrivna två gånger.** Över `md:`
+ * bär hjälten dem, och under `md:` — där hjälten inte ritas alls — står de
+ * kvar i sidans flöde som förut. Att bara behålla hjältens upplaga hade tyst
+ * tagit bort de två brickorna från en telefon. Båda raderna läser samma
+ * `counts`-prop, och ingen av dem räknar något själv.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -87,8 +99,16 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerLayout :container="container" :create="create" :can="can">
+    <ContainerLayout hero="large" :container="container" :create="create" :can="can">
         <Head :title="container.name" />
+
+        <!-- Talen ovanpå bilden, se issue 170 · [[ADR-0050 Desktopdesignen]]
+             § 2. Slotens innehåll ritas bara av den höga hjälten, och den
+             ritas bara över `md:`. -->
+        <template #hero-stats>
+            <UiStat :value="counts.items" :label="t('container.overview.items')" />
+            <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
+        </template>
 
         <h1 class="text-2xl font-semibold">{{ container.name }}</h1>
 
@@ -108,7 +128,10 @@ const { t } = useTranslations();
             </div>
         </dl>
 
-        <div class="mt-8 flex flex-wrap gap-4">
+        <!-- Talen i sidans flöde under `md:`, där hjälten inte ritas. Samma
+             två tal ur samma `counts` — ingen tredje bricka och ingen egen
+             räkning. -->
+        <div class="mt-8 flex flex-wrap gap-4 md:hidden">
             <UiStat :value="counts.items" :label="t('container.overview.items')" />
             <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
         </div>
