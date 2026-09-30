@@ -392,6 +392,52 @@ it('skickar leverantörerna bara vid en partiell omladdning', function () {
     ]);
 });
 
+it('hämtar leverantörerna på nytt efter varje skrivning', function () {
+    withoutVite();
+
+    [, $anvandare, $container, $item] = kostnadsvyKontext();
+
+    kostnadsvyRad($item, ['supplier' => 'Volvo Penta']);
+
+    // Varför frågan måste ställas om: en skrivning svarar med en omdirigering
+    // tillbaka till itemvyn, och den sidan är en vanlig besökning — samma sida
+    // som provet ovan visar saknar `costSuppliers`. Formuläret ligger kvar i
+    // samma komponent genom skrivningen, så `onMounted` körs aldrig om, och
+    // utan en ny fråga stod datalisten tom efter första sparade raden.
+    $svar = actingAs($anvandare)->post(
+        kostnadsvyUrl($container, $item).'/costs',
+        kostnadsvyKropp(['supplier' => 'Biltema']),
+    );
+
+    $svar->assertRedirect(kostnadsvyUrl($container, $item).'?tab=costs');
+
+    actingAs($anvandare)
+        ->get(kostnadsvyUrl($container, $item).'?tab=costs')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->missing('costSuppliers'));
+
+    // Och vyn ställer frågan om: en gång vid monteringen och en gång per
+    // skrivning — skapa, ändra och ta bort. Varje mönster är bundet till sitt
+    // eget anrop, så en `loadSuppliers` någon annanstans i filen räddar inte
+    // en skrivväg som tappat sin.
+    $vy = kostnadsvyKomponent();
+
+    expect($vy)->toContain('onMounted(loadSuppliers)');
+
+    // Skapa: fälten nollställs och frågan ställs om.
+    expect($vy)->toMatch("/form\.reset\([^)]*\);\s+loadSuppliers\(\);/");
+
+    // Ändra: redigeringen stängs och frågan ställs om.
+    expect($vy)->toMatch('/editing\.value = null;\s+loadSuppliers\(\);/');
+
+    // Ta bort.
+    expect($vy)->toMatch('/onSuccess:\s*loadSuppliers,/');
+
+    // Ett avvisat formulär svarar också med en besökning — båda `onError`-
+    // blocken fokuserar felet och frågar om.
+    expect(preg_match_all('/focusFirstError\(\);\s+loadSuppliers\(\);/', $vy))->toBe(2);
+});
+
 // --- kostnadskroken: datumet ur adressen ----------------------------------
 
 it('läser kostnadskrokens datum ur adressen och förifyller fältet', function () {

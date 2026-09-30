@@ -51,6 +51,14 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * den hade varit en andra väg till samma läsning och burit autentiseringen
  * med sig dit.
  *
+ * **Och den hämtas om efter varje skrivning.** En skrivning är själv en vanlig
+ * besökning — formuläret ligger kvar i samma komponent, så `onMounted` körs
+ * inte igen — och en sådan besökning bär inte en optional prop. Utan en ny
+ * fråga står `costSuppliers` som `undefined` efter första sparade raden och
+ * datalisten töms; den som registrerar flera kostnader i rad hade då
+ * autocomplete bara för den första. Samma sak gäller ett avvisat formulär:
+ * också det svarar med en omdirigering tillbaka till itemvyn.
+ *
  * **Fyra ytor, fyra pinnar.** `can.create` ritar formuläret, `can.update` och
  * `can.delete` ritar radåtgärderna. Alla är presentation: grinden i
  * App\Http\Controllers\CostEntryController prövas på nytt i varje skrivning,
@@ -88,21 +96,23 @@ const locale = computed(() => page.props.locale);
  */
 const suppliers = computed(() => page.props.costSuppliers ?? []);
 
-/* "Frågan är ställd" — en gång per komponent, se docblocken. */
-const requested = ref(false);
-
-onMounted(() => {
+/*
+ * Uppslaget. Frågan ställs när formuläret ritas och om efter varje skrivning —
+ * se docblocken: en skrivning är en vanlig besökning, och den tappar proppen.
+ * Anropas därför ur både `onMounted` och skrivningarnas `onSuccess`/`onError`.
+ */
+function loadSuppliers() {
     // Båda formulären ritar ett leverantörsfält: `create` för en ny rad och
     // `update` för en befintlig. En `write`-mottagare får ingen skapayta men
     // väl ändra en rad, och uppslaget ska finnas för henne också.
-    if ((! props.can.create && ! props.can.update) || requested.value) {
+    if (! props.can.create && ! props.can.update) {
         return;
     }
 
-    requested.value = true;
-
     router.reload({ only: ['costSuppliers'] });
-});
+}
+
+onMounted(loadSuppliers);
 
 /*
  * Kostnadskrokens datum ur adressen (Beslut 4). Formen prövas med ett
@@ -138,8 +148,16 @@ function submit() {
         // Datumet och valutan står kvar: de är förval man sällan byter mellan
         // två rader, och att nollställa dem hade gjort varje ny rad till en
         // ny fråga om samma sak.
-        onSuccess: () => form.reset('amount', 'description', 'supplier'),
-        onError: focusFirstError,
+        onSuccess: () => {
+            form.reset('amount', 'description', 'supplier');
+            loadSuppliers();
+        },
+        // Också ett avvisat formulär svarar med en besökning, så proppen
+        // töms även här — se loadSuppliers().
+        onError: () => {
+            focusFirstError();
+            loadSuppliers();
+        },
     });
 }
 
@@ -211,8 +229,14 @@ function cancelEdit() {
 function submitEdit(cost) {
     editForm.patch(url(cost), {
         preserveScroll: true,
-        onSuccess: () => { editing.value = null; },
-        onError: focusFirstError,
+        onSuccess: () => {
+            editing.value = null;
+            loadSuppliers();
+        },
+        onError: () => {
+            focusFirstError();
+            loadSuppliers();
+        },
     });
 }
 
@@ -236,6 +260,7 @@ function destroy(cost) {
         preserveScroll: true,
         onStart: () => { pending.value = cost.ulid; },
         onFinish: () => { pending.value = null; },
+        onSuccess: loadSuppliers,
     });
 }
 </script>
