@@ -77,6 +77,10 @@ use Illuminate\Support\Facades\DB;
  * containrarna som bitar ([[ADR-0038 Gränsen för Pro i kostnaderna]]
  * § Beslut). Månaden kommer ur anroparen och inte ur en parameter — se
  * metoden.
+ *
+ * Sedan issue 175 bär `yearForContainer()` containerns *I år*-bricka: samma
+ * fasta summering igen, avgränsad till innevarande kalenderår. Också där
+ * kommer perioden ur anroparen, av samma skäl — se metoden.
  */
 final class CostReport
 {
@@ -266,6 +270,49 @@ final class CostReport
             'totals' => $this->totals($query),
             'breakdown' => $this->groupByContainer($query),
         ];
+    }
+
+    /**
+     * Den fasta summeringen för INNEVARANDE KALENDERÅR, issue 175 —
+     * containerns *I år*-bricka ([[ADR-0050 Desktopdesignen]] § 9).
+     *
+     * Radmängden är `summaryQuery()` med ett datumspann ovanpå: samma
+     * `rowSet()` och samma `applyScope()` som `summary()`, aldrig en egen
+     * formulering av vilka rader som räknas. Att formulera om "vilka rader
+     * räknas" här hade varit en andra chans att glömma ett villkor — och den
+     * som glöms läcker (issue 74 § Beslut 5).
+     *
+     * **Årtalet är ingen parameter**, av exakt samma skäl som månaden i
+     * `monthForContainers()`: det kommer ur ANROPAREN, som räknade fram det ur
+     * användarens tidszon och skickar 'YYYY'. Samma år för alla som tittar,
+     * och ingen fråga att ställa — *"En fast period — i år, denna månad — som
+     * användaren inte kan byta"* är fri enligt [[ADR-0038 Gränsen för Pro i
+     * kostnaderna]] § Beslut. Den parametriserade rapporten med sin egen
+     * period ligger orörd i `build()` och CostReportController.
+     *
+     * `incurred_on` är en DATE-kolumn och jämförs med `whereDate()`, som i
+     * `baseQuery()` och `monthForContainers()`: i sqlite bär kolumnen en
+     * tidskomponent, och en årsgräns ska inte bero på klockslaget när frågan
+     * körs. Året är användarens LOKALA kalenderår, men jämförelsen är en ren
+     * datumjämförelse — `incurred_on` är en dag och har därför ingen tidszon
+     * att konvertera (samma regel som `purchased_at`, issue 13a § Beslut 5).
+     *
+     * **Ingen nedbrytning.** Donuten på fliken ritas ur `summary()` och är
+     * hela containern, utan period ([[ADR-0040 Underträdets summor]]: bitarna
+     * är de items som bär raderna). Brickan frågar bara *vad har året kostat*,
+     * och en nedbrytning per container hade varit en enda bit.
+     *
+     * @return array{totals: list<array{currency: string, amount: int, count: int}>}
+     */
+    public function yearForContainer(Container $container, ItemScope $scope, string $year): array
+    {
+        // Första och sista dagen i årtalet. Ingen `Carbon`-beräkning behövs —
+        // den sista december är årets sista dag i varje kalender.
+        $query = $this->summaryQuery([$container->id => $scope])
+            ->whereDate('cost_entry.incurred_on', '>=', "{$year}-01-01")
+            ->whereDate('cost_entry.incurred_on', '<=', "{$year}-12-31");
+
+        return ['totals' => $this->totals($query)];
     }
 
     /**

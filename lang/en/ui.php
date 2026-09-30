@@ -1450,6 +1450,15 @@ return [
             // `recurrence_type` (§ 4, [[ADR-0042 Designsystemet]]
             // § Bildernas avvikelser).
             'tasks' => 'Tasks',
+            // Issue 175 · [[ADR-0050 Desktopdesignen]] § 9: the container's
+            // costs tab. The row sits after `tasks` and before `history` in
+            // containerSections.js — the next step of the same enumeration
+            // (*Overview, Items, Documents, Tasks, Costs, History*), with
+            // documents still to come (178). The free half of the surface
+            // lives here: the rows, the total, *this year* and the donut per
+            // item. The Pro half — the period, the filters and the graph — is
+            // issue 176 ([[ADR-0038 Gränsen för Pro i kostnaderna]]).
+            'costs' => 'Costs',
             'categories' => 'Categories',
             'tags' => 'Tags',
             'sharing' => 'Sharing',
@@ -1801,6 +1810,81 @@ return [
             'filter_maintenance' => 'Maintenance only',
             'done' => 'Done',
             'shortcuts' => 'Shortcuts',
+        ],
+
+        /*
+         * The container's costs tab, see issue 175 · [[ADR-0050
+         * Desktopdesignen]] § 9 and resources/js/pages/Containers/Costs.vue.
+         *
+         * **The free half of the cost surface, and the words say so.**
+         * [[ADR-0038 Gränsen för Pro i kostnaderna]] draws the line at the
+         * QUESTION: a fixed summary the user cannot ask anything of is free,
+         * everything queryable is Pro. `total` and `this_year` are the two
+         * fixed periods on this page — neither can be changed — and `total`
+         * is ONE key for both the tile and the caption inside the donut,
+         * because the two name the same row set: the whole container
+         * ([[ADR-0040 Underträdets summor]]). It is a key of its own and not
+         * `container.overview.costs_total`: the two pages are two surfaces,
+         * and a sentence that changes on one of them must not change on the
+         * other.
+         *
+         * `upgrade`, `upgrade_owner` and `upgrade_link` are the Pro surface
+         * that stands where issue 176 will draw the period picker, the
+         * filters and the graph. The sentence names the feature and not the
+         * plan, like `error.plan.feature_unavailable`; the link is its own
+         * key because the string is also readable as a sentence on its own,
+         * and markup inside a translation is either escaped text or
+         * `v-html` (issue 65b decision 5). The owner sentence is what a GUEST
+         * meets instead of the link: she is not a member of the container's
+         * account and cannot open that account's plan page at all.
+         *
+         * `add` opens the item picker and not a form: a cost belongs to an
+         * item ([[ADR-0016 Kostnadsregistrering]]) and the row is written on
+         * the item's own tab (issue 168). `add_choose_item` is the picker's
+         * own question, and both are new keys rather than
+         * `item.cost.form_heading` — that one names a form this page does
+         * not carry.
+         *
+         * The five column words are the table's. `item` is the item's name,
+         * printed verbatim: it is the user's own word and is never looked up
+         * here (the same rule as `container.overview.costs`'s slices).
+         */
+        'costs' => [
+            'title' => 'Costs',
+            'heading' => 'Costs',
+
+            'add' => 'Add cost',
+            'add_choose_item' => 'Which item?',
+
+            'total' => 'Total',
+            'this_year' => 'This year (:year)',
+
+            // The donut panel's heading. It names the BREAKDOWN and not the
+            // total, because the ring's own caption already says *Total* —
+            // and the axis is the item and not the category
+            // ([[ADR-0040 Underträdets summor]]: `cost_entry` has no category
+            // column, and the slices are the items that carry rows).
+            'donut' => 'Costs per item',
+
+            'empty' => 'The container has no costs registered.',
+
+            'date' => 'Date',
+            'description' => 'Description',
+            'item' => 'Item',
+            'supplier' => 'Supplier',
+            'amount' => 'Amount',
+
+            // The pagination. `page` is the whole sentence and not the two
+            // numbers joined in the view: the order of "page" and "of" is the
+            // language's, and `t()` has no pluralisation to hide it behind
+            // (issue 52 decision 4).
+            'previous' => 'Previous',
+            'next' => 'Next',
+            'page' => 'Page :page of :last',
+
+            'upgrade' => 'Reports and filters require the Pro plan.',
+            'upgrade_owner' => 'The account owner can upgrade the plan.',
+            'upgrade_link' => 'See plans',
         ],
     ],
 

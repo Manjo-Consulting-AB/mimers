@@ -216,9 +216,9 @@ it('containern har en flikrad byggd av UiTabs', function () {
     // den sida som läser vad som har hänt. *Inställningar* lämnade raden i
     // issue 170 ([[ADR-0050 Desktopdesignen]] § 3): hjälten bär *Redigera
     // container*, som är samma adress och samma yta, och en flik jämte den
-    // hade varit två vägar till samma val. *Uppgifter* kom med issue 174 på
-    // den plats ADR-0050 § 4 anger.
-    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'tasks', 'history']);
+    // hade varit två vägar till samma val. *Uppgifter* kom med issue 174 och
+    // *Kostnader* med issue 175, båda på den plats ADR-0050 § 4 anger.
+    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'tasks', 'costs', 'history']);
 
     foreach (containerflikLankar('containerTabs', $container->ulid) as $nyckel => $adress) {
         // Etiketten kommer ur `lang/`, och `t()` hade skrivit nyckeln själv på
@@ -233,19 +233,20 @@ it('containern har en flikrad byggd av UiTabs', function () {
 });
 
 /*
- * Klart när: var och en av de tio sektionerna går att nå.
+ * Klart när: var och en av de tolv sektionerna går att nå.
  *
  * Filens tyngdpunkt, och issue 101:s enda krav: **ingen rad får försvinna**.
- * Nycklarna räknas upp ur modulen — en tionde rad vore en ny sida någon byggt
- * utan att en issue bad om den, och en åttonde vore en yta ingen hittar — och
- * varje adress begärs som inloggad medlem.
+ * Nycklarna räknas upp ur modulen — en rad fler vore en ny sida någon byggt
+ * utan att en issue bad om den, och en rad färre vore en yta ingen hittar —
+ * och varje adress begärs som inloggad medlem. Tolv sedan issue 175 (175 lade
+ * till kostnadsfliken, 174 uppgiftsfliken och 116 historikfliken).
  *
  * Den andra halvan är inställningssidan, som är den yta de sju sektionerna
  * flyttade TILL. Att adressen svarar 200 är inte samma sak som att den går att
  * hitta: raden ska ritas på sidan, med samma etikett och samma adress som
  * sektionsmenyn gav den.
  */
-it('var och en av de tio sektionerna går att nå', function () {
+it('var och en av de tolv sektionerna går att nå', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerflikKontext();
@@ -253,6 +254,7 @@ it('var och en av de tio sektionerna går att nå', function () {
     expect(containerflikNycklar('containerSections'))->toBe([
         'items',
         'tasks',
+        'costs',
         'categories',
         'tags',
         'sharing',
@@ -501,8 +503,9 @@ it('historikfliken finns och läser genom läsregeln', function () {
  * femte fliken hade varit den som smög in. **`tasks` är den andra fliken som
  * bryter mot det på samma ärliga villkor** (issue 174,
  * ContainerTaskController): en ny kontrollermetod och en ny rutt, bokförd i
- * flikens egen rad i containerSections.js. Fem rader, och den sjätte är den
- * som smyger.
+ * flikens egen rad i containerSections.js. **`costs` bryter mot det på samma
+ * villkor** (issue 175, ContainerCostController). Sex rader, och den sjunde är
+ * den som smyger.
  *
  * **Fyra blev tre i issue 170.** `settings` lämnade flikraden
  * ([[ADR-0050 Desktopdesignen]] § 3), och inställningssidan har fortfarande
@@ -517,6 +520,7 @@ it('pekar varje flik på en namngiven rutt', function () {
         'overview' => route('containers.show', $container, false),
         'items' => route('containers.items.index', $container, false),
         'tasks' => route('containers.tasks', $container, false),
+        'costs' => route('containers.costs', $container, false),
         'history' => route('containers.history', $container, false),
     ]);
 });

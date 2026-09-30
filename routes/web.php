@@ -15,6 +15,7 @@ use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
+use App\Http\Controllers\ContainerCostController;
 use App\Http\Controllers\ContainerCoverController;
 use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
@@ -1544,6 +1545,36 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/containers/{container}/tasks', ContainerTaskController::class)
         ->name('containers.tasks');
+
+    /*
+     * Issue 175 · Containerns kostnadsflik, se App\Http\Controllers\
+     * ContainerCostController och [[ADR-0050 Desktopdesignen]] § 9.
+     *
+     * **En egen sida på en egen rutt, som de andra flikarna i
+     * `containerTabs`.** Fliken ligger i resources/js/layouts/
+     * containerSections.js på platsen ADR-0050 § 4 anger — efter uppgifterna,
+     * före historiken — och den fyller *Kostnader* i den uppräkning som 174
+     * sköt på framtiden. *Dokument* väntar fortfarande (178).
+     *
+     * **Rutten tar ingen parameter.** Den fria delen av kostnaderna är den
+     * fasta summeringen och raderna: ingen period, inget filter och ingen
+     * gruppering att byta ([[ADR-0038 Gränsen för Pro i kostnaderna]]
+     * § Beslut). En period i querysträngen är därför ett värde ingen läser —
+     * den parametriserade rapporten ligger kvar i
+     * `GET /api/containers/{container}/costs`, med sin grind orörd, och
+     * Pro-delen av den här ytan är issue 176.
+     *
+     * **Rutten är invokable** (`__invoke`, Beslut 1): fliken har en enda
+     * metod, som uppgiftsfliken.
+     *
+     * **Ingen `scopeBindings()`.** Rutten bär bara containern; itemet ligger
+     * i raderna och i länkarna, inte i adressen.
+     *
+     * `{container}` binds på ULID via #[RouteKey('ulid')] på
+     * App\Models\Container, som överallt annars.
+     */
+    Route::get('/containers/{container}/costs', ContainerCostController::class)
+        ->name('containers.costs');
 
     /*
      * Issue 62a · Containerns papperskorg — det mjukraderade innehållet,

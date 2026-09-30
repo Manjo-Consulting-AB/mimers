@@ -713,6 +713,46 @@ it('hämtar uppgiftsflikens strängar ur ui.php', function () {
 });
 
 /*
+ * Containerns kostnadsflik, se issue 175 · [[ADR-0050 Desktopdesignen]] § 9 och
+ * resources/js/pages/Containers/Costs.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
+ * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
+ * skrivs om. Två filer läses, för tabellen är sin egen komponent (CostTable) —
+ * och en rubrik som glöms i den ena hade blivit `container.costs.supplier` på
+ * skärmen.
+ *
+ * **`container.costs.this_year` bär `:year`**, och det prövas inte bara att
+ * nyckeln finns: etiketten säger vilket år brickan räknar, och årtalet kommer
+ * ur serverns `year`-propp och aldrig ur klientens klocka. En nyckel utan
+ * platshållaren hade visat *This year ()*.
+ */
+it('hämtar kostnadsflikens strängar ur ui.php', function () {
+    $nycklar = [];
+
+    foreach (['js/pages/Containers/Costs.vue', 'js/components/CostTable.vue'] as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
+    // katalogen ska falla här och inte som `container.costs.upgrade_link` i
+    // uppgraderingsytan.
+    foreach (['container.nav.costs', 'container.costs.title', 'container.costs.heading', 'container.costs.add', 'container.costs.add_choose_item', 'container.costs.total', 'container.costs.this_year', 'container.costs.donut', 'container.costs.empty', 'container.costs.date', 'container.costs.description', 'container.costs.item', 'container.costs.supplier', 'container.costs.amount', 'container.costs.previous', 'container.costs.next', 'container.costs.page', 'container.costs.upgrade', 'container.costs.upgrade_owner', 'container.costs.upgrade_link'] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+    }
+
+    expect(Lang::get('ui.container.costs.this_year', ['year' => 2026], 'en'))->toBe('This year (2026)');
+});
+
+/*
  * Avbockningsknappens prick, se issue 133 och
  * resources/js/components/TodoRow.vue.
  *
