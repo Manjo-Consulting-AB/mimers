@@ -207,10 +207,17 @@ class ListContainerSummaries
      * Korten, grupperade enligt [[ADR-0036 Containerns art]]: en art med minst
      * två containrar får en egen rubrik, resten ligger i en hög.
      *
-     * Högen ritas FÖRST, som i mockupen (`docs/Design/main.jpeg`), och
-     * arterubrikerna därefter i bokstavsordning. Korten behåller frågans
-     * ordning — namn stigande — inom varje grupp, så en container står på
-     * samma plats i gruppen som i containerlistan.
+     * **Regeln bor i App\Actions\Container\ContainerKindGroups sedan issue
+     * 169** och delas med skalets sidopanel
+     * (App\Actions\Container\ListShellContainers). Skalet behöver samma
+     * indelning med en annan rad — namn och ULID i stället för tal och bild —
+     * och en regel som stod i två filer hade kunnat glida isär utan att något
+     * prov blev rött. Den här metoden bygger bara kortet; ordningen, högen
+     * först och arterna i bokstavsordning, står i hjälparen.
+     *
+     * **Svaret är oförändrat.** Nycklarna, formen på korten och ordningen är
+     * desamma som före utbrytningen (issue 124), och `dashboard.containers`
+     * ritar vidare ur det utan att veta att regeln flyttat.
      *
      * @param  Collection<int, Container>  $containers
      * @param  array<int, int>  $itemCounts
@@ -228,30 +235,20 @@ class ListContainerSummaries
      */
     private function group(Collection $containers, array $itemCounts, array $todoCounts): array
     {
-        $antalPerArt = [];
-
-        foreach ($containers as $container) {
-            // En NÄRVAROKONTROLL och ingen jämförelse: fältet är fritt, och
-            // regeln om att ingen grenar på VILKEN art det är står i
-            // App\Models\Container:s klasskommentar (issue 84). En tom sträng
-            // från äldre data är inget värde att gruppera på — samma linje som
-            // ContainerController::kindsUsedBy().
-            if (! $container->kind) {
-                continue;
-            }
-
-            $antalPerArt[$container->kind] = ($antalPerArt[$container->kind] ?? 0) + 1;
-        }
-
-        /** @var list<string> $egnaArter */
-        $egnaArter = array_keys(array_filter($antalPerArt, fn (int $antal): bool => $antal >= 2));
-        sort($egnaArter);
-
-        $hog = [];
-        $perArt = [];
-
-        foreach ($containers as $container) {
-            $kort = [
+        /** @var list<array{
+         *     kind: string|null,
+         *     containers: list<array{
+         *         ulid: string,
+         *         name: string,
+         *         items: int,
+         *         todos: int,
+         *         cover: array{ulid: string, variants: list<string>}|null
+         *     }>
+         * }> $grupper
+         */
+        $grupper = ContainerKindGroups::byKind(
+            $containers,
+            fn (Container $container): array => [
                 'ulid' => $container->ulid,
                 'name' => $container->name,
                 'items' => $itemCounts[$container->id] ?? 0,
@@ -261,26 +258,8 @@ class ListContainerSummaries
                 // inte av här: kortet och containerlistan bär samma bild i
                 // samma form, och två formuleringar av den hade glidit isär.
                 'cover' => ContainerResource::cover($container),
-            ];
-
-            if (in_array($container->kind, $egnaArter, true)) {
-                $perArt[$container->kind][] = $kort;
-
-                continue;
-            }
-
-            $hog[] = $kort;
-        }
-
-        $grupper = [];
-
-        if ($hog !== []) {
-            $grupper[] = ['kind' => null, 'containers' => $hog];
-        }
-
-        foreach ($egnaArter as $art) {
-            $grupper[] = ['kind' => $art, 'containers' => $perArt[$art]];
-        }
+            ],
+        );
 
         return $grupper;
     }

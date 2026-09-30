@@ -173,6 +173,40 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
         ->and($meny)->toContain('<RecentVisitList');
 });
 
+/*
+ * Klart när (issue 169): sidomenyn visar samma sektioner i samma ordning som
+ * sidopanelen ([[ADR-0048 Mobilen och plusknappen]] § 1).
+ *
+ * Ordningen läses ur BÅDA ytorna i stället för att skrivas av: en sektion som
+ * flyttar i den ena men inte i den andra ska fälla provet, och den enda vägen
+ * till det är att jämföra de två listorna med varandra. Markörerna är
+ * komponentanropen — sektionerna är samma komponenter på båda ställena, och
+ * det är därför de inte kan glida isär.
+ */
+it('visar samma sektioner i samma ordning i sidomenyn som i sidopanelen', function () {
+    $layout = mobilskalKod('layouts/AppLayout.vue');
+    $meny = mobilskalKod('components/MobileMenu.vue');
+
+    $start = (int) strpos($layout, '<aside');
+    $panel = substr($layout, $start, (int) strpos($layout, '</aside>', $start) - $start);
+
+    expect($panel)->not->toBeEmpty('layouten har ingen sidopanel');
+
+    $sektion = '#<ShellSections part="favorites" />|<ShellContainerList|<RecentVisitList|<ShellSections />#';
+
+    preg_match_all($sektion, $panel, $iPanelen);
+    preg_match_all($sektion, $meny, $iMenyn);
+
+    // De fyra sektionerna i skalets ordning ([[ADR-0050 Desktopdesignen]]
+    // § 1), och exakt samma följd i båda ytorna.
+    expect($iPanelen[0])->toBe([
+        '<ShellSections />',
+        '<ShellContainerList',
+        '<RecentVisitList',
+        '<ShellSections part="favorites" />',
+    ])->and($iMenyn[0])->toBe($iPanelen[0]);
+});
+
 it('lämnar fokus tillbaka till Meny när menyn stängs', function () {
     $layout = mobilskalKod('layouts/AppLayout.vue');
     $flikrad = mobilskalKod('components/MobileTabBar.vue');

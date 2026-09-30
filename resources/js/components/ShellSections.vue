@@ -41,11 +41,24 @@ import { useTranslations } from '../composables/useTranslations.js';
  * lägga den i `sections` hade gett en rad som pekade på en sida som inte finns
  * och en rubrik i navigeringen; ordningen här är oförändrad sedan issue 151.
  *
+ * **Raderna blev sidopanelen** (issue 169 · [[ADR-0050 Desktopdesignen]] § 1).
+ * Över `md:` står de inte längre i en vågrät rad i sidhuvudet utan i den mörka
+ * sidopanelen, och de staplas därför på varandra på båda sidor om
+ * brytpunkten: `md:flex-row` var sidhuvudets form och hade gett panelen sex
+ * rader i sidled. Träffytan, etiketterna och ordningen är oförändrade.
+ *
+ * **Den aktuella raden bär `aria-current="page"` och en token-färg.** Vilken
+ * rad det är avgörs av `page.url` mot radens `href` — vägen och inte hela
+ * adressen, för `page.url` bär querysträngen — och `matchPrefix` på
+ * inställningsraden fångar undersidorna under `/settings`, dit
+ * omdirigeringen från issue 53c leder. Färgen är `--color-shell-active`,
+ * rollen ADR-0042 ger "den aktiva raden i sidopanelen".
+ *
  * `part` skiljer de två blocken åt. `rows` är navigeringen, `favorites` är
- * `FAVORITER`-sektionen ur issue 106. De ritas i olika delar av skalet — raden
- * i sidhuvudet och bandet under det — och därför är de två anrop av samma
- * komponent i stället för två komponenter: sektionen är densamma, och det är
- * bara var den står som skiljer.
+ * `FAVORITER`-sektionen ur issue 106. Sedan issue 169 står båda i sidopanelen
+ * över `md:` och i sidomenyn under — navigeringen först, favoriterna sist —
+ * och de är två anrop av samma komponent i stället för två komponenter:
+ * sektionen är densamma, och det är bara var den står som skiljer.
  */
 const props = defineProps({
     /*
@@ -72,21 +85,41 @@ const sections = [
     { key: 'containers', href: '/containers' },
     { key: 'transfers', href: '/transfers' },
     { key: 'search', href: '/search' },
-    { key: 'settings', href: '/settings' },
+    // Inställningarna är den enda raden som också är aktuell på en UNDERSIDA:
+    // `/settings` omdirigerar till profilen (issue 53c), så en jämförelse som
+    // bara såg den exakta adressen hade lämnat raden omarkerad på varje
+    // inställningssida. `matchPrefix` står därför på den och ingen annan —
+    // `/containers` får inte samma flagga, för på en containersida är det
+    // containerraden i sidopanelen som är den aktuella (issue 169).
+    { key: 'settings', href: '/settings', matchPrefix: true },
 ];
+
+/*
+ * Sidans väg, utan querysträngen. `page.url` är hela adressen — Inertia
+ * lägger frågan och dess parametrar i den — och en jämförelse mot `href` hade
+ * fallit så fort en lista paginerades eller ett filter sattes.
+ */
+const currentPath = computed(() => page.url.split('?')[0]);
+
+/*
+ * Är den här raden sidan användaren står på? Se `matchPrefix` ovan.
+ */
+function isCurrent(section) {
+    return currentPath.value === section.href
+        || (section.matchPrefix === true && currentPath.value.startsWith(`${section.href}/`));
+}
 </script>
 
 <template>
-    <ul
-        v-if="props.part === 'rows'"
-        class="flex flex-col gap-1 text-sm md:flex-row md:items-center md:gap-4"
-    >
-        <li v-for="section in sections" :key="section.key">
+    <ul v-if="props.part === 'rows'" class="flex flex-col gap-1 px-2 text-sm">
+        <li v-for="section in sections" :key="section.key" class="flex">
             <Link
                 v-if="user"
                 :href="section.href"
                 :title="section.key === 'settings' ? t('nav.settings') : undefined"
-                class="inline-flex min-h-11 items-center hover:underline"
+                :aria-current="isCurrent(section) ? 'page' : undefined"
+                class="inline-flex min-h-11 items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                :class="['w-full', isCurrent(section) ? 'bg-shell-active text-white' : '']"
             >
                 {{ section.key === 'settings' ? user.name : t(`nav.${section.key}`) }}
             </Link>
@@ -98,19 +131,22 @@ const sections = [
             CSRF-tokenet åt oss. Utan den går det att logga in men inte ut i
             webbläsaren — och i sidomenyn är raden den enda vägen ut.
         -->
-        <li v-if="user">
+        <li v-if="user" class="flex">
             <Link
                 href="/logout"
                 method="post"
                 as="button"
-                class="inline-flex min-h-11 items-center hover:underline"
+                class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
                 {{ t('auth.logout') }}
             </Link>
         </li>
 
-        <li v-else>
-            <Link href="/login" class="inline-flex min-h-11 items-center hover:underline">
+        <li v-else class="flex">
+            <Link
+                href="/login"
+                class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
                 {{ t('nav.login') }}
             </Link>
         </li>
@@ -123,11 +159,7 @@ const sections = [
         inte mötas av ett tomt fack. Ingen räknare och ingen antydan om hur
         många som fallit bort ur omfånget (issue 73 § Beslut 6).
     -->
-    <nav
-        v-else-if="favorites.length"
-        :aria-label="t('nav.favorites')"
-        class="mx-auto w-full max-w-3xl px-4 pt-6"
-    >
+    <nav v-else-if="favorites.length" :aria-label="t('nav.favorites')" class="w-full pt-6">
         <h2 class="text-meta font-semibold uppercase tracking-wide text-ink-subtle">
             {{ t('nav.favorites') }}
         </h2>
