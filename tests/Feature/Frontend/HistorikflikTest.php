@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
+use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
@@ -131,6 +132,43 @@ function historikUrl(Container $container): string
 }
 
 /**
+ * Sidan ur Inertias rotvy — `component` och `props` — så att ett prov kan
+ * läsa dagarna utan att gissa var dagsgränsen hamnade.
+ *
+ * @return array{component: string, props: array<string, mixed>}
+ */
+function historikSida(TestResponse $svar): array
+{
+    /** @var array{component: string, props: array<string, mixed>} $sida */
+    $sida = $svar->viewData('page');
+
+    return $sida;
+}
+
+/**
+ * Dagarnas rader, i den ordning grupperna och raderna står — den platta
+ * listan, nyast först (issue 179 · [[ADR-0050 Desktopdesignen]] § 17).
+ *
+ * @param  array<string, mixed>  $proppar
+ * @return list<array<string, mixed>>
+ */
+function historikRader(array $proppar): array
+{
+    $rader = [];
+
+    /** @var list<array{date: string, rows: list<array<string, mixed>>}> $dagar */
+    $dagar = $proppar['days'];
+
+    foreach ($dagar as $dag) {
+        foreach ($dag['rows'] as $rad) {
+            $rader[] = $rad;
+        }
+    }
+
+    return $rader;
+}
+
+/**
  * Itemets detaljvy som URL, med fliken.
  */
 function historikItemUrl(Container $container, Item $item, ?string $tab = null): string
@@ -163,18 +201,19 @@ it('containern har en historikflik som listar containerns rader nyast först', f
     $mellan = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_CATEGORY_CREATED, när: now()->subDay());
     $nyast = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_CONTAINER_UPDATED, när: now());
 
-    actingAs($ägare)->get(historikUrl($pärm))
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->component('Containers/History')
-            ->has('rows', 3)
-            ->where('rows.0.ulid', $nyast->ulid)
-            ->where('rows.1.ulid', $mellan->ulid)
-            ->where('rows.2.ulid', $äldst->ulid)
-            // Varje rad bär sin handling oförändrad: det är nyckeln vyn slår
-            // upp meningen med, och en rad utan handling är ingen rad.
-            ->where('rows.0.action', AuditLog::ACTION_CONTAINER_UPDATED)
-        );
+    $sida = historikSida(actingAs($ägare)->get(historikUrl($pärm))->assertOk());
+
+    expect($sida['component'])->toBe('Containers/History');
+
+    $rader = historikRader($sida['props']);
+
+    expect($rader)->toHaveCount(3)
+        ->and($rader[0]['ulid'])->toBe($nyast->ulid)
+        ->and($rader[1]['ulid'])->toBe($mellan->ulid)
+        ->and($rader[2]['ulid'])->toBe($äldst->ulid)
+        // Varje rad bär sin handling oförändrad: det är nyckeln vyn slår
+        // upp meningen med, och en rad utan handling är ingen rad.
+        ->and($rader[0]['action'])->toBe(AuditLog::ACTION_CONTAINER_UPDATED);
 
     // Och fliken finns i flikraden, med sin egen adress — samma lista
     // layouten renderar ur (resources/js/layouts/containerSections.js).
@@ -238,20 +277,14 @@ it('en gäst ser bara sina egna rader och ägaren allas', function () {
     $ägarensRad = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_CONTAINER_CREATED, när: now()->subDay());
     $gästensRad = historikRad($pärm, $konto, $gast, AuditLog::ACTION_ITEM_CREATED, när: now());
 
-    actingAs($ägare)->get(historikUrl($pärm))
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('rows', 2)
-            ->where('rows.0.ulid', $gästensRad->ulid)
-            ->where('rows.1.ulid', $ägarensRad->ulid)
-        );
+    $ägarens = historikRader(historikSida(actingAs($ägare)->get(historikUrl($pärm))->assertOk())['props']);
+    $gästens = historikRader(historikSida(actingAs($gast)->get(historikUrl($pärm))->assertOk())['props']);
 
-    actingAs($gast)->get(historikUrl($pärm))
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('rows', 1)
-            ->where('rows.0.ulid', $gästensRad->ulid)
-        );
+    expect($ägarens)->toHaveCount(2)
+        ->and($ägarens[0]['ulid'])->toBe($gästensRad->ulid)
+        ->and($ägarens[1]['ulid'])->toBe($ägarensRad->ulid)
+        ->and($gästens)->toHaveCount(1)
+        ->and($gästens[0]['ulid'])->toBe($gästensRad->ulid);
 });
 
 /*
@@ -342,13 +375,11 @@ it('en rad om ett gallrat item eller en raderad användare visas med en ersätta
 
     // Itemet är borta, så raden läses från containerns flik i stället: den bar
     // samma `container_id` och ligger kvar där.
-    actingAs($ägare)->get(historikUrl($pärm))
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page
-            ->has('rows', 1)
-            ->where('rows.0.item', null)
-            ->where('rows.0.user', null)
-        );
+    $rader = historikRader(historikSida(actingAs($ägare)->get(historikUrl($pärm))->assertOk())['props']);
+
+    expect($rader)->toHaveCount(1)
+        ->and($rader[0]['item'])->toBeNull()
+        ->and($rader[0]['user'])->toBeNull();
 
     $rad = historikKod('js/components/HistoryRow.vue');
 
@@ -419,4 +450,45 @@ it('itemets rader hämtas bara när historikfliken är aktiv', function () {
             ->component('Containers/Items/Show')
             ->has('history', 1)
         );
+});
+
+/*
+ * Klart när: händelserna grupperas per dag i användarens tidszon (issue 179 ·
+ * [[ADR-0050 Desktopdesignen]] § 17).
+ *
+ * Dagsgränsen räknas på servern och i användarens zon ([[ADR-0044 Användarens
+ * dag]] § Beslut 4), och klienten räknar aldrig om en tidpunkt till en dag:
+ * proppen är `days: [{date, rows}]`, och `date` är redan den dag användaren
+ * ser. Provet lägger två händelser på var sin sida om midnatt i Stockholm —
+ * båda skrivna den 26 september i UTC — och bevisar att de hamnar i var sin
+ * grupp, nyast först. Hade grupperingen följt UTC hade båda legat på samma
+ * dag, och en klient som räknade själv hade fått samma fel.
+ *
+ * Tidszonen sätts på användaren EFTER att kontot skapats: `preferredTimezone()`
+ * läser hennes egen först och kontots som reserv, och provet fäster därför
+ * hennes zon och inte appens.
+ */
+it('händelserna grupperas per dag i användarens tidszon', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikKontext();
+
+    $ägare->timezone = 'Europe/Stockholm';
+    $ägare->save();
+
+    // 23:30 lokal tid den 26:e.
+    $sentPåDagen = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_CONTAINER_UPDATED, när: Carbon::parse('2026-09-26 21:30:00'));
+    // 23:30 UTC — 01:30 lokal tid den 27:e.
+    $efterMidnatt = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_CONTAINER_CREATED, när: Carbon::parse('2026-09-26 23:30:00'));
+
+    /** @var list<array{date: string, rows: list<array<string, mixed>>}> $dagar */
+    $dagar = historikSida(actingAs($ägare)->get(historikUrl($pärm))->assertOk())['props']['days'];
+
+    expect($dagar)->toHaveCount(2)
+        ->and($dagar[0]['date'])->toBe('2026-09-27')
+        ->and($dagar[0]['rows'])->toHaveCount(1)
+        ->and($dagar[0]['rows'][0]['ulid'])->toBe($efterMidnatt->ulid)
+        ->and($dagar[1]['date'])->toBe('2026-09-26')
+        ->and($dagar[1]['rows'])->toHaveCount(1)
+        ->and($dagar[1]['rows'][0]['ulid'])->toBe($sentPåDagen->ulid);
 });
