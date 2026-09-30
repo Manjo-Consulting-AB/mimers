@@ -211,6 +211,13 @@ class ItemController extends Controller
      * `false`: hon skapar barn-items under det hon nått, och den ytan hör till
      * detaljvyn.
      *
+     * **`can.update` kom med issue 170** · [[ADR-0050 Desktopdesignen]] § 2–3:
+     * itemlistan bär samma hjälte som översikten, i den låga formen, och
+     * hjälten ritar *Redigera container* — vägen till inställningssidan, som
+     * lämnade flikraden i samma issue. Flaggan räknas med samma policyfråga som
+     * `ContainerController::show()` och `edit()` ställer, och den är
+     * presentation: ruttens `update` prövas ändå.
+     *
      * **Att öppna containern gör den till sessionens kontext** (issue 83).
      * `ActiveContainer::set()` har fem anropare, och den här är en av dem: de
      * tre andra är de tillfällen användaren just FÅTT en container, och den
@@ -349,6 +356,12 @@ class ItemController extends Controller
             ],
             'can' => [
                 'create' => Gate::forUser($user)->allows('createItem', $container),
+                // `can.update` kom med issue 170 · [[ADR-0050 Desktopdesignen]]
+                // § 2–3: hjälten ritar *Redigera container* ur samma flagga som
+                // översikten och inställningssidan ritar sina ur, och den
+                // läggs BREDVID resursen precis som där (issue 54 § Beslut 9).
+                // Flaggan är presentation — ruttens `update` prövas ändå.
+                'update' => Gate::forUser($user)->allows('update', $container),
             ],
             // Plusknappens mål (issue 152): i itemlistan skapar den ett item i
             // containern. Samma grind som `can.create` ovan — de två kommer

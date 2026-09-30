@@ -452,6 +452,14 @@ it('hämtar skalets strängar ur ui.php', function () {
         // heller: en art är användarens egen sträng ([[ADR-0036 Containerns
         // art]]) och slås aldrig upp i katalogen.
         'js/components/ShellContainerList.vue',
+        // Hjälten kom med issue 170 och ligger i samma svep av samma skäl: den
+        // ritas av containerns skal på varje flik, och dess två egna ord är
+        // `container.hero.edit` — knappen som ersätter raden *Inställningar* i
+        // flikraden ([[ADR-0050 Desktopdesignen]] § 2–3) — och
+        // `container.nav.settings`, läsarens länk till samma sida.
+        // Artens värde och containerns namn är användarens egna strängar och
+        // slås aldrig upp.
+        'js/components/ContainerHero.vue',
     ] as $fil) {
         /*
          * Fönstret `(?<![\w$.])` är det som skiljer ett uppslag från ett

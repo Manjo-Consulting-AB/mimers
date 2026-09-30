@@ -39,18 +39,30 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * `t()` — radens ur resources/js/components/HistoryRow.vue, resten ur
  * `audit.history.*`. Sidans titel är en egen nyckel och inte flikens etikett,
  * som på kategoriernas och taggarnas sidor.
+ *
+ * **Hjälten kom med issue 170 · [[ADR-0050 Desktopdesignen]] § 2**, och
+ * historiken skickar `hero="compact"` som varje flik utom översikten: samma
+ * bild, art, namn och beskrivning över `md:`, utan tal. Därför bär sidan
+ * också `can` — hjälten ritar *Redigera container* ur `can.update`, och
+ * kontrollern räknar flaggan bredvid resursen (issue 54 § Beslut 9).
  */
 const props = defineProps({
     container: { type: Object, required: true },
     /* Raderna ur App\Actions\Audit\PresentAuditEvents, nyast först. */
     rows: { type: Array, required: true },
+    /*
+     * `{ update }` — samma flagga som inställningssidan ritar sitt formulär
+     * ur. Den styr *Redigera container* i hjälten; rutten prövar
+     * `ContainerPolicy::update` på nytt.
+     */
+    can: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerLayout :container="container">
+    <ContainerLayout hero="compact" :container="container" :can="can">
         <Head :title="t('audit.history.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('audit.history.heading') }}</h1>

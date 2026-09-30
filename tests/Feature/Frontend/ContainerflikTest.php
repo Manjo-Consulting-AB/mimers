@@ -211,8 +211,11 @@ it('containern har en flikrad byggd av UiTabs', function () {
 
     // Flikarna, ur modulen klienten importerar: översikten först — det är
     // containerns egen sida — sedan den sektion man arbetar i och den sida som
-    // bär resten.
-    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'settings', 'history']);
+    // läser vad som har hänt. *Inställningar* lämnade raden i issue 170
+    // ([[ADR-0050 Desktopdesignen]] § 3): hjälten bär *Redigera container*, som
+    // är samma adress och samma yta, och en flik jämte den hade varit två vägar
+    // till samma val.
+    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'history']);
 
     foreach (containerflikLankar('containerTabs', $container->ulid) as $nyckel => $adress) {
         // Etiketten kommer ur `lang/`, och `t()` hade skrivit nyckeln själv på
@@ -261,11 +264,12 @@ it('var och en av de tio sektionerna går att nå', function () {
         actingAs($anvandare)->get($adress)->assertOk();
     }
 
-    // De sju som lämnade flikraden, ur samma modul: items, settings och sedan
-    // issue 116 även history stannar i raden, resten samlas på
-    // inställningssidan. Historiken stannar därför att bilden ritar den jämte
-    // översikten och items — se containerSections.js.
+    // De åtta som lämnade flikraden, ur samma modul: items och history stannar
+    // i raden sedan issue 116, och *Inställningar* lämnade den i issue 170 —
+    // den ligger därför FÖRST i kolumnen, som hubben de sju andra hänger under
+    // ([[ADR-0050 Desktopdesignen]] § 3). Resten behåller sin inbördes ordning.
     expect(containerflikNycklar('containerSettingsSections'))->toBe([
+        'settings',
         'categories',
         'tags',
         'sharing',
@@ -481,6 +485,12 @@ it('historikfliken finns och läser genom läsregeln', function () {
  * (ContainerHistoryController::index()) är ny, och rutten `containers.history`
  * fanns inte förut. Provet räknar därför fyra rader i stället för tre — den
  * femte fliken hade varit den som smög in.
+ *
+ * **Fyra blev tre i issue 170.** `settings` lämnade flikraden
+ * ([[ADR-0050 Desktopdesignen]] § 3), och inställningssidan har fortfarande
+ * sin rutt — den nås nu genom hjältens *Redigera container* i stället för
+ * genom en flik. Rutten prövas därför kvar på sin sida, av
+ * inställningskolumnens prov.
  */
 it('pekar varje flik på en namngiven rutt', function () {
     [, , $container] = containerflikKontext();
@@ -488,7 +498,6 @@ it('pekar varje flik på en namngiven rutt', function () {
     expect(containerflikLankar('containerTabs', $container->ulid))->toBe([
         'overview' => route('containers.show', $container, false),
         'items' => route('containers.items.index', $container, false),
-        'settings' => route('containers.edit', $container, false),
         'history' => route('containers.history', $container, false),
     ]);
 });

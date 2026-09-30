@@ -60,6 +60,25 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * Ingen sträng i JavaScript (issue 52 · [[ADR-0013 Språk och i18n]]): varje
  * text kommer ur `t()` med en nyckel under `container.overview.*` eller
  * `tips.*`.
+ *
+ * **Hjälten kom med issue 170 · [[ADR-0050 Desktopdesignen]] § 2–3**, och
+ * översikten är den sida som skickar `hero="large"`: bilden, arten, namnet och
+ * hela beskrivningen står ovanpå containerns bild över `md:`, och talen står
+ * ovanpå den. `ContainerHero` äger formen; hit hör bara vilken form sidan vill
+ * ha och vilka tal som ska in i `hero-stats`.
+ *
+ * **Sidans eget huvud ritas bara under `md:`.** Över brytpunkten bär hjälten
+ * namnet, arten och beskrivningen, och samma regel som gäller namnraden i skalet
+ * gäller här: två rader med samma text är en synlig dubblett och en skärmläsare
+ * som läser fel. Varje rad i `<dl>` är ett fält hjälten upprepar; skulle ett
+ * fält tillkomma som hjälten inte bär stannar det synligt på båda bredderna.
+ * Under `md:` är huvudet oförändrat — där ritas ingen hjälte.
+ *
+ * **Talen ritas på två ställen och är därför skrivna två gånger.** Över `md:`
+ * bär hjälten dem, och under `md:` — där hjälten inte ritas alls — står de
+ * kvar i sidans flöde som förut. Att bara behålla hjältens upplaga hade tyst
+ * tagit bort de två brickorna från en telefon. Båda raderna läser samma
+ * `counts`-prop, och ingen av dem räknar något själv.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -87,16 +106,33 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerLayout :container="container" :create="create" :can="can">
+    <ContainerLayout hero="large" :container="container" :create="create" :can="can">
         <Head :title="container.name" />
 
-        <h1 class="text-2xl font-semibold">{{ container.name }}</h1>
+        <!-- Talen ovanpå bilden, se issue 170 · [[ADR-0050 Desktopdesignen]]
+             § 2. Slotens innehåll ritas bara av den höga hjälten, och den
+             ritas bara över `md:`. -->
+        <template #hero-stats>
+            <UiStat :value="counts.items" :label="t('container.overview.items')" />
+            <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
+        </template>
+
+        <!--
+            Sidans eget huvud ritas bara under `md:`. Över brytpunkten är
+            hjälten sidans huvud (ADR-0050 § 2), och den bär samma namn, art och
+            beskrivning — två rader med samma text är både en synlig dubblett
+            och en skärmläsare som läser fel. Namnet är hjältens `<h1>` där, så
+            sidan har en rubrik på varje bredd.
+        -->
+        <h1 class="text-2xl font-semibold md:hidden">{{ container.name }}</h1>
 
         <!-- Panelen äger sin egen marginal: när alla tips är dolda ritas
              ingenting alls, och en ram runt den hade lämnat kvar sin luft. -->
         <InfoPanel :tips="props.tips" />
 
-        <dl class="mt-2 flex flex-col gap-1 text-slate-700">
+        <!-- Varje rad i listan är ett fält hjälten upprepar — arten och
+             beskrivningen — så hela listan hör till huvudet under `md:`. -->
+        <dl class="mt-2 flex flex-col gap-1 text-slate-700 md:hidden">
             <div v-if="container.kind" class="flex flex-wrap gap-x-2">
                 <dt class="font-medium">{{ t('container.overview.kind') }}</dt>
                 <dd>{{ container.kind }}</dd>
@@ -108,7 +144,10 @@ const { t } = useTranslations();
             </div>
         </dl>
 
-        <div class="mt-8 flex flex-wrap gap-4">
+        <!-- Talen i sidans flöde under `md:`, där hjälten inte ritas. Samma
+             två tal ur samma `counts` — ingen tredje bricka och ingen egen
+             räkning. -->
+        <div class="mt-8 flex flex-wrap gap-4 md:hidden">
             <UiStat :value="counts.items" :label="t('container.overview.items')" />
             <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
         </div>

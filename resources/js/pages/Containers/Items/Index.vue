@@ -114,6 +114,12 @@ const props = defineProps({
     categoryTree: { type: Array, required: true },
     /* Filtret som servern tillämpade: { q, tags, category, dropped }. */
     filter: { type: Object, required: true },
+    /*
+     * `{ create, update }` — behörighetsflaggorna. `create` ritar skapaknappen
+     * nedan, och `update` ritar *Redigera container* i hjälten (issue 170 ·
+     * [[ADR-0050 Desktopdesignen]] § 2–3). Båda ligger BREDVID resursen och är
+     * presentation: rutterna prövar samma policyer på nytt.
+     */
     can: { type: Object, required: true },
     /*
      * Läget fliken står i, ur serverns läsning av `?view=` (issue 154 ·
@@ -224,7 +230,7 @@ const views = computed(() => {
 </script>
 
 <template>
-    <ContainerLayout :container="container" :create="create">
+    <ContainerLayout hero="compact" :container="container" :can="can" :create="create">
         <Head :title="t('item.index.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('item.index.heading') }}</h1>

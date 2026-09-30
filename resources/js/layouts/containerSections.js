@@ -95,36 +95,42 @@ export const containerSections = [
  * Sektionerna som stannar i flikraden. Resten samlas på inställningssidan.
  *
  * `items` är den yta man arbetar i — itemen är containern (57a § Beslut 1) —
- * och `settings` är inställningssidan, som bär de sju andra och därför måste
- * gå att nå från varje sida i containern. Den ritades som en knapp i bildens
- * hjälte (*Redigera container*), och hjälten byggs inte ännu; fliken är samma
- * adress och samma yta, och den syns från varje flik i stället för från en.
+ * och `history` är vad som har hänt (116). `settings` stod här från issue 101
+ * och lämnade raden i issue 170 · [[ADR-0050 Desktopdesignen]] § 3: hjälten
+ * bär *Redigera container*, som är samma adress och samma yta, och en flik
+ * jämte den hade varit två vägar till samma val. Flikraden är därmed
+ * *Översikt · Items · Historik*, och 174, 175 och 178 lägger till sina flikar
+ * i ordningen *Översikt, Items, Dokument, Uppgifter, Kostnader, Historik*
+ * (ADR-0050 § 4).
  */
-const TAB_KEYS = ['items', 'settings', 'history'];
+const TAB_KEYS = ['items', 'history'];
 
 /*
  * Flikraden, se issue 101 · [[ADR-0042 Designsystemet]] § Beslut och
  * § Bildernas avvikelser.
  *
- * **Bildens sju flikar blir fyra här, och de tre som fattas är inte glömda.**
+ * **Bildens sju flikar blir tre här, och de fyra som fattas är inte glömda.**
  * Bilden ritar översikt, items, dokument, uppgifter, underhåll, kostnader och
  * historik. Uppgifter och underhåll är EN flik (§ Bildernas avvikelser:
  * `schedule` skiljer dem bara åt via `recurrence_type`, och skillnaden är ett
  * filter i listan), och historiken ritades inte när issue 101 skrevs
  * (§ Konsekvenser: `audit_log` instrumenteras i ett eget arbete). Issue 116
- * bygger den, och raden är den tionde i listan ovan.
+ * bygger den, och raden är den tionde i listan ovan. Inställningarna stod här
+ * från issue 101 till issue 170, då hjälten tog över vägen till dem
+ * (ADR-0050 § 3).
  *
  * **Dokument, uppgifter och kostnader har ingen sida.** Ingen rutt svarar på
  * dem, ingen kontrollermetod hämtar dem och ingen prop bär dem, så en flik för
  * dem hade varit en död länk — och en yta ingen hittar är samma sak som en yta
  * som inte finns (62a, 67c). De byggs därför inte här: issue 101 får ingen ny
  * ändpunkt, och en flik som kräver en ny kontrollermetod är ett fynd i PR:ens
- * `## Frågor och antaganden` och inte en ändpunkt i smyg.
+ * `## Frågor och antaganden` och inte en ändpunkt i smyg. 174, 175 och 178
+ * lägger till dem i den ordning ADR-0050 § 4 anger.
  *
  * **Översikten skrivs här och inte i listan ovan**, för den är containerns egen
- * sida och ingen undersida (`containers.show`, issue 89). `items`, `settings`
- * och `history` är sektioner och har sin rad i listan; fliken är samma nyckel
- * och samma adress, och därför ingen andra formulering av samma sak.
+ * sida och ingen undersida (`containers.show`, issue 89). `items` och `history`
+ * är sektioner och har sin rad i listan; fliken är samma nyckel och samma
+ * adress, och därför ingen andra formulering av samma sak.
  *
  * `count` sätts inte: flikarna bär inga tal i bilden, och `UiTabs` ritar en
  * bricka bara när anroparen har ett tal att visa (issue 100).
@@ -135,14 +141,24 @@ export const containerTabs = [
 ];
 
 /*
- * Inställningssidan, se issue 101.
+ * Inställningssidan, se issue 101 och issue 170.
  *
- * De sju sektionerna som inte fick plats i flikraden: kategorier, taggar,
- * delning, kalender, export, papperskorg och överlåtelse. Ordningen är
- * containerSections egen — strukturen först, utgångarna efter, papperskorgen
- * och ägarbytet sist — så en rad flyttar aldrig i förhållande till sina grannar
- * när ytorna delas.
+ * De åtta sektionerna som inte fick plats i flikraden: inställningssidan själv
+ * och de sju den bär — kategorier, taggar, delning, kalender, export,
+ * papperskorg och överlåtelse. Ordningen är i övrigt containerSections egen —
+ * strukturen först, utgångarna efter, papperskorgen och ägarbytet sist — så en
+ * rad flyttar aldrig i förhållande till sina grannar när ytorna delas.
+ *
+ * **Inställningssidan ligger FÖRST sedan issue 170.** Den lämnade flikraden
+ * (ADR-0050 § 3), och kvar i kolumnen är den hubben de sju andra sektionerna
+ * hänger under: stod hubben fjärde hade vägen till de sex ytor en läsare når
+ * varit gömd bakom tre andra rader ([[ADR-0042 Designsystemet]]
+ * § Konsekvenser). `containerSections` själv är orörd — det är bara den här
+ * ytan som lyfter sin egen sida högst.
  */
-export const containerSettingsSections = containerSections.filter(
-    (section) => ! TAB_KEYS.includes(section.key),
-);
+export const containerSettingsSections = [
+    ...containerSections.filter((section) => section.key === 'settings'),
+    ...containerSections.filter(
+        (section) => ! TAB_KEYS.includes(section.key) && section.key !== 'settings',
+    ),
+];

@@ -27,6 +27,12 @@ use Illuminate\Support\Facades\File;
  * en sida som inte är en inställning. Provet *"lämnar flikarna utan
  * sidokolumn"* är vakten mot att layouten sprids av bara farten.
  *
+ * **Inställningssidan flyttade IN i kolumnen i issue 170**, när den lämnade
+ * flikraden ([[ADR-0050 Desktopdesignen]] § 3), och ligger först där. Listan är
+ * därför åtta rader och inte sju, och provet *"når alla sektioner från
+ * inställningskolumnen"* räknar dem mot `containerSections` så att ingen rad
+ * tappas mellan ytorna.
+ *
  * Hjälparna har prefixet `containerinstallningskolumn` — Pest lägger alla
  * testfiler i samma namnrymd när hela sviten körs.
  */
@@ -88,6 +94,56 @@ function containerinstallningskolumnLanktaggar(string $kod): array
     return $träffar[0];
 }
 
+/**
+ * Kör ett uttryck mot resources/js/layouts/containerSections.js i node, med
+ * modulens listor bundna vid namn — samma grepp och samma skäl som
+ * ContainerflikTest::containerflikKor(): modulen importerar varken Vue eller
+ * Inertia, och en PHP-avskrift av listorna hade bevisat noll.
+ *
+ * Sökvägen går genom pathToFileURL() i stället för att klistras in rått: en
+ * Windows-sökväg är ingen giltig ESM-specificerare.
+ */
+function containerinstallningskolumnKor(string $uttryck): mixed
+{
+    $skript = implode("\n", [
+        "const { pathToFileURL } = await import('node:url');",
+        'const { containerSections, containerTabs, containerSettingsSections } = await import(pathToFileURL('
+            .json_encode(resource_path('js/layouts/containerSections.js'), JSON_UNESCAPED_SLASHES).').href);',
+        "process.stdout.write(JSON.stringify({$uttryck}));",
+    ]);
+
+    $rader = [];
+    $kod = 0;
+
+    exec('node --input-type=module -e '.escapeshellarg($skript).' 2>&1', $rader, $kod);
+
+    expect($kod)->toBe(0, implode("\n", $rader));
+
+    return json_decode(implode("\n", $rader), true);
+}
+
+/**
+ * Nycklarna i en av modulens listor, i listans ordning.
+ *
+ * @return list<string>
+ */
+function containerinstallningskolumnNycklar(string $lista): array
+{
+    return containerinstallningskolumnKor("{$lista}.map((post) => post.key)");
+}
+
+/**
+ * Adresserna i en av modulens listor, byggda ur en påhittad ULID.
+ *
+ * @return array<string, string>
+ */
+function containerinstallningskolumnLankar(string $lista): array
+{
+    return containerinstallningskolumnKor(
+        "Object.fromEntries({$lista}.map((post) => [post.key, post.href('01JTESTULID0000000000000000')]))",
+    );
+}
+
 /*
  * Klart när: layouten lägger sektionslistan i en sidokolumn bredvid
  * innehållet.
@@ -146,6 +202,49 @@ it('ritar sidokolumnen ur containerSettingsSections och skickar propsen vidare',
     expect($kod)->toContain('container: { type: Object, required: true }')
         ->toContain('create: { type: Object, default: null }')
         ->toContain('can: { type: Object, default: null }');
+});
+
+/*
+ * Klart när: inställningskolumnen når alla sektioner, inställningarna först
+ * (issue 170).
+ *
+ * **Inställningssidan lämnade flikraden** ([[ADR-0050 Desktopdesignen]] § 3),
+ * och vägen dit går nu genom hjältens *Redigera container*. Kolumnen är därför
+ * den enda förteckningen över containerns övriga ytor, och två saker måste
+ * hålla: hubben står FÖRST — annars ligger vägen till de sex sektioner en
+ * läsare når bakom tre andra rader — och ingen rad har tappats mellan ytorna.
+ * Flikarna och kolumnen tillsammans är exakt `containerSections`.
+ *
+ * Listorna läses i node och inte som råtext, samma grepp som
+ * ContainerflikTest använder: modulen är ren, och en assertion på en avskrift
+ * hade bevisat noll.
+ */
+it('når alla sektioner från inställningskolumnen, inställningarna först', function () {
+    $kolumn = containerinstallningskolumnNycklar('containerSettingsSections');
+    $flikar = containerinstallningskolumnNycklar('containerTabs');
+    $alla = containerinstallningskolumnNycklar('containerSections');
+
+    expect($kolumn[0] ?? null)->toBe('settings', 'inställningssidan står inte först i kolumnen');
+
+    // Översikten är en flik utan rad i `containerSections` — den är containerns
+    // EGEN sida och ingen undersida (issue 89) — och räknas därför inte in i
+    // jämförelsen. Kvar är sektionerna, och ingen av dem får ligga på båda
+    // ytorna eller saknas på båda.
+    $flikar = array_values(array_filter($flikar, fn (string $nyckel): bool => $nyckel !== 'overview'));
+
+    $täckta = [...$flikar, ...$kolumn];
+
+    expect(array_unique($täckta))->toBe($täckta, 'en sektion ligger på båda ytorna');
+
+    sort($täckta);
+    sort($alla);
+
+    expect($täckta)->toBe($alla, 'en sektion nås inte från någon av ytorna');
+
+    // Och kolumnens första rad är inställningssidan, med sin egen adress ur
+    // samma modul — samma nyckel som fliken bar innan den lämnade raden.
+    expect(containerinstallningskolumnLankar('containerSettingsSections'))
+        ->toHaveKey('settings');
 });
 
 /*

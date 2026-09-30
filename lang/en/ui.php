@@ -1505,6 +1505,15 @@ return [
             'edit' => 'Edit',
         ],
 
+        // The hero, see issue 170 · [[ADR-0050 Desktopdesignen]] § 2–3. The
+        // button replaces the row *Settings* the tab row carried until then:
+        // it leads to the settings page, where the container's seven other
+        // sections live ([[ADR-0042 Designsystemet]] § Konsekvenser), and it
+        // is drawn only for the one who may update the container.
+        'hero' => [
+            'edit' => 'Edit container',
+        ],
+
         'create' => [
             'title' => 'New container',
             'heading' => 'New container',

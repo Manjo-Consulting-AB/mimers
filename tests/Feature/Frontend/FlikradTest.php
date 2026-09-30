@@ -317,6 +317,50 @@ it('har den aktiva fliken i adressen och inte i komponentens tillstånd', functi
 });
 
 /*
+ * Issue 170 · [[ADR-0050 Desktopdesignen]] § 3–4: containerns flikrad.
+ *
+ * **Raden är tre flikar och inte fyra.** *Inställningar* låg i raden från issue
+ * 101 och lämnade den när hjälten tog över vägen till inställningssidan
+ * (ADR-0050 § 3): *Redigera container* i hjälten är samma adress och samma yta,
+ * och en flik jämte den hade varit två vägar till samma val. Kvar är
+ * *Översikt · Items · Historik*, och de tre som ADR-0050 § 4 räknar upp utöver
+ * dem — Dokument, Uppgifter och Kostnader — kommer med 174, 175 och 178, i den
+ * ordningen.
+ *
+ * **Listan läses i node och inte som råtext**, samma grepp som
+ * ContainerflikTest använder: `containerSections.js` är en ren modul, och en
+ * assertion på en avskrift av listan hade bevisat noll. ContainerflikTest
+ * prövar dessutom varje fliks adress mot ruttabellen; här prövas ordningen och
+ * namnen.
+ */
+it('har containerns flikrad Översikt, Items och Historik', function () {
+    $skript = implode("\n", [
+        "const { pathToFileURL } = await import('node:url');",
+        'const { containerTabs } = await import(pathToFileURL('
+            .json_encode(resource_path('js/layouts/containerSections.js'), JSON_UNESCAPED_SLASHES).').href);',
+        'process.stdout.write(JSON.stringify(containerTabs.map((tab) => tab.key)));',
+    ]);
+
+    $rader = [];
+    $kod = 0;
+
+    exec('node --input-type=module -e '.escapeshellarg($skript).' 2>&1', $rader, $kod);
+
+    expect($kod)->toBe(0, implode("\n", $rader));
+
+    expect(json_decode(implode("\n", $rader), true))
+        ->toBe(['overview', 'items', 'history'], 'flikraden är inte Översikt, Items och Historik');
+
+    // Etiketterna kommer ur `lang/` med nyckeln `container.nav.<key>`: `t()`
+    // skriver nyckeln själv när uppslaget misslyckas, och en flik hade då
+    // hetat `container.nav.settings` i raden.
+    foreach (['overview', 'items', 'history'] as $nyckel) {
+        expect(trans("ui.container.nav.{$nyckel}", [], 'en'))
+            ->not->toBe("ui.container.nav.{$nyckel}", "container.nav.{$nyckel} saknas");
+    }
+});
+
+/*
  * Arkitektsvaret på issue 100 skärpte träffen mot adressen, och det här provet
  * är det som håller skärpningen. Den gamla regeln — hela adressen querysträng
  * inräknad, annars längsta sökväg — höll inte för en flik som bär BÅDE sin egen

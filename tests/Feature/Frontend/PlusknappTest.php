@@ -341,8 +341,8 @@ it('ritar knappen i skalet och i flikraden ur sidans mål', function () {
     foreach ([
         'pages/Dashboard.vue' => '<AppLayout :create="create">',
         'pages/Containers/Index.vue' => '<AppLayout :create="create">',
-        'pages/Containers/Overview.vue' => '<ContainerLayout :container="container" :create="create" :can="can">',
-        'pages/Containers/Items/Index.vue' => '<ContainerLayout :container="container" :create="create">',
+        'pages/Containers/Overview.vue' => '<ContainerLayout hero="large" :container="container" :create="create" :can="can">',
+        'pages/Containers/Items/Index.vue' => '<ContainerLayout hero="compact" :container="container" :can="can" :create="create">',
         'pages/Containers/Items/Show.vue' => '<ContainerLayout :container="container" :create="create">',
     ] as $sokvag => $rad) {
         expect(plusknappKod($sokvag))->toContain($rad);
