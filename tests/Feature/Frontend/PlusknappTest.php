@@ -152,6 +152,11 @@ it('öppnar menyn med de rader användaren får använda på ett item', function
                 ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
                 ['key' => 'attachment', 'href' => "{$bas}?tab=attachments"],
                 ['key' => 'schedule', 'href' => "{$bas}/schedules/create"],
+                // Den femte raden ur [[ADR-0048 Mobilen och plusknappen]] § 2:
+                // *Kostnad*, som leder till itemets kostnadsflik. Raden
+                // byggdes inte förrän ytan fanns (issue 168) — en menyrad till
+                // en webbyta som inte finns är en död länk.
+                ['key' => 'cost', 'href' => "{$bas}?tab=costs"],
             ]),
     );
 });
@@ -217,7 +222,7 @@ it('visar ingen knapp för en användare med läsåtkomst', function () {
  * Relationen är den enda raden med en annan grind: en `related`-länk ändrar
  * BÅDA itemen, och `ItemLinkController::store()` kräver `update` på dem medan
  * de fyra andra raderna kräver `create`. En mottagare på `create` ser därför
- * tre rader och en på `write` fyra — samma meny, olika innehåll, och det är
+ * fyra rader och en på `write` fem — samma meny, olika innehåll, och det är
  * servern som avgör.
  */
 it('utelämnar en rad vars policy nekar', function () {
@@ -230,17 +235,18 @@ it('utelämnar en rad vars policy nekar', function () {
     plusknappGrant($container, $skapare, 'create');
 
     actingAs($skapare)->get("/containers/{$container->ulid}/items/{$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->has('create.rows', 3)
+        fn (AssertableInertia $page) => $page->has('create.rows', 4)
             ->where('create.rows.0.key', 'item')
             ->where('create.rows.1.key', 'attachment')
-            ->where('create.rows.2.key', 'schedule'),
+            ->where('create.rows.2.key', 'schedule')
+            ->where('create.rows.3.key', 'cost'),
     );
 
     $skrivare = User::factory()->create();
     plusknappGrant($container, $skrivare, 'write');
 
     actingAs($skrivare)->get("/containers/{$container->ulid}/items/{$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->has('create.rows', 4)
+        fn (AssertableInertia $page) => $page->has('create.rows', 5)
             ->where('create.rows.1.key', 'relation'),
     );
 });
@@ -412,7 +418,7 @@ it('har en mening till varje menyrad och till knappen', function () {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
 
-    foreach (['item', 'relation', 'attachment', 'schedule'] as $rad) {
+    foreach (['item', 'relation', 'attachment', 'schedule', 'cost'] as $rad) {
         expect(Lang::get("ui.create.rows.{$rad}", [], 'en'))->not->toBe(
             "ui.create.rows.{$rad}",
             "ui.create.rows.{$rad} saknas",

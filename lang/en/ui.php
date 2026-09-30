@@ -134,6 +134,9 @@ return [
             'attachment' => 'Image or document',
             // Ett schema.
             'schedule' => 'Task',
+            // En kostnadsrad på itemet (issue 168). Raden leder till itemets
+            // kostnadsflik och byggs bara för den som får skapa på itemet.
+            'cost' => 'Cost',
         ],
     ],
 
@@ -372,6 +375,15 @@ return [
         'loan-updated' => 'The loan has been saved.',
         'loan-deleted' => 'The loan row is gone.',
 
+        // Issue 168 decision 2. Three codes and not one, for the same reason as
+        // the loan's three: registering, changing and removing are three
+        // different things. `cost-deleted` says the ROW is gone and never that
+        // the money came back — the row is soft-deleted and does not enter the
+        // trash (issue 45a decision 9), so the sentence promises no restore.
+        'cost-created' => 'The cost has been registered.',
+        'cost-updated' => 'The cost has been saved.',
+        'cost-deleted' => 'The cost row is gone.',
+
         // Issue 62a decision 7. ONE code for all four types: the restore takes
         // `type` in the body and shares one list, so the view has no reason to
         // know which of them just came back — but the sentence says content,
@@ -540,6 +552,20 @@ return [
         // the client, but the sentence is the user's.
         'loan' => [
             'already_open' => 'The item is already lent out. Register the return first.',
+        ],
+
+        // The cost codes, see issue 168. They come from
+        // App\Support\Cost\MinorUnits as App\Exceptions\Api\ApiException and
+        // become a field error on `amount` in
+        // App\Http\Controllers\CostEntryController — never a raw JSON body in
+        // the middle of a page (same rule as issue 54 decision 4).
+        //
+        // Two sentences and not one: the client cannot mark the right field or
+        // phrase the message without knowing which limit was hit, which is
+        // exactly why the codes carry `data` (issue 45a decision 5).
+        'cost' => [
+            'amount_invalid' => 'The amount is not a number. Write it as 1200.50 or 1200,50.',
+            'amount_decimals' => 'The amount has too many decimals for :currency, which has at most :max_decimals.',
         ],
 
         // The export's only domain error on the web, see issue 67c decision 4.
@@ -2429,6 +2455,45 @@ return [
             'dismiss' => 'Dismiss',
 
             'submit' => 'Upload',
+        ],
+
+        // The cost section on the detail view, see issue 168 decisions 3–5 and
+        // [[ADR-0050 Desktopdesignen]] § 8. The section lives in
+        // resources/js/components/ItemCostSection.vue: it carries its own form
+        // and its own errors, just as ItemLoanSection does for the loans and
+        // ItemAttachmentSection for the attachments, so a rejected amount does
+        // not colour the rest of the page.
+        //
+        // The four fields are the API's own: `amount` is a string in major
+        // units that App\Support\Cost\MinorUnits parses, `currency` is
+        // pre-filled from the container and may be overridden
+        // ([[ADR-0037 Valutans arv]]), `supplier` is free text with
+        // autocomplete from the container's own values, and `incurred_on` is
+        // the cost's date and not the day it was registered. No sentence here
+        // says the amount must be positive: a credit note is a row like any
+        // other ([[ADR-0016 Kostnadsregistrering]]).
+        //
+        // `destroy_confirm` says the row disappears and promises no restore:
+        // the deletion is soft, but the trash lists four types and `cost_entry`
+        // is not one of them (issue 45a decision 9).
+        'cost' => [
+            'heading' => 'Costs',
+            'description' => 'What the item has cost.',
+
+            'empty' => 'The item has no costs registered.',
+            'edit' => 'Change',
+            'cancel' => 'Cancel',
+
+            'destroy' => 'Remove the row',
+            'destroy_confirm' => 'The row is removed. Continue?',
+
+            'form_heading' => 'Register a cost',
+            'form_incurred_on' => 'Date',
+            'form_amount' => 'Amount',
+            'form_currency' => 'Currency',
+            'form_description' => 'Description',
+            'form_supplier' => 'Supplier',
+            'form_submit' => 'Save',
         ],
 
         // The loan section on the detail view, see issue 67a decisions 2–8. The

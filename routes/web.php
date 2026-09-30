@@ -20,6 +20,7 @@ use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
 use App\Http\Controllers\ContainerTrashController;
+use App\Http\Controllers\CostEntryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DismissedTipController;
 use App\Http\Controllers\ExportController;
@@ -858,6 +859,50 @@ Route::middleware('auth')->group(function () {
     Route::delete('/containers/{container}/items/{item}/loans/{loan}', [LoanController::class, 'destroy'])
         ->scopeBindings()
         ->name('containers.items.loans.destroy');
+
+    /*
+     * Issue 168 · Kostnadsraderna i webben — lägg till, ändra och ta bort en
+     * rad på itemet, se App\Http\Controllers\CostEntryController och
+     * [[ADR-0050 Desktopdesignen]] § 8.
+     *
+     * **Tre rutter och ingen sida** (Beslut 2). Listan — raderna och
+     * leverantörerna — kommer med itemvyns props, precis som utlåningen
+     * (issue 67a § Beslut 1), bilagorna (issue 60 § Beslut 2) och relationerna
+     * (issue 58 § Beslut 1) gjorde det. En egen GET hade varit en andra väg
+     * till samma läsning och en andra sanning om sorteringen.
+     *
+     * **`scopeBindings()` på alla tre**, av samma skäl som varje annan nästlad
+     * skrivning i filen (issue 9b § Beslut 1): `{item}` löses genom
+     * containerns `items()` och `{cost}` genom App\Models\Item::costs(), så en
+     * item-ULID ur en annan container — eller en kostnad på ett annat item —
+     * blir 404 i stället för ändrad. Det är hela skyddet, och samma form som
+     * routes/api.php ger samma tre rutter (issue 45a § Beslut 7).
+     *
+     * **Ingenting av `/api` byggs om.** `StoreCostEntryRequest` och
+     * `UpdateCostEntryRequest` delas rakt av, och `CostEntryResource` är
+     * samma resurs itemvyns props byggs ur. Logiken bor i App\Actions\Cost
+     * sedan issue 168, så de två ytorna skriver bevisligen samma rad.
+     *
+     * Grindarna är ITEMETS, en pinne per handling: `view` för listan (i
+     * ItemController::show()), `create` för POST, `update` för PATCH och
+     * `delete` för DELETE. En `write`-mottagare ändrar en rad men tar inte
+     * bort den.
+     *
+     * Skrivningarna svarar 302 till itemvyns kostnadsflik — `?tab=costs`, så
+     * läsaren stannar där hon var — med en flash-kod, mönstret från issue 51
+     * § Beslut 5.
+     */
+    Route::post('/containers/{container}/items/{item}/costs', [CostEntryController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.costs.store');
+
+    Route::patch('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.items.costs.update');
+
+    Route::delete('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.costs.destroy');
 
     /*
      * Issue 58 · Relationerna — knyta och knyta upp, se

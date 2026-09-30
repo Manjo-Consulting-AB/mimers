@@ -4,6 +4,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import HistoryRow from '../../../components/HistoryRow.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
+import ItemCostSection from '../../../components/ItemCostSection.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemMapPanel from '../../../components/ItemMapPanel.vue';
@@ -232,6 +233,18 @@ const props = defineProps({
     /* Serverns datum, `Y-m-d` — "Tillbaka idag" sätter det (Beslut 3). */
     today: { type: String, required: true },
     /*
+     * Itemets kostnadsrader (issue 168 § Beslut 3) ur
+     * App\Http\Resources\CostEntryResource, nyast först — samma ordning och
+     * samma format som `Api\CostEntryController::index()` svarar med.
+     */
+    costs: { type: Array, required: true },
+    /*
+     * Formulärets förval på kostnadsfliken: `{currency}` ur containerns arv
+     * ([[ADR-0037 Valutans arv]]). Servern fyller samma tomrum när klienten
+     * inte skickar en valuta, så förvalet och arvet är ETT värde och inte två.
+     */
+    costDefaults: { type: Object, required: true },
+    /*
      * Historikens rader (issue 116 · [[ADR-0043 Tre loggar]]
      * § Händelseloggen), ur App\Actions\Audit\PresentAuditEvents — nyast
      * först, högst hundra, med namnen redan uppslagna.
@@ -394,7 +407,7 @@ const linkViews = computed(() => [
 /*
  * Flikraden i den form `UiTabs` vill ha: `{ key, label, href, count }`.
  *
- * **Raden har åtta flikar, och fälten har en egen sedan issue 154.**
+ * **Raden har nio flikar, och kostnaden har en egen sedan issue 168.**
  * `docs/Design/struktur - item.jpeg` ritar översikt, detaljer, relationer,
  * dokument, kostnader, uppgifter och historik, och mobilmockupen ritar
  * Översikt · Information · Dokument. Raden är bildens, med två namn bytta:
@@ -407,10 +420,11 @@ const linkViews = computed(() => [
  * snabbfakta under dem ([[ADR-0041 Itemets vy]] § Beslut, issue 96 och 154).
  *
  * **Ordningen är översikten först, sedan bildens, och de egna sist.**
- * Kostnaden har ingen flik (den väntar på trepanelslayouten, issue 103), och
- * historiken kom med issue 116 och ligger SIST — efter utlåningen och
- * taggarna, som containerns egen historikflik: den är vad som HAR hänt och
- * inte en yta man arbetar i.
+ * Kostnaden fick sin flik i issue 168 — bilden ritar den, och ytan fanns
+ * redan på `/api` innan den fanns i webben — och ligger näst sist, före
+ * historiken, som containerns egen flikrad gör ([[ADR-0050 Desktopdesignen]]
+ * § 4). Historiken kom med issue 116 och ligger SIST: den är vad som HAR
+ * hänt och inte en yta man arbetar i.
  *
  * **Etiketten är sektionens eget ord.** Sex av flikarna bär samma rubrik som
  * sektionen de visar — `item.links.heading`, `item.attachment.heading`,
@@ -458,7 +472,15 @@ const tabs = computed(() => {
         { key: 'loans', label: t('item.loan.heading'), href: tabHref('loans'), count: props.loanHistory.length + (props.openLoan ? 1 : 0) },
         { key: 'tags', label: t('item.show.tags'), href: tabHref('tags'), count: props.item.tags.length },
         /*
-         * Historiken (issue 116) är den SJUNDE fliken och ligger sist, som
+         * Kostnaderna (issue 168 · [[ADR-0050 Desktopdesignen]] § 8). Ytan
+         * fanns på `/api` innan den fanns här, och raden ligger näst sist —
+         * före historiken, som containerns egen flikrad gör. Räknaren är
+         * antalet rader fliken ritar, ur `costs`-proppen: en nolla säger att
+         * listan är tom, och den är ett svar och inte en gissning.
+         */
+        { key: 'costs', label: t('item.cost.heading'), href: tabHref('costs'), count: props.costs.length },
+        /*
+         * Historiken (issue 116) är den NIONDE fliken och ligger sist, som
          * containerns egen: den är vad som HAR hänt och inte en yta man
          * arbetar i. Etiketten är `audit.history.heading` — samma ord som
          * containerns flik och som panelens egen rubrik, så fliken och ytan
@@ -962,6 +984,28 @@ function toggleFavorite() {
                     :open-loan-overdue="openLoanOverdue"
                     :loan-history="loanHistory"
                     :today="today"
+                    :can="can"
+                />
+
+                <!--
+                    Kostnaderna (issue 168 · [[ADR-0050 Desktopdesignen]] § 8):
+                    itemets rader, nyast först, och formuläret som lägger till,
+                    ändrar och tar bort dem. Sektionen får `costs`,
+                    `costDefaults` och `can` ur detaljvyns props — och hämtar
+                    leverantörslistan själv med en partiell omladdning när
+                    formuläret ritas, se ItemCostSection.vue.
+
+                    Serverns regler är API:ets, och skrivningarna går mot
+                    App\Http\Controllers\CostEntryController. Rubriken är samma
+                    ord som flikens etikett, så raden och ytan under den inte
+                    kan säga olika saker.
+                -->
+                <ItemCostSection
+                    v-if="activeTab === 'costs'"
+                    :container-ulid="container.ulid"
+                    :item-ulid="item.ulid"
+                    :costs="costs"
+                    :cost-defaults="costDefaults"
                     :can="can"
                 />
 

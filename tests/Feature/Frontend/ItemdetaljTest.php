@@ -274,7 +274,8 @@ it('ger en read-innehavare en detaljvy utan skrivytor', function () {
 /*
  * Plusknappens mål på ett item, se issue 152: en MENY med de rader användaren
  * får använda, byggd av App\Support\Frontend\CreateTarget. Ägaren ser alla
- * fyra; att rader faller bort när en policy nekar prövas i
+ * fem — den femte, *Kostnad*, kom med issue 168 när kostnadsytan byggdes; att
+ * rader faller bort när en policy nekar prövas i
  * tests/Feature/Frontend/PlusknappTest.php.
  */
 it('bär plusknappens meny med radadresser på ett item', function () {
@@ -292,6 +293,9 @@ it('bär plusknappens meny med radadresser på ett item', function () {
                 ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
                 ['key' => 'attachment', 'href' => "{$bas}?tab=attachments"],
                 ['key' => 'schedule', 'href' => "{$bas}/schedules/create"],
+                // Den femte raden ur [[ADR-0048 Mobilen och plusknappen]] § 2:
+                // *Kostnad*, som leder till itemets kostnadsflik (issue 168).
+                ['key' => 'cost', 'href' => "{$bas}?tab=costs"],
             ]),
     );
 });

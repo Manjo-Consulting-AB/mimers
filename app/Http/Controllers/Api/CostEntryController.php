@@ -2,23 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Actions\Access\ResolveItemScope;
-use App\Actions\Audit\RecordAuditEvent;
+use App\Actions\Cost\CreateCostEntry;
+use App\Actions\Cost\DeleteCostEntry;
+use App\Actions\Cost\ListCostSuppliers;
+use App\Actions\Cost\UpdateCostEntry;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Cost\StoreCostEntryRequest;
 use App\Http\Requests\Cost\UpdateCostEntryRequest;
 use App\Http\Resources\CostEntryResource;
-use App\Models\AuditLog;
 use App\Models\Container;
-use App\Models\ContainerAccess;
 use App\Models\CostEntry;
 use App\Models\Item;
-use App\Models\User;
-use App\Support\Cost\MinorUnits;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -41,7 +38,8 @@ use Illuminate\Support\Facades\Gate;
  * i containern men inte bokföra en på sitt eget, och en `write`-mottagare kunde
  * radera en kostnadsrad. `Container $container` står kvar i signaturerna för
  * att ImplicitRouteBinding löser barnbindningen mot den redan lösta
- * föräldern; `store()` behöver den dessutom för attributedAccountId().
+ * föräldern; `store()` behöver den dessutom för att fylla valutan och
+ * tillskriva kontot — se App\Actions\Cost\CreateCostEntry.
  *
  * routes/api.php nästlar `{item}` under `{container}` och `{cost}` under
  * `{item}` med gruppens `->scopeBindings()` — `{item}` löses genom
@@ -59,39 +57,14 @@ use Illuminate\Support\Facades\Gate;
  * huvudenhet ("1200,50") och det som lagras är heltalet i minsta enhet
  * (120050) från App\Support\Cost\MinorUnits::parse() (§ Beslut 3–4).
  * `container_id` denormaliseras från itemet — aldrig ur kroppen (§ Beslut 2).
- * `created_by_user_id` sätts från token, och `created_by_account_id` från
- * attributedAccountId(): kontot härleds ur HUR användaren når containern
- * (ägarkontots medlem, managed-mottagare eller eget konto), aldrig ur
- * kroppen (§ Beslut 2; granskningens fynd 1).
+ * `created_by_user_id` sätts från token, och `created_by_account_id` härleds
+ * ur HUR användaren når containern (ägarkontots medlem, managed-mottagare
+ * eller eget konto), aldrig ur kroppen (§ Beslut 2; granskningens fynd 1).
+ * Båda sätts sedan issue 168 i App\Actions\Cost\CreateCostEntry, som också
+ * bär `attributedAccountId()`.
  */
 class CostEntryController extends Controller
 {
-    /**
-     * Datumfältet. Gamla och nya värdet följer med i `meta` — som `Y-m-d`,
-     * samma form kolumnen har (issue 109, [[ADR-0043 Tre loggar]]
-     * § Händelseloggen).
-     */
-    private const DATE_FIELDS = ['incurred_on'];
-
-    /**
-     * Fälten vars värde får följa med i `meta`: datumet, valutan och
-     * beloppet. `description` och `supplier` är användarens fritext och
-     * följer aldrig med — bara deras NAMN står i `changed`.
-     *
-     * @var list<string>
-     */
-    private const VALUED_FIELDS = ['incurred_on', 'currency', 'amount'];
-
-    public function __construct(private readonly RecordAuditEvent $recordAuditEvent) {}
-
-    /**
-     * Högst 50 förslag. Uppslaget matar en autocomplete, inte en rapport, och
-     * klienten hämtar listan en gång och filtrerar medan användaren skriver —
-     * fler rader hade bara gjort hämtningen långsammare (issue 45b § Beslut
-     * 3–4). Inget konfigvärde, ingen query-parameter.
-     */
-    private const SUPPLIER_SUGGESTION_LIMIT = 50;
-
     /**
      * GET /api/containers/{container}/items/{item}/costs — 200. Sorterad
      * `incurred_on` fallande med `id` fallande som andrasortering, så den
@@ -116,80 +89,21 @@ class CostEntryController extends Controller
     /**
      * POST /api/containers/{container}/items/{item}/costs — 201.
      * StoreCostEntryRequest har bevisat att `amount` är en sträng; själva
-     * beloppstolkningen ligger HÄR, i kontrollern, genom MinorUnits::parse()
-     * — den kastar `cost.amount_invalid`/`cost.amount_decimals` innan en rad
-     * skapas (§ Beslut 4–5).
-     *
-     * **Valutan är valfri i kroppen sedan issue 85 · [[ADR-0037 Valutans
-     * arv]], och den enda raden här som fyller ett tomrum.** Skickar klienten
-     * ingen valuta skriver servern containerns
-     * `App\Models\Container::effectiveCurrency()` — containerns egen om den
-     * har en, annars ägarkontots. Det är samma värde formuläret visar som
-     * förval, och det är därför arvsregeln är prövbar i dag: den Vue-yta som
-     * visar värdet för användaren byggs i den issue som bygger kostnadsytan.
-     *
-     * Skickas en valuta vinner den ALLTID och sparas ordagrant
-     * (versalnormaliserad av requesten). Arvet är ett förslag, aldrig ett
-     * tvång — och kolumnen är oförändrat `NOT NULL`: det finns ingen väg
-     * genom den här metoden som skapar en rad utan valuta. Fallet ligger
-     * före `MinorUnits::parse()`, som behöver valutan för att veta antalet
-     * decimaler.
-     *
-     * Containern är den som redan denormaliseras ur itemet på raden nedan;
-     * ingen ny uppslagning görs och itemet är fortfarande ingen nivå i arvet.
-     *
-     * Inga domänregler utöver det: registrering är fri på alla plannivåer och
-     * kostnadsrader är metadata (räknas inte mot kvoten). Ingen Action: ytan
-     * finns bara på `/api`, så det finns ingen andra yta att glida ifrån
+     * beloppstolkningen, valutan och tillskrivningen av kontot ligger sedan
+     * issue 168 i App\Actions\Cost\CreateCostEntry — samma action som
+     * webbens kostnadsflik anropar, så de två ytorna inte kan glida isär
      * ([[ADR-0024 Tunna controllers och actions]]).
-     *
-     * Sedan issue 109 skrivs raden och händelseloggen i EN transaktion —
-     * kostnaden hör till itemet och loggas i händelseloggen som allt annat
-     * som hänger på det. `meta` bär beloppet och valutan; `description` och
-     * `supplier` är användarens fritext och följer aldrig med ([[ADR-0043
-     * Tre loggar]] § Händelseloggen).
      *
      * Grinden är itemets `create` (issue 71 § Beslut 1 och 5): en kostnadsrad
      * är ny information som läggs till itemet, inte en ändring av det.
      */
-    public function store(StoreCostEntryRequest $request, Container $container, Item $item): JsonResponse
+    public function store(StoreCostEntryRequest $request, Container $container, Item $item, CreateCostEntry $createCostEntry): JsonResponse
     {
         Gate::authorize('create', $item);
 
-        $data = $request->validated();
+        $cost = $createCostEntry->handle($container, $item, $request->validated(), $request->user());
 
-        // `??=` och inte en `if`: en nyckel som saknas OCH en nyckel som kom
-        // in som `null` (tom ruta, ConvertEmptyStringsToNull) betyder samma
-        // sak — containern föreslår. Se klassdokumentationen i
-        // StoreCostEntryRequest.
-        $data['currency'] ??= $container->effectiveCurrency();
-
-        $amount = MinorUnits::parse($data['amount'], $data['currency']);
-        unset($data['amount']);
-
-        $cost = new CostEntry($data);
-        $cost->amount = $amount;
-        $cost->item_id = $item->id;
-        $cost->container_id = $item->container_id;
-        $cost->created_by_user_id = $request->user()->id;
-        $cost->created_by_account_id = $this->attributedAccountId($request->user(), $container);
-
-        DB::transaction(function () use ($cost, $item, $request): void {
-            $cost->save();
-
-            $this->recordAuditEvent->handle(
-                action: AuditLog::ACTION_COST_ENTRY_CREATED,
-                account: $item->container->account,
-                user: $request->user(),
-                container: $item->container,
-                item: $item,
-                subjectType: 'cost_entry',
-                subjectUlid: $cost->ulid,
-                meta: ['amount' => $cost->amount, 'currency' => $cost->currency],
-            );
-        });
-
-        return (new CostEntryResource($cost->load('createdByAccount')))
+        return (new CostEntryResource($cost))
             ->response()
             ->setStatusCode(201);
     }
@@ -206,93 +120,19 @@ class CostEntryController extends Controller
      * validationData()-sammanslagning som UpdateLoanRequest behövde
      * (§ Beslut 12).
      *
-     * Sedan issue 109 loggas ändringen med fältens NAMN, och gamla och nya
-     * värdet för beloppet, valutan och datumet — aldrig för beskrivningen
-     * eller leverantören. En PATCH som inte ändrar något skriver ingen rad:
-     * skillnaden mot databasen läses innan raden sparas.
+     * Skrivningen och loggraden ligger sedan issue 168 i
+     * App\Actions\Cost\UpdateCostEntry — samma action som webbens
+     * kostnadsflik anropar. En PATCH som inte ändrar något skriver ingen rad.
      *
      * Grinden är itemets `update` (issue 71 § Beslut 1 och 5).
      */
-    public function update(UpdateCostEntryRequest $request, Container $container, Item $item, CostEntry $cost): CostEntryResource
+    public function update(UpdateCostEntryRequest $request, Container $container, Item $item, CostEntry $cost, UpdateCostEntry $updateCostEntry): CostEntryResource
     {
         Gate::authorize('update', $item);
 
-        $data = $request->validated();
-
-        if (array_key_exists('amount', $data)) {
-            $amount = MinorUnits::parse($data['amount'], $data['currency']);
-            unset($data['amount']);
-        }
-
-        $cost->fill($data);
-
-        if (isset($amount)) {
-            $cost->amount = $amount;
-        }
-
-        $meta = $this->metaFor($cost);
-
-        DB::transaction(function () use ($cost, $item, $request, $meta): void {
-            $cost->save();
-
-            if ($meta === null) {
-                return;
-            }
-
-            $this->recordAuditEvent->handle(
-                action: AuditLog::ACTION_COST_ENTRY_UPDATED,
-                account: $item->container->account,
-                user: $request->user(),
-                container: $item->container,
-                item: $item,
-                subjectType: 'cost_entry',
-                subjectUlid: $cost->ulid,
-                meta: $meta,
-            );
-        });
-
-        return new CostEntryResource($cost->load('createdByAccount'));
-    }
-
-    /**
-     * `meta` för de fält som ändrades, eller null när ingenting ändrades.
-     *
-     * Läses FÖRE `save()`: `getDirty()` är skillnaden mot databasen, och
-     * efter en sparad rad är den tom.
-     *
-     * @return array{changed: list<string>, values?: array<string, array{from: mixed, to: mixed}>}|null
-     */
-    private function metaFor(CostEntry $cost): ?array
-    {
-        $dirty = $cost->getDirty();
-
-        if ($dirty === []) {
-            return null;
-        }
-
-        $changed = array_keys($dirty);
-        $values = [];
-
-        foreach ($changed as $field) {
-            if (! in_array($field, self::VALUED_FIELDS, true)) {
-                continue;
-            }
-
-            $values[$field] = in_array($field, self::DATE_FIELDS, true)
-                ? [
-                    'from' => $cost->getOriginal($field)?->toDateString(),
-                    'to' => $cost->{$field}->toDateString(),
-                ]
-                : ['from' => $cost->getOriginal($field), 'to' => $cost->{$field}];
-        }
-
-        $meta = ['changed' => $changed];
-
-        if ($values !== []) {
-            $meta['values'] = $values;
-        }
-
-        return $meta;
+        return new CostEntryResource(
+            $updateCostEntry->handle($item, $cost, $request->validated(), $request->user())
+        );
     }
 
     /**
@@ -307,30 +147,15 @@ class CostEntryController extends Controller
      * Grinden är itemets `delete` (issue 71 § Beslut 1 och 5): `write` ändrar
      * en kostnadsrad men tar inte bort den.
      *
-     * Sedan issue 109 skrivs raden och händelseloggen i EN transaktion.
-     * `meta` bär beloppet och valutan, aldrig beskrivningen eller
-     * leverantören.
+     * Raderingen och loggraden ligger sedan issue 168 i
+     * App\Actions\Cost\DeleteCostEntry — samma action som webbens
+     * kostnadsflik anropar.
      */
-    public function destroy(Request $request, Container $container, Item $item, CostEntry $cost): Response
+    public function destroy(Request $request, Container $container, Item $item, CostEntry $cost, DeleteCostEntry $deleteCostEntry): Response
     {
         Gate::authorize('delete', $item);
 
-        DB::transaction(function () use ($cost, $item, $request): void {
-            $meta = ['amount' => $cost->amount, 'currency' => $cost->currency];
-
-            $cost->delete();
-
-            $this->recordAuditEvent->handle(
-                action: AuditLog::ACTION_COST_ENTRY_DELETED,
-                account: $item->container->account,
-                user: $request->user(),
-                container: $item->container,
-                item: $item,
-                subjectType: 'cost_entry',
-                subjectUlid: $cost->ulid,
-                meta: $meta,
-            );
-        });
+        $deleteCostEntry->handle($item, $cost, $request->user());
 
         return response()->noContent();
     }
@@ -341,134 +166,21 @@ class CostEntryController extends Controller
      * med leverantörsnamn stigande som andrasortering — uppslagsytan för
      * autocomplete, issue 45b.
      *
-     * Ytan ligger på CONTAINERN, inte på itemet (issue 45b § Beslut 1): den
-     * som registrerar en kostnad på ett nytt item ska få containerns hela
-     * leverantörshistorik, och `container_id` är denormaliserad på raden just
-     * för att frågan inte ska behöva joina `item`. En enda `GROUP BY` mot
-     * `cost_entry` — ingen relation, ingen Eloquent-modell — som indexet
-     * `(container_id, deleted_at, supplier)` från 45a gör billig i stället
-     * för en full scan.
-     *
-     * `supplier` normaliseras aldrig (ADR-0016): en `strtolower()` i
-     * grupperingen hade gett en lista med värden som inte finns i någon rad
-     * (issue 45b § Beslut 5). Mjukraderade rader räknas inte och `NULL`
-     * filtreras bort — en kostnad i papperskorgen ska inte hålla liv i en
-     * leverantör, och en kostnad utan leverantör är inte en leverantör som
-     * heter ingenting (§ Beslut 3). Inga värden som förekommer på ett raderat
-     * ITEM göms: kostnadsraden är inte raderad, och uppslaget är ett
-     * inmatningsstöd, inte en summering (§ Klart när, sista punkten).
+     * Ytan ligger på CONTAINERN, inte på itemet (issue 45b § Beslut 1), och
+     * frågan bor sedan issue 168 i App\Actions\Cost\ListCostSuppliers —
+     * samma action som webbens kostnadsflik hämtar sin leverantörslista ur.
      *
      * Issue 74 § Beslut 6: ytan står kvar på containergrinden, men den
      * LÄCKER — en lista med "Advokatbyrån Ek & Partners" säger något om
-     * containern som mottagaren av motorn inte ska veta. För en OMFÅNGSBEGRÄNSAD
-     * mottagare joinas därför `item` in och omfånget styr raderna. För ett
-     * OMFATTANDE omfång läggs ingen join till: den befintliga frågan mot
-     * bara `cost_entry` är billigare (indexet från 45a), och de två fallen
-     * är två grenar med flit — en join som alltid görs hade kostat ägaren
-     * en join i onödan. Raderna är desamma som förut; bara urvalet skiljer.
-     *
-     * Mjukraderade items filtreras INTE bort i den begränsade grenen: samma
-     * regel som ägaren har, att ett värde som förekommer på ett raderat item
-     * inte göms. Omfånget är grant-baserat och ett mjukraderat item behåller
-     * sin plats i grafen (issue 74 § Beslut 3).
+     * containern som mottagaren av motorn inte ska veta. Urvalet filtreras
+     * därför per omfång i frågan; se actionen.
      */
-    public function suppliers(Request $request, Container $container, ResolveItemScope $resolveItemScope): JsonResponse
+    public function suppliers(Request $request, Container $container, ListCostSuppliers $listCostSuppliers): JsonResponse
     {
         Gate::authorize('view', $container);
 
-        $query = DB::table('cost_entry')
-            ->where('cost_entry.container_id', $container->id)
-            ->whereNull('cost_entry.deleted_at')
-            ->whereNotNull('cost_entry.supplier');
-
-        $scope = $resolveItemScope->handle($request->user(), $container);
-        $itemIds = $scope->itemIds();
-
-        if ($itemIds !== null) {
-            $query->join('item', 'item.id', '=', 'cost_entry.item_id')
-                ->whereIn('item.id', $itemIds);
-        }
-
-        $rader = $query
-            ->selectRaw('cost_entry.supplier AS supplier, COUNT(*) AS antal')
-            ->groupBy('cost_entry.supplier')
-            ->orderByDesc('antal')
-            ->orderBy('cost_entry.supplier')
-            ->limit(self::SUPPLIER_SUGGESTION_LIMIT)
-            ->get();
-
         return response()->json([
-            'data' => array_map(
-                static fn (object $rad): array => [
-                    'supplier' => $rad->supplier,
-                    'count' => (int) $rad->antal,
-                ],
-                $rader->all()
-            ),
+            'data' => $listCostSuppliers->handle($request->user(), $container),
         ]);
-    }
-
-    /**
-     * Kontot en kostnadsrad tillskrivs när en användare skapar den. Ska vara
-     * "varvet, inte den anställde" — men varvet är det konto vars medlem
-     * handlar, inte nödvändigtvis containerns ägarkonto (granskningens fynd
-     * 1). Den axel kolumnen skiljer på är konto kontra person, inte ägare
-     * kontra gäst: en post som skapas av någon som kommer utifrån ska
-     * tillskrivas det konto som gav hen åtkomst, så relationen överlever
-     * personalomsättningen ([[ADR-0003 Åtkomstmodell]]: "poster tillskrivs
-     * organisationen"). Regel 1 motsvarar [[Konton och åtkomst]] §
-     * Behörighetsregler regel 1; regel 2 är `managed`-fallet; regel 3 är den
-     * personliga åtkomsten.
-     *
-     * Tre regler, första träffen vinner:
-     *
-     * 1. Ägarkontots medlemmar handlar som ägaren → `$container->account_id`.
-     * 2. Annars: en giltig `container_access`-rad på containern med
-     *    `grantee_type = 'account'` vars `grantee_id` är ett konto användaren
-     *    är medlem i → den radens `grantee_id`. "Giltig" är samma villkor som
-     *    grinden använder (`scopeValid`: `revoked_at` NULL, `expires_at` inte
-     *    passerat). Flera sådana rader är en patologi; lägst `id` vinner,
-     *    deterministiskt.
-     * 3. Annars är åtkomsten personlig (`grantee_type = 'user'`) och
-     *    användarens EGET konto gäller: `type = 'personal'` bland hens
-     *    medlemskap, och saknas ett sådant, medlemskapet med lägst
-     *    `account_id`. En privatperson som bjudits in tillskrivs sig själv,
-     *    inte containerns ägare.
-     *
-     * Att fältet aldrig tas ur kroppen står fast (§ Beslut 2–3) — en
-     * `managed`-skribent kan inte välja vilket av sina konton posten hamnar
-     * på: kontot härleds ur hur användaren når containern, inte ur vad
-     * klienten påstår.
-     */
-    private function attributedAccountId(User $user, Container $container): int
-    {
-        if ($container->account->users()->whereKey($user->id)->exists()) {
-            return $container->account_id;
-        }
-
-        $accountIds = $user->accounts()->pluck('account.id')->all();
-
-        $managed = ContainerAccess::query()
-            ->where('container_id', $container->id)
-            ->where('grantee_type', 'account')
-            ->whereIn('grantee_id', $accountIds)
-            ->valid()
-            ->orderBy('id')
-            ->first();
-
-        if ($managed !== null) {
-            return $managed->grantee_id;
-        }
-
-        $personligt = $user->accounts()
-            ->where('account.type', 'personal')
-            ->orderBy('account.id')
-            ->first();
-
-        if ($personligt !== null) {
-            return $personligt->id;
-        }
-
-        return $user->accounts()->orderBy('account.id')->first()->id;
     }
 }
