@@ -2,7 +2,10 @@
 import { computed, ref } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import FocusMap from './FocusMap.vue';
+import FormField from './FormField.vue';
 import ItemViewSwitch from './ItemViewSwitch.vue';
+import UiButton from './UiButton.vue';
+import UiSelect from './UiSelect.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
 
@@ -71,6 +74,24 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * (`parent`/`child`/`related`) är domänvärden och inte text: de är samma tre
  * nycklar som serverns grupper och som `relation` i `/api`-svaret, och de
  * ritas aldrig för användaren.
+ *
+ * **Färgerna är roller och inte palettfärger** (issue 182 · [[ADR-0042
+ * Designsystemet]] § Beslut): `text-ink-muted`, `text-ink`, `text-accent` och
+ * `text-danger` ur `@theme` i `resources/css/app.css`. Fälten är `FormField`
+ * med `UiSelect` i slotten och skicka-knappen är `UiButton` — samma
+ * komponenter som de fem formulären i issue 425 består av. Knappen som bär en
+ * `@click` — upp-knytningen — står kvar som rå `<button>`: GenomgangTest
+ * tillåter bara webbläsarens egna element som klickbar yta, och en
+ * `<UiButton>` hade fallit på den regeln.
+ *
+ * Fältets `id` är fältets NAMN och inte en läsbar etikett — `item` och
+ * `relation`, samma nycklar som StoreItemLinkRequest lägger sina fel på. Det
+ * är FormFields kontrakt (se resources/js/pages/Auth/useErrorFocus.js):
+ * felmeddelandet får id:t `<fält>-error`, och `focusFirstError` slår upp just
+ * det. Id:t hette `item-link-counterpart` och `item-link-relation` fram till
+ * issue 182, och då pekade uppslaget på ingenting — fokus stod still vid ett
+ * fältfel och felet annonserades bara av `role="alert"` i markupen, vilket
+ * FormField inte sätter. Namnen följer de fem migrerade formulären.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -166,7 +187,7 @@ function remove(counterpart) {
 <template>
     <section class="mt-10">
         <h2 class="text-lg font-semibold">{{ t('item.links.heading') }}</h2>
-        <p class="mt-1 text-sm text-slate-600">{{ t('item.links.description') }}</p>
+        <p class="mt-1 text-sm text-ink-muted">{{ t('item.links.description') }}</p>
 
         <!--
             Växeln (§ 156). Den ritas bara under `md:`: över brytpunkten står
@@ -208,14 +229,14 @@ function remove(counterpart) {
                     -->
                     <div
                         v-if="row === 'self'"
-                        class="mx-auto mt-6 flex w-full max-w-sm flex-col items-center rounded border border-slate-400 bg-slate-100 px-4 py-3 text-center"
+                        class="mx-auto mt-6 flex w-full max-w-sm flex-col items-center rounded border border-border bg-surface-sunken px-4 py-3 text-center"
                     >
-                        <span class="font-semibold text-slate-900">{{ itemName }}</span>
-                        <span class="mt-1 text-xs text-slate-600">{{ t('item.links.current') }}</span>
+                        <span class="font-semibold text-ink">{{ itemName }}</span>
+                        <span class="mt-1 text-xs text-ink-muted">{{ t('item.links.current') }}</span>
                     </div>
 
                     <div v-else-if="links[row].length > 0">
-                        <h3 class="mt-6 text-sm font-medium text-slate-600">
+                        <h3 class="mt-6 text-sm font-medium text-ink-muted">
                             {{ t(`item.links.group.${row}`) }}
                         </h3>
 
@@ -223,11 +244,11 @@ function remove(counterpart) {
                             <li
                                 v-for="link in links[row]"
                                 :key="link.item.ulid"
-                                class="flex flex-wrap items-center gap-3 rounded border border-slate-300 bg-white px-4 py-2"
+                                class="flex flex-wrap items-center gap-3 rounded border border-border bg-surface px-4 py-2"
                             >
                                 <Link
                                     :href="`/containers/${containerUlid}/items/${link.item.ulid}`"
-                                    class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                                    class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                                 >
                                     {{ link.item.name }}
                                 </Link>
@@ -236,7 +257,7 @@ function remove(counterpart) {
                                     v-if="can.update"
                                     type="button"
                                     :disabled="pending === link.item.ulid"
-                                    class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
+                                    class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
                                     @click="remove(link.item)"
                                 >
                                     {{ pending === link.item.ulid ? t('common.pending.default') : t('item.links.remove') }}
@@ -247,12 +268,12 @@ function remove(counterpart) {
                 </template>
             </template>
 
-            <p v-else class="mt-4 text-sm text-slate-600">{{ t('item.links.empty') }}</p>
+            <p v-else class="mt-4 text-sm text-ink-muted">{{ t('item.links.empty') }}</p>
 
             <template v-if="can.update">
                 <h3 class="mt-8 text-base font-semibold">{{ t('item.links.form_heading') }}</h3>
 
-                <p v-if="counterparts.length === 0" class="mt-2 text-sm text-slate-600">
+                <p v-if="counterparts.length === 0" class="mt-2 text-sm text-ink-muted">
                     {{ t('item.links.no_counterparts') }}
                 </p>
 
@@ -266,66 +287,57 @@ function remove(counterpart) {
                         felkoden det ersatte, så pair_exists säger vilken relation
                         paret redan har.
                     -->
-                    <div class="flex flex-col gap-1">
-                        <label for="item-link-counterpart" class="text-sm font-medium text-slate-800">
-                            {{ t('item.links.counterpart') }}
-                        </label>
-
-                        <select
-                            id="item-link-counterpart"
+                    <FormField
+                        v-slot="{ describedBy }"
+                        :label="t('item.links.counterpart')"
+                        id="item"
+                        :error="form.errors.item"
+                    >
+                        <UiSelect
+                            id="item"
                             v-model="form.item"
-                            :aria-describedby="form.errors.item ? 'item-link-counterpart-error' : undefined"
+                            :described-by="describedBy"
                             name="item"
                             required
-                            class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+                            class="self-start"
                         >
                             <option value="">{{ t('item.links.counterpart_none') }}</option>
                             <option v-for="candidate in counterparts" :key="candidate.ulid" :value="candidate.ulid">
                                 {{ candidate.name }}
                             </option>
-                        </select>
+                        </UiSelect>
+                    </FormField>
 
-                        <p v-if="form.errors.item" id="item-link-counterpart-error" role="alert" class="text-sm text-red-700">
-                            {{ form.errors.item }}
-                        </p>
-                    </div>
-
-                    <div class="flex flex-col gap-1">
-                        <label for="item-link-relation" class="text-sm font-medium text-slate-800">
-                            {{ t('item.links.relation.label') }}
-                        </label>
-
-                        <select
-                            id="item-link-relation"
+                    <FormField
+                        v-slot="{ describedBy }"
+                        :label="t('item.links.relation.label')"
+                        id="relation"
+                        :error="form.errors.relation"
+                    >
+                        <UiSelect
+                            id="relation"
                             v-model="form.relation"
-                            :aria-describedby="form.errors.relation ? 'item-link-relation-error' : undefined"
+                            :described-by="describedBy"
                             name="relation"
                             required
-                            class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+                            class="self-start"
                         >
                             <option value="">{{ t('item.links.relation.none') }}</option>
                             <option value="parent">{{ t('item.links.relation.parent') }}</option>
                             <option value="child">{{ t('item.links.relation.child') }}</option>
                             <option value="related">{{ t('item.links.relation.related') }}</option>
-                        </select>
+                        </UiSelect>
 
-                        <p class="text-sm text-slate-600">{{ t('item.links.relation_note') }}</p>
+                        <p class="text-sm text-ink-muted">{{ t('item.links.relation_note') }}</p>
 
                         <!-- Riktningen och inte motparten: en cykel handlar om
                              vilket håll kanten går åt, och `item_link.cycle` läggs
                              därför på den här nyckeln (Beslut 6). -->
-                        <p v-if="form.errors.relation" id="item-link-relation-error" role="alert" class="text-sm text-red-700">
-                            {{ form.errors.relation }}
-                        </p>
-                    </div>
+                    </FormField>
 
-                    <button
-                        type="submit"
-                        :disabled="form.processing"
-                        class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                    >
+                    <UiButton type="submit" :pending="form.processing" class="self-start">
                         {{ form.processing ? t('common.pending.default') : t('item.links.submit') }}
-                    </button>
+                    </UiButton>
                 </form>
             </template>
         </div>

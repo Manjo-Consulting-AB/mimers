@@ -2,6 +2,8 @@
 import { computed, nextTick, ref } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import UiButton from './UiButton.vue';
+import UiSelect from './UiSelect.vue';
 import { attachmentPreview, formatByteSize } from './attachmentPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
@@ -95,6 +97,17 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * Rutan bär filnamnet som `title`, och meningen under den säger vad läsaren
  * gör om webbläsaren inte har en egen läsare — samma nedladdningslänk som
  * varje rad alltid har (Beslut 5).
+ *
+ * **Färgerna är roller och inte palettfärger** (issue 182 · [[ADR-0042
+ * Designsystemet]] § Beslut): `text-ink`, `text-ink-muted`, `text-accent` och
+ * `text-danger` ur `@theme` i `resources/css/app.css`. Kontosektionen är
+ * `FormField` med `UiSelect` i slotten och skicka-knappen är `UiButton` —
+ * samma komponenter som de fem formulären i issue 425 består av. De tre
+ * knappar som bär en `@click` står kvar som rå `<button>`: GenomgangTest
+ * tillåter bara webbläsarens egna element som klickbar yta, och en
+ * `<UiButton>` hade fallit på den regeln. Filväljaren är kvar som rå
+ * `<input type="file">` med flit — `v-model` är inte hur en fil väljs, och
+ * `UiInput` bär just en sådan. Beteendet är oförändrat.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -448,7 +461,7 @@ function destroy(attachment) {
 
         <!-- En tom container och ett item utan bilagor säger samma sak: det finns
              ingen rad att visa, och vyn hittar inte på en. -->
-        <p v-if="rows.length === 0" class="mt-2 text-sm text-slate-600">
+        <p v-if="rows.length === 0" class="mt-2 text-sm text-ink-muted">
             {{ t('item.attachment.empty') }}
         </p>
 
@@ -456,7 +469,7 @@ function destroy(attachment) {
             <li
                 v-for="attachment in rows"
                 :key="attachment.ulid"
-                class="flex flex-col gap-3 rounded border border-slate-300 bg-white px-4 py-2"
+                class="flex flex-col gap-3 rounded border border-border bg-surface px-4 py-2"
             >
                 <!--
                     PDF-ramen ÖVERST i raden (61b § Beslut 4), så att
@@ -473,10 +486,10 @@ function destroy(attachment) {
                         :src="attachment.preview.frame"
                         :title="attachment.filename"
                         loading="lazy"
-                        class="h-96 w-full rounded border border-slate-200"
+                        class="h-96 w-full rounded border border-border"
                     ></iframe>
 
-                    <p class="text-sm text-slate-600">{{ t('item.attachment.pdf_fallback') }}</p>
+                    <p class="text-sm text-ink-muted">{{ t('item.attachment.pdf_fallback') }}</p>
                 </template>
 
                 <div class="flex flex-wrap items-center gap-3">
@@ -488,7 +501,7 @@ function destroy(attachment) {
                     <button
                         v-if="attachment.preview.display === 'thumb'"
                         type="button"
-                        class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded border border-slate-300"
+                        class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded border border-border"
                         @click="openViewer(attachment, $event)"
                     >
                         <img
@@ -508,7 +521,7 @@ function destroy(attachment) {
                         v-else-if="attachment.preview.display === 'file'"
                         role="img"
                         :aria-label="t('item.attachment.file_icon')"
-                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-600"
+                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-border bg-surface-sunken text-ink-muted"
                     >
                         <svg
                             viewBox="0 0 24 24"
@@ -524,9 +537,9 @@ function destroy(attachment) {
                         </svg>
                     </span>
 
-                    <span class="font-medium text-slate-900">{{ attachment.filename }}</span>
-                    <span class="text-sm text-slate-600">{{ attachment.kindLabel }}</span>
-                    <span v-if="attachment.size" class="text-sm text-slate-600">{{ attachment.size }}</span>
+                    <span class="font-medium text-ink">{{ attachment.filename }}</span>
+                    <span class="text-sm text-ink-muted">{{ attachment.kindLabel }}</span>
+                    <span v-if="attachment.size" class="text-sm text-ink-muted">{{ attachment.size }}</span>
 
                     <!--
                         Nedladdningen går alltid genom appen (issue 19a):
@@ -538,7 +551,7 @@ function destroy(attachment) {
                     -->
                     <a
                         :href="`/files/${attachment.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.attachment.download') }}
                     </a>
@@ -547,7 +560,7 @@ function destroy(attachment) {
                         v-if="can.delete"
                         type="button"
                         :disabled="pending === attachment.ulid"
-                        class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
+                        class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
                         @click="destroy(attachment)"
                     >
                         {{ pending === attachment.ulid ? t('common.pending.default') : t('item.attachment.destroy') }}
@@ -564,7 +577,7 @@ function destroy(attachment) {
         -->
         <dialog
             ref="viewerElement"
-            class="m-auto max-h-[90vh] max-w-full overflow-auto rounded border border-slate-300 bg-white p-4 backdrop:bg-slate-900/50"
+            class="m-auto max-h-[90vh] max-w-full overflow-auto rounded border border-border bg-surface p-4 backdrop:bg-shell/50"
             @close="onViewerClosed"
         >
             <div v-if="viewer" class="flex max-w-3xl flex-col gap-3">
@@ -577,11 +590,11 @@ function destroy(attachment) {
                 >
 
                 <div class="flex flex-wrap items-center gap-3">
-                    <span class="font-medium text-slate-900">{{ viewer.filename }}</span>
+                    <span class="font-medium text-ink">{{ viewer.filename }}</span>
 
                     <a
                         :href="`/files/${viewer.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.attachment.download') }}
                     </a>
@@ -595,7 +608,7 @@ function destroy(attachment) {
                     <button
                         type="button"
                         autofocus
-                        class="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-slate-700 hover:underline"
+                        class="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-ink-muted hover:underline"
                         @click="closeViewer"
                     >
                         {{ t('item.attachment.viewer_close') }}
@@ -614,12 +627,12 @@ function destroy(attachment) {
 
             <!-- Vilket konto som betalar står före filen, inte efteråt: kvoten
                  räknas på det uppladdande kontot (60 Beslut 4). -->
-            <p class="mt-1 text-sm text-slate-600">{{ t('item.attachment.billing_note') }}</p>
+            <p class="mt-1 text-sm text-ink-muted">{{ t('item.attachment.billing_note') }}</p>
 
             <form class="mt-4 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
                 <!-- Ett enda konto: värdet är förvalt och visas som text. -->
                 <div v-if="singleAccount" class="flex flex-col gap-1">
-                    <p class="text-sm font-medium text-slate-800">{{ t('item.attachment.account') }}</p>
+                    <p class="text-sm font-medium text-ink">{{ t('item.attachment.account') }}</p>
                     <p>{{ singleAccount.name }}</p>
                 </div>
 
@@ -630,18 +643,18 @@ function destroy(attachment) {
                     id="account"
                     :error="accountError"
                 >
-                    <select
+                    <UiSelect
                         id="account"
                         v-model="account"
-                        :aria-describedby="describedBy"
+                        :described-by="describedBy"
                         name="account"
                         required
-                        class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+                        class="self-start"
                     >
                         <option v-for="candidate in accounts" :key="candidate.ulid" :value="candidate.ulid">
                             {{ candidate.name }}
                         </option>
-                    </select>
+                    </UiSelect>
                 </FormField>
 
                 <!--
@@ -650,13 +663,13 @@ function destroy(attachment) {
                     telefon; dropzonen är bekvämligheten ovanpå.
                 -->
                 <div
-                    class="rounded border border-dashed border-slate-400 bg-slate-50 px-4 py-6"
+                    class="rounded border border-dashed border-border bg-surface-sunken px-4 py-6"
                     @dragover.prevent
                     @drop.prevent="onDrop"
                 >
-                    <p class="text-sm text-slate-700">{{ t('item.attachment.dropzone') }}</p>
+                    <p class="text-sm text-ink-muted">{{ t('item.attachment.dropzone') }}</p>
 
-                    <label for="attachment-file" class="mt-3 block text-sm font-medium text-slate-800">
+                    <label for="attachment-file" class="mt-3 block text-sm font-medium text-ink">
                         {{ t('item.attachment.file') }}
                     </label>
 
@@ -680,18 +693,18 @@ function destroy(attachment) {
                     <li
                         v-for="entry in queue"
                         :key="entry.id"
-                        class="flex flex-col gap-1 rounded border border-slate-300 bg-white px-4 py-2"
+                        class="flex flex-col gap-1 rounded border border-border bg-surface px-4 py-2"
                     >
                         <div class="flex flex-wrap items-center gap-3">
-                            <span class="font-medium text-slate-900">{{ entry.name }}</span>
-                            <span class="text-sm text-slate-600">{{ formatByteSize(entry.size) }}</span>
-                            <span class="text-sm text-slate-600">{{ t(`item.attachment.status.${entry.status}`) }}</span>
-                            <span v-if="entry.status === 'uploading'" class="text-sm text-slate-600">{{ entry.percentage }} %</span>
+                            <span class="font-medium text-ink">{{ entry.name }}</span>
+                            <span class="text-sm text-ink-muted">{{ formatByteSize(entry.size) }}</span>
+                            <span class="text-sm text-ink-muted">{{ t(`item.attachment.status.${entry.status}`) }}</span>
+                            <span v-if="entry.status === 'uploading'" class="text-sm text-ink-muted">{{ entry.percentage }} %</span>
 
                             <button
                                 v-if="entry.status === 'failed'"
                                 type="button"
-                                class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
+                                class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
                                 @click="dismiss(entry)"
                             >
                                 {{ t('item.attachment.dismiss') }}
@@ -716,7 +729,7 @@ function destroy(attachment) {
                             v-if="entry.error"
                             :id="`attachment-error-${entry.id}`"
                             role="alert"
-                            class="text-sm text-red-700"
+                            class="text-sm text-danger"
                         >
                             {{ entry.error }}
                         </p>
@@ -728,21 +741,17 @@ function destroy(attachment) {
                      Talen är två och orden är nycklar — meningen står i
                      `lang/` och är formulerad så att den är rätt för både en
                      och fyra filer. -->
-                <p v-if="finished" class="text-sm text-slate-700">
+                <p v-if="finished" class="text-sm text-ink-muted">
                     {{ t('item.attachment.summary', { uploaded, total: queue.length }) }}
                 </p>
 
                 <!-- Köns egen mening när hela anropet nekades — kontot eller
                      takgränsen (Beslut 4 och 7). -->
-                <p v-if="blocked" class="text-sm text-red-700">{{ blocked }}</p>
+                <p v-if="blocked" class="text-sm text-danger">{{ blocked }}</p>
 
-                <button
-                    type="submit"
-                    :disabled="running || !hasWaiting"
-                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                >
+                <UiButton type="submit" :pending="running || !hasWaiting" class="self-start">
                     {{ running ? t('common.pending.upload') : t('item.attachment.submit') }}
-                </button>
+                </UiButton>
             </form>
         </template>
     </section>

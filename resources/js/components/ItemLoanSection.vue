@@ -2,6 +2,9 @@
 import { computed, ref } from 'vue';
 import { router, useForm, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import UiButton from './UiButton.vue';
+import UiInput from './UiInput.vue';
+import UiTextarea from './UiTextarea.vue';
 import { formatDateOnly } from './itemPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
@@ -60,6 +63,15 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * `lang/{locale}/ui.php` genom `t()`, och datumen formateras av
  * formatDateOnly() i itemPresentation.js — DATE-kolumner byggs i lokal tid och
  * räknas aldrig om till en annan tidszon (issue 57a § Beslut 8).
+ *
+ * **Färgerna är roller och inte palettfärger** (issue 182 · [[ADR-0042
+ * Designsystemet]] § Beslut): `text-ink-muted`, `text-ink`, `text-accent` och
+ * `text-danger` ur `@theme` i `resources/css/app.css`. Fälten är `FormField`
+ * med `UiInput`, `UiTextarea` och `UiButton` i slotten — samma komponenter som
+ * de fem formulären i issue 425 består av. De tre knappar som bär en `@click`
+ * står kvar som rå `<button>`: GenomgangTest tillåter bara webbläsarens egna
+ * element som klickbar yta, och en `<UiButton>` hade fallit på den regeln.
+ * Beteendet är oförändrat.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -187,30 +199,30 @@ function destroy(loan) {
 <template>
     <section class="mt-10">
         <h2 class="text-lg font-semibold">{{ t('item.loan.heading') }}</h2>
-        <p class="mt-1 text-sm text-slate-600">{{ t('item.loan.description') }}</p>
+        <p class="mt-1 text-sm text-ink-muted">{{ t('item.loan.description') }}</p>
 
         <!-- Den öppna utlåningen överst (§ Beslut 2). -->
-        <div v-if="openLoan" class="mt-4 flex flex-col gap-2 rounded border border-slate-300 bg-white px-4 py-3">
-            <p class="font-medium text-slate-900">
+        <div v-if="openLoan" class="mt-4 flex flex-col gap-2 rounded border border-border bg-surface px-4 py-3">
+            <p class="font-medium text-ink">
                 {{ t('item.loan.borrowed_by', { name: openLoan.borrower_name }) }}
             </p>
 
-            <p class="text-sm text-slate-600">
+            <p class="text-sm text-ink-muted">
                 {{ t('item.loan.lent_at', { date: formatDateOnly(openLoan.lent_at, locale) }) }}
             </p>
 
-            <p v-if="openLoan.due_at" class="text-sm text-slate-600">
+            <p v-if="openLoan.due_at" class="text-sm text-ink-muted">
                 {{ t('item.loan.due_at', { date: formatDateOnly(openLoan.due_at, locale) }) }}
             </p>
-            <p v-else class="text-sm text-slate-600">{{ t('item.loan.no_due_at') }}</p>
+            <p v-else class="text-sm text-ink-muted">{{ t('item.loan.no_due_at') }}</p>
 
             <!-- Försenad (§ Beslut 5): flaggan är serverns, aldrig klientens
                  jämförelse. -->
-            <p v-if="openLoanOverdue" class="text-sm font-medium text-red-700">
+            <p v-if="openLoanOverdue" class="text-sm font-medium text-danger">
                 {{ t('item.loan.overdue') }}
             </p>
 
-            <p v-if="openLoan.note" class="whitespace-pre-line text-sm text-slate-700">{{ openLoan.note }}</p>
+            <p v-if="openLoan.note" class="whitespace-pre-line text-sm text-ink-muted">{{ openLoan.note }}</p>
 
             <!--
                 Kontaktuppgiften (§ Beslut 4): text, ett sätt att kopiera, och
@@ -219,29 +231,35 @@ function destroy(loan) {
                 låntagaren.
             -->
             <template v-if="openLoan.borrower_email">
-                <p class="text-sm font-medium text-slate-800">{{ t('item.loan.contact') }}</p>
+                <p class="text-sm font-medium text-ink">{{ t('item.loan.contact') }}</p>
 
-                <p class="flex flex-wrap items-center gap-3 text-slate-900">
+                <p class="flex flex-wrap items-center gap-3 text-ink">
                     <span>{{ openLoan.borrower_email }}</span>
 
+                    <!--
+                        Rå `<button>` och inte en UiButton, som i ItemCostSection:
+                        knappen bär en `@click`, och GenomgangTest tillåter bara
+                        webbläsarens egna element som klickbar yta.
+                    -->
                     <button
                         type="button"
-                        class="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
                         @click="copy(openLoan)"
                     >
                         {{ copied === openLoan.ulid ? t('item.loan.copied') : t('item.loan.copy') }}
                     </button>
                 </p>
 
-                <p class="text-sm text-slate-600">{{ t('item.loan.email_note') }}</p>
+                <p class="text-sm text-ink-muted">{{ t('item.loan.email_note') }}</p>
             </template>
 
             <div v-if="can.update || can.delete" class="mt-2 flex flex-wrap items-center gap-3">
+                <!-- Samma skäl som kopiera-knappen: `@click` kräver ett eget element. -->
                 <button
                     v-if="can.update"
                     type="button"
                     :disabled="returnForm.processing"
-                    class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+                    class="inline-flex min-h-11 items-center rounded-control bg-accent px-4 font-medium text-ink-on-accent hover:bg-accent/90 disabled:opacity-50"
                     @click="returnToday"
                 >
                     {{ t('item.loan.return_today') }}
@@ -251,7 +269,7 @@ function destroy(loan) {
                     v-if="can.delete"
                     type="button"
                     :disabled="pending === openLoan.ulid"
-                    class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
+                    class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
                     @click="destroy(openLoan)"
                 >
                     {{ pending === openLoan.ulid ? t('common.pending.default') : t('item.loan.destroy') }}
@@ -266,29 +284,25 @@ function destroy(loan) {
                     id="returned_at"
                     :error="returnForm.errors.returned_at"
                 >
-                    <input
+                    <UiInput
                         id="returned_at"
                         v-model="returnForm.returned_at"
-                        :aria-describedby="describedBy"
+                        :described-by="describedBy"
                         type="date"
                         name="returned_at"
                         :min="openLoan.lent_at"
                         required
-                        class="self-start rounded border border-slate-300 bg-white px-3 py-2"
-                    >
+                        class="self-start"
+                    />
                 </FormField>
 
-                <button
-                    type="submit"
-                    :disabled="returnForm.processing"
-                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                >
+                <UiButton type="submit" :pending="returnForm.processing" class="self-start">
                     {{ returnForm.processing ? t('common.pending.default') : t('item.loan.return_submit') }}
-                </button>
+                </UiButton>
             </form>
         </div>
 
-        <p v-else class="mt-4 text-sm text-slate-600">{{ t('item.loan.not_lent') }}</p>
+        <p v-else class="mt-4 text-sm text-ink-muted">{{ t('item.loan.not_lent') }}</p>
 
         <!--
             Utlåningsformuläret (§ Beslut 3 och 6). Det ritas bara när itemet
@@ -305,15 +319,14 @@ function destroy(loan) {
                     id="borrower_name"
                     :error="loanForm.errors.borrower_name"
                 >
-                    <input
+                    <UiInput
                         id="borrower_name"
                         v-model="loanForm.borrower_name"
-                        :aria-describedby="describedBy"
+                        :described-by="describedBy"
                         type="text"
                         name="borrower_name"
                         required
-                        class="rounded border border-slate-300 bg-white px-3 py-2"
-                    >
+                    />
                 </FormField>
 
                 <FormField
@@ -322,18 +335,17 @@ function destroy(loan) {
                     id="borrower_email"
                     :error="loanForm.errors.borrower_email"
                 >
-                    <input
+                    <UiInput
                         id="borrower_email"
                         v-model="loanForm.borrower_email"
-                        :aria-describedby="describedBy"
+                        :described-by="describedBy"
                         type="email"
                         name="borrower_email"
-                        class="rounded border border-slate-300 bg-white px-3 py-2"
-                    >
+                    />
 
                     <!-- Fältet ser annars ut som ett fält som skickar mejl
                          (§ Beslut 4). -->
-                    <p class="text-sm text-slate-600">{{ t('item.loan.email_note') }}</p>
+                    <p class="text-sm text-ink-muted">{{ t('item.loan.email_note') }}</p>
                 </FormField>
 
                 <FormField
@@ -342,15 +354,14 @@ function destroy(loan) {
                     id="lent_at"
                     :error="loanForm.errors.lent_at"
                 >
-                    <input
+                    <UiInput
                         id="lent_at"
                         v-model="loanForm.lent_at"
-                        :aria-describedby="describedBy"
+                        :described-by="describedBy"
                         type="date"
                         name="lent_at"
                         required
-                        class="rounded border border-slate-300 bg-white px-3 py-2"
-                    >
+                    />
                 </FormField>
 
                 <FormField
@@ -359,15 +370,14 @@ function destroy(loan) {
                     id="due_at"
                     :error="loanForm.errors.due_at"
                 >
-                    <input
+                    <UiInput
                         id="due_at"
                         v-model="loanForm.due_at"
-                        :aria-describedby="describedBy"
+                        :described-by="describedBy"
                         type="date"
                         name="due_at"
                         :min="loanForm.lent_at"
-                        class="rounded border border-slate-300 bg-white px-3 py-2"
-                    >
+                    />
                 </FormField>
 
                 <FormField
@@ -376,15 +386,14 @@ function destroy(loan) {
                     id="returned_at_new"
                     :error="loanForm.errors.returned_at"
                 >
-                    <input
+                    <UiInput
                         id="returned_at_new"
                         v-model="loanForm.returned_at"
-                        :aria-describedby="describedBy"
+                        :described-by="describedBy"
                         type="date"
                         name="returned_at"
                         :min="loanForm.lent_at"
-                        class="rounded border border-slate-300 bg-white px-3 py-2"
-                    >
+                    />
                 </FormField>
 
                 <FormField
@@ -393,23 +402,18 @@ function destroy(loan) {
                     id="note"
                     :error="loanForm.errors.note"
                 >
-                    <textarea
+                    <UiTextarea
                         id="note"
                         v-model="loanForm.note"
-                        :aria-describedby="describedBy"
+                        :described-by="describedBy"
                         name="note"
-                        rows="3"
-                        class="rounded border border-slate-300 bg-white px-3 py-2"
+                        :rows="3"
                     />
                 </FormField>
 
-                <button
-                    type="submit"
-                    :disabled="loanForm.processing"
-                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                >
+                <UiButton type="submit" :pending="loanForm.processing" class="self-start">
                     {{ loanForm.processing ? t('common.pending.default') : t('item.loan.form_submit') }}
-                </button>
+                </UiButton>
             </form>
         </template>
 
@@ -426,33 +430,33 @@ function destroy(loan) {
                 <li
                     v-for="loan in loanHistory"
                     :key="loan.ulid"
-                    class="flex flex-col gap-1 rounded border border-slate-300 bg-white px-4 py-2"
+                    class="flex flex-col gap-1 rounded border border-border bg-surface px-4 py-2"
                 >
                     <div class="flex flex-wrap items-center gap-3">
-                        <span class="font-medium text-slate-900">{{ loan.borrower_name }}</span>
+                        <span class="font-medium text-ink">{{ loan.borrower_name }}</span>
 
-                        <span class="text-sm text-slate-600">
+                        <span class="text-sm text-ink-muted">
                             {{ t('item.loan.lent_at', { date: formatDateOnly(loan.lent_at, locale) }) }}
                         </span>
 
-                        <span class="text-sm text-slate-600">
+                        <span class="text-sm text-ink-muted">
                             {{ t('item.loan.returned_at', { date: formatDateOnly(loan.returned_at, locale) }) }}
                         </span>
 
-                        <span v-if="loan.borrower_email" class="text-sm text-slate-600">{{ loan.borrower_email }}</span>
+                        <span v-if="loan.borrower_email" class="text-sm text-ink-muted">{{ loan.borrower_email }}</span>
 
                         <button
                             v-if="can.delete"
                             type="button"
                             :disabled="pending === loan.ulid"
-                            class="inline-flex min-h-11 items-center text-sm text-red-700 hover:underline"
+                            class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
                             @click="destroy(loan)"
                         >
                             {{ pending === loan.ulid ? t('common.pending.default') : t('item.loan.destroy') }}
                         </button>
                     </div>
 
-                    <p v-if="loan.note" class="whitespace-pre-line text-sm text-slate-700">{{ loan.note }}</p>
+                    <p v-if="loan.note" class="whitespace-pre-line text-sm text-ink-muted">{{ loan.note }}</p>
                 </li>
             </ul>
         </template>
