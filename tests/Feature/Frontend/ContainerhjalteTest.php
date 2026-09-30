@@ -219,6 +219,32 @@ it('ritar ingen hjälte i itemvyn', function () {
 });
 
 /*
+ * Klart när: översiktens eget huvud ritas bara under `md:`.
+ *
+ * Regeln är skalets egen, att namnraden ersätts av hjälten där hjälten ritas
+ * (ADR-0050 § 2), och den gäller sidans huvud också: hjälten bär namnet, arten
+ * och beskrivningen över brytpunkten, och en andra rad med samma text är både
+ * en synlig dubblett och en skärmläsare som läser fel. Rubriken ska finnas på
+ * varje bredd, och därför är hjältens namn sidans `<h1>` — under `md:` ritas
+ * hjälten inte, och då står sidans eget huvud kvar oförändrat.
+ */
+it('ritar översiktens eget huvud bara under md', function () {
+    $vy = hjalteKod('pages/Containers/Overview.vue');
+
+    expect(hjalteTagg($vy, 'h1'))->toContain('md:hidden');
+
+    // Listan bär art och beskrivning — de två fält hjälten upprepar — och hela
+    // listan hör därför till huvudet över brytpunkten.
+    expect(hjalteTagg($vy, 'dl'))->toContain('md:hidden');
+
+    // Och rubriken bor i hjälten över `md:`: dess namn är en `<h1>`.
+    expect(hjalteHjalten())->toMatch(
+        '#<h1\b[^>]*>\s*\{\{ container\.name \}\}\s*</h1>#s',
+        'hjältens namn är ingen <h1>',
+    );
+});
+
+/*
  * Klart när: undertiteln är hela beskrivningen.
  *
  * ADR-0050 § 2: beskrivningen delas inte upp (issue 88) och kortas inte.
@@ -355,4 +381,84 @@ it('bär can.update i itemlistan och historiken', function () {
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
     }
+});
+
+/*
+ * Klart när: en läsare når inställningssidan genom länken *Inställningar*.
+ *
+ * Flikraden bar raden fram till issue 170, och *Redigera container* lovar en
+ * läsare något hen inte får göra. [[ADR-0042 Designsystemet]] § Konsekvenser
+ * väger tyngre än att ADR-0050 § 3 inte nämner läsaren: sidan är `view`-grindad,
+ * och den som når containern ska hitta till dess sju sektioner. Hjälten ritar
+ * därför två grenar på samma plats och samma adress — knappen för den som får
+ * ändra, länken för den som bara läser — och ordet är sektionens eget.
+ */
+it('låter en läsare nå inställningssidan genom länken Inställningar', function () {
+    withoutVite();
+
+    [, $ägare, $container] = hjalteKontext();
+    $läsare = hjalteLasare($container);
+
+    actingAs($ägare)->get("/containers/{$container->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', true));
+
+    actingAs($läsare)->get("/containers/{$container->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
+
+    $hjalte = hjalteHjalten();
+
+    // Den som får ändra ser knappen; den som bara läser ser den inte.
+    expect($hjalte)->toMatch(
+        '#<Link\b[^>]*v-if="canUpdate"[^>]*>\s*\{\{ t\(\'container\.hero\.edit\'\) \}\}\s*</Link>#s',
+        '*Redigera container* ritas inte ur can.update',
+    );
+
+    // Läsarens gren är en länk till samma adress, med sektionens egen nyckel —
+    // ingen ny sträng i katalogen (`t()` skriver nyckeln själv när uppslaget
+    // misslyckas).
+    expect($hjalte)->toMatch(
+        '#<Link\b[^>]*v-else[^>]*>\s*\{\{ t\(\'container\.nav\.settings\'\) \}\}\s*</Link>#s',
+        'läsaren har ingen väg till inställningssidan',
+    );
+
+    expect($hjalte)->toContain('`/containers/${container.ulid}/edit`')
+        ->and(Lang::get('ui.container.nav.settings', [], 'en'))->not->toBe('ui.container.nav.settings');
+});
+
+/*
+ * Klart när: under `md:` når var och en inställningssidan.
+ *
+ * Hjälten ritas inte under brytpunkten (ADR-0050 § 2), och toppraden från issue
+ * 151 bär bara namn, bild och tillbakaknapp — flikraden var alltså den enda
+ * vägen till inställningarna, och den slutade bära dem i issue 170. Skalet
+ * ritar därför raden *Inställningar* direkt efter flikraden, för var och en:
+ * också den som får ändra, för på en telefon är raden den enda vägen dit.
+ * Adressen är inställningssidans egen rutt, och den är `view`-grindad — provet
+ * går hela vägen dit som läsare.
+ */
+it('låter var och en nå inställningssidan under md', function () {
+    withoutVite();
+
+    [, , $container] = hjalteKontext();
+    $läsare = hjalteLasare($container);
+
+    actingAs($läsare)->get("/containers/{$container->ulid}/edit")->assertOk();
+
+    $skal = hjalteKod('layouts/ContainerLayout.vue');
+
+    preg_match('#<UiTabs\b[^>]*/>\s*(<Link\b.*?</Link>)#s', $skal, $träffar);
+
+    $länk = $träffar[1] ?? '';
+
+    expect($länk)->toContain('`/containers/${container.ulid}/edit`')
+        ->and($länk)->toContain('md:hidden')
+        ->and($länk)->toContain('min-h-11')
+        ->and($länk)->toContain("t('container.nav.settings')");
+
+    // Raden ligger efter flikraden och utanför den — flikraden är fortfarande
+    // *Översikt · Items · Historik* (FlikradTest) — och den bär ingen flagga:
+    // den ritas för var och en.
+    expect($länk)->not->toContain('v-if');
 });

@@ -38,7 +38,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * tangentbordet och den aktiva fliken; hit hör bara VILKA flikar som finns och
  * vad de heter. De sju sektionerna som inte fick plats — kategorier, taggar,
  * delning, kalender, export, papperskorg och överlåtelse — samlas på
- * inställningssidan, som är en av flikarna, så ingen av dem tappar sin väg.
+ * inställningssidan, så ingen av dem tappar sin väg. Sedan issue 170 nås den
+ * från hjälten över `md:` och från raden under flikraden under `md:` — den
+ * lämnade flikraden då (ADR-0050 § 3).
  * Listan bor i containerSections.js; en ny flik är en ny rad där och ingen
  * ändring här.
  *
@@ -89,6 +91,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Under `md:` ritas ingen hjälte alls.** Den mörka toppraden från issue 151
  * bär containerns bild och namn där, och hjältens `hidden md:block` är samma
  * uppdelning som skalets egen: den ena ytan under brytpunkten, den andra över.
+ *
+ * **Raden *Inställningar* under flikraden är telefonens väg till sektionerna.**
+ * Den lämnade flikraden i issue 170 (ADR-0050 § 3), och hjälten som tog över
+ * vägen ritas inte här. Utan raden hade en telefon tappat containerns sju
+ * sektioner — [[ADR-0042 Designsystemet]] § Konsekvenser förbjuder det — och
+ * den ritas därför för var och en, också den som bara läser. Träffytan är
+ * `min-h-11` (44 px, issue 68a § Beslut 3), som varje annan radåtgärd.
  *
  * **Talen går genom skalet och byggs inte här.** Den höga hjälten bär
  * översiktens `counts` ovanpå bilden, och de kommer in genom sloten
@@ -267,6 +276,24 @@ const tabs = computed(() =>
                 <p v-else class="hidden px-3 py-2 font-medium text-title md:block">{{ heading }}</p>
 
                 <UiTabs :tabs="tabs" :label="heading" />
+
+                <!--
+                    Under `md:` ritas ingen hjälte, och *Inställningar* lämnade
+                    flikraden när hjälten tog över vägen dit (ADR-0050 § 3).
+                    Utan den här raden hade containerns sju sektioner varit
+                    oåtkomliga på en telefon — [[ADR-0042 Designsystemet]]
+                    § Konsekvenser tillåter inte att en yta tappar sin väg —
+                    och den ritas därför för var och en, också den som bara
+                    läser. Adressen är inställningssidans egen rutt, och raden
+                    ligger utanför `UiTabs` och utanför `TAB_KEYS`: flikraden är
+                    fortfarande *Översikt · Items · Historik*.
+                -->
+                <Link
+                    :href="`/containers/${container.ulid}/edit`"
+                    class="mt-1 inline-flex min-h-11 items-center px-3 text-sm font-medium text-ink-muted underline md:hidden"
+                >
+                    {{ t('container.nav.settings') }}
+                </Link>
             </div>
 
             <div class="min-w-0">

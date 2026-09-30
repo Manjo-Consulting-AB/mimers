@@ -67,6 +67,13 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * ovanpå den. `ContainerHero` äger formen; hit hör bara vilken form sidan vill
  * ha och vilka tal som ska in i `hero-stats`.
  *
+ * **Sidans eget huvud ritas bara under `md:`.** Över brytpunkten bär hjälten
+ * namnet, arten och beskrivningen, och samma regel som gäller namnraden i skalet
+ * gäller här: två rader med samma text är en synlig dubblett och en skärmläsare
+ * som läser fel. Varje rad i `<dl>` är ett fält hjälten upprepar; skulle ett
+ * fält tillkomma som hjälten inte bär stannar det synligt på båda bredderna.
+ * Under `md:` är huvudet oförändrat — där ritas ingen hjälte.
+ *
  * **Talen ritas på två ställen och är därför skrivna två gånger.** Över `md:`
  * bär hjälten dem, och under `md:` — där hjälten inte ritas alls — står de
  * kvar i sidans flöde som förut. Att bara behålla hjältens upplaga hade tyst
@@ -110,13 +117,22 @@ const { t } = useTranslations();
             <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
         </template>
 
-        <h1 class="text-2xl font-semibold">{{ container.name }}</h1>
+        <!--
+            Sidans eget huvud ritas bara under `md:`. Över brytpunkten är
+            hjälten sidans huvud (ADR-0050 § 2), och den bär samma namn, art och
+            beskrivning — två rader med samma text är både en synlig dubblett
+            och en skärmläsare som läser fel. Namnet är hjältens `<h1>` där, så
+            sidan har en rubrik på varje bredd.
+        -->
+        <h1 class="text-2xl font-semibold md:hidden">{{ container.name }}</h1>
 
         <!-- Panelen äger sin egen marginal: när alla tips är dolda ritas
              ingenting alls, och en ram runt den hade lämnat kvar sin luft. -->
         <InfoPanel :tips="props.tips" />
 
-        <dl class="mt-2 flex flex-col gap-1 text-slate-700">
+        <!-- Varje rad i listan är ett fält hjälten upprepar — arten och
+             beskrivningen — så hela listan hör till huvudet under `md:`. -->
+        <dl class="mt-2 flex flex-col gap-1 text-slate-700 md:hidden">
             <div v-if="container.kind" class="flex flex-wrap gap-x-2">
                 <dt class="font-medium">{{ t('container.overview.kind') }}</dt>
                 <dd>{{ container.kind }}</dd>

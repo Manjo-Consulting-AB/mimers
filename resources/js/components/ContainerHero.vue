@@ -39,6 +39,19 @@ import { useTranslations } from '../composables/useTranslations.js';
  * får göra vad"). Pennan på bilden i skalets topprad står kvar på samma villkor
  * och är en annan väg till samma val.
  *
+ * **Läsaren får länken *Inställningar* i knappens ställe, till samma adress.**
+ * Flikraden bar raden fram till issue 170, och [[ADR-0042 Designsystemet]]
+ * § Konsekvenser tillåter inte att en yta tappar sin väg: sidan är `view`-grindad,
+ * så den som når containern ska hitta dit. Ordet är sektionens eget
+ * (`container.nav.settings`) och ingen ny sträng. *Redigera container* hade
+ * däremot lovat en läsare något hen inte får göra, och den ritas därför bara
+ * när `can.update` är sann.
+ *
+ * **Namnet är sidans `<h1>`.** Över `md:` är hjälten sidans huvud, och
+ * översikten döljer sitt eget huvud där (se resources/js/pages/Containers/
+ * Overview.vue) — rubriken ska finnas på varje bredd, och den här raden är den
+ * över brytpunkten.
+ *
  * Ingen sträng i JavaScript ([[ADR-0013 Språk och i18n]]): knappens ord kommer
  * ur `t()`, och artens värde skrivs ORDAGRANT — fältet är fritt
  * ([[ADR-0036 Containerns art]]), så ingen nyckel byggs ur det.
@@ -83,7 +96,12 @@ const canUpdate = computed(() => props.can?.update === true);
                     <!-- Arten är ett fritt textfält och skrivs ordagrant. -->
                     <p v-if="container.kind" class="text-meta">{{ container.kind }}</p>
 
-                    <p class="text-heading font-semibold">{{ container.name }}</p>
+                    <!--
+                        Namnet är sidans `<h1>`: över `md:` är hjälten
+                        containerns huvud, och de sidor som ritar den döljer
+                        sitt eget.
+                    -->
+                    <h1 class="text-heading font-semibold">{{ container.name }}</h1>
 
                     <!--
                         Hela beskrivningen, radbrytningarna bevarade och inget
@@ -104,6 +122,20 @@ const canUpdate = computed(() => props.can?.update === true);
                     class="inline-flex min-h-11 shrink-0 items-center rounded-control border border-border bg-surface px-4 font-medium text-ink outline-none hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 >
                     {{ t('container.hero.edit') }}
+                </Link>
+
+                <!--
+                    Läsarens väg till samma adress: en stillsam länk i
+                    knappens ställe, för den som når containern ska hitta till
+                    dess sju sektioner ([[ADR-0042 Designsystemet]]
+                    § Konsekvenser).
+                -->
+                <Link
+                    v-else
+                    :href="`/containers/${container.ulid}/edit`"
+                    class="inline-flex min-h-11 shrink-0 items-center rounded-control px-4 font-medium text-ink-on-accent underline underline-offset-4 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    {{ t('container.nav.settings') }}
                 </Link>
             </div>
 
