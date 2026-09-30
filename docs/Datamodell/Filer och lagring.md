@@ -64,6 +64,30 @@ Miniatyrer genereras vid uppladdning, inte vid visning. De är små och sparar m
 
 Derivat räknas **inte** mot användarens kvot. De är systemets kostnad, inte kundens.
 
+## attachment_open
+
+Personens senast öppnade filer — en rad per bilaga hon öppnat, med tiden för öppningen. Se [[ADR-0051 Senast öppnade filer]] och [[M24 Desktopdesignen]] § 177.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | Ingen `ulid`: raden syns aldrig utåt, och ingen rutt, resurs eller vy identifierar en enskild öppningsrad — listan visar bilagans ULID och namn |
+| user_id | FK → user, RESTRICT | **Raden är personens och bara hennes**, som `recent_visit` och `favorite`. `RESTRICT` och inte `CASCADE`: raden städas av `DeleteUser` (issue 144), och en kaskad hade varit en radering ingen action har bett om |
+| attachment_id | FK → attachment, RESTRICT | Bilagan öppningen gäller. Kolumnen är bilagans och inte öppnarens: när bilagan gallras försvinner ALLA personers rader på den, genom `PurgeAttachment` |
+| opened_at | TIMESTAMP | UTC. Flyttas fram vid varje ny öppning — se upserten nedan |
+| created_at, updated_at | | |
+
+Uniknyckeln `(user_id, attachment_id)` är det som gör öppningen till ett PAR: skrivningen är en upsert på den, så att öppna samma fil igen flyttar `opened_at` i stället för att lägga en andra rad. Indexet `(user_id, opened_at)` bär både läsningen och taket — de femtio senaste för en person.
+
+**Taket är femtio rader per person, och det upprätthålls vid skrivningen.** `App\Actions\Attachment\RecordAttachmentOpen` raderar det som ligger utanför de femtio senaste i samma förfrågan som upserten, så tabellen är begränsad per person utan ett gallringsjobb. Listan visar de fem översta (`App\Actions\Attachment\ListRecentOpens`); resten finns kvar som buffert, så att en lista som filtrerats av omfånget fortfarande har något att fylla på ur. Taket är högre än de tjugo i `recent_visit`, eftersom en fil öppnas oftare än ett item besöks.
+
+**Skrivningen sker i `files.download`, efter grinden.** Två slag av hämtning räknas: nedladdningen och PDF-förhandsvisningen, där `variant` saknas, och bildvisarens `medium`. **Miniatyren (`?variant=thumb`) räknas inte** — den ritas i en lista utan att någon öppnat något — och inte heller **containerns egen bild** ([[ADR-0047 Containerns bild]]), som hör till containern och inte till något item. En nekad förfrågan och en 404 skriver ingenting, och `files.deliver` på filoriginet skriver aldrig: den bär en signerad URL och vet inte vem som frågar ([[ADR-0019 Filleverans]]).
+
+**Läsningen filtreras, och den filtreras när den läses.** Listan går genom `ResolveItemScope` som favoritlistan (issue 106) och besökslistan (issue 160): en bilaga man förlorat åtkomsten till, eller som ligger i papperskorgen, försvinner ur listan utan att en räknare avslöjar det. Raden står kvar och blir synlig igen om åtkomsten eller bilagan kommer tillbaka.
+
+**Raderna raderas med bilagan, itemet och containern.** `PurgeAttachment` tar bilagans rader före `forceDelete()`, och den vägen bär också `PurgeContent::item()`, `PurgeContainer` och därmed `DeleteAccount` — de gallrar bilagor genom samma action och behöver därför inte känna tabellen. Exporten (`App\Support\Export\ContainerExportBuilder`) tar inte med raderna: den exporterar containerns innehåll, inte vad en viss person tittat på.
+
+Ingen `deleted_at`: raden är inget innehåll att återställa, papperskorgen listar fyra typer (issue 76 § Beslut 3), och en mjukraderad rad hade legat kvar i det unika indexet och blockerat en ny öppning av samma fil.
+
 ## Uppladdningsflödet
 
 1. Ta emot filen till en temporär plats.

@@ -20,7 +20,9 @@ use Illuminate\Support\Facades\DB;
  * anropar avgör om raden får försvinna.
  *
  * Stegen i en transaktion (Beslut 2): först läses radens tillstånd (innan
- * forceDelete gör det oåtkomligt), sedan forceDelete på attachment-raden,
+ * forceDelete gör det oåtkomligt), sedan raderas bilagans öppningsrader
+ * (issue 177 — `attachment_open.attachment_id` är ON DELETE RESTRICT), sedan
+ * forceDelete på attachment-raden,
  * sedan minskas stored_file.reference_count som SQL — aldrig som
  * läs-ändra-skriv i PHP, och aldrig under noll (Beslut 3) — sedan lämnar
  * bytena kontots förbrukningsräkning om bilagan var levande (issue 26a §
@@ -73,6 +75,19 @@ class PurgeAttachment
             $billedAccountId = $rad->billed_account_id;
             $byteSize = (int) StoredFile::query()->whereKey($storedFileId)->value('byte_size');
             $varLevande = ! $rad->trashed();
+
+            // Öppningsraderna först (issue 177 · [[ADR-0051 Senast öppnade
+            // filer]] § Beslut): `attachment_open.attachment_id` är ON DELETE
+            // RESTRICT, och en bilaga kan inte försvinna medan en rad pekar
+            // på den. Hårt och inte mjukt — raden är inget innehåll att
+            // återställa, och papperskorgen listar fyra typer.
+            //
+            // ALLA personers rader på bilagan, inte bara den som gallrar:
+            // nyckeln gäller bilagan. Raden här bär också item- och
+            // containergallringen — PurgeContent::item() och PurgeContainer
+            // når sina bilagor genom den här actionen och behöver därför
+            // inte känna tabellen.
+            DB::table('attachment_open')->where('attachment_id', $attachment->getKey())->delete();
 
             // Steg 2 och Beslut 7 — idempotent per anrop, inte per rad:
             // forceDelete() på en rad som inte finns är en no-op i Eloquent
