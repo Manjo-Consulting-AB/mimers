@@ -32,7 +32,9 @@ use function Pest\Laravel\withoutVite;
  *    genom att de två svaren jämförs rad för rad och inte mot en avskrift.
  * 2. **Klart är den nya frågan** (Beslut 3): avbockade förekomster i
  *    containern, `completed_at` fallande, högst tjugo, med samma radform som
- *    de öppna plus tidsstämpeln.
+ *    de öppna plus tidsstämpeln. Avbockad betyder `status = 'completed'` —
+ *    en ÖVERHOPPAD förekomst (`skipped`) står i historiken och inte här
+ *    (arkitektsvar på issue 174).
  * 3. **Underhållsfiltret står i querysträngen** (Beslut 4) och avgränsar alla
  *    fyra kolumnerna till `fixed` och `interval`. Det prövas i SVARET — en
  *    klient som sållade hade visat fel tavla för den som laddar om adressen,
@@ -162,6 +164,22 @@ function uppgiftsflikKlar(Schedule $schema, ?Carbon $nar = null): ScheduleOccurr
         'schedule_id' => $schema->id,
         'due_at' => uppgiftsflikDatum(-1),
         'visible_from' => uppgiftsflikDatum(-30),
+        'completed_at' => $nar ?? now(),
+    ]);
+}
+
+/**
+ * En ÖVERHOPPAD förekomst — stängd utan att jobbet blev gjort. `skip` sätter
+ * samma `completed_at` som avbockningen (App\Actions\Schedule\CloseOccurrence
+ * steg 2), och det är hela skillnaden mellan de två raderna: `status`.
+ */
+function uppgiftsflikOverhoppad(Schedule $schema, ?Carbon $nar = null): ScheduleOccurrence
+{
+    return ScheduleOccurrence::factory()->completed()->create([
+        'schedule_id' => $schema->id,
+        'due_at' => uppgiftsflikDatum(-1),
+        'visible_from' => uppgiftsflikDatum(-30),
+        'status' => ScheduleOccurrence::STATUS_SKIPPED,
         'completed_at' => $nar ?? now(),
     ]);
 }
@@ -416,6 +434,42 @@ it('Klart visar avbockade förekomster i containern nyast först, högst tjugo',
         ->and($rader[0]['item']['name'])->toBe('Motorn')
         ->and($rader[0]['schedule']['title'])->toBe('Klar 0')
         ->and($rader[0]['can']['update'])->toBeTrue();
+});
+
+/*
+ * Klart när: en överhoppad förekomst står inte i Klart (arkitektsvar på issue
+ * 174).
+ *
+ * [[Scheman och uppgifter]] § schedule_occurrence håller `completed` och
+ * `skipped` som två egna statusvärden, och samma avsnitt säger att de
+ * avklarade förekomsterna är svaret på "när bytte jag impellern senast". En
+ * överhoppad rad under *Klart* hade påstått ett byte som inte gjordes.
+ *
+ * Den överhoppade raden är den NYASTE i provet, så ett svar som bara råkade
+ * klippa bort den inte klarar sig: den hade legat först om `status` inte
+ * prövades. Gränsen på tjugo prövas i provet ovanför och räknas efter
+ * statusfiltret.
+ */
+it('en överhoppad förekomst står inte i Klart', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = uppgiftsflikKonto();
+    $container = uppgiftsflikParm($konto);
+    $motorn = uppgiftsflikItem($container, 'Motorn');
+
+    $avbockad = uppgiftsflikKlar(uppgiftsflikSchema($motorn, 'Byt impeller'), now()->subHour());
+    $overhoppad = uppgiftsflikOverhoppad(uppgiftsflikSchema($motorn, 'Byt olja'), now());
+
+    $svar = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
+
+    $rader = $svar->inertiaProps()['completed'];
+
+    expect(uppgiftsflikTitlar($rader))->toBe(['Byt impeller'])
+        ->and(array_column($rader, 'ulid'))->toBe([$avbockad->ulid])
+        ->and(array_column($rader, 'ulid'))->not->toContain($overhoppad->ulid)
+        // Namnet läcker ingen annan väg heller: en överhoppad rad hade synts
+        // i svaret även om listan klippts bort den ur kolumnen.
+        ->and($svar->getContent())->not->toContain('Byt olja');
 });
 
 /*

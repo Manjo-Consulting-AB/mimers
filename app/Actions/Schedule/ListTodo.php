@@ -276,11 +276,19 @@ class ListTodo
      * Containerns AVBOCKADE förekomster — *Klart*-kolumnen på containerns
      * uppgiftsflik (issue 174 · [[ADR-0050 Desktopdesignen]] § 16, Beslut 3).
      *
+     * **Villkoret är `status = 'completed'`, och `skipped` står utanför**
+     * (arkitektsvar på issue 174). [[Scheman och uppgifter]] §
+     * schedule_occurrence håller `completed` och `skipped` som två egna
+     * statusvärden, och det ena är inte det andra: en överhoppad förekomst
+     * påstår ett byte som inte gjordes. Samma avsnitt säger att de avklarade
+     * förekomsterna är svaret på "när bytte jag impellern senast", och en
+     * överhoppad rad under *Klart* hade svarat fel på den frågan. De
+     * överhoppade syns i historiken i stället (issue 179).
+     *
      * **Markören är `completed_at`.** En stängd förekomst bär sin tidsstämpel
      * (App\Actions\Schedule\CloseOccurrence steg 2), och den är det enda
-     * svaret på när den blev klar. `skip` sätter samma kolumn — en
-     * överhoppad förekomst är också en stängd rad — och skillnaden mellan de
-     * två är `status`, se `## Frågor och antaganden` i PR:en för issue 174.
+     * svaret på när den blev klar. Villkoret ovan är statusfiltret och
+     * tidsstämpeln är sorteringsnyckeln; gränsen räknas efter båda.
      *
      * **Ordningen är `completed_at` fallande med `ulid` fallande**, samma
      * andra nyckel och samma skäl som `ListAuditEvents`: två rader som
@@ -516,6 +524,10 @@ class ListTodo
      * `status` utbytt hade varit en fjärde gren i modellen för en fråga som
      * bara den här ytan ställer.
      *
+     * **Statusen prövas och är `completed`** (arkitektsvar på issue 174):
+     * `skipped` är en egen status och hör i historiken, inte under *Klart*
+     * — se `completedForContainer()`.
+     *
      * **Omfånget löses på den `scoped`-bundna instansen.** Den är samma
      * instans som `ItemPolicy` frågar per rad när `can`-flaggan räknas, så
      * upplösningen härvärmer memon i stället för att bli en andra — en
@@ -528,7 +540,7 @@ class ListTodo
         $scope = $this->resolveItemScope->handle($user, $container);
 
         return ScheduleOccurrence::query()
-            ->whereNotNull('completed_at')
+            ->where('status', ScheduleOccurrence::STATUS_COMPLETED)
             ->with(['schedule.item.container.account'])
             ->whereHas('schedule', function (Builder $query) use ($container, $scope, $maintenanceOnly): void {
                 // Det begränsade omfånget är en `whereIn` mot itemens
