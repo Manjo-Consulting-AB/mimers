@@ -69,8 +69,11 @@ use Inertia\Response;
  * en död länk — samma regel som snabblänkarna på uppgiftsfliken (issue 174
  * § Beslut 5). Flaggan ställer därför SAMMA fråga som
  * App\Http\Controllers\Settings\PlanController::index() ställer: `viewStorage`
- * på containerns konto, alltså ägar- eller adminmedlemskap
- * ([[Konton och åtkomst]]). En gäst med en itemgrant är inte medlem och får
+ * på containerns konto, alltså MEDLEMSKAP i containerns konto
+ * ([[Konton och åtkomst]]). `AccountPolicy::viewStorage()` frågar sin privata
+ * `isMember()` och skiljer inte på ägare, admin och vanlig medlem — en vanlig
+ * medlem når plansidan lika väl som ägaren, och flaggan är därför ingen
+ * ägarkontroll. En gäst med en itemgrant är inte medlem och får
  * ingen länk; hennes egen plansida hade visat hennes egna konton och inte det
  * hon tittar i.
  *
