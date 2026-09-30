@@ -280,6 +280,19 @@ class ListAuditEvents
      * hela minuters offset, så minuthinken är exakt för varje zon. Se
      * `statsForContainer()` om kostnaden.
      *
+     * **Frågan är klippt till samma spann som `periodDays()` ritar.** Utan
+     * datumfilter gäller de senaste trettio dagarna (DEFAULT_DAYS), men
+     * `filtered()` lägger bara på `from` och `to` när användaren satt dem —
+     * utan dem hade frågan hämtat minuthinkar ur HELA loggens historia och
+     * kastat allt äldre än trettio dagar i PHP. Antalet rader hade då varit
+     * antalet distinkta minuter med händelser i containerns hela historia, och
+     * vuxit med varje år loggen bar: tiotusentals modeller för att räkna
+     * trettio tal, tvärtemot löftet att kostnaden inte växer med loggen.
+     * Samma sak när MAX_PERIOD_DAYS klipper `from`: raderna före det klippta
+     * datumet hämtades ändå. Gränserna nedan är spannets lokala början och
+     * slutet dagen efter sista dagen, översatta till UTC — exakt de dygn
+     * `periodDays()` fyller ut, varken mer eller mindre.
+     *
      * @param  Builder<AuditLog>  $base
      * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
      * @return list<array{date: string, count: int}>
@@ -288,13 +301,27 @@ class ListAuditEvents
     {
         $timezone = $viewer->preferredTimezone();
 
+        $days = $this->periodDays($viewer, $filters, $timezone);
+
+        // Ett `from` i framtiden (ensamt, utan `to`) ger ett spann utan dagar:
+        // det finns inget att rita och inget att fråga efter.
+        if ($days === []) {
+            return [];
+        }
+
+        $from = Carbon::parse($days[0], $timezone)->startOfDay()->utc();
+        $to = Carbon::parse($days[count($days) - 1], $timezone)->startOfDay()->addDay()->utc();
+
         $rows = $base
+            ->where('created_at', '>=', $from)
+            ->where('created_at', '<', $to)
             ->selectRaw('substr(created_at, 1, 16) AS minute_key')
             ->selectRaw('COUNT(*) AS count')
             ->groupBy('minute_key')
             ->get();
 
         $counts = [];
+        $ritade = array_flip($days);
 
         // `getAttribute()` och inte egenskapsåtkomst: raden är en projektion
         // över `audit_log`, och `minute_key`/`count` är alias ur `selectRaw`
@@ -305,12 +332,18 @@ class ListAuditEvents
                 ->setTimezone($timezone)
                 ->toDateString();
 
+            // Skydd: frågan är redan klippt till spannet, men en hink utanför
+            // det får inte skapa ett tal för en dag listan inte ritar.
+            if (! isset($ritade[$day])) {
+                continue;
+            }
+
             $counts[$day] = ($counts[$day] ?? 0) + (int) $row->getAttribute('count');
         }
 
         return array_map(
             static fn (string $date): array => ['date' => $date, 'count' => $counts[$date] ?? 0],
-            $this->periodDays($viewer, $filters, $timezone),
+            $days,
         );
     }
 

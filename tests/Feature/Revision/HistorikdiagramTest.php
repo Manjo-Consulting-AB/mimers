@@ -534,6 +534,69 @@ it('ett intervall över flera år klipps till taket', function () {
 });
 
 /*
+ * Klart när: `perDay` läser bara dagarna i spannet.
+ *
+ * Utan datumfilter gäller de senaste trettio dagarna, men `filtered()` lägger
+ * ingen gräns alls när användaren inte satt någon: frågan hade då hämtat
+ * minuthinkar ur HELA containerns historia och kastat allt äldre i PHP.
+ * Kostnaden hade vuxit med loggen i stället för att stå still, och det syns
+ * inte i svaret — bara i frågan. Provet fäster båda sidor: en händelse sextio
+ * dagar bakom spannet påverkar inte talen, och frågan som räknar dagarna bär
+ * spannets två gränser som bundna värden.
+ *
+ * `perType` räknar fortfarande hela den läsbara mängden (Beslut 1), så de två
+ * talen är inte varandras summa — den gamla raden räknas i ringen men inte i
+ * grafen, och det är avsiktligt.
+ */
+it('perDay läser bara dagarna i spannet', function () {
+    withoutVite();
+    Carbon::setTestNow('2026-09-30 12:00:00');
+
+    [$konto, $ägare, $pärm] = historikdiagramKontext('UTC');
+
+    // Sextio dagar bakom de trettio som ritas — utanför `perDay` även utan
+    // datumfilter.
+    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-08-01 12:00:00', 'UTC'));
+    historikdiagramRad($pärm, $konto, $ägare, null, 'cost_entry', Carbon::parse('2026-09-29 12:00:00', 'UTC'));
+
+    $fragor = [];
+
+    DB::listen(function ($fraga) use (&$fragor): void {
+        $fragor[] = ['sql' => $fraga->sql, 'bindings' => $fraga->bindings];
+    });
+
+    $stats = historikdiagramStats(historikdiagramProps($ägare, $pärm));
+
+    expect($stats['perDay'])->toHaveCount(30)
+        ->and($stats['perDay'][0]['date'])->toBe('2026-09-01')
+        ->and(historikdiagramDagsumma($stats['perDay']))->toBe(1)
+        // `perType` ser hela mängden — den gamla raden räknas där.
+        ->and(array_sum(array_map(static fn (array $typ): int => $typ['count'], $stats['perType'])))->toBe(2);
+
+    // Frågan som räknar dagarna är den enda med `minute_key`, och den ska bära
+    // spannets början och slutet som bundna värden: utan dem hade den läst
+    // raden från den 1 augusti också.
+    $minut = null;
+
+    foreach ($fragor as $fraga) {
+        if (str_contains($fraga['sql'], 'minute_key')) {
+            $minut = $fraga;
+        }
+    }
+
+    $bundna = array_map(
+        static fn ($varde): string => $varde instanceof DateTimeInterface
+            ? $varde->format('Y-m-d H:i:s')
+            : (string) $varde,
+        $minut['bindings'] ?? [],
+    );
+
+    expect($minut)->not->toBeNull()
+        ->and($bundna)->toContain('2026-09-01 00:00:00')
+        ->and($bundna)->toContain('2026-10-01 00:00:00');
+});
+
+/*
  * Klart när: aggregaten kostar ett konstant antal frågor.
  *
  * Talen räknas med `GROUP BY` i databasen (Beslut 1) och inte genom att hämta
