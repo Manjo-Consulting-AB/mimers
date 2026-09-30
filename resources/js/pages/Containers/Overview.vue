@@ -107,8 +107,13 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * inte för att skrivbordet fick ett rutnät. Placeringen sker med klasser —
  * samma grepp och samma skäl som dashboardens rutnät (issue 171) — och
  * marginalen sitter kvar på varje panel, så radrytmen är den samma på båda
- * sidor om brytpunkten. *Senaste bilder* är issue 173 och har platsen där
- * bilden har den, i rutnätets tredje kolumn på första raden.
+ * sidor om brytpunkten.
+ *
+ * Rutnätet är fullt: uppgifterna, kostnaderna och detaljerna på första raden,
+ * itemen över två kolumner med aktiviteterna i den tredje, och
+ * informationsytan sist i högerspalten — där bilden har den. *Senaste bilder*
+ * är issue 173 och flyttar in i rutnätet när den byggs; den här issuen lämnar
+ * ingen tom cell efter sig.
  */
 const props = defineProps({
     container: { type: Object, required: true },
