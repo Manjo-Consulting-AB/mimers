@@ -39,14 +39,13 @@ use Illuminate\Contracts\Auth\Access\Gate;
  * skickas inte med, och blir menyn tom returneras null: ingen meny, ingen
  * knapp. Flaggan är presentation; rutterna prövar samma grindar på nytt.
  *
- * **Menyraden *Kostnad* saknas, och det är ett fynd och inte ett val.**
- * [[ADR-0048 Mobilen och plusknappen]] § 2 räknar upp fem rader, och den
- * femte leder till "kostnadsraden" — men ingen webbyta skapar en kostnadsrad i
- * dag. `cost_entry` nås bara genom `POST /api/containers/{container}/items/
- * {item}/costs` (App\Http\Controllers\Api\CostEntryController), och en menyrad
- * dit hade varit en död länk: en yta ingen hittar är samma sak som en yta som
- * inte finns. Raden byggs därför inte förrän ytan finns, och frågan står i
- * PR:ens `## Frågor och antaganden`. Se `rows()`.
+ * **Menyraden *Kostnad* kom med issue 168.** [[ADR-0048 Mobilen och
+ * plusknappen]] § 2 räknar upp fem rader, och den femte leder till
+ * kostnadsraden. Fram till issue 168 fanns ingen webbyta som skapade en
+ * kostnadsrad — `cost_entry` nåddes bara genom `POST /api/containers/
+ * {container}/items/{item}/costs` — och raden byggdes därför inte: en menyrad
+ * dit hade varit en död länk, och en yta ingen hittar är samma sak som en yta
+ * som inte finns. Nu finns ytan, och raden pekar på itemets kostnadsflik.
  *
  * Klassen är en injicerbar stödklass, samma form som
  * App\Support\Frontend\ActiveContainer.
@@ -128,8 +127,8 @@ final class CreateTarget
      * flera föräldrar ska stanna på samma väg när hon väljer en flik ur menyn.
      *
      * Ordningen är [[ADR-0048 Mobilen och plusknappen]] § 2:s: *Item under*,
-     * *Relation*, *Bild eller dokument*, *Uppgift* — och sist *Kostnad*, som
-     * inte finns; se klassens docblock.
+     * *Relation*, *Bild eller dokument*, *Uppgift* och sist *Kostnad* —
+     * den femte raden, som pekar på itemets kostnadsflik (issue 168).
      *
      * @return array{kind: string, rows: list<array{key: string, href: string}>}|null
      */
@@ -163,6 +162,14 @@ final class CreateTarget
                 'key' => 'schedule',
                 'href' => route('containers.items.schedules.create', [$container, $item], absolute: false),
             ];
+
+            // *Kostnad* (issue 168 · [[ADR-0048 Mobilen och plusknappen]] § 2).
+            // Raden leder till kostnadsfliken, precis som *Relation* och *Bild
+            // eller dokument* leder till sina — `tabHref` bär därför den
+            // aktuella förekomsten vidare, så ett flikbyte stannar på samma
+            // väg. Grinden är itemets `create`, samma pinne som
+            // App\Http\Controllers\CostEntryController::store() prövar.
+            $rows[] = ['key' => 'cost', 'href' => $this->tabHref($base, $path, 'costs')];
         }
 
         if ($rows === []) {
