@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Actions\Container\ListShellContainers;
 use App\Actions\Item\ListFavorites;
 use App\Actions\Item\ListRecentVisits;
 use App\Http\Resources\AccountResource;
@@ -111,6 +112,21 @@ use Inertia\Middleware;
  * frågar aldrig efter listan. Skrivningen som matar den ligger i
  * App\Http\Controllers\ItemController::show(), efter grinden.
  *
+ * **`shellContainers` kom med issue 169** — skalets containerlista, se
+ * [[ADR-0050 Desktopdesignen]] § 1 och [[ADR-0036 Containerns art]]. Listan
+ * byggs av App\Actions\Container\ListShellContainers ur SAMMA urval som
+ * `ContainerController::index()` och dashboardens kort
+ * (`Container::scopeAccessibleBy()`), och grupperas per art med samma regel
+ * som korten: en art med minst två containrar får en egen grupp, resten
+ * ligger i högen. Regeln bor i App\Actions\Container\ContainerKindGroups och
+ * står inte i två filer.
+ *
+ * Proppen är den FJÄRDE optionala och följer de tre andras mönster: raden
+ * behövs bara där ytan som bär den ritas — sidopanelen över `md:`, sidomenyn
+ * under — och hämtas genom en partiell omladdning av just den här nyckeln.
+ * Till skillnad från favoriterna, som följer med varje sida, kostar den
+ * alltså ingenting på en sida där ingen av de två ytorna ritas.
+ *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
  * `web`-gruppen, så `App::getLocale()` är redan rätt när `share()` körs.
@@ -153,6 +169,7 @@ class HandleInertiaRequests extends Middleware
         private readonly ActiveContainer $activeContainer,
         private readonly ListFavorites $listFavorites,
         private readonly ListRecentVisits $listRecentVisits,
+        private readonly ListShellContainers $listShellContainers,
         private readonly PendingInvitation $pendingInvitation,
     ) {}
 
@@ -198,6 +215,11 @@ class HandleInertiaRequests extends Middleware
             // listan ritas först när menyn eller sidopanelen ritas, och en
             // vanlig sidladdning ska inte bära den — se klassens docblock.
             'recentVisits' => Inertia::optional(fn (): array => $this->recentVisits($request)),
+            // Den fjärde optionala proppen, av samma skäl som de tre andra:
+            // containerlistan ritas i sidopanelen och i sidomenyn och ingen
+            // annanstans, och en vanlig sidladdning ska inte bära den — se
+            // klassens docblock.
+            'shellContainers' => Inertia::optional(fn (): array => $this->shellContainers($request)),
             'locale' => fn (): string => App::getLocale(),
             'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
@@ -320,6 +342,41 @@ class HandleInertiaRequests extends Middleware
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Skalets containerlista som raddata, eller tomt för en gäst — se
+     * klassens docblock.
+     *
+     * **OPTIONAL, som `recentVisits` ovan och av samma skäl.** Listan ritas i
+     * desktopens sidopanel och i mobilens sidomeny (issue 169 ·
+     * [[ADR-0050 Desktopdesignen]] § 1) och ingen annanstans: den hämtas av
+     * en partiell omladdning av just den här nyckeln när någon av ytorna
+     * ritas, och en sida där ingen av dem ritas frågar aldrig efter den.
+     *
+     * **Raden bär namn och ULID och ingenting mer.** Adressen byggs i
+     * klienten ur ULID:n — samma form som `ContainerCard` — för målet är
+     * containerns översikt, `/containers/{ulid}`, och den ruttens enda
+     * variabel är just ULID:n. Formen är densamma som för en inloggad utan
+     * containrar, så skalet aldrig behöver två avpackningsvägar — samma regel
+     * som `auth()`, `favorites()` och `recentVisits()`.
+     *
+     * `kind` är `null` för högen och artens eget ord för de andra
+     * ([[ADR-0036 Containerns art]]): fältet är fritt och har ingen
+     * översättningsnyckel, så skalet skriver arten ordagrant och formulerar
+     * själv vad högen heter (`dashboard.containers.others`).
+     *
+     * @return list<array{kind: string|null, containers: list<array{ulid: string, name: string}>}>
+     */
+    private function shellContainers(Request $request): array
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return [];
+        }
+
+        return $this->listShellContainers->handle($user);
     }
 
     /**

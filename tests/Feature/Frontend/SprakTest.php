@@ -445,6 +445,13 @@ it('hämtar skalets strängar ur ui.php', function () {
         // är skalets, och `nav.recent_visits` är dess enda nya nyckel —
         // ordet om tiden kommer ur `date.*` och skrivs av useRelativeDate().
         'js/components/RecentVisitList.vue',
+        // Containerlistan kom med issue 169 och ligger i samma svep av samma
+        // skäl: raden är skalets. Dess två nycklar är `nav.containers` —
+        // listans tillgängliga namn — och `dashboard.containers.others`, ordet
+        // för högen. Arterubrikerna fångas inte av mönstret och ska inte
+        // heller: en art är användarens egen sträng ([[ADR-0036 Containerns
+        // art]]) och slås aldrig upp i katalogen.
+        'js/components/ShellContainerList.vue',
     ] as $fil) {
         /*
          * Fönstret `(?<![\w$.])` är det som skiljer ett uppslag från ett

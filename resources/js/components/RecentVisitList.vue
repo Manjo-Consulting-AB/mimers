@@ -30,6 +30,11 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * över en tom lista är en yta som lovar något den inte har — samma regel som
  * favoritsektionen i ShellSections.
  *
+ * **Ramen blev kolumnens i issue 169.** Sektionen står i desktopens sidopanel
+ * och i mobilens sidomeny — båda smala kolumner med sin egen padding — och
+ * `mx-auto w-full max-w-3xl px-4` var ett band på full bredd. Utan ändringen
+ * hade de fyra sektionerna i samma kolumn haft olika indrag.
+ *
  * **Raden visar itemets namn, containerns namn och hur länge sedan besöket
  * var.** Vägen genom trädet står inte där: ett item kan ha flera
  * ([[ADR-0041 Itemets vy]]). Tiden skrivs av `useRelativeDate()` och aldrig
@@ -69,11 +74,14 @@ watch(
 </script>
 
 <template>
-    <nav
-        v-if="rows.length"
-        :aria-label="t('nav.recent_visits')"
-        class="mx-auto w-full max-w-3xl px-4 pt-6"
-    >
+    <!--
+        Ramen är `w-full pt-6` och ingen centrerad bandbredd: sektionen står i
+        skalets sidopanel över `md:` och i sidomenyn under (issue 151, 169),
+        och båda är smala kolumner med sin egen padding. `max-w-3xl` och
+        `px-4` var bandets mått på en full bredd, och de hade gett de fyra
+        sektionerna olika indrag i samma kolumn.
+    -->
+    <nav v-if="rows.length" :aria-label="t('nav.recent_visits')" class="w-full pt-6">
         <h2 class="text-meta font-semibold uppercase tracking-wide text-ink-subtle">
             {{ t('nav.recent_visits') }}
         </h2>

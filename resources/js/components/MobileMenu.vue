@@ -1,6 +1,7 @@
 <script setup>
 import { nextTick, ref, watch } from 'vue';
 import RecentVisitList from './RecentVisitList.vue';
+import ShellContainerList from './ShellContainerList.vue';
 import ShellSections from './ShellSections.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -9,9 +10,17 @@ import { useTranslations } from '../composables/useTranslations.js';
  * [[M23 Mobilen och kartan]] § 151.
  *
  * **Innehållet är skalets sektioner och ingenting eget.** Raderna ritas av
- * ShellSections — samma komponent som sidhuvudet över `md:` — så menyn och
- * sidopanelen visar samma sektioner i samma ordning ur samma data.
- * Favoriterna är samma sektion med samma anrop.
+ * ShellSections, containerlistan av ShellContainerList och de senast besökta
+ * av RecentVisitList — samma komponenter som desktopens sidopanel — så menyn
+ * och panelen visar samma sektioner i samma ordning ur samma data
+ * ([[ADR-0050 Desktopdesignen]] § 1). Favoriterna är samma sektion med samma
+ * anrop.
+ *
+ * **Containerlistan kom med issue 169.** Under `md:` finns ingen sidopanel,
+ * och en sektion som fanns i den ena ytan och saknades i den andra vore ett
+ * fel ([[ADR-0048 Mobilen och plusknappen]] § 1): menyn är den yta som bär
+ * skalets listor på en telefon, precis som den bär *Nyligen besökta* sedan
+ * issue 160.
  *
  * **Att öppna menyn hämtar *Nyligen besökta*** (issue 160 · [[ADR-0049
  * Nyligen besökta]] § Beslut). Listan är en optional prop i skalet, och menyn
@@ -126,6 +135,17 @@ function onClosed() {
                 </div>
 
                 <ShellSections />
+
+                <!--
+                    Containerlistan kom med issue 169. Den är skalets tredje
+                    sektion och står i samma ordning i den här ytan som i
+                    sidopanelen — sektionerna, containrarna, de senast
+                    besökta, favoriterna ([[ADR-0050 Desktopdesignen]] § 1).
+                    Är den sann en enda gång ställs frågan, och den hämtas av
+                    samma `open` som de senast besökta: menyn är ytan som bär
+                    båda under `md:`.
+                -->
+                <ShellContainerList :load="props.open" />
 
                 <RecentVisitList :load="props.open" />
 
