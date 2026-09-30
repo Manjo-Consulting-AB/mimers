@@ -197,6 +197,33 @@ function panelvyTodoRader(TestResponse $svar): array
 }
 
 /**
+ * Källkoden med kommentarer borta. Samma tre slag som GenomgangTest rensar,
+ * och av samma skäl: ett prov som letar efter en klass ska inte kunna nöjas av
+ * en mening i ett docblock.
+ */
+function panelvyUtanKommentarer(string $kod): string
+{
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    return (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
+}
+
+/**
+ * Klasserna på ramen som omsluter ett element, eller null när elementet inte
+ * står direkt i en ram. Rutnätets placering sitter på ramen och aldrig på
+ * panelen: panelerna är M19:s och deras anrop ska stå som förut.
+ */
+function panelvyRamKlasser(string $markup, string $element): ?string
+{
+    if (preg_match('/<(?:div|section) class="([^"]*)"[^>]*>\s*<'.$element.'\b/s', $markup, $traff) !== 1) {
+        return null;
+    }
+
+    return $traff[1];
+}
+
+/**
  * Antalet frågor $anrop ställer, mätt i en KALL request — samma mätning som
  * TodovyTest gör och av samma skäl: det första anropet värmer guarderna,
  * kontocachen, texten och `last_active_at`, och `ResolveItemScope` memoiserar
@@ -513,4 +540,108 @@ it('kostar ett konstant antal frågor oberoende av antalet containrar', function
     expect($medTio)->toBe($medEn);
 
     Carbon::setTestNow();
+});
+
+// --- rutnätet (issue 171) --------------------------------------------------
+
+/*
+ * Klart när: "dashboarden lägger uppgifter, händelser och informationsytan i
+ * en högerspalt över lg".
+ *
+ * Det här är ett källkodsprov, som GenomgangTest: Vue-komponenten ritas i
+ * webbläsaren och går inte att rendera här, men formen går att läsa ur filen.
+ * Kommentarerna rensas bort först — annars kunde en mening om `lg:col-start-3`
+ * nöja ett prov som letar efter klassen (samma fälla som SprakTest och
+ * GenomgangTest rensar bort).
+ *
+ * Högerspalten är rutnätets tredje kolumn, och placeringen står på RAMEN runt
+ * panelen. En klass på panelen själv hade varit samma sak som att ändra i den,
+ * och panelerna är M19:s — det är därför anropen strax ovanför kan stå
+ * oförändrade.
+ */
+it('lägger uppgifter, händelser och informationsytan i en högerspalt över lg', function () {
+    $sida = panelvyUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
+
+    // Rutnätet är sidans eget: tre kolumner över `lg:`, och ingenting alls
+    // under den — där är behållaren ett vanligt block.
+    expect($sida)->toContain('class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8"');
+
+    foreach (['DashboardTasksPanel', 'DashboardActivityPanel', 'InfoPanel'] as $panel) {
+        $ram = panelvyRamKlasser($sida, $panel);
+
+        // Förklaringen hör till `toBeNull`: Pest läser ett extra argument till
+        // `toContain` som en nål till, inte som ett meddelande.
+        expect($ram)->not->toBeNull("{$panel} står inte i en ram");
+        expect((string) $ram)->toContain('lg:col-start-3');
+    }
+
+    // Vänsterdelen: brickorna, korten och kostnaderna. Korten ligger i två
+    // kolumner där, och de två sektionerna spänner samma två kolumner.
+    expect(panelvyRamKlasser($sida, 'DashboardStats'))->toContain('lg:col-span-2')
+        ->and(panelvyRamKlasser($sida, 'ContainerCard'))->toContain('lg:grid-cols-2')
+        ->and(preg_match_all('/<section[^>]*class="[^"]*lg:col-span-2"/', $sida))->toBe(2);
+});
+
+/*
+ * Klart när: "panelernas källordning är oförändrad (ordningen under lg:)".
+ *
+ * Ordningen är den som gällde före issue 171, och den är inte kosmetisk:
+ * under `lg:` är rutnätet ett vanligt block, och där staplas panelerna i
+ * exakt den ordning de står i filen. Rutnätet flyttar alltså panelerna till
+ * högerspalten med klasser och inte genom att flytta dem i markupen — annars
+ * hade mobilens startsida flyttat sig samtidigt.
+ */
+it('behåller panelernas källordning', function () {
+    $sida = panelvyUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
+
+    $positioner = [];
+
+    foreach ([
+        '<InfoPanel',
+        '<DashboardStats',
+        '<ContainerCard',
+        '<CostDonut',
+        '<DashboardTasksPanel',
+        '<DashboardActivityPanel',
+    ] as $panel) {
+        $position = strpos($sida, $panel);
+
+        expect($position)->not->toBeFalse("{$panel} saknas i Dashboard.vue");
+
+        $positioner[] = (int) $position;
+    }
+
+    $sorterad = $positioner;
+    sort($sorterad);
+
+    expect($positioner)->toBe($sorterad);
+});
+
+/*
+ * Klart när: "dashboardens props är oförändrade (samma nycklar som före
+ * issuen)".
+ *
+ * Layouten får inte kosta en propp. Sidan är monteringspunkten mellan
+ * DashboardController och M19:s paneler (issue 122), och en nyckel som lades
+ * till eller föll bort här hade tystnat i en panel — den hade ritat tomt i
+ * stället för att fela. Provet läser därför `defineProps` och inte bara att
+ * nycklarna finns: listan är exakt den samma, i samma ordning.
+ */
+it('har samma proppar som före rutnätet', function () {
+    $sida = panelvyUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
+
+    expect(preg_match('/defineProps\(\{(.*?)\n\}\);/s', $sida, $block))->toBe(1, 'hittade inget defineProps-block');
+    expect(preg_match_all('/^\s*(\w+):\s*\{/m', $block[1], $nycklar))->toBeGreaterThan(0);
+
+    expect($nycklar[1])->toBe([
+        'tasks',
+        'hasContainers',
+        'showUpcomingTasks',
+        'stats',
+        'containerGroups',
+        'costs',
+        'events',
+        'tips',
+        'create',
+    ]);
 });
