@@ -92,7 +92,10 @@ const suppliers = computed(() => page.props.costSuppliers ?? []);
 const requested = ref(false);
 
 onMounted(() => {
-    if (! props.can.create || requested.value) {
+    // Båda formulären ritar ett leverantörsfält: `create` för en ny rad och
+    // `update` för en befintlig. En `write`-mottagare får ingen skapayta men
+    // väl ändra en rad, och uppslaget ska finnas för henne också.
+    if ((! props.can.create && ! props.can.update) || requested.value) {
         return;
     }
 
@@ -482,14 +485,19 @@ function destroy(cost) {
                     />
                 </FormField>
 
-                <datalist id="cost-suppliers">
-                    <option v-for="row in suppliers" :key="row.supplier" :value="row.supplier" />
-                </datalist>
-
                 <UiButton type="submit" class="self-start" :pending="form.processing">
                     {{ form.processing ? t('common.pending.default') : t('item.cost.form_submit') }}
                 </UiButton>
             </form>
         </template>
+
+        <!--
+            Förslagen, EN gång för båda formulären: `list` pekar på id:t, och en
+            datalist som bara fanns i det ena formuläret hade gett den som
+            ändrar en rad tysta förslag.
+        -->
+        <datalist id="cost-suppliers">
+            <option v-for="row in suppliers" :key="row.supplier" :value="row.supplier" />
+        </datalist>
     </section>
 </template>
