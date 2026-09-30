@@ -468,6 +468,46 @@ it('itemets rader hämtas bara när historikfliken är aktiv', function () {
  * läser hennes egen först och kontots som reserv, och provet fäster därför
  * hennes zon och inte appens.
  */
+/*
+ * Klart när: varje diagram har en textuell motsvarighet (issue 180 ·
+ * [[ADR-0050 Desktopdesignen]] § 17).
+ *
+ * Diagrammen är SVG och inget npm-paket (Beslut 3), och en SVG är en bild:
+ * staplarna och ringen är därför `aria-hidden`, och talen bärs av text —
+ * en tabell under grafen, en legend bredvid ringen, och en lista av namn och
+ * tal i panelen. Provet är ett källkodsprov av samma skäl som de andra i
+ * filen: det ska falla när någon ritar ett diagram utan sin text, även om
+ * ingen webbläsare är igång.
+ *
+ * `historikKod()` rensar kommentarerna först — docblocken är svenska med flit,
+ * och en regel som letar efter en tagg ska inte kunna nöjas av en mening.
+ */
+it('varje diagram har en textuell motsvarighet', function () {
+    $tid = historikKod('js/components/ActivityTimeChart.vue');
+    $typer = historikKod('js/components/ActivityTypeChart.vue');
+    $items = historikKod('js/components/ActiveItemsPanel.vue');
+
+    // Ritningen är dekorativ i båda: siffrorna står i texten bredvid.
+    expect($tid)->toContain('aria-hidden="true"')
+        ->toContain('<table')
+        ->and($typer)->toContain('aria-hidden="true"')
+        ->toContain('<ul')
+        ->and($items)->toContain('<ul');
+
+    // Och varje diagram bär sina egna tal som text: antalet per dag, per typ
+    // och per item.
+    expect($tid)->toContain('bar.count')
+        ->and($typer)->toContain('arc.count')
+        ->and($items)->toContain('item.count');
+
+    // Sidan monterar alla tre, i samma kolumn.
+    $sidan = historikKod('js/pages/Containers/History.vue');
+
+    expect($sidan)->toContain('<ActivityTimeChart')
+        ->toContain('<ActivityTypeChart')
+        ->toContain('<ActiveItemsPanel');
+});
+
 it('händelserna grupperas per dag i användarens tidszon', function () {
     withoutVite();
 

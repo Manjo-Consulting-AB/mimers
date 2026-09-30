@@ -902,6 +902,13 @@ it('hämtar historikflikens strängar ur ui.php', function () {
     $filer = [
         'js/pages/Containers/History.vue',
         'js/components/HistoryFilterBar.vue',
+        // Diagrammen kom med issue 180 och ligger i samma svep: rubrikerna
+        // står i vyn och talens etiketter i komponenterna — en rubrik som
+        // glöms i katalogen hade blivit `audit.history.activity_over_time`
+        // över grafen.
+        'js/components/ActivityTimeChart.vue',
+        'js/components/ActivityTypeChart.vue',
+        'js/components/ActiveItemsPanel.vue',
     ];
 
     foreach ($filer as $fil) {
@@ -934,6 +941,14 @@ it('hämtar historikflikens strängar ur ui.php', function () {
         'audit.history.filter_all',
         'audit.history.filter_submit',
         'audit.history.filter_clear',
+        // Diagrammen (issue 180): de två kortrubrikerna, panelens rubrik, och
+        // de tre orden talen bär.
+        'audit.history.activity_over_time',
+        'audit.history.activity_types',
+        'audit.history.recent_items',
+        'audit.history.chart_date',
+        'audit.history.chart_events',
+        'audit.history.type_other',
     ] as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
     }
