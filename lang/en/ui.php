@@ -1440,11 +1440,21 @@ return [
             // containerSections.js: the items are the container, the
             // categories and tags are how it is organised.
             'items' => 'Items',
+            // Issue 178 · [[ADR-0050 Desktopdesignen]] § 12–15: the
+            // container's documents tab. The row sits after `items` and before
+            // `tasks` in containerSections.js — the place ADR-0050 § 4 gives
+            // it (*Overview, Items, Documents, Tasks, Costs, History*), and
+            // the last of the six that enumeration names. It is *Documents*
+            // and not a list of the mockup's document types: the picture draws
+            // *Manual*, *Receipt*, *Service* and *Insurance*, and those are a
+            // later decision (§ 12). The tab is every attachment in the
+            // container — the type is a FILTER on `attachment.kind`.
+            'documents' => 'Documents',
             // Issue 174 · [[ADR-0050 Desktopdesignen]] § 4 and 16: the
             // container's task board. The row sits after `items` and before
             // `history` in containerSections.js — the place ADR-0050 § 4
-            // gives it (*Overview, Items, Documents, Tasks, Costs, History*),
-            // with documents and costs still to come (175 and 178). It is
+            // gives it (*Overview, Items, Documents, Tasks, Costs, History*).
+            // It is
             // *Tasks* and not the mockup's *Maintenance* beside it: the two
             // are ONE surface and the difference is a filter on
             // `recurrence_type` (§ 4, [[ADR-0042 Designsystemet]]
@@ -1453,8 +1463,8 @@ return [
             // Issue 175 · [[ADR-0050 Desktopdesignen]] § 9: the container's
             // costs tab. The row sits after `tasks` and before `history` in
             // containerSections.js — the next step of the same enumeration
-            // (*Overview, Items, Documents, Tasks, Costs, History*), with
-            // documents still to come (178). The free half of the surface
+            // (*Overview, Items, Documents, Tasks, Costs, History*), whose
+            // last row came with issue 178. The free half of the surface
             // lives here: the rows, the total, *this year* and the donut per
             // item. The Pro half — the period, the filters and the graph — is
             // issue 176 ([[ADR-0038 Gränsen för Pro i kostnaderna]]).
@@ -1926,6 +1936,89 @@ return [
             // *The container has no costs registered* would be false the moment
             // a month without rows was selected.
             'empty_filtered' => 'No costs in the selected period.',
+        ],
+
+        /*
+         * The container's documents tab, see issue 178 · [[ADR-0050
+         * Desktopdesignen]] § 12–15.
+         *
+         * **`kind` names the three types the data model actually has.** The
+         * mockup draws *Manual*, *Receipt*, *Service* and *Insurance* beside
+         * each other, and those are a later decision (§ 12): `attachment.kind`
+         * is `image`, `document` or `other`, derived from the sniffed MIME type
+         * by App\Actions\Attachment\StoreAttachment::kindFromMime(), and the
+         * filter offers exactly those three. The picture's four types would be
+         * a filter the rows cannot answer.
+         *
+         * **`uploads` is the billing account's name**, and the sentence is the
+         * whole of it: an upload in the container is charged to that account
+         * (§ 15), and the bar sits above the list so that the number is read
+         * BEFORE the button rather than after a rejected upload.
+         * `unlimited` has no `:limit` — an account without a ceiling shows its
+         * consumption and nothing else.
+         *
+         * **`recent_empty` is not written.** The *Recently opened* strip is
+         * drawn only when the user has opened something here; a heading over
+         * nothing is a claim that something exists. There is therefore no key
+         * for that state — the view omits the panel.
+         *
+         * `page` is the whole sentence and not two numbers joined in the view:
+         * the order of "page" and "of" is the language's (the same rule as
+         * `container.costs.page`).
+         */
+        'documents' => [
+            'title' => 'Documents',
+            'heading' => 'Documents',
+
+            'add' => 'Add document',
+            'add_choose_item' => 'Which item?',
+
+            'empty' => 'The container has no documents.',
+            'empty_filtered' => 'No documents match the filter.',
+
+            'recent' => 'Recently opened',
+
+            'date' => 'Uploaded',
+            'filename' => 'File',
+            'item' => 'Item',
+            'uploader' => 'Uploaded by',
+            'size' => 'Size',
+            'download' => 'Download',
+
+            'view_label' => 'View',
+            'view_list' => 'List',
+            'view_grid' => 'Grid',
+
+            'sort_label' => 'Sort',
+            'sort_newest' => 'Newest first',
+            'sort_oldest' => 'Oldest first',
+            'sort_name' => 'Name',
+            'sort_size' => 'Size',
+
+            // `type` names the FIELD in the filter and the COLUMN in the
+            // table; its three values are the words under
+            // `item.attachment.kind.*` and not copies: one word, one meaning,
+            // and a filter that named a type differently from the row it
+            // filters would be two names for the same thing.
+            'filter_aria' => 'Filter the documents',
+            'type' => 'Type',
+            'filter_item' => 'Item',
+            'filter_uploader' => 'Uploaded by',
+            'filter_from' => 'From',
+            'filter_to' => 'To',
+            'filter_all' => 'All',
+            'filter_submit' => 'Apply',
+            'filter_clear' => 'Clear',
+
+            'previous' => 'Previous',
+            'next' => 'Next',
+            'page' => 'Page :page of :last',
+
+            // The storage bar (§ 15). `uploads` names the account an upload
+            // here is charged to; the two below are its numbers.
+            'uploads' => 'Uploads are charged to :account',
+            'of' => ':used of :limit',
+            'unlimited' => ':used used',
         ],
     ],
 

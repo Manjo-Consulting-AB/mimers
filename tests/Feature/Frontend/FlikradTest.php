@@ -319,13 +319,14 @@ it('har den aktiva fliken i adressen och inte i komponentens tillstånd', functi
 /*
  * Issue 170 · [[ADR-0050 Desktopdesignen]] § 3–4: containerns flikrad.
  *
- * **Raden är fem flikar och inte sex.** *Inställningar* låg i raden från
+ * **Raden är sex flikar och inte sju.** *Inställningar* låg i raden från
  * issue 101 och lämnade den när hjälten tog över vägen till inställningssidan
  * (ADR-0050 § 3): *Redigera container* i hjälten är samma adress och samma yta,
  * och en flik jämte den hade varit två vägar till samma val. Kvar är
- * *Översikt · Items · Uppgifter · Kostnader · Historik* — *Uppgifter* kom med
- * issue 174 och *Kostnader* med issue 175, båda som byggde rutten OCH sidan —
- * och den som ADR-0050 § 4 räknar upp utöver dem, Dokument, kommer med 178.
+ * *Översikt · Items · Dokument · Uppgifter · Kostnader · Historik* — den
+ * uppräkning ADR-0050 § 4 anger, och nu komplett: *Uppgifter* kom med issue
+ * 174, *Kostnader* med 175 och *Dokument* med 178, var och en som byggde rutten
+ * OCH sidan.
  *
  * **Listan läses i node och inte som råtext**, samma grepp som
  * ContainerflikTest använder: `containerSections.js` är en ren modul, och en
@@ -333,7 +334,7 @@ it('har den aktiva fliken i adressen och inte i komponentens tillstånd', functi
  * prövar dessutom varje fliks adress mot ruttabellen; här prövas ordningen och
  * namnen.
  */
-it('har containerns flikrad Översikt, Items, Uppgifter, Kostnader och Historik', function () {
+it('har containerns flikrad Översikt, Items, Dokument, Uppgifter, Kostnader och Historik', function () {
     $skript = implode("\n", [
         "const { pathToFileURL } = await import('node:url');",
         'const { containerTabs } = await import(pathToFileURL('
@@ -349,12 +350,12 @@ it('har containerns flikrad Översikt, Items, Uppgifter, Kostnader och Historik'
     expect($kod)->toBe(0, implode("\n", $rader));
 
     expect(json_decode(implode("\n", $rader), true))
-        ->toBe(['overview', 'items', 'tasks', 'costs', 'history'], 'flikraden är inte Översikt, Items, Uppgifter, Kostnader och Historik');
+        ->toBe(['overview', 'items', 'documents', 'tasks', 'costs', 'history'], 'flikraden är inte Översikt, Items, Dokument, Uppgifter, Kostnader och Historik');
 
     // Etiketterna kommer ur `lang/` med nyckeln `container.nav.<key>`: `t()`
     // skriver nyckeln själv när uppslaget misslyckas, och en flik hade då
     // hetat `container.nav.settings` i raden.
-    foreach (['overview', 'items', 'tasks', 'costs', 'history'] as $nyckel) {
+    foreach (['overview', 'items', 'documents', 'tasks', 'costs', 'history'] as $nyckel) {
         expect(trans("ui.container.nav.{$nyckel}", [], 'en'))
             ->not->toBe("ui.container.nav.{$nyckel}", "container.nav.{$nyckel} saknas");
     }
@@ -366,11 +367,12 @@ it('har containerns flikrad Översikt, Items, Uppgifter, Kostnader och Historik'
  * **Platsen är ADR-0050 § 4:s och inte den ordning issues råkade bli klara.**
  * Raden anger *Översikt, Items, Dokument, Uppgifter, Kostnader, Historik*, och
  * uppgifterna ligger alltså efter itemen och före historiken. Dokument och
- * kostnader finns inte ännu (175 och 178), så provet prövar RIKTNINGEN och
+ * kostnader fanns inte ännu (175 och 178), så provet prövade RIKTNINGEN och
  * inte grannskapet: en flik som hamnade före items eller efter historiken
- * faller, medan 175 och 178 kan lägga sina rader omkring den utan att det här
- * provet skrivs om. Ett "direkt efter items" hade fällt den dag dokumentfliken
- * byggs — alltså på fel sak.
+ * föll, medan 175 och 178 kunde lägga sina rader omkring den utan att det här
+ * provet skrevs om. Ett "direkt efter items" hade fällt den dag dokumentfliken
+ * byggdes — alltså på fel sak. **Riktningen står kvar**, och den är
+ * fortfarande rätt fråga: uppgifterna hör efter itemen och före historiken.
  *
  * **Adressen är ruttens.** Flikens `href` byggs ur containerns ULID av samma
  * funktion layouten anropar, och provet läser den ur modulen i node i stället
@@ -425,11 +427,12 @@ it('fliken finns i containerns flikrad på sin plats', function () {
  * **Platsen är ADR-0050 § 4:s och inte den ordning issues råkade bli klara.**
  * Raden anger *Översikt, Items, Dokument, Uppgifter, Kostnader, Historik*, och
  * kostnaderna ligger alltså efter uppgifterna och före historiken. Dokument
- * finns inte ännu (178), så provet prövar RIKTNINGEN och inte grannskapet: en
- * flik som hamnade före uppgifterna eller efter historiken faller, medan 178
- * kan lägga sin rad omkring den utan att det här provet skrivs om. Ett "direkt
- * efter uppgifterna" hade fällt den dag dokumentfliken byggs — alltså på fel
- * sak.
+ * fanns inte ännu (178), så provet prövade RIKTNINGEN och inte grannskapet: en
+ * flik som hamnade före uppgifterna eller efter historiken föll, medan 178
+ * kunde lägga sin rad omkring den utan att det här provet skrevs om. Ett
+ * "direkt efter uppgifterna" hade fällt den dag dokumentfliken byggdes — alltså
+ * på fel sak. **Riktningen står kvar**, och den är fortfarande rätt fråga:
+ * kostnaderna hör efter uppgifterna och före historiken.
  *
  * **Adressen är ruttens.** Flikens `href` byggs ur containerns ULID av samma
  * funktion layouten anropar, och provet läser den ur modulen i node i stället
@@ -474,6 +477,62 @@ it('kostnadsfliken finns i containerns flikrad på sin plats', function () {
     // Och etiketten finns i katalogen — `t()` skriver annars nyckeln själv i
     // raden.
     expect(trans('ui.container.nav.costs', [], 'en'))->toBe('Costs');
+});
+
+/*
+ * Klart när (issue 178): fliken finns i containerns flikrad på sin plats.
+ *
+ * **Platsen är ADR-0050 § 4:s och inte den ordning issues råkade bli klara.**
+ * Raden anger *Översikt, Items, Dokument, Uppgifter, Kostnader, Historik*, och
+ * dokumenten ligger alltså efter itemen och före uppgifterna — den plats
+ * issue 174 och 175 med flit lämnade öppen och pekade framåt mot. Nu finns
+ * ingen rad kvar att lägga in, och därför prövas GRANNSKAPET och inte bara
+ * riktningen: en flik som hamnade efter uppgifterna hade följt "före
+ * historiken" lika väl.
+ *
+ * **Adressen är ruttens.** Flikens `href` byggs ur containerns ULID av samma
+ * funktion layouten anropar, och provet läser den ur modulen i node i stället
+ * för att skriva av strängen: en flik som pekade på en adress någon hittat på
+ * hade sett rätt ut i en råtextkontroll. Att rutten svarar prövas i
+ * tests/Feature/Frontend/DokumentflikTest.php, som äger sidan.
+ */
+it('dokumentfliken finns i containerns flikrad på sin plats', function () {
+    $skript = implode("\n", [
+        "const { pathToFileURL } = await import('node:url');",
+        'const { containerTabs } = await import(pathToFileURL('
+            .json_encode(resource_path('js/layouts/containerSections.js'), JSON_UNESCAPED_SLASHES).').href);',
+        'process.stdout.write(JSON.stringify(containerTabs.map((tab) => [tab.key, tab.href("ULID")])));',
+    ]);
+
+    $rader = [];
+    $kod = 0;
+
+    exec('node --input-type=module -e '.escapeshellarg($skript).' 2>&1', $rader, $kod);
+
+    expect($kod)->toBe(0, implode("\n", $rader));
+
+    /** @var list<array{0: string, 1: string}> $flikar */
+    $flikar = json_decode(implode("\n", $rader), true);
+    $nycklar = array_column($flikar, 0);
+    $adresser = array_column($flikar, 1, 0);
+
+    expect($nycklar)->toContain('documents');
+
+    // Platsen: efter items och före uppgifterna. `array_search` och inte ett
+    // index skrivet för hand — en flik som flyttar ska fälla på riktningen och
+    // inte på ett tal.
+    expect(array_search('documents', $nycklar, true))
+        ->toBeGreaterThan(array_search('items', $nycklar, true), 'dokumenten ligger före itemen')
+        ->toBeLessThan(array_search('tasks', $nycklar, true), 'dokumenten ligger efter uppgifterna');
+
+    // Adressen: containerns undersida, byggd ur ULID:n — samma form som
+    // grannarna, och ingen annan flik pekar dit.
+    expect($adresser['documents'])->toBe('/containers/ULID/documents')
+        ->and(array_unique($adresser))->toHaveCount(count($adresser));
+
+    // Och etiketten finns i katalogen — `t()` skriver annars nyckeln själv i
+    // raden.
+    expect(trans('ui.container.nav.documents', [], 'en'))->toBe('Documents');
 });
 
 /*

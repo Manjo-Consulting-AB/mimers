@@ -38,13 +38,14 @@ use function Pest\Laravel\withoutVite;
  * tests/Feature/Frontend/FlikradTest.php, träffytan och brytpunkten i
  * tests/Feature/Frontend/GenomgangTest.php, och handprovet står i PR-kroppen.
  *
- * **Dokument och kostnader har ingen flik, och det är avsiktligt.** Ingen rutt
- * svarar på dem och ingen prop bär dem, så en flik för dem hade varit en död
- * länk — en yta ingen hittar är samma sak som en yta som inte finns. De två
- * står i PR:ens `## Frågor och antaganden`; en flik som kräver en ny
+ * **Dokument och kostnader hade ingen flik, och det var avsiktligt.** Ingen
+ * rutt svarade på dem och ingen prop bar dem, så en flik för dem hade varit en
+ * död länk — en yta ingen hittar är samma sak som en yta som inte finns. De
+ * två stod i PR:ens `## Frågor och antaganden`; en flik som kräver en ny
  * kontrollermetod är ett fynd och ingen ändpunkt i smyg. **Uppgifterna
  * lämnade den listan i issue 174**, som byggde både rutten och sidan;
- * dokument och kostnader kommer med 175 och 178.
+ * **kostnaderna i 175 och dokumenten i 178**. Listan är därmed tom, och
+ * flikraden är ADR-0050 § 4:s uppräkning komplett.
  *
  * Hjälparna har prefixet `containerflik` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -218,7 +219,7 @@ it('containern har en flikrad byggd av UiTabs', function () {
     // container*, som är samma adress och samma yta, och en flik jämte den
     // hade varit två vägar till samma val. *Uppgifter* kom med issue 174 och
     // *Kostnader* med issue 175, båda på den plats ADR-0050 § 4 anger.
-    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'tasks', 'costs', 'history']);
+    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'documents', 'tasks', 'costs', 'history']);
 
     foreach (containerflikLankar('containerTabs', $container->ulid) as $nyckel => $adress) {
         // Etiketten kommer ur `lang/`, och `t()` hade skrivit nyckeln själv på
@@ -233,26 +234,28 @@ it('containern har en flikrad byggd av UiTabs', function () {
 });
 
 /*
- * Klart när: var och en av de tolv sektionerna går att nå.
+ * Klart när: var och en av de tretton sektionerna går att nå.
  *
  * Filens tyngdpunkt, och issue 101:s enda krav: **ingen rad får försvinna**.
  * Nycklarna räknas upp ur modulen — en rad fler vore en ny sida någon byggt
  * utan att en issue bad om den, och en rad färre vore en yta ingen hittar —
- * och varje adress begärs som inloggad medlem. Tolv sedan issue 175 (175 lade
- * till kostnadsfliken, 174 uppgiftsfliken och 116 historikfliken).
+ * och varje adress begärs som inloggad medlem. Tretton sedan issue 178 (178
+ * lade till dokumentfliken, 175 kostnadsfliken, 174 uppgiftsfliken och 116
+ * historikfliken).
  *
  * Den andra halvan är inställningssidan, som är den yta de sju sektionerna
  * flyttade TILL. Att adressen svarar 200 är inte samma sak som att den går att
  * hitta: raden ska ritas på sidan, med samma etikett och samma adress som
  * sektionsmenyn gav den.
  */
-it('var och en av de tolv sektionerna går att nå', function () {
+it('var och en av de tretton sektionerna går att nå', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerflikKontext();
 
     expect(containerflikNycklar('containerSections'))->toBe([
         'items',
+        'documents',
         'tasks',
         'costs',
         'categories',
@@ -504,8 +507,9 @@ it('historikfliken finns och läser genom läsregeln', function () {
  * bryter mot det på samma ärliga villkor** (issue 174,
  * ContainerTaskController): en ny kontrollermetod och en ny rutt, bokförd i
  * flikens egen rad i containerSections.js. **`costs` bryter mot det på samma
- * villkor** (issue 175, ContainerCostController). Sex rader, och den sjunde är
- * den som smyger.
+ * villkor** (issue 175, ContainerCostController), och **`documents` likaså**
+ * (issue 178, ContainerDocumentController). Sju rader, och den åttonde är den
+ * som smyger.
  *
  * **Fyra blev tre i issue 170.** `settings` lämnade flikraden
  * ([[ADR-0050 Desktopdesignen]] § 3), och inställningssidan har fortfarande
@@ -519,6 +523,7 @@ it('pekar varje flik på en namngiven rutt', function () {
     expect(containerflikLankar('containerTabs', $container->ulid))->toBe([
         'overview' => route('containers.show', $container, false),
         'items' => route('containers.items.index', $container, false),
+        'documents' => route('containers.documents', $container, false),
         'tasks' => route('containers.tasks', $container, false),
         'costs' => route('containers.costs', $container, false),
         'history' => route('containers.history', $container, false),
