@@ -14,7 +14,9 @@ use App\Support\Cost\CostReport;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
+use function Pest\Laravel\actingAs;
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\withoutVite;
 
 /*
  * Issue 86 · De fasta kostnadssummeringarna — en per container och en för
@@ -362,6 +364,132 @@ it('kontosummeringen löser upp omfånget en gång per request — konstant anta
     $frågorTre = summaFrågor(fn () => getJson($url, $headers)->assertOk());
 
     expect($frågorTre)->toBe($frågorEtt);
+
+    Carbon::setTestNow();
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * Issue 175 · *I år* — den tredje fasta perioden, se
+ * App\Support\Cost\CostReport::yearForContainer(), resources/js/pages/
+ * Containers/Costs.vue och [[ADR-0050 Desktopdesignen]] § 9.
+ *
+ * **Perioden är fast och därför fri** ([[ADR-0038 Gränsen för Pro i
+ * kostnaderna]] § Beslut): årtalet går inte att byta, och det kommer ur
+ * ANROPAREN — `Carbon::now($user->preferredTimezone())` och inte `today()`,
+ * samma regel och samma metod som månaden på dashboarden (issue 125). Det
+ * parametriserade året ligger kvar i rapporten och CostReportController, med
+ * sin grind orörd.
+ *
+ * Proven kör mot webbens flik (`GET /containers/{container}/costs`) och inte
+ * mot en ändpunkt i `/api`: *I år* bor på fliken, och talet är sidans eget.
+ * ---------------------------------------------------------------------------
+ */
+
+/**
+ * Ett konto med två medlemmar i OLIKA tidszoner, och en container under det.
+ *
+ * Båda är medlemmar i SAMMA konto, så de ser samma container och samma rader —
+ * den enda skillnaden mellan deras svar är deras egen tidszon. En andra
+ * container hade gjort provet till ett prov om containers i stället.
+ *
+ * @return array{0: Container, 1: User, 2: User}
+ */
+function summaArskontext(string $lokalTidszon): array
+{
+    $konto = Account::factory()->create(['timezone' => 'Europe/Stockholm']);
+
+    $lokal = User::factory()->create(['timezone' => $lokalTidszon]);
+    $utc = User::factory()->create(['timezone' => 'UTC']);
+    $konto->users()->attach($lokal, ['role' => 'owner']);
+    $konto->users()->attach($utc, ['role' => 'owner']);
+
+    return [Container::factory()->for($konto, 'account')->create(), $lokal, $utc];
+}
+
+/**
+ * Flikens adress.
+ */
+function summaArsurl(Container $container): string
+{
+    return "/containers/{$container->ulid}/costs";
+}
+
+/**
+ * `yearCosts` och `year` ur svaret.
+ *
+ * @return array{yearCosts: list<array{currency: string, amount: int, count: int}>, year: int}
+ */
+function summaArsprops(Container $container, User $anvandare): array
+{
+    $svar = actingAs($anvandare)->get(summaArsurl($container))->assertOk();
+
+    /** @var array{yearCosts: list<array{currency: string, amount: int, count: int}>, year: int} $proppar */
+    $proppar = [
+        'yearCosts' => $svar->inertiaProps()['yearCosts'],
+        'year' => $svar->inertiaProps()['year'],
+    ];
+
+    return $proppar;
+}
+
+/*
+ * Klart när: *I år* räknar kalenderåret i användarens tidszon — en rad
+ * 31 december 23:30 lokal tid.
+ *
+ * Ögonblicket är 2027-01-01 04:30 UTC. I America/New_York är klockan då
+ * 2026-12-31 23:30, så samma sekund tillhör två olika kalenderår för två
+ * användare — och raden följer med dem. En årssumma räknad ur serverns klocka
+ * (UTC) hade gett båda användarna 2027 och tappat raden för new yorkaren.
+ */
+it('I år räknar kalenderåret i användarens tidszon', function () {
+    withoutVite();
+
+    Carbon::setTestNow(Carbon::parse('2027-01-01 04:30:00', 'UTC'));
+
+    [$container, $newyorkaren, $utc] = summaArskontext('America/New_York');
+    $item = summaItem($container, $container->account, $newyorkaren, 'Motorn');
+
+    // Den sista december — fortfarande inne i 2026 i New York, redan passerad
+    // i UTC.
+    summaKostnad($item, ['amount' => 1111, 'currency' => 'SEK', 'incurred_on' => '2026-12-31']);
+    // Den första januari — inne i 2027 för båda.
+    summaKostnad($item, ['amount' => 2222, 'currency' => 'SEK', 'incurred_on' => '2027-01-01']);
+
+    $lokal = summaArsprops($container, $newyorkaren);
+    $serverns = summaArsprops($container, $utc);
+
+    expect($lokal['year'])->toBe(2026)
+        ->and($lokal['yearCosts'])->toBe([['currency' => 'SEK', 'amount' => 1111, 'count' => 1]])
+        ->and($serverns['year'])->toBe(2027)
+        ->and($serverns['yearCosts'])->toBe([['currency' => 'SEK', 'amount' => 2222, 'count' => 1]]);
+
+    Carbon::setTestNow();
+});
+
+/*
+ * Klart när: *I år* är ett KALENDERÅR och inte ett rullande fönster.
+ *
+ * Raden den 31 december förra året räknas inte, raden den 1 januari i år gör
+ * det — och båda ligger inom tolv månader från varandra. Ett rullande fönster
+ * hade räknat båda, vilket är en annan fråga än *i år*.
+ */
+it('I år räknar kalenderåret och inte ett rullande fönster', function () {
+    withoutVite();
+
+    Carbon::setTestNow(Carbon::parse('2026-06-15 12:00:00', 'Europe/Stockholm'));
+
+    [$container, $anvandare] = summaArskontext('Europe/Stockholm');
+    $item = summaItem($container, $container->account, $anvandare, 'Motorn');
+
+    foreach ([['2025-12-31', 100], ['2026-01-01', 200], ['2026-12-31', 400], ['2027-01-01', 800]] as [$datum, $belopp]) {
+        summaKostnad($item, ['amount' => $belopp, 'currency' => 'SEK', 'incurred_on' => $datum]);
+    }
+
+    $proppar = summaArsprops($container, $anvandare);
+
+    expect($proppar['year'])->toBe(2026)
+        ->and($proppar['yearCosts'])->toBe([['currency' => 'SEK', 'amount' => 600, 'count' => 2]]);
 
     Carbon::setTestNow();
 });

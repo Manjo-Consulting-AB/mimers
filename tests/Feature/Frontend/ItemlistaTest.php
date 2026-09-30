@@ -284,12 +284,15 @@ it('länkar containernamnet i containerlistan till itemlistan', function () {
  * sida, en ny rutt och en ny kontrollermetod, bokförd i
  * resources/js/layouts/containerSections.js på den plats ADR-0050 § 4 anger.
  *
+ * **Elva blev tolv i issue 175.** Kostnadsfliken är samma sorts rad igen, och
+ * av samma skäl: en ny sida, en ny rutt och en ny kontrollermetod.
+ *
  * **Räkningen gäller `containerSections` och ingenting annat.** Sedan issue 101
  * bär filen också `containerTabs`, och översiktsraden där är en adress utan
  * sektion — den hör till flikraden och räknas inte hit. En räkning över hela
  * filen hade räknat den som en sektion.
  */
-it('lägger itemlistan först i containerns navigation och behåller elva rader', function () {
+it('lägger itemlistan först i containerns navigation och behåller tolv rader', function () {
     $sektioner = File::get(resource_path('js/layouts/containerSections.js'));
 
     expect($sektioner)->toContain("key: 'items'")
@@ -301,7 +304,7 @@ it('lägger itemlistan först i containerns navigation och behåller elva rader'
     preg_match('#export const containerSections = \[(.*?)\n\];#s', $sektioner, $träff);
 
     expect($träff[1] ?? '')->not->toBe('', 'containerSections finns inte i filen');
-    expect(substr_count($träff[1], 'href: (ulid) =>'))->toBe(11);
+    expect(substr_count($träff[1], 'href: (ulid) =>'))->toBe(12);
 });
 
 /*

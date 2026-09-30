@@ -81,6 +81,7 @@
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}/items` },
     { key: 'tasks', href: (ulid) => `/containers/${ulid}/tasks` },
+    { key: 'costs', href: (ulid) => `/containers/${ulid}/costs` },
     { key: 'categories', href: (ulid) => `/containers/${ulid}/categories` },
     { key: 'tags', href: (ulid) => `/containers/${ulid}/tags` },
     { key: 'sharing', href: (ulid) => `/containers/${ulid}/sharing` },
@@ -103,13 +104,15 @@ export const containerSections = [
  *
  * `tasks` kom med issue 174 · ADR-0050 § 4 och 16 och ligger efter `items`,
  * före `history` — den plats raden anger (*Översikt, Items, Dokument,
- * Uppgifter, Kostnader, Historik*). Dokument och kostnader hoppas över så
- * länge deras sidor inte finns (175 och 178); ordningen är ADR:ens och inte
- * den ordning issues råkade bli klara, så att 175 och 178 lägger sina rader
- * omkring den här utan att flytta den. Flikraden är därmed
- * *Översikt · Items · Uppgifter · Historik*.
+ * Uppgifter, Kostnader, Historik*).
+ *
+ * `costs` kom med issue 175 · ADR-0050 § 9 och ligger efter `tasks`, före
+ * `history`: samma uppräkning, nästa led. Dokument hoppas fortfarande över
+ * (178); ordningen är ADR:ens och inte den ordning issues råkade bli klara,
+ * så att 178 lägger sin rad omkring de här utan att flytta dem. Flikraden är
+ * därmed *Översikt · Items · Uppgifter · Kostnader · Historik*.
  */
-const TAB_KEYS = ['items', 'tasks', 'history'];
+const TAB_KEYS = ['items', 'tasks', 'costs', 'history'];
 
 /*
  * Flikraden, se issue 101 · [[ADR-0042 Designsystemet]] § Beslut och
