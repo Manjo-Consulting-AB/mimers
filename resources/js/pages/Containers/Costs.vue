@@ -332,7 +332,10 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
             </div>
 
             <!-- Nedbrytningen per itemets kategori, med *Övrigt* för raderna
-                 utan kategori ([[ADR-0040 Underträdets summor]]). -->
+                 utan kategori ([[ADR-0040 Underträdets summor]]). Kategoriträdet
+                 följer med: motorns grupper rullas upp över underträdet och
+                 överlappar, så komponenten behöver `parent` för att kunna rita
+                 bara de översta — se CostCategoryBreakdown. -->
             <div v-if="report.category.groups.length > 0" class="mt-8">
                 <UiCard>
                     <template #heading>{{ t('container.costs.breakdown') }}</template>
@@ -340,6 +343,7 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
                     <CostCategoryBreakdown
                         :totals="report.category.totals"
                         :groups="report.category.groups"
+                        :categories="filterOptions.categories"
                     />
                 </UiCard>
             </div>

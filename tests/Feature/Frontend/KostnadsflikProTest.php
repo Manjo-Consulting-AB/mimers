@@ -222,6 +222,46 @@ function kostnadsflikProBelopp(?array $grupp, string $valuta): int
     return 0;
 }
 
+/**
+ * Grupperna som RINGEN ritar, och speglar urvalet i CostCategoryBreakdown.vue:
+ * en grupp vars förälder också är en grupp är redan räknad i den och ritas
+ * inte. Kvar blir de översta, och de är en partition av periodens total.
+ *
+ * @param  list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>  $grupper
+ * @param  list<array<string, mixed>>  $kategorier  CategoryResource-rader, med `ulid` och `parent`
+ * @return list<array{key: mixed, totals: list<array{currency: string, amount: int, count: int}>}>
+ */
+function kostnadsflikProOversta(array $grupper, array $kategorier): array
+{
+    $parentOf = [];
+
+    foreach ($kategorier as $kategori) {
+        $parentOf[(string) $kategori['ulid']] = $kategori['parent'];
+    }
+
+    $gruppUlider = array_map(
+        static fn (array $grupp): ?string => $grupp['key']['ulid'] ?? null,
+        $grupper,
+    );
+
+    return array_values(array_filter(
+        $grupper,
+        static function (array $grupp) use ($parentOf, $gruppUlider): bool {
+            $ulid = $grupp['key']['ulid'] ?? null;
+
+            // Null-gruppen är raderna utan kategori — ingen kategori i
+            // containern, alltså ingenting den kan hänga under.
+            if ($ulid === null) {
+                return true;
+            }
+
+            $parent = $parentOf[$ulid] ?? null;
+
+            return $parent === null || ! in_array($parent, $gruppUlider, true);
+        },
+    ));
+}
+
 /** Månadens första och sista dag, som förvalet räknar dem. */
 function kostnadsflikProManad(): array
 {
@@ -593,6 +633,70 @@ it('nedbrytningen grupperar på itemets kategori och rader utan kategori hamnar 
     expect($vy)->toContain("t('container.costs.other')")
         ->toContain('group.key?.ulid ??')
         ->toContain('<CostDonut');
+});
+
+/*
+ * Ringen ritar bara de ÖVERSTA kategorierna, så att bitarna blir en partition
+ * av periodens total.
+ *
+ * CostDonut fördelar det den får och normaliserar mot summan av bitarna —
+ * andelen är en ritregel och ingen summa — medan motorns kategorigrupper
+ * överlappar med flit: CostReport::groupByCategory rullar upp över underträdet
+ * ([[ADR-0040 Underträdets summor]]), så en kostnad räknas i sin egen kategori
+ * OCH i varje förfader. Ritas de allihop blir varje bit för stor: med
+ * Kylsystem 800 (förälder) och Impeller 800 (barn) får båda 50 % av en ring
+ * vars mitten-tal är periodens 800.
+ *
+ * Provet prövar båda halvorna: att motorns hela lista summerar till MER än
+ * perioden, och att urvalet komponenten gör ger exakt periodens total. Raden
+ * DIREKT på föräldern finns med därför att den skiljer de två vägarna åt: att
+ * rita barnet i stället för föräldern hade tappat förälderns egen rad, medan
+ * att rita föräldern räknar barnets rad en gång — i den kategori den hör till.
+ */
+it('nedbrytningens bitar summerar till periodens total', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = kostnadsflikProKontext();
+    $kylsystem = Category::factory()->for($container, 'container')->create(['name' => 'Kylsystem']);
+    $impeller = Category::factory()->for($container, 'container')->create([
+        'name' => 'Impeller',
+        'parent_id' => $kylsystem->id,
+    ]);
+    $motorn = kostnadsflikProItem($container, 'Frammotorn', $kylsystem);
+    $pumpen = kostnadsflikProItem($container, 'Impellerpumpen', $impeller);
+    $utanKategori = kostnadsflikProItem($container, 'Ankarspelet');
+
+    kostnadsflikProRad($motorn, 300, '2026-04-01');
+    kostnadsflikProRad($pumpen, 800, '2026-04-02');
+    kostnadsflikProRad($utanKategori, 200, '2026-04-03');
+
+    $proppar = kostnadsflikProProps(actingAs($anvandare)->get(kostnadsflikProUrl($container, [
+        'from' => '2026-04-01',
+        'to' => '2026-04-30',
+    ]))->assertOk());
+
+    $grupper = $proppar['report']['category']['groups'];
+    $belopp = static fn (array $grupp): int => kostnadsflikProBelopp($grupp, 'SEK');
+
+    // Motorns svar: barnet bär sin rad (800), föräldern barnets OCH sin egen
+    // (1100). Tillsammans 2100 för en period på 1300 — överlappet.
+    expect(kostnadsflikProGruppnycklar($grupper, 'name'))->toBe(['Impeller', 'Kylsystem', ''])
+        ->and(array_sum(array_map($belopp, $grupper)))->toBe(2100)
+        ->and($proppar['report']['category']['totals'])
+        ->toBe([['currency' => 'SEK', 'amount' => 1300, 'count' => 3]]);
+
+    // Bitarna som ritas är de översta, och de summerar precis till totalen.
+    $oversta = kostnadsflikProOversta($grupper, $proppar['filterOptions']['categories']);
+
+    expect(kostnadsflikProGruppnycklar($oversta, 'name'))->toBe(['Kylsystem', ''])
+        ->and(array_sum(array_map($belopp, $oversta)))->toBe(1300);
+
+    // Och urvalet är komponentens: `parent` ur kategoriträdet, och en grupp
+    // vars förälder också är en grupp ritas inte.
+    $vy = File::get(resource_path('js/components/CostCategoryBreakdown.vue'));
+
+    expect($vy)->toContain('props.categories')
+        ->toContain('! grouped.has(parentOf.get(group.key.ulid))');
 });
 
 /*
