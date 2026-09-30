@@ -6,6 +6,7 @@ use App\Exceptions\Api\ApiException;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
+use App\Models\CostEntry;
 use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -21,6 +22,7 @@ use function Pest\Laravel\actingAs;
 use function Pest\Laravel\delete;
 use function Pest\Laravel\from;
 use function Pest\Laravel\get;
+use function Pest\Laravel\getJson;
 use function Pest\Laravel\patch;
 use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
@@ -1110,30 +1112,43 @@ it('räknar uppgifter och underhåll som ett tal', function () {
 });
 
 /*
- * Klart när: ingen kostnadssummering räknas i den här kontrollern.
+ * Klart när (issue 89, omformulerat i issue 172): ingen kostnad räknas i den
+ * här kontrollern.
  *
- * Kostnadsbrickan är issue 86:s ändpunkt. En `SUM` här hade varit en andra väg
- * till samma tal — precis den drift som gör att två ytor börjar visa olika
- * siffror ([[ADR-0039 Containerns översikt]] § Konsekvenser). Provet är
- * tvådelat: svaret bär ingen kostnadsprop, och kontrollerns KOD rör ingen
- * kostnadskälla.
+ * Fram till issue 172 saknade översikten en kostnadspropp helt, och provet
+ * förbjöd en. Sedan issue 172 bär `costs` containerns fasta summering — men
+ * den kommer ur App\Support\Cost\CostReport::summary(), alltså exakt samma
+ * svar som `/api/containers/{container}/costs/summary` ger. En egen `SUM` här
+ * hade varit en andra väg till samma tal, och de två hade glidit isär
+ * ([[ADR-0039 Containerns översikt]] § Konsekvenser).
  *
- * Kodprovet läser filen med kommentarerna bortskalade, samma grepp som
- * SprakTest använder på Vue-filerna: `update()`s docblock nämner
- * `cost_entry.currency` i prosa, och en råtextkontroll hade fällt på en
- * mening i stället för på en fråga.
+ * Provet är därför tvådelat: svaret är ordagrant API:ets, och kontrollerns KOD
+ * rör ingen kostnadskälla. Kodprovet läser filen med kommentarerna
+ * bortskalade, samma grepp som SprakTest använder på Vue-filerna: docblocken
+ * nämner både `cost_entry` och `CostReport` i prosa, och en råtextkontroll
+ * hade fällt på en mening i stället för på en fråga.
  */
-it('räknar ingen kostnadssummering på översikten', function () {
+it('hämtar kostnaden ur den fasta summeringen och räknar den inte själv', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerKontext();
 
-    actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->missing('costs')
-            ->missing('total')
-            ->missing('costReport')
-    );
+    $motorn = Item::factory()->for($container, 'container')->create(['name' => 'Motorn']);
+
+    CostEntry::factory()->for($motorn, 'item')->create([
+        'amount' => 4200,
+        'currency' => 'SEK',
+        'incurred_on' => Carbon::today()->toDateString(),
+        'created_by_user_id' => User::factory()->create()->id,
+        'created_by_account_id' => $container->account_id,
+    ]);
+
+    $vy = actingAs($anvandare)->get("/containers/{$container->ulid}")->assertOk();
+    $api = getJson("/api/containers/{$container->ulid}/costs/summary")->assertOk();
+
+    expect($vy->inertiaProps()['costs'])->toBe($api->json('data'))
+        ->and($vy->inertiaProps()['costs']['totals'])
+        ->toBe([['currency' => 'SEK', 'amount' => 4200, 'count' => 1]]);
 
     $kontroller = File::get(app_path('Http/Controllers/ContainerController.php'));
     $kontroller = (string) preg_replace('#/\*.*?\*/#s', '', $kontroller);
@@ -1141,6 +1156,7 @@ it('räknar ingen kostnadssummering på översikten', function () {
 
     expect($kontroller)->not->toContain('CostEntry');
     expect($kontroller)->not->toContain('cost_entry');
+    expect($kontroller)->not->toContain('SUM(');
 });
 
 /*

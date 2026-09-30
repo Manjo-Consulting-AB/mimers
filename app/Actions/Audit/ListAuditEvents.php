@@ -80,11 +80,20 @@ class ListAuditEvents
      * Raderna som hör till en container: containerns egna och dess items,
      * lästa genom läsregeln ovan.
      *
+     * **`$limit` kom med issue 172 § Beslut 2 och är densamma som
+     * `forUser()`s.** Läsregeln är oförändrad — de tre leden, i en fråga — och
+     * en yta som vill se färre rader säger det i SIN ände av anropet:
+     * containerns översikt ber om fem ([[ADR-0050 Desktopdesignen]] § 7),
+     * historikfliken (issue 116) om hundra. Utan parametern hade panelen
+     * klippt själv, och det hade varit en andra formulering av läsregeln
+     * ([[ADR-0024 Tunna controllers och actions]]) — samma skäl som gjorde
+     * `forUser()`s gräns till en parameter.
+     *
      * @return Collection<int, AuditLog>
      */
-    public function forContainer(User $viewer, Container $container): Collection
+    public function forContainer(User $viewer, Container $container, int $limit = self::LIMIT): Collection
     {
-        return $this->readable($viewer)
+        return $this->readable($viewer, $limit)
             ->where('container_id', $container->id)
             ->get();
     }

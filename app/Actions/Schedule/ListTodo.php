@@ -185,6 +185,59 @@ class ListTodo
     }
 
     /**
+     * Containerns todo-urval — panelen på containerns översikt (issue 172 ·
+     * [[ADR-0050 Desktopdesignen]] § 7).
+     *
+     * **Samma fråga, samma gruppering och samma presentation som `handle()`.**
+     * Den här metoden lägger bara containerns avgränsning och panelens gräns
+     * ovanpå och går genom `occurrences()` och `present()` — samma kod, samma
+     * `TodoEntryResource`, samma `can`-flagga. Skillnaden är avgränsningen och
+     * gränsen, och ingenting annat (Beslut 1): två formuleringar av "containerns
+     * uppgifter" hade glidit isär, och den ena hade glömt omfånget.
+     *
+     * **Avgränsningen är `schedule.item.container_id`** — samma väg till
+     * containern som översiktens uppgiftsbricka alltid gått. En uppgift i en
+     * annan container hör inte hit, även när användaren når den.
+     *
+     * **Växeln gäller raderna och inte talet** (issue 134), precis som på
+     * dashboarden: `rows` och `groups` följer `show_upcoming_tasks`, medan
+     * `count` är brickans tal och räknar samma mängd oavsett växeln. Utan den
+     * skillnaden hade `counts.todos` krympt i samma stund användaren fällde
+     * ihop listan — och det talet är vad som FINNS, inte vad hon valt att se.
+     *
+     * **`hasContainers` finns inte i svaret.** Det är dashboardens flagga för
+     * att skilja "ingen container alls" från "inget att göra" (Beslut 6), och
+     * på en container finns containern per definition — frågan har inget svar
+     * att ge här, och en fråga utan svar ska inte ställas.
+     *
+     * @return array{
+     *     groups: array<string, list<array<string, mixed>>>,
+     *     rows: list<array<string, mixed>>,
+     *     count: int
+     * }
+     */
+    public function forContainer(User $user, Request $request, Container $container, int $limit): array
+    {
+        $accountIds = $user->accounts->pluck('id')->values()->all();
+
+        $onlyCurrent = $this->onlyCurrent($user);
+
+        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent, $container)->get();
+
+        return [
+            ...$this->present($user, $request, $occurrences->take($limit)),
+            // Växeln PÅ betyder "visa även framtida", och då är inget villkor
+            // lagt på frågan: svaret bär hela mängden och talet är dess längd.
+            // Växeln AV begränsar raderna till försenat och i dag, och då
+            // ställs frågan en gång till — utan villkoret — precis som
+            // DashboardController gör för sina brickor.
+            'count' => $onlyCurrent
+                ? $this->occurrences($user, $accountIds, false, $container)->count()
+                : $occurrences->count(),
+        ];
+    }
+
+    /**
      * En sida av todo-listan — högst `PER_PAGE` rader, och markörerna till
      * nästa och föregående sida.
      *
@@ -305,10 +358,17 @@ class ListTodo
      * i modellen. Den här klassen formulerar fortfarande inget eget `where` —
      * den väljer bara om modellens villkor ska gälla.
      *
+     * **`$container` är containerns avgränsning** (issue 172): satt läggs
+     * `schedule.item.container_id` på, samma väg till containern som
+     * `scopeTodoFor()` själv går — och samma villkor som översiktens
+     * uppgiftsbricka alltid ställt. Osatt är frågan användarens, över alla
+     * containrar. Ingen tredje gren och ingen egen fråga: avgränsningen är ett
+     * villkor ovanpå urvalet, inte ett urval bredvid det.
+     *
      * @param  list<int>  $accountIds
      * @return Builder<ScheduleOccurrence>
      */
-    private function occurrences(User $user, array $accountIds, bool $onlyCurrent): Builder
+    private function occurrences(User $user, array $accountIds, bool $onlyCurrent, ?Container $container = null): Builder
     {
         $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
@@ -316,6 +376,10 @@ class ListTodo
 
         if ($onlyCurrent) {
             $query->dueTodayOrEarlier($user);
+        }
+
+        if ($container !== null) {
+            $query->whereHas('schedule.item', fn (Builder $query) => $query->where('container_id', $container->id));
         }
 
         return $query;

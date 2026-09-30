@@ -1492,6 +1492,48 @@ return [
             'description' => 'Description',
             'items' => 'Items',
             'todos' => 'Open tasks',
+
+            /*
+             * Panelerna på översikten, se issue 172 · [[ADR-0050
+             * Desktopdesignen]] § 7.
+             *
+             * `tasks` is the panel's heading and not the tile's: the tile
+             * counts what is open (`todos` above), the panel lists what is
+             * coming. The word is the dashboard panel's own, and it is a
+             * second key rather than a shared one because the two pages are
+             * two contexts — a sentence that changes on one of them must not
+             * change on the other.
+             *
+             * `view_all` is ONE key for both panels that link onward (tasks
+             * and items): same word, same meaning, one key
+             * ([[ADR-0032 Produktens ord]]).
+             *
+             * `currency` and `account` are the labels of the details list.
+             * `kind` above is its third label — the same word the mobile
+             * header already prints, and deliberately not a second key.
+             *
+             * There is no empty state for the cost panel: it is not drawn at
+             * all when the container has no cost rows, and a heading over an
+             * empty ring would claim there is something to show. The two
+             * panels that DO have an empty state borrow the sentences that
+             * already exist for the same situation on the same container —
+             * `todo.empty.nothing` and `audit.history.empty` — rather than
+             * saying the same thing in a third way.
+             */
+            'tasks' => 'Upcoming tasks',
+            'costs' => 'Costs',
+            // The caption inside the cost ring. The dashboard's ring says
+            // *This month* because its row set is a month; the container's is
+            // the whole container and has no period ([[ADR-0038 Gränsen för
+            // Pro i kostnaderna]]), so it says *Total*. Two keys and not one:
+            // the words name two different row sets.
+            'costs_total' => 'Total',
+            'activity' => 'Recent activity',
+            'details' => 'Container details',
+            'currency' => 'Currency',
+            'account' => 'Account',
+            'created' => 'Created',
+            'view_all' => 'View all',
         ],
 
         'index' => [
