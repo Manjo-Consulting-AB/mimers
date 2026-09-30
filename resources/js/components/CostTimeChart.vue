@@ -56,6 +56,16 @@ import { useTranslations } from '../composables/useTranslations.js';
  * grafen bär samma sak som text: månad och belopp, i serverns ordning. Den är
  * också grafens x-axel — månadsnamnen står i SVG:n och i listan, och båda
  * kommer ur serverns periodnycklar.
+ *
+ * **Etiketterna glesas ut när perioden är lång.** Perioden har ingen övre
+ * gräns — väljaren tar två datum — och ett spann på några år ger ett hundratal
+ * staplar. En etikett är omkring sex viewBox-enheter bred och varje stapel får
+ * `100 / antalet` enheter, så redan vid tolv månader ligger namnen dikt an och
+ * vid trettio går de in i varandra. Var `labelStep`:te stapel får därför en
+ * etikett, alltid den första, och taket är tolv stycken oavsett spannets längd.
+ * **Staplarna ritas alltid allihop** — det är bara orden under dem som glesas,
+ * och listan under grafen bär varje månad och varje belopp för den som vill
+ * läsa talen. Grafen är en översikt; x-axeln är listan.
  */
 const props = defineProps({
     /* Månaderna i stigande ordning: `[{key: {period}, totals: [{currency, amount, count}]}]`. */
@@ -73,6 +83,14 @@ const { t } = useTranslations();
 const BASELINE = 30;
 const MAX_HEIGHT = 26;
 
+/*
+ * Taket för antalet månadsnamn i x-axeln. Tolv ryms med marginal — en etikett
+ * är omkring sex enheter bred och tolv staplar ger drygt åtta enheter var —
+ * och fler än så behövs inte för att läsaren ska känna igen axeln. Längre
+ * spann får glesare etiketter och inte mindre text.
+ */
+const MAX_LABELS = 12;
+
 const charts = computed(() => props.totals.map((total) => {
     const bars = props.groups.map((group) => ({
         period: group.key.period,
@@ -85,6 +103,9 @@ const charts = computed(() => props.totals.map((total) => {
     const peak = Math.max(1, ...bars.map((bar) => Math.abs(bar.amount)));
     const step = 100 / Math.max(bars.length, 1);
     const width = Math.min(step * 0.6, 8);
+    // Aldrig 0: en tom graf ger ingen stapel att sätta en etikett på, men
+    // `index % 0` är NaN och inte falskt.
+    const labelStep = Math.max(1, Math.ceil(bars.length / MAX_LABELS));
 
     return {
         currency: total.currency,
@@ -100,6 +121,7 @@ const charts = computed(() => props.totals.map((total) => {
                 height,
                 y: BASELINE - height,
                 center: index * step + step / 2,
+                showLabel: index % labelStep === 0,
             };
         }),
     };
@@ -122,7 +144,11 @@ const charts = computed(() => props.totals.map((total) => {
                         rx="0.6"
                         class="fill-accent"
                     />
+                    <!-- Etiketten ritas för var `labelStep`:te stapel, så att
+                         namnen inte går in i varandra när perioden är lång.
+                         Alla månader står kvar i listan under grafen. -->
                     <text
+                        v-if="bar.showLabel"
                         :x="bar.center"
                         y="37"
                         text-anchor="middle"

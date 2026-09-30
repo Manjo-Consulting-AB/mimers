@@ -818,6 +818,49 @@ it('filterfältet submittar querysträngen mot samma rutt', function () {
 });
 
 /*
+ * Den valda leverantören står i väljaren även när den faller utanför
+ * ListCostSuppliers tak på femtio.
+ *
+ * Taket är uppslagets — `SUPPLIER_SUGGESTION_LIMIT` matar en autocomplete —
+ * men på fliken är listan en VÄLJARE, och en delad länk med en leverantör
+ * utanför de femtio vanligaste hade ritat ett tomt fält medan filtret gällde:
+ * väljaren hade sagt *Alla* om en fråga som var ställd om en leverantör.
+ * Kontrollern lägger därför till den valda strängen sist när den inte redan
+ * står i listan. Taket är kvar — det är förslagslistan som är begränsad.
+ */
+it('den valda leverantören står i filterfältet även utanför de femtio vanligaste', function () {
+    withoutVite();
+
+    [, $anvandare, $container, $motorn] = kostnadsflikProKontext();
+
+    // Femtio leverantörer med två rader var och en med en enda: den sista
+    // hamnar utanför taket, som sorterar på antal fallande och namn stigande.
+    for ($i = 0; $i < 50; $i++) {
+        kostnadsflikProRad($motorn, 10, '2026-04-01', 'SEK', sprintf('Leverantör %02d', $i));
+        kostnadsflikProRad($motorn, 10, '2026-04-02', 'SEK', sprintf('Leverantör %02d', $i));
+    }
+
+    kostnadsflikProRad($motorn, 20, '2026-04-03', 'SEK', 'Sällsynta Åkeriet');
+
+    $proppar = kostnadsflikProProps(actingAs($anvandare)->get(kostnadsflikProUrl($container, [
+        'from' => '2026-04-01',
+        'to' => '2026-04-30',
+        'supplier' => 'Sällsynta Åkeriet',
+    ]))->assertOk());
+
+    $lista = $proppar['filterOptions']['suppliers'];
+
+    expect($lista)->toHaveCount(51)
+        ->and(end($lista))->toBe('Sällsynta Åkeriet');
+
+    // De femtio första är takets lista, och den valda står utanför den.
+    expect(array_slice($lista, 0, 50))->not->toContain('Sällsynta Åkeriet');
+
+    // Och filtret gäller fortfarande bara den egna raden.
+    expect($proppar['report']['period']['totals'])->toBe([['currency' => 'SEK', 'amount' => 20, 'count' => 1]]);
+});
+
+/*
  * Klart när: diagrammen är SVG i en egen komponent och inget nytt npm-paket
  * har lagts till (Beslut 4).
  *
@@ -846,7 +889,12 @@ it('ritar diagrammen som SVG utan ett nytt npm-paket', function () {
         ->toContain('<rect')
         ->toContain('viewBox')
         // En graf per valuta, och aldrig ett tal över två.
-        ->toContain('props.totals.map');
+        ->toContain('props.totals.map')
+        // Perioden har ingen övre gräns: etiketterna glesas ut i stället för
+        // att gå in i varandra, medan varje stapel och varje tal i listan
+        // under grafen står kvar.
+        ->toContain('MAX_LABELS')
+        ->toContain('v-if="bar.showLabel"');
 
     expect($nedbrytning)->toContain('<CostDonut')
         ->and($nedbrytning)->not->toContain('<svg');

@@ -202,7 +202,15 @@ class ContainerCostController extends Controller
             // och leverantörerna ur ListCostSuppliers — samma lista som
             // kostnadsformulärets autocomplete får.
             'filterOptions' => $canReport
-                ? $this->filterOptions($request, $user, $container, $scope, $listCategories, $listCostSuppliers)
+                ? $this->filterOptions(
+                    $request,
+                    $user,
+                    $container,
+                    $scope,
+                    $listCategories,
+                    $listCostSuppliers,
+                    $filter['supplier'] ?? null,
+                )
                 : null,
         ]);
     }
@@ -371,6 +379,16 @@ class ContainerCostController extends Controller
      * tom lista och ritar inget fält för den: en väljare med bara *Alla* är
      * brus, och en mottagare ska inte kunna filtrera på något hon inte ser.
      *
+     * **Den VALDA leverantören är med även när den faller utanför taket.**
+     * ListCostSuppliers är ett uppslag för en autocomplete och svarar med de
+     * femtio vanligaste (`SUPPLIER_SUGGESTION_LIMIT`), men här är listan en
+     * väljare: en delad länk med en leverantör utanför de femtio hade ritat ett
+     * TOMT fält medan filtret gällde — väljaren hade visat *Alla* om en fråga
+     * som var ställd om en leverantör. Den valda strängen läggs därför till
+     * sist när den inte redan står i listan. Taket är kvar: det är
+     * förslagslistan som är begränsad, inte frågan.
+     *
+     * @param  ?string  $selectedSupplier  leverantören i querysträngen, eller null
      * @return array{items: list<array{ulid: string, name: string}>, categories: list<array<string, mixed>>, suppliers: list<string>}
      */
     private function filterOptions(
@@ -380,13 +398,21 @@ class ContainerCostController extends Controller
         ItemScope $scope,
         ListCategories $listCategories,
         ListCostSuppliers $listCostSuppliers,
+        ?string $selectedSupplier = null,
     ): array {
         $items = $container->items()
             ->inScope($scope)
             ->orderBy('name')
             ->get(['ulid', 'name']);
 
-        $suppliers = $listCostSuppliers->handle($user, $container);
+        $suppliers = array_map(
+            static fn (array $supplier): string => (string) $supplier['supplier'],
+            $listCostSuppliers->handle($user, $container),
+        );
+
+        if ($selectedSupplier !== null && ! in_array($selectedSupplier, $suppliers, true)) {
+            $suppliers[] = $selectedSupplier;
+        }
 
         return [
             'items' => $items
@@ -395,10 +421,7 @@ class ContainerCostController extends Controller
                 ->all(),
             'categories' => CategoryResource::collection($listCategories->handle($user, $container))
                 ->resolve($request),
-            'suppliers' => array_map(
-                static fn (array $supplier): string => (string) $supplier['supplier'],
-                $suppliers,
-            ),
+            'suppliers' => $suppliers,
         ];
     }
 
