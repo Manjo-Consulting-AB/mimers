@@ -158,11 +158,11 @@ function kostnadsflikUrl(Container $container, ?int $sida = null): string
 /**
  * Propparna ur svaret, med de nycklar proven läser.
  *
- * @return array{costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}, yearCosts: list<array{currency: string, amount: int, count: int}>, year: int, rows: array{data: list<array<string, mixed>>, current_page: int, last_page: int, total: int}, items: list<array{ulid: string, name: string}>, canReport: bool, canUpgrade: bool}
+ * @return array{costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}, yearCosts: list<array{currency: string, amount: int, count: int}>, year: int, rows: array{data: list<array<string, mixed>>, current_page: int, last_page: int, total: int, prev_page_url: string|null, next_page_url: string|null}, items: list<array{ulid: string, name: string}>, canReport: bool, canUpgrade: bool}
  */
 function kostnadsflikProps(TestResponse $svar): array
 {
-    /** @var array{costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}, yearCosts: list<array{currency: string, amount: int, count: int}>, year: int, rows: array{data: list<array<string, mixed>>, current_page: int, last_page: int, total: int}, items: list<array{ulid: string, name: string}>, canReport: bool, canUpgrade: bool} $proppar */
+    /** @var array{costs: array{totals: list<array{currency: string, amount: int, count: int}>, breakdown: list<array{key: array{ulid: string, name: string}, totals: list<array{currency: string, amount: int, count: int}>}>}, yearCosts: list<array{currency: string, amount: int, count: int}>, year: int, rows: array{data: list<array<string, mixed>>, current_page: int, last_page: int, total: int, prev_page_url: string|null, next_page_url: string|null}, items: list<array{ulid: string, name: string}>, canReport: bool, canUpgrade: bool} $proppar */
     $proppar = $svar->inertiaProps();
 
     return $proppar;
@@ -231,6 +231,14 @@ it('tabellen visar containerns rader nyast först, tjugofem per sida', function 
         ->and($forsta['rows']['last_page'])->toBe(2)
         ->and($andra['rows']['data'])->toHaveCount(3)
         ->and($andra['rows']['current_page'])->toBe(2);
+
+    // Sidnumreringen i vyn ritas ur just de två nycklarna — första sidan har
+    // ingen föregående, sista har ingen nästa. Saknades de blev båda länkarna
+    // osynliga utan att något annat sade till.
+    expect($forsta['rows']['prev_page_url'])->toBeNull()
+        ->and($forsta['rows']['next_page_url'])->not->toBeNull()
+        ->and($andra['rows']['prev_page_url'])->not->toBeNull()
+        ->and($andra['rows']['next_page_url'])->toBeNull();
 
     // Nyast först, och `id` fallande inuti dagen: den sista skapade raden
     // står överst, den först skapade under den.
