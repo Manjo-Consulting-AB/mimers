@@ -71,6 +71,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * *"Visa mer" är grinden*). Ingen länk, ingen träffyta och ingen markör ritas
  * förrän den vyn finns.
  *
+ * **Bildtexten i ringens mitt är anroparens** (issue 172). Den namnger den
+ * radmängd siffran kommer ur, och de två anroparna har olika mängder:
+ * dashboarden visar innevarande kalendermånad (issue 125) och containerns
+ * översikt hela containern (issue 172). Texten stod tidigare hårdkodad här,
+ * och en gemensam etikett hade varit fel i den ena av de två — *This month*
+ * om en summa som inte har någon period. Standardvärdet är dashboardens ord,
+ * så den som inte skickar en etikett får samma text som förut.
+ *
  * **Färgen är åtta validerade steg, i fast ordning.** Designtokens i
  * resources/css/app.css bär roller och ingen kategorisk skala, så paletten
  * står här. Den är prövad för färgblindhet mot den ljusa ytan, och en nionde
@@ -84,6 +92,12 @@ const props = defineProps({
     totals: { type: Array, required: true },
     /* Månadens nedbrytning per container: `[{key: {ulid, name}, totals: [{currency, amount, count}]}]`. */
     breakdown: { type: Array, required: true },
+    /*
+     * Bildtexten i ringens mitt, eller null för dashboardens ord. Den namnger
+     * radmängden — *This month* på dashboarden, *Total* i containern — och
+     * ägs av anroparen, för det är den som vet vilken mängd den skickade in.
+     */
+    label: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -183,7 +197,7 @@ const donuts = computed(() => props.totals.map((total) => {
 
                 <div class="absolute inset-0 flex flex-col items-center justify-center">
                     <span class="text-title font-semibold text-ink">{{ donut.total }}</span>
-                    <span class="text-meta text-ink-subtle">{{ t('dashboard.costs.month') }}</span>
+                    <span class="text-meta text-ink-subtle">{{ props.label ?? t('dashboard.costs.month') }}</span>
                 </div>
             </div>
 

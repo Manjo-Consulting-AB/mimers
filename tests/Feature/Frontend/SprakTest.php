@@ -633,6 +633,46 @@ it('hämtar dashboardens strängar ur ui.php', function () {
 });
 
 /*
+ * Containerns översikt fick sina paneler i issue 172 · [[ADR-0050
+ * Desktopdesignen]] § 7, och två av dem är nya filer med egna nycklar. Samma
+ * form som provet ovanför: nycklarna läses ur källkoden i stället för att
+ * räknas upp här, så en mening som byter namn i en komponent följer med utan
+ * att provet skrivs om.
+ *
+ * De tre filerna slår också upp nycklar de inte äger — `todo.empty.nothing`,
+ * `item.index.empty` och `audit.history.empty` — och det är med flit: samma
+ * ord om samma sak, och en kopia under `container.overview.*` hade varit en
+ * andra sanning om vad tomt betyder på samma container.
+ */
+it('hämtar containerns översiktssträngar ur ui.php', function () {
+    $nycklar = [];
+
+    foreach ([
+        'js/pages/Containers/Overview.vue',
+        'js/components/ContainerTasksPanel.vue',
+        'js/components/ContainerDetailsPanel.vue',
+    ] as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Panelernas egna etiketter, och inte bara de ärvda: en nyckel som tappas
+    // ur katalogen ska falla här och inte som `container.overview.details` på
+    // skärmen.
+    foreach (['tasks', 'costs', 'costs_total', 'activity', 'details', 'currency', 'account', 'created', 'view_all'] as $nyckel) {
+        expect(Lang::get("ui.container.overview.{$nyckel}", [], 'en'))
+            ->not->toBe("ui.container.overview.{$nyckel}", "container.overview.{$nyckel} saknas");
+    }
+});
+
+/*
  * Avbockningsknappens prick, se issue 133 och
  * resources/js/components/TodoRow.vue.
  *

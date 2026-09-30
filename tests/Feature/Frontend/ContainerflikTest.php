@@ -461,13 +461,23 @@ it('historikfliken finns och läser genom läsregeln', function () {
         ->get("/containers/{$container->ulid}/history")
         ->assertForbidden();
 
-    // Och ingen händelsepanel har smugit in som prop på översikten: historiken
-    // är en egen sida och inte ett kort på någon annans.
+    // Och historikens EGEN form har inte smugit in som prop på översikten:
+    // historiken är en egen sida och inte ett kort på någon annans.
+    //
+    // **`missing('events')` vände i issue 172.** Raden skrevs i issue 116,
+    // medan händelsepanelen var reserverad yta och inte byggd, och den förbjöd
+    // proppen helt. Sedan issue 172 · [[ADR-0050 Desktopdesignen]] § 7 bär
+    // översikten en aktivitetspanel — men den är en GLIMT av loggen: samma
+    // läsregel, högst fem rader, och sidans eget namn. Historikfliken äger
+    // `rows`, och den proppen är fortfarande förbjuden här. Provet fäster
+    // skillnaden i stället för att förbjuda den ena halvan av den.
     actingAs($ägare)->get("/containers/{$container->ulid}")->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->missing('events')
+            ->missing('rows')
             ->missing('history')
             ->missing('auditLog')
+            // Raden ovan är skriven i loggen, och panelen visar den.
+            ->has('events', 1)
         );
 });
 
