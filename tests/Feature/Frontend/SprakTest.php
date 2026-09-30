@@ -643,6 +643,11 @@ it('hämtar dashboardens strängar ur ui.php', function () {
  * `item.index.empty` och `audit.history.empty` — och det är med flit: samma
  * ord om samma sak, och en kopia under `container.overview.*` hade varit en
  * andra sanning om vad tomt betyder på samma container.
+ *
+ * Bildpanelen kom med issue 173 och står i samma lista av samma skäl: den bär
+ * en egen rubrik (`container.overview.images`) och lånar itemets
+ * `item.attachment.file_icon` för den neutrala ytan — samma ord om samma yta
+ * som på itemet, och ingen kopia under `container.overview.*`.
  */
 it('hämtar containerns översiktssträngar ur ui.php', function () {
     $nycklar = [];
@@ -651,6 +656,7 @@ it('hämtar containerns översiktssträngar ur ui.php', function () {
         'js/pages/Containers/Overview.vue',
         'js/components/ContainerTasksPanel.vue',
         'js/components/ContainerDetailsPanel.vue',
+        'js/components/RecentImagesPanel.vue',
     ] as $fil) {
         preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
 
@@ -666,7 +672,7 @@ it('hämtar containerns översiktssträngar ur ui.php', function () {
     // Panelernas egna etiketter, och inte bara de ärvda: en nyckel som tappas
     // ur katalogen ska falla här och inte som `container.overview.details` på
     // skärmen.
-    foreach (['tasks', 'costs', 'costs_total', 'activity', 'details', 'currency', 'account', 'created', 'view_all'] as $nyckel) {
+    foreach (['tasks', 'costs', 'costs_total', 'activity', 'images', 'details', 'currency', 'account', 'created', 'view_all'] as $nyckel) {
         expect(Lang::get("ui.container.overview.{$nyckel}", [], 'en'))
             ->not->toBe("ui.container.overview.{$nyckel}", "container.overview.{$nyckel} saknas");
     }

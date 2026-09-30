@@ -1529,6 +1529,17 @@ return [
             // the words name two different row sets.
             'costs_total' => 'Total',
             'activity' => 'Recent activity',
+            // The image panel (issue 173). *Recent images* and not *Images*:
+            // the panel is a glimpse of the newest five, not the container's
+            // pictures — those live on the documents tab (issue 178), and a
+            // heading that promised the whole set would be a heading the
+            // panel does not keep.
+            //
+            // The panel has no empty state: it is not drawn at all when the
+            // container has no images, and an image without a thumbnail is
+            // drawn with `item.attachment.file_icon` — the same words about
+            // the same surface as the item view's attachment section.
+            'images' => 'Recent images',
             'details' => 'Container details',
             'currency' => 'Currency',
             'account' => 'Account',
