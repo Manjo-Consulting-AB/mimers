@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 
 /**
  * Händelseloggens läsregel — den ENDA platsen den bor på, se [[ADR-0043 Tre
@@ -66,6 +67,18 @@ use Illuminate\Database\Eloquent\Collection;
  * anropet, aldrig genom ett eget `where` bredvid. Ett eget filter i panelen
  * hade varit en andra formulering av läsregeln, och den hade glidit isär från
  * den här.
+ *
+ * **Filtren bor här av samma skäl** (issue 179 · [[ADR-0050 Desktopdesignen]]
+ * § 17). `forContainer()` tar dem som en parameter och lägger dem OVANPÅ de
+ * tre leden, i SAMMA fråga: ett `where` i kontrollern hade varit en andra
+ * sanning om vad användaren får läsa, och en som filtrerade FÖRE läsregeln
+ * hade dessutom kunnat vidga den — ett filter är ett urval av det läsbara, inte
+ * en ny väg in i loggen. Ett filter på en användare vars rader man inte får
+ * läsa ger därför en tom lista, och samma svar som en användare som inte finns.
+ *
+ * `facets()` svarar på den andra halvan av samma fråga — vilka VAL filtret får
+ * bjuda — och läser dem ur samma läsregel, aldrig ur tabellen: en användare
+ * som bara förekommer i rader man inte får läsa ska inte gå att välja.
  */
 class ListAuditEvents
 {
@@ -89,13 +102,69 @@ class ListAuditEvents
      * ([[ADR-0024 Tunna controllers och actions]]) — samma skäl som gjorde
      * `forUser()`s gräns till en parameter.
      *
+     * **`$filters` kom med issue 179** och är historikflitens fyra: `type`,
+     * `user`, `item`, `from` och `to`, alla i den form
+     * App\Http\Requests\Audit\ContainerHistoryFilterRequest har prövat dem.
+     * De läggs EFTER läsregeln och därför i samma fråga — se `filtered()` —
+     * och gränsen på hundra rader står kvar över dem.
+     *
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
      * @return Collection<int, AuditLog>
      */
-    public function forContainer(User $viewer, Container $container, int $limit = self::LIMIT): Collection
+    public function forContainer(User $viewer, Container $container, int $limit = self::LIMIT, array $filters = []): Collection
     {
-        return $this->readable($viewer, $limit)
+        return $this->filtered(
+            $this->readable($viewer, $limit)->where('container_id', $container->id),
+            $viewer,
+            $filters,
+        )->get();
+    }
+
+    /**
+     * Valen historikflitens filter får bjuda på — issue 179 § Beslut 2.
+     *
+     * **Ur läsregeln och aldrig ur tabellen.** `types` är de `subject_type` som
+     * förekommer i containerns läsbara rader, `users` de handlande i dem. En
+     * användare eller en typ som bara finns i rader användaren inte får läsa
+     * kan därför inte väljas, och valet avslöjar ingenting utöver det hon
+     * redan ser: ett filter på en främmande användare hade gett samma tomma
+     * svar som ett på en som inte finns.
+     *
+     * Tre frågor, alla med konstant kostnad: två `SELECT DISTINCT` över
+     * containerns läsbara rader — en per kolumn, för ett gemensamt `DISTINCT`
+     * över paret hade gett varje kombination och inte varje värde — och ett
+     * uppslag av namnen i EN fråga. Att bygga listan ur de hundra raderna i
+     * stället hade tystat ett val så fort ett filter klippte bort det — och en
+     * meny man inte kan ta sig tillbaka ur är en meny utan återväg.
+     *
+     * @return array{types: list<string>, users: Collection<int, User>}
+     */
+    public function facets(User $viewer, Container $container): array
+    {
+        /** @var list<string> $types */
+        $types = $this->readableQuery($viewer)
             ->where('container_id', $container->id)
-            ->get();
+            ->whereNotNull('subject_type')
+            ->distinct()
+            ->orderBy('subject_type')
+            ->pluck('subject_type')
+            ->all();
+
+        /** @var list<int> $userIds */
+        $userIds = $this->readableQuery($viewer)
+            ->where('container_id', $container->id)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id')
+            ->all();
+
+        return [
+            'types' => array_map('strval', $types),
+            // En tom lista ger `whereIn('id', [])`, alltså `0 = 1` och inga
+            // rader — rätt svar utan ett specialfall (samma skydd som led 2
+            // ovan).
+            'users' => User::query()->whereIn('id', $userIds)->orderBy('name')->get(),
+        ];
     }
 
     /**
@@ -137,12 +206,28 @@ class ListAuditEvents
      */
     private function readable(User $viewer, int $limit = self::LIMIT): Builder
     {
+        return $this->readableQuery($viewer)
+            ->with('user')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit($limit);
+    }
+
+    /**
+     * De tre leden, utan ordning och utan gräns — den form `facets()` behöver,
+     * där `SELECT DISTINCT` står ensamt och en `ORDER BY created_at` hade varit
+     * ogiltig SQL jämte det (MariaDB vägrar sortera på en kolumn som inte står
+     * i urvalet när `DISTINCT` är satt).
+     *
+     * @return Builder<AuditLog>
+     */
+    private function readableQuery(User $viewer): Builder
+    {
         $accountIds = $viewer->accounts->pluck('id')->values()->all();
 
         [$unrestrictedContainerIds, $itemIds] = $this->reachable($viewer, $accountIds);
 
         return AuditLog::query()
-            ->with('user')
             ->where(function (Builder $query) use ($viewer, $accountIds, $unrestrictedContainerIds, $itemIds): void {
                 // Led 1: containern ägs av ett av användarens konton. En
                 // underfråga och inte en lista av löpnummer — antalet
@@ -171,10 +256,65 @@ class ListAuditEvents
                     $query->whereNull('container_id')
                         ->whereIn('account_id', $accountIds);
                 });
-            })
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->limit($limit);
+            });
+    }
+
+    /**
+     * Filtren OVANPÅ läsregeln, i samma fråga — issue 179 · [[ADR-0050
+     * Desktopdesignen]] § 17.
+     *
+     * **Ett filter kan inte vidga läsregeln.** Det läggs efter leden och
+     * snävar bara in: `type` mot `subject_type`, `user` och `item` mot radens
+     * identifierare, `from`/`to` mot `created_at`. Att filtrera FÖRE leden
+     * hade inte varit möjligt ens av misstag — frågan är byggd uppifrån och
+     * ned — men kommentaren står här för att det är den egenskapen Beslut 2
+     * vilar på.
+     *
+     * **Användaren och itemet slås upp till löpnummer och får aldrig ett
+     * `exists`-krav.** Ett filter på en användare vars rader man inte får läsa
+     * ska ge en TOM lista, och samma svar som en användare som inte finns
+     * (Beslut 2) — alltså får existensen inte prövas någonstans, varken i
+     * valideringen eller här. Ett ULID som inte finns ger `user_id = 0`, och
+     * ingen rad har löpnummer noll. Itemet slås upp på samma sätt, med
+     * `withTrashed()`: loggen överlever itemet ([[ADR-0043 Tre loggar]]
+     * § Händelseloggen), och en fråga om ett item i papperskorgen är precis
+     * den fråga en historik finns för.
+     *
+     * **Datumgränserna räknas i användarens tidszon** ([[ADR-0044 Användarens
+     * dag]]). `from` är midnatt den dagen och `to` är midnatt dagen EFTER —
+     * övre gränsen är öppen, så hela `to`-dagen ingår. En händelse 23:30 UTC
+     * hör till nästa dygn för en användare i Stockholm, och en jämförelse mot
+     * UTC-dygn hade lagt den på fel dag.
+     *
+     * @param  Builder<AuditLog>  $query
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return Builder<AuditLog>
+     */
+    private function filtered(Builder $query, User $viewer, array $filters): Builder
+    {
+        if (($type = $filters['type'] ?? null) !== null) {
+            $query->where('subject_type', $type);
+        }
+
+        if (($user = $filters['user'] ?? null) !== null) {
+            $query->where('user_id', User::query()->where('ulid', $user)->value('id') ?? 0);
+        }
+
+        if (($item = $filters['item'] ?? null) !== null) {
+            $query->where('item_id', Item::withTrashed()->where('ulid', $item)->value('id') ?? 0);
+        }
+
+        $timezone = $viewer->preferredTimezone();
+
+        if (($from = $filters['from'] ?? null) !== null) {
+            $query->where('created_at', '>=', Carbon::parse($from, $timezone)->startOfDay()->utc());
+        }
+
+        if (($to = $filters['to'] ?? null) !== null) {
+            $query->where('created_at', '<', Carbon::parse($to, $timezone)->startOfDay()->addDay()->utc());
+        }
+
+        return $query;
     }
 
     /**

@@ -460,8 +460,10 @@ it('historikfliken finns och läser genom läsregeln', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Containers/History')
-            ->has('rows', 1)
-            ->where('rows.0.ulid', $rad->ulid)
+            // Sedan issue 179 bär fliken dagarna grupperade i användarens
+            // tidszon, `days: [{date, rows}]`, i stället för en platt `rows`.
+            ->has('days', 1)
+            ->where('days.0.rows.0.ulid', $rad->ulid)
         );
 
     // Grinden är kvar: den som inte når containern får 403 och inte en lista
@@ -478,11 +480,11 @@ it('historikfliken finns och läser genom läsregeln', function () {
     // proppen helt. Sedan issue 172 · [[ADR-0050 Desktopdesignen]] § 7 bär
     // översikten en aktivitetspanel — men den är en GLIMT av loggen: samma
     // läsregel, högst fem rader, och sidans eget namn. Historikfliken äger
-    // `rows`, och den proppen är fortfarande förbjuden här. Provet fäster
+    // `days`, och den proppen är fortfarande förbjuden här. Provet fäster
     // skillnaden i stället för att förbjuda den ena halvan av den.
     actingAs($ägare)->get("/containers/{$container->ulid}")->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->missing('rows')
+            ->missing('days')
             ->missing('history')
             ->missing('auditLog')
             // Raden ovan är skriven i loggen, och panelen visar den.

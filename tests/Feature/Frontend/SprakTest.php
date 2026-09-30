@@ -878,6 +878,95 @@ it('hämtar dokumentflikens strängar ur ui.php', function () {
 });
 
 /*
+ * Historikflikens strängar, se issue 179 · [[ADR-0050 Desktopdesignen]] § 17,
+ * resources/js/pages/Containers/History.vue och
+ * resources/js/components/HistoryFilterBar.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
+ * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
+ * skrivs om. Två filer läses, för filterfältet är sin egen komponent — och en
+ * rubrik som glöms i den ena hade blivit `audit.history.filter_type` på
+ * skärmen.
+ *
+ * **Typordens tolv nycklar prövas särskilt.** Filtret bygger sin etikett som
+ * `audit.subject.<subject_type>` ur ett värde servern skickar — ett dynamiskt
+ * uppslag som mönstret ovan inte fångar — och en typ utan ord visar sin nyckel
+ * i menyn i stället för ett ord. Listan här är de tolv domännamn
+ * `RecordAuditEvent` faktiskt skriver (`subject_type` är ett öppet namnrum, så
+ * en ny typ faller inte här; den syns i menyn och hittas av den som lägger
+ * till den).
+ */
+it('hämtar historikflikens strängar ur ui.php', function () {
+    $nycklar = [];
+
+    $filer = [
+        'js/pages/Containers/History.vue',
+        'js/components/HistoryFilterBar.vue',
+    ];
+
+    foreach ($filer as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
+    // katalogen ska falla här och inte som `audit.history.empty_filtered` i
+    // tomtillståndet.
+    foreach ([
+        'audit.history.title',
+        'audit.history.heading',
+        'audit.history.empty',
+        'audit.history.empty_filtered',
+        'audit.history.day_count',
+        'audit.history.filter_aria',
+        'audit.history.filter_type',
+        'audit.history.filter_user',
+        'audit.history.filter_item',
+        'audit.history.filter_from',
+        'audit.history.filter_to',
+        'audit.history.filter_all',
+        'audit.history.filter_submit',
+        'audit.history.filter_clear',
+    ] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+    }
+
+    // Varje `subject_type` `RecordAuditEvent` skriver har ett ord, så att
+    // typfiltrets meny säger *Costs* och inte `audit.subject.cost_entry`.
+    foreach ([
+        'attachment',
+        'calendar_feed',
+        'category',
+        'container',
+        'container_access',
+        'cost_entry',
+        'invitation',
+        'loan',
+        'ownership_transfer',
+        'schedule',
+        'schedule_occurrence',
+        'tag',
+    ] as $typ) {
+        expect(Lang::get("ui.audit.subject.{$typ}", [], 'en'))
+            ->not->toBe("ui.audit.subject.{$typ}", "audit.subject.{$typ} saknas");
+    }
+
+    // Dagens rubrik bär dagens tal, och de två tomma tillstånden säger olika
+    // saker — det ena att ingenting hänt, det andra att inget matchar.
+    expect(Lang::get('ui.audit.history.day_count', ['count' => 8], 'en'))->toBe('8 events');
+
+    expect(Lang::get('ui.audit.history.empty', [], 'en'))
+        ->not->toBe(Lang::get('ui.audit.history.empty_filtered', [], 'en'));
+});
+
+/*
  * Avbockningsknappens prick, se issue 133 och
  * resources/js/components/TodoRow.vue.
  *

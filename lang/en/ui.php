@@ -2066,11 +2066,59 @@ return [
             // than its heading does, the key is already there.
             'title' => 'History',
             'heading' => 'History',
-            // The first time, and not "nothing matches": the log is the whole
-            // content of the tab, so an empty list means nothing has happened
-            // here yet — never that a filter hid something (issue 99's two
-            // states, and there is no filter on this page).
+            // The first time, and not "nothing matches": without a filter the
+            // log is the whole content of the tab, so an empty list means
+            // nothing has happened here yet (issue 99's two states).
             'empty' => 'Nothing has happened here yet.',
+            // The second state, since issue 179 put filters on the page
+            // ([[ADR-0050 Desktopdesignen]] § 17): with a filter set, an empty
+            // list means the question had no answer — never that nothing has
+            // happened. Saying *nothing has happened here yet* under a filter
+            // would be untrue, and the two states mean different things.
+            'empty_filtered' => 'No events match the filter.',
+            // The day's heading, with the day's own count under it: the row
+            // says when, the heading says how many that day held.
+            'day_count' => ':count events',
+            // The filter field (issue 179 § Beslut 4). The query string carries
+            // the values; these are their names in the form.
+            'filter_aria' => 'Filter the history',
+            'filter_type' => 'Type',
+            'filter_user' => 'User',
+            'filter_item' => 'Item',
+            'filter_from' => 'From',
+            'filter_to' => 'To',
+            'filter_all' => 'All',
+            'filter_submit' => 'Filter',
+            'filter_clear' => 'Clear filters',
+        ],
+
+        /*
+         * The words for `audit_log.subject_type`, see [[ADR-0043 Tre loggar]]
+         * § Händelseloggen and issue 179.
+         *
+         * `subject_type` is a domain name and not a class name, and the type
+         * filter on the history tab offers the ones that actually occur in the
+         * container's readable rows — so the key is the value, exactly like
+         * `audit.action.*` and `audit.field.*`. A `subject_type` added without
+         * a word here shows as `audit.subject.<value>` in the filter and is
+         * found the first time someone opens it.
+         *
+         * They are plural nouns and not sentences: the slot is a select option
+         * that groups rows ("Costs", "Tasks"), never the subject of a sentence.
+         */
+        'subject' => [
+            'attachment' => 'Files',
+            'calendar_feed' => 'Calendar links',
+            'category' => 'Categories',
+            'container' => 'The container',
+            'container_access' => 'Access',
+            'cost_entry' => 'Costs',
+            'invitation' => 'Invitations',
+            'loan' => 'Loans',
+            'ownership_transfer' => 'Transfers',
+            'schedule' => 'Tasks',
+            'schedule_occurrence' => 'Task occurrences',
+            'tag' => 'Tags',
         ],
 
         /*
