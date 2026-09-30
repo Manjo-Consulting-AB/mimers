@@ -133,6 +133,13 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * påstående anroparen HAR gjort — fliken ritar noll rader — och `UiTabs`
  * skiljer den från `null`, som betyder att det inte finns något tal att visa
  * (issue 99 och 100).
+ *
+ * **Färgerna är roller och inte palettfärger** (issue 182 · [[ADR-0042
+ * Designsystemet]] § Beslut): `text-ink`, `text-ink-muted`, `text-accent` och
+ * `text-danger` ur `@theme` i `resources/css/app.css`. Radåtgärden som bär en
+ * `@click` står kvar som rå `<button>`: GenomgangTest tillåter bara
+ * webbläsarens egna element som klickbar yta, och en `<UiButton>` hade fallit
+ * på den regeln. Beteendet är oförändrat.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -668,7 +675,7 @@ function toggleFavorite() {
                 <nav
                     v-if="currentPath"
                     :aria-label="t('item.show.breadcrumb')"
-                    class="mb-2 text-sm text-slate-600"
+                    class="mb-2 text-sm text-ink-muted"
                 >
                     <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <li
@@ -679,7 +686,7 @@ function toggleFavorite() {
                             <Link
                                 v-if="index < currentPath.nodes.length - 1"
                                 :href="pathHref(currentPath.nodes.slice(0, index + 1))"
-                                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                                class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                             >
                                 {{ node.name }}
                             </Link>
@@ -745,7 +752,7 @@ function toggleFavorite() {
                     <Link
                         v-if="can.update"
                         :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.edit.action') }}
                     </Link>
@@ -754,7 +761,7 @@ function toggleFavorite() {
                         v-if="can.delete"
                         type="button"
                         :disabled="pending"
-                        class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-danger hover:underline"
                         @click="destroy"
                     >
                         {{ pending ? t('common.pending.default') : t('item.destroy.action') }}
@@ -769,7 +776,7 @@ function toggleFavorite() {
                     <Link
                         v-if="can.create"
                         :href="`/containers/${container.ulid}/items/create?parent=${item.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.links.create_child.action') }}
                     </Link>
@@ -796,7 +803,7 @@ function toggleFavorite() {
                     *occurrence* — se nyckelns kommentar där.
                 -->
                 <section v-if="paths.length > 1" class="mt-6">
-                    <h2 id="item-placements-heading" class="text-sm font-medium text-slate-600">
+                    <h2 id="item-placements-heading" class="text-sm font-medium text-ink-muted">
                         {{ t('item.show.placements') }}
                     </h2>
 
@@ -811,8 +818,8 @@ function toggleFavorite() {
                                 :aria-current="occurrence.current ? 'true' : null"
                                 class="flex min-h-11 flex-wrap items-center gap-1"
                                 :class="occurrence.current
-                                    ? 'font-semibold text-slate-900'
-                                    : 'text-blue-700 hover:underline'"
+                                    ? 'font-semibold text-ink'
+                                    : 'text-accent hover:underline'"
                             >
                                 <template v-for="(node, step) in occurrence.nodes" :key="`${node.ulid}-${step}`">
                                     <span>{{ node.name }}</span>
@@ -820,7 +827,7 @@ function toggleFavorite() {
                                 </template>
                             </Link>
 
-                            <span v-if="occurrence.current" class="rounded bg-slate-200 px-2 py-1 text-sm font-medium">
+                            <span v-if="occurrence.current" class="rounded bg-surface-sunken px-2 py-1 text-sm font-medium">
                                 {{ t('item.show.placement_current') }}
                             </span>
                         </li>
@@ -862,13 +869,13 @@ function toggleFavorite() {
                 <section v-if="activeTab === 'overview'" class="mt-8 space-y-8">
                     <dl v-if="item.description || item.notes" class="flex flex-col gap-6">
                         <div v-if="item.description">
-                            <dt class="text-sm font-medium text-slate-600">{{ t('item.show.description') }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-slate-900">{{ item.description }}</dd>
+                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.description') }}</dt>
+                            <dd class="mt-1 whitespace-pre-line text-ink">{{ item.description }}</dd>
                         </div>
 
                         <div v-if="item.notes">
-                            <dt class="text-sm font-medium text-slate-600">{{ t('item.show.notes') }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-slate-900">{{ item.notes }}</dd>
+                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.notes') }}</dt>
+                            <dd class="mt-1 whitespace-pre-line text-ink">{{ item.notes }}</dd>
                         </div>
                     </dl>
 
@@ -887,12 +894,12 @@ function toggleFavorite() {
                     -->
                     <Link
                         :href="informationHref"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.show.all_fields') }}
                     </Link>
 
-                    <p v-if="overviewEmpty" class="text-sm text-slate-600">{{ t('item.show.overview_empty') }}</p>
+                    <p v-if="overviewEmpty" class="text-sm text-ink-muted">{{ t('item.show.overview_empty') }}</p>
                 </section>
 
                 <!--
@@ -914,17 +921,17 @@ function toggleFavorite() {
                         class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2"
                     >
                         <div v-for="field in fields" :key="field.key">
-                            <dt class="text-sm font-medium text-slate-600">{{ field.label }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-slate-900">{{ field.value }}</dd>
+                            <dt class="text-sm font-medium text-ink-muted">{{ field.label }}</dt>
+                            <dd class="mt-1 whitespace-pre-line text-ink">{{ field.value }}</dd>
                         </div>
 
                         <div v-if="categoryName">
-                            <dt class="text-sm font-medium text-slate-600">{{ t('item.show.category') }}</dt>
-                            <dd class="mt-1 text-slate-900">{{ categoryName }}</dd>
+                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.category') }}</dt>
+                            <dd class="mt-1 text-ink">{{ categoryName }}</dd>
                         </div>
                     </dl>
 
-                    <p v-else class="text-sm text-slate-600">{{ t('item.show.information_empty') }}</p>
+                    <p v-else class="text-sm text-ink-muted">{{ t('item.show.information_empty') }}</p>
                 </section>
 
                 <!--
@@ -1030,7 +1037,7 @@ function toggleFavorite() {
                      utan taggar ritar ingenting här, och räknaren i fliken säger det. -->
                 <section v-if="activeTab === 'tags'" class="mt-8">
                     <template v-if="item.tags.length > 0">
-                        <h2 class="text-sm font-medium text-slate-600">{{ t('item.show.tags') }}</h2>
+                        <h2 class="text-sm font-medium text-ink-muted">{{ t('item.show.tags') }}</h2>
 
                         <ItemTagList class="mt-2" :tags="item.tags" />
                     </template>
@@ -1055,9 +1062,9 @@ function toggleFavorite() {
                     listan säger vilket — samma val som översiktsfliken gör.
                 -->
                 <section v-if="activeTab === 'history'" class="mt-8">
-                    <h2 class="text-sm font-medium text-slate-600">{{ t('audit.history.heading') }}</h2>
+                    <h2 class="text-sm font-medium text-ink-muted">{{ t('audit.history.heading') }}</h2>
 
-                    <p v-if="history.length === 0" class="mt-2 text-sm text-slate-600">
+                    <p v-if="history.length === 0" class="mt-2 text-sm text-ink-muted">
                         {{ t('audit.history.empty') }}
                     </p>
 
