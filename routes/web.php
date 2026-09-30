@@ -17,6 +17,7 @@ use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
 use App\Http\Controllers\ContainerCostController;
 use App\Http\Controllers\ContainerCoverController;
+use App\Http\Controllers\ContainerDocumentController;
 use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
@@ -1575,6 +1576,36 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/containers/{container}/costs', ContainerCostController::class)
         ->name('containers.costs');
+
+    /*
+     * Issue 178 · Containerns dokumentflik, se
+     * App\Http\Controllers\ContainerDocumentController och
+     * [[ADR-0050 Desktopdesignen]] § 12–15.
+     *
+     * **En egen sida på en egen rutt, som de andra flikarna i
+     * `containerTabs`.** Fliken ligger i resources/js/layouts/
+     * containerSections.js på platsen ADR-0050 § 4 anger — efter items, före
+     * uppgifterna — och den fyller *Dokument* i den uppräkning som 174 och 175
+     * sköt på framtiden.
+     *
+     * **Filtren står i querysträngen och ingen sidstorlek följer med.** `kind`,
+     * `item`, `uploader`, `from`, `to` och `sort` läses av kontrollern — en
+     * handredigerad adress ger listan och inte ett fel — och `?page=` räknas av
+     * ramverket. `?view=grid` är däremot INGEN parameter här: läget mellan lista
+     * och rutnät är en klientfråga om hur raderna ritas, och servern äger bara
+     * det som ändrar svaret.
+     *
+     * **Rutten är invokable** (`__invoke`, Beslut 1): fliken har en enda metod,
+     * som de andra containertabbarna.
+     *
+     * **Ingen `scopeBindings()`.** Rutten bär bara containern; itemet ligger i
+     * raderna och i länkarna, inte i adressen.
+     *
+     * `{container}` binds på ULID via #[RouteKey('ulid')] på
+     * App\Models\Container, som överallt annars.
+     */
+    Route::get('/containers/{container}/documents', ContainerDocumentController::class)
+        ->name('containers.documents');
 
     /*
      * Issue 62a · Containerns papperskorg — det mjukraderade innehållet,

@@ -769,6 +769,115 @@ it('hämtar kostnadsflikens strängar ur ui.php', function () {
 });
 
 /*
+ * Containerns dokumentflik, se issue 178 · [[ADR-0050 Desktopdesignen]]
+ * § 12–15, resources/js/pages/Containers/Documents.vue och de två
+ * komponenterna den monterar.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
+ * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
+ * skrivs om. Fyra filer läses, för filterfältet och lagringsstapeln är sina
+ * egna komponenter — och en rubrik som glöms i den ena hade blivit
+ * `container.documents.filter_uploader` på skärmen.
+ *
+ * **De tre typorden är `item.attachment.kind.*` och inga kopior**, och det
+ * prövas särskilt: filtret och raden ska säga samma ord om samma typ. Bygger
+ * någon en egen uppsättning faller raden nedan, och det är meningen.
+ *
+ * **`of` och `unlimited` bär `:used`**, och etiketten prövas med ett värde:
+ * en nyckel utan platshållaren hade visat en tom parentes. De två är grenarna
+ * för ett tak som finns och ett som inte gör det (§ 15) — ett obegränsat tak
+ * ritar bara förbrukningen.
+ */
+it('hämtar dokumentflikens strängar ur ui.php', function () {
+    $nycklar = [];
+
+    $filer = [
+        'js/pages/Containers/Documents.vue',
+        'js/components/DocumentFilterBar.vue',
+        'js/components/StorageBar.vue',
+    ];
+
+    foreach ($filer as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
+    // katalogen ska falla här och inte som `container.documents.filter_from` i
+    // filterfältet.
+    foreach ([
+        'container.nav.documents',
+        'container.documents.title',
+        'container.documents.heading',
+        'container.documents.add',
+        'container.documents.add_choose_item',
+        'container.documents.empty',
+        'container.documents.empty_filtered',
+        'container.documents.recent',
+        'container.documents.filename',
+        'container.documents.type',
+        'container.documents.item',
+        'container.documents.date',
+        'container.documents.size',
+        'container.documents.download',
+        'container.documents.view_label',
+        'container.documents.view_list',
+        'container.documents.view_grid',
+        'container.documents.sort_label',
+        'container.documents.sort_newest',
+        'container.documents.sort_oldest',
+        'container.documents.sort_name',
+        'container.documents.sort_size',
+        'container.documents.filter_aria',
+        'container.documents.filter_item',
+        'container.documents.filter_uploader',
+        'container.documents.filter_from',
+        'container.documents.filter_to',
+        'container.documents.filter_all',
+        'container.documents.filter_submit',
+        'container.documents.filter_clear',
+        'container.documents.previous',
+        'container.documents.next',
+        'container.documents.page',
+        'container.documents.uploads',
+        'container.documents.of',
+        'container.documents.unlimited',
+    ] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+    }
+
+    // Sorteringens fyra lägen byggs som `container.documents.sort_<värde>` ur
+    // serverns `SORTS`, och typens tre som `item.attachment.kind.<värde>`: de
+    // dynamiska uppslagen fångas inte av mönstret ovan, så de prövas här.
+    foreach (['newest', 'oldest', 'name', 'size'] as $lage) {
+        expect(Lang::get("ui.container.documents.sort_{$lage}", [], 'en'))
+            ->not->toBe("ui.container.documents.sort_{$lage}", "container.documents.sort_{$lage} saknas");
+    }
+
+    foreach (['image', 'document', 'other'] as $kind) {
+        expect(Lang::get("ui.item.attachment.kind.{$kind}", [], 'en'))
+            ->not->toBe("ui.item.attachment.kind.{$kind}", "item.attachment.kind.{$kind} saknas");
+    }
+
+    // Lagringsstapelns två grenar bär sina tal, och ett obegränsat tak nämner
+    // inget tak alls.
+    expect(Lang::get('ui.container.documents.of', ['used' => '2.4 GB', 'limit' => '25 GB'], 'en'))
+        ->toBe('2.4 GB of 25 GB')
+        ->and(Lang::get('ui.container.documents.unlimited', ['used' => '2.4 GB'], 'en'))
+        ->toBe('2.4 GB used');
+
+    expect(Lang::get('ui.container.documents.page', ['page' => 2, 'last' => 5], 'en'))
+        ->toBe('Page 2 of 5');
+});
+
+/*
  * Avbockningsknappens prick, se issue 133 och
  * resources/js/components/TodoRow.vue.
  *

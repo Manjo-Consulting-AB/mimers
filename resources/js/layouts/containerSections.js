@@ -80,6 +80,7 @@
  */
 export const containerSections = [
     { key: 'items', href: (ulid) => `/containers/${ulid}/items` },
+    { key: 'documents', href: (ulid) => `/containers/${ulid}/documents` },
     { key: 'tasks', href: (ulid) => `/containers/${ulid}/tasks` },
     { key: 'costs', href: (ulid) => `/containers/${ulid}/costs` },
     { key: 'categories', href: (ulid) => `/containers/${ulid}/categories` },
@@ -107,12 +108,17 @@ export const containerSections = [
  * Uppgifter, Kostnader, Historik*).
  *
  * `costs` kom med issue 175 · ADR-0050 § 9 och ligger efter `tasks`, före
- * `history`: samma uppräkning, nästa led. Dokument hoppas fortfarande över
- * (178); ordningen är ADR:ens och inte den ordning issues råkade bli klara,
- * så att 178 lägger sin rad omkring de här utan att flytta dem. Flikraden är
- * därmed *Översikt · Items · Uppgifter · Kostnader · Historik*.
+ * `history`: samma uppräkning, nästa led.
+ *
+ * `documents` kom med issue 178 · ADR-0050 § 12–15 och ligger efter `items`,
+ * före `tasks` — den plats uppräkningen anger (*Översikt, Items, Dokument,
+ * Uppgifter, Kostnader, Historik*), och det sista ledet av den. Flikraden är
+ * därmed komplett: *Översikt · Items · Dokument · Uppgifter · Kostnader ·
+ * Historik*. Att raden inte lades till förrän ytan fanns är 101:s regel och
+ * inte ett förbiseende: en flik som kräver en ny kontrollermetod är ett fynd i
+ * PR:ens `## Frågor och antaganden` och inte en ändpunkt i smyg.
  */
-const TAB_KEYS = ['items', 'tasks', 'costs', 'history'];
+const TAB_KEYS = ['items', 'documents', 'tasks', 'costs', 'history'];
 
 /*
  * Flikraden, se issue 101 · [[ADR-0042 Designsystemet]] § Beslut och
@@ -128,15 +134,15 @@ const TAB_KEYS = ['items', 'tasks', 'costs', 'history'];
  * från issue 101 till issue 170, då hjälten tog över vägen till dem
  * (ADR-0050 § 3).
  *
- * **Dokument och kostnader har ingen sida.** Ingen rutt svarar på dem, ingen
- * kontrollermetod hämtar dem och ingen prop bär dem, så en flik för dem hade
+ * **Dokument och kostnader hade ingen sida.** Ingen rutt svarade på dem, ingen
+ * kontrollermetod hämtade dem och ingen prop bar dem, så en flik för dem hade
  * varit en död länk — och en yta ingen hittar är samma sak som en yta som inte
- * finns (62a, 67c). De byggs därför inte här: issue 101 får ingen ny
- * ändpunkt, och en flik som kräver en ny kontrollermetod är ett fynd i PR:ens
- * `## Frågor och antaganden` och inte en ändpunkt i smyg. **Uppgifterna
- * lämnade den listan i issue 174**, som byggde både rutten och sidan;
- * dokument och kostnader kommer med 175 och 178 i den ordning ADR-0050 § 4
- * anger.
+ * finns (62a, 67c). De byggdes därför inte av issue 101, och en flik som
+ * kräver en ny kontrollermetod var ett fynd i PR:ens `## Frågor och
+ * antaganden` och inte en ändpunkt i smyg. **Uppgifterna lämnade den listan i
+ * issue 174**, som byggde både rutten och sidan; **kostnaderna i 175** och
+ * **dokumenten i 178**, i den ordning ADR-0050 § 4 anger. Listan är därmed
+ * tom, och de fem flikarna i TAB_KEYS är ADR-ens sex minus översikten.
  *
  * **Översikten skrivs här och inte i listan ovan**, för den är containerns egen
  * sida och ingen undersida (`containers.show`, issue 89). `items` och `history`
