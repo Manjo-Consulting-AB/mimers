@@ -1440,6 +1440,16 @@ return [
             // containerSections.js: the items are the container, the
             // categories and tags are how it is organised.
             'items' => 'Items',
+            // Issue 174 · [[ADR-0050 Desktopdesignen]] § 4 and 16: the
+            // container's task board. The row sits after `items` and before
+            // `history` in containerSections.js — the place ADR-0050 § 4
+            // gives it (*Overview, Items, Documents, Tasks, Costs, History*),
+            // with documents and costs still to come (175 and 178). It is
+            // *Tasks* and not the mockup's *Maintenance* beside it: the two
+            // are ONE surface and the difference is a filter on
+            // `recurrence_type` (§ 4, [[ADR-0042 Designsystemet]]
+            // § Bildernas avvikelser).
+            'tasks' => 'Tasks',
             'categories' => 'Categories',
             'tags' => 'Tags',
             'sharing' => 'Sharing',
@@ -1750,6 +1760,47 @@ return [
             // ninety. Only asked when the count is greater than zero — a tag
             // on nothing is deleted without a question, as before.
             'destroy_confirm' => 'This tag is used on :count items. Move it to the trash? You can restore it within 30 days.',
+        ],
+
+        /*
+         * The container's task board, see issue 174 · [[ADR-0050
+         * Desktopdesignen]] § 4 and 16 and
+         * resources/js/pages/Containers/Tasks.vue.
+         *
+         * **Three of the four column headings are not here.** *Overdue*,
+         * *Today* and *Upcoming* are the groups the server sorts the open
+         * rows into, and they keep the words they already have under
+         * `todo.group.*` — the same group, the same word, one key. A copy
+         * under `container.tasks.*` would be a second truth about what a
+         * group is called, and the two would drift the day one of them was
+         * reworded. `done` is the fourth column and IS new: the server has
+         * no such group constant — *Done* is a list of closed occurrences
+         * and not one of `ListTodo`'s three groups (decision 3).
+         *
+         * **The two shortcuts borrow the tab row's words.** They lead to the
+         * calendar feed and the export, which is exactly what
+         * `container.nav.calendar` and `container.nav.export` name, and a
+         * second pair of words for the same two destinations would be the
+         * same drift in the other direction. Only the section's own heading
+         * is new.
+         *
+         * **`filter_maintenance` names the filter, not the rows.** The box
+         * is unticked by default, so the sentence has to read as a
+         * restriction and not as the state of the board: *Maintenance only*,
+         * never *All tasks*.
+         *
+         * The page's `title` and `heading` are two keys with the same word,
+         * like every other container page (`container.categories`,
+         * `container.tags`): the browser tab and the page heading are two
+         * surfaces, and the day one of them needs to say more than the other
+         * the key is already there.
+         */
+        'tasks' => [
+            'title' => 'Tasks',
+            'heading' => 'Tasks',
+            'filter_maintenance' => 'Maintenance only',
+            'done' => 'Done',
+            'shortcuts' => 'Shortcuts',
         ],
     ],
 

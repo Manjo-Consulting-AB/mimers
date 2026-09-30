@@ -5,6 +5,7 @@ namespace App\Actions\Schedule;
 use App\Actions\Access\ResolveItemScope;
 use App\Http\Resources\TodoEntryResource;
 use App\Models\Container;
+use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -210,31 +211,137 @@ class ListTodo
      * på en container finns containern per definition — frågan har inget svar
      * att ge här, och en fråga utan svar ska inte ställas.
      *
+     * **`$limit` är valfri sedan issue 174** · [[ADR-0050 Desktopdesignen]]
+     * § 16. Panelen på översikten klipper sina sex rader och skickar in sin
+     * gräns; *Uppgifter*-fliken ritar en tavla och vill ha HELA mängden, och
+     * `null` — förvalet — är svaret "ingen gräns". Att klippa i vyn i stället
+     * hade varit en andra sanning om hur många rader fliken bär.
+     *
+     * **`$maintenanceOnly` är underhållsfiltret** (Beslut 4), och det bor här
+     * och inte i kontrollern av samma skäl som avgränsningen: den som
+     * formulerar ett villkor äger det, och en kontroller som filtrerade hade
+     * varit en andra sanning om vad frågan är. Flaggan kommer ur
+     * querysträngen (`?maintenance=1`) och gäller de tre öppna grupperna; den
+     * avbockade listan tar samma flagga i `completedForContainer()`.
+     *
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
      *     rows: list<array<string, mixed>>,
      *     count: int
      * }
      */
-    public function forContainer(User $user, Request $request, Container $container, int $limit): array
-    {
+    public function forContainer(
+        User $user,
+        Request $request,
+        Container $container,
+        ?int $limit = null,
+        bool $maintenanceOnly = false,
+    ): array {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
         $onlyCurrent = $this->onlyCurrent($user);
 
-        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent, $container)->get();
+        // Ordningen ställs HÄR och inte i `occurrences()` (issue 174).
+        // `page()` lägger sin egen på samma fråga — baklänges när `before` styr
+        // — och en ordning inifrån hade vunnit över den och vänt hela
+        // pagineringen framåt. `handle()` frågar utan ordning och behåller
+        // därför sitt svar oförändrat.
+        //
+        // Ordningen är `/tasks` egen: `due_at` stigande med `ulid` stigande.
+        // Utan den kom raderna i den ordning databasen råkade ge dem, vilket
+        // gör panelen och tavlans kolumner obestämt sorterade — och
+        // docblocken ovan har hela tiden PÅSTÅTT att gruppordningen är
+        // `due_at`-ordningen. `ulid` är andra nyckeln av samma skäl som i
+        // `page()`: två rader som delar förfallodag ska ändå ha en fast
+        // ordning.
+        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent, $container, $maintenanceOnly)
+            ->orderBy('due_at')
+            ->orderBy('ulid')
+            ->get();
 
         return [
-            ...$this->present($user, $request, $occurrences->take($limit)),
+            ...$this->present($user, $request, $limit === null ? $occurrences : $occurrences->take($limit)),
             // Växeln PÅ betyder "visa även framtida", och då är inget villkor
             // lagt på frågan: svaret bär hela mängden och talet är dess längd.
             // Växeln AV begränsar raderna till försenat och i dag, och då
             // ställs frågan en gång till — utan villkoret — precis som
             // DashboardController gör för sina brickor.
             'count' => $onlyCurrent
-                ? $this->occurrences($user, $accountIds, false, $container)->count()
+                ? $this->occurrences($user, $accountIds, false, $container, $maintenanceOnly)->count()
                 : $occurrences->count(),
         ];
+    }
+
+    /**
+     * Containerns AVBOCKADE förekomster — *Klart*-kolumnen på containerns
+     * uppgiftsflik (issue 174 · [[ADR-0050 Desktopdesignen]] § 16, Beslut 3).
+     *
+     * **Villkoret är `status = 'completed'`, och `skipped` står utanför**
+     * (arkitektsvar på issue 174). [[Scheman och uppgifter]] §
+     * schedule_occurrence håller `completed` och `skipped` som två egna
+     * statusvärden, och det ena är inte det andra: en överhoppad förekomst
+     * påstår ett byte som inte gjordes. Samma avsnitt säger att de avklarade
+     * förekomsterna är svaret på "när bytte jag impellern senast", och en
+     * överhoppad rad under *Klart* hade svarat fel på den frågan. De
+     * överhoppade syns i historiken i stället (issue 179).
+     *
+     * **Markören är `completed_at`.** En stängd förekomst bär sin tidsstämpel
+     * (App\Actions\Schedule\CloseOccurrence steg 2), och den är det enda
+     * svaret på när den blev klar. Villkoret ovan är statusfiltret och
+     * tidsstämpeln är sorteringsnyckeln; gränsen räknas efter båda.
+     *
+     * **Ordningen är `completed_at` fallande med `ulid` fallande**, samma
+     * andra nyckel och samma skäl som `ListAuditEvents`: två rader som
+     * stängdes i samma sekund ska ändå ha en ordning som inte beror på
+     * databasens nyckfulla returordning.
+     *
+     * **Omfånget är det samma som de öppna radernas** — containern OCH
+     * användarens item-omfång — för en avbockad rad är samma uppgift som den
+     * öppna var, och en gäst med en itemgrant ska inte få läsa vad hon inte
+     * får se för att raden hunnit bli klar (issue 74 § Beslut 7).
+     * `schedule.is_active` prövas däremot INTE: en pausad förekomst lämnar
+     * den öppna listan, men det som redan är gjort är gjort.
+     *
+     * **Raden är `present()`:s rad, plus `completed_at`** (Beslut 3). Samma
+     * `TodoEntryResource`, samma kontoförval och samma `can`-flagga, och
+     * tidsstämpeln BREDVID resursen — samma mönster som `account` och `can`
+     * följer: ett fält bara webben behöver hör inte inuti `/api`:s svar.
+     * Markören går inte genom `group()`: en avbockad rad har ingen grupp att
+     * räknas in i, och `due_at` säger ingenting om när den blev klar.
+     *
+     * **`$limit` är tjugo** (Beslut 3): *Klart* är en glimt av det senaste,
+     * inte en historik — hela sviten bor i `audit_log` och läses i
+     * historikfliken (issue 179).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function completedForContainer(
+        User $user,
+        Container $container,
+        int $limit = 20,
+        bool $maintenanceOnly = false,
+    ): array {
+        $occurrences = $this->completedOccurrences($user, $container, $maintenanceOnly)
+            ->limit($limit)
+            ->get();
+
+        // Resursen behöver en request för användarens dag, och signaturen bär
+        // ingen: den avbockade listan har varken markör eller filter att läsa
+        // ur en, och den enda fråga `TodoEntryResource` ställer är vem som är
+        // inloggad. Requesten byggs därför ur användaren i stället för att en
+        // tredje parameter läggs på för en upplysning som redan finns i den
+        // första.
+        $request = $this->requestFor($user);
+
+        $accountUlids = $user->accounts->pluck('ulid')->all();
+
+        return $occurrences
+            ->map(fn (ScheduleOccurrence $occurrence): array => [
+                ...$this->row($user, $request, $occurrence, $accountUlids),
+                'completed_at' => $occurrence->completed_at->toIso8601String(),
+            ])
+            ->values()
+            ->all();
     }
 
     /**
@@ -365,11 +472,23 @@ class ListTodo
      * containrar. Ingen tredje gren och ingen egen fråga: avgränsningen är ett
      * villkor ovanpå urvalet, inte ett urval bredvid det.
      *
+     * **`$maintenanceOnly` är underhållsfiltret** (issue 174 § Beslut 4):
+     * schemats `recurrence_type` ska vara `fixed` eller `interval`, alltså
+     * `Schedule::RECURRENCE_TYPES` utom `none` — listan HÄRLEDS ur modellens
+     * konstant och skrivs inte av här, så en fjärde återkommandetyp följer
+     * med automatiskt. Villkoret ligger på `schedule` och inte på raden:
+     * återkommandetypen är schemats, och förekomsten ärver den.
+     *
      * @param  list<int>  $accountIds
      * @return Builder<ScheduleOccurrence>
      */
-    private function occurrences(User $user, array $accountIds, bool $onlyCurrent, ?Container $container = null): Builder
-    {
+    private function occurrences(
+        User $user,
+        array $accountIds,
+        bool $onlyCurrent,
+        ?Container $container = null,
+        bool $maintenanceOnly = false,
+    ): Builder {
         $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
             ->with(['schedule.item.container.account']);
@@ -382,7 +501,101 @@ class ListTodo
             $query->whereHas('schedule.item', fn (Builder $query) => $query->where('container_id', $container->id));
         }
 
+        if ($maintenanceOnly) {
+            $query->whereHas('schedule', fn (Builder $query) => $query->whereIn(
+                'recurrence_type',
+                $this->maintenanceTypes(),
+            ));
+        }
+
         return $query;
+    }
+
+    /**
+     * Frågan bakom *Klart* (issue 174 § Beslut 3): containerns stängda
+     * förekomster, nyast först.
+     *
+     * **Omfånget är inte `scopeTodoFor()`.** Det scopet svarar på "vad ska
+     * jag göra?" och kräver `status = open`, ett `visible_from` i det
+     * förflutna, ett aktivt schema och inga öppna beroenden — fyra villkor
+     * som alla är fel fråga om en rad som redan är gjord. Det som GÄLLER
+     * därifrån är åtkomsten, och den formuleras här på samma sätt: containern
+     * OCH användarens item-omfång, i EN fråga. Ett `scopeTodoFor()` med
+     * `status` utbytt hade varit en fjärde gren i modellen för en fråga som
+     * bara den här ytan ställer.
+     *
+     * **Statusen prövas och är `completed`** (arkitektsvar på issue 174):
+     * `skipped` är en egen status och hör i historiken, inte under *Klart*
+     * — se `completedForContainer()`.
+     *
+     * **Omfånget löses på den `scoped`-bundna instansen.** Den är samma
+     * instans som `ItemPolicy` frågar per rad när `can`-flaggan räknas, så
+     * upplösningen härvärmer memon i stället för att bli en andra — en
+     * `handle()` per sida, inte en per rad (issue 70 § Beslut 2).
+     *
+     * @return Builder<ScheduleOccurrence>
+     */
+    private function completedOccurrences(User $user, Container $container, bool $maintenanceOnly): Builder
+    {
+        $scope = $this->resolveItemScope->handle($user, $container);
+
+        return ScheduleOccurrence::query()
+            ->where('status', ScheduleOccurrence::STATUS_COMPLETED)
+            ->with(['schedule.item.container.account'])
+            ->whereHas('schedule', function (Builder $query) use ($container, $scope, $maintenanceOnly): void {
+                // Det begränsade omfånget är en `whereIn` mot itemens
+                // löpnummer — och en TOM lista betyder "når ingenting", aldrig
+                // "når allt" (ItemScope). Ett obegränsat omfång hoppar över
+                // villkoret helt i stället för att materialisera varje item i
+                // containern.
+                $query->whereHas('item', function (Builder $query) use ($container, $scope): void {
+                    $query->where('container_id', $container->id);
+
+                    if (! $scope->isUnrestricted()) {
+                        $query->whereIn('id', $scope->itemIds() ?? []);
+                    }
+                });
+
+                if ($maintenanceOnly) {
+                    $query->whereIn('recurrence_type', $this->maintenanceTypes());
+                }
+            })
+            ->orderByDesc('completed_at')
+            ->orderByDesc('ulid');
+    }
+
+    /**
+     * Underhållets återkommandetyper (issue 174 § Beslut 4) — `fixed` och
+     * `interval`, alltså `Schedule::RECURRENCE_TYPES` utom `none`.
+     *
+     * Härlett och inte avskrivet: `none` är en återkommandetyp som betyder
+     * "ingen återkomst", och den dag modellen får en femte typ ska filtret
+     * följa med utan att någon kommer ihåg den här raden.
+     *
+     * @return list<string>
+     */
+    private function maintenanceTypes(): array
+    {
+        return array_values(array_diff(Schedule::RECURRENCE_TYPES, ['none']));
+    }
+
+    /**
+     * En request som bär användaren och ingenting annat — för
+     * `completedForContainer()`, vars signatur inte har någon (Beslut 3).
+     *
+     * `TodoEntryResource` frågar requesten efter den inloggade, och svaret
+     * avgör `overdue` och `upcoming` (issue 133). Att bygga en request i
+     * stället för att kräva en av anroparen är inte en genväg runt regeln: det
+     * är samma användare, given i den första parametern, och den dag resursen
+     * behöver något MER av requesten faller det här på att den som bygger den
+     * inte har något mer att ge.
+     */
+    private function requestFor(User $user): Request
+    {
+        $request = Request::create('/');
+        $request->setUserResolver(fn (): User => $user);
+
+        return $request;
     }
 
     /**
@@ -432,19 +645,7 @@ class ListTodo
         $rows = [];
 
         foreach ($occurrences as $occurrence) {
-            $item = $occurrence->schedule->item;
-
-            $row = [
-                // Resursen, med allt den bär, och de tre nycklarna BREDVID
-                // den — samma mönster som App\Http\Controllers\
-                // SearchController lägger containern bredvid ItemResource: ett
-                // fält som bara webben behöver hör inte inuti `/api`:s svar.
-                ...TodoEntryResource::make($occurrence)->resolve($request),
-                'account' => $this->account($item->container->account->ulid, $accountUlids),
-                'can' => [
-                    'update' => Gate::forUser($user)->allows('update', $item),
-                ],
-            ];
+            $row = $this->row($user, $request, $occurrence, $accountUlids);
 
             $groups[$this->group($occurrence->due_at, $today)][] = $row;
             $rows[] = $row;
@@ -453,6 +654,35 @@ class ListTodo
         return [
             'groups' => $groups,
             'rows' => $rows,
+        ];
+    }
+
+    /**
+     * En rad, färdig för webben — den ENDA formuleringen av den.
+     *
+     * `present()` ritar de öppna raderna med den, `completedForContainer()`
+     * de avbockade; skillnaden mellan de två ytorna är gruppen och
+     * tidsstämpeln, och ingen av dem har en egen rad. Två formuleringar av
+     * samma rad hade glidit isär, och den ena hade tappat `can`-flaggan —
+     * alltså ritat en avbockningsknapp för den som inte får bocka av.
+     *
+     * @param  list<string>  $accountUlids
+     * @return array<string, mixed>
+     */
+    private function row(User $user, Request $request, ScheduleOccurrence $occurrence, array $accountUlids): array
+    {
+        $item = $occurrence->schedule->item;
+
+        return [
+            // Resursen, med allt den bär, och de tre nycklarna BREDVID
+            // den — samma mönster som App\Http\Controllers\
+            // SearchController lägger containern bredvid ItemResource: ett
+            // fält som bara webben behöver hör inte inuti `/api`:s svar.
+            ...TodoEntryResource::make($occurrence)->resolve($request),
+            'account' => $this->account($item->container->account->ulid, $accountUlids),
+            'can' => [
+                'update' => Gate::forUser($user)->allows('update', $item),
+            ],
         ];
     }
 

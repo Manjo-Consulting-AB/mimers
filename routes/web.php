@@ -19,6 +19,7 @@ use App\Http\Controllers\ContainerCoverController;
 use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
+use App\Http\Controllers\ContainerTaskController;
 use App\Http\Controllers\ContainerTrashController;
 use App\Http\Controllers\CostEntryController;
 use App\Http\Controllers\DashboardController;
@@ -1519,6 +1520,30 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/containers/{container}/history', [ContainerHistoryController::class, 'index'])
         ->name('containers.history');
+
+    /*
+     * Issue 174 · Containerns uppgiftsflik, se App\Http\Controllers\
+     * ContainerTaskController och [[ADR-0050 Desktopdesignen]] § 4 och 16.
+     *
+     * **En egen sida på en egen rutt, som de andra flikarna i
+     * `containerTabs`.** Tavlan är containerns uppgifter avgränsade till
+     * containern — `/tasks` är kvar för hela listan över alla containrar —
+     * och fliken ligger i resources/js/layouts/containerSections.js på
+     * platsen ADR-0050 § 4 anger: efter items, före historiken. *Dokument*
+     * och *Kostnader* hoppas över så länge de inte finns (175 och 178).
+     *
+     * **Rutten är invokable** (`__invoke`, Beslut 1): fliken har en enda
+     * metod, och en `index()` hade varit ett namn utan en syster att skilja
+     * sig från.
+     *
+     * **Ingen `scopeBindings()`.** Rutten bär bara containern, precis som
+     * historiken; itemet och schemat ligger i raderna, inte i adressen.
+     *
+     * `{container}` binds på ULID via #[RouteKey('ulid')] på
+     * App\Models\Container, som överallt annars.
+     */
+    Route::get('/containers/{container}/tasks', ContainerTaskController::class)
+        ->name('containers.tasks');
 
     /*
      * Issue 62a · Containerns papperskorg — det mjukraderade innehållet,
