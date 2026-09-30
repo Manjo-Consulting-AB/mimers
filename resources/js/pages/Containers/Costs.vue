@@ -2,8 +2,11 @@
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import CostCategoryBreakdown from '../../components/CostCategoryBreakdown.vue';
 import CostDonut, { formatAmount } from '../../components/CostDonut.vue';
+import CostFilterBar from '../../components/CostFilterBar.vue';
 import CostTable from '../../components/CostTable.vue';
+import CostTimeChart from '../../components/CostTimeChart.vue';
 import UiCard from '../../components/UiCard.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -32,12 +35,25 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * valuta — `formatAmount` skriver den med `Intl`s valutastil — så två tutor
  * med samma etikett går ändå att skilja åt.
  *
- * **De två fasta perioderna, och ingen tredje.** *Totalt* är hela containern
- * och *I år* är innevarande kalenderår; båda är fasta och därför fria, och
- * ingen av dem går att byta ([[ADR-0038 Gränsen för Pro i kostnaderna]]
- * § Beslut). Ingen periodväljare, inget filter och ingen graf — det är issue
- * 176, och sidan tar därför ingen parameter: en period i querysträngen är ett
- * värde ingen läser, precis som på dashboarden (issue 125).
+ * **De två fasta perioderna är kvar och påverkas inte av filtret.** *Totalt*
+ * är hela containern och *I år* är innevarande kalenderår; båda är fasta och
+ * därför fria, och ingen av dem går att byta ([[ADR-0038 Gränsen för Pro i
+ * kostnaderna]] § Beslut). En fast summering är densamma varje gång den visas,
+ * och en bricka som rörde sig med filtret hade varit en fråga. Det är därför
+ * `costs` och `yearCosts` ritas ur `summary()` och `yearForContainer()` och
+ * aldrig ur `report`.
+ *
+ * **Pro-delen ritas bara för en Pro-användare** (Beslut 2). `report` är `null`
+ * för en gratisanvändare, och då ritas varken filterfältet, grafen,
+ * nedbrytningen eller jämförelsen — uppgraderingsytan står där i stället.
+ * Grinden är serverns: kontrollern läser `canReport` INNAN den rör
+ * querysträngen, så en gratisanvändare som skriver en period i adressfältet
+ * får exakt samma sida som utan. Vyn prövar samma flagga och ingenting annat.
+ *
+ * **Tabellen följer perioden för Pro.** `rows` är samma fråga som grafen och
+ * nedbrytningen räknas ur, så en rad som syns i tabellen räknas i talen och
+ * tvärtom. Sidnumreringen bygger därför sina länkar med filtret kvar: en
+ * `?page=2` utan period hade tyst bytt fråga mitt i en listning.
  *
  * **Årtalet kommer ur `year`-proppen och aldrig ur klientens klocka.**
  * Servern räknade fram det ur användarens tidszon, och klientens klocka är
@@ -118,6 +134,20 @@ const props = defineProps({
      * App\Http\Controllers\Settings\PlanController::index() ställer.
      */
     canUpgrade: { type: Boolean, required: true },
+    /*
+     * Pro-delen (issue 176): `{ filter, period, category, comparison }` ur
+     * CostReport, eller `null` för en gratisanvändare. `filter` är perioden så
+     * som servern tillämpade den — innevarande kalendermånad när ingen gräns
+     * namngavs, och `null` för en gräns användaren lämnade öppen — och är den
+     * enda källa vyn har till vilket filter som gäller.
+     */
+    report: { type: Object, default: null },
+    /*
+     * Filterfältets alternativ: `{ items, categories, suppliers }`, alla
+     * redan omfångsfiltrerade av servern. `null` för en gratisanvändare, som
+     * inte har något fält att fylla.
+     */
+    filterOptions: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -139,11 +169,41 @@ const planUrl = computed(() => `/settings/plan?account=${props.container.account
  * varje annan href i skalet är relativ (App\Support\Frontend\CreateTarget
  * § docblock). Formen är densamma som TodoController bygger sina
  * markörlänkar i — vyn ritar bara den href den fick.
+ *
+ * **Filtret följer med** (issue 176): för en Pro-användare gäller perioden
+ * tabellen, och en sida två utan period hade varit en annan fråga än sidan
+ * ett. Nycklarna är desamma som filterfältet skickar, och `report` är `null`
+ * för en gratisanvändare — då finns inget filter att ärva.
  */
-const pageUrl = (page) => `${base.value}?page=${page}`;
+const FILTER_KEYS = ['from', 'to', 'item', 'category', 'supplier'];
+
+const pageUrl = (page) => {
+    const params = new URLSearchParams({ page: String(page) });
+    const filter = props.report?.filter;
+
+    for (const key of FILTER_KEYS) {
+        if (filter?.[key]) {
+            params.set(key, filter[key]);
+        }
+    }
+
+    return `${base.value}?${params.toString()}`;
+};
 
 const hasRows = computed(() => props.rows.data.length > 0);
 const hasCosts = computed(() => props.costs.totals.length > 0);
+
+/*
+ * Tabellens tomtext. En Pro-användares tabell följer alltid en period, så en
+ * tom tabell säger något om perioden och inte om containern — *containern har
+ * inga kostnader* hade varit falskt i samma stund en månad utan rader valdes.
+ */
+const emptyText = computed(() => (
+    props.canReport ? t('container.costs.empty_filtered') : t('container.costs.empty')
+));
+
+/* Procenten bär sitt tecken: +12 % och −4 % är samma mening med olika tal. */
+const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
 </script>
 
 <template>
@@ -229,6 +289,65 @@ const hasCosts = computed(() => props.costs.totals.length > 0);
             <p v-else class="mt-2 text-ink-muted">{{ t('container.costs.upgrade_owner') }}</p>
         </div>
 
+        <!--
+            Pro-delen (Beslut 3). Filterfältet, grafen över tid, nedbrytningen
+            per kategori och jämförelsen mot föregående period — allt ur
+            `report`, som är null för en gratisanvändare. Ordningen är
+            bildens: först det man ställer frågan med, sedan svaret.
+        -->
+        <template v-if="canReport && report">
+            <CostFilterBar
+                :container-ulid="container.ulid"
+                :filter="report.filter"
+                :options="filterOptions"
+            />
+
+            <!--
+                Jämförelsen (Beslut 3): periodens total per valuta mot en lika
+                lång period direkt före. En post per valuta och aldrig en
+                jämförelse över två — och `percent` är null när föregående
+                period saknar total i valutan, för då finns ingen kvot att visa.
+            -->
+            <div v-if="report.comparison.length > 0" class="mt-4">
+                <p class="text-meta text-ink-subtle">{{ t('container.costs.comparison') }}</p>
+
+                <ul class="mt-1 flex flex-wrap gap-4">
+                    <li v-for="row in report.comparison" :key="row.currency" class="text-body text-ink">
+                        <span class="font-semibold">{{ formatAmount(row.current, row.currency) }}</span>
+
+                        <span v-if="row.percent !== null" class="ml-2 text-ink-muted">
+                            {{ t('container.costs.comparison_percent', { percent: signedPercent(row.percent) }) }}
+                        </span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Grafen över tid. En graf per valuta, som donuten. -->
+            <div v-if="report.period.groups.length > 0" class="mt-8">
+                <UiCard>
+                    <template #heading>{{ t('container.costs.chart') }}</template>
+
+                    <CostTimeChart :groups="report.period.groups" :totals="report.period.totals" />
+                </UiCard>
+            </div>
+
+            <!-- Nedbrytningen per itemets kategori, med *Övrigt* för raderna
+                 utan kategori ([[ADR-0040 Underträdets summor]]). Staplar och
+                 ingen ring: motorns grupper rullas upp över underträdet och
+                 överlappar, så en andel av totalen hade påstått en partition —
+                 se CostCategoryBreakdown. -->
+            <div v-if="report.category.groups.length > 0" class="mt-8">
+                <UiCard>
+                    <template #heading>{{ t('container.costs.breakdown') }}</template>
+
+                    <CostCategoryBreakdown
+                        :totals="report.category.totals"
+                        :groups="report.category.groups"
+                    />
+                </UiCard>
+            </div>
+        </template>
+
         <!-- Donuten per item. Ritas inte alls för en container utan rader. -->
         <div v-if="hasCosts" class="mt-8">
             <UiCard>
@@ -251,7 +370,7 @@ const hasCosts = computed(() => props.costs.totals.length > 0);
             <h2 class="text-title font-semibold text-ink">{{ t('container.costs.heading') }}</h2>
 
             <p v-if="! hasRows" class="mt-2 text-body text-ink-muted">
-                {{ t('container.costs.empty') }}
+                {{ emptyText }}
             </p>
 
             <CostTable v-else :rows="rows.data" :container-ulid="container.ulid" />
