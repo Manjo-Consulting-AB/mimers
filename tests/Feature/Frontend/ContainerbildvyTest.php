@@ -304,6 +304,46 @@ it('öppnar samma ark från pennan och från inställningarna', function () {
 });
 
 /*
+ * Klart när (issue 626): arket exponerar öppnaren i STANDARDSLOTEN, och båda
+ * anroparna fyller den.
+ *
+ * `ContainerCoverSheet.vue` ritar `<slot name="trigger" :open="show" />`, men
+ * både pennan (ContainerLayout.vue) och inställningarna (Containers/Edit.vue)
+ * fyller STANDARDSLOTTEN med `v-slot="{ open }"`. Vue ritar då ingenting: en
+ * namngiven slot utan innehåll är tom, och knappen respektive pennan blev
+ * aldrig ett element i DOM:en. Det befintliga provet ovan såg bara att
+ * `<ContainerCoverSheet` FANNS — inte att anroparen fyllde en annan slot.
+ *
+ * Kontraktet låses därför från båda sidor: arket har en standardslot som bär
+ * `:open="show"` och ingen namngiven slot, och var och en av anroparna binder
+ * den fyllda slotens `open` till `@click`. Provet är ett källkodsprov på samma
+ * tre filer som grannen ovan, av samma skäl: det som skiljer de två vägarna är
+ * var de sitter, och ingenting annat.
+ */
+it('ritar öppnaren i arkets standardslot som båda anroparna fyller', function () {
+    $skal = File::get(resource_path('js/layouts/ContainerLayout.vue'));
+    $inställningar = File::get(resource_path('js/pages/Containers/Edit.vue'));
+    $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
+
+    // Arket: öppnaren i standardslotten, `show` bunden till slotens `open`.
+    expect($ark)->toContain('<slot :open="show" />');
+
+    // Och ingen namngiven slot — en `name="trigger"` hade tystat båda ytorna.
+    expect($ark)->not->toContain('name="trigger"');
+
+    // Anroparna: båda fyller sheet-elementets slot med `v-slot="{ open }"` och
+    // binder öppnaren till `@click="open"`. Blocket skärs ut så att nålarna
+    // hör till just den komponenten och inte till en granne på samma sida.
+    foreach ([$skal, $inställningar] as $anropare) {
+        $block = substr($anropare, (int) strpos($anropare, '<ContainerCoverSheet'));
+        $block = substr($block, 0, (int) strpos($block, '</ContainerCoverSheet>'));
+
+        expect($block)->toContain('v-slot="{ open }"')
+            ->and($block)->toContain('@click="open"');
+    }
+});
+
+/*
  * Klart när: ett fel från servern, som kvoten eller en fil som inte är en bild,
  * visas med sin felkod översatt.
  *
