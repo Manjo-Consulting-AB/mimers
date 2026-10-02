@@ -133,6 +133,24 @@ function fokuskartaKod(string $sökväg): string
 }
 
 /**
+ * Öppningstaggen för en komponent i en fil, som rå markup — samma form som
+ * hjalteTagg i ContainerhjalteTest. Attributvärdena matchas med citattecken
+ * runt om, så ett `>` inuti ett värde inte avslutar taggen i förtid, och
+ * taggen fångas HEL innan den läses: ett mönster som letar inuti en tagg möter
+ * citattecknen (issue 100).
+ */
+function fokuskartaTagg(string $kod, string $komponent): string
+{
+    preg_match(
+        '/<'.$komponent.'\b((?:"[^"]*"|\'[^\']*\'|[^>"\'])*?)>/s',
+        $kod,
+        $träffar,
+    );
+
+    return $träffar[0] ?? '';
+}
+
+/**
  * Antalet frågor itemets sida ställer, mätt efter ett omätt anrop — samma
  * mönster som trepanelFragor i TrepanelTest.
  */
@@ -547,6 +565,38 @@ it('ger noderna tangentbord, en läsbar etikett och en plusknapp med namn', func
         ->toContain(':rows="menuRows"')
         ->toContain(':heading="menuName"')
         ->toContain('@open-menu="openMenu"');
+});
+
+/*
+ * Klart när: "plusknappen under en nod öppnar nodens meny".
+ *
+ * Testarfynd 2026-10-02: första trycket på nodens plus gjorde ingenting.
+ * `CreateMenu` ritas av ett `v-if` på `menuRows`, så arket fanns inte i DOM:en
+ * när `openMenu()` satte raderna och `menuOpen = true` i samma tick. UiSheet
+ * visar sin `<dialog>` när `open` ÄNDRAS — den har ingen `immediate` — och ett
+ * ark som monteras med `open` redan sant hinner aldrig se ändringen. Nästa
+ * tryck ändrade ingenting (`menuOpen` var redan sant), så menyn förblev stängd.
+ *
+ * Menyn är därför monterad från början, som skalets i AppLayout: dess `v-if`
+ * hänger på `create` — MÅLET för menyn — och aldrig på öppna-läget. Här
+ * motsvaras det av `v-if="node.rows.length > 0"` på knappen i FocusMapNode: en
+ * nod utan rader ritar ingen knapp, så ett monterat ark utan rader kan ingen
+ * öppna. UiSheet rörs inte: den delas av varje ark i appen.
+ */
+it('håller nodmenyn monterad så att första klicket öppnar den', function () {
+    $kartan = fokuskartaKod('components/FocusMap.vue');
+
+    $menyn = fokuskartaTagg($kartan, 'CreateMenu');
+
+    // Taggen lästes hel, och öppna-läget bor kvar i den.
+    expect($menyn)->toContain(':open="menuOpen"')
+        ->toContain(':rows="menuRows"')
+        ->toContain(':heading="menuName"')
+        ->toContain('@close="closeMenu"');
+
+    // ...och inget `v-if` finns på den: arket monteras före första klicket, så
+    // att `open` går från falskt till sant när knappen trycks.
+    expect($menyn)->not->toContain('v-if');
 });
 
 /*
