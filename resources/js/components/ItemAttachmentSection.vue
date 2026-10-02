@@ -82,21 +82,29 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * kommer ur `lang/{locale}/ui.php` genom `t()`.
  *
  * **Visningen är tre ytor och en flagga** (issue 61b § Beslut 1–5):
- * miniatyren i raden, bildvisaren och PDF-ramen. Vilken rad som får vilken
- * avgörs av `attachmentPreview()` i attachmentPresentation.js — den läser
- * `variants` och `inlineEnabled` och ingenting annat, så mallen grenar på
- * ett enda värde och komponenten gissar aldrig vad servern har.
+ * miniatyren i raden, förhandsvisningsknappen och visaren. Vilken rad som får
+ * vilken avgörs av `attachmentPreview()` i attachmentPresentation.js — den
+ * läser `variants` och `inlineEnabled` och ingenting annat, så mallen grenar
+ * på ett enda värde och komponenten gissar aldrig vad servern har. Modulen
+ * rörs inte av M24 (Beslut 5): `display`, `image` och `frame` betyder samma
+ * sak som förut, och det är bara mallen som väljer var de ritas.
  *
- * **Bildvisaren är webbläsarens `<dialog>`** (Beslut 3): Esc stänger, fokus
- * går tillbaka till miniatyren, och `alt` är filnamnet — ur datan och inte ur
- * `lang/`. Ingen karusell, ingen zoom, inget paket: det här är "se bilden".
- * Källan är `medium`, och originalet när den varianten saknas.
+ * **Visaren är webbläsarens `<dialog>`** (Beslut 3 och 4): Esc stänger, fokus
+ * går tillbaka till den som öppnade, och `alt` är filnamnet — ur datan och inte
+ * ur `lang/`. Ingen karusell, ingen zoom, inget paket: det här är "se bilden".
+ * Källan är `medium`, och originalet när den varianten saknas. Samma dialog
+ * visar en PDF, i en ram mot filoriginet — ramen skapas först när dialogen
+ * öppnas, så ingen förfrågan går mot filoriginet förrän användaren ber om
+ * den.
  *
- * **PDF:en ritas i en `<iframe>` mot filoriginet** (Beslut 4), och ramen
- * ligger överst i raden så att nedladdningslänken står kvar UNDER den.
- * Rutan bär filnamnet som `title`, och meningen under den säger vad läsaren
- * gör om webbläsaren inte har en egen läsare — samma nedladdningslänk som
- * varje rad alltid har (Beslut 5).
+ * **Två testarfynd 2026-10-02 flyttade ytorna** (M24, Beslut 1 och 2).
+ * Uppladdningen stod under listan, och med en PDF-ram på 24 rem per PDF fick
+ * man skrolla förbi allt för att ladda upp nästa fil — blocket står därför
+ * FÖRE listan nu, med innehållet oförändrat. Och PDF:en ritas inte längre i
+ * raden: den ritade en ram per rad och gjorde listan svår att överblicka.
+ * Raden ritar filikonen — samma `<span role="img">` som
+ * `display === 'file'` ritar — och en *Preview*-knapp för varje bilaga som
+ * har något att visa (`image` eller `frame`), och PDF:en ritas i visaren.
  *
  * **Färgerna är roller och inte palettfärger** (issue 182 · [[ADR-0042
  * Designsystemet]] § Beslut): `text-ink`, `text-ink-muted`, `text-accent` och
@@ -459,168 +467,15 @@ function destroy(attachment) {
     <section class="mt-10">
         <h2 class="text-lg font-semibold">{{ t('item.attachment.heading') }}</h2>
 
-        <!-- En tom container och ett item utan bilagor säger samma sak: det finns
-             ingen rad att visa, och vyn hittar inte på en. -->
-        <p v-if="rows.length === 0" class="mt-2 text-sm text-ink-muted">
-            {{ t('item.attachment.empty') }}
-        </p>
-
-        <ul v-else class="mt-2 flex flex-col gap-2">
-            <li
-                v-for="attachment in rows"
-                :key="attachment.ulid"
-                class="flex flex-col gap-3 rounded border border-border bg-surface px-4 py-2"
-            >
-                <!--
-                    PDF-ramen ÖVERST i raden (61b § Beslut 4), så att
-                    nedladdningslänken står kvar under den. Webbläsarens egen
-                    läsare ritar den: inget paket, ingen andra renderare att
-                    hålla i takt. `title` är filnamnet ur datan.
-
-                    Ingen `sandbox` här: det är 61a:s CSP som stänger av
-                    skriptet i dokumentet, och en sandbox på ramen hade slagit
-                    av webbläsarens egen läsare med.
-                -->
-                <template v-if="attachment.preview.frame">
-                    <iframe
-                        :src="attachment.preview.frame"
-                        :title="attachment.filename"
-                        loading="lazy"
-                        class="h-96 w-full rounded border border-border"
-                    ></iframe>
-
-                    <p class="text-sm text-ink-muted">{{ t('item.attachment.pdf_fallback') }}</p>
-                </template>
-
-                <div class="flex flex-wrap items-center gap-3">
-                    <!--
-                        Miniatyren (Beslut 1 och 3). Klicket öppnar bilden i
-                        sidan; knappen är knapp och inte en div, så den går
-                        att nå med tangentbord.
-                    -->
-                    <button
-                        v-if="attachment.preview.display === 'thumb'"
-                        type="button"
-                        class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded border border-border"
-                        @click="openViewer(attachment, $event)"
-                    >
-                        <img
-                            :src="attachment.preview.thumbnail"
-                            :alt="attachment.filename"
-                            class="h-16 w-16 rounded object-cover"
-                        >
-                    </button>
-
-                    <!--
-                        Filikonen (Beslut 1). En bilaga utan `thumb` — nyss
-                        uppladdad, eller en PDF — ritas så här och ALDRIG som
-                        en trasig bild: `?variant=thumb` mot en bilaga utan
-                        derivat är 404.
-                    -->
-                    <span
-                        v-else-if="attachment.preview.display === 'file'"
-                        role="img"
-                        :aria-label="t('item.attachment.file_icon')"
-                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-border bg-surface-sunken text-ink-muted"
-                    >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-8 w-8"
-                            aria-hidden="true"
-                        >
-                            <path d="M14 3v5h5M6 3h8l5 5v13H6z"></path>
-                        </svg>
-                    </span>
-
-                    <span class="font-medium text-ink">{{ attachment.filename }}</span>
-                    <span class="text-sm text-ink-muted">{{ attachment.kindLabel }}</span>
-                    <span v-if="attachment.size" class="text-sm text-ink-muted">{{ attachment.size }}</span>
-
-                    <!--
-                        Nedladdningen går alltid genom appen (issue 19a):
-                        rutten kontrollerar `view` på itemet före leveransen.
-                        Den står på VARJE rad, också de som ritas inline — att
-                        se en faktura är inte att ha den (Beslut 5), och den är
-                        samtidigt vägen vidare när webbläsaren inte kan visa
-                        PDF:en.
-                    -->
-                    <a
-                        :href="`/files/${attachment.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.attachment.download') }}
-                    </a>
-
-                    <button
-                        v-if="can.delete"
-                        type="button"
-                        :disabled="pending === attachment.ulid"
-                        class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
-                        @click="destroy(attachment)"
-                    >
-                        {{ pending === attachment.ulid ? t('common.pending.default') : t('item.attachment.destroy') }}
-                    </button>
-                </div>
-            </li>
-        </ul>
-
-        <!--
-            Bildvisaren (Beslut 3). Webbläsarens egen `<dialog>`: Esc stänger,
-            fokus lämnas tillbaka till miniatyren. Källan är `medium` och
-            originalet när den varianten saknas — `image` är alltid en giltig
-            URL.
-        -->
-        <dialog
-            ref="viewerElement"
-            class="m-auto max-h-[90vh] max-w-full overflow-auto rounded border border-border bg-surface p-4 backdrop:bg-shell/50"
-            @close="onViewerClosed"
-        >
-            <div v-if="viewer" class="flex max-w-3xl flex-col gap-3">
-                <h3 class="text-lg font-semibold">{{ t('item.attachment.viewer_heading') }}</h3>
-
-                <img
-                    :src="viewer.preview.image"
-                    :alt="viewer.filename"
-                    class="max-h-[70vh] max-w-full object-contain"
-                >
-
-                <div class="flex flex-wrap items-center gap-3">
-                    <span class="font-medium text-ink">{{ viewer.filename }}</span>
-
-                    <a
-                        :href="`/files/${viewer.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.attachment.download') }}
-                    </a>
-
-                    <!--
-                        Stängningen är returvägen ut och det minst ingripande
-                        elementet i ytan. Utan `autofocus` landar första fokus
-                        på nedladdningslänken, och första Enter startar en
-                        nedladdning användaren inte bad om.
-                    -->
-                    <button
-                        type="button"
-                        autofocus
-                        class="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-ink-muted hover:underline"
-                        @click="closeViewer"
-                    >
-                        {{ t('item.attachment.viewer_close') }}
-                    </button>
-                </div>
-            </div>
-        </dialog>
-
         <!--
             Uppladdningsytan i sin helhet bakom `can.create` (60 Beslut 3):
             dropzonen, filväljaren och kön. En `read`-mottagare ser varken
             dropzon eller filväljare, och servern nekar posten ändå.
+
+            Ytan står FÖRE listan (M24, testarfynd 2026-10-02): med några
+            bilagor, och en PDF-ram på 24 rem per PDF, måste man skrolla förbi
+            allt för att ladda upp nästa fil. Innehållet är oförändrat — bara
+            var det står.
         -->
         <template v-if="can.create">
             <h3 class="mt-8 text-base font-semibold">{{ t('item.attachment.upload_heading') }}</h3>
@@ -754,5 +609,189 @@ function destroy(attachment) {
                 </UiButton>
             </form>
         </template>
+
+        <!-- En tom container och ett item utan bilagor säger samma sak: det finns
+             ingen rad att visa, och vyn hittar inte på en. -->
+        <p v-if="rows.length === 0" class="mt-2 text-sm text-ink-muted">
+            {{ t('item.attachment.empty') }}
+        </p>
+
+        <ul v-else class="mt-2 flex flex-col gap-2">
+            <li
+                v-for="attachment in rows"
+                :key="attachment.ulid"
+                class="flex flex-col gap-3 rounded border border-border bg-surface px-4 py-2"
+            >
+                <div class="flex flex-wrap items-center gap-3">
+                    <!--
+                        Miniatyren (Beslut 1 och 3). Klicket öppnar bilden i
+                        sidan; knappen är knapp och inte en div, så den går
+                        att nå med tangentbord.
+                    -->
+                    <button
+                        v-if="attachment.preview.display === 'thumb'"
+                        type="button"
+                        class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded border border-border"
+                        @click="openViewer(attachment, $event)"
+                    >
+                        <img
+                            :src="attachment.preview.thumbnail"
+                            :alt="attachment.filename"
+                            class="h-16 w-16 rounded object-cover"
+                        >
+                    </button>
+
+                    <!--
+                        Filikonen (Beslut 1). En bilaga utan `thumb` — nyss
+                        uppladdad, eller en PDF — ritas så här och ALDRIG som
+                        en trasig bild: `?variant=thumb` mot en bilaga utan
+                        derivat är 404.
+
+                        PDF-raden ritar samma ikon (M24, testarfynd
+                        2026-10-02): ramen flyttade in i visaren, och `frame`
+                        har därför ingen egen yta i raden längre.
+                    -->
+                    <span
+                        v-else-if="attachment.preview.display === 'file' || attachment.preview.display === 'frame'"
+                        role="img"
+                        :aria-label="t('item.attachment.file_icon')"
+                        class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-border bg-surface-sunken text-ink-muted"
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-8 w-8"
+                            aria-hidden="true"
+                        >
+                            <path d="M14 3v5h5M6 3h8l5 5v13H6z"></path>
+                        </svg>
+                    </span>
+
+                    <span class="font-medium text-ink">{{ attachment.filename }}</span>
+                    <span class="text-sm text-ink-muted">{{ attachment.kindLabel }}</span>
+                    <span v-if="attachment.size" class="text-sm text-ink-muted">{{ attachment.size }}</span>
+
+                    <!--
+                        Förhandsvisningen (M24, Beslut 3): raden bär en knapp
+                        när bilagan har något att visa — `image` för en bild,
+                        `frame` för en PDF. Utan ett filorigin är båda `null`
+                        och knappen ritas inte, samma regel som i dag.
+                        Klicket går samma väg som miniatyren: `openViewer`.
+                    -->
+                    <button
+                        v-if="attachment.preview.image !== null || attachment.preview.frame !== null"
+                        type="button"
+                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                        @click="openViewer(attachment, $event)"
+                    >
+                        {{ t('item.attachment.preview') }}
+                    </button>
+
+                    <!--
+                        Nedladdningen går alltid genom appen (issue 19a):
+                        rutten kontrollerar `view` på itemet före leveransen.
+                        Den står på VARJE rad, också de som ritas inline — att
+                        se en faktura är inte att ha den (Beslut 5), och den är
+                        samtidigt vägen vidare när webbläsaren inte kan visa
+                        PDF:en.
+                    -->
+                    <a
+                        :href="`/files/${attachment.ulid}`"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                    >
+                        {{ t('item.attachment.download') }}
+                    </a>
+
+                    <button
+                        v-if="can.delete"
+                        type="button"
+                        :disabled="pending === attachment.ulid"
+                        class="inline-flex min-h-11 items-center text-sm text-danger hover:underline"
+                        @click="destroy(attachment)"
+                    >
+                        {{ pending === attachment.ulid ? t('common.pending.default') : t('item.attachment.destroy') }}
+                    </button>
+                </div>
+            </li>
+        </ul>
+
+        <!--
+            Visaren (Beslut 3 och 4). Webbläsarens egen `<dialog>`: Esc stänger,
+            fokus lämnas tillbaka till den som öppnade. En bild ritas som förut
+            — källan är `medium` och originalet när den varianten saknas, så
+            `image` är alltid en giltig URL. En PDF ritas i SAMMA dialog, i en
+            ram mot filoriginet: webbläsarens egen läsare är den enda som
+            behövs, och ramen skapas först när dialogen öppnas — ingen
+            förfrågan mot filoriginet förrän användaren ber om den.
+        -->
+        <dialog
+            ref="viewerElement"
+            class="m-auto max-h-[90vh] max-w-full overflow-auto rounded border border-border bg-surface p-4 backdrop:bg-shell/50"
+            :class="viewer && viewer.preview.frame ? 'w-[min(64rem,95vw)]' : ''"
+            @close="onViewerClosed"
+        >
+            <div
+                v-if="viewer"
+                class="flex flex-col gap-3"
+                :class="viewer.preview.frame ? 'w-full' : 'max-w-3xl'"
+            >
+                <h3 class="text-lg font-semibold">
+                    {{ viewer.preview.frame ? t('item.attachment.pdf_viewer_heading') : t('item.attachment.viewer_heading') }}
+                </h3>
+
+                <!--
+                    Ramen bär ingen isolering: det är 61a:s CSP som stänger av
+                    skriptet i dokumentet, och en sådan hade slagit av
+                    webbläsarens egen läsare med. `title` är filnamnet ur
+                    datan.
+                -->
+                <iframe
+                    v-if="viewer.preview.frame"
+                    :src="viewer.preview.frame"
+                    :title="viewer.filename"
+                    class="h-[75vh] w-full rounded border border-border"
+                ></iframe>
+
+                <img
+                    v-else
+                    :src="viewer.preview.image"
+                    :alt="viewer.filename"
+                    class="max-h-[70vh] max-w-full object-contain"
+                >
+
+                <p v-if="viewer.preview.frame" class="text-sm text-ink-muted">{{ t('item.attachment.pdf_fallback') }}</p>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <span class="font-medium text-ink">{{ viewer.filename }}</span>
+
+                    <a
+                        :href="`/files/${viewer.ulid}`"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                    >
+                        {{ t('item.attachment.download') }}
+                    </a>
+
+                    <!--
+                        Stängningen är returvägen ut och det minst ingripande
+                        elementet i ytan. Utan `autofocus` landar första fokus
+                        på nedladdningslänken, och första Enter startar en
+                        nedladdning användaren inte bad om.
+                    -->
+                    <button
+                        type="button"
+                        autofocus
+                        class="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-ink-muted hover:underline"
+                        @click="closeViewer"
+                    >
+                        {{ t('item.attachment.viewer_close') }}
+                    </button>
+                </div>
+            </div>
+        </dialog>
+
     </section>
 </template>
