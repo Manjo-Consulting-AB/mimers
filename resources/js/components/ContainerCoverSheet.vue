@@ -182,7 +182,7 @@ function remove() {
 </script>
 
 <template>
-    <slot name="trigger" :open="show" />
+    <slot :open="show" />
 
     <UiSheet :open="open" :heading="t('container.cover.heading')" :trigger="trigger" @close="close">
         <!--
