@@ -369,6 +369,29 @@ it('skickar ingen egen kontolista till skapaformuläret', function () {
 });
 
 /*
+ * M24 · [[ADR-0050 Desktopdesignen]]. Klart när: formuläret för ny container
+ * och kvotrutan bär bredden `max-w-2xl`, inte `max-w-lg`.
+ *
+ * Testarfynd 2026-10-02 (`docs/Design/Findings-261002/columner _radbrytning.png`):
+ * kvotmeningen *The account has reached its limit for the number of containers
+ * (1 of 1).* bröts över två rader trots att halva skärmen stod tom. Båda rutorna
+ * var 32 rem; 42 rem rymmer meningen på en rad. Under `sm:` är skärmen smalare
+ * än båda bredderna, så mobilen ändras inte — därför står klassen utan brytpunkt.
+ *
+ * Provet räknar klasserna i stället för att läsa en enskild rad: bredden står på
+ * TVÅ ställen, och en kvarvarande `max-w-lg` någon annanstans i filen hade
+ * återinfört den brutna raden utan att ett radprov fällt den.
+ */
+it('ger formuläret för ny container och kvotrutan bredden max-w-2xl', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Create.vue'));
+
+    expect(substr_count($vy, 'max-w-2xl'))->toBe(2);
+
+    // Ingen gammal bredd kvar: 32 rem är det som bröt raden.
+    expect(str_contains($vy, 'max-w-lg'))->toBeFalse();
+});
+
+/*
  * Beslut 3 och 5: POST skapar med name, kind och det valda kontot, gör den
  * nya containern aktiv och ökar ägarkontots räknare med ett — allt genom samma
  * action som /api anropar.
