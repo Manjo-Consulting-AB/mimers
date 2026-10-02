@@ -15,19 +15,28 @@ use function Pest\Laravel\actingAs;
 use function Pest\Laravel\withoutVite;
 
 /*
- * Issue 103 · Trepanelslayouten. Se
+ * Issue 103 · Trepanelslayouten, och issue 633 · förekomstpanelen. Se
  * resources/js/pages/Containers/Items/Show.vue,
  * resources/js/components/ItemStructurePanel.vue,
  * resources/js/components/ItemStructureTree.vue,
  * resources/js/components/ItemMapPanel.vue,
- * [[ADR-0042 Designsystemet]] § Beslut och § Konsekvenser och
- * [[M17 Designsystemet]] § 103.
+ * resources/js/components/ItemPlacementsPanel.vue,
+ * [[ADR-0042 Designsystemet]] § Beslut och § Konsekvenser,
+ * [[M17 Designsystemet]] § 103 och
+ * `docs/Design/struktur - item.jpeg` (panelen under kartan).
  *
  * **Filen prövar en layout och två upplösningar som redan finns.**
  * Strukturen är issue 94:s träd och förekomsterna issue 95:s vägar; ingenting
  * av det byggs på nytt här, och proven nedan faller om en panel börjar ställa
  * en egen fråga — det är [[ADR-0041 Itemets vy]] § Beslut, som byggde en
  * gemensam rotregel just för att två formuleringar av samma graf glider isär.
+ *
+ * **Issue 633 flyttade förekomsterna till en egen panel.** De var en lista
+ * mitt i mittenkolumnen, ovanför flikraden, och tryckte ned flikarna för ett
+ * item som finns på flera platser; nu är de ItemPlacementsPanel.vue i
+ * högerkolumnen under kartan över `md:` och samma panel i mittenkolumnen under
+ * — samma yta två gånger, som kartan. Villkoret (mer än en förekomst) och
+ * rubrikens id bor i panelen, inte i vyn.
  *
  * **Kartans panel är tom med flit**, och provet är därför negativt: det som
  * prövas är att ingenting står där som säger att något saknas. En tom panel
@@ -419,6 +428,152 @@ it('markerar den aktuella förekomsten ur querysträngen', function () {
 
     expect(trepanelKod('components/ItemStructurePanel.vue'))
         ->toContain(':active-trail="activeTrail"');
+});
+
+/*
+ * Klart när: "ritar förekomsterna i en egen panel under kartan".
+ *
+ * Issue 633 · `docs/Design/struktur - item.jpeg` ritar *Förekomster i
+ * struktur* som en panel under kartan i högerkolumnen. Fram till issue 633
+ * låg vägarna som en lista mitt i mittenkolumnen, ovanför flikraden, och
+ * tryckte ned flikarna för ett item som finns på flera platser — en yta ingen
+ * mockup bad om.
+ *
+ * Panelen står EFTER kartan och inuti ramen: högerkolumnen är kartans plats,
+ * och förekomsterna hör till samma kolumn. Att den ligger i kartans eget
+ * omslutande element är vad som gör dem till en kolumn och inte två ytor som
+ * råkade hamna under varandra i källan.
+ */
+it('ritar förekomsterna i en egen panel under kartan', function () {
+    withoutVite();
+
+    [$container, $anvandare] = trepanelKonto();
+
+    $båten = trepanelItem($container, 'Båten');
+    $masten = trepanelItem($container, 'Masten');
+    $impellern = trepanelItem($container, 'Impellern');
+
+    trepanelKant($båten, $impellern);
+    trepanelKant($masten, $impellern);
+
+    $vy = trepanelKod('pages/Containers/Items/Show.vue');
+
+    // Två instanser: högerkolumnen över `md:` och mittenkolumnen under.
+    expect(substr_count($vy, '<ItemPlacementsPanel'))->toBe(2, 'förekomstpanelen ritas inte två gånger');
+
+    $kartan = strpos($vy, '<ItemMapPanel');
+    $panelen = strrpos($vy, '<ItemPlacementsPanel');
+    $ramen = strpos($vy, '</ContainerLayout>');
+
+    expect($kartan)->not->toBeFalse('kartans panel saknas')
+        ->and($panelen)->not->toBeFalse('förekomstpanelen saknas')
+        ->and($ramen)->not->toBeFalse('ContainerLayout stängs aldrig');
+
+    // Efter kartan och före ramens slut.
+    expect((int) $kartan)->toBeLessThan((int) $panelen)
+        ->and((int) $panelen)->toBeLessThan((int) $ramen);
+
+    // ...och inuti kartans EGET omslutande element — samma kolumn.
+    preg_match('#<div class="[^"]*md:col-start-2[^"]*">(.*?)</div>#s', $vy, $träff);
+
+    expect($träff[1] ?? '')->toContain('<ItemMapPanel')
+        ->toContain('<ItemPlacementsPanel')
+        ->toContain(':paths="paths"')
+        ->toContain(':path-href="pathHref"');
+
+    // Panelen ritar itemets vägar ur samma svar som brödsmulan: ett item med
+    // två föräldrar har två vägar, och båda kommer med.
+    $vägar = actingAs($anvandare)
+        ->get(trepanelUrl($container, $impellern))
+        ->assertOk()
+        ->viewData('page')['props']['paths'];
+
+    expect($vägar)->toHaveCount(2);
+});
+
+/*
+ * Klart när: "ritar förekomstpanelen i mittenkolumnen under md:".
+ *
+ * Under `md:` är högerkolumnen dold, och panelen ritas därför en gång till i
+ * mittenkolumnen där den gamla listan stod — samma mönster och samma skäl som
+ * kartan, som står i högerpanelen över `md:` och i relationsfliken under
+ * (FokuskartaTest). Kopian i mitten bär `md:hidden`; högerkolumnens omslag är
+ * redan `hidden md:block` och behöver ingen egen brytpunkt.
+ *
+ * **Villkoret och rubrikens id bor i panelen.** `paths.length > 1` och
+ * `id="item-placements-heading"` fanns i vyn fram till issue 633; nu ritar vyn
+ * samma panel två gånger och ska inte upprepa samma regel på två ställen.
+ */
+it('ritar förekomstpanelen i mittenkolumnen under md:', function () {
+    $vy = trepanelKod('pages/Containers/Items/Show.vue');
+
+    expect(substr_count($vy, '<ItemPlacementsPanel'))->toBe(2);
+
+    $mitten = strpos($vy, '<ItemPlacementsPanel');
+    $flikraden = strpos($vy, '<UiTabs');
+
+    expect($mitten)->not->toBeFalse('förekomstpanelen saknas i mittenkolumnen')
+        ->and($flikraden)->not->toBeFalse('flikraden saknas');
+
+    // Kopian i mitten står där den gamla listan stod: före flikraden.
+    expect((int) $mitten)->toBeLessThan((int) $flikraden);
+
+    // ...och det är den som bär brytpunkten.
+    preg_match('/<ItemPlacementsPanel\b[^>]*>/s', $vy, $först);
+
+    expect($först[0] ?? '')->toContain('md:hidden');
+
+    // Regeln och id:t flyttade in i panelen. Två `expect` och inte en kedja:
+    // ett andra `not` mitt i en kedja fäller phpstan (samma fälla som
+    // GenomgangTest beskriver).
+    expect($vy)->not->toContain('paths.length > 1');
+    expect($vy)->not->toContain('item-placements-heading');
+});
+
+/*
+ * Klart när: "märker den aktuella förekomsten med synlig text och länkar de
+ * andra".
+ *
+ * Raden är mockupens: vägen som en brödsmula, och radens åtgärd till höger.
+ * Den aktuella raden bär ordet *Current* som SYNLIG text bredvid
+ * `aria-current` — markeringen får aldrig vara en färg allena (issue 68b
+ * § Beslut 7) — och de andra raderna en länk *Go to* mot samma adress som
+ * brödsmulan bygger, `pathHref(occurrence.nodes)`.
+ *
+ * Panelen ställer ingen egen fråga och räknar ingenting själv: vägarna kommer
+ * i `paths`, adressen i `pathHref`, och båda är vyns. Propplistan prövas för
+ * att en panel som plötsligt frågade efter något eget — en egen läsning av
+ * adressen, en egen väg — hade varit den andra regeln om samma sak.
+ */
+it('märker den aktuella förekomsten med synlig text och länkar de andra', function () {
+    $panelen = trepanelKod('components/ItemPlacementsPanel.vue');
+
+    expect($panelen)->toContain('aria-current')
+        ->toContain("t('item.show.placement_current')")
+        ->toContain("t('item.show.placement_go')")
+        ->toContain('UiBadge')
+        // Den aktuella raden bär ordet, de andra länken.
+        ->toContain('v-if="occurrence.current"')
+        ->toContain('v-else')
+        ->toContain('pathHref(occurrence.nodes)')
+        ->toContain('aria-labelledby="item-placements-heading"');
+
+    // Ingen egen fråga och ingen egen navigering: allt kommer i propparna.
+    foreach (['usePage', 'fetch(', 'axios', 'router.'] as $hämtning) {
+        expect($panelen)->not->toContain($hämtning);
+    }
+
+    // Propparna, i källordning: vägarna och vyns adressfunktion.
+    expect(trepanelProps('components/ItemPlacementsPanel.vue'))->toBe(['paths', 'pathHref']);
+
+    // ...och ordet finns i katalogen, som alla andra ord på ytan.
+    expect(Lang::has('ui.item.show.placement_go'))->toBeTrue();
+    expect(Lang::get('ui.item.show.placement_go', [], 'en'))->toBe('Go to');
+
+    // Vyn skickar båda vidare, på båda ställena.
+    expect(trepanelKod('pages/Containers/Items/Show.vue'))
+        ->toContain(':paths="paths"')
+        ->toContain(':path-href="pathHref"');
 });
 
 /*

@@ -538,16 +538,26 @@ it('har inget vägfält i ItemResource', function () {
  * vandrar inte i grafen, filtrerar inte och sorterar inte. Ett `.sort()` i
  * komponenten hade gjort serverns ordning till en av två, och "den första i
  * ordningen" till ett svar som beror på var den ritas.
+ *
+ * **Loopen som ritar raderna flyttade till ItemPlacementsPanel.vue i issue
+ * 633**, och
+ * det är samma påstående som prövas — bara i den fil som nu äger den. Vyn
+ * behåller uppslaget av den aktuella vägen och skickar `paths` och `pathHref`
+ * vidare; panelen ritar raderna i den ordning de kom.
  */
 it('sorterar aldrig om i vyn', function () {
     $vy = File::get(resource_path('js/pages/Containers/Items/Show.vue'));
+    $panelen = File::get(resource_path('js/components/ItemPlacementsPanel.vue'));
 
     expect($vy)->toContain('paths: { type: Array, required: true }');
     expect($vy)->toContain('props.paths.find((path) => path.current)');
-    expect($vy)->toContain('v-for="(occurrence, index) in paths"');
+    expect($vy)->toContain(':paths="paths"');
+    expect($panelen)->toContain('v-for="(occurrence, index) in paths"');
     expect($vy)->toContain('v-for="(node, index) in currentPath.nodes"');
     expect($vy)->not->toContain('.sort(');
     expect($vy)->not->toContain('.reverse(');
+    expect($panelen)->not->toContain('.sort(');
+    expect($panelen)->not->toContain('.reverse(');
 });
 
 /**
