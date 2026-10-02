@@ -81,12 +81,12 @@ function submit() {
             id="quota-error"
             role="alert"
             tabindex="-1"
-            class="mt-6 max-w-lg rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 outline-none"
+            class="mt-6 max-w-2xl rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 outline-none"
         >
             {{ form.errors.quota }}
         </p>
 
-        <form class="mt-8 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
+        <form class="mt-8 flex max-w-2xl flex-col gap-4" @submit.prevent="submit">
             <FormField
                 v-slot="{ describedBy }"
                 :label="t('container.create.name')"
