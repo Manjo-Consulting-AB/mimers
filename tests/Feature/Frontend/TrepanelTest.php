@@ -565,6 +565,10 @@ it('märker den aktuella förekomsten med synlig text och länkar de andra', fun
         ->toContain(':id="headingId"')
         ->toContain('useId()');
 
+    // ...och inget bokstavligt id: panelen ritas två gånger, och ett hårdkodat
+    // id hade gett två element med samma id i DOM:en.
+    expect($panelen)->not->toContain('id="item-placements-heading"');
+
     // Ingen egen fråga och ingen egen navigering: allt kommer i propparna.
     foreach (['usePage', 'fetch(', 'axios', 'router.'] as $hämtning) {
         expect($panelen)->not->toContain($hämtning);
