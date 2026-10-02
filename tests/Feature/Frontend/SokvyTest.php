@@ -762,3 +762,78 @@ it('har varje sök-nyckel och ingen svensk sträng i vyn', function () {
         expect($kod)->not->toMatch('/[åäöÅÄÖ]/u', "svensk text utanför kommentar i {$fil}");
     }
 });
+
+/*
+ * Klart när: den synliga etiketten i toppraden döljs visuellt men finns kvar
+ * för skärmläsaren (issue 630 § Beslut 1 och 2).
+ *
+ * Testarfynd 2026-10-02: etiketten *Search all containers* tryckte ned input
+ * och knapp medan plusknappen, klockan och avataren centrerades mot hela
+ * höjden. `labelHidden` gör `<label>` `sr-only` — den finns kvar i trädet och
+ * `for`/`id` är oförändrade, så fältet läses som förut — och sökfältet sätter
+ * den i `header`-varianten, som är förvalet. Förvalet `false` i FormField
+ * ändrar ingenting för någon annan anropare.
+ */
+it('döljer etiketten visuellt i toppraden men inte för skärmläsaren', function () {
+    $fält = File::get(resource_path('js/components/FormField.vue'));
+
+    expect($fält)->toContain('labelHidden: { type: Boolean, default: false }')
+        // `sr-only` är den dolda grenen av klassbindningen, alltså det som
+        // håller etiketten kvar för skärmläsaren men borta från ögat.
+        ->toContain("labelHidden ? 'sr-only'");
+
+    $sök = File::get(resource_path('js/components/SearchField.vue'));
+
+    expect($sök)->toContain('label-hidden')
+        ->toContain("default: 'header'");
+});
+
+/*
+ * Klart när: sökvyn ritar ett eget fält i page-varianten, direkt under de två
+ * meningarna (issue 630 § Beslut 3).
+ *
+ * Det enda fältet stod uppe i hörnet (toppradens), och testaren ville ha
+ * formuläret under förklaringen. Fältet står MELLAN grenarna: under
+ * förklaringen i utgångsläget, under rubriken med sökordet ifyllt efter en
+ * sökning — alltså `v-if="q !== null"` i stället för `v-else`, och exakt ett
+ * `<SearchField variant="page"`.
+ */
+it('ritar ett eget sökfält på sökvyn under förklaringen', function () {
+    $vy = File::get(resource_path('js/pages/Search.vue'));
+
+    expect(substr_count($vy, '<SearchField variant="page"'))->toBe(1)
+        ->and($vy)->toContain("import SearchField from '../components/SearchField.vue'");
+
+    // Positionen: efter förklaringens andra mening, före träffgrenen. Fältet
+    // står utanför båda grenarna och ritas därför i båda lägena.
+    $regel = strpos($vy, "t('search.match_rule')");
+    $fält = strpos($vy, '<SearchField variant="page"');
+    $träffar = strpos($vy, "t('search.empty', { q })");
+
+    expect($regel)->not->toBeFalse()
+        ->and($fält)->not->toBeFalse()
+        ->and($fält)->toBeGreaterThan($regel)
+        ->and($fält)->toBeLessThan($träffar);
+});
+
+/*
+ * Klart när: sökvyns fält bär ett eget id, och toppradens id står kvar
+ * (issue 630 § Beslut 2).
+ *
+ * Båda fälten finns samtidigt på `/search`, och två `<input>` med samma `id`
+ * är en dubblerad identifierare. `header` behåller `search-q`; `page` får
+ * `search-page-q`. Felets id byggs ur fältets (`${id}-error`), så även
+ * felmeddelandena hålls isär.
+ */
+it('ger sökvyns fält ett eget id', function () {
+    $sök = File::get(resource_path('js/components/SearchField.vue'));
+
+    // Båda id:na finns, och `header` är det som bär det gamla.
+    expect($sök)->toContain("'search-q'")
+        ->toContain("'search-page-q'")
+        ->toContain("default: 'header'");
+
+    // FormField får samma id som input, och input binder det ur `fieldId` —
+    // annars pekar `for` på ett annat fält än det som ritades.
+    expect(substr_count($sök, ':id="fieldId"'))->toBe(2);
+});

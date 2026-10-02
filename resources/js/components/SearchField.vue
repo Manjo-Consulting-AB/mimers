@@ -5,9 +5,23 @@ import FormField from './FormField.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Sökfältet, se issue 59b § Beslut 5. Det bor i AppLayout och syns därför på
+ * Sökfältet, se issue 59b § Beslut 5. Det ritas i AppLayout och syns därför på
  * varje inloggad sida — en sökning som bara finns på söksidan är en sökning
- * ingen hittar.
+ * ingen hittar. Sedan issue 630 ritas det också på söksidan själv, i `page`-
+ * varianten, precis under förklaringen.
+ *
+ * **Två varianter, `header` (förval) och `page`** (issue 630 § Beslut 2).
+ * Skillnaden är id, etikett och bredd — allt annat är detsamma:
+ *
+ *   - `header`  → `id="search-q"`, etiketten `label-hidden`, `max-w-xs`. Det är
+ *                 fältet i skalets topprad, och den dolda etiketten låter
+ *                 input och knapp stå på toppradens mittlinje.
+ *   - `page`    → `id="search-page-q"`, etiketten SYNLIG, `max-w-xl`. Det är
+ *                 fältet på `/search`, under de två meningarna.
+ *
+ * Två `id` behövs därför att båda fälten finns samtidigt på `/search`: det i
+ * toppraden och det på sidan. Förvalet `header` gör att
+ * `<SearchField v-if="user" />` i AppLayout står kvar ordagrant.
  *
  * **Ett vanligt GET-formulär mot /search.** Ingen Inertia-länk, ingen
  * `router.get`, ingen `useForm`: webbläsaren skickar querysträngen själv, och
@@ -41,17 +55,42 @@ import { useTranslations } from '../composables/useTranslations.js';
 const { t } = useTranslations();
 const page = usePage();
 
+/*
+ * Varianterna (issue 630 § Beslut 2). `header` är förvalet, så skalets
+ * `<SearchField v-if="user" />` behöver inte skicka någonting.
+ */
+const props = defineProps({
+    variant: { type: String, default: 'header' },
+});
+
+const isPage = computed(() => props.variant === 'page');
+
+/* Två id därför att båda fälten finns samtidigt på /search. */
+const fieldId = computed(() => (isPage.value ? 'search-page-q' : 'search-q'));
+
 const query = computed(() => page.props.q ?? '');
 const error = computed(() => page.props.errors?.q ?? null);
 const pending = ref(false);
 </script>
 
 <template>
-    <form method="get" action="/search" class="w-full max-w-xs" @submit="pending = true">
-        <FormField v-slot="{ describedBy }" :label="t('search.field.label')" id="search-q" :error="error">
+    <form
+        method="get"
+        action="/search"
+        class="w-full"
+        :class="isPage ? 'max-w-xl' : 'max-w-xs'"
+        @submit="pending = true"
+    >
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('search.field.label')"
+            :id="fieldId"
+            :error="error"
+            :label-hidden="!isPage"
+        >
             <div class="flex gap-2">
                 <input
-                    id="search-q"
+                    :id="fieldId"
                     name="q"
                     type="search"
                     :value="query"

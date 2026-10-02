@@ -40,11 +40,19 @@ import { computed } from 'vue';
  *
  * Färgerna kommer ur samma ADR: `text-ink` för etiketten, `text-danger` för
  * felet.
+ *
+ * **`labelHidden` döljer etiketten visuellt men inte för skärmläsaren**
+ * (issue 630 § Beslut 1). Sätts den blir `<label>` `sr-only` i stället för den
+ * synliga stilen — etiketten finns kvar i trädet, `for`/`id` är oförändrade,
+ * och fältet läses som förut. Det är toppradens sökfält som behöver den: den
+ * synliga etiketten tryckte ned input och knapp medan grannarna centrerades
+ * mot hela höjden. Förvalet `false` ändrar ingenting för någon annan anropare.
  */
 const props = defineProps({
     label: { type: String, required: true },
     id: { type: String, required: true },
     error: { type: String, default: null },
+    labelHidden: { type: Boolean, default: false },
 });
 
 const describedBy = computed(() => (props.error ? `${props.id}-error` : undefined));
@@ -52,7 +60,7 @@ const describedBy = computed(() => (props.error ? `${props.id}-error` : undefine
 
 <template>
     <div class="flex flex-col gap-1">
-        <label :for="id" class="text-body font-medium text-ink">{{ label }}</label>
+        <label :for="id" :class="labelHidden ? 'sr-only' : 'text-body font-medium text-ink'">{{ label }}</label>
 
         <slot :described-by="describedBy" />
 
