@@ -1,6 +1,7 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
+import SearchField from '../components/SearchField.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -8,8 +9,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * ligger under AppLayout och på toppnivå: frågan spänner över alla containers
  * användaren når, och det är därför den har en egen URL.
  *
- * **Sökrutan ritas inte här.** Den bor i AppLayout (SearchField) och syns på
- * varje inloggad sida — sidan här ritar bara svaret (Beslut 5).
+ * **Sökrutan i toppraden ritas av AppLayout** (SearchField, `header`-varianten)
+ * och syns på varje inloggad sida. Sedan issue 630 § Beslut 3 ritar sidan
+ * DESSUTOM ett eget fält i `page`-varianten, direkt under förklaringen: två
+ * av testarna 2026-10-02 saknade ett fält på `/search` där de två meningarna
+ * står, och det enda fältet stod uppe i hörnet. Fältet står i båda lägena —
+ * under förklaringen i utgångsläget, och under rubriken med sökordet ifyllt
+ * efter en sökning.
  *
  * **Tre lägen, och bara ett av dem körde en fråga** (Beslut 4):
  *
@@ -68,7 +74,14 @@ const { t } = useTranslations();
             <p class="mt-2 text-sm text-slate-600">{{ t('search.match_rule') }}</p>
         </template>
 
-        <template v-else>
+        <!-- Fältet står mellan grenarna med flit (issue 630 § Beslut 3): i
+             utgångsläget under förklaringen, efter en sökning under rubriken
+             med sökordet ifyllt — samma element, ett ställe. -->
+        <div class="mt-6">
+            <SearchField variant="page" />
+        </div>
+
+        <template v-if="q !== null">
             <p v-if="results.length === 0" class="mt-8 text-slate-700">
                 {{ t('search.empty', { q }) }}
             </p>
