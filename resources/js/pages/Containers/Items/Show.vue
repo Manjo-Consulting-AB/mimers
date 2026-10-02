@@ -8,6 +8,7 @@ import ItemCostSection from '../../../components/ItemCostSection.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemMapPanel from '../../../components/ItemMapPanel.vue';
+import ItemPlacementsPanel from '../../../components/ItemPlacementsPanel.vue';
 import ItemQuickFacts from '../../../components/ItemQuickFacts.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
@@ -69,12 +70,15 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * resursen i kontrollern — se App\Http\Controllers\ItemController. ItemResource
  * bär bara kategorins ULID.
  *
- * **Förekomsterna ritas som en brödsmula och en lista** (issue 95 ·
+ * **Förekomsterna ritas som en brödsmula och en panel** (issue 95 och 633 ·
  * [[ADR-0041 Itemets vy]] § Beslut). Ett item som hänger under två föräldrar
  * har två vägar upp, och mockupen visar båda. Ingen kolumn pekar ut en
  * huvudplats: servern löser upp vägarna, querysträngen väljer vilken som är
  * den aktuella, och den här filen vandrar inte i grafen och sorterar inte om
- * listan (issue 57a § Beslut 8).
+ * listan (issue 57a § Beslut 8). Brödsmulan står överst i itemet; de övriga
+ * vägarna ligger i ItemPlacementsPanel.vue, som den här filen ritar i
+ * högerkolumnen under kartan över `md:` och i mittenkolumnen under — samma
+ * mönster som kartan.
  *
  * **Sidan är tre paneler** (issue 103 · [[M17 Designsystemet]] § 103):
  * strukturen till vänster, itemet i mitten, kartans plats till höger — allt
@@ -783,56 +787,24 @@ function toggleFavorite() {
                 </div>
 
                 <!--
-                    Förekomstlistan (issue 95 · [[ADR-0041 Itemets vy]] § Beslut):
-                    samma vägar som brödsmulan visar en av, med den aktuella utmärkt.
-                    Raderna kommer i serverns ordning och sorteras aldrig här — för
-                    samma användare står brödsmulan och listan därför alltid i samma
-                    ordning (issue 57a § Beslut 8).
+                    Förekomstpanelen under `md:` (issue 95 och 633 ·
+                    ItemPlacementsPanel.vue). Under brytpunkten är högerkolumnen
+                    dold, och panelen ritas därför en gång till här i
+                    mittenkolumnen — samma mönster och samma skäl som kartan,
+                    som står i högerpanelen över `md:` och i relationsfliken
+                    under (FokuskartaTest). Samma yta två gånger på samma skärm
+                    hade varit samma väg två gånger, och därför bär den här
+                    kopian `md:hidden`.
 
-                    Listan ritas bara när itemet har MER än en förekomst: med en enda
-                    hade den upprepat brödsmulan ordagrant och tillagt en rad utan
-                    innehåll. Antalet är antalet vägar mottagaren ser, och det avslöjar
-                    ingenting om dem hon inte ser.
-
-                    Rubriken är listans namn och kopplas till den med
-                    `aria-labelledby` — därför behövs ingen egen `aria-label`. Den
-                    aktuella raden bär `aria-current="true"` och ordet *Current* som
-                    SYNLIG text: markeringen får aldrig vara en färg allena. Orden
-                    kommer ur `lang/en/ui.php` (`item.show.placements`,
-                    `item.show.placement_current`), och ordet är *placement* och inte
-                    *occurrence* — se nyckelns kommentar där.
+                    Villkoret — itemet ska ha MER än en förekomst — bor i
+                    panelen och inte här: anroparen ritar den två gånger och
+                    ska inte behöva komma ihåg samma regel på två ställen.
                 -->
-                <section v-if="paths.length > 1" class="mt-6">
-                    <h2 id="item-placements-heading" class="text-sm font-medium text-ink-muted">
-                        {{ t('item.show.placements') }}
-                    </h2>
-
-                    <ul aria-labelledby="item-placements-heading" class="mt-2 space-y-1 text-sm">
-                        <li
-                            v-for="(occurrence, index) in paths"
-                            :key="index"
-                            class="flex flex-wrap items-center gap-2"
-                        >
-                            <Link
-                                :href="pathHref(occurrence.nodes)"
-                                :aria-current="occurrence.current ? 'true' : null"
-                                class="flex min-h-11 flex-wrap items-center gap-1"
-                                :class="occurrence.current
-                                    ? 'font-semibold text-ink'
-                                    : 'text-accent hover:underline'"
-                            >
-                                <template v-for="(node, step) in occurrence.nodes" :key="`${node.ulid}-${step}`">
-                                    <span>{{ node.name }}</span>
-                                    <span v-if="step < occurrence.nodes.length - 1" aria-hidden="true">›</span>
-                                </template>
-                            </Link>
-
-                            <span v-if="occurrence.current" class="rounded bg-surface-sunken px-2 py-1 text-sm font-medium">
-                                {{ t('item.show.placement_current') }}
-                            </span>
-                        </li>
-                    </ul>
-                </section>
+                <ItemPlacementsPanel
+                    class="mt-6 md:hidden"
+                    :paths="paths"
+                    :path-href="pathHref"
+                />
 
                 <!--
                     Flikraden (issue 102). `label` är tablistens tillgängliga namn och
@@ -1102,6 +1074,22 @@ function toggleFavorite() {
                     class="hidden md:block"
                     :map="map"
                     :overflow-href="relationsHref"
+                />
+
+                <!--
+                    Förekomstpanelen över `md:` (issue 633 ·
+                    `docs/Design/struktur - item.jpeg`, panelen under kartan):
+                    samma vägar som brödsmulan visar en av, med den aktuella
+                    utmärkt. Raderna kommer i serverns ordning och sorteras
+                    aldrig här — för samma användare står brödsmulan och
+                    panelen därför alltid i samma ordning (issue 57a § Beslut 8).
+                    Omslaget ovanför bär redan `hidden md:block`, så panelen
+                    behöver ingen egen brytpunkt.
+                -->
+                <ItemPlacementsPanel
+                    class="mt-6"
+                    :paths="paths"
+                    :path-href="pathHref"
                 />
             </div>
         </div>

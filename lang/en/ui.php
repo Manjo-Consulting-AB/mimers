@@ -2483,8 +2483,13 @@ return [
             // beside it. The label is not a counter — it says which of the
             // paths the recipient SEES is the current one, and nothing about
             // the ones she does not (issue 73 decision 6).
+            //
+            // `placement_go` is the LINK on every OTHER row — the mockup's
+            // *Gå till* — and it is the row's only clickable surface, so the
+            // breadcrumb above it stays text (issue 633).
             'placements' => 'Placements in the structure',
             'placement_current' => 'Current',
+            'placement_go' => 'Go to',
             'breadcrumb' => 'Where this item sits',
 
             // The star in the item's head, see issue 105. The two strings are
