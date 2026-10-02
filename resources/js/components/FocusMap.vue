@@ -38,8 +38,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Plusknappen öppnar samma ark som skalets knapp** ([[ADR-0048 Mobilen och
  * plusknappen]] § 2): `CreateMenu`, med nodens rader och nodens namn som
  * rubrik — menyn säger vilken nod den hör till, och raderna är de samma som i
- * skalet. Är raderna tomma ritas ingen knapp, och arket finns därför bara när
- * det har något att visa. Öppna-läget bor här, som skalets meny bor i
+ * skalet. Är raderna tomma ritas ingen knapp, och det finns därför inget klick
+ * som kan öppna menyn. **Menyn är monterad från början**, som skalets: `UiSheet`
+ * visar sitt `<dialog>` när `open` ÄNDRAS, och ett ark som föds med `open` redan
+ * sant hade aldrig visats. Öppna-läget bor här, som skalets meny bor i
  * AppLayout: noden är en knapp, arket en yta, och den som äger båda är den
  * komponent som ritar dem.
  *
@@ -261,12 +263,13 @@ function closeMenu() {
         </ul>
 
         <!--
-            Nodens meny. Arket ritas bara när någon nod har rader: en yta utan
-            innehåll är inget mål, och servern har redan svarat att menyn är
-            tom genom att inte skicka några rader.
+            Nodens meny, monterad från början. Inget `v-if` här: arket öppnas av
+            en ÄNDRING av `open`, och ett ark som monteras med `open` redan sant
+            hinner aldrig se den — första klicket hade lämnat det stängt för
+            alltid. Raderna fylls av noden som trycktes, och en nod utan rader
+            ritar ingen knapp, så menyn kan bara nås när den har något att visa.
         -->
         <CreateMenu
-            v-if="menuRows.length > 0"
             :open="menuOpen"
             :trigger="menuTrigger"
             :rows="menuRows"
