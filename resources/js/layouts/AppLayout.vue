@@ -9,6 +9,7 @@ import MobileTabBar from '../components/MobileTabBar.vue';
 import NotificationBell from '../components/NotificationBell.vue';
 import RecentVisitList from '../components/RecentVisitList.vue';
 import SearchField from '../components/SearchField.vue';
+import ShellContainerList from '../components/ShellContainerList.vue';
 import ShellSections from '../components/ShellSections.vue';
 import VerifyEmailNotice from '../components/VerifyEmailNotice.vue';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -130,6 +131,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * besökta]]. Den står i skalets band över `md:` — direkt ovanför favoriterna —
  * och i sidomenyn under `md:`, och ritas av
  * resources/js/components/RecentVisitList.vue på båda ställena.
+ * Bandet är sedan issue 169 sidopanelen, se nedan.
  *
  *   - **Listan är en OPTIONAL prop och hämtas först när ytan ritas.** Skalet
  *     äger svaret på "ritas panelen?": `isDesktopPanel` läser brytpunkten ur
@@ -144,6 +146,44 @@ import { useTranslations } from '../composables/useTranslations.js';
  *     App\Http\Controllers\ItemController::show(), efter grinden. Skalet
  *     varken skriver eller filtrerar: raden är redan omfångsprövad när den
  *     kommer hit.
+ *
+ * **SIDOPANELEN kom med issue 169** · [[ADR-0050 Desktopdesignen]] § 1.
+ * Desktop fick aldrig sitt skal: layouten var en vit topprad och en
+ * innehållsyta på 768 px, medan varje bild designern lämnat ritar en mörk
+ * sidopanel och en yta på över 1 200 px. Över `md:` är skalet därför två
+ * kolumner — panelen till vänster, innehållet till höger — och panelen bär
+ * sektionerna i bildens ordning:
+ *
+ *   1. **Raderna ur `ShellSections`**, exakt de sex som fanns i dag och i
+ *      samma ordning. Inga nya: bildens *Kalender*, *Kostnader* och *Dokument*
+ *      är globala sidor som inte finns ([[ADR-0041 Itemets vy]] har redan
+ *      avvisat samma sorts navigering).
+ *   2. **Containerlistan** (`ShellContainerList`), grupperad per art enligt
+ *      [[ADR-0036 Containerns art]]. Listan är en OPTIONAL propp och hämtas
+ *      av samma `isDesktopPanel` som de senast besökta.
+ *   3. ***Nyligen besökta*** och 4. ***Favoriter*** — samma komponenter och
+ *      samma data som förut, flyttade in i panelen.
+ *
+ * **Toppraden bär det som inte är navigering**: plusknappen, sökfältet,
+ * klockan och avataren. De tre första är oförändrade komponenter; avataren är
+ * användarens initialer i en cirkel som pekar på `/settings`, eftersom
+ * datamodellen inte har någon avatarbild.
+ *
+ * **Sidopanelen och mobilens sidomeny visar samma sektioner i samma
+ * ordning** ([[ADR-0048 Mobilen och plusknappen]] § 1): båda ritar
+ * `ShellSections`, `ShellContainerList` och `RecentVisitList`. En sektion som
+ * finns i den ena och saknas i den andra är ett fel, och det är därför
+ * containerlistan ligger i en egen komponent och inte skrivs två gånger.
+ *
+ * **Under `md:` är skalet oförändrat** sedan issue 151 — samma topprad,
+ * flikrad och meny — med ett undantag: menyn får containerlistan, för dess
+ * innehåll är skalets sektioner och ingenting eget.
+ *
+ * **Innehållsytan släpptes från 768 px till `max-w-[96rem]`** (1 536 px,
+ * samma yta som Tailwinds `screen-2xl`): panelen tar sin plats bredvid den,
+ * och itemets trepanel (issue 181) ska rymmas. `max-w-screen-2xl` finns inte
+ * i Tailwind 4, där `screen-*`-nycklarna flyttat till `--breakpoint-*`, och
+ * `max-w-7xl` är för smalt mot ADR-0050:s "över 1 200 px".
  */
 defineProps({
     /*
@@ -187,8 +227,9 @@ const showsVerificationNotice = computed(
 );
 
 /*
- * Ritas desktopens sidopanel? — frågan *Nyligen besökta* ställs bara när
- * svaret är ja (issue 160 · [[ADR-0049 Nyligen besökta]] § Beslut).
+ * Ritas desktopens sidopanel? — frågan *Nyligen besökta* och frågan om
+ * containerlistan ställs bara när svaret är ja (issue 160 · [[ADR-0049
+ * Nyligen besökta]] § Beslut, issue 169).
  *
  * Panelen är `hidden md:block` och alltså alltid i DOM:en: CSS avgör om den
  * syns, och `v-if` hade tvingat fram en andra brytpunkt i JavaScript.
@@ -207,108 +248,191 @@ const isDesktopPanel = ref(false);
 onMounted(() => {
     isDesktopPanel.value = window.matchMedia('(min-width: 768px)').matches;
 });
+
+/*
+ * Användarens initialer, till avataren i toppraden. Namnet är data ur den
+ * delade proppen — ingen översättningsnyckel och ingen fråga till servern —
+ * och formen är den vanliga: första bokstaven i första och sista ordet.
+ *
+ * Tomt namn ger en tom sträng och inte en krasch: `name` är obligatoriskt i
+ * databasen, men en vy som ritar ett tecken ur en sträng ska inte behöva lita
+ * på det för att få ritas.
+ */
+const initials = computed(() => {
+    const words = (user.value?.name ?? '').trim().split(/\s+/).filter(Boolean);
+
+    if (words.length === 0) {
+        return '';
+    }
+
+    const first = words[0].charAt(0);
+    const last = words.length > 1 ? words[words.length - 1].charAt(0) : '';
+
+    return (first + last).toUpperCase();
+});
 </script>
 
 <template>
-    <div class="flex min-h-full flex-col bg-slate-50 text-slate-900">
+    <div class="flex min-h-full flex-col bg-slate-50 text-slate-900 md:flex-row">
         <!--
-            Desktopraden. Dold under `md:`, där mobilskalet tar över: en rad
-            som fälls ihop kräver två tryck för allt, och flikraden i botten
-            gör de fyra vanligaste målen nåbara med tummen.
+            SIDOPANELEN över `md:` — desktopens skal, se issue 169 och
+            [[ADR-0050 Desktopdesignen]] § 1. Mörk yta ur `--color-shell`, och
+            sektionerna i bildens ordning: raderna, containerlistan, de senast
+            besökta, favoriterna.
+
+            **Sektionerna ritas av samma komponenter som mobilens sidomeny**
+            (ShellSections, ShellContainerList, RecentVisitList), och samma
+            proppar går till båda: `isDesktopPanel` är det här skalets svar på
+            "panelen ritas", och MobileMenu svarar med sin egen öppning.
+
+            **`shell-tone` binder om textrollerna inuti ytan** — se
+            resources/css/app.css. Utan den hade UiListRows titel stått i
+            nästan-svart på den mörka ytan; med den ritas samma komponenter i
+            både den mörka panelen och den ljusa menyn.
+
+            **Varje sektion ritas bara när den har rader.** En rubrik över en
+            tom lista är en yta som lovar något den inte har — samma regel i
+            ShellSections, ShellContainerList och RecentVisitList.
         -->
-        <header class="hidden border-b border-slate-200 bg-white md:block">
-            <nav class="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
-                <div class="flex w-full items-center justify-between gap-4 md:w-auto">
-                    <Link href="/" class="inline-flex min-h-11 items-center text-lg font-semibold">
-                        {{ t('common.brand') }}
+        <aside
+            class="shell-tone hidden bg-shell text-ink md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:gap-2 md:overflow-y-auto md:px-4 md:py-4"
+        >
+            <Link href="/" class="inline-flex min-h-11 items-center px-2 text-lg font-semibold">
+                {{ t('common.brand') }}
+            </Link>
+
+            <!--
+                Raderna. `id="huvudmenyn"` står kvar på omslutningen: det är
+                samma navigering som förut, flyttad in i panelen, och namnet
+                är det mobilskalet och proven känner den under.
+            -->
+            <nav id="huvudmenyn" class="w-full">
+                <ShellSections />
+            </nav>
+
+            <ShellContainerList v-if="user" :load="isDesktopPanel" />
+
+            <RecentVisitList v-if="user" :load="isDesktopPanel" />
+
+            <ShellSections part="favorites" />
+        </aside>
+
+        <div class="flex min-h-full min-w-0 flex-1 flex-col">
+            <!--
+                Toppraden över `md:`. Den bär plusknappen, sökfältet, klockan
+                och avataren ([[ADR-0050 Desktopdesignen]] § 1), och raderna
+                den hade förut står nu i sidopanelen.
+
+                **Bredden är `max-w-[96rem]`** — 1 536 px, alltså samma yta
+                som Tailwinds `screen-2xl` — och valet står här därför att
+                issue 169 ber om det. `max-w-screen-2xl` finns inte i Tailwind
+                4, där `screen-*`-nycklarna flyttat till `--breakpoint-*`, och
+                `max-w-7xl` (1 280 px) är för smalt: ADR-0050 mäter bildernas
+                yta till "över 1 200 px" BREDVID sidopanelen, och itemets
+                trepanel (issue 181) ska rymmas i den.
+            -->
+            <header class="hidden border-b border-slate-200 bg-white md:block">
+                <div class="mx-auto flex w-full max-w-[96rem] items-center gap-2 px-4 py-2">
+                    <!--
+                        Sökfältet ligger på sin egen rad under `md:` och skjuts
+                        till höger över det. Klasserna sitter på en omslutande
+                        div och inte på komponenten: `SokvyTest` läser taggen
+                        `<SearchField v-if="user" />` som den står, och villkoret
+                        är det testet handlar om.
+                    -->
+                    <div class="flex w-full items-center gap-2 md:ml-auto md:w-auto">
+                        <!--
+                            Plusknappen i sidhuvudet, se issue 152. Den står först i
+                            skalets åtgärdsgrupp — före sökfältet och klockan — för
+                            att skapa är det man gör och de två andra är ytor man
+                            tittar i. Över `md:` finns ingen flikrad, och det här är
+                            samma knapp på samma plats i skalet.
+                        -->
+                        <CreateButton v-if="create" :create="create" @open="openCreateMenu" />
+
+                        <SearchField v-if="user" />
+                        <NotificationBell v-if="user" />
+
+                        <!--
+                            Avataren, se issue 169 och [[ADR-0050
+                            Desktopdesignen]] § 1. Den är användarens egen rad i
+                            toppraden och pekar på `/settings`, samma mål som
+                            raden i sidopanelen.
+
+                            **Initialerna och ingen bild.** Datamodellen har
+                            ingen avatarbild — `AuthUserResource` bär namn,
+                            e-post, språk, tidszon och enhetssystem — och
+                            bilden i `docs/Design/main.jpeg` ritar ett foto vi
+                            inte har. En cirkel med användarens initialer är
+                            därför den form som går att bygga utan att lova ett
+                            fält som inte finns; namnet bär `title` och
+                            `aria-label`, så raden heter samma sak för en
+                            skärmläsare som för en muspekare.
+                        -->
+                        <Link
+                            v-if="user"
+                            href="/settings"
+                            :aria-label="user.name"
+                            :title="user.name"
+                            class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-pill bg-surface-sunken text-title font-semibold text-ink-muted outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        >
+                            {{ initials }}
+                        </Link>
+                    </div>
+                </div>
+            </header>
+
+            <!--
+                Toppraden på mobilen. Titeln kommer ur sloten när sidan har en
+                egen — ContainerLayout lägger containerns namn och en
+                tillbakaknapp där — och är märket annars.
+            -->
+            <header class="bg-shell text-white md:hidden">
+                <div class="mx-auto flex w-full max-w-[96rem] items-center gap-2 px-4 py-2">
+                    <slot name="topbar">
+                        <p class="text-title font-semibold">{{ t('common.brand') }}</p>
+                    </slot>
+
+                    <!-- Gästen har ingen flikrad (den är mål för en inloggad) och
+                         behöver ändå en väg in. -->
+                    <Link
+                        v-if="!user"
+                        href="/login"
+                        class="ml-auto inline-flex min-h-11 items-center text-body hover:underline"
+                    >
+                        {{ t('nav.login') }}
                     </Link>
                 </div>
+            </header>
 
-                <!-- Sökfältet ligger på sin egen rad under `md:` och skjuts
-                     till höger över det. Klasserna sitter på en omslutande
-                     div och inte på komponenten: `SokvyTest` läser taggen
-                     `<SearchField v-if="user" />` som den står, och villkoret
-                     är det testet handlar om. -->
-                <div class="flex w-full items-center gap-2 md:ml-auto md:w-auto">
-                    <!--
-                        Plusknappen i sidhuvudet, se issue 152. Den står först i
-                        skalets åtgärdsgrupp — före sökfältet och klockan — för
-                        att skapa är det man gör och de två andra är ytor man
-                        tittar i. Över `md:` finns ingen flikrad, och det här är
-                        samma knapp på samma plats i skalet.
-                    -->
-                    <CreateButton v-if="create" :create="create" @open="openCreateMenu" />
-
-                    <SearchField v-if="user" />
-                    <NotificationBell v-if="user" />
-                </div>
-
-                <div id="huvudmenyn" class="hidden w-full md:flex md:w-auto">
-                    <ShellSections />
-                </div>
-            </nav>
-        </header>
-
-        <!--
-            Toppraden på mobilen. Titeln kommer ur sloten när sidan har en
-            egen — ContainerLayout lägger containerns namn och en
-            tillbakaknapp där — och är märket annars.
-        -->
-        <header class="bg-shell text-white md:hidden">
-            <div class="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-2">
-                <slot name="topbar">
-                    <p class="text-title font-semibold">{{ t('common.brand') }}</p>
-                </slot>
-
-                <!-- Gästen har ingen flikrad (den är mål för en inloggad) och
-                     behöver ändå en väg in. -->
-                <Link
-                    v-if="!user"
-                    href="/login"
-                    class="ml-auto inline-flex min-h-11 items-center text-body hover:underline"
-                >
-                    {{ t('nav.login') }}
-                </Link>
+            <div v-if="showsVerificationNotice" class="mx-auto w-full max-w-[96rem] px-4 pt-6">
+                <p class="mb-2 text-sm font-medium text-slate-800">{{ t('auth.verify.banner') }}</p>
+                <VerifyEmailNotice />
             </div>
-        </header>
 
-        <div v-if="showsVerificationNotice" class="mx-auto w-full max-w-3xl px-4 pt-6">
-            <p class="mb-2 text-sm font-medium text-slate-800">{{ t('auth.verify.banner') }}</p>
-            <VerifyEmailNotice />
+            <FlashMessage />
+
+            <!--
+                Innehållsytan. Den var 768 px — skalets gamla mått, samma som
+                toppraden — och är nu `max-w-[96rem]`: panelen till vänster tar
+                sin plats bredvid den, och en sida som ritar tre paneler
+                (itemet, issue 181) behöver bredden.
+            -->
+            <main class="mx-auto w-full max-w-[96rem] flex-1 px-4 pt-8 pb-24 md:pb-8">
+                <slot />
+            </main>
+
+            <footer class="hidden border-t border-slate-200 py-4 text-center text-xs text-slate-600 md:block">
+                {{ t('common.brand') }}
+            </footer>
         </div>
-
-        <FlashMessage />
-
-        <!--
-            SKALETS LISTOR över `md:`, se issue 106 och 160. *Nyligen
-            besökta* står direkt ovanför favoriterna ([[ADR-0049 Nyligen
-            besökta]] § Beslut), och båda återkommer i sidomenyn under `md:`
-            med samma komponenter och samma data — se MobileMenu.
-
-            **RecentVisitList får sin `load` av den här layouten**, som är
-            den som vet att panelen ritas: listan är en optional prop och
-            hämtas först då. Favoriterna är delade och behöver inget besked.
-
-            Sektionerna ritas bara när listan har rader: en tom rubrik är en
-            yta som lovar något den inte har.
-        -->
-        <div class="hidden md:block">
-            <RecentVisitList v-if="user" :load="isDesktopPanel" />
-            <ShellSections part="favorites" />
-        </div>
-
-        <main class="mx-auto w-full max-w-3xl flex-1 px-4 pt-8 pb-24 md:pb-8">
-            <slot />
-        </main>
-
-        <footer class="hidden border-t border-slate-200 py-4 text-center text-xs text-slate-600 md:block">
-            {{ t('common.brand') }}
-        </footer>
 
         <!--
             Mobilskalet, se issue 151. Flikraden ligger fast i botten och
             menyn är en dialog; båda ritas bara för en inloggad, för det är
-            hennes mål de bär.
+            hennes mål de bär. De står utanför innehållskolumnen: de är
+            skalets egna ytor och inte sidans, och de ligger utanför flödet
+            ändå.
         -->
         <template v-if="user">
             <MobileTabBar

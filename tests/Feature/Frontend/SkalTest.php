@@ -142,7 +142,9 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
     // Raden bor i skalets sektionslista sedan issue 151 — samma lista som
     // sidomenyn ritar ur — och ritas bara för en inloggad användare, samma
     // `v-if="user"` som de fyra raderna ovanför (Beslut 2).
-    expect($sektioner)->toContain("{ key: 'settings', href: '/settings' }")
+    // `matchPrefix` kom med issue 169: raden är den enda som också är aktuell
+    // på en undersida, eftersom `/settings` omdirigerar till profilen (53c).
+    expect($sektioner)->toContain("{ key: 'settings', href: '/settings', matchPrefix: true }")
         ->and($sektioner)->toContain('v-if="user"');
 
     // Listan ritas innanför `#huvudmenyn` — samma div som raderna låg i förut
@@ -155,8 +157,11 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
 
     // Före utloggningen (Beslut 1), och som en <Link> med samma träffyta som
     // grannarna (Beslut 4) — ingen <div> med @click, som tappar tangentbordet.
+    // Fokusringen blev en token i issue 169, när raderna flyttade in i
+    // sidopanelen: `outline-none` utan en ring som tar över river
+    // tangentbordsarbetet ([[ADR-0042 Designsystemet]] § Beslut).
     expect(strpos($sektioner, "{ key: 'settings'"))->toBeLessThan(strpos($sektioner, "t('auth.logout')"))
-        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center hover:underline"');
+        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
 
     // Texten bor i lang/ (Beslut 5).
     expect(trans('ui.nav.settings', [], 'en'))->toBe('Settings');
@@ -220,7 +225,7 @@ it('visar användarens namn som länken till inställningarna', function () {
     // `user` är `auth.user` ur den delade proppen, som är null för en gäst, så
     // en gäst ser varken länken eller något namn.
     expect($raden)->toContain('v-if="user"')
-        ->and($sektioner)->toContain("{ key: 'settings', href: '/settings' }")
+        ->and($sektioner)->toContain("{ key: 'settings', href: '/settings', matchPrefix: true }")
         ->and($sektioner)->toContain('const user = computed(() => page.props.auth.user)');
 
     // Namnet ritas på ETT ställe i filen — i länkens etikett — och inte i en
@@ -263,8 +268,10 @@ it('har en väg till uppgifterna i navigeringen för en inloggad och ingen för 
     // Raden ligger i skalets sektionslista, innanför samma `v-if="user"` som
     // de andra raderna (issue 68a § Beslut 2) och i samma lista som sidomenyn
     // ritar (issue 151).
+    // Träffytan (44 px) och fokusringen delas av varje rad i skalet — se
+    // provet för inställningsraden ovanför, där klassen står med skäl.
     expect($sektioner)->toContain("{ key: 'tasks', href: '/tasks' }")
-        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center hover:underline"');
+        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
 
     // Texten bor i lang/, och ordet är sidans eget (`todo.heading`) och inte
     // ruttens — användaren ska möta samma ord i menyn som på sidan.
@@ -333,6 +340,37 @@ it('svarar på varje sektion i settingsSections efter två klick', function () {
         // Klick två: raden i SettingsLayout.
         actingAs($anvandare)->get($url)->assertOk();
     }
+});
+
+/*
+ * Issue 169 · Skalets bredd. Klart när: innehållsytan är inte längre
+ * `max-w-3xl` över `md:`.
+ *
+ * Skalet var en vit topprad och en yta på 768 px. Sidopanelen tar sin plats
+ * bredvid ytan, och varje bild designern lämnat ritar en yta på över
+ * 1 200 px ([[ADR-0050 Desktopdesignen]] § Kontext) — itemets trepanel
+ * (issue 181) ska rymmas i den. Måttet prövas på skalet, inte i en webbläsare:
+ * att 1 536 px ser rätt ut mot `docs/Design/main.jpeg` är handprov.
+ */
+it('släpper innehållsytan från max-w-3xl när skalet får sin sidopanel', function () {
+    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
+
+    // Ingen yta i skalet är kvar på 768 px — varken innehållet, toppraden
+    // eller verifieringsbannern.
+    expect($layout)->not->toContain('max-w-3xl');
+
+    // Och den nya bredden står på <main>, där innehållet faktiskt ritas.
+    preg_match('/<main\b[^>]*>/', $layout, $träff);
+
+    expect($träff[0] ?? '')->toContain('max-w-[96rem]');
+
+    // Sidopanelen är den mörka ytan ur ADR-0042 och ritas bara över `md:`.
+    expect($layout)->toContain('bg-shell')
+        ->toContain('md:flex');
+
+    // Menyn ritar samma sektioner — se MobilskalTest, som äger mobilskalet.
+    expect(File::get(resource_path('js/components/MobileMenu.vue')))
+        ->toContain('<ShellContainerList');
 });
 
 /*

@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: regeländring i ett källkodsprov, ingen ny acceptanstest. Ändringen här är att `lg:` blir en tillåten brytpunkt (M24 § 171 · [[ADR-0050 Desktopdesignen]] § 6); det finns ingen applikationskod i den att fälla, för rutnätet ligger i resources/js/pages/Dashboard.vue och prövas av det nya provet i tests/Feature/Frontend/DashboardTest.php, som är rött på basen.
+
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Finder\SplFileInfo;
 
@@ -11,9 +13,9 @@ use Symfony\Component\Finder\SplFileInfo;
  * och inte en funktion: det finns ingen ny rutt, ingen ny prop och inget nytt
  * svar att hämta. Det som går att pröva på serversidan är därför formen på
  * källkoden — att varje sida bär en titel, att varje skicka-knapp har ett
- * vänteläge, att varje `router`-anrop sätter en flagga, att `md:` är den enda
- * brytpunkten, att navigeringen går att fälla ihop, och att ingen radåtgärd
- * är mindre än en tumme.
+ * vänteläge, att varje `router`-anrop sätter en flagga, att `md:` och `lg:` är
+ * de två brytpunkterna, att navigeringen går att fälla ihop, och att ingen
+ * radåtgärd är mindre än en tumme.
  *
  * **Det som INTE prövas här** är det som kräver en webbläsare: att de fem
  * flödena i "Klart när" faktiskt går att genomföra vid 375 px, att inget
@@ -305,15 +307,24 @@ it('bläddrar i informationsytan utan att skriva något', function () {
         ->and($kod)->toContain("'/tips/dismiss'");
 });
 
-it('använder md: som enda brytpunkt', function () {
+/*
+ * Två brytpunkter uppåt, inte en. Genomgången (issue 68a § Beslut 2) satte
+ * `md:` som den enda, och mobilskalet står kvar där. M24 lade till `lg:` för
+ * skrivbordsrutnäten ([[ADR-0050 Desktopdesignen]] § 6): en sida som är två
+ * kolumner över `lg:` är fortfarande EN kolumn över `md:`, så `md:` behåller
+ * sin roll som skalets brytpunkt. `sm:`, `xl:` och de grövre är fortfarande
+ * förbjudna — de hade gjort brytpunkterna till en glidande skala i stället för
+ * två beslut.
+ */
+it('använder md: och lg: som brytpunkter', function () {
     $avvikelser = [];
 
     foreach (genomgangKod() as $sokvag => $kod) {
-        preg_match_all('/(?<![\w-])(sm|lg|xl|2xl|3xl):/', $kod, $träffar, PREG_OFFSET_CAPTURE);
+        preg_match_all('/(?<![\w-])(sm|xl|2xl|3xl):/', $kod, $träffar, PREG_OFFSET_CAPTURE);
 
         foreach ($träffar[0] as $träff) {
             $avvikelser[] = sprintf(
-                '%s:%d använder %s — genomgången har EN brytpunkt uppåt, md:',
+                '%s:%d använder %s — genomgången har två brytpunkter uppåt, md: och lg:',
                 $sokvag,
                 substr_count(substr($kod, 0, $träff[1]), "\n") + 1,
                 $träff[0],

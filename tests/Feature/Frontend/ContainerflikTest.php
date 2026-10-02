@@ -38,11 +38,14 @@ use function Pest\Laravel\withoutVite;
  * tests/Feature/Frontend/FlikradTest.php, träffytan och brytpunkten i
  * tests/Feature/Frontend/GenomgangTest.php, och handprovet står i PR-kroppen.
  *
- * **Dokument, uppgifter och kostnader har ingen flik, och det är avsiktligt.**
- * Ingen rutt svarar på dem och ingen prop bär dem, så en flik för dem hade
- * varit en död länk — en yta ingen hittar är samma sak som en yta som inte
- * finns. De tre står i PR:ens `## Frågor och antaganden`; en flik som kräver en
- * ny kontrollermetod är ett fynd och ingen ändpunkt i smyg.
+ * **Dokument och kostnader hade ingen flik, och det var avsiktligt.** Ingen
+ * rutt svarade på dem och ingen prop bar dem, så en flik för dem hade varit en
+ * död länk — en yta ingen hittar är samma sak som en yta som inte finns. De
+ * två stod i PR:ens `## Frågor och antaganden`; en flik som kräver en ny
+ * kontrollermetod är ett fynd och ingen ändpunkt i smyg. **Uppgifterna
+ * lämnade den listan i issue 174**, som byggde både rutten och sidan;
+ * **kostnaderna i 175 och dokumenten i 178**. Listan är därmed tom, och
+ * flikraden är ADR-0050 § 4:s uppräkning komplett.
  *
  * Hjälparna har prefixet `containerflik` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -210,9 +213,13 @@ it('containern har en flikrad byggd av UiTabs', function () {
     expect($layout)->not->toContain('v-for="section in containerSections"');
 
     // Flikarna, ur modulen klienten importerar: översikten först — det är
-    // containerns egen sida — sedan den sektion man arbetar i och den sida som
-    // bär resten.
-    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'settings', 'history']);
+    // containerns egen sida — sedan den sektion man arbetar i, uppgifterna och
+    // den sida som läser vad som har hänt. *Inställningar* lämnade raden i
+    // issue 170 ([[ADR-0050 Desktopdesignen]] § 3): hjälten bär *Redigera
+    // container*, som är samma adress och samma yta, och en flik jämte den
+    // hade varit två vägar till samma val. *Uppgifter* kom med issue 174 och
+    // *Kostnader* med issue 175, båda på den plats ADR-0050 § 4 anger.
+    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'documents', 'tasks', 'costs', 'history']);
 
     foreach (containerflikLankar('containerTabs', $container->ulid) as $nyckel => $adress) {
         // Etiketten kommer ur `lang/`, och `t()` hade skrivit nyckeln själv på
@@ -227,25 +234,30 @@ it('containern har en flikrad byggd av UiTabs', function () {
 });
 
 /*
- * Klart när: var och en av de tio sektionerna går att nå.
+ * Klart när: var och en av de tretton sektionerna går att nå.
  *
  * Filens tyngdpunkt, och issue 101:s enda krav: **ingen rad får försvinna**.
- * Nycklarna räknas upp ur modulen — en tionde rad vore en ny sida någon byggt
- * utan att en issue bad om den, och en åttonde vore en yta ingen hittar — och
- * varje adress begärs som inloggad medlem.
+ * Nycklarna räknas upp ur modulen — en rad fler vore en ny sida någon byggt
+ * utan att en issue bad om den, och en rad färre vore en yta ingen hittar —
+ * och varje adress begärs som inloggad medlem. Tretton sedan issue 178 (178
+ * lade till dokumentfliken, 175 kostnadsfliken, 174 uppgiftsfliken och 116
+ * historikfliken).
  *
  * Den andra halvan är inställningssidan, som är den yta de sju sektionerna
  * flyttade TILL. Att adressen svarar 200 är inte samma sak som att den går att
  * hitta: raden ska ritas på sidan, med samma etikett och samma adress som
  * sektionsmenyn gav den.
  */
-it('var och en av de tio sektionerna går att nå', function () {
+it('var och en av de tretton sektionerna går att nå', function () {
     withoutVite();
 
     [, $anvandare, $container] = containerflikKontext();
 
     expect(containerflikNycklar('containerSections'))->toBe([
         'items',
+        'documents',
+        'tasks',
+        'costs',
         'categories',
         'tags',
         'sharing',
@@ -261,11 +273,12 @@ it('var och en av de tio sektionerna går att nå', function () {
         actingAs($anvandare)->get($adress)->assertOk();
     }
 
-    // De sju som lämnade flikraden, ur samma modul: items, settings och sedan
-    // issue 116 även history stannar i raden, resten samlas på
-    // inställningssidan. Historiken stannar därför att bilden ritar den jämte
-    // översikten och items — se containerSections.js.
+    // De åtta som lämnade flikraden, ur samma modul: items och history stannar
+    // i raden sedan issue 116, och *Inställningar* lämnade den i issue 170 —
+    // den ligger därför FÖRST i kolumnen, som hubben de sju andra hänger under
+    // ([[ADR-0050 Desktopdesignen]] § 3). Resten behåller sin inbördes ordning.
     expect(containerflikNycklar('containerSettingsSections'))->toBe([
+        'settings',
         'categories',
         'tags',
         'sharing',
@@ -339,11 +352,11 @@ it('låter en delegerad läsare nå sektionerna via inställningssidan', functio
  * av en vy. Provet faller om två skilda flikar eller två skilda rutter finns:
  * ingen underhållsflik, ingen underhållsrutt, och som mest en uppgiftsflik.
  *
- * **Ingen uppgiftsflik finns i dag, och det är inte samma sak som att provet är
- * tomt.** Ingen sida svarar på containerns uppgifter, så fliken hade varit en
- * död länk (fyndet står i PR:ens `## Frågor och antaganden`). Att raden är tom
- * är därför rätt i dag, och provet är vakten för i morgon: den dag ytan byggs
- * blir den EN flik och EN rutt, och aldrig två.
+ * **Fyndet *ingen uppgiftsflik finns* föll i issue 174**, som byggde ytan.
+ * Provet stod kvar med sin tomma rad från issue 101 till dess, som vakten för
+ * att den dagen skulle ge EN flik och EN rutt — och det är vad det nu räknar:
+ * `tasks` är en av flikarna, `/containers/{container}/tasks` en av ruttarna,
+ * och aldrig två.
  *
  * Det sista provet är det som gäller redan nu: den plats där containern räknar
  * sina uppgifter — översiktens bricka — räknar dem som ETT tal och inte två.
@@ -447,8 +460,10 @@ it('historikfliken finns och läser genom läsregeln', function () {
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Containers/History')
-            ->has('rows', 1)
-            ->where('rows.0.ulid', $rad->ulid)
+            // Sedan issue 179 bär fliken dagarna grupperade i användarens
+            // tidszon, `days: [{date, rows}]`, i stället för en platt `rows`.
+            ->has('days', 1)
+            ->where('days.0.rows.0.ulid', $rad->ulid)
         );
 
     // Grinden är kvar: den som inte når containern får 403 och inte en lista
@@ -457,13 +472,23 @@ it('historikfliken finns och läser genom läsregeln', function () {
         ->get("/containers/{$container->ulid}/history")
         ->assertForbidden();
 
-    // Och ingen händelsepanel har smugit in som prop på översikten: historiken
-    // är en egen sida och inte ett kort på någon annans.
+    // Och historikens EGEN form har inte smugit in som prop på översikten:
+    // historiken är en egen sida och inte ett kort på någon annans.
+    //
+    // **`missing('events')` vände i issue 172.** Raden skrevs i issue 116,
+    // medan händelsepanelen var reserverad yta och inte byggd, och den förbjöd
+    // proppen helt. Sedan issue 172 · [[ADR-0050 Desktopdesignen]] § 7 bär
+    // översikten en aktivitetspanel — men den är en GLIMT av loggen: samma
+    // läsregel, högst fem rader, och sidans eget namn. Historikfliken äger
+    // `days`, och den proppen är fortfarande förbjuden här. Provet fäster
+    // skillnaden i stället för att förbjuda den ena halvan av den.
     actingAs($ägare)->get("/containers/{$container->ulid}")->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
-            ->missing('events')
+            ->missing('days')
             ->missing('history')
             ->missing('auditLog')
+            // Raden ovan är skriven i loggen, och panelen visar den.
+            ->has('events', 1)
         );
 });
 
@@ -480,7 +505,19 @@ it('historikfliken finns och läser genom läsregeln', function () {
  * historikfliken kom med issue 116, kontrollermetoden
  * (ContainerHistoryController::index()) är ny, och rutten `containers.history`
  * fanns inte förut. Provet räknar därför fyra rader i stället för tre — den
- * femte fliken hade varit den som smög in.
+ * femte fliken hade varit den som smög in. **`tasks` är den andra fliken som
+ * bryter mot det på samma ärliga villkor** (issue 174,
+ * ContainerTaskController): en ny kontrollermetod och en ny rutt, bokförd i
+ * flikens egen rad i containerSections.js. **`costs` bryter mot det på samma
+ * villkor** (issue 175, ContainerCostController), och **`documents` likaså**
+ * (issue 178, ContainerDocumentController). Sju rader, och den åttonde är den
+ * som smyger.
+ *
+ * **Fyra blev tre i issue 170.** `settings` lämnade flikraden
+ * ([[ADR-0050 Desktopdesignen]] § 3), och inställningssidan har fortfarande
+ * sin rutt — den nås nu genom hjältens *Redigera container* i stället för
+ * genom en flik. Rutten prövas därför kvar på sin sida, av
+ * inställningskolumnens prov.
  */
 it('pekar varje flik på en namngiven rutt', function () {
     [, , $container] = containerflikKontext();
@@ -488,7 +525,9 @@ it('pekar varje flik på en namngiven rutt', function () {
     expect(containerflikLankar('containerTabs', $container->ulid))->toBe([
         'overview' => route('containers.show', $container, false),
         'items' => route('containers.items.index', $container, false),
-        'settings' => route('containers.edit', $container, false),
+        'documents' => route('containers.documents', $container, false),
+        'tasks' => route('containers.tasks', $container, false),
+        'costs' => route('containers.costs', $container, false),
         'history' => route('containers.history', $container, false),
     ]);
 });

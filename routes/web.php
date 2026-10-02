@@ -15,11 +15,15 @@ use App\Http\Controllers\CalendarFeedDownloadController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ContainerAccessController;
 use App\Http\Controllers\ContainerController;
+use App\Http\Controllers\ContainerCostController;
 use App\Http\Controllers\ContainerCoverController;
+use App\Http\Controllers\ContainerDocumentController;
 use App\Http\Controllers\ContainerHistoryController;
 use App\Http\Controllers\ContainerInvitationController;
 use App\Http\Controllers\ContainerSharingController;
+use App\Http\Controllers\ContainerTaskController;
 use App\Http\Controllers\ContainerTrashController;
+use App\Http\Controllers\CostEntryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DismissedTipController;
 use App\Http\Controllers\ExportController;
@@ -860,6 +864,50 @@ Route::middleware('auth')->group(function () {
         ->name('containers.items.loans.destroy');
 
     /*
+     * Issue 168 · Kostnadsraderna i webben — lägg till, ändra och ta bort en
+     * rad på itemet, se App\Http\Controllers\CostEntryController och
+     * [[ADR-0050 Desktopdesignen]] § 8.
+     *
+     * **Tre rutter och ingen sida** (Beslut 2). Listan — raderna och
+     * leverantörerna — kommer med itemvyns props, precis som utlåningen
+     * (issue 67a § Beslut 1), bilagorna (issue 60 § Beslut 2) och relationerna
+     * (issue 58 § Beslut 1) gjorde det. En egen GET hade varit en andra väg
+     * till samma läsning och en andra sanning om sorteringen.
+     *
+     * **`scopeBindings()` på alla tre**, av samma skäl som varje annan nästlad
+     * skrivning i filen (issue 9b § Beslut 1): `{item}` löses genom
+     * containerns `items()` och `{cost}` genom App\Models\Item::costs(), så en
+     * item-ULID ur en annan container — eller en kostnad på ett annat item —
+     * blir 404 i stället för ändrad. Det är hela skyddet, och samma form som
+     * routes/api.php ger samma tre rutter (issue 45a § Beslut 7).
+     *
+     * **Ingenting av `/api` byggs om.** `StoreCostEntryRequest` och
+     * `UpdateCostEntryRequest` delas rakt av, och `CostEntryResource` är
+     * samma resurs itemvyns props byggs ur. Logiken bor i App\Actions\Cost
+     * sedan issue 168, så de två ytorna skriver bevisligen samma rad.
+     *
+     * Grindarna är ITEMETS, en pinne per handling: `view` för listan (i
+     * ItemController::show()), `create` för POST, `update` för PATCH och
+     * `delete` för DELETE. En `write`-mottagare ändrar en rad men tar inte
+     * bort den.
+     *
+     * Skrivningarna svarar 302 till itemvyns kostnadsflik — `?tab=costs`, så
+     * läsaren stannar där hon var — med en flash-kod, mönstret från issue 51
+     * § Beslut 5.
+     */
+    Route::post('/containers/{container}/items/{item}/costs', [CostEntryController::class, 'store'])
+        ->scopeBindings()
+        ->name('containers.items.costs.store');
+
+    Route::patch('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'update'])
+        ->scopeBindings()
+        ->name('containers.items.costs.update');
+
+    Route::delete('/containers/{container}/items/{item}/costs/{cost}', [CostEntryController::class, 'destroy'])
+        ->scopeBindings()
+        ->name('containers.items.costs.destroy');
+
+    /*
      * Issue 58 · Relationerna — knyta och knyta upp, se
      * App\Http\Controllers\ItemLinkController.
      *
@@ -1474,6 +1522,90 @@ Route::middleware('auth')->group(function () {
      */
     Route::get('/containers/{container}/history', [ContainerHistoryController::class, 'index'])
         ->name('containers.history');
+
+    /*
+     * Issue 174 · Containerns uppgiftsflik, se App\Http\Controllers\
+     * ContainerTaskController och [[ADR-0050 Desktopdesignen]] § 4 och 16.
+     *
+     * **En egen sida på en egen rutt, som de andra flikarna i
+     * `containerTabs`.** Tavlan är containerns uppgifter avgränsade till
+     * containern — `/tasks` är kvar för hela listan över alla containrar —
+     * och fliken ligger i resources/js/layouts/containerSections.js på
+     * platsen ADR-0050 § 4 anger: efter items, före historiken. *Dokument*
+     * och *Kostnader* hoppas över så länge de inte finns (175 och 178).
+     *
+     * **Rutten är invokable** (`__invoke`, Beslut 1): fliken har en enda
+     * metod, och en `index()` hade varit ett namn utan en syster att skilja
+     * sig från.
+     *
+     * **Ingen `scopeBindings()`.** Rutten bär bara containern, precis som
+     * historiken; itemet och schemat ligger i raderna, inte i adressen.
+     *
+     * `{container}` binds på ULID via #[RouteKey('ulid')] på
+     * App\Models\Container, som överallt annars.
+     */
+    Route::get('/containers/{container}/tasks', ContainerTaskController::class)
+        ->name('containers.tasks');
+
+    /*
+     * Issue 175 · Containerns kostnadsflik, se App\Http\Controllers\
+     * ContainerCostController och [[ADR-0050 Desktopdesignen]] § 9.
+     *
+     * **En egen sida på en egen rutt, som de andra flikarna i
+     * `containerTabs`.** Fliken ligger i resources/js/layouts/
+     * containerSections.js på platsen ADR-0050 § 4 anger — efter uppgifterna,
+     * före historiken — och den fyller *Kostnader* i den uppräkning som 174
+     * sköt på framtiden. *Dokument* väntar fortfarande (178).
+     *
+     * **Rutten tar ingen parameter.** Den fria delen av kostnaderna är den
+     * fasta summeringen och raderna: ingen period, inget filter och ingen
+     * gruppering att byta ([[ADR-0038 Gränsen för Pro i kostnaderna]]
+     * § Beslut). En period i querysträngen är därför ett värde ingen läser —
+     * den parametriserade rapporten ligger kvar i
+     * `GET /api/containers/{container}/costs`, med sin grind orörd, och
+     * Pro-delen av den här ytan är issue 176.
+     *
+     * **Rutten är invokable** (`__invoke`, Beslut 1): fliken har en enda
+     * metod, som uppgiftsfliken.
+     *
+     * **Ingen `scopeBindings()`.** Rutten bär bara containern; itemet ligger
+     * i raderna och i länkarna, inte i adressen.
+     *
+     * `{container}` binds på ULID via #[RouteKey('ulid')] på
+     * App\Models\Container, som överallt annars.
+     */
+    Route::get('/containers/{container}/costs', ContainerCostController::class)
+        ->name('containers.costs');
+
+    /*
+     * Issue 178 · Containerns dokumentflik, se
+     * App\Http\Controllers\ContainerDocumentController och
+     * [[ADR-0050 Desktopdesignen]] § 12–15.
+     *
+     * **En egen sida på en egen rutt, som de andra flikarna i
+     * `containerTabs`.** Fliken ligger i resources/js/layouts/
+     * containerSections.js på platsen ADR-0050 § 4 anger — efter items, före
+     * uppgifterna — och den fyller *Dokument* i den uppräkning som 174 och 175
+     * sköt på framtiden.
+     *
+     * **Filtren står i querysträngen och ingen sidstorlek följer med.** `kind`,
+     * `item`, `uploader`, `from`, `to` och `sort` läses av kontrollern — en
+     * handredigerad adress ger listan och inte ett fel — och `?page=` räknas av
+     * ramverket. `?view=grid` är däremot INGEN parameter här: läget mellan lista
+     * och rutnät är en klientfråga om hur raderna ritas, och servern äger bara
+     * det som ändrar svaret.
+     *
+     * **Rutten är invokable** (`__invoke`, Beslut 1): fliken har en enda metod,
+     * som de andra containertabbarna.
+     *
+     * **Ingen `scopeBindings()`.** Rutten bär bara containern; itemet ligger i
+     * raderna och i länkarna, inte i adressen.
+     *
+     * `{container}` binds på ULID via #[RouteKey('ulid')] på
+     * App\Models\Container, som överallt annars.
+     */
+    Route::get('/containers/{container}/documents', ContainerDocumentController::class)
+        ->name('containers.documents');
 
     /*
      * Issue 62a · Containerns papperskorg — det mjukraderade innehållet,

@@ -2,23 +2,30 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Access\ResolveItemScope;
+use App\Actions\Attachment\ListRecentImages;
+use App\Actions\Audit\ListAuditEvents;
+use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
 use App\Actions\Container\UpdateContainer;
 use App\Actions\Item\ListItems;
+use App\Actions\Schedule\ListTodo;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\StoreContainerRequest;
 use App\Http\Requests\Container\UpdateContainerRequest;
 use App\Http\Resources\ContainerResource;
+use App\Http\Resources\ItemResource;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\Container;
-use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use App\Support\Cost\CostReport;
 use App\Support\Frontend\ActiveContainer;
 use App\Support\Frontend\ApiErrorTranslator;
 use App\Support\Frontend\CreateTarget;
 use App\Support\Tips;
-use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -67,6 +74,49 @@ use Inertia\Response;
  */
 class ContainerController extends Controller
 {
+    /**
+     * Antalet uppgiftsrader översiktens panel visar (issue 172).
+     *
+     * Fem, samma tak som dashboardens uppgiftspanel och av samma skäl:
+     * panelen är en glimt av listan och inte listan själv — den finns på
+     * `/tasks` och, från issue 174, i containerns egen uppgiftsflik. Gränsen
+     * går in i anropet till App\Actions\Schedule\ListTodo::forContainer();
+     * urvalet har inget eget femtal, och en yta som vill se fler säger det i
+     * sin egen ände.
+     */
+    public const TASK_LIMIT = 5;
+
+    /**
+     * Antalet rader aktivitetspanelen visar (issue 172).
+     *
+     * Fem, samma tak och samma skäl som ovan: panelen är en glimt av
+     * händelseloggen. Gränsen går in i anropet till
+     * App\Actions\Audit\ListAuditEvents::forContainer(), vars läsregel inte
+     * har något eget femtal (issue 172 § Beslut 2).
+     */
+    public const ACTIVITY_LIMIT = 5;
+
+    /**
+     * Antalet itemrader översiktens panel visar (issue 172).
+     *
+     * Sex enligt `docs/Design/container.jpeg`, som ritar panelen i två
+     * kolumner om tre. Listan själv är opaginerad och bor på
+     * `/containers/{ulid}/items`; panelen klipper i sin egen ände av samma
+     * App\Actions\Item\ListItems-svar som itembrickan räknar — en egen fråga
+     * hade varit en andra sanning om vilka items användaren når.
+     */
+    public const ITEM_LIMIT = 6;
+
+    /**
+     * Antalet bilder översiktens *Senaste bilder*-panel visar (issue 173).
+     *
+     * Fem enligt `docs/Design/container.jpeg`, som ritar en stor bild och
+     * fyra små. Gränsen går in i anropet till
+     * App\Actions\Attachment\ListRecentImages::handle(); urvalet har inget
+     * eget femtal, och en yta som vill se fler säger det i sin egen ände.
+     */
+    public const IMAGE_LIMIT = 5;
+
     /**
      * GET /containers — alla containers användaren når, sorterade på namn.
      *
@@ -129,9 +179,11 @@ class ContainerController extends Controller
      * [[ADR-0039 Containerns översikt]].
      *
      * **URL:en är containerns egen sida och har varit det hela tiden** — fram
-     * till issue 89 svarade itemlistan på den. Översikten bär i den här issuen
-     * huvudet och de två räknande brickorna; flikraden, panelerna och resten av
-     * mockupens yta väntar på designsystemet ([[M15 Containerns översikt]]).
+     * till issue 89 svarade itemlistan på den. Översikten bar då huvudet och
+     * de två räknande brickorna; panelerna kom med issue 172
+     * ([[ADR-0050 Desktopdesignen]] § 7), och *Senaste bilder* väntar på
+     * issue 173. Flikraden kom med designsystemet ([[M15 Containerns
+     * översikt]]).
      *
      * **Varje tal räknar det användaren SJÄLV når** ([[ADR-0028 Åtkomst på
      * itemnivå]] § Konsekvenser, issue 73 § Beslut 6): ingen totalsumma, ingen
@@ -145,15 +197,23 @@ class ContainerController extends Controller
      * raderna hämtas, vilket itemsidan gör ändå — brickan sitter på den sida
      * som ersätter ett besök där.
      *
-     * **Uppgiftsbrickan är `ScheduleOccurrence::scopeTodoFor()` avgränsat till
-     * containern och ingenting annat.** `schedule` har inget fält som skiljer
-     * en uppgift från ett underhåll, och det ska den inte få: skillnaden är
-     * domänen ([[ADR-0033 Produktens omfång]]), så mockupens två brickor är en
-     * teckning och inte ett krav. Avgränsningen är `schedule.item.container_id`
-     * — samma väg till containern som `todoFor()` själv går.
+     * **Uppgiftsbrickan och uppgiftspanelen är samma urval.**
+     * `ScheduleOccurrence::scopeTodoFor()` avgränsat till containern och
+     * ingenting annat — `schedule` har inget fält som skiljer en uppgift från
+     * ett underhåll, och det ska den inte få: skillnaden är domänen
+     * ([[ADR-0033 Produktens omfång]]), så mockupens två brickor är en
+     * teckning och inte ett krav. Avgränsningen är
+     * `schedule.item.container_id` — samma väg till containern som
+     * `todoFor()` själv går — och den formuleras sedan issue 172 på ett ställe:
+     * App\Actions\Schedule\ListTodo::forContainer() svarar på både talet och
+     * raderna, så brickan och panelen inte kan glida isär. Talet är detsamma
+     * som förut: `count` räknar utan växeln för framtida uppgifter, precis som
+     * dashboardens brickor (issue 134).
      *
-     * **Kostnadsbrickan är inte här.** Den är issue 86:s ändpunkt, och en `SUM`
-     * i den här kontrollern hade varit en andra väg till samma tal.
+     * **Kostnaden räknas inte här.** `costs`-proppen kom med issue 172, men
+     * den bär samma App\Support\Cost\CostReport::summary() som
+     * `/api/containers/{container}/costs/summary` svarar med — kontrollern
+     * formulerar ingen `SUM` och ingen egen radmängd.
      *
      * **Att öppna containern gör den till sessionens kontext** (issue 83).
      * Anropet ligger efter `Gate::authorize()` och det är bindande: ett nekat
@@ -172,35 +232,102 @@ class ContainerController extends Controller
      * samma (`InfoPanel.vue`), och två sidor som byggde var sin lista hade
      * kunnat visa olika första tips. Den enda skillnaden mellan sidorna är
      * vilken adress krysset postar tillbaka till, och det äger `back()`.
+     *
+     * **Panelerna kom med issue 172 · [[ADR-0050 Desktopdesignen]] § 7**, som
+     * egna proppar — en per panel, samma form som M19 gav dashboarden
+     * (issue 122) och av samma skäl: en ny panel krockar om en rad här och en
+     * rad i vyn, inte om varandras innehåll. Fem av dem kom med issue 172,
+     * den sjätte (*Senaste bilder*) med issue 173 — och den sjätte kostade en
+     * rad i signaturen, en rad i anropet och en rad i svaret.
+     *
+     * - `tasks` är containerns todo-urval, högst `TASK_LIMIT` rader, ur
+     *   App\Actions\Schedule\ListTodo::forContainer() — samma urval, samma
+     *   ordning och samma rad som `/tasks`, avgränsat till containern.
+     * - `costs` är den fasta summeringen och nedbrytningen per item, ur
+     *   App\Support\Cost\CostReport::summary(). Ingen plangrind: en fast
+     *   summering är fri ([[ADR-0038 Gränsen för Pro i kostnaderna]]).
+     * - `items` är samma App\Actions\Item\ListItems-svar som `counts.items`
+     *   räknar, klippt till `ITEM_LIMIT` rader. Listan hämtas EN gång och
+     *   svarar på båda frågorna.
+     * - `events` är containerns händelselogg genom läsregeln, högst
+     *   `ACTIVITY_LIMIT` rader ([[ADR-0043 Tre loggar]]).
+     * - `recentImages` är de senaste bildbilagorna på containerns items, högst
+     *   `IMAGE_LIMIT` rader, ur App\Actions\Attachment\ListRecentImages — den
+     *   enda panel vars urval är bilagor och inte items (issue 173). Panelen
+     *   ritas bara när listan har något i sig.
+     * - `details` är art, valuta, ägarkontots namn och skapandedatum.
+     *
+     * **Kontrollern räknar fortfarande ingenting själv.** Uppgiftstalet kommer
+     * ur samma anrop som raderna (`count`), itemtalet ur samma lista som
+     * panelen — och den gamla egenformulerade `todoFor()`-räkningen är borta,
+     * eftersom `forContainer()` svarar på samma fråga med samma villkor
+     * (issue 172 § Beslut 1). Talen är oförändrade: `count` räknar samma mängd
+     * som förut, oavsett växeln för framtida uppgifter.
+     *
+     * **Kostnadsproppen är ingen ny väg till ett tal.** Den går genom exakt
+     * den Action som `/api/containers/{container}/costs/summary` använder
+     * (App\Http\Controllers\Api\CostSummaryController) och med samma
+     * omfångsupplösning — en färsk `ResolveItemScope` per request, så
+     * frågekostnaden inte beror på vad processen råkade lösa upp tidigare.
+     * Panelen ritas bara när containern har minst en kostnadsrad, och det
+     * avgör vyn ur `costs.totals`.
+     *
+     * **`recentImages` är den enda panel vars urval är BILAGOR** (issue 173 ·
+     * [[ADR-0050 Desktopdesignen]] § 7). Frågan bor i
+     * App\Actions\Attachment\ListRecentImages, och den går genom
+     * `ResolveItemScope` som varje annan listning: en bild på ett item
+     * användaren inte når — eller i papperskorgen, eller på ett item i
+     * papperskorgen — försvinner ur listan utan att en räknare avslöjar det.
+     * Containerns EGEN bild räknas aldrig ([[ADR-0047 Containerns bild]]): den
+     * hör till containern och inte till något item, och den sitter redan i
+     * skalets topprad.
+     *
+     * **De fyra fälten är allt vyn behöver för att rita och navigera.** Varje
+     * bild är en länk till SITT item, och adressen kräver båda ULID:na — därför
+     * bär `item` både ULID och namn. `hasThumb` är samma svar som
+     * `variants`-tabellen i App\Http\Controllers\ItemController::show ger: en
+     * miniatyr ritas bara när `thumb`-varianten FINNS, för `?variant=thumb`
+     * mot en bilaga utan derivat svarar 404 (issue 61b § Beslut 1). Vyn ska
+     * aldrig gissa, och den ska inte heller känna till derivattabellen.
      */
     public function show(
         Request $request,
         Container $container,
         ListItems $listItems,
+        ListTodo $listTodo,
+        ListAuditEvents $listAuditEvents,
+        PresentAuditEvents $presentAuditEvents,
+        ListRecentImages $listRecentImages,
+        CostReport $report,
         ActiveContainer $activeContainer,
         CreateTarget $createTarget,
     ): Response {
         Gate::authorize('view', $container);
 
-        // Ägarkontot OCH bilden: skalsidans topprad ritar miniatyren ur
-        // `cover`, som resursen läser genom `coverAttachment` (issue 159).
-        // Utan den här raden hade den blivit en oplanerad lazy-load per
-        // sidladdning.
+        // Ägarkontot OCH bilden: skalets topprad ritar miniatyren ur `cover`,
+        // som resursen läser genom `coverAttachment` (issue 159), och
+        // `details.account` läser ägarkontots namn. Utan den här raden hade
+        // båda blivit oplanerade lazy-loads per sidladdning.
         $container->loadMissing(['account', 'coverAttachment.storedFile.derivatives']);
 
         $user = $request->user();
 
         $activeContainer->set($user, $container);
 
-        $accountIds = $user->accounts->pluck('id')->values()->all();
+        // EN hämtning, två svar: itembrickan räknar listan och panelen visar
+        // de sex första av samma lista. Att fråga två gånger hade varit två
+        // sanningar om vilka items användaren når — samma skäl som gjorde
+        // brickan till en `ListItems`-räkning från början (issue 89).
+        $items = $listItems->handle($user, $container);
 
-        // `todoFor()` formulerar åtkomsten och omfånget själv — den här
-        // kontrollern lägger bara containern ovanpå, och räknar ingenting
-        // själv (issue 74 § Beslut 7, issue 89).
-        $todos = ScheduleOccurrence::query()
-            ->todoFor($user, $accountIds)
-            ->whereHas('schedule.item', fn (Builder $query) => $query->where('container_id', $container->id))
-            ->count();
+        $todo = $listTodo->forContainer($user, $request, $container, self::TASK_LIMIT);
+
+        // Omfånget löses upp på en FÄRSK instans, i ETT anrop — samma grepp
+        // och samma skäl som CostSummaryController och monthCosts() i
+        // DashboardController: memon på den `scoped`-bundna instansen finns
+        // för ItemPolicy, och för en summering skulle den bara göra
+        // frågekostnaden beroende av vad processen löst upp tidigare.
+        $scope = app()->build(ResolveItemScope::class)->handle($user, $container);
 
         return Inertia::render('Containers/Overview', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -213,8 +340,31 @@ class ContainerController extends Controller
                 'update' => Gate::forUser($user)->allows('update', $container),
             ],
             'counts' => [
-                'items' => $listItems->handle($user, $container)->count(),
-                'todos' => $todos,
+                'items' => $items->count(),
+                'todos' => $todo['count'],
+            ],
+            // De fem panelernas innehåll (issue 172), i issuens ordning: en
+            // propp per panel, och vyn monterar dem — samma form som M19 gav
+            // dashboarden (issue 122), så en sjätte panel krockar om en rad
+            // här och en rad i vyn och inte om varandras innehåll.
+            'tasks' => $todo['rows'],
+            'costs' => $report->summary($container, $scope),
+            'items' => ItemResource::collection($items->take(self::ITEM_LIMIT))->resolve($request),
+            'events' => $presentAuditEvents->handle(
+                $listAuditEvents->forContainer($user, $container, self::ACTIVITY_LIMIT),
+            ),
+            // Bilderna (issue 173). Proppen är en LISTA och inte ett
+            // `{ulid: …}`-uppslag som `variants` i itemvyn: panelen ritar
+            // raderna i serverns ordning, och ett uppslag hade tappat den.
+            'recentImages' => $this->recentImages($listRecentImages->handle($user, $container, self::IMAGE_LIMIT)),
+            // Containerns egna fakta. `kind` skrivs ut ordagrant av vyn —
+            // fältet är fritt och har ingen översättningsnyckel
+            // ([[ADR-0036 Containerns art]]).
+            'details' => [
+                'kind' => $container->kind,
+                'currency' => $container->effectiveCurrency(),
+                'account' => $container->account->name,
+                'created_at' => $container->created_at->toIso8601String(),
             ],
             // Tipsen användaren inte dolt, i Tips ordning — samma propp och
             // samma lista som dashboarden bär (issue 128).
@@ -532,6 +682,39 @@ class ContainerController extends Controller
             ->distinct()
             ->orderBy('kind')
             ->pluck('kind')
+            ->all();
+    }
+
+    /**
+     * Bildpanelen på översikten: `{ulid, filename, hasThumb, item}` per rad,
+     * i serverns ordning (issue 173).
+     *
+     * **Formen är radens eget svar och ingenting mer.** Vyn ritar en miniatyr
+     * eller en neutral yta, länkar till itemet och skriver filnamnet som
+     * bildtext — fler fält hade frestat panelen att bygga en andra väg vid
+     * sidan av itemets egen sida, och den vägen finns inte här.
+     *
+     * `hasThumb` räknas ur de EAGERLADDADE derivaten, precis som `variants()`
+     * i App\Http\Controllers\ItemController: noll extra frågor per rad, och
+     * samma regel som itemvyn — en miniatyr ritas bara när varianten finns
+     * (issue 61b § Beslut 1).
+     *
+     * @param  Collection<int, Attachment>  $attachments
+     * @return list<array{ulid: string, filename: string, hasThumb: bool, item: array{ulid: string, name: string}}>
+     */
+    private function recentImages(Collection $attachments): array
+    {
+        return $attachments
+            ->map(fn (Attachment $attachment): array => [
+                'ulid' => $attachment->ulid,
+                'filename' => $attachment->filename,
+                'hasThumb' => $attachment->storedFile->derivatives->contains('variant', 'thumb'),
+                'item' => [
+                    'ulid' => $attachment->item->ulid,
+                    'name' => $attachment->item->name,
+                ],
+            ])
+            ->values()
             ->all();
     }
 }

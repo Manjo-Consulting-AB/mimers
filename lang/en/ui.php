@@ -114,10 +114,10 @@ return [
      * — en ikon utan namn är en knapp en skärmläsare inte kan läsa.
      *
      * `rows` är menyraderna, nycklade med radens `key` ur
-     * App\Support\Frontend\CreateTarget. Fyra rader och inte fem: den femte —
-     * *Kostnad* — har ingen yta att leda till i dag, se klassens docblock och
-     * PR:ens `## Frågor och antaganden`. Ordningen står i ADR-0048 § 2, och
-     * raderna kommer i den ordningen ur CreateTarget::forItem().
+     * App\Support\Frontend\CreateTarget. Fem rader sedan issue 168, då
+     * *Kostnad* fick sin yta — itemets kostnadsflik — och menyns sista döda
+     * länk försvann. Ordningen står i ADR-0048 § 2, och raderna kommer i den
+     * ordningen ur CreateTarget::forItem().
      */
     'create' => [
         'label' => 'Create',
@@ -134,6 +134,9 @@ return [
             'attachment' => 'Image or document',
             // Ett schema.
             'schedule' => 'Task',
+            // En kostnadsrad på itemet (issue 168). Raden leder till itemets
+            // kostnadsflik och byggs bara för den som får skapa på itemet.
+            'cost' => 'Cost',
         ],
     ],
 
@@ -372,6 +375,15 @@ return [
         'loan-updated' => 'The loan has been saved.',
         'loan-deleted' => 'The loan row is gone.',
 
+        // Issue 168 decision 2. Three codes and not one, for the same reason as
+        // the loan's three: registering, changing and removing are three
+        // different things. `cost-deleted` says the ROW is gone and never that
+        // the money came back — the row is soft-deleted and does not enter the
+        // trash (issue 45a decision 9), so the sentence promises no restore.
+        'cost-created' => 'The cost has been registered.',
+        'cost-updated' => 'The cost has been saved.',
+        'cost-deleted' => 'The cost row is gone.',
+
         // Issue 62a decision 7. ONE code for all four types: the restore takes
         // `type` in the body and shares one list, so the view has no reason to
         // know which of them just came back — but the sentence says content,
@@ -540,6 +552,20 @@ return [
         // the client, but the sentence is the user's.
         'loan' => [
             'already_open' => 'The item is already lent out. Register the return first.',
+        ],
+
+        // The cost codes, see issue 168. They come from
+        // App\Support\Cost\MinorUnits as App\Exceptions\Api\ApiException and
+        // become a field error on `amount` in
+        // App\Http\Controllers\CostEntryController — never a raw JSON body in
+        // the middle of a page (same rule as issue 54 decision 4).
+        //
+        // Two sentences and not one: the client cannot mark the right field or
+        // phrase the message without knowing which limit was hit, which is
+        // exactly why the codes carry `data` (issue 45a decision 5).
+        'cost' => [
+            'amount_invalid' => 'The amount is not a number. Write it as 1200.50 or 1200,50.',
+            'amount_decimals' => 'The amount has too many decimals for :currency, which has at most :max_decimals.',
         ],
 
         // The export's only domain error on the web, see issue 67c decision 4.
@@ -1414,6 +1440,35 @@ return [
             // containerSections.js: the items are the container, the
             // categories and tags are how it is organised.
             'items' => 'Items',
+            // Issue 178 · [[ADR-0050 Desktopdesignen]] § 12–15: the
+            // container's documents tab. The row sits after `items` and before
+            // `tasks` in containerSections.js — the place ADR-0050 § 4 gives
+            // it (*Overview, Items, Documents, Tasks, Costs, History*), and
+            // the last of the six that enumeration names. It is *Documents*
+            // and not a list of the mockup's document types: the picture draws
+            // *Manual*, *Receipt*, *Service* and *Insurance*, and those are a
+            // later decision (§ 12). The tab is every attachment in the
+            // container — the type is a FILTER on `attachment.kind`.
+            'documents' => 'Documents',
+            // Issue 174 · [[ADR-0050 Desktopdesignen]] § 4 and 16: the
+            // container's task board. The row sits after `items` and before
+            // `history` in containerSections.js — the place ADR-0050 § 4
+            // gives it (*Overview, Items, Documents, Tasks, Costs, History*).
+            // It is
+            // *Tasks* and not the mockup's *Maintenance* beside it: the two
+            // are ONE surface and the difference is a filter on
+            // `recurrence_type` (§ 4, [[ADR-0042 Designsystemet]]
+            // § Bildernas avvikelser).
+            'tasks' => 'Tasks',
+            // Issue 175 · [[ADR-0050 Desktopdesignen]] § 9: the container's
+            // costs tab. The row sits after `tasks` and before `history` in
+            // containerSections.js — the next step of the same enumeration
+            // (*Overview, Items, Documents, Tasks, Costs, History*), whose
+            // last row came with issue 178. The free half of the surface
+            // lives here: the rows, the total, *this year* and the donut per
+            // item. The Pro half — the period, the filters and the graph — is
+            // issue 176 ([[ADR-0038 Gränsen för Pro i kostnaderna]]).
+            'costs' => 'Costs',
             'categories' => 'Categories',
             'tags' => 'Tags',
             'sharing' => 'Sharing',
@@ -1466,6 +1521,59 @@ return [
             'description' => 'Description',
             'items' => 'Items',
             'todos' => 'Open tasks',
+
+            /*
+             * Panelerna på översikten, se issue 172 · [[ADR-0050
+             * Desktopdesignen]] § 7.
+             *
+             * `tasks` is the panel's heading and not the tile's: the tile
+             * counts what is open (`todos` above), the panel lists what is
+             * coming. The word is the dashboard panel's own, and it is a
+             * second key rather than a shared one because the two pages are
+             * two contexts — a sentence that changes on one of them must not
+             * change on the other.
+             *
+             * `view_all` is ONE key for both panels that link onward (tasks
+             * and items): same word, same meaning, one key
+             * ([[ADR-0032 Produktens ord]]).
+             *
+             * `currency` and `account` are the labels of the details list.
+             * `kind` above is its third label — the same word the mobile
+             * header already prints, and deliberately not a second key.
+             *
+             * There is no empty state for the cost panel: it is not drawn at
+             * all when the container has no cost rows, and a heading over an
+             * empty ring would claim there is something to show. The two
+             * panels that DO have an empty state borrow the sentences that
+             * already exist for the same situation on the same container —
+             * `todo.empty.nothing` and `audit.history.empty` — rather than
+             * saying the same thing in a third way.
+             */
+            'tasks' => 'Upcoming tasks',
+            'costs' => 'Costs',
+            // The caption inside the cost ring. The dashboard's ring says
+            // *This month* because its row set is a month; the container's is
+            // the whole container and has no period ([[ADR-0038 Gränsen för
+            // Pro i kostnaderna]]), so it says *Total*. Two keys and not one:
+            // the words name two different row sets.
+            'costs_total' => 'Total',
+            'activity' => 'Recent activity',
+            // The image panel (issue 173). *Recent images* and not *Images*:
+            // the panel is a glimpse of the newest five, not the container's
+            // pictures — those live on the documents tab (issue 178), and a
+            // heading that promised the whole set would be a heading the
+            // panel does not keep.
+            //
+            // The panel has no empty state: it is not drawn at all when the
+            // container has no images, and an image without a thumbnail is
+            // drawn with `item.attachment.file_icon` — the same words about
+            // the same surface as the item view's attachment section.
+            'images' => 'Recent images',
+            'details' => 'Container details',
+            'currency' => 'Currency',
+            'account' => 'Account',
+            'created' => 'Created',
+            'view_all' => 'View all',
         ],
 
         'index' => [
@@ -1477,6 +1585,15 @@ return [
             'active' => 'Active',
             'make_active' => 'Make active',
             'edit' => 'Edit',
+        ],
+
+        // The hero, see issue 170 · [[ADR-0050 Desktopdesignen]] § 2–3. The
+        // button replaces the row *Settings* the tab row carried until then:
+        // it leads to the settings page, where the container's seven other
+        // sections live ([[ADR-0042 Designsystemet]] § Konsekvenser), and it
+        // is drawn only for the one who may update the container.
+        'hero' => [
+            'edit' => 'Edit container',
         ],
 
         'create' => [
@@ -1663,6 +1780,246 @@ return [
             // on nothing is deleted without a question, as before.
             'destroy_confirm' => 'This tag is used on :count items. Move it to the trash? You can restore it within 30 days.',
         ],
+
+        /*
+         * The container's task board, see issue 174 · [[ADR-0050
+         * Desktopdesignen]] § 4 and 16 and
+         * resources/js/pages/Containers/Tasks.vue.
+         *
+         * **Three of the four column headings are not here.** *Overdue*,
+         * *Today* and *Upcoming* are the groups the server sorts the open
+         * rows into, and they keep the words they already have under
+         * `todo.group.*` — the same group, the same word, one key. A copy
+         * under `container.tasks.*` would be a second truth about what a
+         * group is called, and the two would drift the day one of them was
+         * reworded. `done` is the fourth column and IS new: the server has
+         * no such group constant — *Done* is a list of closed occurrences
+         * and not one of `ListTodo`'s three groups (decision 3).
+         *
+         * **The two shortcuts borrow the tab row's words.** They lead to the
+         * calendar feed and the export, which is exactly what
+         * `container.nav.calendar` and `container.nav.export` name, and a
+         * second pair of words for the same two destinations would be the
+         * same drift in the other direction. Only the section's own heading
+         * is new.
+         *
+         * **`filter_maintenance` names the filter, not the rows.** The box
+         * is unticked by default, so the sentence has to read as a
+         * restriction and not as the state of the board: *Maintenance only*,
+         * never *All tasks*.
+         *
+         * The page's `title` and `heading` are two keys with the same word,
+         * like every other container page (`container.categories`,
+         * `container.tags`): the browser tab and the page heading are two
+         * surfaces, and the day one of them needs to say more than the other
+         * the key is already there.
+         */
+        'tasks' => [
+            'title' => 'Tasks',
+            'heading' => 'Tasks',
+            'filter_maintenance' => 'Maintenance only',
+            'done' => 'Done',
+            'shortcuts' => 'Shortcuts',
+        ],
+
+        /*
+         * The container's costs tab, see issue 175 · [[ADR-0050
+         * Desktopdesignen]] § 9 and resources/js/pages/Containers/Costs.vue.
+         *
+         * **The free half of the cost surface, and the words say so.**
+         * [[ADR-0038 Gränsen för Pro i kostnaderna]] draws the line at the
+         * QUESTION: a fixed summary the user cannot ask anything of is free,
+         * everything queryable is Pro. `total` and `this_year` are the two
+         * fixed periods on this page — neither can be changed — and `total`
+         * is ONE key for both the tile and the caption inside the donut,
+         * because the two name the same row set: the whole container
+         * ([[ADR-0040 Underträdets summor]]). It is a key of its own and not
+         * `container.overview.costs_total`: the two pages are two surfaces,
+         * and a sentence that changes on one of them must not change on the
+         * other.
+         *
+         * `upgrade`, `upgrade_owner` and `upgrade_link` are the Pro surface
+         * that stands where issue 176 will draw the period picker, the
+         * filters and the graph. The sentence names the feature and not the
+         * plan, like `error.plan.feature_unavailable`; the link is its own
+         * key because the string is also readable as a sentence on its own,
+         * and markup inside a translation is either escaped text or
+         * `v-html` (issue 65b decision 5). The owner sentence is what a GUEST
+         * meets instead of the link: she is not a member of the container's
+         * account and cannot open that account's plan page at all.
+         *
+         * `add` opens the item picker and not a form: a cost belongs to an
+         * item ([[ADR-0016 Kostnadsregistrering]]) and the row is written on
+         * the item's own tab (issue 168). `add_choose_item` is the picker's
+         * own question, and both are new keys rather than
+         * `item.cost.form_heading` — that one names a form this page does
+         * not carry.
+         *
+         * The five column words are the table's. `item` is the item's name,
+         * printed verbatim: it is the user's own word and is never looked up
+         * here (the same rule as `container.overview.costs`'s slices).
+         */
+        'costs' => [
+            'title' => 'Costs',
+            'heading' => 'Costs',
+
+            'add' => 'Add cost',
+            'add_choose_item' => 'Which item?',
+
+            'total' => 'Total',
+            'this_year' => 'This year (:year)',
+
+            // The donut panel's heading. It names the BREAKDOWN and not the
+            // total, because the ring's own caption already says *Total* —
+            // and the axis is the item and not the category
+            // ([[ADR-0040 Underträdets summor]]: `cost_entry` has no category
+            // column, and the slices are the items that carry rows).
+            'donut' => 'Costs per item',
+
+            'empty' => 'The container has no costs registered.',
+
+            'date' => 'Date',
+            'description' => 'Description',
+            'item' => 'Item',
+            'supplier' => 'Supplier',
+            'amount' => 'Amount',
+
+            // The pagination. `page` is the whole sentence and not the two
+            // numbers joined in the view: the order of "page" and "of" is the
+            // language's, and `t()` has no pluralisation to hide it behind
+            // (issue 52 decision 4).
+            'previous' => 'Previous',
+            'next' => 'Next',
+            'page' => 'Page :page of :last',
+
+            'upgrade' => 'Reports and filters require the Pro plan.',
+            'upgrade_owner' => 'The account owner can upgrade the plan.',
+            'upgrade_link' => 'See plans',
+
+            /*
+             * The Pro part, see issue 176 and [[ADR-0050 Desktopdesignen]] § 9.
+             *
+             * `from`/`to` name the two ends of the period, and the picker is a
+             * range and not a preset list: the server fills both ends from the
+             * current calendar month only when neither was given. An empty
+             * field therefore means "open" — the question *everything up to
+             * this date* is answered as asked and never silently made into a
+             * reversed, empty period.
+             *
+             * `category` is the item's category — `cost_entry` has no category
+             * column ([[ADR-0040 Underträdets summor]]) — and `other` is the
+             * bucket the engine returns with a null key for rows on items
+             * without one. It is not a category in the container: it is the
+             * rows that have none.
+             *
+             * `comparison_percent` carries the sign in its value, so `+12%` and
+             * `-4%` are the same sentence with different numbers and the view
+             * never assembles it from a plus sign and a unit.
+             */
+            'filter_aria' => 'Filter the report',
+            'filter_from' => 'From',
+            'filter_to' => 'To',
+            'filter_category' => 'Category',
+            'filter_all' => 'All',
+            'filter_submit' => 'Apply',
+            'filter_clear' => 'Clear',
+
+            'chart' => 'Costs over time',
+            'breakdown' => 'Costs per category',
+            'other' => 'Other',
+
+            'comparison' => 'Compared with the previous period',
+            'comparison_percent' => ':percent%',
+
+            // A Pro user's table always follows the period, so its empty state
+            // is a statement about the filter and never about the container:
+            // *The container has no costs registered* would be false the moment
+            // a month without rows was selected.
+            'empty_filtered' => 'No costs in the selected period.',
+        ],
+
+        /*
+         * The container's documents tab, see issue 178 · [[ADR-0050
+         * Desktopdesignen]] § 12–15.
+         *
+         * **`kind` names the three types the data model actually has.** The
+         * mockup draws *Manual*, *Receipt*, *Service* and *Insurance* beside
+         * each other, and those are a later decision (§ 12): `attachment.kind`
+         * is `image`, `document` or `other`, derived from the sniffed MIME type
+         * by App\Actions\Attachment\StoreAttachment::kindFromMime(), and the
+         * filter offers exactly those three. The picture's four types would be
+         * a filter the rows cannot answer.
+         *
+         * **`uploads` is the billing account's name**, and the sentence is the
+         * whole of it: an upload in the container is charged to that account
+         * (§ 15), and the bar sits above the list so that the number is read
+         * BEFORE the button rather than after a rejected upload.
+         * `unlimited` has no `:limit` — an account without a ceiling shows its
+         * consumption and nothing else.
+         *
+         * **`recent_empty` is not written.** The *Recently opened* strip is
+         * drawn only when the user has opened something here; a heading over
+         * nothing is a claim that something exists. There is therefore no key
+         * for that state — the view omits the panel.
+         *
+         * `page` is the whole sentence and not two numbers joined in the view:
+         * the order of "page" and "of" is the language's (the same rule as
+         * `container.costs.page`).
+         */
+        'documents' => [
+            'title' => 'Documents',
+            'heading' => 'Documents',
+
+            'add' => 'Add document',
+            'add_choose_item' => 'Which item?',
+
+            'empty' => 'The container has no documents.',
+            'empty_filtered' => 'No documents match the filter.',
+
+            'recent' => 'Recently opened',
+
+            'date' => 'Uploaded',
+            'filename' => 'File',
+            'item' => 'Item',
+            'uploader' => 'Uploaded by',
+            'size' => 'Size',
+            'download' => 'Download',
+
+            'view_label' => 'View',
+            'view_list' => 'List',
+            'view_grid' => 'Grid',
+
+            'sort_label' => 'Sort',
+            'sort_newest' => 'Newest first',
+            'sort_oldest' => 'Oldest first',
+            'sort_name' => 'Name',
+            'sort_size' => 'Size',
+
+            // `type` names the FIELD in the filter and the COLUMN in the
+            // table; its three values are the words under
+            // `item.attachment.kind.*` and not copies: one word, one meaning,
+            // and a filter that named a type differently from the row it
+            // filters would be two names for the same thing.
+            'filter_aria' => 'Filter the documents',
+            'type' => 'Type',
+            'filter_item' => 'Item',
+            'filter_uploader' => 'Uploaded by',
+            'filter_from' => 'From',
+            'filter_to' => 'To',
+            'filter_all' => 'All',
+            'filter_submit' => 'Apply',
+            'filter_clear' => 'Clear',
+
+            'previous' => 'Previous',
+            'next' => 'Next',
+            'page' => 'Page :page of :last',
+
+            // The storage bar (§ 15). `uploads` names the account an upload
+            // here is charged to; the two below are its numbers.
+            'uploads' => 'Uploads are charged to :account',
+            'of' => ':used of :limit',
+            'unlimited' => ':used used',
+        ],
     ],
 
     /*
@@ -1709,11 +2066,79 @@ return [
             // than its heading does, the key is already there.
             'title' => 'History',
             'heading' => 'History',
-            // The first time, and not "nothing matches": the log is the whole
-            // content of the tab, so an empty list means nothing has happened
-            // here yet — never that a filter hid something (issue 99's two
-            // states, and there is no filter on this page).
+            // The first time, and not "nothing matches": without a filter the
+            // log is the whole content of the tab, so an empty list means
+            // nothing has happened here yet (issue 99's two states).
             'empty' => 'Nothing has happened here yet.',
+            // The second state, since issue 179 put filters on the page
+            // ([[ADR-0050 Desktopdesignen]] § 17): with a filter set, an empty
+            // list means the question had no answer — never that nothing has
+            // happened. Saying *nothing has happened here yet* under a filter
+            // would be untrue, and the two states mean different things.
+            'empty_filtered' => 'No events match the filter.',
+            // The day's heading, with the day's own count under it: the row
+            // says when, the heading says how many that day held. It is also
+            // the count on an active item's row (issue 180), where the thing
+            // counted is the item's events — same words, same thing.
+            'day_count' => ':count events',
+            // The three charts (issue 180 · [[ADR-0050 Desktopdesignen]]
+            // § 17): the headings of the two cards, and the panel's own. The
+            // words name the set the numbers are drawn from, like
+            // `container.overview.*` does for its panels.
+            'activity_over_time' => 'Activity over time',
+            'activity_types' => 'Activity types',
+            'recent_items' => 'Recently active items',
+            // The two column headings of the bar chart's text alternative, and
+            // the word under the donut's total. *Events* is the noun the rest
+            // of the tab counts in; a chart that said *count* would be the
+            // only place in the product that does.
+            'chart_date' => 'Day',
+            'chart_events' => 'Events',
+            // A row without a `subject_type` ([[ADR-0043 Tre loggar]]
+            // § Händelseloggen — the name space is open). It is counted as its
+            // own slice rather than dropped, so the donut sums to the total
+            // the heading promises, and this is the word it is drawn with.
+            'type_other' => 'Other',
+            // The filter field (issue 179 § Beslut 4). The query string carries
+            // the values; these are their names in the form.
+            'filter_aria' => 'Filter the history',
+            'filter_type' => 'Type',
+            'filter_user' => 'User',
+            'filter_item' => 'Item',
+            'filter_from' => 'From',
+            'filter_to' => 'To',
+            'filter_all' => 'All',
+            'filter_submit' => 'Filter',
+            'filter_clear' => 'Clear filters',
+        ],
+
+        /*
+         * The words for `audit_log.subject_type`, see [[ADR-0043 Tre loggar]]
+         * § Händelseloggen and issue 179.
+         *
+         * `subject_type` is a domain name and not a class name, and the type
+         * filter on the history tab offers the ones that actually occur in the
+         * container's readable rows — so the key is the value, exactly like
+         * `audit.action.*` and `audit.field.*`. A `subject_type` added without
+         * a word here shows as `audit.subject.<value>` in the filter and is
+         * found the first time someone opens it.
+         *
+         * They are plural nouns and not sentences: the slot is a select option
+         * that groups rows ("Costs", "Tasks"), never the subject of a sentence.
+         */
+        'subject' => [
+            'attachment' => 'Files',
+            'calendar_feed' => 'Calendar links',
+            'category' => 'Categories',
+            'container' => 'The container',
+            'container_access' => 'Access',
+            'cost_entry' => 'Costs',
+            'invitation' => 'Invitations',
+            'loan' => 'Loans',
+            'ownership_transfer' => 'Transfers',
+            'schedule' => 'Tasks',
+            'schedule_occurrence' => 'Task occurrences',
+            'tag' => 'Tags',
         ],
 
         /*
@@ -2429,6 +2854,45 @@ return [
             'dismiss' => 'Dismiss',
 
             'submit' => 'Upload',
+        ],
+
+        // The cost section on the detail view, see issue 168 decisions 3–5 and
+        // [[ADR-0050 Desktopdesignen]] § 8. The section lives in
+        // resources/js/components/ItemCostSection.vue: it carries its own form
+        // and its own errors, just as ItemLoanSection does for the loans and
+        // ItemAttachmentSection for the attachments, so a rejected amount does
+        // not colour the rest of the page.
+        //
+        // The four fields are the API's own: `amount` is a string in major
+        // units that App\Support\Cost\MinorUnits parses, `currency` is
+        // pre-filled from the container and may be overridden
+        // ([[ADR-0037 Valutans arv]]), `supplier` is free text with
+        // autocomplete from the container's own values, and `incurred_on` is
+        // the cost's date and not the day it was registered. No sentence here
+        // says the amount must be positive: a credit note is a row like any
+        // other ([[ADR-0016 Kostnadsregistrering]]).
+        //
+        // `destroy_confirm` says the row disappears and promises no restore:
+        // the deletion is soft, but the trash lists four types and `cost_entry`
+        // is not one of them (issue 45a decision 9).
+        'cost' => [
+            'heading' => 'Costs',
+            'description' => 'What the item has cost.',
+
+            'empty' => 'The item has no costs registered.',
+            'edit' => 'Change',
+            'cancel' => 'Cancel',
+
+            'destroy' => 'Remove the row',
+            'destroy_confirm' => 'The row is removed. Continue?',
+
+            'form_heading' => 'Register a cost',
+            'form_incurred_on' => 'Date',
+            'form_amount' => 'Amount',
+            'form_currency' => 'Currency',
+            'form_description' => 'Description',
+            'form_supplier' => 'Supplier',
+            'form_submit' => 'Save',
         ],
 
         // The loan section on the detail view, see issue 67a decisions 2–8. The

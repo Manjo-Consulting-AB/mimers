@@ -75,10 +75,10 @@ Containern får fliken *Uppgifter* enligt [[ADR-0050 Desktopdesignen]] § 4 och 
 
 **Läs:** [[ADR-0050 Desktopdesignen]] § 4 och 16, [[Scheman och uppgifter]] § Todo-listan, [[ADR-0044 Användarens dag]], `docs/Design/uppgifter_1.png`, `resources/js/pages/Tasks/Index.vue`
 **Klart när:** fliken finns i containerns flikrad; en förekomst hamnar i samma grupp som på `/tasks`; *Klart* visar avbockade förekomster i containern, nyast först; underhållsfiltret visar bara återkommande scheman; gruppen *Idag* följer användarens dag; en uppgift på ett item utanför omfånget visas inte; under `md:` är fliken en lista; hela testsviten är grön.
-**Beror på:** 170
+**Beror på:** 170, 172 (`ListTodo::forContainer`)
 
 ### 175. Containerns kostnadsflik
-Containern får fliken *Kostnader* enligt [[ADR-0050 Desktopdesignen]] § 9. Den fria delen: raderna i en tabell med datum, beskrivning, item, leverantör och belopp, brickorna *Totalt* och *I år*, donuten per item och *Senaste kostnader*. Tabellen pagineras. *Lägg till kostnad* väljer itemet först och leder till itemets flik från 168.
+Containern får fliken *Kostnader* enligt [[ADR-0050 Desktopdesignen]] § 9. Den fria delen: raderna i en tabell med datum, beskrivning, item, leverantör och belopp, brickorna *Totalt* och *I år* och donuten per item. Tabellen pagineras, och bildens *Senaste kostnader* är dess första rader. *Lägg till kostnad* väljer itemet först och leder till itemets flik från 168.
 
 En gratisanvändare ser en uppgraderingsyta där Pro-delen från 176 kommer att stå.
 
@@ -114,7 +114,7 @@ Historikfliken får bildens form enligt [[ADR-0050 Desktopdesignen]] § 17: hän
 
 **Läs:** [[ADR-0050 Desktopdesignen]] § 17, [[ADR-0043 Tre loggar]], [[ADR-0044 Användarens dag]], `docs/Design/Historik.png`, `resources/js/pages/Containers/History.vue`
 **Klart när:** händelserna grupperas per dag, och dagsgränsen följer användarens tidszon; filtren kan kombineras och står i querysträngen; en gäst ser bara de händelser läsregeln ger henne; ett filter på en användare avslöjar ingenting utöver läsregeln; hela testsviten är grön.
-**Beror på:** 170
+**Beror på:** 170, 172 (`ListAuditEvents::forContainer`)
 
 ### 180. Historikens diagram
 Historikfliken får diagrammen *Aktiviteter över tid*, *Aktivitetstyper* och *Senaste aktiva items*, enligt [[ADR-0050 Desktopdesignen]] § 17. Talen räknas på servern under samma läsregel och samma filter som listan i 179.

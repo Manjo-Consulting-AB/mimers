@@ -3,8 +3,9 @@
 use Illuminate\Support\Facades\File;
 
 /*
- * Issue 424 · Designtokens i @theme, issue 425 · Primitiverna, och issue
- * 426 · Ytorna, se [[ADR-0042 Designsystemet]] § Beslut.
+ * Issue 424 · Designtokens i @theme, issue 425 · Primitiverna, issue
+ * 426 · Ytorna och issue 182 · Itemets sektioner, se [[ADR-0042 Designsystemet]]
+ * § Beslut.
  *
  * **Det här är ett källkodsprov, inte ett sidprov.** Issuerna bygger nästan
  * ingenting som syns: 424 flyttar fjorton färgroller, fem typsteg och tre
@@ -155,6 +156,28 @@ function designFlikraden(): array
         'components/UiTabs.vue' => designUtanKommentarer(
             File::get(resource_path('js/components/UiTabs.vue')),
         ),
+    ];
+}
+
+/**
+ * Itemets sektioner ur issue 182: bilagorna, utlåningen, relationerna och
+ * itemsidan själv. Fyra filer med flest råa färgklasser i frontenden, och den
+ * sista gruppen i milstolpen som migreras i ett svep.
+ *
+ * Namngivna med flit, som designPrimitiverna och designYtorna: provet ska
+ * bevisa att de FYRA finns — en glob hade blivit grön av fyra filer med fel
+ * namn, och resten av resources/js bär råa färgklasser tills en sida ändå
+ * byggs om ([[ADR-0042 Designsystemet]] § Konsekvenser).
+ *
+ * @return array<int, string> relativa sökvägar
+ */
+function designItemsektionerna(): array
+{
+    return [
+        'components/ItemAttachmentSection.vue',
+        'components/ItemLoanSection.vue',
+        'components/ItemLinkSection.vue',
+        'pages/Containers/Items/Show.vue',
     ];
 }
 
@@ -313,6 +336,25 @@ it('bär inga råa färgklasser i de fem migrerade formulären', function () {
     ))->toHaveCount(5);
 
     foreach ($filer as $sokvag => $kod) {
+        expect(designRaaFargklasser($sokvag, $kod))->toBe([]);
+    }
+});
+
+it('bär inga råa färgklasser i itemets sektioner', function () {
+    // Samma regel och samma `$palett` som provet för de fem migrerade
+    // formulären ovan, men över de fyra filer issue 182 rör. De har flest råa
+    // färgklasser i frontenden, och en kvarvarande `text-slate-600` i någon av
+    // dem är samma halvgjorda arbete som den sextonde knappen: rollen ska
+    // komma ur @theme, inte ur en palett.
+    $filerna = designItemsektionerna();
+
+    // Fyra, namngivna och räknade — glider listan isär blir loopen nedan tyst,
+    // och ett tyst prov är värre än inget.
+    expect($filerna)->toHaveCount(4);
+
+    foreach ($filerna as $sokvag) {
+        $kod = designUtanKommentarer(File::get(resource_path("js/{$sokvag}")));
+
         expect(designRaaFargklasser($sokvag, $kod))->toBe([]);
     }
 });

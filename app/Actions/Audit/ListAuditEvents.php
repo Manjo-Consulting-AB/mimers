@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 
 /**
  * Händelseloggens läsregel — den ENDA platsen den bor på, se [[ADR-0043 Tre
@@ -66,6 +67,22 @@ use Illuminate\Database\Eloquent\Collection;
  * anropet, aldrig genom ett eget `where` bredvid. Ett eget filter i panelen
  * hade varit en andra formulering av läsregeln, och den hade glidit isär från
  * den här.
+ *
+ * **Filtren bor här av samma skäl** (issue 179 · [[ADR-0050 Desktopdesignen]]
+ * § 17). `forContainer()` tar dem som en parameter och lägger dem OVANPÅ de
+ * tre leden, i SAMMA fråga: ett `where` i kontrollern hade varit en andra
+ * sanning om vad användaren får läsa, och en som filtrerade FÖRE läsregeln
+ * hade dessutom kunnat vidga den — ett filter är ett urval av det läsbara, inte
+ * en ny väg in i loggen. Ett filter på en användare vars rader man inte får
+ * läsa ger därför en tom lista, och samma svar som en användare som inte finns.
+ *
+ * `facets()` svarar på den andra halvan av samma fråga — vilka VAL filtret får
+ * bjuda — och läser dem ur samma läsregel, aldrig ur tabellen: en användare
+ * som bara förekommer i rader man inte får läsa ska inte gå att välja.
+ *
+ * `statsForContainer()` räknar historikflitens diagram (issue 180) över samma
+ * läsregel och samma filter, men UTAN gränsen på hundra: ett tal över de
+ * senaste raderna vore ett annat tal än rubriken lovar.
  */
 class ListAuditEvents
 {
@@ -74,19 +91,416 @@ class ListAuditEvents
      */
     private const LIMIT = 100;
 
+    /**
+     * Antalet dagar `perDay` spänner över när inget datumfilter är satt
+     * (issue 180 § Beslut 1).
+     */
+    private const DEFAULT_DAYS = 30;
+
+    /**
+     * De items *Senaste aktiva items* visar (issue 180 § Beslut 1).
+     */
+    private const TOP_ITEMS = 5;
+
+    /**
+     * Taket för hur många dagar `perDay` fyller ut — ett år och en dag, så
+     * ett skottår ryms.
+     *
+     * **Utan taket vore intervallet en kostnad i sig.** `from` och `to`
+     * prövas bara som datum (App\Http\Requests\Audit\ContainerHistoryFilterRequest
+     * sätter ingen gräns för hur långt ifrån varandra de får ligga), så
+     * `?from=0001-01-01&to=9999-12-31` hade byggt en lista på miljontals
+     * dagar — och varje dag blir en `<rect>` och en tabellrad i vyn. Talet
+     * hade då vuxit med INTERVALLET och inte med antalet händelser, tvärtemot
+     * löftet att aggregaten kostar ett konstant antal frågor.
+     */
+    private const MAX_PERIOD_DAYS = 366;
+
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
     /**
      * Raderna som hör till en container: containerns egna och dess items,
      * lästa genom läsregeln ovan.
      *
+     * **`$limit` kom med issue 172 § Beslut 2 och är densamma som
+     * `forUser()`s.** Läsregeln är oförändrad — de tre leden, i en fråga — och
+     * en yta som vill se färre rader säger det i SIN ände av anropet:
+     * containerns översikt ber om fem ([[ADR-0050 Desktopdesignen]] § 7),
+     * historikfliken (issue 116) om hundra. Utan parametern hade panelen
+     * klippt själv, och det hade varit en andra formulering av läsregeln
+     * ([[ADR-0024 Tunna controllers och actions]]) — samma skäl som gjorde
+     * `forUser()`s gräns till en parameter.
+     *
+     * **`$filters` kom med issue 179** och är historikflitens fyra: `type`,
+     * `user`, `item`, `from` och `to`, alla i den form
+     * App\Http\Requests\Audit\ContainerHistoryFilterRequest har prövat dem.
+     * De läggs EFTER läsregeln och därför i samma fråga — se `filtered()` —
+     * och gränsen på hundra rader står kvar över dem.
+     *
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
      * @return Collection<int, AuditLog>
      */
-    public function forContainer(User $viewer, Container $container): Collection
+    public function forContainer(User $viewer, Container $container, int $limit = self::LIMIT, array $filters = []): Collection
     {
-        return $this->readable($viewer)
+        return $this->filtered(
+            $this->readable($viewer, $limit)->where('container_id', $container->id),
+            $viewer,
+            $filters,
+        )->get();
+    }
+
+    /**
+     * Valen historikflitens filter får bjuda på — issue 179 § Beslut 2.
+     *
+     * **Ur läsregeln och aldrig ur tabellen.** `types` är de `subject_type` som
+     * förekommer i containerns läsbara rader, `users` de handlande i dem. En
+     * användare eller en typ som bara finns i rader användaren inte får läsa
+     * kan därför inte väljas, och valet avslöjar ingenting utöver det hon
+     * redan ser: ett filter på en främmande användare hade gett samma tomma
+     * svar som ett på en som inte finns.
+     *
+     * Tre frågor, alla med konstant kostnad: två `SELECT DISTINCT` över
+     * containerns läsbara rader — en per kolumn, för ett gemensamt `DISTINCT`
+     * över paret hade gett varje kombination och inte varje värde — och ett
+     * uppslag av namnen i EN fråga. Att bygga listan ur de hundra raderna i
+     * stället hade tystat ett val så fort ett filter klippte bort det — och en
+     * meny man inte kan ta sig tillbaka ur är en meny utan återväg.
+     *
+     * @return array{types: list<string>, users: Collection<int, User>}
+     */
+    public function facets(User $viewer, Container $container): array
+    {
+        /** @var list<string> $types */
+        $types = $this->readableQuery($viewer)
             ->where('container_id', $container->id)
+            ->whereNotNull('subject_type')
+            ->distinct()
+            ->orderBy('subject_type')
+            ->pluck('subject_type')
+            ->all();
+
+        /** @var list<int> $userIds */
+        $userIds = $this->readableQuery($viewer)
+            ->where('container_id', $container->id)
+            ->whereNotNull('user_id')
+            ->distinct()
+            ->pluck('user_id')
+            ->all();
+
+        return [
+            'types' => array_map('strval', $types),
+            // En tom lista ger `whereIn('id', [])`, alltså `0 = 1` och inga
+            // rader — rätt svar utan ett specialfall (samma skydd som led 2
+            // ovan).
+            'users' => User::query()->whereIn('id', $userIds)->orderBy('name')->get(),
+        ];
+    }
+
+    /**
+     * De tre talen historikflitens diagram ritar — issue 180 · [[ADR-0050
+     * Desktopdesignen]] § 17.
+     *
+     * **Samma läsregel och samma filter som `forContainer()`** (Beslut 1).
+     * Frågan byggs av `readableQuery()` och `filtered()`, alltså de tre leden
+     * med filtren ovanpå, och ett filter kan därför aldrig vidga läsregeln
+     * här hellre än i listan: en gäst räknar bara de händelser hon får se.
+     * Det som skiljer är att `LIMIT` inte finns med. Ett tal över de hundra
+     * senaste vore ett annat tal än rubriken lovar, och diagrammet svarar
+     * över hela den läsbara mängden — listan ovanför är klippt, talen är det
+     * inte.
+     *
+     * **Aggregaten räknas i databasen** med `GROUP BY` och `COUNT(*)`, aldrig
+     * genom att hämta raderna och vika dem i PHP (som kontrollerns `days()`
+     * gör med de hundra): fyra frågor — en per dag, en per typ och två för
+     * topplistan — oavsett hur många händelser loggen bär.
+     *
+     * **Dagsgränsen räknas som i 179** ([[ADR-0044 Användarens dag]]).
+     * `perDay` hinkas på MINUT i SQL — ett portabelt `substr`, samma grepp
+     * och samma skäl som CostReport::groupByPeriod, eftersom sviten kör
+     * sqlite och produktionen MariaDB och `DATE_FORMAT`/`strftime` inte finns
+     * i båda — och minuten viks till användarens dag i PHP med
+     * `setTimezone()`. Att hinka på dag i SQL hade gett UTC-dygn, och en
+     * händelse 23:30 UTC hör till nästa dygn för en användare i Stockholm.
+     *
+     * **Minuten och inte timmen**, för att en hink måste ligga HELT inom en
+     * lokal dag för att kunna vikas till en. En timhink som innehåller lokal
+     * midnatt gör det inte, och för en zon med :30- eller :45-offset
+     * (Asia/Kolkata, Asia/Kathmandu) infaller midnatt mitt i timmen varje
+     * dygn: hinkens första ögonblick hamnar då på fel dag och dagssiffrorna
+     * blir fel. Alla tidszoner har hela minuters offset, så minuthinken är
+     * exakt för varje zon. Kostnaden är fler grupperade rader — högst antalet
+     * distinkta minuter med händelser — men `COUNT(*)` görs fortfarande i
+     * databasen och det är fortfarande EN fråga.
+     *
+     * **`perDay` och `perType` spänner olika fönster** när inget datumfilter
+     * är satt: `perDay` fyller ut de senaste trettio dagarna (DEFAULT_DAYS),
+     * `perType` räknar hela den läsbara mängden. Det följer Beslut 1 — grafen
+     * över tid är till för att visa NÄR något hände, ringen för att visa
+     * fördelningen — men de två talen är därför inte summan av varandra, och
+     * ingen yta får förutsätta att de är det.
+     *
+     * `topItems` frågar efter items inom `ResolveItemScope` och utanför
+     * papperskorgen genom `Item::inScope()` som underfråga — samma omfång som
+     * varje annan listning, och SoftDeletes' globala scope filtrerar bort det
+     * gallrade itemet. Ett item utanför omfånget eller i papperskorgen blir
+     * därför ingen rad alls, inte en namnlös.
+     *
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return array{perDay: list<array{date: string, count: int}>, perType: list<array{type: string|null, count: int}>, topItems: list<array{ulid: string, name: string, count: int}>}
+     */
+    public function statsForContainer(User $viewer, Container $container, array $filters = []): array
+    {
+        $base = $this->filtered(
+            $this->readableQuery($viewer)->where('container_id', $container->id),
+            $viewer,
+            $filters,
+        );
+
+        return [
+            'perDay' => $this->perDay(clone $base, $viewer, $filters),
+            'perType' => $this->perType(clone $base),
+            'topItems' => $this->topItems(clone $base, $viewer, $container),
+        ];
+    }
+
+    /**
+     * Antal händelser per dag i användarens tidszon — `perDay`.
+     *
+     * Minuthinkarna kommer ur databasen och viks till dagar här, med SAMMA
+     * `setTimezone()` som kontrollern gör för listan: en händelse 23:30 UTC
+     * hör till nästa dygn för en användare i Stockholm, och en gruppering på
+     * UTC-dygn hade lagt den på fel dag.
+     *
+     * **Minuten och inte timmen.** En hink måste ligga helt inom en lokal dag
+     * för att kunna vikas till en, och en timhink som innehåller lokal midnatt
+     * gör inte det. För en zon med :30- eller :45-offset (Asia/Kolkata,
+     * Asia/Kathmandu) infaller midnatt mitt i timmen varje dygn, och
+     * timhinkens första ögonblick hade då lagt hela hinken — och därmed
+     * händelser på båda sidor om midnatt — på dagen före. Alla tidszoner har
+     * hela minuters offset, så minuthinken är exakt för varje zon. Se
+     * `statsForContainer()` om kostnaden.
+     *
+     * **Frågan är klippt till samma spann som `periodDays()` ritar.** Utan
+     * datumfilter gäller de senaste trettio dagarna (DEFAULT_DAYS), men
+     * `filtered()` lägger bara på `from` och `to` när användaren satt dem —
+     * utan dem hade frågan hämtat minuthinkar ur HELA loggens historia och
+     * kastat allt äldre än trettio dagar i PHP. Antalet rader hade då varit
+     * antalet distinkta minuter med händelser i containerns hela historia, och
+     * vuxit med varje år loggen bar: tiotusentals modeller för att räkna
+     * trettio tal, tvärtemot löftet att kostnaden inte växer med loggen.
+     * Samma sak när MAX_PERIOD_DAYS klipper `from`: raderna före det klippta
+     * datumet hämtades ändå. Gränserna nedan är spannets lokala början och
+     * slutet dagen efter sista dagen, översatta till UTC — exakt de dygn
+     * `periodDays()` fyller ut, varken mer eller mindre.
+     *
+     * @param  Builder<AuditLog>  $base
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return list<array{date: string, count: int}>
+     */
+    private function perDay(Builder $base, User $viewer, array $filters): array
+    {
+        $timezone = $viewer->preferredTimezone();
+
+        $days = $this->periodDays($viewer, $filters, $timezone);
+
+        // Ett `from` i framtiden (ensamt, utan `to`) ger ett spann utan dagar:
+        // det finns inget att rita och inget att fråga efter.
+        if ($days === []) {
+            return [];
+        }
+
+        $from = Carbon::parse($days[0], $timezone)->startOfDay()->utc();
+        $to = Carbon::parse($days[count($days) - 1], $timezone)->startOfDay()->addDay()->utc();
+
+        $rows = $base
+            ->where('created_at', '>=', $from)
+            ->where('created_at', '<', $to)
+            ->selectRaw('substr(created_at, 1, 16) AS minute_key')
+            ->selectRaw('COUNT(*) AS count')
+            ->groupBy('minute_key')
             ->get();
+
+        $counts = [];
+        $ritade = array_flip($days);
+
+        // `getAttribute()` och inte egenskapsåtkomst: raden är en projektion
+        // över `audit_log`, och `minute_key`/`count` är alias ur `selectRaw`
+        // som varken finns som kolumn eller cast på App\Models\AuditLog. Samma
+        // grepp och samma skäl som ListTags.
+        foreach ($rows as $row) {
+            $day = Carbon::parse($row->getAttribute('minute_key').':00', 'UTC')
+                ->setTimezone($timezone)
+                ->toDateString();
+
+            // Skydd: frågan är redan klippt till spannet, men en hink utanför
+            // det får inte skapa ett tal för en dag listan inte ritar.
+            if (! isset($ritade[$day])) {
+                continue;
+            }
+
+            $counts[$day] = ($counts[$day] ?? 0) + (int) $row->getAttribute('count');
+        }
+
+        return array_map(
+            static fn (string $date): array => ['date' => $date, 'count' => $counts[$date] ?? 0],
+            $days,
+        );
+    }
+
+    /**
+     * Dagarna diagrammet ritar: perioden i filtret, eller de senaste
+     * trettio när inget datumfilter är satt (Beslut 1).
+     *
+     * Listan är SAMMANHÄNGANDE och stigande. En dag utan händelser får
+     * räknaren noll i stället för att saknas: ett diagram över tid med hål
+     * hade ritat två grannar som grannar även när de låg ett år isär, och
+     * grafen är till för att visa när något hände.
+     *
+     * **Intervallens början klipps mot MAX_PERIOD_DAYS.** Datumfiltret sätter
+     * ingen gräns för hur långt `from` och `to` får ligga ifrån varandra, och
+     * `?from=0001-01-01&to=9999-12-31` hade annars fyllt ut miljontals dagar.
+     * Änden står kvar och början flyttas fram: den som ber om ett orimligt
+     * intervall får de senaste dagarna, inte de första, och de senaste är de
+     * diagrammet är till för. Ett intervall inom taket rörs inte — också det
+     * utan datumfilter, där DEFAULT_DAYS redan ligger under taket.
+     *
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return list<string>
+     */
+    private function periodDays(User $viewer, array $filters, string $timezone): array
+    {
+        $end = isset($filters['to'])
+            ? Carbon::parse($filters['to'], $timezone)->startOfDay()
+            : $viewer->today()->copy()->startOfDay();
+
+        $start = isset($filters['from'])
+            ? Carbon::parse($filters['from'], $timezone)->startOfDay()
+            : $end->copy()->subDays(self::DEFAULT_DAYS - 1);
+
+        $earliest = $end->copy()->subDays(self::MAX_PERIOD_DAYS - 1);
+
+        if ($start->lessThan($earliest)) {
+            $start = $earliest;
+        }
+
+        $days = [];
+
+        for ($day = $start->copy(); $day->lessThanOrEqualTo($end); $day->addDay()) {
+            $days[] = $day->toDateString();
+        }
+
+        return $days;
+    }
+
+    /**
+     * Antal händelser per `subject_type` — `perType`.
+     *
+     * Raden utan `subject_type` räknas som sin egen post och inte bort: den
+     * är en händelse som alla andra, och diagrammet summerar till samma tal
+     * som rubriken visar. Vyn ger den sitt eget ord ([[ADR-0043 Tre loggar]]
+     * § Händelseloggen — `subject_type` är ett öppet namnrum, och en rad
+     * behöver inte ha något).
+     *
+     * @param  Builder<AuditLog>  $base
+     * @return list<array{type: string|null, count: int}>
+     */
+    private function perType(Builder $base): array
+    {
+        $rows = $base
+            ->selectRaw('subject_type AS subject_type')
+            ->selectRaw('COUNT(*) AS count')
+            ->groupBy('subject_type')
+            ->orderByDesc('count')
+            ->orderBy('subject_type')
+            ->get();
+
+        // `getAttribute()` av samma skäl som i `perDay(): `count` är ett alias
+        // ur `selectRaw` och ingen egenskap på App\Models\AuditLog.
+        return $rows->map(static function ($row): array {
+            $type = $row->getAttribute('subject_type');
+
+            return [
+                'type' => $type === null ? null : (string) $type,
+                'count' => (int) $row->getAttribute('count'),
+            ];
+        })->values()->all();
+    }
+
+    /**
+     * De fem items med flest händelser — `topItems` (Beslut 1).
+     *
+     * **Omfånget och papperskorgen prövas FÖRE `LIMIT`**, i `whereIn`-under-
+     * frågan: ett item användaren inte når, eller ett gallrat, får inte ta en
+     * av de fem platserna och tränga ut ett item hon ser. `Item::inScope()`
+     * är samma omfång som varje annan listning (issue 70), och SoftDeletes'
+     * globala scope filtrerar bort det gallrade på samma gång — en item i
+     * papperskorgen blir ingen rad alls, inte en namnlös.
+     *
+     * **Namnen hämtas i en andra fråga** och inte genom att joina `item` i
+     * den första. En join hade varit möjlig — CostReport::groupByItem gör
+     * precis så — men `readableQuery()` skriver `container_id` okvalificerat,
+     * och `item` bär samma kolumn: joinen gör den tvetydig och får MariaDB
+     * att vägra. Att kvalificera läsregelns kolumner för en presentations
+     * skull är en ändring i den fråga som avgör vad användaren får LÄSA, och
+     * den byts hellre mot ett uppslag av högst fem namn. Antalet frågor är
+     * fortfarande konstant.
+     *
+     * **Urvalet har en annan sekundärnyckel än presentationen.** `LIMIT 5`
+     * ligger i SQL och prövas före namnen, så vid lika antal på femte plats
+     * avgör `item_id` stigande vilken post som kommer med. Först därefter,
+     * bland de fem utvalda, sorteras listan om på antal fallande med namnet
+     * stigande. De två ordningarna är alltså inte samma, och det är avsiktligt:
+     * att välja på namn hade krävt en join mot `item` före `LIMIT` — samma
+     * join som motiverats bort ovan — och namnet är en presentationsuppgift som
+     * inte bör styra vilka fem rader läsregeln lämnar ifrån sig. Urvalet är
+     * deterministiskt (item_id är unikt), och de fem posterna presenteras i
+     * namnordning.
+     *
+     * @param  Builder<AuditLog>  $base
+     * @return list<array{ulid: string, name: string, count: int}>
+     */
+    private function topItems(Builder $base, User $viewer, Container $container): array
+    {
+        $scope = $this->resolveItemScope->handle($viewer, $container);
+
+        $rows = $base
+            ->whereIn('item_id', Item::query()->inScope($scope)->select('id'))
+            ->selectRaw('item_id AS item_id')
+            ->selectRaw('COUNT(*) AS count')
+            ->groupBy('item_id')
+            ->orderByDesc('count')
+            ->orderBy('item_id')
+            ->limit(self::TOP_ITEMS)
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return [];
+        }
+
+        $items = Item::query()
+            ->whereIn('id', $rows->pluck('item_id')->all())
+            ->get(['id', 'ulid', 'name'])
+            ->keyBy('id');
+
+        $top = [];
+
+        foreach ($rows as $row) {
+            $item = $items->get((int) $row->getAttribute('item_id'));
+
+            if ($item === null) {
+                continue;
+            }
+
+            $top[] = [
+                'ulid' => (string) $item->ulid,
+                'name' => (string) $item->name,
+                'count' => (int) $row->getAttribute('count'),
+            ];
+        }
+
+        usort($top, static fn (array $a, array $b): int => ($b['count'] <=> $a['count']) ?: strcmp($a['name'], $b['name']));
+
+        return $top;
     }
 
     /**
@@ -128,12 +542,28 @@ class ListAuditEvents
      */
     private function readable(User $viewer, int $limit = self::LIMIT): Builder
     {
+        return $this->readableQuery($viewer)
+            ->with('user')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->limit($limit);
+    }
+
+    /**
+     * De tre leden, utan ordning och utan gräns — den form `facets()` behöver,
+     * där `SELECT DISTINCT` står ensamt och en `ORDER BY created_at` hade varit
+     * ogiltig SQL jämte det (MariaDB vägrar sortera på en kolumn som inte står
+     * i urvalet när `DISTINCT` är satt).
+     *
+     * @return Builder<AuditLog>
+     */
+    private function readableQuery(User $viewer): Builder
+    {
         $accountIds = $viewer->accounts->pluck('id')->values()->all();
 
         [$unrestrictedContainerIds, $itemIds] = $this->reachable($viewer, $accountIds);
 
         return AuditLog::query()
-            ->with('user')
             ->where(function (Builder $query) use ($viewer, $accountIds, $unrestrictedContainerIds, $itemIds): void {
                 // Led 1: containern ägs av ett av användarens konton. En
                 // underfråga och inte en lista av löpnummer — antalet
@@ -162,10 +592,65 @@ class ListAuditEvents
                     $query->whereNull('container_id')
                         ->whereIn('account_id', $accountIds);
                 });
-            })
-            ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->limit($limit);
+            });
+    }
+
+    /**
+     * Filtren OVANPÅ läsregeln, i samma fråga — issue 179 · [[ADR-0050
+     * Desktopdesignen]] § 17.
+     *
+     * **Ett filter kan inte vidga läsregeln.** Det läggs efter leden och
+     * snävar bara in: `type` mot `subject_type`, `user` och `item` mot radens
+     * identifierare, `from`/`to` mot `created_at`. Att filtrera FÖRE leden
+     * hade inte varit möjligt ens av misstag — frågan är byggd uppifrån och
+     * ned — men kommentaren står här för att det är den egenskapen Beslut 2
+     * vilar på.
+     *
+     * **Användaren och itemet slås upp till löpnummer och får aldrig ett
+     * `exists`-krav.** Ett filter på en användare vars rader man inte får läsa
+     * ska ge en TOM lista, och samma svar som en användare som inte finns
+     * (Beslut 2) — alltså får existensen inte prövas någonstans, varken i
+     * valideringen eller här. Ett ULID som inte finns ger `user_id = 0`, och
+     * ingen rad har löpnummer noll. Itemet slås upp på samma sätt, med
+     * `withTrashed()`: loggen överlever itemet ([[ADR-0043 Tre loggar]]
+     * § Händelseloggen), och en fråga om ett item i papperskorgen är precis
+     * den fråga en historik finns för.
+     *
+     * **Datumgränserna räknas i användarens tidszon** ([[ADR-0044 Användarens
+     * dag]]). `from` är midnatt den dagen och `to` är midnatt dagen EFTER —
+     * övre gränsen är öppen, så hela `to`-dagen ingår. En händelse 23:30 UTC
+     * hör till nästa dygn för en användare i Stockholm, och en jämförelse mot
+     * UTC-dygn hade lagt den på fel dag.
+     *
+     * @param  Builder<AuditLog>  $query
+     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return Builder<AuditLog>
+     */
+    private function filtered(Builder $query, User $viewer, array $filters): Builder
+    {
+        if (($type = $filters['type'] ?? null) !== null) {
+            $query->where('subject_type', $type);
+        }
+
+        if (($user = $filters['user'] ?? null) !== null) {
+            $query->where('user_id', User::query()->where('ulid', $user)->value('id') ?? 0);
+        }
+
+        if (($item = $filters['item'] ?? null) !== null) {
+            $query->where('item_id', Item::withTrashed()->where('ulid', $item)->value('id') ?? 0);
+        }
+
+        $timezone = $viewer->preferredTimezone();
+
+        if (($from = $filters['from'] ?? null) !== null) {
+            $query->where('created_at', '>=', Carbon::parse($from, $timezone)->startOfDay()->utc());
+        }
+
+        if (($to = $filters['to'] ?? null) !== null) {
+            $query->where('created_at', '<', Carbon::parse($to, $timezone)->startOfDay()->addDay()->utc());
+        }
+
+        return $query;
     }
 
     /**

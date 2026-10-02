@@ -4,6 +4,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import HistoryRow from '../../../components/HistoryRow.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
+import ItemCostSection from '../../../components/ItemCostSection.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemMapPanel from '../../../components/ItemMapPanel.vue';
@@ -22,14 +23,15 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * ur App\Http\Resources\ContainerResource.
  *
  * **Itemets egna fält, kategorin, taggarna, relationerna, utlåningen,
- * schemana och bilagorna.** Bilagesektionen kom med issue 60 och bor i
- * resources/js/components/ItemAttachmentSection.vue; listan kommer med
+ * schemana, bilagorna och kostnaderna.** Bilagesektionen kom med issue 60 och
+ * bor i resources/js/components/ItemAttachmentSection.vue; listan kommer med
  * detaljvyns props och har ingen egen rutt. Schemana kom med issue 63a och
  * gör detsamma — ScheduleListSection.vue, proparna `schedules` och
  * `openOccurrences`. Utlåningen kom med issue 67a och gör detsamma —
  * ItemLoanSection.vue, proparna `openLoan`, `loanHistory`, `openLoanOverdue`
- * och `today`.
- * Kostnaderna 45–47 har fortfarande ingen yta här.
+ * och `today`. Kostnaderna kom med issue 168 och gör detsamma —
+ * ItemCostSection.vue, proparna `costs` och `costDefaults`, och
+ * leverantörslistan som en optional `costSuppliers`.
  * Relationssektionen bor i resources/js/components/ItemLinkSection.vue: alla
  * tre bär sitt eget formulär och sina egna fel, precis som ContainerAccessRow
  * gör för åtkomsterna, så ett fältfel på en relation, ett schema eller en fil
@@ -131,6 +133,13 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * påstående anroparen HAR gjort — fliken ritar noll rader — och `UiTabs`
  * skiljer den från `null`, som betyder att det inte finns något tal att visa
  * (issue 99 och 100).
+ *
+ * **Färgerna är roller och inte palettfärger** (issue 182 · [[ADR-0042
+ * Designsystemet]] § Beslut): `text-ink`, `text-ink-muted`, `text-accent` och
+ * `text-danger` ur `@theme` i `resources/css/app.css`. Radåtgärden som bär en
+ * `@click` står kvar som rå `<button>`: GenomgangTest tillåter bara
+ * webbläsarens egna element som klickbar yta, och en `<UiButton>` hade fallit
+ * på den regeln. Beteendet är oförändrat.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -231,6 +240,18 @@ const props = defineProps({
     loanHistory: { type: Array, required: true },
     /* Serverns datum, `Y-m-d` — "Tillbaka idag" sätter det (Beslut 3). */
     today: { type: String, required: true },
+    /*
+     * Itemets kostnadsrader (issue 168 § Beslut 3) ur
+     * App\Http\Resources\CostEntryResource, nyast först — samma ordning och
+     * samma format som `Api\CostEntryController::index()` svarar med.
+     */
+    costs: { type: Array, required: true },
+    /*
+     * Formulärets förval på kostnadsfliken: `{currency}` ur containerns arv
+     * ([[ADR-0037 Valutans arv]]). Servern fyller samma tomrum när klienten
+     * inte skickar en valuta, så förvalet och arvet är ETT värde och inte två.
+     */
+    costDefaults: { type: Object, required: true },
     /*
      * Historikens rader (issue 116 · [[ADR-0043 Tre loggar]]
      * § Händelseloggen), ur App\Actions\Audit\PresentAuditEvents — nyast
@@ -394,7 +415,7 @@ const linkViews = computed(() => [
 /*
  * Flikraden i den form `UiTabs` vill ha: `{ key, label, href, count }`.
  *
- * **Raden har åtta flikar, och fälten har en egen sedan issue 154.**
+ * **Raden har nio flikar, och kostnaden har en egen sedan issue 168.**
  * `docs/Design/struktur - item.jpeg` ritar översikt, detaljer, relationer,
  * dokument, kostnader, uppgifter och historik, och mobilmockupen ritar
  * Översikt · Information · Dokument. Raden är bildens, med två namn bytta:
@@ -407,10 +428,11 @@ const linkViews = computed(() => [
  * snabbfakta under dem ([[ADR-0041 Itemets vy]] § Beslut, issue 96 och 154).
  *
  * **Ordningen är översikten först, sedan bildens, och de egna sist.**
- * Kostnaden har ingen flik (den väntar på trepanelslayouten, issue 103), och
- * historiken kom med issue 116 och ligger SIST — efter utlåningen och
- * taggarna, som containerns egen historikflik: den är vad som HAR hänt och
- * inte en yta man arbetar i.
+ * Kostnaden fick sin flik i issue 168 — bilden ritar den, och ytan fanns
+ * redan på `/api` innan den fanns i webben — och ligger näst sist, före
+ * historiken, som containerns egen flikrad gör ([[ADR-0050 Desktopdesignen]]
+ * § 4). Historiken kom med issue 116 och ligger SIST: den är vad som HAR
+ * hänt och inte en yta man arbetar i.
  *
  * **Etiketten är sektionens eget ord.** Sex av flikarna bär samma rubrik som
  * sektionen de visar — `item.links.heading`, `item.attachment.heading`,
@@ -458,7 +480,15 @@ const tabs = computed(() => {
         { key: 'loans', label: t('item.loan.heading'), href: tabHref('loans'), count: props.loanHistory.length + (props.openLoan ? 1 : 0) },
         { key: 'tags', label: t('item.show.tags'), href: tabHref('tags'), count: props.item.tags.length },
         /*
-         * Historiken (issue 116) är den SJUNDE fliken och ligger sist, som
+         * Kostnaderna (issue 168 · [[ADR-0050 Desktopdesignen]] § 8). Ytan
+         * fanns på `/api` innan den fanns här, och raden ligger näst sist —
+         * före historiken, som containerns egen flikrad gör. Räknaren är
+         * antalet rader fliken ritar, ur `costs`-proppen: en nolla säger att
+         * listan är tom, och den är ett svar och inte en gissning.
+         */
+        { key: 'costs', label: t('item.cost.heading'), href: tabHref('costs'), count: props.costs.length },
+        /*
+         * Historiken (issue 116) är den NIONDE fliken och ligger sist, som
          * containerns egen: den är vad som HAR hänt och inte en yta man
          * arbetar i. Etiketten är `audit.history.heading` — samma ord som
          * containerns flik och som panelens egen rubrik, så fliken och ytan
@@ -595,30 +625,46 @@ function toggleFavorite() {
         <Head :title="item.name" />
 
         <!--
-            Trepanelslayouten (issue 103 · [[ADR-0042 Designsystemet]] § Beslut
-            och [[ADR-0041 Itemets vy]] § Beslut): strukturen till vänster,
-            itemet i mitten, kartans plats till höger — allt inuti containerns
-            ram.
+            Trepanelslayouten (issue 103, 181 · [[ADR-0042 Designsystemet]]
+            § Beslut och [[ADR-0041 Itemets vy]] § Beslut): strukturen till
+            vänster, itemet i mitten, kartan till höger — allt inuti containerns
+            ram, som i `docs/Design/struktur - item.jpeg`.
 
-            `md:` är den ENDA brytpunkten (issue 68a § Beslut 2), och under den
-            staplas panelerna i dokumentordningen: strukturen först, itemet
-            sedan, kartan sist. Strukturen blir där en utfällbar yta — se
-            ItemStructurePanel.vue — och aldrig en egen sida: en andra sida
-            hade varit bildens globala navigering, som är avvisad två gånger.
+            Under `md:` staplas panelerna i dokumentordningen: strukturen
+            först, itemet sedan, kartan sist. Strukturen blir där en utfällbar
+            yta — se ItemStructurePanel.vue — och aldrig en egen sida: en andra
+            sida hade varit bildens globala navigering, som är avvisad två
+            gånger. Där är vyn oförändrad sedan issue 154.
 
-            Mittkolumnen är två fjärdedelar och de två sidopanelerna en var.
+            Brytpunkterna är två: `md:` (issue 68a § Beslut 2) och `lg:`
+            (M24 · [[ADR-0050 Desktopdesignen]]).
+
+            **`md:` till `lg:` — fyra spår.** Strukturen ett, itemet tre,
+            kartan tre. Kartan börjar i mittkolumnens första spår och får
+            därför en EGEN rad under itemet i stället för en tredje kolumn:
+            1 + 3 fyller fyra spår, och kartan hamnar under itemet och inte
+            vid sidan om det.
+
+            **`lg:` och uppåt — tre spår:**
+            `minmax(16rem,20rem) minmax(0,1fr) minmax(18rem,24rem)`, alltså
+            struktur, item, karta. Sidopanelerna har ett golv och ett tak i
+            rem i stället för en andel: strukturträdets längsta rad bestämmer
+            golvet, kartans teckenförklaring taket, och itemet tar resten. En
+            andel hade krympt trädet under läsbarhet på en smalare skärm och
+            låtit itemet svälla på en bredare.
+
             `min-w-0` behövs för att en lång rad i itemet ska brytas i stället
             för att tvinga ut kolumnen — samma skäl som ContainerLayouts egen
             slot bär den.
         -->
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-4">
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-4 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]">
             <ItemStructurePanel
                 :nodes="structure"
                 :container-ulid="container.ulid"
                 :active-trail="activeTrail"
             />
 
-            <div class="min-w-0 md:col-span-2">
+            <div class="min-w-0 md:col-span-3 lg:col-span-1">
                 <!--
                     Brödsmulan (issue 95): vägen från roten ned till itemet, den
                     aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
@@ -629,7 +675,7 @@ function toggleFavorite() {
                 <nav
                     v-if="currentPath"
                     :aria-label="t('item.show.breadcrumb')"
-                    class="mb-2 text-sm text-slate-600"
+                    class="mb-2 text-sm text-ink-muted"
                 >
                     <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <li
@@ -640,7 +686,7 @@ function toggleFavorite() {
                             <Link
                                 v-if="index < currentPath.nodes.length - 1"
                                 :href="pathHref(currentPath.nodes.slice(0, index + 1))"
-                                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                                class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                             >
                                 {{ node.name }}
                             </Link>
@@ -706,7 +752,7 @@ function toggleFavorite() {
                     <Link
                         v-if="can.update"
                         :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.edit.action') }}
                     </Link>
@@ -715,7 +761,7 @@ function toggleFavorite() {
                         v-if="can.delete"
                         type="button"
                         :disabled="pending"
-                        class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-danger hover:underline"
                         @click="destroy"
                     >
                         {{ pending ? t('common.pending.default') : t('item.destroy.action') }}
@@ -730,7 +776,7 @@ function toggleFavorite() {
                     <Link
                         v-if="can.create"
                         :href="`/containers/${container.ulid}/items/create?parent=${item.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.links.create_child.action') }}
                     </Link>
@@ -757,7 +803,7 @@ function toggleFavorite() {
                     *occurrence* — se nyckelns kommentar där.
                 -->
                 <section v-if="paths.length > 1" class="mt-6">
-                    <h2 id="item-placements-heading" class="text-sm font-medium text-slate-600">
+                    <h2 id="item-placements-heading" class="text-sm font-medium text-ink-muted">
                         {{ t('item.show.placements') }}
                     </h2>
 
@@ -772,8 +818,8 @@ function toggleFavorite() {
                                 :aria-current="occurrence.current ? 'true' : null"
                                 class="flex min-h-11 flex-wrap items-center gap-1"
                                 :class="occurrence.current
-                                    ? 'font-semibold text-slate-900'
-                                    : 'text-blue-700 hover:underline'"
+                                    ? 'font-semibold text-ink'
+                                    : 'text-accent hover:underline'"
                             >
                                 <template v-for="(node, step) in occurrence.nodes" :key="`${node.ulid}-${step}`">
                                     <span>{{ node.name }}</span>
@@ -781,7 +827,7 @@ function toggleFavorite() {
                                 </template>
                             </Link>
 
-                            <span v-if="occurrence.current" class="rounded bg-slate-200 px-2 py-1 text-sm font-medium">
+                            <span v-if="occurrence.current" class="rounded bg-surface-sunken px-2 py-1 text-sm font-medium">
                                 {{ t('item.show.placement_current') }}
                             </span>
                         </li>
@@ -823,13 +869,13 @@ function toggleFavorite() {
                 <section v-if="activeTab === 'overview'" class="mt-8 space-y-8">
                     <dl v-if="item.description || item.notes" class="flex flex-col gap-6">
                         <div v-if="item.description">
-                            <dt class="text-sm font-medium text-slate-600">{{ t('item.show.description') }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-slate-900">{{ item.description }}</dd>
+                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.description') }}</dt>
+                            <dd class="mt-1 whitespace-pre-line text-ink">{{ item.description }}</dd>
                         </div>
 
                         <div v-if="item.notes">
-                            <dt class="text-sm font-medium text-slate-600">{{ t('item.show.notes') }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-slate-900">{{ item.notes }}</dd>
+                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.notes') }}</dt>
+                            <dd class="mt-1 whitespace-pre-line text-ink">{{ item.notes }}</dd>
                         </div>
                     </dl>
 
@@ -848,12 +894,12 @@ function toggleFavorite() {
                     -->
                     <Link
                         :href="informationHref"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                     >
                         {{ t('item.show.all_fields') }}
                     </Link>
 
-                    <p v-if="overviewEmpty" class="text-sm text-slate-600">{{ t('item.show.overview_empty') }}</p>
+                    <p v-if="overviewEmpty" class="text-sm text-ink-muted">{{ t('item.show.overview_empty') }}</p>
                 </section>
 
                 <!--
@@ -875,17 +921,17 @@ function toggleFavorite() {
                         class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2"
                     >
                         <div v-for="field in fields" :key="field.key">
-                            <dt class="text-sm font-medium text-slate-600">{{ field.label }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-slate-900">{{ field.value }}</dd>
+                            <dt class="text-sm font-medium text-ink-muted">{{ field.label }}</dt>
+                            <dd class="mt-1 whitespace-pre-line text-ink">{{ field.value }}</dd>
                         </div>
 
                         <div v-if="categoryName">
-                            <dt class="text-sm font-medium text-slate-600">{{ t('item.show.category') }}</dt>
-                            <dd class="mt-1 text-slate-900">{{ categoryName }}</dd>
+                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.category') }}</dt>
+                            <dd class="mt-1 text-ink">{{ categoryName }}</dd>
                         </div>
                     </dl>
 
-                    <p v-else class="text-sm text-slate-600">{{ t('item.show.information_empty') }}</p>
+                    <p v-else class="text-sm text-ink-muted">{{ t('item.show.information_empty') }}</p>
                 </section>
 
                 <!--
@@ -965,11 +1011,33 @@ function toggleFavorite() {
                     :can="can"
                 />
 
+                <!--
+                    Kostnaderna (issue 168 · [[ADR-0050 Desktopdesignen]] § 8):
+                    itemets rader, nyast först, och formuläret som lägger till,
+                    ändrar och tar bort dem. Sektionen får `costs`,
+                    `costDefaults` och `can` ur detaljvyns props — och hämtar
+                    leverantörslistan själv med en partiell omladdning när
+                    formuläret ritas, se ItemCostSection.vue.
+
+                    Serverns regler är API:ets, och skrivningarna går mot
+                    App\Http\Controllers\CostEntryController. Rubriken är samma
+                    ord som flikens etikett, så raden och ytan under den inte
+                    kan säga olika saker.
+                -->
+                <ItemCostSection
+                    v-if="activeTab === 'costs'"
+                    :container-ulid="container.ulid"
+                    :item-ulid="item.ulid"
+                    :costs="costs"
+                    :cost-defaults="costDefaults"
+                    :can="can"
+                />
+
                 <!-- Taggarna (issue 56a): itemets fria ord bredvid kategorin. Ett item
                      utan taggar ritar ingenting här, och räknaren i fliken säger det. -->
                 <section v-if="activeTab === 'tags'" class="mt-8">
                     <template v-if="item.tags.length > 0">
-                        <h2 class="text-sm font-medium text-slate-600">{{ t('item.show.tags') }}</h2>
+                        <h2 class="text-sm font-medium text-ink-muted">{{ t('item.show.tags') }}</h2>
 
                         <ItemTagList class="mt-2" :tags="item.tags" />
                     </template>
@@ -994,9 +1062,9 @@ function toggleFavorite() {
                     listan säger vilket — samma val som översiktsfliken gör.
                 -->
                 <section v-if="activeTab === 'history'" class="mt-8">
-                    <h2 class="text-sm font-medium text-slate-600">{{ t('audit.history.heading') }}</h2>
+                    <h2 class="text-sm font-medium text-ink-muted">{{ t('audit.history.heading') }}</h2>
 
-                    <p v-if="history.length === 0" class="mt-2 text-sm text-slate-600">
+                    <p v-if="history.length === 0" class="mt-2 text-sm text-ink-muted">
                         {{ t('audit.history.empty') }}
                     </p>
 
@@ -1007,17 +1075,35 @@ function toggleFavorite() {
             </div>
 
             <!--
-                Kartans plats (issue 156): fokuskartan i högerpanelen över
+                Kartans plats (issue 156, 181): fokuskartan i högerpanelen över
                 `md:`. Under brytpunkten är panelen dold med flit — där är
                 kartan ett LÄGE i itemets relationsflik i stället (se
                 ItemLinkSection.vue), och samma karta två gånger på samma
                 skärm hade varit samma nod två gånger.
+
+                Placeringen sker med klasserna och inte genom att flytta
+                markupen: strukturen, itemet och kartan står i samma ordning i
+                källan på varje bredd ([[ADR-0041 Itemets vy]] § Beslut), och
+                tangentbordsordningen följer den. Över `lg:` tar kartan det
+                tredje spåret; mellan `md:` och `lg:` är rutnätet fyra spår och
+                kartan börjar i mittkolumnens första — samma tre spår som
+                itemet och alltså en egen rad under det. Kartan får ingen egen
+                höjdberäkning: FocusMap växer med sitt innehåll, och den
+                smalare kolumnen bryter rader i stället för att klippa.
+
+                Spåren sätts på det omslutande elementet och inte på panelen:
+                panelen bär kvar `hidden md:block` från issue 156, och dess
+                innehåll och proppar är orörda (Beslut 3). Omslaget bär samma
+                `hidden md:block`, så den dolda panelen inte lämnar en tom
+                rad med ett `gap-6` efter sig på en telefon.
             -->
-            <ItemMapPanel
-                class="hidden md:block"
-                :map="map"
-                :overflow-href="relationsHref"
-            />
+            <div class="hidden md:block md:col-start-2 md:col-span-3 lg:col-start-3 lg:col-span-1">
+                <ItemMapPanel
+                    class="hidden md:block"
+                    :map="map"
+                    :overflow-href="relationsHref"
+                />
+            </div>
         </div>
     </ContainerLayout>
 </template>

@@ -66,3 +66,29 @@
     --radius-control: 8px;
     --radius-pill: 9999px;
 }
+
+/*
+ * Skalets mörka yta — desktopens sidopanel, se [[ADR-0050 Desktopdesignen]]
+ * § 1 och issue 169.
+ *
+ * `--color-shell` är "produktens enda stora mörka yta" ([[ADR-0042
+ * Designsystemet]] § Beslut), och panelen bär sektioner som också ritas i
+ * mobilens LJUSA sidomeny: `UiListRow`, `ShellSections`, `RecentVisitList`
+ * och `ShellContainerList`. Deras textfärger är roller — `text-ink`,
+ * `text-ink-muted`, `text-ink-subtle` — och en roll är ett värde man kan
+ * binda om på ett ställe (ADR-0042: "Ett rollnamn kan bindas om").
+ *
+ * Den här klassen binder därför om TEXTROLLERNA inuti ytan i stället för att
+ * ge var och en av komponenterna en egen mörk variant: `text-ink` blir vitt,
+ * och de två dämpade rollerna blir ljusgrå. Utan den hade `UiListRow`s titel
+ * (#0f172a) stått på #0b1f35 — alltså osynlig — och en `tone`-propp genom
+ * fyra komponenter hade varit samma sak på fyra ställen.
+ *
+ * Ingen dark mode: bara den här ytan binder om, och bara textrollerna. Ytor,
+ * kanter och accenter är desamma som förut.
+ */
+.shell-tone {
+    --color-ink: #ffffff;
+    --color-ink-muted: #cbd5e1;
+    --color-ink-subtle: #94a3b8;
+}

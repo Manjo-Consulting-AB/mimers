@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Actions\Category\ListCategories;
+use App\Actions\Cost\ListCostSuppliers;
 use App\Actions\Item\CreateItem;
 use App\Actions\Item\DeleteItem;
 use App\Actions\Item\ListItemLinks;
@@ -21,6 +22,7 @@ use App\Http\Requests\Item\UpdateItemRequest;
 use App\Http\Resources\AttachmentResource;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ContainerResource;
+use App\Http\Resources\CostEntryResource;
 use App\Http\Resources\ItemLinkResource;
 use App\Http\Resources\ItemResource;
 use App\Http\Resources\LoanResource;
@@ -209,6 +211,13 @@ class ItemController extends Controller
      * `false`: hon skapar barn-items under det hon nått, och den ytan hör till
      * detaljvyn.
      *
+     * **`can.update` kom med issue 170** · [[ADR-0050 Desktopdesignen]] § 2–3:
+     * itemlistan bär samma hjälte som översikten, i den låga formen, och
+     * hjälten ritar *Redigera container* — vägen till inställningssidan, som
+     * lämnade flikraden i samma issue. Flaggan räknas med samma policyfråga som
+     * `ContainerController::show()` och `edit()` ställer, och den är
+     * presentation: ruttens `update` prövas ändå.
+     *
      * **Att öppna containern gör den till sessionens kontext** (issue 83).
      * `ActiveContainer::set()` har fem anropare, och den här är en av dem: de
      * tre andra är de tillfällen användaren just FÅTT en container, och den
@@ -347,6 +356,12 @@ class ItemController extends Controller
             ],
             'can' => [
                 'create' => Gate::forUser($user)->allows('createItem', $container),
+                // `can.update` kom med issue 170 · [[ADR-0050 Desktopdesignen]]
+                // § 2–3: hjälten ritar *Redigera container* ur samma flagga som
+                // översikten och inställningssidan ritar sina ur, och den
+                // läggs BREDVID resursen precis som där (issue 54 § Beslut 9).
+                // Flaggan är presentation — ruttens `update` prövas ändå.
+                'update' => Gate::forUser($user)->allows('update', $container),
             ],
             // Plusknappens mål (issue 152): i itemlistan skapar den ett item i
             // containern. Samma grind som `can.create` ovan — de två kommer
@@ -422,8 +437,8 @@ class ItemController extends Controller
      * § Beslut 2). Bilagorna kommer med props — se `attachments` nedan — och
      * har ingen egen rutt. Schemana gjorde detsamma i issue 63a, se
      * `schedules` och `openOccurrences` nedan, och utlåningen i issue 67a, se
-     * `openLoan`, `loanHistory` och `openLoanOverdue`. Kostnaderna 45–47 har
-     * fortfarande ingen yta här.
+     * `openLoan`, `loanHistory` och `openLoanOverdue`. Kostnaderna har en yta
+     * sedan issue 168, se `costs`, `costDefaults` och `costSuppliers` nedan.
      *
      * `categories` bär kategorins NAMN bredvid resursen — se klassens
      * docblock. Ett item utan kategori får en tom uppslagstabell och vyn
@@ -508,7 +523,7 @@ class ItemController extends Controller
      * sidopanelen ritas — så en vanlig sidladdning betalar ingenting för den,
      * och sidan här räknar varken frågor eller rader för den.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers): Response
     {
         Gate::authorize('view', $item);
 
@@ -629,6 +644,20 @@ class ItemController extends Controller
         $openLoan = $loans->first(fn (Loan $loan): bool => $loan->returned_at === null);
         $history = $loans->reject(fn (Loan $loan): bool => $loan->returned_at === null)->values();
 
+        // Kostnaderna kommer med detaljvyns props och aldrig ur ett eget
+        // anrop (issue 168 § Beslut 3 · [[ADR-0050 Desktopdesignen]] § 8).
+        // Sorteringen är `Api\CostEntryController::index()`s egen —
+        // `incurred_on` fallande med `id` fallande, så den senaste kostnaden
+        // står först och två kostnader samma dag ändå får en stabil ordning —
+        // och `createdByAccount` laddas eager, så listan kostar ett konstant
+        // antal frågor oavsett antal rader (issue 45a § Beslut 14).
+        // Mjukraderade rader faller ut genom SoftDeletes' globala scope.
+        $costs = $item->costs()
+            ->with('createdByAccount')
+            ->orderByDesc('incurred_on')
+            ->orderByDesc('id')
+            ->get();
+
         // Historikfliken (issue 116 · [[ADR-0043 Tre loggar]]
         // § Händelseloggen). Raderna läses genom App\Actions\Audit\
         // ListAuditEvents — samma läsregel som containerns historiksida och
@@ -733,6 +762,36 @@ class ItemController extends Controller
             // format och rörs inte av den här issuen — samma linje som
             // `variants()` och `openOccurrences()` ovan.
             'openLoanOverdue' => $openLoan !== null && $this->isOverdue($openLoan, $user),
+
+            // Kostnaderna (issue 168 § Beslut 3 · [[ADR-0050 Desktopdesignen]]
+            // § 8). `costs` är itemets rader i App\Http\Resources\
+            // CostEntryResource — samma format och samma sortering som
+            // `Api\CostEntryController::index()` svarar med, byggd ur samma
+            // fråga som listan ovan.
+            'costs' => CostEntryResource::collection($costs)->resolve($request),
+
+            // Formulärets förval: containerns valuta enligt arvet
+            // ([[ADR-0037 Valutans arv]]). Fältet är förifyllt och
+            // ändringsbart, inte dolt — ett värde som ändå står i datan får
+            // inte vara osynligt för den som skriver raden. Servern fyller
+            // samma tomrum i App\Actions\Cost\CreateCostEntry när klienten
+            // inte skickar någon valuta, så förvalet och arvet är ETT värde
+            // och inte två.
+            'costDefaults' => ['currency' => $container->effectiveCurrency()],
+
+            // Leverantörslistan är en OPTIONAL prop (issue 168 § Beslut 3):
+            // den ritas först när kostnadsformuläret öppnas, och en vanlig
+            // sidladdning ska inte bära den — samma konstruktion som
+            // `recentVisits` och `notifications` i App\Http\Middleware\
+            // HandleInertiaRequests. Uppslaget är App\Actions\Cost\
+            // ListCostSuppliers, samma action som `GET /api/containers/
+            // {container}/costs/suppliers` svarar ur, så vyn och `/api` föreslår
+            // bevisligen samma namn i samma ordning. Ingen `fetch` mot `/api`:
+            // den hade varit en andra väg till samma läsning och burit med sig
+            // autentiseringen dit.
+            'costSuppliers' => Inertia::optional(
+                fn (): array => $listCostSuppliers->handle($user, $container)
+            ),
 
             // Användarens datum, av samma skäl: "Tillbaka idag" (Beslut 3)
             // sätter `returned_at` till dagens datum, och vilken dag det är

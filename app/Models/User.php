@@ -192,6 +192,28 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
     }
 
     /**
+     * Personens öppnade bilagor — en rad per bilaga hon öppnat, se
+     * [[ADR-0051 Senast öppnade filer]] och [[M24 Desktopdesignen]] § 177.
+     *
+     * **Samma form som `recentVisits()`, och av samma skäl**: en tidsstämpel
+     * på `attachment` hade visat andras beteende och glömt allt utom den
+     * senaste öppningen, medan paret `(user_id, attachment_id)` är unikt och
+     * en ny öppning uppdaterar raden i stället för att skriva en andra.
+     *
+     * Relationen bär ingen åtkomst. Den säger vad användaren öppnat, inte vad
+     * hon får se — skrivningen ligger efter grinden i
+     * App\Http\Controllers\AttachmentDownloadController, och
+     * App\Actions\Attachment\ListRecentOpens filtrerar läsningen genom
+     * App\Actions\Access\ResolveItemScope som allt annat.
+     *
+     * @return HasMany<AttachmentOpen, $this>
+     */
+    public function attachmentOpens(): HasMany
+    {
+        return $this->hasMany(AttachmentOpen::class);
+    }
+
+    /**
      * Begärda adressändringar — en rad per begäran, se [[M20 Kontot]] § 130
      * och [[Konton och åtkomst]] § email_change.
      *

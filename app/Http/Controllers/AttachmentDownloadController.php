@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Attachment\RecordAttachmentOpen;
 use App\Actions\Security\RecordSecurityEvent;
 use App\Models\Attachment;
 use App\Models\Container;
@@ -58,6 +59,13 @@ use Symfony\Component\HttpFoundation\Response;
  * och därmed också en itemgrant-innehavare förbi itemets omfång. Valet av
  * ägare är det enda som avgör, och det valet bor i modellen och inte här.
  *
+ * **Sedan issue 177 skriver rutten också en öppning** i `attachment_open`,
+ * för "senast öppnade filer" i dokumentfliken ([[ADR-0051 Senast öppnade
+ * filer]]). Den ligger efter grinden och före båda leveransgrenarna, och
+ * vad som räknas som en öppning står i `recordOpen()` nedan. Rutten är den
+ * ENDA som skriver: `files.deliver` levererar bytena men vet inte vem som
+ * frågar.
+ *
  * `{attachment}` binds på bilagans ULID via #[RouteKey('ulid')] — en
  * mjukraderad bilaga syns inte av bindningen och ger 404 (Beslut 7).
  *
@@ -69,6 +77,7 @@ class AttachmentDownloadController extends Controller
     public function __invoke(
         Request $request,
         Attachment $attachment,
+        RecordAttachmentOpen $recordAttachmentOpen,
         RecordSecurityEvent $recordSecurityEvent,
     ): Response {
         $attachment->load(['storedFile', 'item.container', 'container']);
@@ -111,6 +120,12 @@ class AttachmentDownloadController extends Controller
         $variant = $request->query('variant');
         $filorigin = FileOrigin::host();
 
+        // Öppningen skrivs efter grinden och FÖRE båda grenarna nedan: raden
+        // hör till den här rutten och inte till leveransen, och en 302 till
+        // filoriginet är samma öppning som en direkt leverans (issue 177 ·
+        // [[ADR-0051 Senast öppnade filer]] § Beslut).
+        $this->recordOpen($request, $attachment, $variant, $recordAttachmentOpen);
+
         if ($filorigin !== null) {
             $svar = redirect()->to(self::signedDeliveryUrl($attachment, $variant));
         } else {
@@ -129,6 +144,69 @@ class AttachmentDownloadController extends Controller
         $this->recordForeignDownload($request, $attachment, $container, $recordSecurityEvent);
 
         return $svar;
+    }
+
+    /**
+     * Öppningen, i "senast öppnade filer" (issue 177 · [[ADR-0051 Senast
+     * öppnade filer]] § Beslut 1).
+     *
+     * **Vad som är en öppning avgörs här, och bara här.** Två undantag:
+     *
+     * - **Containerns egen bild räknas aldrig** ([[ADR-0047 Containerns
+     *   bild]]). En bilaga med `item_id = NULL` hör till containern och inte
+     *   till något item, och en containerbild är containerns ansikte — den
+     *   ritas i skalet och inte av någon som öppnat en fil.
+     * - **Miniatyren räknas inte.** `?variant=thumb` ritas i en lista utan
+     *   att någon öppnat något, och en rad för den hade fyllt taket med
+     *   filer ingen tittat på. Det som räknas är nedladdningen och
+     *   PDF-förhandsvisningen (`variant` saknas) och bildvisarens `medium` —
+     *   se `attachmentPresentation.js`, där `thumb` är listbilden och
+     *   `medium` är bilden som öppnas.
+     *
+     * **Anropet ligger efter `Gate::authorize()`**, som för besöksraden i
+     * ItemController::show(): en nekad förfrågan kastar innan raden skrivs,
+     * så en bilaga utanför omfånget lämnar varken en rad eller ett spår.
+     * `files.deliver` anropar aldrig den här metoden — den rutten bär en
+     * signerad URL och vet inte vem som frågar.
+     *
+     * **Varianten valideras före skrivningen.** Ett okänt värde eller en
+     * variant som saknas ger 404, och en 404 är ingen öppning. Valideringen
+     * är `AttachmentDelivery::storagePath()` och inte en egen kontroll av
+     * derivatraderna: regeln om vilka varianter som finns bor där, och två
+     * formuleringar av den hade glidit isär. Grenarna nedan slår upp samma
+     * variant en gång till när de bygger sitt svar — det är priset för att
+     * kunna skriva före dem, och för `variant` utan värde kostar det ingen
+     * fråga alls.
+     *
+     * **Skrivningen ligger före båda grenarna nedan**, så att 302:an till
+     * filoriginet och den direkta leveransen skriver samma rad. Alla 404:ar
+     * som kan komma före den ligger ovanför: bilagan finns inte, containern
+     * finns inte, eller varianten finns inte.
+     *
+     * Säkerhetsloggen (recordForeignDownload) ligger i stället EFTER att
+     * svaret byggts, och skillnaden är vad de två beskriver. Loggen är en
+     * missbrukssignal och skrivs inte för en fil som visar sig saknas på
+     * disken; öppningen är vad användaren gjorde — hon bad om filen — och
+     * den sista 404:an (bytena borta, issue 167) lämnar därför en
+     * öppningsrad men ingen loggrad.
+     */
+    private function recordOpen(
+        Request $request,
+        Attachment $attachment,
+        mixed $variant,
+        RecordAttachmentOpen $recordAttachmentOpen,
+    ): void {
+        if ($attachment->item_id === null) {
+            return;
+        }
+
+        if ($variant !== null && $variant !== 'medium') {
+            return;
+        }
+
+        AttachmentDelivery::storagePath($attachment->storedFile, $variant);
+
+        $recordAttachmentOpen->handle($request->user(), $attachment);
     }
 
     /**

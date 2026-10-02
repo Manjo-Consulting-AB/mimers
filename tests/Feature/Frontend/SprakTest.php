@@ -445,6 +445,21 @@ it('hämtar skalets strängar ur ui.php', function () {
         // är skalets, och `nav.recent_visits` är dess enda nya nyckel —
         // ordet om tiden kommer ur `date.*` och skrivs av useRelativeDate().
         'js/components/RecentVisitList.vue',
+        // Containerlistan kom med issue 169 och ligger i samma svep av samma
+        // skäl: raden är skalets. Dess två nycklar är `nav.containers` —
+        // listans tillgängliga namn — och `dashboard.containers.others`, ordet
+        // för högen. Arterubrikerna fångas inte av mönstret och ska inte
+        // heller: en art är användarens egen sträng ([[ADR-0036 Containerns
+        // art]]) och slås aldrig upp i katalogen.
+        'js/components/ShellContainerList.vue',
+        // Hjälten kom med issue 170 och ligger i samma svep av samma skäl: den
+        // ritas av containerns skal på varje flik, och dess två egna ord är
+        // `container.hero.edit` — knappen som ersätter raden *Inställningar* i
+        // flikraden ([[ADR-0050 Desktopdesignen]] § 2–3) — och
+        // `container.nav.settings`, läsarens länk till samma sida.
+        // Artens värde och containerns namn är användarens egna strängar och
+        // slås aldrig upp.
+        'js/components/ContainerHero.vue',
     ] as $fil) {
         /*
          * Fönstret `(?<![\w$.])` är det som skiljer ett uppslag från ett
@@ -615,6 +630,355 @@ it('hämtar dashboardens strängar ur ui.php', function () {
     foreach (array_unique($nycklar) as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
+});
+
+/*
+ * Containerns översikt fick sina paneler i issue 172 · [[ADR-0050
+ * Desktopdesignen]] § 7, och två av dem är nya filer med egna nycklar. Samma
+ * form som provet ovanför: nycklarna läses ur källkoden i stället för att
+ * räknas upp här, så en mening som byter namn i en komponent följer med utan
+ * att provet skrivs om.
+ *
+ * De tre filerna slår också upp nycklar de inte äger — `todo.empty.nothing`,
+ * `item.index.empty` och `audit.history.empty` — och det är med flit: samma
+ * ord om samma sak, och en kopia under `container.overview.*` hade varit en
+ * andra sanning om vad tomt betyder på samma container.
+ *
+ * Bildpanelen kom med issue 173 och står i samma lista av samma skäl: den bär
+ * en egen rubrik (`container.overview.images`) och lånar itemets
+ * `item.attachment.file_icon` för den neutrala ytan — samma ord om samma yta
+ * som på itemet, och ingen kopia under `container.overview.*`.
+ */
+it('hämtar containerns översiktssträngar ur ui.php', function () {
+    $nycklar = [];
+
+    foreach ([
+        'js/pages/Containers/Overview.vue',
+        'js/components/ContainerTasksPanel.vue',
+        'js/components/ContainerDetailsPanel.vue',
+        'js/components/RecentImagesPanel.vue',
+    ] as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Panelernas egna etiketter, och inte bara de ärvda: en nyckel som tappas
+    // ur katalogen ska falla här och inte som `container.overview.details` på
+    // skärmen.
+    foreach (['tasks', 'costs', 'costs_total', 'activity', 'images', 'details', 'currency', 'account', 'created', 'view_all'] as $nyckel) {
+        expect(Lang::get("ui.container.overview.{$nyckel}", [], 'en'))
+            ->not->toBe("ui.container.overview.{$nyckel}", "container.overview.{$nyckel} saknas");
+    }
+});
+
+/*
+ * Containerns uppgiftsflik, se issue 174 · [[ADR-0050 Desktopdesignen]] § 16
+ * och resources/js/pages/Containers/Tasks.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
+ * att räknas upp här, så en mening som byter namn i vyn följer med utan att
+ * provet skrivs om — och en nyckel som glöms i katalogen faller här i stället
+ * för att synas som `container.tasks.done` på skärmen.
+ *
+ * **Tre av de fyra kolumnrubrikerna står inte i listan och ska inte göra
+ * det.** De byggs som ``t(`todo.group.${group}`)`` ur gruppens eget namn —
+ * samma ord om samma grupp som på `/tasks` — och mönstret nedan fångar bara
+ * ett uppslag med en skriven nyckel. Att de nycklarna finns prövas där de
+ * hör hemma, i tests/Feature/Frontend/TodovyTest.php.
+ */
+it('hämtar uppgiftsflikens strängar ur ui.php', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Tasks.vue'));
+
+    preg_match_all("/(?<![\w$.])t\\('([a-z0-9_.]+)'/", $vy, $träffar);
+
+    expect($träffar[1])->not->toBeEmpty('Containers/Tasks.vue slår inte upp någon nyckel');
+
+    foreach (array_unique($träffar[1]) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
+    // katalogen ska falla här och inte som `container.tasks.shortcuts` i
+    // rubriken.
+    foreach (['container.nav.tasks', 'container.tasks.title', 'container.tasks.heading', 'container.tasks.filter_maintenance', 'container.tasks.done', 'container.tasks.shortcuts'] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+    }
+});
+
+/*
+ * Containerns kostnadsflik, se issue 175 · [[ADR-0050 Desktopdesignen]] § 9 och
+ * resources/js/pages/Containers/Costs.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
+ * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
+ * skrivs om. Fem filer läses, för tabellen och Pro-delens tre delar är sina
+ * egna komponenter (CostTable, CostFilterBar, CostTimeChart,
+ * CostCategoryBreakdown) — och en rubrik som glöms i den ena hade blivit
+ * `container.costs.supplier` på skärmen.
+ *
+ * **`container.costs.this_year` bär `:year`**, och det prövas inte bara att
+ * nyckeln finns: etiketten säger vilket år brickan räknar, och årtalet kommer
+ * ur serverns `year`-propp och aldrig ur klientens klocka. En nyckel utan
+ * platshållaren hade visat *This year ()*.
+ */
+it('hämtar kostnadsflikens strängar ur ui.php', function () {
+    $nycklar = [];
+
+    $filer = [
+        'js/pages/Containers/Costs.vue',
+        'js/components/CostTable.vue',
+        // Pro-delen, issue 176.
+        'js/components/CostFilterBar.vue',
+        'js/components/CostTimeChart.vue',
+        'js/components/CostCategoryBreakdown.vue',
+    ];
+
+    foreach ($filer as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
+    // katalogen ska falla här och inte som `container.costs.upgrade_link` i
+    // uppgraderingsytan.
+    foreach (['container.nav.costs', 'container.costs.title', 'container.costs.heading', 'container.costs.add', 'container.costs.add_choose_item', 'container.costs.total', 'container.costs.this_year', 'container.costs.donut', 'container.costs.empty', 'container.costs.empty_filtered', 'container.costs.date', 'container.costs.description', 'container.costs.item', 'container.costs.supplier', 'container.costs.amount', 'container.costs.previous', 'container.costs.next', 'container.costs.page', 'container.costs.upgrade', 'container.costs.upgrade_owner', 'container.costs.upgrade_link', 'container.costs.filter_aria', 'container.costs.filter_from', 'container.costs.filter_to', 'container.costs.filter_category', 'container.costs.filter_all', 'container.costs.filter_submit', 'container.costs.filter_clear', 'container.costs.chart', 'container.costs.breakdown', 'container.costs.other', 'container.costs.comparison', 'container.costs.comparison_percent'] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+    }
+
+    expect(Lang::get('ui.container.costs.this_year', ['year' => 2026], 'en'))->toBe('This year (2026)');
+
+    // Pro-delens procent bär sitt tecken i VÄRDET och inte i vyn: "+12 %" och
+    // "−4 %" är samma mening med olika tal, och vyn sätter aldrig ihop ett
+    // plustecken och en enhet själv (issue 176).
+    expect(Lang::get('ui.container.costs.comparison_percent', ['percent' => '+12'], 'en'))->toBe('+12%')
+        ->and(Lang::get('ui.container.costs.comparison_percent', ['percent' => '-4'], 'en'))->toBe('-4%');
+});
+
+/*
+ * Containerns dokumentflik, se issue 178 · [[ADR-0050 Desktopdesignen]]
+ * § 12–15, resources/js/pages/Containers/Documents.vue och de två
+ * komponenterna den monterar.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
+ * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
+ * skrivs om. Fyra filer läses, för filterfältet och lagringsstapeln är sina
+ * egna komponenter — och en rubrik som glöms i den ena hade blivit
+ * `container.documents.filter_uploader` på skärmen.
+ *
+ * **De tre typorden är `item.attachment.kind.*` och inga kopior**, och det
+ * prövas särskilt: filtret och raden ska säga samma ord om samma typ. Bygger
+ * någon en egen uppsättning faller raden nedan, och det är meningen.
+ *
+ * **`of` och `unlimited` bär `:used`**, och etiketten prövas med ett värde:
+ * en nyckel utan platshållaren hade visat en tom parentes. De två är grenarna
+ * för ett tak som finns och ett som inte gör det (§ 15) — ett obegränsat tak
+ * ritar bara förbrukningen.
+ */
+it('hämtar dokumentflikens strängar ur ui.php', function () {
+    $nycklar = [];
+
+    $filer = [
+        'js/pages/Containers/Documents.vue',
+        'js/components/DocumentFilterBar.vue',
+        'js/components/StorageBar.vue',
+    ];
+
+    foreach ($filer as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
+    // katalogen ska falla här och inte som `container.documents.filter_from` i
+    // filterfältet.
+    foreach ([
+        'container.nav.documents',
+        'container.documents.title',
+        'container.documents.heading',
+        'container.documents.add',
+        'container.documents.add_choose_item',
+        'container.documents.empty',
+        'container.documents.empty_filtered',
+        'container.documents.recent',
+        'container.documents.filename',
+        'container.documents.type',
+        'container.documents.item',
+        'container.documents.date',
+        'container.documents.size',
+        'container.documents.download',
+        'container.documents.view_label',
+        'container.documents.view_list',
+        'container.documents.view_grid',
+        'container.documents.sort_label',
+        'container.documents.sort_newest',
+        'container.documents.sort_oldest',
+        'container.documents.sort_name',
+        'container.documents.sort_size',
+        'container.documents.filter_aria',
+        'container.documents.filter_item',
+        'container.documents.filter_uploader',
+        'container.documents.filter_from',
+        'container.documents.filter_to',
+        'container.documents.filter_all',
+        'container.documents.filter_submit',
+        'container.documents.filter_clear',
+        'container.documents.previous',
+        'container.documents.next',
+        'container.documents.page',
+        'container.documents.uploads',
+        'container.documents.of',
+        'container.documents.unlimited',
+    ] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+    }
+
+    // Sorteringens fyra lägen byggs som `container.documents.sort_<värde>` ur
+    // serverns `SORTS`, och typens tre som `item.attachment.kind.<värde>`: de
+    // dynamiska uppslagen fångas inte av mönstret ovan, så de prövas här.
+    foreach (['newest', 'oldest', 'name', 'size'] as $lage) {
+        expect(Lang::get("ui.container.documents.sort_{$lage}", [], 'en'))
+            ->not->toBe("ui.container.documents.sort_{$lage}", "container.documents.sort_{$lage} saknas");
+    }
+
+    foreach (['image', 'document', 'other'] as $kind) {
+        expect(Lang::get("ui.item.attachment.kind.{$kind}", [], 'en'))
+            ->not->toBe("ui.item.attachment.kind.{$kind}", "item.attachment.kind.{$kind} saknas");
+    }
+
+    // Lagringsstapelns två grenar bär sina tal, och ett obegränsat tak nämner
+    // inget tak alls.
+    expect(Lang::get('ui.container.documents.of', ['used' => '2.4 GB', 'limit' => '25 GB'], 'en'))
+        ->toBe('2.4 GB of 25 GB')
+        ->and(Lang::get('ui.container.documents.unlimited', ['used' => '2.4 GB'], 'en'))
+        ->toBe('2.4 GB used');
+
+    expect(Lang::get('ui.container.documents.page', ['page' => 2, 'last' => 5], 'en'))
+        ->toBe('Page 2 of 5');
+});
+
+/*
+ * Historikflikens strängar, se issue 179 · [[ADR-0050 Desktopdesignen]] § 17,
+ * resources/js/pages/Containers/History.vue och
+ * resources/js/components/HistoryFilterBar.vue.
+ *
+ * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
+ * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
+ * skrivs om. Två filer läses, för filterfältet är sin egen komponent — och en
+ * rubrik som glöms i den ena hade blivit `audit.history.filter_type` på
+ * skärmen.
+ *
+ * **Typordens tolv nycklar prövas särskilt.** Filtret bygger sin etikett som
+ * `audit.subject.<subject_type>` ur ett värde servern skickar — ett dynamiskt
+ * uppslag som mönstret ovan inte fångar — och en typ utan ord visar sin nyckel
+ * i menyn i stället för ett ord. Listan här är de tolv domännamn
+ * `RecordAuditEvent` faktiskt skriver (`subject_type` är ett öppet namnrum, så
+ * en ny typ faller inte här; den syns i menyn och hittas av den som lägger
+ * till den).
+ */
+it('hämtar historikflikens strängar ur ui.php', function () {
+    $nycklar = [];
+
+    $filer = [
+        'js/pages/Containers/History.vue',
+        'js/components/HistoryFilterBar.vue',
+        // Diagrammen kom med issue 180 och ligger i samma svep: rubrikerna
+        // står i vyn och talens etiketter i komponenterna — en rubrik som
+        // glöms i katalogen hade blivit `audit.history.activity_over_time`
+        // över grafen.
+        'js/components/ActivityTimeChart.vue',
+        'js/components/ActivityTypeChart.vue',
+        'js/components/ActiveItemsPanel.vue',
+    ];
+
+    foreach ($filer as $fil) {
+        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
+
+        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
+
+        $nycklar = [...$nycklar, ...$träffar[1]];
+    }
+
+    foreach (array_unique($nycklar) as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
+    }
+
+    // Flikens egna ord, och inte bara de ärvda: en nyckel som tappas ur
+    // katalogen ska falla här och inte som `audit.history.empty_filtered` i
+    // tomtillståndet.
+    foreach ([
+        'audit.history.title',
+        'audit.history.heading',
+        'audit.history.empty',
+        'audit.history.empty_filtered',
+        'audit.history.day_count',
+        'audit.history.filter_aria',
+        'audit.history.filter_type',
+        'audit.history.filter_user',
+        'audit.history.filter_item',
+        'audit.history.filter_from',
+        'audit.history.filter_to',
+        'audit.history.filter_all',
+        'audit.history.filter_submit',
+        'audit.history.filter_clear',
+        // Diagrammen (issue 180): de två kortrubrikerna, panelens rubrik, och
+        // de tre orden talen bär.
+        'audit.history.activity_over_time',
+        'audit.history.activity_types',
+        'audit.history.recent_items',
+        'audit.history.chart_date',
+        'audit.history.chart_events',
+        'audit.history.type_other',
+    ] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
+    }
+
+    // Varje `subject_type` `RecordAuditEvent` skriver har ett ord, så att
+    // typfiltrets meny säger *Costs* och inte `audit.subject.cost_entry`.
+    foreach ([
+        'attachment',
+        'calendar_feed',
+        'category',
+        'container',
+        'container_access',
+        'cost_entry',
+        'invitation',
+        'loan',
+        'ownership_transfer',
+        'schedule',
+        'schedule_occurrence',
+        'tag',
+    ] as $typ) {
+        expect(Lang::get("ui.audit.subject.{$typ}", [], 'en'))
+            ->not->toBe("ui.audit.subject.{$typ}", "audit.subject.{$typ} saknas");
+    }
+
+    // Dagens rubrik bär dagens tal, och de två tomma tillstånden säger olika
+    // saker — det ena att ingenting hänt, det andra att inget matchar.
+    expect(Lang::get('ui.audit.history.day_count', ['count' => 8], 'en'))->toBe('8 events');
+
+    expect(Lang::get('ui.audit.history.empty', [], 'en'))
+        ->not->toBe(Lang::get('ui.audit.history.empty_filtered', [], 'en'));
 });
 
 /*

@@ -114,6 +114,24 @@ function personraderingPersonensRader(User $person, Container $container): int
         'updated_at' => now(),
     ]);
 
+    // Öppningsraden (issue 177 · [[ADR-0051 Senast öppnade filer]] § Beslut):
+    // samma form som besöksraden, och samma RESTRICT-nyckel — mot `attachment`
+    // i stället för mot `item`. Bilagan byggs med fabriken; den behöver ingen
+    // stored_file på disken, för ingenting här läser bytena.
+    $bilaga = Attachment::factory()->create([
+        'item_id' => $item->id,
+        'uploaded_by_user_id' => $person->id,
+        'billed_account_id' => $container->account_id,
+    ]);
+
+    DB::table('attachment_open')->insert([
+        'user_id' => $person->id,
+        'attachment_id' => $bilaga->id,
+        'opened_at' => now(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
     DB::table('dismissed_tip')->insert([
         'user_id' => $person->id,
         'tip_key' => 'favorites',
@@ -201,8 +219,9 @@ function personraderingPersonensRader(User $person, Container $container): int
         'webhook_endpoint_id' => $endpoint->id,
     ]);
 
-    // Tretton räknade rader: de tolv ovan plus besöksraden (issue 160).
-    return 13;
+    // Fjorton räknade rader: de tolv ovan plus besöksraden (issue 160) och
+    // öppningsraden (issue 177).
+    return 14;
 }
 
 /**
@@ -212,6 +231,7 @@ function personraderingKvarvarandeRader(User $person): int
 {
     return (int) DB::table('favorite')->where('user_id', $person->id)->count()
         + (int) DB::table('recent_visit')->where('user_id', $person->id)->count()
+        + (int) DB::table('attachment_open')->where('user_id', $person->id)->count()
         + (int) DB::table('dismissed_tip')->where('user_id', $person->id)->count()
         + (int) DB::table('calendar_feed')->where('user_id', $person->id)->count()
         + (int) DB::table('notification_preference')->where('user_id', $person->id)->count()
@@ -332,6 +352,51 @@ it('personens besöksrader raderas även på någon annans item', function () {
         // Itemet är någon annans och står kvar — det var bara besöksraden som
         // var personens.
         ->and(Item::query()->whereKey($item->id)->exists())->toBeTrue();
+});
+
+/*
+ * Klart när: personraderingen tar bort öppningsraderna — även de som pekar på
+ * någon ANNANS bilaga (issue 177 · [[ADR-0051 Senast öppnade filer]]
+ * § Beslut).
+ *
+ * Samma uppställning och samma skäl som besöksraden ovan: raden i personens
+ * egna container försvinner redan med kontot, genom PurgeContainer →
+ * PurgeAttachment, så det är den FRÄMMANDE raden som prövar DeleteUser:s eget
+ * steg. Bilagan står kvar — det var bara öppningen som var personens.
+ */
+it('personens öppningsrader raderas även på någon annans bilaga', function () {
+    $person = User::factory()->create();
+    $konto = personraderingEgetKonto($person);
+    personraderingContainer($konto);
+
+    $agare = Account::factory()->create();
+    $frammande = personraderingContainer($agare);
+    $item = Item::factory()->for($frammande, 'container')->create([
+        'created_by_user_id' => User::factory()->create()->id,
+        'created_by_account_id' => $agare->id,
+    ]);
+
+    $bilaga = Attachment::factory()->create([
+        'item_id' => $item->id,
+        'uploaded_by_user_id' => User::factory()->create()->id,
+        'billed_account_id' => $agare->id,
+    ]);
+
+    beviljaAccess($frammande, $person, 'read', 'guest');
+
+    DB::table('attachment_open')->insert([
+        'user_id' => $person->id,
+        'attachment_id' => $bilaga->id,
+        'opened_at' => now(),
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    app(DeleteUser::class)->handle($person);
+
+    expect(User::query()->whereKey($person->id)->exists())->toBeFalse()
+        ->and(DB::table('attachment_open')->where('attachment_id', $bilaga->id)->exists())->toBeFalse()
+        ->and(Attachment::query()->whereKey($bilaga->id)->exists())->toBeTrue();
 });
 
 /*

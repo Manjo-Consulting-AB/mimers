@@ -132,10 +132,9 @@ it('leder till formuläret för ett nytt item i containern', function () {
 });
 
 /*
- * Menyn på ett item. Fyra rader och inte fem: den femte — *Kostnad* — har
- * ingen webbyta att leda till i dag, och en död länk är värre än en rad som
- * inte finns. Se App\Support\Frontend\CreateTargets docblock och PR:ens
- * `## Frågor och antaganden`.
+ * Menyn på ett item. Fem rader sedan issue 168, då *Kostnad* fick sin yta —
+ * itemets kostnadsflik — och menyns sista döda länk försvann. Se
+ * App\Support\Frontend\CreateTarget.
  */
 it('öppnar menyn med de rader användaren får använda på ett item', function () {
     withoutVite();
@@ -152,7 +151,48 @@ it('öppnar menyn med de rader användaren får använda på ett item', function
                 ['key' => 'relation', 'href' => "{$bas}?tab=relations"],
                 ['key' => 'attachment', 'href' => "{$bas}?tab=attachments"],
                 ['key' => 'schedule', 'href' => "{$bas}/schedules/create"],
+                // Den femte raden ur [[ADR-0048 Mobilen och plusknappen]] § 2:
+                // *Kostnad*, som leder till itemets kostnadsflik. Raden
+                // byggdes inte förrän ytan fanns (issue 168) — en menyrad till
+                // en webbyta som inte finns är en död länk.
+                ['key' => 'cost', 'href' => "{$bas}?tab=costs"],
             ]),
+    );
+});
+
+/*
+ * Klart när: "plusknappens meny har raden Kostnad som leder till fliken".
+ *
+ * Raden är den femte ur [[ADR-0048 Mobilen och plusknappen]] § 2 och kom med
+ * issue 168, när ytan den leder till byggdes: före det hade den varit en död
+ * länk, och en yta ingen hittar är samma sak som en yta som inte finns.
+ * Adressen är itemets egen med `?tab=costs`, samma form *Relation* och *Bild
+ * eller dokument* bär — menyn byter flik, den lämnar inte itemet.
+ *
+ * Grinden är itemets `create`, samma pinne som `ItemController::show()` ritar
+ * raden ur och `CostEntryController::store()` prövar på nytt. En läsare får
+ * därför ingen meny alls, och alltså ingen rad: `create`-proppen är null.
+ */
+it('har raden Kostnad som leder till fliken', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = plusknappKontext();
+    $item = plusknappItem($container);
+
+    $bas = "/containers/{$container->ulid}/items/{$item->ulid}";
+
+    actingAs($anvandare)->get($bas)->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create.rows.4', [
+            'key' => 'cost',
+            'href' => "{$bas}?tab=costs",
+        ]),
+    );
+
+    $lasare = User::factory()->create();
+    plusknappGrant($container, $lasare, 'read');
+
+    actingAs($lasare)->get($bas)->assertInertia(
+        fn (AssertableInertia $page) => $page->where('create', null),
     );
 });
 
@@ -217,7 +257,7 @@ it('visar ingen knapp för en användare med läsåtkomst', function () {
  * Relationen är den enda raden med en annan grind: en `related`-länk ändrar
  * BÅDA itemen, och `ItemLinkController::store()` kräver `update` på dem medan
  * de fyra andra raderna kräver `create`. En mottagare på `create` ser därför
- * tre rader och en på `write` fyra — samma meny, olika innehåll, och det är
+ * fyra rader och en på `write` fem — samma meny, olika innehåll, och det är
  * servern som avgör.
  */
 it('utelämnar en rad vars policy nekar', function () {
@@ -230,17 +270,18 @@ it('utelämnar en rad vars policy nekar', function () {
     plusknappGrant($container, $skapare, 'create');
 
     actingAs($skapare)->get("/containers/{$container->ulid}/items/{$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->has('create.rows', 3)
+        fn (AssertableInertia $page) => $page->has('create.rows', 4)
             ->where('create.rows.0.key', 'item')
             ->where('create.rows.1.key', 'attachment')
-            ->where('create.rows.2.key', 'schedule'),
+            ->where('create.rows.2.key', 'schedule')
+            ->where('create.rows.3.key', 'cost'),
     );
 
     $skrivare = User::factory()->create();
     plusknappGrant($container, $skrivare, 'write');
 
     actingAs($skrivare)->get("/containers/{$container->ulid}/items/{$item->ulid}")->assertInertia(
-        fn (AssertableInertia $page) => $page->has('create.rows', 4)
+        fn (AssertableInertia $page) => $page->has('create.rows', 5)
             ->where('create.rows.1.key', 'relation'),
     );
 });
@@ -300,8 +341,8 @@ it('ritar knappen i skalet och i flikraden ur sidans mål', function () {
     foreach ([
         'pages/Dashboard.vue' => '<AppLayout :create="create">',
         'pages/Containers/Index.vue' => '<AppLayout :create="create">',
-        'pages/Containers/Overview.vue' => '<ContainerLayout :container="container" :create="create" :can="can">',
-        'pages/Containers/Items/Index.vue' => '<ContainerLayout :container="container" :create="create">',
+        'pages/Containers/Overview.vue' => '<ContainerLayout hero="large" :container="container" :create="create" :can="can">',
+        'pages/Containers/Items/Index.vue' => '<ContainerLayout hero="compact" :container="container" :can="can" :create="create">',
         'pages/Containers/Items/Show.vue' => '<ContainerLayout :container="container" :create="create">',
     ] as $sokvag => $rad) {
         expect(plusknappKod($sokvag))->toContain($rad);
@@ -412,7 +453,7 @@ it('har en mening till varje menyrad och till knappen', function () {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
     }
 
-    foreach (['item', 'relation', 'attachment', 'schedule'] as $rad) {
+    foreach (['item', 'relation', 'attachment', 'schedule', 'cost'] as $rad) {
         expect(Lang::get("ui.create.rows.{$rad}", [], 'en'))->not->toBe(
             "ui.create.rows.{$rad}",
             "ui.create.rows.{$rad} saknas",

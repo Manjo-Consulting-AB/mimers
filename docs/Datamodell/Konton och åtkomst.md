@@ -72,7 +72,7 @@ En spärrad radering gör ingenting. **En aktiv prenumeration spärrar inte** �
 Kontona avgörs först, i samma transaktion: ett konto där personen är enda medlem raderas med `DeleteAccount` (med samma innehåll, kvoter och prenumeration som i livscykeln), ett konto med andra medlemmar lämnas orört och personens `account_user`-rad tas bort. Därefter, i den ordning de främmande nycklarna kräver:
 
 1. författarkolumnerna mot `user` nollställs — `item`, `attachment`, `schedule_occurrence`, `cost_entry`, `container_access` och `export` (ADR-0045 § Beslut 2); raderna är någon annans innehåll och står kvar utan avsändare,
-2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `recent_visit`, `dismissed_tip`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `user_deletion`, `sessions` och `personal_access_tokens`,
+2. personens egna rader raderas: `account_user`, `container_access` som mottagare, `calendar_feed`, `notification` och `notification_preference`, `favorite`, `recent_visit`, `attachment_open`, `dismissed_tip`, `magic_link_token`, `totp_recovery_code`, `email_change`, `password_change`, `user_deletion`, `sessions` och `personal_access_tokens`,
 3. väntande inbjudningar och ägarbyten som personen startat dras tillbaka (`status = 'revoked'`), och författarkolumnen nollställs på dem alla — besvarade behåller sin rad,
 4. säkerhetsloggen får en rad `user.deleted`, utan e-postadressen,
 5. `user`-raden raderas **på riktigt**. Ingen mjukradering: en mjukraderad person vore en person som inte är raderad. `email` blir ledig och kan registreras igen som ett nytt konto.

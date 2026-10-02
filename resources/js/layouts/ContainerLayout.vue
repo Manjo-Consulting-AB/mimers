@@ -4,6 +4,7 @@ import { Link } from '@inertiajs/vue3';
 import AppLayout from './AppLayout.vue';
 import ContainerCover from '../components/ContainerCover.vue';
 import ContainerCoverSheet from '../components/ContainerCoverSheet.vue';
+import ContainerHero from '../components/ContainerHero.vue';
 import UiTabs from '../components/UiTabs.vue';
 import { containerTabs } from './containerSections.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -37,7 +38,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * tangentbordet och den aktiva fliken; hit hör bara VILKA flikar som finns och
  * vad de heter. De sju sektionerna som inte fick plats — kategorier, taggar,
  * delning, kalender, export, papperskorg och överlåtelse — samlas på
- * inställningssidan, som är en av flikarna, så ingen av dem tappar sin väg.
+ * inställningssidan, så ingen av dem tappar sin väg. Sedan issue 170 nås den
+ * från hjälten över `md:` och från raden under flikraden under `md:` — den
+ * lämnade flikraden då (ADR-0050 § 3).
  * Listan bor i containerSections.js; en ny flik är en ny rad där och ingen
  * ändring här.
  *
@@ -74,10 +77,32 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Bilden kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut**, och
  * det är den tredje av de tre ytor bilden ritas på: containerlistan,
- * dashboardens kort och containerns topprad. Den ritas bara här — över `md:`
- * står namnraden kvar som den var, för den bild desktopmockupen ritar
- * (`docs/Design/container.jpeg`) är containerns hjälte, och den är en egen yta
- * som ingen issue byggt ännu.
+ * dashboardens kort och containerns topprad.
+ *
+ * **Hjälten kom med issue 170 · [[ADR-0050 Desktopdesignen]] § 2–3**, och den
+ * är den fjärde ytan: bilden desktopmockupen ritar
+ * (`docs/Design/container.jpeg` och `docs/Design/kostnader.png`) är containerns
+ * huvud över `md:`, och den ersätter namnraden som stod här förut. Proppen
+ * `hero` bär formen — `large` på översikten, `compact` på de andra flikarna —
+ * och den som inte skickar något får ingen hjälte och ser sin sida som förut.
+ * Det är sidans svar och inte skalets: samma skal ritar översikten, itemlistan,
+ * historiken och inställningssidan, och bara den första bär talen.
+ *
+ * **Under `md:` ritas ingen hjälte alls.** Den mörka toppraden från issue 151
+ * bär containerns bild och namn där, och hjältens `hidden md:block` är samma
+ * uppdelning som skalets egen: den ena ytan under brytpunkten, den andra över.
+ *
+ * **Raden *Inställningar* under flikraden är telefonens väg till sektionerna.**
+ * Den lämnade flikraden i issue 170 (ADR-0050 § 3), och hjälten som tog över
+ * vägen ritas inte här. Utan raden hade en telefon tappat containerns sju
+ * sektioner — [[ADR-0042 Designsystemet]] § Konsekvenser förbjuder det — och
+ * den ritas därför för var och en, också den som bara läser. Träffytan är
+ * `min-h-11` (44 px, issue 68a § Beslut 3), som varje annan radåtgärd.
+ *
+ * **Talen går genom skalet och byggs inte här.** Den höga hjälten bär
+ * översiktens `counts` ovanpå bilden, och de kommer in genom sloten
+ * `hero-stats` — layouten frågar ingenting själv, precis som den inte räknar
+ * något annat tal på sidan.
  *
  * **Pennan öppnar arket, och den ritas bara för den som får ändra containern**
  * (ADR-0047 § Beslut, "Vem som får göra vad"). Flaggan kommer som `can` från
@@ -107,17 +132,29 @@ const props = defineProps({
     create: { type: Object, default: null },
     /*
      * `{ update }` — samma flagga som inställningssidan ritar sitt formulär ur
-     * (issue 159). Den styr om pennan på bilden ritas; arket och rutten prövar
-     * behörigheten ändå.
+     * (issue 159). Den styr om pennan på bilden ritas, och sedan issue 170 även
+     * *Redigera container* i hjälten; arket och rutten prövar behörigheten
+     * ändå.
      *
      * Flaggan kan inte bo i `container`-proppen: `can` är webbens fält och
      * läggs BREDVID `ContainerResource`, aldrig inuti den (issue 54 § Beslut
      * 9). Den kommer därför från sidan — och en sida som inte skickar den får
-     * ingen penna. I den här issuen skickar översikten och inställningssidan
-     * den; de övriga containernsidorna gör det inte, och deras topprad visar
-     * bilden utan penna.
+     * ingen penna och ingen redigeringsknapp. Översikten, itemlistan,
+     * historiken och inställningssidan skickar den; formulären, schemasidorna
+     * och itemvyn gör det inte, och deras rader visar bilden utan penna.
      */
     can: { type: Object, default: null },
+    /*
+     * Hjältens form (issue 170 · [[ADR-0050 Desktopdesignen]] § 2): `large` på
+     * översikten, `compact` på de andra flikarna, och `null` — förvalet — på
+     * varje sida som inte ska ha någon hjälte. Itemvyn, formulären,
+     * schemasidorna och inställningssidorna skickar ingenting och ser ut som i
+     * dag.
+     *
+     * Flaggan är sidans och inte skalets: samma layout ritar alla containerns
+     * ytor, och vilken av dem som är containerns huvud är en fråga om sidan.
+     */
+    hero: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -206,13 +243,57 @@ const tabs = computed(() =>
 
         <div class="flex flex-col gap-8">
             <div>
-                <!-- Rubriken över flikraden ritas bara över `md:`. Under
-                     brytpunkten bär den mörka toppraden samma namn (sloten
-                     `topbar` ovan), och två rubriker med samma text är både
-                     en synlig dubblett och en skärmläsare som läser fel. -->
-                <p class="hidden px-3 py-2 font-medium text-title md:block">{{ heading }}</p>
+                <!--
+                    Hjälten, där sidan har en (issue 170). Den ersätter
+                    namnraden som stod här: över `md:` är hjälten containerns
+                    huvud, och två rader med samma namn är både en synlig
+                    dubblett och en skärmläsare som läser fel.
+
+                    `hidden md:block` — under brytpunkten bär den mörka
+                    toppraden (sloten `topbar` ovan) containerns bild och namn,
+                    och där ritas ingen hjälte.
+
+                    Talen kommer från sidan genom `hero-stats` och ritas bara
+                    av den höga hjälten: översikten äger sina `counts`, och
+                    skalet frågar ingenting själv.
+                -->
+                <ContainerHero
+                    v-if="hero"
+                    class="hidden md:block"
+                    :hero="hero"
+                    :container="container"
+                    :can="can"
+                >
+                    <template #stats>
+                        <slot name="hero-stats" />
+                    </template>
+                </ContainerHero>
+
+                <!-- Namnraden, på varje sida utan hjälte. Under `md:` bär den
+                     mörka toppraden samma namn (sloten `topbar` ovan), och två
+                     rubriker med samma text är både en synlig dubblett och en
+                     skärmläsare som läser fel. -->
+                <p v-else class="hidden px-3 py-2 font-medium text-title md:block">{{ heading }}</p>
 
                 <UiTabs :tabs="tabs" :label="heading" />
+
+                <!--
+                    Under `md:` ritas ingen hjälte, och *Inställningar* lämnade
+                    flikraden när hjälten tog över vägen dit (ADR-0050 § 3).
+                    Utan den här raden hade containerns sju sektioner varit
+                    oåtkomliga på en telefon — [[ADR-0042 Designsystemet]]
+                    § Konsekvenser tillåter inte att en yta tappar sin väg —
+                    och den ritas därför för var och en, också den som bara
+                    läser. Adressen är inställningssidans egen rutt, och raden
+                    ligger utanför `UiTabs` och utanför `TAB_KEYS`: flikraden är
+                    fortfarande *Översikt · Items · Historik*.
+                -->
+                <Link
+                    :href="`/containers/${container.ulid}/edit`"
+                    class="mt-1 inline-flex min-h-11 items-center px-3 text-sm font-medium text-ink-muted underline md:hidden"
+                >
+                    {{ t('container.nav.settings') }}
+                </Link>
             </div>
 
             <div class="min-w-0">

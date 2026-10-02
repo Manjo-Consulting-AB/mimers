@@ -254,12 +254,19 @@ it('delar favoritlistan och ger en gäst samma tomma svar som en utan favoriter'
 it('delar klockans siffra men aldrig listorna på en vanlig sidladdning', function () {
     withoutVite();
 
+    // *Nyligen besökta* (issue 160) och skalets containerlista (issue 169) är
+    // optionala av samma skäl som klockans listor: de ritas bara i
+    // sidopanelen och sidomenyn, och en vanlig sidladdning ska inte bära dem.
+    // Läsningen av dem prövas i NyligenBesoktaTest och SidopanelTest.
+
     // Gästen först: actingAs() sätter guardens användare för resten av testet.
     get('/')->assertOk()->assertInertia(fn (AssertableInertia $page) => $page
         ->where('auth.user', null)
         ->where('unreadNotificationCount', 0)
         ->missing('notifications')
         ->missing('pendingInvitations')
+        ->missing('recentVisits')
+        ->missing('shellContainers')
     );
 
     $anvandare = User::factory()->create();
@@ -269,5 +276,7 @@ it('delar klockans siffra men aldrig listorna på en vanlig sidladdning', functi
         ->where('unreadNotificationCount', 0)
         ->missing('notifications')
         ->missing('pendingInvitations')
+        ->missing('recentVisits')
+        ->missing('shellContainers')
     );
 });

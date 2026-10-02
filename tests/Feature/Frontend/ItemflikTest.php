@@ -276,15 +276,15 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         // namn rubriken bär, och det som säger vilket item raden hör till.
         ->toContain(':label="item.name"');
 
-    // Åtta flikar sedan issue 154: informationsfliken är fältens, och
-    // historiken (issue 116) är den sista. Bildens sju minus kostnaden, plus
-    // utlåningen — och taggarna, som inte heller har någon rad i bilden.
-    // Kostnaden har ingen flik: den väntar på trepanelslayouten (issue 103).
+    // Nio flikar sedan issue 168: kostnaden har fått sin, och historiken
+    // (issue 116) är fortfarande den sista.
     //
-    // **Informationsfliken kom med issue 154** och är bildens *Detaljer* — på
-    // mobilmockupen *Information*, och den flik *Visa alla fält* öppnar. Den
-    // ligger näst efter översikten, i bildens ordning, och den är därför den
-    // enda ändringen i den här listan sedan issue 116.
+    // **Kostnadsfliken kom med issue 168** och är bildens *Kostnader* — den
+    // rad issue 102 lämnade utanför därför att ytan inte fanns i webben. Den
+    // ligger näst sist, före historiken, precis som i containerns egen flikrad
+    // ([[ADR-0050 Desktopdesignen]] § 4). **Informationsfliken kom med issue
+    // 154** och är bildens *Detaljer* — på mobilmockupen *Information*, och
+    // den flik *Visa alla fält* öppnar.
     expect(itemflikNycklar($vy))->toBe([
         'overview',
         'information',
@@ -293,6 +293,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         'schedules',
         'loans',
         'tags',
+        'costs',
         'history',
     ]);
 
@@ -307,6 +308,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
         'item.schedule.heading',
         'item.loan.heading',
         'item.show.tags',
+        'item.cost.heading',
         'audit.history.heading',
     ]);
 
@@ -335,7 +337,7 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
     preg_match_all("/tabHref\('(\w+)'\)/", $bar, $träffar);
 
-    expect($träffar[1])->toBe(['information', 'relations', 'attachments', 'schedules', 'loans', 'tags', 'history']);
+    expect($träffar[1])->toBe(['information', 'relations', 'attachments', 'schedules', 'loans', 'tags', 'costs', 'history']);
 
     // Och varje flik svarar. Ingen ny ändpunkt: adresserna är itemets egen
     // rutt med en querysträng på, och kontrollern är orörd av issuen.
@@ -344,6 +346,42 @@ it('itemets vy har en flikrad byggd av UiTabs', function () {
 
         actingAs($anvandare)->get($adress)->assertOk();
     }
+});
+
+/*
+ * Klart när: "fliken Kostnader finns i itemets flikrad".
+ *
+ * Fliken är bildens *Kostnader* och kom med issue 168, när ytan den visar
+ * byggdes — den rad issue 102 lämnade utanför därför att `cost_entry` bara
+ * nåddes genom `/api`. Den ligger näst sist, före historiken, precis som i
+ * containerns egen flikrad ([[ADR-0050 Desktopdesignen]] § 4), och den bär
+ * sitt eget ord: etiketten är `item.cost.heading`, samma rubrik som sektionen
+ * strax under den, så fliken och ytan inte kan säga olika saker.
+ *
+ * Provet läser vyns EGEN lista, som proven ovan, och fäster raden vid tre
+ * saker: nyckeln `costs`, adressen `tabHref('costs')` och panelen
+ * `ItemCostSection`. Räknaren är `costs`-proppens längd — en flik som visar en
+ * lista räknar den, och en nolla säger att listan är tom.
+ */
+it('har fliken Kostnader i itemets flikrad', function () {
+    $vy = itemflikKod('pages/Containers/Items/Show.vue');
+
+    $nycklar = itemflikNycklar($vy);
+
+    expect($nycklar)->toContain('costs');
+
+    // Näst sist: historiken (issue 116) ligger efter den, och det är ordningen
+    // bilden och containerns egen flikrad ger.
+    expect(array_search('costs', $nycklar, true))->toBe(count($nycklar) - 2);
+    expect($nycklar[count($nycklar) - 1])->toBe('history');
+
+    $rad = itemflikRader($vy)['costs'];
+
+    expect($rad)->toContain("label: t('item.cost.heading')")
+        ->toContain("href: tabHref('costs')")
+        ->toContain('count: props.costs.length');
+
+    expect(itemflikPaneler($vy)['costs'])->toContain('<ItemCostSection');
 });
 
 /*
@@ -378,6 +416,7 @@ it('alla sex befintliga propar når sin flik', function () {
         'schedules' => ['<ScheduleListSection', ':schedules="schedules"', ':open-occurrences="openOccurrences"'],
         'loans' => ['<ItemLoanSection', ':open-loan="openLoan"', ':loan-history="loanHistory"'],
         'tags' => ['<ItemTagList', ':tags="item.tags"'],
+        'costs' => ['<ItemCostSection', ':costs="costs"', ':cost-defaults="costDefaults"'],
         'history' => ['<HistoryRow', 'v-for="row in history"', ':row="row"'],
     ];
 
@@ -451,6 +490,9 @@ it('räknar raderna på fliken och bär inget tal där ingen lista finns', funct
         'schedules' => ['props.schedules'],
         'loans' => ['props.loanHistory', 'props.openLoan'],
         'tags' => ['props.item.tags'],
+        // Kostnadsfliken ritar itemets rader, och räknaren är deras antal —
+        // en nolla säger att listan är tom (issue 168).
+        'costs' => ['props.costs'],
     ];
 
     foreach ($listor as $nyckel => $proppar) {
@@ -574,11 +616,16 @@ it('flikraden ligger inuti containerns ram', function () {
     // Bilden ritar historiken som en GLOBAL rad i vänstermenyn; den här
     // produkten lägger den inuti containerns ram, som en sjunde flik jämte de
     // sex andra. Att den alltså FINNS som flik är rätt, och ett prov som
-    // fortfarande förbjöd namnet hade fällt den riktiga lösningen. Kvar i
-    // listan står de fyra som fortfarande vore en global navigering.
+    // fortfarande förbjöd namnet hade fällt den riktiga lösningen.
+    //
+    // **`costs` lämnade listan i issue 168, av samma skäl.** Bildens globala
+    // rad *Kostnader* blev itemets egen kostnadsflik — [[ADR-0050
+    // Desktopdesignen]] § 8 lägger ytan på itemet — och plusknappens menyrad
+    // *Kostnad* leder dit. Kvar i listan står de tre som fortfarande vore en
+    // global navigering.
     $flikar = itemflikNycklar($vy);
 
-    foreach (['structure', 'map', 'documents', 'costs'] as $global) {
+    foreach (['structure', 'map', 'documents'] as $global) {
         expect(in_array($global, $flikar, true))->toBeFalse(
             "bildens globala rad {$global} har blivit en flik",
         );

@@ -522,6 +522,45 @@ it('kostar ett konstant antal frågor oavsett antalet containers', function () {
 });
 
 /*
+ * Klart när (issue 170): toppraden under `md:` är oförändrad av hjälten.
+ *
+ * Hjälten ritas bara över `md:` (`hidden md:block`, [[ADR-0050
+ * Desktopdesignen]] § 2), och under brytpunkten är skalet från issue 151
+ * oförändrat: den mörka toppraden bär containerns bild, namn och
+ * tillbakaknapp, och pennan öppnar samma ark som förut. Provet fäster alla
+ * fyra leden, så att hjältens `hidden md:block` inte kan bli en rad som
+ * gömmer toppraden i stället — eller tvärtom.
+ *
+ * Kommentarer rensas bort först, som i grannfilerna: docblocken är svenska
+ * med flit, och en regel som letar efter en klass ska inte kunna nöjas av en
+ * mening i en kommentar.
+ */
+it('lämnar toppraden under md: oförändrad när hjälten ritas', function () {
+    $vy = File::get(resource_path('js/layouts/ContainerLayout.vue'));
+    $vy = (string) preg_replace('#/\*.*?\*/#s', '', $vy);
+    $vy = (string) preg_replace('#<!--.*?-->#s', '', $vy);
+
+    // Hjälten är dold under `md:`, och namnraden den ersätter gäller bara
+    // över brytpunkten — samma `hidden ... md:block` som förut.
+    expect($vy)->toContain('class="hidden md:block"');
+
+    // Toppraden: sloten, tillbakaknappen, bilden, namnet och pennan.
+    $topprad = substr($vy, (int) strpos($vy, '<template #topbar>'));
+    $topprad = substr($topprad, 0, (int) strpos($topprad, '</template>'));
+
+    expect($topprad)->toContain('href="/containers"')
+        ->and($topprad)->toContain("t('nav.back')")
+        ->and($topprad)->toContain('<ContainerCover :cover="container.cover" />')
+        ->and($topprad)->toContain('{{ heading }}')
+        ->and($topprad)->toContain('<ContainerCoverSheet')
+        ->and($topprad)->toContain('v-if="canUpdate"');
+
+    // Och hjälten ritas av en sida som ber om den, i toppradens ställe över
+    // brytpunkten — aldrig i den.
+    expect($topprad)->not->toContain('<ContainerHero');
+});
+
+/*
  * Rutterna ligger bakom `auth`, som varje annan containerrutt: en utloggad
  * besökare möts av inloggningen och når aldrig en kontrollermetod.
  */
