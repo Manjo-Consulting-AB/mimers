@@ -2822,12 +2822,18 @@ return [
             // image. It says what the reader sees, not what the file is — the
             // filename sits next to it.
             //
-            // `pdf_fallback` stands under the PDF frame (decision 4). The view
-            // cannot know whether the browser has a reader of its own, so the
-            // sentence is there the whole time and points at the download link
-            // every row has anyway (decision 5).
+            // `pdf_fallback` stands under the PDF frame, now inside the viewer.
+            // The view cannot know whether the browser has a reader of its
+            // own, so the sentence is there the whole time and points at the
+            // download link every row has anyway (decision 5).
+            //
+            // M24 (test findings 2026-10-02): `preview` is the row button that
+            // opens the viewer, and `pdf_viewer_heading` is the heading when
+            // the viewer shows a PDF instead of an image.
             'viewer_heading' => 'Image viewer',
+            'pdf_viewer_heading' => 'PDF viewer',
             'viewer_close' => 'Close',
+            'preview' => 'Preview',
             'file_icon' => 'The file is shown as an icon',
             'pdf_fallback' => 'Cannot display the PDF? Download it instead.',
 

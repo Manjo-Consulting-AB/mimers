@@ -405,7 +405,7 @@ it('ritar ingen miniatyr för en bilaga vars ULID saknas i uppslaget', function 
     expect($svar['thumbnail'])->toBeNull();
 });
 
-// --- mallen: dialog, ram och den ovillkorliga nedladdningslänken ---------
+// --- mallen: uppladdningen först, visaren och nedladdningslänken ---------
 
 it('öppnar bilden i en dialog som stängs med Esc och lämnar fokus tillbaka', function () {
     $vy = bilagevisningVy();
@@ -426,25 +426,89 @@ it('öppnar bilden i en dialog som stängs med Esc och lämnar fokus tillbaka', 
     expect($vy)->toContain(':alt="viewer.filename"');
 });
 
-it('ritar PDF:en i en iframe mot filoriginet med nedladdningslänken kvar under', function () {
+it('ritar uppladdningen före listan', function () {
     $vy = bilagevisningVy();
 
-    expect($vy)->toContain('<iframe');
-    expect($vy)->toContain(':src="attachment.preview.frame"');
+    // M24 (testarfynd 2026-10-02): uppladdningen stod efter listan, och med
+    // några bilagor fick användaren skrolla förbi allt för att ladda upp
+    // nästa fil. Innehållet i ytan är oförändrat — bara var det står
+    // (Beslut 1).
+    $uppladdning = strpos($vy, '<template v-if="can.create">');
+    $lista = strpos($vy, 'v-for="attachment in');
+
+    expect($uppladdning)->not->toBeFalse();
+    expect($lista)->not->toBeFalse();
+    expect($uppladdning)->toBeLessThan($lista);
+});
+
+it('ritar ingen PDF-ram i raden utan filikonen', function () {
+    $vy = bilagevisningVy();
+
+    // Raden ritar filikonen för både `file` och `frame` (Beslut 2): samma
+    // <span role="img"> som en bilaga utan derivat ritar i dag.
+    expect($vy)->toContain("attachment.preview.display === 'file'");
+    expect($vy)->toContain("attachment.preview.display === 'frame'");
+
+    // Raden bygger ingen ram längre — det var den som gjorde listan svår att
+    // överblicka.
+    expect($vy)->not->toContain(':src="attachment.preview.frame"');
+
+    // Den ENDA ramen i filen är visarens, och den står efter <dialog>.
+    $dialog = strrpos($vy, '<dialog');
+    $iframe = strpos($vy, '<iframe');
+
+    expect($dialog)->not->toBeFalse();
+    expect($iframe)->not->toBeFalse();
+    expect(substr_count($vy, '<iframe'))->toBe(1);
+    expect($iframe)->toBeGreaterThan($dialog);
 
     // Ingen JavaScript-läsare och inget paket (Beslut 4): ramen pekar på
     // samma väg som nedladdningen, och webbservern sätter typen.
     expect($vy)->not->toContain('pdfjs');
     expect($vy)->not->toContain('srcdoc');
+});
 
-    // `title` är filnamnet — samma regel som `alt`.
-    expect($vy)->toContain(':title="attachment.filename"');
+it('ger varje rad som kan visas en förhandsvisningsknapp', function () {
+    $vy = bilagevisningVy();
 
-    // Meningen under ramen pekar på nedladdningslänken, som finns kvar där.
-    expect($vy)->toContain('item.attachment.pdf_fallback');
+    // Knappen ritas bara när bilagan har något att visa: `image` för en bild,
+    // `frame` för en PDF (Beslut 3). Utan ett filorigin är båda null och
+    // knappen ritas inte — samma regel som gör att miniatyren uteblir.
+    expect($vy)->toContain('attachment.preview.image !== null');
+    expect($vy)->toContain('attachment.preview.frame !== null');
+    expect($vy)->toContain("t('item.attachment.preview')");
 
-    // Ramen ligger FÖRE radens metadata i mallen, så länken hamnar under den.
-    expect(strpos($vy, '<iframe'))->toBeLessThan(strpos($vy, 'item.attachment.download'));
+    // Knappen går samma väg in i visaren som miniatyren: exakt två anrop, och
+    // miniatyrens klick finns kvar.
+    preg_match_all('/@click="openViewer\(attachment, \$event\)"/', $vy, $träffar);
+
+    expect($träffar[0])->toHaveCount(2);
+});
+
+it('visar PDF:en i samma dialog som bilden', function () {
+    $vy = bilagevisningVy();
+
+    $dialog = strrpos($vy, '<dialog');
+
+    expect($dialog)->not->toBeFalse();
+
+    // Ramen, filnamnet, rubriken och fallback-meningen bor alla i visaren
+    // (Beslut 4) — efter <dialog> och inte i raden.
+    foreach ([
+        ':src="viewer.preview.frame"',
+        ':title="viewer.filename"',
+        'item.attachment.pdf_viewer_heading',
+        'item.attachment.pdf_fallback',
+    ] as $markor) {
+        expect(strpos($vy, $markor))->toBeGreaterThan($dialog, "{$markor} står inte i visaren");
+    }
+
+    // Ingen isolering på ramen och ingen egen läsare: CSP:n stänger av
+    // skriptet i dokumentet, och webbläsarens egen läsare är den enda som
+    // behövs.
+    expect($vy)->not->toContain('sandbox');
+    expect($vy)->not->toContain('pdfjs');
+    expect($vy)->not->toContain('srcdoc');
 });
 
 it('har en nedladdningslänk på varje bilagerad, också de som ritas inline', function () {
@@ -497,8 +561,9 @@ it('ger en read-mottagare miniatyrerna och visningen men ingen skrivyta', functi
 
 // --- strängarna (Beslut 7) -----------------------------------------------
 
-it('har visningens fyra nycklar och läser dem ur lang/', function () {
-    foreach (['viewer_heading', 'viewer_close', 'file_icon', 'pdf_fallback'] as $nyckel) {
+it('har visningens nycklar och läser dem ur lang/', function () {
+    // `preview` och `pdf_viewer_heading` kom med M24 (Beslut 3 och 4).
+    foreach (['viewer_heading', 'pdf_viewer_heading', 'viewer_close', 'preview', 'file_icon', 'pdf_fallback'] as $nyckel) {
         expect(trim((string) Lang::get("ui.item.attachment.{$nyckel}", [], 'en')))
             ->not->toBe('', "ui.item.attachment.{$nyckel} saknas");
     }
