@@ -342,6 +342,103 @@ function destroy(cost) {
         </div>
 
         <!--
+            Formuläret. Det ritas bara för den som får skapa: grinden är
+            itemets `create`, samma pinne som App\Http\Controllers\
+            CostEntryController::store() prövar.
+        -->
+        <template v-if="can.create">
+            <h3 class="text-title font-semibold text-ink">{{ t('item.cost.form_heading') }}</h3>
+
+            <form class="flex flex-col gap-4" @submit.prevent="submit">
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.cost.form_incurred_on')"
+                    id="cost-incurred-on"
+                    :error="form.errors.incurred_on"
+                >
+                    <UiInput
+                        id="cost-incurred-on"
+                        v-model="form.incurred_on"
+                        :described-by="describedBy"
+                        type="date"
+                    />
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.cost.form_amount')"
+                    id="cost-amount"
+                    :error="form.errors.amount"
+                >
+                    <UiInput
+                        id="cost-amount"
+                        v-model="form.amount"
+                        :described-by="describedBy"
+                        inputmode="decimal"
+                    />
+                </FormField>
+
+                <!--
+                    Valutan är förifylld ur containerns arv
+                    ([[ADR-0037 Valutans arv]]) och går att skriva över: arvet
+                    är ett förslag, aldrig ett tvång. Fältet är synligt och
+                    inte dolt — ett värde som ändå står i datan ska stå framme
+                    för den som skriver raden.
+                -->
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.cost.form_currency')"
+                    id="cost-currency"
+                    :error="form.errors.currency"
+                >
+                    <UiInput
+                        id="cost-currency"
+                        v-model="form.currency"
+                        :described-by="describedBy"
+                        maxlength="3"
+                    />
+                </FormField>
+
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.cost.form_description')"
+                    id="cost-description"
+                    :error="form.errors.description"
+                >
+                    <UiInput
+                        id="cost-description"
+                        v-model="form.description"
+                        :described-by="describedBy"
+                    />
+                </FormField>
+
+                <!--
+                    Leverantören är fritext med autocomplete ur containerns
+                    egna värden ([[ADR-0016 Kostnadsregistrering]]): en
+                    datalist och inte en väljare, för en ny leverantör ska gå
+                    att skriva utan att först finnas.
+                -->
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('item.cost.form_supplier')"
+                    id="cost-supplier"
+                    :error="form.errors.supplier"
+                >
+                    <UiInput
+                        id="cost-supplier"
+                        v-model="form.supplier"
+                        :described-by="describedBy"
+                        list="cost-suppliers"
+                    />
+                </FormField>
+
+                <UiButton type="submit" class="self-start" :pending="form.processing">
+                    {{ form.processing ? t('common.pending.default') : t('item.cost.form_submit') }}
+                </UiButton>
+            </form>
+        </template>
+
+        <!--
             Listan. Serverns ordning, aldrig vyns: `incurred_on` fallande med
             `id` fallande, så den senaste kostnaden står först.
         -->
@@ -487,103 +584,6 @@ function destroy(cost) {
                 </form>
             </li>
         </ul>
-
-        <!--
-            Formuläret. Det ritas bara för den som får skapa: grinden är
-            itemets `create`, samma pinne som App\Http\Controllers\
-            CostEntryController::store() prövar.
-        -->
-        <template v-if="can.create">
-            <h3 class="text-title font-semibold text-ink">{{ t('item.cost.form_heading') }}</h3>
-
-            <form class="flex flex-col gap-4" @submit.prevent="submit">
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_incurred_on')"
-                    id="cost-incurred-on"
-                    :error="form.errors.incurred_on"
-                >
-                    <UiInput
-                        id="cost-incurred-on"
-                        v-model="form.incurred_on"
-                        :described-by="describedBy"
-                        type="date"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_amount')"
-                    id="cost-amount"
-                    :error="form.errors.amount"
-                >
-                    <UiInput
-                        id="cost-amount"
-                        v-model="form.amount"
-                        :described-by="describedBy"
-                        inputmode="decimal"
-                    />
-                </FormField>
-
-                <!--
-                    Valutan är förifylld ur containerns arv
-                    ([[ADR-0037 Valutans arv]]) och går att skriva över: arvet
-                    är ett förslag, aldrig ett tvång. Fältet är synligt och
-                    inte dolt — ett värde som ändå står i datan ska stå framme
-                    för den som skriver raden.
-                -->
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_currency')"
-                    id="cost-currency"
-                    :error="form.errors.currency"
-                >
-                    <UiInput
-                        id="cost-currency"
-                        v-model="form.currency"
-                        :described-by="describedBy"
-                        maxlength="3"
-                    />
-                </FormField>
-
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_description')"
-                    id="cost-description"
-                    :error="form.errors.description"
-                >
-                    <UiInput
-                        id="cost-description"
-                        v-model="form.description"
-                        :described-by="describedBy"
-                    />
-                </FormField>
-
-                <!--
-                    Leverantören är fritext med autocomplete ur containerns
-                    egna värden ([[ADR-0016 Kostnadsregistrering]]): en
-                    datalist och inte en väljare, för en ny leverantör ska gå
-                    att skriva utan att först finnas.
-                -->
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('item.cost.form_supplier')"
-                    id="cost-supplier"
-                    :error="form.errors.supplier"
-                >
-                    <UiInput
-                        id="cost-supplier"
-                        v-model="form.supplier"
-                        :described-by="describedBy"
-                        list="cost-suppliers"
-                    />
-                </FormField>
-
-                <UiButton type="submit" class="self-start" :pending="form.processing">
-                    {{ form.processing ? t('common.pending.default') : t('item.cost.form_submit') }}
-                </UiButton>
-            </form>
-        </template>
 
         <!--
             Förslagen, EN gång för båda formulären: `list` pekar på id:t, och en

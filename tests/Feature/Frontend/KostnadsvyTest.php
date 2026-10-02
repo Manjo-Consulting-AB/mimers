@@ -580,3 +580,26 @@ it('ger 404 för en kostnad på ett annat item', function () {
     expect($frammande->fresh()->description)->toBe('Impeller');
     expect($frammande->fresh()->deleted_at)->toBeNull();
 });
+
+// --- ordningen: registreringen före listan --------------------------------
+
+it('ritar registreringen före listan', function () {
+    $vy = kostnadsvyKomponent();
+
+    // M24 (testarfynd 2026-10-02, costs.png): formuläret stod efter listan,
+    // och med några rader fick användaren skrolla förbi allt för att
+    // registrera nästa kostnad — samma fynd som bilagorna bär i issue 185.
+    // Rubriken med beskrivningen står först, sedan skapaytan, och listan
+    // eller tomtexten sist. Innehållet i ytan är oförändrat — bara var det
+    // står (Beslut 1); radens eget redigeringsformulär ligger kvar i raden.
+    $rubrik = strpos($vy, "t('item.cost.heading')");
+    $formular = strpos($vy, '<template v-if="can.create">');
+    $lista = strpos($vy, 'v-for="cost in costs"');
+
+    expect($rubrik)->not->toBeFalse();
+    expect($formular)->not->toBeFalse();
+    expect($lista)->not->toBeFalse();
+
+    expect($rubrik)->toBeLessThan($formular);
+    expect($formular)->toBeLessThan($lista);
+});
