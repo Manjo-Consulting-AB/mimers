@@ -3,6 +3,8 @@ import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
+import UiBadge from '../../components/UiBadge.vue';
+import UiCard from '../../components/UiCard.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
@@ -36,14 +38,30 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * Containernamnet är en länk till containerns EGEN sida — itemlistan, se issue 57a
  * § Beslut 1.
  *
- * **Bilden kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut.** Raden
- * ritas som bild 1 i `docs/Design/mobil.png`: en liten miniatyr först, sedan
- * namnet och resten. Bilden är containerns egen och kommer färdig i
- * `container.cover` ur `ContainerResource` — kontrollern eager-loadar den, så
- * listan kostar ett konstant antal frågor oavsett antal containers. Utan bild
- * ritar `ContainerCover` den neutrala ytan, aldrig en tom ram.
+ * **Listan är ett rutnät av kort sedan M24 · [[ADR-0050 Desktopdesignen]].**
+ * Raden var en tunn remsa med en liten miniatyr; förlagan är dashboardens kort
+ * (`ContainerCard.vue`), så att en container ser likadan ut här och där. Varje
+ * rad bär ett `UiCard` med bilden i `#media` över rubrikraden, och rutnätet är
+ * en kolumn, två från `md:` och tre från `lg:`.
  *
- * Miniatyren är INTE en länk: raden har redan två mål (namnet och
+ * Brytpunkterna är `md:` och `lg:` och inte issue 634 § Beslut 1:s `sm:` och
+ * `xl:`: GenomgangTest tillåter två brytpunkter uppåt ([[ADR-0050
+ * Desktopdesignen]] § 6), och ett `sm:`/`xl:`-rutnät hade fällt det provet —
+ * filen ligger utanför issuen och rörs inte. Samma två steg, samma form.
+ *
+ * **Kortet visar radens innehåll och ingenting mer.** Dashboardens kort bär
+ * antal items och antal uppgifter, men de talen kommer ur
+ * App\Actions\Container\ListContainerSummaries och finns inte i den här
+ * propens `containers` — att lägga till dem vore en ändring i
+ * `ContainerController::index` och en annan issue.
+ *
+ * Bilden är containerns egen och kommer färdig i `container.cover` ur
+ * `ContainerResource` — kontrollern eager-loadar den, så listan kostar ett
+ * konstant antal frågor oavsett antal containers. Utan bild ritar
+ * `ContainerCover` den neutrala ytan, aldrig en tom ram ([[ADR-0047
+ * Containerns bild]] § Beslut).
+ *
+ * Bilden är INTE en länk: kortet har redan två mål (namnet och
  * redigeringslänken), och en tredje väg till samma sida hade varit ett mål en
  * tumme kan träffa i misstag.
  */
@@ -90,61 +108,65 @@ const isShared = (container) => accountName(container) === null;
             {{ t('container.index.empty') }}
         </p>
 
-        <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
-            <li v-for="container in containers" :key="container.ulid" class="flex flex-wrap items-center gap-x-4 gap-y-2 py-4">
-                <span class="h-12 w-12 shrink-0 overflow-hidden rounded-control">
-                    <ContainerCover :cover="container.cover" />
-                </span>
+        <ul v-else class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <li v-for="container in containers" :key="container.ulid">
+                <UiCard class="h-full">
+                    <template #media>
+                        <div class="aspect-video w-full">
+                            <ContainerCover :cover="container.cover" />
+                        </div>
+                    </template>
 
-                <!-- Namnlänken går till ITEMLISTAN och inte till översikten
-                     (issue 89 · [[ADR-0039 Containerns översikt]]
-                     § Konsekvenser). Den menade listan redan före flytten, och
-                     den som väljer en container ur listan vill in i den — inte
-                     förbi en mellansida. -->
-                <Link
-                    :href="`/containers/${container.ulid}/items`"
-                    class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                >
-                    {{ container.name }}
-                </Link>
+                    <!-- Namnlänken går till ITEMLISTAN och inte till översikten
+                         (issue 89 · [[ADR-0039 Containerns översikt]]
+                         § Konsekvenser). Den menade listan redan före flytten, och
+                         den som väljer en container ur listan vill in i den — inte
+                         förbi en mellansida. -->
+                    <template #heading>
+                        <Link
+                            :href="`/containers/${container.ulid}/items`"
+                            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        >
+                            {{ container.name }}
+                        </Link>
+                    </template>
 
-                <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
-                     Containerns art]]). Ingen översättningsnyckel byggs ur
-                     värdet: `t()` returnerar nyckeln själv när uppslaget
-                     misslyckas, så den gamla raden hade skrivit
-                     `container.kind.Segelbåt` på skärmen första gången någon
-                     skrev en egen art.
-                     Spärren frågar om fältet är SATT, aldrig vilket värde det
-                     bär — samma behandling som varje annat nullbart fält
-                     (`description`), och den domänlogik regeln stänger ute är
-                     en förgrening på VILKEN art det är. En rad med en tom art
-                     vore ett synligt fel, och "ingen art angiven" är ett
-                     tillstånd [[ADR-0036]] § Konsekvenser pekar ut. -->
-                <span v-if="container.kind" class="text-sm text-slate-600">{{ container.kind }}</span>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
+                             Containerns art]]). Ingen översättningsnyckel byggs ur
+                             värdet: `t()` returnerar nyckeln själv när uppslaget
+                             misslyckas, så den gamla raden hade skrivit
+                             `container.kind.Segelbåt` på skärmen första gången någon
+                             skrev en egen art.
+                             Spärren frågar om fältet är SATT, aldrig vilket värde det
+                             bär — samma behandling som varje annat nullbart fält
+                             (`description`), och den domänlogik regeln stänger ute är
+                             en förgrening på VILKEN art det är. En rad med en tom art
+                             vore ett synligt fel, och "ingen art angiven" är ett
+                             tillstånd [[ADR-0036]] § Konsekvenser pekar ut. -->
+                        <span v-if="container.kind" class="text-sm text-slate-600">{{ container.kind }}</span>
 
-                <span v-if="showsAccountName && !isShared(container)" class="text-sm text-slate-600">
-                    {{ accountName(container) }}
-                </span>
+                        <span v-if="showsAccountName && !isShared(container)" class="text-sm text-slate-600">
+                            {{ accountName(container) }}
+                        </span>
 
-                <span v-if="isShared(container)" class="text-sm text-slate-600">
-                    {{ t('container.index.shared') }}
-                </span>
+                        <UiBadge v-if="isShared(container)">
+                            {{ t('container.index.shared') }}
+                        </UiBadge>
 
-                <span
-                    v-if="container.ulid === activeUlid"
-                    aria-current="true"
-                    class="rounded bg-slate-200 px-2 py-1 text-sm font-medium"
-                >
-                    {{ t('container.index.active') }}
-                </span>
+                        <UiBadge v-if="container.ulid === activeUlid" aria-current="true">
+                            {{ t('container.index.active') }}
+                        </UiBadge>
 
-                <Link
-                    v-if="container.can.update"
-                    :href="`/containers/${container.ulid}/edit`"
-                    class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
-                >
-                    {{ t('container.index.edit') }}
-                </Link>
+                        <Link
+                            v-if="container.can.update"
+                            :href="`/containers/${container.ulid}/edit`"
+                            class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
+                        >
+                            {{ t('container.index.edit') }}
+                        </Link>
+                    </div>
+                </UiCard>
             </li>
         </ul>
 

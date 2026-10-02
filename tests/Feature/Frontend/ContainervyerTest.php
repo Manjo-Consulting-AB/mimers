@@ -177,6 +177,32 @@ it('märker en delad container som delad och en egen som egen i vyn', function (
 });
 
 /*
+ * M24 · [[ADR-0050 Desktopdesignen]]. Klart när: containerlistan ritas som ett
+ * rutnät av kort med bilden överst i stället för tunna rader.
+ *
+ * Testarfynd 2026-10-02 (`docs/Design/Findings-261002/containeres.png`): raden
+ * var en tunn remsa med en liten miniatyr. Förlagan är dashboardens kort
+ * (`ContainerCard.vue`), så att en container ser likadan ut på båda ställena —
+ * samma `UiCard`, samma `#media`-slot över rubrikraden och samma `aspect-video`.
+ *
+ * Provet är ett källkodsprov: formen går inte att se i ett svar. Att raderna
+ * delades med `divide-y` är just det som gjorde listan till en lista av rader
+ * och inte av kort, så den klassen fälls särskilt — `not->toContain` mitt i en
+ * kedja fäller phpstan, därför en egen rad.
+ */
+it('ritar containerlistan som ett rutnät av kort med bilden överst', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Index.vue'));
+
+    expect($vy)->toContain('grid-cols-1')
+        ->toContain('<UiCard')
+        ->toContain('#media')
+        ->toContain('aspect-video')
+        ->toContain('<ContainerCover');
+
+    expect(str_contains($vy, 'divide-y'))->toBeFalse();
+});
+
+/*
  * Beslut 8 och issue 84 · [[ADR-0036 Containerns art]]: `kind` är
  * presentation och ett FRITT fält. Propen bär de arter ANVÄNDAREN redan
  * använt — underlaget för autocomplete, samma mönster som leverantörsfältet i
