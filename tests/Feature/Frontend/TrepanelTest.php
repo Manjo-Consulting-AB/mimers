@@ -503,6 +503,8 @@ it('ritar förekomsterna i en egen panel under kartan', function () {
  * **Villkoret och rubrikens id bor i panelen.** `paths.length > 1` och
  * `id="item-placements-heading"` fanns i vyn fram till issue 633; nu ritar vyn
  * samma panel två gånger och ska inte upprepa samma regel på två ställen.
+ * Id:t är dessutom per instans (`useId()`), eftersom två kopior annars delade
+ * id — vyn får därför inte bära strängen alls.
  */
 it('ritar förekomstpanelen i mittenkolumnen under md:', function () {
     $vy = trepanelKod('pages/Containers/Items/Show.vue');
@@ -556,7 +558,12 @@ it('märker den aktuella förekomsten med synlig text och länkar de andra', fun
         ->toContain('v-if="occurrence.current"')
         ->toContain('v-else')
         ->toContain('pathHref(occurrence.nodes)')
-        ->toContain('aria-labelledby="item-placements-heading"');
+        // Rubrikens id föds i panelen och binds, inte som en bokstavlig sträng:
+        // panelen ritas två gånger och ett fast id hade gett två element med
+        // samma id i DOM:en. `useId()` ger varje instans sitt eget.
+        ->toContain(':aria-labelledby="headingId"')
+        ->toContain(':id="headingId"')
+        ->toContain('useId()');
 
     // Ingen egen fråga och ingen egen navigering: allt kommer i propparna.
     foreach (['usePage', 'fetch(', 'axios', 'router.'] as $hämtning) {

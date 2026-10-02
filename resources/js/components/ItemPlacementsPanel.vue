@@ -1,4 +1,5 @@
 <script setup>
+import { useId } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import UiBadge from './UiBadge.vue';
 import UiCard from './UiCard.vue';
@@ -43,6 +44,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * och inte på kortets `<h2>`: badge-talet står utanför spannet och läses därför
  * inte in i listans namn.
  *
+ * **Rubrikens id föds här, inte hos anroparen.** Panelen ritas två gånger (se
+ * ovan), och ett fast id hade gett två element med samma id i DOM:en — ogiltig
+ * HTML, och högerkopians `aria-labelledby` hade pekat på den dolda kopian i
+ * mitten. `useId()` ger varje instans sitt eget id.
+ *
  * **Panelen vet inte vilken skärm den står på.** Det är `Show.vue` som väljer
  * var — samma yta i högerkolumnen över `md:` och i mittenkolumnen under, precis
  * som kartan (ItemMapPanel.vue).
@@ -64,17 +70,20 @@ defineProps({
 });
 
 const { t } = useTranslations();
+
+const uid = useId();
+const headingId = `item-placements-heading-${uid}`;
 </script>
 
 <template>
     <UiCard v-if="paths.length > 1">
         <template #heading>
-            <span id="item-placements-heading">{{ t('item.show.placements') }}</span>
+            <span :id="headingId">{{ t('item.show.placements') }}</span>
 
             <UiBadge class="ml-2">{{ paths.length }}</UiBadge>
         </template>
 
-        <ul aria-labelledby="item-placements-heading" class="space-y-1 text-sm">
+        <ul :aria-labelledby="headingId" class="space-y-1 text-sm">
             <li
                 v-for="(occurrence, index) in paths"
                 :key="index"
