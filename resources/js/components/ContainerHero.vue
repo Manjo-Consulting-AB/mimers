@@ -34,7 +34,8 @@ import ContainerCover from './ContainerCover.vue';
  * länk *Inställningar* i dess ställe för läsaren — två grenar på samma plats
  * och samma adress. Sedan issue 646 ligger *Settings* i flikraden i stället,
  * för alla som når containern: hjälten ritar alltså ingenting som pekar på
- * `/containers/{ulid}/edit`, och den bar heller ingen `can`-flagga för det.
+ * `/containers/{ulid}/edit`. Layouten skickar fortfarande `can`, och hjälten
+ * tar emot den av det skälet, men den används inte här (se `defineProps`).
  * Flikens *Settings* är `view`-grindad som förut, och pennan på bilden i
  * skalets topprad står kvar på `can.update` — den är en annan väg till samma
  * val och bor i skalet, inte här.
@@ -58,6 +59,13 @@ defineProps({
     hero: { type: String, required: true },
     /* Containern, ur App\Http\Resources\ContainerResource. */
     container: { type: Object, required: true },
+    /*
+     * `{ update }` — samma flagga som inställningssidan ritar sitt formulär ur.
+     * Layouten skickar den fortfarande, och hjälten tar emot den för att den
+     * inte ska falla igenom som ett odeklarerat attribut (issue 646); hjälten
+     * använder den inte sedan issue 646 flyttade länken till flikraden.
+     */
+    can: { type: Object, default: null },
 });
 </script>
 
