@@ -248,28 +248,32 @@ Route::middleware('auth')->group(function () {
         ->name('search');
 
     /*
-     * Issue 127 · Notisklockan, se
+     * Issue 127 · Notisklockan, och issue 647 · dess Clear, se
      * App\Http\Controllers\NotificationInboxController.
      *
-     * **EN rutt och ingen sida.** Klockan sitter i sidhuvudet
+     * **TVÅ rutter och ingen sida.** Klockan sitter i sidhuvudet
      * (resources/js/layouts/AppLayout.vue) på varje sida, och både listan och
      * siffran kommer ur de delade propsen — listan som en optional prop som
      * en partiell omladdning hämtar. Här finns alltså bara det klockan
-     * SKRIVER: att den öppnades.
+     * SKRIVER: att den öppnades, och att den rensades.
      *
-     * **Sökvägen är `/notifications/read` och inte `/notifications`.** En
-     * POST mot samlingen hade lästs som "skapa en notis", och klockan skapar
-     * ingenting — den läser. `read` är handlingen, och den är den enda.
+     * **Sökvägarna är `/notifications/read` och `/notifications/clear`, inte
+     * `/notifications`.** En POST mot samlingen hade lästs som "skapa en
+     * notis", och klockan skapar ingenting — den läser och rensar. `read` och
+     * `clear` är handlingarna.
      *
-     * Ingen `throttle`: skrivningen rör användarens egen rad och kostar
-     * ingenting någon annan kan råka ut för. Att hamra den är att sätta sin
-     * egen tidsstämpel till nu, om och om igen.
+     * Ingen `throttle`: skrivningarna rör användarens egen rad och kostar
+     * ingenting någon annan kan råka ut för. Att hamra dem är att sätta sina
+     * egna tidsstämplar till nu, om och om igen.
      *
-     * Ingen FormRequest: rutten har ingen kropp att validera. Användaren
+     * Ingen FormRequest: rutterna har ingen kropp att validera. Användaren
      * kommer ur sessionen och tidsstämpeln ur serverns klocka.
      */
     Route::post('/notifications/read', [NotificationInboxController::class, 'store'])
         ->name('notifications.read');
+
+    Route::post('/notifications/clear', [NotificationInboxController::class, 'clear'])
+        ->name('notifications.clear');
 
     /*
      * Issue 53a · Verifieringssidan. Namnet `verification.notice` är inte
