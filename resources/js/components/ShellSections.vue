@@ -15,14 +15,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * rad som tas bort försvinner från båda. Det är `Klart när`-punkten, och den
  * är därför komponenten finns och inte två avskrifter.
  *
- * **Ordningen är desktopens**, `dashboard, tasks, containers, transfers,
- * search, settings`, samma ordning raderna har haft sedan issue 51 och 122 och
- * samma ord som sidorna de leder till. [[ADR-0048 Mobilen och plusknappen]]
- * § 1 ritar mobilmenyn med *Översikt* och *Sök* främst; det är samma två rader
- * i en annan ordning, och ordningen följer skalet i stället för bilden. Skälet
- * är bindande och inte kosmetiskt: `Klart när` kräver att de två ytorna visar
- * samma sektioner i samma ordning, och att skalet över `md:` är oförändrat —
- * en egen ordning i menyn hade brutit det ena eller det andra.
+ * **Ordningen är listans**, `dashboard, tasks, containers, transfers, search,
+ * settings`, samma ord som sidorna de leder till. Sedan issue 653 ritar en yta
+ * bara en del av listan: `part` väljer vilka nycklar som ritas, och
+ * sidopanelen staplar delarna i mockupens ordning ([[ADR-0050
+ * Desktopdesignen]] § 1) — översikten överst (`top`), containrarna, resten av
+ * raderna (`rows`, förvalet), de senast besökta, favoriterna och användarens
+ * egen rad sist (`account`). Delarna är urval ur SAMMA lista och inte egna
+ * listor, så en rad som flyttar flyttar i varje yta.
  *
  * **Etiketten slås upp ur `nav.<key>`** och kommer aldrig ur en sträng här
  * ([[ADR-0013 Språk och i18n]]): texten formuleras på servern och slås bara
@@ -33,7 +33,7 @@ import { useTranslations } from '../composables/useTranslations.js';
  * enda som säger vad raden GÖR. Grannradernas `title` hade bara upprepat deras
  * synliga text och gett dem en tooltip ingen beställt.
  *
- * **Nyligen besökta är INGEN av de två delarna** (issue 160 · [[ADR-0049
+ * **Nyligen besökta är INGEN av delarna** (issue 160 · [[ADR-0049
  * Nyligen besökta]] § Beslut). Den är en lista över items och inte en rad i
  * navigeringen, och den bor därför i
  * resources/js/components/RecentVisitList.vue — skalet ritar den direkt
@@ -45,7 +45,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Över `md:` står de inte längre i en vågrät rad i sidhuvudet utan i den mörka
  * sidopanelen, och de staplas därför på varandra på båda sidor om
  * brytpunkten: `md:flex-row` var sidhuvudets form och hade gett panelen sex
- * rader i sidled. Träffytan, etiketterna och ordningen är oförändrade.
+ * rader i sidled. Träffytan och etiketterna är oförändrade; ordningen mellan
+ * delarna står hos den yta som staplar dem.
  *
  * **Den aktuella raden bär `aria-current="page"` och en token-färg.** Vilken
  * rad det är avgörs av `page.url` mot radens `href` — vägen och inte hela
@@ -54,15 +55,16 @@ import { useTranslations } from '../composables/useTranslations.js';
  * omdirigeringen från issue 53c leder. Färgen är `--color-shell-active`,
  * rollen ADR-0042 ger "den aktiva raden i sidopanelen".
  *
- * `part` skiljer de två blocken åt. `rows` är navigeringen, `favorites` är
- * `FAVORITER`-sektionen ur issue 106. Sedan issue 169 står båda i sidopanelen
- * över `md:` och i sidomenyn under — navigeringen först, favoriterna sist —
- * och de är två anrop av samma komponent i stället för två komponenter:
- * sektionen är densamma, och det är bara var den står som skiljer.
+ * `part` skiljer blocken åt. `top` är översikten som står överst i panelen,
+ * `rows` är navigeringen mellan sidorna, `account` är användarens egen rad med
+ * vägen ut, och `favorites` är `FAVORITER`-sektionen ur issue 106. De är anrop
+ * av SAMMA komponent i stället för fyra komponenter: raderna är desamma, och
+ * det är bara urvalet och var de står som skiljer.
  */
 const props = defineProps({
     /*
-     * Vilket block som ritas: `rows` (förval) eller `favorites`.
+     * Vilket block som ritas: `top`, `rows` (förval), `account` eller
+     * `favorites`.
      */
     part: { type: String, default: 'rows' },
 });
@@ -79,7 +81,7 @@ const user = computed(() => page.props.auth.user);
  */
 const favorites = computed(() => page.props.favorites ?? []);
 
-const sections = [
+const allSections = [
     { key: 'dashboard', href: '/dashboard' },
     { key: 'tasks', href: '/tasks' },
     { key: 'containers', href: '/containers' },
@@ -93,6 +95,21 @@ const sections = [
     // containerraden i sidopanelen som är den aktuella (issue 169).
     { key: 'settings', href: '/settings', matchPrefix: true },
 ];
+
+/*
+ * Vilka nycklar varje `part` ritar, ur SAMMA lista. En rad byter yta genom att
+ * flyttas mellan raderna här; listan ovan är fortfarande den enda sanningen om
+ * vad en rad är.
+ */
+const partKeys = {
+    'top': ['dashboard'],
+    'rows': ['tasks', 'containers', 'transfers', 'search'],
+    'account': ['settings'],
+};
+
+const sections = computed(() =>
+    allSections.filter((section) => partKeys[props.part].includes(section.key)),
+);
 
 /*
  * Sidans väg, utan querysträngen. `page.url` är hela adressen — Inertia
@@ -111,7 +128,7 @@ function isCurrent(section) {
 </script>
 
 <template>
-    <ul v-if="props.part === 'rows'" class="flex flex-col gap-1 px-2 text-sm">
+    <ul v-if="props.part !== 'favorites'" class="flex flex-col gap-1 px-2 text-sm">
         <li v-for="section in sections" :key="section.key" class="flex">
             <Link
                 v-if="user"
@@ -130,8 +147,12 @@ function isCurrent(section) {
             /logout är en POST-rutt (routes/web.php) och Inertia skickar
             CSRF-tokenet åt oss. Utan den går det att logga in men inte ut i
             webbläsaren — och i sidomenyn är raden den enda vägen ut.
+
+            Raden hör till `account` och inte till navigeringen (issue 653):
+            den är ett mål och inte en sida, och den står sist i panelen
+            tillsammans med användarens namn.
         -->
-        <li v-if="user" class="flex">
+        <li v-if="props.part === 'account' && user" class="flex">
             <Link
                 href="/logout"
                 method="post"
@@ -142,7 +163,7 @@ function isCurrent(section) {
             </Link>
         </li>
 
-        <li v-else class="flex">
+        <li v-else-if="props.part === 'account'" class="flex">
             <Link
                 href="/login"
                 class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
