@@ -508,11 +508,17 @@ class ListAuditEvents
      * oavsett subjekt (issue 107). Lästa genom samma läsregel: en mottagare
      * ser sina egna rader om itemet, ägarkontots medlem allas.
      *
+     * **`$limit` kom med issue 213 och är densamma som `forContainer()`s och
+     * `forUser()`s.** Utan den vore hundra reserven: itemets historikflik
+     * (issue 116) anropar utan gräns och ser de hundra senaste, medan
+     * översiktens händelsepanel ber om fem i SIN ände av anropet — samma
+     * läsregel, samma fråga, olika klipp.
+     *
      * @return Collection<int, AuditLog>
      */
-    public function forItem(User $viewer, Item $item): Collection
+    public function forItem(User $viewer, Item $item, int $limit = self::LIMIT): Collection
     {
-        return $this->readable($viewer)
+        return $this->readable($viewer, $limit)
             ->where('item_id', $item->id)
             ->get();
     }

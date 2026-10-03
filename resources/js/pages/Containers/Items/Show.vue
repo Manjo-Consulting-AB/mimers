@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import HistoryRow from '../../../components/HistoryRow.vue';
+import ItemActivityPanel from '../../../components/ItemActivityPanel.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemCostSection from '../../../components/ItemCostSection.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
@@ -274,6 +275,23 @@ const props = defineProps({
      * 108), och en gäst ser sina egna och ägaren allas ur samma svar.
      */
     history: { type: Array, default: null },
+    /*
+     * Översiktens händelserader (issue 213 · [[ADR-0043 Tre loggar]]
+     * § Händelseloggen), ur App\Actions\Audit\PresentAuditEvents — nyast
+     * först, högst fem, med namnen redan uppslagna.
+     *
+     * **Proppen finns BARA på översikten, och standarden är `null`.**
+     * Servern lämnar nyckeln helt när `?tab=` är satt (se
+     * ItemController::show()), så raderna kostar ingenting för den som öppnar
+     * itemet för att se bilagorna. Skillnaden mellan "inte hämtad" och "hämtad
+     * och tom" är densamma som för `history` ovan: en tom lista är ett svar
+     * servern HAR gett, och panelen ritas bara när svaret finns.
+     *
+     * Vyn ställer ingen fråga och filtrerar ingenting: vilka rader användaren
+     * får läsa avgjorde App\Actions\Audit\ListAuditEvents på servern (issue
+     * 108), och en gäst ser sina egna och ägaren allas ur samma svar.
+     */
+    events: { type: Array, default: null },
     can: { type: Object, required: true },
     /*
      * Är itemet en av användarens favoriter? Se issue 105 och
@@ -872,6 +890,19 @@ function toggleFavorite() {
                     </Link>
 
                     <p v-if="overviewEmpty" class="text-sm text-ink-muted">{{ t('item.show.overview_empty') }}</p>
+
+                    <!--
+                        Händelsepanelen (issue 213): itemets fem senaste
+                        händelser, sist i översiktspanelen. Mittkolumnen syns på
+                        alla bredder — högerkolumnen är `hidden md:block` och
+                        fick därför inte panelen. `docs/Design/struktur -
+                        item.jpeg` ritar ingen aktivitetspanel; panelen kom
+                        efter testarnas fynd 2026-10-03.
+
+                        Proppen finns bara på översikten (`events !== null`) —
+                        se ItemController::show() och `events`-proppen ovan.
+                    -->
+                    <ItemActivityPanel v-if="events !== null" :events="events" />
                 </section>
 
                 <!--

@@ -8,6 +8,7 @@ use App\Models\Item;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Lang;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 
@@ -450,6 +451,162 @@ it('itemets rader hämtas bara när historikfliken är aktiv', function () {
             ->component('Containers/Items/Show')
             ->has('history', 1)
         );
+});
+
+/*
+ * Klart när: itemets översikt visar de fem senaste händelserna för itemet
+ * (issue 213 · [[ADR-0050 Desktopdesignen]]).
+ *
+ * Samma panel och samma tal som containerns översikt (issue 172): de fem
+ * senaste, nyast först, ur samma läsregel men klippt i anropets ände —
+ * `ContainerController::ACTIVITY_LIMIT`. Sju rader på itemet i stigande ålder
+ * gör att de två äldsta faller utanför, och en rad på ett ANNAT item och en
+ * containerbred rad bevisar att urvalet är itemets `item_id` och ingenting
+ * annat: en panel som visade allt i containern hade sett rätt ut i en container
+ * med ett enda item.
+ */
+it('itemets översikt visar de fem senaste händelserna för itemet', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikKontext();
+
+    $motorn = Item::factory()->for($pärm, 'container')->create(['name' => 'Motorn']);
+    $impellern = Item::factory()->for($pärm, 'container')->create(['name' => 'Impellern']);
+
+    // Sju rader på itemet, i stigande ålder: de två äldsta faller utanför.
+    $rader = [];
+
+    foreach (range(1, 7) as $i) {
+        $rader[] = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_ITEM_UPDATED, $motorn, när: now()->subDays(8 - $i));
+    }
+
+    // En rad på ett annat item och en containerbred rad — ingen av dem hör hit.
+    $annatItem = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_ITEM_CREATED, $impellern, när: now());
+    $containerRad = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_CONTAINER_CREATED, när: now());
+
+    /** @var list<array<string, mixed>> $events */
+    $events = historikSida(actingAs($ägare)->get(historikItemUrl($pärm, $motorn))->assertOk())['props']['events'];
+
+    // De fem NYASTE, nyast först.
+    $forvantade = array_reverse(array_slice($rader, 2));
+
+    expect(array_column($events, 'ulid'))
+        ->toBe(array_map(fn (AuditLog $rad): string => $rad->ulid, $forvantade));
+
+    // Två `expect` och inte en kedja: `toContain()` bor i
+    // Pest\Mixins\Expectation och returnerar `self`, och den klassen bär ingen
+    // `$not` — där faller PHPStan på en andra `->not` i samma kedja.
+    expect(array_column($events, 'ulid'))
+        ->not->toContain($annatItem->ulid);
+
+    expect(array_column($events, 'ulid'))
+        ->not->toContain($containerRad->ulid);
+});
+
+/*
+ * Klart när: en gäst ser bara sina egna händelser på itemets översikt
+ * (issue 213).
+ *
+ * Läsregeln är ListAuditEvents (issue 108) och prövas rad för rad i
+ * tests/Feature/Revision/LasregelTest.php; det här provet bevisar att PANELEN
+ * läser genom den och inte runt den. Ägaren ser båda raderna på itemet,
+ * gästen ser sin egen och ingenting annat — ur samma sida, utan en egen
+ * filtrering i vyn eller i kontrollern.
+ */
+it('en gäst ser bara sina egna händelser på itemets översikt', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikKontext();
+
+    $gast = historikGast($pärm);
+    $motorn = Item::factory()->for($pärm, 'container')->create(['name' => 'Motorn']);
+
+    $ägarensRad = historikRad($pärm, $konto, $ägare, AuditLog::ACTION_ITEM_UPDATED, $motorn, när: now()->subDay());
+    $gästensRad = historikRad($pärm, $konto, $gast, AuditLog::ACTION_ITEM_CREATED, $motorn, när: now());
+
+    /** @var list<array<string, mixed>> $ägarens */
+    $ägarens = historikSida(actingAs($ägare)->get(historikItemUrl($pärm, $motorn))->assertOk())['props']['events'];
+    /** @var list<array<string, mixed>> $gästens */
+    $gästens = historikSida(actingAs($gast)->get(historikItemUrl($pärm, $motorn))->assertOk())['props']['events'];
+
+    expect(array_column($ägarens, 'ulid'))->toBe([$gästensRad->ulid, $ägarensRad->ulid])
+        ->and(array_column($gästens, 'ulid'))->toBe([$gästensRad->ulid]);
+});
+
+/*
+ * Klart när: itemets händelser hämtas bara på översikten (issue 213).
+ *
+ * Panelen bor på översikten och raderna kostar en egen fråga mot `audit_log`;
+ * den som öppnar itemet för att se bilagorna ska inte betala för dem.
+ * Kontrollern lämnar proppen HELT när en flik är vald — nyckeln finns inte i
+ * svaret — och det är skillnaden mot en tom lista: `missing` bevisar att ingen
+ * fråga ställdes, medan `[]` hade bevisat att en ställdes och gav noll.
+ *
+ * Historikfliken är det mittersta ledet och det som är lätt att glömma: den
+ * läser samma rader men sin egen propp (`history`), och en kontroll som bara
+ * såg på om `tab` fanns hade gett översiktens panel på varje flik.
+ */
+it('itemets händelser hämtas bara på översikten', function () {
+    withoutVite();
+
+    [$konto, $ägare, $pärm] = historikKontext();
+
+    $motorn = Item::factory()->for($pärm, 'container')->create(['name' => 'Motorn']);
+
+    historikRad($pärm, $konto, $ägare, AuditLog::ACTION_ITEM_CREATED, $motorn);
+
+    foreach (['tags', 'history'] as $flik) {
+        actingAs($ägare)->get(historikItemUrl($pärm, $motorn, $flik))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Containers/Items/Show')
+                ->missing('events')
+            );
+    }
+
+    actingAs($ägare)->get(historikItemUrl($pärm, $motorn))
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Items/Show')
+            ->has('events', 1)
+        );
+});
+
+/*
+ * Klart när: senaste aktiviteter ritas sist på itemets översikt (issue 213).
+ *
+ * Ett källkodsprov av samma skäl som de andra i filen: det ska falla när
+ * panelen flyttas, tappas eller får fel innehåll, även om ingen webbläsare är
+ * igång. Panelen står EFTER den tomma översiktsraden och sist i
+ * översiktspanelen, och komponenten bär samma fyra delar som containerns
+ * aktivitetspanel — ramen, raden, rubriken och tomtexten — men INTE
+ * `show-container`: containern är given av sidan man står på.
+ *
+ * `historikKod()` rensar kommentarerna först — docblocken är svenska med flit,
+ * och en regel som letar efter en tagg ska inte kunna nöjas av en mening.
+ */
+it('ritar senaste aktiviteter sist på itemets översikt', function () {
+    $vy = historikKod('js/pages/Containers/Items/Show.vue');
+
+    $tomrad = strpos($vy, 'v-if="overviewEmpty"');
+    $panel = strpos($vy, '<ItemActivityPanel v-if="events !== null" :events="events"');
+
+    expect($tomrad)->not->toBeFalse()
+        ->and($panel)->not->toBeFalse()
+        ->and($panel)->toBeGreaterThan($tomrad);
+
+    $komponent = historikKod('js/components/ItemActivityPanel.vue');
+
+    expect($komponent)->toContain('<UiCard>')
+        ->toContain('<HistoryRow')
+        ->toContain("t('item.show.activity')")
+        ->toContain("t('audit.history.empty')");
+
+    // Egen `expect` av samma skäl som i förra provet: resultatet av en
+    // `toContain()`-kedja är Pest\Mixins\Expectation, som saknar `$not`.
+    expect($komponent)->not->toContain('show-container');
+
+    expect(Lang::get('ui.item.show.activity', [], 'en'))->toBe('Recent activity');
 });
 
 /*

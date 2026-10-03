@@ -2529,6 +2529,11 @@ return [
             // meets, and an empty panel there says the page is broken; this
             // line says the item is unwritten.
             'overview_empty' => 'Nothing is written about this item yet.',
+            // The activity panel at the foot of the overview (issue 213): the
+            // item's five most recent events. The same heading the container
+            // overview carries (issue 172) and the same word — one panel, one
+            // word.
+            'activity' => 'Recent activity',
             'manufacturer' => 'Manufacturer',
             'model' => 'Model',
             'serial_number' => 'Serial number',
