@@ -135,8 +135,8 @@ function isCurrent(section) {
                 :href="section.href"
                 :title="section.key === 'settings' ? t('nav.settings') : undefined"
                 :aria-current="isCurrent(section) ? 'page' : undefined"
-                class="inline-flex min-h-11 items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                :class="['w-full', isCurrent(section) ? 'bg-shell-active text-white' : '']"
+                class="inline-flex min-h-11 items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                :class="['w-full', isCurrent(section) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50']"
             >
                 {{ section.key === 'settings' ? user.name : t(`nav.${section.key}`) }}
             </Link>
@@ -157,7 +157,7 @@ function isCurrent(section) {
                 href="/logout"
                 method="post"
                 as="button"
-                class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
                 {{ t('auth.logout') }}
             </Link>
@@ -166,7 +166,7 @@ function isCurrent(section) {
         <li v-else-if="props.part === 'account'" class="flex">
             <Link
                 href="/login"
-                class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
                 {{ t('nav.login') }}
             </Link>
@@ -188,7 +188,7 @@ function isCurrent(section) {
         <ul class="flex flex-col">
             <UiListRow v-for="favorite in favorites" :key="favorite.url">
                 <template #title>
-                    <Link :href="favorite.url" class="flex min-h-11 items-center hover:underline">
+                    <Link :href="favorite.url" class="flex min-h-11 items-center rounded-control hover:bg-shell-active/50">
                         {{ favorite.name }}
                     </Link>
                 </template>

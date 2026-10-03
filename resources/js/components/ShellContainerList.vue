@@ -43,15 +43,24 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Den aktiva containern bär `aria-current="page"` och en token-färg**
  * ([[ADR-0050 Desktopdesignen]] § 1, beslut 3). Vilken container som är aktiv
- * äger servern: `activeContainer` ur App\Support\Frontend\ActiveContainer är
- * satt av den kontroller som ÖPPNADE containern (issue 83), och vyn prövar
- * inte åtkomsten en gång till — en andra regel om vad man når är en andra
- * sanning om samma sak.
+ * avgörs av `page.url` — samma form som `currentPath` i ShellSections: vägen
+ * utan querysträng, jämförd mot `/containers/{ulid}` och dess undersidor.
+ * Serverns `activeContainer` läses INTE här (issue 676): proppen sätts av den
+ * kontroller som öppnade containern (issue 83) och är sann även på
+ * `/dashboard`, där ingen containerrad är den användaren står på — två rader
+ * markerade samtidigt. Proppen lever kvar för Containers/Index.vue och rörs
+ * inte; det är bara den här listan som slutar fråga den.
  *
  * **Varje rad är en `<Link>` med fokusring.** Träffytan är `min-h-11` (44 px,
  * issue 68a § Beslut 3) och ringen är `--color-focus` ([[ADR-0042
  * Designsystemet]] § Beslut) — samma form som raderna i ShellSections, och
  * `outline-none` utan en ring som tar över river tangentbordsarbetet.
+ *
+ * **Hover är en bakgrund, inte en understrykning** (issue 676): klassen är
+ * `hover:bg-shell-active/50` i `:class`-grenen för en INAKTIV rad, så den
+ * aktiva raden behåller sin fulla markering när pekaren vilar på den.
+ * Tailwinds `hover:` gäller bara enheter med pekare (`@media (hover: hover)`),
+ * så mobilmenyn får ingen kvarhängande bakgrund efter ett tryck.
  */
 const props = defineProps({
     /*
@@ -66,7 +75,11 @@ const page = usePage();
 
 const groups = computed(() => page.props.shellContainers ?? []);
 
-const activeUlid = computed(() => page.props.activeContainer ?? null);
+/*
+ * Sidans väg, utan querysträngen — samma form som `currentPath` i
+ * ShellSections: `page.url` bär frågan och dess parametrar.
+ */
+const currentPath = computed(() => page.url.split('?')[0]);
 
 /* "Frågan är ställd" — en gång per komponent, se docblocken. */
 const requested = ref(false);
@@ -86,11 +99,13 @@ watch(
 );
 
 /*
- * Är den här containern den användaren står i? Serverns svar och ingenting
- * annat — se docblocken.
+ * Är den här containern den sidan användaren står på? Sidans väg och
+ * ingenting annat — se docblocken. På `/dashboard`, `/tasks`, `/search` och
+ * `/containers` är ingen rad aktiv.
  */
 function isActive(container) {
-    return activeUlid.value !== null && container.ulid === activeUlid.value;
+    return currentPath.value === `/containers/${container.ulid}`
+        || currentPath.value.startsWith(`/containers/${container.ulid}/`);
 }
 </script>
 
@@ -112,8 +127,8 @@ function isActive(container) {
                     <Link
                         :href="`/containers/${container.ulid}`"
                         :aria-current="isActive(container) ? 'page' : undefined"
-                        class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                        :class="isActive(container) ? 'bg-shell-active text-white' : ''"
+                        class="inline-flex min-h-11 w-full items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        :class="isActive(container) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50'"
                     >
                         {{ container.name }}
                     </Link>
