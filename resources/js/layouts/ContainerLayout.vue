@@ -147,9 +147,10 @@ const props = defineProps({
     /*
      * Hjältens form (issue 170 · [[ADR-0050 Desktopdesignen]] § 2): `large` på
      * översikten, `compact` på de andra flikarna, och `null` — förvalet — på
-     * varje sida som inte ska ha någon hjälte. Itemvyn, formulären,
-     * schemasidorna och inställningssidorna skickar ingenting och ser ut som i
-     * dag.
+     * varje sida som inte ska ha någon hjälte. Itemvyn, formulären och
+     * schemasidorna skickar ingenting och ser ut som i dag;
+     * inställningssidorna får sin låga hjälte av ContainerSettingsLayout, som
+     * håller dem i en och samma flik (issue 678).
      *
      * Flaggan är sidans och inte skalets: samma layout ritar alla containerns
      * ytor, och vilken av dem som är containerns huvud är en fråga om sidan.

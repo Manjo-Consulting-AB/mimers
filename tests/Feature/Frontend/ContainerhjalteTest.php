@@ -194,6 +194,42 @@ it('ritar den låga hjälten utan tal i itemlistan och historiken', function () 
 });
 
 /*
+ * Klart när: den låga hjälten ritas på alla inställningssidor.
+ *
+ * Inställningarna är EN flik (ADR-0050 § 2): kolumnen till vänster byter
+ * mellan de åtta sidorna utan att lämna fliken, och en hjälte som fanns på
+ * `Edit.vue` men försvann på `Categories.vue` hade hoppat mitt i fliken.
+ * Attributet sätts därför en gång, i skalet — `ContainerSettingsLayout`
+ * skickar `hero="compact"` till `ContainerLayout` — och ingen av de åtta
+ * sidorna ändras: de skickar fortfarande ingenting själva, och deras egna
+ * `<h1>` står kvar under flikraden som på de andra låga flikarna.
+ */
+it('ritar den låga hjälten på alla inställningssidor', function () {
+    withoutVite();
+
+    [, $ägare, $container] = hjalteKontext();
+
+    // Skalets svar och inte sidornas: attributet står i
+    // `ContainerSettingsLayout` och saknas på var och en av de åtta sidorna.
+    expect(hjalteTagg(hjalteKod('layouts/ContainerSettingsLayout.vue'), 'ContainerLayout'))
+        ->toContain('hero="compact"');
+
+    foreach ([
+        'Edit', 'Categories', 'Tags', 'Sharing',
+        'CalendarFeed', 'Export', 'Trash', 'Transfers',
+    ] as $sida) {
+        $tagg = hjalteTagg(hjalteKod("pages/Containers/{$sida}.vue"), 'ContainerSettingsLayout');
+
+        expect($tagg)->not->toBe('', "{$sida}.vue ritar ingen ContainerSettingsLayout");
+        expect($tagg)->not->toContain('hero');
+    }
+
+    // Och ägaren når två av dem hela vägen genom servern.
+    actingAs($ägare)->get("/containers/{$container->ulid}/edit")->assertOk();
+    actingAs($ägare)->get("/containers/{$container->ulid}/categories")->assertOk();
+});
+
+/*
  * Klart när: itemvyn ritar ingen hjälte.
  *
  * Itemvyn, formulären, schemasidorna och inställningssidorna skickar ingenting
