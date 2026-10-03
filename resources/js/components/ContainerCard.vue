@@ -24,6 +24,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * samma URL som itemlistan låg på före issue 89. Adressen byggs här och inte
  * på servern, samma mönster som resources/js/pages/Containers/Index.vue.
  *
+ * **Länkens klickyta är hela kortet** (fynd från testarna 2026-10-03): ett
+ * klick på bilden eller talen gjorde ingenting. Ytan sträcks ut med en
+ * `::after` på länken i stället för en andra länk runt kortet — en länk runt
+ * bild, rubrik och tal hade lästs upp som en enda lång länktext och gett
+ * kortet två tabbstopp. `UiCard` får därför `relative`, så `::after` mäter
+ * mot kortets ram; attributet faller igenom till kortets rotelement.
+ *
  * **Ramen är `UiCard`** (issue 99): rubriken är kortets rubrikrad och talen är
  * innehållet. Ingen egen ram och ingen egen rubriknivå.
  *
@@ -51,7 +58,7 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <UiCard class="min-w-64 flex-1">
+    <UiCard class="min-w-64 flex-1 relative">
         <template #media>
             <div class="aspect-video w-full">
                 <ContainerCover :cover="props.container.cover" />
@@ -61,7 +68,7 @@ const { t } = useTranslations();
         <template #heading>
             <Link
                 :href="`/containers/${props.container.ulid}`"
-                class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                class="inline-flex min-h-11 items-center text-blue-700 hover:underline after:absolute after:inset-0 after:content-['']"
             >
                 {{ props.container.name }}
             </Link>

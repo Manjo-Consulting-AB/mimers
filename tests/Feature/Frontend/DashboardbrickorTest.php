@@ -398,6 +398,26 @@ it('länkar varje kort till containerns översikt', function () {
     expect($kort)->not->toContain('progress');
 });
 
+/*
+ * Klart när: hela kortets yta leder till containerns översikt.
+ *
+ * Fynd från testarna 2026-10-03: bara namnet var klickbart, och ett klick på
+ * bilden eller talen gjorde ingenting. Länken sträcks ut över kortet med en
+ * `::after`-yta (`after:absolute after:inset-0`) och kortet blir `relative`,
+ * så ytan mäter mot kortets ram. Provet läser att kortet fortfarande har
+ * EXAKT en länk: ytan ritas av `::after` och inte av en andra länk runt hela
+ * kortet, som hade gett två tabbstopp och en enda lång länktext för en
+ * skärmläsare.
+ */
+it('gör hela containerkortet till länkens klickyta', function () {
+    $kort = File::get(resource_path('js/components/ContainerCard.vue'));
+
+    expect($kort)->toContain('after:absolute')
+        ->toContain('after:inset-0')
+        ->toContain('relative')
+        ->and(substr_count($kort, '<Link'))->toBe(1);
+});
+
 // --- grupperingen ----------------------------------------------------------
 
 /*
