@@ -1127,3 +1127,12 @@ if __name__ == "__main__":
         for namn, fel in misslyckade:
             print(f"  - {namn}: {fel}")
         sys.exit(1)
+
+
+def test_worktree_base_ligger_utanfor_repot():
+    assert os.path.commonpath([p.WORKTREE_BASE, p.REPO_ROOT]) != p.REPO_ROOT
+    assert p.WORKTREE_BASE == os.path.join(os.path.dirname(p.REPO_ROOT), "mimers-worktrees")
+
+
+def test_docstringen_namner_inte_gamla_worktreebasen():
+    assert ".claude/worktrees" not in p.__doc__
