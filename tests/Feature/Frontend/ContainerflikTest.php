@@ -214,12 +214,12 @@ it('containern har en flikrad byggd av UiTabs', function () {
 
     // Flikarna, ur modulen klienten importerar: översikten först — det är
     // containerns egen sida — sedan den sektion man arbetar i, uppgifterna och
-    // den sida som läser vad som har hänt. *Inställningar* lämnade raden i
-    // issue 170 ([[ADR-0050 Desktopdesignen]] § 3): hjälten bär *Redigera
-    // container*, som är samma adress och samma yta, och en flik jämte den
-    // hade varit två vägar till samma val. *Uppgifter* kom med issue 174 och
+    // den sida som läser vad som har hänt. *Inställningar* LÄMNADE raden i
+    // issue 170 ([[ADR-0050 Desktopdesignen]] § 3) och är TILLBAKA sist i den
+    // sedan issue 646, som tog bort hjältens båda länkar: fliken är nu den enda
+    // vägen till inställningarna över `md:`. *Uppgifter* kom med issue 174 och
     // *Kostnader* med issue 175, båda på den plats ADR-0050 § 4 anger.
-    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'documents', 'tasks', 'costs', 'history']);
+    expect(containerflikNycklar('containerTabs'))->toBe(['overview', 'items', 'documents', 'tasks', 'costs', 'history', 'settings']);
 
     foreach (containerflikLankar('containerTabs', $container->ulid) as $nyckel => $adress) {
         // Etiketten kommer ur `lang/`, och `t()` hade skrivit nyckeln själv på
@@ -273,10 +273,11 @@ it('var och en av de tretton sektionerna går att nå', function () {
         actingAs($anvandare)->get($adress)->assertOk();
     }
 
-    // De åtta som lämnade flikraden, ur samma modul: items och history stannar
-    // i raden sedan issue 116, och *Inställningar* lämnade den i issue 170 —
-    // den ligger därför FÖRST i kolumnen, som hubben de sju andra hänger under
-    // ([[ADR-0050 Desktopdesignen]] § 3). Resten behåller sin inbördes ordning.
+    // De åtta som kolumnen bär, ur samma modul: items och history stannar i
+    // flikraden sedan issue 116, och *Inställningar* ligger FÖRST i kolumnen,
+    // som hubben de sju andra hänger under ([[ADR-0050 Desktopdesignen]] § 3) —
+    // och sedan issue 646 är samma post även flikradens sista, utan att
+    // kolumnens ordning rörs. Resten behåller sin inbördes ordning.
     expect(containerflikNycklar('containerSettingsSections'))->toBe([
         'settings',
         'categories',
@@ -513,11 +514,12 @@ it('historikfliken finns och läser genom läsregeln', function () {
  * (issue 178, ContainerDocumentController). Sju rader, och den åttonde är den
  * som smyger.
  *
- * **Fyra blev tre i issue 170.** `settings` lämnade flikraden
- * ([[ADR-0050 Desktopdesignen]] § 3), och inställningssidan har fortfarande
- * sin rutt — den nås nu genom hjältens *Redigera container* i stället för
- * genom en flik. Rutten prövas därför kvar på sin sida, av
- * inställningskolumnens prov.
+ * **Fyra blev tre i issue 170 och tre blev sju igen i issue 646.** `settings`
+ * lämnade flikraden i issue 170 ([[ADR-0050 Desktopdesignen]] § 3) och kom
+ * tillbaka sist i den i issue 646, som tog bort hjältens båda länkar och lade
+ * *Settings* i raden för alla som når containern. Inställningssidan har haft
+ * sin rutt hela tiden, och fliken pekar på samma `containers.edit` som
+ * inställningskolumnens rad.
  */
 it('pekar varje flik på en namngiven rutt', function () {
     [, , $container] = containerflikKontext();
@@ -529,5 +531,6 @@ it('pekar varje flik på en namngiven rutt', function () {
         'tasks' => route('containers.tasks', $container, false),
         'costs' => route('containers.costs', $container, false),
         'history' => route('containers.history', $container, false),
+        'settings' => route('containers.edit', $container, false),
     ]);
 });

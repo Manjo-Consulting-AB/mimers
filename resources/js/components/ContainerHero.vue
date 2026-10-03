@@ -1,8 +1,5 @@
 <script setup>
-import { computed } from 'vue';
-import { Link } from '@inertiajs/vue3';
 import ContainerCover from './ContainerCover.vue';
-import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Containerns hjälte, se issue 170 · [[ADR-0050 Desktopdesignen]] § 2–3 och
@@ -32,31 +29,27 @@ import { useTranslations } from '../composables/useTranslations.js';
  * räknades här hade varit en andra väg till samma tal, och de två hade glidit
  * isär ([[ADR-0039 Containerns översikt]] § Konsekvenser).
  *
- * **`Redigera container` leder till inställningssidan** (ADR-0050 § 3), där
- * containerns sju övriga sektioner bor sedan *Inställningar* lämnade flikraden.
- * Knappen ritas bara när `can.update` är sann — flaggan är presentation, och
- * rutten prövar `ContainerPolicy::update` på nytt (ADR-0047 § Beslut, "Vem som
- * får göra vad"). Pennan på bilden i skalets topprad står kvar på samma villkor
- * och är en annan väg till samma val.
- *
- * **Läsaren får länken *Inställningar* i knappens ställe, till samma adress.**
- * Flikraden bar raden fram till issue 170, och [[ADR-0042 Designsystemet]]
- * § Konsekvenser tillåter inte att en yta tappar sin väg: sidan är `view`-grindad,
- * så den som når containern ska hitta dit. Ordet är sektionens eget
- * (`container.nav.settings`) och ingen ny sträng. *Redigera container* hade
- * däremot lovat en läsare något hen inte får göra, och den ritas därför bara
- * när `can.update` är sann.
+ * **Hjälten bär ingen väg till inställningssidan** (issue 646). Här stod
+ * *Redigera container* för den som får ändra (ADR-0050 § 3) och en stillsam
+ * länk *Inställningar* i dess ställe för läsaren — två grenar på samma plats
+ * och samma adress. Sedan issue 646 ligger *Settings* i flikraden i stället,
+ * för alla som når containern: hjälten ritar alltså ingenting som pekar på
+ * `/containers/{ulid}/edit`, och den bar heller ingen `can`-flagga för det.
+ * Flikens *Settings* är `view`-grindad som förut, och pennan på bilden i
+ * skalets topprad står kvar på `can.update` — den är en annan väg till samma
+ * val och bor i skalet, inte här.
  *
  * **Namnet är sidans `<h1>`.** Över `md:` är hjälten sidans huvud, och
  * översikten döljer sitt eget huvud där (se resources/js/pages/Containers/
  * Overview.vue) — rubriken ska finnas på varje bredd, och den här raden är den
  * över brytpunkten.
  *
- * Ingen sträng i JavaScript ([[ADR-0013 Språk och i18n]]): knappens ord kommer
- * ur `t()`, och artens värde skrivs ORDAGRANT — fältet är fritt
- * ([[ADR-0036 Containerns art]]), så ingen nyckel byggs ur det.
+ * Ingen sträng i JavaScript ([[ADR-0013 Språk och i18n]]): hjälten slår inte
+ * upp en enda nyckel sedan issue 646 — texten den bar försvann med länkarna —
+ * och artens värde skrivs ORDAGRANT, för fältet är fritt
+ * ([[ADR-0036 Containerns art]]) och ingen nyckel byggs ur det.
  */
-const props = defineProps({
+defineProps({
     /*
      * `large` på översikten, `compact` på de andra flikarna — ADR-0050 § 2.
      * Den här komponenten ritas bara när skalet har ett värde att ge den;
@@ -65,13 +58,7 @@ const props = defineProps({
     hero: { type: String, required: true },
     /* Containern, ur App\Http\Resources\ContainerResource. */
     container: { type: Object, required: true },
-    /* `{ update }` — samma flagga som inställningssidan ritar sitt formulär ur. */
-    can: { type: Object, default: null },
 });
-
-const { t } = useTranslations();
-
-const canUpdate = computed(() => props.can?.update === true);
 </script>
 
 <template>
@@ -115,28 +102,6 @@ const canUpdate = computed(() => props.can?.update === true);
                         {{ container.description }}
                     </p>
                 </div>
-
-                <Link
-                    v-if="canUpdate"
-                    :href="`/containers/${container.ulid}/edit`"
-                    class="inline-flex min-h-11 shrink-0 items-center rounded-control border border-border bg-surface px-4 font-medium text-ink outline-none hover:bg-surface-muted focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                >
-                    {{ t('container.hero.edit') }}
-                </Link>
-
-                <!--
-                    Läsarens väg till samma adress: en stillsam länk i
-                    knappens ställe, för den som når containern ska hitta till
-                    dess sju sektioner ([[ADR-0042 Designsystemet]]
-                    § Konsekvenser).
-                -->
-                <Link
-                    v-else
-                    :href="`/containers/${container.ulid}/edit`"
-                    class="inline-flex min-h-11 shrink-0 items-center rounded-control px-4 font-medium text-ink-on-accent underline underline-offset-4 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                >
-                    {{ t('container.nav.settings') }}
-                </Link>
             </div>
 
             <!-- Talen, ovanpå bilden och bara i den höga hjälten (ADR-0050

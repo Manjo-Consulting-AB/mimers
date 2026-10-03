@@ -319,14 +319,15 @@ it('har den aktiva fliken i adressen och inte i komponentens tillstånd', functi
 /*
  * Issue 170 · [[ADR-0050 Desktopdesignen]] § 3–4: containerns flikrad.
  *
- * **Raden är sex flikar och inte sju.** *Inställningar* låg i raden från
- * issue 101 och lämnade den när hjälten tog över vägen till inställningssidan
- * (ADR-0050 § 3): *Redigera container* i hjälten är samma adress och samma yta,
- * och en flik jämte den hade varit två vägar till samma val. Kvar är
- * *Översikt · Items · Dokument · Uppgifter · Kostnader · Historik* — den
- * uppräkning ADR-0050 § 4 anger, och nu komplett: *Uppgifter* kom med issue
- * 174, *Kostnader* med 175 och *Dokument* med 178, var och en som byggde rutten
- * OCH sidan.
+ * **Raden är sju flikar, och den har varit både sex och sju.** *Inställningar*
+ * låg i raden från issue 101 och lämnade den i issue 170, när hjälten tog över
+ * vägen till inställningssidan (ADR-0050 § 3): *Redigera container* i hjälten
+ * var samma adress och samma yta, och en flik jämte den hade varit två vägar
+ * till samma val. **Issue 646 tog bort hjältens båda länkar och lade fliken
+ * tillbaka, nu SIST** — den är den enda vägen till inställningarna över `md:`,
+ * och raden är *Översikt · Items · Dokument · Uppgifter · Kostnader · Historik
+ * · Settings*. *Uppgifter* kom med issue 174, *Kostnader* med 175 och
+ * *Dokument* med 178, var och en som byggde rutten OCH sidan.
  *
  * **Listan läses i node och inte som råtext**, samma grepp som
  * ContainerflikTest använder: `containerSections.js` är en ren modul, och en
@@ -334,7 +335,7 @@ it('har den aktiva fliken i adressen och inte i komponentens tillstånd', functi
  * prövar dessutom varje fliks adress mot ruttabellen; här prövas ordningen och
  * namnen.
  */
-it('har containerns flikrad Översikt, Items, Dokument, Uppgifter, Kostnader och Historik', function () {
+it('har containerns flikrad Översikt, Items, Dokument, Uppgifter, Kostnader, Historik och Settings', function () {
     $skript = implode("\n", [
         "const { pathToFileURL } = await import('node:url');",
         'const { containerTabs } = await import(pathToFileURL('
@@ -350,12 +351,12 @@ it('har containerns flikrad Översikt, Items, Dokument, Uppgifter, Kostnader och
     expect($kod)->toBe(0, implode("\n", $rader));
 
     expect(json_decode(implode("\n", $rader), true))
-        ->toBe(['overview', 'items', 'documents', 'tasks', 'costs', 'history'], 'flikraden är inte Översikt, Items, Dokument, Uppgifter, Kostnader och Historik');
+        ->toBe(['overview', 'items', 'documents', 'tasks', 'costs', 'history', 'settings'], 'flikraden är inte Översikt, Items, Dokument, Uppgifter, Kostnader, Historik och Settings');
 
     // Etiketterna kommer ur `lang/` med nyckeln `container.nav.<key>`: `t()`
     // skriver nyckeln själv när uppslaget misslyckas, och en flik hade då
     // hetat `container.nav.settings` i raden.
-    foreach (['overview', 'items', 'documents', 'tasks', 'costs', 'history'] as $nyckel) {
+    foreach (['overview', 'items', 'documents', 'tasks', 'costs', 'history', 'settings'] as $nyckel) {
         expect(trans("ui.container.nav.{$nyckel}", [], 'en'))
             ->not->toBe("ui.container.nav.{$nyckel}", "container.nav.{$nyckel} saknas");
     }

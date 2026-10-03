@@ -101,7 +101,11 @@ export const containerSections = [
  * och `history` är vad som har hänt (116). `settings` stod här från issue 101
  * och lämnade raden i issue 170 · [[ADR-0050 Desktopdesignen]] § 3: hjälten
  * bär *Redigera container*, som är samma adress och samma yta, och en flik
- * jämte den hade varit två vägar till samma val.
+ * jämte den hade varit två vägar till samma val. **Den är tillbaka sedan issue
+ * 646**, som tog bort hjältens båda länkar: fliken är nu den enda vägen till
+ * inställningarna över `md:`, och den ligger därför sist i `containerTabs`
+ * nedan — men fortfarande UTANFÖR `TAB_KEYS`, för `settings` ska stå kvar
+ * först i inställningskolumnen.
  *
  * `tasks` kom med issue 174 · ADR-0050 § 4 och 16 och ligger efter `items`,
  * före `history` — den plats raden anger (*Översikt, Items, Dokument,
@@ -151,10 +155,18 @@ const TAB_KEYS = ['items', 'documents', 'tasks', 'costs', 'history'];
  *
  * `count` sätts inte: flikarna bär inga tal i bilden, och `UiTabs` ritar en
  * bricka bara när anroparen har ett tal att visa (issue 100).
+ *
+ * **`settings` läggs till sist och inte ur `TAB_KEYS`** (issue 646). Posten är
+ * samma rad som i `containerSections` — samma nyckel och samma adress,
+ * `/containers/{ulid}/edit` — så en andra formulering av samma yta undviks.
+ * Den hämtas med `find` i stället för att skrivas av här: skrevs nyckeln in i
+ * `TAB_KEYS` hade `settings` filtrerats bort ur `containerSettingsSections`
+ * nedan, där den ska stå kvar först.
  */
 export const containerTabs = [
     { key: 'overview', href: (ulid) => `/containers/${ulid}` },
     ...containerSections.filter((section) => TAB_KEYS.includes(section.key)),
+    containerSections.find((section) => section.key === 'settings'),
 ];
 
 /*
@@ -167,11 +179,13 @@ export const containerTabs = [
  * rad flyttar aldrig i förhållande till sina grannar när ytorna delas.
  *
  * **Inställningssidan ligger FÖRST sedan issue 170.** Den lämnade flikraden
- * (ADR-0050 § 3), och kvar i kolumnen är den hubben de sju andra sektionerna
- * hänger under: stod hubben fjärde hade vägen till de sex ytor en läsare når
- * varit gömd bakom tre andra rader ([[ADR-0042 Designsystemet]]
- * § Konsekvenser). `containerSections` själv är orörd — det är bara den här
- * ytan som lyfter sin egen sida högst.
+ * då (ADR-0050 § 3) och är tillbaka där sedan issue 646, men kolumnen är
+ * fortfarande den hubben de sju andra sektionerna hänger under: stod hubben
+ * fjärde hade vägen till de sex ytor en läsare når varit gömd bakom tre andra
+ * rader ([[ADR-0042 Designsystemet]] § Konsekvenser). Under `md:` ritas ingen
+ * hjälte, och skalets rad *Inställningar* under flikraden leder hit — kolumnen
+ * är alltså telefonens väg till de sju andra sektionerna. `containerSections`
+ * själv är orörd — det är bara den här ytan som lyfter sin egen sida högst.
  */
 export const containerSettingsSections = [
     ...containerSections.filter((section) => section.key === 'settings'),
