@@ -24,10 +24,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **ContainerLayout är fortfarande ramen.** Den här layouten wrappar den och
  * vidarebefordrar `container`, `create` och `can` oförändrade, så flikraden,
- * rubriken, bilden och plusknappen beter sig precis som förut. PROPKONTRAKTET
- * är därför ContainerLayouts eget: `container` ur
- * App\Http\Resources\ContainerResource är det enda som krävs, och en sida som
- * inte skickar `create` eller `can` får ingen plusknapp och ingen penna.
+ * rubriken, bilden och plusknappen beter sig precis som förut. Den sätter
+ * också `hero="compact"` (issue 678): de åtta sidorna är EN flik, och en hjälte
+ * som fanns på en av dem men försvann på nästa hade hoppat när man bytte rad i
+ * kolumnen. Attributet är därför layoutens svar och inte sidornas — ingen av
+ * de åtta skickar `hero` själv. PROPKONTRAKTET är ändå ContainerLayouts eget:
+ * `container` ur App\Http\Resources\ContainerResource är det enda som krävs,
+ * och en sida som inte skickar `create` eller `can` får ingen plusknapp och
+ * ingen penna.
  *
  * **Listan kommer ur `containerSettingsSections` och renderas med `v-for`.**
  * En ny sektion är en ny rad i containerSections.js och ingen ändring här,
@@ -72,7 +76,7 @@ const sectionLabel = (section) => t(`container.nav.${section.key}`);
 </script>
 
 <template>
-    <ContainerLayout :container="container" :create="create" :can="can">
+    <ContainerLayout hero="compact" :container="container" :create="create" :can="can">
         <div class="flex flex-col gap-8 md:flex-row">
             <nav :aria-label="t('container.edit.sections')" class="md:w-48 md:shrink-0">
                 <button
