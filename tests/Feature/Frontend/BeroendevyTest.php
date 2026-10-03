@@ -1054,7 +1054,7 @@ it('har varje ny beroendenyckel och ingen svensk sträng i vyn', function () {
 
     // Och borttagningen säger att ingenting annat försvann (Beslut 7).
     expect(Lang::get('ui.flash.schedule-dependency-removed', [], 'en'))
-        ->toBe('The dependency is gone. Both schedules remain.');
+        ->toBe('The dependency is gone. Both tasks remain.');
     expect(Lang::get('ui.flash.occurrence-dependency-removed', [], 'en'))
         ->toContain('both occurrences');
 

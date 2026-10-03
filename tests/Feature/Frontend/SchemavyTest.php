@@ -955,3 +955,22 @@ it('kallar itemets uppgiftssektion Tasks och knappen New task', function () {
         expect(trans($nyckel, [], 'en'))->toBe($varde, "{$nyckel} har fel ordalydelse");
     }
 });
+
+it('har inget schedule kvar i det användaren läser', function () {
+    // Platshållaren `:schedule` är undantagen; nycklar och kommentarer räknas inte.
+    $traffar = [];
+
+    foreach (['ui', 'export'] as $fil) {
+        foreach (Arr::dot(require lang_path("en/{$fil}.php")) as $nyckel => $varde) {
+            if (is_string($varde) && preg_match('/(?<!:)\bschedul/i', $varde)) {
+                $traffar[] = "{$fil}.{$nyckel}";
+            }
+        }
+    }
+
+    expect($traffar)->toBe([]);
+});
+
+it('ger flashmeddelandena ordet task', function () {
+    expect(trans('ui.flash.schedule-created', [], 'en'))->toBe('The task has been created.');
+});

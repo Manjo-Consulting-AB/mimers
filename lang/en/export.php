@@ -14,7 +14,7 @@ return [
     'position_note' => 'Position',
     'tags' => 'Tags',
     'links' => 'Links',
-    'schedules' => 'Schedules',
+    'schedules' => 'Tasks',
     'loans' => 'Loans',
     'attachments' => 'Attachments',
     'recurrence' => 'Recurrence',
