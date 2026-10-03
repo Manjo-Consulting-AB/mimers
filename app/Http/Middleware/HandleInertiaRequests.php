@@ -197,6 +197,15 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
+            // Appens version och årtal (issue 655) — två skalära värden, inte
+            // lata och inte optionala: footern ritas på varje sida och läsningen
+            // kostar ingenting. Versionen kommer ur `VERSION` via config
+            // (config/app.php), årtalet ur serverns klocka så footern inte
+            // åldras med en hårdkodad text.
+            'app' => [
+                'version' => config('app.version'),
+                'year' => (int) now()->format('Y'),
+            ],
             'auth' => fn (): array => $this->auth($request),
             // Användarens dag och tidszon ([[ADR-0044 Användarens dag]]
             // § Beslut 4) — se klassens docblock om varför de står här.

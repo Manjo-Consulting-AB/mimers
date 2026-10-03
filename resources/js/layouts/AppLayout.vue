@@ -432,7 +432,7 @@ const initials = computed(() => {
             </main>
 
             <footer class="hidden border-t border-slate-200 py-4 text-center text-xs text-slate-600 md:block">
-                {{ t('common.brand') }}
+                {{ t('common.footer', { year: page.props.app.year, version: page.props.app.version }) }}
             </footer>
         </div>
 
