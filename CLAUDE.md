@@ -2,11 +2,11 @@
 
 Karta över dokumentationen. **Vad du ska läsa** står här; **hur du ska arbeta** står i `AGENTS.md`. De två överlappar inte med flit — hittar du samma regel på båda ställena är det ett fel, säg till.
 
-Repot innehåller Laravel-appen och dokumentationsvalvet under `docs/`. Appen sattes upp i issue 1; domänmodellen börjar i issue 2.
+Repot innehåller Laravel-appen och dokumentationsvalvet under `docs/`.
 
 ## Läsprotokollet
 
-Dokumentationen är ~55 000 ord. Att läsa den i förväg är slöseri i både tid och krediter, och gör dig inte bättre informerad — bara mättad. Läs i den här ordningen och stanna när du har det du behöver:
+Dokumentationen är långt större än vad en session tål. Att läsa den i förväg är slöseri i både tid och krediter, och gör dig inte bättre informerad — bara mättad. Läs i den här ordningen och stanna när du har det du behöver:
 
 1. **`AGENTS.md`** — kort, och gäller alltid.
 2. **Din milstolpes fil** under `docs/Backlog/`. Slå upp numret i tabellen i [Backlog](docs/Backlog.md) och öppna **bara** den filen. Öppna aldrig alla.
@@ -37,7 +37,7 @@ Din issues **Läs**-lista är utgångspunkten. Tabellen här är för frågor so
 
 ## Läs avsnitt, inte hela filer
 
-Två dokument är stora nog att det spelar roll: `Process/Lärdomar.md` (~9 500 ord) och `Deploy/Pipeline.md` (~4 600). Därefter `Tankar.md` och de två längsta ADR:erna, 0018 och 0026, på drygt 2 000 ord var. De flesta ADR:er ligger under 1 200 ord och läses hela. Milstolpefilerna under `docs/Backlog/` är alla under 1 300 ord — läs din hela.
+Två dokument är stora nog att det spelar roll: `Process/Lärdomar.md` och `Deploy/Pipeline.md` — läs dem aldrig hela. Därefter `Tankar.md` och de två längsta ADR:erna, 0018 och 0026. De flesta ADR:er läses hela, och din milstolpes fil under `docs/Backlog/` läser du alltid hel.
 
 Behöver du ett enskilt avsnitt — issuen skriver ofta ut det, som `[[Pipeline]] § Uppladdningsgränser` — så läs bara det:
 
@@ -55,7 +55,7 @@ Skriv inte in radnummer från minnet — de flyttar sig vid varje redigering. K�
 - `docs/Konkurrens.md` — hur vi står oss mot Obsidian, Evernote, Notion och de andra
 - `docs/Backlog.md` — indextabell: issuenummer → milstolpefil
 - `docs/Backlog/` — en fil per milstolpe, issues med läslista och acceptanskriterier
-- `docs/ADR/` — 30 beslut, ett per fil, med kontext och konsekvenser
+- `docs/ADR/` — besluten, ett per fil, med kontext och konsekvenser
 - `docs/Datamodell/` — vad systemet består av, uppdelat per domän
 - `docs/Design/` — designerns bilder, förlaga för [[M17 Designsystemet]]
 - `docs/Deploy/Pipeline.md` — CI, miljöer, utrullning, verifierade fakta om servern

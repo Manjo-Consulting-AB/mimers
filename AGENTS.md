@@ -73,7 +73,7 @@ Reglerna står i blocket ovan. Här står bara kommandona de motsvarar.
 
 Minnesflaggan behövs i en worktree. Ändra inte `phpstan.neon` för att komma runt det.
 
-Bär din issue flera **delmoment** — en migration *och* en API-yta — kan den vara upplagd för två sessioner på samma gren: den första kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Står det så i issuen, följ det.
+Bär din issue flera **delmoment** — en migration *och* en API-yta — kan den vara upplagd för två sessioner på samma gren: den första kör grindarna, pushar grenen och **öppnar ingen PR**; den andra tar vid med tomt kontext, checkar ut grenen och avslutar. Gäller bara om issuens ruta **Delmoment** är kryssad.
 
 **Axlarna väljer granskningens djup, inte mergegrinden.** Deepseek implementerar varje issue; Sonnet granskar varje PR oavsett `risk_class`. En godkänd PR mergas automatiskt oavsett axel — tillfälligt, så länge systemet är i förproduktion utan testare; gaten som lät Tony merga `elevated` manuellt efter läst diff återinförs inför produktionssättning. Ingen PR mergas utan `review:approved`. Opus rör inte den löpande granskningen; dess enda roll är att svara på en obesvarad `## Frågor och antaganden` i PR-kroppen. Se [ADR-0026](docs/ADR/ADR-0026%20Implementering%20och%20granskning%20efter%20riskaxlar.md) (uppföljning 2026-09-05). Säger du till enligt regeln ovan avbryts sessionen och uppgiften går om med tomt kontext — till Deepseek om fyndet är konkret, till Sonnet om du missförstått uppgiften.
 

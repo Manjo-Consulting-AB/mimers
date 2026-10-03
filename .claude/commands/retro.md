@@ -12,9 +12,9 @@ Deras kontext och resonemang finns inte kvar och går inte att rekonstruera. Skr
 
 ## Bevismängden
 
-1. **Processnoteringarna** i milstolpens mergeade PR:er. Använd GitHub-verktygen; sök PR:er mot `main` vars gren heter `issue-NN-*` för milstolpens issuenummer enligt [Backlog](docs/Backlog.md).
+1. **Processnoteringarna** i milstolpens mergeade PR:er. Använd GitHub-verktygen; sök PR:er mot `main` vars gren heter `feature/issue-NN*` för milstolpens issuenummer enligt [Backlog](docs/Backlog.md).
 2. **`docs/Process/Lärdomar.md` § Observerat** — det som redan väntar på en andra träff.
-3. **Grenar per issue** — hur många separata grenar issuen behövde innan den var färdig. Räkna `issue-NN-*` i `git log origin/main --merges`. Detta är metriken med bevisad signal; se `docs/Process/Lärdomar.md`.
+3. **Grenar per issue** — hur många separata grenar issuen behövde innan den var färdig. Räkna `feature/issue-NN*` i `git log origin/main --merges`. Detta är metriken med bevisad signal; se `docs/Process/Lärdomar.md`.
 4. **Per PR:** antal commits och tid från öppnad till merge.
 5. **Ändrade filer mot issuens `In scope`-globbar.** Hämta rutan ur GitHub-issuen, jämför med PR:ens filer. Drift ut ur rutan är den enda helt automatiska mätningen av om issue-skrivandet håller.
 6. **PR:er där `Frågor och antaganden` inte var "Inga."**
@@ -30,7 +30,7 @@ Deras kontext och resonemang finns inte kvar och går inte att rekonstruera. Skr
 
 En issue som gick billigt och snabbt men behövde tre grenar och rörde filer utanför rutan gick inte bra.
 
-**Röda CI-varv är inte en motmetrik här.** Baslinjen visar 42 gröna körningar i rad; de röda som finns var antingen förväntade (appen fanns inte än) eller en skiftlägesbugg. Grinden ligger före pushen, inte i CI. Räkna dem ändå — den dagen siffran slår om från noll är det i sig en observation värd att skriva ner.
+**Röda CI-varv är inte en motmetrik här.** Grinden ligger före pushen, inte i CI.
 
 Mäts bara kostnad kommer arbetet att optimeras mot att se billigt ut — mindre läsning, färre frågor, fler gissningar. Det är precis det failure mode reglerna finns till för att förhindra.
 
