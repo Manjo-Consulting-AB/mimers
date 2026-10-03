@@ -1007,6 +1007,46 @@ def test_sviten_pa_basen_felar_oppet():
     assert rod is False
 
 
+def test_basprovningen_lanar_node_modules():
+    """Issue 193 (#645): kopian saknade node_modules, så Node-proven föll på
+    'Cannot find package vue' och en frisk main dömdes röd."""
+    kropp = _funktionskropp("sviten_ar_rod_pa_basen")
+    assert "node_modules" in kropp
+    assert "os.symlink(" in kropp
+    assert '"cp", "-r", moduler' not in kropp
+
+
+def test_basprovningen_felar_oppet_pa_saknat_nodepaket():
+    """Ett saknat Node-paket är en miljöbrist, inte en röd bas."""
+    original = p.run_cmd
+    nad_composer_test = []
+
+    class _Svar:
+        def __init__(self, kod=0, ut="", fel=""):
+            self.returncode, self.stdout, self.stderr = kod, ut, fel
+
+    def _stubb(args, **kw):
+        if args[:2] == ["git", "merge-base"]:
+            return _Svar(ut="a" * 40 + "\n")
+        if args[:2] == ["git", "archive"]:
+            open(args[args.index("--output") + 1], "w").close()
+        if args[0] == "tar":
+            open(os.path.join(args[args.index("-C") + 1], ".env.example"), "w").close()
+        if args[:2] == ["composer", "test"]:
+            nad_composer_test.append(True)
+            return _Svar(1, "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'vue'")
+        return _Svar()
+
+    p.run_cmd = _stubb
+    try:
+        rod, _, utskrift = p.sviten_ar_rod_pa_basen(".")
+    finally:
+        p.run_cmd = original
+    assert rod is False
+    assert utskrift == ""
+    assert nad_composer_test, "stubben nådde aldrig sviten - provet bevisar inget"
+
+
 def test_sonnet_fasen_borjar_fran_basen():
     """`reset --hard HEAD` lät Sonnet börja ovanpå DeepSeeks egna commits."""
     kropp = _funktionskropp("_process_in_worktree")
@@ -1048,6 +1088,7 @@ def test_resume_pr_mergar_genom_sparren():
 
 def test_usage_vakten_tal_ett_nytt_format():
     original = p.run_cmd
+    nad_composer_test = []
 
     class _Svar:
         stdout = json.dumps({"type": "rate_limit_event", "rate_limit_info": {"annat": 1}})

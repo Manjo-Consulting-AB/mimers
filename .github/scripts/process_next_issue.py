@@ -530,6 +530,16 @@ def sviten_ar_rod_pa_basen(worktree_path):
         bygge = os.path.join(worktree_path, "public", "build")
         if os.path.isdir(bygge):
             run_cmd(["cp", "-r", bygge, os.path.join(tmp, "public", "build")])
+
+        # Node-proven importerar komponenternas källa och behöver node_modules.
+        # Symlänk, inte kopia: /tmp har några hundra MB ledigt och vendor tar
+        # redan 227. Issue 193 (#645): utan den föll tio prov med
+        # ERR_MODULE_NOT_FOUND och en frisk main dömdes röd.
+        moduler = os.path.join(worktree_path, "node_modules")
+        npm_las_oforandrad = run_cmd(["git", "diff", "--quiet", bas_sha, "--", "package-lock.json"],
+                                     check=False, cwd=worktree_path).returncode == 0
+        if npm_las_oforandrad and os.path.isdir(moduler):
+            os.symlink(moduler, os.path.join(tmp, "node_modules"))
         shutil.copy(os.path.join(tmp, ".env.example"), os.path.join(tmp, ".env"))
         run_cmd(["php", "artisan", "key:generate", "--quiet"], cwd=tmp)
 
@@ -538,7 +548,7 @@ def sviten_ar_rod_pa_basen(worktree_path):
         if res.returncode == 0:
             print("  ✓ Sviten är grön på basen - felet hör till försöket.")
             return False, bas_sha, ""
-        if "Testmiljön är inte uppsatt" in utskrift:
+        if "Testmiljön är inte uppsatt" in utskrift or "ERR_MODULE_NOT_FOUND" in utskrift:
             print("  ⚠ Basens testmiljö gick inte att sätta upp - kan inte avgöra, fortsätter som förut.")
             return False, bas_sha, ""
         print("  ✗ Sviten är röd även på basen.")
