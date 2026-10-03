@@ -1100,6 +1100,56 @@ def test_usage_vakten_tal_ett_nytt_format():
         p.run_cmd = original
 
 
+# =====================================================================
+# skapa_pr(): 504 från GitHub fast PR:en skapades (issue #682, PR #703)
+# =====================================================================
+class _PrSkapande:
+    """Svarar på `gh pr create` med `create_svar` och på `gh pr list` med
+    `listor` i tur och ordning."""
+    def __init__(self, create_svar, listor):
+        self.create_svar = create_svar
+        self.listor = list(listor)
+        self.anrop = []
+
+    def __call__(self, args, **kw):
+        self.anrop.append(args)
+        if args[:3] == ["gh", "pr", "create"]:
+            return self.create_svar
+        if args[:3] == ["gh", "pr", "list"]:
+            return types.SimpleNamespace(returncode=0, stdout=self.listor.pop(0), stderr="")
+        raise AssertionError(f"oväntat anrop: {args}")
+
+
+def _kor_skapa_pr(falsk):
+    original_run, original_sleep = p.run_cmd, p.time.sleep
+    p.run_cmd, p.time.sleep = falsk, lambda s: None
+    try:
+        return p.skapa_pr("682", "Titel", "Closes #682", "feature/issue-682", cwd=".")
+    finally:
+        p.run_cmd, p.time.sleep = original_run, original_sleep
+
+
+def test_skapa_pr_laser_numret_ur_urlen():
+    ok = types.SimpleNamespace(returncode=0, stdout="https://github.com/o/r/pull/703\n", stderr="")
+    assert _kor_skapa_pr(_PrSkapande(ok, [])) == "703"
+
+
+def test_skapa_pr_ateranvander_pr_som_skapades_trots_504():
+    fel = types.SimpleNamespace(returncode=1, stdout="", stderr="HTTP 504: We couldn't respond")
+    falsk = _PrSkapande(fel, ["[]", '[{"number": 703}]'])
+    assert _kor_skapa_pr(falsk) == "703"
+
+
+def test_skapa_pr_kastar_nar_ingen_pr_finns():
+    fel = types.SimpleNamespace(returncode=1, stdout="", stderr="HTTP 504")
+    falsk = _PrSkapande(fel, ["[]", "[]", "[]"])
+    try:
+        _kor_skapa_pr(falsk)
+        raise AssertionError("skulle ha kastat")
+    except Exception as e:
+        assert "HTTP 504" in str(e)
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
