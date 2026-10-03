@@ -4,7 +4,9 @@ namespace App\Http\Middleware;
 
 use App\Actions\Container\ListShellContainers;
 use App\Actions\Item\ListFavorites;
+use App\Actions\Item\ListItems;
 use App\Actions\Item\ListRecentVisits;
+use App\Actions\Schedule\ListTodo;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
@@ -23,6 +25,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Lang;
 use Inertia\Inertia;
 use Inertia\Middleware;
@@ -31,11 +34,13 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Tolv nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Femton nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
  * App\Support\Frontend\ActiveContainer och `flash.status` ur sessionen.
+ * `containerCounts` är den femtonde och enda som är nullbar av ett skäl som
+ * inte är "gäst" — se containerCounts().
  *
  * **`today` och `timezone` kom med issue 137.** Frontenden ska inte räkna sin
  * egen dag ([[ADR-0044 Användarens dag]] § Beslut 4): servern skickar
@@ -171,8 +176,10 @@ class HandleInertiaRequests extends Middleware
     public function __construct(
         private readonly ActiveContainer $activeContainer,
         private readonly ListFavorites $listFavorites,
+        private readonly ListItems $listItems,
         private readonly ListRecentVisits $listRecentVisits,
         private readonly ListShellContainers $listShellContainers,
+        private readonly ListTodo $listTodo,
         private readonly PendingInvitation $pendingInvitation,
     ) {}
 
@@ -212,6 +219,9 @@ class HandleInertiaRequests extends Middleware
             'today' => fn (): ?string => $request->user()?->today()->toDateString(),
             'timezone' => fn (): ?string => $request->user()?->preferredTimezone(),
             'activeContainer' => fn (): ?string => $this->activeContainer->forUser($request->user()),
+            // Containerns två tal (issue 679) — se containerCounts() om varför
+            // de är en delad prop och varför de är null utanför en container.
+            'containerCounts' => fn (): ?array => $this->containerCounts($request),
             'favorites' => fn (): array => $this->favorites($request),
             'unreadNotificationCount' => fn (): int => $this->unreadNotificationCount($request)
                 + $this->pendingInvitationCount($request),
@@ -237,6 +247,50 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'status' => fn (): ?string => $request->session()->get('status'),
             ],
+        ];
+    }
+
+    /**
+     * Containerns två tal — antalet items och antalet öppna uppgifter — eller
+     * `null` utanför en container (issue 679).
+     *
+     * **En delad prop och inte en rad i varje kontroller.** Hjälten ritas på
+     * fjorton sidor som renderas av tretton kontrollermetoder; en rad i var
+     * och en hade varit tretton ändrade filer och en lista som glöms när en
+     * flik tillkommer. Här ligger den i samma lata form som `activeContainer`.
+     *
+     * **`null` utom när alla tre gäller**: `$request->user()` finns,
+     * `{container}`-parametern är en Container, och grinden `view` släpper in
+     * henne. Grinden är nödvändig: felsidan (`Inertia::render('Error')` i
+     * bootstrap/app.php) delar samma props, och en 403 på en främmande
+     * container får inte bära dess tal. Annars `['items' => int, 'todos' =>
+     * int]`, ur App\Actions\Item\ListItems::count() och
+     * App\Actions\Schedule\ListTodo::countForContainer().
+     *
+     * **Kostnaden bärs på varje rutt med `{container}`**, också de som inte
+     * ritar någon hjälte — två `COUNT`-frågor plus omfångsupplösningen. Det är
+     * priset för att talen finns där de behövs utan att tretton kontroller
+     * behöver komma ihåg dem, och Inertia utvärderar inte closuren vid en
+     * partiell omladdning som inte ber om den.
+     *
+     * @return array{items: int, todos: int}|null
+     */
+    private function containerCounts(Request $request): ?array
+    {
+        $user = $request->user();
+        $container = $request->route('container');
+
+        if ($user === null || ! $container instanceof Container) {
+            return null;
+        }
+
+        if (! Gate::forUser($user)->allows('view', $container)) {
+            return null;
+        }
+
+        return [
+            'items' => $this->listItems->count($user, $container),
+            'todos' => $this->listTodo->countForContainer($user, $container),
         ];
     }
 

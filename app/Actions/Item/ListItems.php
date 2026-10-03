@@ -125,6 +125,19 @@ class ListItems
     }
 
     /**
+     * Antalet items användaren når i containern (issue 679).
+     *
+     * **Samma mängd som `handle()` utan filter**, men en `COUNT(*)` i stället
+     * för att hämta alla rader med sina ivriga laddningar. Omfånget är det
+     * samma — `scope()` och `inScope()` — så de två svaren kan inte glida
+     * isär: den som räknar och den som listar ställer samma fråga.
+     */
+    public function count(User $user, Container $container): int
+    {
+        return $container->items()->inScope($this->scope($user, $container))->count();
+    }
+
+    /**
      * Omfånget för $user i $container, eller "når ingenting" när ingen
      * användare finns — se klassens docblock.
      */
