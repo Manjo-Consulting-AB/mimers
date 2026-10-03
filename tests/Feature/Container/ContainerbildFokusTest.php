@@ -145,6 +145,30 @@ it('skickar focus som null när ingen punkt är vald', function () {
 });
 
 /*
+ * Klart när (arkitektsvaret på issue 210): kortet som byggs av
+ * App\Actions\Container\ListContainerSummaries bär samma `focus` som
+ * containerlistan.
+ *
+ * Kortet formulerar inte sin egen `cover` — det läser samma
+ * ContainerResource::cover(), och den läser `cover_focus_x`/`cover_focus_y`
+ * ur containerraden. Står kolumnerna inte i actionens `get([...])` är de null
+ * på modellen, och korten svarar `focus: null` även när en punkt är satt: fel
+ * data, inte "ingen punkt vald". Provet låser raden mot att försvinna igen.
+ */
+it('skickar fokuspunkten även på sammanfattningskorten', function () {
+    [, $ägare, $container] = bildfokusKontext();
+
+    actingAs($ägare);
+    patch("/containers/{$container->ulid}/cover/focus", ['x' => 30, 'y' => 80])
+        ->assertRedirect();
+
+    get('/dashboard')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('containerGroups.0.containers.0.cover.focus', ['x' => 30, 'y' => 80]));
+});
+
+/*
  * Klart när: värden utanför 0–100 och icke-heltal avvisas, och raden är orörd.
  *
  * Ett ensamt x utan y är ingen punkt (required på båda), `'a'` faller på

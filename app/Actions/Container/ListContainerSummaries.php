@@ -90,15 +90,20 @@ class ListContainerSummaries
 
         // `cover_attachment_id` MÅSTE stå i urvalet: `ContainerResource::
         // cover()` läser pekaren, och en kolumn som inte hämtats är null —
-        // korten hade tyst tappat sina bilder. Bilden och dess derivat
-        // eager-loadas av samma skäl som ägarkontot i API:et: utan det blir
-        // dashboarden N+1, och kravet är ett KONSTANT antal frågor oavsett
-        // antal containrar (issue 159 § Klart när, issue 70 § Beslut 2).
+        // korten hade tyst tappat sina bilder. Samma sak gäller
+        // `cover_focus_x`/`cover_focus_y`: `cover()` skickar `focus` ur dem,
+        // och är de inte hämtade svarar korten `focus: null` även när en punkt
+        // är satt — inte "ingen punkt vald" utan FEL data (arkitektsvaret på
+        // issue 210). De två står på samma rad som redan hämtas, så ingen ny
+        // fråga ställs. Bilden och dess derivat eager-loadas av samma skäl som
+        // ägarkontot i API:et: utan det blir dashboarden N+1, och kravet är ett
+        // KONSTANT antal frågor oavsett antal containrar (issue 159 § Klart
+        // när, issue 70 § Beslut 2).
         $containers = Container::query()
             ->accessibleBy($user, $accountIds)
             ->with('coverAttachment.storedFile.derivatives')
             ->orderBy('name')
-            ->get(['id', 'ulid', 'name', 'kind', 'cover_attachment_id']);
+            ->get(['id', 'ulid', 'name', 'kind', 'cover_attachment_id', 'cover_focus_x', 'cover_focus_y']);
 
         $itemCounts = $this->itemCounts(
             $user,
