@@ -407,11 +407,11 @@ return [
         // `schedule-deleted` mentions neither the trash nor 30 days — the
         // schedule cannot be restored from a view (issue 20a decision 3), and
         // a restore that does not exist must not be promised in a flash.
-        'schedule-created' => 'The schedule has been created.',
-        'schedule-updated' => 'The schedule has been saved.',
-        'schedule-paused' => 'The schedule is paused. It opens no new occurrences until you resume it.',
-        'schedule-resumed' => 'The schedule is active again.',
-        'schedule-deleted' => 'The schedule has been removed.',
+        'schedule-created' => 'The task has been created.',
+        'schedule-updated' => 'The task has been saved.',
+        'schedule-paused' => 'The task is paused. It opens no new occurrences until you resume it.',
+        'schedule-resumed' => 'The task is active again.',
+        'schedule-deleted' => 'The task has been removed.',
 
         // Issue 63b decisions 5 and 8. Checking off and skipping get one
         // sentence each: they close the same row but say different things
@@ -424,9 +424,9 @@ return [
         // the row is hard-deleted (issue 23 decision 7) and what is lost is the
         // link — both schedules and both occurrences remain.
         'schedule-dependency-created' => 'The dependency has been added.',
-        'schedule-dependency-removed' => 'The dependency is gone. Both schedules remain.',
+        'schedule-dependency-removed' => 'The dependency is gone. Both tasks remain.',
         'occurrence-dependency-created' => 'The exception has been added.',
-        'occurrence-dependency-removed' => 'The exception is gone. Both schedules and both occurrences remain.',
+        'occurrence-dependency-removed' => 'The exception is gone. Both tasks and both occurrences remain.',
 
         // Issue 65b decisions 2, 3 and 4. Creating a feed and an endpoint has
         // no code of its own: there the secret itself is the message, and a
@@ -626,13 +626,13 @@ return [
         ],
 
         'schedule' => [
-            'inactive' => 'The schedule is paused, and checking off would open a new occurrence on a schedule nobody wants occurrences on. Resume the schedule first.',
+            'inactive' => 'The task is paused, and checking off would open a new occurrence on a task nobody wants occurrences on. Resume the task first.',
 
             // Issue 63c decision 6: the three error codes of the schedule
             // dependency, from App\Actions\Schedule\DependSchedule.
-            'dependency_self' => 'A schedule cannot wait for itself.',
-            'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other schedules.',
-            'dependency_not_in_container' => 'Dependencies only run between schedules in the same container.',
+            'dependency_self' => 'A task cannot wait for itself.',
+            'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other tasks.',
+            'dependency_not_in_container' => 'Dependencies only run between tasks in the same container.',
         ],
 
         // Issue 65b decision 5: the feature gate. `Entitlements::assertFeature()`
@@ -1007,7 +1007,7 @@ return [
             'task' => [
                 'due' => [
                     'label' => 'Task falls due',
-                    'description' => 'The day a scheduled task is to be done.',
+                    'description' => 'The day a recurring task is to be done.',
                 ],
                 'overdue' => [
                     'label' => 'Task is overdue',
@@ -1163,7 +1163,7 @@ return [
             'task' => [
                 'due' => [
                     'label' => 'Task falls due',
-                    'description' => 'When a scheduled task becomes visible or falls due.',
+                    'description' => 'When a recurring task becomes visible or falls due.',
                 ],
                 'overdue' => [
                     'label' => 'Task is overdue',
@@ -3015,7 +3015,7 @@ return [
             // The pause is reversible and visible (decision 6): the row stays
             // in the list, greyed out, with this sentence.
             'paused' => 'Paused',
-            'paused_note' => 'The schedule opens no new occurrences while it is paused.',
+            'paused_note' => 'The task opens no new occurrences while it is paused.',
 
             // The deletion is soft, but the trash lists four types and
             // `schedule` is not one of them (issue 20a decision 3). The text
@@ -3023,7 +3023,7 @@ return [
             // the trash — promising a way back that does not exist is worse
             // than promising none (decision 8).
             'destroy' => 'Delete',
-            'destroy_confirm' => 'The schedule and its upcoming occurrences are removed. Continue?',
+            'destroy_confirm' => 'The task and its upcoming occurrences are removed. Continue?',
 
             'recurrence' => [
                 'none' => 'Once',
@@ -3100,8 +3100,8 @@ return [
             ],
 
             'update' => [
-                'title' => 'Edit schedule',
-                'heading' => 'Edit schedule',
+                'title' => 'Edit task',
+                'heading' => 'Edit task',
                 'submit' => 'Save',
             ],
 
@@ -3175,21 +3175,21 @@ return [
                 'heading_schedule' => 'Always waits for',
                 'heading_occurrence' => 'Waiting on this time',
 
-                'note_schedule' => 'A rule for this schedule. Every new occurrence is linked automatically to the counterpart’s then-open occurrence.',
+                'note_schedule' => 'A rule for this task. Every new occurrence is linked automatically to the counterpart’s then-open occurrence.',
                 'note_occurrence' => 'An exception that applies to this occurrence only.',
 
-                'empty_schedule' => 'The schedule is not waiting for anything.',
+                'empty_schedule' => 'The task is not waiting for anything.',
                 'empty_occurrence' => 'The occurrence is not waiting for anything.',
                 'occurrence_none' => 'No open occurrence, so there are no exceptions to show.',
 
                 'counterpart' => 'Counterpart',
-                'counterpart_none' => '— choose a schedule —',
-                'no_counterparts' => 'There are no other schedules to wait for.',
+                'counterpart_none' => '— choose a task —',
+                'no_counterparts' => 'There are no other tasks to wait for.',
 
                 'submit' => 'Add',
                 'remove' => 'Remove',
-                'remove_confirm_schedule' => 'The dependency is removed. Both schedules remain. Continue?',
-                'remove_confirm_occurrence' => 'The exception is removed. Both schedules and both occurrences remain. Continue?',
+                'remove_confirm_schedule' => 'The dependency is removed. Both tasks remain. Continue?',
+                'remove_confirm_occurrence' => 'The exception is removed. Both tasks and both occurrences remain. Continue?',
 
                 'satisfied' => 'Done',
                 'blocking' => 'Blocking',
@@ -3279,13 +3279,13 @@ return [
         // and the point is that the parts keep their own details.
         'structure' => [
             'title' => 'An item can hold other items',
-            'body' => 'Put the parts inside the whole: the camera bag holds the camera, the lenses and the charger. The parts keep their own details and their own schedules.',
+            'body' => 'Put the parts inside the whole: the camera bag holds the camera, the lenses and the charger. The parts keep their own details and their own tasks.',
         ],
 
         // The to-do view is where a due occurrence lands, and the tip names it
         // by its own word rather than describing the screen.
         'schedules' => [
-            'title' => 'A schedule reminds you before something is due',
+            'title' => 'A task reminds you before something is due',
             'body' => 'Set one on an item — inspect the boiler, change the filter, renew the insurance — and it turns up under To do in time for you to act on it.',
         ],
     ],
@@ -3589,7 +3589,7 @@ return [
             ],
             'create' => [
                 'label' => 'Add',
-                'description' => 'Adds attachments, costs, schedules and new child items — but never touches anything that already exists.',
+                'description' => 'Adds attachments, costs, tasks and new child items — but never touches anything that already exists.',
             ],
             'write' => [
                 'label' => 'Change',
