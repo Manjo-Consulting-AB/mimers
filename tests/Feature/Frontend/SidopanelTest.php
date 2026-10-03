@@ -176,14 +176,15 @@ function sidopanelNamn(array $grupp): array
 }
 
 /*
- * Klart när: över `md:` visas sidopanelen med raderna, containerlistan,
- * *Nyligen besökta* och *Favoriter* i den ordningen.
+ * Klart när (issue 653): över `md:` står sidopanelen i mockupens ordning —
+ * översikten, containrarna, resten av raderna, de senast besökta, favoriterna,
+ * och användaren med vägen ut sist ([[ADR-0050 Desktopdesignen]] § 1).
  *
  * Ordningen läses ur källan i stället för att skrivas av här: en sektion som
  * flyttar eller försvinner ska fälla provet, och panelen är den enda platsen
- * de fyra möts.
+ * de sex möts.
  */
-it('ritar sidopanelen med raderna, containerlistan, de senast besökta och favoriterna i den ordningen', function () {
+it('ritar sidopanelen i mockupens ordning', function () {
     $layout = sidopanelKod('layouts/AppLayout.vue');
 
     // Panelen är en mörk yta över `md:` och ritas av samma komponenter som
@@ -200,28 +201,62 @@ it('ritar sidopanelen med raderna, containerlistan, de senast besökta och favor
     $ordning = array_map(
         fn (string $nål): int|false => strpos($panel, $nål),
         [
-            '<ShellSections />',
+            '<ShellSections part="top" />',
             '<ShellContainerList',
+            '<ShellSections />',
             '<RecentVisitList',
             '<ShellSections part="favorites" />',
+            '<ShellSections part="account" />',
         ],
     );
 
-    // Fyra sektioner, och alla fyra står i panelen.
-    expect($ordning[0])->toBeInt()
-        ->and($ordning[1])->toBeInt()
-        ->and($ordning[2])->toBeInt()
-        ->and($ordning[3])->toBeInt();
+    // Sex anrop, och alla sex står i panelen.
+    foreach ($ordning as $position) {
+        expect($position)->not->toBeFalse();
+    }
 
-    expect($ordning[0])->toBeLessThan($ordning[1])
-        ->and($ordning[1])->toBeLessThan($ordning[2])
-        ->and($ordning[2])->toBeLessThan($ordning[3]);
+    for ($i = 1; $i < count($ordning); $i++) {
+        expect($ordning[$i - 1])->toBeLessThan($ordning[$i]);
+    }
+
+    // Användarens rad står sist och är tryckt till panelens botten: den ska
+    // inte följa med i skrollen när panelen är lång.
+    expect($panel)->toMatch('/<div class="mt-auto">\s*<ShellSections part="account" \/>/');
 
     // De två listorna som frågar servern får sin `load` av layouten, som är
-    // den som vet att panelen ritas; favoriterna är delade och behöver inget
-    // besked.
+    // den som vet att panelen ritas; favoriterna och kontoraden är delade och
+    // behöver inget besked.
     expect($panel)->toContain('<ShellContainerList v-if="user" :load="isDesktopPanel" />')
         ->toContain('<RecentVisitList v-if="user" :load="isDesktopPanel" />');
+});
+
+/*
+ * Klart när (issue 653): raderna delas mellan `top`, `rows` och `account`, och
+ * delarna är urval ur SAMMA lista — `sections` delas inte i tre arrayer.
+ *
+ * `top` ritar bara översikten, `account` bara användarens rad med vägen ut,
+ * och `rows` resten. Provet läser grenarna i källan: en rad i fel gren är en
+ * rad på fel plats i panelen, och det syns inte i en svarskropp.
+ */
+it('delar raderna mellan top, rows och account', function () {
+    $sektioner = sidopanelKod('components/ShellSections.vue');
+
+    expect($sektioner)->toContain("'top'")->toContain("'account'");
+
+    // top-grenen: fönstret är filen från `'top'` fram till `'account'`, alltså
+    // grenen före kontoradens.
+    $top = substr($sektioner, (int) strpos($sektioner, "'top'"));
+    $top = substr($top, 0, (int) strpos($top, "'account'"));
+
+    expect($top)->toContain("'dashboard'")
+        ->and($top)->not->toContain("'settings'");
+
+    // account-grenen bär inställningsraden, vägen ut och gästens väg in.
+    $konto = substr($sektioner, (int) strpos($sektioner, "'account'"));
+
+    expect($konto)->toContain("'settings'")
+        ->toContain('/logout')
+        ->toContain('/login');
 });
 
 /*

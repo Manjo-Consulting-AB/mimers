@@ -134,22 +134,31 @@ function onClosed() {
                     </button>
                 </div>
 
-                <ShellSections />
+                <!--
+                    Mockupens ordning (issue 653), samma som sidopanelen:
+                    översikten, containrarna, resten av raderna, de senast
+                    besökta, favoriterna och användaren sist. Ingen `mt-auto`:
+                    menyn skrollar, och en botten som trycks dit hade följt med
+                    i skrollen i stället för att stå still.
+                -->
+                <ShellSections part="top" />
 
                 <!--
                     Containerlistan kom med issue 169. Den är skalets tredje
                     sektion och står i samma ordning i den här ytan som i
-                    sidopanelen — sektionerna, containrarna, de senast
-                    besökta, favoriterna ([[ADR-0050 Desktopdesignen]] § 1).
-                    Är den sann en enda gång ställs frågan, och den hämtas av
-                    samma `open` som de senast besökta: menyn är ytan som bär
-                    båda under `md:`.
+                    sidopanelen. Är den sann en enda gång ställs frågan, och
+                    den hämtas av samma `open` som de senast besökta: menyn är
+                    ytan som bär båda under `md:`.
                 -->
                 <ShellContainerList :load="props.open" />
+
+                <ShellSections />
 
                 <RecentVisitList :load="props.open" />
 
                 <ShellSections part="favorites" />
+
+                <ShellSections part="account" />
             </aside>
 
             <!--

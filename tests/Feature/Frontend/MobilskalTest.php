@@ -174,36 +174,40 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
 });
 
 /*
- * Klart när (issue 169): sidomenyn visar samma sektioner i samma ordning som
- * sidopanelen ([[ADR-0048 Mobilen och plusknappen]] § 1).
+ * Klart när (issue 653): sidomenyn staplar samma sex anrop i samma ordning som
+ * sidopanelen — översikten, containrarna, raderna, de senast besökta,
+ * favoriterna och användaren sist ([[ADR-0050 Desktopdesignen]] § 1).
  *
- * Ordningen läses ur BÅDA ytorna i stället för att skrivas av: en sektion som
+ * Ordningen läses ur BÅDA yternas `<aside>` och jämförs: en sektion som
  * flyttar i den ena men inte i den andra ska fälla provet, och den enda vägen
- * till det är att jämföra de två listorna med varandra. Markörerna är
- * komponentanropen — sektionerna är samma komponenter på båda ställena, och
- * det är därför de inte kan glida isär.
+ * till det är att ställa de två följderna mot varandra.
  */
-it('visar samma sektioner i samma ordning i sidomenyn som i sidopanelen', function () {
+it('ritar sidomenyn i samma ordning som sidopanelen', function () {
     $layout = mobilskalKod('layouts/AppLayout.vue');
     $meny = mobilskalKod('components/MobileMenu.vue');
 
     $start = (int) strpos($layout, '<aside');
-    $panel = substr($layout, $start, (int) strpos($layout, '</aside>', $start) - $start);
+    $panelen = substr($layout, $start, (int) strpos($layout, '</aside>', $start) - $start);
 
-    expect($panel)->not->toBeEmpty('layouten har ingen sidopanel');
+    $start = (int) strpos($meny, '<aside');
+    $menyn = substr($meny, $start, (int) strpos($meny, '</aside>', $start) - $start);
 
-    $sektion = '#<ShellSections part="favorites" />|<ShellContainerList|<RecentVisitList|<ShellSections />#';
+    expect($panelen)->not->toBeEmpty('layouten har ingen sidopanel')
+        ->and($menyn)->not->toBeEmpty('menyn har ingen sidopanel');
 
-    preg_match_all($sektion, $panel, $iPanelen);
-    preg_match_all($sektion, $meny, $iMenyn);
+    $sektion = '#<ShellSections part="top" />|<ShellContainerList|<ShellSections />|<RecentVisitList|<ShellSections part="favorites" />|<ShellSections part="account" />#';
 
-    // De fyra sektionerna i skalets ordning ([[ADR-0050 Desktopdesignen]]
-    // § 1), och exakt samma följd i båda ytorna.
+    preg_match_all($sektion, $panelen, $iPanelen);
+    preg_match_all($sektion, $menyn, $iMenyn);
+
+    // Alla sex anrop står i båda ytorna, och i mockupens ordning.
     expect($iPanelen[0])->toBe([
-        '<ShellSections />',
+        '<ShellSections part="top" />',
         '<ShellContainerList',
+        '<ShellSections />',
         '<RecentVisitList',
         '<ShellSections part="favorites" />',
+        '<ShellSections part="account" />',
     ])->and($iMenyn[0])->toBe($iPanelen[0]);
 });
 

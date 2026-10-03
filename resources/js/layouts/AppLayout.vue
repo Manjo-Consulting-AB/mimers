@@ -277,8 +277,9 @@ const initials = computed(() => {
         <!--
             SIDOPANELEN över `md:` — desktopens skal, se issue 169 och
             [[ADR-0050 Desktopdesignen]] § 1. Mörk yta ur `--color-shell`, och
-            sektionerna i bildens ordning: raderna, containerlistan, de senast
-            besökta, favoriterna.
+            sektionerna i mockupens ordning (issue 653): översikten, containrarna,
+            resten av raderna, de senast besökta, favoriterna — och användaren
+            med vägen ut sist, tryckt till botten av `mt-auto`.
 
             **Sektionerna ritas av samma komponenter som mobilens sidomeny**
             (ShellSections, ShellContainerList, RecentVisitList), och samma
@@ -302,19 +303,27 @@ const initials = computed(() => {
             </Link>
 
             <!--
-                Raderna. `id="huvudmenyn"` står kvar på omslutningen: det är
-                samma navigering som förut, flyttad in i panelen, och namnet
-                är det mobilskalet och proven känner den under.
+                Navigeringen: översikten, containrarna och resten av raderna.
+                `id="huvudmenyn"` står kvar på omslutningen: det är samma
+                navigering som förut, flyttad in i panelen, och namnet är det
+                mobilskalet och proven känner den under.
             -->
             <nav id="huvudmenyn" class="w-full">
+                <ShellSections part="top" />
+
+                <ShellContainerList v-if="user" :load="isDesktopPanel" />
+
                 <ShellSections />
             </nav>
-
-            <ShellContainerList v-if="user" :load="isDesktopPanel" />
 
             <RecentVisitList v-if="user" :load="isDesktopPanel" />
 
             <ShellSections part="favorites" />
+
+            <!-- Användarens namn och vägen ut, tryckta till panelens botten. -->
+            <div class="mt-auto">
+                <ShellSections part="account" />
+            </div>
         </aside>
 
         <div class="flex min-h-full min-w-0 flex-1 flex-col">
