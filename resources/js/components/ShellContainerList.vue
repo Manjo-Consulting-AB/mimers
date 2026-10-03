@@ -7,8 +7,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Skalets containerlista, se issue 169 · [[ADR-0050 Desktopdesignen]] § 1 och
  * [[ADR-0036 Containerns art]].
  *
- * **En lista, två ytor** — samma konstruktion som ShellSections och
- * RecentVisitList: AppLayout ritar den i sidopanelen över `md:`, MobileMenu i
+ * **En lista, två ytor** — samma konstruktion som ShellSections: AppLayout
+ * ritar den i sidopanelen över `md:`, MobileMenu i
  * sidomenyn under, och båda ur SAMMA propp. En sektion som finns i den ena
  * och saknas i den andra är ett fel ([[ADR-0048 Mobilen och plusknappen]] § 1),
  * och det är därför den här filen finns och inte två avskrifter.
@@ -24,9 +24,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Proppen är `undefined` till dess att svaret är här, och `[]` när det
  * kommit och är tomt** — samma skillnad som i RecentVisitList: en rubrik över
- * en lista som är på väg hade varit ett svar komponenten inte har, och en
- * rubrik över en tom lista är en yta som lovar något den inte har. Tomt
- * betyder alltså "ingen container", och då ritas ingenting alls.
+ * en lista som är på väg hade varit ett svar komponenten inte har. Blocket
+ * ritas därför på `loaded` och inte på listans längd (issue 677): den sista
+ * raden är *Add container*, och den finns för varje inloggad. Är listan tom
+ * står högens rubrik (*My containers*) ensam över den raden, i stället för
+ * ingenting alls.
  *
  * **Rubriken är artens eget ord** och slås aldrig upp i `lang/`
  * ([[ADR-0036 Containerns art]]): fältet är fritt och kan innehålla vad som
@@ -76,6 +78,14 @@ const page = usePage();
 const groups = computed(() => page.props.shellContainers ?? []);
 
 /*
+ * Har svaret kommit? `undefined` är "frågan är ställd men inte besvarad", och
+ * `[]` är ett svar: användaren har inga containrar. Blocket ritas i båda fallen
+ * — se docblocken — men bara det sista fallet betyder att raden *Add container*
+ * står ensam.
+ */
+const loaded = computed(() => page.props.shellContainers !== undefined);
+
+/*
  * Sidans väg, utan querysträngen — samma form som `currentPath` i
  * ShellSections: `page.url` bär frågan och dess parametrar.
  */
@@ -110,7 +120,7 @@ function isActive(container) {
 </script>
 
 <template>
-    <nav v-if="groups.length" :aria-label="t('nav.containers')" class="w-full pt-6">
+    <nav v-if="loaded" :aria-label="t('nav.containers')" class="w-full pt-6">
         <!--
             En grupp per art, och högen först — ordningen kommer ur servern
             (App\Actions\Container\ContainerKindGroups) och skrivs inte om
@@ -135,5 +145,46 @@ function isActive(container) {
                 </li>
             </ul>
         </div>
+
+        <!--
+            Högens rubrik står ensam när användaren inte har några containrar
+            (issue 677): blocket ritas ändå, för raden under är *Add
+            container*. Samma ord och samma klasser som grupprubriken ovanför.
+        -->
+        <h2 v-if="!groups.length" class="text-meta font-semibold tracking-wide text-ink-subtle uppercase">
+            {{ t('dashboard.containers.others') }}
+        </h2>
+
+        <!--
+            Sista raden i listan (issue 677), i samma `<ul>`-form som raderna
+            ovanför: vägen till att skapa en container, alltid för en inloggad
+            — `GET /containers/create` har ingen grind, och `POST /containers`
+            prövar `ContainerPolicy::create()`. Klassen är containrarnas, plus
+            `gap-2` för ikonen, och hover är en bakgrund som på varje annan rad.
+        -->
+        <ul class="flex flex-col gap-1 px-2 text-sm">
+            <li class="flex">
+                <Link
+                    href="/containers/create"
+                    class="inline-flex min-h-11 w-full items-center gap-2 rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-5 w-5"
+                        aria-hidden="true"
+                    >
+                        <path d="M12 5v14"></path>
+                        <path d="M5 12h14"></path>
+                    </svg>
+
+                    {{ t('nav.add_container') }}
+                </Link>
+            </li>
+        </ul>
     </nav>
 </template>
