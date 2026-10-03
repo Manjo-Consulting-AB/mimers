@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
  *
  * Pro ges som DATA, inte som ett undantag i planlogiken (Beslut 1): kontot
  * får en vanlig `subscription`-rad med plan `pro`, status `active`,
- * `current_period_end` = 2099-12-31 och `external_ref` = `internal`. Då läser
+ * `current_period_end` = 2037-12-31 och `external_ref` = `internal`. Då läser
  * Account::currentPlan(), PlanResource::planFor() och
  * ReportsAbuseSignals::freeAccountsQuery() samma rad som alla andra konton,
  * utan att någon av de tre ändras — de bär samma regel med flit, och ett
@@ -48,9 +48,11 @@ class GrantInternalPro
 {
     /**
      * Datumet ett internt Pro löper till. Långt fram med flit: raden ska
-     * aldrig gå ut, och något förnyelseflöde finns inte.
+     * aldrig gå ut, och något förnyelseflöde finns inte. Före 2038 med flit
+     * också: `current_period_end` är en MariaDB-`timestamp`, som avvisar
+     * senare datum (fel 1292) — SQLite i testerna gör det inte.
      */
-    private const PERIOD_END = '2099-12-31 00:00:00';
+    private const PERIOD_END = '2037-12-31 00:00:00';
 
     public function handle(User $user): void
     {

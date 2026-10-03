@@ -108,3 +108,13 @@ it('ger en befintlig intern användare Pro genom migrationen', function () {
     expect($interntKonto->fresh()->currentPlan()->code)->toBe('pro');
     expect($annatKonto->fresh()->currentPlan()->code)->toBe('free');
 });
+
+it('sätter ett slutdatum som MariaDB:s timestamp tar emot', function () {
+    config(['konton.internal_pro_emails' => ['mia@manjo.me']]);
+    [$user, $account] = interntProKonto('mia@manjo.me');
+
+    (new GrantInternalPro)->handle($user);
+
+    // timestamp-kolumner når till 2038-01-19; SQLite avvisar inget, så gränsen prövas här.
+    expect($account->subscription()->first()->current_period_end->lt('2038-01-19'))->toBeTrue();
+});
