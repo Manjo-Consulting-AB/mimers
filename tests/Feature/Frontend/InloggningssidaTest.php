@@ -116,7 +116,7 @@ it('länkar till de fyra informationssidorna', function () {
     }
 });
 
-it('har engelska strängarna för den nya sidan i ui.php', function () {
+it('har engelska strängar för den nya sidan', function () {
     // Beslut 5. `toBe` mot det exakta värdet bevisar både att nyckeln finns
     // (en saknad nyckel ger nyckeln själv tillbaka) och att ordet är rätt.
     expect(trans('ui.auth.login.heading', [], 'en'))->toBe('Welcome back');
