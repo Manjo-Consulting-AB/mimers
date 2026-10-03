@@ -113,7 +113,7 @@ const isShared = (container) => accountName(container) === null;
                 <UiCard class="h-full">
                     <template #media>
                         <div class="aspect-video w-full">
-                            <ContainerCover :cover="container.cover" />
+                            <ContainerCover :cover="container.cover" variant="medium" />
                         </div>
                     </template>
 

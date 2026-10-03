@@ -104,7 +104,7 @@ const { t } = useTranslations();
             `alt=""` av samma skäl (issue 68a § Beslut 8).
         -->
         <span class="absolute inset-0" aria-hidden="true">
-            <ContainerCover :cover="container.cover" />
+            <ContainerCover :cover="container.cover" variant="medium" />
         </span>
 
         <span class="absolute inset-0 bg-shell/70" aria-hidden="true"></span>

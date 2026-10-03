@@ -61,7 +61,7 @@ const { t } = useTranslations();
     <UiCard class="min-w-64 flex-1 relative">
         <template #media>
             <div class="aspect-video w-full">
-                <ContainerCover :cover="props.container.cover" />
+                <ContainerCover :cover="props.container.cover" variant="medium" />
             </div>
         </template>
 
