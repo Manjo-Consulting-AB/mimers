@@ -132,6 +132,26 @@ Route::post('/tips/{key}/dismiss', [DismissedTipController::class, 'store'])
 Route::get('/', fn () => Inertia::render('Welcome'))->name('welcome');
 
 /*
+ * Issue 202 · Informationssidorna — /about, /privacy, /terms och /help. Inloggnings-
+ * sidans nya design länkar hit (issue 203).
+ *
+ * **Fyra rutter, en sida.** Adresserna skiljer sig åt men innehållet är det
+ * samma — en rubrik och en mening — och bara rubriken skiljer dem åt. Sidan
+ * `Info` får sin adress som prop och slår upp `info.<sida>.title` i
+ * lang/{locale}/ui.php, så en femte sida är en rad i listan och en nyckel i
+ * katalogen, inte en ny .vue-fil.
+ *
+ * **Utanför `auth` och `guest`.** En informationssida ska nås av både en gäst
+ * och en inloggad, och en plats i någon av grupperna hade skickat den ena
+ * parten vidare. Samma form som `welcome` ovan.
+ *
+ * Texterna är platshållare; de riktiga skrivs i en senare runda.
+ */
+foreach (['about', 'privacy', 'terms', 'help'] as $infoPage) {
+    Route::get('/'.$infoPage, fn () => Inertia::render('Info', ['page' => $infoPage]))->name('info.'.$infoPage);
+}
+
+/*
  * Issue 4 · Autentisering med lösenord. Webben kör på Laravels
  * sessionsguard med CSRF, inte Sanctums cookie-läge — se
  * [[ADR-0011 Autentisering]] och [[ADR-0021 Frontendteknik]]. Motsvarande
