@@ -194,6 +194,20 @@ function nyligenListaFragor(Closure $värm, Closure $anrop): int
     return $frågor;
 }
 
+/**
+ * En fil under resources/js, med kommentarer borta — samma tre slag som
+ * `sidopanelKod()` i SidopanelTest och `mobilskalKod()` i MobilskalTest rensar.
+ */
+function nyligenListaKod(string $sokvag): string
+{
+    $kod = File::get(resource_path("js/{$sokvag}"));
+
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    return (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
+}
+
 /*
  * Klart när: listan visar de senaste i ordning.
  *
@@ -516,41 +530,25 @@ it('antalet frågor är konstant oavsett antal rader', function () {
 });
 
 /*
- * Sektionen är SKALETS och inte en sidas, och den ritas i båda ytorna ur samma
- * komponent — se resources/js/components/RecentVisitList.vue.
+ * Klart när (issue 677): sektionen *Nyligen besökta* ritas inte längre i
+ * skalet — varken i desktopens sidopanel eller i mobilens sidomeny.
  *
- * Provet är ett källkodsprov, som favoritlistans och mobilskalets: Inertia
- * renderar mallen i klienten, så den renderade sektionen når aldrig
- * svarskroppen i en testsvit. Villkoret är listans LÄNGD och ingenting annat —
- * en rubrik över en tom lista är en yta som lovar något den inte har, och en
- * lista som ännu inte hämtats (`undefined`) ska varken ritas eller kallas tom.
+ * Fyndet är testarnas (2026-10-03): mockupen `docs/Design/dokument.png` har
+ * ingen *Recently visited*. Komponenten, besöksinspelningen, proppen
+ * `recentVisits`, nyckeln `nav.recent_visits` och [[ADR-0049 Nyligen besökta]]
+ * står kvar till dess att städningen blir en egen issue — det här provet
+ * prövar bara att skalet inte längre ritar den.
+ *
+ * Provet är ett källkodsprov som de andra i den här filen: Inertia renderar
+ * mallen i klienten, så ett anrop når aldrig svarskroppen i en testsvit.
+ * Kommentarerna rensas bort först — en mening i ett docblock om var
+ * komponenten brukade ritas är inte samma sak som ett anrop.
  */
-it('ritar sektionen i båda skalets ytor och bara när listan har rader', function () {
-    $layout = File::get(resource_path('js/layouts/AppLayout.vue'));
-    $meny = File::get(resource_path('js/components/MobileMenu.vue'));
-    $komponenten = File::get(resource_path('js/components/RecentVisitList.vue'));
+it('ritar inte de senast besökta i skalet', function () {
+    foreach (['layouts/AppLayout.vue', 'components/MobileMenu.vue'] as $sokvag) {
+        expect(nyligenListaKod($sokvag))->not->toContain('RecentVisitList');
+    }
 
-    // Samma komponent på båda ställena, och `load` kommer ur den yta som vet
-    // att den ritas: layouten läser brytpunkten, menyn sin egen öppning.
-    expect($layout)->toContain("import RecentVisitList from '../components/RecentVisitList.vue'")
-        ->toContain('<RecentVisitList v-if="user" :load="isDesktopPanel" />')
-        ->toContain("window.matchMedia('(min-width: 768px)')");
-
-    expect($meny)->toContain("import RecentVisitList from './RecentVisitList.vue'")
-        ->toContain('<RecentVisitList :load="props.open" />');
-
-    // Den står direkt ovanför favoriterna i båda ytorna
-    // ([[ADR-0049 Nyligen besökta]] § Beslut).
-    expect(strpos($layout, '<RecentVisitList'))->toBeLessThan(strpos($layout, '<ShellSections part="favorites" />'))
-        ->and(strpos($meny, '<RecentVisitList'))->toBeLessThan(strpos($meny, '<ShellSections part="favorites" />'));
-
-    // Frågan ställs en gång, när ytan blir ritad — och aldrig annars.
-    expect($komponenten)->toContain('const rows = computed(() => page.props.recentVisits ?? [])')
-        ->toContain("router.reload({ only: ['recentVisits'] })")
-        ->toContain('v-if="rows.length"')
-        ->toContain("t('nav.recent_visits')")
-        ->toContain('<UiListRow');
-
-    // Rubriken kommer ur lang/ som all annan text i layouten.
-    expect(trans('ui.nav.recent_visits', [], 'en'))->toBe('Recently visited');
+    // Komponenten finns kvar: borttagningen är ur skalet, inte ur repot.
+    expect(File::exists(resource_path('js/components/RecentVisitList.vue')))->toBeTrue();
 });

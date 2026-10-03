@@ -7,7 +7,6 @@ import FlashMessage from '../components/FlashMessage.vue';
 import MobileMenu from '../components/MobileMenu.vue';
 import MobileTabBar from '../components/MobileTabBar.vue';
 import NotificationBell from '../components/NotificationBell.vue';
-import RecentVisitList from '../components/RecentVisitList.vue';
 import SearchField from '../components/SearchField.vue';
 import ShellContainerList from '../components/ShellContainerList.vue';
 import ShellSections from '../components/ShellSections.vue';
@@ -127,25 +126,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  *     i, och varje sida som bär en knapp ligger bakom `auth`; `user`-villkoret
  *     är detsamma som för flikraden och menyn.
  *
- * **Sektionen *Nyligen besökta* kom med issue 160** · [[ADR-0049 Nyligen
- * besökta]]. Den står i skalets band över `md:` — direkt ovanför favoriterna —
- * och i sidomenyn under `md:`, och ritas av
- * resources/js/components/RecentVisitList.vue på båda ställena.
- * Bandet är sedan issue 169 sidopanelen, se nedan.
- *
- *   - **Listan är en OPTIONAL prop och hämtas först när ytan ritas.** Skalet
- *     äger svaret på "ritas panelen?": `isDesktopPanel` läser brytpunkten ur
- *     `matchMedia` vid monteringen, och komponenten ställer sin fråga en gång
- *     när den blir sann. En sida där menyn aldrig öppnats — och en telefon,
- *     där bandet är dolt — frågar aldrig efter listan.
- *   - **Gästen har ingen lista att fråga om.** Villkoret är `v-if="user"`,
- *     som för `SearchField` och `NotificationBell` i samma skal: en gäst har
- *     ingen meny att öppna, men `isDesktopPanel` blir sann ändå på en bred
- *     skärm, och utan villkoret hade varje sidnavigering ställt frågan.
- *   - **Skrivningen som matar listan ligger på servern**, i
- *     App\Http\Controllers\ItemController::show(), efter grinden. Skalet
- *     varken skriver eller filtrerar: raden är redan omfångsprövad när den
- *     kommer hit.
+ * **Sektionen *Nyligen besökta* togs bort ur skalet med issue 677.** Den kom
+ * med issue 160 · [[ADR-0049 Nyligen besökta]] och stod i skalets band över
+ * `md:` — direkt ovanför favoriterna — och i sidomenyn under `md:`, ritad av
+ * resources/js/components/RecentVisitList.vue. Komponenten, besöksinspelningen
+ * och proppen `recentVisits` står kvar oanvända till dess att städningen blir
+ * en egen issue.
  *
  * **SIDOPANELEN kom med issue 169** · [[ADR-0050 Desktopdesignen]] § 1.
  * Desktop fick aldrig sitt skal: layouten var en vit topprad och en
@@ -160,9 +146,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  *      avvisat samma sorts navigering).
  *   2. **Containerlistan** (`ShellContainerList`), grupperad per art enligt
  *      [[ADR-0036 Containerns art]]. Listan är en OPTIONAL propp och hämtas
- *      av samma `isDesktopPanel` som de senast besökta.
- *   3. ***Nyligen besökta*** och 4. ***Favoriter*** — samma komponenter och
- *      samma data som förut, flyttade in i panelen.
+ *      av `isDesktopPanel`. Dess sista rad är *Add container* (issue 677).
+ *   3. ***Favoriter*** — samma komponent och samma data som förut, flyttad in
+ *      i panelen.
  *
  * **Toppraden bär det som inte är navigering**: plusknappen, sökfältet,
  * klockan och avataren. De tre första är oförändrade komponenter; avataren är
@@ -171,9 +157,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Sidopanelen och mobilens sidomeny visar samma sektioner i samma
  * ordning** ([[ADR-0048 Mobilen och plusknappen]] § 1): båda ritar
- * `ShellSections`, `ShellContainerList` och `RecentVisitList`. En sektion som
+ * `ShellSections` och `ShellContainerList`. En sektion som
  * finns i den ena och saknas i den andra är ett fel, och det är därför
  * containerlistan ligger i en egen komponent och inte skrivs två gånger.
+ *
+ * **Linjerna mellan blocken kom med issue 677** ([[ADR-0050 Desktopdesignen]]
+ * § 1) och står bara i panelen, aldrig i mobilmenyn. De är fyra: före
+ * containerlistan (`v-if="user"`), före raderna, före favoriterna
+ * (`v-if="hasFavorites"`) och överst i kontoblocket.
  *
  * **Under `md:` är skalet oförändrat** sedan issue 151 — samma topprad,
  * flikrad och meny — med ett undantag: menyn får containerlistan, för dess
@@ -226,10 +217,12 @@ const showsVerificationNotice = computed(
     () => Boolean(user.value) && user.value.email_verified_at === null && !page.url.startsWith('/email/verify'),
 );
 
+/* Favoriterna är en delad propp, och en tom lista är samma sak som ingen sektion. */
+const hasFavorites = computed(() => (page.props.favorites ?? []).length > 0);
+
 /*
- * Ritas desktopens sidopanel? — frågan *Nyligen besökta* och frågan om
- * containerlistan ställs bara när svaret är ja (issue 160 · [[ADR-0049
- * Nyligen besökta]] § Beslut, issue 169).
+ * Ritas desktopens sidopanel? — frågan om containerlistan ställs bara när
+ * svaret är ja (issue 169).
  *
  * Panelen är `hidden md:block` och alltså alltid i DOM:en: CSS avgör om den
  * syns, och `v-if` hade tvingat fram en andra brytpunkt i JavaScript.
@@ -277,23 +270,27 @@ const initials = computed(() => {
         <!--
             SIDOPANELEN över `md:` — desktopens skal, se issue 169 och
             [[ADR-0050 Desktopdesignen]] § 1. Mörk yta ur `--color-shell`, och
-            sektionerna i mockupens ordning (issue 653): översikten, containrarna,
-            resten av raderna, de senast besökta, favoriterna — och användaren
+            sektionerna i mockupens ordning (issue 653 och 677): översikten,
+            containrarna, resten av raderna, favoriterna — och användaren
             med vägen ut sist, tryckt till botten av `mt-auto`.
 
             **Sektionerna ritas av samma komponenter som mobilens sidomeny**
-            (ShellSections, ShellContainerList, RecentVisitList), och samma
-            proppar går till båda: `isDesktopPanel` är det här skalets svar på
-            "panelen ritas", och MobileMenu svarar med sin egen öppning.
+            (ShellSections, ShellContainerList), och samma proppar går till
+            båda: `isDesktopPanel` är det här skalets svar på "panelen ritas",
+            och MobileMenu svarar med sin egen öppning.
+
+            **Linjerna mellan blocken står bara här** (issue 677): mobilmenyn
+            får inga. Den första och den tredje ritas bara när blocket under
+            dem har ett innehåll.
 
             **`shell-tone` binder om textrollerna inuti ytan** — se
             resources/css/app.css. Utan den hade UiListRows titel stått i
             nästan-svart på den mörka ytan; med den ritas samma komponenter i
             både den mörka panelen och den ljusa menyn.
 
-            **Varje sektion ritas bara när den har rader.** En rubrik över en
-            tom lista är en yta som lovar något den inte har — samma regel i
-            ShellSections, ShellContainerList och RecentVisitList.
+            **Favoriterna ritas bara när listan har rader** (ShellSections),
+            men containerblocket ritas även tomt: dess sista rad är *Add
+            container*, och den finns för varje inloggad.
         -->
         <aside
             class="shell-tone hidden bg-shell text-ink md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col md:gap-2 md:overflow-y-auto md:px-4 md:py-4"
@@ -311,17 +308,23 @@ const initials = computed(() => {
             <nav id="huvudmenyn" class="w-full">
                 <ShellSections part="top" />
 
+                <hr v-if="user" class="my-2 border-white/10" />
+
                 <ShellContainerList v-if="user" :load="isDesktopPanel" />
+
+                <hr class="my-2 border-white/10" />
 
                 <ShellSections />
             </nav>
 
-            <RecentVisitList v-if="user" :load="isDesktopPanel" />
+            <hr v-if="hasFavorites" class="my-2 border-white/10" />
 
             <ShellSections part="favorites" />
 
             <!-- Användarens namn och vägen ut, tryckta till panelens botten. -->
             <div class="mt-auto">
+                <hr class="my-2 border-white/10" />
+
                 <ShellSections part="account" />
             </div>
         </aside>

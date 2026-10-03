@@ -176,13 +176,14 @@ function sidopanelNamn(array $grupp): array
 }
 
 /*
- * Klart när (issue 653): över `md:` står sidopanelen i mockupens ordning —
- * översikten, containrarna, resten av raderna, de senast besökta, favoriterna,
- * och användaren med vägen ut sist ([[ADR-0050 Desktopdesignen]] § 1).
+ * Klart när (issue 653 och 677): över `md:` står sidopanelen i mockupens
+ * ordning — översikten, containrarna, resten av raderna, favoriterna, och
+ * användaren med vägen ut sist ([[ADR-0050 Desktopdesignen]] § 1).
  *
  * Ordningen läses ur källan i stället för att skrivas av här: en sektion som
  * flyttar eller försvinner ska fälla provet, och panelen är den enda platsen
- * de sex möts.
+ * de fem möts. *Nyligen besökta* är borta sedan issue 677 och får inte komma
+ * tillbaka genom en import som ingen ser.
  */
 it('ritar sidopanelen i mockupens ordning', function () {
     $layout = sidopanelKod('layouts/AppLayout.vue');
@@ -204,13 +205,12 @@ it('ritar sidopanelen i mockupens ordning', function () {
             '<ShellSections part="top" />',
             '<ShellContainerList',
             '<ShellSections />',
-            '<RecentVisitList',
             '<ShellSections part="favorites" />',
             '<ShellSections part="account" />',
         ],
     );
 
-    // Sex anrop, och alla sex står i panelen.
+    // Fem anrop, och alla fem står i panelen.
     foreach ($ordning as $position) {
         expect($position)->not->toBeFalse();
     }
@@ -219,15 +219,112 @@ it('ritar sidopanelen i mockupens ordning', function () {
         expect($ordning[$i - 1])->toBeLessThan($ordning[$i]);
     }
 
-    // Användarens rad står sist och är tryckt till panelens botten: den ska
-    // inte följa med i skrollen när panelen är lång.
-    expect($panel)->toMatch('/<div class="mt-auto">\s*<ShellSections part="account" \/>/');
+    // *Nyligen besökta* ritas inte längre i skalet (issue 677), varken i
+    // panelen eller utanför den.
+    expect($panel)->not->toContain('RecentVisitList')
+        ->and($layout)->not->toContain('RecentVisitList');
 
-    // De två listorna som frågar servern får sin `load` av layouten, som är
-    // den som vet att panelen ritas; favoriterna och kontoraden är delade och
-    // behöver inget besked.
-    expect($panel)->toContain('<ShellContainerList v-if="user" :load="isDesktopPanel" />')
-        ->toContain('<RecentVisitList v-if="user" :load="isDesktopPanel" />');
+    // Användarens rad står sist och är tryckt till panelens botten: den ska
+    // inte följa med i skrollen när panelen är lång. Linjen överst i blocket
+    // kom med issue 677.
+    expect($panel)->toMatch('/<div class="mt-auto">\s*<hr class="my-2 border-white\/10" \/>\s*<ShellSections part="account" \/>/');
+
+    // Listan som frågar servern får sin `load` av layouten, som är den som vet
+    // att panelen ritas; favoriterna och kontoraden är delade och behöver
+    // inget besked.
+    expect($panel)->toContain('<ShellContainerList v-if="user" :load="isDesktopPanel" />');
+});
+
+/*
+ * Klart när (issue 677): panelens block skiljs åt av exakt fyra linjer, och
+ * bara i panelen — mobilmenyn får inga ([[ADR-0050 Desktopdesignen]] § 1).
+ *
+ * Den första och den tredje ritas bara när blocket under dem har ett innehåll:
+ * en linje över en tom containerlista eller tomma favoriter är en gräns mot
+ * ingenting. Linjen över kontoblocket står som första barn i `mt-auto`, och
+ * den prövas av ordningsprovet ovanför.
+ */
+it('skiljer sidopanelens block åt med en linje', function () {
+    $layout = sidopanelKod('layouts/AppLayout.vue');
+    $meny = sidopanelKod('components/MobileMenu.vue');
+
+    $start = (int) strpos($layout, '<aside');
+    $panel = substr($layout, $start, (int) strpos($layout, '</aside>', $start) - $start);
+
+    // Fyra linjer, och alla fyra står i panelen.
+    expect(substr_count($panel, '<hr'))->toBe(4);
+
+    // Före containerlistan, villkorad av att användaren finns.
+    expect($panel)->toMatch('/<hr v-if="user" class="my-2 border-white\/10" \/>\s*<ShellContainerList/');
+
+    // Mellan containerlistan och raderna, utan villkor.
+    expect($panel)->toMatch('/<ShellContainerList[^>]*\/>\s*<hr class="my-2 border-white\/10" \/>\s*<ShellSections \/>/');
+
+    // Före favoriterna, villkorad av att listan har rader.
+    expect($panel)->toMatch('/<hr v-if="hasFavorites" class="my-2 border-white\/10" \/>\s*<ShellSections part="favorites" \/>/');
+
+    // Villkoret är listans längd ur den delade proppen.
+    expect($layout)->toContain('(page.props.favorites ?? []).length > 0');
+
+    // Menyn får inga linjer.
+    expect($meny)->not->toContain('<hr');
+});
+
+/*
+ * Klart när (issue 677): *Add container* är sista raden i containerlistan och
+ * leder till formuläret.
+ *
+ * Raden står i en egen `<ul>` efter grupperna, inuti samma `<nav>`, och bär
+ * containerlänkarnas klasser plus ikonen. Adressen är ruttens sanna form, och
+ * etiketten kommer ur `lang/` som all annan text i skalet.
+ */
+it('leder sista raden i containerlistan till att skapa en container', function () {
+    $lista = sidopanelKod('components/ShellContainerList.vue');
+
+    // Raden står efter grupperna, inte inuti dem: den hör till blocket och
+    // inte till en art.
+    $grupper = (int) strpos($lista, 'v-for="group in groups"');
+    $raden = (int) strpos($lista, 'href="/containers/create"');
+
+    expect($grupper)->not->toBeFalse()
+        ->and($raden)->not->toBeFalse()
+        ->and($raden)->toBeGreaterThan($grupper);
+
+    // Målet, etiketten och ikonen — plustecknet ur CreateButton.vue.
+    expect($lista)->toContain("t('nav.add_container')")
+        ->toContain('<path d="M12 5v14">')
+        ->toContain('<path d="M5 12h14">')
+        ->toContain('class="h-5 w-5"')
+        ->toContain('hover:bg-shell-active/50');
+
+    expect(route('containers.create', [], false))->toBe('/containers/create');
+    expect(trans('ui.nav.add_container', [], 'en'))->toBe('Add container');
+});
+
+/*
+ * Klart när (issue 677): blocket ritas även utan containrar, med högens rubrik
+ * och raden *Add container* — den sista finns för varje inloggad.
+ *
+ * `loaded` skiljer "frågan är ställd men inte besvarad" (`undefined`) från
+ * "användaren har inga containrar" (`[]`): det första ritar ingenting, det
+ * andra ritar rubriken och raden. Ett `v-if="groups.length"` hade gömt båda.
+ */
+it('ritar containerblocket med bara Add container när användaren saknar containrar', function () {
+    $lista = sidopanelKod('components/ShellContainerList.vue');
+
+    expect($lista)->toContain('page.props.shellContainers !== undefined')
+        ->toContain('<h2 v-if="!groups.length"');
+
+    expect($lista)->not->toContain('v-if="groups.length"');
+
+    // Serverns halva: en kontoägare utan containrar får en TOM lista ur den
+    // partiella omladdningen — samma form som en gäst, och den form `loaded`
+    // läser som "svaret är här".
+    withoutVite();
+
+    [, $ägare] = sidopanelKonto();
+
+    expect(sidopanelGrupper(sidopanelSvar($ägare)))->toBe([]);
 });
 
 /*

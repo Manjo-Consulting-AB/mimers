@@ -164,19 +164,20 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
     expect($layout)->toContain('<ShellSections part="favorites" />')
         ->and($meny)->toContain('<ShellSections part="favorites" />');
 
-    // *Nyligen besökta* är INGEN rad i den här listan — den är en egen lista
-    // och inte en navigeringsrad (issue 160 · [[ADR-0049 Nyligen besökta]]
-    // § Beslut), och den ritas av RecentVisitList direkt ovanför favoriterna i
-    // båda ytorna. Se tests/Feature/Frontend/NyligenBesoktaTest.php.
+    // *Nyligen besökta* ritas inte i någon av ytorna sedan issue 677: den kom
+    // med issue 160 · [[ADR-0049 Nyligen besökta]] som en egen lista ovanför
+    // favoriterna, och är borta ur skalet. Se
+    // tests/Feature/Frontend/NyligenBesoktaTest.php.
     expect($sektioner)->not->toContain('recent_visits')
-        ->and($layout)->toContain('<RecentVisitList')
-        ->and($meny)->toContain('<RecentVisitList');
+        ->and($layout)->not->toContain('<RecentVisitList')
+        ->and($meny)->not->toContain('<RecentVisitList');
 });
 
 /*
- * Klart när (issue 653): sidomenyn staplar samma sex anrop i samma ordning som
- * sidopanelen — översikten, containrarna, raderna, de senast besökta,
- * favoriterna och användaren sist ([[ADR-0050 Desktopdesignen]] § 1).
+ * Klart när (issue 653 och 677): sidomenyn staplar samma fem anrop i samma
+ * ordning som sidopanelen — översikten, containrarna, raderna, favoriterna och
+ * användaren sist ([[ADR-0050 Desktopdesignen]] § 1). *Nyligen besökta* är
+ * borta sedan issue 677.
  *
  * Ordningen läses ur BÅDA yternas `<aside>` och jämförs: en sektion som
  * flyttar i den ena men inte i den andra ska fälla provet, och den enda vägen
@@ -195,17 +196,16 @@ it('ritar sidomenyn i samma ordning som sidopanelen', function () {
     expect($panelen)->not->toBeEmpty('layouten har ingen sidopanel')
         ->and($menyn)->not->toBeEmpty('menyn har ingen sidopanel');
 
-    $sektion = '#<ShellSections part="top" />|<ShellContainerList|<ShellSections />|<RecentVisitList|<ShellSections part="favorites" />|<ShellSections part="account" />#';
+    $sektion = '#<ShellSections part="top" />|<ShellContainerList|<ShellSections />|<ShellSections part="favorites" />|<ShellSections part="account" />#';
 
     preg_match_all($sektion, $panelen, $iPanelen);
     preg_match_all($sektion, $menyn, $iMenyn);
 
-    // Alla sex anrop står i båda ytorna, och i mockupens ordning.
+    // Alla fem anrop står i båda ytorna, och i mockupens ordning.
     expect($iPanelen[0])->toBe([
         '<ShellSections part="top" />',
         '<ShellContainerList',
         '<ShellSections />',
-        '<RecentVisitList',
         '<ShellSections part="favorites" />',
         '<ShellSections part="account" />',
     ])->and($iMenyn[0])->toBe($iPanelen[0]);

@@ -72,6 +72,11 @@ return [
         // the user should meet the same words in the menu and on the page.
         'tasks' => 'To do',
         'containers' => 'Containers',
+        // The last row of the shell's container list, see issue 677: the way
+        // to create a container, drawn for every signed-in user. It carries no
+        // permission flag — `GET /containers/create` has no gate, and `POST
+        // /containers` tries `ContainerPolicy::create()`.
+        'add_container' => 'Add container',
         'transfers' => 'Ownership transfers',
         // The way into the global search, see issue 78 decision 2: the field
         // in the header is not enough of a way in — someone who does not
