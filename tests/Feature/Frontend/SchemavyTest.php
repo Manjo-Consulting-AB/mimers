@@ -933,3 +933,25 @@ it('har varje ny schemanyckel och ingen svensk sträng i vyerna', function () {
         }
     }
 });
+
+/*
+ * M24 · Ordbytet för testarens fynd 2026-10-03: det man skapar i sektionen är
+ * en uppgift, och ordet "schedule" är missvisande för användaren. Nycklarna
+ * `item.schedule.*` står kvar (Beslut 2) — bara texten användaren läser byter,
+ * och datamodellen och koden heter fortfarande `schedule`.
+ */
+it('kallar itemets uppgiftssektion Tasks och knappen New task', function () {
+    // Beslut 1: exakt dessa fem nycklar byter värde. `t()` skriver nyckeln
+    // själv om den saknas, så `toBe` binder både närvaron och ordalydelsen.
+    $varden = [
+        'ui.item.schedule.heading' => 'Tasks',
+        'ui.item.schedule.empty' => 'The item has no tasks.',
+        'ui.item.schedule.add' => 'New task',
+        'ui.item.schedule.create.title' => 'New task',
+        'ui.item.schedule.create.heading' => 'New task',
+    ];
+
+    foreach ($varden as $nyckel => $varde) {
+        expect(trans($nyckel, [], 'en'))->toBe($varde, "{$nyckel} har fel ordalydelse");
+    }
+});
