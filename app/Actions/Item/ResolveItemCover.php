@@ -39,6 +39,9 @@ use Illuminate\Support\Collection;
  * Ett KONSTANT antal frågor — en för bilderna — oavsett hur många bilagor
  * itemet har: `handle()` frågar `images()` en gång och letar upp valet i
  * svaret, aldrig med en fråga per bilaga.
+ *
+ * `forItems()` är samma regel för en HEL lista: en post per item, och en enda
+ * fråga för hela samlingen i stället för en per rad.
  */
 class ResolveItemCover
 {
@@ -54,6 +57,58 @@ class ResolveItemCover
             : $images->firstWhere('id', $item->cover_attachment_id);
 
         return $chosen ?? $images->first();
+    }
+
+    /**
+     * Omslagsbilden för varje item i en samling, nycklad på itemets `id`.
+     *
+     * Samma ordning som `handle()` — den valda bilagan om den finns bland
+     * itemets bilder, annars den äldsta bilden, annars null — men EN fråga för
+     * hela samlingen i stället för en per rad. Bilderna hämtas i förväg och
+     * väljs per item i minnet; en vandring per rad vore den N+1 listan byggdes
+     * för att undvika.
+     *
+     * Varje item får en post, även `null`: vyns uppslag är detsamma för alla
+     * rader och behöver ingen andra gren för ett item utan bild. En tom
+     * samling svarar `[]` utan att fråga.
+     *
+     * @param  iterable<Item>  $items
+     * @return array<int, ?Attachment> item-`id` → bilden, eller null
+     */
+    public function forItems(iterable $items): array
+    {
+        $byId = [];
+
+        foreach ($items as $item) {
+            $byId[$item->id] = $item;
+        }
+
+        if ($byId === []) {
+            return [];
+        }
+
+        $images = Attachment::query()
+            ->whereIn('item_id', array_keys($byId))
+            ->where('kind', 'image')
+            ->with('storedFile.derivatives')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('item_id');
+
+        $covers = [];
+
+        foreach ($byId as $id => $item) {
+            $itemImages = $images->get($id, collect());
+
+            $chosen = $item->cover_attachment_id === null
+                ? null
+                : $itemImages->firstWhere('id', $item->cover_attachment_id);
+
+            $covers[$id] = $chosen ?? $itemImages->first();
+        }
+
+        return $covers;
     }
 
     /**

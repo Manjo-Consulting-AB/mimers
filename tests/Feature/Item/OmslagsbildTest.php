@@ -6,6 +6,8 @@ use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia;
 
@@ -235,6 +237,79 @@ it('faller tillbaka på den äldsta bilden när den valda bilagan mjukraderats',
 
     expect($item->refresh()->cover_attachment_id)->toBe($vald->id);
     expect((new ResolveItemCover)->handle($item)?->id)->toBe($aldsta->id);
+});
+
+/*
+ * Klart när: samlingen löses som ett item i taget — samma regel, samma svar.
+ *
+ * Fyra items täcker var sitt steg i ordningen: ett med en VALD nyare bild, ett
+ * med bara bilder (den äldsta väntas), ett vars valda bilaga mjukraderats (den
+ * äldsta väntas), och ett med bara ett dokument (null). Provet jämför mot
+ * `handle()` rad för rad — en andra formulering av regeln i listvägen hade
+ * glidit ifrån den första, och det är därför `forItems()` bor i samma klass.
+ *
+ * Den valda bilden är med flit den NYASTE, som i enhetsprovet ovan: annars
+ * vore skillnaden mellan "vald" och "äldst" osynlig.
+ */
+it('löser omslaget för en samling som för ett item i taget', function () {
+    $container = omslagKontext()[2];
+
+    $vald = omslagItem($container, 'Vald');
+    omslagBilaga($vald, 'gammal.jpg');
+    $valdNy = omslagBilaga($vald, 'ny.jpg');
+    omslagVal($vald, $valdNy);
+
+    $aldst = omslagItem($container, 'Äldst');
+    $aldsta = omslagBilaga($aldst, 'gammal.jpg');
+    omslagBilaga($aldst, 'ny.jpg');
+
+    $raderad = omslagItem($container, 'Raderad');
+    $raderadAldst = omslagBilaga($raderad, 'gammal.jpg');
+    $raderadVald = omslagBilaga($raderad, 'ny.jpg');
+    omslagVal($raderad, $raderadVald);
+    $raderadVald->delete();
+
+    $dokument = omslagItem($container, 'Dokument');
+    omslagBilaga($dokument, 'manual.pdf', 'document');
+
+    $items = collect([$vald, $aldst, $raderad, $dokument]);
+
+    $covers = (new ResolveItemCover)->forItems($items);
+
+    // En post per item, även den utan bild.
+    expect($covers)->toHaveCount(4);
+
+    foreach ($items as $item) {
+        expect($covers[$item->id]?->id)->toBe((new ResolveItemCover)->handle($item)?->id);
+    }
+
+    expect($covers[$vald->id]?->id)->toBe($valdNy->id);
+    expect($covers[$aldst->id]?->id)->toBe($aldsta->id);
+    expect($covers[$raderad->id]?->id)->toBe($raderadAldst->id);
+    expect($covers[$dokument->id])->toBeNull();
+});
+
+/*
+ * Klart när: en tom samling svarar `[]` utan att fråga.
+ *
+ * Grinden ligger i metoden och inte hos anroparen: en `whereIn` med en tom
+ * lista är en fråga som aldrig kan svara något, och listläget kan mycket väl
+ * bära noll rader. `DB::listen` räknar noll — en fråga hade synts här.
+ */
+it('svarar en tom lista utan att fråga', function () {
+    // Tiden fryst: varje fil som räknar frågor med DB::listen gör det, se
+    // tests/Feature/Testinfrastruktur/FragerakningTest.php (issue 477).
+    Carbon::setTestNow(now());
+
+    $frågor = 0;
+    DB::listen(function () use (&$frågor) {
+        $frågor++;
+    });
+
+    expect((new ResolveItemCover)->forItems([]))->toBe([]);
+    expect($frågor)->toBe(0);
+
+    Carbon::setTestNow();
 });
 
 /*

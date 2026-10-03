@@ -2,15 +2,19 @@
 
 // rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
 
+use App\Actions\Container\SetContainerCover;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\ContainerAccess;
+use App\Models\ImageDerivative;
 use App\Models\Item;
 use App\Models\ItemLink;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
 use App\Support\Item\ItemStatus;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -152,6 +156,51 @@ function itemlistaKant(Item $förälder, Item $barn, string $relation = 'parent'
         'created_at' => now(),
         'updated_at' => now(),
     ]);
+}
+
+/**
+ * En bilaga på itemet, med ett `thumb`-derivat när $thumb är sant.
+ *
+ * Derivatet skapas av kön i drift (issue 61b § Beslut 1); här byggs raden
+ * direkt så att `hasThumb` är känd utan att köa ett jobb. `kind` är `image`
+ * som standard — det är den sortens bilaga omslaget väljer.
+ */
+function itemlistaBild(
+    Item $item,
+    string $filnamn = 'foto.jpg',
+    bool $thumb = true,
+    string $kind = 'image',
+): Attachment {
+    $bilaga = Attachment::factory()->for($item, 'item')->create([
+        'filename' => $filnamn,
+        'kind' => $kind,
+    ]);
+
+    if ($thumb) {
+        ImageDerivative::factory()->create([
+            'stored_file_id' => $bilaga->stored_file_id,
+            'variant' => 'thumb',
+            'storage_path' => $bilaga->storedFile->storage_path.'_thumb.jpg',
+        ]);
+    }
+
+    return $bilaga;
+}
+
+/**
+ * Sätter containerns EGEN bild genom App\Actions\Container\SetContainerCover —
+ * samma väg rutten går. Raden ska aldrig låna den.
+ */
+function itemlistaContainerbild(User $användare, Container $container): Attachment
+{
+    actingAs($användare);
+
+    return app(SetContainerCover::class)->handle(
+        $container,
+        UploadedFile::fake()->image('container.png'),
+        $användare,
+        $container->account,
+    );
 }
 
 /**
@@ -621,6 +670,97 @@ it('låter en förekomst utanför omfånget stå utan verkan på statusen', func
 });
 
 /*
+ * Klart när (issue 183): varje rad bär sitt EGET omslag bredvid resursen.
+ *
+ * `covers` är itemets ULID → `{ulid, hasThumb}` eller null, och ligger BREDVID
+ * `ItemResource` — `/api` har inte bett om fältet och resursen rörs inte
+ * (`missing('items.0.cover')`). Tre rader täcker de tre svaren: en med en vald
+ * bild som har ett `thumb`-derivat, en med en bild UTAN derivat, och en med
+ * bara ett dokument.
+ *
+ * Den valda bilden är den NYASTE av två — annars vore skillnaden mellan "vald"
+ * och "äldst" osynlig i listvägen, precis som i enhetsprovet.
+ */
+it('ger varje rad sitt eget omslag bredvid resursen', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemlistaKontext();
+
+    $medThumb = itemlistaItem($container, 'Med thumb', $anvandare);
+    itemlistaBild($medThumb, 'gammal.jpg', false);
+    $vald = itemlistaBild($medThumb, 'ny.jpg', true);
+    $medThumb->cover_attachment_id = $vald->id;
+    $medThumb->save();
+
+    $utanDerivat = itemlistaItem($container, 'Utan derivat', $anvandare);
+    $utanThumb = itemlistaBild($utanDerivat, 'foto.jpg', false);
+
+    $baraDokument = itemlistaItem($container, 'Bara dokument', $anvandare);
+    itemlistaBild($baraDokument, 'manual.pdf', false, 'document');
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->has('items', 3)
+            ->where("covers.{$medThumb->ulid}.ulid", $vald->ulid)
+            ->where("covers.{$medThumb->ulid}.hasThumb", true)
+            ->where("covers.{$utanDerivat->ulid}.ulid", $utanThumb->ulid)
+            ->where("covers.{$utanDerivat->ulid}.hasThumb", false)
+            ->where("covers.{$baraDokument->ulid}", null)
+            ->missing('items.0.cover')
+    );
+});
+
+/*
+ * Klart när (issue 183): containerns omslag används ALDRIG för en rad.
+ *
+ * Containern har en egen bild satt genom samma action som rutten använder,
+ * men itemet har inga bilder — och då är radens svar null, inte containerns
+ * foto. Utan `expect`-raden nedan hade provet varit grönt även om bilden
+ * aldrig satts, och bevisat noll.
+ */
+it('tar aldrig containerns omslag till en rad', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemlistaKontext();
+
+    $containerbild = itemlistaContainerbild($anvandare, $container);
+
+    expect($container->refresh()->cover_attachment_id)->toBe($containerbild->id);
+
+    $item = itemlistaItem($container, 'Motorn', $anvandare);
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->has('items', 1)
+            ->where("covers.{$item->ulid}", null)
+    );
+});
+
+/*
+ * Klart när (issue 183): träd- och kartläget betalar ingenting.
+ *
+ * `covers` är `[]` där, samma grind som `categories` och `statuses`: en yta
+ * ingen ser ska inte kosta en fråga. Itemet har en bild — hade grinden saknats
+ * hade fältet burit den.
+ */
+it('skickar inga omslag i träd- och kartläget', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemlistaKontext();
+
+    $item = itemlistaItem($container, 'Motorn', $anvandare);
+    itemlistaBild($item, 'foto.jpg');
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items?view=tree")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('covers', [])
+    );
+
+    actingAs($anvandare)->get("/containers/{$container->ulid}/items?view=map")->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page->where('covers', [])
+    );
+});
+
+/*
  * Klart när: antalet frågor är konstant oavsett antalet rader.
  *
  * Det är issuens svåraste del, och det är DÄRFÖR filen mäter om det: raderna
@@ -665,6 +805,63 @@ it('kostar ett konstant antal frågor även när raderna har barn och förekomst
 
         itemlistaKant($rot, $barn);
         itemlistaFörekomst($barn, -1);
+    }
+
+    $sextiofyraRader = itemlistaFrågor($värm, function () use ($url) {
+        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 64));
+    });
+
+    expect($sextiofyraRader)->toBe($fyraRader);
+
+    Carbon::setTestNow();
+});
+
+/*
+ * Klart när (issue 183): omslaget kostar ett konstant antal frågor oavsett
+ * antalet rader.
+ *
+ * Samma mätning som provet ovan, men varje rad bär två bilder och ett derivat:
+ * en lösning som vandrade per rad — en fråga per item, eller ett derivat
+ * uppslaget i taget — hade vuxit med listan. Bilderna hämtas en gång och valet
+ * sker i minnet (App\Actions\Item\ResolveItemCover::forItems()).
+ */
+it('kostar ett konstant antal frågor även när raderna har bilder', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemlistaKontext();
+
+    $fyra = [
+        itemlistaItem($container, 'Båten', $anvandare),
+        itemlistaItem($container, 'Motorn', $anvandare),
+        itemlistaItem($container, 'Masten', $anvandare),
+        itemlistaItem($container, 'Impellern', $anvandare),
+    ];
+
+    foreach ($fyra as $item) {
+        itemlistaBild($item, 'ett.jpg', false);
+        itemlistaBild($item, 'tva.jpg', true);
+    }
+
+    // Frys tiden runt mätningarna så UpdateLastActiveAt skriver deterministiskt
+    // (issue 80, 477).
+    Carbon::setTestNow(now());
+
+    actingAs($anvandare);
+
+    $url = "/containers/{$container->ulid}/items";
+
+    $värm = fn () => get($url)->assertOk();
+
+    $fyraRader = itemlistaFrågor($värm, function () use ($url) {
+        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 4));
+    });
+
+    // Sextio rader till, vardera med två bilder och ett derivat: sextiofyra
+    // rader, samma frågor.
+    foreach (range(1, 60) as $i) {
+        $item = itemlistaItem($container, "Rad $i", $anvandare);
+        itemlistaBild($item, 'ett.jpg', false);
+        itemlistaBild($item, 'tva.jpg', true);
     }
 
     $sextiofyraRader = itemlistaFrågor($värm, function () use ($url) {
