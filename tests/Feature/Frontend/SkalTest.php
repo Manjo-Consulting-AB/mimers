@@ -161,7 +161,7 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
     // sidopanelen: `outline-none` utan en ring som tar över river
     // tangentbordsarbetet ([[ADR-0042 Designsystemet]] § Beslut).
     expect(strpos($sektioner, "{ key: 'settings'"))->toBeLessThan(strpos($sektioner, "t('auth.logout')"))
-        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
+        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
 
     // Texten bor i lang/ (Beslut 5).
     expect(trans('ui.nav.settings', [], 'en'))->toBe('Settings');
@@ -271,7 +271,7 @@ it('har en väg till uppgifterna i navigeringen för en inloggad och ingen för 
     // Träffytan (44 px) och fokusringen delas av varje rad i skalet — se
     // provet för inställningsraden ovanför, där klassen står med skäl.
     expect($sektioner)->toContain("{ key: 'tasks', href: '/tasks' }")
-        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center rounded-control outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
+        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
 
     // Texten bor i lang/, och ordet är sidans eget (`todo.heading`) och inte
     // ruttens — användaren ska möta samma ord i menyn som på sidan.

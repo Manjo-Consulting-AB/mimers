@@ -377,32 +377,39 @@ it('visar bara de containrar användaren når', function () {
 });
 
 /*
- * Klart när: den aktiva containern och sidan bär `aria-current`.
+ * Klart när (issue 676): en container markeras bara när sidans adress ligger i
+ * den — på `/dashboard` med sessionsnyckeln satt är varje rad omarkerad.
  *
  * Det är ett källkodsprov: `aria-current` sätts av vyn när raden ritas, och
- * ett svar från servern bär ingen markup. Den aktiva containern kommer ur den
- * delade proppen `activeContainer` — satt av den kontroller som ÖPPNADE
- * containern (issue 83) — och vyn prövar inte åtkomsten en gång till.
+ * ett svar från servern bär ingen markup. Adressen är `page.url` utan
+ * querysträng — samma form som `currentPath` i ShellSections — och jämförs med
+ * containerns egen väg och dess undersidor. Den delade proppen
+ * `activeContainer` läses inte längre här: den sätts av den kontroller som
+ * ÖPPNADE containern (issue 83) och är sann även på `/dashboard`, där både
+ * översiktsraden och containerraden blev markerade samtidigt.
  */
-it('märker den aktiva containern och den aktuella sidan med aria-current', function () {
+it('markerar en container bara när sidans adress ligger i den', function () {
     $lista = sidopanelKod('components/ShellContainerList.vue');
     $sektioner = sidopanelKod('components/ShellSections.vue');
 
-    // Containerraden: ULID:n ur `activeContainer`, och token-färgen ur
-    // ADR-0042 — rollen "den aktiva raden i sidopanelen".
+    // Containerraden: sidans egen väg, utan querysträngen, mot radens väg och
+    // dess undersidor. `activeContainer` läses inte alls — proppen lever kvar
+    // för Containers/Index.vue (beslut 2), men den här listan frågar den inte.
     expect($lista)->toContain(":aria-current=\"isActive(container) ? 'page' : undefined\"")
-        ->toContain('page.props.activeContainer')
+        ->toContain("page.url.split('?')[0]")
+        ->toContain('`/containers/${container.ulid}`')
+        ->toContain('`/containers/${container.ulid}/`')
         ->toContain('bg-shell-active');
 
-    // Sektionsraden: sidans egen väg, utan querysträngen.
+    expect($lista)->not->toContain('activeContainer');
+
+    // Sektionsraden är oförändrad: samma väg och samma token-färg.
     expect($sektioner)->toContain(":aria-current=\"isCurrent(section) ? 'page' : undefined\"")
         ->toContain("page.url.split('?')[0]")
         ->toContain('bg-shell-active');
 
-    // Och den aktiva containern ligger i listan: vyn har alltid en rad att
-    // märka, för proppen `activeContainer` sätts bara för en container
-    // användaren når (App\Support\Frontend\ActiveContainer) och listan är
-    // omfångsprövad på samma villkor.
+    // Och proppen `activeContainer` lever: `/dashboard` med sessionsnyckeln
+    // satt delar fortfarande containerns ulid (beslut 2).
     withoutVite();
 
     [, $ägare, $container] = sidopanelKontext();
@@ -414,6 +421,49 @@ it('märker den aktiva containern och den aktuella sidan med aria-current', func
         ->assertInertia(fn ($page) => $page->where('activeContainer', $container->ulid));
 
     expect(sidopanelGrupper(sidopanelSvar($ägare))[0]['containers'][0]['ulid'])->toBe($container->ulid);
+});
+
+/*
+ * Klart när (issue 676): hover är en bakgrund, inte en understrykning — i
+ * sidopanelen och i containernas rader, som delar ytan med sidomenyn.
+ *
+ * Varje `<Link>` i de två filerna bär `hover:bg-shell-active/50`, antingen i
+ * `class` (rader utan aktiv gren: utloggningen, `/login`, favoriten) eller i
+ * `:class` (raderna med en aktiv gren). Provet läser taggen och inte filen, så
+ * en ny rad utan hover fälls även om grannarna har den.
+ */
+it('ger varje länk i sidopanelen en bakgrund vid hover och ingen understrykning', function () {
+    foreach (['components/ShellContainerList.vue', 'components/ShellSections.vue'] as $sokvag) {
+        $kod = sidopanelKod($sokvag);
+
+        expect($kod)->not->toContain('hover:underline');
+
+        preg_match_all('#<Link\b(?:"[^"]*"|\'[^\']*\'|[^>"\'])*?>#s', $kod, $länkar);
+
+        expect($länkar[0])->not->toBeEmpty("{$sokvag} har inga länkar");
+
+        foreach ($länkar[0] as $länk) {
+            // Ingen förklaring som andra argument: `toContain` tar fler nålar,
+            // inte ett meddelande — strängen hade blivit en andra nål.
+            expect($länk)->toContain('hover:bg-shell-active/50');
+        }
+    }
+});
+
+/*
+ * Klart när (issue 676): den aktiva raden behåller full markering vid hover.
+ *
+ * Hoverklassen står i `:class`-grenen för en INAKTIV rad och inte i den
+ * statiska `class`, så en rad som redan är markerad inte tonas ned när pekaren
+ * vilar på den. Provet läser hela uttrycket: en hoverklass i `class` hade
+ * gett den aktiva raden halv bakgrund ovanpå sin fulla.
+ */
+it('låter den aktiva raden behålla full markering vid hover', function () {
+    $lista = sidopanelKod('components/ShellContainerList.vue');
+    $sektioner = sidopanelKod('components/ShellSections.vue');
+
+    expect($lista)->toContain("isActive(container) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50'");
+    expect($sektioner)->toContain("isCurrent(section) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50'");
 });
 
 /*
