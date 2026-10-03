@@ -273,6 +273,26 @@ class ListTodo
     }
 
     /**
+     * Antalet öppna uppgifter i containern (issue 679).
+     *
+     * **Exakt uttrycket bakom `forContainer()['count']`**: villkoret
+     * `onlyCurrent` är `false` och `maintenanceOnly` står kvar på sitt förval,
+     * så talet räknar det som FINNS oberoende av växeln
+     * `show_upcoming_tasks` — samma tal som översiktens `counts.todos`.
+     * `forContainer()` själv är oförändrad; den här metoden är samma fråga utan
+     * radhämtningen, för den som bara ska veta hur många.
+     */
+    public function countForContainer(User $user, Container $container): int
+    {
+        return $this->occurrences(
+            $user,
+            $user->accounts->pluck('id')->values()->all(),
+            false,
+            $container,
+        )->count();
+    }
+
+    /**
      * Containerns AVBOCKADE förekomster — *Klart*-kolumnen på containerns
      * uppgiftsflik (issue 174 · [[ADR-0050 Desktopdesignen]] § 16, Beslut 3).
      *
