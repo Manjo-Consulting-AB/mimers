@@ -227,6 +227,25 @@ function itemlistaFrågor(Closure $värm, Closure $anrop): int
     return $frågor;
 }
 
+/**
+ * Listblocket i Index.vue — från `<ul v-else` till första `</ul>`.
+ *
+ * Raden prövas mot blocket och inte mot hela filen: docblocken ovan räknar upp
+ * ord och proppar som raden inte får bära (som `container.cover` och
+ * `statuses`), och en kontroll mot hela filen hade fällt på dem i stället för
+ * på raden.
+ */
+function itemlistaListblock(): string
+{
+    $vy = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
+
+    preg_match('#<ul v-else.*?</ul>#s', $vy, $träff);
+
+    expect($träff[0] ?? '')->not->toBe('', 'listblocket finns inte i Index.vue');
+
+    return $träff[0];
+}
+
 /*
  * Beslut 1: båda rutterna ligger bakom `auth`. En utloggad besökare skickas
  * till inloggningen och når aldrig en kontrollermetod.
@@ -876,9 +895,17 @@ it('kostar ett konstant antal frågor även när raderna har bilder', function (
 /*
  * Klart när: statusens text ligger i `lang/` och inte i en `.vue`-fil.
  *
- * Ordet är mockupens, och vyn slår upp det ur `item.index.status_*` precis som
- * sina andra ord — en text i en komponent blir aldrig engelsk (issue 52
- * § Beslut 4, [[ADR-0021 Frontendteknik]]).
+ * Ordet är mockupens, och uppslaget ligger i `item.index.status_*` — en text i
+ * en komponent blir aldrig engelsk (issue 52 § Beslut 4, [[ADR-0021
+ * Frontendteknik]]).
+ *
+ * **Uppslaget läses ur kartan sedan issue 212** · [[ADR-0050
+ * Desktopdesignen]]: listans rad ritar ingen status längre, så raden som bar
+ * `t(\`item.index.status_${statuses[item.ulid]}\`)` finns inte kvar. Samma
+ * nyckel, samma ord — nu per nod i `ContainerMapNode.vue`
+ * (`t(\`item.index.status_${status}\`)`). Att orden inte hamnat i listans vy
+ * prövas fortfarande mot `Index.vue`: ett `OK` där vore en text utanför
+ * `lang/`, oavsett vilken rad som ritar den.
  */
 it('har statusens text i lang och inte i vyn', function () {
     $en = require lang_path('en/ui.php');
@@ -886,9 +913,75 @@ it('har statusens text i lang och inte i vyn', function () {
     expect($en['item']['index']['status_ok'])->toBe('OK');
     expect($en['item']['index']['status_overdue'])->not->toBe('');
 
+    $noden = File::get(resource_path('js/components/ContainerMapNode.vue'));
+
+    expect($noden)->toContain('t(`item.index.status_${status}`)');
+
     $vy = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
 
-    expect($vy)->toContain('t(`item.index.status_${statuses[item.ulid]}`)');
     expect($vy)->not->toContain('>OK<');
     expect($vy)->not->toContain("'OK'");
+});
+
+/*
+ * Klart när (issue 212): raden ritar itemets EGET omslag som miniatyr, och en
+ * ikon när omslaget saknas eller inte har något `thumb`-derivat.
+ *
+ * Omslaget kommer ur `covers` (App\Actions\Item\ResolveItemCover), och
+ * `hasThumb` är serverns svar på om `?variant=thumb` svarar — utan derivat är
+ * en `<img>` mot varianten en trasig bild, och då ritas lådikonen. Provet
+ * läser KÄLLAN och inte det renderade svaret: det är samma sorts kontroll som
+ * `har statusens text i lang och inte i vyn`, och den fångar att containerns
+ * eget omslag aldrig lånas in i raden.
+ */
+it('ritar itemets eget omslag som miniatyr och annars en ikon', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
+
+    expect($vy)->toContain('covers: { type: Object, required: true }');
+    expect($vy)->toContain('covers[item.ulid]?.hasThumb');
+    expect($vy)->toContain('?variant=thumb');
+
+    // Lådikonen på reservytan: sista ledet i den inline-ritade ikonen.
+    expect($vy)->toContain('d="M12 22V12"');
+
+    // Containerns omslag läses aldrig i raden — ett item utan bild ärver inte
+    // containerns foto.
+    expect($vy)->not->toContain('container.cover');
+});
+
+/*
+ * Klart när (issue 212): raden bär namnet, beskrivningen och en pil — och
+ * ingenting av det mockupen inte längre ritar.
+ *
+ * Kontrollerna mot det borttagna är lika viktiga som de mot det nya: en rad
+ * som behöll `item.manufacturer` eller `statuses[item.ulid]` hade sett rätt ut
+ * vid en blick och ändå burit en yta issuen tog bort.
+ */
+it('visar namn, beskrivning och pil på raden', function () {
+    $raden = itemlistaListblock();
+
+    expect($raden)->toContain('item.name');
+    expect($raden)->toContain('item.description');
+    expect($raden)->toContain('d="m9 6 6 6-6 6"');
+
+    expect($raden)->not->toContain('item.manufacturer');
+    expect($raden)->not->toContain('item.model');
+    expect($raden)->not->toContain('categories[item.category]');
+    expect($raden)->not->toContain('statuses[item.ulid]');
+    expect($raden)->not->toContain('<ItemTagList');
+});
+
+/*
+ * Klart när (issue 212): HELA raden är länken till itemet.
+ *
+ * Exakt en `<Link` i blocket: en andra hade delat raden i två mål, och en rad
+ * som bara länkade namnet är den form issuen tar bort. Träffytan är
+ * `min-h-11` — 44 px (issue 68a § Beslut 3) — och adressen är itemets egen.
+ */
+it('gör hela raden till en länk till itemet', function () {
+    $raden = itemlistaListblock();
+
+    expect(substr_count($raden, '<Link'))->toBe(1);
+    expect($raden)->toContain(':href="`/containers/${container.ulid}/items/${item.ulid}`"');
+    expect($raden)->toContain('min-h-11');
 });
