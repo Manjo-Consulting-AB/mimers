@@ -144,10 +144,11 @@ return [
      * Notisklockan i sidhuvudet, se issue 127 och
      * resources/js/components/NotificationBell.vue.
      *
-     * `label` är klockans ord och bär både panelens rubrik och knappens
-     * tillgängliga namn — knappen ritar en ikon och en siffra och har ingen
-     * text av sin egen, och en andra nyckel för aria-label hade varit samma
-     * ord på två ställen (samma grepp som `nav.favorites`).
+     * `label` är klockans ord och bär knappens tillgängliga namn, flikens
+     * synliga etikett och — sedan rubriken togs bort i issue 647 — panelens
+     * namn. Knappen ritar en ikon och en siffra och har ingen text av sin
+     * egen, och en andra nyckel för aria-label hade varit samma ord på flera
+     * ställen (samma grepp som `nav.favorites`).
      *
      * **De sex typerna är nycklade med sin egen typsträng.** Typen är ett
      * öppet namnrum ([[Notiser]] § notification), och `translate()` slår upp
@@ -179,6 +180,9 @@ return [
     'inbox' => [
         'label' => 'Notifications',
         'empty' => 'Nothing new.',
+        // Issue 647: knappen under listan som tömmer panelen och nollställer
+        // siffran. Kort och i klockskalet, som `empty` ovan.
+        'clear' => 'Clear',
 
         'task' => [
             'due' => ':title on :item — :date',

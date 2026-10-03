@@ -4,6 +4,7 @@ use App\Actions\Notification\CreateNotification;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Account;
 use App\Models\Container;
+use App\Models\Invitation;
 use App\Models\Item;
 use App\Models\Loan;
 use App\Models\Notification;
@@ -14,10 +15,12 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\post;
 use function Pest\Laravel\withoutVite;
 
 /*
@@ -26,6 +29,10 @@ use function Pest\Laravel\withoutVite;
  * app/Http/Controllers/NotificationInboxController,
  * resources/js/components/NotificationBell.vue och
  * resources/js/components/notificationPresentation.js.
+ *
+ * **Sedan issue 647 prövas också Clear**, panelens rensning: att den är en
+ * tidsstämpel och ingen radering, att listan blir tom medan siffran nollas,
+ * och att inbjudningarna står kvar. Proven ligger sist i filen.
  *
  * **Klockan är ingen kanal** ([[ADR-0010 Notisarkitektur]] § Beslut). Filen
  * prövar att den LÄSER `notification` som tabellen redan är: de tjugo senaste
@@ -121,6 +128,31 @@ function klockaListan(User $anvandare, string $url = '/dashboard'): array
         'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')),
         'X-Inertia-Partial-Component' => 'Dashboard',
         'X-Inertia-Partial-Data' => 'notifications',
+    ]);
+
+    $svar->assertOk();
+
+    return $svar->json('props');
+}
+
+/**
+ * Klockans BÅDA listor, hämtade som klienten hämtar dem vid en rensning:
+ * notiserna och inbjudningarna i samma partiella omladdning
+ * (resources/js/components/NotificationBell.vue).
+ *
+ * `klockaListan` ovan frågar bara efter `notifications` — det är vad
+ * läsningen behöver. Clear rör notiserna medan inbjudningarna ska stå kvar,
+ * och då måste båda läsas i samma svar för att jämförelsen ska betyda något.
+ *
+ * @return array<string, mixed>
+ */
+function klockaPanelen(User $anvandare, string $url = '/dashboard'): array
+{
+    $svar = actingAs($anvandare)->get($url, [
+        'X-Inertia' => 'true',
+        'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')),
+        'X-Inertia-Partial-Component' => 'Dashboard',
+        'X-Inertia-Partial-Data' => 'notifications,pendingInvitations',
     ]);
 
     $svar->assertOk();
@@ -447,4 +479,145 @@ it('gör ingen länk när schemat är mjukraderat men förekomsten lever kvar', 
 
     expect($förekomst->fresh()->schedule)->toBeNull()
         ->and(klockaListan($anvandare)['notifications'][0]['url'])->toBeNull();
+});
+
+/*
+ * Issue 647 · Notisklockan utan rubrik och med Clear, fynd från testarna
+ * 2026-10-03 (docs/Design/findings_20261003_a/notis.png). Panelen tömmer sin
+ * lista med en diskret Clear-knapp, och rensningen är en TIDSSTÄMPEL och
+ * ingen radering: `notification` är outboxen ([[ADR-0010 Notisarkitektur]]
+ * § Beslut) och raderna står kvar.
+ *
+ * Proven nedan prövar kolumnen, skrivningen och de två följderna — listan
+ * blir tom, siffran noll — och att inbjudningarna, som inte är notiser, står
+ * kvar. Formen på skrivningen är `store()`s: användaren ur sessionen, ingen
+ * kropp, svaret `back()`.
+ */
+
+it('har kolumnen notifications_cleared_at på user, nullbar', function () {
+    expect(Schema::hasColumn('user', 'notifications_cleared_at'))->toBeTrue();
+
+    $kolumn = collect(Schema::getColumns('user'))->firstWhere('name', 'notifications_cleared_at');
+
+    expect($kolumn['nullable'])->toBeTrue();
+});
+
+it('tömmer panelens lista vid Clear utan att radera någon notisrad', function () {
+    $anvandare = klockaAnvandare();
+
+    klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->subMinute());
+    klockaRad($anvandare, Notification::TYPE_TASK_DUE, now());
+
+    expect(klockaListan($anvandare)['notifications'])->toHaveCount(2);
+
+    $fore = Notification::query()->count();
+
+    actingAs($anvandare)->post('/notifications/clear')->assertRedirect();
+
+    expect(klockaListan($anvandare)['notifications'])->toBe([])
+        ->and(Notification::query()->count())->toBe($fore);
+});
+
+it('nollställer siffran vid Clear', function () {
+    withoutVite();
+
+    $anvandare = klockaAnvandare();
+
+    klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->subMinute());
+    klockaRad($anvandare, Notification::TYPE_TASK_DUE, now());
+
+    actingAs($anvandare)->get('/dashboard')->assertInertia(
+        fn (AssertableInertia $page) => $page->where('unreadNotificationCount', 2)
+    );
+
+    actingAs($anvandare)->post('/notifications/clear')->assertRedirect();
+
+    actingAs($anvandare)->get('/dashboard')->assertInertia(
+        fn (AssertableInertia $page) => $page->where('unreadNotificationCount', 0)
+    );
+});
+
+/*
+ * Gränsen är strikt och tiden är fryst: en notis skapad EFTER rensningen ska
+ * synas, och en skapad i samma sekund som rensningen hör till det rensade —
+ * samma regel som siffran (HandleInertiaRequests::unreadNotificationCount()).
+ */
+it('visar en notis som skapats efter rensningen', function () {
+    Carbon::setTestNow(Carbon::parse('2026-10-03 12:00:00'));
+
+    $anvandare = klockaAnvandare();
+
+    klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->subMinute());
+
+    actingAs($anvandare)->post('/notifications/clear')->assertRedirect();
+
+    expect(klockaListan($anvandare)['notifications'])->toBe([]);
+
+    klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->addMinute());
+
+    $rader = klockaListan($anvandare)['notifications'];
+
+    expect($rader)->toHaveCount(1)
+        ->and($rader[0]['created_at'])->toBe(now()->addMinute()->toIso8601String());
+
+    Carbon::setTestNow();
+});
+
+it('låter inbjudningarna stå kvar efter rensningen', function () {
+    $inbjudare = User::factory()->create();
+    $mottagare = User::factory()->create(['email' => 'klocka@exempel.se']);
+    $container = Container::factory()->for(Account::factory()->create(), 'account')->create();
+
+    Invitation::factory()->create([
+        'container_id' => $container->id,
+        'email' => 'klocka@exempel.se',
+        'invited_by_user_id' => $inbjudare->id,
+    ]);
+
+    klockaRad($mottagare, Notification::TYPE_TASK_DUE, now()->subMinute());
+
+    $fore = klockaPanelen($mottagare);
+
+    expect($fore['notifications'])->toHaveCount(1)
+        ->and($fore['pendingInvitations'])->toHaveCount(1);
+
+    actingAs($mottagare)->post('/notifications/clear')->assertRedirect();
+
+    $efter = klockaPanelen($mottagare);
+
+    expect($efter['notifications'])->toBe([])
+        ->and($efter['pendingInvitations'])->toBe($fore['pendingInvitations']);
+});
+
+it('rensar bara den egna listan', function () {
+    $anvandare = klockaAnvandare();
+    $annan = klockaAnvandare();
+
+    klockaRad($anvandare, Notification::TYPE_TASK_DUE, now()->subMinute());
+    klockaRad($annan, Notification::TYPE_TASK_DUE, now()->subMinute());
+
+    actingAs($anvandare)->post('/notifications/clear')->assertRedirect();
+
+    expect(klockaListan($anvandare)['notifications'])->toBe([])
+        ->and(klockaListan($annan)['notifications'])->toHaveCount(1);
+});
+
+it('skickar en utloggad besökare från /notifications/clear till inloggningen', function () {
+    post('/notifications/clear')->assertRedirect('/login');
+});
+
+/*
+ * Källkodsprovet: rubriken är borta ur panelen, Clear-knappen och dess rutt
+ * finns kvar, och strängen ligger i `lang/en/ui.php`. Panelen bär sitt namn
+ * som `aria-label` i stället — det prövas i webbläsaren och står i PR-kroppen.
+ */
+it('ritar ingen rubrik i panelen och Clear under listan', function () {
+    $kod = File::get(resource_path('js/components/NotificationBell.vue'));
+
+    expect($kod)->not->toContain('<h2');
+
+    expect($kod)->toContain("t('inbox.clear')")
+        ->toContain('/notifications/clear');
+
+    expect(trans('ui.inbox.clear', [], 'en'))->toBe('Clear');
 });

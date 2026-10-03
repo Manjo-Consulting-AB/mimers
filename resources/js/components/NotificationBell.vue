@@ -32,6 +32,15 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * den den optionala listan: därför hämtas den en gång till i `onSuccess`.
  * `preserveState` håller panelen öppen under båda anropen.
  *
+ * **Clear tömmer listan och nollställer siffran** (issue 647). Knappen postar
+ * till `/notifications/clear`, som sätter BÅDE `notifications_cleared_at` och
+ * `notifications_read_at` till nu: listan och siffran är två kolumner men en
+ * handling för den som klickar, och en rensad panel med en kvarstående bricka
+ * hade varit en nolla som inte stämmer. Ingenting raderas ur `notification` —
+ * posten flyttar bara gränsen — och inbjudningarna står kvar, för de är något
+ * att svara på och inte ett kvitto. Formen är öppningens, med samma partiella
+ * omladdning efter.
+ *
  * **Frågan ställs en gång per sidladdning.** `loaded` är det enda tillståndet
  * vid sidan av `isOpen`, och den finns för att en stängd och åter öppnad
  * panel inte ska fråga servern igen om samma lista. En ny navigering ger en
@@ -124,6 +133,13 @@ const empty = computed(() => bothLoaded.value
     && invitations.value.length === 0);
 
 /*
+ * Clear-knappen ritas bara när det finns notiser att rensa (issue 647).
+ * Inbjudningarna räknas inte: de är något att svara på och står kvar efter
+ * rensningen, så en panel med bara inbjudningar har ingenting att rensa.
+ */
+const hasRows = computed(() => rows.value !== undefined && rows.value.length > 0);
+
+/*
  * Meningen: typen ger nyckeln, payloaden ger värdena, och datumet skrivs av
  * datumregeln (issue 104) och inte av den här filen.
  */
@@ -156,6 +172,23 @@ function toggle() {
         // listorna, så de hämtas en gång till — annars hade panelen tömts i
         // samma stund som siffran nollställdes. Inbjudningarna hade fallit
         // bort med dem, fast de inte nollställs av skrivningen.
+        onSuccess: () => router.reload({ only: ['notifications', 'pendingInvitations'] }),
+    });
+}
+
+/*
+ * Clear (issue 647) tömmer panelens lista. Skrivningen är en tidsstämpel på
+ * användarraden och ingen radering — raderna ligger kvar i outboxen — och
+ * servern sätter både listans och siffrans gräns, så panelen blir tom och
+ * brickan noll. Posten följs av samma partiella omladdning som öppningen:
+ * svaret är en omdirigering som renderar om sidan fullt och tappar de
+ * optionala listorna, och inbjudningarna — som inte rensas — måste hämtas
+ * tillbaka med dem.
+ */
+function clear() {
+    router.post('/notifications/clear', {}, {
+        preserveScroll: true,
+        preserveState: true,
         onSuccess: () => router.reload({ only: ['notifications', 'pendingInvitations'] }),
     });
 }
@@ -218,11 +251,10 @@ function toggle() {
         <section
             v-if="isOpen"
             :id="panelId"
+            :aria-label="t('inbox.label')"
             class="absolute right-0 z-10 w-80 max-w-[calc(100vw-2rem)] rounded-card border border-border bg-surface p-4 shadow-lg"
             :class="isTab ? 'bottom-full mb-1' : 'mt-1'"
         >
-            <h2 class="text-title font-semibold text-ink">{{ t('inbox.label') }}</h2>
-
             <p v-if="empty" class="mt-2 text-slate-700">
                 {{ t('inbox.empty') }}
             </p>
@@ -260,6 +292,23 @@ function toggle() {
                     </template>
                 </UiListRow>
             </ul>
+
+            <!--
+                Clear (issue 647) står under listan och bara när det finns
+                notiser att rensa. Inbjudningarna är inga notiser och rensas
+                inte — de är kvar tills de besvarats — så knappen ritas inte
+                för en panel som bara bär dem. Rubriken togs bort i samma
+                issue: panelen bär sitt namn som `aria-label` i stället.
+            -->
+            <div v-if="hasRows" class="mt-2 flex justify-end">
+                <button
+                    type="button"
+                    class="min-h-11 text-meta text-ink-subtle hover:underline"
+                    @click="clear"
+                >
+                    {{ t('inbox.clear') }}
+                </button>
+            </div>
         </section>
     </div>
 </template>

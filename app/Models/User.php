@@ -47,6 +47,15 @@ use Laravel\Sanctum\HasApiTokens;
  * App\Http\Middleware\HandleInertiaRequests — ingen annan rör den, och den
  * ligger därför utanför `#[Fillable]` som resten av tidsstämplarna.
  *
+ * `notifications_cleared_at` kom med issue 647. Det är klockans RENSNING:
+ * samma slags tidsstämpel och samma skäl, men den styr LISTAN och inte
+ * siffran — är den NULL visas varje rad, annars bara de skapade efter den.
+ * Den sätts av samma kontroller (`clear()` sätter båda) och läses av
+ * `HandleInertiaRequests::notifications()`. Ingenting raderas ur
+ * `notification`: outboxen är ett register över vad som hänt
+ * ([[ADR-0010 Notisarkitektur]] § Beslut). Ligger utanför `#[Fillable]` av
+ * samma skäl som grannen.
+ *
  * `totp_secret` castas `encrypted` sedan issue #19 (TOTP-hemlighet:
  * aktivering och verifiering) — se [[Konton och åtkomst]] § user:
  * "Krypterad", och App\Support\Auth\TotpBroker § Beslut 1, som sätter och
@@ -114,6 +123,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'totp_confirmed_at' => 'datetime',
             'last_active_at' => 'datetime',
             'notifications_read_at' => 'datetime',
+            'notifications_cleared_at' => 'datetime',
             'show_upcoming_tasks' => 'boolean',
             'password_hash' => 'hashed',
         ];

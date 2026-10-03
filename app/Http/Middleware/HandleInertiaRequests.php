@@ -75,6 +75,9 @@ use Inertia\Middleware;
  * först när klockan öppnas, genom en partiell omladdning av just den nyckeln,
  * och en vanlig sidladdning rör den aldrig. Skillnaden är hela poängen —
  * siffran är billig och behövs överallt, raderna är dyra och behövs sällan.
+ * Sedan issue 647 har de två propsen också var sin tidsstämpel på
+ * användarraden: siffran styrs av `notifications_read_at` (issue 127) och
+ * listan av `notifications_cleared_at` — klockans Clear sätter båda.
  *
  * **Klockan är ingen kanal.** Den läser `notification` som tabellen redan är
  * ([[Notiser]] § notification) och rör varken `notification_delivery`,
@@ -423,6 +426,14 @@ class HandleInertiaRequests extends Middleware
      * raden pekar på svarar 404 eller nekad åtkomst, och det är rätt svar:
      * raden är sann, målet finns inte längre för henne.
      *
+     * **Rensningen är listans gräns och inte en radering** (issue 647).
+     * `notifications_cleared_at` filtrerar bort allt skapat före Clear —
+     * raderna ligger kvar i outboxen, för `notification` är ett register över
+     * vad som HÄNT ([[ADR-0010 Notisarkitektur]] § Beslut) — och `NULL`
+     * betyder att ingenting rensats. Gränsen är strikt, samma regel som
+     * `unreadNotificationCount()`: en rad skapad i samma sekund som
+     * rensningen hör till det rensade.
+     *
      * **Subjectet hämtas per typ, i förväg.** Payloaden bär namn och inga
      * ULID:n (Beslut 5: data, aldrig text), så adressen till ett item måste
      * byggas ur raden själv — och `morphWith` ger hela listan i ett konstant
@@ -440,6 +451,15 @@ class HandleInertiaRequests extends Middleware
 
         return Notification::query()
             ->where('user_id', $user->getKey())
+            // Rensningen (issue 647): Clear sätter `notifications_cleared_at`
+            // och gränsen flyttar listan. NULL betyder "har aldrig rensat"
+            // och visar allt — samma form som `unreadNotificationCount()`
+            // ovan, och av samma skäl: en befintlig användare ska inte mötas
+            // av en tom panel hon aldrig bett om.
+            ->when(
+                $user->notifications_cleared_at !== null,
+                fn (Builder $query): Builder => $query->where('created_at', '>', $user->notifications_cleared_at),
+            )
             ->with([
                 'container',
                 // Relation och inte MorphTo i signaturen: `with()` tar en
