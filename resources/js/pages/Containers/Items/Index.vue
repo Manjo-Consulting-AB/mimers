@@ -5,7 +5,6 @@ import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ContainerMap from '../../../components/ContainerMap.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
 import ItemStructureTree from '../../../components/ItemStructureTree.vue';
-import ItemTagList from '../../../components/ItemTagList.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
 import { activeFilters, filterSummary } from '../../../components/itemFilter.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
@@ -48,19 +47,24 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * **Sidan visar antalet rader den ritar** och ingenting mer (57a § Beslut 4).
  * Ingen totalsumma, ingen "av N", ingen rad om att något dolts.
  *
- * **Kategorinamnet slås upp i `categories`**, som kontrollern bygger ur de
- * redan eager-laddade relationerna (ULID → namn). `ItemResource` bär bara
- * kategorins ULID, och uppslaget hör därför BREDVID resursen och inte inuti
- * den — samma linje som issue 54 § Beslut 9. Saknas uppslaget utelämnas
- * raden; vyn hittar aldrig på ett värde. `categoryTree` är något annat: hela
+ * **Kategorinamnet slås upp i `categories`** — proppen står kvar även sedan
+ * raden slutade rita den (issue 212). Servern bygger den ur de redan
+ * eager-laddade relationerna (ULID → namn), och uppslaget hör BREDVID
+ * resursen och inte inuti den, för `ItemResource` bär bara kategorins ULID —
+ * samma linje som issue 54 § Beslut 9. `categoryTree` är något annat: hela
  * trädet, till filterradens väljare.
  *
  * **Serienumret ritas inte här** (57a § Beslut 8). Det hör till detaljvyn.
  *
- * **Ingen miniatyr** (57a § Beslut 9). Bilagorna är issue 60 och 61, och att
- * rita en miniatyr här hade betytt en egen väg till filoriginet innan
- * [[ADR-0019 Filleverans]] fått sin yta. Rutan nedan lämnar platsen så att
- * issue 61 kan fylla den utan att raden byter form.
+ * **Raden ritar itemets EGET omslag** (issue 212 · [[ADR-0050
+ * Desktopdesignen]]): `covers` är itemets ULID → `{ulid, hasThumb}` eller
+ * null, och urvalet är App\Actions\Item\ResolveItemCover — samma bild och
+ * samma omfång som servern räknade, ritat som en miniatyr mot
+ * `/files/{ulid}?variant=thumb` ([[ADR-0019 Filleverans]]). Servern har
+ * prövat att derivatet finns (`hasThumb`); utan det ritas en lådikon i
+ * stället, för en `<img>` mot en variant som inte finns är en trasig bild
+ * (issue 61b § Beslut 1). Containerns eget omslag läses ALDRIG i raden — ett
+ * item utan bild ärver inte containerns foto.
  *
  * **`can.create` ritar skapaknappen** (issue 57b § Beslut 2). Flaggan är
  * `ContainerPolicy::createItem()` och sätts mot CONTAINERN, för det är grinden
@@ -69,12 +73,16 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * Flaggan är presentation; ruttens `Gate::authorize()` gäller oavsett vad
  * sidan visade.
  *
- * **Radens status kommer ur `statuses`** (issue 92 · [[ADR-0040 Underträdets
- * summor]]): itemets ULID → `ok` eller `overdue`, räknat på servern över
- * itemets underträd. Vyn räknar ingenting själv — den slår upp och översätter,
- * och TEXTEN ligger i `lang/` precis som resten av sidans ord. Uppslaget
- * ligger bredvid `ItemResource` av samma skäl som `categories` gör det:
- * resursen delas med `/api`, som inte har bett om fältet.
+ * **Statusen visas bara i kartläget** (issue 212 · [[ADR-0050
+ * Desktopdesignen]]). `statuses` är itemets ULID → `ok` eller `overdue`,
+ * räknat på servern över itemets underträd (issue 92 · [[ADR-0040
+ * Underträdets summor]]). Listans rad ritade den förr, men mockupen bär namn,
+ * beskrivning och en pil — statusen hör till kartan, som ritar den per nod
+ * (`ContainerMapNode.vue`), och proppen står kvar för kartans skull. Vyn
+ * räknar ingenting själv — den slår upp och översätter, och TEXTEN ligger i
+ * `lang/` precis som resten av sidans ord. Uppslaget ligger bredvid
+ * `ItemResource` av samma skäl som `categories` gör det: resursen delas med
+ * `/api`, som inte har bett om fältet.
  *
  * **Fliken har tre lägen sedan issue 154 och 157** · [[ADR-0046 Containerns
  * karta]]: *Lista*, som är sidan som den var och förblir förval, *Träd*, som
@@ -104,10 +112,19 @@ import { useTranslations } from '../../../composables/useTranslations.js';
 const props = defineProps({
     container: { type: Object, required: true },
     items: { type: Array, required: true },
-    /* Kategori-ULID → namn, för de kategorier raderna pekar på. */
+    /*
+     * Kategori-ULID → namn. Servern skickar den; raden ritar den inte längre
+     * (issue 212), men proppen står kvar av samma skäl som `statuses` gör det.
+     */
     categories: { type: Object, required: true },
     /* Item-ULID → status: `ok` eller `overdue`. */
     statuses: { type: Object, required: true },
+    /*
+     * Item-ULID → `{ulid, hasThumb}` eller null, ur
+     * App\Actions\Item\ResolveItemCover: radens eget omslag. `hasThumb` säger
+     * att `thumb`-derivatet finns, och först då ritas en miniatyr.
+     */
+    covers: { type: Object, required: true },
     /* Containerns taggar inom omfånget, ur ListTags — filterradens kryssrutor. */
     tags: { type: Array, required: true },
     /* Containerns kategoriträd inom omfånget, ur ListCategories — filterradens väljare. */
@@ -275,46 +292,68 @@ const views = computed(() => {
             </p>
 
             <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
-                <li v-for="item in items" :key="item.ulid" class="flex items-start gap-4 py-4">
-                    <div
-                        aria-hidden="true"
-                        class="h-12 w-12 shrink-0 rounded border border-slate-200 bg-slate-50"
-                    />
-
-                    <div class="min-w-0 flex-1">
-                        <div class="flex flex-wrap items-center gap-x-3">
-                            <Link
-                                :href="`/containers/${container.ulid}/items/${item.ulid}`"
-                                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                            >
-                                {{ item.name }}
-                            </Link>
-
-                            <!-- Ordet är dämpat och undantaget syns: mockupen
-                                 sätter OK på varje rad, och poängen med raden är
-                                 att det som AVVIKER ska hittas utan att öppna
-                                 sextio items. -->
-                            <span
-                                class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
-                                :class="statuses[item.ulid] === 'overdue'
-                                    ? 'bg-red-50 text-red-700'
-                                    : 'text-slate-500'"
-                            >
-                                {{ t(`item.index.status_${statuses[item.ulid]}`) }}
-                            </span>
-                        </div>
-
-                        <p
-                            v-if="categories[item.category] || item.manufacturer || item.model"
-                            class="mt-1 flex flex-wrap gap-x-4 text-sm text-slate-600"
+                <li v-for="item in items" :key="item.ulid">
+                    <!--
+                        Hela raden är länken (issue 212 · [[ADR-0050
+                        Desktopdesignen]]), och den bär fyra saker: miniatyren,
+                        namnet, beskrivningen och en pil. Status, kategori,
+                        tillverkare, modell och taggar står inte längre här —
+                        mockupen ritar dem inte, och statusen hör till kartan.
+                    -->
+                    <Link
+                        :href="`/containers/${container.ulid}/items/${item.ulid}`"
+                        class="flex min-h-11 items-center gap-4 py-3 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    >
+                        <img
+                            v-if="covers[item.ulid]?.hasThumb"
+                            :src="`/files/${covers[item.ulid].ulid}?variant=thumb`"
+                            alt=""
+                            class="h-12 w-12 shrink-0 rounded border border-slate-200 object-cover"
                         >
-                            <span v-if="categories[item.category]">{{ categories[item.category] }}</span>
-                            <span v-if="item.manufacturer">{{ item.manufacturer }}</span>
-                            <span v-if="item.model">{{ item.model }}</span>
-                        </p>
 
-                        <ItemTagList class="mt-2" :tags="item.tags" />
-                    </div>
+                        <!--
+                            Utan derivat ritas en lådikon i stället för en
+                            `<img>` mot en variant som inte finns — samma val
+                            som RecentImagesPanel gör (issue 61b § Beslut 1).
+                        -->
+                        <span
+                            v-else
+                            aria-hidden="true"
+                            class="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-6 w-6"
+                            >
+                                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                                <path d="m3.3 7 8.7 5 8.7-5" />
+                                <path d="M12 22V12" />
+                            </svg>
+                        </span>
+
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate font-medium text-ink">{{ item.name }}</span>
+                            <span v-if="item.description" class="block truncate text-sm text-ink-muted">{{ item.description }}</span>
+                        </span>
+
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-4 w-4 shrink-0 text-ink-subtle"
+                            aria-hidden="true"
+                        >
+                            <path d="m9 6 6 6-6 6" />
+                        </svg>
+                    </Link>
                 </li>
             </ul>
         </template>
