@@ -19,12 +19,26 @@ import { computed } from 'vue';
  * ikon i, och att bygga en vore att lägga domänen i koden, precis det
  * [[ADR-0033 Produktens omfång]] förbjöd i artens värdelista.
  *
- * **Miniatyren är derivatet, originalet är reserven.** `variants` bär de
- * varianter som FINNS (samma form som `variants`-proppen på itemets detaljvy,
- * issue 61b § Beslut 1): finns `thumb` ritas den, annars originalet. Ett
- * nyuppladdat foto har inga derivat förrän kön kört, och en `<img>` mot en
- * variant som saknas är en trasig bild (issue 19a § Beslut 5) — originalet är
- * alltid en giltig URL, så fallbacken är ett faktum och ingen gissning.
+ * **Den begärda varianten ritas om den finns, annars originalet.** Anroparen
+ * säger vilken variant den vill ha (`variant`, förval `thumb`), och `variants`
+ * bär de varianter som FINNS (samma form som `variants`-proppen på itemets
+ * detaljvy, issue 61b § Beslut 1). Finns den begärda varianten i listan ritas
+ * `?variant=<den>`, annars originalet. Ingen kedja `medium` → `thumb`:
+ * `App\Jobs\GenerateImageDerivatives` skriver aldrig en variant som vore en
+ * förstoring, så en bild utan `medium` är antingen mindre än 1024 px
+ * (originalet duger) eller ännu inte bearbetad (originalet är det enda som
+ * finns). Ett nyuppladdat foto har inga derivat förrän kön kört, och en
+ * `<img>` mot en variant som saknas är en trasig bild (issue 19a § Beslut 5) —
+ * originalet är alltid en giltig URL, så fallbacken är ett faktum och ingen
+ * gissning.
+ *
+ * **`medium` på de stora ytorna, `thumb` på de små** (fynd från testarna
+ * 2026-10-03, issue 681): hjälten (`ContainerHero.vue`) och korten
+ * (`ContainerCard.vue`, `pages/Containers/Index.vue`) breder ut sig upp till
+ * 1200 px och ber därför om `medium` (1024 px) — en `thumb` (320 px) sträcks
+ * och blir suddig. De små fyrkanterna — toppraden i `ContainerLayout.vue`
+ * (`h-10 w-10`) och förhandsvisningen i `Containers/Edit.vue` (`h-16 w-16`) —
+ * behåller förvalet `thumb` och säger ingenting.
  *
  * **Adressen byggs här och går alltid till appdomänen.** `/files/{ulid}` svarar
  * 302 till en signerad länk på filoriginet, och signaturen präglas där
@@ -39,6 +53,12 @@ import { computed } from 'vue';
 const props = defineProps({
     /* `{ ulid, variants }` eller null, ur container-proppen (`cover`). */
     cover: { type: Object, default: null },
+    /*
+     * Varianten anroparen vill rita. Förvalet `thumb` behåller dagens beteende
+     * för varje anropare som inte säger något — de små fyrkanterna i skalets
+     * topprad och i förhandsvisningen.
+     */
+    variant: { type: String, default: 'thumb' },
 });
 
 const url = computed(() => {
@@ -46,7 +66,7 @@ const url = computed(() => {
         return null;
     }
 
-    const variant = props.cover.variants?.includes('thumb') ? 'thumb' : null;
+    const variant = props.cover.variants?.includes(props.variant) ? props.variant : null;
 
     return variant === null
         ? `/files/${props.cover.ulid}`

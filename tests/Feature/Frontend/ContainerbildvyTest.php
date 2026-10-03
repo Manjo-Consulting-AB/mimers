@@ -131,6 +131,18 @@ function bildvyFrågor(Closure $anrop): int
     return $frågor;
 }
 
+/**
+ * `<ContainerCover ...>`-taggen ur en fil, så att nålarna hör till just den
+ * komponenten och inte till en granne på samma sida. `<ContainerCoverSheet` är
+ * en ANNAN komponent och fångas inte: `\b` faller på `S` efter `ContainerCover`.
+ */
+function bildvyTagg(string $fil, string $komponent = 'ContainerCover'): string
+{
+    preg_match('/<'.$komponent.'\b[^>]*>/', File::get(resource_path($fil)), $träff);
+
+    return $träff[0] ?? '';
+}
+
 /*
  * Klart när: en uppladdad bild syns i containerlistan, på dashboardkortet och i
  * toppraden.
@@ -179,6 +191,83 @@ it('visar bilden i containerlistan, på dashboardkortet och i toppraden', functi
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Containers/Overview')
             ->where('container.cover.ulid', $bilaga->ulid)
+        );
+});
+
+/*
+ * Klart när (issue 681): den begärda varianten ritas om den finns, annars
+ * originalet.
+ *
+ * Regeln bor i `url`-computed, och provet låser den från källan: proppen finns
+ * med förvalet `thumb`, valet faller på `props.variant` och går via
+ * `variants?.includes(...)`. Den gamla nålen — `includes('thumb')` — är
+ * förbjuden, för den band komponenten till miniatyren och lämnade hjälten och
+ * korten suddiga (fynd från testarna 2026-10-03).
+ */
+it('väljer den begärda varianten och annars originalet', function () {
+    $vy = File::get(resource_path('js/components/ContainerCover.vue'));
+
+    expect($vy)->toContain("variant: { type: String, default: 'thumb' }")
+        ->and($vy)->toContain('variants?.includes(props.variant)');
+
+    // Den gamla regeln, ordagrant: borta.
+    expect($vy)->not->toContain("includes('thumb')");
+});
+
+/*
+ * Klart när (issue 681): hjälten och korten ber om `medium`, de små ytorna om
+ * ingenting.
+ *
+ * Ett källkodsprov, för det som avgör är VILKEN variant anroparen ber om och
+ * ingenting annat. Taggen skärs ut ur varje fil, så att nålen hör till just
+ * `<ContainerCover>` och inte till en granne — `ContainerLayout.vue` bär också
+ * `<ContainerCoverSheet`.
+ */
+it('ritar medium i hjälten och på korten men thumb i toppraden', function () {
+    foreach ([
+        'js/components/ContainerHero.vue',
+        'js/components/ContainerCard.vue',
+        'js/pages/Containers/Index.vue',
+    ] as $fil) {
+        expect(bildvyTagg($fil))->toContain('variant="medium"');
+    }
+
+    // De små fyrkanterna: förvalet `thumb`, alltså ingen propp alls.
+    foreach ([
+        'js/layouts/ContainerLayout.vue',
+        'js/pages/Containers/Edit.vue',
+    ] as $fil) {
+        expect(bildvyTagg($fil))->not->toContain('variant');
+    }
+});
+
+/*
+ * Klart när (issue 681): servern skickar `medium` i `variants` när derivatet
+ * finns.
+ *
+ * Formen `{ ulid, variants }` kommer ur App\Http\Resources\ContainerResource::
+ * cover(), som SORTERAR varianterna — `medium` före `thumb`. Leveransen av
+ * själva varianten prövas i tests/Feature/Attachment och rörs inte här.
+ */
+it('skickar medium i variants när derivatet finns', function () {
+    [$konto, $anvandare, $container] = bildvyKontext();
+
+    $bilaga = bildvySätt($anvandare, $container, $konto);
+
+    foreach (['thumb', 'medium'] as $variant) {
+        ImageDerivative::factory()->create([
+            'stored_file_id' => $bilaga->stored_file_id,
+            'variant' => $variant,
+            'storage_path' => $bilaga->storedFile->storage_path.'_'.$variant.'.jpg',
+        ]);
+    }
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Overview')
+            ->where('container.cover.variants', ['medium', 'thumb'])
         );
 });
 
