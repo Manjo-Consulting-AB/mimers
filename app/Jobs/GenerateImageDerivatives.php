@@ -21,12 +21,13 @@ use Throwable;
  * än målet förstoras aldrig — då skrivs varianten inte alls, och avsaknaden
  * av raden betyder "originalet duger".
  *
- * Bara tre MIME-typer får derivat, och formatet följer källan (Beslut 4):
- * jpeg (kvalitet 82), png och webp (kvalitet 82). Allt annat — svg, gif,
- * heic, dokument — får inga derivat. Sökvägen är originalets plus variantens
- * namn: `ab/cd/<hash>_thumb.jpg`. Samma disk `files`, samma prefixstruktur —
- * derivaten ligger bredvid sitt original, och gallringen i 17b hittar dem
- * utan en extra fråga.
+ * Sex MIME-typer får derivat, och formatet följer källan (Beslut 4):
+ * jpeg och webp (kvalitet 82), avif (kvalitet 60), png, gif och bmp. En
+ * animerad gif får en miniatyr av första bildrutan — det är GD:s beteende.
+ * Allt annat — svg, heic, tiff, video, dokument — får inga derivat.
+ * Sökvägen är originalets plus variantens namn: `ab/cd/<hash>_thumb.jpg`.
+ * Samma disk `files`, samma prefixstruktur — derivaten ligger bredvid sitt
+ * original, och gallringen i 17b hittar dem utan en extra fråga.
  *
  * Jobbet är repots första `app/Jobs/`-klass och följer Laravels standard:
  * `implements ShouldQueue`, `use Queueable` (som drar in Dispatchable,
@@ -66,6 +67,9 @@ class GenerateImageDerivatives implements ShouldQueue
         'image/jpeg' => 'jpg',
         'image/png' => 'png',
         'image/webp' => 'webp',
+        'image/gif' => 'gif',
+        'image/bmp' => 'bmp',
+        'image/avif' => 'avif',
     ];
 
     public function __construct(public StoredFile $storedFile) {}
@@ -194,6 +198,9 @@ class GenerateImageDerivatives implements ShouldQueue
             'image/jpeg' => @imagecreatefromjpeg($path),
             'image/png' => @imagecreatefrompng($path),
             'image/webp' => @imagecreatefromwebp($path),
+            'image/gif' => @imagecreatefromgif($path),
+            'image/bmp' => @imagecreatefrombmp($path),
+            'image/avif' => @imagecreatefromavif($path),
             default => throw new RuntimeException("Okänd MIME-typ för bildläsning ({$mime})."),
         };
 
@@ -206,7 +213,8 @@ class GenerateImageDerivatives implements ShouldQueue
 
     /**
      * Kodar om bilden till originalets format: jpeg och webp med kvalitet 82,
-     * png utan kvalitetsparametrar (Beslut 4).
+     * avif med kvalitet 60, png, gif och bmp utan kvalitetsparametrar
+     * (Beslut 4).
      */
     private function encode(string $mime, GdImage $image): string
     {
@@ -216,6 +224,9 @@ class GenerateImageDerivatives implements ShouldQueue
             'image/jpeg' => imagejpeg($image, null, 82),
             'image/png' => imagepng($image),
             'image/webp' => imagewebp($image, null, 82),
+            'image/gif' => imagegif($image),
+            'image/bmp' => imagebmp($image),
+            'image/avif' => imageavif($image, null, 60),
             default => throw new RuntimeException("Okänd MIME-typ för bildkodning ({$mime})."),
         };
 

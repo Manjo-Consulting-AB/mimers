@@ -366,6 +366,8 @@ it('en bild levereras inline på en egen origin', function (string $mime, string
     'png' => ['image/png', 'foto.png'],
     'gif' => ['image/gif', 'foto.gif'],
     'webp' => ['image/webp', 'foto.webp'],
+    'bmp' => ['image/bmp', 'foto.bmp'],
+    'avif' => ['image/avif', 'foto.avif'],
     'pdf' => ['application/pdf', 'manual.pdf'],
 ]);
 

@@ -127,6 +127,79 @@ function miniatyrAlfaVid(string $absolutSökväg, int $x, int $y): int
     return $rgba['alpha'];
 }
 
+/**
+ * Bygger en bild i ett givet format med GD — samma väg som jobbet läser
+ * den. Behövs för gif, bmp och avif, som UploadedFile::fake()->image()
+ * inte kan skapa.
+ */
+function miniatyrBild(string $format, int $bredd, int $höjd): string
+{
+    $bild = imagecreatetruecolor($bredd, $höjd);
+    $färg = imagecolorallocate($bild, 255, 0, 0);
+    imagefilledrectangle($bild, 0, 0, $bredd - 1, $höjd - 1, $färg);
+
+    ob_start();
+    match ($format) {
+        'gif' => imagegif($bild),
+        'bmp' => imagebmp($bild),
+        'avif' => imageavif($bild, null, 60),
+        default => throw new InvalidArgumentException("Okänt format ({$format})."),
+    };
+    $byten = (string) ob_get_clean();
+    imagedestroy($bild);
+
+    return $byten;
+}
+
+it('en uppladdad gif ger två derivat', function () {
+    [$account, $headers, $container, $item] = miniatyrFörbered();
+
+    $fil = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('a.gif', miniatyrBild('gif', 2000, 1000)));
+
+    // Båda varianterna med rad och fil, i originalets format (Beslut 4).
+    $derivat = ImageDerivative::where('stored_file_id', $fil->id)->get();
+
+    expect($derivat)->toHaveCount(2);
+    expect($derivat->pluck('variant')->sort()->values()->all())->toBe(['medium', 'thumb']);
+
+    foreach ($derivat as $rad) {
+        expect($rad->storage_path)->toEndWith('.gif');
+        expect(Storage::disk('files')->exists($rad->storage_path))->toBeTrue();
+    }
+});
+
+it('en uppladdad bmp ger två derivat', function () {
+    [$account, $headers, $container, $item] = miniatyrFörbered();
+
+    $fil = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('a.bmp', miniatyrBild('bmp', 2000, 1000)));
+
+    $derivat = ImageDerivative::where('stored_file_id', $fil->id)->get();
+
+    expect($derivat)->toHaveCount(2);
+    expect($derivat->pluck('variant')->sort()->values()->all())->toBe(['medium', 'thumb']);
+
+    foreach ($derivat as $rad) {
+        expect($rad->storage_path)->toEndWith('.bmp');
+        expect(Storage::disk('files')->exists($rad->storage_path))->toBeTrue();
+    }
+});
+
+it('en uppladdad avif ger två derivat', function () {
+    [$account, $headers, $container, $item] = miniatyrFörbered();
+
+    $fil = miniatyrGenereraFör($container, $item, $account->ulid, $headers, UploadedFile::fake()->createWithContent('a.avif', miniatyrBild('avif', 2000, 1000)));
+
+    $derivat = ImageDerivative::where('stored_file_id', $fil->id)->get();
+
+    expect($derivat)->toHaveCount(2);
+    expect($derivat->pluck('variant')->sort()->values()->all())->toBe(['medium', 'thumb']);
+
+    foreach ($derivat as $rad) {
+        expect($rad->storage_path)->toEndWith('.avif');
+        expect(Storage::disk('files')->exists($rad->storage_path))->toBeTrue();
+    }
+})->skip(! (gd_info()['AVIF Support'] ?? false), 'GD saknar AVIF-stöd.');
+
 it('en uppladdad jpeg ger två derivat', function () {
     [$account, $headers, $container, $item] = miniatyrFörbered();
 

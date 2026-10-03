@@ -107,6 +107,8 @@ return [
         'image/png',
         'image/gif',
         'image/webp',
+        'image/bmp',
+        'image/avif',
         'application/pdf',
     ],
 
