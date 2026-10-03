@@ -243,6 +243,7 @@ class ItemController extends Controller
         ListTags $listTags,
         ActiveContainer $activeContainer,
         ItemStatus $itemStatus,
+        ResolveItemCover $resolveItemCover,
         CreateTarget $createTarget,
         ResolveItemTree $resolveItemTree,
         ResolveItemMap $resolveItemMap,
@@ -346,6 +347,21 @@ class ItemController extends Controller
             // hela åtkomstlösningen byggdes för att undvika. Se `$statuses`
             // ovan för vad som räknas i vilket läge.
             'statuses' => $statuses,
+
+            // Radens eget omslag (issue 183 · [[ADR-0050 Desktopdesignen]]),
+            // samma linje som `statuses` ovan: upplösningen ligger BREDVID
+            // `ItemResource`, som delas med `/api` och inte har bett om
+            // fältet. Formen är item-ULID → `{ulid, hasThumb}` eller null, och
+            // uppslaget är detsamma för alla rader.
+            //
+            // En fråga för hela listan, oavsett antal rader — bilderna hämtas
+            // en gång och valet sker i minnet, se
+            // App\Actions\Item\ResolveItemCover::forItems(). Containerns eget
+            // omslag (`coverAttachment` ovan) används aldrig för en rad.
+            //
+            // Träd- och kartläget ritar inga rader och betalar därför
+            // ingenting, samma grind som `categories` ovan.
+            'covers' => $view === 'list' ? $this->covers($items, $resolveItemCover) : [],
             'tags' => TagResource::collection($tags)->resolve($request),
             'categoryTree' => CategoryResource::collection($categories)->resolve($request),
             'filter' => [
@@ -1733,6 +1749,42 @@ class ItemController extends Controller
         }
 
         return $names;
+    }
+
+    /**
+     * Radens omslag, nycklad på itemets ULID (issue 183 ·
+     * [[ADR-0050 Desktopdesignen]]).
+     *
+     * Bilden kommer ur App\Actions\Item\ResolveItemCover::forItems() — samma
+     * regel som itemvyn, och en fråga för hela listan. `hasThumb` räknas ur de
+     * EAGERLADDADE derivaten, precis som `recentImages()` i
+     * App\Http\Controllers\ContainerController: noll extra frågor per rad, och
+     * samma regel som itemvyn — en miniatyr ritas bara när varianten finns
+     * (issue 61b § Beslut 1).
+     *
+     * En rad utan bild svarar null i stället för att saknas: vyns uppslag är
+     * detsamma för alla rader. Containerns omslag används aldrig — raden bär
+     * sitt eget.
+     *
+     * @param  Collection<int, Item>  $items
+     * @return array<string, array{ulid: string, hasThumb: bool}|null>
+     */
+    private function covers(Collection $items, ResolveItemCover $resolveItemCover): array
+    {
+        $uppslaget = $resolveItemCover->forItems($items);
+
+        $covers = [];
+
+        foreach ($items as $item) {
+            $attachment = $uppslaget[$item->id];
+
+            $covers[$item->ulid] = $attachment === null ? null : [
+                'ulid' => $attachment->ulid,
+                'hasThumb' => $attachment->storedFile->derivatives->contains('variant', 'thumb'),
+            ];
+        }
+
+        return $covers;
     }
 
     /**
