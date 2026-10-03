@@ -2917,7 +2917,7 @@ return [
         // the date is already formatted by formatDateOnly() (decisions 3, 5).
         'loan' => [
             'heading' => 'Loans',
-            'description' => 'Who has the thing, and when it is due back.',
+            'description' => 'Who has the item, and when it is due back.',
 
             // The open loan sits on top and the history below (decision 2).
             // `returned_at IS NULL` is the open one, and which row that is
