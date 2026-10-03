@@ -1,7 +1,5 @@
 <?php
 
-// rott-pa-basen: issue 77b — ordbyte i prosa (kommentar och testnamn), ingen kodändring; bas och head delar applikationskod.
-
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -514,6 +512,14 @@ it('förklarar att systemet aldrig mejlar låntagaren', function () {
             ->missing('notifications')
             ->missing('reminders')
     );
+});
+
+it('beskriver utlåningen med ordet item', function () {
+    // Beskrivningen namnger det som lånas ut: ett item, inte en thing
+    // (M24, fynd från testare 2026-10-03).
+    $mening = trans('ui.item.loan.description', [], 'en');
+
+    expect($mening)->toBe('Who has the item, and when it is due back.');
 });
 
 // --- raderingen ----------------------------------------------------------
