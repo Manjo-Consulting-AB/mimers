@@ -223,6 +223,8 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 | kind | VARCHAR(40) | `boat`, `caravan`, `house`, `car`, `other`. Endast för presentation och mallval — systemet beter sig inte olika. |
 | template_source_id | FK → container NULL | Om utstämplad från mall, se [[ADR-0002 Konto äger container]] |
 | cover_attachment_id | FK → attachment NULL | Containerns bild, se [[ADR-0047 Containerns bild]] och [[Filer och lagring]] § attachment |
+| cover_focus_x | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, x i procent (0–100). `NULL` = mitten. Se [[ADR-0047 Containerns bild]]. |
+| cover_focus_y | TINYINT UNSIGNED NULL | Fokuspunkten på bilden, y i procent (0–100). `NULL` = mitten. Se [[ADR-0047 Containerns bild]]. |
 | deleted_at | | |
 
 Index: `(account_id, deleted_at)`.
@@ -230,6 +232,8 @@ Index: `(account_id, deleted_at)`.
 `cover_attachment_id` är en pekare till en av containerns **egna** bilagor — en rad i `attachment` vars `container_id` är den här containerns. Ett CHECK-villkor kan inte uttrycka "egen", så regeln upprätthålls i `SetContainerCover`, den enda vägen som sätter pekaren. Pekaren är nullbar och frivillig: en container utan bild har ingen, och det finns ingen upplösning med återfall som för itemets omslag — en container har högst en bild.
 
 Nyckeln är `ON DELETE SET NULL`, en medveten avvikelse från husets RESTRICT och samma som `item.cover_attachment_id`: en preferens får aldrig hindra papperskorgens gallring. Gallringen rensar bilden först och nollställer pekaren själv.
+
+`cover_focus_x`/`cover_focus_y` är fokuspunkten — den del av bilden som ska synas när en yta beskär den (`object-position: x% y%`) — och de två kolumnerna sätts alltid TILLSAMMANS (CHECK-villkoret `container_cover_focus_pair`; en halv punkt finns inte), med `NULL` som mitten. De nollställs när bilden byts eller tas bort: en punkt vald på en bild säger ingenting om nästa.
 
 ## container_access
 

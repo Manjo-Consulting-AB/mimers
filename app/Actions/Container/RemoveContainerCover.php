@@ -139,6 +139,12 @@ class RemoveContainerCover
         }
 
         $rad->cover_attachment_id = null;
+
+        // Fokuspunkten nollställs tillsammans med pekaren (issue 682): en
+        // punkt vald på en bild som inte längre finns är ingenting att behålla.
+        $rad->cover_focus_x = null;
+        $rad->cover_focus_y = null;
+
         $rad->save();
 
         // Instansen anroparen skickade in bär den nollställda pekaren —

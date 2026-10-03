@@ -1206,6 +1206,30 @@ Route::middleware('auth')->group(function () {
         ->name('containers.cover.destroy');
 
     /*
+     * Issue 682 · Fokuspunkten på containerns bild, se [[ADR-0047 Containerns
+     * bild]] och App\Http\Controllers\ContainerCoverController::focus().
+     *
+     * **PATCH, för det är samma bilds visning som skrivs om.** Kroppen bär
+     * punkten (`x`, `y` i procent) och ingenting annat av resursen, och en
+     * POST hade sagt "skapa" om en egenskap som redan finns. Sökvägen ligger
+     * under bilden — `/cover/focus` — för punkten hör till bilden och inte
+     * till containern som helhet.
+     *
+     * **Ingen `throttle`.** Skrivningen rör containerns egen rad och kostar
+     * ingenting någon annan kan råka ut för; att hamra den är att sätta sin
+     * egen punkt om och om igen.
+     *
+     * **`/api` får ingen**, av samma skäl som de två bildrutterna ovan:
+     * webben är den enda klienten, och `focus` i `cover`-proppen bär
+     * läsningen (App\Http\Resources\ContainerResource::cover()).
+     *
+     * Ingen `scopeBindings()`: rutten har bara ett rutt-parameter, som
+     * grannarna.
+     */
+    Route::patch('/containers/{container}/cover/focus', [ContainerCoverController::class, 'focus'])
+        ->name('containers.cover.focus');
+
+    /*
      * Issue 65b § Beslut 1 och 2 · Containerns kalenderlänk, se
      * App\Http\Controllers\CalendarFeedController.
      *

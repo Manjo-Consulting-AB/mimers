@@ -526,7 +526,8 @@ it('bär beskrivningen som en nullbar kolumn på containern', function () {
  * `cover_attachment_id` lades till av issue 158 ([[ADR-0047 Containerns
  * bild]]): containerns bild är ett faktum om containern och hör därför här,
  * precis som `description` gör. Listan uppdaterades av samma skäl som regeln
- * ovan anger.
+ * ovan anger. `cover_focus_x`/`cover_focus_y` lades till av issue 682 —
+ * fokuspunkten på samma bild, och samma skäl: den är ett faktum om containern.
  */
 it('har inte fått någon annan kolumn än description', function () {
     $kolumner = collect(Schema::getColumns('container'))->pluck('name')->sort()->values()->all();
@@ -534,6 +535,8 @@ it('har inte fått någon annan kolumn än description', function () {
     expect($kolumner)->toBe([
         'account_id',
         'cover_attachment_id',
+        'cover_focus_x',
+        'cover_focus_y',
         'created_at',
         'currency',
         'deleted_at',
