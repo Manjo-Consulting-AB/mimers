@@ -2699,22 +2699,54 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
     else:
         pr_body = bygg_pr_kropp(issue_num, agent_summary)
 
-        pr_res = run_cmd([
-            "gh", "pr", "create",
-            "--title", f"Fix #{issue_num}: {issue_title}",
-            "--body", pr_body,
-            # --head krävs explicit: `git push origin <branch>` (utan -u) pushar
-            # branchen men sätter aldrig lokal upstream-tracking, och gh pr create
-            # kan då inte avgöra head-branchen även om fjärr-branchen finns.
-            "--head", branch_name,
-        ], cwd=worktree_path)
-        # gh 2.23.0 saknar --json på pr create; kommandot skriver PR-URL:en på stdout.
-        pr_url = pr_res.stdout.strip().splitlines()[-1]
-        pr_number = pr_url.rstrip("/").split("/")[-1]
+        pr_number = skapa_pr(issue_num, issue_title, pr_body, branch_name, worktree_path)
 
     granska_och_merga(
         issue_num, issue_title, issue_body, pr_number, pr_body, risk_class,
         branch_name, worktree_path, pushed_sha=pushed_sha,
+    )
+
+
+def skapa_pr(issue_num, issue_title, pr_body, branch_name, cwd):
+    """Öppnar PR:en och returnerar dess nummer.
+
+    GitHubs GraphQL kan svara 504 på `gh pr create` fast PR:en faktiskt
+    skapades på serversidan. Så kraschade issue #682 (PR #703, 2026-10-03):
+    PR:en fanns, men felet gick rakt till undantagshanteraren, som städade
+    worktreen och satte `needs-human` på en färdig, grön PR. Ett misslyckat
+    anrop slås därför upp mot grenen innan det räknas som ett fel.
+    """
+    pr_res = run_cmd([
+        "gh", "pr", "create",
+        "--title", f"Fix #{issue_num}: {issue_title}",
+        "--body", pr_body,
+        # --head krävs explicit: `git push origin <branch>` (utan -u) pushar
+        # branchen men sätter aldrig lokal upstream-tracking, och gh pr create
+        # kan då inte avgöra head-branchen även om fjärr-branchen finns.
+        "--head", branch_name,
+    ], check=False, cwd=cwd)
+    if pr_res.returncode == 0:
+        # gh 2.23.0 saknar --json på pr create; kommandot skriver PR-URL:en på stdout.
+        pr_url = pr_res.stdout.strip().splitlines()[-1]
+        return pr_url.rstrip("/").split("/")[-1]
+
+    for forsok in range(3):
+        if forsok:
+            time.sleep(10)
+        lista = run_cmd(
+            ["gh", "pr", "list", "--head", branch_name, "--state", "open", "--json", "number"],
+            check=False, cwd=cwd,
+        )
+        if lista.returncode == 0 and json.loads(lista.stdout or "[]"):
+            pr_number = str(json.loads(lista.stdout)[0]["number"])
+            print(f"--> `gh pr create` föll (kod {pr_res.returncode}), men PR #{pr_number} "
+                  f"finns på {branch_name} - fortsätter med den.")
+            return pr_number
+
+    raise Exception(
+        f"Kommando misslyckades: gh pr create --head {branch_name} (kod {pr_res.returncode})"
+        f"\nUT: {(pr_res.stdout or '').strip()[-2000:]}"
+        f"\nFEL: {(pr_res.stderr or '').strip()[-2000:]}"
     )
 
 
