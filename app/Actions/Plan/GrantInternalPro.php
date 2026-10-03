@@ -37,6 +37,12 @@ use Illuminate\Support\Str;
  * massildelning: de står utanför Subscription::#[Fillable] med flit, se
  * modellens docblock, och samma grepp som
  * App\Actions\OwnershipTransfer\AcceptOwnershipTransfer::grantProTime().
+ *
+ * `grace_until` nollställs med flit: har kontot nedgraderats tidigare ligger
+ * fristen kvar på raden (StartDowngrade sätter den), och ReadPlanUsage räknar
+ * fram graceDaysLeft ur den. Utan nollställningen visar ett Pro-konto en
+ * nedräkning av en frist som inte gäller. Samma grepp och samma skäl som
+ * AcceptOwnershipTransfer::grantProTime().
  */
 class GrantInternalPro
 {
@@ -67,6 +73,7 @@ class GrantInternalPro
         $subscription->status = 'active';
         $subscription->current_period_end = Carbon::parse(self::PERIOD_END);
         $subscription->external_ref = 'internal';
+        $subscription->grace_until = null;
 
         $subscription->save();
     }

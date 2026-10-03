@@ -3,6 +3,7 @@
 use App\Actions\Auth\CreatesUserWithPersonalAccount;
 use App\Actions\Plan\GrantInternalPro;
 use App\Models\Account;
+use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 
@@ -76,6 +77,25 @@ it('är idempotent', function () {
     $action->handle($user);
 
     expect(Subscription::query()->where('account_id', $konto->id)->count())->toBe(1);
+});
+
+it('nollställer fristen på ett konto som nedgraderats tidigare', function () {
+    [$user, $konto] = interntProKonto('tony@manjo.me');
+    $pro = Plan::query()->where('code', 'pro')->firstOrFail();
+
+    // StartDowngrade har satt fristen: raden är cancelled med grace_until tre
+    // månader fram. ReadPlanUsage räknar graceDaysLeft ur den, så ett Pro-konto
+    // med fristen kvar visar en nedräkning av något som inte gäller.
+    Subscription::factory()->for($konto)->for($pro)->cancelled()->create([
+        'grace_until' => now()->addMonths(3),
+    ]);
+
+    (new GrantInternalPro)->handle($user);
+
+    $subscription = Subscription::query()->where('account_id', $konto->id)->firstOrFail();
+
+    expect($subscription->grace_until)->toBeNull();
+    expect($konto->fresh()->currentPlan()->code)->toBe('pro');
 });
 
 it('ger en befintlig intern användare Pro genom migrationen', function () {
