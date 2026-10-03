@@ -26,8 +26,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  * kommer ur servern — items inom omfånget och uppladdarna bakom de bilagor
  * användaren redan ser — och är den ena listan tom ritas dess fält inte alls:
  * ett filter utan alternativ är brus, och en mottagare ska inte kunna filtrera
- * på något hon inte ser. `kind` och `sort` ritas alltid: deras värden är fasta
- * och en träffbild utan bilder är ett giltigt svar och inte ett tomt fält.
+ * på något hon inte ser. `kind` ritas alltid: dess värden är fasta och en
+ * träffbild utan bilder är ett giltigt svar och inte ett tomt fält.
  *
  * **Typens tre ord är `item.attachment.kind.*` och inga kopior.** Samma ord
  * som raden bär i listan, en nyckel — två uppräkningar av samma tre typer
@@ -37,8 +37,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * en tom datumruta och `sort=newest` — förvalet — skickas inte: en URL utan
  * brus går att läsa och dela, och `?kind=` och ingen `kind` är samma fråga.
  *
- * **"Rensa" rensar ALLT och behåller ingenting** — den går till samma adress
- * utan en enda parameter, vilket är samma sak som ett tomt filter.
+ * **Sorteringen har flyttat ut** (M24 · Beslut 6). Fältet står i verktygsraden
+ * över listan, bredvid lägesväxeln, för det är en fråga om LISTAN och inte ett
+ * filter på den — men den är fortfarande serverns och bärs vidare av varje
+ * anrop härifrån: `apply()` skickar `filter.sort` när den inte är `newest`,
+ * och "Rensa" rör den inte.
+ *
+ * **"Rensa" rensar filtren och behåller sorteringen** — den går till samma
+ * adress utan en enda filterparameter, vilket är samma sak som ett tomt
+ * filter, men med `sort` kvar så ordningen användaren valde står kvar.
  *
  * **Ingen sträng i JavaScript** (issue 52 · [[ADR-0013 Språk och i18n]]):
  * varje text kommer ur `t()` under `container.documents.*`.
@@ -69,15 +76,11 @@ const { t } = useTranslations();
  */
 const kinds = ['image', 'document', 'other'];
 
-/* Sorteringarna, i samma ordning som serverns `SORTS`. */
-const sorts = ['newest', 'oldest', 'name', 'size'];
-
 const kind = ref('');
 const item = ref('');
 const uploader = ref('');
 const from = ref('');
 const to = ref('');
-const sort = ref('newest');
 
 /*
  * Vänteläget för hela raden (issue 68a § Beslut 4 och 5): submit och "rensa"
@@ -95,7 +98,6 @@ watch(
         uploader.value = filter.uploader ?? '';
         from.value = filter.from ?? '';
         to.value = filter.to ?? '';
-        sort.value = filter.sort ?? 'newest';
     },
     { immediate: true, deep: true },
 );
@@ -132,9 +134,11 @@ function apply() {
         params.to = to.value;
     }
 
-    // Förvalet skrivs inte ut: `sort=newest` är samma fråga som ingen `sort`.
-    if (sort.value !== 'newest') {
-        params.sort = sort.value;
+    // Sorteringen kommer ur `filter`-proppen och inte ur ett eget fält: den
+    // väljs i verktygsraden, och förvalet skrivs inte ut — `sort=newest` är
+    // samma fråga som ingen `sort`.
+    if (props.filter.sort !== 'newest') {
+        params.sort = props.filter.sort;
     }
 
     router.get(`/containers/${props.containerUlid}/documents`, params, {
@@ -145,14 +149,14 @@ function apply() {
     });
 }
 
-/* Rensningen: samma anrop utan en enda parameter. */
+/* Rensningen: samma anrop utan en enda filterparameter. Sorteringen rörs
+   inte — den väljs i verktygsraden och står kvar över en rensning. */
 function clear() {
     kind.value = '';
     item.value = '';
     uploader.value = '';
     from.value = '';
     to.value = '';
-    sort.value = 'newest';
 
     apply();
 }
@@ -259,24 +263,6 @@ function clear() {
                 :disabled="pending"
                 class="rounded border border-slate-300 bg-white px-3 py-2 font-normal"
             >
-        </label>
-
-        <label
-            for="document-filter-sort"
-            class="flex flex-col gap-1 text-sm font-medium text-slate-800"
-        >
-            {{ t('container.documents.sort_label') }}
-            <select
-                id="document-filter-sort"
-                v-model="sort"
-                name="sort"
-                :disabled="pending"
-                class="rounded border border-slate-300 bg-white px-3 py-2 font-normal"
-            >
-                <option v-for="value in sorts" :key="value" :value="value">
-                    {{ t(`container.documents.sort_${value}`) }}
-                </option>
-            </select>
         </label>
 
         <button

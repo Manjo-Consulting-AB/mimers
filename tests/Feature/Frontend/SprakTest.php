@@ -849,6 +849,10 @@ it('hämtar dokumentflikens strängar ur ui.php', function () {
         'container.documents.uploads',
         'container.documents.of',
         'container.documents.unlimited',
+        // M24 (fynd 2026-10-03): underraden, procenten och öppningens datum.
+        'container.documents.subheading',
+        'container.documents.percent',
+        'container.documents.opened',
     ] as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
     }

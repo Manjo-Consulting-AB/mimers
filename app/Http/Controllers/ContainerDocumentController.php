@@ -310,10 +310,18 @@ class ContainerDocumentController extends Controller
     /**
      * De senast öppnade raderna, i den form panelen ritar.
      *
-     * `attachment` och dess `item` är eager-laddade av ListRecentOpens, så
-     * raden kostar ingen fråga. `opened_at` följer med som ISO 8601 och
-     * formateras av vyn — samma regel som `created_at` i resurserna: servern
-     * skickar ögonblicket, klienten formulerar ordet.
+     * `attachment`, dess `item` och dess `storedFile.derivatives` är
+     * eager-laddade av ListRecentOpens, så raden kostar ingen fråga.
+     * `opened_at` följer med som ISO 8601 och formateras av vyn — samma regel
+     * som `created_at` i resurserna: servern skickar ögonblicket, klienten
+     * formulerar ordet.
+     *
+     * `hasThumb` är samma svar som `recentImages()` ger och samma regel som
+     * `variants` i itemvyn: en miniatyr ritas bara när `thumb`-varianten
+     * FINNS, för `?variant=thumb` mot en bilaga utan derivat svarar 404
+     * (issue 61b § Beslut 1). Vyn ska aldrig gissa, och den ska inte heller
+     * känna till derivattabellen. En miniatyr i panelen skriver ingen
+     * öppning — det gör bara leveransrutten.
      *
      * @param  Collection<int, AttachmentOpen>  $opens
      * @return list<array<string, mixed>>
@@ -324,6 +332,7 @@ class ContainerDocumentController extends Controller
             ->map(fn (AttachmentOpen $open): array => [
                 'ulid' => (string) $open->attachment->ulid,
                 'filename' => (string) $open->attachment->filename,
+                'hasThumb' => $open->attachment->storedFile->derivatives->contains('variant', 'thumb'),
                 'opened_at' => $open->opened_at->toIso8601String(),
                 'item' => [
                     'ulid' => (string) $open->attachment->item->ulid,
