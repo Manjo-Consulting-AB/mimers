@@ -35,6 +35,10 @@ _ide_helper.php
 # Deploy-artefakter
 release.tar.gz
 
+# Versionen skrivs av bygget till artefakten (staging.yml § Paketera), inte
+# incheckad: den hör till releasen och inte till källkoden.
+/VERSION
+
 # OS
 .DS_Store
 Thumbs.db

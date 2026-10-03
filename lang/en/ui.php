@@ -15,6 +15,7 @@
 return [
     'common' => [
         'brand' => 'Mimers',
+        'footer' => '© :year Manjo Consulting AB · Mimers :version',
         'tagline' => 'The place for everything you own, use or work with.',
         'to_dashboard' => 'Go to the dashboard',
         'home' => 'Back to the start page',

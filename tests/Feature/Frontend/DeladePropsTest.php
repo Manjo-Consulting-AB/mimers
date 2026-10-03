@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Support\Frontend\ActiveContainer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
@@ -279,4 +280,61 @@ it('delar klockans siffra men aldrig listorna på en vanlig sidladdning', functi
         ->missing('recentVisits')
         ->missing('shellContainers')
     );
+});
+
+/*
+ * Issue 655 · Footerns version, se HandleInertiaRequests::share(),
+ * config/app.php § version, lang/en/ui.php § common.footer och
+ * resources/js/layouts/AppLayout.vue § <footer>.
+ *
+ * Proppen `app` bär två skalära värden: versionen ur filen `VERSION` som
+ * bygget skriver till artefakten, och serverns årtal. Formen prövas här —
+ * att versionen kommer ur configen (och därmed ur filen, inte ur en hårdkodad
+ * text) och att footern skriver båda. Att själva filen skrivs ligger i
+ * paketeringen, och det sista provet läser workflowen i stället för att köra
+ * den.
+ */
+it('delar versionen ur filen VERSION', function () {
+    withoutVite();
+
+    config(['app.version' => 'v9.9.9']);
+
+    $account = Account::factory()->create();
+    $user = User::factory()->create();
+    $account->users()->attach($user, ['role' => 'owner']);
+
+    actingAs($user)->get('/dashboard')->assertInertia(fn (AssertableInertia $page) => $page
+        ->where('app.version', 'v9.9.9')
+        ->where('app.year', (int) now()->format('Y'))
+    );
+});
+
+it('faller tillbaka på dev utan VERSION-fil', function () {
+    // Källkodsprov och inte ett anrop: grenen nås bara när filen saknas, och
+    // filen får inte finnas i repot — den skrivs av bygget och ligger i
+    // .gitignore. Provet låser båda: att configen läser filen och har `dev`
+    // som fallback, och att ingen råkat checka in en VERSION.
+    $config = File::get(config_path('app.php'));
+
+    expect($config)->toContain("base_path('VERSION')");
+    expect($config)->toContain("'dev'");
+    expect(file_exists(base_path('VERSION')))->toBeFalse();
+});
+
+it('skriver footern med bolaget och versionen', function () {
+    $mening = trans('ui.common.footer', ['year' => 2026, 'version' => 'v0.18.0'], 'en');
+
+    // Hela meningen och inte bara nyckeln: en saknad nyckel hade gett
+    // tillbaka `ui.common.footer` och ett prov på `not->toBe(nyckeln)` hade
+    // passerat även om versen tappat versionen.
+    expect($mening)->toBe('© 2026 Manjo Consulting AB · Mimers v0.18.0');
+
+    expect(File::get(resource_path('js/layouts/AppLayout.vue')))->toContain('common.footer');
+});
+
+it('skriver taggen till VERSION i paketeringen', function () {
+    $workflow = File::get(base_path('.github/workflows/staging.yml'));
+
+    expect($workflow)->toContain('> VERSION');
+    expect($workflow)->toContain('GITHUB_REF_NAME');
 });

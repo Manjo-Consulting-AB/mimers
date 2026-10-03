@@ -60,6 +60,17 @@ jobs:
 
       - name: Paketera
         run: |
+          # Versionen skrivs till artefakten FÖRE tar, så att den följer med i
+          # arkivet. Staging körs på versionstaggen (`v*`), och produktionen
+          # befordrar samma artefakt — båda miljöerna visar därför taggen.
+          # `workflow_dispatch` på en otaggad commit får en dev-version i
+          # stället. Footern läser filen via config (config/app.php).
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "$GITHUB_REF_NAME" > VERSION
+          else
+            echo "dev-${GITHUB_SHA::7}" > VERSION
+          fi
+
           # Arkivet skrivs utanför trädet och flyttas in efteråt. Skrivs det
           # direkt i katalogen det läser ändras "." medan tar läser den, och
           # GNU tar avslutar med kod 1 och "file changed as we read it". Det
