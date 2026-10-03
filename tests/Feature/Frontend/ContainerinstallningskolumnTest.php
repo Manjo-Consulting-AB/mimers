@@ -208,12 +208,15 @@ it('ritar sidokolumnen ur containerSettingsSections och skickar propsen vidare',
  * Klart när: inställningskolumnen når alla sektioner, inställningarna först
  * (issue 170).
  *
- * **Inställningssidan lämnade flikraden** ([[ADR-0050 Desktopdesignen]] § 3),
- * och vägen dit går nu genom hjältens *Redigera container*. Kolumnen är därför
- * den enda förteckningen över containerns övriga ytor, och två saker måste
- * hålla: hubben står FÖRST — annars ligger vägen till de sex sektioner en
- * läsare når bakom tre andra rader — och ingen rad har tappats mellan ytorna.
- * Flikarna och kolumnen tillsammans är exakt `containerSections`.
+ * **Inställningssidan lämnade flikraden** ([[ADR-0050 Desktopdesignen]] § 3)
+ * och är tillbaka i den sedan issue 646, men kolumnen är fortfarande den
+ * förteckning över containerns övriga ytor som hubben hänger under — och den
+ * enda vägen dit under `md:`. Två saker måste hålla: hubben står FÖRST —
+ * annars ligger vägen till de sex sektioner en läsare når bakom tre andra
+ * rader — och ingen rad har tappats mellan ytorna. Flikarna och kolumnen
+ * täcker tillsammans `containerSections`, med `settings` som enda post på
+ * båda ytorna (issue 646: samma post är både kolumnens första rad och
+ * flikradens sista).
  *
  * Listorna läses i node och inte som råtext, samma grepp som
  * ContainerflikTest använder: modulen är ren, och en assertion på en avskrift
@@ -232,7 +235,13 @@ it('når alla sektioner från inställningskolumnen, inställningarna först', f
     // ytorna eller saknas på båda.
     $flikar = array_values(array_filter($flikar, fn (string $nyckel): bool => $nyckel !== 'overview'));
 
-    $täckta = [...$flikar, ...$kolumn];
+    // `settings` är UNDANTAGET (issue 646): posten står med flit både först i
+    // kolumnen och sist i flikraden — hubben och fliken är samma yta och samma
+    // adress. Dubblettkontrollen gäller därför de övriga, medan täckningen
+    // räknar `settings` en gång, ur kolumnen.
+    $dubbletter = array_values(array_filter($flikar, fn (string $nyckel): bool => $nyckel !== 'settings'));
+
+    $täckta = [...$dubbletter, ...$kolumn];
 
     expect(array_unique($täckta))->toBe($täckta, 'en sektion ligger på båda ytorna');
 

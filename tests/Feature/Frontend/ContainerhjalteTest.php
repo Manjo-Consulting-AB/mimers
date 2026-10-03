@@ -5,7 +5,6 @@ use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\User;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\Lang;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
@@ -20,9 +19,11 @@ use function Pest\Laravel\withoutVite;
  *
  * **Filen prövar både ytan och propparna.** Hjälten är en form som ritas ur
  * containern — bilden, arten, namnet och hela beskrivningen — och den formen
- * går att läsa ur källkoden; vilken sida som ber om vilken hjälte, och vem som
- * får se *Redigera container*, är däremot svar som kommer från servern och
- * prövas genom rutterna.
+ * går att läsa ur källkoden; vilken sida som ber om vilken hjälte, och vad
+ * `can.update` svarar, är däremot svar som kommer från servern och prövas
+ * genom rutterna. Sedan issue 646 ritar hjälten ingen väg till
+ * inställningssidan — den ligger i flikraden — och `can`-flaggan bor kvar i
+ * skalet för pennan.
  *
  * **Det som INTE prövas här** är det som kräver en webbläsare: att hjälten ser
  * ut som `container.jpeg` och `kostnader.png`, att bilden beskärs rätt i sin
@@ -308,32 +309,40 @@ it('utelämnar undertiteln när beskrivningen saknas', function () {
 });
 
 /*
- * Klart när: *Redigera container* leder till inställningssidan och ritas bara
- * för den som får ändra.
+ * Klart när: hjälten ritar ingen väg till inställningssidan (issue 646).
  *
- * Knappen är flikradens ersättning för raden *Inställningar* (ADR-0050 § 3),
- * och adressen är inställningssidans egen rutt — inte en sträng som råkar se
- * likadan ut. Flaggan är presentation: `ContainerPolicy::update` prövas på
- * nytt av rutten, och en läsare får `false` på varje flik som bär hjälten.
+ * Hjälten bar två grenar till `/containers/{ulid}/edit` — *Redigera container*
+ * för den som får ändra (ADR-0050 § 3) och länken *Inställningar* för läsaren.
+ * Båda togs bort i issue 646, som i stället lade *Settings* i flikraden för
+ * alla som når containern: fliken är samma adress och samma `view`-grindade
+ * sida, och två vägar till samma val var just det ADR-0050 § 3 ville bort.
+ *
+ * Provet fäster frånvaron i källkoden och att sidan själv står kvar: både
+ * ägaren och läsaren får 200 på adressen — vägen dit är flikens och skalets,
+ * inte hjältens — och läsaren nekas fortfarande `PATCH`, för flaggan var
+ * presentation och aldrig grinden.
  */
-it('låter Redigera container leda till inställningssidan, bara för den som får ändra', function () {
+it('ritar ingen redigeringslänk i hjälten', function () {
     withoutVite();
 
     [, $ägare, $container] = hjalteKontext();
     $läsare = hjalteLasare($container);
 
-    $adress = route('containers.edit', $container, false);
-
-    expect($adress)->toBe("/containers/{$container->ulid}/edit");
-
     $hjalte = hjalteHjalten();
 
-    // Adressen byggs ur containerns ULID, och knappen ritas ur `can.update`.
-    expect($hjalte)->toContain('`/containers/${container.ulid}/edit`')
-        ->and($hjalte)->toContain('v-if="canUpdate"')
-        ->and($hjalte)->toContain("t('container.hero.edit')");
+    expect($hjalte)->not->toContain('/edit');
+    expect($hjalte)->not->toContain('container.hero.edit');
 
-    // Översikten: ägaren ser flaggan sann, läsaren falsk.
+    // Ingen av dem tappar vägen dit: sidan svarar 200 för båda, och fliken i
+    // raden (ContainerflikTest, FlikradTest) och skalets rad under `md:`
+    // (provet nedanför) bär den.
+    $adress = "/containers/{$container->ulid}/edit";
+
+    actingAs($ägare)->get($adress)->assertOk();
+    actingAs($läsare)->get($adress)->assertOk();
+
+    // Flaggan finns kvar och skiljer dem åt på översikten — den styr pennan i
+    // skalets topprad, som är en annan väg till samma val.
     actingAs($ägare)->get("/containers/{$container->ulid}")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', true));
@@ -342,16 +351,12 @@ it('låter Redigera container leda till inställningssidan, bara för den som f�
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
 
-    // Och läsaren nekas skrivningen rutten förmedlar, som varje annan gång
-    // flaggan är presentation.
+    // Och läsaren nekas fortfarande skrivningen, som varje annan gång flaggan
+    // är presentation.
     actingAs($läsare)->patch("/containers/{$container->ulid}", ['name' => 'Tjuvnamn'])
         ->assertForbidden();
 
     expect($container->fresh()->name)->toBe($container->name);
-
-    // Meningen finns i katalogen — `t()` skriver nyckeln själv när uppslaget
-    // misslyckas, och en knapp hade då hetat `container.hero.edit`.
-    expect(Lang::get('ui.container.hero.edit', [], 'en'))->not->toBe('ui.container.hero.edit');
 });
 
 /*
@@ -381,50 +386,6 @@ it('bär can.update i itemlistan och historiken', function () {
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
     }
-});
-
-/*
- * Klart när: en läsare når inställningssidan genom länken *Inställningar*.
- *
- * Flikraden bar raden fram till issue 170, och *Redigera container* lovar en
- * läsare något hen inte får göra. [[ADR-0042 Designsystemet]] § Konsekvenser
- * väger tyngre än att ADR-0050 § 3 inte nämner läsaren: sidan är `view`-grindad,
- * och den som når containern ska hitta till dess sju sektioner. Hjälten ritar
- * därför två grenar på samma plats och samma adress — knappen för den som får
- * ändra, länken för den som bara läser — och ordet är sektionens eget.
- */
-it('låter en läsare nå inställningssidan genom länken Inställningar', function () {
-    withoutVite();
-
-    [, $ägare, $container] = hjalteKontext();
-    $läsare = hjalteLasare($container);
-
-    actingAs($ägare)->get("/containers/{$container->ulid}")
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', true));
-
-    actingAs($läsare)->get("/containers/{$container->ulid}")
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
-
-    $hjalte = hjalteHjalten();
-
-    // Den som får ändra ser knappen; den som bara läser ser den inte.
-    expect($hjalte)->toMatch(
-        '#<Link\b[^>]*v-if="canUpdate"[^>]*>\s*\{\{ t\(\'container\.hero\.edit\'\) \}\}\s*</Link>#s',
-        '*Redigera container* ritas inte ur can.update',
-    );
-
-    // Läsarens gren är en länk till samma adress, med sektionens egen nyckel —
-    // ingen ny sträng i katalogen (`t()` skriver nyckeln själv när uppslaget
-    // misslyckas).
-    expect($hjalte)->toMatch(
-        '#<Link\b[^>]*v-else[^>]*>\s*\{\{ t\(\'container\.nav\.settings\'\) \}\}\s*</Link>#s',
-        'läsaren har ingen väg till inställningssidan',
-    );
-
-    expect($hjalte)->toContain('`/containers/${container.ulid}/edit`')
-        ->and(Lang::get('ui.container.nav.settings', [], 'en'))->not->toBe('ui.container.nav.settings');
 });
 
 /*
