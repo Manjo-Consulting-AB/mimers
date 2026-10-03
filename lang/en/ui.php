@@ -3863,4 +3863,21 @@ return [
             'back' => 'Back to the containers',
         ],
     ],
+
+    /*
+     * Issue 202 · Informationssidorna — /about, /privacy, /terms och /help.
+     *
+     * Rubriken per sida och EN platshållare för brödtexten, som är densamma på
+     * alla fyra tills de riktiga texterna skrivs. Sidan
+     * resources/js/pages/Info.vue slår upp `info.<sida>.title`, så en femte
+     * sida är en ny nyckel här och en ny rad i ruttlistan — inte en ny fil.
+     * Nycklarna följer adresserna i routes/web.php.
+     */
+    'info' => [
+        'about' => ['title' => 'About Mimers'],
+        'privacy' => ['title' => 'Privacy policy'],
+        'terms' => ['title' => 'Terms of use'],
+        'help' => ['title' => 'Help'],
+        'placeholder' => 'This page is coming soon.',
+    ],
 ];
