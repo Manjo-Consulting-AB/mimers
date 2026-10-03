@@ -2992,9 +2992,9 @@ return [
         // resources/js/components/schedulePresentation.js picks by the number,
         // the same rule as the days in 62a.
         'schedule' => [
-            'heading' => 'Schedules',
-            'empty' => 'The item has no schedules.',
-            'add' => 'New schedule',
+            'heading' => 'Tasks',
+            'empty' => 'The item has no tasks.',
+            'add' => 'New task',
             'back' => 'Back to the item',
 
             // The next due date is the date of the OPEN occurrence (decision
@@ -3090,8 +3090,8 @@ return [
             ],
 
             'create' => [
-                'title' => 'New schedule',
-                'heading' => 'New schedule',
+                'title' => 'New task',
+                'heading' => 'New task',
                 'submit' => 'Create',
             ],
 
