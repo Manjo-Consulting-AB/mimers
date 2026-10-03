@@ -53,6 +53,12 @@ it('ritar procenten bredvid lagringsstapeln', function () {
     expect($bar)->toContain('container.documents.percent')
         ->toContain('container.documents.uploads');
 
+    // Kontot står UNDER stapeln (Beslut 3), inte över den: raden kommer efter
+    // procenten i källan. Utan tak finns ingen stapel, och raden hamnar då
+    // direkt under meningen — kontot syns ändå.
+    expect(strpos($bar, 'container.documents.uploads'))
+        ->toBeGreaterThan(strpos($bar, 'container.documents.percent'));
+
     expect(Lang::get('ui.container.documents.percent', ['percent' => 10], 'en'))->toBe('10%');
 });
 

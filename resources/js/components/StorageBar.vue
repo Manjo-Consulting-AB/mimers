@@ -93,11 +93,7 @@ const label = computed(() => (limit.value === null
             </svg>
 
             <div class="min-w-0 flex-1">
-                <p class="text-meta text-ink-subtle">
-                    {{ t('container.documents.uploads', { account: storage.account.name }) }}
-                </p>
-
-                <p class="mt-1 text-body font-medium text-ink">{{ label }}</p>
+                <p class="text-body font-medium text-ink">{{ label }}</p>
 
                 <!-- Stapeln och procenten ritas bara när det finns ett tak att
                      fylla. Båda är `aria-hidden`: meningen ovanför säger redan
@@ -117,6 +113,12 @@ const label = computed(() => (limit.value === null
                         {{ t('container.documents.percent', { percent: storage.percent }) }}
                     </span>
                 </div>
+
+                <!-- Kontot står under stapeln (§ 15). Utan tak finns ingen
+                     stapel, och raden hamnar då direkt under meningen. -->
+                <p class="mt-2 text-meta text-ink-subtle">
+                    {{ t('container.documents.uploads', { account: storage.account.name }) }}
+                </p>
             </div>
         </div>
     </section>
