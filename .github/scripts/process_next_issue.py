@@ -13,7 +13,7 @@ Direkt därefter körs `atgarda:arkitektsvar`: Tony sätter den etiketten själv
 han bedömer att ett postat arkitektsvar ska genomföras, och åtgärdsloopen kör
 det svaret som fynd och mergar automatiskt vid godkänt. Se atgarda_arkitektsvar().
 
-Körs i en isolerad git worktree (.claude/worktrees/issue-<n>), inte i huvudarbetsträdet -
+Körs i en isolerad git worktree (../mimers-worktrees/<gren>), inte i huvudarbetsträdet -
 se ADR-0026: Docker valdes bort just för att batch-agenter redan körs isolerat i worktrees.
 """
 import subprocess
@@ -70,7 +70,9 @@ def avbryt_vid_peak():
         sys.exit(0)
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-WORKTREE_BASE = os.path.join(REPO_ROOT, ".claude", "worktrees")
+# Syskon till repot, inte under det: Claude Code läser CLAUDE.md i varje katalog
+# ovanför arbetskatalogen, så en worktree inuti huvudcheckouten ger agenten två versioner.
+WORKTREE_BASE = os.path.join(os.path.dirname(REPO_ROOT), "mimers-worktrees")
 LOCK_PATH = os.path.join(REPO_ROOT, ".claude", "process-next-issue.lock")
 GH_REPO = "Manjo-Consulting-AB/mimers"
 
@@ -275,7 +277,7 @@ def underhall_objektlagret(tvinga=False):
     Körs medan låset hålls och innan någon worktree finns, alltså utan
     samtidiga git-processer. `git gc` utan `--prune=now` behåller
     onåbara objekt i två veckor och räknar alla worktrees HEAD som rötter,
-    så pågående arbete i .claude/worktrees/ kan inte skadas.
+    så pågående arbete i mimers-worktrees/ kan inte skadas.
     """
     losa = rakna_losa_objekt()
     if not tvinga and losa < LOSA_OBJEKT_TAK:
