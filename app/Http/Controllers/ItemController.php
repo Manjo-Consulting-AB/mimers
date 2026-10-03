@@ -882,6 +882,21 @@ class ItemController extends Controller
             // linje som `categories`, `variants` och `paths`: `ItemResource` är
             // `/api`:s format och har inte bett om fältet.
             ...($auditRows === null ? [] : ['history' => $auditRows]),
+
+            // Översiktens händelsepanel (issue 213 · [[ADR-0050
+            // Desktopdesignen]]): itemets fem senaste händelser, ur samma
+            // action som historikfliken läser genom men med översiktens gräns
+            // — containerns översikt visar samma panel med samma tal, och
+            // gränsen är dess `ACTIVITY_LIMIT` och inte en ny konstant.
+            //
+            // **Proppen finns BARA utan `tab`**, samma konstruktion som
+            // `history` ovan och av samma skäl: den som öppnar itemet för att
+            // se bilagorna ska inte betala för historiken. En vald flik (också
+            // `history`) lämnar nyckeln helt — nyckeln saknas och ingen fråga
+            // ställs.
+            ...($request->query('tab') === null
+                ? ['events' => $presentAuditEvents->handle($listAuditEvents->forItem($user, $item, ContainerController::ACTIVITY_LIMIT))]
+                : []),
         ]);
     }
 
