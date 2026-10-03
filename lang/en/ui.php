@@ -215,8 +215,64 @@ return [
     'auth' => [
         'login' => [
             'title' => 'Log in',
-            'heading' => 'Log in',
+            'heading' => 'Welcome back',
+            'subheading' => 'Log in to your account to continue.',
+            'forgot' => 'Forgot your password?',
+            'no_account' => 'Don\'t have an account?',
             'submit' => 'Log in',
+        ],
+
+        /*
+         * Issue 203 · Inloggningssidan i den nya formen, se
+         * docs/Design/frontpage.png. Vänsterkolumnen på `/login` ritar bara
+         * formen — Googles och Apples inloggning, språkväljaren, fotot,
+         * raden *Används för* och rutan om molnlagringen finns inte i koden
+         * och har därför ingen text här (Beslut 6). Texten är engelsk.
+         *
+         * **`body` avviker från issuens ordlista med flit.** Issuen föreskrev
+         * mockupens mening ordagrant — *"whether it is a boat, a caravan, a
+         * cottage, a car or a project"* — men den namnger fordon, och
+         * [[ADR-0033 Produktens omfång]] § Beslut förbjuder det i varje text
+         * en ny användare möter: *"Tomma tillstånd och onboarding bär
+         * bredden. Den första skärmen en ny användare möter får inte be henne
+         * lägga till sin båt."* `/login` är just den skärmen. Regeln vaktas av
+         * SprakTest *"beskriver produkten generiskt, utan fordon i copyn"*,
+         * som issuen samtidigt kräver grön utan ändring — och där vinner
+         * acceptanskriteriet över exempeltexten (AGENTS.md). Meningen nedan
+         * bär i stället ADR-0033:s egen formulering, "the things you own, use
+         * or work with", och listan av dokument, servicehistorik, uppgifter
+         * och kostnader står kvar.
+         */
+        'landing' => [
+            'heading' => 'Everything in one place for what you',
+            'heading_accent' => 'own, use or work with.',
+            'body' => 'Mimers helps you gather and keep track of information about the things you own, use or work with — documents, service history, tasks, costs and everything else.',
+
+            'features' => [
+                'documents' => [
+                    'title' => 'Gather every document',
+                    'body' => 'Manuals, receipts, pictures and more.',
+                ],
+                'maintenance' => [
+                    'title' => 'Stay on top of maintenance',
+                    'body' => 'Plan, get reminders and keep a record.',
+                ],
+                'costs' => [
+                    'title' => 'Track costs',
+                    'body' => 'See what it costs — per year, category or item.',
+                ],
+                'relations' => [
+                    'title' => 'See the connections',
+                    'body' => 'Link related things together in a simple way.',
+                ],
+            ],
+
+            'links' => [
+                'about' => 'About Mimers',
+                'privacy' => 'Privacy policy',
+                'terms' => 'Terms of use',
+                'help' => 'Help',
+            ],
         ],
 
         'code' => [
