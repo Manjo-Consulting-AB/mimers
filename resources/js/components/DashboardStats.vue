@@ -1,4 +1,5 @@
 <script setup>
+import { Link } from '@inertiajs/vue3';
 import UiStat from './UiStat.vue';
 import { formatAmount } from './CostDonut.vue';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -32,6 +33,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * inte inuti den — UiStat ligger utanför den här issuen ruta, och en tredje
  * rad i en delad yta är ett beslut om designsystemet och inte om dashboarden.
  *
+ * **Brickorna är genvägar** (fynd från testarna 2026-10-03, issue 654):
+ * containerbrickan leder till `/containers` och uppgiftsbrickan till `/tasks` —
+ * samma lista som talet är hämtat ur. Länken bor här och inte i UiStat, så att
+ * containerns översikt kan använda samma tuta olänkad. Den röda *Overdue*-raden
+ * står kvar utanför länken: den är en underrad till talet, inte en egen ingång.
+ * Kostnadsbrickan länkas inte — det finns ingen sida för de totala kostnaderna
+ * än.
+ *
  * **Ingen sträng står i filen** (issue 52 · [[ADR-0013 Språk och i18n]]): varje
  * text kommer ur `t()` med en nyckel under `dashboard.stats.*`.
  */
@@ -47,10 +56,20 @@ const { t } = useTranslations();
 
 <template>
     <div class="flex flex-wrap items-start gap-4">
-        <UiStat :value="props.stats.containers" :label="t('dashboard.stats.containers')" />
+        <Link
+            href="/containers"
+            class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+        >
+            <UiStat :value="props.stats.containers" :label="t('dashboard.stats.containers')" />
+        </Link>
 
         <div class="flex flex-col gap-1">
-            <UiStat :value="props.stats.tasks" :label="t('dashboard.stats.tasks')" />
+            <Link
+                href="/tasks"
+                class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                <UiStat :value="props.stats.tasks" :label="t('dashboard.stats.tasks')" />
+            </Link>
 
             <p class="text-meta text-danger">
                 {{ t('dashboard.stats.overdue', { count: props.stats.overdue }) }}

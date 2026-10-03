@@ -39,6 +39,8 @@ use function Pest\Laravel\withoutVite;
  *    får en egen rubrik, en art med en container hamnar i högen.
  * 5. **Frågekostnaden är konstant oberoende av antalet containrar** (issue 70
  *    § Beslut 2).
+ * 6. **Brickorna är genvägar** (issue 654): container- och uppgiftsbrickan
+ *    länkar till listan bakom talet, kostnadsbrickan gör det inte.
  *
  * Hjälparna har prefixet `bricka` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
@@ -526,4 +528,46 @@ it('kostar ett konstant antal frågor oberoende av antalet containrar', function
     expect($medTio)->toBe($medEn);
 
     Carbon::setTestNow();
+});
+
+// --- länkarna --------------------------------------------------------------
+
+/*
+ * Klart när: containerbrickan länkar till containerlistan och uppgiftsbrickan
+ * till todo-vyn.
+ *
+ * Adresserna binds i Vue-filen till ruttabellen — en flyttad rutt faller här
+ * och inte först i webbläsaren. Talen kommer ur samma två listor som punkterna
+ * 1 och 2, så genvägen leder till det provet redan har jämfört brickan mot.
+ */
+it('länkar containerbrickan till containerlistan och uppgiftsbrickan till todo-vyn', function () {
+    expect(route('containers.index', [], false))->toBe('/containers')
+        ->and(route('tasks', [], false))->toBe('/tasks');
+
+    $brickor = File::get(resource_path('js/components/DashboardStats.vue'));
+
+    expect($brickor)->toContain('href="/containers"')
+        ->toContain('href="/tasks"')
+        ->toContain('class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
+});
+
+/*
+ * Klart när: kostnadsbrickan länkas inte.
+ *
+ * Det finns ingen sida för de totala kostnaderna än (issue 654 · Beslut 2), och
+ * en länk dit hade varit ett löfte om en vy som inte finns. Provet läser
+ * kostnadsblocket ur källan och letar efter en `<Link>` i det: blocket fångas
+ * först, så ett mönster som slutat matcha ger ett tomt prov i stället för ett
+ * tyst grönt.
+ */
+it('länkar inte kostnadsbrickan', function () {
+    $brickor = File::get(resource_path('js/components/DashboardStats.vue'));
+
+    preg_match('/<div v-for="cost in props\.costs".*?<\/div>/s', $brickor, $kostnad);
+
+    expect($kostnad)->not->toBeEmpty('kostnadsblocket saknas i DashboardStats.vue');
+
+    $block = $kostnad[0] ?? '';
+
+    expect($block)->not->toContain('<Link');
 });
