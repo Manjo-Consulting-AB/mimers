@@ -198,20 +198,27 @@ it('visar bilden i containerlistan, på dashboardkortet och i toppraden', functi
  * Klart när (issue 681): den begärda varianten ritas om den finns, annars
  * originalet.
  *
- * Regeln bor i `url`-computed, och provet låser den från källan: proppen finns
- * med förvalet `thumb`, valet faller på `props.variant` och går via
- * `variants?.includes(...)`. Den gamla nålen — `includes('thumb')` — är
- * förbjuden, för den band komponenten till miniatyren och lämnade hjälten och
- * korten suddiga (fynd från testarna 2026-10-03).
+ * Regeln flyttade till `coverPresentation.js` i issue 683 § Beslut 1, när
+ * väljaren i arket behövde samma adress. Provet låser den där den bor nu: den
+ * begärda varianten om den finns, annars originalet, och vyn frågar modulen i
+ * stället för att bära en egen formulering. Den gamla nålen —
+ * `includes('thumb')` — är förbjuden, för den band komponenten till miniatyren
+ * och lämnade hjälten och korten suddiga (fynd från testarna 2026-10-03).
  */
 it('väljer den begärda varianten och annars originalet', function () {
+    $modul = File::get(resource_path('js/components/coverPresentation.js'));
     $vy = File::get(resource_path('js/components/ContainerCover.vue'));
 
+    expect($modul)->toContain('cover.variants?.includes(variant)')
+        ->and($modul)->toContain('`/files/${cover.ulid}?variant=${available}`');
+
+    // Vyn: förvalet `thumb` kvar, och regeln hämtas ur modulen.
     expect($vy)->toContain("variant: { type: String, default: 'thumb' }")
-        ->and($vy)->toContain('variants?.includes(props.variant)');
+        ->and($vy)->toContain('coverUrl(props.cover, props.variant)')
+        ->and($vy)->not->toContain('variants?.includes');
 
     // Den gamla regeln, ordagrant: borta.
-    expect($vy)->not->toContain("includes('thumb')");
+    expect($modul.$vy)->not->toContain("includes('thumb')");
 });
 
 /*
@@ -729,4 +736,117 @@ it('sätter och byter bilden genom webbens rutt', function () {
     // Den gamla bilagan är rensad, och bara den nya finns kvar.
     expect(Attachment::withTrashed()->whereKey($pekarPå)->exists())->toBeFalse()
         ->and(Attachment::withTrashed()->count())->toBe(1);
+});
+
+/*
+ * Klart när (issue 683): bilden ritas med fokuspunkten som `object-position`.
+ *
+ * Ett källkodsprov, för det som avgör är att PUNKTEN blir bildens stil och inget
+ * annat. Adressen och variantregeln flyttade till `coverPresentation.js`
+ * (Beslut 1), och komponenten importerar `coverUrl` därifrån — två
+ * formuleringar av samma regel hade glidit isär. `:style` sitter på
+ * `<img>`-taggen, alltså den yta som faktiskt beskär bilden.
+ */
+it('ritar bilden med fokuspunkten som object-position', function () {
+    $vy = File::get(resource_path('js/components/ContainerCover.vue'));
+
+    expect($vy)->toContain("from './coverPresentation.js'")
+        ->and($vy)->toContain('coverUrl')
+        ->and($vy)->toContain('objectPosition')
+        ->and($vy)->toContain('cover?.focus');
+
+    // `<img>`-taggen bär stilen — den här filens enda bild.
+    expect(bildvyTagg('js/components/ContainerCover.vue', 'img'))->toContain(':style');
+});
+
+/*
+ * Klart när (issue 683): arket låter användaren välja fokuspunkten med ett
+ * klick.
+ *
+ * Klicket räknas om till procent ur bildens ruta (`getBoundingClientRect`), och
+ * en knapp som aktiveras med tangentbordet har inga koordinater — `event.detail
+ * === 0` fångar den och lämnar punkten orörd (Beslut 4). Rutten jämförs mot
+ * ruttabellen: `containers.cover.focus` är samma adress controllern svarar på.
+ */
+it('låter arket välja fokuspunkten med ett klick', function () {
+    $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
+
+    expect($ark)->toContain('v-if="container.cover"')
+        ->and($ark)->toContain('@click="chooseFocus"')
+        ->and($ark)->toContain('event.detail === 0')
+        ->and($ark)->toContain('getBoundingClientRect')
+        ->and($ark)->toContain('router.patch')
+        ->and($ark)->toContain('`/containers/${props.container.ulid}/cover/focus`');
+
+    [, , $container] = bildvyKontext();
+
+    expect(route('containers.cover.focus', $container, false))
+        ->toBe("/containers/{$container->ulid}/cover/focus");
+});
+
+/*
+ * Klart när (issue 683): en egen knapp centrerar bilden.
+ *
+ * `{ x: 50, y: 50 }` är mitten, samma punkt servern tolkar som `null`, och
+ * knappen bär sin egen text ur katalogen (Beslut 3).
+ */
+it('centrerar bilden med en egen knapp', function () {
+    $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
+
+    expect($ark)->toContain("t('container.cover.focus_reset')")
+        ->and($ark)->toContain('{ x: 50, y: 50 }');
+});
+
+/*
+ * Klart när (issue 683): väljarens texter kommer ur översättningsfilen.
+ *
+ * Fyra nycklar under `container.cover` (Beslut 5), var och en både i katalogen
+ * och använd i arket — en nyckel som bara finns i den ena är antingen död text
+ * eller en rå sträng i vyn.
+ */
+it('hämtar väljarens texter ur översättningsfilen', function () {
+    $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
+
+    foreach ([
+        'container.cover.focus_heading',
+        'container.cover.focus_help',
+        'container.cover.focus_label',
+        'container.cover.focus_reset',
+    ] as $nyckel) {
+        expect(Lang::has("ui.{$nyckel}"))->toBeTrue("ui.{$nyckel} saknas i lang/en/ui.php");
+        expect($ark)->toContain("t('{$nyckel}')");
+    }
+});
+
+/*
+ * Klart när (issue 683): fokuspunkten delas ända fram till vyn.
+ *
+ * Skrivningen går genom RUTTEN och läses tillbaka ur containerns vy och ur
+ * dashboardens kort — samma `cover.focus` på båda, för formen kommer ur
+ * App\Http\Resources\ContainerResource::cover() och kortet bär samma `cover`
+ * som containerlistan (Beslut 3).
+ */
+it('delar fokuspunkten ända fram till vyn', function () {
+    [$konto, $anvandare, $container] = bildvyKontext();
+
+    bildvySätt($anvandare, $container, $konto);
+
+    actingAs($anvandare)
+        ->patch("/containers/{$container->ulid}/cover/focus", ['x' => 20, 'y' => 70])
+        ->assertRedirect();
+
+    actingAs($anvandare)
+        ->get("/containers/{$container->ulid}")
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Containers/Overview')
+            ->where('container.cover.focus', ['x' => 20, 'y' => 70])
+        );
+
+    actingAs($anvandare)
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('containerGroups.0.containers.0.cover.focus', ['x' => 20, 'y' => 70])
+        );
 });

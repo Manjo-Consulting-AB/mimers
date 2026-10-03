@@ -2,6 +2,7 @@
 import { computed, ref, useId } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import UiSheet from './UiSheet.vue';
+import { coverUrl } from './coverPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -52,6 +53,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * inget val någon gör här, och raden syns därför inte. Servern prövar
  * medlemskapet och nekar ett konto användaren inte är medlem i.
  *
+ * **Väljaren för fokuspunkten ligger i arket** (issue 683 § Beslut 3), efter
+ * *Ta bort bilden* och bara när det finns en bild: klicket sätter den del av
+ * bilden som ska synas när en yta beskär den, och arket är den enda ytan som
+ * har bilden i sin helhet framför sig. Ett klick och inte en dragbar markör —
+ * markören ritas där klicket landade och flyttar sig när propparna laddas om.
+ *
  * Ingen sträng står i filen ([[ADR-0013 Språk och i18n]]): varje text kommer
  * ur `t()` med en nyckel under `container.cover.*`.
  */
@@ -100,6 +107,12 @@ const deviceInput = ref(null);
 
 const pending = ref(false);
 const error = ref(null);
+
+/*
+ * Punkten väljaren ritar markören på. Utan en sparad punkt står markören i
+ * mitten, som är samma sak som `null` betyder på servern.
+ */
+const focus = computed(() => props.container.cover?.focus ?? { x: 50, y: 50 });
 
 function show(event) {
     trigger.value = event.currentTarget ?? null;
@@ -176,6 +189,47 @@ function remove() {
         },
         onSuccess: () => {
             close();
+        },
+    });
+}
+
+/*
+ * Ett klick i bilden sätter fokuspunkten, i procent av bildens ruta.
+ *
+ * `event.detail === 0` är tangentbordet: en knapp som aktiveras med Enter har
+ * inga koordinater, och `clientX`/`clientY` är då 0 — ett klick i övre vänstra
+ * hörnet hade varit svaret på en tangenttryckning.
+ */
+function chooseFocus(event) {
+    if (event.detail === 0) {
+        return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+
+    const x = Math.round((event.clientX - rect.left) / rect.width * 100);
+    const y = Math.round((event.clientY - rect.top) / rect.height * 100);
+
+    setFocus({
+        x: Math.min(100, Math.max(0, x)),
+        y: Math.min(100, Math.max(0, y)),
+    });
+}
+
+/*
+ * Skriver punkten. **Arket stängs inte** (issue 683 § Beslut 4): användaren ser
+ * markören flytta när propparna laddas om och kan klicka igen. Vänteläget är
+ * uppladdningens, så en knapptryckning under ett anrop inte blir två skrivningar
+ * i rad.
+ */
+function setFocus(point) {
+    router.patch(`/containers/${props.container.ulid}/cover/focus`, point, {
+        preserveScroll: true,
+        onStart: () => {
+            pending.value = true;
+        },
+        onFinish: () => {
+            pending.value = false;
         },
     });
 }
@@ -278,6 +332,42 @@ function remove() {
 
             {{ t('container.cover.remove') }}
         </button>
+
+        <!--
+            Fokuspunkten (issue 683 § Beslut 3): hela bilden, ingen beskärning,
+            och ett klick sätter den del som ska synas. Markören ritas där
+            punkten står. Bara när det finns en bild — en punkt på en bild som
+            inte finns är ingenting att välja.
+        -->
+        <template v-if="container.cover">
+            <p class="mt-4 text-sm font-medium text-ink">{{ t('container.cover.focus_heading') }}</p>
+            <p class="text-sm text-ink-subtle">{{ t('container.cover.focus_help') }}</p>
+
+            <button
+                type="button"
+                class="relative mt-2 block w-full overflow-hidden rounded-control"
+                :aria-label="t('container.cover.focus_label')"
+                :disabled="pending"
+                @click="chooseFocus"
+            >
+                <img :src="coverUrl(container.cover, 'medium')" alt="" class="block h-auto w-full">
+
+                <span
+                    aria-hidden="true"
+                    class="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-accent shadow"
+                    :style="{ left: `${focus.x}%`, top: `${focus.y}%` }"
+                ></span>
+            </button>
+
+            <button
+                type="button"
+                class="inline-flex min-h-11 items-center gap-2 rounded-control px-2 text-left text-ink hover:bg-surface-muted"
+                :disabled="pending"
+                @click="setFocus({ x: 50, y: 50 })"
+            >
+                {{ t('container.cover.focus_reset') }}
+            </button>
+        </template>
 
         <!--
             Serverns mening, färdigöversatt: kvoten, storlekstaket eller en

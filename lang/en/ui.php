@@ -1743,6 +1743,14 @@ return [
             'device' => 'Choose from your device',
             'remove' => 'Remove the image',
             'description' => 'The image is the container\'s face. It is shown in the container list, on the dashboard and at the top of the container.',
+
+            // Issue 683 decision 5. Four keys and not one: the picker has a
+            // heading, a line of help, a name for the picture (the button is an
+            // image and carries no visible text), and the reset button's word.
+            'focus_heading' => 'What to show',
+            'focus_help' => 'Click the part of the image that should always be visible.',
+            'focus_label' => 'Choose the focus point',
+            'focus_reset' => 'Center the image',
         ],
 
         // The category tree, see issue 56a decisions 1, 2, 3 and 4.

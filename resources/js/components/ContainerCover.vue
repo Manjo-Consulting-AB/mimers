@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { coverUrl } from './coverPresentation.js';
 
 /*
  * Containerns bild, se [[ADR-0047 Containerns bild]] § Beslut och
@@ -19,18 +20,17 @@ import { computed } from 'vue';
  * ikon i, och att bygga en vore att lägga domänen i koden, precis det
  * [[ADR-0033 Produktens omfång]] förbjöd i artens värdelista.
  *
- * **Den begärda varianten ritas om den finns, annars originalet.** Anroparen
- * säger vilken variant den vill ha (`variant`, förval `thumb`), och `variants`
- * bär de varianter som FINNS (samma form som `variants`-proppen på itemets
- * detaljvy, issue 61b § Beslut 1). Finns den begärda varianten i listan ritas
- * `?variant=<den>`, annars originalet. Ingen kedja `medium` → `thumb`:
- * `App\Jobs\GenerateImageDerivatives` skriver aldrig en variant som vore en
- * förstoring, så en bild utan `medium` är antingen mindre än 1024 px
- * (originalet duger) eller ännu inte bearbetad (originalet är det enda som
- * finns). Ett nyuppladdat foto har inga derivat förrän kön kört, och en
- * `<img>` mot en variant som saknas är en trasig bild (issue 19a § Beslut 5) —
- * originalet är alltid en giltig URL, så fallbacken är ett faktum och ingen
- * gissning.
+ * **Adressen och variantregeln bor i `coverPresentation.js`.** `coverUrl`
+ * väljer den begärda varianten om den finns i `cover.variants` och originalet
+ * annars (issue 681) och bygger alltid appdomänens `/files/{ulid}`. Regeln
+ * flyttade dit i issue 683 § Beslut 1, när väljaren i arket behövde samma
+ * adress: två formuleringar av samma regel hade glidit isär.
+ *
+ * **Fokuspunkten ritas som `object-position`.** `cover.focus` är `{ x, y }` i
+ * procent eller null för mitten (issue 682), och blir bildens `object-position`
+ * — den del användaren pekat ut ligger kvar i rutan när `object-cover` beskär.
+ * Punkten kommer med proppen, så varje yta som ritar komponenten får den utan
+ * att en anropare ändras (issue 683 § Beslut 2).
  *
  * **`medium` på de stora ytorna, `thumb` på de små** (fynd från testarna
  * 2026-10-03, issue 681): hjälten (`ContainerHero.vue`) och korten
@@ -39,11 +39,6 @@ import { computed } from 'vue';
  * och blir suddig. De små fyrkanterna — toppraden i `ContainerLayout.vue`
  * (`h-10 w-10`) och förhandsvisningen i `Containers/Edit.vue` (`h-16 w-16`) —
  * behåller förvalet `thumb` och säger ingenting.
- *
- * **Adressen byggs här och går alltid till appdomänen.** `/files/{ulid}` svarar
- * 302 till en signerad länk på filoriginet, och signaturen präglas där
- * behörigheten prövas (issue 61a § Beslut 1 och 4). Att bygga filoriginets URL
- * i klienten hade varit en andra och osignerad väg till samma byten.
  *
  * **`alt=""` är rätt och inte en glömska.** Bilden är containerns ansikte och
  * står alltid intill containerns namn, som är den text en skärmläsare ska ha;
@@ -61,21 +56,20 @@ const props = defineProps({
     variant: { type: String, default: 'thumb' },
 });
 
-const url = computed(() => {
-    if (! props.cover) {
-        return null;
-    }
+const url = computed(() => coverUrl(props.cover, props.variant));
 
-    const variant = props.cover.variants?.includes(props.variant) ? props.variant : null;
-
-    return variant === null
-        ? `/files/${props.cover.ulid}`
-        : `/files/${props.cover.ulid}?variant=${variant}`;
-});
+/*
+ * Punkten användaren pekat ut, eller null för mitten. `null` (och inte
+ * `{ x: 50, y: 50 }`) när ingen punkt finns: `object-cover` centrerar redan av
+ * sig själv, och en stil som säger "mitten" är samma svar två gånger.
+ */
+const position = computed(() => (props.cover?.focus
+    ? { objectPosition: `${props.cover.focus.x}% ${props.cover.focus.y}%` }
+    : null));
 </script>
 
 <template>
-    <img v-if="url" :src="url" alt="" class="h-full w-full object-cover">
+    <img v-if="url" :src="url" :style="position" alt="" class="h-full w-full object-cover">
 
     <span
         v-else
