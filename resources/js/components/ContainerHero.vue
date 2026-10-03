@@ -1,5 +1,9 @@
 <script setup>
+import { computed } from 'vue';
+import { Link, usePage } from '@inertiajs/vue3';
 import ContainerCover from './ContainerCover.vue';
+import UiStat from './UiStat.vue';
+import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Containerns hjälte, se issue 170 · [[ADR-0050 Desktopdesignen]] § 2–3 och
@@ -23,11 +27,22 @@ import ContainerCover from './ContainerCover.vue';
  * samma yta, och hjälten hade sett ut som två olika ytor beroende på om
  * containern hade en bild.
  *
- * **Talen bärs av den höga hjälten och kommer från sidan.** `stats`-sloten
- * ritas bara när hjälten är `large`, och den fylls av den sida som äger talen
- * (översikten, ur sina `counts`). Hjälten frågar ingenting själv: en siffra som
- * räknades här hade varit en andra väg till samma tal, och de två hade glidit
- * isär ([[ADR-0039 Containerns översikt]] § Konsekvenser).
+ * **Brickorna står i hjälten på varje flik och är länkar** (fynd från
+ * testarna 2026-10-03, issue 680). Talen kommer ur den delade proppen
+ * `containerCounts` — `{ items, todos }`, byggd i
+ * App\Http\Middleware\HandleInertiaRequests::containerCounts() (issue 679) —
+ * och hjälten läser den själv ur `page.props`. Hjälten frågar alltså ingenting
+ * själv om siffrorna: en räkning här hade varit en andra väg till samma tal,
+ * och de två hade glidit isär ([[ADR-0039 Containerns översikt]]
+ * § Konsekvenser). Proppen är `null` utanför en container, och då ritas inga
+ * brickor.
+ *
+ * **Brickorna ritas i båda formerna.** `hero` styr bara hjältens HÖJD
+ * (`min-h-56` / `min-h-32`); den höga och den låga hjälten bär samma två tal.
+ * *Items* leder till itemlistan och *Open tasks* till uppgiftsfliken — samma
+ * grepp som dashboardens brickor fick i issue 654: länken bor i hjälten och
+ * inte i `UiStat`, som förblir en form ([[ADR-0042 Designsystemet]]
+ * § Beslut).
  *
  * **Hjälten bär ingen väg till inställningssidan** (issue 646). Här stod
  * *Redigera container* för den som får ändra (ADR-0050 § 3) och en stillsam
@@ -45,16 +60,19 @@ import ContainerCover from './ContainerCover.vue';
  * Overview.vue) — rubriken ska finnas på varje bredd, och den här raden är den
  * över brytpunkten.
  *
- * Ingen sträng i JavaScript ([[ADR-0013 Språk och i18n]]): hjälten slår inte
- * upp en enda nyckel sedan issue 646 — texten den bar försvann med länkarna —
- * och artens värde skrivs ORDAGRANT, för fältet är fritt
+ * Ingen sträng i JavaScript ([[ADR-0013 Språk och i18n]]): brickornas etiketter
+ * kommer ur `t()` med nycklarna `container.overview.items` och
+ * `container.overview.todos` — samma nycklar översiktens egna brickor bär — och
+ * artens värde skrivs ORDAGRANT, för fältet är fritt
  * ([[ADR-0036 Containerns art]]) och ingen nyckel byggs ur det.
  */
 defineProps({
     /*
      * `large` på översikten, `compact` på de andra flikarna — ADR-0050 § 2.
-     * Den här komponenten ritas bara när skalet har ett värde att ge den;
-     * frånvaron av en hjälte är skalets beslut och inte hjältens.
+     * Sedan issue 680 styr formen bara hjältens HÖJD (`min-h-56` / `min-h-32`);
+     * brickorna ritas i båda. Den här komponenten ritas bara när skalet har ett
+     * värde att ge den; frånvaron av en hjälte är skalets beslut och inte
+     * hjältens.
      */
     hero: { type: String, required: true },
     /* Containern, ur App\Http\Resources\ContainerResource. */
@@ -67,6 +85,12 @@ defineProps({
      */
     can: { type: Object, default: null },
 });
+
+const page = usePage();
+
+const counts = computed(() => page.props.containerCounts ?? null);
+
+const { t } = useTranslations();
 </script>
 
 <template>
@@ -112,10 +136,25 @@ defineProps({
                 </div>
             </div>
 
-            <!-- Talen, ovanpå bilden och bara i den höga hjälten (ADR-0050
-                 § 2). Den låga bär inga tal, och sloten är tom då. -->
-            <div v-if="hero === 'large'" class="mt-2 flex flex-wrap gap-4">
-                <slot name="stats" />
+            <!-- Brickorna, ovanpå bilden och i båda formerna (issue 680).
+                 Talen kommer ur den delade proppen `containerCounts`, och varje
+                 bricka är en länk — samma grepp som dashboardens brickor
+                 (issue 654): *Items* till itemlistan, *Open tasks* till
+                 uppgiftsfliken. -->
+            <div v-if="counts" class="mt-2 flex flex-wrap gap-4">
+                <Link
+                    :href="`/containers/${container.ulid}/items`"
+                    class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    <UiStat :value="counts.items" :label="t('container.overview.items')" />
+                </Link>
+
+                <Link
+                    :href="`/containers/${container.ulid}/tasks`"
+                    class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
+                </Link>
             </div>
         </div>
     </section>

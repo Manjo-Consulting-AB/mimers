@@ -68,9 +68,9 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *
  * **Hjälten kom med issue 170 · [[ADR-0050 Desktopdesignen]] § 2–3**, och
  * översikten är den sida som skickar `hero="large"`: bilden, arten, namnet och
- * hela beskrivningen står ovanpå containerns bild över `md:`, och talen står
- * ovanpå den. `ContainerHero` äger formen; hit hör bara vilken form sidan vill
- * ha och vilka tal som ska in i `hero-stats`.
+ * hela beskrivningen står ovanpå containerns bild över `md:`. Sedan issue 680
+ * läser hjälten sina egna brickor ur den delade proppen `containerCounts`; hit
+ * hör bara vilken form sidan vill ha.
  *
  * **Sidans eget huvud ritas bara under `md:`.** Över brytpunkten bär hjälten
  * namnet, arten och beskrivningen, och samma regel som gäller namnraden i skalet
@@ -79,11 +79,12 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * fält tillkomma som hjälten inte bär stannar det synligt på båda bredderna.
  * Under `md:` är huvudet oförändrat — där ritas ingen hjälte.
  *
- * **Talen ritas på två ställen och är därför skrivna två gånger.** Över `md:`
- * bär hjälten dem, och under `md:` — där hjälten inte ritas alls — står de
- * kvar i sidans flöde som förut. Att bara behålla hjältens upplaga hade tyst
- * tagit bort de två brickorna från en telefon. Båda raderna läser samma
- * `counts`-prop, och ingen av dem räknar något själv.
+ * **Talen ritas på två ställen.** Över `md:` bär hjälten dem ur den delade
+ * proppen `containerCounts` (issue 680), och under `md:` — där hjälten inte
+ * ritas alls — står de kvar i sidans flöde ur `counts` som förut. Att bara
+ * behålla hjältens upplaga hade tyst tagit bort de två brickorna från en
+ * telefon. Båda är samma siffror ur samma källa på servern (issue 679), och
+ * ingen av raderna räknar något själv.
  *
  * **Panelerna kom med issue 172 · [[ADR-0050 Desktopdesignen]] § 7.** Sidan är
  * monteringspunkten och äger ingenting själv: varje panel har sin egen propp
@@ -170,14 +171,6 @@ const itemUrl = (item) => `/containers/${props.container.ulid}/items/${item.ulid
 <template>
     <ContainerLayout hero="large" :container="container" :create="create" :can="can">
         <Head :title="container.name" />
-
-        <!-- Talen ovanpå bilden, se issue 170 · [[ADR-0050 Desktopdesignen]]
-             § 2. Slotens innehåll ritas bara av den höga hjälten, och den
-             ritas bara över `md:`. -->
-        <template #hero-stats>
-            <UiStat :value="counts.items" :label="t('container.overview.items')" />
-            <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
-        </template>
 
         <!--
             Rutnätet (issue 172). Behållaren är ett vanligt block tills `lg:`

@@ -117,64 +117,71 @@ function hjalteHjalten(): string
 }
 
 /*
- * Klart när: översikten ritar den höga hjälten med talen.
+ * Klart när: hjälten ritar brickorna ur den delade proppen.
  *
- * Den höga hjälten är översiktens (ADR-0050 § 2), och talen kommer från sidan
- * — layouten frågar ingenting själv. Provet fäster båda leden: sidan ber om
- * `large` och fyller `hero-stats` med sina två `counts`, skalet förmedlar
- * sloten vidare, och hjälten ritar den bara när den är hög.
+ * Talen kommer ur `containerCounts` — `{ items, todos }`, byggd i
+ * App\Http\Middleware\HandleInertiaRequests::containerCounts() (issue 679) — och
+ * hjälten läser den själv ur `page.props` (issue 680). Sloten `stats` och vägen
+ * genom skalet är borta: sidan skickar inga tal, och hjälten frågar inte sidan
+ * om dem.
  */
-it('ritar den höga hjälten med talen på översikten', function () {
+it('ritar brickorna i hjälten ur den delade proppen', function () {
     withoutVite();
 
     [, $ägare, $container] = hjalteKontext();
 
+    // Översikten svarar med den delade proppen satt.
     actingAs($ägare)->get("/containers/{$container->ulid}")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Containers/Overview')
-            ->where('counts.items', 0)
-            ->where('counts.todos', 0)
+            ->where('containerCounts.items', 0)
+            ->where('containerCounts.todos', 0)
         );
 
-    $vy = hjalteKod('pages/Containers/Overview.vue');
-
-    // Sidan ber om den höga formen, och fyller sloten med samma `counts` som
-    // brickorna i sidans flöde läser.
-    expect(hjalteTagg($vy, 'ContainerLayout'))->toContain('hero="large"')
-        ->and($vy)->toContain('<template #hero-stats>')
-        ->and($vy)->toContain('<UiStat :value="counts.items"')
-        ->and($vy)->toContain('<UiStat :value="counts.todos"');
-
-    // Skalet ritar hjälten ur proppen och förmedlar talen vidare — det läser
-    // ingenting själv och räknar ingenting själv.
-    $skal = hjalteKod('layouts/ContainerLayout.vue');
-
-    expect(hjalteTagg($skal, 'ContainerHero'))->toContain('v-if="hero"')
-        ->and(hjalteTagg($skal, 'ContainerHero'))->toContain(':hero="hero"')
-        ->and(hjalteTagg($skal, 'ContainerHero'))->toContain(':can="can"')
-        ->and($skal)->toContain('<slot name="hero-stats" />');
-
-    // Och hjälten ritar sloten bara i den höga formen: den låga bär inga tal.
     $hjalte = hjalteHjalten();
 
-    expect($hjalte)->toContain('<slot name="stats" />');
+    // Hjälten läser proppen själv och fyller brickorna ur den.
+    expect($hjalte)->toContain('page.props.containerCounts')
+        ->and($hjalte)->toContain('<UiStat :value="counts.items"')
+        ->and($hjalte)->toContain('<UiStat :value="counts.todos"');
+
+    // Brickorna ritas i båda formerna: villkoret är talens närvaro — `counts`
+    // — och inte hjältens höjd.
+    preg_match('#<div\b[^>]*v-if="counts"[^>]*>#s', $hjalte, $träffar);
+
+    $brickrad = $träffar[0] ?? '';
+
+    expect($brickrad)->not->toBe('', 'brickorna ritas inte ur `counts`');
+    expect($brickrad)->not->toContain("hero === 'large'");
 
     expect($hjalte)->toMatch(
-        '#<div\b[^>]*v-if="hero === \'large\'"[^>]*>\s*<slot name="stats" />#s',
-        'talen ritas även i den låga hjälten — den ska bära inga',
+        '#<div\b[^>]*v-if="counts"[^>]*>\s*<Link\b.*?<UiStat#s',
+        'brickorna står inte inuti brickraden',
     );
+
+    // Sloten `stats` finns inte längre, i någon av de tre filerna: hjälten får
+    // talen ur proppen och skalet förmedlar ingenting.
+    foreach ([$hjalte, hjalteKod('layouts/ContainerLayout.vue'), hjalteKod('pages/Containers/Overview.vue')] as $kod) {
+        expect($kod)->not->toContain('hero-stats')
+            ->and($kod)->not->toContain('name="stats"');
+    }
+
+    // Och sidan ber fortfarande om den höga formen.
+    expect(hjalteTagg(hjalteKod('pages/Containers/Overview.vue'), 'ContainerLayout'))
+        ->toContain('hero="large"');
 });
 
 /*
- * Klart när: itemlistan och historiken ritar den låga hjälten utan tal.
+ * Klart när: brickorna står i den låga hjälten på flikarna.
  *
- * `compact` på varje flik utom översikten (ADR-0050 § 2). Ingen av dem fyller
- * `hero-stats`, och sloten är dessutom stängd i den låga formen — två spärrar
- * för samma sak, för en sida som fyllde sloten av misstag hade annars fått
- * tal ovanpå bilden.
+ * `compact` på varje flik utom översikten (ADR-0050 § 2), och sedan issue 680
+ * bär den låga hjälten samma två brickor som den höga: den delade proppen
+ * `containerCounts` är satt på varje containersida (issue 679), och hjälten
+ * ritar talen när den finns. Provet fäster båda leden: flikarna svarar med
+ * proppen satt, och deras skal ber om den låga formen.
  */
-it('ritar den låga hjälten utan tal i itemlistan och historiken', function () {
+it('ritar brickorna i den låga hjälten på flikarna', function () {
     withoutVite();
 
     [, $ägare, $container] = hjalteKontext();
@@ -183,14 +190,60 @@ it('ritar den låga hjälten utan tal i itemlistan och historiken', function () 
         'pages/Containers/Items/Index.vue' => "/containers/{$container->ulid}/items",
         'pages/Containers/History.vue' => "/containers/{$container->ulid}/history",
     ] as $sokvag => $adress) {
-        actingAs($ägare)->get($adress)->assertOk();
+        actingAs($ägare)->get($adress)
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('containerCounts.items', 0)
+                ->where('containerCounts.todos', 0)
+            );
 
         $vy = hjalteKod($sokvag);
 
         expect(hjalteTagg($vy, 'ContainerLayout'))->toContain('hero="compact"');
-
-        expect($vy)->not->toContain('hero-stats');
     }
+});
+
+/*
+ * Klart när: brickorna är länkar.
+ *
+ * *Items* leder till containerns itemlista och *Open tasks* till fliken
+ * *Tasks* — samma grepp som dashboardens brickor fick i issue 654: länken bor i
+ * hjälten och inte i `UiStat`, som förblir en form. Provet fäster adresserna mot
+ * ruttabellen, läser länkarna ur källkoden och kräver att varje bricka omsluts
+ * av sin egen `<Link>` med fokusringen.
+ */
+it('länkar itembrickan till itemlistan och uppgiftsbrickan till uppgiftsfliken', function () {
+    withoutVite();
+
+    [, , $container] = hjalteKontext();
+
+    // Adresserna är ruttnamnens egna, så en flyttad rutt fälls här och inte
+    // först i webbläsaren.
+    expect(route('containers.items.index', $container, false))
+        ->toBe("/containers/{$container->ulid}/items")
+        ->and(route('containers.tasks', $container, false))
+        ->toBe("/containers/{$container->ulid}/tasks");
+
+    $hjalte = hjalteHjalten();
+
+    expect($hjalte)->toContain('`/containers/${container.ulid}/items`')
+        ->and($hjalte)->toContain('`/containers/${container.ulid}/tasks`');
+
+    // Varje bricka omsluts av sin egen `<Link>`, och länken bär fokusringen —
+    // samma klassrad som DashboardStats.vue.
+    preg_match_all(
+        '#<Link\b([^>]*)>\s*<UiStat\b([^>]*)/>#s',
+        $hjalte,
+        $träffar,
+        PREG_SET_ORDER,
+    );
+
+    expect($träffar)->toHaveCount(2, 'brickorna omsluts inte var för sig av en <Link>');
+
+    expect($träffar[0][1])->toContain('focus-visible:ring-2')
+        ->and($träffar[0][2])->toContain(':value="counts.items"')
+        ->and($träffar[1][1])->toContain('focus-visible:ring-2')
+        ->and($träffar[1][2])->toContain(':value="counts.todos"');
 });
 
 /*

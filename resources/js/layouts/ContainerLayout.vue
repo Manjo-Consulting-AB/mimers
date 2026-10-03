@@ -99,10 +99,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * den ritas därför för var och en, också den som bara läser. Träffytan är
  * `min-h-11` (44 px, issue 68a § Beslut 3), som varje annan radåtgärd.
  *
- * **Talen går genom skalet och byggs inte här.** Den höga hjälten bär
- * översiktens `counts` ovanpå bilden, och de kommer in genom sloten
- * `hero-stats` — layouten frågar ingenting själv, precis som den inte räknar
- * något annat tal på sidan.
+ * **Talen byggs inte här.** Sedan issue 680 läser hjälten den delade proppen
+ * `containerCounts` själv och ritar sina brickor ur den; skalet frågar
+ * ingenting och förmedlar ingenting, precis som det inte räknar något annat
+ * tal på sidan.
  *
  * **Pennan öppnar arket, och den ritas bara för den som får ändra containern**
  * (ADR-0047 § Beslut, "Vem som får göra vad"). Flaggan kommer som `can` från
@@ -254,9 +254,9 @@ const tabs = computed(() =>
                     toppraden (sloten `topbar` ovan) containerns bild och namn,
                     och där ritas ingen hjälte.
 
-                    Talen kommer från sidan genom `hero-stats` och ritas bara
-                    av den höga hjälten: översikten äger sina `counts`, och
-                    skalet frågar ingenting själv.
+                    Sedan issue 680 läser hjälten sina egna tal ur den delade
+                    proppen `containerCounts`: skalet frågar ingenting och
+                    skickar ingenting vidare.
                 -->
                 <ContainerHero
                     v-if="hero"
@@ -264,11 +264,7 @@ const tabs = computed(() =>
                     :hero="hero"
                     :container="container"
                     :can="can"
-                >
-                    <template #stats>
-                        <slot name="hero-stats" />
-                    </template>
-                </ContainerHero>
+                />
 
                 <!-- Namnraden, på varje sida utan hjälte. Under `md:` bär den
                      mörka toppraden samma namn (sloten `topbar` ovan), och två
