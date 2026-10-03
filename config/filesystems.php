@@ -55,9 +55,25 @@ return [
         // move_uploaded_file ([[ADR-0007 Fillagring hos inleed]]).
         // `throw => true`: en misslyckad skrivning får aldrig bli ett tyst
         // `false` som ändå skapar en databasrad.
+        //
+        // Issue 651 · Behörigheterna är uttryckliga. Utan `directory_visibility`
+        // ärver Flysystem Laravels privata standard och skapar varje
+        // underkatalog med `0700`: appen (PHP, kontots användare) når dem, men
+        // LiteSpeed, som levererar bytena vid den interna omdirigeringen, gör
+        // det inte — och svaret blir LiteSpeeds egen 404 i stället för bytena
+        // ([[Pipeline]] § Filleverans). `0711` och inte `0755`: webbservern
+        // behöver kunna gå igenom katalogen, inte lista den. Filerna är redan
+        // `0644` i dag; raden gör det uttryckligt. Skyddet mot direkt åtkomst är
+        // fortfarande `.htaccess`-tillåtlistan på `_protected`, oförändrad.
         'files' => [
             'driver' => 'local',
             'root' => storage_path('files'),
+            'visibility' => 'public',
+            'directory_visibility' => 'public',
+            'permissions' => [
+                'file' => ['public' => 0644, 'private' => 0600],
+                'dir' => ['public' => 0711, 'private' => 0700],
+            ],
             'throw' => true,
             'report' => false,
         ],
