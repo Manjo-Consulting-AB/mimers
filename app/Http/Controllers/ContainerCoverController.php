@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Actions\Container\RemoveContainerCover;
 use App\Actions\Container\SetContainerCover;
+use App\Actions\Container\SetContainerCoverFocus;
 use App\Exceptions\Api\ApiException;
+use App\Http\Requests\Container\ContainerCoverFocusRequest;
 use App\Http\Requests\Container\ContainerCoverRequest;
 use App\Models\Account;
 use App\Models\Container;
@@ -60,7 +62,7 @@ use RuntimeException;
  * transaktion, som kastar samma kod. Ett dokument avvisas av actionen med
  * `attachment.not_image`, som översätts på samma väg.
  *
- * Två rutter och ingen sida: bilden kommer med containerns egen prop ur
+ * Tre rutter och ingen sida: bilden kommer med containerns egen prop ur
  * App\Http\Resources\ContainerResource (se `cover` där), och en andra väg till
  * samma läsning hade varit en andra sanning om vilken bild som är satt.
  *
@@ -68,6 +70,13 @@ use RuntimeException;
  * `status` och ingenting annat. Arket står på containerns sida (eller i
  * skalet, som följer med varje containerns sida), så `back()` är samma sida
  * med färska props och den nya bilden i toppraden.
+ *
+ * **Issue 682 lade till en tredje rutt, `focus`, och den svarar `back()` UTAN
+ * flash-kod.** Fokuspunkten sätts av en markör användaren drar i bilden, och
+ * markören som flyttar sig är kvittensen — en grön ruta per klick vore brus
+ * (issuens beslut 5). Den har ingen egen sida av samma skäl som de två andra:
+ * `focus` i `cover`-proppen bär läsningen, och `SetContainerCoverFocus` bär
+ * skrivningen.
  */
 class ContainerCoverController extends Controller
 {
@@ -137,5 +146,36 @@ class ContainerCoverController extends Controller
         $removeContainerCover->handle($container);
 
         return back()->with('status', 'container-cover-removed');
+    }
+
+    /**
+     * PATCH /containers/{container}/cover/focus — sätter fokuspunkten på
+     * bilden, 302 tillbaka utan flash-kod (issue 682 · [[ADR-0047 Containerns
+     * bild]]).
+     *
+     * **Grinden ligger i App\Actions\Container\SetContainerCoverFocus::handle()**
+     * — `ContainerPolicy::update`, samma pinne som att sätta bilden — av samma
+     * skäl som destroy() ovan lånar sin av RemoveContainerCover: actionen är
+     * ytan för varje anropare.
+     *
+     * **404 när containern saknar bild.** Actionen svarar `false` när raden
+     * inte har någon `cover_attachment_id`, och en punkt på en bild som inte
+     * finns är ett anrop mot ett objekt som inte finns. Det är skillnaden mot
+     * destroy(), där en container utan bild är ett giltigt tillstånd och en
+     * no-op.
+     *
+     * **`back()` utan flash-kod.** Markören som flyttar sig i bilden är
+     * kvittensen; en grön ruta per klick vore brus (issuens beslut 5).
+     */
+    public function focus(
+        ContainerCoverFocusRequest $request,
+        Container $container,
+        SetContainerCoverFocus $setContainerCoverFocus,
+    ): RedirectResponse {
+        if (! $setContainerCoverFocus->handle($container, $request->integer('x'), $request->integer('y'))) {
+            abort(404);
+        }
+
+        return back();
     }
 }

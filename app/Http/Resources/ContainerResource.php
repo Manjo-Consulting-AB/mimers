@@ -28,7 +28,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * hade varje kontroller under layouten behövt lägga dit det, och en enda av
  * dem hade glömt — den sidans topprad hade tyst tappat bilden.
  *
- * Formen är `{ ulid, variants }` eller `null`, aldrig utelämnad. `variants` är
+ * Formen är `{ ulid, variants, focus }` eller `null`, aldrig utelämnad.
+ * `focus` kom med issue 682 — den punkt på bilden som ska synas när ytan
+ * beskär den, eller `null` för mitten (se `cover()`). `variants` är
  * samma sak som `variants`-proppen på itemets detaljvy (issue 61b § Beslut 1):
  * de derivatvarianter som faktiskt FINNS, så att vyn kan rita miniatyren
  * `?variant=thumb` när den finns och originalet annars — en `<img>` mot en
@@ -58,13 +60,20 @@ class ContainerResource extends JsonResource
      * Containerns bild i det format vyerna ritar ur, eller null när ingen är
      * satt — se klassens docblock.
      *
+     * **`focus` kom med issue 682.** Det är den punkt på bilden som ska synas
+     * när ytan beskär den (`object-position: x% y%`), och den läses ur
+     * `cover_focus_x`/`cover_focus_y` på containerraden — samma rad som
+     * `cover_attachment_id`, så ingen ny fråga ställs. Formen är
+     * `{x, y}` i procent, eller `null` när ingen punkt är vald (NULL betyder
+     * mitten). Är `cover` null finns ingen bild och ingen punkt att läsa.
+     *
      * Publik och statisk därför att App\Actions\Container\ListContainerSummaries
      * bygger sina kort ur en egen fråga och inte genom den här resursen.
      * Kortet bär samma `cover` som containerlistan, och två formuleringar av
      * samma form hade glidit isär — samma skäl som `Container::
      * scopeAccessibleBy()` bär för urvalet.
      *
-     * @return array{ulid: string, variants: list<string>}|null
+     * @return array{ulid: string, variants: list<string>, focus: array{x: int, y: int}|null}|null
      */
     public static function cover(Container $container): ?array
     {
@@ -85,6 +94,12 @@ class ContainerResource extends JsonResource
                 ->sort()
                 ->values()
                 ->all(),
+            // Kolumnerna är satta TILLSAMMANS (CHECK-villkoret
+            // container_cover_focus_pair, 2026_10_04_000000), så x är null
+            // exakt när ingen punkt är vald.
+            'focus' => $container->cover_focus_x === null
+                ? null
+                : ['x' => $container->cover_focus_x, 'y' => $container->cover_focus_y],
         ];
     }
 

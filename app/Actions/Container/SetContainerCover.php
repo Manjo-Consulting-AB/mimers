@@ -94,6 +94,13 @@ class SetContainerCover
             $forra = $rad->cover_attachment_id;
 
             $rad->cover_attachment_id = $bilaga->id;
+
+            // Fokuspunkten nollställs när bilden byts (issue 682): en punkt
+            // vald på den förra bilden säger ingenting om den nya. Nollställd
+            // betyder mitten, samma utgångsläge som en bild utan vald punkt.
+            $rad->cover_focus_x = null;
+            $rad->cover_focus_y = null;
+
             $rad->save();
 
             if ($forra !== null && $forra !== $bilaga->id) {

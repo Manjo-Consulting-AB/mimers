@@ -66,6 +66,30 @@ class Container extends Model
     protected $table = 'container';
 
     /**
+     * Fokuspunkten på containerns bild — `cover_focus_x`/`cover_focus_y`, se
+     * issue 682 och [[ADR-0047 Containerns bild]].
+     *
+     * Båda är procent (0–100) och läses som HELTAL. Kolumnerna är TINYINT
+     * UNSIGNED och en `integer`-cast gör värdet till en int i stället för
+     * strängen `"30"` som drivrutinen annars kan ge — resursen skickar dem
+     * vidare orörda (App\Http\Resources\ContainerResource::cover()), och en
+     * sträng där hade varit en tyst typglidning mot klienten.
+     *
+     * De står UTANFÖR #[Fillable] och sätts bara av
+     * App\Actions\Container\SetContainerCoverFocus — samma regel som
+     * `cover_attachment_id`.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'cover_focus_x' => 'integer',
+            'cover_focus_y' => 'integer',
+        ];
+    }
+
+    /**
      * Ägarkontot. Exakt ett, se [[ADR-0002 Konto äger container]].
      *
      * @return BelongsTo<Account, $this>
