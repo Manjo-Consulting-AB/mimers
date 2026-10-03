@@ -44,4 +44,27 @@ return [
 
     'registration_ip_retention_days' => (int) env('ACCOUNT_REGISTRATION_IP_RETENTION_DAYS', 90),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Interna Pro-konton
+    |--------------------------------------------------------------------------
+    |
+    | Adresserna här får Pro utan betalning — två interna användare som ska
+    | kunna pröva varje funktion på staging och produktion, se [[M24
+    | Desktopdesignen]] § Internt Pro.
+    |
+    | Pro ges som DATA, inte som ett undantag i planlogiken:
+    | App\Actions\Plan\GrantInternalPro skriver en vanlig subscription-rad
+    | (plan `pro`, status `active`, external_ref `internal`) åt kontot. Då bär
+    | Account::currentPlan(), PlanResource::planFor() och
+    | ReportsAbuseSignals::freeAccountsQuery() samma regel som för alla andra
+    | konton, utan att någon av dem ändras.
+    |
+    | Jämförelsen är skiftlägesokänslig. Att ta bort Pro från en adress som
+    | lämnar listan görs för hand — actionen och migrationen lägger bara till.
+    |
+    */
+
+    'internal_pro_emails' => ['tony@manjo.me', 'mia@manjo.me'],
+
 ];
