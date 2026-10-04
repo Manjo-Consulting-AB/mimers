@@ -111,7 +111,7 @@ class ListItemTasks
     private function groups(User $user, Request $request, Container $container, array $itemIds): array
     {
         $occurrences = $this->occurrences($itemIds)
-            ->where('status', ScheduleOccurrence::STATUS_OPEN)
+            ->active()
             ->orderBy('due_at')
             ->orderBy('ulid')
             ->get();
@@ -228,7 +228,7 @@ class ListItemTasks
     private function blocked(ScheduleOccurrence $occurrence): bool
     {
         foreach ($occurrence->dependsOn as $dependency) {
-            if ($dependency->status === ScheduleOccurrence::STATUS_OPEN
+            if ($dependency->isActive()
                 && $dependency->schedule !== null
                 && $dependency->schedule->item !== null) {
                 return true;

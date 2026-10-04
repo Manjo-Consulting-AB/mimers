@@ -43,13 +43,13 @@ use RuntimeException;
  * båda räknas ut.
  *
  * Returvärdet är medvetet nullbart: `recurrence_type: none` har ingen nästa
- * när engångsförekomsten väl är stängd, och ett schema som redan har en öppen
+ * när engångsförekomsten väl är stängd, och ett schema som redan har en AKTIV
  * förekomst ska inte få en andra. Det är dokumenterade returvärden, inte
  * undantag (Beslut 4, § Att se upp med).
  *
- * Invarianten — exakt en öppen förekomst per aktivt schema, även under
+ * Invarianten — exakt en aktiv förekomst per aktivt schema, även under
  * samtidighet — hålls här i kod (Beslut 7): transaktion, `lockForUpdate()` på
- * SCHEMATADEN (som alltid finns), kontroll att ingen öppen förekomst finns,
+ * SCHEMATADEN (som alltid finns), kontroll att ingen aktiv förekomst finns,
  * och skapande först då. Låset ligger aldrig på förekomsttabellen — en tom
  * mängd rader är ett gap lock i MySQL, exakt den fällan issue 16a gick i.
  */
@@ -83,7 +83,7 @@ class OpenNextOccurrence
                 return null;
             }
 
-            if ($lockedSchedule->occurrences()->where('status', ScheduleOccurrence::STATUS_OPEN)->exists()) {
+            if ($lockedSchedule->occurrences()->active()->exists()) {
                 return null;
             }
 
@@ -100,7 +100,7 @@ class OpenNextOccurrence
             // issue 699 § Beslut 2) — det är inte fryst.
             $occurrence->visible_from = $dueAt->copy()->subDays($lockedSchedule->lead_days);
             $occurrence->due_at = $dueAt;
-            $occurrence->status = 'open';
+            $occurrence->status = ScheduleOccurrence::STATUS_OPEN;
             $occurrence->save();
 
             // Arvet från schemanivån (23b § Beslut 2), i SAMMA transaktion som
@@ -164,7 +164,7 @@ class OpenNextOccurrence
             }
 
             $occurrence = $lockedSchedule->occurrences()
-                ->where('status', ScheduleOccurrence::STATUS_OPEN)
+                ->active()
                 ->first();
 
             if ($occurrence === null) {
@@ -297,7 +297,7 @@ class OpenNextOccurrence
 
         $openTargets = ScheduleOccurrence::query()
             ->whereIn('schedule_id', $dependedScheduleIds)
-            ->where('status', ScheduleOccurrence::STATUS_OPEN)
+            ->active()
             ->whereHas('schedule', fn ($query) => $query->where('is_active', true))
             ->get(['id']);
 

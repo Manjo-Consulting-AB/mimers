@@ -25,7 +25,8 @@ use Illuminate\Support\Facades\Gate;
  * eller `visible_from`, och ingen rad hade gett ett fel.
  *
  * **Urvalet är `ScheduleOccurrence::scopeTodoFor()` och ingenting annat**
- * (Beslut 2). De tre villkoren — `status = open`, inga öppna beroenden,
+ * (Beslut 2). De tre villkoren — aktiv (`open` eller `in_progress`,
+ * ADR-0052 § 1), inga öppna beroenden,
  * containern åtkomlig och itemet inom omfånget — formuleras EN gång, i
  * modellen (issue 24 § Beslut 2, issue 74 § Beslut 7). Den här klassen
  * formulerar inget eget `where`, och ingen av vyerna filtrerar: två
@@ -576,7 +577,8 @@ class ListTodo
      * förekomster, nyast först.
      *
      * **Omfånget är inte `scopeTodoFor()`.** Det scopet svarar på "vad ska
-     * jag göra?" och kräver `status = open`, ett aktivt schema och inga öppna
+     * jag göra?" och kräver aktiv (`open` eller `in_progress`), ett aktivt
+     * schema och inga öppna
      * beroenden — villkor som alla är fel fråga om en rad som redan är gjord.
      * Det som GÄLLER
      * därifrån är åtkomsten, och den formuleras här på samma sätt: containern

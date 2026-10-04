@@ -903,6 +903,10 @@ it('kostar ett konstant antal frågor oavsett antal rader', function () {
  * av `account`, `can` och `cover` — de ligger BREDVID den i webbens props,
  * samma uppdelning som SearchController gör med containern, och `/api` har
  * inte bett om dem.
+ *
+ * `status` och `gtd_list` ligger INUTI resursen sedan issue 232 (ADR-0052
+ * § 1): de är förekomstens egna fält och hör till `/api`s rad, till skillnad
+ * från webbens `account`, `can` och `cover`.
  */
 it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', function () {
     withoutVite();
@@ -924,6 +928,8 @@ it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', func
         'ulid',
         'due_at',
         'visible_from',
+        'status',
+        'gtd_list',
         'overdue',
         'upcoming',
         'schedule',

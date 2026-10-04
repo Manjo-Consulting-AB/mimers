@@ -335,6 +335,8 @@ it('svaret bär schema, item och container', function () {
         'ulid' => $occurrence->ulid,
         'due_at' => '2026-09-02',
         'visible_from' => '2026-09-02',
+        'status' => 'open',
+        'gtd_list' => 'next',
         'overdue' => false,
         'upcoming' => false,
         'schedule' => [
@@ -542,14 +544,16 @@ it('todo-listan är oförändrad', function () {
     expect(todoUlidLista($response))->toBe([$först->ulid, $engångsRad->ulid, $senare->ulid])
         ->and($response->json('data'))->toHaveCount(3);
 
-    // Nycklarna är de åtta API:et alltid svarat med. Webbens `account` och
-    // `can` ligger BREDVID resursen och läggs på i vyn — en nyckel som
-    // flyttade in i resursen hade ändrat API:ets kontrakt utan att någon rört
-    // det.
+    // Nycklarna är de tio API:et svarar med sedan issue 232 lade `status` och
+    // `gtd_list` på raden (ADR-0052 § 1). Webbens `account` och `can` ligger
+    // BREDVID resursen och läggs på i vyn — en nyckel som flyttade in i
+    // resursen hade ändrat API:ets kontrakt utan att någon rört det.
     expect(array_keys($response->json('data.0')))->toBe([
         'ulid',
         'due_at',
         'visible_from',
+        'status',
+        'gtd_list',
         'overdue',
         'upcoming',
         'schedule',

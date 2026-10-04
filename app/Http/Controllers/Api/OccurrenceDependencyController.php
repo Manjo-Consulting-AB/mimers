@@ -108,7 +108,7 @@ class OccurrenceDependencyController extends Controller
             $row->setAttribute('counterpart_status', $counterpart->status);
             $row->setAttribute('counterpart_item_ulid', $item->ulid);
             $row->setAttribute('counterpart_item_name', $item->name);
-            $row->setAttribute('satisfied', $counterpart->status !== ScheduleOccurrence::STATUS_OPEN);
+            $row->setAttribute('satisfied', ! $counterpart->isActive());
         });
 
         $ordered = $visible->sortBy(fn (OccurrenceDependency $row): array => [
@@ -209,6 +209,6 @@ class OccurrenceDependencyController extends Controller
         $dependency->setAttribute('counterpart_status', $other->status);
         $dependency->setAttribute('counterpart_item_ulid', $other->schedule->item->ulid);
         $dependency->setAttribute('counterpart_item_name', $other->schedule->item->name);
-        $dependency->setAttribute('satisfied', $other->status !== ScheduleOccurrence::STATUS_OPEN);
+        $dependency->setAttribute('satisfied', ! $other->isActive());
     }
 }

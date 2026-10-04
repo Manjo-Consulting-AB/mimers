@@ -29,12 +29,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  *
  * Ingen `deleted_at` (issue 22 § Beslut 2): raderingen av ett schema är mjuk
  * (SoftDeletes på App\Models\Schedule) och förekomsterna följer med genom
- * relationen. `status` har ingen cast — det är en av
- * ['open', 'completed', 'skipped'] och läses/skrivs som sträng.
+ * relationen. `status` har ingen cast — det är en av STATUSES och
+ * läses/skrivs som sträng. `gtd_list` har ingen cast heller; det är en av
+ * GTD_LISTS.
  *
  * `overdue` är INTE en kolumn utan härleds vid läsning av
- * App\Http\Resources\ScheduleOccurrenceResource: `status = 'open' AND
- * due_at < idag`. `idag` är ANVÄNDARENS kalenderdatum sedan issue 135 —
+ * App\Http\Resources\ScheduleOccurrenceResource: AKTIV (`open` eller
+ * `in_progress`) och `due_at < idag`. `idag` är ANVÄNDARENS kalenderdatum sedan issue 135 —
  * `User::today()` — och inte serverns; se den metoden för varför datumet
  * byggs om till appens tidszon. App\Support\Item\ItemStatus räknar fortfarande
  * i serverns datum och rörs inte av issue 135.
@@ -53,10 +54,30 @@ class ScheduleOccurrence extends Model
     protected $table = 'schedule_occurrence';
 
     /**
-     * De tre statusvärdena, var för sig — avslutsflödet (issue 22b) jämför
+     * Modellens standardvärden, speglar kolumnernas DEFAULT i migrationen.
+     * En osparad förekomst bär `gtd_list = next` direkt — samma tekniska värde
+     * som databasen ändå ger raden (ADR-0052 § 4) — så att svaret på `complete`
+     * visar samma lista som nästa läsning av raden. Förvalet fattar inget
+     * beslut åt issue 235, som sätter listan uttryckligen i
+     * App\Actions\Schedule\OpenNextOccurrence och skriver över det här.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'gtd_list' => self::GTD_NEXT,
+    ];
+
+    /**
+     * De fyra statusvärdena, var för sig — avslutsflödet (issue 22b) jämför
      * och sätter dem och ska aldrig behöva stava strängarna.
+     *
+     * `in_progress` är frivilligt och krävs aldrig för att en uppgift ska
+     * kunna bockas av ([[ADR-0052 Uppgifternas listor och uppgifter utan
+     * datum]] § 1).
      */
     public const STATUS_OPEN = 'open';
+
+    public const STATUS_IN_PROGRESS = 'in_progress';
 
     public const STATUS_COMPLETED = 'completed';
 
@@ -67,7 +88,36 @@ class ScheduleOccurrence extends Model
      *
      * @var list<string>
      */
-    public const STATUSES = [self::STATUS_OPEN, self::STATUS_COMPLETED, self::STATUS_SKIPPED];
+    public const STATUSES = [self::STATUS_OPEN, self::STATUS_IN_PROGRESS, self::STATUS_COMPLETED, self::STATUS_SKIPPED];
+
+    /**
+     * Statusarna för en förekomst som INTE är stängd — det som koden frågar
+     * efter där den menar "inte stängd" (ADR-0052 § 1). `skipped` och
+     * `completed` hör bara till historiken.
+     *
+     * @var list<string>
+     */
+    public const ACTIVE_STATUSES = [self::STATUS_OPEN, self::STATUS_IN_PROGRESS];
+
+    /**
+     * GTD-listorna, var för sig. Listan är en EGEN egenskap vid sidan av
+     * statusen (ADR-0052 § 1): den säger hur användaren tänker hantera
+     * uppgiften, statusen hur långt den har kommit.
+     */
+    public const GTD_INBOX = 'inbox';
+
+    public const GTD_NEXT = 'next';
+
+    public const GTD_WAITING = 'waiting';
+
+    public const GTD_SOMEDAY = 'someday';
+
+    /**
+     * De giltiga värdena för `gtd_list`, se migrationens CHECK-villkor.
+     *
+     * @var list<string>
+     */
+    public const GTD_LISTS = [self::GTD_INBOX, self::GTD_NEXT, self::GTD_WAITING, self::GTD_SOMEDAY];
 
     /**
      * Get the attributes that should be cast.
@@ -151,11 +201,38 @@ class ScheduleOccurrence extends Model
     }
 
     /**
+     * Är förekomsten aktiv — alltså inte stängd (ADR-0052 § 1)? `open` och
+     * `in_progress` är aktiva; `completed` och `skipped` är historik.
+     *
+     * Frågan ställs på EN rad där koden redan har modellen i handen. Där
+     * urvalet görs i databasen används i stället `scopeActive()`.
+     */
+    public function isActive(): bool
+    {
+        return in_array($this->status, self::ACTIVE_STATUSES, true);
+    }
+
+    /**
+     * Begränsar till de AKTIVA förekomsterna — `status IN ('open',
+     * 'in_progress')`. Det är frågan koden ställer där den i dag frågar efter
+     * `status = 'open'` och menar *inte stängd* (ADR-0052 § 1): todo-urvalet,
+     * itemets status, notiserna, ICS-flödet, beroendena och avbockningens
+     * kontroll av att förekomsten inte redan är stängd.
+     *
+     * @param  Builder<ScheduleOccurrence>  $query
+     * @return Builder<ScheduleOccurrence>
+     */
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereIn('status', self::ACTIVE_STATUSES);
+    }
+
+    /**
      * Begränsar till de förekomster som hör hemma i todo-listan (issue 24) —
      * dokumentets tre villkor plus de som följer av att raden hänger under
      * något ([[Scheman och uppgifter]] § Todo-listan, issue 24 § Beslut 3):
      *
-     * - `status = 'open'`
+     * - aktiv (`status IN ('open', 'in_progress')`, ADR-0052 § 1)
      * - containern är åtkomlig för användaren. Villkoret ligger på
      *   Container-modellen (`scopeAccessibleBy`) och appliceras som `whereHas`
      *   genom relationskedjan förekomst → schema → item → container — aldrig
@@ -171,7 +248,7 @@ class ScheduleOccurrence extends Model
      *   och todo-listan är en TOPPNIVÅvy som annars namnger varje annat items
      *   uppgifter i containern.
      * - inga öppna beroenden — samma villkor som spärren i 23b § Beslut 4.
-     *   En förekomst vars motpart har status `open` går inte att stänga och
+     *   En förekomst vars motpart är AKTIV går inte att stänga och
      *   ska inte stå bland det man kan göra nu. Ett öppet beroende vars
      *   motpart ligger under ett mjukraderat schema eller item räknas inte:
      *   motparten "existerar inte" där, i GET-listan eller i cykelkontrollen
@@ -253,7 +330,7 @@ class ScheduleOccurrence extends Model
         }
 
         return $query
-            ->where('status', self::STATUS_OPEN)
+            ->active()
             ->whereHas('schedule', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {
                 $query->where('schedule.is_active', true)
                     ->whereHas('item', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {
@@ -263,7 +340,10 @@ class ScheduleOccurrence extends Model
             })
             ->whereDoesntHave('dependsOn', function (Builder $query): void {
                 $query
-                    ->where('status', self::STATUS_OPEN)
+                    // Samma villkor som `active()`, men skrivet med konstanten:
+                    // closurens `Builder` är otypad för phpstan, och scopet går
+                    // inte att lösa upp på den.
+                    ->whereIn('status', self::ACTIVE_STATUSES)
                     ->whereHas('schedule.item');
             });
     }

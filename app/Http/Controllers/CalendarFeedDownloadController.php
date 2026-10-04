@@ -96,7 +96,7 @@ class CalendarFeedDownloadController extends Controller
         $scope = $this->resolveItemScope->handle($feed->user, $container);
 
         $occurrences = ScheduleOccurrence::query()
-            ->where('status', ScheduleOccurrence::STATUS_OPEN)
+            ->active()
             ->whereHas('schedule', function (Builder $query) use ($feed, $accountIds, $scope): void {
                 $query->where('schedule.is_active', true)
                     ->whereHas('item', function (Builder $query) use ($feed, $accountIds, $scope): void {
