@@ -45,13 +45,23 @@ use Illuminate\Support\Facades\Gate;
  *
  * **Ordningen och grupperingen räknas på servern** (Beslut 3). `due_at`
  * stigande med `ulid` stigande — samma deterministiska ordning som
- * `Api\TodoController::index()` — och raden hamnar i `overdue`, `today` eller
- * `upcoming` efter en jämförelse mot ANVÄNDARENS datum, `User::today()`
- * (issue 135). Klienten får tre listor och ritar dem i den ordning de kommer;
- * den räknar aldrig en grupp själv. Samma regel som `overdue` i 63b § Beslut 3:
- * en klient med fel klocka ska inte kunna flytta en uppgift till fel hög — och
- * av samma skäl räknas dagen i användarens tidszon och inte i serverns, som
- * mellan midnatt och klockan två svensk tid ännu är i går.
+ * `Api\TodoController::index()` — och raden hamnar i `overdue`, `today`,
+ * `this_week` eller `upcoming` efter en jämförelse mot ANVÄNDARENS datum,
+ * `User::today()` (issue 135). Klienten får fyra listor och ritar dem i den
+ * ordning de kommer; den räknar aldrig en grupp själv. Samma regel som
+ * `overdue` i 63b § Beslut 3: en klient med fel klocka ska inte kunna flytta
+ * en uppgift till fel hög — och av samma skäl räknas dagen i användarens
+ * tidszon och inte i serverns, som mellan midnatt och klockan två svensk tid
+ * ännu är i går.
+ *
+ * **`this_week` är veckan som börjar i morgon och slutar på söndag** (M24 ·
+ * issue 719, Tonys beslut 2026-10-04). Veckan är ISO 8601 och slutar på söndag
+ * OBEROENDE av locale: `endOfWeek()` utan argument följer Carbons locale, och
+ * `en_US` lägger veckoslutet på lördag, så `CarbonInterface::SUNDAY` skrivs ut.
+ * På en söndag är gruppen tom, och det är rätt — det finns ingen dag kvar av
+ * veckan.
+ * Gruppen ritas överallt där grupperna ritas: `/tasks`, dashboardens panel,
+ * översiktens panel och containerns uppgiftsflik.
  *
  * **`/tasks` är paginerad, dashboarden är det inte** (issue 123). `page()`
  * nedan ger en sida om högst `PER_PAGE` rader med en markör över
@@ -66,9 +76,10 @@ use Illuminate\Support\Facades\Gate;
  * ADR-0005 står kvar som historik enligt [[ADR-0032 Produktens ord]].
  *
  * **`rows` är samma rader i samma ordning, ogrupperade** — för panelen, som
- * tar de fem första. Gruppordningen (försenat, idag, kommande) ÄR den ordning
- * `due_at` ger, så de två fälten kan inte glida ifrån varandra: den som
- * behöver en grupprubrik tar `groups`, den som bara ska visa en rad tar `rows`.
+ * tar de fem första. Gruppordningen (försenat, i dag, denna vecka, kommande) ÄR
+ * den ordning `due_at` ger, så de två fälten kan inte glida ifrån varandra: den
+ * som behöver en grupprubrik tar `groups`, den som bara ska visa en rad tar
+ * `rows`.
  *
  * **Flaggorna är presentation** (Beslut 4). `can.update` räknas per rad med
  * `ItemPolicy::update()` — samma grind som avbockningsrutten (63b) och
@@ -112,7 +123,12 @@ class ListTodo
     public const GROUP_TODAY = 'today';
 
     /**
-     * Raden förfaller framåt i tiden.
+     * Raden förfaller senare i veckan — efter i dag och senast på söndag.
+     */
+    public const GROUP_THIS_WEEK = 'this_week';
+
+    /**
+     * Raden förfaller framåt i tiden, bortom innevarande vecka.
      */
     public const GROUP_UPCOMING = 'upcoming';
 
@@ -150,8 +166,8 @@ class ListTodo
      * samma som `/tasks` ställer.
      *
      * **Växeln gäller raderna** (issue 134): är `show_upcoming_tasks` falsk
-     * bär både `rows` och `groups` bara försenat och i dag, och `upcoming` är
-     * en tom lista. `$onlyCurrent` är anroparens svar på om villkoret ska
+     * bär både `rows` och `groups` bara försenat och i dag, och `this_week` och
+     * `upcoming` är tomma listor. `$onlyCurrent` är anroparens svar på om villkoret ska
      * läggas på: `null` — förvalet — följer användarens växel, och `true` är
      * "försenat plus i dag" oavsett växeln. Den senare är räknarnas väg (issue
      * 697): dashboardens BRICKOR mäter det som är aktuellt nu, och
@@ -205,13 +221,14 @@ class ListTodo
      * containern som översiktens uppgiftsbricka alltid gått. En uppgift i en
      * annan container hör inte hit, även när användaren når den.
      *
-     * **Växeln gäller raderna och inte talet** (issue 134, issue 697), precis
-     * som på dashboarden: `rows` och `groups` följer `show_upcoming_tasks`,
-     * medan `count` är brickans tal — det som är aktuellt nu, försenat plus i
-     * dag — och räknar samma mängd oavsett växeln. Växeln PÅ betyder "visa
-     * även framtida", och då är `$occurrences` hela mängden: talet ställs i en
-     * andra fråga, med villkoret på. Växeln AV begränsar redan `$occurrences`,
-     * och talet är dess längd.
+     * **`$onlyCurrent` styr raderna och inte talet** (issue 134, issue 697),
+     * precis som på dashboarden: `rows` och `groups` följer värdet, medan
+     * `count` är brickans tal — det som är aktuellt nu, försenat plus i dag —
+     * och räknar samma mängd oavsett. Värdet PÅ betyder "visa bara det
+     * aktuella", och då är `$occurrences` redan den mängden: talet är dess
+     * längd. Värdet AV bär hela mängden, och talet ställs i en andra fråga,
+     * med villkoret på. `null` följer användarens växel; containerns
+     * uppgiftsflik skickar `false` och släpper den (Beslut 2).
      *
      * **`hasContainers` finns inte i svaret.** Det är dashboardens flagga för
      * att skilja "ingen container alls" från "inget att göra" (Beslut 6), och
@@ -220,7 +237,7 @@ class ListTodo
      *
      * **`$limit` är valfri sedan issue 174** · [[ADR-0050 Desktopdesignen]]
      * § 16. Panelen på översikten klipper sina sex rader och skickar in sin
-     * gräns; *Uppgifter*-fliken ritar en tavla och vill ha HELA mängden, och
+     * gräns; *Uppgifter*-fliken ritar en lista och vill ha HELA mängden, och
      * `null` — förvalet — är svaret "ingen gräns". Att klippa i vyn i stället
      * hade varit en andra sanning om hur många rader fliken bär.
      *
@@ -228,8 +245,15 @@ class ListTodo
      * och inte i kontrollern av samma skäl som avgränsningen: den som
      * formulerar ett villkor äger det, och en kontroller som filtrerade hade
      * varit en andra sanning om vad frågan är. Flaggan kommer ur
-     * querysträngen (`?maintenance=1`) och gäller de tre öppna grupperna; den
+     * querysträngen (`?maintenance=1`) och gäller de fyra öppna grupperna; den
      * avbockade listan tar samma flagga i `completedForContainer()`.
+     *
+     * **`$onlyCurrent` är flikens undantag** (M24 · issue 719, Beslut 2):
+     * `null` — förvalet — följer användarens växel som i dag, och containerns
+     * uppgiftsflik skickar `false`, för **en container beskriver containerns
+     * tillstånd, inte användarens filter**. Fliken visar alltså alltid allt,
+     * oavsett `show_upcoming_tasks`. Översiktens panel och dashboarden skickar
+     * inget och följer växeln som förut.
      *
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
@@ -243,10 +267,11 @@ class ListTodo
         Container $container,
         ?int $limit = null,
         bool $maintenanceOnly = false,
+        ?bool $onlyCurrent = null,
     ): array {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
-        $onlyCurrent = $this->onlyCurrent($user);
+        $onlyCurrent ??= $this->onlyCurrent($user);
 
         // Ordningen ställs HÄR och inte i `occurrences()` (issue 174).
         // `page()` lägger sin egen på samma fråga — baklänges när `before` styr
@@ -668,6 +693,7 @@ class ListTodo
         $groups = [
             self::GROUP_OVERDUE => [],
             self::GROUP_TODAY => [],
+            self::GROUP_THIS_WEEK => [],
             self::GROUP_UPCOMING => [],
         ];
 
@@ -755,6 +781,12 @@ class ListTodo
     /**
      * Radens grupp. Jämförelsen görs mot användarens datum, `User::today()` —
      * den enda klocka som får avgöra vad som är försenat (Beslut 3, issue 135).
+     *
+     * **Veckan slutar på söndag, oberoende av locale** (M24 · issue 719).
+     * `endOfWeek()` utan argument följer Carbons locale, och `en_US` lägger
+     * veckoslutet på lördag — därför skrivs `CarbonInterface::SUNDAY` ut.
+     * Jämförelsen är `<=`: en rad som förfaller på söndagen hör till veckan,
+     * och en rad som förfaller i morgon är den första dagen i den.
      */
     private function group(CarbonInterface $dueAt, CarbonInterface $today): string
     {
@@ -762,7 +794,13 @@ class ListTodo
             return self::GROUP_OVERDUE;
         }
 
-        return $dueAt->equalTo($today) ? self::GROUP_TODAY : self::GROUP_UPCOMING;
+        if ($dueAt->equalTo($today)) {
+            return self::GROUP_TODAY;
+        }
+
+        return $dueAt->lessThanOrEqualTo($today->copy()->endOfWeek(CarbonInterface::SUNDAY))
+            ? self::GROUP_THIS_WEEK
+            : self::GROUP_UPCOMING;
     }
 
     /**

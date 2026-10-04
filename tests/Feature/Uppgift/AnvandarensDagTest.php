@@ -191,14 +191,17 @@ it('lägger en förekomst som förfaller i dag under today på /tasks', function
 
     // Framförhållning på morgondagens uppgift: `visible_from` är `due_at` minus
     // `lead_days`, och en uppgift som ännu inte blivit synlig ligger utanför
-    // urvalet oavsett grupp.
+    // urvalet oavsett grupp. Morgondagen är lördag och ligger kvar i
+    // innevarande vecka — veckan slutar på söndag (M24 · issue 719) — så raden
+    // är `this_week` och inte `upcoming`.
     [, , $idag] = dagUppgift($container, $konto, $anvandare, 'Byt impeller', '2026-09-25');
     [, , $imorgon] = dagUppgift($container, $konto, $anvandare, 'Byt olja', '2026-09-26', 7);
 
     $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
     expect(array_column(dagGrupp($svar, 'today'), 'ulid'))->toBe([$idag->ulid])
-        ->and(array_column(dagGrupp($svar, 'upcoming'), 'ulid'))->toBe([$imorgon->ulid]);
+        ->and(array_column(dagGrupp($svar, 'this_week'), 'ulid'))->toBe([$imorgon->ulid])
+        ->and(dagGrupp($svar, 'upcoming'))->toBe([]);
 });
 
 it('lägger samma förekomst i /api/todo med overdue false', function () {
@@ -311,6 +314,8 @@ it('ger samma datum och samma grupper som servern mitt på dagen', function () {
 
     expect($anvandare->today()->toDateString())->toBe(Carbon::today()->toDateString());
 
+    // Morgondagen är lördag och hör till innevarande vecka — den slutar på
+    // söndag (M24 · issue 719) — så raden är `this_week` och inte `upcoming`.
     [, , $igar] = dagUppgift($container, $konto, $anvandare, 'Försenad', '2026-09-24');
     [, , $idag] = dagUppgift($container, $konto, $anvandare, 'I dag', '2026-09-25');
     [, , $imorgon] = dagUppgift($container, $konto, $anvandare, 'I morgon', '2026-09-26', 7);
@@ -319,5 +324,6 @@ it('ger samma datum och samma grupper som servern mitt på dagen', function () {
 
     expect(array_column(dagGrupp($svar, 'overdue'), 'ulid'))->toBe([$igar->ulid])
         ->and(array_column(dagGrupp($svar, 'today'), 'ulid'))->toBe([$idag->ulid])
-        ->and(array_column(dagGrupp($svar, 'upcoming'), 'ulid'))->toBe([$imorgon->ulid]);
+        ->and(array_column(dagGrupp($svar, 'this_week'), 'ulid'))->toBe([$imorgon->ulid])
+        ->and(dagGrupp($svar, 'upcoming'))->toBe([]);
 });

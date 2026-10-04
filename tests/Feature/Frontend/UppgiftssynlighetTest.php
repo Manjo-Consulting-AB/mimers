@@ -21,7 +21,10 @@ use function Pest\Laravel\withoutVite;
  *    dashboardens uppgiftspanel, i översiktens panel och i uppgiftsflikens
  *    *Kommande*-kolumn.
  * 2. **Växeln styr fortfarande vad listorna visar** — med `show_upcoming_tasks`
- *    av faller en framtida rad bort, på båda ytorna.
+ *    av faller en framtida rad bort på `/tasks`, dashboarden och översikten.
+ *    **Containerns uppgiftsflik är undantaget** (M24 · issue 719, Beslut 2):
+ *    en container beskriver containerns tillstånd, inte användarens filter, så
+ *    fliken visar raden även med växeln av.
  * 3. **Blockerade och pausade förekomster förblir dolda** — `visible_from` togs
  *    ur urvalet, men de ANDRA villkoren i `scopeTodoFor()` står orörda.
  * 4. **Räknarna räknar det som är aktuellt nu** — en förekomst skapad med
@@ -88,10 +91,14 @@ it('visar en förekomst under kommande från att den skapas', function () {
 });
 
 /*
- * Klart när: en framtida förekomst saknas på båda ytorna när växeln är av.
+ * Klart när: en framtida förekomst saknas på `/tasks` när växeln är av — och
+ * står kvar på fliken.
  *
- * Det som håller raden borta är VÄXELN och `due_at`, inte `visible_from`
- * (issue 698 § Beslut 2): den synliga raden hade annars stått i *Kommande*.
+ * Det som håller raden borta från `/tasks` är VÄXELN och `due_at`, inte
+ * `visible_from` (issue 698 § Beslut 2): den synliga raden hade annars stått i
+ * *Kommande*. **Fliken släpper växeln** (M24 · issue 719, Beslut 2) — en
+ * container beskriver containerns tillstånd, inte användarens filter — så de
+ * två ytorna svarar olika med flit, och båda halvorna prövas här.
  */
 it('döljer en framtida förekomst när växeln är av', function () {
     withoutVite();
@@ -106,9 +113,9 @@ it('döljer en framtida förekomst när växeln är av', function () {
     $flik = actingAs($anvandare)->get(route('containers.tasks', $container))->assertOk();
 
     expect(todovyGrupp($lista, 'upcoming'))->toBe([])
-        ->and(todovyGrupp($flik, 'upcoming'))->toBe([])
+        ->and(array_column(todovyGrupp($flik, 'upcoming'), 'ulid'))->toBe([$rad->ulid])
         ->and($lista->getContent())->not->toContain($rad->ulid)
-        ->and($flik->getContent())->not->toContain($rad->ulid);
+        ->and($flik->getContent())->toContain($rad->ulid);
 });
 
 /*
