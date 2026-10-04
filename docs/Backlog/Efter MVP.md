@@ -6,4 +6,4 @@ Ligger utanför scope men noterat så att ingen bygger sig i hörnet: PDF-pärme
 
 Se [[Översikt]] § Avgränsning för motiveringar.
 
-**GTD-tavlan i containerns uppgiftsflik.** `docs/Design/uppgifter_1.png` ritar listorna Inbox, Next, Waiting, Calendar, Someday och Done, med kontext, prioritet och tilldelning. Det förutsätter en annan uppgiftsmodell än `schedule_occurrence`, och den är ett produktbeslut i klass med [[ADR-0033 Produktens omfång]]. Till MVP byggs tavlan med de grupper som finns, se [[ADR-0050 Desktopdesignen]] § 16.
+**Tavlan och kalendern som vyer av uppgifterna.** GTD-listorna är inte längre en post här: [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] tar in dem före lansering. Kvar är presentationerna *Board* och *Calendar* i mockuperna (`docs/Design/tasks-container.png`), samt taggar på uppgifter, ansvarig och flera items per uppgift.

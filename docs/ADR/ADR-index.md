@@ -55,8 +55,9 @@ Tillbaka till [[00 Index]].
 | [[ADR-0047 Containerns bild]] | En bilaga kan tillhöra en container; containerns bild är en pekare som itemets | [[Filer och lagring]], [[Konton och åtkomst]] |
 | [[ADR-0048 Mobilen och plusknappen]] | Eget skal under `md:`, plusknappen skapar det vyn visar, sibling förblir struket | Frontend |
 | [[ADR-0049 Nyligen besökta]] | De 20 senast öppnade itemen per person, på servern, filtrerade vid läsning | [[Konton och åtkomst]], [[Registerförteckning]] |
-| [[ADR-0050 Desktopdesignen]] | Mörk sidopanel, containerns hjälte och sex flikar; kostnadsraderna får ett webbgränssnitt; underhåll, GTD, dokumenttyper och betalningsmetod tas inte in | Frontend, [[Items och organisation]] |
+| [[ADR-0050 Desktopdesignen]] | Mörk sidopanel, containerns hjälte och sex flikar; kostnadsraderna får ett webbgränssnitt; underhåll, GTD (ersatt av ADR-0052), dokumenttyper och betalningsmetod tas inte in | Frontend, [[Items och organisation]] |
 | [[ADR-0051 Senast öppnade filer]] | De 50 senast öppnade filerna per person, skrivna i leveransrutten, filtrerade vid läsning | [[Filer och lagring]], [[Registerförteckning]] |
+| [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] | GTD-listan på förekomsten och skild från statusen; Calendar, Done och datumgrupperna härleds; en uppgift får sakna datum, ett återkommande schema får det inte | [[Scheman och uppgifter]] |
 
 ## Om att ändra ett beslut
 
