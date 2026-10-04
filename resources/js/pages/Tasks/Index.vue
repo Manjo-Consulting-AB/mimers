@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import TaskGroup from '../../components/TaskGroup.vue';
 import TodoRow from '../../components/TodoRow.vue';
 import UpcomingTasksToggle from '../../components/UpcomingTasksToggle.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -40,7 +41,9 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * rader sidan bär, per rad, så en grupp som sträcker sig över en sidgräns får
  * sin rubrik en gång per sida. Vyn ritar varje icke-tom grupp precis som förr
  * och minns ingenting mellan sidorna: rubriken följer av raderna här, inte av
- * en räknare.
+ * en räknare. Rubriken med antalet och ihopfällningen ritas av `TaskGroup`
+ * (M24 · issue 231), och antalet är raderna på DEN HÄR sidan — rubriken säger
+ * vad som står under den.
  *
  * **Det tomma läget gäller sidan, inte listan.** En sida utan rader visar
  * samma mening som en tom lista gjorde, och länkarna ritas utanför den
@@ -108,14 +111,23 @@ const isEmpty = computed(() => Object.values(props.groups).every((entries) => en
             </p>
         </template>
 
+        <!--
+            Grupperna (Beslut 3 och 7). Rubriken med antalet och
+            ihopfällningen ritas av TaskGroup (M24 · issue 231) — samma
+            komponent som containerns och itemets flik. Antalet är raderna på
+            DEN HÄR sidan, eftersom listan är paginerad: rubriken säger vad som
+            står under den och ingenting om resten av serien.
+        -->
         <template v-for="(entries, group) in groups" :key="group">
-            <section v-if="entries.length > 0" class="mt-8">
-                <h2 class="text-sm font-medium text-slate-700">{{ t(`todo.group.${group}`) }}</h2>
-
-                <ul class="mt-2 flex flex-col divide-y divide-slate-200">
-                    <TodoRow v-for="entry in entries" :key="entry.ulid" :entry="entry" />
-                </ul>
-            </section>
+            <TaskGroup
+                v-if="entries.length > 0"
+                class="mt-8"
+                :heading="t(`todo.group.${group}`)"
+                :count="entries.length"
+                :tone="group === 'overdue' ? 'danger' : null"
+            >
+                <TodoRow v-for="entry in entries" :key="entry.ulid" :entry="entry" />
+            </TaskGroup>
         </template>
 
         <nav v-if="previousUrl || nextUrl" class="mt-8 flex items-center gap-4">

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import TaskGroup from '../../components/TaskGroup.vue';
 import TodoRow from '../../components/TodoRow.vue';
 import UiEmptyState from '../../components/UiEmptyState.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -69,6 +70,11 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * ord kommer ur `t()`. Grupprubrikerna är `todo.group.*` — samma grupp, samma
  * ord, en nyckel — och de två genvägarna bär `container.nav.*`, som flikraden
  * gjorde.
+ *
+ * **Rubriken med antalet och ihopfällningen ritas av `TaskGroup`** (M24 ·
+ * issue 231): vyn skickar in gruppens namn, antalet och tonen, och komponenten
+ * ritar knappen, chevronen och raderna. Det gäller de fyra öppna grupperna OCH
+ * *Klart*, som bär `container.tasks.done` i stället för en `todo.group.*`.
  */
 const props = defineProps({
     /* Containern ur App\Http\Resources\ContainerResource. */
@@ -178,22 +184,25 @@ const exportUrl = () => `/containers/${props.container.ulid}/export`;
         <!--
             Listan (Beslut 1 och 3): grupperna i den ordning servern gav dem,
             sedan *Klart*. En sektion ritas bara när den har rader — en tom
-            grupp har ingen rubrik att visa.
+            grupp har ingen rubrik att visa. Rubriken med antalet och
+            ihopfällningen ritas av TaskGroup (M24 · issue 231): samma
+            komponent som de två andra ytorna, så de inte glider isär.
         -->
         <div v-else class="mt-6 flex flex-col gap-8">
             <template v-for="(entries, group) in groups" :key="group">
-                <section v-if="entries.length > 0" class="min-w-0">
-                    <h2 class="text-sm font-medium text-slate-700">{{ t(`todo.group.${group}`) }}</h2>
-
-                    <ul class="mt-2 flex flex-col divide-y divide-slate-200">
-                        <TodoRow
-                            v-for="entry in entries"
-                            :key="entry.ulid"
-                            :entry="entry"
-                            :show-container="false"
-                        />
-                    </ul>
-                </section>
+                <TaskGroup
+                    v-if="entries.length > 0"
+                    :heading="t(`todo.group.${group}`)"
+                    :count="entries.length"
+                    :tone="group === 'overdue' ? 'danger' : null"
+                >
+                    <TodoRow
+                        v-for="entry in entries"
+                        :key="entry.ulid"
+                        :entry="entry"
+                        :show-container="false"
+                    />
+                </TaskGroup>
             </template>
 
             <!--
@@ -201,20 +210,21 @@ const exportUrl = () => `/containers/${props.container.ulid}/export`;
                 raderna — schemats titel, itemet, ett datum — men datumet är
                 `completed_at`, och avbockningsknappen ritas inte: det finns
                 ingenting kvar att bocka av, och rutten hade svarat att
-                förekomsten inte är öppen.
+                förekomsten inte är öppen. Rubriken är containerns fliks ord,
+                och gruppen har ingen egen ton.
             -->
-            <section v-if="completed.length > 0" class="min-w-0">
-                <h2 class="text-sm font-medium text-slate-700">{{ t('container.tasks.done') }}</h2>
-
-                <ul class="mt-2 flex flex-col divide-y divide-slate-200">
-                    <TodoRow
-                        v-for="entry in completed"
-                        :key="entry.ulid"
-                        :entry="entry"
-                        :show-container="false"
-                    />
-                </ul>
-            </section>
+            <TaskGroup
+                v-if="completed.length > 0"
+                :heading="t('container.tasks.done')"
+                :count="completed.length"
+            >
+                <TodoRow
+                    v-for="entry in completed"
+                    :key="entry.ulid"
+                    :entry="entry"
+                    :show-container="false"
+                />
+            </TaskGroup>
         </div>
 
         <!--

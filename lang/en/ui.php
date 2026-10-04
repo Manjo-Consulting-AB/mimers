@@ -3541,6 +3541,13 @@ return [
             'upcoming' => 'Upcoming',
         ],
 
+        // Antalet vid grupprubriken, se M24 · issue 231 (GitHub #729) och
+        // resources/js/components/TaskGroup.vue. Två nycklar av samma skäl som
+        // `date.overdue_one`/`date.overdue`: `t()` pluraliserar inte, så ental
+        // har sin egen mening. Talet är listans längd som servern gav den.
+        'group_count' => ':count tasks',
+        'group_count_one' => '1 task',
+
         // Växeln för framtida uppgifter, se issue 134. Etiketten namnger
         // kolumnen (`user.show_upcoming_tasks`): på visar listan allt synligt
         // — dagens beteende — och av bara det som är aktuellt nu. Samma ord
