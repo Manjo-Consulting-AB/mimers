@@ -55,9 +55,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Beslut 3). En uppgift som förfaller i dag har ingen prick, för de två
  * fälten är varandras komplement och möts inte.
  *
- * **Pausmärkets ord kommer ur `pausedLabel`.** Bara itemets flik kan bära en
- * pausad rad, och ordet för den bor där (`item.schedule.paused`) — raden äger
- * formen på märket, fliken äger ordet.
+ * **Båda märkenas ord bor i raden.** `paused` ritar `item.schedule.paused` och
+ * `blocked` ritar `todo.blocked`, båda direkt ur `entry` — raden äger formen
+ * och ordet för båda, och en propp för det ena märket hade gett de två samma
+ * utseende men olika vägar dit.
  *
  * **Pricken är dekor; orden bär betydelsen.** Den sitter `absolute`, alltså
  * utanför flödet, så knappen behåller sin storlek och sin 44 px höga träffyta
@@ -76,13 +77,6 @@ const props = defineProps({
      * `false`, för containern står redan i hjälten.
      */
     showContainer: { type: Boolean, default: true },
-    /*
-     * Ordet för en pausad rad. `entry.paused` sätts bara av itemets
-     * uppgiftsflik — `scopeTodoFor()` stänger ute pausade scheman från `/tasks`,
-     * dashboarden och containerns flik — så ordet kommer från den fliken och
-     * inte från raden. Utan ord ritas inget märke.
-     */
-    pausedLabel: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -132,10 +126,10 @@ function complete() {
                      den öppna raden ligger kvar och märks i stället för att
                      försvinna. -->
                 <span
-                    v-if="entry.paused && pausedLabel"
+                    v-if="entry.paused"
                     class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
                 >
-                    {{ pausedLabel }}
+                    {{ t('item.schedule.paused') }}
                 </span>
 
                 <!-- Blockerad: förekomsten har ett öppet beroende. Servern

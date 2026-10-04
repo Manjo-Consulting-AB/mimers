@@ -413,7 +413,7 @@ it('alla sex befintliga propar når sin flik', function () {
         'information' => ['v-for="field in fields"', 'field.value'],
         'relations' => ['<ItemLinkSection', ':links="links"', ':counterparts="counterparts"'],
         'attachments' => ['<ItemAttachmentSection', ':attachments="attachments"', ':variants="variants"'],
-        'schedules' => ['<ScheduleListSection', ':schedules="schedules"', ':open-occurrences="openOccurrences"'],
+        'schedules' => ['<ScheduleListSection', ':groups="itemTasks.groups"', ':completed="itemTasks.completed"', ':include-children="includeChildren"'],
         'loans' => ['<ItemLoanSection', ':open-loan="openLoan"', ':loan-history="loanHistory"'],
         'tags' => ['<ItemTagList', ':tags="item.tags"'],
         'costs' => ['<ItemCostSection', ':costs="costs"', ':cost-defaults="costDefaults"'],

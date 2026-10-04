@@ -737,7 +737,7 @@ it('förmedlar pausat, försenat och återkallat med ett ord och inte bara en ny
     // Beslut 7:s andra stycke. Färgen får bära tillståndet bara tillsammans
     // med ett ord — den som inte ser nyansen ska ändå kunna läsa raden.
     $ord = [
-        'components/ScheduleListSection.vue' => 'item.schedule.paused',
+        'components/TodoRow.vue' => 'item.schedule.paused',
         'components/OpenOccurrence.vue' => 'item.schedule.occurrence.overdue',
         'components/ItemLoanSection.vue' => 'item.loan.overdue',
         'components/CalendarFeedRow.vue' => 'calendar.row.revoked_badge',

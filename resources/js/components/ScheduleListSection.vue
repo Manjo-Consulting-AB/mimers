@@ -62,14 +62,6 @@ const props = defineProps({
     completed: { type: Array, required: true },
     /* Reglagets läge, ur `?children`. Förvalet är PÅ. */
     includeChildren: { type: Boolean, required: true },
-    /*
-     * Sidans egna proppar (Beslut 2): flikens räknare räknar `schedules`, och
-     * HTTP-proven läser `openOccurrences`. Sektionen ritar förekomsterna ur
-     * `groups` och `completed` och läser ingen av dem, men de följer med
-     * panelen — `ItemflikTest` binder `schedules`-ytan vid dem.
-     */
-    schedules: { type: Array, default: () => [] },
-    openOccurrences: { type: Object, default: () => ({}) },
     /* `{ create }` — *New task*-länken. Rutten prövar samma grind. */
     can: { type: Object, required: true },
 });
@@ -189,7 +181,6 @@ const completedAt = (entry) => eventDate(entry.completed_at);
                             :key="entry.ulid"
                             :entry="entry"
                             :show-container="false"
-                            :paused-label="t('item.schedule.paused')"
                         />
                     </ul>
                 </section>
