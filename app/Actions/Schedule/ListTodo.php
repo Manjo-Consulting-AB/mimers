@@ -12,6 +12,7 @@ use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
@@ -185,6 +186,50 @@ class ListTodo
      */
     public const CURSOR_BEFORE = 'before';
 
+    /**
+     * Den härledda vyn *Calendar* (M26 · issue 237, ADR-0052 § 1): aktiva
+     * förekomster med ett datum.
+     *
+     * **Inte ett värde i `gtd_list`.** *Calendar* och *Done* står i
+     * `?list=`, men de lagras aldrig: de följer av `due_at` respektive
+     * `status` (ADR-0052 § 1 — "lagra aldrig ett tillstånd som andra fält
+     * redan avgör"). Den som läser dem ur kolumnen hade fått en tom lista som
+     * såg ut som ett svar.
+     */
+    public const LIST_CALENDAR = 'calendar';
+
+    /**
+     * Den härledda vyn *Done* (M26 · issue 237, ADR-0052 § 1): avbockade
+     * förekomster, nyast först. Inte heller ett värde i `gtd_list` — se
+     * `LIST_CALENDAR`.
+     */
+    public const LIST_DONE = 'done';
+
+    /**
+     * De sex värdena i `?list=`, i flikradens ordning (M26 · issue 237,
+     * Beslut 1). *Active* är frånvaron av värde och står därför inte här.
+     *
+     * De fyra första HÄRLEDS ur modellens `GTD_LISTS` och skrivs inte av:
+     * `gtd_list`-kolumnen är den enda sanningen om vilka listor som lagras,
+     * och en femte lista ska följa med hit utan att någon kommer ihåg den här
+     * raden.
+     */
+    public const LISTS = [
+        ...ScheduleOccurrence::GTD_LISTS,
+        self::LIST_CALENDAR,
+        self::LIST_DONE,
+    ];
+
+    /**
+     * Hur långt bakåt panelens *Done*-tal räknar (M26 · issue 237, Beslut 3):
+     * avbockade de senaste 30 dagarna, i användarens dag.
+     *
+     * **Gränsen gäller bara panelens TAL.** Fliken *Done* visar alla
+     * avbockade, och en förekomst är `completed` oavsett ålder — talet är en
+     * glimt av hur mycket som hänt på sistone, inte listans längd.
+     */
+    public const DONE_RECENT_DAYS = 30;
+
     public function __construct(
         private readonly ResolveItemScope $resolveItemScope,
         private readonly ResolveItemCover $resolveItemCover,
@@ -208,14 +253,25 @@ class ListTodo
      * (panelen) och en gång med `true` (brickorna). `page()` har ingen
      * motsvarighet — `/tasks` visar alltid det användaren valt.
      *
+     * **`$list` är GTD-filtret** (M26 · issue 237, Beslut 1 och 2): ett av
+     * `LISTS`, eller `null` för *Active* — alla aktiva förekomster, som förut.
+     * Ett okänt värde behandlas som inget värde (`normalizeList()`), för
+     * filtret kommer ur ett adressfält och en klistrad adress ska ge *Active*
+     * och inte ett fel. Dashboarden och API:et skickar inget och får *Active*;
+     * *Done* går aldrig genom den här metoden, för den raden har en annan
+     * form (se `completed()`).
+     *
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
      *     rows: list<array<string, mixed>>,
-     *     hasContainers: bool
+     *     hasContainers: bool,
+     *     list: string|null
      * }
      */
-    public function handle(User $user, Request $request, ?bool $onlyCurrent = null): array
+    public function handle(User $user, Request $request, ?bool $onlyCurrent = null, ?string $list = null): array
     {
+        $list = $this->normalizeList($list);
+
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
         // Containerna användaren når, i EN fråga — underlaget för `hasContainers`
@@ -241,7 +297,7 @@ class ListTodo
         // `occurrences()`: `page()` lägger sin egen på samma fråga och VÄNDER
         // på den baklänges, och en ordning inifrån hade vänt hela
         // pagineringen framåt.
-        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent)
+        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent, list: $list)
             ->orderByRaw('due_at IS NULL')
             ->orderBy('due_at')
             ->orderBy('ulid')
@@ -250,6 +306,7 @@ class ListTodo
         return [
             ...$this->present($user, $request, $occurrences),
             'hasContainers' => $containerIds !== [],
+            'list' => $list,
         ];
     }
 
@@ -302,10 +359,23 @@ class ListTodo
      * oavsett `show_upcoming_tasks`. Översiktens panel och dashboarden skickar
      * inget och följer växeln som förut.
      *
+     * **`$list` är GTD-filtret** (M26 · issue 237, Beslut 1 och 2), samma
+     * värden som `handle()`: de fyra lagrade listorna och *Calendar* i
+     * datumgrupperna, *Done* i stället för grupperna, och `null` för
+     * *Active*. Fliken *Done* ERSÄTTER den *Klart*-grupp som förr låg sist på
+     * fliken (Beslut 4): de avbockade är nu en egen flik, och på *Active*
+     * eller en lista ritas ingen *Klart*-grupp alls. Den avbockade raden
+     * kommer ur samma fråga som förr (`completed()`), utan gränsen tjugo men
+     * med paginering över `(completed_at, ulid)` (Beslut 1).
+     *
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
      *     rows: list<array<string, mixed>>,
-     *     count: int
+     *     count: int,
+     *     completed: list<array<string, mixed>>,
+     *     list: string|null,
+     *     previous: string|null,
+     *     next: string|null
      * }
      */
     public function forContainer(
@@ -315,7 +385,28 @@ class ListTodo
         ?int $limit = null,
         bool $maintenanceOnly = false,
         ?bool $onlyCurrent = null,
+        ?string $list = null,
     ): array {
+        $list = $this->normalizeList($list);
+
+        // *Done* är en egen fråga med en egen radform (Beslut 1): de fyra
+        // grupperna är tomma, och `completed` bär sidan. `count` — brickans
+        // tal — hör till de öppna raderna och är 0 här; panelen ritar sitt
+        // eget *Done*-tal ur `gtdCounts()`.
+        if ($list === self::LIST_DONE) {
+            $done = $this->completedForContainer($user, $request, $container, $maintenanceOnly);
+
+            return [
+                'groups' => $this->emptyGroups(),
+                'rows' => [],
+                'count' => 0,
+                'completed' => $done['rows'],
+                'list' => $list,
+                'previous' => $done['previous'],
+                'next' => $done['next'],
+            ];
+        }
+
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
         // Ordningen ställs HÄR och inte i `occurrences()` (issue 174).
@@ -332,7 +423,7 @@ class ListTodo
         // både MySQL och sqlite sätter annars null först. `ulid` är andra
         // nyckeln av samma skäl som i `page()`: två rader som delar
         // förfallodag — eller saknar den — ska ändå ha en fast ordning.
-        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent, $container, $maintenanceOnly)
+        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent, $container, $maintenanceOnly, $list)
             ->orderByRaw('due_at IS NULL')
             ->orderBy('due_at')
             ->orderBy('ulid')
@@ -346,6 +437,10 @@ class ListTodo
             // *No date* med sig. Samma fråga som DashboardController ställer
             // för sina brickor.
             'count' => $this->occurrences($user, $accountIds, true, $container, $maintenanceOnly)->count(),
+            'completed' => [],
+            'list' => $list,
+            'previous' => null,
+            'next' => null,
         ];
     }
 
@@ -371,8 +466,63 @@ class ListTodo
     }
 
     /**
-     * Containerns AVBOCKADE förekomster — *Klart*-kolumnen på containerns
-     * uppgiftsflik (issue 174 · [[ADR-0050 Desktopdesignen]] § 16, Beslut 3).
+     * Panelens tal: antalet aktiva förekomster per GTD-lista, plus *Calendar*
+     * och *Done* (M26 · issue 237, Beslut 3).
+     *
+     * **Tre frågor, oavsett antal rader.** En `GROUP BY gtd_list` för de fyra
+     * lagrade listorna, en för *Calendar* (`due_at IS NOT NULL`) och en för
+     * *Done* — de avbockade de senaste `DONE_RECENT_DAYS` dagarna i
+     * användarens dag. Talet bor här och inte i vyn: en klient som räknade
+     * själv hade behövt hela mängden, och panelen hade blivit en andra fråga
+     * om samma sak.
+     *
+     * **Samma omfång som listan** (Beslut 3): `scopeTodoFor()` — aktiv,
+     * åtkomlig och inom användarens item-omfång — och containern när en
+     * sådan är satt. En mottagare med en itemgrant räknar alltså bara sina
+     * egna items uppgifter, precis som hon bara ser dem i listan.
+     *
+     * **Växeln `show_upcoming_tasks` rör inte panelen** (Beslut 3): talen är
+     * användarens hela GTD-läge och inte det hon valt att visa just nu.
+     * `occurrences()` får därför `false` — släpp växeln — och inget
+     * `dueTodayOrEarlier`, till skillnad från räknarna i
+     * `forContainer()['count']`.
+     *
+     * **Gränsen på 30 dagar gäller bara det här talet** (Beslut 3). Fliken
+     * *Done* visar alla avbockade, och en förekomst är `completed` oavsett
+     * ålder; panelen är en glimt av hur mycket som hänt på sistone.
+     *
+     * @return array{inbox: int, next: int, waiting: int, calendar: int, someday: int, done: int}
+     */
+    public function gtdCounts(User $user, ?Container $container = null): array
+    {
+        $accountIds = $user->accounts->pluck('id')->values()->all();
+
+        $perLista = $this->occurrences($user, $accountIds, false, $container)
+            ->selectRaw('gtd_list, COUNT(*) as antal')
+            ->groupBy('gtd_list')
+            ->pluck('antal', 'gtd_list');
+
+        $calendar = $this->occurrences($user, $accountIds, false, $container)
+            ->whereNotNull('due_at')
+            ->count();
+
+        $done = $this->completedOccurrences($user, $container, false)
+            ->where('completed_at', '>=', $user->today()->subDays(self::DONE_RECENT_DAYS)->startOfDay())
+            ->count();
+
+        return [
+            ScheduleOccurrence::GTD_INBOX => (int) ($perLista[ScheduleOccurrence::GTD_INBOX] ?? 0),
+            ScheduleOccurrence::GTD_NEXT => (int) ($perLista[ScheduleOccurrence::GTD_NEXT] ?? 0),
+            ScheduleOccurrence::GTD_WAITING => (int) ($perLista[ScheduleOccurrence::GTD_WAITING] ?? 0),
+            self::LIST_CALENDAR => $calendar,
+            ScheduleOccurrence::GTD_SOMEDAY => (int) ($perLista[ScheduleOccurrence::GTD_SOMEDAY] ?? 0),
+            self::LIST_DONE => $done,
+        ];
+    }
+
+    /**
+     * Användarens AVBOCKADE förekomster över ALLA containrar hon når —
+     * *Done*-fliken på `/tasks` (M26 · issue 237, Beslut 1), en sida i taget.
      *
      * **Villkoret är `status = 'completed'`, och `skipped` står utanför**
      * (arkitektsvar på issue 174). [[Scheman och uppgifter]] §
@@ -380,61 +530,167 @@ class ListTodo
      * statusvärden, och det ena är inte det andra: en överhoppad förekomst
      * påstår ett byte som inte gjordes. Samma avsnitt säger att de avklarade
      * förekomsterna är svaret på "när bytte jag impellern senast", och en
-     * överhoppad rad under *Klart* hade svarat fel på den frågan. De
+     * överhoppad rad under *Done* hade svarat fel på den frågan. De
      * överhoppade syns i historiken i stället (issue 179).
-     *
-     * **Markören är `completed_at`.** En stängd förekomst bär sin tidsstämpel
-     * (App\Actions\Schedule\CloseOccurrence steg 2), och den är det enda
-     * svaret på när den blev klar. Villkoret ovan är statusfiltret och
-     * tidsstämpeln är sorteringsnyckeln; gränsen räknas efter båda.
-     *
-     * **Ordningen är `completed_at` fallande med `ulid` fallande**, samma
-     * andra nyckel och samma skäl som `ListAuditEvents`: två rader som
-     * stängdes i samma sekund ska ändå ha en ordning som inte beror på
-     * databasens nyckfulla returordning.
      *
      * **Omfånget är det samma som de öppna radernas** — containern OCH
      * användarens item-omfång — för en avbockad rad är samma uppgift som den
      * öppna var, och en gäst med en itemgrant ska inte få läsa vad hon inte
      * får se för att raden hunnit bli klar (issue 74 § Beslut 7).
      * `schedule.is_active` prövas däremot INTE: en pausad förekomst lämnar
-     * den öppna listan, men det som redan är gjort är gjort.
+     * den öppna listan, men det som redan är gjort är gjort. Med `$container`
+     * osatt är omfånget användarens, över alla containrar hon når.
      *
-     * **Raden är `present()`:s rad, plus `completed_at`** (Beslut 3). Samma
-     * `TodoEntryResource`, samma kontoförval och samma `can`-flagga, och
-     * tidsstämpeln BREDVID resursen — samma mönster som `account` och `can`
-     * följer: ett fält bara webben behöver hör inte inuti `/api`:s svar.
-     * Markören går inte genom `group()`: en avbockad rad har ingen grupp att
-     * räknas in i, och `due_at` säger ingenting om när den blev klar.
+     * @return array{
+     *     rows: list<array<string, mixed>>,
+     *     previous: string|null,
+     *     next: string|null
+     * }
+     */
+    public function completed(
+        User $user,
+        Request $request,
+        ?Container $container = null,
+        bool $maintenanceOnly = false,
+    ): array {
+        return $this->completedPage(
+            $user,
+            $request,
+            $this->completedOccurrences($user, $container, $maintenanceOnly),
+        );
+    }
+
+    /**
+     * Containerns AVBOCKADE förekomster — *Done*-fliken på containerns
+     * uppgiftsflik (M26 · issue 237, Beslut 1 och 4), en sida i taget.
      *
-     * **`$limit` är tjugo** (Beslut 3): *Klart* är en glimt av det senaste,
-     * inte en historik — hela sviten bor i `audit_log` och läses i
-     * historikfliken (issue 179).
+     * **Samma fråga och samma paginering som `/tasks`**, bara avgränsad till
+     * containern. Metoden är den tunna ingången och ingenting annat: två
+     * formuleringar av "containerns avbockade" hade glidit isär, och den ena
+     * hade glömt item-omfånget (Beslut 1). Den gamla gränsen tjugo är borta —
+     * *Done* är inte längre en glimt sist i en annan lista utan en egen lista,
+     * och den bläddras över `(completed_at, ulid)`.
      *
-     * @return list<array<string, mixed>>
+     * @return array{
+     *     rows: list<array<string, mixed>>,
+     *     previous: string|null,
+     *     next: string|null
+     * }
      */
     public function completedForContainer(
         User $user,
+        Request $request,
         Container $container,
-        int $limit = 20,
         bool $maintenanceOnly = false,
     ): array {
-        $occurrences = $this->completedOccurrences($user, $container, $maintenanceOnly)
-            ->limit($limit)
+        return $this->completed($user, $request, $container, $maintenanceOnly);
+    }
+
+    /**
+     * En sida av den avbockade listan — högst `PER_PAGE` rader, nyast först,
+     * och markörerna till nästa och föregående sida (M26 · issue 237,
+     * Beslut 1).
+     *
+     * **Markören är `c_{sekunder}_{ulid}`**, där sekunderna är `completed_at`
+     * som Unix-tid. Formen skiljer sig från `/tasks` egen (`d_`/`n_`) med
+     * flit: nycklarna är andra — `completed_at` i stället för `due_at` — och
+     * en markör som såg likadan ut för två olika frågor hade varit en
+     * inbjudan att läsa den med fel parser. Listan står i adressen bredvid
+     * markören (`?list=done`), så markören behöver inte bära den (Beslut 2).
+     *
+     * **Ordningen är `completed_at` fallande med `ulid` fallande**, samma
+     * andra nyckel och samma skäl som `ListAuditEvents`: två rader som
+     * stängdes i samma sekund ska ändå ha en ordning som inte beror på
+     * databasens nyckfulla returordning. Bakåt hämtas raderna i stigande
+     * ordning och vänds, samma grepp som `page()`: den sida som SLUTAR på
+     * markören är den föregående, och den ritas nyast först som de andra.
+     *
+     * **Raden är `row()`, plus `completed_at`** (Beslut 3). Samma
+     * `TodoEntryResource`, samma kontoförval och samma `can`-flagga, och
+     * tidsstämpeln BREDVID resursen — samma mönster som `account` och `can`
+     * följer: ett fält bara webben behöver hör inte inuti `/api`:s svar.
+     *
+     * @param  Builder<ScheduleOccurrence>  $base
+     * @return array{
+     *     rows: list<array<string, mixed>>,
+     *     previous: string|null,
+     *     next: string|null
+     * }
+     */
+    private function completedPage(User $user, Request $request, Builder $base): array
+    {
+        $before = $this->completedCursor($request->query(self::CURSOR_BEFORE));
+        $after = $this->completedCursor($request->query(self::CURSOR_AFTER));
+
+        $backwards = $before !== null;
+
+        if ($before !== null) {
+            $at = $this->completedAt($before['seconds']);
+
+            // Bakåt: raderna från och med markören och framåt i den visade
+            // ordningen (nyare), alltså (completed_at, ulid) >= markören. Den
+            // sida som slutar på markören är den föregående.
+            $base->where(fn (Builder $query) => $query
+                ->where('completed_at', '>', $at)
+                ->orWhere(fn (Builder $query) => $query
+                    ->where('completed_at', '=', $at)
+                    ->where('ulid', '>=', $before['ulid'])));
+        } elseif ($after !== null) {
+            $at = $this->completedAt($after['seconds']);
+
+            // Framåt: raderna strikt efter markören, alltså äldre.
+            $base->where(fn (Builder $query) => $query
+                ->where('completed_at', '<', $at)
+                ->orWhere(fn (Builder $query) => $query
+                    ->where('completed_at', '=', $at)
+                    ->where('ulid', '<', $after['ulid'])));
+        }
+
+        $occurrences = $base
+            ->orderBy('completed_at', $backwards ? 'asc' : 'desc')
+            ->orderBy('ulid', $backwards ? 'asc' : 'desc')
+            ->limit(self::PER_PAGE + 1)
             ->get();
 
-        // Resursen behöver en request för användarens dag, och signaturen bär
-        // ingen: den avbockade listan har varken markör eller filter att läsa
-        // ur en, och den enda fråga `TodoEntryResource` ställer är vem som är
-        // inloggad. Requesten byggs därför ur användaren i stället för att en
-        // tredje parameter läggs på för en upplysning som redan finns i den
-        // första.
+        $hasMore = $occurrences->count() > self::PER_PAGE;
+
+        $page = $occurrences->take(self::PER_PAGE);
+
+        if ($backwards) {
+            $page = $page->reverse()->values();
+        }
+
+        return [
+            'rows' => $this->completedRows($user, $page),
+            'previous' => $backwards
+                ? ($hasMore ? $this->completedMark($occurrences->last()) : null)
+                : ($after === null ? null : $this->completedCursorString($after['seconds'], $after['ulid'])),
+            'next' => $before !== null
+                ? $this->completedCursorString($before['seconds'], $before['ulid'])
+                : ($hasMore ? $this->completedMark($page->last()) : null),
+        ];
+    }
+
+    /**
+     * Raderna ur de avbockade förekomsterna — samma `row()`, plus
+     * tidsstämpeln.
+     *
+     * @param  Collection<int, ScheduleOccurrence>  $occurrences
+     * @return list<array<string, mixed>>
+     */
+    private function completedRows(User $user, Collection $occurrences): array
+    {
+        // Resursen behöver en request för användarens dag, och den avbockade
+        // raden har varken markör eller filter att läsa ur en: den enda fråga
+        // `TodoEntryResource` ställer är vem som är inloggad. Requesten byggs
+        // därför ur användaren i stället för att en parameter läggs på för en
+        // upplysning som redan finns i den första.
         $request = $this->requestFor($user);
 
         $accountUlids = $user->accounts->pluck('ulid')->all();
 
-        // Omslagen räknas på de rader som faktiskt visas — `$limit` är redan
-        // lagd på frågan, så en avbockad rad utanför glimten kostar ingen bild.
+        // Omslagen räknas på de rader som faktiskt visas — sidan är redan
+        // klippt, så en avbockad rad utanför den kostar ingen bild.
         $covers = $this->covers($occurrences);
 
         return $occurrences
@@ -484,21 +740,49 @@ class ListTodo
      * Går markören inte att läsa alls förbigås den — en klistrad adress ska ge
      * första sidan, inte ett fel.
      *
+     * **`$list` är GTD-filtret** (M26 · issue 237, Beslut 1 och 2): ett av
+     * `LISTS`, eller `null` för *Active*. De fyra listorna och *Calendar*
+     * filtrerar raderna i datumgrupperna precis som `handle()`. *Done* är en
+     * EGEN väg: raden har en annan form, nycklarna är `completed_at` i
+     * stället för `due_at`, och sidan bläddras av `completedPage()`. Den
+     * här metoden lämnar då `groups` tomma och lägger raderna i `completed`.
+     * Markören bär inte listan (Beslut 2) — den står i adressen bredvid.
+     *
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
+     *     completed: list<array<string, mixed>>,
+     *     list: string|null,
      *     hasContainers: bool,
      *     previous: string|null,
      *     next: string|null
      * }
      */
-    public function page(User $user, Request $request): array
+    public function page(User $user, Request $request, ?string $list = null): array
     {
+        $list = $this->normalizeList($list);
+
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
         $containerIds = Container::query()
             ->accessibleBy($user, $accountIds)
             ->pluck('id')
             ->all();
+
+        // *Done* går sin egen väg (Beslut 1): frågan är en annan och raden
+        // bär `completed_at`. Grupperna lämnas tomma, så vyn ritar `completed`
+        // i stället för datumgrupperna.
+        if ($list === self::LIST_DONE) {
+            $done = $this->completed($user, $request);
+
+            return [
+                'groups' => $this->emptyGroups(),
+                'completed' => $done['rows'],
+                'list' => $list,
+                'hasContainers' => $containerIds !== [],
+                'previous' => $done['previous'],
+                'next' => $done['next'],
+            ];
+        }
 
         $before = $this->cursor($request->query(self::CURSOR_BEFORE));
         $after = $this->cursor($request->query(self::CURSOR_AFTER));
@@ -512,7 +796,7 @@ class ListTodo
         // dagens datum flyttar varken nycklarna eller deras ordning
         // (issue 134, issue 123). `null` är "följ användarens växel", och
         // växeln AV bär *No date* (ADR-0052 § 4).
-        $query = $this->occurrences($user, $accountIds, null);
+        $query = $this->occurrences($user, $accountIds, null, list: $list);
 
         // `whereDate()` och inte en rå kolumnjämförelse, av samma skäl som
         // `scopeTodoFor()` väljer det: `due_at` är en DATE-kolumn, men värdet
@@ -588,6 +872,10 @@ class ListTodo
 
         return [
             ...$this->present($user, $request, $page),
+            // Den aktiva vägen bär ingen avbockad rad: *Done* är en egen flik
+            // och en egen väg (Beslut 1).
+            'completed' => [],
+            'list' => $list,
             'hasContainers' => $containerIds !== [],
             // Föregående sida slutar på raden före den här sidans första rad.
             // Framåt är det markören vi kom in med; bakåt är det den
@@ -636,6 +924,13 @@ class ListTodo
      * med automatiskt. Villkoret ligger på `schedule` och inte på raden:
      * återkommandetypen är schemats, och förekomsten ärver den.
      *
+     * **`$list` är GTD-filtret** (M26 · issue 237, Beslut 1 och 2). De fyra
+     * lagrade listorna går genom modellens `inGtdList()`, och *Calendar* —
+     * den härledda vyn — lägger `whereNotNull('due_at')` på, för det är hela
+     * dess villkor (ADR-0052 § 1). `null` och ett okänt värde lämnar frågan
+     * orörd: *Done* kommer aldrig hit, för den har sin egen fråga och sin
+     * egen radform.
+     *
      * @param  list<int>  $accountIds
      * @return Builder<ScheduleOccurrence>
      */
@@ -645,10 +940,17 @@ class ListTodo
         ?bool $onlyCurrent,
         ?Container $container = null,
         bool $maintenanceOnly = false,
+        ?string $list = null,
     ): Builder {
         $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
             ->with(['schedule.item.container.account']);
+
+        if ($list !== null && in_array($list, ScheduleOccurrence::GTD_LISTS, true)) {
+            $query->inGtdList($list);
+        } elseif ($list === self::LIST_CALENDAR) {
+            $query->whereNotNull('due_at');
+        }
 
         // `true` är räknarnas fråga: försenat plus i dag, och aldrig en rad
         // utan datum (ADR-0052 § 4). `null` — följ användarens växel — och
@@ -676,57 +978,77 @@ class ListTodo
     }
 
     /**
-     * Frågan bakom *Klart* (issue 174 § Beslut 3): containerns stängda
-     * förekomster, nyast först.
+     * Frågan bakom *Done* (issue 174 § Beslut 3, M26 · issue 237): de stängda
+     * förekomsterna, nyast först. Ordningen ställs av anroparen — sidan vänder
+     * på den baklänges, samma skäl som i `occurrences()`.
      *
      * **Omfånget är inte `scopeTodoFor()`.** Det scopet svarar på "vad ska
      * jag göra?" och kräver aktiv (`open` eller `in_progress`), ett aktivt
      * schema och inga öppna
      * beroenden — villkor som alla är fel fråga om en rad som redan är gjord.
      * Det som GÄLLER
-     * därifrån är åtkomsten, och den formuleras här på samma sätt: containern
-     * OCH användarens item-omfång, i EN fråga. Ett `scopeTodoFor()` med
-     * `status` utbytt hade varit en fjärde gren i modellen för en fråga som
-     * bara den här ytan ställer.
+     * därifrån är åtkomsten, och den formuleras här på samma sätt som i
+     * `scopeTodoFor()`: containrarna användaren når och hennes item-omfång, i
+     * EN fråga. Ett `scopeTodoFor()` med `status` utbytt hade varit en fjärde
+     * gren i modellen för en fråga som bara de här ytorna ställer.
+     *
+     * **`$container` osatt är alla containrar användaren når** (M26 · issue
+     * 237, Beslut 1): *Done* på `/tasks` är samma fråga som på containern,
+     * utan avgränsningen — och samma omfång, så en gäst med en itemgrant ser
+     * sina avbockade och inga andras.
      *
      * **Statusen prövas och är `completed`** (arkitektsvar på issue 174):
-     * `skipped` är en egen status och hör i historiken, inte under *Klart*
+     * `skipped` är en egen status och hör i historiken, inte under *Done*
      * — se `completedForContainer()`.
      *
      * **Omfånget löses på den `scoped`-bundna instansen.** Den är samma
      * instans som `ItemPolicy` frågar per rad när `can`-flaggan räknas, så
      * upplösningen härvärmer memon i stället för att bli en andra — en
-     * `handle()` per sida, inte en per rad (issue 70 § Beslut 2).
+     * upplösning per container, inte en per rad (issue 70 § Beslut 2).
      *
      * @return Builder<ScheduleOccurrence>
      */
-    private function completedOccurrences(User $user, Container $container, bool $maintenanceOnly): Builder
+    private function completedOccurrences(User $user, ?Container $container, bool $maintenanceOnly): Builder
     {
-        $scope = $this->resolveItemScope->handle($user, $container);
+        $accountIds = $user->accounts->pluck('id')->values()->all();
+
+        $containerIds = $container !== null
+            ? [$container->id]
+            : Container::query()->accessibleBy($user, $accountIds)->pluck('id')->all();
+
+        $scopes = $this->resolveItemScope->forContainers($user, $containerIds);
+
+        $unrestrictedContainers = [];
+        $scopedItemIds = [];
+
+        foreach ($scopes as $containerId => $scope) {
+            if ($scope->isUnrestricted()) {
+                $unrestrictedContainers[] = $containerId;
+
+                continue;
+            }
+
+            $scopedItemIds = array_merge($scopedItemIds, $scope->itemIds() ?? []);
+        }
 
         return ScheduleOccurrence::query()
             ->where('status', ScheduleOccurrence::STATUS_COMPLETED)
             ->with(['schedule.item.container.account'])
-            ->whereHas('schedule', function (Builder $query) use ($container, $scope, $maintenanceOnly): void {
+            ->whereHas('schedule', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds, $maintenanceOnly): void {
                 // Det begränsade omfånget är en `whereIn` mot itemens
                 // löpnummer — och en TOM lista betyder "når ingenting", aldrig
-                // "når allt" (ItemScope). Ett obegränsat omfång hoppar över
-                // villkoret helt i stället för att materialisera varje item i
-                // containern.
-                $query->whereHas('item', function (Builder $query) use ($container, $scope): void {
-                    $query->where('container_id', $container->id);
-
-                    if (! $scope->isUnrestricted()) {
-                        $query->whereIn('id', $scope->itemIds() ?? []);
-                    }
+                // "når allt" (ItemScope). Ett obegränsat omfång lägger
+                // container-id:t i den första grenen i stället för att
+                // materialisera varje item i containern.
+                $query->whereHas('item', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {
+                    $query->whereIn('item.container_id', $unrestrictedContainers)
+                        ->orWhereIn('item.id', $scopedItemIds);
                 });
 
                 if ($maintenanceOnly) {
                     $query->whereIn('recurrence_type', $this->maintenanceTypes());
                 }
-            })
-            ->orderByDesc('completed_at')
-            ->orderByDesc('ulid');
+            });
     }
 
     /**
@@ -761,6 +1083,42 @@ class ListTodo
         $request->setUserResolver(fn (): User => $user);
 
         return $request;
+    }
+
+    /**
+     * De fem grupperna, tomma, i ritningsordning (ADR-0052 § 3).
+     *
+     * `present()` fyller dem; `page()` och `forContainer()` lämnar dem tomma
+     * när *Done* valts, så att vyns loop över `groups` ritar ingenting och
+     * `completed` ritar listan i stället. Att returnera en tom array i
+     * stället för samma fem nycklar hade tvingat vyn att pröva formen.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function emptyGroups(): array
+    {
+        return [
+            self::GROUP_OVERDUE => [],
+            self::GROUP_TODAY => [],
+            self::GROUP_THIS_WEEK => [],
+            self::GROUP_UPCOMING => [],
+            self::GROUP_NO_DATE => [],
+        ];
+    }
+
+    /**
+     * `?list=`-värdet, eller `null` för *Active* (M26 · issue 237,
+     * Beslut 1).
+     *
+     * **Ett okänt värde behandlas som inget värde** (Beslut 1): filtret kommer
+     * ur ett adressfält någon klistrat i, och *Active* är det ärliga svaret på
+     * en adress som inte pekar ut en lista — ett 404 eller en tom tavla hade
+     * varit ett svar på fel fråga. Kontrollerna skickar värdet vidare orörd
+     * och tolkar det inte (Beslut 2); tolkningen bor här.
+     */
+    private function normalizeList(?string $list): ?string
+    {
+        return $list !== null && in_array($list, self::LISTS, true) ? $list : null;
     }
 
     /**
@@ -837,13 +1195,7 @@ class ListTodo
         // de öppna, efter *Upcoming* och före *Done*. Vyn itererar `groups`
         // och ritar rubriken för varje icke-tom grupp, så ordningen här ÄR
         // ordningen på sidan.
-        $groups = [
-            self::GROUP_OVERDUE => [],
-            self::GROUP_TODAY => [],
-            self::GROUP_THIS_WEEK => [],
-            self::GROUP_UPCOMING => [],
-            self::GROUP_NO_DATE => [],
-        ];
+        $groups = $this->emptyGroups();
 
         $covers = $this->covers($occurrences);
 
@@ -962,6 +1314,53 @@ class ListTodo
         return $cursor['due_at'] === null
             ? 'n_'.$cursor['ulid']
             : 'd_'.$cursor['due_at'].'_'.$cursor['ulid'];
+    }
+
+    /**
+     * Markören för *Done* ur querysträngen (M26 · issue 237, Beslut 1), eller
+     * null när den saknas eller inte går att läsa. Formen är
+     * `c_{sekunder}_{ulid}`, där sekunderna är `completed_at` som Unix-tid —
+     * samma tre delar som `cursor()`, men en EGEN bokstav, för nycklarna är
+     * andra och en delad parser hade läst en `due_at` som en `completed_at`.
+     *
+     * En trasig markör ger första sidan i stället för ett fel, av samma skäl
+     * som `cursor()`: den kommer ur ett adressfält någon klistrat i.
+     *
+     * @return array{seconds: int, ulid: string}|null
+     */
+    private function completedCursor(mixed $value): ?array
+    {
+        if (is_string($value) && preg_match('/^c_(\d+)_([0-9A-Za-z]{26})$/', $value, $träffar) === 1) {
+            return ['seconds' => (int) $träffar[1], 'ulid' => $träffar[2]];
+        }
+
+        return null;
+    }
+
+    /**
+     * Unix-sekunderna som en datetime-sträng, för jämförelsen mot kolumnen.
+     * `completed_at` lagras i UTC utan tidsdel (schemat har sekundprecision),
+     * så `toDateTimeString()` är exakt den form kolumnen bär.
+     */
+    private function completedAt(int $seconds): string
+    {
+        return Carbon::createFromTimestamp($seconds, 'UTC')->toDateTimeString();
+    }
+
+    /**
+     * Markören för en avbockad rad — `completedCursor()`:s motpart.
+     */
+    private function completedMark(ScheduleOccurrence $occurrence): string
+    {
+        return $this->completedCursorString($occurrence->completed_at->getTimestamp(), $occurrence->ulid);
+    }
+
+    /**
+     * Markören som den står i querysträngen, `c_{sekunder}_{ulid}`.
+     */
+    private function completedCursorString(int $seconds, string $ulid): string
+    {
+        return 'c_'.$seconds.'_'.$ulid;
     }
 
     /**
