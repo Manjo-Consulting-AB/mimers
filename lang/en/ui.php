@@ -1586,7 +1586,10 @@ return [
             'kind' => 'Kind',
             'description' => 'Description',
             'items' => 'Items',
-            'todos' => 'Open tasks',
+            // M24 · issue 702 § Beslut 2: the tile counts what is DUE, not
+            // what exists — since issue 697 the count is overdue plus today.
+            // The red *Overdue: :count* sub-line is unchanged.
+            'todos' => 'Tasks due',
 
             /*
              * Panelerna på översikten, se issue 172 · [[ADR-0050
@@ -3201,6 +3204,11 @@ return [
                 // optional is a 422 the user does not understand.
                 'anchor_date' => 'First due date',
                 'anchor_date_fixed' => 'Start of the series',
+                // M24 · the edit form (issue 702 § Beslut 3): on an existing
+                // non-`fixed` schedule the field is prefilled with the open
+                // occurrence's due date, so the label says *Next due date* and
+                // not *First due date*. The create form keeps `anchor_date`.
+                'anchor_date_next' => 'Next due date',
 
                 // `lead_days` is explained by what it DOES (decision 5): it is
                 // `visible_from`, and without the sentence the field is
@@ -3246,7 +3254,11 @@ return [
                 'view' => 'Occurrences',
 
                 'due' => 'Due :date',
-                'visible_from' => 'Visible since :date',
+                // M24 · issue 702 § Beslut 1: the task shows up as soon as it
+                // is created (issue 698), so `visible_from` is no longer the
+                // day it became visible but the reminder day — and the row is
+                // drawn only when it differs from the due date.
+                'visible_from' => 'Reminder :date',
                 'window' => ':days days to spare',
                 'window_one' => '1 day to spare',
 
@@ -3444,7 +3456,10 @@ return [
         // and sits where `UiStat` puts a label, under the number.
         'stats' => [
             'containers' => 'Containers',
-            'tasks' => 'Open tasks',
+            // M24 · issue 702 § Beslut 2: same word as the container's tile
+            // (`container.overview.todos`) — the count is overdue plus today
+            // (issue 697). The sub-line stays *Overdue: :count*.
+            'tasks' => 'Tasks due',
             'overdue' => 'Overdue: :count',
             'costs' => 'Costs',
         ],

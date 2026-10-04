@@ -37,8 +37,10 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * (Beslut 4). `StoreScheduleRequest` kräver den även för `interval` och
  * `none` — den är seriens startpunkt OCH det första förfallodatumet — så
  * fältet är alltid synligt men rubriken byter: *Startpunkt i serien* för
- * `fixed`, *Första förfallodatum* annars. Ett obligatoriskt fält som ser
- * valfritt ut är ett 422 användaren inte förstår.
+ * `fixed`, *Första förfallodatum* annars. Vid REDIGERING av ett icke-`fixed`
+ * schema (issue 702 § Beslut 3) är fältet förifyllt med den öppna
+ * förekomstens förfall och rubriken är *Nästa förfallodatum*. Ett
+ * obligatoriskt fält som ser valfritt ut är ett 422 användaren inte förstår.
  *
  * **Intervallfälten döljs OCH nollställs när `none` väljs** (Beslut 4).
  * `prohibited_if:recurrence_type,none` i den delade FormRequesten avvisar dem
@@ -59,6 +61,15 @@ const props = defineProps({
     itemUlid: { type: String, required: true },
     /* Schemat som redigeras, eller null när ett nytt schema skapas. */
     schedule: { type: Object, default: null },
+    /*
+     * Den öppna förekomstens förfallodag, ur ScheduleController::edit() (issue
+     * 702 § Beslut 3). Redigeringsformuläret förifyller `anchor_date` med den
+     * — det är nästa gång uppgiften förfaller, inte seriens start — och en
+     * orörd sparning skriver samma datum som förekomsten redan har. Undantaget
+     * är `fixed`, där fältet är seriens startpunkt och behåller schemats eget
+     * datum.
+     */
+    openDueAt: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -76,7 +87,14 @@ const fields = {
     recurrence_type: props.schedule?.recurrence_type ?? 'none',
     interval_unit: props.schedule?.interval_unit ?? null,
     interval_count: props.schedule?.interval_count ?? null,
-    anchor_date: props.schedule?.anchor_date ?? '',
+    /*
+     * `fixed` är seriens startpunkt i kalendern och behåller schemats eget
+     * datum; för de andra är fältet nästa förfallodatum och förifylls med den
+     * öppna förekomstens förfall (Beslut 3).
+     */
+    anchor_date: props.schedule?.recurrence_type === 'fixed'
+        ? (props.schedule.anchor_date ?? '')
+        : (props.openDueAt ?? props.schedule?.anchor_date ?? ''),
     lead_days: props.schedule?.lead_days ?? 0,
 };
 
@@ -93,9 +111,21 @@ watch(() => form.recurrence_type, (type) => {
 
 const interval = computed(() => form.recurrence_type !== 'none');
 
-const anchorDateLabel = computed(() => (form.recurrence_type === 'fixed'
-    ? t('item.schedule.form.anchor_date_fixed')
-    : t('item.schedule.form.anchor_date')));
+/*
+ * Rubriken följer typen OCH ytan (issue 702 § Beslut 3): för `fixed` är
+ * datumet seriens startpunkt; för de andra är det första förfallodatumet i
+ * skapandeformuläret och NÄSTA förfallodatum när ett befintligt schema
+ * redigeras, där fältet är förifyllt med den öppna förekomstens förfall.
+ */
+const anchorDateLabel = computed(() => {
+    if (form.recurrence_type === 'fixed') {
+        return t('item.schedule.form.anchor_date_fixed');
+    }
+
+    return props.schedule === null
+        ? t('item.schedule.form.anchor_date')
+        : t('item.schedule.form.anchor_date_next');
+});
 
 /*
  * Knappens ord byter medan servern svarar (issue 68a § Beslut 4 och 5): en
