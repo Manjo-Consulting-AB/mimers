@@ -3,10 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import TodoRow from '../../components/TodoRow.vue';
-import UiListRow from '../../components/UiListRow.vue';
 import UiEmptyState from '../../components/UiEmptyState.vue';
-import { scheduleUrl } from '../../components/occurrencePresentation.js';
-import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
@@ -40,13 +37,12 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * men är tom, och en lista utan innehåll är samma svar utan brus.
  *
  * **Den femte sektionen är `completed`** (Beslut 3): avbockade förekomster i
- * containern, nyast först och högst tjugo. Raden är INTE `TodoRow` — den ritar
- * en avbockningsknapp, och en avbockad rad har ingenting att bocka av. Den är
- * `UiListRow` (issue 99) med samma upplysningar som de öppna raderna bär —
- * schemats titel, itemet och ett datum — och datumet är `completed_at`, som
- * skrivs av `eventDate()`: en avbockning är en HÄNDELSE och inte en
- * förfallodag, och `dueDate()` hade svarat *Om 3 dagar* om något som gjordes i
- * förrgår (issue 104).
+ * containern, nyast först och högst tjugo. Raden är `TodoRow` som de öppna
+ * (M24 · issue 230, Beslut 5): komponenten ser `completed_at` och ritar en
+ * fylld bock utan knapp och utan formulär, med `eventDate()` i stället för
+ * `dueDate()` — en avbockning är en HÄNDELSE och inte en förfallodag, och
+ * `dueDate()` hade svarat *Om 3 dagar* om något som gjordes i förrgår (issue
+ * 104). Två formuleringar av samma rad blir en.
  *
  * **Underhållsfiltret står i querysträngen** (Beslut 4). Kryssrutan postar
  * ingen kropp: `router.get` mot SAMMA rutt som sidan ligger på, med
@@ -92,7 +88,6 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
-const { eventDate } = useRelativeDate();
 
 /* Kryssrutans läge, speglat ur proppen — se docblocken ovan. */
 const onlyMaintenance = ref(props.maintenance);
@@ -133,19 +128,13 @@ function apply() {
 }
 
 /*
- * Adresserna byggs i vyn, som i varje annan rad: rutten `containers.calendar`
- * och `containers.export` är containerns egna undersidor, och samma två
- * adresser står i resources/js/layouts/containerSections.js. Schemats adress
- * kommer ur occurrencePresentation.js — en enda stavning av samma rutt.
+ * Snabblänkarnas adresser byggs i vyn, som i varje annan rad: rutten
+ * `containers.calendar` och `containers.export` är containerns egna undersidor,
+ * och samma två adresser står i resources/js/layouts/containerSections.js.
+ * Uppgiftsradens adresser bor i `TodoRow` (M24 · issue 230).
  */
 const calendarUrl = () => `/containers/${props.container.ulid}/calendar`;
 const exportUrl = () => `/containers/${props.container.ulid}/export`;
-
-const itemUrl = (entry) => `/containers/${entry.container.ulid}/items/${entry.item.ulid}`;
-
-const scheduleHref = (entry) => scheduleUrl(entry.container.ulid, entry.item.ulid, entry.schedule.ulid);
-
-const completedAt = (entry) => eventDate(entry.completed_at);
 </script>
 
 <template>
@@ -218,29 +207,12 @@ const completedAt = (entry) => eventDate(entry.completed_at);
                 <h2 class="text-sm font-medium text-slate-700">{{ t('container.tasks.done') }}</h2>
 
                 <ul class="mt-2 flex flex-col divide-y divide-slate-200">
-                    <UiListRow v-for="entry in completed" :key="entry.ulid">
-                        <template #title>
-                            <Link
-                                :href="scheduleHref(entry)"
-                                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                            >
-                                {{ entry.schedule.title }}
-                            </Link>
-                        </template>
-
-                        <template #subtitle>
-                            <Link
-                                :href="itemUrl(entry)"
-                                class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                            >
-                                {{ entry.item.name }}
-                            </Link>
-                        </template>
-
-                        <template #meta>
-                            <time :datetime="entry.completed_at">{{ completedAt(entry).text }}</time>
-                        </template>
-                    </UiListRow>
+                    <TodoRow
+                        v-for="entry in completed"
+                        :key="entry.ulid"
+                        :entry="entry"
+                        :show-container="false"
+                    />
                 </ul>
             </section>
         </div>

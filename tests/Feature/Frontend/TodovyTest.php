@@ -612,20 +612,24 @@ it('visar container, item och schema med länkar som går rätt', function () {
 });
 
 /*
- * Klart när: en försenad rad har pricken i `danger` på knappen, en framtida
- * rad har den i `accent`, och en rad som förfaller i dag har ingen prick.
+ * Klart när: en försenad rads bock bär ordet *Overdue* och en framtida rads
+ * bock ordet *Upcoming* i knappens `aria-label` (M24 · issue 230, Beslut 1).
  *
  * **Servern avgör, klienten ritar** (issue 64 § Beslut 3). Raden läser
  * `entry.overdue` och `entry.upcoming`, som `TodoEntryResource` räknar mot
- * användarens dag (issue 133) — vyn jämför inga datum själv. Halvan som
- * bevisar det står i provet "låter serverns datum styra gruppen": `new Date`
- * och `Date.now` får inte finnas i vyn.
+ * användarens dag — vyn jämför inga datum själv. Halvan som bevisar det står i
+ * provet "låter serverns datum styra gruppen": `new Date` och `Date.now` får
+ * inte finnas i vyn.
  *
  * Fälten prövas per grupp och inte bara i `/api`: grupperingen och fälten
- * räknas ur SAMMA predikat, så en rad i `upcoming` som inte är `upcoming`
- * vore två svar på samma fråga.
+ * räknas ur SAMMA predikat, så en rad i `upcoming` som inte är `upcoming` vore
+ * två svar på samma fråga.
+ *
+ * **Den gamla pricken (issue 133) och textknappen *Check off* är borta.** Den
+ * skärmläsartext pricken bar flyttar in i knappens namn: `todo.complete` och,
+ * när servern pekat ut ett tillstånd, grupprubrikens eget ord.
  */
-it('ritar pricken för försenat och framtida på avbockningsknappen', function () {
+it('bär försenat och kommande i knappens aria-label', function () {
     withoutVite();
 
     [, $anvandare, , $item] = todovyKontext();
@@ -643,25 +647,22 @@ it('ritar pricken för försenat och framtida på avbockningsknappen', function 
         ->and(todovyGrupp($svar, 'upcoming')[0]['overdue'])->toBeFalse()
         ->and(todovyGrupp($svar, 'upcoming')[0]['upcoming'])->toBeTrue();
 
+    // Kommentarerna bort: docblocken talar med flit om vad som togs bort, och
+    // det är MARKUPEN som ska bära orden.
     $rad = File::get(resource_path('js/components/TodoRow.vue'));
+    $rad = (string) preg_replace('#/\*.*?\*/#s', '', $rad);
+    $rad = (string) preg_replace('#<!--.*?-->#s', '', $rad);
 
-    // Färgerna ur designsystemets tokens ([[ADR-0042 Designsystemet]]
-    // § Beslut), aldrig en hårdkodad Tailwind-färg — `bg-red-600` hade sett
-    // likadan ut i en strukturell kontroll och fallit först vid en ombindning.
-    expect($rad)->toContain(":class=\"entry.overdue ? 'bg-danger' : 'bg-accent'\"")
-        // Pricken ritas bara när servern pekat ut ett tillstånd: en rad som
-        // förfaller i dag får ingen prick, för båda fälten är false.
-        ->toContain('v-if="entry.overdue || entry.upcoming"')
-        // Betydelsen för den som inte ser färgen, i knappens namn.
-        ->toContain('class="sr-only"')
+    // Namnet byggs i raden och bär både handlingen och tillståndet.
+    expect($rad)->toContain(':aria-label')
+        ->toContain("t('todo.complete')")
         ->toContain("t('todo.group.overdue')")
-        ->toContain("t('todo.group.upcoming')")
-        ->toContain('aria-hidden="true"');
+        ->toContain("t('todo.group.upcoming')");
 
-    // Pricken sitter utanför flödet och krymper inte träffytan: `min-h-11` är
-    // 44 px, och en prick i flödet hade gjort knappen högre och knuffat raden.
-    expect($rad)->toContain('class="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"')
-        ->toContain('relative inline-flex min-h-11 items-center rounded bg-slate-900');
+    // Pricken (`sr-only` och `absolute`) och textknappen (`bg-slate-900`) är
+    // borta — annars hade raden burit två svar på samma fråga.
+    expect($rad)->not->toContain('sr-only');
+    expect($rad)->not->toContain('bg-slate-900');
 });
 
 /*

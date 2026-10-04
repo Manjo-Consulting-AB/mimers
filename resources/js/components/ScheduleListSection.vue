@@ -2,9 +2,6 @@
 import { computed, ref, watch } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
 import TodoRow from './TodoRow.vue';
-import UiListRow from './UiListRow.vue';
-import { scheduleUrl } from './occurrencePresentation.js';
-import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -43,11 +40,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * *New task* — och rutten prövar `create` på nytt. Pausen, redigeringen och
  * raderingen ritas på schemats sida, bakom sina egna flaggor.
  *
- * Ordningen i *Done* och tidsstämpeln kommer färdiga från servern; `eventDate`
- * skriver `completed_at` som en HÄNDELSE och inte som ett förfallodatum
- * (issue 104) — en avbockning är något som gjordes, inte något som förfaller.
- * Ingen sträng står i JavaScript (issue 52 · [[ADR-0013 Språk och i18n]]):
- * rubriken, knappen, reglaget och grupprubrikerna kommer ur `t()`.
+ * Ordningen i *Done* kommer färdig från servern, och raden är `TodoRow` som de
+ * öppna (M24 · issue 230, Beslut 5): komponenten ser `completed_at` och skriver
+ * tidsstämpeln med `eventDate()` som en HÄNDELSE och inte som ett
+ * förfallodatum (issue 104) — en avbockning är något som gjordes, inte något
+ * som förfaller. Ingen sträng står i JavaScript (issue 52 · [[ADR-0013 Språk
+ * och i18n]]): rubriken, knappen, reglaget och grupprubrikerna kommer ur `t()`.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -67,7 +65,6 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
-const { eventDate } = useRelativeDate();
 
 /* Kryssrutans läge, speglat ur proppen — se docblocken ovan. */
 const onlyChildren = ref(props.includeChildren);
@@ -107,18 +104,6 @@ function apply() {
         onFinish: () => { pending.value = false; },
     });
 }
-
-/*
- * Adresserna byggs i vyn, som i varje annan rad. Schemats adress kommer ur
- * occurrencePresentation.js — en enda stavning av samma rutt — och itemets ur
- * radens egen container och eget item, av samma skäl som i
- * resources/js/pages/Containers/Tasks.vue.
- */
-const itemUrl = (entry) => `/containers/${entry.container.ulid}/items/${entry.item.ulid}`;
-
-const scheduleHref = (entry) => scheduleUrl(entry.container.ulid, entry.item.ulid, entry.schedule.ulid);
-
-const completedAt = (entry) => eventDate(entry.completed_at);
 </script>
 
 <template>
@@ -197,29 +182,12 @@ const completedAt = (entry) => eventDate(entry.completed_at);
                 <h2 class="text-sm font-medium text-slate-700">{{ t('container.tasks.done') }}</h2>
 
                 <ul class="mt-2 flex flex-col divide-y divide-slate-200">
-                    <UiListRow v-for="entry in completed" :key="entry.ulid">
-                        <template #title>
-                            <Link
-                                :href="scheduleHref(entry)"
-                                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                            >
-                                {{ entry.schedule.title }}
-                            </Link>
-                        </template>
-
-                        <template #subtitle>
-                            <Link
-                                :href="itemUrl(entry)"
-                                class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                            >
-                                {{ entry.item.name }}
-                            </Link>
-                        </template>
-
-                        <template #meta>
-                            <time :datetime="entry.completed_at">{{ completedAt(entry).text }}</time>
-                        </template>
-                    </UiListRow>
+                    <TodoRow
+                        v-for="entry in completed"
+                        :key="entry.ulid"
+                        :entry="entry"
+                        :show-container="false"
+                    />
                 </ul>
             </section>
         </div>
