@@ -48,6 +48,22 @@ class ScheduleOccurrenceFactory extends Factory
     }
 
     /**
+     * En förekomst utan datum (ADR-0052 § 3) — `due_at` och `visible_from` är
+     * null. I produktionen är `none` utan `anchor_date` den enda vägen in, och
+     * den öppnas av App\Actions\Schedule\OpenNextOccurrence; här byggs raden
+     * direkt, för de läsare som ska tåla den. Sätt båda kolumnerna tillsammans:
+     * standardtillståndets `visible_from`-closure läser `due_at` och hade gett
+     * en typkrock om bara det ena nollställdes.
+     */
+    public function dateless(): static
+    {
+        return $this->state(fn (): array => [
+            'due_at' => null,
+            'visible_from' => null,
+        ]);
+    }
+
+    /**
      * En stängd förekomst — historikraden som listan bär som logg över
      * utförda jobb. Skrivs i produktion av avslutsflödet (issue 22b), i test
      * av den här fabriken.

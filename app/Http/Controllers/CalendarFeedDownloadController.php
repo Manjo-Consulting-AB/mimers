@@ -44,7 +44,8 @@ use Symfony\Component\HttpFoundation\Response;
  * - `visible_from` filtreras INTE: en kalender visar framtiden, så en
  *   förekomst som förfaller om fyra månader ska stå i kalendern. Därför
  *   används inte scopeTodoFor(), som också filtrerar på blockerande
- *   beroenden (Beslut 3).
+ *   beroenden (Beslut 3). `due_at` däremot MÅSTE finnas: en förekomst utan
+ *   datum skrivs inte till flödet (ADR-0052 § 3).
  *
  * Issue 74 § Beslut 9: urvalet filtreras också på OMFÅNGET. Backlogfilen
  * listar inte feeden bland aggregaten, men den hör hit: den är en
@@ -97,6 +98,11 @@ class CalendarFeedDownloadController extends Controller
 
         $occurrences = ScheduleOccurrence::query()
             ->active()
+            // En förekomst utan datum skrivs inte till flödet (ADR-0052 § 3):
+            // en heldagshändelse kräver en dag, och DTSTART/DTEND kan inte
+            // byggas ur null. Villkoret ligger på frågan, så IcsDocument slipper
+            // en kontroll per rad.
+            ->whereNotNull('due_at')
             ->whereHas('schedule', function (Builder $query) use ($feed, $accountIds, $scope): void {
                 $query->where('schedule.is_active', true)
                     ->whereHas('item', function (Builder $query) use ($feed, $accountIds, $scope): void {

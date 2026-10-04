@@ -25,6 +25,9 @@ use Throwable;
  * andra formulering av samma regel skulle glida isär från listan och låta
  * produktens två ytor säga olika saker om samma uppgift.
  *
+ * **En förekomst utan datum ger ingen notis** (ADR-0052 § 3): `whereNotNull
+ * ('due_at')` står på frågan, och en rad utan förfall når aldrig typvalet.
+ *
  * Ovanpå urvalet ligger en NIVÅGRIND, inte en kontogrind (issue 75
  * § Beslut 8): notisen går till den som kan bocka av uppgiften, och
  * `complete()`/`skip()` går via ItemPolicy::update() — alltså
@@ -114,6 +117,11 @@ class GeneratesTaskNotifications
 
         $occurrences = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
+            // En förekomst utan datum ger ingen notis (ADR-0052 § 3): det
+            // finns ingen dag att påminna om. Villkoret ligger på FRÅGAN och
+            // inte som en kontroll per rad — raden är utesluten innan den
+            // når typvalet nedan, som annars hade jämfört null med ett datum.
+            ->whereNotNull('due_at')
             ->visibleToday($user)
             ->with(['schedule.item.container.account'])
             ->get();

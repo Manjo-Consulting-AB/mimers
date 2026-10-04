@@ -552,6 +552,11 @@ class ListTodo
     ): Builder {
         $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
+            // Fram till issue 234 (ADR-0052 § 3) har en rad utan datum ingen
+            // grupp att hamna i, och listan sorterar och grupperar på `due_at`.
+            // Villkoret håller raden borta tills *No date* byggs; då ersätts
+            // det av gruppen, och markören `n_{ulid}`.
+            ->whereNotNull('due_at')
             ->with(['schedule.item.container.account']);
 
         if ($onlyCurrent) {

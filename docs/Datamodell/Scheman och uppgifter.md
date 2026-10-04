@@ -48,8 +48,8 @@ Skillnaden är inte kosmetisk och kan inte uttryckas med ett enda nästa-datum-f
 |---|---|---|
 | id, ulid | | |
 | schedule_id | FK | |
-| visible_from | DATE | `due_at` minus `lead_days`. Innan detta syns uppgiften inte i todo-listan. |
-| due_at | DATE | |
+| visible_from | DATE NULL | `due_at` minus `lead_days`. Innan detta syns uppgiften inte i todo-listan. Null när `due_at` är null. |
+| due_at | DATE NULL | Null för en uppgift utan datum. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3 |
 | status | VARCHAR(20) | `open` \| `in_progress` \| `completed` \| `skipped` |
 | gtd_list | VARCHAR(10) | `inbox` \| `next` \| `waiting` \| `someday`. Förval `next`. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 |
 | completed_at | TIMESTAMP NULL | |
@@ -60,6 +60,8 @@ Skillnaden är inte kosmetisk och kan inte uttryckas med ett enda nästa-datum-f
 Index: `(schedule_id, status)`, `(due_at, status)` för todo-listan över alla containers.
 
 **Aktiv** är en förekomst som inte är stängd: `status` är `open` eller `in_progress`. Villkoret formuleras en gång, som `ScheduleOccurrence::scopeActive()`, och det är frågan koden ställer överallt där den menar *inte stängd* — todo-urvalet, itemets status, notiserna, ICS-flödet, beroendena och avbockningens kontroll. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1.
+
+**En uppgift utan datum.** `due_at` och `visible_from` får vara null. Har en förekomst inget `due_at` är `visible_from` också null, och tas datumet bort försvinner glappet med det — `lead_days` ignoreras utan ett förfall. **Ett återkommande schema måste ha ett datum:** `recurrence_type` `fixed` och `interval` kräver `anchor_date`, och deras förekomster får alltid ett `due_at`. Bara `none` får sakna datum — utan ett första datum finns ingen serie att räkna nästa förfall ur. En förekomst utan datum syns inte i *Overdue*, *Today*, *This week* eller *Upcoming*, ger ingen notis, skrivs inte till ICS-flödet, gör aldrig ett item försenat och exporteras med tomma datum. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3.
 
 **Förfallen** (`overdue`) är inte en status utan härleds: **aktiv** och `due_at < idag`, där `idag` är **användarens kalenderdag** — `User::today()` — och inte serverns. Se [[ADR-0044 Användarens dag]] § Beslut 1. Lagra aldrig ett tillstånd som klockan kan ändra åt dig — då måste ett jobb hålla det uppdaterat, och det jobbet kommer att missa körningar.
 
