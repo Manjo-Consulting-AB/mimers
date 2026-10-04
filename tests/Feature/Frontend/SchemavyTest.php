@@ -491,7 +491,7 @@ it('pausar och återupptar med en PATCH som bär bara is_active', function () {
     $url = schemavySchemaUrl($container, $item)."/{$schema->ulid}";
 
     actingAs($anvandare)->patch($url, ['is_active' => false])
-        ->assertRedirect(schemavyUrl($container, $item))
+        ->assertRedirect($url)
         ->assertSessionHas('status', 'schedule-paused');
 
     expect($schema->fresh()->is_active)->toBeFalse();
@@ -741,7 +741,7 @@ it('låter en write-mottagare ändra och pausa men inte radera', function () {
 
     $url = schemavySchemaUrl($container, $item)."/{$schema->ulid}";
 
-    actingAs($skrivare)->patch($url, ['is_active' => false])->assertRedirect(schemavyUrl($container, $item));
+    actingAs($skrivare)->patch($url, ['is_active' => false])->assertRedirect($url);
 
     expect($schema->fresh()->is_active)->toBeFalse();
 
