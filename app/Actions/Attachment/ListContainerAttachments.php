@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Bilagorna i en container, en sida i taget — underlaget för dokumentfliken
@@ -36,14 +37,18 @@ use Illuminate\Support\Carbon;
  *   tom lista kompilerar till `0 = 1` — "når ingenting", aldrig "når allt"
  *   (App\Support\Access\ItemScope).
  *
- * **Filtren är ett OCH och kan kombineras** (Beslut 2). Var och en smalnar av
- * frågan och ingen av dem breddar den: en ULID som inte matchar något ger ett
- * tomt resultat, aldrig ett ogiltigt filter (samma linje som
- * App\Actions\Item\ListItems § docblock). `uploader` slås upp GLOBALT och inte
- * inom omfånget — det är ofarligt, för omfångsvillkoret står kvar och en
- * uppladdare utanför omfånget ger därför noll rader. Att i stället bygga en
- * lista över "uppladdare inom omfånget" och pröva ULID:n mot den hade varit en
- * andra formulering av samma fråga.
+ * **ELLER inom en grupp, OCH mellan grupperna** (Beslut 2). `kind`, `item` och
+ * `uploader` tar var sin LISTA: en bilaga har en typ, ett item och en
+ * uppladdare, så flera värden i samma grupp måste vara en ELLER — ett OCH
+ * inom gruppen hade aldrig kunnat träffa. Grupperna emellan är det ett OCH:
+ * `kind[]=document&item[]=<motor>` ger motorns dokument och varken motorns
+ * bild eller värmarens pdf. Varje grupp smalnar av frågan och ingen av dem
+ * breddar den: en ULID som inte matchar något ger ett tomt resultat, aldrig
+ * ett ogiltigt filter (samma linje som App\Actions\Item\ListItems § docblock).
+ * `uploader` slås upp GLOBALT och inte inom omfånget — det är ofarligt, för
+ * omfångsvillkoret står kvar och en uppladdare utanför omfånget ger därför
+ * noll rader. Att i stället bygga en lista över "uppladdare inom omfånget" och
+ * pröva ULID:n mot den hade varit en andra formulering av samma fråga.
  *
  * **Datumgränserna är användarens dygn, inte UTC:s** (Beslut 2). `from` och
  * `to` är `Y-m-d` i användarens tidszon (`User::preferredTimezone()`, issue
@@ -102,6 +107,43 @@ class ListContainerAttachments
         return is_string($kind) && in_array($kind, ['image', 'document', 'other'], true) ? $kind : null;
     }
 
+    /**
+     * Typfiltret ur querysträngen, normaliserat till en lista (Beslut 1).
+     *
+     * Både `kind=image` och `kind[]=image&kind[]=document` tas emot: ett
+     * skalärt värde blir en lista med ett element, och varje värde prövas
+     * genom `kindFilter()` så att ett okänt värde faller bort. Listan är
+     * DEDUPLICERAD och står i ordningen `image, document, other` — den fasta
+     * ordningen och inte den inskickade, så att två adresser som pekar på
+     * samma filter ger samma `filter`-propp.
+     *
+     * En tom lista är inget filter: den som skickade `kind[]=video` får hela
+     * listan och inte ett tomt svar, samma linje som `kindFilter()` drar för
+     * ett enskilt värde.
+     *
+     * @return list<string>
+     */
+    public static function kindFilters(mixed $kind): array
+    {
+        if (is_string($kind)) {
+            $kind = [$kind];
+        }
+
+        if (! is_array($kind)) {
+            return [];
+        }
+
+        $giltiga = array_filter(array_map(
+            static fn (mixed $varde): ?string => self::kindFilter($varde),
+            $kind,
+        ), static fn (?string $varde): bool => $varde !== null);
+
+        return array_values(array_filter(
+            ['image', 'document', 'other'],
+            static fn (string $varde): bool => in_array($varde, $giltiga, true),
+        ));
+    }
+
     public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
 
     /**
@@ -114,16 +156,49 @@ class ListContainerAttachments
      * fråga per bild (issue 61b § Beslut 1). Frågekostnaden är därför konstant
      * och växer inte med antalet rader.
      *
-     * @param  array{kind?: string|null, item?: string|null, uploader?: string|null, from?: string|null, to?: string|null, sort?: string|null}  $filters
+     * @param  array{q?: string|null, kind?: list<string>, item?: list<string>, uploader?: list<string>, from?: string|null, to?: string|null, sort?: string|null}  $filters
      */
     public function handle(User $user, Container $container, array $filters = []): LengthAwarePaginator
     {
         $itemIds = $this->resolveItemScope->handle($user, $container)->itemIds();
 
-        $query = Attachment::query()
+        $query = $this->visible($container, $itemIds)
             ->select('attachment.*')
+            // `billedAccount` bär AttachmentResource (`billed_account`), och
+            // `storedFile.derivatives` bär `variants` i kontrollern: utan dem
+            // hade båda blivit en fråga per rad.
+            ->with(['item', 'storedFile.derivatives', 'billedAccount']);
+
+        $this->applyItemFilter($query, $filters['item'] ?? []);
+        $this->applyScalarFilters($query, $user, $filters);
+        $this->applySort($query, $filters['sort'] ?? null);
+
+        return $query->paginate(self::PER_PAGE);
+    }
+
+    /**
+     * Urvalet som `handle()`, `uploaders()` och `counts()` delar: bilagor på
+     * LEVANDE items i containern användaren når.
+     *
+     * `whereHas('item', …)` bär containern, papperskorgen (itemets SoftDeletes)
+     * och containerns EGEN bild (`item_id = NULL` matchar aldrig) — se
+     * klassdocblocken. `whereNotNull('attachment.item_id')` står bredvid som
+     * samma sanning skriven rakt ut. Omfånget läggs ovanpå som
+     * `whereIn('item.id', …)`, och ett OMFATTANDE omfång slipper villkoret
+     * helt: `null` är "hela containern" och en tom lista är "når ingenting".
+     *
+     * Extraherad så att de tre läsarna frågar samma sak: två avskrifter av
+     * urvalet glider isär, och den ena hade räknat in en bilaga den andra inte
+     * visade.
+     *
+     * @param  list<int>|null  $itemIds
+     * @return Builder<Attachment>
+     */
+    private function visible(Container $container, ?array $itemIds): Builder
+    {
+        return Attachment::query()
             ->whereNotNull('attachment.item_id')
-            ->whereHas('item', function (Builder $query) use ($container, $itemIds, $filters) {
+            ->whereHas('item', function (Builder $query) use ($container, $itemIds) {
                 /** @var Builder<Item> $query */
                 $query->where('item.container_id', $container->getKey());
 
@@ -133,18 +208,7 @@ class ListContainerAttachments
                 if ($itemIds !== null) {
                     $query->whereIn('item.id', $itemIds);
                 }
-
-                $this->applyItemFilter($query, $filters['item'] ?? null);
-            })
-            // `billedAccount` bär AttachmentResource (`billed_account`), och
-            // `storedFile.derivatives` bär `variants` i kontrollern: utan dem
-            // hade båda blivit en fråga per rad.
-            ->with(['item', 'storedFile.derivatives', 'billedAccount']);
-
-        $this->applyScalarFilters($query, $user, $filters);
-        $this->applySort($query, $filters['sort'] ?? null);
-
-        return $query->paginate(self::PER_PAGE);
+            });
     }
 
     /**
@@ -170,16 +234,7 @@ class ListContainerAttachments
     {
         $itemIds = $this->resolveItemScope->handle($user, $container)->itemIds();
 
-        $ids = Attachment::query()
-            ->whereNotNull('attachment.item_id')
-            ->whereHas('item', function (Builder $query) use ($container, $itemIds) {
-                /** @var Builder<Item> $query */
-                $query->where('item.container_id', $container->getKey());
-
-                if ($itemIds !== null) {
-                    $query->whereIn('item.id', $itemIds);
-                }
-            })
+        $ids = $this->visible($container, $itemIds)
             ->distinct()
             ->pluck('attachment.uploaded_by_user_id')
             ->all();
@@ -201,24 +256,137 @@ class ListContainerAttachments
     }
 
     /**
-     * `item`-filtret, inuti `whereHas('item')` — itemets ULID.
+     * Antalet bilagor per typ, item och uppladdare, inom det användaren ser
+     * (Beslut 5) — underlaget för siffrorna i filterkolumnen.
+     *
+     * **Samma urval som `uploaders()`** — containern, omfånget, inga
+     * borttagna — och därför samma `visible()`. Antalen följer INTE det valda
+     * filtret: siffran bredvid *Image* är alltid antalet bilder användaren
+     * når, och ett `q` eller en `kind` i adressen rör den inte. Ett filter
+     * som räknade om sig självt hade visat noll för varje val utom det valda.
+     *
+     * **Konstant antal frågor**: en `GROUP BY` per grupp, plus ett ULID-uppslag
+     * för de löpnummer som blev kvar i item- och uppladdargruppen. Totalen är
+     * summan av typgrupperna — varje bilaga har en typ, så en fjärde fråga
+     * hade svarat samma sak som den första. `kind` bär alla tre nycklarna även
+     * när en typ saknas, så vyn slipper hantera en utelämnad nyckel.
+     *
+     * @return array{total: int, kind: array<string, int>, item: array<string, int>, uploader: array<string, int>}
+     */
+    public function counts(User $user, Container $container): array
+    {
+        $itemIds = $this->resolveItemScope->handle($user, $container)->itemIds();
+
+        $kinds = ['image' => 0, 'document' => 0, 'other' => 0];
+        $total = 0;
+
+        $rader = $this->visible($container, $itemIds)
+            ->toBase()
+            ->select('attachment.kind as grupp', DB::raw('COUNT(*) as antal'))
+            ->groupBy('attachment.kind')
+            ->get();
+
+        foreach ($rader as $rad) {
+            $total += (int) $rad->antal;
+
+            $kind = (string) $rad->grupp;
+
+            if (array_key_exists($kind, $kinds)) {
+                $kinds[$kind] = (int) $rad->antal;
+            }
+        }
+
+        $perItem = $this->visible($container, $itemIds)
+            ->toBase()
+            ->select('attachment.item_id as grupp', DB::raw('COUNT(*) as antal'))
+            ->groupBy('attachment.item_id')
+            ->pluck('antal', 'grupp')
+            ->all();
+
+        $perUppladdare = $this->visible($container, $itemIds)
+            ->toBase()
+            ->select('attachment.uploaded_by_user_id as grupp', DB::raw('COUNT(*) as antal'))
+            ->groupBy('attachment.uploaded_by_user_id')
+            ->pluck('antal', 'grupp')
+            ->all();
+
+        return [
+            'total' => $total,
+            'kind' => $kinds,
+            'item' => $this->ulidCounts($perItem, Item::class),
+            'uploader' => $this->ulidCounts($perUppladdare, User::class),
+        ];
+    }
+
+    /**
+     * Löpnummer → antal, översatt till ULID → antal (Beslut 5).
+     *
+     * Ett uppslag per grupp och ingenting mer: mängden som ska namnges är
+     * löpnumren ur `GROUP BY`, och ett `id` utan rad i tabellen — kan inte
+     * hända med en deklarerad främmande nyckel — hoppas över i stället för att
+     * bli en nyckel utan namn.
+     *
+     * @param  array<int|string, int|string>  $antalPerId
+     * @param  class-string<Item>|class-string<User>  $modell
+     * @return array<string, int>
+     */
+    private function ulidCounts(array $antalPerId, string $modell): array
+    {
+        if ($antalPerId === []) {
+            return [];
+        }
+
+        $ulids = $modell::query()->whereIn('id', array_keys($antalPerId))->pluck('ulid', 'id')->all();
+
+        $antalPerUlid = [];
+
+        foreach ($antalPerId as $id => $antal) {
+            if (isset($ulids[$id])) {
+                $antalPerUlid[(string) $ulids[$id]] = (int) $antal;
+            }
+        }
+
+        return $antalPerUlid;
+    }
+
+    /**
+     * `item`-filtret — itemets ULID, som en ELLER-lista (Beslut 1 och 2).
      *
      * Villkoret ligger i item-ledet och inte som `where('attachment.item_id',
      * …)`: en ULID som inte finns i containern, eller som ligger utanför
      * omfånget, ska ge noll rader, och den sökta raden är ändå alltid den
-     * aktuella item-raden i underfrågan.
+     * aktuella item-raden i underfrågan. Flera värden är en ELLER inom
+     * gruppen — en bilaga har ETT item, så ett OCH hade aldrig kunnat träffa
+     * — medan gruppen som helhet kombineras med de andra Gruppen med OCH.
+     *
+     * @param  Builder<Attachment>  $query
+     * @param  list<string>  $ulids
      */
-    private function applyItemFilter(Builder $query, ?string $ulid): void
+    private function applyItemFilter(Builder $query, array $ulids): void
     {
-        if ($ulid === null || $ulid === '') {
+        if ($ulids === []) {
             return;
         }
 
-        $query->where('item.ulid', $ulid);
+        $query->whereHas('item', static function (Builder $item) use ($ulids) {
+            /** @var Builder<Item> $item */
+            $item->whereIn('item.ulid', $ulids);
+        });
     }
 
     /**
-     * Typ, uppladdare och datum — de filter som står direkt på `attachment`.
+     * Sökningen, typen, uppladdaren och datumet — de filter som står direkt på
+     * `attachment`.
+     *
+     * **`kind` och `uploader` är ELLER inom sin grupp** (Beslut 2): en bilaga
+     * har en typ och en uppladdare, så `whereIn` är den enda formen som kan
+     * träffa mer än ett värde. En tom lista är inget filter.
+     *
+     * **`q` söker i filnamnet** (Beslut 3). `%`, `_` och escapetecknet självt
+     * escapas med `!` och inte med backslash: `'\\'` är ETT tecken i MariaDB
+     * men TVÅ i sqlite, och sviten kör sqlite — då hade ett filnamn med
+     * backslash betett sig olika i test och drift. `ESCAPE '!'` står därför
+     * utskrivet och `!`, `%` och `_` blir bokstavliga.
      *
      * `from` och `to` är dygnsgränser i användarens tidszon och vänds till ett
      * UTC-spann: `startOfDay()` respektive `endOfDay()` i hennes zon, lästa mot
@@ -227,26 +395,34 @@ class ListContainerAttachments
      * att undvika.
      *
      * @param  Builder<Attachment>  $query
-     * @param  array{kind?: string|null, uploader?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{q?: string|null, kind?: list<string>, uploader?: list<string>, from?: string|null, to?: string|null}  $filters
      */
     private function applyScalarFilters(Builder $query, User $user, array $filters): void
     {
-        $kind = self::kindFilter($filters['kind'] ?? null);
+        $q = $filters['q'] ?? null;
 
-        if ($kind !== null) {
-            $query->where('attachment.kind', $kind);
+        if ($q !== null && $q !== '') {
+            $escaped = str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $q);
+
+            $query->whereRaw("attachment.filename LIKE ? ESCAPE '!'", ['%'.$escaped.'%']);
         }
 
-        $uploader = $filters['uploader'] ?? null;
+        $kinds = $filters['kind'] ?? [];
 
-        if ($uploader !== null && $uploader !== '') {
+        if ($kinds !== []) {
+            $query->whereIn('attachment.kind', $kinds);
+        }
+
+        $uploaders = $filters['uploader'] ?? [];
+
+        if ($uploaders !== []) {
             // En ULID utan användare bakom sig ger `whereIn(…, [])` och
             // därmed `0 = 1` — "matchar ingenting" och aldrig "matchar allt".
             // Ett `whereNull` hade varit det tysta svaret: kolumnen är
             // NOT NULL, så det hade råkat bli rätt av fel skäl.
             $query->whereIn(
                 'attachment.uploaded_by_user_id',
-                User::query()->where('ulid', $uploader)->pluck('id')->all(),
+                User::query()->whereIn('ulid', $uploaders)->pluck('id')->all(),
             );
         }
 

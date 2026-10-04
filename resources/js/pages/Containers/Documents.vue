@@ -9,6 +9,7 @@ import UiBadge from '../../components/UiBadge.vue';
 import UiCard from '../../components/UiCard.vue';
 import UiSelect from '../../components/UiSelect.vue';
 import { attachmentPreview, formatByteSize } from '../../components/attachmentPresentation.js';
+import { documentFilterQuery } from '../../components/documentFilter.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -93,9 +94,16 @@ const props = defineProps({
     variants: { type: Object, required: true },
     /* Sant när användarfiler levereras från en egen origin (issue 61a). */
     inlineEnabled: { type: Boolean, required: true },
-    /* Filtret så som servern tillämpade det: `{kind, item, uploader, from, to, sort}`. */
+    /*
+     * Filtret så som servern tillämpade det:
+     * `{q, kind, item, uploader, from, to, sort}` — listorna är `[]` när
+     * gruppen inte filtrerar (Beslut 4).
+     */
     filter: { type: Object, required: true },
-    /* Filterfältets alternativ: `{items, uploaders}` — allt ur serverns omfång. */
+    /*
+     * Filterfältets alternativ: `{items, uploaders, kinds, total}`, allt ur
+     * serverns omfång och med antalen (Beslut 6).
+     */
     filterOptions: { type: Object, required: true },
     /* Användarens egna senast öppnade filer i containern, nyast först. */
     recentOpens: { type: Array, required: true },
@@ -124,46 +132,32 @@ const view = computed(() => {
 });
 
 /*
- * Filtret som querysträng, ur `filter`-proppen och ingenting annat. Ett värde
- * som inte gäller — `null`, och `sort=newest` som är förvalet — lämnas
- * UTANFÖR: en URL utan brus går att läsa och dela.
+ * Filtret som querysträng, ur `filter`-proppen och ingenting annat (Beslut 7).
+ * Formen bor i documentFilter.js; kvar här är bara LÄGET, som inte är ett
+ * filter och därför står utanför `filterQuery` — annars hade `hasFilter` blivit
+ * sant bara för att rutnätet ritas.
  */
-const filterQuery = computed(() => {
-    const params = new URLSearchParams();
-
-    for (const key of ['kind', 'item', 'uploader', 'from', 'to']) {
-        if (props.filter[key] !== null && props.filter[key] !== undefined) {
-            params.set(key, props.filter[key]);
-        }
-    }
-
-    if (props.filter.sort !== 'newest') {
-        params.set('sort', props.filter.sort);
-    }
-
-    return params.toString();
-});
+const filterQuery = computed(() => documentFilterQuery(props.filter, null));
 
 /*
- * Växelns två lägen, i ritad ordning: det FÖRSTA är förvalet. Adressen skrivs
- * ut per läge i listan nedan i stället för att byggas av en hjälpare — listan
- * ÄR förteckningen över lägena, och ett läge vars adress byggs någon annanstans
- * är ett läge man inte ser.
+ * Växelns två lägen, i ritad ordning: det FÖRSTA är förvalet. Varje läges
+ * adress byggs ur samma funktion som resten av sidan, så länkarna bär exakt
+ * det filter servern tillämpade.
  */
 const views = computed(() => {
-    const query = filterQuery.value;
-    const tail = query === '' ? '' : `&${query}`;
+    const listQuery = documentFilterQuery(props.filter, null);
+    const gridQuery = documentFilterQuery(props.filter, 'grid');
 
     return [
         {
             key: 'list',
             label: t('container.documents.view_list'),
-            href: query === '' ? base.value : `${base.value}?${query}`,
+            href: listQuery === '' ? base.value : `${base.value}?${listQuery}`,
         },
         {
             key: 'grid',
             label: t('container.documents.view_grid'),
-            href: `${base.value}?view=grid${tail}`,
+            href: `${base.value}?${gridQuery}`,
         },
     ];
 });
@@ -174,11 +168,7 @@ const views = computed(() => {
  * — samma skäl och samma grepp som pageUrl() i Costs.vue (issue 176).
  */
 const pageUrl = (number) => {
-    const params = new URLSearchParams(filterQuery.value);
-
-    if (view.value === 'grid') {
-        params.set('view', 'grid');
-    }
+    const params = new URLSearchParams(documentFilterQuery(props.filter, view.value));
 
     params.set('page', String(number));
 
@@ -205,17 +195,11 @@ const sortPending = ref(false);
  * läsa och dela.
  */
 function changeSort(value) {
-    const params = new URLSearchParams(filterQuery.value);
-
-    if (view.value === 'grid') {
-        params.set('view', 'grid');
-    }
-
-    if (value === 'newest') {
-        params.delete('sort');
-    } else {
-        params.set('sort', value);
-    }
+    // Det nya värdet läggs i `filter` innan strängen byggs: `newest` är
+    // förvalet och faller då bort av sig själv, som i varje annan adress här.
+    const params = new URLSearchParams(
+        documentFilterQuery({ ...props.filter, sort: value }, view.value),
+    );
 
     router.get(`${base.value}?${params.toString()}`, {}, {
         preserveScroll: true,
