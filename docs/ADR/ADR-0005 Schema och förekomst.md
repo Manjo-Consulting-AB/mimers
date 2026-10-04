@@ -1,6 +1,6 @@
 # ADR-0005 Schema och förekomst
 
-**Status:** Antagen 2026-08-03 · [[ADR-index]]
+**Status:** Antagen 2026-08-03 · Ändrad av [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] (en förekomst får sakna datum) · [[ADR-index]]
 
 ## Kontext
 
@@ -46,3 +46,7 @@ Att inte generera serier i förväg slipper frågan om hur långt in i framtiden
 ## Uppföljning 2026-09-25 — vilken dag
 
 `overdue` härleds fortfarande och lagras aldrig. Men *idag* i formeln ovan är inte längre serverns `CURDATE()`: det är användarens kalenderdag. Se [[ADR-0044 Användarens dag]].
+
+## Uppföljning 2026-10-04 — förekomster utan datum
+
+En förekomst får sakna `due_at` och `visible_from`, men bara när schemats `recurrence_type` är `none`. Ett återkommande schema kräver fortfarande ett första datum. `overdue` härleds som förut, och bara för förekomster som har ett datum. Förekomsten får också en GTD-lista och statusen `in_progress`. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]].

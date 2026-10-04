@@ -1,6 +1,6 @@
 # ADR-0050 Desktopdesignen
 
-**Status:** Antagen 2026-09-30 · Bygger vidare på [[ADR-0042 Designsystemet]], [[ADR-0038 Gränsen för Pro i kostnaderna]] och [[ADR-0041 Itemets vy]] · [[ADR-index]]
+**Status:** Antagen 2026-09-30 · § 16 ersatt i frågan om GTD-listorna av [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] · Bygger vidare på [[ADR-0042 Designsystemet]], [[ADR-0038 Gränsen för Pro i kostnaderna]] och [[ADR-0041 Itemets vy]] · [[ADR-index]]
 
 Tonys beslut 2026-09-29 och 30, vid gapanalysen efter [[M23 Mobilen och kartan]] och genomgången av designerns fyra nya bilder: `kostnader.png`, `dokument.png`, `uppgifter_1.png` och `Historik.png` i `docs/Design/`.
 
@@ -84,3 +84,7 @@ De fyra nya bilderna ritar containerns flikar *Dokument*, *Uppgifter*, *Kostnade
 **Bygga GTD-tavlan som bilden ritar den.** Valdes bort för MVP. Den kräver en ny uppgiftsmodell, inte en ny vy.
 
 **Rita kostnadsfliken helt fri.** Valdes bort. Allt frågbart är Pro enligt [[ADR-0038 Gränsen för Pro i kostnaderna]], och den gränsen ändras inte av en bild.
+
+## Uppföljning 2026-10-04 — GTD-listorna
+
+§ 16 sköt GTD-listorna till efter MVP. [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] tar in dem före lansering: listan lagras på förekomsten, och Calendar och Done härleds. Tavlan som vy är fortfarande ett senare steg. Containerns flik är en lista sedan issue 225.
