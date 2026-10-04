@@ -1,10 +1,13 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import DocumentFilterBar from '../../components/DocumentFilterBar.vue';
 import ItemViewSwitch from '../../components/ItemViewSwitch.vue';
 import StorageBar from '../../components/StorageBar.vue';
+import UiBadge from '../../components/UiBadge.vue';
+import UiCard from '../../components/UiCard.vue';
+import UiSelect from '../../components/UiSelect.vue';
 import { attachmentPreview, formatByteSize } from '../../components/attachmentPresentation.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -57,6 +60,15 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * itemet först och leder till itemets bilageflik `?tab=attachments`, där
  * uppladdningen redan finns (issue 60). Är `items` tom ritas ingen knapp: en
  * meny utan rader är en död yta (issue 174 § Beslut 5).
+ *
+ * **Rubrikraden bär ikon, rubrik och underrad; lagringsstapeln och knappen
+ * står till höger om den** (M24, testarnas fynd 2026-10-03 ·
+ * `docs/Design/dokument.png`). Underraden namnger containern, och ikonen är
+ * dekor. Sorteringen bor i verktygsraden över listan — den är en fråga om
+ * LISTAN och inte ett filter på den — och ett val ställer samma fråga som
+ * sidnumreringen, utan `page`. *Senast öppnade* är ett kort med miniatyrer,
+ * och en miniatyr ritas bara när `hasThumb` är sann (servern har prövat att
+ * `thumb`-varianten finns); annars filikonen, aldrig en trasig bild.
  *
  * **Ingen sträng i JavaScript** (issue 52 · [[ADR-0013 Språk och i18n]]):
  * rubriken, flikens namn i webbläsaren, filterfältets ord, tabellrubrikerna,
@@ -173,6 +185,45 @@ const pageUrl = (number) => {
     return `${base.value}?${params.toString()}`;
 };
 
+/*
+ * Sorteringarna, i samma ordning som serverns `SORTS`. Listan är fast och
+ * ingen propp: `sort` kan bara anta de fyra värdena, och en väljare byggd ur
+ * svaret hade tappat ett läge ingen lista använt ännu — samma skäl som
+ * `kinds` i filterfältet.
+ */
+const sorts = ['newest', 'oldest', 'name', 'size'];
+
+/* Vänteläget för sorteringsvalet (issue 68a § Beslut 4 och 5). */
+const sortPending = ref(false);
+
+/*
+ * Ett val i sorteringen (Beslut 6). Samma fråga som pageUrl() ställer, men
+ * utan `page`: ett nytt sorteringsval är en ny ordning och börjar på sida ett
+ * — en kvarvarande `?page=3` hade visat en tom sida för en lista som bara har
+ * en. Läget bärs med, så en sortering i rutnätet inte tyst byter till listan,
+ * och förvalet `newest` lämnas UTANFÖR strängen: en URL utan brus går att
+ * läsa och dela.
+ */
+function changeSort(value) {
+    const params = new URLSearchParams(filterQuery.value);
+
+    if (view.value === 'grid') {
+        params.set('view', 'grid');
+    }
+
+    if (value === 'newest') {
+        params.delete('sort');
+    } else {
+        params.set('sort', value);
+    }
+
+    router.get(`${base.value}?${params.toString()}`, {}, {
+        preserveScroll: true,
+        onStart: () => { sortPending.value = true; },
+        onFinish: () => { sortPending.value = false; },
+    });
+}
+
 /* Itemets bilageflik (issue 60): där en bilaga laddas upp och tas bort. */
 const itemUrl = (row) => `/containers/${props.container.ulid}/items/${row.item.ulid}?tab=attachments`;
 
@@ -195,89 +246,200 @@ const hasFilter = computed(() => filterQuery.value !== '');
     <ContainerLayout hero="compact" :container="container" :can="can">
         <Head :title="t('container.documents.title')" />
 
-        <div class="flex flex-wrap items-start justify-between gap-4">
-            <h1 class="text-heading font-semibold">{{ t('container.documents.heading') }}</h1>
+        <!--
+            Rubrikraden (Beslut 1): ikonen och rubriken till vänster, lagrings-
+            stapeln (§ 15) och *Lägg till dokument* (Beslut 2) till höger.
+            Underraden namnger containern, och ikonen är dekor — `aria-hidden`
+            — för rubriken säger redan vad ytan är.
+        -->
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="size-10 shrink-0 text-accent"
+                    aria-hidden="true"
+                >
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <path d="M14 2v6h6" />
+                </svg>
 
-            <!-- Lagringsstapeln (§ 15). Det konto en uppladdning i containern
-                 debiteras, med sina tal ur servern. -->
-            <StorageBar v-if="storage" class="w-full md:w-96" :storage="storage" />
+                <div>
+                    <h1 class="text-heading font-semibold">{{ t('container.documents.heading') }}</h1>
+                    <p class="text-body text-ink-muted">
+                        {{ t('container.documents.subheading', { container: container.name }) }}
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <StorageBar v-if="storage" class="w-full md:w-80" :storage="storage" />
+
+                <!--
+                    *Lägg till dokument* (Beslut 2). En `<details>` och inget
+                    eget öppet-tillstånd i JavaScript — samma grepp som *Lägg
+                    till kostnad* på kostnadsfliken — och listan innehåller de
+                    items användaren får SKAPA på. Ett val leder till itemets
+                    bilageflik, där uppladdningen skrivs. Panelen ligger
+                    absolut och ritas därför inte i flödet.
+                -->
+                <details v-if="items.length > 0" class="relative">
+                    <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control bg-accent px-4 font-medium text-ink-on-accent">
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="size-5 shrink-0"
+                            aria-hidden="true"
+                        >
+                            <path d="M12 5v14M5 12h14" />
+                        </svg>
+
+                        {{ t('container.documents.add') }}
+
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="size-5 shrink-0"
+                            aria-hidden="true"
+                        >
+                            <path d="m6 9 6 6 6-6" />
+                        </svg>
+                    </summary>
+
+                    <div class="absolute right-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
+                        <p class="text-meta text-ink-subtle">{{ t('container.documents.add_choose_item') }}</p>
+
+                        <ul class="mt-1 flex flex-col">
+                            <li v-for="option in items" :key="option.ulid">
+                                <Link
+                                    :href="`/containers/${container.ulid}/items/${option.ulid}?tab=attachments`"
+                                    class="flex min-h-11 items-center rounded-control px-2 text-body text-ink hover:bg-surface-sunken"
+                                >
+                                    {{ option.name }}
+                                </Link>
+                            </li>
+                        </ul>
+                    </div>
+                </details>
+            </div>
         </div>
 
         <!--
-            *Lägg till dokument* (Beslut 5). En `<details>` och inget eget
-            öppet-tillstånd i JavaScript — samma grepp som *Avancerat* i
-            delningsformuläret och *Lägg till kostnad* på kostnadsfliken — och
-            listan innehåller de items användaren får SKAPA på. Ett val leder
-            till itemets bilageflik, där uppladdningen skrivs.
+            *Senast öppnade* (Beslut 4): användarens EGNA öppningar, nyast
+            först och högst fem, som ett kort med miniatyrer. Kortet ritas bara
+            när det finns något att visa — en rubrik över ingenting är ett
+            påstående om att något finns.
+
+            Miniatyren ritas bara när servern säger att `thumb`-varianten finns
+            (`hasThumb`): en `<img>` mot en bilaga utan derivat är 404 (issue
+            19a § Beslut 5), och filerna levereras som `attachment` när
+            `inlineEnabled` är falsk (issue 61a § Beslut 2). Annars filikonen,
+            aldrig en trasig bild.
+
+            Kortet är EN länk till itemets bilageflik — hela fliken leder dit,
+            och den som kommer tillbaka till en fil vill se den bland sina
+            andra. Itemnamnet står inte i kortet: fliken är redan itemets, och
+            namnet upprepade bara var man är. Ingen *Visa alla* — någon sådan
+            vy finns inte.
         -->
-        <details v-if="items.length > 0" class="mt-6">
-            <summary class="inline-flex min-h-11 cursor-pointer items-center rounded bg-blue-700 px-4 font-medium text-white">
-                {{ t('container.documents.add') }}
-            </summary>
+        <UiCard v-if="recentOpens.length > 0" class="mt-8">
+            <template #heading>{{ t('container.documents.recent') }}</template>
 
-            <p class="mt-2 text-sm text-slate-700">{{ t('container.documents.add_choose_item') }}</p>
-
-            <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                <li v-for="option in items" :key="option.ulid">
-                    <Link
-                        :href="`/containers/${container.ulid}/items/${option.ulid}?tab=attachments`"
-                        class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                    >
-                        {{ option.name }}
-                    </Link>
-                </li>
-            </ul>
-        </details>
-
-        <!--
-            *Senast öppnade* (Beslut 3): användarens EGNA öppningar, nyast
-            först och högst fem. Panelen ritas bara när det finns något att
-            visa — en rubrik över ingenting är ett påstående om att något
-            finns. Kortet länkar till itemets bilageflik och inte till filen:
-            hela fliken leder dit, och den som kommer tillbaka till en fil vill
-            se den bland sina andra.
-        -->
-        <section v-if="recentOpens.length > 0" class="mt-8">
-            <h2 class="text-title font-semibold">{{ t('container.documents.recent') }}</h2>
-
-            <ul class="mt-2 flex flex-col gap-2 md:grid md:grid-cols-3 md:gap-4 lg:grid-cols-5">
-                <li
-                    v-for="open in recentOpens"
-                    :key="open.ulid"
-                    class="flex min-h-11 flex-col gap-1 rounded-card border border-border bg-surface p-3"
-                >
+            <ul class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+                <li v-for="open in recentOpens" :key="open.ulid">
                     <Link
                         :href="`/containers/${container.ulid}/items/${open.item.ulid}?tab=attachments`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        class="flex min-h-11 flex-col gap-2"
                     >
-                        {{ open.filename }}
-                    </Link>
+                        <img
+                            v-if="open.hasThumb && inlineEnabled"
+                            :src="`/files/${open.ulid}?variant=thumb`"
+                            :alt="open.filename"
+                            class="h-24 w-full rounded object-cover"
+                        >
 
-                    <span class="text-meta text-ink-muted">{{ open.item.name }}</span>
-                    <time :datetime="open.opened_at" class="text-meta text-ink-subtle">{{ openedAt(open) }}</time>
+                        <span
+                            v-else
+                            role="img"
+                            :aria-label="t('item.attachment.file_icon')"
+                            class="flex h-24 w-full items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="size-8"
+                                aria-hidden="true"
+                            >
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <path d="M14 2v6h6" />
+                            </svg>
+                        </span>
+
+                        <span class="truncate font-medium text-ink">{{ open.filename }}</span>
+                        <time :datetime="open.opened_at" class="text-meta text-ink-subtle">
+                            {{ t('container.documents.opened', { date: openedAt(open) }) }}
+                        </time>
+                    </Link>
                 </li>
             </ul>
-        </section>
+        </UiCard>
 
         <!--
-            Växeln (Beslut 2) och filterfältet (§ 12). Läget kommer ur
-            adressen genom `view`, filtret ur `filter`-proppen — serverns
-            läsning — så vyn håller ingenting i minnet och en omladdning
-            landar i samma läge och samma träfflista.
+            Filterfältet (§ 12). Det står mellan kortet och verktygsraden, och
+            filtret kommer ur `filter`-proppen — serverns läsning — så vyn
+            håller ingenting i minnet och en omladdning landar i samma
+            träfflista.
         -->
-        <ItemViewSwitch
-            class="mt-8"
-            :views="views"
-            :current="view"
-            :label="t('container.documents.view_label')"
-        />
-
         <DocumentFilterBar
             :container-ulid="container.ulid"
             :items="filterOptions.items"
             :uploaders="filterOptions.uploaders"
             :filter="filter"
         />
+
+        <!--
+            Verktygsraden (Beslut 6): sorteringen och lägesväxeln. Sorteringen
+            är en fråga om LISTAN och inte ett filter på den, och står därför
+            här i stället för i filterfältet. Ett val ställer samma fråga som
+            sidnumreringen, utan `page`. Läget kommer ur adressen genom
+            `view` — servern läser den inte (Beslut 2 i issue 178).
+        -->
+        <div class="mt-6 flex flex-wrap items-center justify-end gap-3">
+            <label for="document-sort" class="sr-only">{{ t('container.documents.sort_label') }}</label>
+
+            <UiSelect
+                id="document-sort"
+                :model-value="filter.sort"
+                :disabled="sortPending"
+                @update:model-value="changeSort"
+            >
+                <option v-for="value in sorts" :key="value" :value="value">
+                    {{ t(`container.documents.sort_${value}`) }}
+                </option>
+            </UiSelect>
+
+            <ItemViewSwitch
+                :views="views"
+                :current="view"
+                :label="t('container.documents.view_label')"
+            />
+        </div>
 
         <!-- Två tomma lägen, och de säger olika saker: ett filter som inte
              matchar något är ett svar om FRÅGAN, en tom container ett svar om
@@ -287,81 +449,111 @@ const hasFilter = computed(() => filterQuery.value !== '');
         </p>
 
         <!--
-            Listan. Kolumnrubrikerna är `<th scope="col">`, som i
-            kostnadstabellen: en skärmläsare läser då cellen som "Item, Motor"
-            i stället för att läsa tolv namn i rad.
+            Listan (Beslut 7), inramad i ett kort. Kolumnrubrikerna är
+            `<th scope="col">`, som i kostnadstabellen: en skärmläsare läser då
+            cellen som "Item, Motor" i stället för att läsa tolv namn i rad.
+
+            Ingen checkboxkolumn och ingen ⋯-meny: det finns inga massåtgärder,
+            och raden har bara en åtgärd — nedladdningen, vars kolumnrubrik är
+            `sr-only` därför att länkens eget ord redan säger vad den gör.
+            Typen ritas som en neutral bricka; UiBadge har inga typfärger, och
+            en egen färg per typ hade varit en femte färg vid sidan av tokens
+            ([[ADR-0042 Designsystemet]]).
         -->
-        <table v-else-if="view === 'list'" class="mt-4 w-full border-collapse text-left">
-            <thead>
-                <tr class="border-b border-border">
-                    <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                        {{ t('container.documents.filename') }}
-                    </th>
-                    <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                        {{ t('container.documents.type') }}
-                    </th>
-                    <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                        {{ t('container.documents.item') }}
-                    </th>
-                    <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                        {{ t('container.documents.date') }}
-                    </th>
-                    <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                        {{ t('container.documents.size') }}
-                    </th>
-                    <th scope="col" class="py-2 text-meta font-medium text-ink-subtle">
-                        {{ t('container.documents.download') }}
-                    </th>
-                </tr>
-            </thead>
+        <div v-else-if="view === 'list'" class="mt-4 overflow-hidden rounded-card border border-border bg-surface">
+            <table class="w-full border-collapse text-left">
+                <thead>
+                    <tr class="border-b border-border">
+                        <th scope="col" class="py-2 pl-4 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.filename') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.type') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.item') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.date') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.size') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            <span class="sr-only">{{ t('container.documents.download') }}</span>
+                        </th>
+                    </tr>
+                </thead>
 
-            <tbody>
-                <tr v-for="row in attachments.data" :key="row.ulid" class="border-b border-border">
-                    <td class="py-1 pr-4">
-                        <span class="flex items-center gap-2">
-                            <!-- Miniatyren bara när varianten finns; annars
-                                 ingen bild alls, aldrig en trasig sådan. -->
-                            <img
-                                v-if="preview(row).display === 'thumb'"
-                                :src="preview(row).thumbnail"
-                                :alt="row.filename"
-                                class="h-8 w-8 shrink-0 rounded object-cover"
+                <tbody>
+                    <tr v-for="row in attachments.data" :key="row.ulid" class="border-b border-border last:border-b-0">
+                        <td class="py-1 pl-4 pr-4">
+                            <span class="flex items-center gap-2">
+                                <!-- Miniatyren bara när varianten finns; annars
+                                     en liten filikon, aldrig en trasig bild. -->
+                                <img
+                                    v-if="preview(row).display === 'thumb'"
+                                    :src="preview(row).thumbnail"
+                                    :alt="row.filename"
+                                    class="h-8 w-8 shrink-0 rounded object-cover"
+                                >
+
+                                <span
+                                    v-else
+                                    role="img"
+                                    :aria-label="t('item.attachment.file_icon')"
+                                    class="flex size-8 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                                >
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.5"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        class="size-4"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <path d="M14 2v6h6" />
+                                    </svg>
+                                </span>
+
+                                <span class="font-medium text-ink">{{ row.filename }}</span>
+                            </span>
+                        </td>
+
+                        <td class="py-1 pr-4">
+                            <UiBadge>{{ t(`item.attachment.kind.${row.kind}`) }}</UiBadge>
+                        </td>
+
+                        <td class="py-1 pr-4">
+                            <Link
+                                :href="itemUrl(row)"
+                                class="inline-flex min-h-11 items-center text-accent hover:underline"
                             >
+                                {{ row.item.name }}
+                            </Link>
+                        </td>
 
-                            <span class="font-medium text-ink">{{ row.filename }}</span>
-                        </span>
-                    </td>
+                        <td class="py-1 pr-4 text-ink-muted">
+                            <time :datetime="row.created_at">{{ opened(row) }}</time>
+                        </td>
 
-                    <td class="py-1 pr-4 text-ink-muted">
-                        {{ t(`item.attachment.kind.${row.kind}`) }}
-                    </td>
+                        <td class="py-1 pr-4 text-ink-muted">{{ size(row) }}</td>
 
-                    <td class="py-1 pr-4">
-                        <Link
-                            :href="itemUrl(row)"
-                            class="inline-flex min-h-11 items-center text-accent hover:underline"
-                        >
-                            {{ row.item.name }}
-                        </Link>
-                    </td>
-
-                    <td class="py-1 pr-4 text-ink-muted">
-                        <time :datetime="row.created_at">{{ opened(row) }}</time>
-                    </td>
-
-                    <td class="py-1 pr-4 text-ink-muted">{{ size(row) }}</td>
-
-                    <td class="py-1">
-                        <a
-                            :href="fileUrl(row.ulid)"
-                            class="inline-flex min-h-11 items-center text-accent hover:underline"
-                        >
-                            {{ t('container.documents.download') }}
-                        </a>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+                        <td class="py-1 pr-4">
+                            <a
+                                :href="fileUrl(row.ulid)"
+                                class="inline-flex min-h-11 items-center text-accent hover:underline"
+                            >
+                                {{ t('container.documents.download') }}
+                            </a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <!--
             Rutnätet (Beslut 2). Samma rader, ritade som kort: miniatyren när

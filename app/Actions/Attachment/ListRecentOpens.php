@@ -56,7 +56,8 @@ use Illuminate\Database\Eloquent\Collection;
  *
  * **Frågekostnaden är konstant** och växer inte med antalet rader: omfånget
  * i containern (ResolveItemScope, memoiserad per användare och container),
- * öppningsraderna i EN fråga och bilagan med sitt item i TVÅ. Det är samma
+ * öppningsraderna i EN fråga och bilagan med sitt item och sina derivat i
+ * TRE. Det är samma
  * form som ListRecentVisits och samma skäl: en fråga per rad är den N+1
  * issue 9a § Att se upp med varnar för.
  *
@@ -80,9 +81,12 @@ class ListRecentOpens
      * Användarens senast öppnade filer i containern, nyast först och
      * filtrerade på omfång.
      *
-     * `attachment.item` är eager-laddad: raden visar filens namn, itemets
-     * namn och hur länge sedan öppningen var, och adressen till filen
-     * behöver bilagans ULID. Det är TVÅ frågor, konstanta över antalet rader.
+     * `attachment.item` och `attachment.storedFile.derivatives` är
+     * eager-laddade: raden visar filens namn, itemets namn och hur länge
+     * sedan öppningen var, adressen till filen behöver bilagans ULID, och
+     * `hasThumb` prövar om `thumb`-varianten finns (annars ritas ingen
+     * miniatyr — `?variant=thumb` mot en bilaga utan derivat svarar 404,
+     * issue 61b § Beslut 1). Det är tre frågor, konstanta över antalet rader.
      *
      * @return Collection<int, AttachmentOpen>
      */
@@ -106,7 +110,7 @@ class ListRecentOpens
                     }
                 });
             })
-            ->with('attachment.item')
+            ->with('attachment.item', 'attachment.storedFile.derivatives')
             ->orderByDesc('attachment_open.opened_at')
             ->orderByDesc('attachment_open.id')
             ->limit($limit)

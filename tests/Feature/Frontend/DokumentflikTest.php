@@ -552,6 +552,60 @@ it('Senast öppnade visar bara användarens egna öppningar', function () {
 });
 
 /*
+ * Klart när: Senast öppnade bär hasThumb ur bilagans derivat (Beslut 5).
+ *
+ * En öppnad bild MED `thumb`-derivat ger `true`, en pdf utan derivat `false`.
+ * Vyn ritar miniatyren ur `hasThumb` och aldrig ur en gissning: `?variant=
+ * thumb` mot en bilaga utan derivat svarar 404 (issue 61b § Beslut 1), och ett
+ * `true` för pdf:en hade blivit en trasig bild i kortet. De två raderna i
+ * SAMMA svar är det som håller regeln — ett `hasThumb` som alltid var sant
+ * hade sett riktigt ut med bara bilden.
+ *
+ * Derivaten hänger på `stored_file` och inte på bilagan, så provet fäster
+ * läsningen vid rätt led: en `derivatives`-fråga ställd mot bilagan hade gett
+ * tomt för båda, alltså `false` för bilden och ett prov som föll.
+ */
+it('Senast öppnade bär hasThumb ur bilagans derivat', function () {
+    withoutVite();
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+
+    $bild = dokumentflikBilaga($motor, $ägare, 'bild.jpg', 'image');
+    ImageDerivative::factory()->create([
+        'stored_file_id' => $bild->stored_file_id,
+        'variant' => 'thumb',
+    ]);
+
+    $pdf = dokumentflikBilaga($motor, $ägare, 'manual.pdf');
+
+    DB::table('attachment_open')->insert([
+        [
+            'user_id' => $ägare->id,
+            'attachment_id' => $bild->id,
+            'opened_at' => now()->subMinute(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'user_id' => $ägare->id,
+            'attachment_id' => $pdf->id,
+            'opened_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+
+    $rader = collect(dokumentflikProps(
+        actingAs($ägare)->get(dokumentflikUrl($container))->assertOk(),
+    )['recentOpens']);
+
+    expect($rader->firstWhere('ulid', $bild->ulid)['hasThumb'])->toBeTrue()
+        ->and($rader->firstWhere('ulid', $pdf->ulid)['hasThumb'])->toBeFalse();
+});
+
+/*
  * Klart när: lagringsstapeln visar containerns konto för dess medlem
  * (Beslut 4).
  *

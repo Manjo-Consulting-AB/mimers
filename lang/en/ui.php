@@ -2043,6 +2043,9 @@ return [
         'documents' => [
             'title' => 'Documents',
             'heading' => 'Documents',
+            // The line under the heading. `:container` is the container's own
+            // name, written by the user and never looked up.
+            'subheading' => 'All documents belonging to :container',
 
             'add' => 'Add document',
             'add_choose_item' => 'Which item?',
@@ -2051,6 +2054,9 @@ return [
             'empty_filtered' => 'No documents match the filter.',
 
             'recent' => 'Recently opened',
+            // A card in the *Recently opened* strip. `:date` comes from the
+            // date rule (`date.*`) and not from a second formatting.
+            'opened' => 'Opened :date',
 
             'date' => 'Uploaded',
             'filename' => 'File',
@@ -2089,10 +2095,14 @@ return [
             'page' => 'Page :page of :last',
 
             // The storage bar (§ 15). `uploads` names the account an upload
-            // here is charged to; the two below are its numbers.
+            // here is charged to; the three below are its numbers.
             'uploads' => 'Uploads are charged to :account',
             'of' => ':used of :limit',
             'unlimited' => ':used used',
+            // The number beside the bar. Drawn only when there is a ceiling to
+            // fill, and hidden from a screen reader — the sentence above it
+            // already states the same ratio.
+            'percent' => ':percent%',
         ],
     ],
 
