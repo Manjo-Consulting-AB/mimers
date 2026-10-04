@@ -224,11 +224,11 @@ class ListTodo
      * **`$onlyCurrent` styr raderna och inte talet** (issue 134, issue 697),
      * precis som på dashboarden: `rows` och `groups` följer värdet, medan
      * `count` är brickans tal — det som är aktuellt nu, försenat plus i dag —
-     * och räknar samma mängd oavsett. Värdet AV betyder "visa bara det
-     * aktuella", och då är `$occurrences` redan den mängden: talet ställs i en
-     * andra fråga, med villkoret på. Värdet PÅ bär hela mängden, och talet är
-     * dess längd. `null` följer användarens växel; containerns uppgiftsflik
-     * skickar `false` och släpper den (Beslut 2).
+     * och räknar samma mängd oavsett. Värdet PÅ betyder "visa bara det
+     * aktuella", och då är `$occurrences` redan den mängden: talet är dess
+     * längd. Värdet AV bär hela mängden, och talet ställs i en andra fråga,
+     * med villkoret på. `null` följer användarens växel; containerns
+     * uppgiftsflik skickar `false` och släpper den (Beslut 2).
      *
      * **`hasContainers` finns inte i svaret.** Det är dashboardens flagga för
      * att skilja "ingen container alls" från "inget att göra" (Beslut 6), och
