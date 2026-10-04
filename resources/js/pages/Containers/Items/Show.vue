@@ -221,16 +221,6 @@ const props = defineProps({
      */
     schedules: { type: Array, required: true },
     /*
-     * Schemats ULID → den öppna förekomsten ur ScheduleOccurrenceResource,
-     * eller `null`, byggd på servern bredvid ScheduleResource (issue 63a
-     * § Beslut 1, issue 63b § Beslut 1). Resursen bär inget `next_due_at` med
-     * flit — nästa förfall bor på förekomsten, aldrig på schemat — så
-     * uppslaget kommer som en egen prop. Sedan 63b är det förekomsten och
-     * inte datumet: avbockningen från sektionen behöver ULID:n att posta mot,
-     * `overdue` att märka raden med och `visible_from` att visa glappet med.
-     */
-    openOccurrences: { type: Object, required: true },
-    /*
      * Itemets uppgifter för fliken *Tasks* (M24 · issue 227):
      * `{ groups, completed }` ur App\Actions\Schedule\ListItemTasks — samma
      * grupper och samma rad som containerns flik.
