@@ -60,9 +60,13 @@ const props = defineProps({
     containerUlid: { type: String, required: true },
     /* Items användaren når i containern, `{ulid, name}`, ur servern. */
     items: { type: Array, required: true },
-    /* Uppladdarna bakom bilagorna användaren ser, `{ulid, name}`. */
+    /* Uppladdarna bakom bilagorna användaren ser, `{ulid, name, count}`. */
     uploaders: { type: Array, required: true },
-    /* Filtret så som servern tillämpade det: `{kind, item, uploader, from, to, sort}`. */
+    /*
+     * Filtret så som servern tillämpade det:
+     * `{q, kind, item, uploader, from, to, sort}` — listorna är `[]` när
+     * gruppen inte filtrerar (Beslut 4).
+     */
     filter: { type: Object, required: true },
 });
 
@@ -90,12 +94,18 @@ const to = ref('');
  */
 const pending = ref(false);
 
+/*
+ * Fälten speglas ur `filter`-proppen, och listorna (Beslut 4) läses som sitt
+ * FÖRSTA värde: enkelvalet står kvar i det här fältet, och flera värden per
+ * grupp hör till filterkolumnen som kommer senare. Fältet skickar därför
+ * fortfarande ett skalärt värde — servern normaliserar det till en lista.
+ */
 watch(
     () => props.filter,
     (filter) => {
-        kind.value = filter.kind ?? '';
-        item.value = filter.item ?? '';
-        uploader.value = filter.uploader ?? '';
+        kind.value = filter.kind[0] ?? '';
+        item.value = filter.item[0] ?? '';
+        uploader.value = filter.uploader[0] ?? '';
         from.value = filter.from ?? '';
         to.value = filter.to ?? '';
     },

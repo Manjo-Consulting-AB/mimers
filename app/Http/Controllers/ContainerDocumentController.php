@@ -41,14 +41,18 @@ use Inertia\Response;
  * lista hade sagt "inga dokument" om en container hon inte når. Grinden svarar
  * på om hon når containern; VILKA rader hon sedan ser svarar actionen på.
  *
- * **Filtren står i querysträngen och kan kombineras** (Beslut 2): `kind`,
- * `item`, `uploader`, `from`, `to` och `sort`. `filter`-proppen är serverns
- * läsning av samma sträng — förvalen ifyllda och ett värde som inte gick att
- * läsa utelämnat — så vyn ritar fälten ur svaret i stället för ur adressen,
- * precis som `maintenance` på uppgiftsfliken och `filter` på kostnadsfliken.
- * Ett okänt värde är INTE ett fel: en handredigerad adress ska ge listan och
- * inte ett formulärfel på ett fält användaren inte har ([[ADR-0038 Gränsen för
- * Pro i kostnaderna]] § Beslut om formulärfel, samma linje).
+ * **Filtren står i querysträngen och kan kombineras** (Beslut 2): `q`, `kind`,
+ * `item`, `uploader`, `from`, `to` och `sort`. `kind`, `item` och `uploader`
+ * tar flera värden var — ELLER inom gruppen, OCH mellan grupperna — och både
+ * `kind=image` och `kind[]=image&kind[]=document` läses. `q` söker i
+ * filnamnet. `filter`-proppen är serverns läsning av samma sträng — förvalen
+ * ifyllda, listorna `[]` när gruppen inte filtrerar och ett värde som inte
+ * gick att läsa utelämnat — så vyn ritar fälten ur svaret i stället för ur
+ * adressen, precis som `maintenance` på uppgiftsfliken och `filter` på
+ * kostnadsfliken. Ett okänt värde är INTE ett fel: en handredigerad adress ska
+ * ge listan och inte ett formulärfel på ett fält användaren inte har
+ * ([[ADR-0038 Gränsen för Pro i kostnaderna]] § Beslut om formulärfel, samma
+ * linje).
  *
  * **Sorteringen har fyra lägen** (Beslut 2): `newest`, `oldest`, `name` och
  * `size`. Lista eller rutnät är däremot INGET filter på servern: `?view=grid`
@@ -130,10 +134,9 @@ class ContainerDocumentController extends Controller
         // Filtret LÄSES en gång och används två: som fråga till actionen och
         // som `filter`-propp till vyn. Två läsningar av samma sträng glider
         // isär, och då visar fältet ett filter listan inte tillämpade.
-        $filter = $this->filter($request);
-        $sort = $this->sort($request);
+        $filter = $this->filter($request) + ['sort' => $this->sort($request)];
 
-        $paginator = $listAttachments->handle($user, $container, $filter + ['sort' => $sort]);
+        $paginator = $listAttachments->handle($user, $container, $filter);
 
         // Varianterna byggs ur sidans MODELLER och innan raderna formas om:
         // `through()` ersätter dem med arrayer, och uppslaget ska kosta noll
@@ -173,25 +176,24 @@ class ContainerDocumentController extends Controller
             // och samma regel som `variants` i ItemController::show() (issue
             // 61b § Beslut 1).
             'variants' => $variants,
-            // Filtret så som servern tillämpade det, med ALLA nycklar och
-            // `null` för dem som inte gäller. Vyn ritar sina fält ur proppen
-            // och läser aldrig adressen själv — samma form och samma skäl som
-            // `filter` i ContainerCostController.
-            'filter' => [
-                'kind' => $filter['kind'] ?? null,
-                'item' => $filter['item'] ?? null,
-                'uploader' => $filter['uploader'] ?? null,
-                'from' => $filter['from'] ?? null,
-                'to' => $filter['to'] ?? null,
-                'sort' => $sort,
-            ],
-            // Filterfältets alternativ: items och uppladdare användaren ser.
-            // Ett filter utan alternativ ritas inte av vyn — en väljare med
-            // bara *Alla* är brus (samma regel som ContainerCostController).
-            'filterOptions' => [
-                'items' => $this->visibleItems($container, $scope),
-                'uploaders' => $listAttachments->uploaders($user, $container),
-            ],
+            // Filtret så som servern tillämpade det, med ALLA nycklar: `q` och
+            // datumen som `null` när de inte gäller, och `kind`, `item` och
+            // `uploader` som LISTOR — `[]` när gruppen inte filtrerar. Vyn
+            // ritar sina fält ur proppen och läser aldrig adressen själv —
+            // samma form och samma skäl som `filter` i
+            // ContainerCostController, och listorna är det Beslut 4 skriver ut.
+            'filter' => $filter,
+            // Filterfältets alternativ MED antalen (Beslut 6): items och
+            // uppladdare användaren ser, var och en med antalet bilagor den
+            // svarar för, plus typantalen och totalen. Ett filter utan
+            // alternativ ritas inte av vyn — en väljare med bara *Alla* är
+            // brus (samma regel som ContainerCostController).
+            'filterOptions' => $this->filterOptions(
+                $container,
+                $scope,
+                $listAttachments->uploaders($user, $container),
+                $listAttachments->counts($user, $container),
+            ),
             // Senast öppnade (Beslut 3), användarens egna, fem rader.
             'recentOpens' => $this->recentOpens($listRecentOpens->handle($user, $container)),
             // Lagringsstapeln (Beslut 4), eller null när användaren inte har
@@ -209,7 +211,7 @@ class ContainerDocumentController extends Controller
     }
 
     /**
-     * Filtret ur querysträngen, normaliserat.
+     * Filtret ur querysträngen, normaliserat (Beslut 1 och 4).
      *
      * **Ett värde som inte går att läsa utelämnas i stället för att avvisas.**
      * En `kind` utanför de tre, en datumsträng som inte är ett datum och en
@@ -219,26 +221,34 @@ class ContainerDocumentController extends Controller
      * hade dessutom varit ett fel användaren inte kan rätta: fältet hon
      * skrev i finns inte i formuläret.
      *
+     * **`kind`, `item` och `uploader` är listor**, och både `kind=image` och
+     * `kind[]=image&kind[]=document` tas emot: det skalära värdet blir en lista
+     * med ett element, så den gamla adressen fortsätter att fungera. En grupp
+     * utan värden är `[]` och inte `null` — Beslut 4:s form, och vyn behöver
+     * bara hantera en tom lista i stället för två frånvaron.
+     *
      * ULID:erna får sin FORM prövad och ingenting slås upp. Att slå upp dem är
      * actionens sak, och ett uppslag mot `user` eller `item` här hade varit
      * samma fråga ställd två gånger — skillnaden är att actionen redan har
      * omfånget, och en ULID som pekar utanför det ska ge noll rader och inte
      * ett avvisat filter.
      *
-     * @return array<string, string>
+     * @return array{q: string|null, kind: list<string>, item: list<string>, uploader: list<string>, from: string|null, to: string|null}
      */
     private function filter(Request $request): array
     {
-        return array_filter([
+        return [
+            // Sökningen (Beslut 3): trimmad, högst 255 tecken, tom är null.
+            'q' => $this->search($request->query('q')),
             // Typen normaliseras av actionen och inte av en egen lista här:
             // samma tre värden, en formulering (ListContainerAttachments::
-            // kindFilter()).
-            'kind' => ListContainerAttachments::kindFilter($request->query('kind')),
-            'item' => $this->ulid($request->query('item')),
-            'uploader' => $this->ulid($request->query('uploader')),
+            // kindFilters()).
+            'kind' => ListContainerAttachments::kindFilters($request->query('kind')),
+            'item' => $this->ulids($request->query('item')),
+            'uploader' => $this->ulids($request->query('uploader')),
             'from' => $this->date($request->query('from')),
             'to' => $this->date($request->query('to')),
-        ], static fn (?string $varde): bool => $varde !== null);
+        ];
     }
 
     /**
@@ -252,14 +262,50 @@ class ContainerDocumentController extends Controller
     }
 
     /**
-     * En ULID ur querysträngen, eller null. FORMEN prövas och ingenting slås
-     * upp: `Str::isUlid()` är samma kontroll som `HasUlid` bygger på, och en
-     * sträng som inte är en ULID kan inte matcha en rad — då är den inget
-     * filter och ingen fråga att ställa.
+     * Sökordet ur querysträngen, eller null (Beslut 3).
+     *
+     * Trimmad och högst 255 tecken — samma längd som `IndexItemRequest` sätter
+     * på `q` i `/api`, så en sökterm som kommer in härifrån aldrig är längre än
+     * den API:et tar emot. En tom sträng är samma sak som ingen sökning. Längden
+     * KLIPPS i stället för att avvisas: en för lång term i ett gammalt bokmärke
+     * ska ge en lista, inte ett formulärfel på ett fält användaren inte har.
      */
-    private function ulid(mixed $value): ?string
+    private function search(mixed $value): ?string
     {
-        return is_string($value) && Str::isUlid($value) ? $value : null;
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value === '' ? null : mb_substr($value, 0, 255);
+    }
+
+    /**
+     * ULID:erna ur en query-parameter, som en lista (Beslut 1).
+     *
+     * Både `item=<ulid>` och `item[]=<ulid>&item[]=<ulid>` tas emot: en sträng
+     * blir en lista med ett element, och listan DEDUPLICERAS så att samma ULID
+     * två gånger är ett värde. FORMEN prövas och ingenting slås upp:
+     * `Str::isUlid()` är samma kontroll som `HasUlid` bygger på, och en sträng
+     * som inte är en ULID kan inte matcha en rad — den faller bort i stället för
+     * att bli ett filter som ger tomt.
+     *
+     * @return list<string>
+     */
+    private function ulids(mixed $value): array
+    {
+        if (is_string($value)) {
+            $value = [$value];
+        }
+
+        if (! is_array($value)) {
+            return [];
+        }
+
+        $giltiga = array_filter($value, static fn (mixed $ulid): bool => is_string($ulid) && Str::isUlid($ulid));
+
+        return array_values(array_unique($giltiga));
     }
 
     /**
@@ -367,6 +413,46 @@ class ContainerDocumentController extends Controller
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Filterfältets alternativ MED antalen (Beslut 6).
+     *
+     * `items` och `uploaders` är oförändrade listor — items användaren når,
+     * uppladdarna bakom bilagorna hon ser — men var och en bär nu `count`, och
+     * ett item utan bilagor får 0. `kinds` bär alla tre nycklarna (en typ utan
+     * bilagor är 0 och inte utelämnad), och `total` är antalet bilagor i
+     * omfånget.
+     *
+     * Antalen kommer ur ListContainerAttachments::counts() och följer INTE det
+     * valda filtret: siffran bredvid *Image* är alltid antalet bilder
+     * användaren når. Att räkna om den mot träfflistan hade visat noll för
+     * varje val utom det valda.
+     *
+     * @param  list<array{ulid: string, name: string}>  $uploaders
+     * @param  array{total: int, kind: array<string, int>, item: array<string, int>, uploader: array<string, int>}  $counts
+     * @return array{items: list<array{ulid: string, name: string, count: int}>, uploaders: list<array{ulid: string, name: string, count: int}>, kinds: array<string, int>, total: int}
+     */
+    private function filterOptions(Container $container, ItemScope $scope, array $uploaders, array $counts): array
+    {
+        return [
+            'items' => array_map(
+                static fn (array $item): array => [
+                    ...$item,
+                    'count' => $counts['item'][$item['ulid']] ?? 0,
+                ],
+                $this->visibleItems($container, $scope),
+            ),
+            'uploaders' => array_map(
+                static fn (array $uploader): array => [
+                    ...$uploader,
+                    'count' => $counts['uploader'][$uploader['ulid']] ?? 0,
+                ],
+                $uploaders,
+            ),
+            'kinds' => $counts['kind'],
+            'total' => $counts['total'],
+        ];
     }
 
     /**

@@ -397,11 +397,14 @@ it('filtren på typ, item, uppladdare och datum kan kombineras', function () {
     expect(dokumentflikFilnamn($proppar))->toBe(['traff.pdf']);
 
     // Filtret som servern tillämpade följer med vyn, så fälten kan ritas ur
-    // svaret i stället för ur adressen.
+    // svaret i stället för ur adressen. Sedan issue 688 är `kind`, `item` och
+    // `uploader` LISTOR (Beslut 4): det skalära värdet i adressen har
+    // normaliserats till en lista med ett element, och `q` står med som null.
     expect($proppar['filter'])->toBe([
-        'kind' => 'document',
-        'item' => $motor->ulid,
-        'uploader' => $ägare->ulid,
+        'q' => null,
+        'kind' => ['document'],
+        'item' => [$motor->ulid],
+        'uploader' => [$ägare->ulid],
         'from' => $dygnet,
         'to' => $dygnet,
         'sort' => 'newest',
@@ -815,4 +818,236 @@ it('ritar raden ur resursen med sitt item och sina varianter', function () {
         // Löpnumret och de främmande nycklarna lämnar aldrig svaret
         // (AttachmentResource § docblock).
         ->and($rad)->not->toHaveKeys(['id', 'item_id', 'stored_file_id', 'uploaded_by_user_id']);
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * Issue 688 · Filtergrupperna, sökningen och antalen.
+ *
+ * Filtret tar flera värden per grupp (Beslut 1 och 2), `q` söker i filnamnet
+ * (Beslut 3), och `filterOptions` bär antalen (Beslut 5 och 6). Träfflistan
+ * prövas som filnamn och antalen som tal — en siffra som råkade bli rätt för
+ * EN rad hade sett riktig ut i en svag kontroll.
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * Klart när: flera värden i en grupp ger träffar av vart och ett (Beslut 2).
+ *
+ * Två typer i samma grupp är en ELLER: bilden OCH pdf:en svaras ut medan
+ * `other` faller bort. Två items likaså. Ett filter som blev ett OCH inom
+ * gruppen hade gett noll rader — den som skriver `kind[]=image&kind[]=document`
+ * vill se BÅDA slagen, inte bilagor som är både bild och pdf (vilket ingen är).
+ */
+it('flera värden i en grupp ger träffar av vart och ett', function () {
+    withoutVite();
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+    $varmare = dokumentflikItem($container, 'Värmaren');
+
+    dokumentflikBilaga($motor, $ägare, 'bild.jpg', 'image', now()->subMinutes(4));
+    dokumentflikBilaga($motor, $ägare, 'manual.pdf', 'document', now()->subMinutes(3));
+    dokumentflikBilaga($motor, $ägare, 'anteckning.txt', 'other', now()->subMinutes(2));
+    dokumentflikBilaga($varmare, $ägare, 'varmarmanual.pdf', 'document', now()->subMinute());
+
+    $typer = dokumentflikProps(actingAs($ägare)->get(
+        dokumentflikUrl($container, 'kind[]=image&kind[]=document'),
+    )->assertOk());
+
+    // Bilden och pdf:en, nyast först, och `other` är borta.
+    expect(dokumentflikFilnamn($typer))->toBe(['varmarmanual.pdf', 'manual.pdf', 'bild.jpg'])
+        // Och listan normaliseras i den FASTA ordningen image, document,
+        // other — inte den inskickade.
+        ->and($typer['filter']['kind'])->toBe(['image', 'document']);
+
+    $items = dokumentflikProps(actingAs($ägare)->get(dokumentflikUrl(
+        $container,
+        "item[]={$motor->ulid}&item[]={$varmare->ulid}",
+    ))->assertOk());
+
+    expect(dokumentflikFilnamn($items))->toBe([
+        'varmarmanual.pdf',
+        'anteckning.txt',
+        'manual.pdf',
+        'bild.jpg',
+    ])->and($items['filter']['item'])->toBe([$motor->ulid, $varmare->ulid]);
+});
+
+/*
+ * Klart när: grupperna kombineras med och (Beslut 2).
+ *
+ * `kind[]=document&item[]=<motor>` är motorns dokument och ingenting annat:
+ * motorns bild faller på typen och värmarens pdf på itemet. Ett gruppfilter
+ * som tystnat hade gett tre rader, ett som överskridit noll.
+ */
+it('grupperna kombineras med och', function () {
+    withoutVite();
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+    $varmare = dokumentflikItem($container, 'Värmaren');
+
+    dokumentflikBilaga($motor, $ägare, 'motormanual.pdf', 'document', now()->subMinutes(3));
+    dokumentflikBilaga($motor, $ägare, 'motorbild.jpg', 'image', now()->subMinutes(2));
+    dokumentflikBilaga($varmare, $ägare, 'varmarmanual.pdf', 'document', now()->subMinute());
+
+    expect(dokumentflikFilnamn(dokumentflikProps(actingAs($ägare)->get(dokumentflikUrl(
+        $container,
+        "kind[]=document&item[]={$motor->ulid}",
+    ))->assertOk())))->toBe(['motormanual.pdf']);
+});
+
+/*
+ * Klart när: ett skalärt värde och ett okänt värde läses som i dag
+ * (Beslut 1).
+ *
+ * Den gamla adressen `kind=document` ska fungera oförändrat — den
+ * normaliseras till en lista med ett element — och ett värde som inte går att
+ * läsa är inget filter: varken en typ utanför de tre eller en sträng som inte
+ * är en ULID. Listan svarar då på frågan användaren faktiskt ställde (ingen).
+ */
+it('ett skalärt värde och ett okänt värde läses som i dag', function () {
+    withoutVite();
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+
+    dokumentflikBilaga($motor, $ägare, 'bild.jpg', 'image', now()->subMinute());
+    dokumentflikBilaga($motor, $ägare, 'manual.pdf');
+
+    $skalär = dokumentflikProps(actingAs($ägare)->get(dokumentflikUrl($container, 'kind=document'))->assertOk());
+
+    expect($skalär['filter']['kind'])->toBe(['document'])
+        ->and(dokumentflikFilnamn($skalär))->toBe(['manual.pdf']);
+
+    $okänd = dokumentflikProps(actingAs($ägare)->get(dokumentflikUrl(
+        $container,
+        'kind[]=video&item[]=inte-en-ulid',
+    ))->assertOk());
+
+    expect($okänd['filter']['kind'])->toBe([])
+        ->and($okänd['filter']['item'])->toBe([])
+        ->and(dokumentflikFilnamn($okänd))->toBe(['manual.pdf', 'bild.jpg']);
+});
+
+/*
+ * Klart när: sökningen matchar filnamnet och tar procent och understreck
+ * bokstavligt (Beslut 3).
+ *
+ * `%` och `_` är LIKE:s jokertecken, och ett oescapad `%` hade låtit `q=50%`
+ * träffa `500.pdf`. Escapetecknet är `!` och inte backslash: `'\\'` är ett
+ * tecken i MariaDB men två i sqlite, och sviten kör sqlite. Provet fäster båda
+ * halvorna — att `50%.pdf` träffas ÄR beviset för att jokertecknet är
+ * bokstavligt, för ett `LIKE` utan escape hade gett samma svar för båda.
+ */
+it('sökningen matchar filnamnet och tar procent och understreck bokstavligt', function () {
+    withoutVite();
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+
+    dokumentflikBilaga($motor, $ägare, 'Motormanual.pdf', 'document', now()->subMinutes(5));
+    dokumentflikBilaga($motor, $ägare, '500.pdf', 'document', now()->subMinutes(4));
+    dokumentflikBilaga($motor, $ägare, '50%.pdf', 'document', now()->subMinutes(3));
+    dokumentflikBilaga($motor, $ägare, 'axb.pdf', 'document', now()->subMinutes(2));
+    dokumentflikBilaga($motor, $ägare, 'a_b.pdf', 'document', now()->subMinute());
+
+    $sök = fn (string $term): array => dokumentflikFilnamn(dokumentflikProps(
+        actingAs($ägare)->get(dokumentflikUrl($container, 'q='.rawurlencode($term)))->assertOk(),
+    ));
+
+    // Filnamnet matchas utan hänsyn till versaler.
+    expect($sök('manual'))->toBe(['Motormanual.pdf']);
+
+    // `%` är bokstavligt: procenttecknet träffas, `500.pdf` gör det inte.
+    expect($sök('50%'))->toBe(['50%.pdf']);
+
+    // `_` är bokstavligt: understrecket träffas, `axb.pdf` gör det inte.
+    expect($sök('a_b'))->toBe(['a_b.pdf']);
+
+    expect(dokumentflikProps(actingAs($ägare)->get(
+        dokumentflikUrl($container, 'q=manual'),
+    )->assertOk())['filter']['q'])->toBe('manual');
+});
+
+/*
+ * Klart när: räknar bilagorna per typ, item och uppladdare inom omfånget
+ * (Beslut 5 och 6).
+ *
+ * Gästen har en item-grant på motorn och når därför bara motorns bilagor.
+ * Antalen räknas över SAMMA urval som listan: tre bilagor, och värmarens
+ * uppladdare finns varken i listan eller i siffrorna. Uppladdarna ligger i
+ * namnordning och namnen är slumpade, så provet slår upp dem på ULID.
+ */
+it('räknar bilagorna per typ, item och uppladdare inom omfånget', function () {
+    withoutVite();
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+    $varmare = dokumentflikItem($container, 'Värmaren');
+
+    $grannen = User::factory()->create();
+    $varmarens = User::factory()->create();
+
+    dokumentflikBilaga($motor, $ägare, 'motorbild.jpg', 'image');
+    dokumentflikBilaga($motor, $ägare, 'motormanual.pdf', 'document');
+    dokumentflikBilaga($motor, $grannen, 'grannens.pdf', 'document');
+    dokumentflikBilaga($varmare, $varmarens, 'varmarmanual.pdf', 'document');
+
+    $gäst = dokumentflikGast($container, $motor);
+
+    $alternativ = dokumentflikProps(actingAs($gäst)->get(dokumentflikUrl($container))->assertOk())['filterOptions'];
+
+    expect($alternativ['total'])->toBe(3)
+        ->and($alternativ['kinds'])->toBe(['image' => 1, 'document' => 2, 'other' => 0]);
+
+    // Gästen når bara motorn, och itemet bär sina tre bilagor.
+    expect($alternativ['items'])->toBe([
+        ['ulid' => $motor->ulid, 'name' => 'Motorn', 'count' => 3],
+    ]);
+
+    $uppladdare = collect($alternativ['uploaders'])->keyBy('ulid');
+
+    expect($uppladdare)->toHaveCount(2)
+        ->and($uppladdare[$ägare->ulid]['count'])->toBe(2)
+        ->and($uppladdare[$grannen->ulid]['count'])->toBe(1)
+        // Värmarens uppladdare laddade bara upp där gästen inte når.
+        ->and($uppladdare->has($varmarens->ulid))->toBeFalse();
+});
+
+/*
+ * Klart när: antalen följer inte filtret (Beslut 5).
+ *
+ * Siffran bredvid *Image* är alltid antalet bilder användaren når — inte
+ * antalet bilder i träfflistan. Ett filter som räknade om sig självt hade visat
+ * noll för varje val utom det valda, och en väljare där alla andra alternativ
+ * står på noll är en väljare som säger att de är tomma.
+ */
+it('antalen följer inte filtret', function () {
+    withoutVite();
+
+    [, $ägare, $container] = dokumentflikKontext();
+
+    $motor = dokumentflikItem($container, 'Motorn');
+
+    dokumentflikBilaga($motor, $ägare, 'bild.jpg', 'image');
+    dokumentflikBilaga($motor, $ägare, 'manual.pdf', 'document');
+
+    $utan = dokumentflikProps(actingAs($ägare)->get(dokumentflikUrl($container))->assertOk());
+    $med = dokumentflikProps(actingAs($ägare)->get(dokumentflikUrl($container, 'kind[]=image'))->assertOk());
+
+    // Träfflistan smalnar av till bilden …
+    expect(dokumentflikFilnamn($med))->toBe(['bild.jpg']);
+
+    // … men antalen är desamma som utan filter.
+    expect($med['filterOptions']['kinds'])->toBe($utan['filterOptions']['kinds'])
+        ->and($med['filterOptions']['total'])->toBe($utan['filterOptions']['total'])
+        ->and($med['filterOptions']['kinds'])->toBe(['image' => 1, 'document' => 1, 'other' => 0])
+        ->and($med['filterOptions']['total'])->toBe(2);
 });
