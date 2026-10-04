@@ -19,8 +19,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * Beslut 8 — ett beroende pekar ofta på en förekomst på en ANNAN sak, och
  * "Serva motorn" utan att veta vilken motor är obrukbart i en lista.
  *
- * `satisfied` är HÄRLETT ur motpartens status (`status != 'open'`), aldrig en
- * kolumn — samma regel som `overdue` (22a § Beslut 2, 23b § Beslut 8).
+ * `satisfied` är HÄRLETT ur motpartens status, aldrig en kolumn: motparten är
+ * satisfied när den INTE är aktiv — `status` utanför
+ * App\Models\ScheduleOccurrence::ACTIVE_STATUSES (ADR-0052 § 1) — samma regel
+ * som `overdue` (22a § Beslut 2, 23b § Beslut 8).
  *
  * `depends_on` beskriver vad den här förekomsten väntar på (inte vad som
  * väntar på den). `counterpart_*`-attributen finns varken som kolumner eller

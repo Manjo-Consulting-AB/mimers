@@ -306,7 +306,7 @@ it('ett schema har bara en aktiv förekomst', function () {
  * Nyckeln ligger direkt efter `status` i båda svaren.
  */
 it('resurserna bär gtd_list', function () {
-    [, , , $item] = listaOchStatusKontext();
+    [$konto, $anvandare, $container, $item] = listaOchStatusKontext();
     $rad = listaOchStatusRad($item, '2026-09-15', 'in_progress');
     $rad->forceFill(['gtd_list' => 'waiting'])->save();
 
@@ -325,6 +325,25 @@ it('resurserna bär gtd_list', function () {
         ->toBe(array_search('status', $forekomstNycklar, true) + 1)
         ->and(array_search('gtd_list', $todoNycklar, true))
         ->toBe(array_search('status', $todoNycklar, true) + 1);
+
+    // Svaret på `complete` i `/api` bär samma lista som nästa läsning av raden:
+    // den nya förekomsten skapas i minnet av
+    // App\Actions\Schedule\OpenNextOccurrence och läses aldrig om ur databasen,
+    // så attributförvalet i ScheduleOccurrence måste bära `next` (ADR-0052 § 1:
+    // `gtd_list` får inte vara null).
+    [$schema, $nasta] = oppnaForekomst($item, [
+        'title' => 'Serva motorn',
+        'anchor_date' => '2026-09-02',
+    ]);
+
+    $svar = actingAs($anvandare)->postJson(
+        "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules/{$schema->ulid}/occurrences/{$nasta->ulid}/complete",
+        ['account' => $konto->ulid],
+    );
+
+    $svar->assertOk();
+
+    expect($svar->json('data.next.gtd_list'))->toBe('next');
 });
 
 /*

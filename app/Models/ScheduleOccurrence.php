@@ -54,6 +54,20 @@ class ScheduleOccurrence extends Model
     protected $table = 'schedule_occurrence';
 
     /**
+     * Modellens standardvärden, speglar kolumnernas DEFAULT i migrationen.
+     * En osparad förekomst bär `gtd_list = next` direkt — samma tekniska värde
+     * som databasen ändå ger raden (ADR-0052 § 4) — så att svaret på `complete`
+     * visar samma lista som nästa läsning av raden. Förvalet fattar inget
+     * beslut åt issue 235, som sätter listan uttryckligen i
+     * App\Actions\Schedule\OpenNextOccurrence och skriver över det här.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'gtd_list' => self::GTD_NEXT,
+    ];
+
+    /**
      * De fyra statusvärdena, var för sig — avslutsflödet (issue 22b) jämför
      * och sätter dem och ska aldrig behöva stava strängarna.
      *
