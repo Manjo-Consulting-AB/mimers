@@ -362,6 +362,17 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete', [ScheduleOccurrenceController::class, 'complete']);
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip', [ScheduleOccurrenceController::class, 'skip']);
 
+    // M26 · issue 238 · Listan och statusen i API:et — byta en aktiv förekomsts
+    // `gtd_list` och/eller `status`, se App\Http\Controllers\Api\
+    // ScheduleOccurrenceController::update() och App\Actions\Schedule\
+    // ChangeOccurrence (delad med webben, issue 235). Kroppen är
+    // `{"gtd_list"?, "status"?}` och minst ett av fälten krävs. `status` tar
+    // bara `open` och `in_progress`: att stänga går genom complete/skip och
+    // deras avslutsflöde. `{occurrence}` binds av gruppens scopeBindings()
+    // genom App\Models\Schedule::occurrences() precis som de två rutterna
+    // ovan, och grinden är itemets `update` — samma som för complete/skip.
+    Route::patch('/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}', [ScheduleOccurrenceController::class, 'update']);
+
     // Issue 23b · Beroenden mellan förekomster — "den här gången måste jag
     // måla innan jag sjösätter", se App\Http\Controllers\Api\OccurrenceDependencyController
     // och App\Actions\Schedule\DependOccurrence. {occurrence} är alltid den

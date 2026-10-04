@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Schedule\ChangeOccurrence;
 use App\Actions\Schedule\CloseOccurrence;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\CompleteOccurrenceRequest;
+use App\Http\Requests\Schedule\UpdateOccurrenceRequest;
 use App\Http\Resources\ScheduleOccurrenceResource;
 use App\Models\Account;
 use App\Models\Container;
@@ -16,9 +18,11 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 
 /**
- * Förekomsterna av ett schema, se issue 22. Tre ytor: `index()` listar den
+ * Förekomsterna av ett schema, se issue 22. Fyra ytor: `index()` listar den
  * öppna förekomsten och historiken (22a), `complete()`/`skip()` stänger en
- * öppen förekomst och öppnar nästa i samma transaktion (22b). Ingen show(),
+ * öppen förekomst och öppnar nästa i samma transaktion (22b) och `update()`
+ * byter listan och/eller statusen på en aktiv förekomst genom
+ * App\Actions\Schedule\ChangeOccurrence (M26 · issue 238). Ingen show(),
  * ingen allmän POST/DELETE: en förekomst skapas ALDRIG av en klient, den är
  * systemets bokföring av ett schema och den enda vägen in är
  * App\Actions\Schedule\OpenNextOccurrence (issue 22 § Beslut 1) — avslutet
@@ -32,13 +36,14 @@ use Illuminate\Support\Facades\Gate;
  * annat item, eller en förekomst i ett annat schema, ger 404 — hela skyddet
  * mot en främmande ULID (issue 22 § Beslut 1). Grinden är ITEMETS egen på
  * App\Policies\ItemPolicy sedan issue 71 (andra halvan): `view` (index)
- * respektive `update` (complete/skip), ingen ny policymetod (issue 22b
+ * respektive `update` (complete/skip/update), ingen ny policymetod (issue 22b
  * § Beslut 1). Schemat hör till `{item}` genom bindningen, så `$schedule->item`
  * är samma item — men grinden ställs mot det item schemat faktiskt hör till,
  * aldrig mot containern, se issue 71 § Beslut 1.
  *
  * `complete` och `skip` kräver `update`, inte `create`: att bocka av ändrar
- * en förekomst som redan finns (issue 71 § Beslut 5). Fram till dess krävdes
+ * en förekomst som redan finns (issue 71 § Beslut 5) — samma grind som
+ * `update()` byter lista och status med (issue 238). Fram till dess krävdes
  * en container-bred grant, vilket stängde ute varje omfångsbegränsad
  * mottagare från att bocka av sin egen uppgift — och en `write`-mottagare
  * kunde det för att grinden delades med containerns `update`.
@@ -95,6 +100,55 @@ class ScheduleOccurrenceController extends Controller
     public function skip(CompleteOccurrenceRequest $request, Container $container, Item $item, Schedule $schedule, ScheduleOccurrence $occurrence, CloseOccurrence $closeOccurrence): JsonResponse
     {
         return $this->close($request, $container, $item, $schedule, $occurrence, $closeOccurrence, ScheduleOccurrence::STATUS_SKIPPED);
+    }
+
+    /**
+     * PATCH /api/containers/{container}/items/{item}/schedules/{schedule}
+     * /occurrences/{occurrence} — 200. Byter listan och/eller statusen på en
+     * AKTIV förekomst, se App\Actions\Schedule\ChangeOccurrence (M26 ·
+     * issue 238, [[ADR-0052 Uppgifternas listor och uppgifter utan datum]]
+     * § 1 och 2). Samma action och samma `UpdateOccurrenceRequest` som webbens
+     * rutt (issue 235): reglerna — bara `open` och `in_progress`, och förvalet
+     * som lärs in en gång — bor i actionen och kan inte glida isär mellan
+     * ytorna.
+     *
+     * **Grinden är ITEMETS `update`**, som för `complete`/`skip`: att byta
+     * lista eller status ändrar en förekomst som redan finns. En
+     * `read`-mottagare får 403.
+     *
+     * **Ingen `account` i kroppen.** Att bocka av tillskriver varvet ett konto
+     * (`completed_by_account_id`) och behöver därför ett; en lista eller en
+     * status tillskrivs ingen, och loggraden bär containerns ägarkonto
+     * (issue 235 § Beslut 5).
+     *
+     * Svaret är 200 med den ändrade förekomsten i ScheduleOccurrenceResource,
+     * så `gtd_list` och `status` syns direkt. En stängd förekomst ger 422
+     * `occurrence.not_open` genom App\Exceptions\Api\ApiException — samma
+     * felhölje som resten av API:et ([[AGENTS.md]] § Felformat).
+     */
+    public function update(
+        UpdateOccurrenceRequest $request,
+        Container $container,
+        Item $item,
+        Schedule $schedule,
+        ScheduleOccurrence $occurrence,
+        ChangeOccurrence $changeOccurrence,
+    ): ScheduleOccurrenceResource {
+        Gate::authorize('update', $schedule->item);
+
+        $changed = $changeOccurrence->handle(
+            $occurrence,
+            $request->user(),
+            $request->validated('gtd_list'),
+            $request->validated('status'),
+        );
+
+        // Den ändrade raden är aktiv och saknar avslutare; sätt relationen
+        // uttryckligen så resursen inte gör ett oplanerat lazy-load per svar
+        // (jfr close() och index()).
+        $changed->setRelation('completedByAccount', null);
+
+        return new ScheduleOccurrenceResource($changed);
     }
 
     /**
