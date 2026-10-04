@@ -146,18 +146,26 @@ function action(name) {
         </div>
 
         <p class="mt-2 flex flex-wrap gap-x-2 text-sm text-slate-700">
-            <span :class="due.state === 'danger' ? 'text-danger' : ''">
-                {{ due.relative ? due.text : t('item.schedule.occurrence.due', { date: due.text }) }}
-            </span>
-            <!-- Påminnelsedagen är bara en egen rad när den skiljer sig från
-                 förfallet (issue 702 § Beslut 1): är de samma dag finns ingen
-                 påminnelse att visa, och `visible_from` är samma sak som
-                 `due_at`. Villkoret är `lead_days > 0` — ingen ny prop. -->
-            <span v-if="occurrence.visible_from !== occurrence.due_at" aria-hidden="true">·</span>
-            <span v-if="occurrence.visible_from !== occurrence.due_at">{{ t('item.schedule.occurrence.visible_from', { date: visibleFrom }) }}</span>
-            <template v-if="spare">
-                <span aria-hidden="true">·</span>
-                <span>{{ spare }}</span>
+            <!-- En förekomst utan datum säger *No date* i datumets plats
+                 (M26 · issue 236 § Beslut 5, ADR-0052 § 3): ingen
+                 "Due " med tomt datum, ingen röd ton — en uppgift utan datum
+                 är varken försenad eller kommande. Schemats sida ritar samma
+                 ord genom den här komponenten. -->
+            <span v-if="due.text === null">{{ t('todo.no_date') }}</span>
+            <template v-else>
+                <span :class="due.state === 'danger' ? 'text-danger' : ''">
+                    {{ due.relative ? due.text : t('item.schedule.occurrence.due', { date: due.text }) }}
+                </span>
+                <!-- Påminnelsedagen är bara en egen rad när den skiljer sig från
+                     förfallet (issue 702 § Beslut 1): är de samma dag finns ingen
+                     påminnelse att visa, och `visible_from` är samma sak som
+                     `due_at`. Villkoret är `lead_days > 0` — ingen ny prop. -->
+                <span v-if="occurrence.visible_from !== occurrence.due_at" aria-hidden="true">·</span>
+                <span v-if="occurrence.visible_from !== occurrence.due_at">{{ t('item.schedule.occurrence.visible_from', { date: visibleFrom }) }}</span>
+                <template v-if="spare">
+                    <span aria-hidden="true">·</span>
+                    <span>{{ spare }}</span>
+                </template>
             </template>
         </p>
 
