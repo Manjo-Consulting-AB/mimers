@@ -42,6 +42,18 @@ use Illuminate\Support\Facades\DB;
  * samma transaktion (issue 22 § Beslut 3). Att pausa rör ALDRIG den öppna
  * förekomsten — raden ligger kvar och blockerar fortfarande de uppgifter som
  * beror på den.
+ *
+ * **En ändring av det återkommande FLYTTAR den öppna förekomsten** (M24,
+ * issue 699 § Beslut 5): ändras `recurrence_type`, `interval_unit`,
+ * `interval_count` eller `anchor_date` räknas `due_at` om, ändras bara
+ * `lead_days` räknas `visible_from` om — i båda fallen av
+ * OpenNextOccurrence::moveOpen(), i samma transaktion. Det gäller också ett
+ * pausat schema: förekomsten ligger kvar och flyttas med sina nya värden.
+ *
+ * Flytten loggas INTE för sig (Beslut 6): raden `schedule.updated` bär redan
+ * fälten i `meta.changed`/`meta.values`, och förekomsten är en följd av
+ * ändringen, inte en egen handling — samma regel som CloseOccurrence följer
+ * för förekomsten den öppnar.
  */
 class UpdateSchedule
 {
@@ -58,6 +70,20 @@ class UpdateSchedule
         'anchor_date',
         'lead_days',
         'is_active',
+    ];
+
+    /**
+     * Fälten som bestämmer den öppna förekomstens `due_at` (issue 699 § Beslut
+     * 5). Ändras något av dem räknas förfallet om; annars räknas bara
+     * `visible_from`.
+     *
+     * @var list<string>
+     */
+    private const DUE_FIELDS = [
+        'recurrence_type',
+        'interval_unit',
+        'interval_count',
+        'anchor_date',
     ];
 
     public function __construct(
@@ -79,7 +105,11 @@ class UpdateSchedule
         // anropare som var för sig räknar ut den kan räkna olika.
         $reactivated = $schedule->is_active && ! $schedule->getOriginal('is_active');
 
-        DB::transaction(function () use ($schedule, $actor, $meta, $reactivated): void {
+        // Före `save()`: efter en sparad rad är skillnaden mot databasen tom.
+        $dueChanged = $schedule->isDirty(self::DUE_FIELDS);
+        $leadChanged = $schedule->isDirty('lead_days');
+
+        DB::transaction(function () use ($schedule, $actor, $meta, $reactivated, $dueChanged, $leadChanged): void {
             $schedule->save();
 
             if ($meta !== null) {
@@ -93,6 +123,14 @@ class UpdateSchedule
                     subjectUlid: $schedule->ulid,
                     meta: $meta,
                 );
+            }
+
+            // Efter loggraden och före återaktiveringen (Beslut 5): den öppna
+            // förekomsten flyttas med sina nya värden. Har schemat ingen öppen
+            // rad att flytta gör anropet ingenting, och återaktiveringen
+            // nedan öppnar en som vanligt.
+            if ($dueChanged || $leadChanged) {
+                $this->openNextOccurrence->moveOpen($schedule, $actor, $dueChanged);
             }
 
             if ($reactivated && ! $schedule->openOccurrence()->exists()) {
