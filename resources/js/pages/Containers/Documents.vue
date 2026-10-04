@@ -368,11 +368,13 @@ const hasFilter = computed(() =>
             Layouten (Beslut 5). Filterkolumnen till vänster och listan till
             höger, över `lg:`; under `lg:` är kolumnen gömd och filterbaren från
             issue 178 står kvar orörd — mobilen behåller enkelvalet. `items-start`
-            så kolumnen inte tänjs ut över en lång lista.
+            så kolumnen inte tänjs ut över en lång lista, och `lg:mt-8` så
+            kolumnens överkant möter kortet *Senast öppnade* i stället för
+            rubrikraden — högerkolumnens första element bär sin egen `mt-8`.
         -->
         <div class="lg:grid lg:grid-cols-[16rem_1fr] lg:items-start lg:gap-6">
             <DocumentFilterColumn
-                class="hidden lg:block"
+                class="hidden lg:block lg:mt-8"
                 :container-ulid="container.ulid"
                 :filter="filter"
                 :filter-options="filterOptions"
