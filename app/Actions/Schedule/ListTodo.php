@@ -24,12 +24,14 @@ use Illuminate\Support\Facades\Gate;
  * eller `visible_from`, och ingen rad hade gett ett fel.
  *
  * **Urvalet är `ScheduleOccurrence::scopeTodoFor()` och ingenting annat**
- * (Beslut 2). De fyra villkoren — `status = open`, `visible_from <= idag`,
- * inga öppna beroenden, containern åtkomlig och itemet inom omfånget —
- * formuleras EN gång, i modellen (issue 24 § Beslut 2, issue 74 § Beslut 7).
- * Den här klassen formulerar inget eget `where`, och ingen av vyerna
- * filtrerar: två filtreringar är två sanningar, och den ena är alltid den som
- * glömmer omfånget.
+ * (Beslut 2). De tre villkoren — `status = open`, inga öppna beroenden,
+ * containern åtkomlig och itemet inom omfånget — formuleras EN gång, i
+ * modellen (issue 24 § Beslut 2, issue 74 § Beslut 7). Den här klassen
+ * formulerar inget eget `where`, och ingen av vyerna filtrerar: två
+ * filtreringar är två sanningar, och den ena är alltid den som glömmer
+ * omfånget. **`visible_from` räknas inte bland villkoren** (M24 · issue 698):
+ * listan visar en öppen förekomst från att den skapas, och när den blir synlig
+ * är numera en egen fråga (`scopeVisibleToday()`) som bara påminnelsen ställer.
  *
  * **Användarens växel lägger på ETT villkor till, och det bor också i
  * modellen** (issue 134). Är `user.show_upcoming_tasks` falsk visas bara det
@@ -541,9 +543,9 @@ class ListTodo
      * förekomster, nyast först.
      *
      * **Omfånget är inte `scopeTodoFor()`.** Det scopet svarar på "vad ska
-     * jag göra?" och kräver `status = open`, ett `visible_from` i det
-     * förflutna, ett aktivt schema och inga öppna beroenden — fyra villkor
-     * som alla är fel fråga om en rad som redan är gjord. Det som GÄLLER
+     * jag göra?" och kräver `status = open`, ett aktivt schema och inga öppna
+     * beroenden — villkor som alla är fel fråga om en rad som redan är gjord.
+     * Det som GÄLLER
      * därifrån är åtkomsten, och den formuleras här på samma sätt: containern
      * OCH användarens item-omfång, i EN fråga. Ett `scopeTodoFor()` med
      * `status` utbytt hade varit en fjärde gren i modellen för en fråga som

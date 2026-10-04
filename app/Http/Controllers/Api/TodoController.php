@@ -47,6 +47,10 @@ class TodoController extends Controller
 
         $occurrences = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
+            // API:ets svar är oförändrat (issue 698 § Beslut 2): ytan är
+            // webben, och `/api/todo` behåller `visible_from <= idag` genom
+            // att ställa scopet som listorna inte längre ställer.
+            ->visibleToday($user)
             ->with(['schedule.item.container'])
             ->orderBy('due_at')
             ->orderBy('ulid')

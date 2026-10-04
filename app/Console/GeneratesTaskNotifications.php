@@ -16,10 +16,13 @@ use Throwable;
  * förfallit skapar en notis per mottagare; själva leveransen äger 34a och
  * mallarna 32a. Se [[Notiser]] § Kön och § notification.
  *
- * Urvalet är exakt det todo-listan formulerar — `ScheduleOccurrence::
- * scopeTodoFor()` (Beslut 3): öppen, `visible_from <= idag`, aktivt schema
- * och inga blockerande beroenden. Det formuleras inte om här; en andra
- * formulering av samma regel skulle glida isär från listan och låta
+ * Urvalet är todo-listans — `ScheduleOccurrence::scopeTodoFor()` (Beslut 3):
+ * öppen, aktivt schema och inga blockerande beroenden — plus
+ * `scopeVisibleToday()`. Sedan M24 (issue 698 § Beslut 2) bär listan en öppen
+ * förekomst från att den skapas och ställer inte längre `visible_from`, men
+ * PÅMINNELSEN ska fortfarande komma när fönstret öppnas: `task.due` faller
+ * först när `visible_from` passerats. Villkoret formuleras inte om här; en
+ * andra formulering av samma regel skulle glida isär från listan och låta
  * produktens två ytor säga olika saker om samma uppgift.
  *
  * Ovanpå urvalet ligger en NIVÅGRIND, inte en kontogrind (issue 75
@@ -108,6 +111,7 @@ class GeneratesTaskNotifications
 
         $occurrences = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
+            ->visibleToday($user)
             ->with(['schedule.item.container.account'])
             ->get();
 
