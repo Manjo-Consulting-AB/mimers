@@ -222,10 +222,39 @@ const listFieldId = computed(() => `todo-list-${props.entry.ulid}`);
 /* Växelns tillstånd: serverns `status`, aldrig ett eget (ADR-0052 § 1). */
 const inProgress = computed(() => props.entry.status === 'in_progress');
 
+/*
+ * Radens ENDA felruta (Beslut 4). Domänfelet ur avbockningen eller bytet
+ * (`occurrence.not_open`) och valideringsfelet på `gtd_list` eller `status`
+ * ritas på samma ställe: samma förekomst, samma rad, och ett 422 som ingen ser
+ * är lika stumt som ett race.
+ */
+const rowError = computed(
+    () => form.errors.occurrence
+        || listForm.errors.occurrence
+        || listForm.errors.gtd_list
+        || listForm.errors.status
+        || null,
+);
+
+/*
+ * Väljaren får inte bli stale (issue 236 § Beslut 4): `:value` binder mot
+ * serverns `entry.gtd_list`, men ett `<select>` behåller sitt valda alternativ
+ * även när PATCH:en nekas. Vid fel — `occurrence.not_open` i ett race eller ett
+ * 422 — sätts rutan tillbaka till radens eget värde, annars visar den en lista
+ * raden inte ligger i. `event.target` fångas först: händelsen får inte läsas
+ * asynkront.
+ */
 function changeList(event) {
+    const select = event.target;
+
     listForm
-        .transform(() => ({ gtd_list: event.target.value }))
-        .patch(occurrenceUrl.value, { preserveScroll: true });
+        .transform(() => ({ gtd_list: select.value }))
+        .patch(occurrenceUrl.value, {
+            preserveScroll: true,
+            onError: () => {
+                select.value = props.entry.gtd_list;
+            },
+        });
 }
 
 function toggleProgress() {
@@ -322,8 +351,9 @@ function toggleProgress() {
                     <select
                         :id="listFieldId"
                         :value="entry.gtd_list"
+                        :disabled="listForm.processing"
                         :aria-label="t('todo.list.label')"
-                        class="min-h-11 rounded-control border border-border bg-surface px-2 text-meta text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        class="min-h-11 rounded-control border border-border bg-surface px-2 text-meta text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
                         @change="changeList"
                     >
                         <option v-for="list in lists" :key="list" :value="list">
@@ -334,7 +364,8 @@ function toggleProgress() {
                     <button
                         type="button"
                         :aria-pressed="inProgress"
-                        class="inline-flex min-h-11 items-center rounded-control border px-3 text-meta font-medium outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        :disabled="listForm.processing"
+                        class="inline-flex min-h-11 items-center rounded-control border px-3 text-meta font-medium outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
                         :class="inProgress ? 'border-accent bg-accent-soft text-accent' : 'border-border text-ink-muted'"
                         @click="toggleProgress"
                     >
@@ -375,12 +406,12 @@ function toggleProgress() {
                  statusbytet (`occurrence.not_open`) ritas på samma ställe som
                  avbockningens, för det är samma förekomst och samma rutt. -->
             <p
-                v-if="form.errors.occurrence || listForm.errors.occurrence"
+                v-if="rowError"
                 role="alert"
                 tabindex="-1"
                 class="mt-2 whitespace-pre-line rounded-control border border-danger bg-danger/10 px-3 py-2 text-body text-danger outline-none"
             >
-                {{ form.errors.occurrence || listForm.errors.occurrence }}
+                {{ rowError }}
             </p>
         </div>
 
