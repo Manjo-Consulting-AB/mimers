@@ -27,15 +27,17 @@ use Illuminate\Support\Collection;
  * villkor som App\Http\Controllers\ContainerController::index() ställer.
  * Formulera det aldrig en andra gång här.
  *
- * **Uppgiftstalen kommer ur `$todo`, och det är hela poängen.** Brickan ska
- * visa *samma tal som antalet rader på `/tasks`*, och kortets uppgiftstal är
- * antalet rader i den containern — alltså ställs ingen fråga om uppgifter här
- * alls. App\Actions\Schedule\ListTodo har redan svarat för panelen på samma
- * sida, och att ställa samma fråga en gång till hade varit en andra sanning om
- * urvalet: den ena hade glömt omfånget eller `visible_from`, och ingen rad
- * hade gett ett fel. Raden bär containerns ULID och `overdue` beräknat mot
- * serverns datum (se TodoEntryResource), så både kortets tal och brickans
- * underrad räknas ur samma svar som todo-vyn ritar.
+ * **Uppgiftstalen kommer ur `$todo`, och det är hela poängen.** Brickan räknar
+ * det som är AKTUELLT NU — försenat plus i dag — och kortets uppgiftstal är
+ * antalet sådana rader i den containern (issue 697). `$todo` är därför
+ * ListTodo-svaret med `onlyCurrent: true`, inte panelens, och talet är inte
+ * antalet rader bakom länken till `/tasks`. Alltså ställs ingen fråga om
+ * uppgifter här alls: App\Actions\Schedule\ListTodo har redan svarat, och att
+ * ställa samma fråga en gång till hade varit en andra sanning om urvalet — den
+ * ena hade glömt omfånget eller `visible_from`, och ingen rad hade gett ett
+ * fel. Raden bär containerns ULID och `overdue` beräknat mot serverns datum
+ * (se TodoEntryResource), så både kortets tal och brickans underrad räknas ur
+ * ett och samma svar.
  *
  * **Frågekostnaden är konstant oberoende av antalet containrar** (issue 70
  * § Beslut 2). Containrarna är EN fråga, omfånget värms i ETT anrop genom
@@ -116,8 +118,10 @@ class ListContainerSummaries
             'stats' => [
                 // Antalet containrar användaren når — samma urval som listan.
                 'containers' => $containers->count(),
-                // Antalet rader i `scopeTodoFor()`, alltså exakt de rader som
-                // står bakom länken till `/tasks`. Inget annat tal.
+                // Det som är aktuellt nu — försenat plus i dag (issue 697) —
+                // och inte antalet rader bakom länken till `/tasks`: talet
+                // växer inte när listan börjar visa framtida rader. Inget
+                // annat tal.
                 'tasks' => count($todo['rows']),
                 // Underraden. Grupperingen sker på serverns datum, i ListTodo
                 // — den här filen jämför inget datum själv.

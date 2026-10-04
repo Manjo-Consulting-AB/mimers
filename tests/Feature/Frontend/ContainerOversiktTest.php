@@ -283,9 +283,9 @@ it('visar containerns todo-rader i todo-listans ordning, högst fem', function (
  * Klart när: `uppgiftspanelen följer växeln för framtida uppgifter`.
  *
  * Växeln (`user.show_upcoming_tasks`, issue 134) gäller panelen precis som på
- * dashboarden — och INTE brickan: `counts.todos` är vad som finns, inte vad
- * användaren valt att se. Utan den skillnaden hade talet krympt i samma stund
- * hon fällde ihop listan, och det talet är samma tal som före issue 172.
+ * dashboarden — och INTE brickan: `counts.todos` är det som är aktuellt nu,
+ * försenat plus i dag (issue 697), och inte vad användaren valt att se. Utan
+ * den skillnaden hade talet krympt i samma stund hon fällde ihop listan.
  */
 it('följer växeln för framtida uppgifter men räknar brickan oberoende av den', function () {
     withoutVite();
@@ -301,7 +301,7 @@ it('följer växeln för framtida uppgifter men räknar brickan oberoende av den
     $pa = oversiktProps(actingAs($agare)->get("/containers/{$container->ulid}")->assertOk());
 
     expect(oversiktTitlar($pa['tasks']))->toBe(['Försenad', 'I dag', 'Framtida'])
-        ->and($pa['counts']['todos'])->toBe(3);
+        ->and($pa['counts']['todos'])->toBe(2);
 
     $agare->update(['show_upcoming_tasks' => false]);
 
@@ -310,8 +310,9 @@ it('följer växeln för framtida uppgifter men räknar brickan oberoende av den
     // Raderna följer växeln — bara försenat och i dag.
     expect(oversiktTitlar($av['tasks']))->toBe(['Försenad', 'I dag']);
 
-    // Talet gör det inte: det räknar vad som FINNS, och är oförändrat.
-    expect($av['counts']['todos'])->toBe(3);
+    // Talet gör det inte: det räknar det som är aktuellt nu (issue 697), och
+    // är oförändrat.
+    expect($av['counts']['todos'])->toBe(2);
 });
 
 /*
@@ -328,10 +329,13 @@ it('visar inte en uppgift i en annan container', function () {
     [$konto, $agare] = oversiktKonto();
     $container = oversiktParm($konto);
     $motorn = oversiktItem($container, 'Motorn');
-    oversiktUppgift($motorn, oversiktDatum(5), 'Byt impeller');
+    // Förfallodagen ligger i det förflutna: `counts.todos` räknar det som är
+    // aktuellt nu (issue 697), och det är avgränsningen — inte datumet —
+    // provet gäller.
+    oversiktUppgift($motorn, oversiktDatum(-5), 'Byt impeller');
 
     $annan = oversiktParm($konto, 'Trailern');
-    oversiktUppgift(oversiktItem($annan, 'Hjulen'), oversiktDatum(6), 'Byt däck');
+    oversiktUppgift(oversiktItem($annan, 'Hjulen'), oversiktDatum(-6), 'Byt däck');
 
     $svar = actingAs($agare)->get("/containers/{$container->ulid}")->assertOk();
     $props = oversiktProps($svar);
@@ -570,8 +574,10 @@ it('räknar samma tal som före panelerna', function () {
     $container = oversiktParm($konto);
     $motorn = oversiktItem($container, 'Motorn');
 
+    // Förfallodagarna ligger i det förflutna: `counts.todos` räknar det som är
+    // aktuellt nu (issue 697), och talet ska vara sju.
     foreach (range(1, 7) as $i) {
-        oversiktUppgift($motorn, oversiktDatum(10 * $i), "Uppgift {$i}");
+        oversiktUppgift($motorn, oversiktDatum(-10 * $i), "Uppgift {$i}");
         oversiktItem($container, "Item {$i}");
     }
 
@@ -606,8 +612,11 @@ it('räknar bara gästens item i kostnader, items och uppgifter', function () {
     $motorn = oversiktItem($container, 'Motorn');
     $hemlig = oversiktItem($container, 'Hemlig motor');
 
-    oversiktUppgift($motorn, oversiktDatum(10), 'Min uppgift');
-    oversiktUppgift($hemlig, oversiktDatum(11), 'Hemlig uppgift');
+    // Förfallodagarna ligger i det förflutna: `counts.todos` räknar det som är
+    // aktuellt nu (issue 697), och det är omfånget — inte datumet — provet
+    // gäller.
+    oversiktUppgift($motorn, oversiktDatum(-10), 'Min uppgift');
+    oversiktUppgift($hemlig, oversiktDatum(-11), 'Hemlig uppgift');
 
     oversiktKostnad($motorn, 1000);
     oversiktKostnad($hemlig, 999999);

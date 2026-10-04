@@ -1132,10 +1132,13 @@ it('räknar uppgifter och underhåll som ett tal', function () {
             'is_active' => true,
         ]);
 
+    // Förfallodagen ligger i det förflutna: `counts.todos` räknar det som är
+    // aktuellt nu — försenat plus i dag (issue 697) — och provet gäller att
+    // uppgifter och underhåll är ETT tal.
     $förekomst = fn (Schedule $schema, string $status = 'open'): ScheduleOccurrence => ScheduleOccurrence::factory()->create([
         'schedule_id' => $schema->id,
-        'due_at' => Carbon::today()->addDays(30)->toDateString(),
-        'visible_from' => Carbon::today()->subDays(30)->toDateString(),
+        'due_at' => Carbon::today()->subDays(30)->toDateString(),
+        'visible_from' => Carbon::today()->subDays(60)->toDateString(),
         'status' => $status,
     ]);
 
