@@ -775,9 +775,9 @@ it('hämtar kostnadsflikens strängar ur ui.php', function () {
  *
  * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för att
  * räknas upp här, så en mening som byter namn i vyn följer med utan att provet
- * skrivs om. Fyra filer läses, för filterfältet och lagringsstapeln är sina
- * egna komponenter — och en rubrik som glöms i den ena hade blivit
- * `container.documents.filter_uploader` på skärmen.
+ * skrivs om. Fyra filer läses, för filterfältet, filterkolumnen och
+ * lagringsstapeln är sina egna komponenter — och en rubrik som glöms i den ena
+ * hade blivit `container.documents.filter_uploader` på skärmen.
  *
  * **De tre typorden är `item.attachment.kind.*` och inga kopior**, och det
  * prövas särskilt: filtret och raden ska säga samma ord om samma typ. Bygger
@@ -794,6 +794,7 @@ it('hämtar dokumentflikens strängar ur ui.php', function () {
     $filer = [
         'js/pages/Containers/Documents.vue',
         'js/components/DocumentFilterBar.vue',
+        'js/components/DocumentFilterColumn.vue',
         'js/components/StorageBar.vue',
     ];
 
@@ -853,6 +854,15 @@ it('hämtar dokumentflikens strängar ur ui.php', function () {
         'container.documents.subheading',
         'container.documents.percent',
         'container.documents.opened',
+        // M24 (filterkolumnen och sökfältet): de åtta nya orden.
+        'container.documents.filter_heading',
+        'container.documents.filter_clear_all',
+        'container.documents.filter_all_documents',
+        'container.documents.filter_item_search',
+        'container.documents.filter_all_uploaders',
+        'container.documents.filter_dates',
+        'container.documents.search_label',
+        'container.documents.search_placeholder',
     ] as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
     }
