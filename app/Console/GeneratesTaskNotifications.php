@@ -49,7 +49,10 @@ use Throwable;
  * den blir synlig och `task.overdue` när datumet passerats. `dedupe_key` bär
  * förekomstens och användarens ULID, så jobbets 96 körningar per dygn ger en
  * rad — och en ny förekomst efter avbockning har en ny ULID och får en ny
- * påminnelse (Beslut 5).
+ * påminnelse (Beslut 5). En FLYTT ger också en ny påminnelse: en förekomst
+ * som flyttats till ett nytt `due_at` får sina nycklar frigjorda av
+ * App\Actions\Notification\ReleaseTaskReminders, och påminns därför igen när
+ * den nya tidpunkten inträffar (M24, issue 700).
  *
  * Ett fel för en användare stoppar inte de andra (Beslut 9): varje användare
  * ligger i ett eget try/catch och ett fångat fel loggas som en varning.
