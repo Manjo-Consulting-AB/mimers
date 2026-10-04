@@ -184,6 +184,44 @@ it('sorterar no_date på ulid', function () {
     expect(array_column(todovyGrupp($svar, 'no_date'), 'ulid'))->toBe($ulider);
 });
 
+// --- panelen ---------------------------------------------------------------
+
+/*
+ * Klart när: panelen visar försenat före `no_date`.
+ *
+ * Dashboardens panel klipper sina fem första ur `rows` (issue 122), så
+ * ordningen MÅSTE ställas innan klippet: `handle()` sätter samma ordning som
+ * `/tasks` — daterade före odaterade, `due_at` stigande med `ulid` stigande
+ * (ADR-0052 § Konsekvenser, Beslut 2). Sex daterade rader, varav en försenad,
+ * plus en utan datum: utan ordningen hade den odaterade raden kunnat komma
+ * först av databasens eget tycke och trängt ut den försenade ur de fem.
+ * Ordningen gör den försenade till panelens första rad och den odaterade till
+ * rad sju — utanför panelen.
+ */
+it('visar försenat före no_date i panelen', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = todovyKontext();
+
+    [, $försenad] = todovyUppgift($item, todovyDatum(-3), 'Försenad');
+
+    foreach (range(1, 5) as $i) {
+        todovyUppgift($item, todovyDatum($i), "Daterad {$i}");
+    }
+
+    $utanDatum = noDatumUppgift($item, 'Utan datum');
+
+    $panel = actingAs($anvandare)->get('/dashboard')->assertOk();
+
+    $ulider = array_column($panel->inertiaProps()['tasks'], 'ulid');
+
+    expect($ulider)->toHaveCount(5)
+        ->and($ulider[0])->toBe($försenad->ulid)
+        ->and($ulider)->not->toContain($utanDatum->ulid)
+        // Den odaterade raden syns inte i panelen: den är rad sju av sju.
+        ->and($panel->getContent())->not->toContain('Utan datum');
+});
+
 // --- växeln ----------------------------------------------------------------
 
 /*
