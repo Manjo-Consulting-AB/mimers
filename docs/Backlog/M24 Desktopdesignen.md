@@ -136,3 +136,33 @@ Trepanelen från 103 får skalets bredd: strukturen till vänster, itemet i mitt
 **Läs:** [[ADR-0042 Designsystemet]] § Beslut och § Konsekvenser, `resources/css/app.css` (`@theme`), de fyra filerna
 **Klart när:** de fyra filerna har inga råa färgklasser som `slate-`, `blue-` eller `red-` kvar; fokusringen finns kvar på varje interaktiv del; tangentbordsvägarna från 68a och 68b fungerar som förut; hela testsviten är grön.
 **Beror på:** 181
+
+### 225. Containerns Tasks-flik blir en lista med This week
+
+GitHub #719. Containerns uppgiftsflik går från tavla till lista: *Overdue → Today → This week → Upcoming → Done*, och visar alltid allt oavsett `show_upcoming_tasks`. Gruppen *This week* (i morgon till söndag, ISO 8601) införs i `ListTodo::group()` och gäller på alla ytor. Raden leds av uppgiftens titel.
+
+**Läs:** `docs/Design/tasks-container.png`, `app/Actions/Schedule/ListTodo.php`, `resources/js/pages/Containers/Tasks.vue`, `resources/js/components/TodoRow.vue`
+
+**Klart när:** grupperna står i ordningen ovan och tomma grupper ritas inte; *This week* är tom på en söndag och följer inte locale; fliken visar kommande uppgifter fast växeln är av, medan `/tasks` fortfarande följer den; hela testsviten är grön.
+
+**Beror på:** —
+
+### 226. Pausa och radera ett schema från schemats egen sida
+
+GitHub #720. Schemats sida får *Pause/Resume* och *Delete*, så att itemets flik kan sluta vara en regellista (227). En paus landar på schemats sida.
+
+**Läs:** `resources/js/pages/Containers/Items/Schedules/Show.vue`, `app/Http/Controllers/ScheduleController.php` (`update()`, `destroy()`), `app/Http/Controllers/ScheduleOccurrenceController.php` (`show()`)
+
+**Klart när:** knapparna ritas efter `can.update` och `can.delete`; en write-mottagare får 403 på raderingen; en paus redirectar till schemats sida och en formulärsparning till itemet; hela testsviten är grön.
+
+**Beror på:** —
+
+### 227. Itemets Tasks-flik blir en lista av förekomster med Include child items
+
+GitHub #721. Itemets uppgiftsflik visar förekomster i samma grupper och med samma rad som containern, med *Done* sist. Reglaget *Include child items* (på som förval) styr om ättlingarna räknas med, också i *Done*. Pausade och blockerade uppgifter står kvar med märken, som i #696.
+
+**Läs:** `docs/Design/tasks-item.png`, `app/Actions/Schedule/ListTodo.php`, `app/Http/Controllers/ItemController.php`, `resources/js/components/ScheduleListSection.vue`
+
+**Klart när:** ett barn med två parents ger en rad; en förekomst på ett item mottagaren inte når syns varken öppen eller i *Done*; `children=0` begränsar både öppna och klara till itemet; fliken har inga knappar för att pausa, redigera eller radera; hela testsviten är grön.
+
+**Beror på:** 225, 226

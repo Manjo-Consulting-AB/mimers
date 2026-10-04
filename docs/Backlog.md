@@ -42,7 +42,7 @@ Alla issues förutsätter konventionerna i [[Datamodell – översikt]] — ULID
 | [[M21 Uppgifterna i vardagen]] | **132–139** | nästa förfall efter det stängda, prickarna på knappen, växeln för framtida uppgifter och användarens dag överallt |
 | [[M22 Redo för testare]] | **141–150** | webben räknas som aktivitet, konto- och personraderingen, inbjudningsnotisen som aldrig skickas, kalenderns namn, testplanen för filerna och varningen innan en tagg eller kategori kastas |
 | [[M23 Mobilen och kartan]] | **151–160** | mobilskalet, plusknappen som skapar det vyn visar, fokuskartan, containerns karta, containerns bild och nyligen besökta |
-| [[M24 Desktopdesignen]] | **168–182** | kostnadsraderna i webben, desktopskalets sidopanel, containerns hjälte, översikternas paneler och flikarna för uppgifter, kostnader, dokument och historik |
+| [[M24 Desktopdesignen]] | **168–182, 225–227** | kostnadsraderna i webben, desktopskalets sidopanel, containerns hjälte, översikternas paneler och flikarna för uppgifter, kostnader, dokument och historik |
 | [[M25 Itemets vy enligt mockupen]] | — | frågor att avgöra efter testarnas genomgång 2026-10-02: itemets överdel, snabbåtkomsten, flikraden, kartans lägen och skalet |
 | [[Att sortera efter mockuparna]] | — | identifierat arbete som ännu inte fått en plats — ingen milstolpe |
 | [[Efter MVP]] | efter lansering | idéer som inte är beslutade |
