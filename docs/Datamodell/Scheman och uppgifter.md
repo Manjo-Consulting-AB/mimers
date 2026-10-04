@@ -104,3 +104,17 @@ ORDER BY due_at
 `idag` är användarens kalenderdag och inte serverns; se [[ADR-0044 Användarens dag]] § Beslut 1.
 
 Systemet är kraftigt säsongsbetonat — i april förfaller allting samtidigt. Det påverkar notisstrategin, se veckosammanfattningen i [[Notiser]].
+
+## API:et
+
+`/api` bär samma skrivningar som webben, genom samma actions (M26 · issue 238).
+
+| Skrivning | Rutt och kropp |
+|---|---|
+| Byta listan eller statusen på en aktiv förekomst | `PATCH /api/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}` — `{"gtd_list"?, "status"?}`, minst ett av fälten. `status` tar bara `open` och `in_progress`: att stänga går genom `complete` och `skip`, och en stängd förekomst svarar 422 `occurrence.not_open` |
+| Sätta listan för den första förekomsten | `gtd_list` i kroppen till `POST .../schedules` — förekomsten hamnar i listan, och `next`/`someday` blir dessutom schemats förval |
+| Sätta schemats förval | `default_gtd_list` i kroppen till `PATCH .../schedules/{schedule}` — `next`, `someday` eller `null` |
+
+`gtd_list` och `default_gtd_list` är två egenskaper ([[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 och § 2): den första säger hur användaren tänker hantera uppgiften, den andra är regeln för nästa förekomst.
+
+`due_at` och `visible_from` är nullbara i svaret: en uppgift utan datum svarar `null`, aldrig ett påhittat datum ([[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3). Ett återkommande schema kräver fortfarande ett datum — bara `none` får sakna det.

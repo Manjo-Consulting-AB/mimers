@@ -87,12 +87,23 @@ class ScheduleController extends Controller
      * till ett schema är att lägga till, och en `create`-mottagare får göra
      * det på sitt item utan att för den skull få ändra det som redan står
      * där.
+     *
+     * `gtd_list` hör till FÖREKOMSTEN och inte till schemat (M26 · issue 238
+     * § Beslut 2), så det kan inte följa med i `new Schedule(...)` — det
+     * skickas som eget argument till actionen, precis som webben gör
+     * (issue 235). Väljs `next` eller `someday` sätter actionen dessutom
+     * schemats förval.
      */
     public function store(StoreScheduleRequest $request, Container $container, Item $item, CreateSchedule $createSchedule): JsonResponse
     {
         Gate::authorize('create', $item);
 
-        $schedule = $createSchedule->handle($item, $request->user(), new Schedule($request->validated()));
+        $schedule = $createSchedule->handle(
+            $item,
+            $request->user(),
+            new Schedule($request->validated()),
+            $request->validated('gtd_list'),
+        );
 
         return (new ScheduleResource($schedule))
             ->response()
@@ -106,6 +117,11 @@ class ScheduleController extends Controller
      * ändringen; `validated()` bär redan de nollade intervallkolumnerna när
      * schemat byter till `none`, så raden städas i samma skrivning (§ Att se
      * upp med).
+     *
+     * `default_gtd_list` (M26 · issue 238 § Beslut 2) är ett av de fälten och
+     * följer med `fill()` rakt igenom — `UpdateScheduleRequest` validerar det
+     * (bara `next` och `someday`, eller `null`) och `UpdateSchedule` loggar
+     * ändringen. Ingen egen gren behövs här.
      *
      * Ett PAUSAT schema som aktiveras (`is_active` falskt → sant) och saknar
      * en öppen förekomst öppnar en — i samma transaktion som aktiveringen
