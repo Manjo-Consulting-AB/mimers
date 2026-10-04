@@ -93,9 +93,10 @@ use Illuminate\Support\Facades\Gate;
  * tar de fem första. Gruppordningen (försenat, i dag, denna vecka, kommande,
  * utan datum) följer den ordning raderna kommer i, så de två fälten kan inte
  * glida ifrån varandra: den som behöver en grupprubrik tar `groups`, den som
- * bara ska visa en rad tar `rows`. `handle()` frågar utan egen `orderBy`
- * (issue 174), så den inbördes ordningen där är databasens; `page()` och
- * `forContainer()` sätter den själva.
+ * bara ska visa en rad tar `rows`. Ordningen ställs av varje anropare:
+ * `handle()` och `forContainer()` sätter samma (Beslut 2, ADR-0052 § 3) —
+ * daterade före odaterade, `due_at` stigande med `ulid` stigande — och
+ * `page()` sätter den själv och VÄNDER på den när `before` styr.
  *
  * **Flaggorna är presentation** (Beslut 4). `can.update` räknas per rad med
  * `ItemPolicy::update()` — samma grind som avbockningsrutten (63b) och
@@ -229,7 +230,22 @@ class ListTodo
         // `$onlyCurrent` skickas VIDARE orörd: `null` betyder "följ
         // användarens växel" och avgörs i `occurrences()`, medan `true` är
         // räknarnas fråga — som också spärrar för rader utan datum.
-        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent)->get();
+        //
+        // Ordningen ställs här och inte i `occurrences()` (Beslut 2, ADR-0052
+        // § 3): panelen klipper sina fem första ur `rows`, så utan den hade de
+        // fem varit databasens urval i stället för listans första fem. Samma
+        // ordning som `forContainer()` och `ListItemTasks` sätter: daterade
+        // före odaterade, `due_at` stigande med `ulid` stigande.
+        // `orderByRaw('due_at IS NULL')` är första nyckeln, för både MySQL och
+        // sqlite sätter annars null först. Ordningen kan inte bo i
+        // `occurrences()`: `page()` lägger sin egen på samma fråga och VÄNDER
+        // på den baklänges, och en ordning inifrån hade vänt hela
+        // pagineringen framåt.
+        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent)
+            ->orderByRaw('due_at IS NULL')
+            ->orderBy('due_at')
+            ->orderBy('ulid')
+            ->get();
 
         return [
             ...$this->present($user, $request, $occurrences),
@@ -305,8 +321,7 @@ class ListTodo
         // Ordningen ställs HÄR och inte i `occurrences()` (issue 174).
         // `page()` lägger sin egen på samma fråga — baklänges när `before` styr
         // — och en ordning inifrån hade vunnit över den och vänt hela
-        // pagineringen framåt. `handle()` frågar utan ordning och behåller
-        // därför sitt svar oförändrat.
+        // pagineringen framåt. `handle()` sätter samma ordning själv.
         //
         // Ordningen är `/tasks` egen: daterade före odaterade, `due_at`
         // stigande med `ulid` stigande. Utan den kom raderna i den ordning

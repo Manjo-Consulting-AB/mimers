@@ -194,9 +194,8 @@ it('sorterar no_date på ulid', function () {
  * ligger inte i framtiden: den är något användaren ska göra nu, och den får
  * inte försvinna när hon döljer det som ligger framåt (ADR-0052 § 4).
  *
- * Panelen pagineras inte och `handle()` frågar utan egen ordning (issue 174),
- * så panelens rader prövas som en MÄNGD och inte som en följd; `/tasks` är
- * paginerad och sorterad, och prövas rad för rad.
+ * Panelen pagineras inte, så panelens rader prövas som en MÄNGD och inte som
+ * en följd; `/tasks` är paginerad och sorterad, och prövas rad för rad.
  */
 it('visar no_date men inte upcoming när växeln är av', function () {
     withoutVite();
