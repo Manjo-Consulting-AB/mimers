@@ -441,6 +441,10 @@ it('kräver anchor_date för alla tre typerna', function () {
 
 /*
  * Klart när: lead_days går att sätta och förklaras med vad den gör.
+ *
+ * Sedan M24 (issue 698 § Beslut 3) är `lead_days` PÅMINNELSEN och inte
+ * listan: uppgiften syns från att den skapas, och fältet räknar ner till
+ * notisen. Hjälptexten säger därför `reminder` och nämner inte todo-listan.
  */
 it('sätter lead_days och förklarar fältet med vad det gör', function () {
     [$konto, $anvandare, $container, $item] = schemavyKontext();
@@ -457,14 +461,16 @@ it('sätter lead_days och förklarar fältet med vad det gör', function () {
     $schema = Schedule::query()->sole();
 
     expect($schema->lead_days)->toBe(30);
-    // 30 dagar innan förfall är uppgiften synlig — `visible_from`.
+    // 30 dagar innan förfall sätts `visible_from` — påminnelsens dag.
     expect($schema->openOccurrence()->sole()->visible_from->toDateString())->toBe('2027-04-05');
 
     // Förklaringen står i lang/ och ritas vid fältet; standarden är serverns
     // (`lead_days` är 0 i modellens $attributes och i migrationen), och vyn
-    // hittar ingen egen.
-    expect(Lang::get('ui.item.schedule.form.lead_days_hint', [], 'en'))
-        ->toContain('to-do list');
+    // hittar ingen egen. Fältet är påminnelsen, inte listan (issue 698).
+    $hint = Lang::get('ui.item.schedule.form.lead_days_hint', [], 'en');
+
+    expect($hint)->toContain('reminder')
+        ->and($hint)->not->toContain('to-do list');
 
     expect(File::get(resource_path('js/components/ScheduleForm.vue')))
         ->toContain('item.schedule.form.lead_days_hint');

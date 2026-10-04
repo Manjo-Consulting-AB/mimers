@@ -152,18 +152,10 @@ class ScheduleOccurrence extends Model
 
     /**
      * Begränsar till de förekomster som hör hemma i todo-listan (issue 24) —
-     * dokumentets fyra villkor plus de som följer av att raden hänger under
+     * dokumentets tre villkor plus de som följer av att raden hänger under
      * något ([[Scheman och uppgifter]] § Todo-listan, issue 24 § Beslut 3):
      *
      * - `status = 'open'`
-     * - `visible_from <= idag`, där idag är ANVÄNDARENS kalenderdatum och
-     *   inte serverns (issue 135): `User::today()` ger hennes datum, och
-     *   `toDateString()` gör jämförelsen till en datumjämförelse. `whereDate()`,
-     *   aldrig en rå kolumnjämförelse: i sqlite lagras DATE-kolumner med en
-     *   tidskomponent, och ett datum ska inte bero på klockslaget när frågan
-     *   körs (issue 24 § Att se upp med). Skickas `today()` rakt in hade
-     *   datumet följt med som ett ögonblick i appens tidszon — rätt här, men
-     *   strängen gör det omöjligt att läsa fel.
      * - containern är åtkomlig för användaren. Villkoret ligger på
      *   Container-modellen (`scopeAccessibleBy`) och appliceras som `whereHas`
      *   genom relationskedjan förekomst → schema → item → container — aldrig
@@ -195,6 +187,14 @@ class ScheduleOccurrence extends Model
      *   hoppas över — så det är rätt att A väntar). Villkoret nedan prövar
      *   därför bara `status` och att schema/item finns (SoftDeletes' globala
      *   scope), aldrig motpartens `is_active`.
+     *
+     * **`visible_from` står inte här sedan M24 (issue 698).** När en uppgift
+     * blir synlig i LISTORNA är en egen fråga — `scopeVisibleToday()` — och
+     * listorna visar en öppen förekomst från att den skapas. Påminnelsen och
+     * `Api\TodoController::index()` lägger själva på det scopet och behåller
+     * därmed sitt gamla svar (issue 698 § Beslut 2). Att lägga tillbaka raden
+     * här hade dragit in påminnelsen i listans beteende igen, och det är
+     * precis vad som flyttades ut.
      *
      * Omfånget (issue 74 § Beslut 7 och 10) löses upp HÄR, en gång per
      * anrop, och inte i anroparen: scopet är delat mellan TodoController och
@@ -254,7 +254,6 @@ class ScheduleOccurrence extends Model
 
         return $query
             ->where('status', self::STATUS_OPEN)
-            ->whereDate('visible_from', '<=', $user->today()->toDateString())
             ->whereHas('schedule', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {
                 $query->where('schedule.is_active', true)
                     ->whereHas('item', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds): void {
@@ -267,6 +266,29 @@ class ScheduleOccurrence extends Model
                     ->where('status', self::STATUS_OPEN)
                     ->whereHas('schedule.item');
             });
+    }
+
+    /**
+     * Begränsar till de förekomster som blivit SYNLIGA — `visible_from <= idag`
+     * (M24 · issue 698). Villkoret låg tidigare inuti `scopeTodoFor()` och
+     * lyftes ut: listorna ska visa en öppen förekomst från att den skapas,
+     * medan PÅMINNELSEN fortsatt utgår från `visible_from`. Två frågor, två
+     * scope — läsarna väljer vilket de lägger på (issue 698 § Beslut 2).
+     *
+     * **Idag är ANVÄNDARENS kalenderdatum**, inte serverns (issue 135):
+     * `User::today()` ger hennes datum, och `toDateString()` gör jämförelsen
+     * till en datumjämförelse. `whereDate()`, aldrig en rå kolumnjämförelse: i
+     * sqlite lagras DATE-kolumner med en tidskomponent, och ett datum ska inte
+     * bero på klockslaget när frågan körs (issue 24 § Att se upp med). Skickas
+     * `today()` rakt in hade datumet följt med som ett ögonblick i appens
+     * tidszon — rätt här, men strängen gör det omöjligt att läsa fel.
+     *
+     * @param  Builder<ScheduleOccurrence>  $query
+     * @return Builder<ScheduleOccurrence>
+     */
+    public function scopeVisibleToday(Builder $query, User $user): Builder
+    {
+        return $query->whereDate('visible_from', '<=', $user->today()->toDateString());
     }
 
     /**

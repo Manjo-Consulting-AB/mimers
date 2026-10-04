@@ -42,9 +42,11 @@ use function Pest\Laravel\withoutVite;
  * Filen bevisar de gränser issuen är byggd kring:
  *
  * 1. **Urvalet är `scopeTodoFor()` — vyn filtrerar ingenting** (Beslut 2).
- *    Villkoren prövas genom WEBBSIDAN: en stängd förekomst, en vars
- *    `visible_from` ligger i framtiden, en som är blockerad och en i en container
- *    användaren inte når får aldrig en rad.
+ *    Villkoren prövas genom WEBBSIDAN: en stängd förekomst, en som är blockerad
+ *    och en i en container användaren inte når får aldrig en rad. En förekomst
+ *    vars `visible_from` ligger i framtiden SYNS däremot, under kommande —
+ *    sedan M24 (issue 698) räknar listan inte `visible_from`, och det prövas
+ *    här.
  * 2. **Ordningen och grupperingen är serverns** (Beslut 3) — `due_at`
  *    stigande med `ulid` som andra nyckel, och gruppen räknas mot serverns
  *    datum, aldrig mot klientens.
@@ -56,8 +58,8 @@ use function Pest\Laravel\withoutVite;
  *    på "inga containers" och "inget att göra".
  * 6. **Frågekostnaden är konstant** (Beslut 8), mätt med `DB::listen`.
  *
- * Datumen är relativa till `Carbon::today()` och inte fasta strängar: listan
- * kräver `visible_from <= idag`, så en fast dag hade gjort hela filen
+ * Datumen är relativa till `Carbon::today()` och inte fasta strängar: raderna
+ * grupperas mot dagens datum, så en fast dag hade gjort hela filen
  * tidsberoende — den hade fallit i morgon och klarat sig i dag.
  *
  * Att ingen svensk sträng står kvar i en Vue-komponent och att nycklarna finns
@@ -151,9 +153,10 @@ function todovySchema(Item $item, string $due, array $attribut = []): Schedule
  * raden direkt så att förfallodatumet är känt utan att räkna kalender.
  *
  * `visible_from` ärver INTE `due_at` som i fabriken: en uppgift som förfaller
- * framåt i tiden är synlig NU, och det är `visible_from` som avgör det.
- * Standarden är därför en månad bakåt, och ett test som vill pröva villkoret
- * sätter kolumnen explicit.
+ * framåt i tiden har redan blivit synlig, och standarden är därför en månad
+ * bakåt. Sedan M24 (issue 698) styr `visible_from` inte listan utan bara
+ * påminnelsen, så ett test som vill pröva en framtida synlighetsdag sätter
+ * kolumnen explicit.
  *
  * @param  array<string, mixed>  $attribut
  */
@@ -355,26 +358,29 @@ it('visar de öppna förekomsterna över alla containers användaren når, i due
 });
 
 /*
- * Klart när: en förekomst vars `visible_from` ligger i framtiden inte syns.
+ * Klart när: en förekomst vars `visible_from` ligger i framtiden ÄNDÅ syns —
+ * under kommande (M24 · issue 698 § Beslut 1).
  *
- * Villkoret är `scopeTodoFor()`:s (issue 24 § Beslut 3) och prövas här genom
- * webbsidan — vyn får aldrig en egen filtrering att glömma det i.
+ * Villkoret `visible_from <= idag` flyttade ur `scopeTodoFor()`: listan visar
+ * en öppen förekomst från att den skapas, och påminnelsen är den enda läsaren
+ * som ställer `scopeVisibleToday()`. Provet prövar genom webbsidan att vyn
+ * följer urvalet och inte bär en egen filtrering kvar.
  */
-it('visar inte en förekomst vars visible_from ligger i framtiden', function () {
+it('visar en förekomst vars visible_from ligger i framtiden under kommande', function () {
     withoutVite();
 
     [, $anvandare, , $item] = todovyKontext();
 
-    todovyUppgift($item, todovyDatum(30), 'Synlig nu');
+    [, $synlig] = todovyUppgift($item, todovyDatum(0), 'Synlig nu');
 
-    $doldSchema = todovySchema($item, todovyDatum(60), ['title' => 'Dold än']);
-    $dold = todovyRad($doldSchema, todovyDatum(60), ['visible_from' => todovyDatum(30)]);
+    // Ännu inte påmind om: `visible_from` ligger 30 dagar fram.
+    $framtidaSchema = todovySchema($item, todovyDatum(60), ['title' => 'Framtida']);
+    $framtida = todovyRad($framtidaSchema, todovyDatum(60), ['visible_from' => todovyDatum(30)]);
 
     $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
-    expect(array_column(array_column(todovyRader($svar), 'schedule'), 'title'))
-        ->toBe(['Synlig nu'])
-        ->and($svar->getContent())->not->toContain($dold->ulid);
+    expect(array_column(todovyGrupp($svar, 'today'), 'ulid'))->toBe([$synlig->ulid])
+        ->and(array_column(todovyGrupp($svar, 'upcoming'), 'ulid'))->toBe([$framtida->ulid]);
 });
 
 /*
@@ -646,18 +652,19 @@ it('ritar pricken för försenat och framtida på avbockningsknappen', function 
 });
 
 /*
- * Klart när: en uppgift kan bockas av från listan, och listan ritas om utan
- * den.
+ * Klart när: en uppgift kan bockas av från listan, och listan ritas om med
+ * NÄSTA förekomst.
  *
  * Avbockningen är 63b:s rutt rakt av (Beslut 4): samma grind, samma
  * FormRequest, samma Action. Kontot som postas är det servern räknade fram —
  * containerns ägarkonto, eftersom användaren är medlem i det.
  *
  * Nästa förekomst öppnas i samma transaktion av `CloseOccurrence`, med
- * `visible_from = due_at`, och ligger därför i framtiden: listan blir tom och
- * den avbockade raden syns inte.
+ * `visible_from = due_at` i framtiden. Sedan M24 (issue 698) döljer inte
+ * längre `visible_from` raden: listan bär den nya förekomsten med en NY ULID,
+ * och den avbockade är borta.
  */
-it('bockar av en uppgift från listan och ritar om utan den', function () {
+it('bockar av en uppgift från listan och ritar om med nästa förekomst', function () {
     withoutVite();
 
     [$konto, $anvandare, , $item] = todovyKontext();
@@ -675,9 +682,13 @@ it('bockar av en uppgift från listan och ritar om utan den', function () {
 
     expect($rad->fresh()->status)->toBe('completed');
 
+    $nästa = $schema->openOccurrence()->sole();
+
     $efter = actingAs($anvandare)->get('/tasks')->assertOk();
 
-    expect(todovyRader($efter))->toBe([])
+    expect(todovyRader($efter))->toHaveCount(1)
+        ->and(todovyRader($efter)[0]['ulid'])->toBe($nästa->ulid)
+        ->and($nästa->ulid)->not->toBe($rad->ulid)
         ->and($efter->getContent())->not->toContain($rad->ulid);
 });
 

@@ -3204,9 +3204,11 @@ return [
 
                 // `lead_days` is explained by what it DOES (decision 5): it is
                 // `visible_from`, and without the sentence the field is
-                // incomprehensible.
+                // incomprehensible. Since M24 (issue 698) it is the REMINDER
+                // and not the list: the task shows up as soon as it is created,
+                // and `lead_days` counts down to the reminder.
                 'lead_days' => 'Days before due',
-                'lead_days_hint' => 'The task shows up in the to-do list this many days before it is due.',
+                'lead_days_hint' => 'You get a reminder this many days before it is due.',
             ],
 
             'create' => [
