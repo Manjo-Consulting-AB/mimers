@@ -2,6 +2,7 @@
 
 namespace App\Actions\Schedule;
 
+use App\Actions\Notification\ReleaseTaskReminders;
 use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
 use App\Models\ScheduleDependency;
@@ -54,6 +55,10 @@ use RuntimeException;
  */
 class OpenNextOccurrence
 {
+    public function __construct(
+        private readonly ReleaseTaskReminders $releaseTaskReminders,
+    ) {}
+
     /**
      * @param  Carbon  $today  Den agerandes kalenderdatum, midnatt i appens
      *                         tidszon — `User::today()` för den som agerar.
@@ -142,6 +147,12 @@ class OpenNextOccurrence
      * `anchor_date` ändrades. Är den falsk ligger `due_at` kvar och bara
      * `visible_from` räknas om (Beslut 2) — `visible_from = due_at −
      * lead_days` i båda fallen.
+     *
+     * **Ett ändrat `due_at` frigör uppgiftsnotisernas dedupe-nycklar** (M24,
+     * issue 700 § Beslut 3 och 4): en flyttad förekomst behåller sin ULID, så
+     * utan frigöringen hade en redan påmind förekomst aldrig påmints igen på
+     * sitt nya datum. Bara förfallet räknas — en ändrad `lead_days` lämnar
+     * nycklarna i fred, och det gör också en PATCH som landar på samma datum.
      */
     public function moveOpen(Schedule $schedule, User $actor, bool $recalculateDue): ?ScheduleOccurrence
     {
@@ -160,12 +171,26 @@ class OpenNextOccurrence
                 return null;
             }
 
+            // Förfallet FÖRE flytten, läst medan det ännu är det gamla — det
+            // är skillnaden mot det nya som avgör om påminnelserna frigörs.
+            $before = $occurrence->due_at->toDateString();
+
             if ($recalculateDue) {
                 $occurrence->due_at = $this->movedDueAt($schedule, $lockedSchedule, $actor);
             }
 
             $occurrence->visible_from = $occurrence->due_at->copy()->subDays($lockedSchedule->lead_days);
             $occurrence->save();
+
+            // Bara ett ändrat `due_at` frigör (Beslut 4). Ändras bara
+            // `lead_days` flyttas `visible_from` men förfallet är detsamma, och
+            // en andra påminnelse om samma datum vore en dubblett — samma sak
+            // när en PATCH räknar fram samma `due_at`. Frigöringen ligger i
+            // transaktionen (Beslut 3): antingen flyttas förekomsten och
+            // nycklarna frigörs, eller händer ingendera.
+            if ($occurrence->due_at->toDateString() !== $before) {
+                $this->releaseTaskReminders->handle($occurrence);
+            }
 
             return $occurrence;
         });
