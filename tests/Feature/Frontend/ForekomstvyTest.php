@@ -314,9 +314,20 @@ it('räknar aldrig försenat i vyn utan läser serverns fält', function () {
     // löses upp på servern sedan issue 135 — `$this->today($request)` läser
     // `User::today()`, aldrig en klocka i klienten. Sedan issue 232 är
     // villkoret `isActive()` — aktiv, alltså `open` eller `in_progress`
-    // (ADR-0052 § 1) — i stället för jämförelsen med `'open'`.
-    expect(File::get(app_path('Http/Resources/ScheduleOccurrenceResource.php')))
-        ->toContain("'overdue' => \$this->resource->isActive() && \$this->due_at->lessThan(\$this->today(\$request))");
+    // (ADR-0052 § 1) — i stället för jämförelsen med `'open'`. Sedan issue 233
+    // kräver jämförelsen ett datum: `due_at` är nullbart, och en förekomst utan
+    // datum är aldrig försenad (ADR-0052 § 3).
+    //
+    // Blanktecken viks ihop före jämförelsen. Uttrycket är tre rader i källan,
+    // och provet ska pinna regeln — inte var raden bryts.
+    $resursen = (string) preg_replace(
+        '/\s+/',
+        ' ',
+        File::get(app_path('Http/Resources/ScheduleOccurrenceResource.php')),
+    );
+
+    expect($resursen)
+        ->toContain("'overdue' => \$this->resource->isActive() && \$this->due_at !== null && \$this->due_at->lessThan(\$this->today(\$request))");
 });
 
 // --- avbockningen: en knapptryckning, och nästa förfall ur servern ----------

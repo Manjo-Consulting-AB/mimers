@@ -35,11 +35,14 @@ use Illuminate\Support\Carbon;
  * due_at > idag`, samma `today()` (issue 133). De två är varandras
  * komplement men möts inte — en rad som förfaller i dag är varken eller. Vyn
  * jämför inga datum själv (issue 64 § Beslut 3); den ritar den prick servern
- * pekar ut, och färgen är aldrig den enda bäraren av den.
+ * pekar ut, och färgen är aldrig den enda bäraren av den. En förekomst utan
+ * datum är varken försenad eller kommande (ADR-0052 § 3): båda är false, och
+ * raden hör till gruppen *No date* — som issue 234 ger den.
  *
  * `visible_from` och `due_at` är DATE-kolumner och serialiseras med
  * `toDateString()` ("2027-05-05"), aldrig `toIso8601String()` — ett
- * förfallodatum har ingen tidszon (Beslut 5).
+ * förfallodatum har ingen tidszon (Beslut 5). Båda är nullbara sedan
+ * ADR-0052 § 3 och svarar `null` för en uppgift utan datum.
  *
  * @mixin ScheduleOccurrence
  */
@@ -52,12 +55,16 @@ class TodoEntryResource extends JsonResource
     {
         return [
             'ulid' => $this->ulid,
-            'due_at' => $this->due_at->toDateString(),
-            'visible_from' => $this->visible_from->toDateString(),
+            'due_at' => $this->due_at?->toDateString(),
+            'visible_from' => $this->visible_from?->toDateString(),
             'status' => $this->status,
             'gtd_list' => $this->gtd_list,
-            'overdue' => $this->resource->isActive() && $this->due_at->lessThan($this->today($request)),
-            'upcoming' => $this->resource->isActive() && $this->due_at->greaterThan($this->today($request)),
+            'overdue' => $this->resource->isActive()
+                && $this->due_at !== null
+                && $this->due_at->lessThan($this->today($request)),
+            'upcoming' => $this->resource->isActive()
+                && $this->due_at !== null
+                && $this->due_at->greaterThan($this->today($request)),
             'schedule' => [
                 'ulid' => $this->schedule->ulid,
                 'title' => $this->schedule->title,

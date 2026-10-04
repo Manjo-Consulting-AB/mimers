@@ -142,7 +142,9 @@ class CloseOccurrence
                     // En Eloquent-relation med date-cast vore renare, men
                     // spärren måste läsas på EN fråga och en relation med
                     // eager loads är fler; utdata är identisk (granskningen).
-                    'due_at' => Carbon::parse($row->due_at)->toDateString(),
+                    // En blockerare kan sakna datum (ADR-0052 § 3): då är
+                    // svaret null, inte ett påhittat `Carbon::parse(null)`.
+                    'due_at' => $row->due_at === null ? null : Carbon::parse($row->due_at)->toDateString(),
                 ])
                 ->all();
 
@@ -180,7 +182,7 @@ class CloseOccurrence
                 item: $lockedSchedule->item,
                 subjectType: 'schedule_occurrence',
                 subjectUlid: $lockedOccurrence->ulid,
-                meta: ['due_at' => $lockedOccurrence->due_at->toDateString()],
+                meta: ['due_at' => $lockedOccurrence->due_at?->toDateString()],
             );
 
             // Steg 3 och 4 — nästa förfall räknas och nästa förekomst skapas

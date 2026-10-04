@@ -23,12 +23,16 @@ use Illuminate\Support\Carbon;
  * `in_progress`) `AND due_at < idag` (dokumentet § schedule_occurrence), där idag är
  * ANVÄNDARENS datum och inte serverns (issue 135, se `today()`). Ett lagrat
  * tillstånd som klockan ändrar kräver ett jobb som förr eller senare missar
- * en körning — därför beräknas det per rad vid läsning (Beslut 2).
+ * en körning — därför beräknas det per rad vid läsning (Beslut 2). En
+ * förekomst utan datum är aldrig försenad (ADR-0052 § 3) — `due_at < idag`
+ * är inte sant för null.
  *
  * `visible_from` och `due_at` är DATE-kolumner och serialiseras med
  * `toDateString()` ("2027-05-05"), aldrig `toIso8601String()` — ett
- * förfallodatum har ingen tidszon (Beslut 8). `completed_at` är en
- * tidsstämpel och serialiseras som resten av API:et.
+ * förfallodatum har ingen tidszon (Beslut 8). Båda är nullbara sedan
+ * ADR-0052 § 3: en uppgift utan datum svarar `null`, inte ett påhittat
+ * datum. `completed_at` är en tidsstämpel och serialiseras som resten av
+ * API:et.
  *
  * `completed_by_account` är kontots ULID och namn som ett objekt, eller
  * `null`. `completed_by_user` exponeras MEDVETET inte — attributionen utåt
@@ -46,11 +50,13 @@ class ScheduleOccurrenceResource extends JsonResource
     {
         return [
             'ulid' => $this->ulid,
-            'visible_from' => $this->visible_from->toDateString(),
-            'due_at' => $this->due_at->toDateString(),
+            'visible_from' => $this->visible_from?->toDateString(),
+            'due_at' => $this->due_at?->toDateString(),
             'status' => $this->status,
             'gtd_list' => $this->gtd_list,
-            'overdue' => $this->resource->isActive() && $this->due_at->lessThan($this->today($request)),
+            'overdue' => $this->resource->isActive()
+                && $this->due_at !== null
+                && $this->due_at->lessThan($this->today($request)),
             'completed_at' => $this->completed_at?->toIso8601String(),
             'completed_by_account' => $this->completedByAccount === null
                 ? null

@@ -112,6 +112,10 @@ class ListItemTasks
     {
         $occurrences = $this->occurrences($itemIds)
             ->active()
+            // Fram till issue 234 (ADR-0052 § 3) har en rad utan datum ingen
+            // grupp att hamna i. Villkoret håller den borta tills *No date*
+            // byggs — samma regel som ListTodo ställer på sin fråga.
+            ->whereNotNull('due_at')
             ->orderBy('due_at')
             ->orderBy('ulid')
             ->get();

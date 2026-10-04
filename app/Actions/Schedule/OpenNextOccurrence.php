@@ -47,6 +47,13 @@ use RuntimeException;
  * förekomst ska inte få en andra. Det är dokumenterade returvärden, inte
  * undantag (Beslut 4, § Att se upp med).
  *
+ * **En engångsuppgift utan `anchor_date` öppnar en förekomst UTAN datum**
+ * (ADR-0052 § 3): `due_at` och `visible_from` blir null, och raden bär bara
+ * sin titel och sin lista. Ännu finns ingen väg in för användaren — den
+ * kommer i issue 236 och 238 — så raderna skapas av proven. `fixed` och
+ * `interval` kräver fortfarande `anchor_date` och är ett programmeringsfel
+ * utan det: utan ett första datum finns ingen serie att räkna nästa förfall ur.
+ *
  * Invarianten — exakt en aktiv förekomst per aktivt schema, även under
  * samtidighet — hålls här i kod (Beslut 7): transaktion, `lockForUpdate()` på
  * SCHEMATADEN (som alltid finns), kontroll att ingen aktiv förekomst finns,
@@ -89,7 +96,15 @@ class OpenNextOccurrence
 
             $dueAt = $this->dueAt($lockedSchedule, $today, $from, $closedDueAt);
 
-            if ($dueAt === null) {
+            // `due_at === null` betyder två saker för `none` (ADR-0052 § 3):
+            // en engångsuppgift UTAN datum öppnar en förekomst ändå, medan en
+            // engångsuppgift som redan öppnat sin förekomst inte har någon
+            // nästa. Skillnaden är om schemat har en förekomst sedan förut —
+            // har det en stängd finns ingen nästa, har det ingen alls är raden
+            // en uppgift utan datum.
+            $dateless = $dueAt === null && ! $lockedSchedule->occurrences()->exists();
+
+            if ($dueAt === null && ! $dateless) {
                 return null;
             }
 
@@ -97,8 +112,9 @@ class OpenNextOccurrence
             $occurrence->schedule_id = $lockedSchedule->id;
             // Glappet är förfallet minus schemats `lead_days`. Det räknas om
             // av moveOpen() om `lead_days` ändras medan raden är öppen (M24,
-            // issue 699 § Beslut 2) — det är inte fryst.
-            $occurrence->visible_from = $dueAt->copy()->subDays($lockedSchedule->lead_days);
+            // issue 699 § Beslut 2) — det är inte fryst. Utan förfall finns
+            // inget glapp: båda datumen är null (ADR-0052 § 3).
+            $occurrence->visible_from = $dueAt?->copy()->subDays($lockedSchedule->lead_days);
             $occurrence->due_at = $dueAt;
             $occurrence->status = ScheduleOccurrence::STATUS_OPEN;
             $occurrence->save();
@@ -173,13 +189,14 @@ class OpenNextOccurrence
 
             // Förfallet FÖRE flytten, läst medan det ännu är det gamla — det
             // är skillnaden mot det nya som avgör om påminnelserna frigörs.
-            $before = $occurrence->due_at->toDateString();
+            // Null när raden saknade datum (ADR-0052 § 3).
+            $before = $occurrence->due_at?->toDateString();
 
             if ($recalculateDue) {
                 $occurrence->due_at = $this->movedDueAt($schedule, $lockedSchedule, $actor);
             }
 
-            $occurrence->visible_from = $occurrence->due_at->copy()->subDays($lockedSchedule->lead_days);
+            $occurrence->visible_from = $occurrence->due_at?->copy()->subDays($lockedSchedule->lead_days);
             $occurrence->save();
 
             // Bara ett ändrat `due_at` frigör (Beslut 4). Ändras bara
@@ -187,8 +204,10 @@ class OpenNextOccurrence
             // en andra påminnelse om samma datum vore en dubblett — samma sak
             // när en PATCH räknar fram samma `due_at`. Frigöringen ligger i
             // transaktionen (Beslut 3): antingen flyttas förekomsten och
-            // nycklarna frigörs, eller händer ingendera.
-            if ($occurrence->due_at->toDateString() !== $before) {
+            // nycklarna frigörs, eller händer ingendera. Ett datum som sätts
+            // eller tas bort är också en ändring: null mot ett datum skiljer
+            // sig från alla datum, i båda riktningarna.
+            if ($occurrence->due_at?->toDateString() !== $before) {
                 $this->releaseTaskReminders->handle($occurrence);
             }
 
@@ -199,10 +218,14 @@ class OpenNextOccurrence
     /**
      * Förfallet den öppna förekomsten ska få (Beslut 1 och 1b): den senaste
      * stängda förekomsten ger samma indata en öppning hade fått, och
-     * `dueAt()` räknar. Undantaget är `none`, vars gren returnerar null så
-     * fort schemat HAR en förekomst — och det har det alltid här.
+     * `dueAt()` räknar.
+     *
+     * `none` är undantaget: förfallet är `anchor_date`, och saknas det har
+     * engångsuppgiften inget datum (ADR-0052 § 3). Null är alltså ett giltigt
+     * svar här, inte ett programmeringsfel — flytten tömmer `due_at` och
+     * `visible_from` när användaren tar bort datumet.
      */
-    private function movedDueAt(Schedule $schedule, Schedule $lockedSchedule, User $actor): Carbon
+    private function movedDueAt(Schedule $schedule, Schedule $lockedSchedule, User $actor): ?Carbon
     {
         $previous = $lockedSchedule->occurrences()
             ->whereIn('status', [ScheduleOccurrence::STATUS_COMPLETED, ScheduleOccurrence::STATUS_SKIPPED])
@@ -226,13 +249,9 @@ class OpenNextOccurrence
         }
 
         if ($lockedSchedule->recurrence_type === 'none') {
-            $anchor = $lockedSchedule->anchor_date;
-
-            if ($anchor === null) {
-                throw $this->programmingError('Ett schema med recurrence_type none utan anchor_date kan inte flytta sin förekomst.');
-            }
-
-            return $anchor->copy();
+            // Null när `anchor_date` saknas: en engångsuppgift utan datum
+            // (ADR-0052 § 3), inte ett programmeringsfel.
+            return $lockedSchedule->anchor_date?->copy();
         }
 
         $dueAt = $this->dueAt($lockedSchedule, $actor->today(), $from, $closedDueAt);
@@ -314,7 +333,10 @@ class OpenNextOccurrence
      *
      * - `none`: `anchor_date`, men bara om schemat aldrig öppnat en förekomst
      *   — när engångsuppgiften väl är stängd finns ingen nästa, inte heller
-     *   vid en senare återaktivering (Beslut 3).
+     *   vid en senare återaktivering (Beslut 3). Saknas `anchor_date` har
+     *   uppgiften inget datum: svaret är null, och `handle()` öppnar en
+     *   förekomst utan datum (ADR-0052 § 3). Ett `none` utan `anchor_date`
+     *   är alltså INTE ett programmeringsfel.
      * - `fixed`: räknar ALLTID från kalendern (`anchor_date`), framflyttat i
      *   seriens steg tills det är både `>= $today` och `> $closedDueAt` (132) —
      *   oavsett `$from` och oavsett när jobbet gjordes. `$today` är den
@@ -324,15 +346,19 @@ class OpenNextOccurrence
      *   `completed_at`. Ligger resultatet på eller före `$closedDueAt` stegas
      *   det fram med intervallet tills det ligger efter (132).
      *
-     * @return Carbon|null null när det inte finns någon nästa förekomst.
+     * @return Carbon|null null när det inte finns någon nästa förekomst, eller
+     *                     när en `none`-uppgift saknar datum.
      */
     private function dueAt(Schedule $schedule, Carbon $today, ?Carbon $from, ?Carbon $closedDueAt): ?Carbon
     {
         $anchor = $schedule->anchor_date;
 
         if ($schedule->recurrence_type === 'none') {
+            // Utan `anchor_date` har engångsuppgiften inget datum (ADR-0052
+            // § 3). Null betyder "öppna utan datum", och `handle()` skiljer
+            // det från "ingen nästa" med hjälp av förekomsthistoriken.
             if ($anchor === null) {
-                throw $this->programmingError('Ett schema med recurrence_type none utan anchor_date kan inte öppna en förekomst.');
+                return null;
             }
 
             if ($schedule->occurrences()->exists()) {

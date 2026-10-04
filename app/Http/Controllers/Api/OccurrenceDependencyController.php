@@ -104,7 +104,7 @@ class OccurrenceDependencyController extends Controller
 
             $row->setAttribute('counterpart_ulid', $counterpart->ulid);
             $row->setAttribute('counterpart_title', $schedule->title);
-            $row->setAttribute('counterpart_due_at', $counterpart->due_at->toDateString());
+            $row->setAttribute('counterpart_due_at', $counterpart->due_at?->toDateString());
             $row->setAttribute('counterpart_status', $counterpart->status);
             $row->setAttribute('counterpart_item_ulid', $item->ulid);
             $row->setAttribute('counterpart_item_name', $item->name);
@@ -205,7 +205,7 @@ class OccurrenceDependencyController extends Controller
     {
         $dependency->setAttribute('counterpart_ulid', $other->ulid);
         $dependency->setAttribute('counterpart_title', $other->schedule->title);
-        $dependency->setAttribute('counterpart_due_at', $other->due_at->toDateString());
+        $dependency->setAttribute('counterpart_due_at', $other->due_at?->toDateString());
         $dependency->setAttribute('counterpart_status', $other->status);
         $dependency->setAttribute('counterpart_item_ulid', $other->schedule->item->ulid);
         $dependency->setAttribute('counterpart_item_name', $other->schedule->item->name);

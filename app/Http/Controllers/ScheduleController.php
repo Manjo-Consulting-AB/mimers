@@ -418,7 +418,7 @@ class ScheduleController extends Controller
 
             $row->setAttribute('counterpart_ulid', $counterpart->ulid);
             $row->setAttribute('counterpart_title', $counterpartSchedule->title);
-            $row->setAttribute('counterpart_due_at', $counterpart->due_at->toDateString());
+            $row->setAttribute('counterpart_due_at', $counterpart->due_at?->toDateString());
             $row->setAttribute('counterpart_status', $counterpart->status);
             $row->setAttribute('counterpart_item_ulid', $counterpartItem->ulid);
             $row->setAttribute('counterpart_item_name', $counterpartItem->name);
@@ -522,7 +522,7 @@ class ScheduleController extends Controller
                 ->reject(fn (Schedule $candidate): bool => in_array($openByScheduleId->get($candidate->id)->ulid, $dependedOnOccurrences, true))
                 ->map(fn (Schedule $candidate): array => [
                     'ulid' => $openByScheduleId->get($candidate->id)->ulid,
-                    'due_at' => $openByScheduleId->get($candidate->id)->due_at->toDateString(),
+                    'due_at' => $openByScheduleId->get($candidate->id)->due_at?->toDateString(),
                 ] + $labels($candidate))
                 ->values()
                 ->all(),
