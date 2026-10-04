@@ -7,12 +7,12 @@ import { documentFilterQuery } from './documentFilter.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Filterkolumnen på containerns dokumentflik, se M24 · Beslut 1–3 och
+ * Filterkolumnen på containerns dokumentflik, se M24 · issue 217 · Beslut 1–6 och
  * `docs/Design/dokument.png` (testarnas fynd 2026-10-03,
  * `docs/Design/findings_20261003_b/docs.png`).
  *
  * **Kolumnen ställer samma fråga som `DocumentFilterBar`, men som flerval.**
- * Servern läste redan flera värden per grupp i issue 688 (§ Beslut 4), och
+ * Servern läste redan flera värden per grupp (issue 216 § Beslut 4), och
  * rutorna skickar listor: `kind[]=image&kind[]=document`. Den mobila
  * filterbaren står kvar orörd under `lg:` och behåller enkelvalet — kolumnen
  * ritas bara över `lg:` (Beslut 5).
@@ -339,7 +339,7 @@ function clearAll() {
             </summary>
 
             <div class="mt-1 flex flex-col gap-3">
-                <label for="document-filter-dates-from" class="flex flex-col gap-1 text-meta text-ink-subtle">
+                <label for="document-filter-dates-from" class="flex flex-col gap-1 text-meta text-ink-muted">
                     {{ t('container.documents.filter_from') }}
                     <UiInput
                         id="document-filter-dates-from"
@@ -350,7 +350,7 @@ function clearAll() {
                     />
                 </label>
 
-                <label for="document-filter-dates-to" class="flex flex-col gap-1 text-meta text-ink-subtle">
+                <label for="document-filter-dates-to" class="flex flex-col gap-1 text-meta text-ink-muted">
                     {{ t('container.documents.filter_to') }}
                     <UiInput
                         id="document-filter-dates-to"

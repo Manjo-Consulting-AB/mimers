@@ -100,7 +100,7 @@ it('ritar typen som bricka och inga radval', function () {
 });
 
 /*
- * Filterkolumnen och sökfältet, se M24 · Beslut 1–6 och
+ * Filterkolumnen och sökfältet, se M24 · issue 217 · Beslut 1–6 och
  * `docs/Design/dokument.png` (testarnas fynd 2026-10-03).
  *
  * **Källkodsprov och inte sidprov**, som resten av filen: det som prövas är

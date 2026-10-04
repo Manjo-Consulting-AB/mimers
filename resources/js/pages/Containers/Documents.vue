@@ -73,12 +73,12 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * och en miniatyr ritas bara när `hasThumb` är sann (servern har prövat att
  * `thumb`-varianten finns); annars filikonen, aldrig en trasig bild.
  *
- * **Filterkolumnen och sökfältet (M24, Beslut 1–6).** Över `lg:` står
+ * **Filterkolumnen och sökfältet (M24 · issue 217, Beslut 1–6).** Över `lg:` står
  * filterkolumnen till vänster (DocumentFilterColumn) och listan till höger;
  * under `lg:` är kolumnen gömd och filterbaren från issue 178 står kvar orörd
  * — mobilen behåller enkelvalet. Sökfältet ligger i verktygsraden över listan,
  * och Enter ställer samma fråga som ett kryss i kolumnen: en GET mot samma
- * rutt, utan `page`. Tomtexten räknar också `q` (Beslut 6), så en sökning utan
+ * rutt, utan `page`. Tomtexten räknar också `q` (issue 217 § Beslut 6), så en
  * träff säger `empty_filtered`.
  *
  * **Ingen sträng i JavaScript** (issue 52 · [[ADR-0013 Språk och i18n]]):
@@ -107,12 +107,12 @@ const props = defineProps({
     /*
      * Filtret så som servern tillämpade det:
      * `{q, kind, item, uploader, from, to, sort}` — listorna är `[]` när
-     * gruppen inte filtrerar (Beslut 4).
+     * gruppen inte filtrerar (issue 216 § Beslut 4).
      */
     filter: { type: Object, required: true },
     /*
      * Filterfältets alternativ: `{items, uploaders, kinds, total}`, allt ur
-     * serverns omfång och med antalen (Beslut 6).
+     * serverns omfång och med antalen (issue 216 § Beslut 6).
      */
     filterOptions: { type: Object, required: true },
     /* Användarens egna senast öppnade filer i containern, nyast först. */
@@ -142,11 +142,11 @@ const view = computed(() => {
 });
 
 /*
- * Sökfältet i verktygsraden (Beslut 4). Fältet speglas ur `filter.q` med
+ * Sökfältet i verktygsraden (issue 217 § Beslut 4). Fältet speglas ur `filter.q` med
  * `watch` och inte bara vid montering: servern är den som avgör vad som
  * gäller, och efter en bakåtknapp eller en omladdning ska fältet visa den
  * fråga listan svarade på. Enter skickar `q` på samma sätt som ett kryss i
- * filterkolumnen (Beslut 3): en GET utan `page`, med läget kvar.
+ * filterkolumnen (issue 217 § Beslut 3): en GET utan `page`, med läget kvar.
  */
 const q = ref('');
 const searchPending = ref(false);
@@ -255,7 +255,7 @@ const opened = (row) => eventDate(row.created_at).text;
 const openedAt = (open) => eventDate(open.opened_at).text;
 
 /*
- * Tomtexten (Beslut 6). `hasFilter` räknar också `q`: en sökning utan träff är
+ * Tomtexten (issue 217 § Beslut 6). `hasFilter` räknar också `q`: en sökning utan träff är
  * ett svar om FRÅGAN och ska säga `empty_filtered`, inte `empty`.
  * Sorteringen räknas INTE — en ordning är ingen fråga, och `sort=oldest` på en
  * tom container ska inte påstå att ett filter gömmer innehållet.
@@ -365,7 +365,7 @@ const hasFilter = computed(() =>
         </div>
 
         <!--
-            Layouten (Beslut 5). Filterkolumnen till vänster och listan till
+            Layouten (issue 217 § Beslut 5). Filterkolumnen till vänster och listan till
             höger, över `lg:`; under `lg:` är kolumnen gömd och filterbaren från
             issue 178 står kvar orörd — mobilen behåller enkelvalet. `items-start`
             så kolumnen inte tänjs ut över en lång lista, och `lg:mt-8` så
@@ -452,7 +452,7 @@ const hasFilter = computed(() =>
                 håller ingenting i minnet och en omladdning landar i samma
                 träfflista.
 
-                Under `lg:` (Beslut 5). Över `lg:` tar filterkolumnen över, och
+                Under `lg:` (issue 217 § Beslut 5). Över `lg:` tar filterkolumnen över, och
                 den här raden är gömd — mobilen behåller sitt enkelval, och två
                 filterytor för samma fråga hade glidit isär.
             -->
@@ -466,7 +466,7 @@ const hasFilter = computed(() =>
             </div>
 
             <!--
-                Verktygsraden (Beslut 4 och 6): sökfältet till vänster,
+                Verktygsraden (issue 217 § Beslut 4 och 6): sökfältet till vänster,
                 sorteringen och lägesväxeln till höger. Sökningen är ett `q` som
                 varje annat filter, och Enter ställer samma fråga som ett kryss i
                 kolumnen — en GET utan `page`. Sorteringen är en fråga om LISTAN
