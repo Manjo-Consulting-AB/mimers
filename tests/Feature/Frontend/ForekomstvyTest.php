@@ -487,11 +487,12 @@ it('öppnar ingen ny förekomst för ett none-schema och säger att uppgiften ä
         fn (AssertableInertia $page) => $page->where("openOccurrences.{$schema->ulid}", null)
     );
 
-    // Och sektionen säger att uppgiften är klar i stället för att visa ett
+    // Och schemats sida säger att uppgiften är klar i stället för att visa ett
     // tomt förfallodatum — olika en pausad rad, som har sin egen mening.
-    $sektion = File::get(resource_path('js/components/ScheduleListSection.vue'));
+    // Meningen bor på schemats EGEN sida; itemets flik visar den avbockade
+    // förekomsten under *Done* (issue 227).
+    $sektion = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
 
-    expect($sektion)->toContain('schedule.done');
     expect($sektion)->toContain("t('item.schedule.occurrence.done')");
 
     expect(Lang::get('ui.item.schedule.occurrence.done', [], 'en'))->toBe('The task is done.');

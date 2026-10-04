@@ -254,17 +254,17 @@ it('skriver förfallodagen med datumregeln och den synliga från-dagen absolut',
 });
 
 /*
- * Även schemaradens "nästa förfall" är ett förfallodatum och går genom samma
- * regel (issue 104). Provet är filriktat med flit: radens egen formatering var
- * `formatDateOnly()`, som källkodsprovet i DatumregelTest inte fångar — det ser
- * bara literala `toLocaleDateString`-anrop. Utan det här provet kan en egen
- * formatering smyga tillbaka utan att något går rött.
+ * Även radens förfallodatum går genom samma regel (issue 104), och raden är
+ * `TodoRow` sedan issue 227 (M24): itemets flik listar FÖREKOMSTER i samma rad
+ * som containerns flik, och den gamla schemaraden med ett eget "nästa förfall"
+ * finns inte kvar. Provet är filriktat med flit — radens egen formatering var
+ * `formatDateOnly()`, som källkodsprovet i DatumregelTest inte fångar.
  */
-it('låter schemaraden skriva nästa förfall med datumregeln', function () {
-    $sektionen = File::get(resource_path('js/components/ScheduleListSection.vue'));
+it('låter raden skriva förfallet med datumregeln', function () {
+    $rad = File::get(resource_path('js/components/TodoRow.vue'));
 
-    expect($sektionen)->toContain('useRelativeDate')
-        ->toContain('dueDate(occurrence.due_at, occurrence.overdue)');
+    expect($rad)->toContain('useRelativeDate')
+        ->toContain('dueDate(props.entry.due_at, props.entry.overdue)');
 });
 
 it('formulerar återkommandet i ord och aldrig som kolumnvärden', function () {
@@ -540,9 +540,11 @@ it('märker ett pausat schema i listan men låter raden ligga kvar', function ()
             ->where('schedules.0.is_active', false)
     );
 
-    $vy = File::get(resource_path('js/components/ScheduleListSection.vue'));
+    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
 
-    // Raden ligger kvar med en markering och en mening om vad pausen gör.
+    // Märkningen och meningen om vad pausen gör bor på schemats EGEN sida
+    // sedan issue 226; itemets flik märker den pausade förekomsten med
+    // `TodoRow`s `item.schedule.paused` (issue 227).
     expect($vy)->toContain("t('item.schedule.paused')");
     expect($vy)->toContain("t('item.schedule.paused_note')");
     // Och sektionen ritas på detaljvyn — en prop ingen vy läser är ingen yta.
@@ -632,9 +634,10 @@ it('raderar ett schema efter bekräftelse och lovar ingen papperskorg', function
     expect(Lang::get('ui.item.schedule.destroy_confirm', [], 'en'))->not->toContain('trash');
 
     // Och knappen frågar innan den raderar: webbläsarens egen dialog med
-    // meningens text ur `lang/` — ingen sträng i JavaScript, samma mönster som
-    // detaljvyns radering.
-    $vy = File::get(resource_path('js/components/ScheduleListSection.vue'));
+    // meningens text ur `lang/` — ingen sträng i JavaScript. Knappen bor på
+    // schemats EGEN sida sedan issue 226; itemets flik har inga regelknappar
+    // kvar (issue 227).
+    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
 
     expect($vy)->toContain('window.confirm');
     expect($vy)->toContain("t('item.schedule.destroy_confirm')");
@@ -684,10 +687,14 @@ it('visar listan för en read-mottagare men ingen skrivyta, och nekar skrivandet
     expect(Schedule::query()->count())->toBe(1);
     expect($schema->fresh()->is_active)->toBeTrue();
 
-    // Ytorna ritas bakom samma flaggor som kontrollern prövar.
-    $vy = File::get(resource_path('js/components/ScheduleListSection.vue'));
+    // Ytorna ritas bakom samma flaggor som kontrollern prövar. Sedan issue 227
+    // bär itemets flik bara *New task* (`can.create`); pausen, redigeringen och
+    // raderingen bor på schemats egen sida (issue 226).
+    expect(File::get(resource_path('js/components/ScheduleListSection.vue')))
+        ->toContain('v-if="can.create"');
 
-    expect($vy)->toContain('v-if="can.create"');
+    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+
     expect($vy)->toContain('v-if="can.update"');
     expect($vy)->toContain('v-if="can.delete"');
 });

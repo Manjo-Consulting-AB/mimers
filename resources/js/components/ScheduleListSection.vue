@@ -1,167 +1,124 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
-import OpenOccurrence from './OpenOccurrence.vue';
+import TodoRow from './TodoRow.vue';
+import UiListRow from './UiListRow.vue';
 import { scheduleUrl } from './occurrencePresentation.js';
-import { recurrenceLabel } from './schedulePresentation.js';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
- * Schemana på itemets detaljvy, se issue 63a § Beslut 1, 2, 6, 7 och 8, och
- * issue 63b § Beslut 1, 2 och 4.
+ * Itemets uppgiftsflik — listan av FÖREKOMSTER (M24 · issue 227, Tonys beslut
+ * 2026-10-04, docs/Design/tasks-item.png).
  *
- * **Schemat är regeln och förekomsten den enskilda gången** ([[ADR-0005
- * Schema och förekomst]]). Den här sektionen listar REGLERNA — titeln,
- * återkommandet, nästa förfall och en markering för pausade — och bär sedan
- * 63b:s avbockning: den öppna förekomstens tre datum och de två handlingar
- * som stänger den. Historiken bor på schemats egen sida, dit raden länkar
- * (Beslut 1).
+ * **Fliken visar samma grupper och samma rad som containerns flik** (Beslut 1
+ * och 4): *Overdue → Today → This week → Upcoming → Done*, ur
+ * App\Actions\Schedule\ListItemTasks, som frågar `ListTodo`s rader och grupper.
+ * Gruppen räknas aldrig i vyn — en `computed` som jämför `due_at` mot
+ * `Date.now()` hade flyttat en uppgift till fel hög så fort klientens klocka
+ * gick fel (issue 64 § Beslut 3).
  *
- * **Avbockningen ligger här med flit** (Beslut 1). Det är produktens
- * vanligaste skrivning, och den ska kosta en knapptryckning från itemet —
- * inte en navigering. Formuläret är resources/js/components/OpenOccurrence.vue,
- * samma komponent som schemats sida ritar: två avskrifter av samma
- * skrivning hade glidit isär.
+ * **REGELLISTAN är borta.** Fram till issue 227 listade sektionen itemets
+ * scheman med pausa, redigera och radera och en avbockning per rad. Reglerna
+ * bor nu på schemats egen sida (issue 226), dit radens titel länkar, och
+ * avbockningen är `TodoRow`s snabbavbockning (Beslut 5). Ingen `OpenOccurrence`
+ * och ingen egen skrivväg här.
  *
- * **Nästa förfall är den öppna förekomstens datum** och räknas aldrig om i
- * vyn: servern skickar `openOccurrences` (schemanas ULID → förekomsten, eller
- * `null`) byggd ur den eager-laddade relationen, och ett schema utan öppen
- * förekomst får sin egen mening i stället för ett tomt fält (63a § Beslut 1).
- * Sedan 63b är det förekomsten och inte datumet — avbockningen behöver
- * ULID:n, `overdue` och `visible_from`, och `due_at` är ett av dess fält.
+ * **Reglaget *Include child items* står i querysträngen** (Beslut 3).
+ * Kryssrutan postar ingen kropp: `router.get` mot SAMMA rutt som sidan ligger
+ * på, med `children=0` när den är av och utan parametern när den är på — så ett
+ * avgränsat läge är en adress man kan spara, dela och backa ur (issue 59a
+ * § Beslut 1). Servern äger svaret, och `props.includeChildren` speglas med
+ * `watch` så att kryssrutan följer servern efter en bakåtknapp eller en
+ * omladdning. Vänteläget stänger kontrollen medan svaret är på väg (issue 68a
+ * § Beslut 4). Samma konstruktion som underhållsfiltret i
+ * resources/js/pages/Containers/Tasks.vue.
  *
- * **Egen komponent och inte rader i Show.vue**, av samma skäl som
- * ItemAttachmentSection och ItemLinkSection ligger här: sektionen bär sina
- * egna skrivningar och sina egna fel, så en nekad avbockning inte färgar
- * resten av sidan.
+ * **En tom grupp ritas inte** (Beslut 4) — varken rubrik eller lista, och det
+ * gäller också *Done*. Är allt tomt ritas `item.schedule.empty` i stället: en
+ * rubrik utan rader hade sagt att gruppen finns men är tom, och en lista utan
+ * innehåll är samma svar utan brus.
  *
- * **`can` är presentation** (63a § Beslut 7). Varje knapp ritas efter samma
- * grind som kontrollern prövar — `create` för att lägga till, `update` för
- * att ändra, pausa OCH bocka av, `delete` för att radera — men det som
- * avgör är `Gate::authorize()` i App\Http\Controllers\ScheduleController och
- * App\Http\Controllers\ScheduleOccurrenceController. En användare med bara
- * `read` ser ingen skrivyta alls; en `create`-mottagare ser *Nytt schema* men
- * ingen radåtgärd; en `write`-mottagare ser pausen och avbockningen men inte
- * raderingen.
+ * **`can` är presentation** (Beslut 4). Bara `can.create` läses här — knappen
+ * *New task* — och rutten prövar `create` på nytt. Pausen, redigeringen och
+ * raderingen ritas på schemats sida, bakom sina egna flaggor.
  *
- * **Pausen är en PATCH som bär bara `is_active`** (63a § Beslut 6), och
- * raderingen en DELETE. Båda går mot samma rutt som redigeringen, och båda
- * behåller scrolläget: en paus är en liten ändring i en lista man står mitt
- * i.
+ * Ordningen i *Done* och tidsstämpeln kommer färdiga från servern; `eventDate`
+ * skriver `completed_at` som en HÄNDELSE och inte som ett förfallodatum
+ * (issue 104) — en avbockning är något som gjordes, inte något som förfaller.
+ * Ingen sträng står i JavaScript (issue 52 · [[ADR-0013 Språk och i18n]]):
+ * rubriken, knappen, reglaget och grupprubrikerna kommer ur `t()`.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
     itemUlid: { type: String, required: true },
-    /* Schemana ur App\Http\Resources\ScheduleResource, sorterade på titel. */
-    schedules: { type: Array, required: true },
     /*
-     * Schemats ULID → den öppna förekomsten ur ScheduleOccurrenceResource,
-     * eller `null` för ett schema som inte har någon (issue 63b § Beslut 1).
+     * De fyra öppna grupperna, i ritningsordning: overdue, today, this_week,
+     * upcoming. Varje rad är `ListTodo`s rad — `TodoEntryResource` plus
+     * `account`, `can`, `paused` och `blocked` — och vyn ritar den som den kom.
      */
-    openOccurrences: { type: Object, required: true },
-    /*
-     * De öppna förekomsterna på items UNDER det här itemet (M24 · testarnas
-     * fynd 2026-10-03), byggda på servern: en rad per öppen förekomst på en
-     * ättling — barn, barnbarn, utan djuptak — sorterade på förfallodatum.
-     *
-     * Varje rad bär sitt eget items ULID, så schemats titel och avbockningens
-     * adress går mot BARNET och inte mot sidans item (Beslut 7 i issuen:
-     * `scopeBindings()` kräver att `{item}` är schemats item).
-     *
-     * Servern skickar bara proppen när uppgiftsfliken är aktiv, och en tom
-     * lista betyder att ingen ättling har en öppen uppgift — då ritas ingen
-     * rubrik.
-     */
-    descendantOccurrences: { type: Array, default: () => [] },
-    /* Containerns ägarkonto — avbockningens förval när användaren är medlem. */
-    containerAccount: { type: String, default: '' },
+    groups: { type: Object, required: true },
+    /* Avbockade förekomster på itemet och ättlingarna, nyast först, högst tjugo. */
+    completed: { type: Array, required: true },
+    /* Reglagets läge, ur `?children`. Förvalet är PÅ. */
+    includeChildren: { type: Boolean, required: true },
+    /* `{ create }` — *New task*-länken. Rutten prövar samma grind. */
     can: { type: Object, required: true },
 });
 
 const { t } = useTranslations();
-const { dueDate } = useRelativeDate();
+const { eventDate } = useRelativeDate();
+
+/* Kryssrutans läge, speglat ur proppen — se docblocken ovan. */
+const onlyChildren = ref(props.includeChildren);
+
+/* Vänteläget för reglaget: en enda kontroll, en enda flagga (issue 68a). */
+const pending = ref(false);
+
+watch(
+    () => props.includeChildren,
+    (value) => {
+        onlyChildren.value = value;
+    },
+);
 
 /*
- * Raderna: återkommandet formulerat i ord, den öppna förekomsten som den kom
- * från servern, och dess datum ur datumregeln (issue 104) — relativt inom
- * gränsen, absolut bortom den. Nästa förfall är ett förfallodatum som alla
- * andra och får samma form: en egen formatering här är precis den blandning
- * regeln finns för att ta bort. `occurrence.overdue` är serverns fält och går
- * in i regeln — raden räknar aldrig försenat själv.
- *
- * `done` är `none`-uppgiftens sista tillstånd (Beslut 8 och "Klart när"): en
- * engångsuppgift vars förekomst är stängd öppnar ingen ny, och raden ska säga
- * att uppgiften är klar i stället för att visa ett tomt förfallodatum. En
- * PAUSAD rad har redan sin egen mening och förväxlas inte med den.
- *
- * `dueLabel` är den färdiga meningen: en relativ rad bär sin egen preposition
- * ("Overdue by 3 days"), medan det absoluta datumet får radens ord runt sig
- * ("Next due: 14 Oct 2026").
+ * Är allt tomt? Frågan ställs på serverns svar och inte på en egen räkning:
+ * grupperna är redan avgränsade av reglaget, och vyn lägger inget villkor till
+ * dem (Beslut 4).
  */
-const rows = computed(() => props.schedules.map((schedule) => {
-    const occurrence = props.openOccurrences[schedule.ulid] ?? null;
-    const due = occurrence ? dueDate(occurrence.due_at, occurrence.overdue) : null;
-
-    return {
-        ...schedule,
-        recurrence: recurrenceLabel(t, schedule),
-        occurrence,
-        due,
-        dueLabel: due === null
-            ? null
-            : (due.relative ? due.text : t('item.schedule.next_due', { date: due.text })),
-        done: occurrence === null && schedule.recurrence_type === 'none' && schedule.is_active,
-    };
-}));
-
-function url(schedule) {
-    return scheduleUrl(props.containerUlid, props.itemUlid, schedule.ulid);
-}
-
-function editUrl(schedule) {
-    return `${url(schedule)}/edit`;
-}
+const hasAnyTask = computed(
+    () => props.completed.length > 0 || Object.values(props.groups).some((entries) => entries.length > 0),
+);
 
 /*
- * `pending` är radens vänteläge (issue 68a § Beslut 4 och 5): pausen och
- * raderingen är båda små mutationer i samma lista, och flaggan bär den
- * anropade radens ULID — listan ritar flera scheman ur samma komponent, och
- * bara knapparna på raden man tryckte på ska stängas och byta ord medan
- * servern svarar (Beslut 4).
+ * Flikens egen adress. `router.get` lägger parametern ovanpå querysträngen, så
+ * `tab=schedules` står kvar och `children=0` läggs till eller utelämnas.
  */
-const pending = ref(null);
+const tabUrl = () => `/containers/${props.containerUlid}/items/${props.itemUlid}?tab=schedules`;
 
-function toggle(schedule) {
-    router.patch(url(schedule), { is_active: !schedule.is_active }, {
+function apply() {
+    const params = onlyChildren.value ? {} : { children: 0 };
+
+    router.get(tabUrl(), params, {
+        preserveState: true,
         preserveScroll: true,
-        onStart: () => { pending.value = schedule.ulid; },
-        onFinish: () => { pending.value = null; },
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
     });
 }
 
 /*
- * Raderingen. Bekräftelsen är webbläsarens egen dialog med serverns mening ur
- * `lang/` — ingen modal komponent och ingen sträng i JavaScript, samma mönster
- * som detaljvyns radering och bilagesektionen.
- *
- * Texten säger att schemat och dess kommande förekomster tas bort och nämner
- * varken papperskorgen eller de 30 dagarna (Beslut 8): raden mjukraderas, men
- * papperskorgen listar fyra typer och `schedule` är inte en av dem (issue 20a
- * § Beslut 3). Att lova en väg tillbaka som inte finns är värre än att inte
- * lova någon.
+ * Adresserna byggs i vyn, som i varje annan rad. Schemats adress kommer ur
+ * occurrencePresentation.js — en enda stavning av samma rutt — och itemets ur
+ * radens egen container och eget item, av samma skäl som i
+ * resources/js/pages/Containers/Tasks.vue.
  */
-function destroy(schedule) {
-    if (! window.confirm(t('item.schedule.destroy_confirm'))) {
-        return;
-    }
+const itemUrl = (entry) => `/containers/${entry.container.ulid}/items/${entry.item.ulid}`;
 
-    router.delete(url(schedule), {
-        preserveScroll: true,
-        onStart: () => { pending.value = schedule.ulid; },
-        onFinish: () => { pending.value = null; },
-    });
-}
+const scheduleHref = (entry) => scheduleUrl(entry.container.ulid, entry.item.ulid, entry.schedule.ulid);
+
+const completedAt = (entry) => eventDate(entry.completed_at);
 </script>
 
 <template>
@@ -178,164 +135,93 @@ function destroy(schedule) {
             </Link>
         </div>
 
-        <p v-if="rows.length === 0" class="mt-2 text-sm text-slate-600">
+        <!--
+            Reglaget (Beslut 3). En kryssruta och ingen skicka-knapp: valet är
+            ett värde i adressen, och svaret ritar servern. `:disabled` medan
+            svaret är på väg, så kontrollen inte ser död ut (issue 68a
+            § Beslut 4).
+        -->
+        <label
+            for="item-tasks-children"
+            class="mt-4 flex min-h-11 w-fit items-center gap-2 text-sm font-medium text-slate-800"
+        >
+            <input
+                id="item-tasks-children"
+                v-model="onlyChildren"
+                type="checkbox"
+                name="children"
+                :disabled="pending"
+                @change="apply"
+            >
+            {{ t('item.schedule.include_children') }}
+        </label>
+
+        <!--
+            Det tomma läget (Beslut 4): först när allt är tomt — de fyra öppna
+            grupperna OCH *Done* — annars hade en lista med bara avbockade
+            rader sagt att itemet saknar uppgifter.
+        -->
+        <p v-if="!hasAnyTask" class="mt-2 text-sm text-slate-600">
             {{ t('item.schedule.empty') }}
         </p>
 
-        <ul v-else class="mt-2 flex flex-col gap-2">
-            <!--
-                En pausad rad ligger KVAR i listan, gråtonad: pausen är
-                avsiktligt reversibel och synlig (Beslut 6). Att dölja den
-                hade gjort ett pausat schema omöjligt att hitta och därmed
-                omöjligt att återuppta.
-            -->
-            <li
-                v-for="schedule in rows"
-                :key="schedule.ulid"
-                class="flex flex-col gap-2 rounded border border-slate-300 bg-white px-4 py-3"
-                :class="schedule.is_active ? null : 'text-slate-600'"
-            >
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span class="font-medium">{{ schedule.title }}</span>
-
-                    <span class="text-sm">{{ schedule.recurrence }}</span>
-
-                    <span
-                        class="text-sm"
-                        :class="schedule.due?.state === 'danger' ? 'text-danger' : ''"
-                    >
-                        {{ schedule.dueLabel
-                            ? schedule.dueLabel
-                            : schedule.done
-                                ? t('item.schedule.occurrence.done')
-                                : t('item.schedule.no_next_due') }}
-                    </span>
-
-                    <span
-                        v-if="! schedule.is_active"
-                        class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
-                    >
-                        {{ t('item.schedule.paused') }}
-                    </span>
-                </div>
-
-                <p v-if="! schedule.is_active" class="text-sm">
-                    {{ t('item.schedule.paused_note') }}
-                </p>
-
-                <div class="flex flex-wrap gap-4 text-sm">
-                    <!-- Historiken och förekomsterna bor på schemats egen sida
-                         (Beslut 1). Länken ritas för alla som får se raden —
-                         att läsa historiken är samma grind som att läsa
-                         schemat. -->
-                    <Link
-                        :href="url(schedule)"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                    >
-                        {{ t('item.schedule.occurrence.view') }}
-                    </Link>
-
-                    <Link
-                        v-if="can.update"
-                        :href="editUrl(schedule)"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                    >
-                        {{ t('item.schedule.edit') }}
-                    </Link>
-
-                    <button
-                        v-if="can.update"
-                        type="button"
-                        :disabled="pending === schedule.ulid"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                        @click="toggle(schedule)"
-                    >
-                        {{ pending === schedule.ulid ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
-                    </button>
-
-                    <button
-                        v-if="can.delete"
-                        type="button"
-                        :disabled="pending === schedule.ulid"
-                        class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
-                        @click="destroy(schedule)"
-                    >
-                        {{ pending === schedule.ulid ? t('common.pending.default') : t('item.schedule.destroy') }}
-                    </button>
-                </div>
-
-                <!-- Den öppna förekomsten med avbockningen (Beslut 1). Ritas
-                     bara när det finns en rad att stänga; en stängd
-                     engångsuppgift säger det i raden ovan i stället. -->
-                <OpenOccurrence
-                    v-if="schedule.occurrence"
-                    :container-ulid="containerUlid"
-                    :item-ulid="itemUlid"
-                    :schedule-ulid="schedule.ulid"
-                    :occurrence="schedule.occurrence"
-                    :container-account="containerAccount"
-                    :can="can"
-                />
-            </li>
-        </ul>
-
         <!--
-            Uppgifterna på items UNDER det här itemet (M24 · testarnas fynd
-            2026-10-03). Listan står efter den egna — förälderns uppgifter är
-            de man kom för — och ritas bara när det finns något att visa.
-
-            Varje rad säger vilket item den hör till och länkar dit, och
-            avbockningen sker på plats: `OpenOccurrence` postar mot RADENS
-            item-ULID, så ett barns uppgift stängs från förälderns flik och
-            `back()` landar här igen. Ingen paus-, redigerings- eller
-            raderingsknapp ritas på dessa rader — de hör till schemats egen
-            sida, dit titeln länkar.
+            Listan (Beslut 4): grupperna i den ordning servern gav dem, sedan
+            *Done*. En sektion ritas bara när den har rader, och rubriken byggs
+            ur gruppens EGET namn — samma nyckel som containerns flik.
         -->
-        <template v-if="descendantOccurrences.length > 0">
-            <h3 class="mt-8 text-base font-semibold">
-                {{ t('item.schedule.descendants_heading') }}
-            </h3>
+        <div v-else class="mt-6 flex flex-col gap-8">
+            <template v-for="(entries, group) in groups" :key="group">
+                <section v-if="entries.length > 0" class="min-w-0">
+                    <h2 class="text-sm font-medium text-slate-700">{{ t(`todo.group.${group}`) }}</h2>
 
-            <ul class="mt-2 flex flex-col gap-2">
-                <li
-                    v-for="row in descendantOccurrences"
-                    :key="row.occurrence.ulid"
-                    class="flex flex-col gap-2 rounded border border-slate-300 bg-white px-4 py-3"
-                    :class="row.schedule.is_active ? null : 'text-slate-600'"
-                >
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <Link
-                            :href="scheduleUrl(containerUlid, row.item.ulid, row.schedule.ulid)"
-                            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                        >
-                            {{ row.schedule.title }}
-                        </Link>
+                    <ul class="mt-2 flex flex-col divide-y divide-slate-200">
+                        <TodoRow
+                            v-for="entry in entries"
+                            :key="entry.ulid"
+                            :entry="entry"
+                            :show-container="false"
+                        />
+                    </ul>
+                </section>
+            </template>
 
-                        <Link
-                            :href="`/containers/${containerUlid}/items/${row.item.ulid}`"
-                            class="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
-                        >
-                            {{ t('item.schedule.on_item', { item: row.item.name }) }}
-                        </Link>
+            <!--
+                *Done* (Beslut 4). Raden bär samma upplysningar som de öppna —
+                schemats titel, itemet, ett datum — men datumet är
+                `completed_at`, och avbockningsknappen ritas inte: det finns
+                ingenting kvar att bocka av. Rubriken är containerns fliks ord,
+                samma grupp och samma nyckel.
+            -->
+            <section v-if="completed.length > 0" class="min-w-0">
+                <h2 class="text-sm font-medium text-slate-700">{{ t('container.tasks.done') }}</h2>
 
-                        <span
-                            v-if="! row.schedule.is_active"
-                            class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
-                        >
-                            {{ t('item.schedule.paused') }}
-                        </span>
-                    </div>
+                <ul class="mt-2 flex flex-col divide-y divide-slate-200">
+                    <UiListRow v-for="entry in completed" :key="entry.ulid">
+                        <template #title>
+                            <Link
+                                :href="scheduleHref(entry)"
+                                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                            >
+                                {{ entry.schedule.title }}
+                            </Link>
+                        </template>
 
-                    <OpenOccurrence
-                        :container-ulid="containerUlid"
-                        :item-ulid="row.item.ulid"
-                        :schedule-ulid="row.schedule.ulid"
-                        :occurrence="row.occurrence"
-                        :container-account="containerAccount"
-                        :can="row.can"
-                    />
-                </li>
-            </ul>
-        </template>
+                        <template #subtitle>
+                            <Link
+                                :href="itemUrl(entry)"
+                                class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                            >
+                                {{ entry.item.name }}
+                            </Link>
+                        </template>
+
+                        <template #meta>
+                            <time :datetime="entry.completed_at">{{ completedAt(entry).text }}</time>
+                        </template>
+                    </UiListRow>
+                </ul>
+            </section>
+        </div>
     </section>
 </template>
