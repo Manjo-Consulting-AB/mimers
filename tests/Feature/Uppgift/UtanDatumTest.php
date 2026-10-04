@@ -336,11 +336,16 @@ it('resurserna svarar null och inte försenad', function () {
 });
 
 /*
- * Klart när: listorna kraschar inte och visar inte raden än — `/tasks`,
- * containerns flik och itemets flik svarar 200 utan raden. Den daterade raden
- * syns, så listorna bevisligen ritades.
+ * Klart när: listorna svarar 200 och bär raden utan datum i `no_date` SIST.
+ *
+ * Fram till M26 · issue 234 visade listorna inte raden alls — den hade ingen
+ * grupp att hamna i, och provet hette "visar inte raden än". *No date* byggdes
+ * i issue 234, så samma tre ytor bär nu båda raderna: den daterade först, den
+ * odaterade sist. Den daterade förfaller den 14 oktober 2026, som är den
+ * frysta dagens datum, alltså i `today`; den odaterade ligger i `no_date`, som
+ * är sista gruppen bland de öppna (ADR-0052 § 3).
  */
-it('listorna kraschar inte och visar inte raden än', function () {
+it('listorna bär raden utan datum i no_date sist', function () {
     withoutVite();
 
     [, $anvandare, $container, $item] = utanDatumKontext();
@@ -354,16 +359,13 @@ it('listorna kraschar inte och visar inte raden än', function () {
         ->assertOk();
 
     $tasksGrupper = $tasks->inertiaProps()['groups'];
-    expect(utanDatumUlids($tasksGrupper))->toContain($daterad->ulid)
-        ->and(utanDatumUlids($tasksGrupper))->not->toContain($utanDatum->ulid);
+    expect(utanDatumUlids($tasksGrupper))->toBe([$daterad->ulid, $utanDatum->ulid]);
 
     $containerGrupper = $containerflik->inertiaProps()['groups'];
-    expect(utanDatumUlids($containerGrupper))->toContain($daterad->ulid)
-        ->and(utanDatumUlids($containerGrupper))->not->toContain($utanDatum->ulid);
+    expect(utanDatumUlids($containerGrupper))->toBe([$daterad->ulid, $utanDatum->ulid]);
 
     $itemGrupper = $itemflik->inertiaProps()['itemTasks']['groups'];
-    expect(utanDatumUlids($itemGrupper))->toContain($daterad->ulid)
-        ->and(utanDatumUlids($itemGrupper))->not->toContain($utanDatum->ulid);
+    expect(utanDatumUlids($itemGrupper))->toBe([$daterad->ulid, $utanDatum->ulid]);
 });
 
 /*

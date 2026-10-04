@@ -3,8 +3,11 @@
 use App\Actions\Schedule\ListTodo;
 use App\Models\Account;
 use App\Models\Item;
+use App\Models\Schedule;
+use App\Models\ScheduleOccurrence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
+use Illuminate\Testing\TestResponse;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
@@ -52,6 +55,16 @@ use function Pest\Laravel\withoutVite;
  * dag sedan issue 135 medan `todovyDatum()` räknar ur serverns klocka — utan
  * pinnen är filen alltså väggklockeberoende, grön på dagen och röd på natten.
  * Vid tolv UTC sammanfaller de två datumen, så proven är oförändrade.
+ *
+ * **M26 · issue 234 lade en andra sektion i markören.** Daterade rader kommer
+ * före odaterade, och markören bär sin sektion: `d_{due_at}_{ulid}` för en
+ * daterad rad och `n_{ulid}` för en odaterad ([[ADR-0052 Uppgifternas listor
+ * och uppgifter utan datum]] § Konsekvenser). Sektionen `// --- de två
+ * sektionerna ---` nedan prövar de fyra gränserna den ordningen är byggd
+ * kring: framåt från daterade in i `no_date`, bakåt från `no_date` till
+ * daterade, tre sidor inom `no_date`, och den gamla markörformen
+ * `{due_at}_{ulid}`, som fortfarande läses som `d_…`. Hjälparna med prefixet
+ * `paginering` delas av alla proven.
  */
 beforeEach(function () {
     Carbon::setTestNow(Carbon::today()->setTime(12, 0));
@@ -101,6 +114,64 @@ function pagineringMark(string $due, string $ulid): string
 function pagineringUlider(array $rader): array
 {
     return array_column($rader, 'ulid');
+}
+
+/**
+ * $antal öppna förekomster UTAN datum på samma item, i skapelseordning
+ * (M26 · issue 234).
+ *
+ * Schemat är `none` utan `anchor_date` — den enda vägen till en odaterad rad
+ * (ADR-0052 § 3) — och förekomsten byggs ur fabrikens `dateless()`. ULID:n är
+ * monoton i tiden, så skapelseordningen ÄR `ulid`-ordningen, precis som i
+ * `pagineringRader()`.
+ *
+ * @return list<string> förekomsternas ULID:n, i `ulid`-ordning
+ */
+function pagineringUtanDatum(Item $item, int $antal, string $namn): array
+{
+    $ulider = [];
+
+    foreach (range(1, $antal) as $i) {
+        $schema = Schedule::factory()->for($item, 'item')->create([
+            'title' => "{$namn} {$i}",
+            'recurrence_type' => 'none',
+            'interval_unit' => null,
+            'interval_count' => null,
+            'anchor_date' => null,
+        ]);
+
+        $ulider[] = ScheduleOccurrence::factory()
+            ->for($schema, 'schedule')
+            ->dateless()
+            ->create()
+            ->ulid;
+    }
+
+    return $ulider;
+}
+
+/**
+ * Alla rader i svaret, i gruppernas ritningsordning — de FEM öppna grupperna,
+ * med *No date* sist.
+ *
+ * `todovyRader()` i TodovyTest samlar de fyra daterade grupperna; den här
+ * filen behöver hela följden för att kunna pröva att ingen rad tappas mellan
+ * två sidor och att sektionen byter plats baklänges.
+ *
+ * @return list<array<string, mixed>>
+ */
+function pagineringAlla(TestResponse $svar): array
+{
+    /** @var array<string, list<array<string, mixed>>> $grupper */
+    $grupper = $svar->inertiaProps()['groups'];
+
+    return array_merge(
+        $grupper['overdue'],
+        $grupper['today'],
+        $grupper['this_week'],
+        $grupper['upcoming'],
+        $grupper['no_date'],
+    );
 }
 
 // --- sidan -----------------------------------------------------------------
@@ -403,4 +474,153 @@ it('säger inte längre att listan är opaginerad', function () {
 
     expect(trim($en['todo']['pagination']['previous']))->not->toBe('')
         ->and(trim($en['todo']['pagination']['next']))->not->toBe('');
+});
+
+// --- de två sektionerna (M26 · issue 234) ----------------------------------
+
+/*
+ * Klart när: `bläddrar framåt från daterade in i no_date` — 60 daterade och
+ * 5 odaterade, med `PER_PAGE` 50: sidan 2 har 10 daterade och 5 odaterade,
+ * och ingen rad saknas eller står två gånger.
+ *
+ * Sextio daterade på samma förfallodag ligger i `overdue`, i `ulid`-ordning.
+ * Sidan ett bär de femtio första och INGEN odaterad rad — daterade kommer
+ * före odaterade. Markören den lämnar efter sig är `d_…` för den femtionde
+ * daterade raden; framåt från den kommer de tio daterade som är kvar, och
+ * därefter alla fem odaterade. Hela följden fogas samman och jämförs med den
+ * förväntade: en rad för mycket, en rad för lite eller en överlappning faller
+ * på samma rad.
+ */
+it('bläddrar framåt från daterade in i no_date', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = todovyKontext();
+
+    $daterade = pagineringRader($item, todovyDatum(-1), 60, 'Daterad');
+    $odaterade = pagineringUtanDatum($item, 5, 'Utan datum');
+
+    $sida1 = actingAs($anvandare)->get('/tasks')->assertOk();
+
+    expect(pagineringUlider(pagineringAlla($sida1)))->toBe(array_slice($daterade, 0, 50))
+        ->and(todovyGrupp($sida1, 'no_date'))->toBe([])
+        ->and($sida1->inertiaProps()['nextUrl'])->toStartWith('/tasks?'.ListTodo::CURSOR_AFTER.'=');
+
+    $sida2 = actingAs($anvandare)->get($sida1->inertiaProps()['nextUrl'])->assertOk();
+
+    // Tio daterade kvar, och alla fem odaterade — ingen rad tappas, ingen står
+    // två gånger.
+    expect(pagineringUlider(todovyRader($sida2)))->toBe(array_slice($daterade, 50))
+        ->and(pagineringUlider(todovyGrupp($sida2, 'no_date')))->toBe($odaterade)
+        ->and(pagineringUlider(pagineringAlla($sida2)))
+        ->toBe([...array_slice($daterade, 50), ...$odaterade])
+        ->and($sida2->inertiaProps()['nextUrl'])->toBeNull();
+
+    // Gränsen ligger MELLAN sektionerna: sidan ett slutar på en daterad rad,
+    // och sidan tvås sista rad är odaterad.
+    expect(todovyRader($sida2))->toHaveCount(10)
+        ->and(todovyGrupp($sida2, 'no_date'))->toHaveCount(5);
+});
+
+/*
+ * Klart när: `bläddrar bakåt från no_date till daterade`.
+ *
+ * Markören är `n_…` för den sista odaterade raden och är inklusiv, så sidan
+ * slutar där. Bakåt gäller spegelregeln: först de odaterade med mindre eller
+ * lika `ulid`, sedan alla daterade — och den ordningen vänds till
+ * ritningsordning, alltså daterade först, odaterade sist. Sidan bär därför
+ * fyrtiofem daterade och fem odaterade.
+ *
+ * Föregående sida ligger helt i den daterade sektionen: markören dit är
+ * `d_…` för den äldsta daterade raden i den hämtade sviten, och bakåt från en
+ * daterad markör kommer bara daterade.
+ */
+it('bläddrar bakåt från no_date till daterade', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = todovyKontext();
+
+    $daterade = pagineringRader($item, todovyDatum(-1), 60, 'Daterad');
+    $odaterade = pagineringUtanDatum($item, 5, 'Utan datum');
+
+    $sista = end($odaterade);
+
+    $sida = actingAs($anvandare)
+        ->get('/tasks?'.ListTodo::CURSOR_BEFORE.'=n_'.$sista)
+        ->assertOk();
+
+    // Fyrtiofem daterade (de som ryms efter de fem odaterade i femtioett-
+    // sviten) och alla fem odaterade — daterade först, odaterade sist.
+    expect(pagineringUlider(pagineringAlla($sida)))
+        ->toBe([...array_slice($daterade, 15), ...$odaterade])
+        ->and($sida->inertiaProps()['nextUrl'])->toStartWith('/tasks?'.ListTodo::CURSOR_AFTER.'=n_'.$sista);
+
+    $tillbaka = actingAs($anvandare)->get($sida->inertiaProps()['previousUrl'])->assertOk();
+
+    expect(pagineringUlider(pagineringAlla($tillbaka)))->toBe(array_slice($daterade, 0, 15))
+        ->and(todovyGrupp($tillbaka, 'no_date'))->toBe([])
+        ->and($tillbaka->inertiaProps()['previousUrl'])->toBeNull();
+});
+
+/*
+ * Klart när: `bläddrar inom no_date` — 120 odaterade ger tre sidor utan
+ * dubbletter.
+ *
+ * Ingen daterad rad finns, så hela listan är en enda sektion sorterad på
+ * `ulid`. Markören framåt är `n_…` för sidans sista rad, och framåt från en
+ * odaterad markör kommer bara odaterade med större `ulid` — ingen daterad rad
+ * kan smyga in, för det finns ingen. De tre sidorna är 50, 50 och 20 rader,
+ * och sammanfogade är de exakt de 120, utan en enda dubblett.
+ */
+it('bläddrar inom no_date', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = todovyKontext();
+
+    $odaterade = pagineringUtanDatum($item, 120, 'Utan datum');
+
+    $sida1 = actingAs($anvandare)->get('/tasks')->assertOk();
+    $sida2 = actingAs($anvandare)->get($sida1->inertiaProps()['nextUrl'])->assertOk();
+    $sida3 = actingAs($anvandare)->get($sida2->inertiaProps()['nextUrl'])->assertOk();
+
+    $alla = [
+        ...pagineringUlider(pagineringAlla($sida1)),
+        ...pagineringUlider(pagineringAlla($sida2)),
+        ...pagineringUlider(pagineringAlla($sida3)),
+    ];
+
+    expect(pagineringUlider(pagineringAlla($sida1)))->toHaveCount(50)
+        ->and(pagineringUlider(pagineringAlla($sida2)))->toHaveCount(50)
+        ->and(pagineringUlider(pagineringAlla($sida3)))->toHaveCount(20)
+        ->and($sida3->inertiaProps()['nextUrl'])->toBeNull()
+        ->and($alla)->toBe($odaterade)
+        ->and(array_unique($alla))->toHaveCount(120);
+
+    // Bakåt från sida tre landar på sida två, ordagrant.
+    $tillbaka = actingAs($anvandare)->get($sida3->inertiaProps()['previousUrl'])->assertOk();
+
+    expect(pagineringUlider(pagineringAlla($tillbaka)))->toBe(array_slice($odaterade, 50, 50));
+});
+
+/*
+ * Klart när: `läser en markör i den gamla formen`.
+ *
+ * Före issue 234 var formen `{due_at}_{ulid}`, utan sektion. En adress som
+ * redan är sparad — i en bokmärkesrad, i webbläsarens historik — ska fortsatt
+ * fungera, och `cursor()` läser därför den gamla formen som `d_…`. Provet
+ * bygger markören med `pagineringMark()`, som skriver just den gamla formen.
+ */
+it('läser en markör i den gamla formen', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = todovyKontext();
+
+    $daterade = pagineringRader($item, todovyDatum(-1), 60, 'Daterad');
+
+    $sida = actingAs($anvandare)
+        ->get('/tasks?'.ListTodo::CURSOR_AFTER.'='.pagineringMark(todovyDatum(-1), $daterade[49]))
+        ->assertOk();
+
+    // Samma svar som `d_…` hade gett: de tio daterade som är kvar.
+    expect(pagineringUlider(todovyRader($sida)))->toBe(array_slice($daterade, 50))
+        ->and($sida->inertiaProps()['previousUrl'])->not->toBeNull();
 });

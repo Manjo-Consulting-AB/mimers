@@ -67,6 +67,11 @@ class TodoController extends Controller
     public const GROUP_UPCOMING = ListTodo::GROUP_UPCOMING;
 
     /**
+     * Raden har inget datum — sista gruppen bland de öppna (ADR-0052 § 3).
+     */
+    public const GROUP_NO_DATE = ListTodo::GROUP_NO_DATE;
+
+    /**
      * GET /tasks — 200. En sida av de öppna förekomsterna användaren når, i
      * `due_at`-ordning, grupperade i försenat, idag, denna vecka och kommande.
      *

@@ -103,7 +103,12 @@ class ListItemTasks
     }
 
     /**
-     * De fyra öppna grupperna, i ritningsordning.
+     * De fem öppna grupperna, i ritningsordning — *No date* sist (ADR-0052 § 3).
+     *
+     * **Daterade före odaterade** (ADR-0052 § Konsekvenser):
+     * `orderByRaw('due_at IS NULL')` är första nyckeln, för både MySQL och
+     * sqlite sätter annars null först. Sedan `due_at` och `ulid`, samma
+     * deterministiska ordning som `ListTodo` och `/tasks` ger.
      *
      * @param  list<int>  $itemIds
      * @return array<string, list<array<string, mixed>>>
@@ -112,10 +117,7 @@ class ListItemTasks
     {
         $occurrences = $this->occurrences($itemIds)
             ->active()
-            // Fram till issue 234 (ADR-0052 § 3) har en rad utan datum ingen
-            // grupp att hamna i. Villkoret håller den borta tills *No date*
-            // byggs — samma regel som ListTodo ställer på sin fråga.
-            ->whereNotNull('due_at')
+            ->orderByRaw('due_at IS NULL')
             ->orderBy('due_at')
             ->orderBy('ulid')
             ->get();
@@ -125,6 +127,7 @@ class ListItemTasks
             ListTodo::GROUP_TODAY => [],
             ListTodo::GROUP_THIS_WEEK => [],
             ListTodo::GROUP_UPCOMING => [],
+            ListTodo::GROUP_NO_DATE => [],
         ];
 
         $today = $user->today();
