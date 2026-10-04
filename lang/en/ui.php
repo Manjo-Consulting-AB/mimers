@@ -3113,6 +3113,12 @@ return [
             'heading' => 'Tasks',
             'empty' => 'The item has no tasks.',
             'add' => 'New task',
+
+            // M24 · issue 227: reglaget som avgör om förekomsterna på
+            // ättlingarna räknas med på fliken. Samma två ord som växeln bär på
+            // varje annan yta, se `todo.blocked` nedan och `TodoRow`.
+            'include_children' => 'Include child items',
+
             'back' => 'Back to the item',
 
             // The next due date is the date of the OPEN occurrence (decision
@@ -3130,12 +3136,6 @@ return [
             // in the list, greyed out, with this sentence.
             'paused' => 'Paused',
             'paused_note' => 'The task opens no new occurrences while it is paused.',
-
-            // M24 · testarnas fynd 2026-10-03: uppgifterna på items UNDER det
-            // här itemet, i en egen lista efter de egna. Rubriken säger var de
-            // hör hemma, och varje rad namnger itemet den ligger på.
-            'descendants_heading' => 'Tasks on items below',
-            'on_item' => 'on :item',
 
             // The deletion is soft, but the trash lists four types and
             // `schedule` is not one of them (issue 20a decision 3). The text
@@ -3523,6 +3523,13 @@ return [
 
         'due' => 'Due :date',
         'complete' => 'Check off',
+
+        // M24 · issue 227: märket på en rad vars förekomst har ett öppet
+        // beroende. Den blockerade raden står kvar i listan (till skillnad från
+        // på `/tasks`, där `scopeTodoFor` sållar bort den) och märks i stället,
+        // så en avbockning som nekas förklaras av ordet och inte av ett tyst
+        // försvinnande.
+        'blocked' => 'Blocked',
 
         // The section headings. The key is the group's name, the same words
         // the controller sorts the rows into — no separate list in

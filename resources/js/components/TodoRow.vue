@@ -35,9 +35,19 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Knappen ritas bara för den som får bocka av** (Beslut 4). `can.update`
  * räknas på servern med `ItemPolicy::update()`; flaggan är presentation, och
  * postar en `read`-mottagare ändå svarar rutten 403. Domänfelet — ett pausat
- * schema, en redan stängd förekomst — formuleras av servern och ritas på
- * raden. Blockerade uppgifter finns aldrig i listan (villkor tre i
- * `scopeTodoFor`), så 63b:s blockeringsmening kan inte uppstå här.
+ * schema, en redan stängd förekomst, ett öppet beroende — formuleras av
+ * servern och ritas på raden. På `/tasks` och containerns flik finns
+ * blockerade uppgifter aldrig i listan (villkor tre i `scopeTodoFor`), men på
+ * itemets flik gör de det med märket nedan, och då är det serverfelet vägen
+ * till att förklara varför avbockningen nekas.
+ *
+ * **Två märken är presentation** (M24 · issue 227, Beslut 4). `paused` sätts på
+ * en rad vars schema är pausat (`! is_active`), och `blocked` på en rad vars
+ * förekomst har ett öppet beroende — båda kommer färdigräknade ur
+ * App\Actions\Schedule\ListItemTasks och läses aldrig ur klockan eller ur en
+ * egen fråga. Nycklarna finns bara på itemets flik; på `/tasks` och containerns
+ * flik är `entry.paused` och `entry.blocked` odefinierade, alltså falska, och
+ * inget märke ritas.
  *
  * **Knappen bär en prick för försenat och framtida** (issue 133). Färgen
  * kommer ur `entry.overdue` och `entry.upcoming`, som servern redan har räknat
@@ -102,9 +112,30 @@ function complete() {
 <template>
     <li class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-4">
         <div>
-            <Link :href="scheduleHref" class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline">
-                {{ entry.schedule.title }}
-            </Link>
+            <div class="flex flex-wrap items-center gap-x-2">
+                <Link :href="scheduleHref" class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline">
+                    {{ entry.schedule.title }}
+                </Link>
+
+                <!-- Pausad: schemat öppnar inga nya förekomster (Beslut 4), men
+                     den öppna raden ligger kvar och märks i stället för att
+                     försvinna. -->
+                <span
+                    v-if="entry.paused"
+                    class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
+                >
+                    {{ t('item.schedule.paused') }}
+                </span>
+
+                <!-- Blockerad: förekomsten har ett öppet beroende. Servern
+                     nekar avbockningen och formulerar felet på raden. -->
+                <span
+                    v-if="entry.blocked"
+                    class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
+                >
+                    {{ t('todo.blocked') }}
+                </span>
+            </div>
 
             <p class="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-600">
                 <Link :href="itemUrl" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">

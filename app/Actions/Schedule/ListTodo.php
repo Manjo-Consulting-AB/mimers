@@ -721,10 +721,15 @@ class ListTodo
      * samma rad hade glidit isär, och den ena hade tappat `can`-flaggan —
      * alltså ritat en avbockningsknapp för den som inte får bocka av.
      *
+     * **Publik sedan issue 227** (M24): itemets uppgiftsflik bygger samma rad
+     * genom App\Actions\Schedule\ListItemTasks, och två formuleringar av samma
+     * rad hade glidit isär — den ena hade tappat `can`-flaggan. Ingen egen rad
+     * där, alltså.
+     *
      * @param  list<string>  $accountUlids
      * @return array<string, mixed>
      */
-    private function row(User $user, Request $request, ScheduleOccurrence $occurrence, array $accountUlids): array
+    public function row(User $user, Request $request, ScheduleOccurrence $occurrence, array $accountUlids): array
     {
         $item = $occurrence->schedule->item;
 
@@ -787,8 +792,13 @@ class ListTodo
      * veckoslutet på lördag — därför skrivs `CarbonInterface::SUNDAY` ut.
      * Jämförelsen är `<=`: en rad som förfaller på söndagen hör till veckan,
      * och en rad som förfaller i morgon är den första dagen i den.
+     *
+     * **Publik sedan issue 227** (M24): `ListItemTasks` grupperar sina rader
+     * med samma metod, så en förekomst hamnar i samma grupp på itemets flik som
+     * på `/tasks` och containerns flik. En egen jämförelse där hade varit den
+     * andra sanningen om var veckan slutar.
      */
-    private function group(CarbonInterface $dueAt, CarbonInterface $today): string
+    public function group(CarbonInterface $dueAt, CarbonInterface $today): string
     {
         if ($dueAt->lessThan($today)) {
             return self::GROUP_OVERDUE;

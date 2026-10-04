@@ -28,8 +28,10 @@ import { useTranslations } from '../../../composables/useTranslations.js';
  * schemana, bilagorna och kostnaderna.** Bilagesektionen kom med issue 60 och
  * bor i resources/js/components/ItemAttachmentSection.vue; listan kommer med
  * detaljvyns props och har ingen egen rutt. Schemana kom med issue 63a och
- * gör detsamma — ScheduleListSection.vue, proparna `schedules` och
- * `openOccurrences`. Utlåningen kom med issue 67a och gör detsamma —
+ * gör detsamma — ScheduleListSection.vue, propen `itemTasks` (grupperna och de
+ * avbockade förekomsterna) och reglaget `includeChildren`. Regellistan med
+ * pausa, redigera och radera bor på schemats egen sida sedan issue 226.
+ * Utlåningen kom med issue 67a och gör detsamma —
  * ItemLoanSection.vue, proparna `openLoan`, `loanHistory`, `openLoanOverdue`
  * och `today`. Kostnaderna kom med issue 168 och gör detsamma —
  * ItemCostSection.vue, proparna `costs` och `costDefaults`, och
@@ -229,18 +231,22 @@ const props = defineProps({
      */
     openOccurrences: { type: Object, required: true },
     /*
-     * De öppna förekomsterna på items UNDER det här itemet (M24 · testarnas
-     * fynd 2026-10-03), byggda bredvid `schedules` i kontrollern: en rad per
-     * öppen förekomst på en ättling, sorterade på förfallodatum, med barnets
-     * namn, schemats titel och avbockningen.
+     * Itemets uppgifter för fliken *Tasks* (M24 · issue 227):
+     * `{ groups, completed }` ur App\Actions\Schedule\ListItemTasks — samma
+     * grupper och samma rad som containerns flik.
      *
-     * **Proppen finns BARA när uppgiftsfliken är aktiv**, och standarden är en
-     * tom lista — servern lämnar nyckeln helt annars, och listan ritas inte på
-     * någon annan flik (se ItemController::descendantOccurrences()). En tom
-     * lista är här samma sak som "ingen hämtad": sektionen ritar ingenting för
-     * den, och den egna listan ovan bär sitt eget tomma svar.
+     * **Proppen finns BARA när uppgiftsfliken är aktiv**, och standarden är ett
+     * tomt svar — servern lämnar nyckeln helt annars (se ItemController::show()).
+     * En tom `groups`/`completed` är här samma sak som "ingen hämtad": sektionen
+     * ritas bara på fliken.
      */
-    descendantOccurrences: { type: Array, default: () => [] },
+    itemTasks: { type: Object, default: () => ({ groups: {}, completed: [] }) },
+    /*
+     * Reglaget *Include child items* (Beslut 3): sant som förval, och
+     * `?children=0` stänger av det. Servern äger värdet, och vyn ritar sin
+     * kontroll ur det så att den följer en bakåtknapp eller en omladdning.
+     */
+    includeChildren: { type: Boolean, default: true },
     /*
      * Den öppna utlåningen ur App\Http\Resources\LoanResource, eller `null`
      * (issue 67a § Beslut 2). Itemets enda status en annan medlem behöver se
@@ -987,22 +993,19 @@ function toggleFavorite() {
                 />
 
                 <!--
-                    Schemana (issue 63a § Beslut 1): de är itemets egna uppgifter och
-                    inte en egen vy. Sedan issue 63b bär sektionen också den öppna
-                    förekomsten och avbockningen — det är produktens vanligaste
-                    skrivning och ska kosta en knapptryckning från itemet. Historiken
-                    ligger på schemats egen sida; beroendena är 63c och har ingen yta
-                    här. `container.account` är containerns ägarkonto och avbockningens
-                    förval när användaren är medlem i det.
+                    Uppgifterna (M24 · issue 227): förekomsterna på itemet och —
+                    med reglaget på — ättlingarna, i samma grupper och med samma
+                    rad som containerns flik (se ScheduleListSection.vue).
+                    Regellistan med pausa, redigera och radera bor på schemats
+                    egen sida sedan issue 226, dit radens titel länkar.
                 -->
                 <ScheduleListSection
                     v-if="activeTab === 'schedules'"
                     :container-ulid="container.ulid"
                     :item-ulid="item.ulid"
-                    :schedules="schedules"
-                    :open-occurrences="openOccurrences"
-                    :descendant-occurrences="descendantOccurrences"
-                    :container-account="container.account"
+                    :groups="itemTasks.groups"
+                    :completed="itemTasks.completed"
+                    :include-children="includeChildren"
                     :can="can"
                 />
 

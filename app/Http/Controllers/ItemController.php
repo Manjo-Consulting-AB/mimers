@@ -12,11 +12,11 @@ use App\Actions\Item\ListItemLinks;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\RecordRecentVisit;
 use App\Actions\Item\ResolveItemCover;
-use App\Actions\Item\ResolveItemDescendants;
 use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Item\ResolveItemTree;
 use App\Actions\Item\UpdateItem;
+use App\Actions\Schedule\ListItemTasks;
 use App\Actions\Tag\ListTags;
 use App\Http\Requests\Item\StoreItemRequest;
 use App\Http\Requests\Item\UpdateItemRequest;
@@ -540,7 +540,7 @@ class ItemController extends Controller
      * sidopanelen ritas — så en vanlig sidladdning betalar ingenting för den,
      * och sidan här räknar varken frågor eller rader för den.
      */
-    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ResolveItemDescendants $resolveItemDescendants): Response
+    public function show(Request $request, Container $container, Item $item, ListItemLinks $listItemLinks, ListItems $listItems, RecordRecentVisit $recordRecentVisit, ResolveItemPaths $resolveItemPaths, ResolveItemTree $resolveItemTree, ListAuditEvents $listAuditEvents, PresentAuditEvents $presentAuditEvents, CreateTarget $createTarget, ListCostSuppliers $listCostSuppliers, ListItemTasks $listItemTasks): Response
     {
         Gate::authorize('view', $item);
 
@@ -707,6 +707,12 @@ class ItemController extends Controller
         // de här raderna och fokuskartan bygger sina noder ur dem (issue 156),
         // så relationsfliken och kartan bevisligen ritar samma lista.
         $linkRows = ItemLinkResource::collection($links)->resolve($request);
+
+        // Reglaget *Include child items* (M24 · issue 227, Beslut 3): förvalet
+        // är PÅ, och bara `?children=0` stänger av det (se proppen `itemTasks`
+        // nedan). Läsningen bor här och inte i vyn: servern äger svaret, och
+        // `itemTasks` byggs ur samma värde som proppen bär.
+        $includeChildren = $request->boolean('children', true);
 
         return Inertia::render('Containers/Items/Show', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -884,21 +890,32 @@ class ItemController extends Controller
             // `/api`:s format och har inte bett om fältet.
             ...($auditRows === null ? [] : ['history' => $auditRows]),
 
-            // Uppgifterna på items UNDER det här itemet (M24 · testarnas fynd
-            // 2026-10-03). Fliken *Tasks* visar, efter itemets egna scheman,
-            // de öppna förekomsterna på varje ättling — barn, barnbarn, utan
-            // djuptak. Raden säger vilket item den hör till och bär sin egen
-            // avbockning, så ett barns uppgift kan stängas från förälderns
-            // flik. Se `descendantOccurrences()`.
+            // Itemets uppgiftsflik (M24 · issue 227, Tonys beslut 2026-10-04).
+            // Förekomsterna på itemet och — när reglaget är på — ättlingarna,
+            // i samma grupper och med samma rad som containerns flik:
+            // *Overdue → Today → This week → Upcoming → Done*. Frågan är
+            // App\Actions\Schedule\ListItemTasks, och regellistan med pausa,
+            // redigera och radera bor på schemats egen sida sedan issue 226.
+            //
+            // **Reglaget *Include child items* står i querysträngen** (Beslut
+            // 3): `?tab=schedules&children=0` stänger av det, och förvalet är
+            // PÅ — det testarna bad om i #696 får inte försvinna av ett
+            // utelämnat fält. `includeChildren` följer med som en egen prop, så
+            // vyn ritar sin kontroll ur serverns svar och inte ur ett
+            // klienttillstånd som kan gå isär från adressen efter en
+            // bakåtknapp.
             //
             // Proppen finns BARA när fliken är aktiv, samma konstruktion som
-            // `history` ovan: ättlingarnas scheman kostar en egen fråga mot
-            // `schedule`, och den som öppnar itemet för att se bilagorna ska
-            // inte betala för uppgifterna. Ligger BREDVID resursen och inte i
-            // den, samma linje som `schedules` och `openOccurrences`:
-            // `ItemResource` är `/api`:s format och har inte bett om fältet.
+            // `history` ovan: ättlingarnas förekomster kostar egna frågor, och
+            // den som öppnar itemet för att se bilagorna ska inte betala för
+            // uppgifterna. Ligger BREDVID resursen och inte i den, samma linje
+            // som `schedules` och `openOccurrences`: `ItemResource` är
+            // `/api`:s format och har inte bett om fältet.
             ...($request->query('tab') === 'schedules'
-                ? ['descendantOccurrences' => $this->descendantOccurrences($container, $item, $user, $resolveItemDescendants, $request)]
+                ? [
+                    'itemTasks' => $listItemTasks->handle($user, $request, $container, $item, $includeChildren),
+                    'includeChildren' => $includeChildren,
+                ]
                 : []),
 
             // Översiktens händelsepanel (issue 213 · [[ADR-0050
@@ -2010,89 +2027,5 @@ class ItemController extends Controller
         }
 
         return $occurrences;
-    }
-
-    /**
-     * De öppna förekomsterna på varje item UNDER det här itemet, som rader
-     * för *Tasks*-fliken (M24 · testarnas fynd 2026-10-03).
-     *
-     * **Ättlingarna kommer ur App\Actions\Item\ResolveItemDescendants.** En
-     * `parent`-kant i `item_link` bär förälder–barn, och actionen gör
-     * slutningen i PHP på EN fråga — ingen rekursiv CTE, ingen fråga per nivå.
-     * Det första elementet är itemet SJÄLVT och tas bort: den egna listan
-     * ritas redan av `schedules` och `openOccurrences` ovan.
-     *
-     * **Tom lista utan ättlingar, och ingen schemafråga.** Ett item utan
-     * underliggande items — det vanligaste fallet — ska inte betala för en
-     * fråga vars svar är tomt.
-     *
-     * **Fyra frågor oavsett antal ättlingar och uppgifter**: kanterna
-     * (actionen), schemana, förekomsterna och items:en. Grindarna läser den
-     * memoiserade App\Actions\Access\ResolveItemScope, så `view` och `update`
-     * per rad kostar inga egna frågor.
-     *
-     * **Behörigheten prövas PER RAD.** En itemgrant når ättlingarna, men
-     * `ResolveItemDescendants` läser också omvända `child`-rader, vilket
-     * `ResolveItemScope` inte gör — de två mängderna kan skilja sig. `view`
-     * är skyddet: en rad anroparen inte får se ritas inte alls. `can.update`
-     * är per rad, för nivån på ett barn kan vara högre än förälderns.
-     *
-     * **Synligheten är varje öppen förekomst**, som i den egna listan: inget
-     * `visible_from`-filter, pausade scheman (`is_active = false`) och
-     * blockerade förekomster följer med. Mjukraderade scheman och items faller
-     * bort genom SoftDeletes respektive actionen.
-     *
-     * Sorteringen sker i PHP: `due_at` stigande, sedan `schedule.title`, sedan
-     * `occurrence.ulid` — den sista nyckeln bara för att två lika rader ska få
-     * en stabil ordning.
-     *
-     * @return list<array{item: array{ulid: string, name: string}, schedule: array{ulid: string, title: string, is_active: bool}, occurrence: array<string, mixed>, can: array{update: bool}}>
-     */
-    private function descendantOccurrences(Container $container, Item $item, User $user, ResolveItemDescendants $resolveItemDescendants, Request $request): array
-    {
-        $ids = array_slice($resolveItemDescendants->handle($item), 1);
-
-        if ($ids === []) {
-            return [];
-        }
-
-        $schedules = Schedule::query()
-            ->whereIn('item_id', $ids)
-            ->whereHas('openOccurrence')
-            ->with(['openOccurrence', 'item'])
-            ->get();
-
-        $gate = Gate::forUser($user);
-        $rows = [];
-
-        foreach ($schedules as $schedule) {
-            // `ItemPolicy::allows()` läser `$item->container->account`, och
-            // containern är redan hämtad av `show()` — att hänga den på
-            // modellen kostar inga frågor i stället för en per rad. Samma
-            // handgrepp som `counterparts()` och `creatable()`.
-            $schedule->item->setRelation('container', $container);
-
-            if ($gate->denies('view', $schedule->item)) {
-                continue;
-            }
-
-            $occurrence = $schedule->openOccurrence;
-            $occurrence->setRelation('completedByAccount', null);
-
-            $rows[] = [
-                'item' => ['ulid' => $schedule->item->ulid, 'name' => $schedule->item->name],
-                'schedule' => ['ulid' => $schedule->ulid, 'title' => $schedule->title, 'is_active' => $schedule->is_active],
-                'occurrence' => (new ScheduleOccurrenceResource($occurrence))->resolve($request),
-                'can' => ['update' => $gate->allows('update', $schedule->item)],
-            ];
-        }
-
-        usort($rows, fn (array $a, array $b): int => [
-            $a['occurrence']['due_at'], $a['schedule']['title'], $a['occurrence']['ulid'],
-        ] <=> [
-            $b['occurrence']['due_at'], $b['schedule']['title'], $b['occurrence']['ulid'],
-        ]);
-
-        return $rows;
     }
 }
