@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Link, router } from '@inertiajs/vue3';
+import TaskGroup from './TaskGroup.vue';
 import TodoRow from './TodoRow.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -46,6 +47,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * förfallodatum (issue 104) — en avbockning är något som gjordes, inte något
  * som förfaller. Ingen sträng står i JavaScript (issue 52 · [[ADR-0013 Språk
  * och i18n]]): rubriken, knappen, reglaget och grupprubrikerna kommer ur `t()`.
+ *
+ * **Rubriken med antalet och ihopfällningen ritas av `TaskGroup`** (M24 ·
+ * issue 231): sektionen skickar in gruppens namn, antalet och tonen, och
+ * komponenten ritar knappen, chevronen och raderna — samma komponent som
+ * containerns flik och `/tasks`.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -153,22 +159,25 @@ function apply() {
         <!--
             Listan (Beslut 4): grupperna i den ordning servern gav dem, sedan
             *Done*. En sektion ritas bara när den har rader, och rubriken byggs
-            ur gruppens EGET namn — samma nyckel som containerns flik.
+            ur gruppens EGET namn — samma nyckel som containerns flik. Rubriken
+            med antalet och ihopfällningen ritas av TaskGroup (M24 · issue
+            231), samma komponent som de två andra ytorna.
         -->
         <div v-else class="mt-6 flex flex-col gap-8">
             <template v-for="(entries, group) in groups" :key="group">
-                <section v-if="entries.length > 0" class="min-w-0">
-                    <h2 class="text-sm font-medium text-slate-700">{{ t(`todo.group.${group}`) }}</h2>
-
-                    <ul class="mt-2 flex flex-col divide-y divide-slate-200">
-                        <TodoRow
-                            v-for="entry in entries"
-                            :key="entry.ulid"
-                            :entry="entry"
-                            :show-container="false"
-                        />
-                    </ul>
-                </section>
+                <TaskGroup
+                    v-if="entries.length > 0"
+                    :heading="t(`todo.group.${group}`)"
+                    :count="entries.length"
+                    :tone="group === 'overdue' ? 'danger' : null"
+                >
+                    <TodoRow
+                        v-for="entry in entries"
+                        :key="entry.ulid"
+                        :entry="entry"
+                        :show-container="false"
+                    />
+                </TaskGroup>
             </template>
 
             <!--
@@ -178,18 +187,18 @@ function apply() {
                 ingenting kvar att bocka av. Rubriken är containerns fliks ord,
                 samma grupp och samma nyckel.
             -->
-            <section v-if="completed.length > 0" class="min-w-0">
-                <h2 class="text-sm font-medium text-slate-700">{{ t('container.tasks.done') }}</h2>
-
-                <ul class="mt-2 flex flex-col divide-y divide-slate-200">
-                    <TodoRow
-                        v-for="entry in completed"
-                        :key="entry.ulid"
-                        :entry="entry"
-                        :show-container="false"
-                    />
-                </ul>
-            </section>
+            <TaskGroup
+                v-if="completed.length > 0"
+                :heading="t('container.tasks.done')"
+                :count="completed.length"
+            >
+                <TodoRow
+                    v-for="entry in completed"
+                    :key="entry.ulid"
+                    :entry="entry"
+                    :show-container="false"
+                />
+            </TaskGroup>
         </div>
     </section>
 </template>
