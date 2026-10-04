@@ -199,8 +199,25 @@ it('förifyller Next due date utom för fixed', function () {
     $vy = File::get(resource_path('js/components/ScheduleForm.vue'));
 
     expect($vy)->toContain('props.openDueAt')
-        ->toContain('anchor_date_next')
-        ->toContain("form.recurrence_type === 'fixed'");
+        ->toContain('anchor_date_next');
+
+    /*
+     * `fixed`-grenen måste sitta i `fields`-blocket, där förifyllningen sker —
+     * etikettens computed ligger utanför, och en träff där bevisar ingenting om
+     * vad fältet startar med. Provet läser blocket och kräver att grenen står
+     * före `props.openDueAt`.
+     */
+    preg_match('/(const fields = \{.*?\n\};)/s', $vy, $traff);
+    $falt = $traff[1] ?? '';
+
+    expect($falt)->toContain('props.openDueAt');
+
+    $fixed = strpos($falt, "recurrence_type === 'fixed'");
+    $oppen = strpos($falt, 'props.openDueAt');
+
+    expect($fixed)->toBeInt();
+    expect($oppen)->toBeInt();
+    expect($fixed)->toBeLessThan($oppen);
 
     expect(trans('ui.item.schedule.form.anchor_date_next', [], 'en'))->toBe('Next due date');
     expect(trans('ui.item.schedule.form.anchor_date', [], 'en'))->toBe('First due date');

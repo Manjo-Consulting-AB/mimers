@@ -65,7 +65,9 @@ const props = defineProps({
      * Den öppna förekomstens förfallodag, ur ScheduleController::edit() (issue
      * 702 § Beslut 3). Redigeringsformuläret förifyller `anchor_date` med den
      * — det är nästa gång uppgiften förfaller, inte seriens start — och en
-     * orörd sparning skriver samma datum som förekomsten redan har.
+     * orörd sparning skriver samma datum som förekomsten redan har. Undantaget
+     * är `fixed`, där fältet är seriens startpunkt och behåller schemats eget
+     * datum.
      */
     openDueAt: { type: String, default: null },
 });
@@ -85,7 +87,14 @@ const fields = {
     recurrence_type: props.schedule?.recurrence_type ?? 'none',
     interval_unit: props.schedule?.interval_unit ?? null,
     interval_count: props.schedule?.interval_count ?? null,
-    anchor_date: props.openDueAt ?? props.schedule?.anchor_date ?? '',
+    /*
+     * `fixed` är seriens startpunkt i kalendern och behåller schemats eget
+     * datum; för de andra är fältet nästa förfallodatum och förifylls med den
+     * öppna förekomstens förfall (Beslut 3).
+     */
+    anchor_date: props.schedule?.recurrence_type === 'fixed'
+        ? (props.schedule.anchor_date ?? '')
+        : (props.openDueAt ?? props.schedule?.anchor_date ?? ''),
     lead_days: props.schedule?.lead_days ?? 0,
 };
 
