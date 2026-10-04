@@ -80,10 +80,17 @@ class OpenNextOccurrence
      * @param  Carbon|null  $closedDueAt  Den stängda förekomstens `due_at`, så att
      *                                    nästa förfall hamnar strikt efter den (132).
      *                                    Null när ingen förekomst har stängts.
+     * @param  string|null  $gtdList  Listan den nya förekomsten ska bära, när
+     *                                anroparen väljer den uttryckligen. Bara
+     *                                App\Actions\Schedule\CreateSchedule gör det
+     *                                (ADR-0052 § 2, issue 235 § Beslut 4): den
+     *                                första förekomsten får användarens val, inte
+     *                                schemats förval. Null — alla andra anropare —
+     *                                ger förvalet, eller `inbox`.
      */
-    public function handle(Schedule $schedule, Carbon $today, ?Carbon $from = null, ?Carbon $closedDueAt = null): ?ScheduleOccurrence
+    public function handle(Schedule $schedule, Carbon $today, ?Carbon $from = null, ?Carbon $closedDueAt = null, ?string $gtdList = null): ?ScheduleOccurrence
     {
-        return DB::transaction(function () use ($schedule, $today, $from, $closedDueAt): ?ScheduleOccurrence {
+        return DB::transaction(function () use ($schedule, $today, $from, $closedDueAt, $gtdList): ?ScheduleOccurrence {
             $lockedSchedule = $schedule->newQuery()->whereKey($schedule->id)->lockForUpdate()->first();
 
             if ($lockedSchedule === null) {
@@ -117,6 +124,13 @@ class OpenNextOccurrence
             $occurrence->visible_from = $dueAt?->copy()->subDays($lockedSchedule->lead_days);
             $occurrence->due_at = $dueAt;
             $occurrence->status = ScheduleOccurrence::STATUS_OPEN;
+            // Listan en ny förekomst hamnar i (ADR-0052 § 2, issue 235
+            // § Beslut 3): schemats förval, eller `inbox` när förvalet är null.
+            // En återkommande uppgift behöver då bara bearbetas en gång — nästa
+            // års service ärver listan utan att någon rör den. Anroparens
+            // uttryckliga val går före: den allra första förekomsten får
+            // användarens lista (Beslut 4), inte ett förval som ännu inte finns.
+            $occurrence->gtd_list = $gtdList ?? $lockedSchedule->default_gtd_list ?? ScheduleOccurrence::GTD_INBOX;
             $occurrence->save();
 
             // Arvet från schemanivån (23b § Beslut 2), i SAMMA transaktion som

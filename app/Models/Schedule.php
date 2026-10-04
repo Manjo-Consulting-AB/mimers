@@ -25,10 +25,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * itemet lästs från rutten, aldrig via massildelning. Samma mönster som
  * Item gör med `container_id`.
  *
+ * `default_gtd_list` är däremot MED i `#[Fillable]` (M26 · issue 235): det är
+ * ett av schemats egna fält, och PATCH-rutten skriver det genom kontrollerns
+ * `fill()`. Ett nytt schema har inget förval — kolumnen är NULLBAR utan
+ * kolumnförval — och modellen sätter därför inget attributförval för den.
+ *
  * Inga förekomster skapas här — den enda vägen in är
  * App\Actions\Schedule\OpenNextOccurrence (issue 22 § Beslut 3).
  */
-#[Fillable(['title', 'notes', 'recurrence_type', 'interval_unit', 'interval_count', 'anchor_date', 'lead_days', 'is_active'])]
+#[Fillable(['title', 'notes', 'recurrence_type', 'interval_unit', 'interval_count', 'anchor_date', 'lead_days', 'is_active', 'default_gtd_list'])]
 #[RouteKey('ulid')]
 class Schedule extends Model
 {

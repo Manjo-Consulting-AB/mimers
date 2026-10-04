@@ -178,7 +178,16 @@ class ScheduleController extends Controller
     {
         Gate::authorize('create', $item);
 
-        $createSchedule->handle($item, $request->user(), new Schedule($request->validated()));
+        // `gtd_list` är den lista användaren valde för den första förekomsten
+        // (ADR-0052 § 2, M26 · issue 235 § Beslut 4). Fältet hör till
+        // FÖREKOMSTEN och inte till schemat, så det kan inte följa med i
+        // `new Schedule(...)` — det skickas som eget argument till actionen.
+        $createSchedule->handle(
+            $item,
+            $request->user(),
+            new Schedule($request->validated()),
+            $request->validated('gtd_list'),
+        );
 
         return redirect()
             ->route('containers.items.show', [$container, $item])

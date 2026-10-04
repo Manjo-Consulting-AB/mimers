@@ -185,6 +185,19 @@ class CloseOccurrence
                 meta: ['due_at' => $lockedOccurrence->due_at?->toDateString()],
             );
 
+            // Förvalet lärs in när en förekomst stängs (ADR-0052 § 2, M26 ·
+            // issue 235 § Beslut 2): är schemats `default_gtd_list` fortfarande
+            // null sätts det till `next`, oavsett om förekomsten bockades av
+            // eller hoppades över. `next` och inte den stängda förekomstens
+            // lista — en avbockning säger "den här gången är gjord", inte
+            // "nästa gång hör till Waiting". Skrivningen ligger FÖRE
+            // OpenNextOccurrence nedan, så att den nya förekomsten ärver
+            // förvalet i samma transaktion och i samma läsning av raden.
+            if ($lockedSchedule->default_gtd_list === null) {
+                $lockedSchedule->default_gtd_list = ScheduleOccurrence::GTD_NEXT;
+                $lockedSchedule->save();
+            }
+
             // Steg 3 och 4 — nästa förfall räknas och nästa förekomst skapas
             // av OpenNextOccurrence, i samma transaktion. `$from` är det enda
             // som skiljer complete från skip (Beslut 4): complete räknar
