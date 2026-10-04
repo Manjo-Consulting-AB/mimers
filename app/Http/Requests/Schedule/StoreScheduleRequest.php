@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Schedule;
 
 use App\Models\Schedule;
+use App\Models\ScheduleOccurrence;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -10,7 +11,7 @@ use Illuminate\Validation\Rule;
  * POST /api/containers/{container}/items/{item}/schedules, se issue 21 §
  * Beslut 5. Kroppen är `{"title", "notes"?, "recurrence_type",
  * "interval_unit"?, "interval_count"?, "anchor_date", "lead_days"?,
- * "is_active"?}`.
+ * "is_active"?, "gtd_list"?}`.
  *
  * `anchor_date` är obligatorisk för ALLA tre återkommandetyperna — den är
  * seriens startpunkt OCH det första förfallodatumet. Utan den på `interval`
@@ -61,6 +62,10 @@ class StoreScheduleRequest extends FormRequest
             'anchor_date' => ['required', 'date_format:Y-m-d'],
             'lead_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'is_active' => ['sometimes', 'boolean'],
+            // Listan den första förekomsten hamnar i (ADR-0052 § 2, M26 ·
+            // issue 235 § Beslut 4). Väljs `next` eller `someday` sätts
+            // schemats förval direkt; `waiting` och `inbox` blir aldrig förval.
+            'gtd_list' => ['sometimes', Rule::in(ScheduleOccurrence::GTD_LISTS)],
         ];
     }
 }

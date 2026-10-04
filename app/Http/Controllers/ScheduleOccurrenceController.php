@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Schedule\ChangeOccurrence;
 use App\Actions\Schedule\CloseOccurrence;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Schedule\CompleteOccurrenceRequest;
+use App\Http\Requests\Schedule\UpdateOccurrenceRequest;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\ScheduleOccurrenceResource;
 use App\Http\Resources\ScheduleResource;
@@ -157,6 +159,56 @@ class ScheduleOccurrenceController extends Controller
         ApiErrorTranslator $translator,
     ): RedirectResponse {
         return $this->close($request, $schedule, $occurrence, $closeOccurrence, $translator, ScheduleOccurrence::STATUS_SKIPPED);
+    }
+
+    /**
+     * PATCH /containers/{container}/items/{item}/schedules/{schedule}
+     * /occurrences/{occurrence} — 302 tillbaka.
+     *
+     * Byter listan och/eller statusen på en aktiv förekomst (M26 · issue 235
+     * § Beslut 5). Flödet ligger i App\Actions\Schedule\ChangeOccurrence —
+     * låsningen, spärren, inlärningen av schemats förval och loggraden — och
+     * den här metoden gör samma tre saker som `close()`: prövar grinden,
+     * översätter ett domänfel till ett formulärfel och svarar `back()`.
+     *
+     * **Grinden är ITEMETS `update`**, som för `complete` och `skip`: att byta
+     * lista eller status ändrar en förekomst som redan finns. En `read`- eller
+     * `create`-mottagare får 403.
+     *
+     * **Ingen `account` i kroppen.** Att bocka av tillskriver varvet ett konto
+     * (`completed_by_account_id`) och behöver därför ett; en lista eller en
+     * status tillskrivs ingen, och loggraden bär containerns ägarkonto som
+     * förut. `UpdateOccurrenceRequest` validerar bara de två fälten.
+     *
+     * **Ett domänfel ritas som felet på `occurrence`**, precis som `close()`
+     * gör — `occurrence.not_open` för en redan stängd förekomst. Koderna går
+     * genom App\Support\Frontend\ApiErrorTranslator.
+     */
+    public function update(
+        UpdateOccurrenceRequest $request,
+        Container $container,
+        Item $item,
+        Schedule $schedule,
+        ScheduleOccurrence $occurrence,
+        ChangeOccurrence $changeOccurrence,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('update', $schedule->item);
+
+        try {
+            $changeOccurrence->handle(
+                $occurrence,
+                $request->user(),
+                $request->validated('gtd_list'),
+                $request->validated('status'),
+            );
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages([
+                'occurrence' => $this->occurrenceMessage($e, $translator),
+            ]);
+        }
+
+        return back()->with('status', 'occurrence-updated');
     }
 
     /**

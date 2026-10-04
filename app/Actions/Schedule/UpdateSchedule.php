@@ -70,6 +70,10 @@ class UpdateSchedule
         'anchor_date',
         'lead_days',
         'is_active',
+        // Schemats förval (ADR-0052 § 2, M26 · issue 235 § Beslut 4): en
+        // värdelista som `recurrence_type`, och det gamla och nya värdet hör i
+        // loggen — förvalet får inte ändras utan att gå att läsa efteråt.
+        'default_gtd_list',
     ];
 
     /**

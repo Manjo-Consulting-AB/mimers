@@ -147,6 +147,15 @@ class AuditLog extends Model
     public const ACTION_SCHEDULE_OCCURRENCE_SKIPPED = 'schedule_occurrence.skipped';
 
     /**
+     * Listan eller statusen på en förekomst byttes (M26 · issue 235). `meta`
+     * bär namnen på de fält som ändrades i `changed` — historikraden ritar
+     * fältorden ur dem — och `from`/`to` per fält, och ingenting annat: en
+     * PATCH som bara rör statusen ska inte se ut som att den rörde listan.
+     * Skrivningen ligger i App\Actions\Schedule\ChangeOccurrence.
+     */
+    public const ACTION_SCHEDULE_OCCURRENCE_CHANGED = 'schedule_occurrence.changed';
+
+    /**
      * Beroendena bär sina två ULID:er i `meta` och ingen `subject_type`:
      * raden i `schedule_dependency`/`occurrence_dependency` har ingen egen
      * ULID — paret identifierar den (issue 23 § Beslut 1, issue 23b

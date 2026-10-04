@@ -14,6 +14,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * är. Inget `next_due_at`: nästa förfall bor på den öppna förekomsten (22a),
  * aldrig på schemat (§ Beslut 3 och 8).
  *
+ * `default_gtd_list` (M26 · issue 235 § Beslut 6) är schemats förval och får
+ * vara `null` — det betyder "inget förval ännu", samma tillstånd ett nytt
+ * schema föds i. Ingen API-rutt för att ändra det byggs här; den kommer i
+ * issue 238.
+ *
  * `anchor_date` är en DATE-kolumn och serialiseras med `toDateString()`
  * ("2027-05-05"), aldrig `toIso8601String()` — ett förfallodatum har ingen
  * tidszon (§ Beslut 8). `created_at`/`updated_at` är tidsstämplar och
@@ -38,6 +43,7 @@ class ScheduleResource extends JsonResource
             'anchor_date' => $this->anchor_date?->toDateString(),
             'lead_days' => $this->lead_days,
             'is_active' => $this->is_active,
+            'default_gtd_list' => $this->default_gtd_list,
             'created_at' => $this->created_at->toIso8601String(),
             'updated_at' => $this->updated_at->toIso8601String(),
         ];

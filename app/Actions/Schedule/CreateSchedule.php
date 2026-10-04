@@ -44,11 +44,27 @@ class CreateSchedule
      *                       loggraden. Behörigheten är redan prövad.
      * @param  Schedule  $schedule  Det nya schemat med kroppens fält ifyllda,
      *                              utan `item_id`.
+     * @param  string|null  $gtdList  Listan användaren valde i formuläret
+     *                                (ADR-0052 § 2, issue 235 § Beslut 4), eller
+     *                                null när ingen valdes. Den första
+     *                                förekomsten får listan — eller `inbox`
+     *                                när den är null. Väljs `next` eller
+     *                                `someday` sätts schemats förval direkt,
+     *                                med samma regel som ChangeOccurrence.
      */
-    public function handle(Item $item, User $actor, Schedule $schedule): Schedule
+    public function handle(Item $item, User $actor, Schedule $schedule, ?string $gtdList = null): Schedule
     {
-        DB::transaction(function () use ($item, $actor, $schedule): void {
+        DB::transaction(function () use ($item, $actor, $schedule, $gtdList): void {
             $schedule->item_id = $item->id;
+
+            // Förvalet, när användaren valde en lista som får vara ett
+            // (ADR-0052 § 2): `waiting` och `inbox` blir aldrig förval. Ett
+            // nytt schema har inget förval sedan förut, så någon kontroll mot
+            // null behövs inte här.
+            if ($gtdList !== null && in_array($gtdList, Schedule::DEFAULT_GTD_LISTS, true)) {
+                $schedule->default_gtd_list = $gtdList;
+            }
+
             $schedule->save();
 
             $this->recordAuditEvent->handle(
@@ -66,7 +82,7 @@ class CreateSchedule
                 // issue 517): ett `fixed`-schema vars `anchor_date` ligger
                 // bakom oss får sin första förekomst på HENNES dag, inte på
                 // serverns.
-                $this->openNextOccurrence->handle($schedule, $actor->today());
+                $this->openNextOccurrence->handle($schedule, $actor->today(), gtdList: $gtdList);
             }
         });
 

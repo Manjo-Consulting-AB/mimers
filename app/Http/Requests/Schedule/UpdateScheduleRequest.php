@@ -101,6 +101,12 @@ class UpdateScheduleRequest extends FormRequest
             'anchor_date' => ['sometimes', 'required', 'date_format:Y-m-d'],
             'lead_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'is_active' => ['sometimes', 'boolean'],
+            // Schemats förval (ADR-0052 § 2, M26 · issue 235 § Beslut 4).
+            // Nullbar med flit: förvalet får tömmas, och `null` är då svaret på
+            // "inget förval ännu" — samma tillstånd ett nytt schema föds i.
+            // Bara `next` och `someday` är förval; `waiting` gäller en enskild
+            // gång och `inbox` är bara en förekomsts första hem.
+            'default_gtd_list' => ['sometimes', 'nullable', Rule::in(Schedule::DEFAULT_GTD_LISTS)],
         ];
     }
 }

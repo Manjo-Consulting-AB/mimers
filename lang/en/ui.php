@@ -2405,6 +2405,11 @@ return [
                 // flag: the history tells them apart, and the next interval
                 // due date is counted from a different date (issue 110).
                 'skipped' => ':user skipped a task on :item',
+                // The list and the status were changed (M26 · issue 235). The
+                // same sentence as `schedule.updated`: the row is read by a
+                // person, and which of the two changed is what `meta.changed`
+                // and the field words below say.
+                'changed' => ':user changed :fields on a task on :item',
             ],
 
             'tag' => [
@@ -2438,9 +2443,11 @@ return [
             'color' => 'the colour',
             'cover' => 'the cover image',
             'currency' => 'the currency',
+            'default_gtd_list' => 'the default list',
             'description' => 'the description',
             'due_at' => 'the due date',
             'expires_at' => 'the expiry date',
+            'gtd_list' => 'the list',
             'incurred_on' => 'the date',
             'interval_count' => 'the interval',
             'interval_unit' => 'the interval',
@@ -2461,6 +2468,7 @@ return [
             'recurrence_type' => 'the repetition',
             'returned_at' => 'the return date',
             'serial_number' => 'the serial number',
+            'status' => 'the status',
             'supplier' => 'the supplier',
             'tags' => 'the tags',
             'title' => 'the title',
