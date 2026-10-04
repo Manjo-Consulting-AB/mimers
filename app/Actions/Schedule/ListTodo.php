@@ -3,6 +3,7 @@
 namespace App\Actions\Schedule;
 
 use App\Actions\Access\ResolveItemScope;
+use App\Actions\Item\ResolveItemCover;
 use App\Http\Resources\TodoEntryResource;
 use App\Models\Container;
 use App\Models\Schedule;
@@ -156,7 +157,10 @@ class ListTodo
      */
     public const CURSOR_BEFORE = 'before';
 
-    public function __construct(private readonly ResolveItemScope $resolveItemScope) {}
+    public function __construct(
+        private readonly ResolveItemScope $resolveItemScope,
+        private readonly ResolveItemCover $resolveItemCover,
+    ) {}
 
     /**
      * Användarens öppna uppgifter, grupperade och ogrupperade — HELA listan.
@@ -387,9 +391,13 @@ class ListTodo
 
         $accountUlids = $user->accounts->pluck('ulid')->all();
 
+        // Omslagen räknas på de rader som faktiskt visas — `$limit` är redan
+        // lagd på frågan, så en avbockad rad utanför glimten kostar ingen bild.
+        $covers = $this->covers($occurrences);
+
         return $occurrences
             ->map(fn (ScheduleOccurrence $occurrence): array => [
-                ...$this->row($user, $request, $occurrence, $accountUlids),
+                ...$this->row($user, $request, $occurrence, $accountUlids, $covers),
                 'completed_at' => $occurrence->completed_at->toIso8601String(),
             ])
             ->values()
@@ -664,6 +672,36 @@ class ListTodo
     }
 
     /**
+     * Omslagen för förekomsternas items, nycklade på item-`id` (M24 · issue
+     * 229, Beslut 2).
+     *
+     * **Samma form som `/containers/{container}/items` bär**, och den kommer
+     * ur App\Actions\Item\ResolveItemCover::thumbnails(): regeln och formen
+     * bor där och inte i vyn. Här plockas bara de UNIKA itemen ur raderna — en
+     * förekomst per item är vanligt, och samma item ska inte frågas två gånger.
+     *
+     * Ett anrop per LISTA, inte per rad: resultatet skickas till varje
+     * `row()`, och `thumbnails()` hämtar bilderna i EN fråga för hela
+     * samlingen. Det är samma konstanta frågekostnad som resten av listan
+     * vilar på (Beslut 8) — en fråga per rad hade varit den N+1 listan
+     * byggdes för att undvika.
+     *
+     * Publik sedan issue 229: itemets uppgiftsflik
+     * (App\Actions\Schedule\ListItemTasks) ritar samma rad och behöver samma
+     * omslag, och en egen uppslagning där hade varit en andra sanning om
+     * vilken bild ett item bär.
+     *
+     * @param  Collection<int, ScheduleOccurrence>  $occurrences
+     * @return array<int, array{ulid: string, hasThumb: bool}|null> item-`id` → omslaget, eller null
+     */
+    public function covers(Collection $occurrences): array
+    {
+        return $this->resolveItemCover->thumbnails(
+            $occurrences->pluck('schedule.item')->unique('id')->values(),
+        );
+    }
+
+    /**
      * Raderna ur förekomsterna, grupperade och ogrupperade.
      *
      * Grupperingen räknas per rad mot användarens datum (Beslut 3). En sida kan
@@ -697,10 +735,12 @@ class ListTodo
             self::GROUP_UPCOMING => [],
         ];
 
+        $covers = $this->covers($occurrences);
+
         $rows = [];
 
         foreach ($occurrences as $occurrence) {
-            $row = $this->row($user, $request, $occurrence, $accountUlids);
+            $row = $this->row($user, $request, $occurrence, $accountUlids, $covers);
 
             $groups[$this->group($occurrence->due_at, $today)][] = $row;
             $rows[] = $row;
@@ -726,15 +766,28 @@ class ListTodo
      * rad hade glidit isär — den ena hade tappat `can`-flaggan. Ingen egen rad
      * där, alltså.
      *
+     * **`$covers` är radens omslag** (M24 · issue 229, Beslut 2), nycklat på
+     * item-`id` och räknat EN gång per lista av `covers()`. Det läggs BREDVID
+     * resursen som `account` och `can` — ett fält bara webben behöver hör inte
+     * inuti `/api`:s svar (Beslut 3). Förvalet `[]` betyder "inget omslag
+     * uppslaget", och en rad utan bild bär `cover: null` i stället för att
+     * nyckeln saknas, så vyns uppslag är detsamma för alla rader.
+     *
      * @param  list<string>  $accountUlids
+     * @param  array<int, array{ulid: string, hasThumb: bool}|null>  $covers
      * @return array<string, mixed>
      */
-    public function row(User $user, Request $request, ScheduleOccurrence $occurrence, array $accountUlids): array
-    {
+    public function row(
+        User $user,
+        Request $request,
+        ScheduleOccurrence $occurrence,
+        array $accountUlids,
+        array $covers = [],
+    ): array {
         $item = $occurrence->schedule->item;
 
         return [
-            // Resursen, med allt den bär, och de tre nycklarna BREDVID
+            // Resursen, med allt den bär, och de fyra nycklarna BREDVID
             // den — samma mönster som App\Http\Controllers\
             // SearchController lägger containern bredvid ItemResource: ett
             // fält som bara webben behöver hör inte inuti `/api`:s svar.
@@ -743,6 +796,7 @@ class ListTodo
             'can' => [
                 'update' => Gate::forUser($user)->allows('update', $item),
             ],
+            'cover' => $covers[$item->id] ?? null,
         ];
     }
 

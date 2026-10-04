@@ -1791,12 +1791,11 @@ class ItemController extends Controller
      * Radens omslag, nycklad på itemets ULID (issue 183 ·
      * [[ADR-0050 Desktopdesignen]]).
      *
-     * Bilden kommer ur App\Actions\Item\ResolveItemCover::forItems() — samma
-     * regel som itemvyn, och en fråga för hela listan. `hasThumb` räknas ur de
-     * EAGERLADDADE derivaten, precis som `recentImages()` i
-     * App\Http\Controllers\ContainerController: noll extra frågor per rad, och
-     * samma regel som itemvyn — en miniatyr ritas bara när varianten finns
-     * (issue 61b § Beslut 1).
+     * **Formen bor i App\Actions\Item\ResolveItemCover::thumbnails()** sedan
+     * issue 229: uppgiftslistornas rader bär samma `{ulid, hasThumb}`, och två
+     * formuleringar av den hade glidit isär. Här nycklas svaret bara om från
+     * item-`id` till item-`ulid`, vilket är vad `covers`-proppen alltid varit
+     * nycklad på — webbens rad slår upp sitt omslag med itemets ULID.
      *
      * En rad utan bild svarar null i stället för att saknas: vyns uppslag är
      * detsamma för alla rader. Containerns omslag används aldrig — raden bär
@@ -1807,17 +1806,12 @@ class ItemController extends Controller
      */
     private function covers(Collection $items, ResolveItemCover $resolveItemCover): array
     {
-        $uppslaget = $resolveItemCover->forItems($items);
+        $uppslaget = $resolveItemCover->thumbnails($items);
 
         $covers = [];
 
         foreach ($items as $item) {
-            $attachment = $uppslaget[$item->id];
-
-            $covers[$item->ulid] = $attachment === null ? null : [
-                'ulid' => $attachment->ulid,
-                'hasThumb' => $attachment->storedFile->derivatives->contains('variant', 'thumb'),
-            ];
+            $covers[$item->ulid] = $uppslaget[$item->id];
         }
 
         return $covers;

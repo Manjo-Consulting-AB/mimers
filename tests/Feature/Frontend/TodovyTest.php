@@ -899,9 +899,9 @@ it('kostar ett konstant antal frågor oavsett antal rader', function () {
  * Klart när: `/api/todo` svarar exakt som förut.
  *
  * Webben LÅNAR listan; den bygger ingen egen. Resursen fick inga nya nycklar
- * av `account` och `can` — de ligger BREDVID den i webbens props, samma
- * uppdelning som SearchController gör med containern, och `/api` har inte bett om
- * dem.
+ * av `account`, `can` och `cover` — de ligger BREDVID den i webbens props,
+ * samma uppdelning som SearchController gör med containern, och `/api` har
+ * inte bett om dem.
  */
 it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', function () {
     withoutVite();
@@ -934,7 +934,7 @@ it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', func
     $rad = todovyRader(actingAs($anvandare)->get('/tasks')->assertOk())[0];
 
     expect($rad['ulid'])->toBe($apiRaden['ulid'])
-        ->and(array_keys($rad))->toBe([...array_keys($apiRaden), 'account', 'can']);
+        ->and(array_keys($rad))->toBe([...array_keys($apiRaden), 'account', 'can', 'cover']);
 });
 
 // --- språket ---------------------------------------------------------------
