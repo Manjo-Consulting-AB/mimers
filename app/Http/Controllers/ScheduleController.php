@@ -56,7 +56,9 @@ use Inertia\Response;
  * **Pausen är en `PATCH` som bär bara `is_active`** (Beslut 6). Den går
  * genom `update()` nedan och inte genom en egen rutt: `UpdateScheduleRequest`
  * har `sometimes` på allt, och en återaktivering som saknar en öppen förekomst
- * öppnar en — samma regel som `/api` (issue 22 § Beslut 3).
+ * öppnar en — samma regel som `/api` (issue 22 § Beslut 3). Sedan issue 720
+ * ritas pausen på schemats sida och svaret landar där; formulärets sparning
+ * landar fortfarande på itemet (§ Beslut 3).
  *
  * **Raderingen lovar ingen papperskorg** (Beslut 8). Schemat mjukraderas
  * (SoftDeletes), men papperskorgen listar fyra typer och `schedule` är inte en
@@ -216,7 +218,7 @@ class ScheduleController extends Controller
 
     /**
      * PATCH /containers/{container}/items/{item}/schedules/{schedule} — 302
-     * till itemets detaljvy.
+     * tillbaka till den yta anropet kom från (issue 720 § Beslut 3).
      *
      * Kroppen är antingen formulärets sju fält — de åtta minus `is_active`,
      * som formuläret aldrig ritar — eller `{"is_active": false}` från
@@ -224,6 +226,14 @@ class ScheduleController extends Controller
      * (Beslut 6): `UpdateScheduleRequest::validationData()` lägger radens
      * nuvarande värden under klientens, så en paus tvingar inte fram de
      * andra fälten och `validated()` bär ändå hela raden.
+     *
+     * **Pausen landar på schemats sida, formuläret på itemet.** När
+     * förfrågan bara bär `is_active` kom den från pausknappen — sedan issue
+     * 720 ritas den på schemats sida, och svaret går tillbaka dit så att
+     * märkningen och knappens ord byts på samma yta (Beslut 3). En sparning
+     * från formuläret bär fler fält och går till itemet som förut.
+     * Raderingen (`destroy()`) går alltid till itemet: schemats sida finns
+     * inte kvar att landa på.
      *
      * Skrivningen är App\Actions\Schedule\UpdateSchedule sedan issue 110 —
      * delad med `/api`, så att de två ytorna skriver exakt samma rad i
@@ -268,8 +278,15 @@ class ScheduleController extends Controller
             default => 'schedule-updated',
         };
 
-        return redirect()
-            ->route('containers.items.show', [$container, $item])
+        // Bara `is_active` i kroppen är pausknappen och ingen formulärsparning
+        // (Beslut 3). `keys()` läser vad klienten SKICKADE, inte
+        // `validationData()`:s sammanslagna rad — en paus ska kännas igen på
+        // sin smala kropp, inte på att de andra fälten råkade vara oförändrade.
+        $pause = $request->keys() === ['is_active'];
+
+        return ($pause
+            ? redirect()->route('containers.items.schedules.show', [$container, $item, $schedule])
+            : redirect()->route('containers.items.show', [$container, $item]))
             ->with('status', $status);
     }
 
