@@ -98,7 +98,17 @@ class UpdateScheduleRequest extends FormRequest
                 'integer',
                 'min:1',
             ],
-            'anchor_date' => ['sometimes', 'required', 'date_format:Y-m-d'],
+            // Frivillig för `none`, obligatorisk för de återkommande typerna
+            // (ADR-0052 § 3, M26 · issue 236 § Beslut 1). `sometimes` plus
+            // `nullable`: ett PATCH som tömmer datumet på ett `none`-schema är
+            // lagligt, och regeln delas med `/api`.
+            'anchor_date' => [
+                'sometimes',
+                'nullable',
+                'required_if:recurrence_type,fixed',
+                'required_if:recurrence_type,interval',
+                'date_format:Y-m-d',
+            ],
             'lead_days' => ['sometimes', 'integer', 'min:0', 'max:365'],
             'is_active' => ['sometimes', 'boolean'],
             // Schemats förval (ADR-0052 § 2, M26 · issue 235 § Beslut 4).

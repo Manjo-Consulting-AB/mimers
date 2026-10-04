@@ -34,13 +34,26 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * förklaring blir ett val någon gör fel en gång och sedan aldrig ändrar.
  *
  * **`anchor_date` frågas för alla tre typerna, och etiketten följer typen**
- * (Beslut 4). `StoreScheduleRequest` kräver den även för `interval` och
- * `none` — den är seriens startpunkt OCH det första förfallodatumet — så
- * fältet är alltid synligt men rubriken byter: *Startpunkt i serien* för
- * `fixed`, *Första förfallodatum* annars. Vid REDIGERING av ett icke-`fixed`
- * schema (issue 702 § Beslut 3) är fältet förifyllt med den öppna
- * förekomstens förfall och rubriken är *Nästa förfallodatum*. Ett
+ * (Beslut 4). Fältet är alltid synligt men rubriken byter: *Startpunkt i
+ * serien* för `fixed`, *Första förfallodatum* annars. Vid REDIGERING av ett
+ * icke-`fixed` schema (issue 702 § Beslut 3) är fältet förifyllt med den
+ * öppna förekomstens förfall och rubriken är *Nästa förfallodatum*. Ett
  * obligatoriskt fält som ser valfritt ut är ett 422 användaren inte förstår.
+ *
+ * **Datumet är frivilligt för en engångsuppgift** (M26 · issue 236 § Beslut 1,
+ * [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3).
+ * `StoreScheduleRequest`/`UpdateScheduleRequest` kräver det bara för `fixed`
+ * och `interval`, och för `none` saknar fältet `required` och bär en knapp
+ * som tömmer det. Samma regler delas med `/api`. Masken säger samma sak som
+ * servern: ett tomt datum på en engångsuppgift är ett svar och inte ett fel.
+ *
+ * **Listan väljs i samma formulär** (M26 · issue 236 § Beslut 2). När ett
+ * schema SKAPAS frågar *List* efter listan den första förekomsten hamnar i och
+ * skickar `gtd_list`; vid REDIGERING visas *Default list for new occurrences*
+ * och skickar schemats `default_gtd_list`. Bara `next` och `someday` kan vara
+ * förval — `waiting` gäller en enskild gång och `inbox` är bara en förekomsts
+ * första hem (ADR-0052 § 2). Bara det ena fältet finns i `fields`, så en
+ * skapande POST bär aldrig `default_gtd_list` och en PATCH aldrig `gtd_list`.
  *
  * **Intervallfälten döljs OCH nollställs när `none` väljs** (Beslut 4).
  * `prohibited_if:recurrence_type,none` i den delade FormRequesten avvisar dem
@@ -95,7 +108,19 @@ const fields = {
     anchor_date: props.schedule?.recurrence_type === 'fixed'
         ? (props.schedule.anchor_date ?? '')
         : (props.openDueAt ?? props.schedule?.anchor_date ?? ''),
+    // Fältet heter *Reminder* i vyn och `lead_days` i koden (Beslut 3):
+    // nyckeln `item.schedule.form.reminder` är etiketten, `lead_days` är
+    // kolumnen. Utan ett datum ritas fältet inte — men värdet står kvar.
     lead_days: props.schedule?.lead_days ?? 0,
+    /*
+     * Listan (Beslut 2). Bara det ena fältet finns i formuläret: skapande
+     * skickar `gtd_list` och redigering `default_gtd_list`, så POST:en och
+     * PATCH:en bär varsitt fält och aldrig båda. Förvalet är `inbox` — en
+     * uppgift som läggs till utan att någon tänker på listan är obearbetad.
+     */
+    ...(props.schedule === null
+        ? { gtd_list: 'inbox' }
+        : { default_gtd_list: props.schedule.default_gtd_list ?? null }),
 };
 
 const form = useForm(fields);
@@ -110,6 +135,9 @@ watch(() => form.recurrence_type, (type) => {
 });
 
 const interval = computed(() => form.recurrence_type !== 'none');
+
+/* Datumet krävs bara av de återkommande typerna (Beslut 1). */
+const dateRequired = computed(() => form.recurrence_type !== 'none');
 
 /*
  * Rubriken följer typen OCH ytan (issue 702 § Beslut 3): för `fixed` är
@@ -178,6 +206,54 @@ function submit() {
                 name="notes"
                 :rows="3"
             />
+        </FormField>
+
+        <!--
+            Listan (Beslut 2). Skapande frågar efter den första förekomstens
+            lista (`gtd_list`), redigering efter schemats förval för nästa
+            förekomst (`default_gtd_list`) — bara det ena fältet finns i
+            `fields`, så en POST och en PATCH bär aldrig samma nyckel.
+            Alternativen är `todo.list.*`, samma ord som kolumnens värden.
+        -->
+        <FormField
+            v-if="schedule === null"
+            v-slot="{ describedBy }"
+            :label="t('item.schedule.form.gtd_list')"
+            id="gtd_list"
+            :error="form.errors.gtd_list"
+        >
+            <UiSelect
+                id="gtd_list"
+                v-model="form.gtd_list"
+                :described-by="describedBy"
+                name="gtd_list"
+            >
+                <option value="inbox">{{ t('todo.list.inbox') }}</option>
+                <option value="next">{{ t('todo.list.next') }}</option>
+                <option value="waiting">{{ t('todo.list.waiting') }}</option>
+                <option value="someday">{{ t('todo.list.someday') }}</option>
+            </UiSelect>
+        </FormField>
+
+        <FormField
+            v-else
+            v-slot="{ describedBy }"
+            :label="t('item.schedule.form.default_gtd_list')"
+            id="default_gtd_list"
+            :error="form.errors.default_gtd_list"
+        >
+            <UiSelect
+                id="default_gtd_list"
+                v-model="form.default_gtd_list"
+                :described-by="describedBy"
+                name="default_gtd_list"
+            >
+                <option :value="null">{{ t('item.schedule.form.default_gtd_list_none') }}</option>
+                <option value="next">{{ t('todo.list.next') }}</option>
+                <option value="someday">{{ t('todo.list.someday') }}</option>
+            </UiSelect>
+
+            <p class="text-body text-ink-muted">{{ t('item.schedule.form.default_gtd_list_hint') }}</p>
         </FormField>
 
         <!--
@@ -254,9 +330,12 @@ function submit() {
         </template>
 
         <!--
-            Startpunkten, alltid synlig och alltid obligatorisk (Beslut 4).
-            Rubriken följer typen: för `fixed` är datumet seriens startpunkt i
-            kalendern, för de andra är det första gången uppgiften förfaller.
+            Startpunkten, alltid synlig (Beslut 4). Rubriken följer typen: för
+            `fixed` är datumet seriens startpunkt i kalendern, för de andra är
+            det första gången uppgiften förfaller. `required` följer SAMMA
+            regel som FormRequesten (Beslut 1): bara `fixed` och `interval`
+            kräver ett datum, och en engångsuppgift får lämnas tom — därför
+            knappen som tömmer fältet.
         -->
         <FormField
             v-slot="{ describedBy }"
@@ -264,19 +343,50 @@ function submit() {
             id="anchor_date"
             :error="form.errors.anchor_date"
         >
-            <UiInput
-                id="anchor_date"
-                v-model="form.anchor_date"
-                :described-by="describedBy"
-                type="date"
-                name="anchor_date"
-                required
-            />
+            <div class="flex items-center gap-2">
+                <UiInput
+                    id="anchor_date"
+                    v-model="form.anchor_date"
+                    :described-by="describedBy"
+                    type="date"
+                    name="anchor_date"
+                    :required="dateRequired"
+                />
+
+                <button
+                    v-if="form.anchor_date"
+                    type="button"
+                    :aria-label="t('item.schedule.form.anchor_date_clear')"
+                    class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control border border-border text-ink-muted outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    @click="form.anchor_date = ''"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-4 w-4"
+                        aria-hidden="true"
+                    >
+                        <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
         </FormField>
 
+        <!--
+            Påminnelsen (Beslut 3). Utan ett datum gör `lead_days` ingenting —
+            `visible_from` räknas bara fram när det finns ett `due_at` — så
+            fältet döljs i stället för att stå kvar och lova en notis som
+            aldrig kommer. Värdet står kvar i formuläret och skickas med, så
+            att ett datum som sätts tillbaka får sin gamla påminnelse.
+        -->
         <FormField
+            v-if="form.anchor_date"
             v-slot="{ describedBy }"
-            :label="t('item.schedule.form.lead_days')"
+            :label="t('item.schedule.form.reminder')"
             id="lead_days"
             :error="form.errors.lead_days"
         >

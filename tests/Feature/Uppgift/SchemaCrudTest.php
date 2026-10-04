@@ -108,7 +108,7 @@ it('ett schema skapas med interval och kräver anchor_date och intervall', funct
     expect($response->json('data.lead_days'))->toBe(14);
 });
 
-it('ett engångsschema kräver anchor_date och avvisar intervallkolumnerna', function () {
+it('ett engångsschema avvisar intervallkolumnerna och får sakna datum', function () {
     [, , $headers, $container, $item] = skapaSchemaTestItem();
     $url = "/api/containers/{$container->ulid}/items/{$item->ulid}/schedules";
 
@@ -123,14 +123,18 @@ it('ett engångsschema kräver anchor_date och avvisar intervallkolumnerna', fun
     expect($response->json('error.code'))->toBe('validation.failed');
     expect($response->json('error.data.fields.interval_unit'))->not->toBeNull();
 
+    // Sedan M26 · issue 236 § Beslut 1
+    // ([[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3) är
+    // `anchor_date` frivillig för `none`: `required_if` gäller bara `fixed`
+    // och `interval`, och den här kroppen skapar därför schemat utan datum i
+    // stället för att avvisas. Regeln delas med webben.
     $utanAnkare = postJson($url, [
         'title' => 'Kontrollera brandsläckaren',
         'recurrence_type' => 'none',
     ], $headers);
 
-    $utanAnkare->assertStatus(422);
-    expect($utanAnkare->json('error.code'))->toBe('validation.failed');
-    expect($utanAnkare->json('error.data.fields.anchor_date'))->not->toBeNull();
+    $utanAnkare->assertCreated();
+    expect($utanAnkare->json('data.anchor_date'))->toBeNull();
 });
 
 it('fixed utan intervall avvisas', function () {

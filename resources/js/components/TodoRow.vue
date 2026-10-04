@@ -128,6 +128,15 @@ const completed = computed(() => (isDone.value ? eventDate(props.entry.completed
 const hasDateText = computed(() => (isDone.value ? completed.value.text !== null : due.value.text !== null));
 
 /*
+ * En rad utan datum säger *No date* i datumets plats (M26 · issue 236
+ * § Beslut 5, ADR-0052 § 3). Ordet står utan kalenderikon och utan röd ton:
+ * en uppgift utan datum är varken försenad eller kommande, och färgen får
+ * inte låna en roll den inte har. Bara en rad som inte är klar — en avbockad
+ * rad har sitt händelsedatum.
+ */
+const hasNoDate = computed(() => ! isDone.value && due.value.text === null);
+
+/*
  * Cirkelns kant (Beslut 1): serverns fält avgör, aldrig klockan. Idag är
  * varken `overdue` eller `upcoming`, och de två fälten är varandras komplement
  * — en rad som förfaller i dag har alltså ingen av dem.
@@ -176,6 +185,53 @@ function complete() {
         ),
         { preserveScroll: true },
     );
+}
+
+/*
+ * Listan och statusen (M26 · issue 236 § Beslut 4). Två kontroller bakom
+ * samma grind som avbockningen — `entry.can.update` — och bara på en rad som
+ * inte är *Done*: en stängd förekomst kan inte ändras (ChangeOccurrence nekar
+ * den med `occurrence.not_open`), och en väljare som alltid ger samma fel är
+ * en fälla.
+ *
+ * **Egen form och inte `form`.** Avbockningen skickar `account`; de här två
+ * skickar bara sitt eget fält, och `transform` gör att kroppen bär exakt det.
+ * En delad form hade låtit en PATCH bära avbockningens konto med, eller en
+ * avbockning bära en lista.
+ *
+ * **Rutten är samma PATCH som webben fick i issue 235** — den som
+ * App\Http\Controllers\ScheduleOccurrenceController::update() svarar på — och
+ * `preserveScroll` håller kvar läsaren där hon var i en lång lista.
+ *
+ * **De fyra listorna är `todo.list.*`-nycklarna**, samma ord som
+ * `gtd_list`-kolumnens värden (ADR-0052 § 1). Servern skickar ingen
+ * uppräkning att läsa — bara radens eget värde — så ordningen står här och
+ * bor i katalogens fyra nycklar, inte i en egen lista i JavaScript.
+ */
+const listForm = useForm({ gtd_list: null, status: null });
+
+const lists = ['inbox', 'next', 'waiting', 'someday'];
+
+const occurrenceUrl = computed(
+    () => `${scheduleHref.value}/occurrences/${props.entry.ulid}`,
+);
+
+/* Fältets id måste vara unikt i listan — varje rad har samma fältnamn. */
+const listFieldId = computed(() => `todo-list-${props.entry.ulid}`);
+
+/* Växelns tillstånd: serverns `status`, aldrig ett eget (ADR-0052 § 1). */
+const inProgress = computed(() => props.entry.status === 'in_progress');
+
+function changeList(event) {
+    listForm
+        .transform(() => ({ gtd_list: event.target.value }))
+        .patch(occurrenceUrl.value, { preserveScroll: true });
+}
+
+function toggleProgress() {
+    listForm
+        .transform(() => ({ status: inProgress.value ? 'open' : 'in_progress' }))
+        .patch(occurrenceUrl.value, { preserveScroll: true });
 }
 </script>
 
@@ -255,6 +311,43 @@ function complete() {
                 >
                     {{ t('todo.blocked') }}
                 </span>
+
+                <!-- Listan och statusen (M26 · issue 236 § Beslut 4): en
+                     kompakt väljare och växeln *In progress*, båda bakom
+                     samma grind som avbockningen och bara på en rad som inte
+                     är *Done*. Den som saknar rätten får listans namn som ett
+                     märke i stället — samma ord, ingen kontroll hon inte får
+                     använda. -->
+                <template v-if="! isDone && entry.can.update">
+                    <select
+                        :id="listFieldId"
+                        :value="entry.gtd_list"
+                        :aria-label="t('todo.list.label')"
+                        class="min-h-11 rounded-control border border-border bg-surface px-2 text-meta text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        @change="changeList"
+                    >
+                        <option v-for="list in lists" :key="list" :value="list">
+                            {{ t(`todo.list.${list}`) }}
+                        </option>
+                    </select>
+
+                    <button
+                        type="button"
+                        :aria-pressed="inProgress"
+                        class="inline-flex min-h-11 items-center rounded-control border px-3 text-meta font-medium outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        :class="inProgress ? 'border-accent bg-accent-soft text-accent' : 'border-border text-ink-muted'"
+                        @click="toggleProgress"
+                    >
+                        {{ t('todo.in_progress') }}
+                    </button>
+                </template>
+
+                <span
+                    v-else-if="! isDone"
+                    class="rounded-pill border border-border bg-surface-sunken px-2 py-0.5 text-meta font-medium text-ink-muted"
+                >
+                    {{ t(`todo.list.${entry.gtd_list}`) }}
+                </span>
             </div>
 
             <p class="mt-1 flex flex-wrap items-center gap-x-2 text-body text-ink-muted">
@@ -277,14 +370,17 @@ function complete() {
             </p>
 
             <!-- Domänfelet ur avslutsflödet, formulerat av servern och
-                 aldrig som en JSON-kropp — samma mönster som OpenOccurrence. -->
+                 aldrig som en JSON-kropp — samma mönster som OpenOccurrence.
+                 Felrutan är radens ENDA: ett domänfel ur list- eller
+                 statusbytet (`occurrence.not_open`) ritas på samma ställe som
+                 avbockningens, för det är samma förekomst och samma rutt. -->
             <p
-                v-if="form.errors.occurrence"
+                v-if="form.errors.occurrence || listForm.errors.occurrence"
                 role="alert"
                 tabindex="-1"
                 class="mt-2 whitespace-pre-line rounded-control border border-danger bg-danger/10 px-3 py-2 text-body text-danger outline-none"
             >
-                {{ form.errors.occurrence }}
+                {{ form.errors.occurrence || listForm.errors.occurrence }}
             </p>
         </div>
 
@@ -316,6 +412,13 @@ function complete() {
 
                 {{ isDone ? completed.text : (due.relative ? due.text : t('todo.due', { date: due.text })) }}
             </time>
+
+            <!-- Utan datum står ordet i datumets plats (Beslut 5): ingen
+                 kalenderikon och ingen röd ton — en uppgift utan datum är
+                 varken försenad eller kommande (ADR-0052 § 3). -->
+            <span v-if="hasNoDate" class="inline-flex items-center text-meta text-ink-muted">
+                {{ t('todo.no_date') }}
+            </span>
 
             <img
                 v-if="entry.cover?.hasThumb"

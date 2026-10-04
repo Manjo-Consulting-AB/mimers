@@ -38,9 +38,10 @@ use function Pest\Laravel\withoutVite;
  *    `UpdateScheduleRequest` och App\Actions\Schedule\OpenNextOccurrence delas
  *    rakt av, och ett aktivt schema öppnar sin första förekomst i samma svep
  *    (issue 22 § Beslut 3 och 9).
- * 3. **Skillnaden mellan de tre typerna** — `anchor_date` frågas för alla tre,
- *    intervallfälten krävs för `fixed`/`interval` och avvisas för `none`
- *    (issue 21 § Beslut 5, Beslut 3 och 4).
+ * 3. **Skillnaden mellan de tre typerna** — `anchor_date` krävs för de
+ *    återkommande typerna och är frivillig för `none` (sedan M26 · issue 236
+ *    § Beslut 1), intervallfälten krävs för `fixed`/`interval` och avvisas
+ *    för `none` (issue 21 § Beslut 5, Beslut 3 och 4).
  * 4. **Grindarna på itemet** (Beslut 7) — `read` ser listan men ingen skrivyta
  *    och nekas på allt skrivande, `create` får lägga till men inte ändra eller
  *    radera, `write` får ändra och pausa men inte radera.
@@ -437,13 +438,19 @@ it('kräver enhet och antal för fixed och lägger felet på fältet', function 
 });
 
 /*
- * Klart när: anchor_date frågas för alla tre typerna och etiketten följer
- * typen.
+ * Klart när: anchor_date krävs för de ÅTERKOMMANDE typerna och etiketten
+ * följer typen.
+ *
+ * Sedan M26 · issue 236 § Beslut 1 ([[ADR-0052 Uppgifternas listor och
+ * uppgifter utan datum]] § 3) är datumet frivilligt för `none`: en
+ * engångsuppgift får sakna datum, och `required_if` gäller bara `fixed` och
+ * `interval`. Provet på vägen UTAN datum — att en engångsuppgift skapas utan
+ * `anchor_date` — bor i tests/Feature/Frontend/ListaIWebbenTest.php.
  */
-it('kräver anchor_date för alla tre typerna', function () {
+it('kräver anchor_date för de återkommande typerna', function () {
     [$konto, $anvandare, $container, $item] = schemavyKontext();
 
-    foreach (['none', 'fixed', 'interval'] as $typ) {
+    foreach (['fixed', 'interval'] as $typ) {
         actingAs($anvandare)->post(schemavySchemaUrl($container, $item), [
             'title' => 'Utan startpunkt',
             'recurrence_type' => $typ,

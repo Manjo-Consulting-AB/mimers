@@ -3218,12 +3218,30 @@ return [
                 // occurrence's due date, so the label says *Next due date* and
                 // not *First due date*. The create form keeps `anchor_date`.
                 'anchor_date_next' => 'Next due date',
+                // Knappen som tömmer datumet (M26 · issue 236 § Beslut 1):
+                // för `none` är datumet frivilligt, och ett fält som går att
+                // lämna tomt behöver en väg tillbaka till tomt.
+                'anchor_date_clear' => 'Clear the date',
+
+                // Listan (M26 · issue 236 § Beslut 2, ADR-0052 § 2). Skapande
+                // formuläret frågar efter listan den FÖRSTA förekomsten hamnar
+                // i (`gtd_list`); redigeringsformuläret efter schemats förval
+                // för nästa förekomst (`default_gtd_list`). Alternativen är
+                // `todo.list.*` — samma fyra ord i båda formulären.
+                'gtd_list' => 'List',
+                'default_gtd_list' => 'Default list for new occurrences',
+                'default_gtd_list_hint' => 'The default is set the first time a task leaves Inbox.',
+                'default_gtd_list_none' => 'Not set',
 
                 // `lead_days` is explained by what it DOES (decision 5): it is
                 // `visible_from`, and without the sentence the field is
                 // incomprehensible. Since M24 (issue 698) it is the REMINDER
                 // and not the list: the task shows up as soon as it is created,
                 // and `lead_days` counts down to the reminder.
+                // M26 · issue 236 § Beslut 3: fältet heter *Reminder* och ritas
+                // bara när datumet är satt — utan ett datum gör påminnelsen
+                // ingenting. `lead_days` står kvar som fältnamn i koden.
+                'reminder' => 'Reminder',
                 'lead_days' => 'Days before due',
                 'lead_days_hint' => 'You get a reminder this many days before it is due.',
             ],
@@ -3531,6 +3549,26 @@ return [
 
         'due' => 'Due :date',
         'complete' => 'Check off',
+
+        // M26 · issue 236: radens väljare för listan och dess märke. Orden är
+        // samma fyra som `gtd_list`-kolumnens värden (ADR-0052 § 1) — ingen
+        // egen uppräkning i vyn som kan glida ifrån serverns.
+        'list' => [
+            'label' => 'List',
+            'inbox' => 'Inbox',
+            'next' => 'Next',
+            'waiting' => 'Waiting',
+            'someday' => 'Someday',
+        ],
+
+        // Växeln på raden (issue 236): statusen `in_progress`, det frivilliga
+        // mellantillståndet mellan `open` och avbockad (ADR-0052 § 1).
+        'in_progress' => 'In progress',
+
+        // Raden utan datum (issue 236 § Beslut 5, ADR-0052 § 3). Samma ord
+        // som grupprubriken `todo.group.no_date`, men en egen nyckel: rubriken
+        // namnger GRUPPEN, den här fyller DATUMETS plats i raden.
+        'no_date' => 'No date',
 
         // M24 · issue 227: märket på en rad vars förekomst har ett öppet
         // beroende. Den blockerade raden står kvar i listan (till skillnad från
