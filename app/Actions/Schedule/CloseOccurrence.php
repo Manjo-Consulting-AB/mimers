@@ -201,9 +201,12 @@ class CloseOccurrence
             // UTC-datumet för tidsstämpeln. Se completionDay().
             $today = $user->today();
 
+            // Regeln bor i OpenNextOccurrence sedan M24 (issue 699 § Beslut
+            // 4): flytten av en öppen förekomst räknar ur samma dag, och en
+            // regel ska ha ett uttryck.
             $from = $status === ScheduleOccurrence::STATUS_SKIPPED
                 ? $lockedOccurrence->due_at
-                : $this->completionDay($lockedOccurrence, $user);
+                : $this->openNextOccurrence->completionDay($lockedOccurrence, $user);
 
             $next = $this->openNextOccurrence->handle($lockedSchedule, $today, $from, $lockedOccurrence->due_at);
 
@@ -212,29 +215,5 @@ class CloseOccurrence
 
             return ['closed' => $lockedOccurrence, 'next' => $next];
         });
-    }
-
-    /**
-     * Den lokala dagen för `completed_at` — dagen `interval` räknar nästa
-     * förfall från ([[ADR-0044 Användarens dag]] § Beslut 3).
-     *
-     * `completed_at` är en tidsstämpel i UTC, men en avbockning 01:30 svensk
-     * tid den 25:e är klockan 23:30 UTC den 24:e, och den som trycker räknar
-     * från den 25:e. Dagen tas därför ut i HENNES tidszon, precis som
-     * kostnadskrokens `incurred_on` (issue 136 § Beslut 3), och byggs sedan om
-     * till midnatt i APPENS tidszon — samma form som `User::today()` ger
-     * ([[ADR-0044 Användarens dag]] § Beslut 5): ett datum utan tidszon, så
-     * att den kan jämföras med `due_at` och `closedDueAt` som datum.
-     *
-     * För `complete` blir dagen identisk med `$user->today()`, eftersom
-     * `completed_at` sätts till `now()` i samma transaktion. Den räknas ändå
-     * ur tidsstämpeln och inte ur dagens datum: regeln är `completed_at`s dag,
-     * och två uttryck för samma regel driver isär.
-     */
-    private function completionDay(ScheduleOccurrence $occurrence, User $user): Carbon
-    {
-        return Carbon::parse(
-            $occurrence->completed_at->copy()->setTimezone($user->preferredTimezone())->toDateString()
-        );
     }
 }

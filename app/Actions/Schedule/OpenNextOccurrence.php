@@ -6,6 +6,7 @@ use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
 use App\Models\ScheduleDependency;
 use App\Models\ScheduleOccurrence;
+use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -15,11 +16,17 @@ use RuntimeException;
  * `schedule_occurrence`, se issue 22. En förekomst skapas aldrig av en
  * klient; den är systemets bokföring av ett schema.
  *
- * Anropas på exakt tre ställen (Beslut 3): när ett schema skapas med
- * `is_active = true` (App\Http\Controllers\Api\ScheduleController::store, i
- * samma transaktion som schemat), när ett pausat schema aktiveras och saknar
- * en öppen förekomst (update), och när en förekomst stängs (issue 22b — som
- * anropar samma Action med `$from` satt).
+ * **`handle()` anropas på exakt tre ställen** (Beslut 3): när ett schema
+ * skapas med `is_active = true`
+ * (App\Http\Controllers\Api\ScheduleController::store, i samma transaktion
+ * som schemat), när ett pausat schema aktiveras och saknar en öppen förekomst
+ * (update), och när en förekomst stängs (issue 22b — som anropar samma Action
+ * med `$from` satt).
+ *
+ * **`moveOpen()` skapar aldrig en förekomst.** Den flyttar den redan öppna
+ * raden när schemats återkommande ändras (M24, issue 699), och är därmed den
+ * enda vägen in som RÖR en rad som finns sedan förut — men den lägger aldrig
+ * till en. Samma ULID, samma `id`, inga beroenden rivs (Beslut 3 och 7).
  *
  * Bara avslutsanropet har en stängd förekomst att förhålla sig till, och
  * skickar då också dess `due_at` (132): nästa förfall ligger alltid strikt
@@ -83,8 +90,9 @@ class OpenNextOccurrence
 
             $occurrence = new ScheduleOccurrence;
             $occurrence->schedule_id = $lockedSchedule->id;
-            // Glappet fryses i raden: ändras `lead_days` senare rör det nästa
-            // förekomst, inte den öppna (Beslut 5).
+            // Glappet är förfallet minus schemats `lead_days`. Det räknas om
+            // av moveOpen() om `lead_days` ändras medan raden är öppen (M24,
+            // issue 699 § Beslut 2) — det är inte fryst.
             $occurrence->visible_from = $dueAt->copy()->subDays($lockedSchedule->lead_days);
             $occurrence->due_at = $dueAt;
             $occurrence->status = 'open';
@@ -105,6 +113,138 @@ class OpenNextOccurrence
 
             return $occurrence;
         });
+    }
+
+    /**
+     * Flyttar den ÖPPNA förekomsten när schemats återkommande ändras (M24,
+     * issue 699). Ingen ny rad skapas: samma ULID, samma `id` — och därmed
+     * står `occurrence_dependency` orörd, för den pekar på förekomstens `id`
+     * (Beslut 3 och 7).
+     *
+     * **Förekomsten får det förfall den hade fått om schemat haft sina nya
+     * värden när den öppnades** (Beslut 1). Indata är därför öppningens:
+     * `$today` är den agerandes dag, och `$from`/`$closedDueAt` kommer ur den
+     * senaste STÄNGDA förekomsten — `$from` är dess `due_at` vid `skip` och
+     * den lokala dagen för `completed_at` vid `complete`, precis som
+     * CloseOccurrence räknar dem. Saknas en stängd förekomst är båda null och
+     * förfallet räknas som vid en öppning.
+     *
+     * **Ett ändrat `anchor_date` går före regeln ovan** (Beslut 1b):
+     * användaren äger uppgiften och ska kunna flytta varje typ utan att
+     * radera och skapa ny. För `interval` betyder det att `$from` inte
+     * används alls — förfallet är det nya `anchor_date` — och för `fixed`
+     * räknar `nextCalendarDue()` därifrån. Att `anchor_date` ändrades läses
+     * ur den SPARADE modellen (`wasChanged`), eftersom anroparen sparar före
+     * anropet (Beslut 5).
+     *
+     * **`$recalculateDue`** är den ändrandes `getDirty()`: sann när
+     * `recurrence_type`, `interval_unit`, `interval_count` eller
+     * `anchor_date` ändrades. Är den falsk ligger `due_at` kvar och bara
+     * `visible_from` räknas om (Beslut 2) — `visible_from = due_at −
+     * lead_days` i båda fallen.
+     */
+    public function moveOpen(Schedule $schedule, User $actor, bool $recalculateDue): ?ScheduleOccurrence
+    {
+        return DB::transaction(function () use ($schedule, $actor, $recalculateDue): ?ScheduleOccurrence {
+            $lockedSchedule = $schedule->newQuery()->whereKey($schedule->getKey())->lockForUpdate()->first();
+
+            if ($lockedSchedule === null) {
+                return null;
+            }
+
+            $occurrence = $lockedSchedule->occurrences()
+                ->where('status', ScheduleOccurrence::STATUS_OPEN)
+                ->first();
+
+            if ($occurrence === null) {
+                return null;
+            }
+
+            if ($recalculateDue) {
+                $occurrence->due_at = $this->movedDueAt($schedule, $lockedSchedule, $actor);
+            }
+
+            $occurrence->visible_from = $occurrence->due_at->copy()->subDays($lockedSchedule->lead_days);
+            $occurrence->save();
+
+            return $occurrence;
+        });
+    }
+
+    /**
+     * Förfallet den öppna förekomsten ska få (Beslut 1 och 1b): den senaste
+     * stängda förekomsten ger samma indata en öppning hade fått, och
+     * `dueAt()` räknar. Undantaget är `none`, vars gren returnerar null så
+     * fort schemat HAR en förekomst — och det har det alltid här.
+     */
+    private function movedDueAt(Schedule $schedule, Schedule $lockedSchedule, User $actor): Carbon
+    {
+        $previous = $lockedSchedule->occurrences()
+            ->whereIn('status', [ScheduleOccurrence::STATUS_COMPLETED, ScheduleOccurrence::STATUS_SKIPPED])
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->first();
+
+        $closedDueAt = $previous?->due_at;
+
+        $from = match (true) {
+            $previous === null => null,
+            $previous->status === ScheduleOccurrence::STATUS_SKIPPED => $previous->due_at,
+            default => $this->completionDay($previous, $previous->completedByUser ?? $actor),
+        };
+
+        // Beslut 1b: ett ändrat anchor_date går före de stängda
+        // förekomsterna. Bara `interval` behöver veta det — `fixed` räknar
+        // redan från `anchor_date`, och `none` nedan bortser från `$from`.
+        if ($lockedSchedule->recurrence_type === 'interval' && $schedule->wasChanged('anchor_date')) {
+            $from = null;
+        }
+
+        if ($lockedSchedule->recurrence_type === 'none') {
+            $anchor = $lockedSchedule->anchor_date;
+
+            if ($anchor === null) {
+                throw $this->programmingError('Ett schema med recurrence_type none utan anchor_date kan inte flytta sin förekomst.');
+            }
+
+            return $anchor->copy();
+        }
+
+        $dueAt = $this->dueAt($lockedSchedule, $actor->today(), $from, $closedDueAt);
+
+        if ($dueAt === null) {
+            throw $this->programmingError('Ett schema med en öppen förekomst kan inte sakna ett nästa förfall.');
+        }
+
+        return $dueAt;
+    }
+
+    /**
+     * Den lokala dagen för `completed_at` — dagen `interval` räknar nästa
+     * förfall från ([[ADR-0044 Användarens dag]] § Beslut 3).
+     *
+     * `completed_at` är en tidsstämpel i UTC, men en avbockning 01:30 svensk
+     * tid den 25:e är klockan 23:30 UTC den 24:e, och den som trycker räknar
+     * från den 25:e. Dagen tas därför ut i HENNES tidszon, precis som
+     * kostnadskrokens `incurred_on` (issue 136 § Beslut 3), och byggs sedan om
+     * till midnatt i APPENS tidszon — samma form som `User::today()` ger
+     * ([[ADR-0044 Användarens dag]] § Beslut 5): ett datum utan tidszon, så
+     * att den kan jämföras med `due_at` och `closedDueAt` som datum.
+     *
+     * För `complete` blir dagen identisk med `$user->today()`, eftersom
+     * `completed_at` sätts till `now()` i samma transaktion. Den räknas ändå
+     * ur tidsstämpeln och inte ur dagens datum: regeln är `completed_at`s dag,
+     * och två uttryck för samma regel driver isär.
+     *
+     * Ligger här och inte i CloseOccurrence sedan M24 (issue 699 § Beslut 4):
+     * både avslutet och flytten av en öppen förekomst räknar ur samma regel,
+     * och en regel ska ha ett uttryck.
+     */
+    public function completionDay(ScheduleOccurrence $occurrence, User $user): Carbon
+    {
+        return Carbon::parse(
+            $occurrence->completed_at->copy()->setTimezone($user->preferredTimezone())->toDateString()
+        );
     }
 
     /**
