@@ -423,7 +423,7 @@ class ScheduleController extends Controller
             $row->setAttribute('counterpart_item_ulid', $counterpartItem->ulid);
             $row->setAttribute('counterpart_item_name', $counterpartItem->name);
             $row->setAttribute('counterpart_schedule_ulid', $counterpartSchedule->ulid);
-            $row->setAttribute('satisfied', $counterpart->status !== ScheduleOccurrence::STATUS_OPEN);
+            $row->setAttribute('satisfied', ! $counterpart->isActive());
         });
 
         $ordered = $visible->sortBy(fn (OccurrenceDependency $row): array => [
@@ -498,7 +498,7 @@ class ScheduleController extends Controller
 
         $openByScheduleId = ScheduleOccurrence::query()
             ->whereIn('schedule_id', $writable->pluck('id')->all())
-            ->where('status', ScheduleOccurrence::STATUS_OPEN)
+            ->active()
             ->get(['id', 'ulid', 'schedule_id', 'due_at'])
             ->keyBy('schedule_id');
 

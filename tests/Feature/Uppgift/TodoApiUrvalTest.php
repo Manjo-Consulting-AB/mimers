@@ -255,12 +255,13 @@ it('döljer fortfarande en blockerad och en pausad förekomst', function () {
 
 /*
  * Klart när: `array_keys($svar->json())` är `['data']`, och `data.0` bär de
- * åtta nycklarna.
+ * tio nycklarna — två fler sedan issue 232 lade `status` och `gtd_list` på
+ * raden (ADR-0052 § 1).
  *
  * Svaret förblir `{"data": [...]}` (Beslut 3) och får inga räknare (Beslut 4):
  * grupperna är radernas flaggor, och talen är webbens.
  */
-it('svarar med de åtta nycklarna och utan räknare', function () {
+it('svarar med de tio nycklarna och utan räknare', function () {
     [, , $headers] = apiurvalGrund();
 
     $svar = getJson('/api/todo', $headers);
@@ -271,6 +272,8 @@ it('svarar med de åtta nycklarna och utan räknare', function () {
             'ulid',
             'due_at',
             'visible_from',
+            'status',
+            'gtd_list',
             'overdue',
             'upcoming',
             'schedule',

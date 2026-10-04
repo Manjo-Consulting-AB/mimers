@@ -85,10 +85,11 @@ class CloseOccurrence
 
             $lockedOccurrence = $lockedSchedule->occurrences()->whereKey($occurrence->getKey())->lockForUpdate()->firstOrFail();
 
-            // Beslut 5: bara en ÖPPEN förekomst kan stängas. Utan regeln
-            // blir ett dubbelklick två stängningar och två nya förekomster,
-            // och serien har hoppat ett steg utan att någon gjorde något.
-            if ($lockedOccurrence->status !== ScheduleOccurrence::STATUS_OPEN) {
+            // Beslut 5: bara en AKTIV förekomst kan stängas — `open` eller
+            // `in_progress` (ADR-0052 § 1). Utan regeln blir ett dubbelklick
+            // två stängningar och två nya förekomster, och serien har hoppat
+            // ett steg utan att någon gjorde något.
+            if (! $lockedOccurrence->isActive()) {
                 throw ApiException::make('occurrence.not_open', ['status' => $lockedOccurrence->status], 422);
             }
 
@@ -108,8 +109,8 @@ class CloseOccurrence
             // klickar sig förbi. Kontrollen ligger först i flödet, innan
             // någonting skrivs, och räknas i EN fråga oavsett antalet
             // beroenden (§ Att se upp med). Ett beroende är uppfyllt så snart
-            // motparten inte längre är `open` (Beslut 5), så listan är
-            // blockerarna med motpartens status `open`.
+            // motparten inte längre är AKTIV (Beslut 5, ADR-0052 § 1), så
+            // listan är blockerarna med motpartens status aktiv.
             //
             // Ett beroende vars motpart ligger under ett MJUKRADERAT schema
             // eller item existerar inte — varken här, i GET eller i
@@ -125,7 +126,7 @@ class CloseOccurrence
                 ->join('schedule', 'schedule.id', '=', 'blocker.schedule_id')
                 ->join('item', 'item.id', '=', 'schedule.item_id')
                 ->where('occurrence_dependency.occurrence_id', $lockedOccurrence->id)
-                ->where('blocker.status', ScheduleOccurrence::STATUS_OPEN)
+                ->whereIn('blocker.status', ScheduleOccurrence::ACTIVE_STATUSES)
                 ->whereNull('schedule.deleted_at')
                 ->whereNull('item.deleted_at')
                 ->orderBy('blocker.due_at')

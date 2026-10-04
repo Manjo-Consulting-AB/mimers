@@ -36,6 +36,10 @@ class ScheduleOccurrenceFactory extends Factory
             // test som vill ha ett glapp sätter båda kolumnerna explicit.
             'visible_from' => fn (array $attribut): string => $attribut['due_at'],
             'status' => 'open',
+            // Speglar kolumnens förval (ADR-0052 § 4): en rad som skapas utan
+            // en lista får `next`. Vilken lista en NY förekomst får i
+            // produktionen avgörs av koden i issue 235, inte här.
+            'gtd_list' => 'next',
             'completed_at' => null,
             'completed_by_user_id' => null,
             'completed_by_account_id' => null,

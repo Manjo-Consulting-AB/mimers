@@ -26,6 +26,7 @@ Noll eller flera per item. En livflotte har både treårig service och ett certi
 | anchor_date | DATE NULL | Startpunkt för `fixed` |
 | lead_days | SMALLINT UNSIGNED | Hur många dagar innan förfall uppgiften dyker upp. Motsvarar OmniFocus defer. |
 | is_active | BOOLEAN | Pausad utan att raderas |
+| default_gtd_list | VARCHAR(10) NULL | `next` \| `someday` — förvalet för en ny förekomst. Null tills det lärs in, se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 2 |
 | deleted_at | | |
 
 Index: `(item_id, deleted_at)`.
@@ -49,7 +50,8 @@ Skillnaden är inte kosmetisk och kan inte uttryckas med ett enda nästa-datum-f
 | schedule_id | FK | |
 | visible_from | DATE | `due_at` minus `lead_days`. Innan detta syns uppgiften inte i todo-listan. |
 | due_at | DATE | |
-| status | VARCHAR(20) | `open` \| `completed` \| `skipped` |
+| status | VARCHAR(20) | `open` \| `in_progress` \| `completed` \| `skipped` |
+| gtd_list | VARCHAR(10) | `inbox` \| `next` \| `waiting` \| `someday`. Förval `next`. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 |
 | completed_at | TIMESTAMP NULL | |
 | completed_by_user_id | FK NULL | |
 | completed_by_account_id | FK NULL | Varvet, inte den anställde |
@@ -57,7 +59,9 @@ Skillnaden är inte kosmetisk och kan inte uttryckas med ett enda nästa-datum-f
 
 Index: `(schedule_id, status)`, `(due_at, status)` för todo-listan över alla containers.
 
-**Förfallen** (`overdue`) är inte en status utan härleds: `status = 'open' AND due_at < idag`, där `idag` är **användarens kalenderdag** — `User::today()` — och inte serverns. Se [[ADR-0044 Användarens dag]] § Beslut 1. Lagra aldrig ett tillstånd som klockan kan ändra åt dig — då måste ett jobb hålla det uppdaterat, och det jobbet kommer att missa körningar.
+**Aktiv** är en förekomst som inte är stängd: `status` är `open` eller `in_progress`. Villkoret formuleras en gång, som `ScheduleOccurrence::scopeActive()`, och det är frågan koden ställer överallt där den menar *inte stängd* — todo-urvalet, itemets status, notiserna, ICS-flödet, beroendena och avbockningens kontroll. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1.
+
+**Förfallen** (`overdue`) är inte en status utan härleds: **aktiv** och `due_at < idag`, där `idag` är **användarens kalenderdag** — `User::today()` — och inte serverns. Se [[ADR-0044 Användarens dag]] § Beslut 1. Lagra aldrig ett tillstånd som klockan kan ändra åt dig — då måste ett jobb hålla det uppdaterat, och det jobbet kommer att missa körningar.
 
 **Historiken är loggen.** Avklarade förekomster är svaret på "när bytte jag impellern senast" — ingen separat historiktabell behövs.
 
@@ -88,7 +92,7 @@ I en transaktion:
 Läser **förekomster**, aldrig items:
 
 ```
-status = 'open'
+aktiv (status = 'open' eller 'in_progress')
 AND visible_from <= användarens idag (`User::today()`)
 AND containern är åtkomlig för användaren
 AND inga öppna beroenden

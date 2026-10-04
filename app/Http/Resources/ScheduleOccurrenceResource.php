@@ -15,8 +15,12 @@ use Illuminate\Support\Carbon;
  * egen `id` eller `schedule_id`. Ingen `schedule`-nyckel — rutten är nästlad
  * under schemat, så klienten vet redan vilket det är.
  *
- * `overdue` är INTE en kolumn utan en BERÄKNAD boolean: `status = 'open'
- * AND due_at < idag` (dokumentet § schedule_occurrence), där idag är
+ * `gtd_list` är förekomstens GTD-lista (ADR-0052 § 1) — ett läsfält här,
+ * skrivningen kommer i issue 238. Nästa fält efter `status`, för de två
+ * svarar på olika frågor om samma rad.
+ *
+ * `overdue` är INTE en kolumn utan en BERÄKNAD boolean: AKTIV (`open` eller
+ * `in_progress`) `AND due_at < idag` (dokumentet § schedule_occurrence), där idag är
  * ANVÄNDARENS datum och inte serverns (issue 135, se `today()`). Ett lagrat
  * tillstånd som klockan ändrar kräver ett jobb som förr eller senare missar
  * en körning — därför beräknas det per rad vid läsning (Beslut 2).
@@ -45,7 +49,8 @@ class ScheduleOccurrenceResource extends JsonResource
             'visible_from' => $this->visible_from->toDateString(),
             'due_at' => $this->due_at->toDateString(),
             'status' => $this->status,
-            'overdue' => $this->status === 'open' && $this->due_at->lessThan($this->today($request)),
+            'gtd_list' => $this->gtd_list,
+            'overdue' => $this->resource->isActive() && $this->due_at->lessThan($this->today($request)),
             'completed_at' => $this->completed_at?->toIso8601String(),
             'completed_by_account' => $this->completedByAccount === null
                 ? null

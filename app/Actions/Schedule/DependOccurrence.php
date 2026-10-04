@@ -21,7 +21,8 @@ use Illuminate\Support\Facades\DB;
  *    motparten finns i containern. Actionen kontrollerar ändå, för den
  *    anropas från två ställen och en Action som litar på sin anropare är en
  *    Action som slutar stämma.
- * 2. Den väntande förekomsten måste vara `open` — `occurrence.not_open`,
+ * 2. Den väntande förekomsten måste vara aktiv (`open` eller `in_progress`,
+ *    ADR-0052 § 1) — `occurrence.not_open`,
  *    samma kod som 22b § Beslut 5. Ett krav på något som redan är gjort
  *    ändrar ingenting och ser ut som att det gör det (§ Beslut 7).
  * 3. Inte sig själv — `occurrence.dependency_self`.
@@ -65,7 +66,7 @@ class DependOccurrence
     {
         $containerId = $this->assertSameContainer($occurrence, $other);
 
-        if ($occurrence->status !== ScheduleOccurrence::STATUS_OPEN) {
+        if (! $occurrence->isActive()) {
             throw ApiException::make('occurrence.not_open', ['status' => $occurrence->status], 422);
         }
 

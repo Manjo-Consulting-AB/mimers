@@ -20,14 +20,19 @@ use Illuminate\Support\Carbon;
  * Inga löpnummer: varken förekomstens, schemats, itemets eller containerns
  * `id` exponeras (Beslut 5).
  *
- * `overdue` är INTE en kolumn utan en BERÄKNAD boolean: `status = 'open' AND
- * due_at < idag` (dokumentet § schedule_occurrence, 22a § Beslut 2), där idag
+ * `status` och `gtd_list` följer med raden (ADR-0052 § 1, issue 232
+ * § Beslut 4) — ett läsfält här, skrivningen kommer i issue 238. `gtd_list`
+ * står direkt efter `status`, för de två svarar på olika frågor om samma rad.
+ *
+ * `overdue` är INTE en kolumn utan en BERÄKNAD boolean: AKTIV (`open` eller
+ * `in_progress`) `AND due_at < idag` (dokumentet § schedule_occurrence, 22a
+ * § Beslut 2), där idag
  * är ANVÄNDARENS datum och inte serverns (issue 135, se `today()`). Ett lagrat
  * tillstånd som klockan ändrar kräver ett jobb som förr eller senare missar en
  * körning — därför beräknas det per rad vid läsning.
  *
- * `upcoming` är `overdue`s spegelbild och beräknas på samma sätt: `status =
- * 'open' AND due_at > idag`, samma `today()` (issue 133). De två är varandras
+ * `upcoming` är `overdue`s spegelbild och beräknas på samma sätt: aktiv `AND
+ * due_at > idag`, samma `today()` (issue 133). De två är varandras
  * komplement men möts inte — en rad som förfaller i dag är varken eller. Vyn
  * jämför inga datum själv (issue 64 § Beslut 3); den ritar den prick servern
  * pekar ut, och färgen är aldrig den enda bäraren av den.
@@ -49,8 +54,10 @@ class TodoEntryResource extends JsonResource
             'ulid' => $this->ulid,
             'due_at' => $this->due_at->toDateString(),
             'visible_from' => $this->visible_from->toDateString(),
-            'overdue' => $this->status === ScheduleOccurrence::STATUS_OPEN && $this->due_at->lessThan($this->today($request)),
-            'upcoming' => $this->status === ScheduleOccurrence::STATUS_OPEN && $this->due_at->greaterThan($this->today($request)),
+            'status' => $this->status,
+            'gtd_list' => $this->gtd_list,
+            'overdue' => $this->resource->isActive() && $this->due_at->lessThan($this->today($request)),
+            'upcoming' => $this->resource->isActive() && $this->due_at->greaterThan($this->today($request)),
             'schedule' => [
                 'ulid' => $this->schedule->ulid,
                 'title' => $this->schedule->title,

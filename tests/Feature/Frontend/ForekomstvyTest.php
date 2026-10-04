@@ -312,9 +312,11 @@ it('räknar aldrig försenat i vyn utan läser serverns fält', function () {
     // Och fältet är serverns: ScheduleOccurrenceResource räknar det ur
     // `due_at` mot dagens datum, aldrig ur en kolumn. Dagen är användarens och
     // löses upp på servern sedan issue 135 — `$this->today($request)` läser
-    // `User::today()`, aldrig en klocka i klienten.
+    // `User::today()`, aldrig en klocka i klienten. Sedan issue 232 är
+    // villkoret `isActive()` — aktiv, alltså `open` eller `in_progress`
+    // (ADR-0052 § 1) — i stället för jämförelsen med `'open'`.
     expect(File::get(app_path('Http/Resources/ScheduleOccurrenceResource.php')))
-        ->toContain("'overdue' => \$this->status === 'open' && \$this->due_at->lessThan(\$this->today(\$request))");
+        ->toContain("'overdue' => \$this->resource->isActive() && \$this->due_at->lessThan(\$this->today(\$request))");
 });
 
 // --- avbockningen: en knapptryckning, och nästa förfall ur servern ----------

@@ -28,7 +28,8 @@ use Illuminate\Support\Facades\DB;
  *
  * **Förfallen är datamodellens begrepp och inte en egen regel.**
  * [[Scheman och uppgifter]] § Förekomster definierar det som
- * `status = 'open' AND due_at < idag`, och det är exakt den formel
+ * AKTIV (`open` eller `in_progress`, ADR-0052 § 1) `AND due_at < idag`, och
+ * det är exakt den formel
  * App\Http\Resources\ScheduleOccurrenceResource bär som `overdue`. Att
  * formulera om den här hade gett två svar på samma fråga. **`idag` är
  * ANVÄNDARENS kalenderdag** och inte serverns ([[ADR-0044 Användarens dag]]
@@ -181,7 +182,7 @@ class ItemStatus
             ->join('schedule', 'schedule.id', '=', 'schedule_occurrence.schedule_id')
             ->whereIn('schedule.item_id', $itemIds)
             ->whereNull('schedule.deleted_at')
-            ->where('schedule_occurrence.status', ScheduleOccurrence::STATUS_OPEN)
+            ->whereIn('schedule_occurrence.status', ScheduleOccurrence::ACTIVE_STATUSES)
             ->whereDate('schedule_occurrence.due_at', '<', $today)
             ->distinct()
             ->pluck('schedule.item_id')

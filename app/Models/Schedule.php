@@ -54,6 +54,16 @@ class Schedule extends Model
     public const INTERVAL_UNITS = ['day', 'week', 'month', 'year'];
 
     /**
+     * De listor ett schema får bära som förval, se migrationens CHECK-villkor
+     * och [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 2.
+     * `waiting` blir aldrig förval — att vänta gäller en enskild gång, inte
+     * regeln — och `inbox` är bara en förekomsts första hem.
+     *
+     * @var list<string>
+     */
+    public const DEFAULT_GTD_LISTS = [ScheduleOccurrence::GTD_NEXT, ScheduleOccurrence::GTD_SOMEDAY];
+
+    /**
      * Tabellen heter `schedule`, inte Eloquents standardplural `schedules`.
      */
     protected $table = 'schedule';
@@ -118,17 +128,19 @@ class Schedule extends Model
     }
 
     /**
-     * Schemats öppna förekomst — den som förfaller härnäst, om schemat har
-     * en. Invarianterna (issue 22 § Beslut 7) garanterar högst en; är det
-     * ingen alls returnerar relationen null. Läsningen "saknar schemat en
-     * öppen förekomst?" i App\Http\Controllers\Api\ScheduleController går
+     * Schemats AKTIVA förekomst — den som förfaller härnäst, om schemat har
+     * en. Namnet står kvar: "öppen" betyder *inte stängd*, alltså `open` eller
+     * `in_progress` ([[ADR-0052 Uppgifternas listor och uppgifter utan
+     * datum]] § 1). Invarianterna (issue 22 § Beslut 7) garanterar högst en;
+     * är det ingen alls returnerar relationen null. Läsningen "saknar schemat
+     * en aktiv förekomst?" i App\Http\Controllers\Api\ScheduleController går
      * genom relationens existens.
      *
      * @return HasOne<ScheduleOccurrence, $this>
      */
     public function openOccurrence(): HasOne
     {
-        return $this->hasOne(ScheduleOccurrence::class)->where('status', 'open');
+        return $this->hasOne(ScheduleOccurrence::class)->active();
     }
 
     /**
