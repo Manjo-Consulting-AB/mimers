@@ -23,6 +23,12 @@ defineProps({
     container: { type: Object, required: true },
     item: { type: Object, required: true },
     schedule: { type: Object, required: true },
+    /*
+     * Den öppna förekomstens förfallodag, eller null när schemat saknar en
+     * öppen förekomst (issue 702 § Beslut 3). Skickas rakt vidare till
+     * ScheduleForm, som förifyller `anchor_date` med den.
+     */
+    openDueAt: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -48,6 +54,7 @@ const { t } = useTranslations();
             :container-ulid="container.ulid"
             :item-ulid="item.ulid"
             :schedule="schedule"
+            :open-due-at="openDueAt"
         />
     </ContainerLayout>
 </template>

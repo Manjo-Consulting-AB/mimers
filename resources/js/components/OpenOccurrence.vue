@@ -149,8 +149,12 @@ function action(name) {
             <span :class="due.state === 'danger' ? 'text-danger' : ''">
                 {{ due.relative ? due.text : t('item.schedule.occurrence.due', { date: due.text }) }}
             </span>
-            <span aria-hidden="true">·</span>
-            <span>{{ t('item.schedule.occurrence.visible_from', { date: visibleFrom }) }}</span>
+            <!-- Påminnelsedagen är bara en egen rad när den skiljer sig från
+                 förfallet (issue 702 § Beslut 1): är de samma dag finns ingen
+                 påminnelse att visa, och `visible_from` är samma sak som
+                 `due_at`. Villkoret är `lead_days > 0` — ingen ny prop. -->
+            <span v-if="occurrence.visible_from !== occurrence.due_at" aria-hidden="true">·</span>
+            <span v-if="occurrence.visible_from !== occurrence.due_at">{{ t('item.schedule.occurrence.visible_from', { date: visibleFrom }) }}</span>
             <template v-if="spare">
                 <span aria-hidden="true">·</span>
                 <span>{{ spare }}</span>

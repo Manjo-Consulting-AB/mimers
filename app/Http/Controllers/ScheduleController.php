@@ -204,6 +204,13 @@ class ScheduleController extends Controller
             'container' => ContainerResource::make($container)->resolve($request),
             'item' => ['ulid' => $item->ulid, 'name' => $item->name],
             'schedule' => (new ScheduleResource($schedule))->resolve($request),
+            /*
+             * Den öppna förekomstens förfallodag, eller null när schemat
+             * saknar en öppen förekomst (issue 702 § Beslut 3). Formuläret
+             * förifyller `anchor_date` med den, så en orörd sparning inte
+             * flyttar uppgiften.
+             */
+            'openDueAt' => $schedule->openOccurrence()->first()?->due_at?->toDateString(),
         ]);
     }
 
