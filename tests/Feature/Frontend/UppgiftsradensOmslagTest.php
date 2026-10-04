@@ -304,10 +304,13 @@ it('containerns flik, itemets flik och Done bär samma cover', function () {
     // /tasks — grupperna.
     $tasks = radomslagKarta(radomslagRader(actingAs($anvandare)->get('/tasks')->assertOk()));
 
-    // Containerns flik — grupperna OCH *Klart*.
+    // Containerns flik — grupperna, och *Done* på sin EGEN flik sedan M26 ·
+    // issue 237 (`?list=done`, ADR-0052 § 1): samma avbockade rad, en annan
+    // adress.
     $flikSvar = actingAs($anvandare)->get("/containers/{$container->ulid}/tasks")->assertOk();
     $flik = radomslagKarta(radomslagRader($flikSvar));
-    $flikKlar = radomslagKarta($flikSvar->inertiaProps()['completed']);
+    $doneSvar = actingAs($anvandare)->get("/containers/{$container->ulid}/tasks?list=done")->assertOk();
+    $flikKlar = radomslagKarta($doneSvar->inertiaProps()['completed']);
 
     // Itemets flik — grupperna OCH *Done*.
     $itemSvar = actingAs($anvandare)

@@ -562,8 +562,11 @@ it('todo-listan är oförändrad', function () {
     ]);
 
     // Och den delade frågan: fliken svarar med samma öppna rader, i samma
-    // ordning, medan den avbockade står i sin egen kolumn.
+    // ordning, medan den avbockade står i sin egen kolumn. Sedan M26 · issue
+    // 237 är den kolumnen en EGEN flik (`?list=done`), inte en grupp sist på
+    // fliken (ADR-0052 § 1) — samma fråga, en annan adress.
     $flik = actingAs($user)->get("/containers/{$container->ulid}/tasks")->assertOk();
+    $done = actingAs($user)->get("/containers/{$container->ulid}/tasks?list=done")->assertOk();
 
     $grupper = $flik->inertiaProps()['groups'];
 
@@ -577,5 +580,5 @@ it('todo-listan är oförändrad', function () {
         array_column($grupper['this_week'], 'ulid'),
         array_column($grupper['upcoming'], 'ulid'),
     ))->toBe(todoUlidLista($response))
-        ->and(array_column($flik->inertiaProps()['completed'], 'ulid'))->toBe([$avbockad->ulid]);
+        ->and(array_column($done->inertiaProps()['completed'], 'ulid'))->toBe([$avbockad->ulid]);
 });

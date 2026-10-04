@@ -534,28 +534,28 @@ it('gruppen Idag följer användarens dag', function () {
 });
 
 /*
- * Klart när: Klart visar avbockade förekomster i containern nyast först, högst
- * tjugo.
+ * Klart när: *Done*-fliken visar avbockade förekomster i containern nyast
+ * först, och *Active* har ingen *Klart*-grupp.
  *
- * Beslut 3, och provet fäster alla tre halvorna:
+ * M26 · issue 237 (Beslut 1 och 4), och provet fäster de tre halvorna:
  *
- *   - **Markören är `completed_at`.** En ÖPPEN förekomst hör inte i *Klart*
+ *   - **Markören är `completed_at`.** En ÖPPEN förekomst hör inte i *Done*
  *     hur nära sin förfallodag den än ligger — de två listorna är varandras
  *     komplement.
  *   - **Ordningen är fallande.** Tjugoen rader med var sin tid, och den
  *     NYASTE först; ett prov som bara räknade raderna hade godtagit vilken
- *     ordning som helst.
- *   - **Taket är tjugo.** Den tjugoförsta raden — den äldsta — finns inte i
- *     svaret, och det prövas på ULID:n och inte på antalet: en lista som
- *     klippte bort den nyaste hade också haft tjugo rader.
+ *     ordning som helst. Taket på tjugo är BORTA: *Done* är inte längre en
+ *     glimt sist i en annan lista utan en egen lista.
+ *   - **Fliken ersätter gruppen** (Beslut 4): på *Active* är `completed` tom,
+ *     och den avbockade raden syns bara under `?list=done`.
  *
  * Raden bär samma fält som de öppna raderna plus `completed_at` (Beslut 3):
- * `account` och `can` ligger BREDVID resursen, precis som i de tre öppna
- * kolumnerna. En egen form för den avbockade raden hade glidit isär från dem
+ * `account` och `can` ligger BREDVID resursen, precis som i de öppna
+ * grupperna. En egen form för den avbockade raden hade glidit isär från dem
  * — den ena hade tappat `can`-flaggan och ritat en avbockningsknapp för den
  * som inte får bocka av.
  */
-it('Klart visar avbockade förekomster i containern nyast först, högst tjugo', function () {
+it('Done-fliken visar avbockade i containern nyast först, och Active har ingen Klart-grupp', function () {
     withoutVite();
 
     [$konto, $anvandare] = uppgiftsflikKonto();
@@ -577,31 +577,34 @@ it('Klart visar avbockade förekomster i containern nyast först, högst tjugo',
     // sviten körs på — ett par dagar hade hamnat i `this_week` på en måndag.
     $öppen = uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Kvar att göra'), uppgiftsflikDatum(10));
 
-    $svar = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
+    $svar = actingAs($anvandare)->get(uppgiftsflikUrl($container, 'list=done'))->assertOk();
 
     $rader = $svar->inertiaProps()['completed'];
 
-    expect($rader)->toHaveCount(20);
+    // Alla tjugoen ryms på första sidan (PER_PAGE är femtio), nyast först.
+    expect($rader)->toHaveCount(21);
 
-    // Nyast först: den först skapade (äldst) står sist, och den tjugoförsta
-    // finns inte alls.
     expect(array_column($rader, 'ulid'))->toBe(array_map(
         fn (ScheduleOccurrence $rad): string => $rad->ulid,
-        array_slice($klara, 0, 20),
+        $klara,
     ));
 
-    expect(array_column($rader, 'ulid'))->not->toContain($klara[20]->ulid)
-        ->and($svar->getContent())->not->toContain($klara[20]->ulid);
-
-    // Den öppna raden står i sin kolumn och inte i den här.
+    // Den öppna raden står inte i *Done*, och *Done*-fliken har inga
+    // datumgrupper: raderna ligger i `completed`.
     expect(array_column($rader, 'ulid'))->not->toContain($öppen->ulid)
-        ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'upcoming')))->toBe(['Kvar att göra']);
+        ->and($svar->inertiaProps()['groups']['upcoming'])->toBe([]);
 
-    // Samma form som de öppna raderna, plus tidsstämpeln. Nycklarna läses ur
-    // den öppna radens eget svar i stället för att skrivas av här: de två
-    // listorna ska bära samma fält, och en avskrift hade inte kunnat se att de
-    // gled isär.
-    $öppenRad = uppgiftsflikGrupp($svar, 'upcoming')[0];
+    // Samma form som de öppna raderna, plus tidsstämpeln. Den öppna radens
+    // nycklar läses ur *Active*, där den ritas, i stället för att skrivas av
+    // här: de två listorna ska bära samma fält, och en avskrift hade inte
+    // kunnat se att de gled isär.
+    $aktiv = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
+
+    // *Active* har ingen *Klart*-grupp — fliken har ersatt den (Beslut 4).
+    expect($aktiv->inertiaProps()['completed'])->toBe([])
+        ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($aktiv, 'upcoming')))->toBe(['Kvar att göra']);
+
+    $öppenRad = uppgiftsflikGrupp($aktiv, 'upcoming')[0];
 
     expect(array_keys($rader[0]))->toBe([...array_keys($öppenRad), 'completed_at'])
         ->and($rader[0]['completed_at'])->toBe($klara[0]->completed_at->toIso8601String())
@@ -611,20 +614,19 @@ it('Klart visar avbockade förekomster i containern nyast först, högst tjugo',
 });
 
 /*
- * Klart när: en överhoppad förekomst står inte i Klart (arkitektsvar på issue
+ * Klart när: en överhoppad förekomst står inte i *Done* (arkitektsvar på issue
  * 174).
  *
  * [[Scheman och uppgifter]] § schedule_occurrence håller `completed` och
  * `skipped` som två egna statusvärden, och samma avsnitt säger att de
  * avklarade förekomsterna är svaret på "när bytte jag impellern senast". En
- * överhoppad rad under *Klart* hade påstått ett byte som inte gjordes.
+ * överhoppad rad under *Done* hade påstått ett byte som inte gjordes.
  *
  * Den överhoppade raden är den NYASTE i provet, så ett svar som bara råkade
  * klippa bort den inte klarar sig: den hade legat först om `status` inte
- * prövades. Gränsen på tjugo prövas i provet ovanför och räknas efter
- * statusfiltret.
+ * prövades.
  */
-it('en överhoppad förekomst står inte i Klart', function () {
+it('en överhoppad förekomst står inte i Done', function () {
     withoutVite();
 
     [$konto, $anvandare] = uppgiftsflikKonto();
@@ -634,7 +636,7 @@ it('en överhoppad förekomst står inte i Klart', function () {
     $avbockad = uppgiftsflikKlar(uppgiftsflikSchema($motorn, 'Byt impeller'), now()->subHour());
     $overhoppad = uppgiftsflikOverhoppad(uppgiftsflikSchema($motorn, 'Byt olja'), now());
 
-    $svar = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
+    $svar = actingAs($anvandare)->get(uppgiftsflikUrl($container, 'list=done'))->assertOk();
 
     $rader = $svar->inertiaProps()['completed'];
 
@@ -675,6 +677,7 @@ it('underhållsfiltret visar bara återkommande scheman i alla fyra kolumner', f
     }
 
     $utan = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
+    $utanDone = actingAs($anvandare)->get(uppgiftsflikUrl($container, 'list=done'))->assertOk();
 
     expect($utan->inertiaProps()['maintenance'])->toBeFalse()
         // Den ofiltrerade tavlan bär `none` — återkommandetypen som betyder
@@ -684,13 +687,15 @@ it('underhållsfiltret visar bara återkommande scheman i alla fyra kolumner', f
             'fixed försenad',
             'interval försenad',
         ])
-        ->and(uppgiftsflikTitlar($utan->inertiaProps()['completed']))->toBe([
+        // *Done* är en egen flik (Beslut 4) och lyder samma filter.
+        ->and(uppgiftsflikTitlar($utanDone->inertiaProps()['completed']))->toBe([
             'none klar',
             'fixed klar',
             'interval klar',
         ]);
 
     $med = actingAs($anvandare)->get(uppgiftsflikUrl($container, 'maintenance=1'))->assertOk();
+    $medDone = actingAs($anvandare)->get(uppgiftsflikUrl($container, 'list=done&maintenance=1'))->assertOk();
 
     expect($med->inertiaProps()['maintenance'])->toBeTrue()
         // De tre öppna kolumnerna: `none` är borta, `fixed` och `interval` är
@@ -698,8 +703,8 @@ it('underhållsfiltret visar bara återkommande scheman i alla fyra kolumner', f
         ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($med, 'overdue')))->toBe(['fixed försenad', 'interval försenad'])
         ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($med, 'today')))->toBe(['fixed i dag', 'interval i dag'])
         ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($med, 'upcoming')))->toBe(['fixed kommande', 'interval kommande'])
-        // Och den fjärde kolumnen lyder samma filter.
-        ->and(uppgiftsflikTitlar($med->inertiaProps()['completed']))->toBe(['fixed klar', 'interval klar']);
+        // Och *Done*-fliken lyder samma filter.
+        ->and(uppgiftsflikTitlar($medDone->inertiaProps()['completed']))->toBe(['fixed klar', 'interval klar']);
 });
 
 /*
@@ -732,12 +737,15 @@ it('en uppgift på ett item utanför omfånget visas inte, varken öppen eller k
     $gast = uppgiftsflikGast($container, $mitt);
 
     $svar = actingAs($gast)->get(uppgiftsflikUrl($container))->assertOk();
+    $done = actingAs($gast)->get(uppgiftsflikUrl($container, 'list=done'))->assertOk();
 
     expect(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'upcoming')))->toBe(['Byt impeller'])
-        ->and(uppgiftsflikTitlar($svar->inertiaProps()['completed']))->toBe(['Byt olja'])
+        ->and(uppgiftsflikTitlar($done->inertiaProps()['completed']))->toBe(['Byt olja'])
         ->and($svar->getContent())->not->toContain('Hemlig uppgift')
-        ->and($svar->getContent())->not->toContain('Hemligt gjort')
-        ->and($svar->getContent())->not->toContain('Hemlig motor');
+        ->and($done->getContent())->not->toContain('Hemligt gjort')
+        // Namnet läcker ingen annan väg heller: den dolda raden hade synts i
+        // svaret även om listan klippts bort den ur kolumnen.
+        ->and($done->getContent())->not->toContain('Hemlig motor');
 });
 
 /*
@@ -763,12 +771,13 @@ it('en uppgift i en annan container visas inte', function () {
     uppgiftsflikKlar(uppgiftsflikSchema(uppgiftsflikItem($grannen, 'Rodret'), 'Byt lager'));
 
     $svar = actingAs($anvandare)->get(uppgiftsflikUrl($har))->assertOk();
+    $done = actingAs($anvandare)->get(uppgiftsflikUrl($har, 'list=done'))->assertOk();
 
     expect(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'upcoming')))->toBe(['Byt impeller'])
-        ->and(uppgiftsflikTitlar($svar->inertiaProps()['completed']))->toBe(['Inspektera linan'])
-        ->and($svar->getContent())->not->toContain('Laga seglet')
-        ->and($svar->getContent())->not->toContain('Byt lager')
-        ->and($svar->getContent())->not->toContain($grannen->ulid);
+        ->and(uppgiftsflikTitlar($done->inertiaProps()['completed']))->toBe(['Inspektera linan'])
+        ->and($done->getContent())->not->toContain('Laga seglet')
+        ->and($done->getContent())->not->toContain('Byt lager')
+        ->and($done->getContent())->not->toContain($grannen->ulid);
 
     // Och `/tasks` visar båda: avgränsningen är flikens och inte urvalets.
     expect(uppgiftsflikKarta(actingAs($anvandare)->get('/tasks')->assertOk()))->toHaveCount(2);
@@ -904,7 +913,7 @@ it('ritar en lista med grupperna i ordning och hoppar över tomma', function () 
     $kontroller = uppgiftsflikKod('app/Http/Controllers/ContainerTaskController.php');
 
     expect($kontroller)->toContain('forContainer(')
-        ->toContain('completedForContainer(')
+        ->toContain('gtdCounts(')
         ->toContain('onlyCurrent: false');
 
     expect($kontroller)->not->toMatch('/->where\(|->whereHas\(|->orderBy|->limit\(/');

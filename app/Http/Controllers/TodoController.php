@@ -81,22 +81,42 @@ class TodoController extends Controller
      */
     public function index(Request $request): Response
     {
-        $todo = app(ListTodo::class)->page($request->user(), $request);
+        $listTodo = app(ListTodo::class);
+        $user = $request->user();
+
+        // Kontrollern LÄSER `list` och skickar den vidare (Beslut 2): den
+        // tolkar inte värdet, räknar ingen grupp och formulerar inget
+        // `where`. Ett okänt värde blir *Active* inne i actionen.
+        $list = $request->query('list');
+
+        $todo = $listTodo->page($user, $request, is_string($list) ? $list : null);
+
+        // Markörens adresser bär listan (Beslut 2): listan står i adressen
+        // bredvid markören, så en bläddring stannar i samma flik. Är listan
+        // *Active* lämnas parametern utanför — en tom parameter är brus.
+        $query = $todo['list'] === null ? [] : ['list' => $todo['list']];
 
         return Inertia::render('Tasks/Index', [
             'groups' => $todo['groups'],
+            // *Done* är egen väg (Beslut 1): grupperna är tomma och raderna
+            // ligger här. Vyn ritar det ena eller det andra ur `list`.
+            'completed' => $todo['completed'],
+            // Panelens tal (Beslut 3) — alla användarens containrar.
+            'counts' => $listTodo->gtdCounts($user),
+            // Fliken som är vald, ur `?list=` — vyn tänder sin flik ur den.
+            'list' => $todo['list'],
             'hasContainers' => $todo['hasContainers'],
             // Växelns läge, så att komponenten kan rita sitt eget tillstånd
             // (issue 134). Servern är den enda som vet vad som sparats, och
             // `PUT /settings/tasks` svarar `back()` — sidan ritas om ur det
             // här värdet och aldrig ur ett klienttillstånd.
-            'showUpcomingTasks' => $request->user()->show_upcoming_tasks,
+            'showUpcomingTasks' => $user->show_upcoming_tasks,
             'previousUrl' => $todo['previous'] === null
                 ? null
-                : route('tasks', [ListTodo::CURSOR_BEFORE => $todo['previous']], false),
+                : route('tasks', [...$query, ListTodo::CURSOR_BEFORE => $todo['previous']], false),
             'nextUrl' => $todo['next'] === null
                 ? null
-                : route('tasks', [ListTodo::CURSOR_AFTER => $todo['next']], false),
+                : route('tasks', [...$query, ListTodo::CURSOR_AFTER => $todo['next']], false),
         ]);
     }
 }

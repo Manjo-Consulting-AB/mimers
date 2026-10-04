@@ -72,17 +72,20 @@ class ContainerTaskController extends Controller
     /**
      * GET /containers/{container}/tasks — 200.
      *
-     * Fyra proppar och ingen femte: `groups` är de fyra öppna grupperna ur
-     * `ListTodo::forContainer()` UTAN gräns (Beslut 2), `completed` är *Klart*
-     * ur `ListTodo::completedForContainer()` (Beslut 3), `maintenance` är
-     * filtrets läge så att vyn kan rita sin egen kontroll, och `can` bär
-     * hjältens och snabblänkarnas flaggor.
+     * Propparna kommer ur `ListTodo::forContainer()` (Beslut 2): `groups` är
+     * de fyra öppna grupperna UTAN gräns, och `completed` är *Done* — tom på
+     * *Active* och de lagrade listorna, för fliken har ersatt den gamla
+     * gruppen (Beslut 4), och en sida i taget under `?list=done` (Beslut 1).
+     * `counts` är panelens tal ur `ListTodo::gtdCounts()`, `list` är fliken,
+     * `maintenance` filtrets läge så att vyn kan rita sin egen kontroll, och
+     * `can` bär hjältens och snabblänkarnas flaggor.
      *
-     * **Ingen paginering.** Listan visar hela containerns uppgifter: en
-     * container är en avgränsad mängd, och `/tasks` finns kvar för den som
-     * vill se allt över alla containrar (Beslut 2). *Klart* är däremot
-     * klippt till tjugo — den är en glimt av det senaste och inte en
-     * historik (Beslut 3).
+     * **De öppna grupperna pagineras inte.** Listan visar hela containerns
+     * uppgifter: en container är en avgränsad mängd, och `/tasks` finns kvar
+     * för den som vill se allt över alla containrar (Beslut 2). *Done* är
+     * däremot en egen lista och pagineras över `(completed_at, ulid)`
+     * (Beslut 1): den gamla glimten på tjugo är borta, och den som vill se
+     * hela historiken går vidare till historikfliken (issue 179).
      */
     public function __invoke(Request $request, Container $container, ListTodo $listTodo): Response
     {
@@ -99,18 +102,37 @@ class ContainerTaskController extends Controller
 
         $maintenance = $request->boolean('maintenance');
 
+        // Kontrollern LÄSER `list` och skickar den vidare (Beslut 2): den
+        // tolkar inte värdet och formulerar inget `where`. Ett okänt värde
+        // blir *Active* inne i actionen.
+        $list = $request->query('list');
+
         $todo = $listTodo->forContainer(
             $user,
             $request,
             $container,
             maintenanceOnly: $maintenance,
             onlyCurrent: false,
+            list: is_string($list) ? $list : null,
         );
 
         // Samma policyfråga som CalendarFeedController och ExportController
         // ställer i sina index() — se klassens docblock för varför de två
         // flaggorna finns trots att de svarar likadant i dag.
         $canView = Gate::forUser($user)->allows('view', $container);
+
+        // Markörens adresser bär listan och filtret (Beslut 2): en bläddring
+        // i *Done* stannar i fliken och behåller underhållsfiltret. Är listan
+        // *Active* och filtret av lämnas båda parametrarna utanför.
+        $query = [];
+
+        if ($todo['list'] !== null) {
+            $query['list'] = $todo['list'];
+        }
+
+        if ($maintenance) {
+            $query['maintenance'] = 1;
+        }
 
         return Inertia::render('Containers/Tasks', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -122,13 +144,27 @@ class ContainerTaskController extends Controller
             // De fyra öppna grupperna, i ritningsordning: försenat, idag,
             // denna vecka, kommande. Vyn itererar objektets nycklar som de
             // kommer och räknar aldrig en grupp själv (issue 64 § Beslut 3).
+            // På *Done* är de tomma, och raderna ligger i `completed`.
             'groups' => $todo['groups'],
-            // *Klart* — avbockade förekomster i containern, nyast först.
-            'completed' => $listTodo->completedForContainer($user, $container, maintenanceOnly: $maintenance),
+            // *Done* — avbockade förekomster i containern, nyast först, en
+            // sida i taget (Beslut 1 och 4). På de övriga flikarna är listan
+            // tom: den gamla *Klart*-gruppen sist på fliken är nu en egen
+            // flik.
+            'completed' => $todo['completed'],
+            // Panelens tal (Beslut 3) — containerns.
+            'counts' => $listTodo->gtdCounts($user, $container),
+            // Fliken som är vald, ur `?list=` — vyn tänder sin flik ur den.
+            'list' => $todo['list'],
             // Filtrets läge, så att kryssrutan ritar sitt eget tillstånd ur
             // serverns svar i stället för ur ett klienttillstånd som kan gå
             // isär från adressen efter en bakåtknapp.
             'maintenance' => $maintenance,
+            'previousUrl' => $todo['previous'] === null
+                ? null
+                : route('containers.tasks', [$container, ...$query, ListTodo::CURSOR_BEFORE => $todo['previous']], false),
+            'nextUrl' => $todo['next'] === null
+                ? null
+                : route('containers.tasks', [$container, ...$query, ListTodo::CURSOR_AFTER => $todo['next']], false),
         ]);
     }
 }

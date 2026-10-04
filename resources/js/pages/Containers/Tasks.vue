@@ -2,9 +2,11 @@
 import { computed, ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
+import GtdListPanel from '../../components/GtdListPanel.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
 import TodoRow from '../../components/TodoRow.vue';
 import UiEmptyState from '../../components/UiEmptyState.vue';
+import UiTabs from '../../components/UiTabs.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
@@ -74,17 +76,38 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * **Rubriken med antalet och ihopfällningen ritas av `TaskGroup`** (M24 ·
  * issue 231): vyn skickar in gruppens namn, antalet och tonen, och komponenten
  * ritar knappen, chevronen och raderna. Det gäller de fyra öppna grupperna OCH
- * *Klart*, som bär `container.tasks.done` i stället för en `todo.group.*`.
+ * *Done*, som bär `container.tasks.done` i stället för en `todo.group.*`.
+ *
+ * **Flikraden och panelen är M26 · issue 237** (ADR-0052 § 1 och 5).
+ * `?list=` väljer lista, flikraden är `UiTabs`, och `list` styr vilket
+ * innehåll som ritas: *Done* kommer i `completed` och de övriga i `groups`.
+ * Den gamla *Done*-gruppen sist på fliken är nu en egen flik (Beslut 4) — på
+ * *Active* och de lagrade listorna är `completed` därför tom. Panelen
+ * (`GtdListPanel`) ritar antalet per lista ur `counts`, och den står till
+ * höger över `lg:` och under listan under `lg:` (Beslut 3). Flikarnas
+ * adresser bär även underhållsfiltret, så ett filter inte tyst försvinner när
+ * man byter flik.
  */
 const props = defineProps({
     /* Containern ur App\Http\Resources\ContainerResource. */
     container: { type: Object, required: true },
     /* De fyra öppna grupperna, i ritningsordning: overdue, today, this_week, upcoming. */
     groups: { type: Object, required: true },
-    /* Avbockade förekomster i containern, nyast först, högst tjugo. */
+    /*
+     * *Done* — de avbockade förekomsterna, nyast först, en sida i taget, när
+     * `list` är `done`. Tom annars: gruppen är nu en egen flik (Beslut 4).
+     */
     completed: { type: Array, required: true },
+    /* Fliken ur `?list=`: en av listorna, eller null för *Active*. */
+    list: { type: String, default: null },
+    /* Antalet per lista, ur ListTodo::gtdCounts() — panelens tal (Beslut 3). */
+    counts: { type: Object, required: true },
     /* Underhållsfiltrets läge, ur `?maintenance=1`. */
     maintenance: { type: Boolean, required: true },
+    /* Adressen till föregående sida av *Done*, eller null. */
+    previousUrl: { type: String, default: null },
+    /* Adressen till nästa sida av *Done*, eller null. */
+    nextUrl: { type: String, default: null },
     /*
      * `{ update, calendar, export }` — hjältens *Redigera container* och de
      * två snabblänkarna. Varje flagga är serverns svar på samma policyfråga
@@ -94,6 +117,45 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
+
+/* Flikens basadress — samma rutt som sidan ligger på. */
+const taskBase = () => `/containers/${props.container.ulid}/tasks`;
+
+/*
+ * Flikraden (Beslut 4), i ritningsordning: *Active*, de fyra lagrade
+ * listorna, *Calendar* och *Done*. *Active* är adressen UTAN `list` — den är
+ * vilotillståndet. Är underhållsfiltret på följer det med i varje fliks
+ * adress, så filtret inte tappas när man byter flik; filtret är en del av
+ * adressen (Beslut 4, issue 59a § Beslut 1) och ska följa med, inte nollas.
+ */
+const tabs = computed(() => {
+    // Filtret följer med i flikens adress: `?maintenance=1` när det är på.
+    const filter = props.maintenance ? 'maintenance=1' : '';
+
+    const link = (key) => {
+        // *Active* är adressen UTAN `list` — den är vilotillståndet.
+        if (key === 'active') {
+            return filter === '' ? taskBase() : `${taskBase()}?${filter}`;
+        }
+
+        const params = filter === '' ? `list=${key}` : `list=${key}&${filter}`;
+
+        return `${taskBase()}?${params}`;
+    };
+
+    return [
+        { key: 'active', label: t('todo.tabs.active'), href: link('active') },
+        { key: 'inbox', label: t('todo.list.inbox'), href: link('inbox') },
+        { key: 'next', label: t('todo.list.next'), href: link('next') },
+        { key: 'waiting', label: t('todo.list.waiting'), href: link('waiting') },
+        { key: 'calendar', label: t('todo.tabs.calendar'), href: link('calendar') },
+        { key: 'someday', label: t('todo.list.someday'), href: link('someday') },
+        { key: 'done', label: t('todo.tabs.done'), href: link('done') },
+    ];
+});
+
+/* Panelens rader är flikarna UTAN *Active* — de sex listorna (Beslut 3). */
+const panelRows = computed(() => tabs.value.filter((tab) => tab.key !== 'active'));
 
 /* Kryssrutans läge, speglat ur proppen — se docblocken ovan. */
 const onlyMaintenance = ref(props.maintenance);
@@ -123,7 +185,18 @@ const hasAnyTask = computed(
  * parameter är brus, och en adress utan brus går att läsa och dela.
  */
 function apply() {
-    const params = onlyMaintenance.value ? { maintenance: 1 } : {};
+    // Fliken följer med (Beslut 4): filtret är ett tillägg till listan och
+    // ska inte tyst byta vilken lista man står på. Är listan *Active* lämnas
+    // parametern utanför, som i varje annan adress.
+    const params = {};
+
+    if (props.list !== null) {
+        params.list = props.list;
+    }
+
+    if (onlyMaintenance.value) {
+        params.maintenance = 1;
+    }
 
     router.get(`/containers/${props.container.ulid}/tasks`, params, {
         preserveState: true,
@@ -150,6 +223,13 @@ const exportUrl = () => `/containers/${props.container.ulid}/export`;
         <h1 class="text-2xl font-semibold">{{ t('container.tasks.heading') }}</h1>
 
         <!--
+            Flikraden (Beslut 4). Listan står i adressen, och `UiTabs` tänder
+            den flik vars `href` matchar den — vyn håller inget val i minnet.
+            Är underhållsfiltret på bär varje fliks adress det med.
+        -->
+        <UiTabs class="mt-4" :tabs="tabs" :label="t('todo.tabs.label')" />
+
+        <!--
             Underhållsfiltret (Beslut 4). En kryssruta och ingen
             skicka-knapp: valet är ett värde i adressen, och svaret ritar
             servern. `:disabled` medan svaret är på väg, så kontrollen inte
@@ -171,60 +251,92 @@ const exportUrl = () => `/containers/${props.container.ulid}/export`;
         </label>
 
         <!--
-            Det tomma läget (Beslut 3). Först när alla fem är tomma — de fyra
-            öppna grupperna OCH *Klart* — annars hade en lista med bara
-            avbockade rader sagt att containern saknar uppgifter.
+            Listan till vänster och panelen till höger över `lg:`, panelen
+            under listan under `lg:` (Beslut 3).
         -->
-        <div v-if="!hasAnyTask" class="mt-8">
-            <UiEmptyState>
-                {{ t('container.tasks.empty') }}
-            </UiEmptyState>
-        </div>
+        <div class="mt-6 flex flex-col gap-8 lg:flex-row lg:items-start">
+            <div class="lg:flex-1">
+                <!--
+                    Det tomma läget (Beslut 3). Först när alla listor är tomma
+                    — de fyra öppna grupperna OCH *Done* — annars hade en
+                    lista med bara avbockade rader sagt att containern saknar
+                    uppgifter.
+                -->
+                <div v-if="!hasAnyTask">
+                    <UiEmptyState>
+                        {{ t('container.tasks.empty') }}
+                    </UiEmptyState>
+                </div>
 
-        <!--
-            Listan (Beslut 1 och 3): grupperna i den ordning servern gav dem,
-            sedan *Klart*. En sektion ritas bara när den har rader — en tom
-            grupp har ingen rubrik att visa. Rubriken med antalet och
-            ihopfällningen ritas av TaskGroup (M24 · issue 231): samma
-            komponent som de två andra ytorna, så de inte glider isär.
-        -->
-        <div v-else class="mt-6 flex flex-col gap-8">
-            <template v-for="(entries, group) in groups" :key="group">
-                <TaskGroup
-                    v-if="entries.length > 0"
-                    :heading="t(`todo.group.${group}`)"
-                    :count="entries.length"
-                    :tone="group === 'overdue' ? 'danger' : null"
-                >
-                    <TodoRow
-                        v-for="entry in entries"
-                        :key="entry.ulid"
-                        :entry="entry"
-                        :show-container="false"
-                    />
-                </TaskGroup>
-            </template>
+                <!--
+                    Listan (Beslut 1 och 3): grupperna i den ordning servern
+                    gav dem, sedan *Done*. En sektion ritas bara när den har
+                    rader — en tom grupp har ingen rubrik att visa. Rubriken
+                    med antalet och ihopfällningen ritas av TaskGroup (M24 ·
+                    issue 231): samma komponent som de två andra ytorna, så de
+                    inte glider isär. `completed` är tom utanför *Done*-fliken,
+                    så gruppen ritas bara där (Beslut 4).
+                -->
+                <div v-else class="flex flex-col gap-8">
+                    <template v-for="(entries, group) in groups" :key="group">
+                        <TaskGroup
+                            v-if="entries.length > 0"
+                            :heading="t(`todo.group.${group}`)"
+                            :count="entries.length"
+                            :tone="group === 'overdue' ? 'danger' : null"
+                        >
+                            <TodoRow
+                                v-for="entry in entries"
+                                :key="entry.ulid"
+                                :entry="entry"
+                                :show-container="false"
+                            />
+                        </TaskGroup>
+                    </template>
 
-            <!--
-                *Klart* (Beslut 3). Raden bär samma upplysningar som de öppna
-                raderna — schemats titel, itemet, ett datum — men datumet är
-                `completed_at`, och avbockningsknappen ritas inte: det finns
-                ingenting kvar att bocka av, och rutten hade svarat att
-                förekomsten inte är öppen. Rubriken är containerns fliks ord,
-                och gruppen har ingen egen ton.
-            -->
-            <TaskGroup
-                v-if="completed.length > 0"
-                :heading="t('container.tasks.done')"
-                :count="completed.length"
-            >
-                <TodoRow
-                    v-for="entry in completed"
-                    :key="entry.ulid"
-                    :entry="entry"
-                    :show-container="false"
-                />
-            </TaskGroup>
+                    <!--
+                        *Done* (Beslut 3 och 4). Raden bär samma upplysningar
+                        som de öppna raderna — schemats titel, itemet, ett
+                        datum — men datumet är `completed_at`, och
+                        avbockningsknappen ritas inte: det finns ingenting kvar
+                        att bocka av, och rutten hade svarat att förekomsten
+                        inte är öppen. Rubriken är containerns fliks ord, och
+                        gruppen har ingen egen ton.
+                    -->
+                    <TaskGroup
+                        v-if="completed.length > 0"
+                        :heading="t('container.tasks.done')"
+                        :count="completed.length"
+                    >
+                        <TodoRow
+                            v-for="entry in completed"
+                            :key="entry.ulid"
+                            :entry="entry"
+                            :show-container="false"
+                        />
+                    </TaskGroup>
+                </div>
+
+                <nav v-if="previousUrl || nextUrl" class="mt-8 flex items-center gap-4">
+                    <Link
+                        v-if="previousUrl"
+                        :href="previousUrl"
+                        class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                    >
+                        {{ t('todo.pagination.previous') }}
+                    </Link>
+
+                    <Link
+                        v-if="nextUrl"
+                        :href="nextUrl"
+                        class="ml-auto inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                    >
+                        {{ t('todo.pagination.next') }}
+                    </Link>
+                </nav>
+            </div>
+
+            <GtdListPanel class="lg:w-72" :counts="counts" :rows="panelRows" />
         </div>
 
         <!--

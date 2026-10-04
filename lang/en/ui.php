@@ -3561,6 +3561,25 @@ return [
             'someday' => 'Someday',
         ],
 
+        // M26 · issue 237: flikraden över listorna. `active` är frånvaron av
+        // `?list=` — alla aktiva förekomster — och `calendar` och `done` är
+        // de två härledda vyerna (ADR-0052 § 1). Flikens namn för de fyra
+        // lagrade listorna är `todo.list.*`; bara de här tre orden är nya.
+        // `label` är tablistens tillgängliga namn och behövs av `UiTabs`.
+        'tabs' => [
+            'label' => 'Task lists',
+            'active' => 'Active',
+            'calendar' => 'Calendar',
+            'done' => 'Done',
+        ],
+
+        // Panelens rubrik (M26 · issue 237, Beslut 3). Raderna under den är
+        // `todo.list.*` och de två flikorden ovan — panelen är samma sex
+        // listor som flikraden bär, ritade som tal.
+        'gtd_panel' => [
+            'heading' => 'Lists',
+        ],
+
         // Växeln på raden (issue 236): statusen `in_progress`, det frivilliga
         // mellantillståndet mellan `open` och avbockad (ADR-0052 § 1).
         'in_progress' => 'In progress',

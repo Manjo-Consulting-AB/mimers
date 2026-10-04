@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use InvalidArgumentException;
 
 /**
  * Den ENSKILDA GÅNGEN av ett schema — se [[Scheman och uppgifter]] §
@@ -416,5 +417,32 @@ class ScheduleOccurrence extends Model
         return $query->where(fn (Builder $query) => $query
             ->whereNull('due_at')
             ->orWhereDate('due_at', '<=', $user->today()->toDateString()));
+    }
+
+    /**
+     * Begränsar till en GTD-lista — ett av de fyra värdena i
+     * `schedule_occurrence.gtd_list` ([[ADR-0052 Uppgifternas listor och
+     * uppgifter utan datum]] § 1).
+     *
+     * **`calendar` och `done` är inte listor här.** De är härledda vyer
+     * (ADR-0052 § 1) och står aldrig i kolumnen: *Calendar* är aktiv och
+     * `due_at IS NOT NULL`, *Done* är `status = completed`. Den som vill ha
+     * dem formulerar sitt eget villkor — se App\Actions\Schedule\ListTodo —
+     * och skickar aldrig dem hit. Scopet prövar därför värdet mot
+     * `GTD_LISTS` och kastar på ett värde kolumnen inte kan bära: en tyst tom
+     * lista hade sett ut som "inga uppgifter i listan" i stället för som ett
+     * fel i anroparen, och en `calendar` som skrevs hit hade läckt ut i
+     * kolumnen genom en läsning som såg oskyldig ut.
+     *
+     * @param  Builder<ScheduleOccurrence>  $query
+     * @return Builder<ScheduleOccurrence>
+     */
+    public function scopeInGtdList(Builder $query, string $list): Builder
+    {
+        if (! in_array($list, self::GTD_LISTS, true)) {
+            throw new InvalidArgumentException("Ogiltig GTD-lista: {$list}");
+        }
+
+        return $query->where('gtd_list', $list);
     }
 }
