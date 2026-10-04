@@ -2090,6 +2090,31 @@ return [
             'filter_submit' => 'Apply',
             'filter_clear' => 'Clear',
 
+            /*
+             * The filter column (M24 · Decisions 1–3) and the search field in
+             * the toolbar (Decision 4).
+             *
+             * **The column is the same question as the bar, with multi-select
+             * and one group per line.** `filter_all_documents` and
+             * `filter_all_uploaders` are the *no choice* rows — a checkbox
+             * group cannot express "none of them", so the empty group has its
+             * own row that carries the total. `filter_dates` is the group
+             * heading; the two date fields reuse `filter_from` and `filter_to`
+             * so the column and the mobile bar name them the same.
+             *
+             * **`search_*` is the free-text search over the LIST** and not the
+             * `filter_item_search` over the item OPTIONS: one asks the server
+             * for rows, the other only hides rows already on screen.
+             */
+            'filter_heading' => 'Filter',
+            'filter_clear_all' => 'Clear all',
+            'filter_all_documents' => 'All documents',
+            'filter_item_search' => 'Search items',
+            'filter_all_uploaders' => 'All users',
+            'filter_dates' => 'Date range',
+            'search_label' => 'Search documents',
+            'search_placeholder' => 'Search documents…',
+
             'previous' => 'Previous',
             'next' => 'Next',
             'page' => 'Page :page of :last',
