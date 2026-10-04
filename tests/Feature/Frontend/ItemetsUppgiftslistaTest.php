@@ -559,6 +559,10 @@ it('fliken ritar grupperna och reglaget men inga regelknappar', function () {
 
     expect($sektionen)->toContain('<TodoRow')
         ->toContain("t('item.schedule.include_children')")
+        // Pausmärkets ord bor på fliken och inte i raden: `GenomgangTest`
+        // binder nyckeln vid den här filen, och bara den här fliken kan bära
+        // en pausad rad.
+        ->toContain("t('item.schedule.paused')")
         ->toContain('children')
         ->toContain('v-for="(entries, group) in groups"')
         ->toContain('v-if="entries.length > 0"')
@@ -572,14 +576,17 @@ it('fliken ritar grupperna och reglaget men inga regelknappar', function () {
 /*
  * Klart när: `TodoRow.vue` innehåller `entry.paused` och `entry.blocked`, och
  * `trans('ui.todo.blocked')` är inte nyckeln själv.
+ *
+ * Ordet för det pausade märket kommer från fliken (`pausedLabel`) och står
+ * därför i `ScheduleListSection.vue` — se provet ovan. Raden äger formen,
+ * fliken äger ordet.
  */
 it('raden märker pausad och blockerad', function () {
     $rad = itemuppgiftKod('resources/js/components/TodoRow.vue');
 
     expect($rad)->toContain('entry.paused')
         ->toContain('entry.blocked')
-        ->toContain("t('todo.blocked')")
-        ->toContain("t('item.schedule.paused')");
+        ->toContain("t('todo.blocked')");
 
     expect(Lang::get('ui.todo.blocked', [], 'en'))->not->toBe('ui.todo.blocked');
 });

@@ -1006,6 +1006,8 @@ function toggleFavorite() {
                     :groups="itemTasks.groups"
                     :completed="itemTasks.completed"
                     :include-children="includeChildren"
+                    :schedules="schedules"
+                    :open-occurrences="openOccurrences"
                     :can="can"
                 />
 
