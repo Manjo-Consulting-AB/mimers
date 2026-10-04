@@ -486,6 +486,63 @@ def run_local_tests(cwd):
     return True, "", ""
 
 
+# Basträden som rott-pa-basen.sh och sviten_ar_rod_pa_basen() bygger. Båda
+# städar efter sig, men inte om processen dödas (kill -9, timeout) - och ett
+# kvarlämnat träd är hundratals MB. Prefixen är till för stada_bastrad().
+BASTRAD_PREFIX = ("mimers-rott-", "mimers-bas-")
+BASTRAD_MAXALDER = 2 * AGENT_TIMEOUT
+
+
+def lana_vendor(kalla, mal):
+    """Ger basträdet en vendor utan att kopiera den: hårdlänkar kostar inget
+    utrymme. Det som skrivs i vendor kopieras däremot på riktigt, annars
+    skriver det rakt igenom till worktreens vendor: vendor/composer/ och
+    vendor/autoload.php skrivs om av `composer dump-autoload` och pekar ut
+    vilken app/ klasserna laddas ur, och Pest lägger sin resultatcache i
+    pestphp/pest/.temp. Samma lista som i rott-pa-basen.sh. Går
+    hårdlänkningen inte, blir det en vanlig kopia."""
+    if run_cmd(["cp", "-al", kalla, mal], check=False).returncode == 0:
+        for egen in ("composer", "autoload.php", os.path.join("pestphp", "pest", ".temp")):
+            run_cmd(["rm", "-rf", os.path.join(mal, egen)])
+            if os.path.exists(os.path.join(kalla, egen)):
+                run_cmd(["cp", "-r", os.path.join(kalla, egen), os.path.join(mal, egen)])
+    else:
+        run_cmd(["rm", "-rf", mal])
+        run_cmd(["cp", "-r", kalla, mal])
+
+
+def stada_bastrad(kataloger=None, nu=None):
+    """Tar bort basträd som blivit kvar efter en dödad körning. Körs medan
+    låset hålls, så inget av dem kan tillhöra en pågående körning här; åldern
+    skyddar ändå ett träd som någon kör för hand just nu.
+
+    /tmp gås också igenom: före #727 låg träden där, och rott-pa-basen.sh:s
+    hette bara tmp.XXXXXXXXXX. Sådana känns igen på att de innehåller
+    skriptet själv - ingen annan tmp-katalog gör det.
+    """
+    kataloger = kataloger or [WORKTREE_BASE, tempfile.gettempdir()]
+    nu = nu or time.time()
+    for katalog in kataloger:
+        try:
+            namn = os.listdir(katalog)
+        except OSError:
+            continue
+        for n in namn:
+            sokvag = os.path.join(katalog, n)
+            vart = n.startswith(BASTRAD_PREFIX) or (
+                n.startswith("tmp.")
+                and os.path.isfile(os.path.join(sokvag, ".github", "scripts", "rott-pa-basen.sh")))
+            if not vart or not os.path.isdir(sokvag) or os.path.islink(sokvag):
+                continue
+            try:
+                if nu - os.path.getmtime(sokvag) < BASTRAD_MAXALDER:
+                    continue
+            except OSError:
+                continue
+            print(f"  🧹 Tar bort kvarlämnat basträd {sokvag}")
+            shutil.rmtree(sokvag, ignore_errors=True)
+
+
 def sviten_ar_rod_pa_basen(worktree_path):
     """Kör testsviten på baskommiten, utan någon av försökets ändringar.
 
@@ -500,7 +557,10 @@ def sviten_ar_rod_pa_basen(worktree_path):
     Samma teknik som rott-pa-basen.sh: basens träd exporteras med `git archive`
     (en worktree skulle dela objektdatabas och index med försöket), vendor och
     den byggda frontenden lånas från försökets worktree när låsfilen är
-    oförändrad. Katalogen ligger i /tmp, inte på NFS-mounten.
+    oförändrad. Katalogen ligger bredvid worktreen, inte i /tmp: /tmp har några
+    hundra MB ledigt och vendor ensam är större (issue 229, #727). På samma
+    filsystem kan vendor hårdlänkas i stället för att kopieras - se
+    lana_vendor().
 
     Felar öppet: kan prövningen inte göras, eller fälls sviten av att miljön inte
     är uppsatt (testforutsattningar.php) i stället för av ett test, returneras
@@ -509,7 +569,8 @@ def sviten_ar_rod_pa_basen(worktree_path):
     Returnerar (rod: bool, bas_sha: str, utskrift: str).
     """
     bas_sha = ""
-    tmp = tempfile.mkdtemp(prefix="mimers-bas-")
+    tmp = tempfile.mkdtemp(prefix=BASTRAD_PREFIX[1],
+                           dir=os.path.dirname(os.path.abspath(worktree_path)))
     try:
         bas_sha = run_cmd(["git", "merge-base", "HEAD", "origin/main"],
                           cwd=worktree_path).stdout.strip()
@@ -523,7 +584,7 @@ def sviten_ar_rod_pa_basen(worktree_path):
         las_oforandrad = run_cmd(["git", "diff", "--quiet", bas_sha, "--", "composer.lock"],
                                  check=False, cwd=worktree_path).returncode == 0
         if las_oforandrad and os.path.isdir(vendor):
-            run_cmd(["cp", "-r", vendor, os.path.join(tmp, "vendor")])
+            lana_vendor(vendor, os.path.join(tmp, "vendor"))
             run_cmd(["composer", "dump-autoload", "--quiet", "--no-interaction", "--no-scripts"], cwd=tmp)
         else:
             run_cmd(["composer", "install", "--prefer-dist", "--no-interaction", "--no-progress",
@@ -534,8 +595,8 @@ def sviten_ar_rod_pa_basen(worktree_path):
             run_cmd(["cp", "-r", bygge, os.path.join(tmp, "public", "build")])
 
         # Node-proven importerar komponenternas källa och behöver node_modules.
-        # Symlänk, inte kopia: /tmp har några hundra MB ledigt och vendor tar
-        # redan 227. Issue 193 (#645): utan den föll tio prov med
+        # Symlänk, inte kopia: node_modules läses bara, och en kopia vore
+        # hundratals MB till. Issue 193 (#645): utan den föll tio prov med
         # ERR_MODULE_NOT_FOUND och en frisk main dömdes röd.
         moduler = os.path.join(worktree_path, "node_modules")
         npm_las_oforandrad = run_cmd(["git", "diff", "--quiet", bas_sha, "--", "package-lock.json"],
@@ -3127,6 +3188,9 @@ if __name__ == "__main__":
         # gren, där en framtida fix skulle träffa en av dem och missa resten.
         # Kostar en katalogläsning när det inte behövs.
         underhall_objektlagret()
+        # Samma skäl: ett basträd som blev kvar efter en dödad körning äter
+        # disken för varje bana, och fyllde /tmp i issue 229 (#727).
+        stada_bastrad()
 
         if len(sys.argv) >= 3 and sys.argv[1] == "--resume-pr":
             avbryt_vid_peak()

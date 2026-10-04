@@ -1150,6 +1150,85 @@ def test_skapa_pr_kastar_nar_ingen_pr_finns():
         assert "HTTP 504" in str(e)
 
 
+# =====================================================================
+# Issue 229 (#727): basträden får inte fylla /tmp
+# =====================================================================
+
+def _gammal(sokvag, sekunder):
+    t = os.path.getmtime(sokvag) - sekunder
+    os.utime(sokvag, (t, t))
+
+
+def test_stada_bastrad_tar_bara_gamla_egna_trad():
+    """Ett kvarlämnat basträd från en dödad körning fyllde /tmp. Städningen
+    får bara ta våra egna träd, och bara de som inte kan vara i bruk."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as rot:
+        gamla_rott = os.path.join(rot, "mimers-rott-aaaa")
+        gamla_bas = os.path.join(rot, "mimers-bas-bbbb")
+        farsk = os.path.join(rot, "mimers-rott-cccc")
+        gammal_tmp = os.path.join(rot, "tmp.dddd")
+        frammande_tmp = os.path.join(rot, "tmp.eeee")
+        worktree = os.path.join(rot, "feature")
+        os.makedirs(os.path.join(gammal_tmp, ".github", "scripts"))
+        open(os.path.join(gammal_tmp, ".github", "scripts", "rott-pa-basen.sh"), "w").close()
+        for k in (gamla_rott, gamla_bas, farsk, frammande_tmp, worktree):
+            os.makedirs(k)
+        for k in (gamla_rott, gamla_bas, gammal_tmp, frammande_tmp, worktree):
+            _gammal(k, p.BASTRAD_MAXALDER + 60)
+
+        p.stada_bastrad([rot])
+
+        kvar = sorted(os.listdir(rot))
+    assert kvar == ["feature", "mimers-rott-cccc", "tmp.eeee"], kvar
+
+
+def test_lana_vendor_skriver_inte_igenom_till_kallan():
+    """dump-autoload skriver om vendor/composer och vendor/autoload.php. Var de
+    hårdlänkade skulle basträdets dump skriva över worktreens autoload."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as rot:
+        kalla = os.path.join(rot, "vendor")
+        os.makedirs(os.path.join(kalla, "composer"))
+        os.makedirs(os.path.join(kalla, "paket"))
+        os.makedirs(os.path.join(kalla, "pestphp", "pest", ".temp"))
+        for f in ("autoload.php", "composer/autoload_classmap.php", "paket/Klass.php",
+                  "pestphp/pest/.temp/test-results"):
+            with open(os.path.join(kalla, f), "w") as fh:
+                fh.write("worktree")
+        mal = os.path.join(rot, "mimers-bas-x", "vendor")
+        os.makedirs(os.path.dirname(mal))
+
+        p.lana_vendor(kalla, mal)
+
+        for f in ("autoload.php", "composer/autoload_classmap.php", "pestphp/pest/.temp/test-results"):
+            with open(os.path.join(mal, f), "w") as fh:
+                fh.write("basen")
+            with open(os.path.join(kalla, f)) as fh:
+                assert fh.read() == "worktree", f
+        assert os.path.samefile(os.path.join(kalla, "paket/Klass.php"),
+                                os.path.join(mal, "paket/Klass.php")), "paketen ska hårdlänkas, inte kopieras"
+
+
+def test_basprovningen_kopierar_inte_vendor_till_tmp():
+    kropp = _funktionskropp("sviten_ar_rod_pa_basen")
+    assert '"cp", "-r", vendor' not in kropp
+    assert "lana_vendor(" in kropp
+    assert "dir=" in kropp.split("mkdtemp(")[1].split(")")[0]
+
+
+def test_rott_pa_basen_lagger_inte_tradet_i_tmp():
+    skript = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "rott-pa-basen.sh")).read()
+    assert 'ARBETE="$(mktemp -d)"' not in skript
+    assert "mimers-rott-XXXXXXXX" in skript
+    assert "cp -al" in skript
+
+
+def test_stadningen_kors_for_varje_bana():
+    huvud = open(p.__file__).read().split('if __name__ == "__main__":')[1]
+    assert huvud.index("stada_bastrad()") < huvud.index('sys.argv[1] == "--resume-pr"')
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
