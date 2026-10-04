@@ -229,6 +229,19 @@ const props = defineProps({
      */
     openOccurrences: { type: Object, required: true },
     /*
+     * De öppna förekomsterna på items UNDER det här itemet (M24 · testarnas
+     * fynd 2026-10-03), byggda bredvid `schedules` i kontrollern: en rad per
+     * öppen förekomst på en ättling, sorterade på förfallodatum, med barnets
+     * namn, schemats titel och avbockningen.
+     *
+     * **Proppen finns BARA när uppgiftsfliken är aktiv**, och standarden är en
+     * tom lista — servern lämnar nyckeln helt annars, och listan ritas inte på
+     * någon annan flik (se ItemController::descendantOccurrences()). En tom
+     * lista är här samma sak som "ingen hämtad": sektionen ritar ingenting för
+     * den, och den egna listan ovan bär sitt eget tomma svar.
+     */
+    descendantOccurrences: { type: Array, default: () => [] },
+    /*
      * Den öppna utlåningen ur App\Http\Resources\LoanResource, eller `null`
      * (issue 67a § Beslut 2). Itemets enda status en annan medlem behöver se
      * på en sekund, och den kommer färdigräknad från servern: `returned_at IS
@@ -988,6 +1001,7 @@ function toggleFavorite() {
                     :item-ulid="item.ulid"
                     :schedules="schedules"
                     :open-occurrences="openOccurrences"
+                    :descendant-occurrences="descendantOccurrences"
                     :container-account="container.account"
                     :can="can"
                 />

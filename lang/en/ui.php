@@ -3127,6 +3127,12 @@ return [
             'paused' => 'Paused',
             'paused_note' => 'The task opens no new occurrences while it is paused.',
 
+            // M24 · testarnas fynd 2026-10-03: uppgifterna på items UNDER det
+            // här itemet, i en egen lista efter de egna. Rubriken säger var de
+            // hör hemma, och varje rad namnger itemet den ligger på.
+            'descendants_heading' => 'Tasks on items below',
+            'on_item' => 'on :item',
+
             // The deletion is soft, but the trash lists four types and
             // `schedule` is not one of them (issue 20a decision 3). The text
             // therefore says what goes away and mentions neither 30 days nor
