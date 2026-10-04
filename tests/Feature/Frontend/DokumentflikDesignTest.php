@@ -163,6 +163,13 @@ it('skickar filtret utan sida och behåller sorteringen vid Rensa alla', functio
 
     expect($kolumn)->not->toContain('page');
 
+    // Positiv kontroll: rensningen går genom `apply`, som sprider
+    // `...props.filter` och därmed bär `sort` vidare. Raden namnger bara de sex
+    // filtergrupperna. Att `sort:` saknas i filen bevisar inget i sig — hade
+    // `clearAll` byggt sin egen querysträng utan `props.filter` hade provet
+    // ändå varit grönt.
+    expect($kolumn)->toContain('apply({ q: null, kind: [], item: [], uploader: [], from: null, to: null })');
+
     // Sorteringen sätts aldrig här — den kommer ur `props.filter` och överlever
     // därför både ett kryss och en rensning. Ett `sort:` i komponenten hade
     // varit en andra plats som ägde ordningen.
