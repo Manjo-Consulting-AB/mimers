@@ -57,13 +57,18 @@ class TodoController extends Controller
     public const GROUP_TODAY = ListTodo::GROUP_TODAY;
 
     /**
-     * Raden förfaller framåt i tiden.
+     * Raden förfaller senare i veckan — efter i dag och senast på söndag.
+     */
+    public const GROUP_THIS_WEEK = ListTodo::GROUP_THIS_WEEK;
+
+    /**
+     * Raden förfaller framåt i tiden, bortom innevarande vecka.
      */
     public const GROUP_UPCOMING = ListTodo::GROUP_UPCOMING;
 
     /**
      * GET /tasks — 200. En sida av de öppna förekomsterna användaren når, i
-     * `due_at`-ordning, grupperade i försenat, idag och kommande.
+     * `due_at`-ordning, grupperade i försenat, idag, denna vecka och kommande.
      *
      * Länkarna till nästa och föregående sida byggs här och inte i vyn:
      * adressen och parameternamnen hör till rutten, och vyn ska bara rita den

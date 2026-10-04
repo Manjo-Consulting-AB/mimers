@@ -1896,6 +1896,7 @@ return [
             'heading' => 'Tasks',
             'filter_maintenance' => 'Maintenance only',
             'done' => 'Done',
+            'empty' => 'No tasks in this container.',
             'shortcuts' => 'Shortcuts',
         ],
 
@@ -3523,12 +3524,13 @@ return [
         'due' => 'Due :date',
         'complete' => 'Check off',
 
-        // The section headings. The key is the group's name, the same three
-        // words the controller sorts the rows into — no separate list in
+        // The section headings. The key is the group's name, the same words
+        // the controller sorts the rows into — no separate list in
         // JavaScript that could drift from the server's.
         'group' => [
             'overdue' => 'Overdue',
             'today' => 'Today',
+            'this_week' => 'This week',
             'upcoming' => 'Upcoming',
         ],
 

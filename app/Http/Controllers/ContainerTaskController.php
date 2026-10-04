@@ -14,12 +14,17 @@ use Inertia\Response;
  * Containerns uppgiftsflik — `GET /containers/{container}/tasks`, se issue 174 ·
  * [[ADR-0050 Desktopdesignen]] § 4 och 16.
  *
- * **Fliken är en tavla med de grupper som redan finns.** *Försenade*, *Idag*
- * och *Kommande* är `ListTodo`-grupperna från `/tasks` (Beslut 2) och *Klart*
- * är den nya frågan (Beslut 3). Bildens GTD-listor — Inbox, Next, Waiting,
- * Calendar, Someday — har ingen datakälla: de förutsätter status, prioritet,
- * kontext och tilldelning som `schedule_occurrence` inte har, och de står i
- * [[Efter MVP]] (ADR-0050 § 16).
+ * **Fliken är en lista med de grupper som redan finns.** *Försenade*, *Idag*,
+ * *Denna vecka* och *Kommande* är `ListTodo`-grupperna från `/tasks` (Beslut 2)
+ * och *Klart* är den nya frågan (Beslut 3). Bildens GTD-listor — Inbox, Next,
+ * Waiting, Calendar, Someday — har ingen datakälla: de förutsätter status,
+ * prioritet, kontext och tilldelning som `schedule_occurrence` inte har, och de
+ * står i [[Efter MVP]] (ADR-0050 § 16).
+ *
+ * **Fliken släpper växeln `show_upcoming_tasks`** (M24 · issue 719, Beslut 2):
+ * den skickar `onlyCurrent: false` till `forContainer()`, för **en container
+ * beskriver containerns tillstånd, inte användarens filter**. Översiktens panel
+ * och dashboarden skickar inget och följer växeln som förut.
  *
  * **Kontrollern väljer sida och ingenting annat** — samma regel som
  * App\Http\Controllers\TodoController och ContainerHistoryController följer.
@@ -38,7 +43,7 @@ use Inertia\Response;
  * uppgifter och inga andras.
  *
  * **Underhållsfiltret står i querysträngen** (Beslut 4): `?maintenance=1`
- * avgränsar alla fyra kolumnerna till scheman som återkommer. Det är ett
+ * avgränsar alla grupperna till scheman som återkommer. Det är ett
  * filter på servern och inte i klienten — en klient som sållade hade visat
  * fel tavla för den som laddar om sidan, och ett filtrerat läge ska vara en
  * adress man kan spara och dela (issue 59a § Beslut 1). Flaggan läses som
@@ -67,13 +72,13 @@ class ContainerTaskController extends Controller
     /**
      * GET /containers/{container}/tasks — 200.
      *
-     * Fyra proppar och ingen femte: `groups` är de tre öppna kolumnerna ur
+     * Fyra proppar och ingen femte: `groups` är de fyra öppna grupperna ur
      * `ListTodo::forContainer()` UTAN gräns (Beslut 2), `completed` är *Klart*
      * ur `ListTodo::completedForContainer()` (Beslut 3), `maintenance` är
      * filtrets läge så att vyn kan rita sin egen kontroll, och `can` bär
      * hjältens och snabblänkarnas flaggor.
      *
-     * **Ingen paginering.** Tavlan visar hela containerns uppgifter: en
+     * **Ingen paginering.** Listan visar hela containerns uppgifter: en
      * container är en avgränsad mängd, och `/tasks` finns kvar för den som
      * vill se allt över alla containrar (Beslut 2). *Klart* är däremot
      * klippt till tjugo — den är en glimt av det senaste och inte en
@@ -94,7 +99,13 @@ class ContainerTaskController extends Controller
 
         $maintenance = $request->boolean('maintenance');
 
-        $todo = $listTodo->forContainer($user, $request, $container, maintenanceOnly: $maintenance);
+        $todo = $listTodo->forContainer(
+            $user,
+            $request,
+            $container,
+            maintenanceOnly: $maintenance,
+            onlyCurrent: false,
+        );
 
         // Samma policyfråga som CalendarFeedController och ExportController
         // ställer i sina index() — se klassens docblock för varför de två
@@ -108,9 +119,9 @@ class ContainerTaskController extends Controller
                 'calendar' => $canView,
                 'export' => $canView,
             ],
-            // De tre öppna kolumnerna, i ritningsordning: försenat, idag,
-            // kommande. Vyn itererar objektets nycklar som de kommer och
-            // räknar aldrig en grupp själv (issue 64 § Beslut 3).
+            // De fyra öppna grupperna, i ritningsordning: försenat, idag,
+            // denna vecka, kommande. Vyn itererar objektets nycklar som de
+            // kommer och räknar aldrig en grupp själv (issue 64 § Beslut 3).
             'groups' => $todo['groups'],
             // *Klart* — avbockade förekomster i containern, nyast först.
             'completed' => $listTodo->completedForContainer($user, $container, maintenanceOnly: $maintenance),

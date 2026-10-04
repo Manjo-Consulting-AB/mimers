@@ -219,10 +219,12 @@ function todovyMottagare(Container $container, ?Item $item, string $niva, ?User 
 }
 
 /**
- * Alla rader i svaret, i gruppernas ritningsordning: försenat, idag, kommande.
+ * Alla rader i svaret, i gruppernas ritningsordning: försenat, idag, denna
+ * vecka, kommande.
  *
  * Ordningen är `due_at` stigande — varje försenad rad ligger före varje rad som
- * förfaller idag, som i sin tur ligger före varje kommande.
+ * förfaller idag, som i sin tur ligger före varje rad i innevarande vecka och
+ * varje kommande.
  *
  * @return list<array<string, mixed>>
  */
@@ -231,7 +233,12 @@ function todovyRader(TestResponse $svar): array
     /** @var array<string, list<array<string, mixed>>> $grupper */
     $grupper = $svar->inertiaProps()['groups'];
 
-    return array_merge($grupper['overdue'], $grupper['today'], $grupper['upcoming']);
+    return array_merge(
+        $grupper['overdue'],
+        $grupper['today'],
+        $grupper['this_week'],
+        $grupper['upcoming'],
+    );
 }
 
 /**
@@ -470,11 +477,15 @@ it('ger en omfångsbegränsad mottagare bara uppgifter på de items hon når', f
 // --- grupperingen ----------------------------------------------------------
 
 /*
- * Klart när: raderna grupperas i försenat, idag och kommande, räknat på
- * serverns datum.
+ * Klart när: raderna grupperas i försenat, idag, denna vecka och kommande,
+ * räknat på serverns datum.
  *
  * Serverns klocka flyttas till ett känt datum, så grupperingen prövas mot
- * fasta tal i stället för mot den dag sviten råkar köras.
+ * fasta tal i stället för mot den dag sviten råkar köras. Måndagen den 15 juni
+ * 2026 är vald med flit: veckan slutar på söndagen den 21:a, så den 20:e hör
+ * till `this_week` medan den 25:e — nästa vecka — är `upcoming`. Ett
+ * argumentlöst `endOfWeek()` hade lagt veckoslutet på lördagen och flyttat den
+ * 20:e till `upcoming`.
  */
 it('grupperar raderna i försenat, idag och kommande efter serverns datum', function () {
     withoutVite();
@@ -483,17 +494,19 @@ it('grupperar raderna i försenat, idag och kommande efter serverns datum', func
 
     [, $anvandare, , $item] = todovyKontext();
 
-    // Alla tre är synliga idag — grupperingen är det som skiljer dem.
+    // Alla fyra är synliga idag — grupperingen är det som skiljer dem.
     $synlig = ['visible_from' => '2026-06-01'];
 
     [, $försenad] = todovyUppgift($item, '2026-06-10', 'Byt impeller', $synlig);
     [, $idag] = todovyUppgift($item, '2026-06-15', 'Byt olja', $synlig);
-    [, $kommande] = todovyUppgift($item, '2026-06-20', 'Byt filter', $synlig);
+    [, $iVeckan] = todovyUppgift($item, '2026-06-20', 'Byt filter', $synlig);
+    [, $kommande] = todovyUppgift($item, '2026-06-25', 'Byt impeller igen', $synlig);
 
     $svar = actingAs($anvandare)->get('/tasks')->assertOk();
 
     expect(array_column(todovyGrupp($svar, 'overdue'), 'ulid'))->toBe([$försenad->ulid])
         ->and(array_column(todovyGrupp($svar, 'today'), 'ulid'))->toBe([$idag->ulid])
+        ->and(array_column(todovyGrupp($svar, 'this_week'), 'ulid'))->toBe([$iVeckan->ulid])
         ->and(array_column(todovyGrupp($svar, 'upcoming'), 'ulid'))->toBe([$kommande->ulid]);
 
     Carbon::setTestNow();
@@ -956,6 +969,7 @@ it('har varje todo-nyckel och ingen svensk sträng i vyn', function () {
     expect(array_keys($sv['todo']['group']))->toBe([
         TodoController::GROUP_OVERDUE,
         TodoController::GROUP_TODAY,
+        TodoController::GROUP_THIS_WEEK,
         TodoController::GROUP_UPCOMING,
     ]);
 

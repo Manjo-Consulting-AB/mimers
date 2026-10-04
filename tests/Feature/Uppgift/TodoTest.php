@@ -563,9 +563,14 @@ it('todo-listan är oförändrad', function () {
 
     $grupper = $flik->inertiaProps()['groups'];
 
+    // Fyra grupper sedan M24 · issue 719: de tre raderna förfaller den 2:a,
+    // 4:e och 5:e september, och veckan (som slutar på söndagen den 6:e) bär
+    // de två senare. Ordningen är densamma — `due_at` stigande — så
+    // sammanfogningen är fortfarande API:ets ordning.
     expect(array_merge(
         array_column($grupper['overdue'], 'ulid'),
         array_column($grupper['today'], 'ulid'),
+        array_column($grupper['this_week'], 'ulid'),
         array_column($grupper['upcoming'], 'ulid'),
     ))->toBe(todoUlidLista($response))
         ->and(array_column($flik->inertiaProps()['completed'], 'ulid'))->toBe([$avbockad->ulid]);

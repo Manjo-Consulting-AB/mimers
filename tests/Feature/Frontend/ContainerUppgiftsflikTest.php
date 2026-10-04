@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Schedule\ListTodo;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -7,6 +8,7 @@ use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Testing\TestResponse;
@@ -22,34 +24,41 @@ use function Pest\Laravel\withoutVite;
  * resources/js/pages/Containers/Tasks.vue och [[ADR-0050 Desktopdesignen]]
  * § 4 och 16.
  *
- * Filen bevisar tavlans fyra kolumner och de tre beslut som skiljer dem åt:
+ * Filen bevisar listans fem grupper och de beslut som skiljer dem åt:
  *
- * 1. **De tre öppna kolumnerna är `/tasks` egna grupper** (Beslut 2). Samma
- *    `ListTodo::forContainer()`, samma gruppering mot användarens dag
- *    ([[ADR-0044 Användarens dag]]), samma växel för framtida uppgifter —
- *    skillnaden är containerns avgränsning och att tavlan inte klipper
- *    listan. En förekomst hamnar i samma kolumn här som där, och det prövas
- *    genom att de två svaren jämförs rad för rad och inte mot en avskrift.
+ * 1. **De fyra öppna grupperna är `/tasks` egna grupper** (Beslut 1 och 2,
+ *    M24 · issue 719). Samma `ListTodo::forContainer()`, samma gruppering mot
+ *    användarens dag ([[ADR-0044 Användarens dag]]), samma `this_week` — men
+ *    fliken är UNDANTAGET från växeln `show_upcoming_tasks`: en container
+ *    beskriver containerns tillstånd, inte användarens filter. En förekomst
+ *    hamnar i samma grupp här som där, och det prövas genom att de två svaren
+ *    jämförs rad för rad och inte mot en avskrift.
  * 2. **Klart är den nya frågan** (Beslut 3): avbockade förekomster i
  *    containern, `completed_at` fallande, högst tjugo, med samma radform som
  *    de öppna plus tidsstämpeln. Avbockad betyder `status = 'completed'` —
  *    en ÖVERHOPPAD förekomst (`skipped`) står i historiken och inte här
  *    (arkitektsvar på issue 174).
  * 3. **Underhållsfiltret står i querysträngen** (Beslut 4) och avgränsar alla
- *    fyra kolumnerna till `fixed` och `interval`. Det prövas i SVARET — en
- *    klient som sållade hade visat fel tavla för den som laddar om adressen,
- *    och ett filtrerat läge ska vara en adress man kan spara och dela
+ *    grupperna till `fixed` och `interval`. Det prövas i SVARET — en klient
+ *    som sållade hade visat fel lista för den som laddar om adressen, och ett
+ *    filtrerat läge ska vara en adress man kan spara och dela
  *    (issue 59a § Beslut 1).
+ *
+ * **Veckan slutar på söndag** (Beslut 1): `this_week` räknas från i morgon
+ * till och med söndag, oberoende av locale. Proven pinnar klockan till en
+ * känd veckodag där gruppen inte är tom, för ett relativt datum hade gjort
+ * sviten veckodagsberoende — samma skäl som filen redan pinnar klockan till
+ * mitt på dagen.
  *
  * Därtill omfånget, som är samma regel som `/tasks` lyder under: en gäst med
  * en itemgrant ser sina items uppgifter och inga andras (issue 74 § Beslut 7),
  * och det gäller BÅDA listorna — en avbockad rad är samma uppgift som den
  * öppna var, och en glömd `where` i den ena ger varken fel eller larm.
  *
- * **Det som INTE prövas här** är det som kräver en webbläsare: att tavlan ser
- * ut som docs/Design/uppgifter_1.png, att den blir en lista under `md:`, och
- * att kryssrutan känns rätt i handen. Formen på `UiListRow` prövas i
- * YtornaTest, träffytan i GenomgangTest, och handprovet står i PR-kroppen.
+ * **Det som INTE prövas här** är det som kräver en webbläsare: att listan ser
+ * ut som docs/Design/tasks-container.png och att kryssrutan känns rätt i
+ * handen. Formen på `UiListRow` prövas i YtornaTest, träffytan i
+ * GenomgangTest, och handprovet står i PR-kroppen.
  *
  * **Klockan pinnas till mitt på dagen UTC** ([[ADR-0044 Användarens dag]]),
  * samma skäl och samma grepp som ContainerOversiktTest: servern går i UTC och
@@ -251,7 +260,7 @@ function uppgiftsflikKarta(TestResponse $svar): array
 {
     $karta = [];
 
-    foreach (['overdue', 'today', 'upcoming'] as $grupp) {
+    foreach (['overdue', 'today', 'this_week', 'upcoming'] as $grupp) {
         foreach (uppgiftsflikGrupp($svar, $grupp) as $rad) {
             $karta[$rad['ulid']] = $grupp;
         }
@@ -279,31 +288,37 @@ function uppgiftsflikKod(string $sokvag): string
 /*
  * Klart när: en förekomst hamnar i samma grupp som på tasks.
  *
- * Beslut 2:s hela innehåll. Jämförelsen är mot `/tasks` EGET svar och inte mot
- * en avskrift av vad grupperna borde vara: två ytor som formulerar samma fråga
- * var för sig glider isär, och den ena hade glömt användarens dag eller
- * växeln. Här svarar båda ur samma `forContainer()`/`handle()`, och provet
- * fäller den dag någon ger fliken en egen gruppering.
+ * Beslut 1:s och 2:s hela innehåll. Jämförelsen är mot `/tasks` EGET svar och
+ * inte mot en avskrift av vad grupperna borde vara: två ytor som formulerar
+ * samma fråga var för sig glider isär, och den ena hade glömt användarens dag
+ * eller `this_week`. Här svarar båda ur samma `forContainer()`/`handle()`, och
+ * provet fäller den dag någon ger fliken en egen gruppering.
  *
- * Raderna läggs i alla tre grupperna, så att en tavla som ritade allt i första
- * kolumnen faller — och ordningen prövas, inte bara mängden.
+ * Raderna läggs i alla FYRA grupperna, så att en lista som ritade allt i
+ * första gruppen faller — och ordningen prövas, inte bara mängden. Klockan
+ * står på en onsdag, så `this_week` är den enda gruppen som kräver ett känt
+ * veckodatum: i morgon (torsdag) och lördag hör till veckan, måndagen därpå
+ * gör det inte.
  */
 it('en förekomst hamnar i samma grupp som på tasks', function () {
     withoutVite();
+
+    Carbon::setTestNow('2026-06-17 10:00:00');
 
     [$konto, $anvandare] = uppgiftsflikKonto();
     $container = uppgiftsflikParm($konto);
 
     $motorn = uppgiftsflikItem($container, 'Motorn');
 
-    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Försenad'), uppgiftsflikDatum(-5));
-    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'I dag'), uppgiftsflikDatum(0));
-    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Kommande'), uppgiftsflikDatum(10));
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Försenad'), '2026-06-12');
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'I dag'), '2026-06-17');
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'I veckan'), '2026-06-20');
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Kommande'), '2026-06-26');
 
     $tasks = actingAs($anvandare)->get('/tasks')->assertOk();
     $fliken = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
 
-    expect(uppgiftsflikKarta($tasks))->toHaveCount(3)
+    expect(uppgiftsflikKarta($tasks))->toHaveCount(4)
         ->and(uppgiftsflikKarta($fliken))->toBe(uppgiftsflikKarta($tasks));
 
     // Och raderna är samma rader i samma ordning: en flik som visade
@@ -312,13 +327,170 @@ it('en förekomst hamnar i samma grupp som på tasks', function () {
     $ulids = fn (TestResponse $svar): array => array_merge(
         array_column(uppgiftsflikGrupp($svar, 'overdue'), 'ulid'),
         array_column(uppgiftsflikGrupp($svar, 'today'), 'ulid'),
+        array_column(uppgiftsflikGrupp($svar, 'this_week'), 'ulid'),
         array_column(uppgiftsflikGrupp($svar, 'upcoming'), 'ulid'),
     );
 
     expect($ulids($fliken))->toBe($ulids($tasks))
         ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($fliken, 'overdue')))->toBe(['Försenad'])
         ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($fliken, 'today')))->toBe(['I dag'])
+        ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($fliken, 'this_week')))->toBe(['I veckan'])
         ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($fliken, 'upcoming')))->toBe(['Kommande']);
+});
+
+/*
+ * Klart när: this_week räknas från i morgon till söndag.
+ *
+ * Beslut 1. Klockan står på en onsdag (2026-06-17), så veckan slutar på
+ * söndagen den 21:a: i morgon och lördagen hör till `this_week`, måndagen
+ * den 22:a gör det inte utan är `upcoming`. I dag är `today`, och en rad före
+ * i dag är `overdue` — gränserna prövas i båda riktningarna, så ett `<=` som
+ * blev ett `<` faller.
+ */
+it('this_week räknas från i morgon till söndag', function () {
+    withoutVite();
+
+    Carbon::setTestNow('2026-06-17 10:00:00');
+
+    [$konto, $anvandare] = uppgiftsflikKonto();
+    $container = uppgiftsflikParm($konto);
+    $motorn = uppgiftsflikItem($container, 'Motorn');
+
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'I går'), '2026-06-16');
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'I dag'), '2026-06-17');
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'I morgon'), '2026-06-18');
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'På söndag'), '2026-06-21');
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Nästa måndag'), '2026-06-22');
+
+    $svar = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
+
+    expect(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'overdue')))->toBe(['I går'])
+        ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'today')))->toBe(['I dag'])
+        ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'this_week')))->toBe(['I morgon', 'På söndag'])
+        ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'upcoming')))->toBe(['Nästa måndag']);
+});
+
+/*
+ * Klart när: this_week är tom på en söndag.
+ *
+ * Beslut 1: veckan slutar på söndag, så på söndagen finns ingen dag kvar av
+ * den. En rad i morgon — måndagen — hör alltså till `upcoming` och inte till
+ * `this_week`, och gruppen är tom fastän listan har rader.
+ */
+it('this_week är tom på en söndag', function () {
+    withoutVite();
+
+    Carbon::setTestNow('2026-06-21 10:00:00');
+
+    [$konto, $anvandare] = uppgiftsflikKonto();
+    $container = uppgiftsflikParm($konto);
+    $motorn = uppgiftsflikItem($container, 'Motorn');
+
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'I dag'), '2026-06-21');
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'I morgon'), '2026-06-22');
+
+    $svar = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
+
+    expect(uppgiftsflikGrupp($svar, 'this_week'))->toBe([])
+        ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'today')))->toBe(['I dag'])
+        ->and(uppgiftsflikTitlar(uppgiftsflikGrupp($svar, 'upcoming')))->toBe(['I morgon']);
+});
+
+/*
+ * Klart när: veckan slutar på söndag också för en användare med locale en_US.
+ *
+ * Beslut 1: `endOfWeek()` utan argument följer Carbons locale, och `en_US`
+ * lägger veckoslutet på lördag — då hade söndagen den 21:a hamnat i
+ * `upcoming` i stället för i `this_week`. `CarbonInterface::SUNDAY` skrivs
+ * därför ut.
+ *
+ * **Locale sätts på Carbon, och requesten går förbi middleware.** `User::today()`
+ * bygger sin Carbon ur den GLOBALA Carbon-locale, och
+ * App\Http\Middleware\SetLocale sätter den ur användarens — men
+ * `LocaleResolver` normaliserar `en_US` till katalogen `en`, och `en` RÅKAR
+ * sluta veckan på söndag i den installerade Carbon-versionen. Ett prov genom
+ * webbsidan hade alltså varit grönt även med ett argumentlöst `endOfWeek()`
+ * och inte kunnat fälla något. Provet sätter därför locale på Carbon och
+ * anropar `forContainer()` direkt, så att jämförelsen verkligen sker med en
+ * amerikansk vecka. Mutationen är beviset: byts argumentet bort faller raden.
+ */
+it('veckan slutar på söndag också för en användare med locale en_US', function () {
+    Carbon::setTestNow('2026-06-17 10:00:00');
+
+    $tidigare = Carbon::getLocale();
+    Carbon::setLocale('en_US');
+
+    try {
+        $konto = Account::factory()->create(['locale' => 'en_US']);
+        $anvandare = User::factory()->create(['locale' => 'en_US']);
+        $konto->users()->attach($anvandare, ['role' => 'owner']);
+
+        $container = uppgiftsflikParm($konto);
+        $motorn = uppgiftsflikItem($container, 'Motorn');
+
+        uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'På söndag'), '2026-06-21');
+
+        $request = Request::create('/');
+        $request->setUserResolver(fn (): User => $anvandare);
+
+        $grupper = app(ListTodo::class)->forContainer($anvandare, $request, $container)['groups'];
+
+        expect(uppgiftsflikTitlar($grupper['this_week']))->toBe(['På söndag'])
+            ->and($grupper['upcoming'])->toBe([]);
+    } finally {
+        Carbon::setLocale($tidigare);
+    }
+});
+
+/*
+ * Klart när: fliken visar kommande uppgifter fast växeln är av.
+ *
+ * Beslut 2. `show_upcoming_tasks = false` gör `/tasks`, dashboarden och
+ * översiktens panel till "försenat och i dag" — men containerns uppgiftsflik
+ * skickar `onlyCurrent: false`, för en container beskriver containerns
+ * tillstånd och inte användarens filter. Raden tio dagar fram ligger bortom
+ * veckan och hör alltså i `upcoming`.
+ */
+it('fliken visar kommande uppgifter fast växeln är av', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = uppgiftsflikKonto();
+    $container = uppgiftsflikParm($konto);
+    $motorn = uppgiftsflikItem($container, 'Motorn');
+
+    $anvandare->update(['show_upcoming_tasks' => false]);
+
+    $rad = uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Långt fram'), uppgiftsflikDatum(10));
+
+    $flik = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
+
+    expect(array_column(uppgiftsflikGrupp($flik, 'upcoming'), 'ulid'))->toBe([$rad->ulid])
+        ->and(uppgiftsflikGrupp($flik, 'this_week'))->toBe([]);
+});
+
+/*
+ * Klart när: växeln styr fortfarande /tasks.
+ *
+ * Beslut 2:s andra halva, och samma användare och rad som provet ovanför:
+ * undantaget är flikens och inte urvalets. `/tasks` bär varken `this_week`
+ * eller `upcoming` när växeln är av — hade `forContainer()` läckt in i
+ * `handle()` hade raden synts på båda ytorna.
+ */
+it('växeln styr fortfarande /tasks', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = uppgiftsflikKonto();
+    $container = uppgiftsflikParm($konto);
+    $motorn = uppgiftsflikItem($container, 'Motorn');
+
+    $anvandare->update(['show_upcoming_tasks' => false]);
+
+    uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Långt fram'), uppgiftsflikDatum(10));
+
+    $tasks = actingAs($anvandare)->get('/tasks')->assertOk();
+
+    expect(uppgiftsflikGrupp($tasks, 'upcoming'))->toBe([])
+        ->and(uppgiftsflikGrupp($tasks, 'this_week'))->toBe([]);
 });
 
 /*
@@ -400,8 +572,10 @@ it('Klart visar avbockade förekomster i containern nyast först, högst tjugo',
         );
     }
 
-    // En öppen förekomst hör i en annan kolumn.
-    $öppen = uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Kvar att göra'), uppgiftsflikDatum(3));
+    // En öppen förekomst hör i en annan grupp. Tio dagar fram ligger bortom
+    // innevarande vecka, så gruppen är `upcoming` oavsett vilken veckodag
+    // sviten körs på — ett par dagar hade hamnat i `this_week` på en måndag.
+    $öppen = uppgiftsflikOppna(uppgiftsflikSchema($motorn, 'Kvar att göra'), uppgiftsflikDatum(10));
 
     $svar = actingAs($anvandare)->get(uppgiftsflikUrl($container))->assertOk();
 
@@ -549,10 +723,10 @@ it('en uppgift på ett item utanför omfånget visas inte, varken öppen eller k
     $mitt = uppgiftsflikItem($container, 'Motorn');
     $dolt = uppgiftsflikItem($container, 'Hemlig motor');
 
-    uppgiftsflikOppna(uppgiftsflikSchema($mitt, 'Byt impeller'), uppgiftsflikDatum(3));
+    uppgiftsflikOppna(uppgiftsflikSchema($mitt, 'Byt impeller'), uppgiftsflikDatum(10));
     uppgiftsflikKlar(uppgiftsflikSchema($mitt, 'Byt olja'));
 
-    uppgiftsflikOppna(uppgiftsflikSchema($dolt, 'Hemlig uppgift'), uppgiftsflikDatum(4));
+    uppgiftsflikOppna(uppgiftsflikSchema($dolt, 'Hemlig uppgift'), uppgiftsflikDatum(11));
     uppgiftsflikKlar(uppgiftsflikSchema($dolt, 'Hemligt gjort'));
 
     $gast = uppgiftsflikGast($container, $mitt);
@@ -582,10 +756,10 @@ it('en uppgift i en annan container visas inte', function () {
     $har = uppgiftsflikParm($konto, 'Havsörnen');
     $grannen = uppgiftsflikParm($konto, 'Vindilen');
 
-    uppgiftsflikOppna(uppgiftsflikSchema(uppgiftsflikItem($har, 'Motorn'), 'Byt impeller'), uppgiftsflikDatum(3));
+    uppgiftsflikOppna(uppgiftsflikSchema(uppgiftsflikItem($har, 'Motorn'), 'Byt impeller'), uppgiftsflikDatum(10));
     uppgiftsflikKlar(uppgiftsflikSchema(uppgiftsflikItem($har, 'Ankaret'), 'Inspektera linan'));
 
-    uppgiftsflikOppna(uppgiftsflikSchema(uppgiftsflikItem($grannen, 'Seglet'), 'Laga seglet'), uppgiftsflikDatum(4));
+    uppgiftsflikOppna(uppgiftsflikSchema(uppgiftsflikItem($grannen, 'Seglet'), 'Laga seglet'), uppgiftsflikDatum(11));
     uppgiftsflikKlar(uppgiftsflikSchema(uppgiftsflikItem($grannen, 'Rodret'), 'Byt lager'));
 
     $svar = actingAs($anvandare)->get(uppgiftsflikUrl($har))->assertOk();
@@ -611,7 +785,7 @@ it('en främling nekas fliken', function () {
     withoutVite();
 
     $container = uppgiftsflikParm(Account::factory()->create());
-    uppgiftsflikOppna(uppgiftsflikSchema(uppgiftsflikItem($container, 'Motorn'), 'Byt impeller'), uppgiftsflikDatum(3));
+    uppgiftsflikOppna(uppgiftsflikSchema(uppgiftsflikItem($container, 'Motorn'), 'Byt impeller'), uppgiftsflikDatum(10));
 
     actingAs(User::factory()->create())
         ->get(uppgiftsflikUrl($container))
@@ -668,59 +842,107 @@ it('snabblänkarna ritas bara för den som får öppna sidorna', function () {
 });
 
 /*
- * Tavlans form, så långt den går att pröva på serversidan.
+ * Listans form, så långt den går att pröva på serversidan.
  *
- * Klart när i milstolpen: *under `md:` är fliken en lista*. CSS:en kan inte
- * mätas här, men de klasser som bär formen kan läsas: rutnätet slås på över
- * brytpunkten, under den staplas sektionerna, och varje kolumn är en
- * `<section>` med sin egen rubrik — fyra rubriker i kolumnordningen är exakt
- * den lista issuen ber om, i samma markup.
+ * Klart när i milstolpen: *flikens sektioner staplas i en kolumn på alla
+ * bredder, en tom grupp ritas inte, och är alla tomma visas UiEmptyState*.
+ * CSS:en kan inte mätas här, men markupen kan läsas: rutnätet är borta,
+ * sektionen ritas bara när gruppen har rader, och tom-tillståndet bär sin
+ * nyckel.
  *
- * Provet fäster också att de tre öppna kolumnrubrikerna är `todo.group.*` —
- * samma grupp, samma ord, EN nyckel: en kopia under `container.tasks.*` hade
- * varit den andra sanningen om vad gruppen heter. Och att kontrollern är tunn:
- * den väljer sida, den formulerar inget `where`.
+ * Provet fäster också att grupprubrikerna är `todo.group.*` — samma grupp,
+ * samma ord, EN nyckel: en kopia under `container.tasks.*` hade varit den
+ * andra sanningen om vad gruppen heter. Och att kontrollern är tunn: den väljer
+ * sida, den formulerar inget `where`.
  */
-it('ritar tavlan som ett rutnät över md: och en lista under', function () {
+it('ritar en lista med grupperna i ordning och hoppar över tomma', function () {
     withoutVite();
 
     $vy = uppgiftsflikKod('resources/js/pages/Containers/Tasks.vue');
 
-    expect($vy)->toContain('md:grid')
-        ->toContain('md:grid-cols-4')
-        ->toContain('flex-col')
+    // Den nekande halvan står för sig: `toContain()` svarar med en expectation
+    // över en sträng, och ett `not` mitt i kedjan fäller phpstan ("access to an
+    // undefined property ...::$not") — samma fälla som de andra källkodsproven
+    // i sviten. Tavlan är borta: ingen `md:grid-cols-4`.
+    expect($vy)->not->toContain('md:grid-cols-4');
+
+    expect($vy)->toContain('flex-col')
         ->toContain('v-for="(entries, group) in groups"')
-        // Rubriken byggs ur gruppens EGET namn, så en fjärde grupp från
-        // servern följer med utan att vyn skrivs om.
+        // En tom grupp ritas inte — varken rubrik eller lista.
+        ->toContain('v-if="entries.length > 0"')
+        ->toContain('completed.length > 0')
+        // Tomt läge för hela fliken, med sin egen nyckel.
+        ->toContain('UiEmptyState')
+        ->toContain("t('container.tasks.empty')")
+        // Rubriken byggs ur gruppens EGET namn, så en ny grupp från servern
+        // följer med utan att vyn skrivs om.
         ->toContain('t(`todo.group.${group}`)')
         ->toContain("t('container.tasks.done')")
-        // Avbockningen är TodoRows befintliga — ingen ny skrivväg.
-        ->toContain('<TodoRow');
+        // Avbockningen är TodoRows befintliga — ingen ny skrivväg — och
+        // containern står i hjälten och upprepas inte i raden (Beslut 4).
+        ->toContain('<TodoRow')
+        ->toContain(':show-container="false"');
 
     // Nycklarna finns i katalogen: `t()` skriver nyckeln själv på skärmen när
-    // uppslaget misslyckas, och en kolumn hade då hetat `container.tasks.done`.
+    // uppslaget misslyckas, och en grupp hade då hetat `container.tasks.empty`.
     foreach ([
         'container.tasks.title',
         'container.tasks.heading',
         'container.tasks.done',
         'container.tasks.shortcuts',
         'container.tasks.filter_maintenance',
+        'container.tasks.empty',
     ] as $nyckel) {
         expect(trans("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
     }
 
-    // Kontrollern räknar sina fyra kolumner ur samma action som `/tasks` och
-    // klipper inte de öppna listorna: tavlan är hela containern. Att den inte
-    // formulerar ett eget `where` är arkitekturkravet ([[ADR-0024 Tunna
-    // controllers och actions]]) och prövas här som ett källkodsprov.
+    // Kontrollern räknar sina grupper ur samma action som `/tasks`, klipper
+    // inte de öppna listorna — fliken är hela containern — och släpper växeln
+    // med `onlyCurrent: false` (Beslut 2). Att den inte formulerar ett eget
+    // `where` är arkitekturkravet ([[ADR-0024 Tunna controllers och actions]])
+    // och prövas här som ett källkodsprov.
     $kontroller = uppgiftsflikKod('app/Http/Controllers/ContainerTaskController.php');
 
     expect($kontroller)->toContain('forContainer(')
-        ->toContain('completedForContainer(');
+        ->toContain('completedForContainer(')
+        ->toContain('onlyCurrent: false');
 
-    // Den nekande halvan står för sig: `toContain()` svarar med en
-    // expectation över en sträng, och ett `not` mitt i kedjan fäller phpstan
-    // ("access to an undefined property ...::$not") — samma fälla som de
-    // andra källkodsproven i sviten.
     expect($kontroller)->not->toMatch('/->where\(|->whereHas\(|->orderBy|->limit\(/');
+});
+
+/*
+ * Klart när: raden leds av schemats titel (Beslut 4).
+ *
+ * Första raden är uppgiften — schemats titel, länkad till schemats sida — och
+ * itemet står på underraden. Provet jämför POSITIONERNA och inte bara att båda
+ * finns: en rad som behöll itemet först hade sett likadan ut i en `toContain`,
+ * och ordningen är hela beslutet.
+ *
+ * Containerlänken står i `v-if="showContainer"`: fliken skickar `false`, för
+ * containern står redan i hjälten, medan `/tasks` och dashboarden behåller
+ * namnet.
+ */
+it('raden leds av schemats titel', function () {
+    $rad = uppgiftsflikKod('resources/js/components/TodoRow.vue');
+
+    // Ordningen prövas med ett mönster och inte med två positioner: `strpos()`
+    // svarar `int|false`, och jämförelsen hade fällt phpstan utan att säga
+    // något om raden. Kommentarerna är borta ur `$rad` (uppgiftsflikKod), så
+    // mönstret kan bara nöjas av markupen.
+    expect($rad)->toMatch('/entry\.schedule\.title.*entry\.item\.name/s')
+        ->toContain('v-if="showContainer"')
+        ->toContain('showContainer: { type: Boolean, default: true }');
+});
+
+/*
+ * Klart när: nycklarna this_week och empty finns.
+ *
+ * `t()` och `trans()` skriver nyckeln SJÄLV när uppslaget misslyckas (med
+ * flit, så en saknad sträng syns) — alltså är "skiljer sig från nyckeln" hela
+ * beviset för att raden finns i katalogen. `this_week` är grupprubriken och
+ * `container.tasks.empty` tom-tillståndet.
+ */
+it('har nycklarna this_week och empty', function () {
+    expect(trans('ui.todo.group.this_week', [], 'en'))->not->toBe('ui.todo.group.this_week')
+        ->and(trans('ui.container.tasks.empty', [], 'en'))->not->toBe('ui.container.tasks.empty');
 });

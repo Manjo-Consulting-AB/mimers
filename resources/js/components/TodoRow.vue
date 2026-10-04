@@ -8,10 +8,17 @@ import { useTranslations } from '../composables/useTranslations.js';
 /*
  * En rad i todo-listan, se issue 64 § Beslut 4 och 5.
  *
- * **Raden säger var uppgiften hör hemma** (Beslut 5): itemets namn, schemats
- * titel och containerns namn, alla tre, för "Byt impeller" utan "Motorn" och
- * "Havsörnen" går inte att handla på när man har fyra containers. Itemets namn är
- * en länk till itemet, schemats titel till schemats sida (63b).
+ * **Raden leds av uppgiften och inte av itemet** (M24 · issue 719, Beslut 4):
+ * första raden är SCHEMats titel — vad som ska göras — och den är en länk till
+ * schemats sida (63b). Underraden bär itemet, containern och förfallet, i den
+ * ordningen, för "Byt impeller" utan "Motorn" och "Havsörnen" går inte att
+ * handla på när man har fyra containers.
+ *
+ * **`showContainer` styr containerlänken** (Beslut 4). På `/tasks` och i
+ * dashboardens panel behövs containernamnet — raden står bland andra
+ * containers — men på containerns uppgiftsflik står containern redan i hjälten,
+ * och fliken skickar `false`. Förvalet är `true`, så de ytor som inte säger
+ * något får dagens rad oförändrad.
  *
  * **Avbockningen är 63b:s rutt, rakt av** (Beslut 4). Samma `complete`-rutt,
  * samma grind, samma `CompleteOccurrenceRequest` — `back()` landar på
@@ -49,6 +56,12 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /* En post ur todo-listan: TodoEntryResource plus `account` och `can`. */
     entry: { type: Object, required: true },
+    /*
+     * Ritar containernamnet på underraden. `true` är förvalet — `/tasks` och
+     * dashboardens panel behöver det — och containerns uppgiftsflik skickar
+     * `false`, för containern står redan i hjälten.
+     */
+    showContainer: { type: Boolean, default: true },
 });
 
 const { t } = useTranslations();
@@ -89,24 +102,27 @@ function complete() {
 <template>
     <li class="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-4">
         <div>
-            <Link :href="itemUrl" class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline">
-                {{ entry.item.name }}
+            <Link :href="scheduleHref" class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline">
+                {{ entry.schedule.title }}
             </Link>
 
             <p class="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-600">
-                <Link :href="scheduleHref" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
-                    {{ entry.schedule.title }}
+                <Link :href="itemUrl" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+                    {{ entry.item.name }}
                 </Link>
 
-                <span aria-hidden="true">·</span>
-
-                <!-- Containernamnet går till ITEMLISTAN (issue 89 · [[ADR-0039
+                <!-- Containernamnet ritas bara när ytan behöver det (Beslut 4),
+                     och det går till ITEMLISTAN (issue 89 · [[ADR-0039
                      Containerns översikt]] § Konsekvenser): uppgiften hör till
                      ett item, och den som följer containern ur todo-vyn letar i
                      listan — inte på en översikt. -->
-                <Link :href="`/containers/${entry.container.ulid}/items`" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
-                    {{ entry.container.name }}
-                </Link>
+                <template v-if="showContainer">
+                    <span aria-hidden="true">·</span>
+
+                    <Link :href="`/containers/${entry.container.ulid}/items`" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+                        {{ entry.container.name }}
+                    </Link>
+                </template>
 
                 <span aria-hidden="true">·</span>
 
