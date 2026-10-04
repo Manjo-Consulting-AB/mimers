@@ -45,11 +45,13 @@ use Inertia\Response;
  * **Växeln för framtida uppgifter gäller panelen och inte brickorna** (issue
  * 134). Panelen visar vad användaren valt, precis som `/tasks` — urvalet
  * läser `user.show_upcoming_tasks` — och växeln själv ritas i panelens
- * rubrikrad ur `showUpcomingTasks`-proppen. Brickorna räknar däremot samma
- * tal oavsett växeln, och kontrollern frågar därför App\Actions\Schedule\
- * ListTodo två gånger: en gång med flaggan för panelen och en gång utan för
- * sammanfattningen. Två frågor i stället för en är priset för att talet ska
- * betyda vad det betydde i går; listan är i båda fallen en och samma fråga.
+ * rubrikrad ur `showUpcomingTasks`-proppen. Brickorna räknar däremot det som
+ * är aktuellt nu, försenat plus i dag, oavsett växeln (issue 697), och
+ * kontrollern frågar därför App\Actions\Schedule\ListTodo två gånger: en gång
+ * med förvalet för panelen och en gång med `onlyCurrent: true` för
+ * sammanfattningen. Två frågor i stället för en är priset för att listan ska
+ * följa valet medan talet står stilla; listan är i båda fallen en och samma
+ * fråga.
  *
  * **De två tomma lägena följer med** (issue 64 § Beslut 6). `hasContainers`
  * kommer ur samma anrop som listan, så panelen kan skilja "ingen container
@@ -61,9 +63,9 @@ use Inertia\Response;
  * Båda kommer ur App\Actions\Container\ListContainerSummaries, som får
  * `$todo` — todo-svaret som redan är hämtat — i stället för att ställa en
  * egen fråga: uppgiftsbrickan ska räkna urvalet, och det finns bara ett sätt
- * att vara säker på att den gör det. Sedan issue 134 är det urvalet det UTAN
- * växeln, se `$allTodo` i `index()`: talet är listans storlek och inte det
- * hon valt att visa.
+ * att vara säker på att den gör det. Sedan issue 697 är det urvalet det som
+ * är aktuellt nu, se `$counted` i `index()`: talet är försenat plus i dag —
+ * inte allt som finns, och inte det hon valt att visa.
  *
  * **Kostnaderna kom med issue 125**, som sin egen propp: `costs` bär
  * månadens totalsumma per valuta och nedbrytningen per container, och båda
@@ -129,15 +131,15 @@ class DashboardController extends Controller
         $user = $request->user();
 
         // Panelen följer växeln (issue 134) — samma urval som `/tasks`, precis
-        // som förr. Brickorna gör det INTE: de räknar samma tal oavsett vad
-        // listan visar, och den andra frågan nedan bär därför hela listan.
-        // Att låta brickan följa växeln hade varit frestande och fel: "öppna
-        // uppgifter" är ett mått på vad som finns, inte på vad hon valt att
-        // se, och ett tal som krymper när hon fäller ihop listan vore ett
-        // annat tal än i går.
+        // som förr. Brickorna gör det INTE: de räknar det som är aktuellt nu,
+        // försenat plus i dag (issue 697), oavsett vad listan visar, och den
+        // andra frågan nedan bär därför bara de raderna. Att låta brickan följa
+        // växeln hade varit frestande och fel: "öppna uppgifter" är ett mått på
+        // vad som är aktuellt nu, inte på vad hon valt att se, och ett tal som
+        // krympte när hon fällde ihop listan vore ett annat tal än i går.
         $todo = app(ListTodo::class)->handle($user, $request);
-        $allTodo = app(ListTodo::class)->handle($user, $request, applyPreference: false);
-        $summaries = app(ListContainerSummaries::class)->handle($user, $allTodo);
+        $counted = app(ListTodo::class)->handle($user, $request, onlyCurrent: true);
+        $summaries = app(ListContainerSummaries::class)->handle($user, $counted);
 
         return Inertia::render('Dashboard', [
             'tasks' => array_slice($todo['rows'], 0, self::TASK_LIMIT),

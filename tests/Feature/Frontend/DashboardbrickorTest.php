@@ -276,15 +276,15 @@ it('visar noll och inga grupper för en användare utan containrar', function ()
 // --- uppgiftsbrickan -------------------------------------------------------
 
 /*
- * Klart när: uppgiftsbrickan visar samma tal som antalet rader på `/tasks`,
- * med antalet försenade som underrad.
+ * Klart när: uppgiftsbrickan visar försenat plus i dag, med antalet försenade
+ * som underrad.
  *
- * Provet hämtar båda sidorna och jämför talen mot listans rader. En bricka som
- * ställde en egen fråga hade kunnat ge rätt antal i dag och fel så snart
- * `scopeTodoFor()` ändrades — och underraden är serverns gruppering, räknad mot
- * serverns datum, aldrig klientens klocka.
+ * Sedan issue 697 räknar brickan det som är AKTUELLT NU och inte antalet rader
+ * på `/tasks`: två försenade och en i dag ger tre, och de tre framåt räknas
+ * inte alls — även om listan visar dem. Underraden är serverns gruppering,
+ * räknad mot serverns datum, aldrig klientens klocka.
  */
-it('visar antalet rader på /tasks med de försenade som underrad', function () {
+it('visar försenat plus i dag på brickan med de försenade som underrad', function () {
     withoutVite();
 
     [$konto, $anvandare] = brickaKonto();
@@ -292,10 +292,12 @@ it('visar antalet rader på /tasks med de försenade som underrad', function () 
     $container = brickaPärm($konto);
     $item = brickaItem($container, 'Motorn');
 
-    // Två försenade och tre framåt: underraden är två, brickan fem.
+    // Två försenade och en i dag: brickan är de tre, underraden de två.
     brickaUppgift($item, brickaDatum(-10), 'Försenad ett');
     brickaUppgift($item, brickaDatum(-1), 'Försenad två');
+    brickaUppgift($item, brickaDatum(0), 'I dag');
 
+    // Och tre framåt, som varken brickan eller underraden räknar.
     foreach (range(1, 3) as $i) {
         brickaUppgift($item, brickaDatum(10 * $i), "Framåt {$i}");
     }
@@ -305,11 +307,13 @@ it('visar antalet rader på /tasks med de försenade som underrad', function () 
 
     /** @var array<string, list<array<string, mixed>>> $grupper */
     $grupper = $lista->inertiaProps()['groups'];
-    $rader = array_merge($grupper['overdue'], $grupper['today'], $grupper['upcoming']);
 
-    expect($rader)->toHaveCount(5)
-        ->and(brickaTal($bricka)['tasks'])->toBe(count($rader))
-        ->and(brickaTal($bricka)['tasks'])->toBe(5)
+    // Listan visar alla sex med växeln på — brickan räknar bara de aktuella.
+    expect($grupper['overdue'])->toHaveCount(2)
+        ->and($grupper['today'])->toHaveCount(1)
+        ->and($grupper['upcoming'])->toHaveCount(3)
+        ->and(brickaTal($bricka)['tasks'])->toBe(count($grupper['overdue']) + count($grupper['today']))
+        ->and(brickaTal($bricka)['tasks'])->toBe(3)
         ->and(brickaTal($bricka)['overdue'])->toBe(count($grupper['overdue']))
         ->and(brickaTal($bricka)['overdue'])->toBe(2);
 });
@@ -353,8 +357,10 @@ it('räknar kortets tal inom mottagarens omfång', function () {
     $mitt = brickaItem($pärm, 'Motorn');
     $dolt = brickaItem($pärm, 'Hemlig motor');
 
-    brickaUppgift($mitt, brickaDatum(30), 'Byt impeller');
-    brickaUppgift($dolt, brickaDatum(31), 'Hemlig uppgift');
+    // Förfallodagarna ligger i det förflutna: talet räknar det som är aktuellt
+    // nu (issue 697), och det är omfånget — inte datumet — provet gäller.
+    brickaUppgift($mitt, brickaDatum(-30), 'Byt impeller');
+    brickaUppgift($dolt, brickaDatum(-31), 'Hemlig uppgift');
 
     $mottagare = brickaMottagare($pärm, $mitt, 'read');
 

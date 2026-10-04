@@ -210,26 +210,36 @@ it('räknar bara de items en itemgrant-mottagare når', function () {
 });
 
 /*
- * Klart när: räknar uppgifterna oavsett växeln för framtida uppgifter.
+ * Klart när: räknar inte en framtida uppgift i talen med växeln på eller av.
  *
- * Förekomsten förfaller framåt i tiden men `visible_from` har passerat. Med
- * växeln av begränsas listan till försenat och i dag — men talet är vad som
- * FINNS, och står kvar på ett. Samma tal som översiktens `counts.todos`.
+ * Förekomsten förfaller framåt i tiden men `visible_from` har passerat, så
+ * den är laglig i listan. Talen räknar däremot det som är aktuellt nu —
+ * försenat plus i dag (issue 697) — och den framtida raden är olaglig där.
+ * `containerCounts.todos` och `counts.todos` är noll i BÅDA lägena; växeln rör
+ * aldrig ett tal.
  */
-it('räknar uppgifterna oavsett växeln för framtida uppgifter', function () {
+it('räknar inte en framtida uppgift i talen med växeln på eller av', function () {
     withoutVite();
 
     [, $ägare, $container] = containertalKontext();
 
-    $ägare->update(['show_upcoming_tasks' => false]);
-
     $item = containertalItem($container, 'Rodret');
     containertalUppgift($item, containertalDatum(7));
 
-    $props = containertalProps(actingAs($ägare)->get("/containers/{$container->ulid}"));
+    $på = containertalProps(actingAs($ägare)->get("/containers/{$container->ulid}"));
 
-    expect($props['containerCounts']['todos'])->toBe(1);
-    expect($props['containerCounts']['todos'])->toBe($props['counts']['todos']);
+    expect($på['containerCounts']['todos'])->toBe(0)
+        ->and($på['counts']['todos'])->toBe(0);
+
+    $ägare->update(['show_upcoming_tasks' => false]);
+
+    $av = containertalProps(actingAs($ägare)->get("/containers/{$container->ulid}"));
+
+    expect($av['containerCounts']['todos'])->toBe(0)
+        ->and($av['counts']['todos'])->toBe(0)
+        // De två talen är samma tal, i båda lägena.
+        ->and($av['containerCounts']['todos'])->toBe($av['counts']['todos'])
+        ->and($på['containerCounts']['todos'])->toBe($på['counts']['todos']);
 });
 
 /*

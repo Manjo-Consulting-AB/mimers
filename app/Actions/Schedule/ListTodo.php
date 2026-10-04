@@ -36,8 +36,10 @@ use Illuminate\Support\Facades\Gate;
  * som är aktuellt nu — försenat och i dag — genom
  * `ScheduleOccurrence::scopeDueTodayOrEarlier()`, bredvid `scopeTodoFor`.
  * Klassens regel står kvar: inget `where` formuleras här, bara valet om
- * modellens villkor ska gälla. Dashboardens brickor räknar samma tal oavsett
- * växeln, och den enda vägen dit är att fråga utan flaggan (se `handle()`).
+ * modellens villkor ska gälla. **Räknarna rörs aldrig av växeln** (issue 697):
+ * varje tal här är det som är aktuellt nu — försenat plus i dag — och den enda
+ * vägen dit är att fråga med villkoret PÅ oavsett vad användaren valt (se
+ * `handle()`, `forContainer()` och `countForContainer()`).
  *
  * **Ordningen och grupperingen räknas på servern** (Beslut 3). `due_at`
  * stigande med `ulid` stigande — samma deterministiska ordning som
@@ -145,14 +147,15 @@ class ListTodo
      * PHP (issue 122): panelen pagineras inte (issue 123), och frågan är den
      * samma som `/tasks` ställer.
      *
-     * **Växeln gäller här** (issue 134): är `show_upcoming_tasks` falsk bär
-     * både `rows` och `groups` bara försenat och i dag, och `upcoming` är en
-     * tom lista. `$applyPreference` finns för dashboardens BRICKOR, som
-     * räknar samma tal oavsett växeln: App\Http\Controllers\
-     * DashboardController frågar en gång med flaggan (panelen) och en gång
-     * utan (brickorna), och den senare läser `rows` som om ingen växel
-     * fanns. `page()` har ingen motsvarighet — `/tasks` visar alltid det
-     * användaren valt.
+     * **Växeln gäller raderna** (issue 134): är `show_upcoming_tasks` falsk
+     * bär både `rows` och `groups` bara försenat och i dag, och `upcoming` är
+     * en tom lista. `$onlyCurrent` är anroparens svar på om villkoret ska
+     * läggas på: `null` — förvalet — följer användarens växel, och `true` är
+     * "försenat plus i dag" oavsett växeln. Den senare är räknarnas väg (issue
+     * 697): dashboardens BRICKOR mäter det som är aktuellt nu, och
+     * App\Http\Controllers\DashboardController frågar en gång med `null`
+     * (panelen) och en gång med `true` (brickorna). `page()` har ingen
+     * motsvarighet — `/tasks` visar alltid det användaren valt.
      *
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
@@ -160,7 +163,7 @@ class ListTodo
      *     hasContainers: bool
      * }
      */
-    public function handle(User $user, Request $request, bool $applyPreference = true): array
+    public function handle(User $user, Request $request, ?bool $onlyCurrent = null): array
     {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
@@ -176,7 +179,7 @@ class ListTodo
         $occurrences = $this->occurrences(
             $user,
             $accountIds,
-            $applyPreference && $this->onlyCurrent($user),
+            $onlyCurrent ?? $this->onlyCurrent($user),
         )->get();
 
         return [
@@ -200,11 +203,13 @@ class ListTodo
      * containern som översiktens uppgiftsbricka alltid gått. En uppgift i en
      * annan container hör inte hit, även när användaren når den.
      *
-     * **Växeln gäller raderna och inte talet** (issue 134), precis som på
-     * dashboarden: `rows` och `groups` följer `show_upcoming_tasks`, medan
-     * `count` är brickans tal och räknar samma mängd oavsett växeln. Utan den
-     * skillnaden hade `counts.todos` krympt i samma stund användaren fällde
-     * ihop listan — och det talet är vad som FINNS, inte vad hon valt att se.
+     * **Växeln gäller raderna och inte talet** (issue 134, issue 697), precis
+     * som på dashboarden: `rows` och `groups` följer `show_upcoming_tasks`,
+     * medan `count` är brickans tal — det som är aktuellt nu, försenat plus i
+     * dag — och räknar samma mängd oavsett växeln. Växeln PÅ betyder "visa
+     * även framtida", och då är `$occurrences` hela mängden: talet ställs i en
+     * andra fråga, med villkoret på. Växeln AV begränsar redan `$occurrences`,
+     * och talet är dess längd.
      *
      * **`hasContainers` finns inte i svaret.** Det är dashboardens flagga för
      * att skilja "ingen container alls" från "inget att göra" (Beslut 6), och
@@ -261,33 +266,33 @@ class ListTodo
 
         return [
             ...$this->present($user, $request, $limit === null ? $occurrences : $occurrences->take($limit)),
-            // Växeln PÅ betyder "visa även framtida", och då är inget villkor
-            // lagt på frågan: svaret bär hela mängden och talet är dess längd.
-            // Växeln AV begränsar raderna till försenat och i dag, och då
-            // ställs frågan en gång till — utan villkoret — precis som
-            // DashboardController gör för sina brickor.
+            // Växeln AV begränsar redan raderna till försenat och i dag, och
+            // då är talet deras längd. Växeln PÅ bär hela mängden, och då
+            // ställs frågan en gång till — med villkoret på — precis som
+            // DashboardController gör för sina brickor (issue 697).
             'count' => $onlyCurrent
-                ? $this->occurrences($user, $accountIds, false, $container, $maintenanceOnly)->count()
-                : $occurrences->count(),
+                ? $occurrences->count()
+                : $this->occurrences($user, $accountIds, true, $container, $maintenanceOnly)->count(),
         ];
     }
 
     /**
      * Antalet öppna uppgifter i containern (issue 679).
      *
-     * **Exakt uttrycket bakom `forContainer()['count']`**: villkoret
-     * `onlyCurrent` är `false` och `maintenanceOnly` står kvar på sitt förval,
-     * så talet räknar det som FINNS oberoende av växeln
-     * `show_upcoming_tasks` — samma tal som översiktens `counts.todos`.
-     * `forContainer()` själv är oförändrad; den här metoden är samma fråga utan
-     * radhämtningen, för den som bara ska veta hur många.
+     * **Samma tal som `forContainer()['count']` och översiktens
+     * `counts.todos`**: villkoret `onlyCurrent` är `true` (issue 697) och
+     * `maintenanceOnly` står kvar på sitt förval, så talet räknar det som är
+     * aktuellt nu — försenat plus i dag — oberoende av växeln
+     * `show_upcoming_tasks`. `forContainer()` själv är oförändrad; den här
+     * metoden är samma fråga utan radhämtningen, för den som bara ska veta hur
+     * många.
      */
     public function countForContainer(User $user, Container $container): int
     {
         return $this->occurrences(
             $user,
             $user->accounts->pluck('id')->values()->all(),
-            false,
+            true,
             $container,
         )->count();
     }

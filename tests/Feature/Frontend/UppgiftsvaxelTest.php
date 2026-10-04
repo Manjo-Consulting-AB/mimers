@@ -364,9 +364,10 @@ it('paginerar listan när växeln är av', function () {
 /*
  * Klart när: dashboardens brickor visar samma tal med växeln av som på.
  *
- * Talen mäter vad som FINNS och inte vad hon valt att visa: en bricka som
- * krympte när hon fällde ihop listan vore ett annat tal än i går. Panelen
- * däremot följer växeln — den visar den lista hon valt.
+ * Talen mäter det som är aktuellt nu — försenat plus i dag (issue 697) — och
+ * inte vad hon valt att visa: den framtida raden är olaglig i talet, och en
+ * bricka som krympte när hon fällde ihop listan vore ett annat tal än i går.
+ * Panelen däremot följer växeln — den visar den lista hon valt.
  */
 it('visar samma brickor med växeln av som på', function () {
     withoutVite();
@@ -384,7 +385,7 @@ it('visar samma brickor med växeln av som på', function () {
     $av = actingAs($anvandare)->get('/dashboard')->assertOk();
 
     expect($av->inertiaProps()['stats'])->toBe($på->inertiaProps()['stats'])
-        ->and($på->inertiaProps()['stats']['tasks'])->toBe(3)
+        ->and($på->inertiaProps()['stats']['tasks'])->toBe(2)
         ->and($på->inertiaProps()['stats']['overdue'])->toBe(1)
         // Panelen är den yta som följer valet.
         ->and($på->inertiaProps()['tasks'])->toHaveCount(3)
