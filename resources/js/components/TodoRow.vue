@@ -72,6 +72,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * som cirkelns kant, men svagare. Färgen är aldrig den enda bäraren: datumet
  * står kvar med sina egna ord.
  *
+ * **En rad utan datum ritar ingen datumtext** (M26 · issue 234). `due_at` är
+ * nullbart sedan [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3,
+ * och `dueDate(null)` svarar `null`; raden ritar då ingen `<time>` alls i
+ * stället för att skriva "Due " med tomt datum. Hur raden i övrigt ser ut utan
+ * datum är issue 236.
+ *
  * **En avbockad rad är samma rad** (Beslut 5). Finns `entry.completed_at` ritas
  * en fylld bock (`bg-success`) utan knapp och utan formulär, och datumet till
  * höger är `eventDate()` i stället för `dueDate()`: en avbockning är en
@@ -113,10 +119,13 @@ const isDone = computed(() => Boolean(props.entry.completed_at));
 
 /*
  * Datumet till höger: avbockningens tidsstämpel när raden är klar, annars
- * förfallodagen. En `null`-text — ett datum servern inte kunde läsa — ritas
- * inte alls.
+ * förfallodagen. En `null`-text — ett datum servern inte kunde läsa, eller en
+ * rad utan datum (ADR-0052 § 3) — ritas inte alls.
  */
 const completed = computed(() => (isDone.value ? eventDate(props.entry.completed_at) : null));
+
+/* Finns ingen datumtext ritas ingen `<time>`: en tom "Due " säger ingenting. */
+const hasDateText = computed(() => (isDone.value ? completed.value.text !== null : due.value.text !== null));
 
 /*
  * Cirkelns kant (Beslut 1): serverns fält avgör, aldrig klockan. Idag är
@@ -286,6 +295,7 @@ function complete() {
              [[ADR-0050 Desktopdesignen]] § 6). -->
         <div class="flex w-full items-center gap-3 md:w-auto">
             <time
+                v-if="hasDateText"
                 :datetime="isDone ? entry.completed_at : entry.due_at"
                 class="inline-flex items-center gap-1.5 text-meta"
                 :class="!isDone && due.state === 'danger' ? 'text-danger' : 'text-ink-muted'"

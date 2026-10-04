@@ -393,11 +393,28 @@ class ScheduleOccurrence extends Model
      * UTC men i dag enligt hennes tidszon hör till "i dag" och stannar kvar i
      * listan.
      *
+     * **En rad utan datum är också "aktuell nu"** (M26 · issue 234, ADR-0052
+     * § 4). Växeln `show_upcoming_tasks` döljer bara det som ligger FRAMÅT —
+     * *This week* och *Upcoming* — och en uppgift utan datum ligger inte i
+     * framtiden: den är något användaren ska göra nu. Villkoret är därför en
+     * `OR`: `due_at IS NULL` eller `due_at <= idag`. `whereNull` och
+     * `whereDate` står i var sin gren, så att `whereDate` aldrig får ett null
+     * att jämföra — samma regel som markören på `/tasks` följer.
+     *
+     * **Räknarna vill inte ha den grenen.** *Tasks due* räknar försenat plus i
+     * dag och ingenting annat (ADR-0052 § 3), så varje räknare lägger
+     * `whereNotNull('due_at')` ovanpå det här scopet — se
+     * App\Actions\Schedule\ListTodo, vars `$onlyCurrent === true` är precis
+     * den frågan. Scopet självt svarar på växelns fråga, och växeln bär
+     * *No date*.
+     *
      * @param  Builder<ScheduleOccurrence>  $query
      * @return Builder<ScheduleOccurrence>
      */
     public function scopeDueTodayOrEarlier(Builder $query, User $user): Builder
     {
-        return $query->whereDate('due_at', '<=', $user->today()->toDateString());
+        return $query->where(fn (Builder $query) => $query
+            ->whereNull('due_at')
+            ->orWhereDate('due_at', '<=', $user->today()->toDateString()));
     }
 }

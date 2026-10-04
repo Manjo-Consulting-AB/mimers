@@ -978,6 +978,9 @@ it('har varje todo-nyckel och ingen svensk sträng i vyn', function () {
         TodoController::GROUP_TODAY,
         TodoController::GROUP_THIS_WEEK,
         TodoController::GROUP_UPCOMING,
+        // M26 · issue 234: den femte gruppen, sista bland de öppna
+        // (ADR-0052 § 3). Nyckeln bor i ListTodo och speglas i kontrollern.
+        TodoController::GROUP_NO_DATE,
     ]);
 
     // Ingen svensk sträng utanför kommentar i todovyns komponenter. Växeln

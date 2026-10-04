@@ -3539,6 +3539,11 @@ return [
             'today' => 'Today',
             'this_week' => 'This week',
             'upcoming' => 'Upcoming',
+            // M26 · issue 234: the last group among the open ones, for an
+            // occurrence without a `due_at` (ADR-0052 § 3). The heading is
+            // drawn by the same loop as the four above — the views iterate
+            // `groups` — so the word is the only thing that follows the key.
+            'no_date' => 'No date',
         ],
 
         // Antalet vid grupprubriken, se M24 · issue 231 (GitHub #729) och

@@ -39,22 +39,31 @@ use Illuminate\Support\Facades\Gate;
  * modellen** (issue 134). Är `user.show_upcoming_tasks` falsk visas bara det
  * som är aktuellt nu — försenat och i dag — genom
  * `ScheduleOccurrence::scopeDueTodayOrEarlier()`, bredvid `scopeTodoFor`.
- * Klassens regel står kvar: inget `where` formuleras här, bara valet om
- * modellens villkor ska gälla. **Räknarna rörs aldrig av växeln** (issue 697):
- * varje tal här är det som är aktuellt nu — försenat plus i dag — och den enda
- * vägen dit är att fråga med villkoret PÅ oavsett vad användaren valt (se
- * `handle()`, `forContainer()` och `countForContainer()`).
+ * Sedan `no_date` kom (M26 · issue 234, ADR-0052 § 4) bär det villkoret också
+ * de odaterade raderna: en uppgift utan datum ligger inte i framtiden, och
+ * växeln döljer bara *This week* och *Upcoming*. Klassens regel står kvar:
+ * inget `where` formuleras här, bara valet om modellens villkor ska gälla.
  *
- * **Ordningen och grupperingen räknas på servern** (Beslut 3). `due_at`
- * stigande med `ulid` stigande — samma deterministiska ordning som
- * `Api\TodoController::index()` — och raden hamnar i `overdue`, `today`,
- * `this_week` eller `upcoming` efter en jämförelse mot ANVÄNDARENS datum,
- * `User::today()` (issue 135). Klienten får fyra listor och ritar dem i den
- * ordning de kommer; den räknar aldrig en grupp själv. Samma regel som
- * `overdue` i 63b § Beslut 3: en klient med fel klocka ska inte kunna flytta
- * en uppgift till fel hög — och av samma skäl räknas dagen i användarens
- * tidszon och inte i serverns, som mellan midnatt och klockan två svensk tid
- * ännu är i går.
+ * **Räknarna rörs aldrig av växeln, och aldrig av `no_date`** (issue 697,
+ * ADR-0052 § 4): varje tal här är det som är aktuellt nu — försenat plus i
+ * dag — och den enda vägen dit är att fråga med villkoret PÅ oavsett vad
+ * användaren valt. `$onlyCurrent === true` är just den frågan, och den bär
+ * dessutom `whereNotNull('due_at')`: en rad utan datum räknas inte i *Tasks
+ * due*. Växeln AV ställer samma villkor men UTAN datumspärren, så att raderna
+ * får *No date* med sig (se `handle()`, `forContainer()` och
+ * `countForContainer()`).
+ *
+ * **Ordningen och grupperingen räknas på servern** (Beslut 3, ADR-0052 § 3).
+ * Daterade rader sorteras `due_at` stigande med `ulid` stigande, och de
+ * odaterade kommer efter dem, sorterade på `ulid` — `orderByRaw('due_at IS
+ * NULL')` först, för både MySQL och sqlite sätter annars null först. Raden
+ * hamnar i `overdue`, `today`, `this_week`, `upcoming` eller `no_date` efter
+ * en jämförelse mot ANVÄNDARENS datum, `User::today()` (issue 135). Klienten
+ * får fem listor och ritar dem i den ordning de kommer; den räknar aldrig en
+ * grupp själv. Samma regel som `overdue` i 63b § Beslut 3: en klient med fel
+ * klocka ska inte kunna flytta en uppgift till fel hög — och av samma skäl
+ * räknas dagen i användarens tidszon och inte i serverns, som mellan midnatt
+ * och klockan två svensk tid ännu är i går.
  *
  * **`this_week` är veckan som börjar i morgon och slutar på söndag** (M24 ·
  * issue 719, Tonys beslut 2026-10-04). Veckan är ISO 8601 och slutar på söndag
@@ -66,10 +75,13 @@ use Illuminate\Support\Facades\Gate;
  * översiktens panel och containerns uppgiftsflik.
  *
  * **`/tasks` är paginerad, dashboarden är det inte** (issue 123). `page()`
- * nedan ger en sida om högst `PER_PAGE` rader med en markör över
- * `(due_at, ulid)` i querysträngen; `handle()` ger hela listan, ogrupperad i
- * `rows`, och det är den dashboardens uppgiftspanel läser och klipper sina fem
- * ur. Panelen pagineras alltså inte, och frågan är den samma för båda.
+ * nedan ger en sida om högst `PER_PAGE` rader med en markör i querysträngen;
+ * markören bär sin sektion sedan `no_date` kom (ADR-0052 § Konsekvenser):
+ * `d_{due_at}_{ulid}` för en daterad rad och `n_{ulid}` för en odaterad, så
+ * att ett null-`due_at` aldrig jämförs med ett datum. `handle()` ger hela
+ * listan, ogrupperad i `rows`, och det är den dashboardens uppgiftspanel läser
+ * och klipper sina fem ur. Panelen pagineras alltså inte, och frågan är den
+ * samma för båda.
  *
  * **Pagineringen omprövade ett äldre beslut, och det hör hit.** Issue 64
  * § Beslut 3 och [[ADR-0005 Schema och förekomst]] motiverade den opaginerade
@@ -78,10 +90,13 @@ use Illuminate\Support\Facades\Gate;
  * ADR-0005 står kvar som historik enligt [[ADR-0032 Produktens ord]].
  *
  * **`rows` är samma rader i samma ordning, ogrupperade** — för panelen, som
- * tar de fem första. Gruppordningen (försenat, i dag, denna vecka, kommande) ÄR
- * den ordning `due_at` ger, så de två fälten kan inte glida ifrån varandra: den
- * som behöver en grupprubrik tar `groups`, den som bara ska visa en rad tar
- * `rows`.
+ * tar de fem första. Gruppordningen (försenat, i dag, denna vecka, kommande,
+ * utan datum) följer den ordning raderna kommer i, så de två fälten kan inte
+ * glida ifrån varandra: den som behöver en grupprubrik tar `groups`, den som
+ * bara ska visa en rad tar `rows`. Ordningen ställs av varje anropare:
+ * `handle()` och `forContainer()` sätter samma (Beslut 2, ADR-0052 § 3) —
+ * daterade före odaterade, `due_at` stigande med `ulid` stigande — och
+ * `page()` sätter den själv och VÄNDER på den när `before` styr.
  *
  * **Flaggorna är presentation** (Beslut 4). `can.update` räknas per rad med
  * `ItemPolicy::update()` — samma grind som avbockningsrutten (63b) och
@@ -135,6 +150,18 @@ class ListTodo
     public const GROUP_UPCOMING = 'upcoming';
 
     /**
+     * Raden har inget datum — `due_at IS NULL` (M26 · issue 234,
+     * ADR-0052 § 3).
+     *
+     * Sista gruppen bland de öppna, efter `upcoming` och före *Done*: en
+     * odaterad uppgift ligger inte i framtiden utan är något användaren ska
+     * göra nu, och den får varken sorteras bland datumen eller försvinna.
+     * Ordningen inom gruppen är `ulid` stigande — skapelseordningen — för en
+     * uppgift utan datum jämförs aldrig som om den hade ett.
+     */
+    public const GROUP_NO_DATE = 'no_date';
+
+    /**
      * Antalet rader per sida på `/tasks` (issue 123).
      */
     public const PER_PAGE = 50;
@@ -171,11 +198,12 @@ class ListTodo
      * samma som `/tasks` ställer.
      *
      * **Växeln gäller raderna** (issue 134): är `show_upcoming_tasks` falsk
-     * bär både `rows` och `groups` bara försenat och i dag, och `this_week` och
-     * `upcoming` är tomma listor. `$onlyCurrent` är anroparens svar på om villkoret ska
-     * läggas på: `null` — förvalet — följer användarens växel, och `true` är
-     * "försenat plus i dag" oavsett växeln. Den senare är räknarnas väg (issue
-     * 697): dashboardens BRICKOR mäter det som är aktuellt nu, och
+     * bär både `rows` och `groups` försenat, i dag OCH *No date*, och
+     * `this_week` och `upcoming` är tomma listor (ADR-0052 § 4).
+     * `$onlyCurrent` är anroparens svar på om villkoret ska läggas på: `null` —
+     * förvalet — följer användarens växel, och `true` är "försenat plus i dag"
+     * oavsett växeln, utan en rad utan datum. Den senare är räknarnas väg
+     * (issue 697): dashboardens BRICKOR mäter det som är aktuellt nu, och
      * App\Http\Controllers\DashboardController frågar en gång med `null`
      * (panelen) och en gång med `true` (brickorna). `page()` har ingen
      * motsvarighet — `/tasks` visar alltid det användaren valt.
@@ -199,11 +227,25 @@ class ListTodo
             ->pluck('id')
             ->all();
 
-        $occurrences = $this->occurrences(
-            $user,
-            $accountIds,
-            $onlyCurrent ?? $this->onlyCurrent($user),
-        )->get();
+        // `$onlyCurrent` skickas VIDARE orörd: `null` betyder "följ
+        // användarens växel" och avgörs i `occurrences()`, medan `true` är
+        // räknarnas fråga — som också spärrar för rader utan datum.
+        //
+        // Ordningen ställs här och inte i `occurrences()` (Beslut 2, ADR-0052
+        // § 3): panelen klipper sina fem första ur `rows`, så utan den hade de
+        // fem varit databasens urval i stället för listans första fem. Samma
+        // ordning som `forContainer()` och `ListItemTasks` sätter: daterade
+        // före odaterade, `due_at` stigande med `ulid` stigande.
+        // `orderByRaw('due_at IS NULL')` är första nyckeln, för både MySQL och
+        // sqlite sätter annars null först. Ordningen kan inte bo i
+        // `occurrences()`: `page()` lägger sin egen på samma fråga och VÄNDER
+        // på den baklänges, och en ordning inifrån hade vänt hela
+        // pagineringen framåt.
+        $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent)
+            ->orderByRaw('due_at IS NULL')
+            ->orderBy('due_at')
+            ->orderBy('ulid')
+            ->get();
 
         return [
             ...$this->present($user, $request, $occurrences),
@@ -226,14 +268,14 @@ class ListTodo
      * containern som översiktens uppgiftsbricka alltid gått. En uppgift i en
      * annan container hör inte hit, även när användaren når den.
      *
-     * **`$onlyCurrent` styr raderna och inte talet** (issue 134, issue 697),
-     * precis som på dashboarden: `rows` och `groups` följer värdet, medan
-     * `count` är brickans tal — det som är aktuellt nu, försenat plus i dag —
-     * och räknar samma mängd oavsett. Värdet PÅ betyder "visa bara det
-     * aktuella", och då är `$occurrences` redan den mängden: talet är dess
-     * längd. Värdet AV bär hela mängden, och talet ställs i en andra fråga,
-     * med villkoret på. `null` följer användarens växel; containerns
-     * uppgiftsflik skickar `false` och släpper den (Beslut 2).
+     * **`$onlyCurrent` styr raderna och inte talet** (issue 134, issue 697,
+     * ADR-0052 § 4), precis som på dashboarden: `rows` och `groups` följer
+     * värdet, medan `count` är brickans tal — det som är aktuellt nu, försenat
+     * plus i dag, och aldrig en rad utan datum — och räknar samma mängd
+     * oavsett. `null` — förvalet — följer användarens växel, och växeln AV bär
+     * *No date* med sig; `true` är räknarnas fråga; containerns uppgiftsflik
+     * skickar `false` och släpper växeln (Beslut 2). Talet ställs därför alltid
+     * i en egen fråga: raderna kan bära odaterade rader som talet inte räknar.
      *
      * **`hasContainers` finns inte i svaret.** Det är dashboardens flagga för
      * att skilja "ingen container alls" från "inget att göra" (Beslut 6), och
@@ -276,35 +318,34 @@ class ListTodo
     ): array {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
-        $onlyCurrent ??= $this->onlyCurrent($user);
-
         // Ordningen ställs HÄR och inte i `occurrences()` (issue 174).
         // `page()` lägger sin egen på samma fråga — baklänges när `before` styr
         // — och en ordning inifrån hade vunnit över den och vänt hela
-        // pagineringen framåt. `handle()` frågar utan ordning och behåller
-        // därför sitt svar oförändrat.
+        // pagineringen framåt. `handle()` sätter samma ordning själv.
         //
-        // Ordningen är `/tasks` egen: `due_at` stigande med `ulid` stigande.
-        // Utan den kom raderna i den ordning databasen råkade ge dem, vilket
-        // gör panelen och tavlans kolumner obestämt sorterade — och
-        // docblocken ovan har hela tiden PÅSTÅTT att gruppordningen är
-        // `due_at`-ordningen. `ulid` är andra nyckeln av samma skäl som i
-        // `page()`: två rader som delar förfallodag ska ändå ha en fast
-        // ordning.
+        // Ordningen är `/tasks` egen: daterade före odaterade, `due_at`
+        // stigande med `ulid` stigande. Utan den kom raderna i den ordning
+        // databasen råkade ge dem, vilket gör panelen och tavlans kolumner
+        // obestämt sorterade — och docblocken ovan har hela tiden PÅSTÅTT att
+        // gruppordningen är `due_at`-ordningen. `orderByRaw('due_at IS NULL')`
+        // är första nyckeln sedan `no_date` kom (ADR-0052 § Konsekvenser):
+        // både MySQL och sqlite sätter annars null först. `ulid` är andra
+        // nyckeln av samma skäl som i `page()`: två rader som delar
+        // förfallodag — eller saknar den — ska ändå ha en fast ordning.
         $occurrences = $this->occurrences($user, $accountIds, $onlyCurrent, $container, $maintenanceOnly)
+            ->orderByRaw('due_at IS NULL')
             ->orderBy('due_at')
             ->orderBy('ulid')
             ->get();
 
         return [
             ...$this->present($user, $request, $limit === null ? $occurrences : $occurrences->take($limit)),
-            // Växeln AV begränsar redan raderna till försenat och i dag, och
-            // då är talet deras längd. Växeln PÅ bär hela mängden, och då
-            // ställs frågan en gång till — med villkoret på — precis som
-            // DashboardController gör för sina brickor (issue 697).
-            'count' => $onlyCurrent
-                ? $occurrences->count()
-                : $this->occurrences($user, $accountIds, true, $container, $maintenanceOnly)->count(),
+            // Talet ställs alltid i en egen fråga (issue 697, ADR-0052 § 4):
+            // det är räknarnas mängd — försenat plus i dag, utan en rad utan
+            // datum — och den är inte längre radernas, för växeln AV bär
+            // *No date* med sig. Samma fråga som DashboardController ställer
+            // för sina brickor.
+            'count' => $this->occurrences($user, $accountIds, true, $container, $maintenanceOnly)->count(),
         ];
     }
 
@@ -314,10 +355,10 @@ class ListTodo
      * **Samma tal som `forContainer()['count']` och översiktens
      * `counts.todos`**: villkoret `onlyCurrent` är `true` (issue 697) och
      * `maintenanceOnly` står kvar på sitt förval, så talet räknar det som är
-     * aktuellt nu — försenat plus i dag — oberoende av växeln
-     * `show_upcoming_tasks`. `forContainer()` själv är oförändrad; den här
-     * metoden är samma fråga utan radhämtningen, för den som bara ska veta hur
-     * många.
+     * aktuellt nu — försenat plus i dag, och aldrig en rad utan datum
+     * (ADR-0052 § 4) — oberoende av växeln `show_upcoming_tasks`.
+     * `forContainer()` själv är oförändrad; den här metoden är samma fråga utan
+     * radhämtningen, för den som bara ska veta hur många.
      */
     public function countForContainer(User $user, Container $container): int
     {
@@ -409,11 +450,22 @@ class ListTodo
      * En sida av todo-listan — högst `PER_PAGE` rader, och markörerna till
      * nästa och föregående sida.
      *
-     * **Markören är `(due_at, ulid)` och står i querysträngen** som `after`
-     * eller `before`. Två rader som delar `due_at` skiljs av `ulid`, så en
-     * sidgräns kan aldrig hamna mitt i ett dött lopp: nästa sida börjar på
-     * raden efter den förra sidans sista, vilket är hela skälet till den
-     * andra nyckeln.
+     * **Markören bär sin sektion** (ADR-0052 § Konsekvenser). Formen är
+     * `d_{due_at}_{ulid}` för en daterad rad och `n_{ulid}` för en odaterad,
+     * och den står i querysträngen som `after` eller `before`. Två rader som
+     * delar `due_at` — eller saknar den — skiljs av `ulid`, så en sidgräns kan
+     * aldrig hamna mitt i ett dött lopp: nästa sida börjar på raden efter den
+     * förra sidans sista. Den gamla formen `{due_at}_{ulid}`, utan sektion,
+     * läses fortfarande som `d_…`, så en adress som redan är sparad fungerar.
+     *
+     * **Ett null-`due_at` jämförs aldrig med ett datum.** Frågan byggs som två
+     * delar — `due_at IS NOT NULL` och `due_at IS NULL` — och varje jämförelse
+     * ligger inuti sin del. Framåt från en daterad markör: daterade rader efter
+     * `(due_at, ulid)`, och därefter alla odaterade. Framåt från en odaterad:
+     * bara odaterade med större `ulid`. Bakåt spegelvänt: från en odaterad
+     * först odaterade med mindre eller lika `ulid`, sedan alla daterade; från
+     * en daterad bara daterade. Därför `whereNull()` och `whereNotNull()` runt
+     * varje `whereDate()`, som aldrig får ett null att jämföra.
      *
      * **Grupperingen räknas per rad, på den här sidans rader** — `due_at` mot
      * användarens datum och ingenting annat. En sida som börjar mitt i en grupp
@@ -453,35 +505,71 @@ class ListTodo
 
         // Baklänges när `before` styr: raden markören pekar på är sidans sista,
         // och frågan hämtar de femtio som slutar där.
-        //
-        // `whereDate()` och inte en rå kolumnjämförelse, av samma skäl som
-        // `scopeTodoFor()` väljer det: `due_at` är en DATE-kolumn, men värdet
-        // lagras med en tidsdel — `2026-06-15 00:00:00`. MariaDB klipper den
-        // till kolumnens typ, sqlite gör det inte, så `due_at > '2026-06-15'`
-        // hade räknat in samma dag i sviten och inte i drift.
         $backwards = $before !== null;
 
         // Växeln lägger på ett villkor och rör inte markören: sidgränsen är
         // `(due_at, ulid)` över de rader frågan bär, och en avgränsning mot
         // dagens datum flyttar varken nycklarna eller deras ordning
-        // (issue 134, issue 123).
-        $query = $this->occurrences($user, $accountIds, $this->onlyCurrent($user));
+        // (issue 134, issue 123). `null` är "följ användarens växel", och
+        // växeln AV bär *No date* (ADR-0052 § 4).
+        $query = $this->occurrences($user, $accountIds, null);
 
-        if ($backwards) {
-            $query->where(fn (Builder $query) => $query
-                ->whereDate('due_at', '<', $before['due_at'])
-                ->orWhere(fn (Builder $query) => $query
-                    ->whereDate('due_at', '=', $before['due_at'])
-                    ->where('ulid', '<=', $before['ulid'])));
+        // `whereDate()` och inte en rå kolumnjämförelse, av samma skäl som
+        // `scopeTodoFor()` väljer det: `due_at` är en DATE-kolumn, men värdet
+        // lagras med en tidsdel — `2026-06-15 00:00:00`. MariaDB klipper den
+        // till kolumnens typ, sqlite gör det inte, så `due_at > '2026-06-15'`
+        // hade räknat in samma dag i sviten och inte i drift. Varje jämförelse
+        // står inuti sin sektion, så `whereDate()` aldrig får ett null.
+        if ($before !== null) {
+            $query->where(function (Builder $query) use ($before): void {
+                if ($before['due_at'] === null) {
+                    // Bakåt från en odaterad rad: de odaterade före och med
+                    // markören, och därefter alla daterade.
+                    $query->where(fn (Builder $query) => $query
+                        ->whereNull('due_at')
+                        ->where('ulid', '<=', $before['ulid']))
+                        ->orWhereNotNull('due_at');
+
+                    return;
+                }
+
+                // Bakåt från en daterad rad: bara daterade, före och med
+                // markören.
+                $query->whereNotNull('due_at')
+                    ->where(fn (Builder $query) => $query
+                        ->whereDate('due_at', '<', $before['due_at'])
+                        ->orWhere(fn (Builder $query) => $query
+                            ->whereDate('due_at', '=', $before['due_at'])
+                            ->where('ulid', '<=', $before['ulid'])));
+            });
         } elseif ($after !== null) {
-            $query->where(fn (Builder $query) => $query
-                ->whereDate('due_at', '>', $after['due_at'])
-                ->orWhere(fn (Builder $query) => $query
-                    ->whereDate('due_at', '=', $after['due_at'])
-                    ->where('ulid', '>', $after['ulid'])));
+            $query->where(function (Builder $query) use ($after): void {
+                if ($after['due_at'] === null) {
+                    // Framåt från en odaterad rad: bara odaterade med större
+                    // `ulid`.
+                    $query->whereNull('due_at')->where('ulid', '>', $after['ulid']);
+
+                    return;
+                }
+
+                // Framåt från en daterad rad: daterade efter markören, och
+                // därefter alla odaterade.
+                $query->where(fn (Builder $query) => $query
+                    ->whereNotNull('due_at')
+                    ->where(fn (Builder $query) => $query
+                        ->whereDate('due_at', '>', $after['due_at'])
+                        ->orWhere(fn (Builder $query) => $query
+                            ->whereDate('due_at', '=', $after['due_at'])
+                            ->where('ulid', '>', $after['ulid']))))
+                    ->orWhereNull('due_at');
+            });
         }
 
         $occurrences = $query
+            // Första nyckeln är sektionen: daterade före odaterade framåt,
+            // odaterade före daterade bakåt. Utan den sätter både MySQL och
+            // sqlite null först.
+            ->orderByRaw('due_at IS NULL'.($backwards ? ' desc' : ''))
             ->orderBy('due_at', $backwards ? 'desc' : 'asc')
             ->orderBy('ulid', $backwards ? 'desc' : 'asc')
             ->limit(self::PER_PAGE + 1)
@@ -506,11 +594,11 @@ class ListTodo
             // femtioförsta raden, den vi hämtade men inte visar.
             'previous' => $backwards
                 ? ($hasMore ? $this->mark($occurrences->last()) : null)
-                : ($after === null ? null : $this->cursorString($after['due_at'], $after['ulid'])),
+                : ($after === null ? null : $this->cursorString($after)),
             // Nästa sida börjar efter den här sidans sista rad. Bakåt är det
             // markören vi kom in med — den ÄR sidans sista rad.
-            'next' => $backwards
-                ? $this->cursorString($before['due_at'], $before['ulid'])
+            'next' => $before !== null
+                ? $this->cursorString($before)
                 : ($hasMore ? $this->mark($page->last()) : null),
         ];
     }
@@ -525,6 +613,14 @@ class ListTodo
      * `ScheduleOccurrence::scopeDueTodayOrEarlier()`, bredvid `scopeTodoFor`
      * i modellen. Den här klassen formulerar fortfarande inget eget `where` —
      * den väljer bara om modellens villkor ska gälla.
+     *
+     * **`$onlyCurrent` är trevärt sedan `no_date` kom** (ADR-0052 § 4):
+     * `null` — förvalet — följer användarens växel, och växeln AV bär
+     * *No date* med sig; `true` är räknarnas fråga och lägger dessutom på
+     * `whereNotNull('due_at')`, så att en rad utan datum aldrig räknas i
+     * *Tasks due*; `false` släpper växeln helt (containerns uppgiftsflik).
+     * Att `true` och "växeln AV" inte längre är samma fråga är hela poängen:
+     * de visar samma daterade rader men bara växeln bär den odaterade.
      *
      * **`$container` är containerns avgränsning** (issue 172): satt läggs
      * `schedule.item.container_id` på, samma väg till containern som
@@ -546,20 +642,22 @@ class ListTodo
     private function occurrences(
         User $user,
         array $accountIds,
-        bool $onlyCurrent,
+        ?bool $onlyCurrent,
         ?Container $container = null,
         bool $maintenanceOnly = false,
     ): Builder {
         $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
-            // Fram till issue 234 (ADR-0052 § 3) har en rad utan datum ingen
-            // grupp att hamna i, och listan sorterar och grupperar på `due_at`.
-            // Villkoret håller raden borta tills *No date* byggs; då ersätts
-            // det av gruppen, och markören `n_{ulid}`.
-            ->whereNotNull('due_at')
             ->with(['schedule.item.container.account']);
 
-        if ($onlyCurrent) {
+        // `true` är räknarnas fråga: försenat plus i dag, och aldrig en rad
+        // utan datum (ADR-0052 § 4). `null` — följ användarens växel — och
+        // `false` bär raden utan datum, i *No date*.
+        if ($onlyCurrent === true) {
+            $query->whereNotNull('due_at');
+        }
+
+        if ($onlyCurrent ?? $this->onlyCurrent($user)) {
             $query->dueTodayOrEarlier($user);
         }
 
@@ -735,11 +833,16 @@ class ListTodo
         $today = $user->today();
         $accountUlids = $user->accounts->pluck('ulid')->all();
 
+        // Fem nycklar, i ritningsordning (ADR-0052 § 3): *No date* sist bland
+        // de öppna, efter *Upcoming* och före *Done*. Vyn itererar `groups`
+        // och ritar rubriken för varje icke-tom grupp, så ordningen här ÄR
+        // ordningen på sidan.
         $groups = [
             self::GROUP_OVERDUE => [],
             self::GROUP_TODAY => [],
             self::GROUP_THIS_WEEK => [],
             self::GROUP_UPCOMING => [],
+            self::GROUP_NO_DATE => [],
         ];
 
         $covers = $this->covers($occurrences);
@@ -813,35 +916,52 @@ class ListTodo
      * kommer ur ett adressfält någon klistrat i, och ett 500 hade varit ett
      * svar på fel fråga.
      *
-     * Formen är `due_at` och `ulid` med ett understreck emellan —
-     * `2026-06-15_01HZ…`. Understrecket finns inte i någon av delarna:
-     * datumet bär bindestreck och ULID:n är Crockfords alfabet.
+     * Formen är `d_{due_at}_{ulid}` för en daterad rad och `n_{ulid}` för en
+     * odaterad (ADR-0052 § Konsekvenser). Understrecket finns inte i någon av
+     * delarna: datumet bär bindestreck och ULID:n är Crockfords alfabet. Den
+     * gamla formen `{due_at}_{ulid}`, utan sektion, läses som `d_…`, så en
+     * adress som redan är sparad fungerar.
      *
-     * @return array{due_at: string, ulid: string}|null
+     * @return array{due_at: string|null, ulid: string}|null
      */
     private function cursor(mixed $value): ?array
     {
-        if (! is_string($value) || preg_match('/^(\d{4}-\d{2}-\d{2})_([0-9A-Za-z]{26})$/', $value, $träffar) !== 1) {
+        if (! is_string($value)) {
             return null;
         }
 
-        return ['due_at' => $träffar[1], 'ulid' => $träffar[2]];
+        if (preg_match('/^n_([0-9A-Za-z]{26})$/', $value, $träffar) === 1) {
+            return ['due_at' => null, 'ulid' => $träffar[1]];
+        }
+
+        if (preg_match('/^(?:d_)?(\d{4}-\d{2}-\d{2})_([0-9A-Za-z]{26})$/', $value, $träffar) === 1) {
+            return ['due_at' => $träffar[1], 'ulid' => $träffar[2]];
+        }
+
+        return null;
     }
 
     /**
-     * Markören för en rad.
+     * Markören för en rad — daterad eller odaterad (ADR-0052 § Konsekvenser).
      */
     private function mark(ScheduleOccurrence $occurrence): string
     {
-        return $this->cursorString($occurrence->due_at->toDateString(), $occurrence->ulid);
+        return $this->cursorString([
+            'due_at' => $occurrence->due_at?->toDateString(),
+            'ulid' => $occurrence->ulid,
+        ]);
     }
 
     /**
      * Markören som den står i querysträngen — `cursor()`:s motpart.
+     *
+     * @param  array{due_at: string|null, ulid: string}  $cursor
      */
-    private function cursorString(string $dueAt, string $ulid): string
+    private function cursorString(array $cursor): string
     {
-        return $dueAt.'_'.$ulid;
+        return $cursor['due_at'] === null
+            ? 'n_'.$cursor['ulid']
+            : 'd_'.$cursor['due_at'].'_'.$cursor['ulid'];
     }
 
     /**
@@ -858,9 +978,18 @@ class ListTodo
      * med samma metod, så en förekomst hamnar i samma grupp på itemets flik som
      * på `/tasks` och containerns flik. En egen jämförelse där hade varit den
      * andra sanningen om var veckan slutar.
+     *
+     * **`null` är `no_date`** (ADR-0052 § 3): en rad utan `due_at` jämförs
+     * aldrig mot ett datum, den har sin egen grupp. Signaturen är därför
+     * `?CarbonInterface` — den som bär en rad utan datum ska inte behöva
+     * gissa ett datum åt den.
      */
-    public function group(CarbonInterface $dueAt, CarbonInterface $today): string
+    public function group(?CarbonInterface $dueAt, CarbonInterface $today): string
     {
+        if ($dueAt === null) {
+            return self::GROUP_NO_DATE;
+        }
+
         if ($dueAt->lessThan($today)) {
             return self::GROUP_OVERDUE;
         }
