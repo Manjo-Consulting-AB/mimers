@@ -97,7 +97,7 @@ Datumdiagrammet räknar bara datumgrupperna. GTD-räkningen är en egen panel. D
 
 **Inbox betyder obearbetad, inte utan plats.** Uppgiften hör fortfarande till ett item. Utan item har den varken ägare, behörighet eller plats i strukturen, och varje ställe som läser åtkomsten hade behövt ett undantag ([[ADR-0028 Åtkomst på itemnivå]]).
 
-***No date* är en restgrupp.** Utan den hade en uppgift i *Next* utan datum funnits utan att synas i *All tasks*, och en lista som heter *All tasks* ska visa alla.
+***No date* är en restgrupp.** Utan den hade en aktiv uppgift i *Next* utan datum saknats i listan över aktiva uppgifter. Den vyn heter *Active* och inte *All tasks*: de avbockade står under *Done*, och en etikett som lovar alla får inte utelämna några.
 
 ## Konsekvenser
 
@@ -127,4 +127,4 @@ Datumdiagrammet räknar bara datumgrupperna. GTD-räkningen är en egen panel. D
 
 **En separat inställning för när uppgiften blir synlig, vid sidan av påminnelsen.** Det var mockupens två fält. Valdes bort, eftersom issue 220 (#698) redan gjort uppgifter synliga från att de skapas, och testarna tog upp osynliga uppgifter som ett fel.
 
-**Låta uppgifter utan datum sakna grupp.** Valdes bort, eftersom *All tasks* då inte visar allt.
+**Låta uppgifter utan datum sakna grupp.** Valdes bort, eftersom *Active* då inte visar alla aktiva uppgifter.
