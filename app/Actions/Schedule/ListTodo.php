@@ -628,10 +628,12 @@ class ListTodo
     /**
      * Användarens växel, som ett svar på "bara det aktuella nu?" —
      * `show_upcoming_tasks` sann betyder "visa även framtida", alltså att
-     * inget villkor läggs på (issue 134). Läsningen bor här så att `handle()`
-     * och `page()` svarar likadant på samma kolumn.
+     * inget villkor läggs på (issue 134). Läsningen bor här så att `handle()`,
+     * `page()` och `Api\TodoController::index()` svarar likadant på samma
+     * kolumn: API:et följer webben (M24 · issue 701), och växeln läses på ETT
+     * ställe i stället för en gång per yta.
      */
-    private function onlyCurrent(User $user): bool
+    public function onlyCurrent(User $user): bool
     {
         return ! $user->show_upcoming_tasks;
     }

@@ -143,19 +143,22 @@ it('en återkallad eller utgången åtkomst tar bort uppgifterna ur listan', fun
     expect(todoUlidLista($response))->toBe([$egenOpen->ulid]);
 });
 
-it('en förekomst vars visible_from ligger i framtiden kommer inte med', function () {
+it('en förekomst vars visible_from ligger i framtiden kommer med som upcoming', function () {
     [$account, $user, $headers] = kontoMedMedlem();
     $container = Container::factory()->for($account, 'account')->create(['name' => 'Bårösund']);
 
     // due 2027-05-05, lead 14 → visible_from 2027-04-21: fortfarande i
-    // framtiden. Den får inte synas trots att förekomsten är öppen.
+    // framtiden. Ändå med sedan M24 (issue 701): listan visar en öppen
+    // förekomst från att den skapas, och bara påminnelsen ställer
+    // `visible_from` (issue 698 § Beslut 2).
     [, , $framtida] = todoUppgift($container, $user, $account, 'Byt impeller', '2027-05-05', 14);
     [, , $idag] = todoUppgift($container, $user, $account, 'Serva motorn', '2026-09-02');
 
     $response = getJson('/api/todo', $headers);
 
     $response->assertOk();
-    expect(todoUlidLista($response))->toBe([$idag->ulid]);
+    expect(todoUlidLista($response))->toBe([$idag->ulid, $framtida->ulid])
+        ->and($response->json('data.1.upcoming'))->toBeTrue();
     expect($framtida->visible_from->toDateString())->toBe('2027-04-21');
 });
 
