@@ -250,10 +250,10 @@ it('märker en förfallen förekomst ur serverns härledda overdue', function ()
         [, $anvandare, $container, $item] = forekomstKontext();
 
         $försenat = forekomstSchema($item, ['title' => 'Byt olja', 'anchor_date' => '2026-01-01']);
-        forekomstRad($försenat, '2026-09-01');
+        $försenad = forekomstRad($försenat, '2026-09-01');
 
         $framtida = forekomstSchema($item, ['title' => 'Byt impeller', 'anchor_date' => '2027-01-01']);
-        forekomstRad($framtida, '2027-01-01');
+        $framtidaRad = forekomstRad($framtida, '2027-01-01');
 
         $sida = actingAs($anvandare)->get(forekomstSidaUrl($container, $item, $försenat))
             ->assertOk()
@@ -262,12 +262,15 @@ it('märker en förfallen förekomst ur serverns härledda overdue', function ()
                 ->where('occurrences.0.overdue', true)
             );
 
-        // Och det är samma fält sektionen på itemet läser: `overdue` följer med
-        // den öppna förekomsten i `openOccurrences` (Beslut 3).
-        actingAs($anvandare)->get(forekomstItemUrl($container, $item))->assertOk()->assertInertia(
+        // Och det är samma fält Tasks-fliken läser: `overdue` följer med raden i
+        // `itemTasks` (M24 · issue 726 § Beslut 3), den ena gruppen för den
+        // försenade och den andra för den framtida.
+        actingAs($anvandare)->get(forekomstItemUrl($container, $item).'?tab=schedules')->assertOk()->assertInertia(
             fn (AssertableInertia $page) => $page
-                ->where("openOccurrences.{$försenat->ulid}.overdue", true)
-                ->where("openOccurrences.{$framtida->ulid}.overdue", false)
+                ->where('itemTasks.groups.overdue.0.ulid', $försenad->ulid)
+                ->where('itemTasks.groups.overdue.0.overdue', true)
+                ->where('itemTasks.groups.upcoming.0.ulid', $framtidaRad->ulid)
+                ->where('itemTasks.groups.upcoming.0.overdue', false)
         );
 
         expect($sida->viewData('page')['props']['occurrences'][0]['overdue'])->toBeTrue();
@@ -350,12 +353,14 @@ it('stänger förekomsten från itemets sektion och visar det nya datumet', func
         expect($nästa->ulid)->not->toBe($öppen->ulid);
         expect($nästa->due_at->toDateString())->toBe('2027-09-16');
 
-        // Och sidan ritas om ur serverns svar: sektionen läser det nya datumet
-        // ur `openOccurrences`.
-        actingAs($anvandare)->get($itemUrl)->assertOk()->assertInertia(
+        // Och sidan ritas om ur serverns svar: Tasks-fliken läser det nya
+        // datumet ur `itemTasks` (M24 · issue 726 § Beslut 3). Det nya
+        // förfallet ligger i framtiden, alltså i gruppen *upcoming*.
+        actingAs($anvandare)->get($itemUrl.'?tab=schedules')->assertOk()->assertInertia(
             fn (AssertableInertia $page) => $page
-                ->where("openOccurrences.{$schema->ulid}.due_at", '2027-09-16')
-                ->where("openOccurrences.{$schema->ulid}.ulid", $nästa->ulid)
+                ->where('itemTasks.groups.upcoming.0.schedule.ulid', $schema->ulid)
+                ->where('itemTasks.groups.upcoming.0.due_at', '2027-09-16')
+                ->where('itemTasks.groups.upcoming.0.ulid', $nästa->ulid)
         );
     } finally {
         Carbon::setTestNow();
@@ -478,13 +483,19 @@ it('öppnar ingen ny förekomst för ett none-schema och säger att uppgiften ä
         ->post(forekomstStängUrl($container, $item, $schema, $öppen, 'complete'), ['account' => $konto->ulid])
         ->assertRedirect(forekomstItemUrl($container, $item));
 
-    // Ingen nästa: `recurrence_type: none` har ingen serie (issue 22 §
-    // Beslut 1), och Actionen svarar null.
+    // Ingen öppen förekomst: `recurrence_type: none` har ingen serie (issue 22
+    // § Beslut 1), och Actionen svarar null.
     expect($schema->occurrences()->count())->toBe(1);
     expect($schema->openOccurrence()->exists())->toBeFalse();
 
-    actingAs($anvandare)->get(forekomstItemUrl($container, $item))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page->where("openOccurrences.{$schema->ulid}", null)
+    // Tasks-fliken (M24 · issue 726 § Beslut 3): schemat har ingen rad i någon
+    // av grupperna — förekomsten saknas i `itemTasks.groups`.
+    actingAs($anvandare)->get(forekomstItemUrl($container, $item).'?tab=schedules')->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->has('itemTasks.groups.overdue', 0)
+            ->has('itemTasks.groups.today', 0)
+            ->has('itemTasks.groups.this_week', 0)
+            ->has('itemTasks.groups.upcoming', 0)
     );
 
     // Och schemats sida säger att uppgiften är klar i stället för att visa ett

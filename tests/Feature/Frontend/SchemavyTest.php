@@ -210,31 +210,58 @@ it('listar itemets scheman sorterade på titel, i samma ordning som /api', funct
 it('visar nästa förfall ur den öppna förekomsten och inget påhittat datum', function () {
     withoutVite();
 
-    [, $anvandare, $container, $item] = schemavyKontext();
+    Carbon::setTestNow('2026-09-16 12:00:00');
 
-    $oljebyte = schemavySchema($item, ['title' => 'Byt olja']);
-    // Ett pausat schema har ingen öppen förekomst — pausen rör aldrig raden,
-    // men ett schema som skapats pausat har aldrig fått någon.
-    $pausat = schemavySchema($item, ['title' => 'Byt impeller', 'is_active' => false]);
+    try {
+        [, $anvandare, $container, $item] = schemavyKontext();
 
-    schemavyFörekomst($oljebyte, '2027-05-05');
+        $oljebyte = schemavySchema($item, ['title' => 'Byt olja']);
+        // Ett pausat schema har ingen öppen förekomst — pausen rör aldrig raden,
+        // men ett schema som skapats pausat har aldrig fått någon.
+        $pausat = schemavySchema($item, ['title' => 'Byt impeller', 'is_active' => false]);
 
-    actingAs($anvandare)->get(schemavyUrl($container, $item))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->has('schedules', 2)
-            ->where('schedules.0.title', 'Byt impeller')
-            ->where('schedules.0.is_active', false)
-            ->where('schedules.1.title', 'Byt olja')
-            ->where('schedules.1.is_active', true)
-            // Sedan issue 63b är det den öppna FÖREKOMSTEN och inte dess
-            // datum som ligger i propen — avbockningen behöver ULID:n,
-            // `overdue` och `visible_from`, och `due_at` är ett av dess fält
-            // (issue 63b § Beslut 2). Nästa förfall är fortfarande samma rad.
-            ->where("openOccurrences.{$oljebyte->ulid}.due_at", '2027-05-05')
-            // Nyckeln finns med `null` och är inte utelämnad: vyns uppslag är
-            // detsamma för alla rader och slipper en andra gren.
-            ->where("openOccurrences.{$pausat->ulid}", null)
-    );
+        schemavyFörekomst($oljebyte, '2027-05-05');
+
+        actingAs($anvandare)->get(schemavyUrl($container, $item))->assertOk()->assertInertia(
+            fn (AssertableInertia $page) => $page
+                ->has('schedules', 2)
+                ->where('schedules.0.title', 'Byt impeller')
+                ->where('schedules.0.is_active', false)
+                ->where('schedules.1.title', 'Byt olja')
+                ->where('schedules.1.is_active', true)
+        );
+
+        // Nästa förfall läses ur uppgiftsfliken (M24 · issue 726): raden för det
+        // aktiva schemat bär den öppna förekomstens förfallodatum, och det
+        // pausade schemat har ingen öppen förekomst alls — därför ingen rad i
+        // någon av grupperna. Sedan issue 227 ritar fliken förekomsterna ur
+        // `itemTasks`, inte ur den borttagna `openOccurrences`-proppen.
+        actingAs($anvandare)->get(schemavyUrl($container, $item).'?tab=schedules')->assertOk()->assertInertia(
+            fn (AssertableInertia $page) => $page
+                ->has('itemTasks.groups.overdue', 0)
+                ->has('itemTasks.groups.today', 0)
+                ->has('itemTasks.groups.this_week', 0)
+                ->has('itemTasks.groups.upcoming', 1)
+                ->where('itemTasks.groups.upcoming.0.schedule.ulid', $oljebyte->ulid)
+                ->where('itemTasks.groups.upcoming.0.due_at', '2027-05-05')
+        );
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+/*
+ * Klart när: varken kontrollern eller vyn bär den gamla `openOccurrences`.
+ *
+ * Sedan issue 227 ritar itemets Tasks-flik förekomsterna ur `itemTasks`, och
+ * proppen `openOccurrences` hade blivit en andra sanning om samma öppna
+ * förekomst — till priset av en serialisering per sidladdning (M24 ·
+ * issue 726 § Beslut 1 och 2). Provet läser filerna som text: en prop som
+ * deklareras men inte används syns inte i något svar.
+ */
+it('itemets sida skickar inte openOccurrences', function () {
+    expect(File::get(app_path('Http/Controllers/ItemController.php')))->not->toContain('openOccurrences');
+    expect(File::get(resource_path('js/pages/Containers/Items/Show.vue')))->not->toContain('openOccurrences');
 });
 
 /*
