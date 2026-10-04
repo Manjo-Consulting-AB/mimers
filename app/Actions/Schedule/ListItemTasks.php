@@ -125,6 +125,7 @@ class ListItemTasks
 
         $today = $user->today();
         $accountUlids = $user->accounts->pluck('ulid')->all();
+        $covers = $this->listTodo->covers($occurrences);
 
         foreach ($occurrences as $occurrence) {
             if (! $this->visible($user, $container, $occurrence)) {
@@ -132,7 +133,7 @@ class ListItemTasks
             }
 
             $groups[$this->listTodo->group($occurrence->due_at, $today)][] = [
-                ...$this->listTodo->row($user, $request, $occurrence, $accountUlids),
+                ...$this->listTodo->row($user, $request, $occurrence, $accountUlids, $covers),
                 'paused' => ! $occurrence->schedule->is_active,
                 'blocked' => $this->blocked($occurrence),
             ];
@@ -163,6 +164,7 @@ class ListItemTasks
             ->get();
 
         $accountUlids = $user->accounts->pluck('ulid')->all();
+        $covers = $this->listTodo->covers($occurrences);
 
         $rows = [];
 
@@ -172,7 +174,7 @@ class ListItemTasks
             }
 
             $rows[] = [
-                ...$this->listTodo->row($user, $request, $occurrence, $accountUlids),
+                ...$this->listTodo->row($user, $request, $occurrence, $accountUlids, $covers),
                 'completed_at' => $occurrence->completed_at->toIso8601String(),
             ];
         }

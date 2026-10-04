@@ -112,6 +112,45 @@ class ResolveItemCover
     }
 
     /**
+     * Omslaget för varje item i en samling, som raden bär det — nycklad på
+     * itemets `id` (M24 · issue 229, Beslut 1).
+     *
+     * Samma svar som `ItemController::covers()` sedan issue 183 gav sina
+     * rader, men formatet bor nu HÄR i stället för i kontrollern: formen
+     * `{ulid, hasThumb}` är samma svar för `/containers/{container}/items`
+     * och för uppgiftslistornas rader, och två formuleringar av den hade
+     * glidit isär — den ena hade glömt `hasThumb` och ritat en trasig
+     * miniatyr.
+     *
+     * `hasThumb` räknas ur de EAGERLADDADE derivaten, precis som
+     * `ContainerController::recentImages()`: noll extra frågor per rad, och
+     * samma regel som itemvyn — en miniatyr ritas bara när varianten finns
+     * (issue 61b § Beslut 1). Regeln och formen kommer ur `forItems()` i ett
+     * enda anrop, så kostnaden är konstant oavsett hur många item samlingen
+     * bär.
+     *
+     * Ett item utan bild får `null` i stället för att saknas: vyns uppslag är
+     * detsamma för alla rader och behöver ingen andra gren. En tom samling
+     * svarar `[]` utan att fråga.
+     *
+     * @param  iterable<Item>  $items
+     * @return array<int, array{ulid: string, hasThumb: bool}|null> item-`id` → omslaget, eller null
+     */
+    public function thumbnails(iterable $items): array
+    {
+        $thumbnails = [];
+
+        foreach ($this->forItems($items) as $id => $attachment) {
+            $thumbnails[$id] = $attachment === null ? null : [
+                'ulid' => $attachment->ulid,
+                'hasThumb' => $attachment->storedFile->derivatives->contains('variant', 'thumb'),
+            ];
+        }
+
+        return $thumbnails;
+    }
+
+    /**
      * Itemets bilder, ÄLDST först — urvalet och ordningen `handle()` väljer
      * ur.
      *
