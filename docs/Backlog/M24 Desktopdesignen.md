@@ -166,3 +166,43 @@ GitHub #721. Itemets uppgiftsflik visar förekomster i samma grupper och med sam
 **Klart när:** ett barn med två parents ger en rad; en förekomst på ett item mottagaren inte når syns varken öppen eller i *Done*; `children=0` begränsar både öppna och klara till itemet; fliken har inga knappar för att pausa, redigera eller radera; hela testsviten är grön.
 
 **Beror på:** 225, 226
+
+### 228. Itemets sida slutar skicka openOccurrences
+
+GitHub #726. Propen `openOccurrences` läses inte längre sedan 227 och tas bort, med sin metod i `ItemController`. Proven som läste den läser `itemTasks` i stället.
+
+**Läs:** `app/Http/Controllers/ItemController.php` (`show()`, `openOccurrences()`), `resources/js/pages/Containers/Items/Show.vue`
+
+**Klart när:** varken kontrollern eller sidan nämner `openOccurrences`; proven i `ForekomstvyTest` och `SchemavyTest` är gröna mot `itemTasks`; hela testsviten är grön.
+
+**Beror på:** 227
+
+### 229. Uppgiftsraden bär itemets omslag
+
+GitHub #727. Raderna i uppgiftslistorna får `cover` bredvid resursen, med samma regel som itemlistan (`ResolveItemCover`) och ett konstant antal frågor. `/api/todo` får inget nytt fält.
+
+**Läs:** `app/Actions/Item/ResolveItemCover.php`, `app/Actions/Schedule/ListTodo.php`, `app/Actions/Schedule/ListItemTasks.php`
+
+**Klart när:** raden bär bilagans ULID och `hasThumb`, eller null; samma `cover` på `/tasks`, containerns flik, itemets flik och i *Done*; frågeantalet är konstant; hela testsviten är grön.
+
+**Beror på:** —
+
+### 230. Uppgiftsraden enligt mockupen
+
+GitHub #728. `TodoRow` får rund bock, datum med ikon och miniatyr till höger, och röd ton på försenade rader. *Done* ritas med samma komponent. Pricken och textknappen *Check off* försvinner.
+
+**Läs:** `docs/Design/tasks-container.png`, `resources/js/components/TodoRow.vue`, [[ADR-0042 Designsystemet]]
+
+**Klart när:** bockens kant följer serverns fält; försenat och kommande står i knappens `aria-label`; inga råa palettfärger i raden; *Done* ritas inte längre med `UiListRow`; hela testsviten är grön.
+
+**Beror på:** 229
+
+### 231. Grupprubrikerna med antal och ihopfällning
+
+GitHub #729. Ny komponent `TaskGroup`: en rubrik med antal som fäller ihop gruppen. Används på containerns flik, itemets flik och `/tasks`. Ihopfällningen sparas inte.
+
+**Läs:** `docs/Design/tasks-container.png`, `resources/js/pages/Containers/Tasks.vue`, `resources/js/components/ScheduleListSection.vue`, `resources/js/pages/Tasks/Index.vue`
+
+**Klart när:** rubriken är en knapp med `aria-expanded`; antalet har nycklar för ental och flertal; de tre ytorna ritar `TaskGroup`; hela testsviten är grön.
+
+**Beror på:** 230
