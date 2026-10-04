@@ -387,6 +387,22 @@ it('en stängd förekomst kan inte ändras', function () {
         ->and($rad->fresh()->status)->toBe('completed');
 });
 
+/*
+ * Klart när (Beslut 5): minst ett av fälten krävs. En tom kropp är ingen
+ * ändring och ska inte se ut som en.
+ */
+it('en tom kropp avvisas', function () {
+    [, $anvandare, , $item] = listansKontext();
+    [, $rad] = oppnaForekomst($item);
+
+    actingAs($anvandare)
+        ->patch(listansUrl($rad), [])
+        ->assertSessionHasErrors(['gtd_list', 'status']);
+
+    expect($rad->fresh()->gtd_list)->toBe('inbox')
+        ->and($rad->fresh()->status)->toBe('open');
+});
+
 // --- grinden ----------------------------------------------------------------
 
 /*
