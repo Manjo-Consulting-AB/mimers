@@ -120,7 +120,13 @@ if [ ${#PROVAS[@]} -eq 0 ]; then
 fi
 TESTER=("${PROVAS[@]}")
 
-ARBETE="$(mktemp -d)"
+# Basträdet läggs bredvid repot, inte i /tmp. Pipelinens maskin har några
+# hundra MB ledigt i /tmp och vendor ensam är större än så - issue 229 (#727)
+# föll på "No space left on device" i kopieringen nedan, tre försök i rad.
+# Bredvid repot ligger trädet på samma filsystem som vendor, så att vendor kan
+# hårdlänkas i stället för att kopieras. Prefixet gör att pipelinen känner igen
+# och städar ett träd som blev kvar när processen dödades före trap:en.
+ARBETE="$(mktemp -d "${ROTT_PA_BASEN_KATALOG:-$(dirname "$ROT")}/mimers-rott-XXXXXXXX")"
 trap 'rm -rf "$ARBETE"' EXIT
 
 # Basträdet, utan historik och utan PR:ens källkod.
@@ -140,8 +146,26 @@ cd "$ARBETE"
 # bootad app. Vi är bara ute efter klasskartan; paketmanifestet byggs vid behov
 # när testet körs.
 export COMPOSER_ALLOW_SUPERUSER=1
+#
+# Hårdlänkar, inte en kopia: de kostar inget utrymme. Det som skrivs i vendor
+# måste däremot vara en egen fil, annars skriver det rakt igenom till rotens
+# vendor - dump-autoload skriver om vendor/autoload.php och vendor/composer/,
+# och dessa pekar ut app/ som klasserna laddas ur. Pest lägger sin
+# resultatcache i pestphp/pest/.temp, eftersom phpunit.xml inte sätter någon
+# cacheDirectory. Därför kopieras just de på riktigt. Går hårdlänkningen inte
+# (ett annat filsystem) blir det en vanlig kopia.
 if git -C "$ROT" diff --quiet "$BASE_SHA" HEAD -- composer.lock && [ -d "$ROT/vendor" ]; then
-    cp -r "$ROT/vendor" "$ARBETE/vendor"
+    if cp -al "$ROT/vendor" "$ARBETE/vendor" 2>/dev/null; then
+        for egen in composer autoload.php pestphp/pest/.temp; do
+            rm -rf "${ARBETE:?}/vendor/$egen"
+            if [ -e "$ROT/vendor/$egen" ]; then
+                cp -r "$ROT/vendor/$egen" "$ARBETE/vendor/$egen"
+            fi
+        done
+    else
+        rm -rf "$ARBETE/vendor"
+        cp -r "$ROT/vendor" "$ARBETE/vendor"
+    fi
     composer dump-autoload --quiet --no-interaction --no-scripts
 else
     composer install --prefer-dist --no-interaction --no-progress --quiet --no-scripts
