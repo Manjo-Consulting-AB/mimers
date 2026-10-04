@@ -11,7 +11,6 @@ use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
-use function Pest\Laravel\patch;
 use function Pest\Laravel\withoutVite;
 
 /*
@@ -330,9 +329,9 @@ it('avvisar calendar som gtd_list med 422', function () {
         ."/schedules/{$rad->schedule->ulid}/occurrences/{$rad->ulid}";
 
     actingAs($anvandare)
-        ->from('/tasks')
-        ->patch($url, ['gtd_list' => 'calendar'])
-        ->assertSessionHasErrors('gtd_list');
+        ->patchJson($url, ['gtd_list' => 'calendar'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('gtd_list');
 
     expect($rad->fresh()->gtd_list)->toBe('next');
 });
