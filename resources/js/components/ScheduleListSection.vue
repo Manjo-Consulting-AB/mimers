@@ -60,6 +60,20 @@ const props = defineProps({
      * eller `null` för ett schema som inte har någon (issue 63b § Beslut 1).
      */
     openOccurrences: { type: Object, required: true },
+    /*
+     * De öppna förekomsterna på items UNDER det här itemet (M24 · testarnas
+     * fynd 2026-10-03), byggda på servern: en rad per öppen förekomst på en
+     * ättling — barn, barnbarn, utan djuptak — sorterade på förfallodatum.
+     *
+     * Varje rad bär sitt eget items ULID, så schemats titel och avbockningens
+     * adress går mot BARNET och inte mot sidans item (Beslut 7 i issuen:
+     * `scopeBindings()` kräver att `{item}` är schemats item).
+     *
+     * Servern skickar bara proppen när uppgiftsfliken är aktiv, och en tom
+     * lista betyder att ingen ättling har en öppen uppgift — då ritas ingen
+     * rubrik.
+     */
+    descendantOccurrences: { type: Array, default: () => [] },
     /* Containerns ägarkonto — avbockningens förval när användaren är medlem. */
     containerAccount: { type: String, default: '' },
     can: { type: Object, required: true },
@@ -264,5 +278,64 @@ function destroy(schedule) {
                 />
             </li>
         </ul>
+
+        <!--
+            Uppgifterna på items UNDER det här itemet (M24 · testarnas fynd
+            2026-10-03). Listan står efter den egna — förälderns uppgifter är
+            de man kom för — och ritas bara när det finns något att visa.
+
+            Varje rad säger vilket item den hör till och länkar dit, och
+            avbockningen sker på plats: `OpenOccurrence` postar mot RADENS
+            item-ULID, så ett barns uppgift stängs från förälderns flik och
+            `back()` landar här igen. Ingen paus-, redigerings- eller
+            raderingsknapp ritas på dessa rader — de hör till schemats egen
+            sida, dit titeln länkar.
+        -->
+        <template v-if="descendantOccurrences.length > 0">
+            <h3 class="mt-8 text-base font-semibold">
+                {{ t('item.schedule.descendants_heading') }}
+            </h3>
+
+            <ul class="mt-2 flex flex-col gap-2">
+                <li
+                    v-for="row in descendantOccurrences"
+                    :key="row.occurrence.ulid"
+                    class="flex flex-col gap-2 rounded border border-slate-300 bg-white px-4 py-3"
+                    :class="row.schedule.is_active ? null : 'text-slate-600'"
+                >
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <Link
+                            :href="scheduleUrl(containerUlid, row.item.ulid, row.schedule.ulid)"
+                            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        >
+                            {{ row.schedule.title }}
+                        </Link>
+
+                        <Link
+                            :href="`/containers/${containerUlid}/items/${row.item.ulid}`"
+                            class="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
+                        >
+                            {{ t('item.schedule.on_item', { item: row.item.name }) }}
+                        </Link>
+
+                        <span
+                            v-if="! row.schedule.is_active"
+                            class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
+                        >
+                            {{ t('item.schedule.paused') }}
+                        </span>
+                    </div>
+
+                    <OpenOccurrence
+                        :container-ulid="containerUlid"
+                        :item-ulid="row.item.ulid"
+                        :schedule-ulid="row.schedule.ulid"
+                        :occurrence="row.occurrence"
+                        :container-account="containerAccount"
+                        :can="row.can"
+                    />
+                </li>
+            </ul>
+        </template>
     </section>
 </template>
