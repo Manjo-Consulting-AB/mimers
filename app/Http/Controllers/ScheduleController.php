@@ -227,11 +227,16 @@ class ScheduleController extends Controller
      * nuvarande värden under klientens, så en paus tvingar inte fram de
      * andra fälten och `validated()` bär ändå hela raden.
      *
-     * **Pausen landar på schemats sida, formuläret på itemet.** När
-     * förfrågan bara bär `is_active` kom den från pausknappen — sedan issue
-     * 720 ritas den på schemats sida, och svaret går tillbaka dit så att
-     * märkningen och knappens ord byts på samma yta (Beslut 3). En sparning
-     * från formuläret bär fler fält och går till itemet som förut.
+     * **Pausen landar på den sida den trycktes på, formuläret på itemet.**
+     * När förfrågan bara bär `is_active` kom den från pausknappen (Beslut 3).
+     * Knappen ritas både på schemats sida och, tills issue 227 tar bort den, i
+     * itemets flik — och svaret går tillbaka till den yta anropet kom från,
+     * samma `back()`-mönster som resten av webben: `Referer` bär schemats sida
+     * respektive itemet, och en paus som trycktes på schemats sida möts av
+     * märkningen och den nya knapptexten där i stället för att kastas tillbaka
+     * till itemet. Ett anrop utan `Referer` (ett direktanrop, eller ett prov
+     * som inte sätter en) landar på itemet — samma svar som före issue 720.
+     * En sparning från formuläret bär fler fält och går till itemet.
      * Raderingen (`destroy()`) går alltid till itemet: schemats sida finns
      * inte kvar att landa på.
      *
@@ -284,7 +289,16 @@ class ScheduleController extends Controller
         // sin smala kropp, inte på att de andra fälten råkade vara oförändrade.
         $pause = $request->keys() === ['is_active'];
 
-        return ($pause
+        // Vart pausen går beror på var den trycktes: schemats sida skickar sig
+        // själv som `Referer`, itemets flik sin egen sida. En paus från
+        // schemats sida stannar där; allt annat — formuläret, ett anrop utan
+        // `Referer` — landar på itemet som förut (Beslut 3). Jämförelsen tål en
+        // avslutande snedstreck, men inte en query-sträng: schemats sida har
+        // ingen, och `route()` bygger samma absoluta URL som webbläsaren sände.
+        $fromSchedulePage = rtrim((string) url()->previous(), '/')
+            === rtrim(route('containers.items.schedules.show', [$container, $item, $schedule]), '/');
+
+        return ($pause && $fromSchedulePage
             ? redirect()->route('containers.items.schedules.show', [$container, $item, $schedule])
             : redirect()->route('containers.items.show', [$container, $item]))
             ->with('status', $status);

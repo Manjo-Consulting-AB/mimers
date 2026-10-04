@@ -163,6 +163,11 @@ it('skickar can.delete till schemats sida', function () {
 /*
  * Klart när: `en paus från schemats sida landar på schemats sida` — PATCH
  * {is_active: false} → redirect till schemats sida, status schedule-paused.
+ *
+ * `from()` sätter `Referer` till schemats sida, precis som webbläsaren gör när
+ * knappen trycks där (Beslut 3). Utan den landar pausen på itemet, som förut —
+ * se `pausar och återupptar med en PATCH som bär bara is_active` i
+ * SchemavyTest.php, som prövar just den vägen.
  */
 it('en paus från schemats sida landar på schemats sida', function () {
     [$konto, $anvandare, $container, $item] = schemasidanKontext();
@@ -170,13 +175,35 @@ it('en paus från schemats sida landar på schemats sida', function () {
     $schema = schemasidanSchema($item);
     schemasidanFörekomst($schema, '2027-05-05');
 
-    actingAs($anvandare)->patch(schemasidanSidaUrl($container, $item, $schema), ['is_active' => false])
+    actingAs($anvandare)
+        ->from(schemasidanSidaUrl($container, $item, $schema))
+        ->patch(schemasidanSidaUrl($container, $item, $schema), ['is_active' => false])
         ->assertRedirect(schemasidanSidaUrl($container, $item, $schema))
         ->assertSessionHas('status', 'schedule-paused');
 
     expect($schema->fresh()->is_active)->toBeFalse();
     // Att pausa rör ALDRIG den öppna förekomsten (Beslut 6, issue 63c).
     expect($schema->openOccurrence()->count())->toBe(1);
+});
+
+/*
+ * Motsatt gren: samma PATCH, men från itemets flik, landar på itemet —
+ * knapparna står kvar i ScheduleListSection.vue tills issue 227 tar bort dem,
+ * och en paus där ska inte kasta användaren till en annan sida.
+ */
+it('en paus från itemets flik landar fortfarande på itemet', function () {
+    [$konto, $anvandare, $container, $item] = schemasidanKontext();
+
+    $schema = schemasidanSchema($item);
+    schemasidanFörekomst($schema, '2027-05-05');
+
+    actingAs($anvandare)
+        ->from(schemasidanItemUrl($container, $item))
+        ->patch(schemasidanSidaUrl($container, $item, $schema), ['is_active' => false])
+        ->assertRedirect(schemasidanItemUrl($container, $item))
+        ->assertSessionHas('status', 'schedule-paused');
+
+    expect($schema->fresh()->is_active)->toBeFalse();
 });
 
 /*
