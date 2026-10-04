@@ -78,6 +78,11 @@ class ScheduleOccurrenceController extends Controller
      * aldrig `due_at` mot klientens klocka — [[ADR-0005 Schema och förekomst]]
      * :s regel, att ett tillstånd klockan ändrar aldrig lagras, gäller lika
      * mycket för en `computed` i en komponent som för en kolumn.
+     *
+     * **`can` bär två pinnar sedan issue 720** (§ Beslut 1): `update` för
+     * pausen och `delete` för raderingen — samma grindar som
+     * ScheduleController::update() och ::destroy() prövar. Vyn ritar
+     * knapparna efter dem och ingenting annat.
      */
     public function show(Request $request, Container $container, Item $item, Schedule $schedule): Response
     {
@@ -98,6 +103,9 @@ class ScheduleOccurrenceController extends Controller
             'occurrences' => ScheduleOccurrenceResource::collection($occurrences)->resolve($request),
             'can' => [
                 'update' => Gate::forUser($request->user())->allows('update', $schedule->item),
+                // Raderingen bor på schemats sida (issue 720 § Beslut 1) och
+                // prövar samma grind som ScheduleController::destroy().
+                'delete' => Gate::forUser($request->user())->allows('delete', $schedule->item),
             ],
         ]);
     }

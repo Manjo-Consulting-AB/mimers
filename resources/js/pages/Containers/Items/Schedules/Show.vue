@@ -1,6 +1,6 @@
 <script setup>
-import { computed } from 'vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../../layouts/ContainerLayout.vue';
 import OpenOccurrence from '../../../../components/OpenOccurrence.vue';
 import ScheduleDependencySection from '../../../../components/ScheduleDependencySection.vue';
@@ -123,6 +123,45 @@ const scheduleDependencyUrl = computed(
 const occurrenceDependencyUrl = computed(() => (open.value === null
     ? ''
     : `${scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid)}/occurrences/${open.value.ulid}/dependencies`));
+
+/*
+ * Regelns egna två handlingar (issue 720 § Beslut 2). Pausen och raderingen
+ * flyttade hit från resources/js/components/ScheduleListSection.vue, där de
+ * står kvar tills issue 227 tar bort dem: schemats sida är regelns yta, och
+ * det är hit itemets tab länkar.
+ *
+ * Båda anropar samma rutt som redigeringen — PATCH med bara `is_active` för
+ * pausen, DELETE för raderingen — och servern svarar med en omdirigering
+ * tillbaka hit. `pending` är sidans vänteläge: här ritas ETT schema, så en
+ * boolean räcker där listan behövde radens ULID. `onFinish` nollställer den
+ * även när svaret blev ett fel.
+ *
+ * Bekräftelsen är webbläsarens egen dialog med serverns mening ur `lang/` —
+ * ingen modal och ingen sträng i JavaScript, samma mönster som listan.
+ */
+const pending = ref(false);
+
+const scheduleActionUrl = scheduleUrl(props.container.ulid, props.item.ulid, props.schedule.ulid);
+
+function toggle() {
+    router.patch(scheduleActionUrl, { is_active: ! props.schedule.is_active }, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+    });
+}
+
+function destroy() {
+    if (! window.confirm(t('item.schedule.destroy_confirm'))) {
+        return;
+    }
+
+    router.delete(scheduleActionUrl, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+    });
+}
 </script>
 
 <template>
@@ -131,7 +170,23 @@ const occurrenceDependencyUrl = computed(() => (open.value === null
 
         <h1 class="text-2xl font-semibold">{{ schedule.title }}</h1>
 
-        <p class="mt-2 text-sm text-slate-600">{{ recurrence }}</p>
+        <div class="mt-2 flex flex-wrap items-center gap-3">
+            <p class="text-sm text-slate-600">{{ recurrence }}</p>
+
+            <!-- Pausen är synlig och reversibel (issue 720 § Beslut 3): samma
+                 märke och samma mening som listan använder, så att ett pausat
+                 schema går att känna igen på båda ytorna. -->
+            <span
+                v-if="! schedule.is_active"
+                class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
+            >
+                {{ t('item.schedule.paused') }}
+            </span>
+        </div>
+
+        <p v-if="! schedule.is_active" class="mt-2 text-sm text-slate-600">
+            {{ t('item.schedule.paused_note') }}
+        </p>
 
         <p v-if="schedule.notes" class="mt-2 whitespace-pre-line text-slate-900">{{ schedule.notes }}</p>
 
@@ -150,6 +205,26 @@ const occurrenceDependencyUrl = computed(() => (open.value === null
             >
                 {{ t('item.schedule.edit') }}
             </Link>
+
+            <button
+                v-if="can.update"
+                type="button"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                @click="toggle"
+            >
+                {{ pending ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
+            </button>
+
+            <button
+                v-if="can.delete"
+                type="button"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
+                @click="destroy"
+            >
+                {{ pending ? t('common.pending.default') : t('item.schedule.destroy') }}
+            </button>
         </div>
 
         <section class="mt-8">
