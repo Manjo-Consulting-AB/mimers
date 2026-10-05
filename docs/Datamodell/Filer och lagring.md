@@ -128,6 +128,18 @@ Hur det görs konkret avgörs av [[ADR-0019 Filleverans]]. Notera att `storage_p
 
 **Sökvägen är inte en hemlighet.** `storage_path` byggs av innehållshashen, och den kan beräknas av var och en som råkar ha samma fil. Leveransen får därför aldrig vila på att sökvägen är svår att gissa.
 
+## API:et
+
+`/api` bär samma skrivningar som webben, genom samma actions (M27 · issue 247).
+
+| Skrivning | Rutt och kropp |
+|---|---|
+| Flytta en bilaga | `POST /api/containers/{container}/items/{item}/attachments/{attachment}/move` — `{"target": "<item-ulid>"}`, 200 med `AttachmentResource`. Inom samma container rörs ingen kvot; ett ägarbyte prövar den nya ägarens kvot och nekar med 403 `quota.storage_exceeded` |
+| Kopiera en bilaga | `POST .../attachments/{attachment}/copy` — `{"target": "<item-ulid>"}`, 201 med `AttachmentResource`. Kopian är en ny `attachment` mot samma `stored_file` och belastar kvoten alltid ([[ADR-0053 Flytt och kopiering]] § 4) |
+| Skicka en bilaga tillbaka till inboxen | `POST .../attachments/{attachment}/inbox` — ingen kropp, 200 med `AttachmentResource`. Ägaren blir personkontot och dess kvot prövas ([[ADR-0054 Inboxen]] § 6) |
+
+Målet för `move` och `copy` slås upp globalt på ULID och kan ligga i en annan container än ruttens `{container}` — en ULID som inte finns eller är mjukraderad ger 404, inte ett valideringsfel ([[ADR-0053 Flytt och kopiering]] § 8).
+
 ## Virusskanning
 
 Filer sprids mellan användare via delade containers, så en infekterad fil kan nå någon annan. ClamAV är osannolikt tillgängligt på delad hosting. I MVP: `scan_status = 'skipped'`, kolumnen finns, och de tre leveranskraven ovan är den faktiska skyddsmekanismen. Lös skanningen på riktigt när det finns en VPS.

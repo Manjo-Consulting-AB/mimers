@@ -131,6 +131,11 @@ Systemet är kraftigt säsongsbetonat — i april förfaller allting samtidigt. 
 | Byta listan eller statusen på en aktiv förekomst | `PATCH /api/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}` — `{"gtd_list"?, "status"?}`, minst ett av fälten. `status` tar bara `open` och `in_progress`: att stänga går genom `complete` och `skip`, och en stängd förekomst svarar 422 `occurrence.not_open` |
 | Sätta listan för den första förekomsten | `gtd_list` i kroppen till `POST .../schedules` — förekomsten hamnar i listan, och schemats förval blir samma lista (`next` när `waiting` valdes) |
 | Sätta schemats förval | `default_gtd_list` i kroppen till `PATCH .../schedules/{schedule}` — `next`, `someday` eller `null` |
+| Flytta en uppgift | `POST .../schedules/{schedule}/move` — `{"target": "<item-ulid>"}`, 200 med `ScheduleResource`. Historiken följer med; ett beroende över en containergräns nekar med 422 `schedule.has_dependencies` |
+| Skicka en uppgift tillbaka till inboxen | `POST .../schedules/{schedule}/inbox` — ingen kropp, 200 med `ScheduleResource`. Listan och förvalet nollställs ([[ADR-0054 Inboxen]] § 6); 422 `schedule.has_dependencies` vid beroenden |
+| Läsa, fånga och bearbeta inboxen | `GET /api/inbox` — 200 `{data: {tasks, attachments}}`; `POST /api/inbox/tasks`, `POST /api/inbox/attachments` — fångst, 201; `POST /api/inbox/tasks/{schedule}/process`, `POST /api/inbox/attachments/process` — bearbetning, 200 ([[ADR-0054 Inboxen]] § 4, 6 och 8) |
+
+`GET /api/inbox` **skapar ingen inbox** — den läses, och en användare utan inbox möts av tomma listor. Den skapas först när något fångas (ADR-0054 § 1).
 
 `gtd_list` och `default_gtd_list` är två egenskaper ([[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 och § 2): den första säger hur användaren tänker hantera uppgiften, den andra är regeln för nästa förekomst. En lista kan inte sättas på en förekomst som ligger i inboxen — den sätts när uppgiften bearbetas — och ett sådant försök svarar 422 `occurrence.in_inbox` ([[ADR-0054 Inboxen]] § 5).
 

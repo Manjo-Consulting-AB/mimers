@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\CostEntryController;
 use App\Http\Controllers\Api\CostReportController;
 use App\Http\Controllers\Api\CostSummaryController;
 use App\Http\Controllers\Api\ExportController;
+use App\Http\Controllers\Api\InboxController;
 use App\Http\Controllers\Api\InvitationResponseController;
 use App\Http\Controllers\Api\ItemController;
 use App\Http\Controllers\Api\ItemLinkController;
@@ -297,6 +298,22 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::get('/containers/{container}/items/{item}/attachments', [AttachmentController::class, 'index']);
     Route::delete('/containers/{container}/items/{item}/attachments/{attachment}', [AttachmentController::class, 'destroy']);
 
+    // M27 · issue 247 · Flytt, kopiering och *Back to Inbox* för en bilaga —
+    // se App\Http\Controllers\Api\AttachmentController::move()/copy()/toInbox()
+    // och App\Actions\Attachment\MoveAttachment, CopyAttachment respektive
+    // App\Actions\Inbox\SendToInbox ([[ADR-0053 Flytt och kopiering]] § 2 och 4,
+    // [[ADR-0054 Inboxen]] § 6). SAMMA actions och samma två grindar som webben
+    // — `delete`/`view` på KÄLLAN och `create` på MÅLET. `{attachment}` binds av
+    // gruppens scopeBindings() genom App\Models\Item::attachments(), som för
+    // destroy() ovan, så en bilaga från ett annat item ger 404. Målet för
+    // move/copy står i kroppens `target` (App\Http\Requests\TargetItemRequest);
+    // målet för inbox är användarens EGEN inbox och står aldrig i kroppen.
+    // Domänfelen kastas av actionerna som ApiException och renderas i
+    // felhöljet ([[AGENTS.md]] § Felformat).
+    Route::post('/containers/{container}/items/{item}/attachments/{attachment}/move', [AttachmentController::class, 'move']);
+    Route::post('/containers/{container}/items/{item}/attachments/{attachment}/copy', [AttachmentController::class, 'copy']);
+    Route::post('/containers/{container}/items/{item}/attachments/{attachment}/inbox', [AttachmentController::class, 'toInbox']);
+
     // Issue 15b · Fritextsök — den ENDA toppnivårutten som rör items, och
     // den enda som finns just för att frågan är global: en sökning över ALLT
     // användaren har åtkomst till, inte inom en container hon redan valt (issue
@@ -334,6 +351,21 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     Route::post('/containers/{container}/items/{item}/schedules', [ScheduleController::class, 'store']);
     Route::patch('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'update']);
     Route::delete('/containers/{container}/items/{item}/schedules/{schedule}', [ScheduleController::class, 'destroy']);
+
+    // M27 · issue 247 · Flytten och *Back to Inbox* för en uppgift — se
+    // App\Http\Controllers\Api\ScheduleController::move()/toInbox() och
+    // App\Actions\Schedule\MoveSchedule respektive App\Actions\Inbox\
+    // SendToInbox ([[ADR-0053 Flytt och kopiering]] § 6, [[ADR-0054 Inboxen]]
+    // § 6). SAMMA actions och samma grindar som webben: `delete` på KÄLLANS
+    // item och `create` på MÅLET. `{schedule}` binds av gruppens
+    // scopeBindings() genom App\Models\Item::schedules(), som schemarutterna
+    // ovan. Målet för move står i kroppens `target`
+    // (App\Http\Requests\TargetItemRequest) och kan ligga i en annan container;
+    // målet för inbox är användarens EGEN inbox och står aldrig i kroppen.
+    // `schedule.has_dependencies` och `schedule.already_in_inbox` renderas i
+    // felhöljet ([[AGENTS.md]] § Felformat).
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/move', [ScheduleController::class, 'move']);
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/inbox', [ScheduleController::class, 'toInbox']);
 
     // Issue 22a · Förekomsterna av ett schema — den öppna plus historiken,
     // se App\Http\Controllers\Api\ScheduleOccurrenceController och
@@ -531,6 +563,23 @@ Route::middleware('auth:sanctum')->scopeBindings()->group(function () {
     // och det är därför den är M3:s riskyta. Bara GET: listan är en vy; allt
     // som ändrar en uppgift går genom 22b:s rutter ovan.
     Route::get('/todo', [TodoController::class, 'index']);
+
+    // M27 · issue 247 · Inboxen i `/api` — läsningen, fångsten och
+    // bearbetningen, se App\Http\Controllers\Api\InboxController och
+    // App\Actions\Inbox\ ([[ADR-0054 Inboxen]] § 4, 6, 7 och 8). SAMMA actions
+    // som webbens InboxController: ListTodo för listan, StoreAttachment och
+    // CreateSchedule för fångsten, ProcessInboxTask och ProcessInboxAttachments
+    // för bearbetningen. TOPPNIVÅrutter precis som /todo: inboxen är
+    // användarens EGEN (ADR-0054 § 2), så det finns ingen container att nästla
+    // under och ingen främmande ULID att peka fel på. `GET /api/inbox` SKAPAR
+    // ingen inbox; den skapas först när något fångas. `throttle:uploads` på
+    // uppladdningen — samma spärr som POST .../attachments ovan, för samma skäl.
+    Route::get('/inbox', [InboxController::class, 'index']);
+    Route::post('/inbox/attachments', [InboxController::class, 'storeAttachments'])
+        ->middleware('throttle:uploads');
+    Route::post('/inbox/attachments/process', [InboxController::class, 'processAttachments']);
+    Route::post('/inbox/tasks', [InboxController::class, 'storeTask']);
+    Route::post('/inbox/tasks/{schedule}/process', [InboxController::class, 'process']);
 
     // Issue 31b · Preferensytan och de tysta timmarna, se
     // App\Http\Controllers\Api\NotificationPreferenceController och
