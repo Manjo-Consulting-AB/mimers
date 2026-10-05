@@ -542,6 +542,7 @@ it('har inte fått någon annan kolumn än description', function () {
         'deleted_at',
         'description',
         'id',
+        'inbox_user_id',
         'kind',
         'name',
         'template_source_id',

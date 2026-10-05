@@ -844,6 +844,7 @@ it('ett fel mitt i raderingen lämnar ingenting halvt', function () {
         $trasig,
         app(RevokeInvitation::class),
         app(RevokeOwnershipTransfer::class),
+        app(PurgeContent::class),
     );
 
     expect(fn () => $action->handle($person))

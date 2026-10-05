@@ -39,6 +39,17 @@ use App\Support\Access\AccessLevel;
  * Regel 5 (uppladdningar räknas mot den uppladdande användarens konto) är
  * inte en behörighetsfråga och hör inte hemma här.
  *
+ * **Inboxen är ett undantag ovanpå reglerna** (issue 243 · [[ADR-0054
+ * Inboxen]] § 2). En container med `inbox_user_id` når bara den personen,
+ * och den är inte till för att hanteras som en container: `view` följer
+ * omfånget, och `update`, `delete`, `createItem`, `manageAccess`,
+ * `transfer`, `viewAccesses`, `viewTransfers` och `viewAuditLog` nekar
+ * ALLTID — även för ägaren själv. En inbox kan alltså inte döpas om,
+ * raderas, delas, överlåtas eller få nya items, och ingen ser dess
+ * åtkomst- eller överlåtelsehistorik. Det som får hända med dess INNEHÅLL
+ * (itemets `view`, `create`, `update`, `delete`) är App\Policies\ItemPolicy,
+ * som följer App\Actions\Access\ResolveItemScope regel 0.
+ *
  * Ingen behörighetslogik får bo i App\Http\Controllers\Api\ContainerController
  * — den anropar bara Gate::authorize() och litar på svaret härifrån.
  */
@@ -58,6 +69,13 @@ class ContainerPolicy
      */
     public function view(User $user, Container $container): bool
     {
+        // En inbox följer OMFÅNGET och ingenting annat: bara `inbox_user_id`
+        // når den. Medlemskapet i ägarkontot hade annars gett varje medlem
+        // hela kontots inboxar (ADR-0054 § 2, issue 243).
+        if ($container->isInbox()) {
+            return (int) $container->inbox_user_id === (int) $user->id;
+        }
+
         return $this->isMemberOfOwnerAccount($user, $container->account)
             || $this->hasContainerAccess($user, $container, AccessLevel::READ);
     }
@@ -97,6 +115,10 @@ class ContainerPolicy
      */
     public function update(User $user, Container $container): bool
     {
+        if ($container->isInbox()) {
+            return false;
+        }
+
         if ($this->isFrozen($container->account)) {
             return false;
         }
@@ -127,6 +149,10 @@ class ContainerPolicy
      */
     public function createItem(User $user, Container $container): bool
     {
+        if ($container->isInbox()) {
+            return false;
+        }
+
         if ($this->isFrozen($container->account)) {
             return false;
         }
@@ -151,6 +177,10 @@ class ContainerPolicy
      */
     public function delete(User $user, Container $container): bool
     {
+        if ($container->isInbox()) {
+            return false;
+        }
+
         return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isFrozen($container->account);
     }
 
@@ -166,6 +196,10 @@ class ContainerPolicy
      */
     public function viewAccesses(User $user, Container $container): bool
     {
+        if ($container->isInbox()) {
+            return false;
+        }
+
         return $this->isMemberOfOwnerAccount($user, $container->account);
     }
 
@@ -176,6 +210,10 @@ class ContainerPolicy
      */
     public function manageAccess(User $user, Container $container): bool
     {
+        if ($container->isInbox()) {
+            return false;
+        }
+
         return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isFrozen($container->account);
     }
 
@@ -190,6 +228,10 @@ class ContainerPolicy
      */
     public function transfer(User $user, Container $container): bool
     {
+        if ($container->isInbox()) {
+            return false;
+        }
+
         return $this->isMemberOfOwnerAccount($user, $container->account) && ! $this->isFrozen($container->account);
     }
 
@@ -211,6 +253,10 @@ class ContainerPolicy
      */
     public function viewTransfers(User $user, Container $container): bool
     {
+        if ($container->isInbox()) {
+            return false;
+        }
+
         return $this->isMemberOfOwnerAccount($user, $container->account);
     }
 
@@ -239,6 +285,10 @@ class ContainerPolicy
      */
     public function viewAuditLog(User $user, Container $container): bool
     {
+        if ($container->isInbox()) {
+            return false;
+        }
+
         return $this->isMemberOfOwnerAccount($user, $container->account)
             || $this->hasContainerAccess($user, $container, AccessLevel::READ);
     }

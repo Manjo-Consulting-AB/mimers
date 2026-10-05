@@ -103,6 +103,7 @@ class ListContainerSummaries
         // när, issue 70 § Beslut 2).
         $containers = Container::query()
             ->accessibleBy($user, $accountIds)
+            ->listable()
             ->with('coverAttachment.storedFile.derivatives')
             ->orderBy('name')
             ->get(['id', 'ulid', 'name', 'kind', 'cover_attachment_id', 'cover_focus_x', 'cover_focus_y']);

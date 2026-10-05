@@ -6,10 +6,12 @@ use App\Actions\Account\DeleteAccount;
 use App\Actions\Invitation\RevokeInvitation;
 use App\Actions\OwnershipTransfer\RevokeOwnershipTransfer;
 use App\Actions\Security\RecordSecurityEvent;
+use App\Actions\Trash\PurgeContent;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\Invitation;
+use App\Models\Item;
 use App\Models\LegalHold;
 use App\Models\OwnershipTransfer;
 use App\Models\SecurityLog;
@@ -57,6 +59,8 @@ use Illuminate\Support\Facades\DB;
  *    attachment, schedule_occurrence, cost_entry, container_access och
  *    export. Raderna är någon annans innehåll och står kvar, utan avsändare,
  * 5. personens egna rader raderas,
+ * 5b. personens inbox raderas ([[ADR-0054 Inboxen]] § 9) — den är hennes
+ *    och blir inte kvar i ett personkonto som står kvar med andra medlemmar,
  * 6. väntande inbjudningar och ägarbyten som personen startat dras tillbaka,
  *    och författarkolumnen nollställs på dem alla — besvarade behåller sin
  *    rad (ADR-0045 § Beslut 3),
@@ -85,6 +89,7 @@ class DeleteUser
         private readonly DeleteAccount $deleteAccount,
         private readonly RevokeInvitation $revokeInvitation,
         private readonly RevokeOwnershipTransfer $revokeOwnershipTransfer,
+        private readonly PurgeContent $purgeContent,
     ) {}
 
     /**
@@ -217,6 +222,12 @@ class DeleteUser
 
             // Steg 5.
             $this->raderaPersonensRader($row);
+
+            // Steg 5b. Personens inbox (issue 243 · [[ADR-0054 Inboxen]]
+            // § 9). Den ligger efter steg 5 med flit: personens egna
+            // `notification`-rader är redan borta, och `notification.
+            // container_id` är ON DELETE RESTRICT.
+            $this->raderaInboxen($row);
 
             // Steg 6.
             $this->draTillbakaStartade($row);
@@ -449,6 +460,49 @@ class DeleteUser
             ->delete();
 
         DB::table('magic_link_token')->where('email', $user->email)->delete();
+    }
+
+    /**
+     * Steg 5b: personens inbox raderas med personen — ÄVEN när personkontot
+     * har andra medlemmar och därför står kvar (ADR-0054 § 9). Inboxen är
+     * hennes och ingen annans, och den får inte ligga kvar i ett konto hon
+     * lämnat.
+     *
+     * **Raderna skrivs för hand och containerräknaren rörs inte.** Inboxen
+     * räknades aldrig mot containertaket när den skapades
+     * (App\Actions\Inbox\ResolveInbox), så en minskning här hade dragit ifrån
+     * ett tal den aldrig lade till. Därför PurgeContent::item() — som tar
+     * bilagorna genom PurgeAttachment och schemana med sig — i stället för
+     * PurgeContainer, som minskar `usage_counter.container_count` och skriver
+     * `container.purged`.
+     *
+     * Låg inboxen i ett konto där personen var enda medlem raderades den
+     * redan i steg 2, med hela kontot; då finns ingen rad kvar att hitta här.
+     *
+     * Ordningen mot steg 5 är inte en detalj: `notification.container_id` är
+     * ON DELETE RESTRICT, och personens egna notisrader måste bort innan
+     * containern kan `forceDelete`:as.
+     */
+    private function raderaInboxen(User $user): void
+    {
+        $inbox = Container::withTrashed()
+            ->where('inbox_user_id', $user->getKey())
+            ->first();
+
+        if ($inbox === null) {
+            return;
+        }
+
+        foreach (Item::withTrashed()->where('container_id', $inbox->id)->get() as $item) {
+            $this->purgeContent->item($item);
+        }
+
+        // En grant mot en inbox ger ingen åtkomst (ResolveItemScope regel 0),
+        // men raden kan finnas — skriven direkt i databasen — och
+        // `container_access.container_id` är ON DELETE RESTRICT.
+        DB::table('container_access')->where('container_id', $inbox->id)->delete();
+
+        $inbox->forceDelete();
     }
 
     /**

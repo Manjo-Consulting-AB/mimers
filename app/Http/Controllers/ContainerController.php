@@ -149,6 +149,7 @@ class ContainerController extends Controller
 
         $containers = Container::query()
             ->accessibleBy($user, $accountIds)
+            ->listable()
             // ContainerResource::toArray() läser $this->account->ulid och
             // containerns bild för varje rad — utan eager loading blir listan
             // N+1, samma resonemang som API-kontrollerns index(). Bilden

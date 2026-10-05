@@ -219,6 +219,7 @@ Det ägda objektet. Se [[Översikt]] för vad ordet betyder.
 |---|---|---|
 | id, ulid | | |
 | account_id | FK → account | Ägaren. Exakt ett konto. |
+| inbox_user_id | FK → user NULL UNIQUE | Personens inbox. Det ENDA som gör containern till en inbox, se [[ADR-0054 Inboxen]]. |
 | name | VARCHAR(255) | |
 | kind | VARCHAR(40) | `boat`, `caravan`, `house`, `car`, `other`. Endast för presentation och mallval — systemet beter sig inte olika. |
 | template_source_id | FK → container NULL | Om utstämplad från mall, se [[ADR-0002 Konto äger container]] |
@@ -234,6 +235,8 @@ Index: `(account_id, deleted_at)`.
 Nyckeln är `ON DELETE SET NULL`, en medveten avvikelse från husets RESTRICT och samma som `item.cover_attachment_id`: en preferens får aldrig hindra papperskorgens gallring. Gallringen rensar bilden först och nollställer pekaren själv.
 
 `cover_focus_x`/`cover_focus_y` är fokuspunkten — den del av bilden som ska synas när en yta beskär den (`object-position: x% y%`) — och de två kolumnerna sätts alltid TILLSAMMANS (CHECK-villkoret `container_cover_focus_pair`; en halv punkt finns inte), med `NULL` som mitten. De nollställs när bilden byts eller tas bort: en punkt vald på en bild säger ingenting om nästa.
+
+`inbox_user_id` är det **enda** som gör containern till en inbox: en pekare till personen som äger den, med ett unikt index. Är den satt är containern en personlig inkorg och ingenting annat — den nås av `inbox_user_id` och av ingen annan, den syns aldrig i en lista över containrar, och den kan inte döpas om, raderas, delas eller överlåtas. Den räknas inte mot planens containertak ([[ADR-0054 Inboxen]] § 3), och dess item är den plats där uppgifter och bilagor som saknar hemvist fångas. Container och item skapas första gången de behövs, av `ResolveInbox`, och det unika indexet är skyddet mot två samtidiga skapanden. En container utan pekaren är en vanlig container, och `NULL` är värdet för varje container som fanns före inboxen. Raden raderas med personen, även när ägarkontot står kvar ([[ADR-0054 Inboxen]] § 9).
 
 ## container_access
 
@@ -385,6 +388,8 @@ Sammanfattat, att implementera som en policy och inte utspritt i controllers:
     Är `item_id` satt gäller accessen **bara det itemet och dess ättlingar** via `item_link`-relationen `parent`/`child` — transitivt, aldrig uppåt, och `sibling` bär ingen behörighet alls. Itemets `attachment`, `cost_entry`, `schedule` och `loan` följer itemets nivå. När flera grants når samma item vinner **den högsta nivån**. Se [[ADR-0028 Åtkomst på itemnivå]].
 4. Är kontot `read_only` nekas allt skrivande oavsett behörighet — **utom två saker: att återkalla en åtkomst, och att rensa lagring**. Båda minskar exponeringen i stället för att öka den, och ett fruset konto ska varken vara utlåst från att klippa en relation det inte längre vill ha eller från att ta sig under sin nya gräns. Rensningen går via `DELETE /api/accounts/{account}/storage` (issue 28a) och prövas mot `AccountPolicy` utan `read_only`-kontroll; det är just den vägen ur en nedgradering som `read_only` finns till för att framtvinga. Att bevilja eller bjuda in är däremot fortfarande spärrat.
 5. Uppladdningar räknas mot **den uppladdande användarens konto**, inte ägarkontot.
+
+**Regel 1 har ett undantag, och det är en inbox.** En container med `inbox_user_id` når **bara** den personen, oavsett roll i ägarkontot: en inkorg är där man fångar tankar innan de är färdiga, och den som delar sitt konto med en sambo ska inte dela sina halvfärdiga anteckningar ([[ADR-0054 Inboxen]] § 2). Undantaget är den enda regeln som prövas för en inbox — en `container_access`-rad mot den ger ingenting. Ägaren får `view` på containern och `view`, `create`, `update` och `delete` på dess item; ingen, inte ens ägaren, får döpa om, radera, dela, överlåta eller lägga nya items i den, och ingen ser dess åtkomst- eller överlåtelsehistorik. Den bor i `App\Actions\Access\ResolveItemScope` regel 0 och i `App\Policies\ContainerPolicy`.
 
 **Att hantera åtkomster och att se dem är två olika saker.** Regel 3 spärrar det första: bara ägarkontots medlemmar beviljar, bjuder in och återkallar, och de är också de enda som ser åtkomsternas förvaltningsvy — nivåer, utgångsdatum, vem som beviljade, historiken av återkallade rader och de inbjudningar som ännu inte besvarats.
 

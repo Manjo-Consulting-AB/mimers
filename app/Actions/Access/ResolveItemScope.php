@@ -16,6 +16,11 @@ use Illuminate\Support\Facades\DB;
  *
  * Reglerna, i den ordning de tillämpas:
  *
+ * 0. En INBOX räknas som ägd bara av sin `inbox_user_id`. Medlemskapet i
+ *    ägarkontot ger ingenting, och varje grant mot containern ignoreras —
+ *    se [[ADR-0054 Inboxen]] § 2 och issue 243. Är användaren
+ *    `inbox_user_id` blir omfånget hela containern på `delete`; annars når
+ *    hon ingenting.
  * 1. Ägarkontots medlemmar når hela containern på `delete` — den högsta
  *    nivån, så ingen itemgrant kan höja den.
  * 2. En container-bred grant (`item_id IS NULL`) ger hela containern på sin
@@ -178,13 +183,37 @@ class ResolveItemScope
      */
     private function resolve(User $user, array $containerIds): array
     {
-        $accountIds = $user->accounts->pluck('id')->all();
+        $accountIds = $user->accounts->pluck('id')->map(fn ($id): int => (int) $id)->all();
 
-        $owned = Container::query()
+        // En fråga i stället för två: raden bär både ägarkontot och
+        // inboxens ägare, och uppdelningen görs i minnet. Reglerna nedan
+        // frågar efter SAMMA rader som förut, så frågekostnaden är oförändrad
+        // (se klassens docblock).
+        $containers = Container::query()
             ->whereIn('id', $containerIds)
-            ->whereIn('account_id', $accountIds)
-            ->pluck('id')
-            ->all();
+            ->get(['id', 'account_id', 'inbox_user_id']);
+
+        /** @var array<int, int> container_id → inbox_user_id */
+        $inboxOwner = [];
+
+        /** @var array<int, true> container_id */
+        $owned = [];
+
+        foreach ($containers as $container) {
+            // Regel 0: en inbox räknas som ägd bara av sin egen
+            // `inbox_user_id`. Den läses här och inte ur grants — och
+            // `continue` gör att varken container-breda grants eller
+            // itemgrants nedan någonsin når en inbox (ADR-0054 § 2).
+            if ($container->inbox_user_id !== null) {
+                $inboxOwner[$container->id] = (int) $container->inbox_user_id;
+
+                continue;
+            }
+
+            if (in_array((int) $container->account_id, $accountIds, true)) {
+                $owned[$container->id] = true;
+            }
+        }
 
         // Giltighetsvillkoret formuleras INTE på nytt här — det bor i
         // ContainerAccess::scopeValidFor(), och två formuleringar av
@@ -216,7 +245,15 @@ class ResolveItemScope
         $scopes = [];
 
         foreach ($containerIds as $containerId) {
-            if (in_array($containerId, $owned, true)) {
+            if (isset($inboxOwner[$containerId])) {
+                $scopes[$containerId] = $inboxOwner[$containerId] === (int) $user->id
+                    ? ItemScope::unrestricted(AccessLevel::DELETE)
+                    : ItemScope::restricted([]);
+
+                continue;
+            }
+
+            if (isset($owned[$containerId])) {
                 $scopes[$containerId] = ItemScope::unrestricted(AccessLevel::DELETE);
 
                 continue;

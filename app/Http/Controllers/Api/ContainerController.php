@@ -61,6 +61,7 @@ class ContainerController extends Controller
 
         $containers = Container::query()
             ->accessibleBy($user, $accountIds)
+            ->listable()
             // Uppföljning på granskningen av PR #43: ContainerResource::toArray()
             // läser $this->account->ulid för varje rad. Utan eager loading
             // gör en lista med N containers N+1 frågor — en extra fråga

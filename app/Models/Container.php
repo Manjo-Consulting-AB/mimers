@@ -100,6 +100,36 @@ class Container extends Model
     }
 
     /**
+     * Inboxens ägare, när containern är en inbox — se [[ADR-0054 Inboxen]]
+     * § 1 och issue 243. Relationen är den ena halvan av `inbox_user_id`;
+     * den andra är `isInbox()` nedan.
+     *
+     * `inbox_user_id` är det ENDA som gör containern till en inbox, och det
+     * är en person och inte ett konto: en inkorg är där man fångar tankar
+     * innan de är färdiga, och den som delar sitt konto med en sambo ska inte
+     * dela sina halvfärdiga anteckningar (ADR-0054 § Motivering). Därför
+     * når `inboxUser()`s person den även när hon inte är medlem i
+     * ägarkontot, och ingen annan medlem når den (ADR-0054 § 2).
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function inboxUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'inbox_user_id');
+    }
+
+    /**
+     * Är containern en inbox? Frågan ställs av åtkomstlagret
+     * (App\Actions\Access\ResolveItemScope, App\Policies\ContainerPolicy) och
+     * av listningarna, som alla behandlar en inbox som något annat än en
+     * vanlig container. Se [[ADR-0054 Inboxen]] § 1.
+     */
+    public function isInbox(): bool
+    {
+        return $this->inbox_user_id !== null;
+    }
+
+    /**
      * Containerns bild — en pekare till en av containerns EGNA bilagor, se
      * [[ADR-0047 Containerns bild]] och issue 158. Nullbar och frivillig,
      * som itemets omslag ([[ADR-0041 Itemets vy]] § Beslut).
@@ -305,19 +335,59 @@ class Container extends Model
      * här: en mjukraderad container matchar aldrig, eftersom scopet läggs
      * på samma byggare (issue 15b § Att se upp med).
      *
+     * **En inbox som tillhör någon annan utesluts** (issue 243 ·
+     * [[ADR-0054 Inboxen]] § 2). Ett personkonto kan ha fler medlemmar, och
+     * `whereHas('account.users')` ovan skulle annars ge var och en av dem
+     * hela kontots inboxar. Den EGNA inboxen passerar — den nås genom sina
+     * egna ytor — men den filtreras bort ur listningarna av `listable()`
+     * nedan.
+     *
      * @param  Builder<Container>  $query
      * @param  list<int>  $accountIds
      * @return Builder<Container>
      */
     public function scopeAccessibleBy(Builder $query, User $user, array $accountIds): Builder
     {
-        return $query->where(function (Builder $query) use ($user, $accountIds) {
-            $query->whereHas('account.users', function (Builder $query) use ($user) {
-                $query->whereKey($user->id);
-            })->orWhereHas('accesses', function (Builder $query) use ($user, $accountIds) {
-                /** @var Builder<ContainerAccess> $query */
-                $query->validFor($user, $accountIds);
+        return $query
+            ->where(function (Builder $query) use ($user) {
+                $query->whereNull('inbox_user_id')->orWhere('inbox_user_id', $user->id);
+            })
+            ->where(function (Builder $query) use ($user, $accountIds) {
+                $query->whereHas('account.users', function (Builder $query) use ($user) {
+                    $query->whereKey($user->id);
+                })->orWhereHas('accesses', function (Builder $query) use ($user, $accountIds) {
+                    /** @var Builder<ContainerAccess> $query */
+                    $query->validFor($user, $accountIds);
+                });
             });
-        });
+    }
+
+    /**
+     * Containrar som får synas i en LISTA över containrar — alltså varje
+     * container utom en inbox. Se [[ADR-0054 Inboxen]] § 2 och issue 243.
+     *
+     * **Inboxen nås av sina egna ytor och av ingen lista.** Användaren ser
+     * aldrig containern, bara *Inbox* — fliken på `/tasks`, sidan `/inbox`
+     * och sökträffarna för hennes egna bilagor och uppgifter. Containerlistan,
+     * sidopanelen, dashboardens kort, sökningens containerfilter och
+     * `/api/containers` bär den därför inte.
+     *
+     * Scopet läggs OVANPÅ `accessibleBy()` och ersätter det inte: den egna
+     * inboxen är åtkomlig men inte listbar. Att lägga `whereNull` i
+     * `accessibleBy()` i stället hade gjort den onåbar för den väg som ska
+     * nå den, och `ResolveItemScope` hade tappat sin regel 0.
+     *
+     * **Alla listor över containrar ska bära det här scopet**, men alla
+     * listor över ITEMS eller UPPGIFTER ska inte: inboxens uppgifter syns på
+     * `/tasks` och i ICS-flödet som alla andra (ADR-0054 § 5 och 7), så
+     * `ListTodo`, `ScheduleOccurrence::scopeTodoFor()`,
+     * `CalendarFeedDownloadController` och `ListAuditEvents` lämnas orörda.
+     *
+     * @param  Builder<Container>  $query
+     * @return Builder<Container>
+     */
+    public function scopeListable(Builder $query): Builder
+    {
+        return $query->whereNull('inbox_user_id');
     }
 }

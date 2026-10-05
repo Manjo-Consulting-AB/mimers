@@ -46,6 +46,7 @@ final class ListShellContainers
 
         $containers = Container::query()
             ->accessibleBy($user, $accountIds)
+            ->listable()
             ->orderBy('name')
             ->get(['ulid', 'name', 'kind']);
 
