@@ -110,6 +110,22 @@ class AuditLog extends Model
 
     public const ACTION_ATTACHMENT_RESTORED = 'attachment.restored';
 
+    /**
+     * Bilagan flyttades till ett annat item (M27 · issue 242, [[ADR-0053
+     * Flytt och kopiering]] § 7). Inom samma container bär `meta`
+     * `from_item`/`to_item` som ULID:er; mellan containrar skriver flytten i
+     * stället två rader — en i vardera loggen — med `meta.direction` `out`
+     * respektive `in`, och **ingen av dem nämner motparten**.
+     */
+    public const ACTION_ATTACHMENT_MOVED = 'attachment.moved';
+
+    /**
+     * En kopia av bilagan lades på ett annat item (M27 · issue 242). EN rad,
+     * i målcontainern: källan förändrades inte, och en rad där hade beskrivit
+     * en händelse som inte hände (ADR-0053 § 7).
+     */
+    public const ACTION_ATTACHMENT_COPIED = 'attachment.copied';
+
     public const ACTION_COST_ENTRY_CREATED = 'cost_entry.created';
 
     public const ACTION_COST_ENTRY_UPDATED = 'cost_entry.updated';

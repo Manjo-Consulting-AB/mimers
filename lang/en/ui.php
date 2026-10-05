@@ -423,6 +423,13 @@ return [
         'attachment-uploaded' => 'The attachment has been uploaded.',
         'attachment-deleted' => 'The attachment is in the trash. It can be restored within 30 days.',
 
+        // Issue 242 · [[ADR-0053 Flytt och kopiering]]. A move keeps the same
+        // row and a copy makes a new one, but both leave a file where the user
+        // asked for it — the confirmation says what happened, not which of the
+        // two the database did.
+        'attachment-moved' => 'The attachment has been moved.',
+        'attachment-copied' => 'The attachment has been copied.',
+
         // Issue 159 · [[ADR-0047 Containerns bild]]. Two codes and not one:
         // setting and removing are two different things, and the removal is
         // NOT "deleted" — a container image never enters the trash, it is
@@ -557,6 +564,11 @@ return [
         // sentence; the code itself never reaches a browser (ADR-0013).
         'attachment' => [
             'not_image' => 'That file is not an image. A container image must be a picture.',
+
+            // Issue 242: a move whose target is the item the file is already
+            // on. The picker will not offer it (issue 243), but the code is
+            // reachable from a hand-made request and from /api (issue 247).
+            'same_item' => 'The file is already on that item.',
         ],
 
         // Issue 62a decision 7: `RestoreContent` throws `trash.parent_deleted`
@@ -2308,6 +2320,18 @@ return [
                 'created' => ':user added a file to :item',
                 'deleted' => ':user moved a file on :item to the trash',
                 'restored' => ':user restored a file on :item',
+                // Issue 242: one sentence for BOTH rows of a move between
+                // containers — the `out` row and the `in` row — and no `:item`
+                // in it. The log row's own item column says where the reader
+                // is, and `:item` would be the SOURCE item on the `out` row,
+                // which would read as "moved a file TO" the item it left.
+                // The direction itself lives in `meta.direction`; the wording
+                // ADR-0053 § 7 asks for ("out of" / "into the container") needs
+                // a frontend change and belongs to issue 243.
+                'moved' => ':user moved a file',
+                // Only ever written in the target container, with `item_id` set
+                // to the target — so `:item` is true here.
+                'copied' => ':user copied a file to :item',
             ],
 
             'calendar_feed' => [

@@ -1087,6 +1087,15 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/items/{item}/costs',
         'containers/{container}/items/{item}/links',
         'containers/{container}/items/{item}/attachments',
+        // Issue 242: flytten och kopian av en bilaga. Ingen av dem rör några
+        // `container_access`-rader: flytten kräver `delete` på källans item
+        // och `create` på målets, kopian `view` på källan och `create` på
+        // målet ([[ADR-0053 Flytt och kopiering]] § 2) — pinningar som redan
+        // finns på itemet. Ägaren flyttas mellan konton, men ägarskapet är
+        // `attachment.billed_account_id` och inte en åtkomstrad, och grinden
+        // är oförändrad. Ingen ny läsare och ingen ny mottagare läggs till.
+        'containers/{container}/items/{item}/attachments/{attachment}/move',
+        'containers/{container}/items/{item}/attachments/{attachment}/copy',
         'containers/{container}/items/{item}/schedules',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip',
