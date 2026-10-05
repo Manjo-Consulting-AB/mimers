@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Attachment\CopyAttachment;
+use App\Actions\Attachment\MoveAttachment;
 use App\Actions\Attachment\StoreAttachment;
 use App\Actions\Attachment\TrashAttachment;
+use App\Actions\Inbox\SendToInbox;
 use App\Exceptions\Api\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Attachment\StoreAttachmentRequest;
+use App\Http\Requests\TargetItemRequest;
 use App\Http\Resources\AttachmentResource;
 use App\Models\Account;
 use App\Models\Attachment;
@@ -153,5 +157,100 @@ class AttachmentController extends Controller
         $trashAttachment->handle($attachment, $request->user());
 
         return response()->noContent();
+    }
+
+    /**
+     * POST /api/containers/{container}/items/{item}/attachments/{attachment}
+     * /move — 200, AttachmentResource. M27 · issue 247: SAMMA action som
+     * webbens AttachmentController::move() ([[ADR-0053 Flytt och kopiering]]
+     * § 2 och § 8), och samma två grindar — `delete` på KÄLLANS item och
+     * `create` på MÅLETS, `delete` först så en anropare utan rätt att flytta
+     * från källan inte kan sondera vilka mål som finns.
+     *
+     * Målet kommer ur kroppens `target` och slås upp av
+     * App\Http\Requests\TargetItemRequest — en ULID som inte finns eller är
+     * mjukraderad ger 404, inte ett valideringsfel. Domänfelet
+     * (`quota.storage_exceeded` vid ett ägarbyte) kastas av actionen som
+     * App\Exceptions\Api\ApiException och renderas i felhöljet
+     * ([[AGENTS.md]] § Felformat).
+     */
+    public function move(
+        TargetItemRequest $request,
+        Container $container,
+        Item $item,
+        Attachment $attachment,
+        MoveAttachment $moveAttachment,
+    ): AttachmentResource {
+        Gate::authorize('delete', $item);
+
+        $target = $request->targetItem();
+
+        Gate::authorize('create', $target);
+
+        $moved = $moveAttachment->handle($attachment, $target, $request->user());
+
+        // Flytten returnerar den LÅSTA raden utan relationer; resursen läser
+        // `storedFile` och `billedAccount`, så de laddas här i stället för ett
+        // oplanerat lazy-load per svar.
+        $moved->loadMissing(['storedFile', 'billedAccount']);
+
+        return new AttachmentResource($moved);
+    }
+
+    /**
+     * POST /api/containers/{container}/items/{item}/attachments/{attachment}
+     * /copy — 201, AttachmentResource. M27 · issue 247: SAMMA action som
+     * webbens AttachmentController::copy() ([[ADR-0053 Flytt och kopiering]]
+     * § 2 och § 4), och samma grindar — `view` på KÄLLAN (kopian rör inte
+     * originalet) och `create` på MÅLET.
+     *
+     * Kvoten prövas alltid, även inom samma konto; felet blir 403
+     * `quota.storage_exceeded` i felhöljet.
+     */
+    public function copy(
+        TargetItemRequest $request,
+        Container $container,
+        Item $item,
+        Attachment $attachment,
+        CopyAttachment $copyAttachment,
+    ): JsonResponse {
+        Gate::authorize('view', $item);
+
+        $target = $request->targetItem();
+
+        Gate::authorize('create', $target);
+
+        $copy = $copyAttachment->handle($attachment, $target, $request->user());
+
+        return (new AttachmentResource($copy))
+            ->response()
+            ->setStatusCode(201);
+    }
+
+    /**
+     * POST /api/containers/{container}/items/{item}/attachments/{attachment}
+     * /inbox — *Back to Inbox*, 200 med AttachmentResource. M27 · issue 247
+     * och issue 244: SAMMA action som webbens AttachmentController::toInbox(),
+     * App\Actions\Inbox\SendToInbox::attachment ([[ADR-0054 Inboxen]] § 6).
+     *
+     * **Grinden är `delete` på källans item**, som för en flytt. Målet är
+     * användarens EGEN inbox och står därför inte i kroppen — den skapas om
+     * den saknas. Ägaren blir personkontot, och flytten prövar dess kvot; ett
+     * kvotfel blir 403 `quota.storage_exceeded`.
+     */
+    public function toInbox(
+        Request $request,
+        Container $container,
+        Item $item,
+        Attachment $attachment,
+        SendToInbox $sendToInbox,
+    ): AttachmentResource {
+        Gate::authorize('delete', $item);
+
+        $moved = $sendToInbox->attachment($attachment, $request->user());
+
+        $moved->loadMissing(['storedFile', 'billedAccount']);
+
+        return new AttachmentResource($moved);
     }
 }

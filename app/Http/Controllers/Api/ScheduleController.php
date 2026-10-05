@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\Inbox\SendToInbox;
 use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Schedule\DeleteSchedule;
+use App\Actions\Schedule\MoveSchedule;
 use App\Actions\Schedule\UpdateSchedule;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Schedule\StoreScheduleRequest;
 use App\Http\Requests\Schedule\UpdateScheduleRequest;
+use App\Http\Requests\TargetItemRequest;
 use App\Http\Resources\ScheduleResource;
 use App\Models\Container;
 use App\Models\Item;
@@ -166,5 +169,60 @@ class ScheduleController extends Controller
         $deleteSchedule->handle($schedule, $request->user());
 
         return response()->noContent();
+    }
+
+    /**
+     * POST /api/containers/{container}/items/{item}/schedules/{schedule}/move
+     * — 200, ScheduleResource. M27 · issue 247: SAMMA action som webbens
+     * ScheduleController::move(), App\Actions\Schedule\MoveSchedule
+     * ([[ADR-0053 Flytt och kopiering]] § 6), och samma två grindar —
+     * `delete` på KÄLLANS item och `create` på MÅLETS, `delete` först.
+     *
+     * Målet kommer ur kroppens `target` (App\Http\Requests\TargetItemRequest)
+     * och kan ligga i en annan container än ruttens `{container}`; en ULID som
+     * inte finns eller är mjukraderad ger 404. Domänfelet
+     * `schedule.has_dependencies` — en flytt över en containergräns med
+     * beroenden — kastas av actionen som App\Exceptions\Api\ApiException och
+     * renderas i felhöljet ([[AGENTS.md]] § Felformat).
+     */
+    public function move(
+        TargetItemRequest $request,
+        Container $container,
+        Item $item,
+        Schedule $schedule,
+        MoveSchedule $moveSchedule,
+    ): ScheduleResource {
+        Gate::authorize('delete', $item);
+
+        $target = $request->targetItem();
+
+        Gate::authorize('create', $target);
+
+        return new ScheduleResource($moveSchedule->handle($schedule, $target, $request->user()));
+    }
+
+    /**
+     * POST /api/containers/{container}/items/{item}/schedules/{schedule}/inbox
+     * — *Back to Inbox*, 200 med ScheduleResource. M27 · issue 247 och issue
+     * 244: SAMMA action som webbens ScheduleController::toInbox(),
+     * App\Actions\Inbox\SendToInbox::schedule ([[ADR-0054 Inboxen]] § 6).
+     *
+     * **Grinden är `delete` på källans item**, som för en flytt. Målet är
+     * användarens EGEN inbox och står inte i kroppen — den skapas om den
+     * saknas. Uppgiften får `gtd_list` och `default_gtd_list` nollställda.
+     * Domänfelet `schedule.has_dependencies` (en uppgift med beroenden) och
+     * `schedule.already_in_inbox` kastas av actionen som ApiException — samma
+     * koder som webben, bara i felhöljet.
+     */
+    public function toInbox(
+        Request $request,
+        Container $container,
+        Item $item,
+        Schedule $schedule,
+        SendToInbox $sendToInbox,
+    ): ScheduleResource {
+        Gate::authorize('delete', $item);
+
+        return new ScheduleResource($sendToInbox->schedule($schedule, $request->user()));
     }
 }
