@@ -56,6 +56,7 @@ final class ActiveContainer
 
         $container = Container::query()
             ->accessibleBy($user, $accountIds)
+            ->listable()
             ->where('ulid', $ulid)
             ->first();
 
@@ -96,6 +97,7 @@ final class ActiveContainer
 
         return Container::query()
             ->accessibleBy($user, $accountIds)
+            ->listable()
             ->whereKey($container->id)
             ->exists();
     }

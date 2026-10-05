@@ -87,6 +87,7 @@ class SearchAccessibleItems
 
         $containerIds = Container::query()
             ->accessibleBy($user, $accountIds)
+            ->listable()
             ->pluck('id')
             ->all();
 

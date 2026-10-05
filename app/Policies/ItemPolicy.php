@@ -31,6 +31,13 @@ use App\Support\Access\AccessLevel;
  * `update` och `delete` nekas när ÄGARKONTOT är `read_only` eller `closed`,
  * `view` aldrig. Spärren sitter på kontot (`account.status`), aldrig på
  * användaren, exakt som i ContainerPolicy.
+ *
+ * **Inboxens item kräver ingen egen gren här** (issue 243 · [[ADR-0054
+ * Inboxen]] § 2). Ägaren får `view`, `create`, `update` och `delete` på sitt
+ * inbox-item, och ingen annan får något — men det följer av regel 0 i
+ * App\Actions\Access\ResolveItemScope, som gör omfånget i en inbox till
+ * ägarens och till ingen annans. Lägg inte en inbox-kontroll i `allows()`:
+ * två ställen som svarar på samma fråga glider isär.
  */
 class ItemPolicy
 {

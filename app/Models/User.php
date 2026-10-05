@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Attributes\RouteKey;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -151,6 +152,29 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
         return $this->belongsToMany(Account::class, 'account_user')
             ->withPivot('role')
             ->withTimestamps();
+    }
+
+    /**
+     * Personens inbox — containern som bär `inbox_user_id = hennes id`, se
+     * [[ADR-0054 Inboxen]] § 1 och issue 243.
+     *
+     * **Högst en per person**, och det är det unika indexet på
+     * `container.inbox_user_id` som upprätthåller det — inte den här
+     * relationen. Relationen är en `hasOne` för att frågan ska kunna ställas
+     * som vilken annan som helst; den som SKAPAR inboxen är
+     * App\Actions\Inbox\ResolveInbox, som skriver raden direkt och låter
+     * indexet skydda mot dubbletter.
+     *
+     * Relationen bär ingen åtkomst: att läsa den säger att inboxen finns,
+     * inte att anroparen får se den. Grinden är
+     * App\Policies\ContainerPolicy::view(), som för en inbox bara släpper
+     * igenom `inbox_user_id` själv (ADR-0054 § 2).
+     *
+     * @return HasOne<Container, $this>
+     */
+    public function inboxContainer(): HasOne
+    {
+        return $this->hasOne(Container::class, 'inbox_user_id');
     }
 
     /**
