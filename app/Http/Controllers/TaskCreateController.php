@@ -30,9 +30,11 @@ use Inertia\Response;
  * Utan `item` finns ingenting att neka: inboxen är användarens egen, och
  * `POST /inbox/tasks` prövar samma sak igen när hon sparar.
  *
- * **En ULID som inte finns, eller som är mjukraderad, ger 404 och inte 403.**
- * Uppslaget är globalt — sidan ligger utanför containerfamiljen — och
- * ordningen är `ScheduleController::move()`s: objektet först, grinden sedan.
+ * **En ULID som inte finns, vars container är mjukraderad, eller som tillhör
+ * en inbox ger 404 och inte 403.** Uppslaget är globalt — sidan ligger utanför
+ * containerfamiljen — och ordningen är `ScheduleController::move()`s: objektet
+ * först, grinden sedan. Inboxen är ingen plats: den nås bara genom sina egna
+ * ytor (ADR-0054 § 2), och målväljaren listar den aldrig.
  *
  * **Sidan skickar itemet OCH containern** (Beslut 1): vyn visar båda i
  * platsfältet, och formulärets POST-adress byggs ur dem — itemets egen rutt.
@@ -65,12 +67,25 @@ class TaskCreateController extends Controller
             // `container.account` läses i förväg: ItemPolicy frågar efter
             // ägarkontots status (regel 4), och utan raden hade grinden gjort
             // ett uppslag till — samma värmning som ListCreatableItems gör.
+            // `container.inbox_user_id` tas med av samma skäl: `isInbox()`
+            // nedan läser kolumnen, och utan den i urvalet hade den varit null.
             $item = Item::query()
-                ->with(['container:id,ulid,name,account_id', 'container.account'])
+                ->with(['container:id,ulid,name,account_id,inbox_user_id', 'container.account'])
                 ->where('ulid', $ulid)
                 ->first();
 
-            abort_if($item === null, 404);
+            // Objektet först, grinden sedan (samma ordning som
+            // ScheduleController::move()) — och två 404:or innan grinden.
+            // En ULID utan träff, och ett item vars container är mjukraderad:
+            // den eager-laddade raden blir null, och ett senare
+            // `$item->container->ulid` hade kastat och gett 500.
+            abort_if($item === null || $item->container === null, 404);
+
+            // Inboxen nås bara genom sina egna ytor (ADR-0054 § 2), och
+            // App\Actions\Item\ListCreatableItems listar den aldrig. Ägaren FÅR
+            // skapa på sitt inbox-item — det är därför grinden inte räcker —
+            // så platsen nekas som 404, samma svar som en ULID utan träff.
+            abort_if($item->container->isInbox(), 404);
 
             Gate::authorize('create', $item);
         }
@@ -94,16 +109,28 @@ class TaskCreateController extends Controller
      * omdirigering till en främmande sajt är annars ett öppet mål för vem som
      * helst som kan lura in en länk i användarens flöde.
      *
+     * **Kontrolltecken och backslash nekas var de än står.** WHATWG-parsern tar
+     * bort tab, LF och CR var som helst i adressen innan den läses, så
+     * `/%09/evil.example` — avkodat till `/<TAB>/evil.example` — blir
+     * `//evil.example` i webbläsaren. Ett backstreck efter första tecknet har
+     * samma verkan. Mönstret är därför hela regeln: ett inledande `/`, ingen
+     * andra snedstrecksvariant, och sedan bara tecken utanför kontroll- och
+     * backslashmängden. `\z` och inte `$`: `$` hade släppt igenom ett avslutande
+     * radbrytningstecken.
+     *
      * Null betyder "använd standardadressen", och den är `/tasks` — samma svar
      * för en adress som saknas och en som nekats.
      */
     public static function safeReturn(mixed $return): ?string
     {
-        if (! is_string($return) || $return === '' || ! str_starts_with($return, '/')) {
+        if (! is_string($return)) {
             return null;
         }
 
-        if (str_starts_with($return, '//') || str_starts_with($return, '/\\')) {
+        // Avgränsaren är `~` och inte `/`: mönstret bär `/` i en teckenklass,
+        // och PCRE stänger vid första oeskyddade avgränsaren — även inuti en
+        // klass.
+        if (preg_match('~\A/(?![/\\\\])[^\x00-\x1F\x7F\\\\]*\z~', $return) !== 1) {
             return null;
         }
 

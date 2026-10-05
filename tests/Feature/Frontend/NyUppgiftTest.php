@@ -202,6 +202,42 @@ it('ett item användaren inte får skapa i ger 403', function () {
     actingAs($lasare)->get('/tasks/create?item=01JZZZZZZZZZZZZZZZZZZZZZZZ')->assertNotFound();
 });
 
+/*
+ * Fynd i granskningen: ett inbox-item är ingen plats.
+ *
+ * Inboxen nås bara genom sina egna ytor (ADR-0054 § 2), och
+ * App\Actions\Item\ListCreatableItems listar den aldrig — målväljaren erbjuder
+ * den aldrig som mål. Ägaren FÅR skapa på sitt inbox-item, så grinden nekar
+ * inte; platsen nekas därför som 404, samma svar som en ULID utan träff.
+ */
+it('ett inbox-item är ingen plats på /tasks/create', function () {
+    withoutVite();
+
+    [$person] = nyuppgiftKontext();
+
+    $inbox = app(ResolveInbox::class)->handle($person);
+
+    actingAs($person)->get("/tasks/create?item={$inbox->ulid}")->assertNotFound();
+});
+
+/*
+ * Fynd i granskningen: en mjukraderad container ger 404 och inte 500.
+ *
+ * Itemet finns, men containern är mjukraderad: den eager-laddade raden blir
+ * null, och ett senare `$item->container->ulid` hade kastat. Objektet först,
+ * grinden sedan — samma 404 som en ULID utan träff.
+ */
+it('ett item i en mjukraderad container ger 404', function () {
+    withoutVite();
+
+    [$person, , $container] = nyuppgiftKontext();
+    $item = nyuppgiftItem($container);
+
+    $container->delete();
+
+    actingAs($person)->get("/tasks/create?item={$item->ulid}")->assertNotFound();
+});
+
 // --- skrivningarna ----------------------------------------------------------
 
 /*
@@ -288,7 +324,17 @@ it('return till en extern adress ignoreras', function () {
     [$person, , $container] = nyuppgiftKontext();
     $item = nyuppgiftItem($container);
 
-    $externa = ['https://evil.example', '//evil.example', '/\\evil.example', 'evil.example'];
+    $externa = [
+        'https://evil.example',
+        '//evil.example',
+        '/\\evil.example',
+        'evil.example',
+        // WHATWG-parsern tar bort tab, LF och CR var som helst i adressen, så
+        // dessa blir `//evil.example` i webbläsaren om de släpps igenom.
+        "/\t/evil.example",
+        "/\n/evil.example",
+        "/\t\\evil.example",
+    ];
 
     foreach ($externa as $extern) {
         actingAs($person)->post("/containers/{$container->ulid}/items/{$item->ulid}/schedules", [
