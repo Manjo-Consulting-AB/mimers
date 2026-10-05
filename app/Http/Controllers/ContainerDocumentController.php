@@ -144,18 +144,38 @@ class ContainerDocumentController extends Controller
         $variants = $this->variants($paginator->getCollection());
 
         $rows = $paginator
-            ->through(fn (Attachment $attachment): array => [
-                ...AttachmentResource::make($attachment)->resolve($request),
+            ->through(function (Attachment $attachment) use ($request, $user, $container): array {
+                $item = $attachment->item;
 
-                // Itemet raden hör till. Resursen bär det inte — `/api`s
-                // nästlade bilagerutt vet redan vilket itemet är — men listan
-                // länkar varje rad till itemets bilageflik och visar dess
-                // namn (issue 60).
-                'item' => [
-                    'ulid' => (string) $attachment->item->ulid,
-                    'name' => (string) $attachment->item->name,
-                ],
-            ]);
+                // Flytten prövar `delete` på bilagans ITEM ([[ADR-0053 Flytt
+                // och kopiering]] § 2), och raden här är den enda platsen i
+                // webben där rader från flera items möts: en `read`-mottagare
+                // på ett item ser sin rad men får varken flytta eller radera
+                // den. Flaggan är presentation — rutten prövar samma grind
+                // på nytt (ContainerDocumentController § can ovan).
+                //
+                // Containern binds på itemet i stället för att slås upp: hela
+                // sidan är EN container, och `ItemPolicy::delete()` läser
+                // `$item->container->account`, så utan raden hade varje rad
+                // kostat ett eget uppslag (ItemPolicy § allows).
+                $item->setRelation('container', $container);
+
+                return [
+                    ...AttachmentResource::make($attachment)->resolve($request),
+
+                    // Itemet raden hör till. Resursen bär det inte — `/api`s
+                    // nästlade bilagerutt vet redan vilket itemet är — men
+                    // listan länkar varje rad till itemets bilageflik och
+                    // visar dess namn (issue 60).
+                    'item' => [
+                        'ulid' => (string) $item->ulid,
+                        'name' => (string) $item->name,
+                    ],
+                    'can' => [
+                        'delete' => Gate::forUser($user)->allows('delete', $item),
+                    ],
+                ];
+            });
 
         return Inertia::render('Containers/Documents', [
             'container' => ContainerResource::make($container)->resolve($request),

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../../../layouts/ContainerLayout.vue';
+import ItemTargetPicker from '../../../../components/ItemTargetPicker.vue';
 import OpenOccurrence from '../../../../components/OpenOccurrence.vue';
 import ScheduleDependencySection from '../../../../components/ScheduleDependencySection.vue';
 import { formatDate } from '../../../../components/accessPresentation.js';
@@ -162,6 +163,46 @@ function destroy() {
         onFinish: () => { pending.value = false; },
     });
 }
+
+/*
+ * Flytten (issue 243 · [[ADR-0053 Flytt och kopiering]] § 6). Uppgiften
+ * flyttas men kopieras aldrig — historiken är svaret på när den gjordes
+ * senast, och två uppgifter med samma historik svarar fel (§ 1). Knappen står
+ * bakom `can.delete` på itemet, som raderingen intill: en flytt tar bort
+ * något från källan.
+ *
+ * Väljaren (issue 242) lämnar målet; svaret går till schemats sida på det
+ * NYA itemet, för uppgiften ligger inte kvar här. Domänfelet — en uppgift med
+ * beroenden kan flyttas inom containern men inte till en annan — kommer som
+ * ett fältfel på `schedule` och ritas under knappen.
+ */
+const pickerOpen = ref(false);
+const pickerTrigger = ref(null);
+const moveError = ref(null);
+
+function openPicker(event) {
+    pickerTrigger.value = event.currentTarget;
+    moveError.value = null;
+    pickerOpen.value = true;
+}
+
+function closePicker() {
+    pickerOpen.value = false;
+}
+
+function chooseTarget(target) {
+    router.post(`${scheduleActionUrl}/move`, { target: target.ulid }, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+        onError: (errors) => { moveError.value = errors.schedule ?? null; },
+        onHttpException: (response) => {
+            moveError.value = response.status === 403 ? t('error.403') : t('error.generic');
+
+            return false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -216,6 +257,19 @@ function destroy() {
                 {{ pending ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
             </button>
 
+            <!-- Flytten (issue 243 · [[ADR-0053 Flytt och kopiering]] § 6):
+                 bakom `can.delete`, som raderingen intill — en flytt tar bort
+                 något från källan. Servern prövar samma grind på nytt. -->
+            <button
+                v-if="can.delete"
+                type="button"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                @click="openPicker($event)"
+            >
+                {{ t('item.schedule.move') }}
+            </button>
+
             <button
                 v-if="can.delete"
                 type="button"
@@ -226,6 +280,13 @@ function destroy() {
                 {{ pending ? t('common.pending.default') : t('item.schedule.destroy') }}
             </button>
         </div>
+
+        <!-- Flyttens fel (issue 243): `schedule.has_dependencies` när målet
+             ligger i en annan container och uppgiften har beroenden, eller en
+             403:a ur grinden. Det står under knappen, och sidan står kvar. -->
+        <p v-if="moveError" role="alert" class="mt-2 text-sm text-red-700">
+            {{ moveError }}
+        </p>
 
         <section class="mt-8">
             <!-- Den öppna förekomsten med sin avbockning (Beslut 1). En
@@ -320,6 +381,19 @@ function destroy() {
             :counterparts="counterparts.occurrence"
             :active="hasOpenOccurrence"
             :can="can"
+        />
+
+        <!-- Målväljaren (issue 242 och 243): målet är ett item, och
+             `excludeItem` är itemet uppgiften står på — att flytta den till
+             sig själv är inget mål. Rubriken är uppgiftens egen mening, för
+             den som väljer ser vad som flyttas. -->
+        <ItemTargetPicker
+            :open="pickerOpen"
+            :trigger="pickerTrigger"
+            :exclude-item="item.ulid"
+            :heading="t('item.schedule.move_heading')"
+            @choose="chooseTarget"
+            @close="closePicker"
         />
     </ContainerLayout>
 </template>

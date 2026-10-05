@@ -2,6 +2,7 @@
 import { computed, nextTick, ref } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiButton from './UiButton.vue';
 import UiSelect from './UiSelect.vue';
 import { attachmentPreview, formatByteSize } from './attachmentPresentation.js';
@@ -116,6 +117,22 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * `<UiButton>` hade fallit på den regeln. Filväljaren är kvar som rå
  * `<input type="file">` med flit — `v-model` är inte hur en fil väljs, och
  * `UiInput` bär just en sådan. Beteendet är oförändrat.
+ *
+ * **Raden får *Move…* och *Copy…*** (issue 243 · [[ADR-0053 Flytt och
+ * kopiering]] § 2). Båda öppnar ItemTargetPicker med itemet som
+ * `excludeItem` — att flytta något till sig självt är inget mål — och postar
+ * valet som `target` till rutten för respektive handling. *Move…* ritas
+ * bakom `can.delete` på itemet: en flytt tar bort något från källan, och den
+ * som inte får radera ska inte kunna tömma itemet genom att flytta allt.
+ * *Copy…* står på varje rad, för en kopia rör inte originalet och raden syns
+ * bara för den som får läsa itemet. Servern prövar båda grindarna på nytt;
+ * flaggan här är presentation.
+ *
+ * **Felet ritas på den rad som flyttades.** Kvotfelet
+ * (`quota.storage_exceeded`) kommer som ett fältfel på `attachment`, och ett
+ * 403 från grinden fångas av `onHttpException` — annars hade Inertia visat
+ * sin egen ruta mitt över sidan. Samma väg som köns radfel: raden bär sin
+ * egen mening, och resten av listan står kvar orörd.
  */
 const props = defineProps({
     containerUlid: { type: String, required: true },
@@ -461,6 +478,72 @@ function destroy(attachment) {
         onFinish: () => { pending.value = null; },
     });
 }
+
+/*
+ * Flytten och kopian (issue 243). Väljaren (issue 242) äger listan och
+ * valet; den här filen äger raden som öppnade den och vart valet ska.
+ *
+ * `picked` bär bilagan OCH verbet, alltså `move` eller `copy` — samma ord
+ * som står i adressen. Anroparen läser det ur argumentet och aldrig ur en
+ * ref som stängningen kan ha nollställt medan anropet är i luften.
+ */
+const pickerOpen = ref(false);
+const pickerTrigger = ref(null);
+const pickerHeading = ref('');
+const picked = ref(null);
+
+/* Radens fel: kvotfelet eller 403, ritat på den rad som flyttades. */
+const actionError = ref(null);
+
+function openPicker(attachment, action, event) {
+    picked.value = { attachment, action };
+    pickerTrigger.value = event.currentTarget;
+    pickerHeading.value = action === 'copy'
+        ? t('item.attachment.copy_heading')
+        : t('item.attachment.move_heading');
+    pickerOpen.value = true;
+}
+
+/* Väljaren stängdes — oavsett väg, ett val eller Esc. */
+function closePicker() {
+    pickerOpen.value = false;
+    picked.value = null;
+}
+
+/*
+ * Valet ur väljaren. Målet postas som `target`, och svaret är `back()` med
+ * färska props — listan speglar alltid serverns svar, samma regel som
+ * uppladdningen (Beslut 6). `preserveScroll` håller raden kvar under
+ * fingret. Ett 403 fångas och ritas på raden; `false` stänger av Inertias
+ * egen felruta, precis som köns `onHttpFailure` gör.
+ */
+function chooseTarget(target) {
+    const { attachment, action } = picked.value;
+
+    // Verbet står i adressen: `move` och `copy` är två bokstavliga suffix, och
+    // `picked` bär det ena.
+    const url = `${itemUrl()}/attachments/${attachment.ulid}${action === 'copy' ? '/copy' : '/move'}`;
+
+    router.post(url, { target: target.ulid }, {
+        preserveScroll: true,
+        onStart: () => {
+            pending.value = attachment.ulid;
+            actionError.value = null;
+        },
+        onFinish: () => { pending.value = null; },
+        onError: (errors) => {
+            actionError.value = { ulid: attachment.ulid, message: errors.attachment };
+        },
+        onHttpException: (response) => {
+            actionError.value = {
+                ulid: attachment.ulid,
+                message: response.status === 403 ? t('error.403') : t('error.generic'),
+            };
+
+            return false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -706,6 +789,33 @@ function destroy(attachment) {
                         {{ t('item.attachment.download') }}
                     </a>
 
+                    <!--
+                        *Move…* och *Copy…* (issue 243 · [[ADR-0053 Flytt och
+                        kopiering]] § 2). Flytten står bakom `can.delete` — den
+                        tar bort något från källan — och kopian på varje rad,
+                        för en kopia rör inte originalet. Båda öppnar väljaren
+                        med itemet som `excludeItem`, och servern prövar samma
+                        två grindar på nytt.
+                    -->
+                    <button
+                        v-if="can.delete"
+                        type="button"
+                        :disabled="pending === attachment.ulid"
+                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                        @click="openPicker(attachment, 'move', $event)"
+                    >
+                        {{ t('item.attachment.move') }}
+                    </button>
+
+                    <button
+                        type="button"
+                        :disabled="pending === attachment.ulid"
+                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                        @click="openPicker(attachment, 'copy', $event)"
+                    >
+                        {{ t('item.attachment.copy') }}
+                    </button>
+
                     <button
                         v-if="can.delete"
                         type="button"
@@ -716,6 +826,20 @@ function destroy(attachment) {
                         {{ pending === attachment.ulid ? t('common.pending.default') : t('item.attachment.destroy') }}
                     </button>
                 </div>
+
+                <!--
+                    Radens fel (issue 243): kvotfelet ur fältfelet på
+                    `attachment`, eller 403:an ur `onHttpException`. Det står
+                    under raden det gäller och lämnar resten av listan orörd —
+                    samma form som köns felrad.
+                -->
+                <p
+                    v-if="actionError && actionError.ulid === attachment.ulid"
+                    role="alert"
+                    class="text-sm text-danger"
+                >
+                    {{ actionError.message }}
+                </p>
             </li>
         </ul>
 
@@ -792,6 +916,21 @@ function destroy(attachment) {
                 </div>
             </div>
         </dialog>
+
+        <!--
+            Målväljaren (issue 242 och 243). Ett mål per anrop: raden som
+            öppnade den bär sin ULID och sitt verb, och valet postas till
+            radens egen rutt. `exclude-item` är itemet, så flytten aldrig
+            erbjuder ett mål som är källan.
+        -->
+        <ItemTargetPicker
+            :open="pickerOpen"
+            :trigger="pickerTrigger"
+            :exclude-item="itemUlid"
+            :heading="pickerHeading"
+            @choose="chooseTarget"
+            @close="closePicker"
+        />
 
     </section>
 </template>
