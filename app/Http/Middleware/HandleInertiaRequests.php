@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Actions\Container\ListShellContainers;
+use App\Actions\Item\ListCreatableItems;
 use App\Actions\Item\ListFavorites;
 use App\Actions\Item\ListItems;
 use App\Actions\Item\ListRecentVisits;
@@ -34,7 +35,7 @@ use Inertia\Middleware;
  * De delade propsen — det enda som når varje webbsida, se issue 51
  * § Beslut 2 och 3.
  *
- * Femton nycklar, och ingen av dem byggs för hand: `auth.user` och
+ * Sexton nycklar, och ingen av dem byggs för hand: `auth.user` och
  * `auth.accounts` kommer ur samma API Resource-klasser som `/api` använder
  * ([[ADR-0021 Frontendteknik]] § "Inertia-props renderas ur samma API
  * Resource-klasser som /api"), `activeContainer` ur
@@ -135,6 +136,15 @@ use Inertia\Middleware;
  * Till skillnad från favoriterna, som följer med varje sida, kostar den
  * alltså ingenting på en sida där ingen av de två ytorna ritas.
  *
+ * **`itemTargets` kom med issue 242** — items användaren får skapa i,
+ * grupperade per container, se App\Actions\Item\ListCreatableItems. Proppen är
+ * den FEMTE optionala och följer de fyra andras mönster: listan är dyr — den
+ * prövar `ItemPolicy::create` per item i varje container användaren når — och
+ * behövs bara när målväljaren öppnas (issue 243, 245 och 246), så en vanlig
+ * sidladdning bär den aldrig. Innehållet skiljer sig från `shellContainers`
+ * ovan: den listar containrar som mål, den här listar ITEMS, och en container
+ * utan valbara items utelämnas.
+ *
  * `locale` och `translations` kom med issue 52: locale sätts av
  * App\Http\Middleware\SetLocale, som ligger FÖRE den här middlewaren i
  * `web`-gruppen, så `App::getLocale()` är redan rätt när `share()` körs.
@@ -175,6 +185,7 @@ class HandleInertiaRequests extends Middleware
 
     public function __construct(
         private readonly ActiveContainer $activeContainer,
+        private readonly ListCreatableItems $listCreatableItems,
         private readonly ListFavorites $listFavorites,
         private readonly ListItems $listItems,
         private readonly ListRecentVisits $listRecentVisits,
@@ -242,6 +253,10 @@ class HandleInertiaRequests extends Middleware
             // annanstans, och en vanlig sidladdning ska inte bära den — se
             // klassens docblock.
             'shellContainers' => Inertia::optional(fn (): array => $this->shellContainers($request)),
+            // Den femte optionala proppen, av samma skäl som de fyra andra:
+            // mållistan behövs bara när målväljaren öppnas, och en vanlig
+            // sidladdning ska inte bära den — se klassens docblock.
+            'itemTargets' => Inertia::optional(fn (): array => $this->itemTargets($request)),
             'locale' => fn (): string => App::getLocale(),
             'translations' => fn (): array => Lang::get('ui'),
             'flash' => [
@@ -443,6 +458,36 @@ class HandleInertiaRequests extends Middleware
         }
 
         return $this->listShellContainers->handle($user);
+    }
+
+    /**
+     * Items användaren får skapa i, grupperade per container — mållistan
+     * bakom målväljaren, eller tomt för en gäst — se klassens docblock.
+     *
+     * **OPTIONAL, som `shellContainers` ovan och av samma skäl.** Listan ritas
+     * bara i dialogen som väljer ett mål (issue 242), och den hämtas av en
+     * partiell omladdning av just den här nyckeln när dialogen öppnas: en sida
+     * där ingen dialog öppnats frågar aldrig efter den, och en vanlig
+     * sidladdning betalar ingenting. Att listan är dyr är hela poängen — den
+     * prövar `ItemPolicy::create` per item i varje container användaren når.
+     *
+     * Ett tidigt `return []` och inte en tom lista ur actionen: en gäst har
+     * ingen att fråga för, och ListCreatableItems tar en `User`. Formen är
+     * densamma som för en inloggad utan mål, så skalet aldrig behöver två
+     * avpackningsvägar — samma regel som `auth()`, `favorites()` och
+     * `recentVisits()`.
+     *
+     * @return list<array{container: array{ulid: string, name: string}, items: list<array{ulid: string, name: string}>}>
+     */
+    private function itemTargets(Request $request): array
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return [];
+        }
+
+        return $this->listCreatableItems->handle($user);
     }
 
     /**

@@ -2870,6 +2870,30 @@ return [
             'cover_none' => '— no cover image —',
         ],
 
+        /*
+         * The target picker — the dialog that chooses an item to move
+         * something TO, see issue 242 and
+         * resources/js/components/ItemTargetPicker.vue.
+         *
+         * The list is every item the user may create in, across every
+         * container she reaches (App\Actions\Item\ListCreatableItems), so
+         * `search` searches both the item's and the container's name, and
+         * `empty` is about a list that is genuinely empty — it says nothing
+         * about what the scope filtered away (issue 73 decision 6).
+         * `loading` is shown while the lazy `itemTargets` prop is fetched.
+         *
+         * The close button reuses `item.form.parent_cancel` rather than
+         * gaining a fifth key: the two pickers are the same dialog with
+         * different contents, and a second word for the same button would be
+         * the second formulation the house avoids.
+         */
+        'target' => [
+            'search' => 'Search items',
+            'empty' => 'There is no item you can add to.',
+            'loading' => 'Loading…',
+            'choose' => 'Choose',
+        ],
+
         'create' => [
             'title' => 'New item',
             'heading' => 'New item',
