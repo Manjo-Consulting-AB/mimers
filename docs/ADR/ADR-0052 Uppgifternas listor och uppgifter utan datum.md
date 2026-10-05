@@ -1,6 +1,6 @@
 # ADR-0052 Uppgifternas listor och uppgifter utan datum
 
-**Status:** Antagen 2026-10-04 · Ersätter [[ADR-0050 Desktopdesignen]] § 16 i frågan om GTD-listorna · Ändrar [[ADR-0005 Schema och förekomst]] om att varje förekomst har ett datum · Bygger vidare på [[ADR-0044 Användarens dag]] och issue 225–227 · [[ADR-index]]
+**Status:** Antagen 2026-10-04 · § 1 och § 2 ändrade av [[ADR-0054 Inboxen]] (Inbox är en plats och inte en GTD-lista) · Ersätter [[ADR-0050 Desktopdesignen]] § 16 i frågan om GTD-listorna · Ändrar [[ADR-0005 Schema och förekomst]] om att varje förekomst har ett datum · Bygger vidare på [[ADR-0044 Användarens dag]] och issue 225–227 · [[ADR-index]]
 
 Tonys beslut 2026-10-04, efter genomgången av designerns underlag `docs/Design/Mimers_Task_Flow_GTD_Design_Decision.md` och bilderna `task-dashboard.png`, `task-new.png`, `tasks-container.png` och `tasks-item.png`.
 
@@ -128,3 +128,7 @@ Datumdiagrammet räknar bara datumgrupperna. GTD-räkningen är en egen panel. D
 **En separat inställning för när uppgiften blir synlig, vid sidan av påminnelsen.** Det var mockupens två fält. Valdes bort, eftersom issue 220 (#698) redan gjort uppgifter synliga från att de skapas, och testarna tog upp osynliga uppgifter som ett fel.
 
 **Låta uppgifter utan datum sakna grupp.** Valdes bort, eftersom *Active* då inte visar alla aktiva uppgifter.
+
+## Uppföljning 2026-10-05 — Inbox är en plats
+
+[[ADR-0054 Inboxen]] ändrar § 1 och § 2. `gtd_list` får värdena `next`, `waiting` och `someday`, och null för en förekomst i användarens inbox. *Inbox* är en härledd vy över det som ligger i inboxen, inte ett värde. En uppgift som skapas på ett item får `next` som förval och hamnar aldrig i Inbox. Regeln som lär in schemats förval när en förekomst lämnar Inbox utgår: förvalet sätts till den lista som väljs när uppgiften skapas eller bearbetas. Vyn *In progress* tillkommer bredvid *Active*.
