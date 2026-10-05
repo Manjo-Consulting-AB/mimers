@@ -155,6 +155,12 @@ const props = defineProps({
     maxUploadBytes: { type: Number, required: true },
     /* Containerns ägarkonto — förvalet när användaren är medlem i det. */
     containerAccount: { type: String, default: '' },
+    /*
+     * Sant när itemets container är en inbox (M27 · issue 244, ADR-0054 § 1).
+     * *Back to Inbox* ritas då inte på raden — bilagan är redan där, och
+     * rutten hade svarat 422 `attachment.already_in_inbox`.
+     */
+    containerIsInbox: { type: Boolean, default: false },
     can: { type: Object, required: true },
 });
 
@@ -845,9 +851,11 @@ function toInbox(attachment) {
                         sin plats. Handlingen går alltid till den EGNA inboxen
                         och är därför aldrig ett val i väljaren. Servern prövar
                         samma grind på nytt, och ett kvotfel ritas på raden.
+                        Raden ritas inte när itemet REDAN är en inbox — bilagan
+                        är redan där.
                     -->
                     <button
-                        v-if="can.delete"
+                        v-if="can.delete && !containerIsInbox"
                         type="button"
                         :disabled="pending === attachment.ulid"
                         class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"

@@ -34,6 +34,10 @@ use Illuminate\Support\Facades\DB;
  * **En ändring som inte ändrar något skriver ingen rad.** En PATCH med samma
  * värden som förut sparar ingenting och loggar ingenting.
  *
+ * **Förvalet ignoreras för ett schema i inboxen** ([[ADR-0054 Inboxen]] § 5):
+ * ett obearbetat schema har inget förval, och den invarianten hålls här så
+ * att varken webbens formulär eller en handgjord PATCH kan bryta den.
+ *
  * **Pausen är samma skrivning som en ändring av titeln** (issue 63a
  * § Beslut 6): bara `is_active` avgör vilken mening användaren möts av, och
  * `meta.changed` bär `is_active` i båda fallen.
@@ -101,6 +105,17 @@ class UpdateSchedule
      */
     public function handle(Schedule $schedule, User $actor): void
     {
+        // Ett schema som ligger i inboxen har inget förval ([[ADR-0054
+        // Inboxen]] § 5): förekomsterna är obearbetade och får sin lista först
+        // när uppgiften bearbetas. Formuläret skickar alltid fältet — dess
+        // förval är *Next* — och en handgjord PATCH kan bära vilket värde som
+        // helst, så invarianten hålls här och inte i vyn. Fältet IGNORERAS i
+        // stället för att nekas: en titeländring på en obearbetad uppgift ska
+        // inte falla på ett fält användaren inte rörde.
+        if ($this->inInbox($schedule)) {
+            $schedule->default_gtd_list = $schedule->getOriginal('default_gtd_list');
+        }
+
         // Läsningen sker FÖRE `save()`: `getDirty()` är skillnaden mot
         // databasen, och efter en sparad rad är den tom.
         $meta = $this->metaFor($schedule);
@@ -194,5 +209,15 @@ class UpdateSchedule
         return $value instanceof DateTimeInterface
             ? $value->format('Y-m-d')
             : $value;
+    }
+
+    /**
+     * Ligger schemat på ett inbox-item? Containern är den enda som vet det
+     * (`inbox_user_id`), och itemet kan vara mjukraderat — därav den
+     * null-säkra vägen; ett schema utan item är inte i en inbox.
+     */
+    private function inInbox(Schedule $schedule): bool
+    {
+        return (bool) $schedule->item?->container?->isInbox();
     }
 }

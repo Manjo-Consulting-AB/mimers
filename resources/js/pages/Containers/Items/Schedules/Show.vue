@@ -57,6 +57,12 @@ const props = defineProps({
     hasOpenOccurrence: { type: Boolean, required: true },
     /* Motparterna användaren får ändra, en lista per nivå (63c § Beslut 3). */
     counterparts: { type: Object, required: true },
+    /*
+     * Sant när schemat ligger på ett inbox-item (M27 · issue 244, ADR-0054
+     * § 1). *Back to Inbox* ritas då inte: uppgiften är redan där, och rutten
+     * hade svarat 422 `schedule.already_in_inbox`.
+     */
+    containerIsInbox: { type: Boolean, default: false },
     can: { type: Object, required: true },
 });
 
@@ -301,9 +307,11 @@ function toInbox() {
                  *Move…* och bakom samma `can.delete` — uppgiften lämnar sin
                  plats. Handlingen går alltid till den EGNA inboxen och är
                  därför aldrig ett val i väljaren. Servern prövar samma grind
-                 på nytt. -->
+                 på nytt. Knappen ritas inte när uppgiften REDAN ligger i
+                 inboxen (`containerIsInbox`): rutten hade svarat 422
+                 `schedule.already_in_inbox`. -->
             <button
-                v-if="can.delete"
+                v-if="can.delete && !containerIsInbox"
                 type="button"
                 :disabled="pending"
                 class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"

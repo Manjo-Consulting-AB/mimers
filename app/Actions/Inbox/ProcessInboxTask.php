@@ -41,6 +41,17 @@ use Illuminate\Support\Facades\DB;
  * den här spärren svarar på var uppgiften LIGGER, och den är det som gör att
  * bearbetningen inte kan användas som en flytt bakvägen.
  *
+ * **Inboxen är inget mål.** Ett inbox-item som `target` nekas med 422
+ * `schedule.not_a_valid_target`: bearbetningen flyttar uppgiften TILL en
+ * plats, och väljaren (issue 242) visar aldrig en inbox. Utan spärren hade en
+ * handgjord begäran kunnat flytta en uppgift in i en inbox med en lista satt
+ * — ett tillstånd modellen inte har.
+ *
+ * **Raden läses om under lås innan spärren ställs.** Annars kunde två
+ * samtidiga bearbetningar båda se uppgiften i inboxen och flytta den, den ena
+ * efter den andra; `MoveSchedule` tar samma lås, så den här läsningen är det
+ * som gör kontrollen och flytten till EN skrivning.
+ *
  * Skrivningarna ligger i samma transaktion som flytten: antingen flyttas
  * schemat och får sin lista och sitt datum, eller händer ingendera.
  * `MoveSchedule` öppnar sin egen transaktion — den blir en savepoint i den
@@ -63,11 +74,20 @@ class ProcessInboxTask
     public function handle(Schedule $schedule, Item $target, User $actor, string $gtdList, ?string $dueAt): Schedule
     {
         return DB::transaction(function () use ($schedule, $target, $actor, $gtdList, $dueAt): Schedule {
-            if (! $this->isInActorsInbox($schedule, $actor)) {
+            $rad = Schedule::query()
+                ->whereKey($schedule->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($rad === null || ! $this->isInActorsInbox($rad, $actor)) {
                 throw ApiException::make('schedule.not_in_inbox', [], 422);
             }
 
-            $moved = $this->moveSchedule->handle($schedule, $target, $actor);
+            if ($target->container->isInbox()) {
+                throw ApiException::make('schedule.not_a_valid_target', [], 422);
+            }
+
+            $moved = $this->moveSchedule->handle($rad, $target, $actor);
 
             $open = $moved->openOccurrence()->first();
 

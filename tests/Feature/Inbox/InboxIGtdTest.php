@@ -263,6 +263,32 @@ it('en uppgift i inboxen har ingen lista och inget förval', function () {
         ->and($schema->default_gtd_list)->toBeNull();
 });
 
+/*
+ * Fynd 1 i granskningen: formuläret skickar ALLTID `default_gtd_list` (dess
+ * förval är *Next*), så en redigering av ett inbox-schema — en titeländring —
+ * hade satt ett förval på ett obearbetat schema. Invarianten hålls i
+ * UpdateSchedule, som ignorerar fältet för ett schema i inboxen.
+ */
+it('en redigering av ett inbox-schema rör inte förvalet', function () {
+    [$person] = inboxGtdKontext();
+    $inbox = inboxGtdInbox($person);
+    [$schema] = oppnaForekomst($inbox);
+
+    expect($schema->default_gtd_list)->toBeNull();
+
+    actingAs($person)
+        ->patch(
+            "/containers/{$inbox->container->ulid}/items/{$inbox->ulid}/schedules/{$schema->ulid}",
+            ['title' => 'Ny titel', 'default_gtd_list' => 'next'],
+        )
+        ->assertRedirect();
+
+    $schema->refresh();
+
+    expect($schema->title)->toBe('Ny titel')
+        ->and($schema->default_gtd_list)->toBeNull();
+});
+
 // --- spärren mot listbyte i inboxen (Beslut 3) ------------------------------
 
 /*
@@ -384,6 +410,50 @@ it('bearbetning av någon annans schema nekas med 403', function () {
         ->assertForbidden();
 
     expect($schema->fresh()->item_id)->toBe($annansInbox->id);
+});
+
+/*
+ * Fynd 3 i granskningen: ett schema vars item är mjukraderat gav
+ * `Gate::authorize('delete', null)` — en 500:a. Källitemet läses null-säkert
+ * och svaret är 404, samma som för en ULID som aldrig funnits.
+ */
+it('bearbetning av ett schema vars item är mjukraderat ger 404', function () {
+    [$person] = inboxGtdKontext();
+    $inbox = inboxGtdInbox($person);
+    [$schema] = oppnaForekomst($inbox);
+
+    $inbox->delete();
+
+    actingAs($person)
+        ->post("/inbox/tasks/{$schema->ulid}/process", [
+            'target' => $inbox->ulid,
+            'gtd_list' => 'next',
+        ])
+        ->assertNotFound();
+});
+
+/*
+ * Fynd 4 i granskningen: bearbetningens mål får inte vara ett inbox-item.
+ * Väljaren (issue 242) visar aldrig en inbox, men en handgjord begäran når
+ * koden. Utan spärren hade `MoveSchedule` svarat `same_item` — rätt svar på
+ * fel fråga; `not_a_valid_target` säger vad användaren försökte göra.
+ */
+it('bearbetning till ett inbox-item som mål nekas', function () {
+    [$person] = inboxGtdKontext();
+    $inbox = inboxGtdInbox($person);
+    [$schema] = oppnaForekomst($inbox);
+
+    actingAs($person)
+        ->post("/inbox/tasks/{$schema->ulid}/process", [
+            'target' => $inbox->ulid,
+            'gtd_list' => 'next',
+        ])
+        ->assertSessionHasErrors('schedule');
+
+    expect(session('errors')->get('schedule')[0])
+        ->toBe(Lang::get('ui.error.schedule.not_a_valid_target', [], 'en'));
+
+    expect($schema->fresh()->item_id)->toBe($inbox->id);
 });
 
 // --- waiting blir aldrig förval (Beslut 2) ----------------------------------
@@ -758,6 +828,8 @@ it('back to inbox nekas för en uppgift som redan ligger där', function () {
 /*
  * Klart när: `knapparna ritas bakom can.delete` — `Schedules/Show.vue` och
  * `ItemAttachmentSection.vue` innehåller `todo.back_to_inbox` och `/inbox`.
+ * Knappen döljs dessutom när källan REDAN är en inbox (`containerIsInbox`,
+ * fynd 5 i granskningen): rutten hade svarat 422 `already_in_inbox`.
  */
 it('knapparna ritas bakom can.delete', function () {
     foreach ([
@@ -770,8 +842,10 @@ it('knapparna ritas bakom can.delete', function () {
 
         expect($kod)->toContain('todo.back_to_inbox')
             ->toContain('/inbox')
-            // Knappen står bakom samma grind som *Move…* intill.
-            ->toMatch('/v-if="can\.delete"[\s\S]{0,400}todo\.back_to_inbox/');
+            // Knappen står bakom samma grind som *Move…* intill ...
+            ->toMatch('/v-if="can\.delete[^"]*"[\s\S]{0,400}todo\.back_to_inbox/')
+            // ... och ritas inte för en källa som redan är en inbox.
+            ->toMatch('/v-if="can\.delete && !containerIsInbox"/');
     }
 });
 

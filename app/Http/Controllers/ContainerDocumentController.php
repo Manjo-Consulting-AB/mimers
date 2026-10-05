@@ -184,6 +184,10 @@ class ContainerDocumentController extends Controller
             'can' => [
                 'update' => Gate::forUser($user)->allows('update', $container),
             ],
+            // Sant när containern är en inbox (ADR-0054 § 1). Flaggan döljer
+            // *Back to Inbox* på raderna — bilagan är redan där, och rutten
+            // hade svarat 422 `attachment.already_in_inbox`.
+            'containerIsInbox' => $container->isInbox(),
             // Rader i en sida om trettio, i den valda ordningen. Paginatorn
             // går rakt igenom: sidnumret kommer ur `?page=` och räknas av
             // ramverket, och vyn ritar bara de länkar den får — med filtren

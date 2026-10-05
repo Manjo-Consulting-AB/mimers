@@ -102,6 +102,12 @@ const props = defineProps({
     /* Containern ur App\Http\Resources\ContainerResource. */
     container: { type: Object, required: true },
     /*
+     * Sant när containern är en inbox (M27 · issue 244, ADR-0054 § 1).
+     * *Back to Inbox* ritas då inte på raderna — bilagan är redan där, och
+     * rutten hade svarat 422 `attachment.already_in_inbox`.
+     */
+    containerIsInbox: { type: Boolean, default: false },
+    /*
      * `{ update }` — hjältens *Redigera container*. Flaggan är serverns svar
      * på samma policyfråga som rutten `PATCH /containers/{container}` ställer.
      */
@@ -749,9 +755,11 @@ function toInbox(row) {
                                          `row.can.delete` som flytten intill.
                                          Handlingen går alltid till den EGNA
                                          inboxen, och servern prövar samma
-                                         grind på nytt. -->
+                                         grind på nytt. Raden ritas inte när
+                                         containern REDAN är en inbox —
+                                         bilagan är redan där. -->
                                     <button
-                                        v-if="row.can.delete"
+                                        v-if="row.can.delete && !containerIsInbox"
                                         type="button"
                                         :disabled="actionPending === row.ulid"
                                         class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"

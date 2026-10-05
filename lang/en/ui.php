@@ -757,6 +757,12 @@ return [
             // already there. The action goes to the user's own inbox and is
             // never a choice in the picker.
             'already_in_inbox' => 'The task is already in the inbox.',
+
+            // Issue 244 · ADR-0054 § 6: processing a task whose target is an
+            // inbox item. The picker (issue 242) never offers one, but the
+            // code is reachable from a hand-made request and from /api
+            // (issue 247).
+            'not_a_valid_target' => 'Choose an item outside the inbox as the target.',
         ],
 
         // Issue 65b decision 5: the feature gate. `Entitlements::assertFeature()`

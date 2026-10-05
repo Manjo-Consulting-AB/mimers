@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Inbox\ProcessInboxTask;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Inbox\ProcessInboxTaskRequest;
+use App\Models\Item;
 use App\Models\Schedule;
 use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
@@ -27,10 +28,15 @@ use Illuminate\Validation\ValidationException;
  * svarar 403, och ett schema utanför användarens egen inbox nekas av actionen
  * med 422 `schedule.not_in_inbox`.
  *
+ * **Källitemet läses null-säkert.** Ett schema vars item är mjukraderat har
+ * ingen `$schedule->item` att pröva grinden på; en rå `Gate::authorize` hade
+ * gett 500. `withTrashed()` ser raden och 404:ar, samma svar som en ULID som
+ * aldrig funnits.
+ *
  * **Ett domänfel blir ett formulärfel, aldrig en JSON-kropp** — samma mönster
  * som ScheduleController::move(): `schedule.not_in_inbox`,
- * `schedule.has_dependencies` och `schedule.same_item` ritas på fältet
- * `schedule`.
+ * `schedule.has_dependencies`, `schedule.same_item` och
+ * `schedule.not_a_valid_target` ritas på fältet `schedule`.
  */
 class InboxController extends Controller
 {
@@ -43,7 +49,11 @@ class InboxController extends Controller
         ProcessInboxTask $processInboxTask,
         ApiErrorTranslator $translator,
     ): RedirectResponse {
-        Gate::authorize('delete', $schedule->item);
+        $source = Item::withTrashed()->find($schedule->item_id);
+
+        abort_if($source === null || $source->trashed(), 404);
+
+        Gate::authorize('delete', $source);
 
         $target = $request->targetItem();
 

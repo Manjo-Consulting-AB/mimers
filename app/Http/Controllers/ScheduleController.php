@@ -132,6 +132,12 @@ class ScheduleController extends Controller
             'occurrenceDependencies' => $occurrenceDependencies,
             'hasOpenOccurrence' => $open !== null,
             'counterparts' => $this->counterparts($request, $container, $schedule, $scheduleDependencies, $occurrenceDependencies),
+            // Sant när schemat ligger på ett inbox-item (ADR-0054 § 1).
+            // Flaggan döljer *Back to Inbox* — uppgiften är redan där, och
+            // rutten hade svarat 422 `schedule.already_in_inbox`. Ligger
+            // BREDVID resursen och inte i den: `ContainerResource` är
+            // `/api`:s format och har inte bett om ett vy-fält.
+            'containerIsInbox' => $container->isInbox(),
         ]);
     }
 

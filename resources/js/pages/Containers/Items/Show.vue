@@ -151,6 +151,12 @@ import { useTranslations } from '../../../composables/useTranslations.js';
 const props = defineProps({
     container: { type: Object, required: true },
     item: { type: Object, required: true },
+    /*
+     * Sant när containern är en inbox (M27 · issue 244, ADR-0054 § 1).
+     * Skickas vidare till bilagesektionen, som döljer *Back to Inbox* för en
+     * bilaga som redan ligger där.
+     */
+    containerIsInbox: { type: Boolean, default: false },
     /* Kategori-ULID → namn; tom när itemet saknar kategori. */
     categories: { type: Object, required: true },
     /*
@@ -979,6 +985,7 @@ function toggleFavorite() {
                     :inline-enabled="inlineEnabled"
                     :max-upload-bytes="maxUploadBytes"
                     :container-account="container.account"
+                    :container-is-inbox="containerIsInbox"
                     :can="can"
                 />
 
