@@ -58,6 +58,8 @@ Tillbaka till [[00 Index]].
 | [[ADR-0050 Desktopdesignen]] | Mörk sidopanel, containerns hjälte och sex flikar; kostnadsraderna får ett webbgränssnitt; underhåll, GTD (ersatt av ADR-0052), dokumenttyper och betalningsmetod tas inte in | Frontend, [[Items och organisation]] |
 | [[ADR-0051 Senast öppnade filer]] | De 50 senast öppnade filerna per person, skrivna i leveransrutten, filtrerade vid läsning | [[Filer och lagring]], [[Registerförteckning]] |
 | [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] | GTD-listan på förekomsten och skild från statusen; Calendar, Done och datumgrupperna härleds; en uppgift får sakna datum, ett återkommande schema får det inte | [[Scheman och uppgifter]] |
+| [[ADR-0053 Flytt och kopiering]] | Bilagor flyttas och kopieras, uppgifter flyttas; ägaren står för lagringen och blir målcontainerns ägarkonto om användaren är medlem där, annars användarens eget | [[Filer och lagring]], [[Planer och kvoter]] |
+| [[ADR-0054 Inboxen]] | En dold personlig container med ett item tar emot det som saknar hemvist; Inbox är en plats och inte en GTD-lista | [[Konton och åtkomst]], [[Scheman och uppgifter]] |
 
 ## Om att ändra ett beslut
 
