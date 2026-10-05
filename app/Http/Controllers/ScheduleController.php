@@ -167,8 +167,21 @@ class ScheduleController extends Controller
     }
 
     /**
-     * POST /containers/{container}/items/{item}/schedules — 302 till itemets
-     * detaljvy.
+     * POST /containers/{container}/items/{item}/schedules — 302 tillbaka till
+     * den yta anropet kom från, annars till itemets detaljvy.
+     *
+     * **`return` är den nya ytans väg tillbaka** (M27 · issue 246 § Beslut 3):
+     * formuläret på `/tasks/create` postar hit när platsen är ett item, och
+     * bär med sig adressen användaren kom från. Den valideras av
+     * App\Http\Controllers\TaskCreateController::safeReturn() — en relativ
+     * adress släpps igenom, allt annat blir `/tasks` — så en extern värd
+     * varken kan eller får styra omdirigeringen.
+     *
+     * **Utan `return` är svaret oförändrat.** Itemets egen skaparsida
+     * (resources/js/pages/Containers/Items/Schedules/Create.vue, issue 63a)
+     * skickar ingen `return`, och en sådan POST landar på itemet som förut.
+     * Frånvaron av fältet är alltså hela skillnaden mellan den gamla ytan och
+     * den nya — ingen flagga, ingen egen rutt.
      *
      * Ordningen och transaktionen är `/api`:s (App\Http\Controllers\Api\
      * ScheduleController::store()), och det är inte en detalj: ett schema som
@@ -200,6 +213,11 @@ class ScheduleController extends Controller
             new Schedule($request->validated()),
             $request->validated('gtd_list'),
         );
+
+        if ($request->has('return')) {
+            return redirect(TaskCreateController::safeReturn($request->input('return')) ?? '/tasks')
+                ->with('status', 'schedule-created');
+        }
 
         return redirect()
             ->route('containers.items.show', [$container, $item])

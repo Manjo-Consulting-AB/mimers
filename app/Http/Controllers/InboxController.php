@@ -175,13 +175,25 @@ class InboxController extends Controller
     }
 
     /**
-     * POST /inbox/tasks — 302 tillbaka till `/inbox`.
+     * POST /inbox/tasks — 302 tillbaka till `/inbox`, eller till `return`.
      *
-     * **Bara en titel** (ADR-0054 § 8): uppgiften fångas utan plats, och
-     * schemat blir `none` utan datum. `CreateSchedule` sätter `gtd_list` till
-     * null på förekomsten och `default_gtd_list` till null på schemat, just
-     * för att itemet ligger i en inbox (ADR-0054 § 5, issue 244) — den regeln
-     * bor i actionen och upprepas inte här.
+     * **Hela formulärets kropp** (issue 246 § Beslut 1): `/tasks/create`
+     * postar hit när platsen är *Inbox*, och fälten är schemats egna — titel,
+     * anteckningar, återkommande och datum. En uppgift i inboxen har ändå
+     * ingen lista (ADR-0054 § 5): `StoreInboxTaskRequest` tar inte emot
+     * `gtd_list`, och `CreateSchedule` nollar både förekomstens lista och
+     * schemats förval för ett inbox-item.
+     *
+     * **`recurrence_type` saknas i den gamla fångsten.** Formuläret på
+     * `/inbox` postar bara en titel (ADR-0054 § 8), och den blir `none` utan
+     * datum — samma svar som förut.
+     *
+     * **Svaret är `back()` när ingen `return` kom med, och annars den
+     * adressen.** `return` valideras av
+     * App\Http\Controllers\TaskCreateController::safeReturn(): en relativ
+     * adress släpps igenom, allt annat — en extern värd inräknad — blir
+     * `/tasks` (Beslut 3). Fångsten på `/inbox` skickar ingen `return` och
+     * landar därför på samma sida som förut.
      */
     public function storeTask(
         StoreInboxTaskRequest $request,
@@ -191,16 +203,21 @@ class InboxController extends Controller
         $user = $request->user();
         $inbox = $resolveInbox->handle($user);
 
+        $data = $request->validated();
+        $data['recurrence_type'] ??= 'none';
+        $data['is_active'] = true;
+
         $createSchedule->handle(
             $inbox,
             $user,
-            new Schedule([
-                'title' => $request->validated('title'),
-                'recurrence_type' => 'none',
-                'is_active' => true,
-            ]),
+            new Schedule($data),
             null,
         );
+
+        if ($request->has('return')) {
+            return redirect(TaskCreateController::safeReturn($request->input('return')) ?? '/tasks')
+                ->with('status', 'inbox-task-captured');
+        }
 
         return back()->with('status', 'inbox-task-captured');
     }

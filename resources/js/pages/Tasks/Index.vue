@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import GtdListPanel from '../../components/GtdListPanel.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
@@ -140,19 +140,64 @@ const isDone = computed(() => props.list === 'done');
 const isEmpty = computed(
     () => props.completed.length === 0 && Object.values(props.groups).every((entries) => entries.length === 0),
 );
+
+/*
+ * *New task* (M27 · issue 246 § Beslut 2). Sidan är en av de tre ytorna som
+ * bär knappen, och den leder till formuläret med INBOXEN förvald: här finns
+ * ingen plats att ärva, och en uppgift som fångas utan sammanhang hör i
+ * inboxen (ADR-0054 § 8).
+ *
+ * Adressen bär `return` med den här sidan (Beslut 3), så svaret landar i
+ * samma flik — `page.url` är adressen med sin querysträng, och listan man
+ * står i följer därför med tillbaka.
+ *
+ * **Det är en `<Link>` och inte en `<UiButton>`.** Knappen navigerar, och
+ * GenomgangTest tillåter bara `<Link>` — Inertias enda namngivna undantag —
+ * bland komponenttaggarna: en `@click` på en komponent är en klickyta provet
+ * inte kan se är tabbbar. Klasserna är `UiButton`s `primary`, så formen är
+ * densamma som i designsystemet.
+ */
+const page = usePage();
+
+const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page.url)}`);
 </script>
 
 <template>
     <AppLayout>
         <Head :title="t('todo.title')" />
 
-        <!-- Rubrikraden bär växeln (issue 134): frågan "vilka uppgifter ska
-             listan visa?" ställs där listan står, och svaret gäller både den
-             här sidan och dashboardens panel. -->
+        <!-- Rubrikraden bär växeln (issue 134) och *New task* (M27 · issue
+             246): frågan "vilka uppgifter ska listan visa?" ställs där listan
+             står, och svaret gäller både den här sidan och dashboardens panel.
+             Knappen ritas alltid — inboxen är alltid ett möjligt mål (Beslut
+             2). -->
         <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <h1 class="text-2xl font-semibold">{{ t('todo.heading') }}</h1>
 
-            <UpcomingTasksToggle :enabled="props.showUpcomingTasks" />
+            <div class="flex flex-wrap items-center gap-2">
+                <UpcomingTasksToggle :enabled="props.showUpcomingTasks" />
+
+                <Link
+                    :href="createUrl"
+                    class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="mr-2 h-4 w-4"
+                        aria-hidden="true"
+                    >
+                        <path d="M12 5v14"></path>
+                        <path d="M5 12h14"></path>
+                    </svg>
+
+                    {{ t('todo.new') }}
+                </Link>
+            </div>
         </div>
 
         <!--

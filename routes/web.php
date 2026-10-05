@@ -54,6 +54,7 @@ use App\Http\Controllers\Settings\StorageController;
 use App\Http\Controllers\Settings\TaskPreferenceController;
 use App\Http\Controllers\Settings\UserDeletionController;
 use App\Http\Controllers\TagController;
+use App\Http\Controllers\TaskCreateController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UnsubscribeController;
@@ -96,6 +97,24 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::get('/tasks', [TodoController::class, 'index'])
     ->middleware('auth')
     ->name('tasks');
+
+/*
+ * Issue 246 (M27) · Formuläret för en ny uppgift, se
+ * App\Http\Controllers\TaskCreateController och [[ADR-0054 Inboxen]] § 5 och
+ * § 8.
+ *
+ * **En egen adress och ingen ny skrivregel.** `?item=<ulid>` är frivilligt:
+ * med det förväljer sidan itemet, utan det är platsen inboxen. Formuläret
+ * postar till itemets BEFINTLIGA rutt (`containers.items.schedules.store`)
+ * eller till `POST /inbox/tasks` (issue 245) — den här rutten renderar bara.
+ *
+ * **Sökvägen kolliderar med ingenting.** `/tasks` är ett fast segment och
+ * `/tasks/create` ett annat, och det finns ingen `/tasks/{parameter}` som kan
+ * fånga det senare.
+ */
+Route::get('/tasks/create', [TaskCreateController::class, 'create'])
+    ->middleware('auth')
+    ->name('tasks.create');
 
 /*
  * Issue 245 (M27) · Sidan `/inbox` och dess tre fångst- och

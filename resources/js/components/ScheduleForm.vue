@@ -88,6 +88,22 @@ const props = defineProps({
      * datum.
      */
     openDueAt: { type: String, default: null },
+    /*
+     * Adressen en SKAPANDE POST går till. `null` — förvalet — är itemets egen
+     * väg, `/containers/{container}/items/{item}/schedules`, som är den enda
+     * som funnits. Sidan `/tasks/create` (M27 · issue 246) skickar
+     * `/inbox/tasks` när platsen är *Inbox*: uppgiften har då ingen plats i
+     * adressen, och den befintliga fångstrutten är den som skriver den
+     * (ADR-0054 § 8). Formuläret självt vet ingenting om varför.
+     */
+    createUrl: { type: String, default: null },
+    /*
+     * Den relativa adressen användaren kom från, skickad som `return` i en
+     * SKAPANDE POST (issue 246 § Beslut 3). Servern validerar den — en extern
+     * värd blir `/tasks` — och svaret går tillbaka dit användaren stod. Vid
+     * REDIGERING skickas den aldrig: en PATCH går till schemats sida.
+     */
+    returnUrl: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -127,6 +143,13 @@ const fields = {
     ...(props.schedule === null
         ? { gtd_list: 'next' }
         : { default_gtd_list: props.schedule.default_gtd_list ?? 'next' }),
+    /*
+     * Vägen tillbaka (issue 246 § Beslut 3). Nyckeln finns bara i ett
+     * SKAPANDE formulär som fått en adress: en PATCH bär den aldrig, och det
+     * gamla skapandeformuläret på itemet (issue 63a) skickar ingen `return`
+     * och får därför itemets detaljvy som förut.
+     */
+    ...(props.schedule === null && props.returnUrl !== null ? { return: props.returnUrl } : {}),
 };
 
 const form = useForm(fields);
@@ -170,15 +193,19 @@ const submitLabel = computed(() => (form.processing
     : (props.schedule === null ? t('item.schedule.create.submit') : t('item.schedule.update.submit'))));
 
 function submit() {
-    const url = `/containers/${props.containerUlid}/items/${props.itemUlid}/schedules`;
-
     if (props.schedule === null) {
-        form.post(url, { onError: focusFirstError });
+        form.post(
+            props.createUrl ?? `/containers/${props.containerUlid}/items/${props.itemUlid}/schedules`,
+            { onError: focusFirstError },
+        );
 
         return;
     }
 
-    form.patch(`${url}/${props.schedule.ulid}`, { onError: focusFirstError });
+    form.patch(
+        `/containers/${props.containerUlid}/items/${props.itemUlid}/schedules/${props.schedule.ulid}`,
+        { onError: focusFirstError },
+    );
 }
 </script>
 
