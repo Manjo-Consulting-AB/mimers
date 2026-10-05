@@ -75,6 +75,12 @@ En uppgift kan stå i flera vyer samtidigt. *Next*, *In progress* och ett datum 
 
 Målitemet väljs bland de items där användaren har `create`, i alla containrar hon når.
 
+**Tillbaka till inboxen.** En uppgift eller bilaga kan skickas tillbaka för att bearbetas igen, med den egna handlingen *Back to Inbox*. Inboxen är aldrig ett val i målväljaren, och handlingen går alltid till användarens egen inbox, som skapas om den saknas.
+- **En uppgift** flyttas enligt [[ADR-0053 Flytt och kopiering]], och därefter blir `gtd_list` null på den öppna förekomsten och `default_gtd_list` null på schemat. En återkommande uppgift får nya förekomster utan lista tills den bearbetats igen. En uppgift med beroenden kan inte skickas tillbaka, eftersom inboxen är en annan container.
+- **En bilaga** flyttas enligt ADR-0053. Ägaren blir personkontot, och dess kvot prövas.
+- Behörigheten är densamma som för en flytt: `delete` på källan.
+- Handlingen finns i webben och i `/api`.
+
 ### 7. Var inboxen syns
 
 - **Fliken *Inbox* på `/tasks`.** Containerns Tasks-flik har ingen inbox, eftersom inboxen inte hör till någon container.
