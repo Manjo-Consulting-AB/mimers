@@ -16,10 +16,11 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * antingen på ett item — den här sidans egen väg — eller i inboxen.
  *
  * **Platsen är sidans egen uppfinning, och formuläret vet ingenting om den.**
- * ScheduleForm ritas oförändrad (Beslut 1) och får bara en annan POST-adress:
- * `createUrl` är `/inbox/tasks` när platsen är inboxen och itemets egen rutt
- * annars. Ingen ny skrivregel tillkommer — de två rutterna finns sedan issue
- * 63a och 245.
+ * ScheduleForm får bara en annan POST-adress — `createUrl` är `/inbox/tasks`
+ * när platsen är inboxen och itemets egen rutt annars — och `showList`, som är
+ * false för inboxen: en uppgift i inboxen är obearbetad och har ingen lista
+ * (ADR-0054 § 5), så *List*-fältet varken ritas eller skickas. Ingen ny
+ * skrivregel tillkommer — de två rutterna finns sedan issue 63a och 245.
  *
  * **`item` ur `?item=` är förvalet, och `ItemTargetPicker` byter det.** Utan
  * item är platsen inboxen: en container är inte ett item (Beslut 2), och på
@@ -147,6 +148,7 @@ function onTargetChosen(item) {
                 :item-ulid="place?.ulid ?? ''"
                 :create-url="createUrl"
                 :return-url="returnUrl ?? '/tasks'"
+                :show-list="place !== null"
             />
         </div>
 

@@ -179,6 +179,27 @@ it('utan item är inboxen förvald', function () {
 });
 
 /*
+ * Arkitektsvaret punkt 2: *List*-fältet döljs när platsen är *Inbox*.
+ *
+ * En uppgift i inboxen är obearbetad och har ingen lista (ADR-0054 § 5), så
+ * ett fält som inte får någon verkan ska varken ritas eller skickas. Sidan
+ * binder `showList` till platsen — false för inboxen, true för ett item — och
+ * då ritar formuläret fältet igen, med *Next* förvalt (§ 5).
+ *
+ * Ett källkodsprov, som de andra vy-kontrollerna: `showList` är en propp och
+ * en `v-if`, och formen går att avgöra ur markupen. Hjälparen stryker
+ * kommentarerna först, så bara koden kan fälla provet.
+ */
+it('listväljaren döljs för inboxen', function () {
+    expect(nyuppgiftKod('js/pages/Tasks/Create.vue'))
+        ->toContain(':show-list="place !== null"');
+
+    expect(nyuppgiftKod('js/components/ScheduleForm.vue'))
+        ->toContain('showList')
+        ->toContain('schedule === null && showList');
+});
+
+/*
  * Klart när: ett item användaren inte får skapa i ger 403.
  *
  * Grinden är ITEMETS `create` — samma pinne som målväljaren filtrerar sin lista
