@@ -55,20 +55,6 @@ class ScheduleOccurrence extends Model
     protected $table = 'schedule_occurrence';
 
     /**
-     * Modellens standardvärden, speglar kolumnernas DEFAULT i migrationen.
-     * En osparad förekomst bär `gtd_list = next` direkt — samma tekniska värde
-     * som databasen ändå ger raden (ADR-0052 § 4) — så att svaret på `complete`
-     * visar samma lista som nästa läsning av raden. Förvalet fattar inget
-     * beslut åt issue 235, som sätter listan uttryckligen i
-     * App\Actions\Schedule\OpenNextOccurrence och skriver över det här.
-     *
-     * @var array<string, mixed>
-     */
-    protected $attributes = [
-        'gtd_list' => self::GTD_NEXT,
-    ];
-
-    /**
      * De fyra statusvärdena, var för sig — avslutsflödet (issue 22b) jämför
      * och sätter dem och ska aldrig behöva stava strängarna.
      *
@@ -104,9 +90,12 @@ class ScheduleOccurrence extends Model
      * GTD-listorna, var för sig. Listan är en EGEN egenskap vid sidan av
      * statusen (ADR-0052 § 1): den säger hur användaren tänker hantera
      * uppgiften, statusen hur långt den har kommit.
+     *
+     * Sedan [[ADR-0054 Inboxen]] § 5 finns ingen `inbox` bland dem: inboxen är
+     * en PLATS och inte en lista. En förekomst vars schema ligger på
+     * användarens inbox-item har `gtd_list = null`; varje annan förekomst har
+     * ett av de tre värdena.
      */
-    public const GTD_INBOX = 'inbox';
-
     public const GTD_NEXT = 'next';
 
     public const GTD_WAITING = 'waiting';
@@ -115,10 +104,11 @@ class ScheduleOccurrence extends Model
 
     /**
      * De giltiga värdena för `gtd_list`, se migrationens CHECK-villkor.
+     * Null är också giltigt — det betyder att förekomsten ligger i inboxen.
      *
      * @var list<string>
      */
-    public const GTD_LISTS = [self::GTD_INBOX, self::GTD_NEXT, self::GTD_WAITING, self::GTD_SOMEDAY];
+    public const GTD_LISTS = [self::GTD_NEXT, self::GTD_WAITING, self::GTD_SOMEDAY];
 
     /**
      * Get the attributes that should be cast.
@@ -420,9 +410,9 @@ class ScheduleOccurrence extends Model
     }
 
     /**
-     * Begränsar till en GTD-lista — ett av de fyra värdena i
+     * Begränsar till en GTD-lista — ett av de tre värdena i
      * `schedule_occurrence.gtd_list` ([[ADR-0052 Uppgifternas listor och
-     * uppgifter utan datum]] § 1).
+     * uppgifter utan datum]] § 1, [[ADR-0054 Inboxen]] § 5).
      *
      * **`calendar` och `done` är inte listor här.** De är härledda vyer
      * (ADR-0052 § 1) och står aldrig i kolumnen: *Calendar* är aktiv och

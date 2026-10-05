@@ -62,7 +62,11 @@ class Schedule extends Model
      * De listor ett schema får bära som förval, se migrationens CHECK-villkor
      * och [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 2.
      * `waiting` blir aldrig förval — att vänta gäller en enskild gång, inte
-     * regeln — och `inbox` är bara en förekomsts första hem.
+     * regeln (ADR-0054 § 5: väljs *Waiting* blir förvalet `next`).
+     *
+     * Ett schema som ligger i inboxen har `default_gtd_list = null`: dess
+     * förekomster är obearbetade och har ingen lista förrän uppgiften
+     * bearbetats ([[ADR-0054 Inboxen]] § 5 och 6).
      *
      * @var list<string>
      */

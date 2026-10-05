@@ -103,14 +103,19 @@ const props = defineProps({
 const { t } = useTranslations();
 
 /*
- * Flikraden, i ritningsordning (Beslut 4): *Active*, de fyra lagrade
- * listorna, *Calendar* och *Done*. *Active* är adressen UTAN `list` — den är
- * vilotillståndet, och det är därför `UiTabs` kan skilja den från de övriga.
+ * Flikraden, i ritningsordning (Beslut 4; M27 · issue 244): *Active*, *In
+ * progress*, *Inbox*, de tre lagrade listorna, *Calendar* och *Done*.
+ * *Active* är adressen UTAN `list` — den är vilotillståndet, och det är
+ * därför `UiTabs` kan skilja den från de övriga.
  * Adresserna byggs här och inte på servern: de är vyns navigation, och
  * markörerna (som servern äger) hör till bläddringen och inte till fliken.
  */
 const tabs = computed(() => [
     { key: 'active', label: t('todo.tabs.active'), href: '/tasks' },
+    // *In progress* läggs till efter *Active* (M27 · issue 244, ADR-0054 § 5).
+    // Fliken finns på BÅDA ytorna; *Inbox* bara här, för inboxen hör inte
+    // till någon container.
+    { key: 'in_progress', label: t('todo.tabs.in_progress'), href: '/tasks?list=in_progress' },
     { key: 'inbox', label: t('todo.list.inbox'), href: '/tasks?list=inbox' },
     { key: 'next', label: t('todo.list.next'), href: '/tasks?list=next' },
     { key: 'waiting', label: t('todo.list.waiting'), href: '/tasks?list=waiting' },
@@ -120,8 +125,8 @@ const tabs = computed(() => [
 ]);
 
 /*
- * Panelens rader är flikarna UTAN *Active*: panelen räknar de sex listorna,
- * och *Active* är summan av dem och inte en lista bland dem (Beslut 3).
+ * Panelens rader är flikarna UTAN *Active*: panelen räknar listorna, och
+ * *Active* är summan av dem och inte en lista bland dem (Beslut 3).
  */
 const panelRows = computed(() => tabs.value.filter((tab) => tab.key !== 'active'));
 

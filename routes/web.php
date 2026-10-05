@@ -31,6 +31,7 @@ use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
+use App\Http\Controllers\InboxController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
 use App\Http\Controllers\ItemLinkController;
@@ -95,6 +96,25 @@ Route::get('/dashboard', [DashboardController::class, 'index'])
 Route::get('/tasks', [TodoController::class, 'index'])
     ->middleware('auth')
     ->name('tasks');
+
+/*
+ * Issue 244 (M27) · Bearbetningen av en uppgift i inboxen, se
+ * App\Http\Controllers\InboxController och App\Actions\Inbox\ProcessInboxTask,
+ * [[ADR-0054 Inboxen]] § 6.
+ *
+ * **Ingen container i adressen.** Uppgiften ligger på användarens inbox-item,
+ * och `{schedule}` binds globalt på ULID — det finns ingen container att
+ * scope-binda mot, och ett schema i någon annans inbox ska ge 403 ur grinden
+ * och inte 404. Målet står i KROPPEN (`target`, ett item-ULID) och kan ligga i
+ * vilken container som helst där användaren har `create`; uppslaget görs av
+ * App\Http\Requests\Inbox\ProcessInboxTaskRequest.
+ *
+ * Svaret är `back()`: formuläret står på `/inbox` (issue 245), och nästa
+ * uppgift ligger överst. Ett domänfel blir ett fältfel på `schedule`.
+ */
+Route::post('/inbox/tasks/{schedule}/process', [InboxController::class, 'process'])
+    ->middleware('auth')
+    ->name('inbox.tasks.process');
 
 /*
  * Issue 128 · Informationsytan, se App\Http\Controllers\
@@ -1024,6 +1044,23 @@ Route::middleware('auth')->group(function () {
         ->name('containers.items.attachments.copy');
 
     /*
+     * Issue 244 (M27) · *Back to Inbox* för en bilaga, se
+     * App\Actions\Inbox\SendToInbox och [[ADR-0054 Inboxen]] § 6.
+     *
+     * SAMMA `scopeBindings()` som `move` och `copy` ovan: `{attachment}` binds
+     * genom App\Models\Item::attachments(), så en bilaga på ett annat item ger
+     * 404. Målet står INTE i kroppen — det är användarens egen inbox och inget
+     * hon väljer; väljaren (issue 242) visar den aldrig.
+     *
+     * Grinden är `delete` på källans item, som för en flytt (ADR-0053 § 2), och
+     * svaret är `back()` med en flash-kod. Ett kvotfel — den nya ägaren är
+     * personkontot (ADR-0053 § 3) — blir ett fältfel på `attachment`.
+     */
+    Route::post('/containers/{container}/items/{item}/attachments/{attachment}/inbox', [AttachmentController::class, 'toInbox'])
+        ->scopeBindings()
+        ->name('containers.items.attachments.inbox');
+
+    /*
      * Issue 63a · Schemat som regel — formulären, pausen och raderingen, se
      * App\Http\Controllers\ScheduleController.
      *
@@ -1098,6 +1135,20 @@ Route::middleware('auth')->group(function () {
     Route::post('/containers/{container}/items/{item}/schedules/{schedule}/move', [ScheduleController::class, 'move'])
         ->scopeBindings()
         ->name('containers.items.schedules.move');
+
+    /*
+     * Issue 244 (M27) · *Back to Inbox* för en uppgift, se
+     * App\Actions\Inbox\SendToInbox och [[ADR-0054 Inboxen]] § 6.
+     *
+     * SAMMA `scopeBindings()` som `move` ovan. Målet står inte i kroppen: det
+     * är användarens EGEN inbox, och handlingen är just därför inte ett val i
+     * väljaren (issue 242). Grinden är `delete` på KÄLLANS item (ADR-0053 § 2),
+     * och svaret är en redirect till `/inbox` — uppgiften finns inte kvar på
+     * källan, så `back()` hade landat på en sida som inte längre bär den.
+     */
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/inbox', [ScheduleController::class, 'toInbox'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.inbox');
 
     /*
      * Issue 63b · Förekomsten — den öppna uppgiften, avbockningen, historiken

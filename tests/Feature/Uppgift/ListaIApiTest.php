@@ -98,21 +98,11 @@ it('sätter in_progress via API:et', function () {
 });
 
 /*
- * Klart när: den första flytten från inbox sätter schemats förval — samma
- * regel som webben (issue 235 § Beslut 1), för actionen är den samma.
+ * M27 · issue 244: provet om att den första flytten satte förvalet är BORTA.
+ * Regeln i ADR-0052 § 2 utgår med [[ADR-0054 Inboxen]] § 5 — förvalet sätts
+ * när uppgiften skapas eller bearbetas, och en senare flytt rör det inte.
+ * Provet för webben togs bort samtidigt, i ListansReglerTest.php.
  */
-it('första flytten från inbox sätter förvalet via API:et', function () {
-    [, , $headers, $container, $item] = skapaForekomstKontext();
-    [$schedule, $occurrence, $url] = listaIApiSchema($container, $item, $headers);
-
-    expect($occurrence->gtd_list)->toBe('inbox')
-        ->and($schedule->default_gtd_list)->toBeNull();
-
-    patchJson($url, ['gtd_list' => 'someday'], $headers)->assertOk();
-
-    expect($occurrence->fresh()->gtd_list)->toBe('someday')
-        ->and($schedule->fresh()->default_gtd_list)->toBe('someday');
-});
 
 /*
  * Klart när: en stängd förekomst ger 422 `occurrence.not_open` i felformatet
@@ -160,7 +150,7 @@ it('en read-mottagare får 403', function () {
 
     $response->assertStatus(403);
     expect($response->json('error.code'))->toBe('auth.forbidden');
-    expect($occurrence->fresh()->gtd_list)->toBe('inbox');
+    expect($occurrence->fresh()->gtd_list)->toBe('next');
 });
 
 // --- skapandet och redigeringen av schemat ----------------------------------
@@ -168,14 +158,15 @@ it('en read-mottagare får 403', function () {
 /*
  * Klart när: `skapar ett schema med gtd_list via API:et` — den första
  * förekomsten hamnar i listan, och `waiting` blir aldrig förval
- * (issue 235 § Beslut 4). Fram till issue 238 tappades fältet tyst på `/api`.
+ * (M27 · issue 244, ADR-0054 § 5: förvalet blir `next`). Fram till issue 238
+ * tappades fältet tyst på `/api`.
  */
 it('skapar ett schema med gtd_list via API:et', function () {
     [, , $headers, $container, $item] = skapaForekomstKontext();
     [$schedule, $occurrence] = listaIApiSchema($container, $item, $headers, ['gtd_list' => 'waiting']);
 
     expect($occurrence->gtd_list)->toBe('waiting')
-        ->and($schedule->default_gtd_list)->toBeNull();
+        ->and($schedule->default_gtd_list)->toBe('next');
 });
 
 /*

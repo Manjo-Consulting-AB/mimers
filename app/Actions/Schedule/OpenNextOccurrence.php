@@ -3,6 +3,7 @@
 namespace App\Actions\Schedule;
 
 use App\Actions\Notification\ReleaseTaskReminders;
+use App\Models\Item;
 use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
 use App\Models\ScheduleDependency;
@@ -82,11 +83,13 @@ class OpenNextOccurrence
      *                                    Null när ingen förekomst har stängts.
      * @param  string|null  $gtdList  Listan den nya förekomsten ska bära, när
      *                                anroparen väljer den uttryckligen. Bara
-     *                                App\Actions\Schedule\CreateSchedule gör det
-     *                                (ADR-0052 § 2, issue 235 § Beslut 4): den
-     *                                första förekomsten får användarens val, inte
-     *                                schemats förval. Null — alla andra anropare —
-     *                                ger förvalet, eller `inbox`.
+     *                                App\Actions\Schedule\CreateSchedule gör det:
+     *                                den första förekomsten får användarens val,
+     *                                inte schemats förval — väljs *Waiting* blir
+     *                                förekomsten `waiting` medan förvalet blir
+     *                                `next` (ADR-0054 § 5). Null — alla andra
+     *                                anropare — ger förvalet, och null när
+     *                                schemat ligger i inboxen (§ 5 och 6).
      */
     public function handle(Schedule $schedule, Carbon $today, ?Carbon $from = null, ?Carbon $closedDueAt = null, ?string $gtdList = null): ?ScheduleOccurrence
     {
@@ -124,13 +127,27 @@ class OpenNextOccurrence
             $occurrence->visible_from = $dueAt?->copy()->subDays($lockedSchedule->lead_days);
             $occurrence->due_at = $dueAt;
             $occurrence->status = ScheduleOccurrence::STATUS_OPEN;
-            // Listan en ny förekomst hamnar i (ADR-0052 § 2, issue 235
-            // § Beslut 3): schemats förval, eller `inbox` när förvalet är null.
-            // En återkommande uppgift behöver då bara bearbetas en gång — nästa
-            // års service ärver listan utan att någon rör den. Anroparens
-            // uttryckliga val går före: den allra första förekomsten får
-            // användarens lista (Beslut 4), inte ett förval som ännu inte finns.
-            $occurrence->gtd_list = $gtdList ?? $lockedSchedule->default_gtd_list ?? ScheduleOccurrence::GTD_INBOX;
+            // Listan en ny förekomst hamnar i (ADR-0052 § 2, M27 · issue 244):
+            // schemats förval, så att en återkommande uppgift bara behöver
+            // bearbetas en gång — nästa års service ärver listan utan att någon
+            // rör den. Anroparens uttryckliga val går före: den allra första
+            // förekomsten får användarens lista, inte ett förval.
+            //
+            // **Ligger schemat i inboxen är listan null** (ADR-0054 § 5): en
+            // obearbetad uppgift har ingen lista, och förvalet är null av samma
+            // skäl. Kontrollen står här och inte bara i anroparen, så att en
+            // återaktivering eller en stängning av en inbox-uppgift inte kan
+            // ge nästa förekomst en lista ingen har valt.
+            //
+            // **Utanför inboxen har varje förekomst ett värde** (ADR-0054 § 5,
+            // andra punkten). Är förvalet tömt — redigeringssidan tillåter det,
+            // och en återaktivering kan möta ett schema som aldrig fick något —
+            // faller raden på `next` i stället för på null: null betyder *i
+            // inboxen* sedan den här issuen, och en uppgift på ett riktigt item
+            // får inte läsas som obearbetad.
+            $occurrence->gtd_list = $this->inInbox($lockedSchedule)
+                ? null
+                : ($gtdList ?? $lockedSchedule->default_gtd_list ?? ScheduleOccurrence::GTD_NEXT);
             $occurrence->save();
 
             // Arvet från schemanivån (23b § Beslut 2), i SAMMA transaktion som
@@ -148,6 +165,20 @@ class OpenNextOccurrence
 
             return $occurrence;
         });
+    }
+
+    /**
+     * Ligger schemat på ett inbox-item ([[ADR-0054 Inboxen]] § 5)? Frågan
+     * ställs på en färsk läsning av itemet och dess container — `$schedule`
+     * är den LÅSTA raden, och itemet kan inte läsas ur den utan ett uppslag.
+     * Är itemet borta (mjukraderat) är svaret nej: en försvunnen plats är
+     * ingen inbox.
+     */
+    private function inInbox(Schedule $schedule): bool
+    {
+        $item = Item::query()->find($schedule->item_id);
+
+        return (bool) $item?->container?->isInbox();
     }
 
     /**

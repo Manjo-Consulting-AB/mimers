@@ -47,13 +47,18 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * som tömmer det. Samma regler delas med `/api`. Masken säger samma sak som
  * servern: ett tomt datum på en engångsuppgift är ett svar och inte ett fel.
  *
- * **Listan väljs i samma formulär** (M26 · issue 236 § Beslut 2). När ett
- * schema SKAPAS frågar *List* efter listan den första förekomsten hamnar i och
- * skickar `gtd_list`; vid REDIGERING visas *Default list for new occurrences*
- * och skickar schemats `default_gtd_list`. Bara `next` och `someday` kan vara
- * förval — `waiting` gäller en enskild gång och `inbox` är bara en förekomsts
- * första hem (ADR-0052 § 2). Bara det ena fältet finns i `fields`, så en
- * skapande POST bär aldrig `default_gtd_list` och en PATCH aldrig `gtd_list`.
+ * **Listan väljs i samma formulär** (M26 · issue 236 § Beslut 2; M27 · issue
+ * 244). När ett schema SKAPAS frågar *List* efter listan den första
+ * förekomsten hamnar i och skickar `gtd_list`; vid REDIGERING visas *Default
+ * list for new occurrences* och skickar schemats `default_gtd_list`. Bara det
+ * ena fältet finns i `fields`, så en skapande POST bär aldrig
+ * `default_gtd_list` och en PATCH aldrig `gtd_list`.
+ *
+ * **`inbox` är inget val** ([[ADR-0054 Inboxen]] § 5): inboxen är en plats och
+ * inte en lista, och en uppgift som skapas på ett inbox-item är obearbetad —
+ * den får sin lista först när den bearbetas. Förvalet är därför *Next*, och
+ * *Not set* är borta ur förvalsfältet: ett schema utanför inboxen har alltid
+ * ett förval, och `waiting` blir aldrig ett (ADR-0052 § 2).
  *
  * **Intervallfälten döljs OCH nollställs när `none` väljs** (Beslut 4).
  * `prohibited_if:recurrence_type,none` i den delade FormRequesten avvisar dem
@@ -115,12 +120,13 @@ const fields = {
     /*
      * Listan (Beslut 2). Bara det ena fältet finns i formuläret: skapande
      * skickar `gtd_list` och redigering `default_gtd_list`, så POST:en och
-     * PATCH:en bär varsitt fält och aldrig båda. Förvalet är `inbox` — en
-     * uppgift som läggs till utan att någon tänker på listan är obearbetad.
+     * PATCH:en bär varsitt fält och aldrig båda. Förvalet är `next`: en uppgift
+     * som skapas på ett riktigt item börjar där (ADR-0054 § 5), och ett schema
+     * utan förval visar `next` — alternativet *Not set* finns inte längre.
      */
     ...(props.schedule === null
-        ? { gtd_list: 'inbox' }
-        : { default_gtd_list: props.schedule.default_gtd_list ?? null }),
+        ? { gtd_list: 'next' }
+        : { default_gtd_list: props.schedule.default_gtd_list ?? 'next' }),
 };
 
 const form = useForm(fields);
@@ -213,7 +219,8 @@ function submit() {
             lista (`gtd_list`), redigering efter schemats förval för nästa
             förekomst (`default_gtd_list`) — bara det ena fältet finns i
             `fields`, så en POST och en PATCH bär aldrig samma nyckel.
-            Alternativen är `todo.list.*`, samma ord som kolumnens värden.
+            Alternativen är `todo.list.*`, samma ord som kolumnens värden —
+            utom `inbox`, som är en plats och inte en lista (ADR-0054 § 5).
         -->
         <FormField
             v-if="schedule === null"
@@ -228,7 +235,6 @@ function submit() {
                 :described-by="describedBy"
                 name="gtd_list"
             >
-                <option value="inbox">{{ t('todo.list.inbox') }}</option>
                 <option value="next">{{ t('todo.list.next') }}</option>
                 <option value="waiting">{{ t('todo.list.waiting') }}</option>
                 <option value="someday">{{ t('todo.list.someday') }}</option>
@@ -248,7 +254,6 @@ function submit() {
                 :described-by="describedBy"
                 name="default_gtd_list"
             >
-                <option :value="null">{{ t('item.schedule.form.default_gtd_list_none') }}</option>
                 <option value="next">{{ t('todo.list.next') }}</option>
                 <option value="someday">{{ t('todo.list.someday') }}</option>
             </UiSelect>

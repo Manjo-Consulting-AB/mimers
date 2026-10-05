@@ -128,13 +128,13 @@ it('skapar en engångsuppgift utan datum från webben', function () {
 
     expect($schema->anchor_date)->toBeNull();
 
-    // Förekomsten öppnas utan datum i `inbox` — förvalet när ingen lista
-    // valdes (ADR-0052 § 2).
+    // Förekomsten öppnas utan datum i `next` — förvalet på ett riktigt item
+    // när ingen lista valdes (M27 · issue 244, ADR-0054 § 5).
     $förekomst = $schema->openOccurrence()->sole();
 
     expect($förekomst->due_at)->toBeNull()
         ->and($förekomst->visible_from)->toBeNull()
-        ->and($förekomst->gtd_list)->toBe('inbox');
+        ->and($förekomst->gtd_list)->toBe('next');
 });
 
 /*
@@ -246,8 +246,13 @@ it('raden utan datum säger No date', function () {
 // --- katalogen -------------------------------------------------------------
 
 /*
- * Klart när: de tolv nya nycklarna finns (Beslut 6). Ordagrant ur beslutet —
- * samma lista binder orden och inte bara nyckelnamnen.
+ * Klart när: de nya nycklarna finns (Beslut 6). Ordagrant ur beslutet — samma
+ * lista binder orden och inte bara nyckelnamnen.
+ *
+ * **M27 · issue 244** ändrade två av dem: meningen under förvalsfältet
+ * beskriver den nya regeln (förvalet sätts när uppgiften skapas eller
+ * bearbetas ur inboxen), och `item.schedule.form.default_gtd_list_none` är
+ * BORTA — alternativet *Not set* ritas inte längre (ADR-0054 § 5).
  */
 it('har varje ny nyckel', function () {
     $nycklar = [
@@ -260,14 +265,15 @@ it('har varje ny nyckel', function () {
         'todo.no_date' => 'No date',
         'item.schedule.form.gtd_list' => 'List',
         'item.schedule.form.default_gtd_list' => 'Default list for new occurrences',
-        'item.schedule.form.default_gtd_list_hint' => 'The default is set the first time a task leaves Inbox.',
-        'item.schedule.form.default_gtd_list_none' => 'Not set',
+        'item.schedule.form.default_gtd_list_hint' => 'The default is set when the task is created, or when it is processed from the inbox.',
         'item.schedule.form.reminder' => 'Reminder',
     ];
 
-    expect($nycklar)->toHaveCount(12);
+    expect($nycklar)->toHaveCount(11);
 
     foreach ($nycklar as $nyckel => $mening) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->toBe($mening, "{$nyckel} saknas eller har fel ord");
     }
+
+    expect(Lang::has('ui.item.schedule.form.default_gtd_list_none', 'en'))->toBeFalse();
 });

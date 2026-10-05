@@ -14,12 +14,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * sanningen om hur många uppgifter en lista bär, och den hade glidit isär
  * från flikens innehåll ([[ADR-0024 Tunna controllers och actions]]).
  *
- * **Raden och fliken är samma sex listor.** `rows` kommer från anroparen i
+ * **Raden och fliken är samma listor.** `rows` kommer från anroparen i
  * samma form som flikraden — `{ key, label, href }` — så panelen och
  * `UiTabs` pekar på samma adresser och bär samma ord. `active` är INTE med:
- * panelen räknar de sex listorna, och *Active* är summan av dem, inte en
- * lista bland dem. Flikarnas hrefs bär sitt eget filter (`?list=`), och
- * panelen ärver dem — den bygger ingen adress själv.
+ * panelen räknar listorna, och *Active* är summan av dem, inte en lista bland
+ * dem. Flikarnas hrefs bär sitt eget filter (`?list=`), och panelen ärver dem
+ * — den bygger ingen adress själv. Sedan M27 · issue 244 är *Inbox* och *In
+ * progress* två av dem; panelen ritar dem för `/tasks`, och containerns flik
+ * — som inte har någon inbox — skickar sina egna rader.
  *
  * **Talet är en glimt, inte listans längd.** *Done* räknar bara de senaste
  * 30 dagarna (Beslut 3); fliken *Done* visar alla avbockade. Panelen säger
@@ -33,10 +35,11 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /*
      * Antalet per lista, ur App\Actions\Schedule\ListTodo::gtdCounts():
-     * `inbox`, `next`, `waiting`, `calendar`, `someday`, `done`.
+     * `inbox`, `next`, `waiting`, `someday`, `in_progress`, `calendar`,
+     * `done`.
      */
     counts: { type: Object, required: true },
-    /* De sex listorna i ritningsordning: `{ key, label, href }`. */
+    /* Listorna i ritningsordning: `{ key, label, href }`. */
     rows: { type: Array, required: true },
 });
 

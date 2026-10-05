@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Inbox\SendToInbox;
 use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Schedule\DeleteSchedule;
 use App\Actions\Schedule\MoveSchedule;
@@ -378,6 +379,45 @@ class ScheduleController extends Controller
         return redirect()
             ->route('containers.items.schedules.show', [$target->container, $target, $schedule])
             ->with('status', 'schedule-moved');
+    }
+
+    /**
+     * POST /containers/{container}/items/{item}/schedules/{schedule}/inbox —
+     * *Back to Inbox*, M27 · issue 244, se App\Actions\Inbox\SendToInbox och
+     * [[ADR-0054 Inboxen]] § 6.
+     *
+     * **Grinden är `delete` på källans item**, densamma som flytten intill:
+     * uppgiften lämnar sin plats (ADR-0053 § 2). Målet är användarens EGEN
+     * inbox och står därför inte i kroppen — det är hela skillnaden mot
+     * `move()`, och väljaren (issue 242) visar aldrig en inbox.
+     *
+     * **Svaret är en redirect till `/inbox` och inte `back()`.** Uppgiften
+     * ligger inte kvar på källan, och den nyss skickade raden finns inte
+     * längre i listan användaren stod i — schemats sida på det gamla itemet
+     * hade blivit 404. Sidan `/inbox` byggs i issue 245; adressen är densamma
+     * och ruttnamnet kommer med den.
+     *
+     * Domänfelet — `schedule.has_dependencies` för en uppgift med beroenden,
+     * `schedule.already_in_inbox` för en som redan ligger där — ritas på
+     * fältet `schedule`, som vid en flytt.
+     */
+    public function toInbox(
+        Request $request,
+        Container $container,
+        Item $item,
+        Schedule $schedule,
+        SendToInbox $sendToInbox,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('delete', $item);
+
+        try {
+            $sendToInbox->schedule($schedule, $request->user());
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['schedule' => $translator->message($e)]);
+        }
+
+        return redirect('/inbox')->with('status', 'schedule-in-inbox');
     }
 
     /**

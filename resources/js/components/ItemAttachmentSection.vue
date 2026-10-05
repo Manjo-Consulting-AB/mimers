@@ -544,6 +544,38 @@ function chooseTarget(target) {
         },
     });
 }
+
+/*
+ * *Back to Inbox* (M27 · issue 244, [[ADR-0054 Inboxen]] § 6). En egen
+ * handling och inte ett val i väljaren: den går alltid till användarens EGEN
+ * inbox, och den skapas om den saknas. Knappen står bakom `can.delete`, som
+ * *Move…* intill, och servern prövar samma grind på nytt.
+ *
+ * Ägaren blir personkontot och dess kvot prövas (ADR-0053 § 3 och 4): ett
+ * kvotfel kommer som ett fältfel på `attachment` och ritas på raden, precis
+ * som flyttens. Kroppen är tom — målet står inte i den.
+ */
+function toInbox(attachment) {
+    router.post(`${itemUrl()}/attachments/${attachment.ulid}/inbox`, {}, {
+        preserveScroll: true,
+        onStart: () => {
+            pending.value = attachment.ulid;
+            actionError.value = null;
+        },
+        onFinish: () => { pending.value = null; },
+        onError: (errors) => {
+            actionError.value = { ulid: attachment.ulid, message: errors.attachment };
+        },
+        onHttpException: (response) => {
+            actionError.value = {
+                ulid: attachment.ulid,
+                message: response.status === 403 ? t('error.403') : t('error.generic'),
+            };
+
+            return false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -805,6 +837,23 @@ function chooseTarget(target) {
                         @click="openPicker(attachment, 'move', $event)"
                     >
                         {{ t('item.attachment.move') }}
+                    </button>
+
+                    <!--
+                        *Back to Inbox* (M27 · issue 244, ADR-0054 § 6): bredvid
+                        *Move…* och bakom samma `can.delete` — bilagan lämnar
+                        sin plats. Handlingen går alltid till den EGNA inboxen
+                        och är därför aldrig ett val i väljaren. Servern prövar
+                        samma grind på nytt, och ett kvotfel ritas på raden.
+                    -->
+                    <button
+                        v-if="can.delete"
+                        type="button"
+                        :disabled="pending === attachment.ulid"
+                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                        @click="toInbox(attachment)"
+                    >
+                        {{ t('todo.back_to_inbox') }}
                     </button>
 
                     <button

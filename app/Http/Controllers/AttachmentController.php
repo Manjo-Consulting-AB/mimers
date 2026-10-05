@@ -6,6 +6,7 @@ use App\Actions\Attachment\CopyAttachment;
 use App\Actions\Attachment\MoveAttachment;
 use App\Actions\Attachment\StoreAttachment;
 use App\Actions\Attachment\TrashAttachment;
+use App\Actions\Inbox\SendToInbox;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Attachment\StoreAttachmentRequest;
 use App\Http\Requests\TargetItemRequest;
@@ -197,6 +198,43 @@ class AttachmentController extends Controller
         }
 
         return back()->with('status', 'attachment-moved');
+    }
+
+    /**
+     * POST /containers/{container}/items/{item}/attachments/{attachment}/inbox
+     * — *Back to Inbox*, M27 · issue 244, se App\Actions\Inbox\SendToInbox och
+     * [[ADR-0054 Inboxen]] § 6.
+     *
+     * **Grinden är `delete` på källans item**, densamma som flytten intill.
+     * Målet är användarens EGEN inbox — den står inte i kroppen, och väljaren
+     * (issue 242) visar den aldrig.
+     *
+     * **Ägaren blir personkontot och dess kvot prövas** (ADR-0053 § 3 och 4):
+     * inboxens container ägs av personkontot, och flytten väljer målcontainerns
+     * ägarkonto när användaren är medlem i det. Nekas kvoten ligger bilagan
+     * kvar på källan, oförändrad.
+     *
+     * Svaret är `back()` — bilagans rad står kvar på itemet tills sidan ritas
+     * om ur serverns svar, och ett kvotfel blir ett fältfel på `attachment`
+     * precis som vid en flytt.
+     */
+    public function toInbox(
+        Request $request,
+        Container $container,
+        Item $item,
+        Attachment $attachment,
+        SendToInbox $sendToInbox,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('delete', $item);
+
+        try {
+            $sendToInbox->attachment($attachment, $request->user());
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['attachment' => $translator->message($e)]);
+        }
+
+        return back()->with('status', 'attachment-in-inbox');
     }
 
     /**

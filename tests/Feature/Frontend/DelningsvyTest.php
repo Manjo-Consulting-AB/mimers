@@ -1096,6 +1096,13 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         // är oförändrad. Ingen ny läsare och ingen ny mottagare läggs till.
         'containers/{container}/items/{item}/attachments/{attachment}/move',
         'containers/{container}/items/{item}/attachments/{attachment}/copy',
+        // Issue 244: *Back to Inbox* för en bilaga. Den rör inga
+        // `container_access`-rader alls — grinden är `delete` på källans item,
+        // samma pinne som flytten intill — och målet är användarens EGEN
+        // inbox, som ingen annan når (ADR-0054 § 2). Ägaren blir personkontot,
+        // men ägarskapet är `attachment.billed_account_id` och inte en
+        // åtkomstrad. Ingen ny läsare och ingen ny mottagare läggs till.
+        'containers/{container}/items/{item}/attachments/{attachment}/inbox',
         'containers/{container}/items/{item}/schedules',
         // Issue 240: flytten av en uppgift. Den rör inga
         // `container_access`-rader alls — grinden är `delete` på källans item
@@ -1103,6 +1110,10 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         // 242). Uppgiften byter item men inte ägare; ingen ny läsare och ingen
         // ny mottagare läggs till.
         'containers/{container}/items/{item}/schedules/{schedule}/move',
+        // Issue 244: *Back to Inbox* för en uppgift. Samma grind (`delete` på
+        // källans item) och samma mål — användarens egen inbox. Ingen ny
+        // läsare och ingen ny mottagare läggs till.
+        'containers/{container}/items/{item}/schedules/{schedule}/inbox',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip',
         'containers/{container}/items/{item}/schedules/{schedule}/dependencies',

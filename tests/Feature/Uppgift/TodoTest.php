@@ -336,7 +336,7 @@ it('svaret bär schema, item och container', function () {
         'due_at' => '2026-09-02',
         'visible_from' => '2026-09-02',
         'status' => 'open',
-        'gtd_list' => 'inbox',
+        'gtd_list' => 'next',
         'overdue' => false,
         'upcoming' => false,
         'schedule' => [

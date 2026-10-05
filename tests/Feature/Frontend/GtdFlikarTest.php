@@ -1,6 +1,8 @@
 <?php
 
+use App\Actions\Inbox\ResolveInbox;
 use App\Actions\Schedule\ListTodo;
+use App\Models\Container;
 use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
@@ -36,6 +38,13 @@ use function Pest\Laravel\withoutVite;
  * 4. **Flikraden och *Done*** (Beslut 4): fliken ersätter *Done*-gruppen på
  *    containern, och vyn ritar `UiTabs` och `GtdListPanel`.
  *
+ * **M27 · issue 244** lägger till vyerna *Inbox* (förekomsterna på
+ * användarens inbox-item) och *In progress* (`status = in_progress`), och
+ * `inbox` upphör att vara ett värde i `gtd_list` — se
+ * [[ADR-0054 Inboxen]] § 5. Proven om de två vyerna bor i
+ * tests/Feature/Inbox/InboxIGtdTest.php; här prövas de genom flikraden och
+ * panelen.
+ *
  * Hjälparna med prefixet `todovy` kommer ur tests/Feature/Frontend/TodovyTest.php
  * — Pest lägger alla testfiler i samma namnrymd, samma grepp som
  * tests/Feature/Frontend/TaskpagineringTest.php gör. Bara hjälparna med
@@ -57,7 +66,7 @@ afterEach(function () {
 /**
  * En öppen förekomst i vald lista, med ett datum $dagar fram (eller bak).
  */
-function gtdFlikDaterad(Item $item, string $titel, int $dagar, string $lista): ScheduleOccurrence
+function gtdFlikDaterad(Item $item, string $titel, int $dagar, ?string $lista = 'next'): ScheduleOccurrence
 {
     [, $rad] = todovyUppgift($item, todovyDatum($dagar), $titel, ['gtd_list' => $lista]);
 
@@ -68,7 +77,7 @@ function gtdFlikDaterad(Item $item, string $titel, int $dagar, string $lista): S
  * En öppen förekomst i vald lista UTAN datum (ADR-0052 § 3). Schemat är
  * `none` utan `anchor_date` — den enda vägen till en odaterad rad.
  */
-function gtdFlikOdaterad(Item $item, string $titel, string $lista): ScheduleOccurrence
+function gtdFlikOdaterad(Item $item, string $titel, ?string $lista = 'next'): ScheduleOccurrence
 {
     $schema = Schedule::factory()->for($item, 'item')->create([
         'title' => $titel,
@@ -139,7 +148,7 @@ it('visar bara den valda listan i datumgrupperna, på båda ytorna', function ()
 
     [, $anvandare, $container, $item] = todovyKontext();
 
-    gtdFlikDaterad($item, 'Inbox-uppgift', 10, 'inbox');
+    gtdFlikDaterad($item, 'Someday-uppgift', 10, 'someday');
     gtdFlikDaterad($item, 'Next-uppgift', 11, 'next');
     gtdFlikDaterad($item, 'Waiting-uppgift', 12, 'waiting');
 
@@ -150,7 +159,7 @@ it('visar bara den valda listan i datumgrupperna, på båda ytorna', function ()
 
         expect($svar->inertiaProps()['list'])->toBe('next')
             ->and(gtdFlikTitlar($svar, 'upcoming'))->toBe(['Next-uppgift'])
-            ->and($svar->getContent())->not->toContain('Inbox-uppgift')
+            ->and($svar->getContent())->not->toContain('Someday-uppgift')
             ->and($svar->getContent())->not->toContain('Waiting-uppgift');
     }
 });
@@ -195,7 +204,7 @@ it('ger Active för ett okänt list-värde', function () {
 
     [, $anvandare, , $item] = todovyKontext();
 
-    gtdFlikDaterad($item, 'Inbox-uppgift', 10, 'inbox');
+    gtdFlikDaterad($item, 'Someday-uppgift', 10, 'someday');
     gtdFlikDaterad($item, 'Next-uppgift', 11, 'next');
 
     $aktiv = actingAs($anvandare)->get('/tasks')->assertOk();
@@ -203,7 +212,7 @@ it('ger Active för ett okänt list-värde', function () {
 
     expect($okand->inertiaProps()['list'])->toBeNull()
         ->and(gtdFlikTitlar($okand, 'upcoming'))->toBe(gtdFlikTitlar($aktiv, 'upcoming'))
-        ->and(gtdFlikTitlar($okand, 'upcoming'))->toBe(['Inbox-uppgift', 'Next-uppgift']);
+        ->and(gtdFlikTitlar($okand, 'upcoming'))->toBe(['Someday-uppgift', 'Next-uppgift']);
 });
 
 // --- Done (Beslut 1 och 4) -------------------------------------------------
@@ -351,9 +360,11 @@ it('räknar per lista i panelen', function () {
 
     [, $anvandare, , $item] = todovyKontext();
 
-    // Två inbox MED datum — de är panelens *Calendar*.
-    gtdFlikDaterad($item, 'Inbox ett', 10, 'inbox');
-    gtdFlikDaterad($item, 'Inbox två', 11, 'inbox');
+    // Två inbox-uppgifter MED datum — de är panelens *Calendar*, och de ligger
+    // i inboxen (gtd_list null) och inte i en lista (ADR-0054 § 5).
+    $inbox = app(ResolveInbox::class)->handle($anvandare);
+    gtdFlikDaterad($inbox, 'Inbox ett', 10, null);
+    gtdFlikDaterad($inbox, 'Inbox två', 11, null);
 
     // Tre next och en waiting UTAN datum — de räknas i sin lista men inte i
     // *Calendar*.
@@ -362,16 +373,23 @@ it('räknar per lista i panelen', function () {
     gtdFlikOdaterad($item, 'Next tre', 'next');
     gtdFlikOdaterad($item, 'Waiting ett', 'waiting');
 
-    gtdFlikAvbockad($item, 'Klar i går', now()->subDay(), 'inbox');
+    // En pågående — den ligger i `next` OCH i *In progress* (ADR-0054 § 5):
+    // axlarna är olika frågor och talen summerar inte till antalet uppgifter.
+    $pagar = gtdFlikOdaterad($item, 'Pågående', 'next');
+    $pagar->status = 'in_progress';
+    $pagar->save();
+
+    gtdFlikAvbockad($item, 'Klar i går', now()->subDay(), 'next');
 
     $counts = actingAs($anvandare)->get('/tasks')->assertOk()->inertiaProps()['counts'];
 
     expect($counts)->toBe([
         'inbox' => 2,
-        'next' => 3,
+        'next' => 4,
         'waiting' => 1,
-        'calendar' => 2,
         'someday' => 0,
+        'in_progress' => 1,
+        'calendar' => 2,
         'done' => 1,
     ]);
 });
@@ -391,21 +409,23 @@ it('räknar inte det mottagaren inte når', function () {
 
     $dolt = todovyItem($container, 'Hemlig motor');
 
-    gtdFlikOdaterad($mitt, 'Min uppgift', 'inbox');
+    gtdFlikOdaterad($mitt, 'Min uppgift', 'next');
     gtdFlikDaterad($mitt, 'Min daterade', 10, 'next');
 
-    gtdFlikOdaterad($dolt, 'Hemlig ett', 'inbox');
-    gtdFlikOdaterad($dolt, 'Hemlig två', 'inbox');
+    gtdFlikOdaterad($dolt, 'Hemlig ett', 'next');
+    gtdFlikOdaterad($dolt, 'Hemlig två', 'next');
     gtdFlikDaterad($dolt, 'Hemlig tre', 10, 'next');
 
     $gast = todovyMottagare($container, $mitt, 'read');
 
     $counts = actingAs($gast)->get('/tasks')->assertOk()->inertiaProps()['counts'];
 
-    expect($counts['inbox'])->toBe(1)
-        ->and($counts['next'])->toBe(1)
+    expect($counts['next'])->toBe(2)
         ->and($counts['calendar'])->toBe(1)
-        ->and($counts['someday'])->toBe(0);
+        ->and($counts['someday'])->toBe(0)
+        // Gästen har ingen inbox, och uppslaget SKAPAR ingen (ADR-0054 § 5).
+        ->and($counts['inbox'])->toBe(0)
+        ->and(Container::query()->where('inbox_user_id', $gast->id)->count())->toBe(0);
 });
 
 /*
@@ -501,7 +521,7 @@ it('ritar flikarna och panelen i båda vyerna', function () {
 
     // Panelens ord och rubrik finns i katalogen — `t()` skriver nyckeln själv
     // vid ett missat uppslag, och panelen hade då hetat `todo.gtd_panel.heading`.
-    foreach (['todo.tabs.label', 'todo.tabs.active', 'todo.tabs.calendar', 'todo.tabs.done', 'todo.gtd_panel.heading'] as $nyckel) {
+    foreach (['todo.tabs.label', 'todo.tabs.active', 'todo.tabs.in_progress', 'todo.tabs.calendar', 'todo.tabs.done', 'todo.list.inbox', 'todo.gtd_panel.heading'] as $nyckel) {
         expect(trans("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "{$nyckel} saknas");
     }
 });

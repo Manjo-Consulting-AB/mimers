@@ -122,11 +122,12 @@ const { t } = useTranslations();
 const taskBase = () => `/containers/${props.container.ulid}/tasks`;
 
 /*
- * Flikraden (Beslut 4), i ritningsordning: *Active*, de fyra lagrade
- * listorna, *Calendar* och *Done*. *Active* är adressen UTAN `list` — den är
- * vilotillståndet. Är underhållsfiltret på följer det med i varje fliks
- * adress, så filtret inte tappas när man byter flik; filtret är en del av
- * adressen (Beslut 4, issue 59a § Beslut 1) och ska följa med, inte nollas.
+ * Flikraden (Beslut 4; M27 · issue 244), i ritningsordning: *Active*, *In
+ * progress*, de tre lagrade listorna, *Calendar* och *Done*. *Active* är
+ * adressen UTAN `list` — den är vilotillståndet. Är underhållsfiltret på
+ * följer det med i varje fliks adress, så filtret inte tappas när man byter
+ * flik; filtret är en del av adressen (Beslut 4, issue 59a § Beslut 1) och
+ * ska följa med, inte nollas.
  */
 const tabs = computed(() => {
     // Filtret följer med i flikens adress: `?maintenance=1` när det är på.
@@ -145,7 +146,10 @@ const tabs = computed(() => {
 
     return [
         { key: 'active', label: t('todo.tabs.active'), href: link('active') },
-        { key: 'inbox', label: t('todo.list.inbox'), href: link('inbox') },
+        // *In progress* läggs till efter *Active* (M27 · issue 244, ADR-0054
+        // § 5). *Inbox* finns INTE här: inboxen hör inte till någon container,
+        // och fliken *Inbox* bor bara på `/tasks`.
+        { key: 'in_progress', label: t('todo.tabs.in_progress'), href: link('in_progress') },
         { key: 'next', label: t('todo.list.next'), href: link('next') },
         { key: 'waiting', label: t('todo.list.waiting'), href: link('waiting') },
         { key: 'calendar', label: t('todo.tabs.calendar'), href: link('calendar') },
@@ -154,7 +158,7 @@ const tabs = computed(() => {
     ];
 });
 
-/* Panelens rader är flikarna UTAN *Active* — de sex listorna (Beslut 3). */
+/* Panelens rader är flikarna UTAN *Active* (Beslut 3). */
 const panelRows = computed(() => tabs.value.filter((tab) => tab.key !== 'active'));
 
 /* Kryssrutans läge, speglat ur proppen — se docblocken ovan. */
