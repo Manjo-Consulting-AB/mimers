@@ -11,6 +11,7 @@ use App\Actions\Schedule\ListTodo;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\AuthUserResource;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\Container;
 use App\Models\Invitation;
 use App\Models\Item;
@@ -236,6 +237,9 @@ class HandleInertiaRequests extends Middleware
             'favorites' => fn (): array => $this->favorites($request),
             'unreadNotificationCount' => fn (): int => $this->unreadNotificationCount($request)
                 + $this->pendingInvitationCount($request),
+            // Inboxens tal (M27 · issue 245) — se inboxCount() om varför det är
+            // en delad prop och varför det räknas utan ResolveInbox.
+            'inboxCount' => fn (): int => $this->inboxCount($request),
             // Ingen closure runt OptionalProp: den är redan lat, och en
             // kapslad closure hade fått resolvern att packa upp den i två
             // steg i stället för att filtrera den som den prop den är.
@@ -520,6 +524,54 @@ class HandleInertiaRequests extends Middleware
                 fn (Builder $query): Builder => $query->where('created_at', '>', $user->notifications_read_at),
             )
             ->count();
+    }
+
+    /**
+     * Antalet i användarens inbox — uppgifterna plus bilagorna — eller 0 utan
+     * en inbox. M27 · issue 245, se [[ADR-0054 Inboxen]] § 7.
+     *
+     * **En delad prop och inte en rad i varje kontroller**, av samma skäl som
+     * `unreadNotificationCount` ovan: raden i sidopanelen ritas av skalet på
+     * varje sida, och en siffra som bara stämmer på `/inbox` vore en siffra
+     * som ljuger på de andra.
+     *
+     * **Två `count()` och ingen `ResolveInbox`.** Att läsa en siffra får
+     * aldrig SKAPA en inbox — samma regel som `ListTodo::inboxItemId()` och
+     * `InboxController::index()` (ADR-0054 § 1). Itemet slås upp på
+     * `inbox_user_id`, och saknas det är talet 0: den som ännu inte fångat
+     * något har en tom inbox, inte en som ska skapas.
+     *
+     * Uppgifterna räknas med SAMMA urval som `/inbox` och fliken *Inbox* på
+     * `/tasks` (`ScheduleOccurrence::scopeTodoFor()` plus inbox-itemet, issue
+     * 244), så siffran i panelen och listan på sidan är samma mängd. Bilagorna
+     * är itemets bilagor — mjukraderade faller bort genom SoftDeletes' globala
+     * scope, precis som i listan.
+     */
+    private function inboxCount(Request $request): int
+    {
+        $user = $request->user();
+
+        if ($user === null) {
+            return 0;
+        }
+
+        $itemId = Item::query()
+            ->whereHas('container', fn (Builder $query): Builder => $query->where('inbox_user_id', $user->getKey()))
+            ->orderBy('item.id')
+            ->value('item.id');
+
+        if ($itemId === null) {
+            return 0;
+        }
+
+        $tasks = ScheduleOccurrence::query()
+            ->todoFor($user, $user->accounts->pluck('id')->values()->all())
+            ->whereHas('schedule', fn (Builder $query): Builder => $query->where('item_id', $itemId))
+            ->count();
+
+        $attachments = Attachment::query()->where('item_id', $itemId)->count();
+
+        return $tasks + $attachments;
     }
 
     /**

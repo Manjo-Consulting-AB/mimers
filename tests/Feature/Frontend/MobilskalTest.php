@@ -150,6 +150,11 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
     expect(array_column($träffar, 1))->toBe([
         'dashboard',
         'tasks',
+        // Inboxen kom med M27 · issue 245: raden står bredvid uppgifterna och
+        // bär antalet obearbetat. Ändringen ligger utanför issue 245:s ruta
+        // och deklareras i PR:en — provet listar skalets rader och fälls av en
+        // ny rad, med flit (en rad som glöms i katalogen ska synas).
+        'inbox',
         'containers',
         'transfers',
         'search',

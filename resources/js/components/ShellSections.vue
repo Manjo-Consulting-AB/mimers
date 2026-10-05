@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
+import UiBadge from './UiBadge.vue';
 import UiListRow from './UiListRow.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -81,9 +82,24 @@ const user = computed(() => page.props.auth.user);
  */
 const favorites = computed(() => page.props.favorites ?? []);
 
+/*
+ * Inboxens antal ur den delade proppen (M27 · issue 245,
+ * [[ADR-0054 Inboxen]] § 7). Talet är serverns — två `count()` i
+ * App\Http\Middleware\HandleInertiaRequests::inboxCount() — och vyn räknar
+ * ingenting: en klient som räknade själv hade behövt hela mängden, och
+ * siffran hade kunnat glida ifrån listan på `/inbox`. Utan en inbox är talet
+ * 0, och då ritas inget tal — en nolla är inget att bearbeta.
+ */
+const inboxCount = computed(() => page.props.inboxCount ?? 0);
+
 const allSections = [
     { key: 'dashboard', href: '/dashboard' },
     { key: 'tasks', href: '/tasks' },
+    // Inboxen (M27 · issue 245, [[ADR-0054 Inboxen]] § 7): raden står bredvid
+    // uppgifterna, som den hör ihop med, och bär antalet obearbetat — uppgifter
+    // plus bilagor — så att skalet säger till när det finns något att bearbeta
+    // utan att användaren öppnar sidan.
+    { key: 'inbox', href: '/inbox' },
     { key: 'containers', href: '/containers' },
     { key: 'transfers', href: '/transfers' },
     { key: 'search', href: '/search' },
@@ -139,6 +155,22 @@ function isCurrent(section) {
                 :class="['w-full', isCurrent(section) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50']"
             >
                 {{ section.key === 'settings' ? user.name : t(`nav.${section.key}`) }}
+
+                <!--
+                    Antalet står till höger om raden (M27 · issue 245). Det
+                    ritas bara när det finns något att bearbeta, och det är
+                    samma tal i sidopanelen och i sidomenyn — raden kommer ur
+                    samma lista. En bricka och inte ett naket textelement: skalets
+                    egna prov läser radens markup, och brickan är designsystemets
+                    form för ett kort ord vid sidan av ett annat.
+                -->
+                <UiBadge
+                    v-if="section.key === 'inbox' && inboxCount > 0"
+                    state="neutral"
+                    class="ml-auto tabular-nums"
+                >
+                    {{ inboxCount }}
+                </UiBadge>
             </Link>
         </li>
 
