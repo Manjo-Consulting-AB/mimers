@@ -71,6 +71,12 @@ return [
         // is the page's own word (`todo.heading`) rather than the route's —
         // the user should meet the same words in the menu and on the page.
         'tasks' => 'To do',
+        // The way into the inbox, see M27 · issue 245 and [[ADR-0054 Inboxen]]
+        // § 7: the row sits next to the to-do view, and the label is the page's
+        // own word (`inbox.page.heading`) rather than the route's. The row
+        // carries a count — the user's unsorted tasks and files — so the shell
+        // tells her there is something to process without her opening the page.
+        'inbox' => 'Inbox',
         'containers' => 'Containers',
         // The last row of the shell's container list, see issue 677: the way
         // to create a container, drawn for every signed-in user. It carries no
@@ -214,6 +220,68 @@ return [
 
         'account' => [
             'inactive' => 'Your account has been inactive for :months months — it closes :close_at',
+        ],
+
+        /*
+         * M27 · issue 245 — the `/inbox` page, see [[ADR-0054 Inboxen]] § 4, 6
+         * and 7.
+         *
+         * **Its own `page` branch and not flat keys beside the bell's.** The
+         * keys ABOVE in
+         * this block are the notification clock's (issue 127): `inbox.label`
+         * and `inbox.empty` are already the bell's, and NotificationBell reads
+         * them, plus SprakTest pins them. The page is a different thing that
+         * happens to share the word — a place to catch and sort, not the
+         * bell. Nesting the page's copy keeps the two apart, and the heading
+         * is the page's own word, the same as `nav.inbox`, so the menu and the
+         * page say the same thing.
+         *
+         * **The two empty states are told apart on purpose**, the same rule as
+         * `todo.empty`: a page with nothing caught yet is not a page whose
+         * rows were filtered away. Neither sentence mentions a number or hints
+         * that anything was left out (issue 73 decision 6).
+         *
+         * **The three list words are NOT repeated here.** Next, Waiting and
+         * Someday already live in `todo.list.*` (M26 · issue 236) and are the
+         * same four column values (ADR-0052 § 1) — a second copy would be a
+         * second truth about what the lists are called.
+         */
+        'page' => [
+            'title' => 'Inbox',
+            'heading' => 'Inbox',
+
+            'tasks_heading' => 'Tasks',
+            'empty_tasks' => 'Nothing to process.',
+            'attachments_heading' => 'Files',
+            'empty_attachments' => 'No files here.',
+
+            'capture' => [
+                'task_label' => 'New task',
+                'task_placeholder' => 'What needs doing?',
+                'task_submit' => 'Add task',
+                'files_label' => 'Add files',
+                'files_hint' => 'Documents and images. Pick one or more.',
+                'files_submit' => 'Add files',
+            ],
+
+            // The task row: *Process…* opens the item picker (issue 242) and
+            // then the small step with the list and an optional date
+            // (ADR-0054 § 6).
+            'process' => 'Process…',
+            'process_heading' => 'Where does it belong?',
+            'list_label' => 'List',
+            'due_label' => 'Date',
+            'due_none' => 'No date',
+            'process_confirm' => 'Process',
+
+            // The file rows: a checkbox each, and *Move selected…* opens the
+            // same picker. The error the server answers with is drawn above
+            // the list under `move_error`.
+            'move_selected' => 'Move selected…',
+            'selected_count' => ':count selected',
+            'move_heading' => 'Where do the files belong?',
+            'move_confirm' => 'Move',
+            'move_error' => 'The files could not be moved.',
         ],
     ],
 
@@ -496,6 +564,17 @@ return [
         'attachment-in-inbox' => 'The attachment is back in the inbox.',
         'schedule-processed' => 'The task has been processed.',
 
+        // M27 · issue 245. The three writes on `/inbox` get one sentence each,
+        // for the same reason as the loan's and the cost's three: catching a
+        // task, catching files and moving files out are three different
+        // things, and "saved" would answer none of them. The keys sit here
+        // under `flash` and not under `inbox` because FlashMessage reads
+        // `flash.<code>` and nothing else (issue 51 decision 5) — the copy is
+        // the mechanism's, not the page's.
+        'inbox-task-captured' => 'The task is in your inbox.',
+        'inbox-files-captured' => 'The files are in your inbox.',
+        'inbox-attachments-processed' => 'The files have been moved.',
+
         // Issue 63b decisions 5 and 8. Checking off and skipping get one
         // sentence each: they close the same row but say different things
         // about the work, and a shared "the occurrence is closed" would make
@@ -590,6 +669,14 @@ return [
             // hit this is a hand-made request — or a second tap before the
             // page redrew.
             'already_in_inbox' => 'The file is already in the inbox.',
+
+            // M27 · issue 245 · [[ADR-0054 Inboxen]] § 6: processing files
+            // that do not all lie in the user's OWN inbox. One code for the
+            // whole batch — a missing ULID, a file on a real item and a file
+            // in someone else's inbox are the same answer, and the request is
+            // refused whole: nothing is moved. The sentence says what the
+            // action needs, not which file was wrong.
+            'not_in_inbox' => 'Only files in your own inbox can be processed.',
         ],
 
         // Issue 62a decision 7: `RestoreContent` throws `trash.parent_deleted`

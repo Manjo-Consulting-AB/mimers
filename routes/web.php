@@ -98,6 +98,41 @@ Route::get('/tasks', [TodoController::class, 'index'])
     ->name('tasks');
 
 /*
+ * Issue 245 (M27) · Sidan `/inbox` och dess tre fångst- och
+ * bearbetningsrutter, se App\Http\Controllers\InboxController och
+ * [[ADR-0054 Inboxen]] § 4, 6, 7 och 8.
+ *
+ * **Sidan skapar ingen inbox.** `GET /inbox` läser användarens inbox-item och
+ * visar tomma listor när den saknas; containern skapas först när något fångas
+ * (`ResolveInbox::handle()` i de två fångstrutterna, ADR-0054 § 1).
+ *
+ * **Ingen container i adressen.** Inboxen hör inte till någon container, och
+ * det finns ingen `{container}`-parameter att scope-binda mot — varken sidan
+ * eller handlingarna. Uppgifterna och bilagorna är användarens EGNA, och
+ * åtkomsten prövas av `inbox_user_id` (ADR-0054 § 2) i kontrollern och i
+ * actionerna.
+ *
+ * Svaren är `back()`: formulären står på `/inbox`, och sidan ritas om ur
+ * serverns svar. Ett domänfel blir ett fältfel — på `files`, `attachments`
+ * eller `schedule` — och ritas över listan.
+ */
+Route::get('/inbox', [InboxController::class, 'index'])
+    ->middleware('auth')
+    ->name('inbox');
+
+Route::post('/inbox/tasks', [InboxController::class, 'storeTask'])
+    ->middleware('auth')
+    ->name('inbox.tasks.store');
+
+Route::post('/inbox/attachments', [InboxController::class, 'storeAttachments'])
+    ->middleware('auth')
+    ->name('inbox.attachments.store');
+
+Route::post('/inbox/attachments/process', [InboxController::class, 'processAttachments'])
+    ->middleware('auth')
+    ->name('inbox.attachments.process');
+
+/*
  * Issue 244 (M27) · Bearbetningen av en uppgift i inboxen, se
  * App\Http\Controllers\InboxController och App\Actions\Inbox\ProcessInboxTask,
  * [[ADR-0054 Inboxen]] § 6.

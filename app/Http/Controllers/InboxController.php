@@ -2,46 +2,245 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Attachment\StoreAttachment;
+use App\Actions\Inbox\ProcessInboxAttachments;
 use App\Actions\Inbox\ProcessInboxTask;
+use App\Actions\Inbox\ResolveInbox;
+use App\Actions\Schedule\CreateSchedule;
+use App\Actions\Schedule\ListTodo;
 use App\Exceptions\Api\ApiException;
+use App\Http\Requests\Inbox\ProcessInboxAttachmentsRequest;
 use App\Http\Requests\Inbox\ProcessInboxTaskRequest;
+use App\Http\Requests\Inbox\StoreInboxAttachmentsRequest;
+use App\Http\Requests\Inbox\StoreInboxTaskRequest;
+use App\Http\Resources\AttachmentResource;
+use App\Models\Attachment;
 use App\Models\Item;
 use App\Models\Schedule;
+use App\Support\Files\FileOrigin;
 use App\Support\Frontend\ApiErrorTranslator;
+use App\Support\Plan\Entitlements;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
+use RuntimeException;
 
 /**
- * Bearbetningen av en uppgift i inboxen — `POST /inbox/tasks/{schedule}/
- * process`, M27 · issue 244, se App\Actions\Inbox\ProcessInboxTask och
- * [[ADR-0054 Inboxen]] § 6.
+ * Inboxen — sidan `/inbox` och dess fyra handlingar. M27 · issue 244 och 245,
+ * se [[ADR-0054 Inboxen]] § 4, 6, 7 och 8.
  *
- * **En rutt och ingen sida.** Sidan `/inbox` kommer i issue 245; hit når
- * bara formuläret som redan står där, och svaret är `back()` — användaren
- * står kvar i kön och nästa uppgift ligger överst.
+ * **Sidan skapar ingen inbox.** `index` läser användarens inbox-item genom
+ * App\Actions\Inbox\ResolveInbox::existing() och visar tomma listor när den
+ * saknas — att läsa en vy ska inte skapa en container (ADR-0054 § 1; issue
+ * 244:s `ListTodo::inboxItemId()` ställer samma fråga för `/tasks`). Den
+ * skapas först när något FÅNGAS: `storeAttachments` och `storeTask` kallar
+ * `ResolveInbox::handle()`, som skapar den i en transaktion.
  *
- * **Grindarna är desamma som för en flytt** (ADR-0053 § 2): `delete` på
- * KÄLLAN — uppgiften lämnar sin plats — och `create` på MÅLET. Källan är
- * schemats item, och `{schedule}` binds globalt på ULID (ingen container i
- * adressen): ett schema i någon annans inbox finns, men `delete` på dess item
- * svarar 403, och ett schema utanför användarens egen inbox nekas av actionen
- * med 422 `schedule.not_in_inbox`.
+ * **Uppgifterna kommer ur ListTodo**, samma urval och samma radform som
+ * `/tasks` (issue 64, issue 237, M27 · issue 244): `list: inbox` är de aktiva
+ * förekomsterna på användarens inbox-item, och raden är `TodoEntryResource`
+ * med `can`, `account` och `cover` bredvid. Vyn ritar dem och räknar
+ * ingenting.
  *
- * **Källitemet läses null-säkert.** Ett schema vars item är mjukraderat har
- * ingen `$schedule->item` att pröva grinden på; en rå `Gate::authorize` hade
- * gett 500. `withTrashed()` ser raden och 404:ar, samma svar som en ULID som
- * aldrig funnits.
+ * **Bilagorna är inbox-itemets bilagor**, nyast först — samma sortering och
+ * samma `AttachmentResource` som itemets detaljvy (issue 60 § Beslut 2) — med
+ * `variants` och `inlineEnabled` BREDVID resursen, precis som i
+ * App\Http\Controllers\ContainerDocumentController: miniatyren ritas bara när
+ * servern säger att varianten finns (issue 61b § Beslut 1).
+ *
+ * **Grindarna är desamma som för en flytt** ([[ADR-0053 Flytt och kopiering]]
+ * § 2) i varje skrivning: `delete` på KÄLLAN och `create` på MÅLET. Källan är
+ * för uppgiften schemats item — läst null-säkert, så ett mjukraderat item ger
+ * 404 och inte 500 — och för bilagorna användarens inbox-item.
  *
  * **Ett domänfel blir ett formulärfel, aldrig en JSON-kropp** — samma mönster
- * som ScheduleController::move(): `schedule.not_in_inbox`,
- * `schedule.has_dependencies`, `schedule.same_item` och
- * `schedule.not_a_valid_target` ritas på fältet `schedule`.
+ * som AttachmentController::move(): `schedule.*` ritas på fältet `schedule`,
+ * `attachment.*` och kvotfelet på fältet `attachments` (eller `files` vid
+ * uppladdningen), och felet ritas över listan i vyn.
  */
 class InboxController extends Controller
 {
     /**
+     * GET /inbox — 200. Användarens obearbetade uppgifter och bilagor.
+     *
+     * **Tomma listor utan en inbox** (ADR-0054 § 1): sidan skapar den inte,
+     * och en användare som ännu inte fångat något möts av de tomma lägena.
+     */
+    public function index(Request $request, ListTodo $listTodo, ResolveInbox $resolveInbox): Response
+    {
+        $user = $request->user();
+        $inbox = $resolveInbox->existing($user);
+
+        $attachments = $inbox === null
+            ? new Collection
+            : $inbox->attachments()
+                ->with(['storedFile.derivatives', 'billedAccount'])
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get();
+
+        return Inertia::render('Inbox/Index', [
+            // `list: inbox` är samma fråga som fliken *Inbox* på `/tasks`
+            // (issue 244): aktiva förekomster på användarens inbox-item.
+            'tasks' => $listTodo->handle($user, $request, list: ListTodo::LIST_INBOX)['rows'],
+            'attachments' => AttachmentResource::collection($attachments)->resolve($request),
+            // Bilagans ULID → de varianter som finns, och flaggan för inline
+            // leverans — samma två proppar som dokumentfliken, så miniatyren
+            // ritas ur samma regel (issue 61b § Beslut 1 och 2).
+            'variants' => $this->variants($attachments),
+            'inlineEnabled' => FileOrigin::host() !== null,
+            // Att fånga är alltid tillåtet för den inloggade: rutten ligger
+            // bakom `auth`, och inboxen är hennes egen (ADR-0054 § 2). Utan en
+            // inbox skapas den av fångsten.
+            'can' => ['capture' => true],
+        ]);
+    }
+
+    /**
+     * POST /inbox/attachments — 302 tillbaka till `/inbox`.
+     *
+     * En eller flera filer, ett `StoreAttachment::handle()` per fil: hashen,
+     * sniffningen, dedupen och referensräkningen bor i actionen och skrivs
+     * inte om här. `ResolveInbox` körs först — fångsten skapar inboxen.
+     *
+     * **Kvoten och storleksgränsen är personkontots** (ADR-0054 § 3), och
+     * kontot bestäms av servern: det är inboxens ägarkonto. Klienten skickar
+     * inget konto.
+     *
+     * Ordningen är itemets uppladdnings: den billiga storleksspärren, sedan
+     * den billiga kvotspärren, sist skrivningen — som prövar kvoten en gång
+     * till, auktoritativt, i sin egen transaktion.
+     */
+    public function storeAttachments(
+        StoreInboxAttachmentsRequest $request,
+        ResolveInbox $resolveInbox,
+        StoreAttachment $storeAttachment,
+        Entitlements $entitlements,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        $user = $request->user();
+        $inbox = $resolveInbox->handle($user);
+        $account = $inbox->container->account;
+
+        /** @var list<UploadedFile> $files */
+        $files = $request->file('files');
+
+        try {
+            foreach ($files as $file) {
+                $byteSize = $file->getSize();
+
+                if ($byteSize === false) {
+                    throw new RuntimeException('Den mottagna filen kunde inte läsas.');
+                }
+
+                $entitlements->assertFileWithinLimit($account, $byteSize);
+                $entitlements->assertStorageWithinLimit($account, $byteSize);
+
+                $storeAttachment->handle(
+                    item: $inbox,
+                    file: $file,
+                    user: $user,
+                    account: $account,
+                );
+            }
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['files' => $translator->message($e)]);
+        }
+
+        return back()->with('status', 'inbox-files-captured');
+    }
+
+    /**
+     * POST /inbox/tasks — 302 tillbaka till `/inbox`.
+     *
+     * **Bara en titel** (ADR-0054 § 8): uppgiften fångas utan plats, och
+     * schemat blir `none` utan datum. `CreateSchedule` sätter `gtd_list` till
+     * null på förekomsten och `default_gtd_list` till null på schemat, just
+     * för att itemet ligger i en inbox (ADR-0054 § 5, issue 244) — den regeln
+     * bor i actionen och upprepas inte här.
+     */
+    public function storeTask(
+        StoreInboxTaskRequest $request,
+        ResolveInbox $resolveInbox,
+        CreateSchedule $createSchedule,
+    ): RedirectResponse {
+        $user = $request->user();
+        $inbox = $resolveInbox->handle($user);
+
+        $createSchedule->handle(
+            $inbox,
+            $user,
+            new Schedule([
+                'title' => $request->validated('title'),
+                'recurrence_type' => 'none',
+                'is_active' => true,
+            ]),
+            null,
+        );
+
+        return back()->with('status', 'inbox-task-captured');
+    }
+
+    /**
+     * POST /inbox/attachments/process — 302 tillbaka till `/inbox`.
+     *
+     * Flera bilagor till SAMMA item. Grindarna är flyttens: `delete` på
+     * källan — användarens inbox-item — och `create` på målet. Finns ingen
+     * inbox finns ingenting att bearbeta, och svaret är samma 422 som en
+     * bilaga utanför inboxen (ADR-0054 § 6).
+     *
+     * Kvotsumman, låset och "allt eller inget" bor i
+     * App\Actions\Inbox\ProcessInboxAttachments.
+     */
+    public function processAttachments(
+        ProcessInboxAttachmentsRequest $request,
+        ResolveInbox $resolveInbox,
+        ProcessInboxAttachments $processInboxAttachments,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        $user = $request->user();
+        $inbox = $resolveInbox->existing($user);
+
+        if ($inbox === null) {
+            throw ValidationException::withMessages([
+                'attachments' => $translator->message(ApiException::make('attachment.not_in_inbox', [], 422)),
+            ]);
+        }
+
+        Gate::authorize('delete', $inbox);
+
+        $target = $request->targetItem();
+
+        Gate::authorize('create', $target);
+
+        try {
+            $processInboxAttachments->handle($user, $target, $request->validated('attachments'));
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['attachments' => $translator->message($e)]);
+        }
+
+        return back()->with('status', 'inbox-attachments-processed');
+    }
+
+    /**
      * POST /inbox/tasks/{schedule}/process — 302 tillbaka.
+     *
+     * Bearbetningen av en uppgift: välj item, lista och datum. Grindarna är
+     * flyttens — `delete` på KÄLLAN och `create` på MÅLET. Källan är schemats
+     * item, och `{schedule}` binds globalt på ULID (ingen container i
+     * adressen): ett schema i någon annans inbox finns, men `delete` på dess
+     * item svarar 403, och ett schema utanför användarens egen inbox nekas av
+     * actionen med 422 `schedule.not_in_inbox`.
+     *
+     * **Källitemet läses null-säkert.** Ett schema vars item är mjukraderat
+     * har ingen `$schedule->item` att pröva grinden på; en rå
+     * `Gate::authorize` hade gett 500. `withTrashed()` ser raden och 404:ar,
+     * samma svar som en ULID som aldrig funnits.
      */
     public function process(
         ProcessInboxTaskRequest $request,
@@ -72,5 +271,31 @@ class InboxController extends Controller
         }
 
         return back()->with('status', 'schedule-processed');
+    }
+
+    /**
+     * Bilagans ULID → de varianter som faktiskt finns, byggd ur de
+     * eager-laddade relationerna — samma hjälpare som
+     * App\Http\Controllers\ItemController::variants() och
+     * ContainerDocumentController::variants(), och av samma skäl: en bilaga
+     * utan derivat får en TOM lista och inte en utelämnad nyckel, så vyns
+     * uppslag är detsamma för alla rader.
+     *
+     * @param  Collection<int, Attachment>  $attachments
+     * @return array<string, list<string>>
+     */
+    private function variants(Collection $attachments): array
+    {
+        $variants = [];
+
+        foreach ($attachments as $attachment) {
+            $variants[$attachment->ulid] = $attachment->storedFile->derivatives
+                ->pluck('variant')
+                ->sort()
+                ->values()
+                ->all();
+        }
+
+        return $variants;
     }
 }

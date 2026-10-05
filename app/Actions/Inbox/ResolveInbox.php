@@ -67,8 +67,15 @@ class ResolveInbox
 
     /**
      * Inbox-itemet om både containern och itemet finns, annars null.
+     *
+     * **Offentlig med flit** (M27 · issue 245): den som bara ska LÄSA inboxen —
+     * `GET /inbox` och bearbetningen av bilagor — får inte skapa den. Att läsa
+     * en vy ska inte skapa en container, och det här är den enda vägen till
+     * uppslaget som inte går genom `handle()`. `ListTodo::inboxItemId()` ställer
+     * samma fråga för `/tasks`-vyn och kan inte återanvända den här (den ligger
+     * i `app/Actions/Schedule/`, utanför den här issuen).
      */
-    private function existing(User $user): ?Item
+    public function existing(User $user): ?Item
     {
         $container = $this->containerFor($user);
 
