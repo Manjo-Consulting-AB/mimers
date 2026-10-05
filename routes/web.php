@@ -1000,6 +1000,30 @@ Route::middleware('auth')->group(function () {
         ->name('containers.items.attachments.destroy');
 
     /*
+     * Issue 242 · Flytten och kopian — se App\Http\Controllers\
+     * AttachmentController::move()/copy() och [[ADR-0053 Flytt och
+     * kopiering]].
+     *
+     * Två rutter och SAMMA `scopeBindings()` som `destroy` ovan: `{attachment}`
+     * binds genom App\Models\Item::attachments(), så en bilaga på ett annat
+     * item ger 404. Målet står däremot i KROPPEN (`target`, ett item-ULID) och
+     * kan ligga i en annan container — det går inte att scope-binda, och
+     * App\Http\Requests\TargetItemRequest slår upp det globalt (404 för en
+     * ULID som saknas eller är mjukraderad).
+     *
+     * Båda svarar `back()` med en flash-kod, som uppladdningen och raderingen
+     * (issue 60 § Beslut 5), och ett kvotfel blir ett fältfel på `attachment`
+     * i stället för en JSON-kropp.
+     */
+    Route::post('/containers/{container}/items/{item}/attachments/{attachment}/move', [AttachmentController::class, 'move'])
+        ->scopeBindings()
+        ->name('containers.items.attachments.move');
+
+    Route::post('/containers/{container}/items/{item}/attachments/{attachment}/copy', [AttachmentController::class, 'copy'])
+        ->scopeBindings()
+        ->name('containers.items.attachments.copy');
+
+    /*
      * Issue 63a · Schemat som regel — formulären, pausen och raderingen, se
      * App\Http\Controllers\ScheduleController.
      *

@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Attachment\CopyAttachment;
+use App\Actions\Attachment\MoveAttachment;
 use App\Actions\Attachment\StoreAttachment;
 use App\Actions\Attachment\TrashAttachment;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Attachment\StoreAttachmentRequest;
+use App\Http\Requests\TargetItemRequest;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
@@ -152,5 +155,83 @@ class AttachmentController extends Controller
         $trashAttachment->handle($attachment, $request->user());
 
         return back()->with('status', 'attachment-deleted');
+    }
+
+    /**
+     * POST /containers/{container}/items/{item}/attachments/{attachment}/move
+     * — 302 tillbaka till itemets detaljvy.
+     *
+     * **Två grindar, och pinnen skiljer sig från raderingens** ([[ADR-0053
+     * Flytt och kopiering]] § 2): `delete` på KÄLLANS item — en flytt tar
+     * bort något därifrån, och en `write`-mottagare ska inte kunna tömma ett
+     * item genom att flytta allt — och `create` på MÅLETS. Båda prövas innan
+     * actionen rör något, och `delete` först: en anropare som inte får flytta
+     * från källan ska inte kunna sondera vilka mål som finns.
+     *
+     * Målet kommer ur kroppens `target` och slås upp av
+     * App\Http\Requests\TargetItemRequest — en ULID som inte finns eller är
+     * mjukraderad ger 404, inte ett valideringsfel (ADR-0053 § 8).
+     *
+     * Kvotfelet (`quota.storage_exceeded`, när den nya ägarens kvot inte
+     * räcker) ritas som fältfel på `attachment`, inte som en JSON-kropp mitt
+     * i sidan — samma väg som uppladdningens filfel (Beslut 5 i issue 60).
+     */
+    public function move(
+        TargetItemRequest $request,
+        Container $container,
+        Item $item,
+        Attachment $attachment,
+        MoveAttachment $moveAttachment,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('delete', $item);
+
+        $target = $request->targetItem();
+
+        Gate::authorize('create', $target);
+
+        try {
+            $moveAttachment->handle($attachment, $target, $request->user());
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['attachment' => $translator->message($e)]);
+        }
+
+        return back()->with('status', 'attachment-moved');
+    }
+
+    /**
+     * POST /containers/{container}/items/{item}/attachments/{attachment}/copy
+     * — 302 tillbaka till itemets detaljvy.
+     *
+     * Grindarna är `view` på KÄLLAN och `create` på MÅLET ([[ADR-0053 Flytt
+     * och kopiering]] § 2): kopian rör inte originalet, så `delete` krävs
+     * inte — den som bara får läsa får kopiera vidare, och den som får skriva
+     * på målet får lägga den där.
+     *
+     * Kvoten prövas alltid, även inom samma konto: kopian är en ny bilaga med
+     * hela sin logiska storlek (ADR-0053 § 4). Felet ritas på `attachment`,
+     * som vid uppladdning och flytt.
+     */
+    public function copy(
+        TargetItemRequest $request,
+        Container $container,
+        Item $item,
+        Attachment $attachment,
+        CopyAttachment $copyAttachment,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('view', $item);
+
+        $target = $request->targetItem();
+
+        Gate::authorize('create', $target);
+
+        try {
+            $copyAttachment->handle($attachment, $target, $request->user());
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['attachment' => $translator->message($e)]);
+        }
+
+        return back()->with('status', 'attachment-copied');
     }
 }
