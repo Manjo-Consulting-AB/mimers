@@ -135,6 +135,28 @@ it('fångar en fil i inboxen och belastar personkontot', function () {
     expect(inboxSidaForbrukning($konto))->toBe(strlen($innehåll));
 });
 
+it('nekar hela satsen när kvoten inte räcker för summan och skriver ingen fil', function () {
+    withoutVite();
+
+    [$person, $konto] = inboxSidaKontext();
+
+    // Kvoten räcker för den ena filen men inte för båda: 100 + 200 > 250.
+    // Summan prövas FÖRE den första skrivningen, så ingenting hamnar i
+    // inboxen — utan den prövningen hade fil 1 skrivits och fil 2 fällt
+    // satsen, och användaren mötts av ett fel och en halvfylld inbox.
+    sättPlangräns('free', 'storage_bytes', 250);
+
+    $första = UploadedFile::fake()->createWithContent('ett.pdf', str_repeat('a', 100));
+    $andra = UploadedFile::fake()->createWithContent('två.pdf', str_repeat('b', 200));
+
+    from('/inbox')->actingAs($person)->post('/inbox/attachments', [
+        'files' => [$första, $andra],
+    ])->assertSessionHasErrors(['files']);
+
+    expect(Attachment::query()->count())->toBe(0);
+    expect(inboxSidaForbrukning($konto))->toBe(0);
+});
+
 it('fångar en uppgift med bara titel', function () {
     withoutVite();
 
@@ -314,10 +336,21 @@ it('en annan användare ser inte min inbox', function () {
     $andra = User::factory()->create();
     $konto->users()->attach($andra, ['role' => 'member']);
 
+    // Hon fångar sitt EGET: en uppgift i sin egen inbox. Provet bevisar alltså
+    // inte bara "tomt utan inbox" — hennes rad SYNS, och mina gör det inte.
+    from('/inbox')->actingAs($andra)->post('/inbox/tasks', ['title' => 'Hennes egen']);
+
     actingAs($andra)->get('/inbox')
         ->assertOk()
         ->assertInertia(fn ($page) => $page
             ->component('Inbox/Index')
-            ->has('tasks', 0)
+            ->has('tasks', 1)
+            ->where('tasks.0.schedule.title', 'Hennes egen')
             ->has('attachments', 0));
+
+    // Talet i sidopanelen är hennes eget — en uppgift, inte mina två rader
+    // (uppgiften och bilagan) — så siffran läcker inte mellan användare.
+    actingAs($andra)->get('/dashboard')
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page->where('inboxCount', 1));
 });

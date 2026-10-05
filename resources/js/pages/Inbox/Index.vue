@@ -155,6 +155,15 @@ function submitProcess() {
 const selected = ref([]);
 const moveForm = useForm({ target: '', attachments: [] });
 
+/* Elementfelen (`attachments.0`, `attachments.1`, …) ur `distinct` och
+ * `string` i App\Http\Requests\Inbox\ProcessInboxAttachmentsRequest. Det
+ * samlade felet ligger på `attachments` och ritas först; de här kommer bara
+ * ur ett handgjort anrop, men listan ska visa dem också i stället för att
+ * tiga om vilken rad som var fel. */
+const attachmentElementErrors = computed(() => Object.entries(moveForm.errors)
+    .filter(([key]) => key.startsWith('attachments.'))
+    .map(([, message]) => message));
+
 /* Raderna: storleken formaterad och förhandsvisningen räknad, som i
  * dokumentfliken — `attachmentPreview()` läser `variants` och `inlineEnabled`
  * och vyn gissar ingenting (issue 61b § Beslut 1). */
@@ -273,6 +282,24 @@ function onTargetChosen(item) {
                 </li>
             </ul>
 
+            <!-- Ett domänfel ur bearbetningen är ett formulärfel och ritas
+                 ÖVER steget (ADR-0054 § 6): `schedule.*` för ett mål som inte
+                 går att flytta till, `target` för ett ogiltigt mål. Utan den
+                 här raden nekas bearbetningen tyst — felet hamnade på ett fält
+                 vyn inte läste. -->
+            <p
+                v-if="processForm.errors.schedule || processForm.errors.target"
+                class="mt-4 flex flex-col"
+                role="alert"
+            >
+                <span v-if="processForm.errors.schedule" class="text-body text-danger">
+                    {{ processForm.errors.schedule }}
+                </span>
+                <span v-if="processForm.errors.target" class="text-body text-danger">
+                    {{ processForm.errors.target }}
+                </span>
+            </p>
+
             <!-- Steget efter målväljaren: listan (förvalt *Next*) och ett
                  frivilligt datum. -->
             <form
@@ -316,7 +343,11 @@ function onTargetChosen(item) {
                     />
                 </FormField>
 
-                <p class="text-meta text-ink-muted">{{ t('inbox.page.due_none') }}</p>
+                <!-- Bara när datumet är tomt: en permanent *No date* under ett
+                     valt datum är en motsägelse. -->
+                <p v-if="!processForm.due_at" class="text-meta text-ink-muted">
+                    {{ t('inbox.page.due_none') }}
+                </p>
 
                 <UiButton type="submit" :pending="processForm.processing">
                     {{ processForm.processing ? t('common.pending.default') : t('inbox.page.process_confirm') }}
@@ -329,9 +360,23 @@ function onTargetChosen(item) {
             <h2 class="text-title font-semibold text-ink">{{ t('inbox.page.attachments_heading') }}</h2>
 
             <!-- Felet ritas ÖVER listan (ADR-0054 § 6): hela satsen nekas, och
-                 meningen säger varför. -->
-            <p v-if="moveForm.errors.attachments" class="mt-2 flex flex-col" role="alert">
-                <span class="text-body text-danger">{{ moveForm.errors.attachments }}</span>
+                 meningen säger varför. Elementfelen (`attachments.N`) hör hit
+                 de med. -->
+            <p
+                v-if="moveForm.errors.attachments || attachmentElementErrors.length > 0"
+                class="mt-2 flex flex-col"
+                role="alert"
+            >
+                <span v-if="moveForm.errors.attachments" class="text-body text-danger">
+                    {{ moveForm.errors.attachments }}
+                </span>
+                <span
+                    v-for="(message, index) in attachmentElementErrors"
+                    :key="index"
+                    class="text-body text-danger"
+                >
+                    {{ message }}
+                </span>
             </p>
 
             <p v-if="attachments.length === 0" class="mt-2 text-body text-ink-muted">

@@ -112,9 +112,18 @@ class InboxController extends Controller
      * kontot bestäms av servern: det är inboxens ägarkonto. Klienten skickar
      * inget konto.
      *
-     * Ordningen är itemets uppladdnings: den billiga storleksspärren, sedan
-     * den billiga kvotspärren, sist skrivningen — som prövar kvoten en gång
-     * till, auktoritativt, i sin egen transaktion.
+     * Ordningen är itemets uppladdnings, men i TVÅ steg: först den billiga
+     * styckesspärren och SUMMAN, sedan skrivningarna — som prövar kvoten en
+     * gång till var, auktoritativt, i sin egen transaktion.
+     *
+     * **Kvotspärren gäller hela satsen och står FÖRE den första skrivningen.**
+     * Fångsten är inte "allt eller inget" — en fil i taget skrivs av
+     * `StoreAttachment` — men utan en gemensam prövning hade en sats vars
+     * summa spräcker kvoten lämnat fil 1–2 i inboxen och svarat med ett fel på
+     * `files`: användaren ser ett fel och en halvfylld inbox. En enda
+     * `assertStorageWithinLimit($account, summan)` gör svaret begripligt och
+     * speglar App\Actions\Inbox\ProcessInboxAttachments, som prövar sin summa
+     * på samma sätt (ADR-0054 § 6).
      */
     public function storeAttachments(
         StoreInboxAttachmentsRequest $request,
@@ -131,6 +140,9 @@ class InboxController extends Controller
         $files = $request->file('files');
 
         try {
+            // Först: storlekarna, den billiga styckespärren och summan.
+            $totalBytes = 0;
+
             foreach ($files as $file) {
                 $byteSize = $file->getSize();
 
@@ -139,8 +151,15 @@ class InboxController extends Controller
                 }
 
                 $entitlements->assertFileWithinLimit($account, $byteSize);
-                $entitlements->assertStorageWithinLimit($account, $byteSize);
 
+                $totalBytes += $byteSize;
+            }
+
+            // Kvoten prövas EN gång för hela satsen, innan den första
+            // skrivningen. Kastet nekar allt och ingenting har skrivits.
+            $entitlements->assertStorageWithinLimit($account, $totalBytes);
+
+            foreach ($files as $file) {
                 $storeAttachment->handle(
                     item: $inbox,
                     file: $file,
