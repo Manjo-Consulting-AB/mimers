@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import GtdListPanel from '../../components/GtdListPanel.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
@@ -218,13 +218,58 @@ function apply() {
  */
 const calendarUrl = () => `/containers/${props.container.ulid}/calendar`;
 const exportUrl = () => `/containers/${props.container.ulid}/export`;
+
+/*
+ * *New task* (M27 · issue 246 § Beslut 2). Fliken är en av de tre ytorna som
+ * bär knappen, och den leder till formuläret med INBOXEN förvald: en container
+ * är inte ett item, så det finns ingen plats att ärva. Användaren byter med
+ * *Change…* (resources/js/pages/Tasks/Create.vue).
+ *
+ * Adressen bär `return` med den här sidan (Beslut 3), så svaret landar i
+ * samma flik — `page.url` är adressen med sin querysträng, och listan och
+ * underhållsfiltret man står i följer därför med tillbaka.
+ *
+ * **Det är en `<Link>` och inte en `<UiButton>`.** Knappen navigerar, och
+ * GenomgangTest tillåter bara `<Link>` bland komponenttaggarna: en `@click` på
+ * en komponent är en klickyta provet inte kan se är tabbbar. Klasserna är
+ * `UiButton`s `primary`, så formen är densamma som i designsystemet.
+ */
+const page = usePage();
+
+const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page.url)}`);
 </script>
 
 <template>
     <ContainerLayout hero="compact" :container="container" :can="can">
         <Head :title="t('container.tasks.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('container.tasks.heading') }}</h1>
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <h1 class="text-2xl font-semibold">{{ t('container.tasks.heading') }}</h1>
+
+            <!-- *New task* (M27 · issue 246 § Beslut 2). Knappen ritas alltid:
+                 inboxen är alltid ett möjligt mål, och containern behöver
+                 därför ingen `can`-flagga. -->
+            <Link
+                :href="createUrl"
+                class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="mr-2 h-4 w-4"
+                    aria-hidden="true"
+                >
+                    <path d="M12 5v14"></path>
+                    <path d="M5 12h14"></path>
+                </svg>
+
+                {{ t('todo.new') }}
+            </Link>
+        </div>
 
         <!--
             Flikraden (Beslut 4). Listan står i adressen, och `UiTabs` tänder

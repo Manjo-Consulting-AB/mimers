@@ -3830,6 +3830,20 @@ return [
         // försvinnande.
         'blocked' => 'Blocked',
 
+        // M27 · issue 246: knappen som skapar en uppgift utanför ett item, och
+        // formuläret den leder till. `todo.new` är knappens ord på alla tre
+        // ytorna (itemets flik, containerns flik och `/tasks`); `todo.create.*`
+        // är formulärets — platsen, de två valen i den och sidans titel.
+        // *Inbox* är samma ord som `todo.list.inbox`, med flit: det är samma
+        // plats, och två ord för den hade lärt användaren två begrepp.
+        'new' => 'New task',
+        'create' => [
+            'title' => 'New task',
+            'place' => 'Place',
+            'inbox' => 'Inbox',
+            'change' => 'Change…',
+        ],
+
         // The section headings. The key is the group's name, the same words
         // the controller sorts the rows into — no separate list in
         // JavaScript that could drift from the server's.

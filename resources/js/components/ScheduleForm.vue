@@ -52,7 +52,9 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * förekomsten hamnar i och skickar `gtd_list`; vid REDIGERING visas *Default
  * list for new occurrences* och skickar schemats `default_gtd_list`. Bara det
  * ena fältet finns i `fields`, så en skapande POST bär aldrig
- * `default_gtd_list` och en PATCH aldrig `gtd_list`.
+ * `default_gtd_list` och en PATCH aldrig `gtd_list`. På `/tasks/create` med
+ * platsen *Inbox* döljs fältet helt (`showList`, issue 246): uppgiften har
+ * ingen lista (ADR-0054 § 5).
  *
  * **`inbox` är inget val** ([[ADR-0054 Inboxen]] § 5): inboxen är en plats och
  * inte en lista, och en uppgift som skapas på ett inbox-item är obearbetad —
@@ -88,6 +90,32 @@ const props = defineProps({
      * datum.
      */
     openDueAt: { type: String, default: null },
+    /*
+     * Adressen en SKAPANDE POST går till. `null` — förvalet — är itemets egen
+     * väg, `/containers/{container}/items/{item}/schedules`, som är den enda
+     * som funnits. Sidan `/tasks/create` (M27 · issue 246) skickar
+     * `/inbox/tasks` när platsen är *Inbox*: uppgiften har då ingen plats i
+     * adressen, och den befintliga fångstrutten är den som skriver den
+     * (ADR-0054 § 8). Formuläret självt vet ingenting om varför.
+     */
+    createUrl: { type: String, default: null },
+    /*
+     * Den relativa adressen användaren kom från, skickad som `return` i en
+     * SKAPANDE POST (issue 246 § Beslut 3). Servern validerar den — en extern
+     * värd blir `/tasks` — och svaret går tillbaka dit användaren stod. Vid
+     * REDIGERING skickas den aldrig: en PATCH går till schemats sida.
+     */
+    returnUrl: { type: String, default: null },
+    /*
+     * Om *List*-fältet ritas i ett SKAPANDE formulär. `true` — förvalet — är
+     * exakt dagens beteende: itemets egen sida (issue 63a) och redigeringen
+     * rörs inte. Sidan `/tasks/create` (M27 · issue 246) sätter den till
+     * `false` när platsen är *Inbox*: en uppgift i inboxen är obearbetad och
+     * har ingen lista ([[ADR-0054 Inboxen]] § 5), och ett fält som inte får
+     * någon verkan ska varken ritas eller skickas. Servern nollar ändå
+     * (CreateSchedule), så regeln hänger inte på klienten.
+     */
+    showList: { type: Boolean, default: true },
 });
 
 const { t } = useTranslations();
@@ -123,10 +151,21 @@ const fields = {
      * PATCH:en bär varsitt fält och aldrig båda. Förvalet är `next`: en uppgift
      * som skapas på ett riktigt item börjar där (ADR-0054 § 5), och ett schema
      * utan förval visar `next` — alternativet *Not set* finns inte längre.
+     *
+     * Är `showList` false (bara `/tasks/create` med platsen *Inbox*) finns
+     * `gtd_list` inte med alls: ett dolt fält ska inte skickas. Servern nollar
+     * ändå, så regeln hänger inte på klienten.
      */
     ...(props.schedule === null
-        ? { gtd_list: 'next' }
+        ? (props.showList ? { gtd_list: 'next' } : {})
         : { default_gtd_list: props.schedule.default_gtd_list ?? 'next' }),
+    /*
+     * Vägen tillbaka (issue 246 § Beslut 3). Nyckeln finns bara i ett
+     * SKAPANDE formulär som fått en adress: en PATCH bär den aldrig, och det
+     * gamla skapandeformuläret på itemet (issue 63a) skickar ingen `return`
+     * och får därför itemets detaljvy som förut.
+     */
+    ...(props.schedule === null && props.returnUrl !== null ? { return: props.returnUrl } : {}),
 };
 
 const form = useForm(fields);
@@ -170,15 +209,19 @@ const submitLabel = computed(() => (form.processing
     : (props.schedule === null ? t('item.schedule.create.submit') : t('item.schedule.update.submit'))));
 
 function submit() {
-    const url = `/containers/${props.containerUlid}/items/${props.itemUlid}/schedules`;
-
     if (props.schedule === null) {
-        form.post(url, { onError: focusFirstError });
+        form.post(
+            props.createUrl ?? `/containers/${props.containerUlid}/items/${props.itemUlid}/schedules`,
+            { onError: focusFirstError },
+        );
 
         return;
     }
 
-    form.patch(`${url}/${props.schedule.ulid}`, { onError: focusFirstError });
+    form.patch(
+        `/containers/${props.containerUlid}/items/${props.itemUlid}/schedules/${props.schedule.ulid}`,
+        { onError: focusFirstError },
+    );
 }
 </script>
 
@@ -221,9 +264,11 @@ function submit() {
             `fields`, så en POST och en PATCH bär aldrig samma nyckel.
             Alternativen är `todo.list.*`, samma ord som kolumnens värden —
             utom `inbox`, som är en plats och inte en lista (ADR-0054 § 5).
+            `showList` false (platsen är *Inbox* på `/tasks/create`, issue 246)
+            tar bort fältet helt — dolt OCH oskickat.
         -->
         <FormField
-            v-if="schedule === null"
+            v-if="schedule === null && showList"
             v-slot="{ describedBy }"
             :label="t('item.schedule.form.gtd_list')"
             id="gtd_list"
@@ -242,7 +287,7 @@ function submit() {
         </FormField>
 
         <FormField
-            v-else
+            v-if="schedule !== null"
             v-slot="{ describedBy }"
             :label="t('item.schedule.form.default_gtd_list')"
             id="default_gtd_list"

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Link, router } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 import TaskGroup from './TaskGroup.vue';
 import TodoRow from './TodoRow.vue';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -110,19 +110,56 @@ function apply() {
         onFinish: () => { pending.value = false; },
     });
 }
+
+/*
+ * *New task* (M27 · issue 246 § Beslut 2). Fliken är en av de tre ytorna som
+ * bär knappen, och den här är den enda som förväljer ett item: knappen bär
+ * sektionens item i adressen, så formuläret öppnas med platsen redan satt.
+ *
+ * Adressen bär `return` med den här sidan (Beslut 3), så svaret landar på
+ * itemet man stod på — `page.url` är adressen med sin querysträng, och fliken
+ * och reglaget man står i följer därför med tillbaka.
+ *
+ * **Det är en `<Link>` och inte en `<UiButton>`.** Knappen navigerar, och
+ * GenomgangTest tillåter bara `<Link>` bland komponenttaggarna: en `@click` på
+ * en komponent är en klickyta provet inte kan se är tabbbar. Klasserna är
+ * `UiButton`s `primary`, så formen är densamma som i designsystemet.
+ */
+const page = usePage();
+
+const createUrl = computed(
+    () => `/tasks/create?item=${props.itemUlid}&return=${encodeURIComponent(page.url)}`,
+);
 </script>
 
 <template>
     <section class="mt-10">
-        <div class="flex flex-wrap items-baseline gap-4">
+        <div class="flex flex-wrap items-center gap-4">
             <h2 class="text-lg font-semibold">{{ t('item.schedule.heading') }}</h2>
 
+            <!-- *New task* (M27 · issue 246 § Beslut 2): den gamla textlänken
+                 är en knapp, och den förväljer sektionens item. Grinden är
+                 `can.create` — rutten prövar samma pinne på nytt. -->
             <Link
                 v-if="can.create"
-                :href="`/containers/${containerUlid}/items/${itemUlid}/schedules/create`"
-                class="inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
+                :href="createUrl"
+                class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
-                {{ t('item.schedule.add') }}
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="mr-2 h-4 w-4"
+                    aria-hidden="true"
+                >
+                    <path d="M12 5v14"></path>
+                    <path d="M5 12h14"></path>
+                </svg>
+
+                {{ t('todo.new') }}
             </Link>
         </div>
 
