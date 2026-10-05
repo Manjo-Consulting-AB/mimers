@@ -1097,6 +1097,12 @@ it('har ingen rutt som beviljar en åtkomst i webben', function () {
         'containers/{container}/items/{item}/attachments/{attachment}/move',
         'containers/{container}/items/{item}/attachments/{attachment}/copy',
         'containers/{container}/items/{item}/schedules',
+        // Issue 240: flytten av en uppgift. Den rör inga
+        // `container_access`-rader alls — grinden är `delete` på källans item
+        // och `create` på målets, samma pinningar som bilagans flytt (issue
+        // 242). Uppgiften byter item men inte ägare; ingen ny läsare och ingen
+        // ny mottagare läggs till.
+        'containers/{container}/items/{item}/schedules/{schedule}/move',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/complete',
         'containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}/skip',
         'containers/{container}/items/{item}/schedules/{schedule}/dependencies',

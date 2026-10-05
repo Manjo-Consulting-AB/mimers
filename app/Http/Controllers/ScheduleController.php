@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Actions\Schedule\CreateSchedule;
 use App\Actions\Schedule\DeleteSchedule;
+use App\Actions\Schedule\MoveSchedule;
 use App\Actions\Schedule\UpdateSchedule;
+use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Schedule\StoreScheduleRequest;
 use App\Http\Requests\Schedule\UpdateScheduleRequest;
+use App\Http\Requests\TargetItemRequest;
 use App\Http\Resources\ContainerResource;
 use App\Http\Resources\OccurrenceDependencyResource;
 use App\Http\Resources\ScheduleDependencyResource;
@@ -17,9 +20,11 @@ use App\Models\OccurrenceDependency;
 use App\Models\Schedule;
 use App\Models\ScheduleDependency;
 use App\Models\ScheduleOccurrence;
+use App\Support\Frontend\ApiErrorTranslator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -324,6 +329,55 @@ class ScheduleController extends Controller
         return redirect()
             ->route('containers.items.show', [$container, $item])
             ->with('status', 'schedule-deleted');
+    }
+
+    /**
+     * POST /containers/{container}/items/{item}/schedules/{schedule}/move —
+     * 302 till schemats sida på det NYA itemet.
+     *
+     * **Två grindar, och pinnen skiljer sig från raderingens** ([[ADR-0053
+     * Flytt och kopiering]] § 2): `delete` på KÄLLANS item — en flytt tar bort
+     * något därifrån — och `create` på MÅLETS. Båda prövas innan actionen rör
+     * något, och `delete` först: en anropare som inte får flytta från källan
+     * ska inte kunna sondera vilka mål som finns.
+     *
+     * Målet kommer ur kroppens `target` och slås upp av
+     * App\Http\Requests\TargetItemRequest — en ULID som inte finns eller är
+     * mjukraderad ger 404, inte ett valideringsfel (ADR-0053 § 8). Målet kan
+     * ligga i en annan container än ruttens `{container}`.
+     *
+     * Svaret går till schemats sida och inte tillbaka till källan:
+     * uppgiften ligger inte kvar där, och `back()` hade landat på en sida som
+     * inte längre visar den. Flashkoden säger vad som hände — ingen papperskorg
+     * och inget ångra.
+     *
+     * Domänfelet (beroenden mellan containrar, samma item) ritas som ett
+     * fältfel på `schedule`, aldrig som en JSON-kropp mitt i sidan — samma väg
+     * som bilagans flytt (issue 60 § Beslut 5 och issue 242).
+     */
+    public function move(
+        TargetItemRequest $request,
+        Container $container,
+        Item $item,
+        Schedule $schedule,
+        MoveSchedule $moveSchedule,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        Gate::authorize('delete', $item);
+
+        $target = $request->targetItem();
+
+        Gate::authorize('create', $target);
+
+        try {
+            $moveSchedule->handle($schedule, $target, $request->user());
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['schedule' => $translator->message($e)]);
+        }
+
+        return redirect()
+            ->route('containers.items.schedules.show', [$target->container, $target, $schedule])
+            ->with('status', 'schedule-moved');
     }
 
     /**

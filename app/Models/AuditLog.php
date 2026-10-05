@@ -149,6 +149,15 @@ class AuditLog extends Model
     public const ACTION_SCHEDULE_DELETED = 'schedule.deleted';
 
     /**
+     * Uppgiften flyttades till ett annat item (M27 · issue 240, [[ADR-0053
+     * Flytt och kopiering]] § 7). Inom samma container bär `meta`
+     * `from_item`/`to_item` som ULID:er; mellan containrar skriver flytten i
+     * stället två rader — en i vardera loggen — med `meta.direction` `out`
+     * respektive `in`, och **ingen av dem nämner motparten**.
+     */
+    public const ACTION_SCHEDULE_MOVED = 'schedule.moved';
+
+    /**
      * Förekomsten bockades av. Den nya förekomsten `CloseOccurrence` öppnar i
      * samma transaktion loggas INTE — den är en följd av avbockningen, inte
      * en handling (issue 110).

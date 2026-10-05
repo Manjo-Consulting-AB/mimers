@@ -482,6 +482,11 @@ return [
         'schedule-resumed' => 'The task is active again.',
         'schedule-deleted' => 'The task has been removed.',
 
+        // Issue 240 · [[ADR-0053 Flytt och kopiering]] § 6. The move keeps the
+        // row and its whole history — the occurrences follow the task — so the
+        // confirmation says what happened to the task, not to the item it left.
+        'schedule-moved' => 'The task has been moved.',
+
         // Issue 63b decisions 5 and 8. Checking off and skipping get one
         // sentence each: they close the same row but say different things
         // about the work, and a shared "the occurrence is closed" would make
@@ -707,6 +712,18 @@ return [
             'dependency_self' => 'A task cannot wait for itself.',
             'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other tasks.',
             'dependency_not_in_container' => 'Dependencies only run between tasks in the same container.',
+
+            // Issue 240 · [[ADR-0053 Flytt och kopiering]] § 6. Dependencies are
+            // written within one container, so a task that has any — on either
+            // level and in either direction — cannot be moved to another one.
+            // The move is refused, never silently stripped of its dependencies:
+            // the user removes them first.
+            'has_dependencies' => "Remove the task's dependencies before moving it to another container.",
+
+            // Issue 240: a move whose target is the item the task is already
+            // on. The picker will not offer it (issue 243), but the code is
+            // reachable from a hand-made request and from /api (issue 247).
+            'same_item' => 'The task is already on that item.',
         ],
 
         // Issue 65b decision 5: the feature gate. `Entitlements::assertFeature()`
@@ -2414,6 +2431,15 @@ return [
                 'created' => ':user created a task on :item',
                 'updated' => ':user changed :fields on a task on :item',
                 'deleted' => ':user deleted a task on :item',
+                // Issue 240: one sentence for BOTH rows of a move between
+                // containers — the `out` row and the `in` row — and no `:item`
+                // in it, for the same reason as `attachment.moved`: the log
+                // row's own item column says where the reader is, and `:item`
+                // would be the SOURCE item on the `out` row, which would read
+                // as "moved a task TO" the item it left. Within one container
+                // the single row carries `from_item`/`to_item` instead, and
+                // `:item` is the target.
+                'moved' => ':user moved a task',
             ],
 
             'schedule_dependency' => [
