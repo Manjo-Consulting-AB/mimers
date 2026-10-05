@@ -1079,6 +1079,27 @@ Route::middleware('auth')->group(function () {
         ->name('containers.items.schedules.destroy');
 
     /*
+     * Issue 240 · Flytten av en uppgift — se
+     * App\Http\Controllers\ScheduleController::move() och
+     * App\Actions\Schedule\MoveSchedule, [[ADR-0053 Flytt och kopiering]] § 6
+     * och § 7.
+     *
+     * SAMMA `scopeBindings()` som de fem ovan: `{schedule}` binds genom
+     * App\Models\Item::schedules(), så ett schema på ett annat item — eller i
+     * en annan container — ger 404. Målet står i KROPPEN (`target`, ett
+     * item-ULID) och kan ligga i en annan container; det går inte att
+     * scope-binda, och App\Http\Requests\TargetItemRequest slår upp det
+     * globalt (404 för en ULID som saknas eller är mjukraderad).
+     *
+     * Svaret är en redirect till schemats sida på det NYA itemet — uppgiften
+     * ligger inte kvar på källan — med flashkoden `schedule-moved`, och ett
+     * domänfel blir ett fältfel på `schedule` i stället för en JSON-kropp.
+     */
+    Route::post('/containers/{container}/items/{item}/schedules/{schedule}/move', [ScheduleController::class, 'move'])
+        ->scopeBindings()
+        ->name('containers.items.schedules.move');
+
+    /*
      * Issue 63b · Förekomsten — den öppna uppgiften, avbockningen, historiken
      * och det härledda försenat, se
      * App\Http\Controllers\ScheduleOccurrenceController.
