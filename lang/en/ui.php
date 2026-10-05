@@ -3018,6 +3018,18 @@ return [
             'destroy' => 'Remove',
             'destroy_confirm' => 'The attachment moves to the trash and can be restored within 30 days. Continue?',
 
+            // Issue 243 · [[ADR-0053 Flytt och kopiering]] § 2: the row's two
+            // new actions. *Move* is drawn behind `can.delete` on the item —
+            // it takes something away from the source — while *Copy* stands
+            // wherever the row is visible, because it does not. Both open the
+            // target picker (issue 242), and each heading names what lands on
+            // the chosen item: the dialog asks *where*, and the word after
+            // *to* answers what the user is about to place there.
+            'move' => 'Move…',
+            'copy' => 'Copy…',
+            'move_heading' => 'Move to item',
+            'copy_heading' => 'Copy to item',
+
             // Issue 61b decision 7: the four strings of the inline view. `alt`
             // is not among them — it is the filename and comes from the data.
             //
@@ -3226,6 +3238,14 @@ return [
             // than promising none (decision 8).
             'destroy' => 'Delete',
             'destroy_confirm' => 'The task and its upcoming occurrences are removed. Continue?',
+
+            // Issue 243 · [[ADR-0053 Flytt och kopiering]] § 1: a task is moved
+            // but never copied — two tasks with the same history answer twice.
+            // The button therefore has one label and one heading, and it is
+            // drawn behind `can.delete` on the item, like the deletion beside
+            // it (issue 226).
+            'move' => 'Move…',
+            'move_heading' => 'Move task to item',
 
             'recurrence' => [
                 'none' => 'Once',

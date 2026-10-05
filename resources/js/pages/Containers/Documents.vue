@@ -4,6 +4,7 @@ import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import DocumentFilterBar from '../../components/DocumentFilterBar.vue';
 import DocumentFilterColumn from '../../components/DocumentFilterColumn.vue';
+import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
 import ItemViewSwitch from '../../components/ItemViewSwitch.vue';
 import StorageBar from '../../components/StorageBar.vue';
 import UiBadge from '../../components/UiBadge.vue';
@@ -85,6 +86,15 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * rubriken, flikens namn i webbläsaren, filterfältets ord, tabellrubrikerna,
  * tomtexterna, sidnumreringen och lagringsstapelns meningar kommer ur `t()`.
  * Typens tre ord är `item.attachment.kind.*` — samma ord som raden bär.
+ *
+ * **Radens *Move…* och *Copy…*** (issue 243 · [[ADR-0053 Flytt och
+ * kopiering]] § 2). Här möts rader från flera items, så grinden är radens
+ * EGEN: `row.can.delete` ritar flytten — den som får radera bilagans item får
+ * flytta den — och kopian står på varje rad, för en kopia rör inte
+ * originalet och raden syns bara för den som får läsa itemet. Flaggan kommer
+ * ur kontrollern (`ContainerDocumentController`), och rutten prövar samma
+ * grind på nytt. Båda öppnar ItemTargetPicker (issue 242) och postar valet
+ * som `target` i radens kropp; ett fel ritas på raden.
  */
 const props = defineProps({
     /* Containern ur App\Http\Resources\ContainerResource. */
@@ -268,6 +278,69 @@ const hasFilter = computed(() =>
     || (props.filter.from ?? '') !== ''
     || (props.filter.to ?? '') !== '',
 );
+
+/*
+ * Flytten och kopian (issue 243). Raden bär sin ULID och sitt verb, och
+ * `picked` håller dem kvar till POST:en är skickad — `chooseTarget()` läser
+ * dem ur argumentet och aldrig ur en ref som stängningen kan ha nollställt
+ * medan anropet är i luften.
+ */
+const rowActionUrl = (row, action) => `/containers/${props.container.ulid}/items/${row.item.ulid}/attachments/${row.ulid}${action === 'copy' ? '/copy' : '/move'}`;
+
+const pickerOpen = ref(false);
+const pickerTrigger = ref(null);
+const pickerHeading = ref('');
+const picked = ref(null);
+
+/* Radens vänteläge och radens fel — en rad i taget, som raderingen. */
+const actionPending = ref(null);
+const actionError = ref(null);
+
+function openPicker(row, action, event) {
+    picked.value = { row, action };
+    pickerTrigger.value = event.currentTarget;
+    pickerHeading.value = action === 'copy'
+        ? t('item.attachment.copy_heading')
+        : t('item.attachment.move_heading');
+    pickerOpen.value = true;
+}
+
+/* Väljaren stängdes — ett val eller Esc, samma väg. */
+function closePicker() {
+    pickerOpen.value = false;
+    picked.value = null;
+}
+
+/*
+ * Valet ur väljaren. Målet postas som `target`; svaret är `back()` med
+ * färska props, så listan speglar serverns svar och raden flyttar bort ur
+ * vyn när den lämnat itemet. Ett kvotfel kommer som fältfel på `attachment`,
+ * ett 403 fångas av `onHttpException` — `false` stänger av Inertias egen
+ * felruta, så felet hamnar på raden och inte mitt över sidan.
+ */
+function chooseTarget(target) {
+    const { row, action } = picked.value;
+
+    router.post(rowActionUrl(row, action), { target: target.ulid }, {
+        preserveScroll: true,
+        onStart: () => {
+            actionPending.value = row.ulid;
+            actionError.value = null;
+        },
+        onFinish: () => { actionPending.value = null; },
+        onError: (errors) => {
+            actionError.value = { ulid: row.ulid, message: errors.attachment };
+        },
+        onHttpException: (response) => {
+            actionError.value = {
+                ulid: row.ulid,
+                message: response.status === 403 ? t('error.403') : t('error.generic'),
+            };
+
+            return false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -614,12 +687,47 @@ const hasFilter = computed(() =>
                             <td class="py-1 pr-4 text-ink-muted">{{ size(row) }}</td>
 
                             <td class="py-1 pr-4">
-                                <a
-                                    :href="fileUrl(row.ulid)"
-                                    class="inline-flex min-h-11 items-center text-accent hover:underline"
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <a
+                                        :href="fileUrl(row.ulid)"
+                                        class="inline-flex min-h-11 items-center text-accent hover:underline"
+                                    >
+                                        {{ t('container.documents.download') }}
+                                    </a>
+
+                                    <!-- *Move…* bakom radens `can.delete`,
+                                         *Copy…* på varje rad (issue 243 ·
+                                         [[ADR-0053 Flytt och kopiering]] § 2).
+                                         Servern prövar samma grindar. -->
+                                    <button
+                                        v-if="row.can.delete"
+                                        type="button"
+                                        :disabled="actionPending === row.ulid"
+                                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                                        @click="openPicker(row, 'move', $event)"
+                                    >
+                                        {{ t('item.attachment.move') }}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        :disabled="actionPending === row.ulid"
+                                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                                        @click="openPicker(row, 'copy', $event)"
+                                    >
+                                        {{ t('item.attachment.copy') }}
+                                    </button>
+                                </div>
+
+                                <!-- Radens fel: kvotfelet eller 403:an, ritat
+                                     under raden det gäller. -->
+                                <p
+                                    v-if="actionError && actionError.ulid === row.ulid"
+                                    role="alert"
+                                    class="text-sm text-danger"
                                 >
-                                    {{ t('container.documents.download') }}
-                                </a>
+                                    {{ actionError.message }}
+                                </p>
                             </td>
                         </tr>
                     </tbody>
@@ -694,5 +802,20 @@ const hasFilter = computed(() =>
 
             </div>
         </div>
+
+        <!--
+            Målväljaren (issue 242 och 243). EN för hela listan: raden som
+            öppnade den bär sin ULID och sitt verb, och `excludeItem` är
+            radens item, så ett item aldrig erbjuds som mål för sin egen
+            bilaga.
+        -->
+        <ItemTargetPicker
+            :open="pickerOpen"
+            :trigger="pickerTrigger"
+            :exclude-item="picked?.row.item.ulid ?? null"
+            :heading="pickerHeading"
+            @choose="chooseTarget"
+            @close="closePicker"
+        />
     </ContainerLayout>
 </template>
