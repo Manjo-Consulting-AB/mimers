@@ -57,6 +57,12 @@ const props = defineProps({
     hasOpenOccurrence: { type: Boolean, required: true },
     /* Motparterna användaren får ändra, en lista per nivå (63c § Beslut 3). */
     counterparts: { type: Object, required: true },
+    /*
+     * Sant när schemat ligger på ett inbox-item (M27 · issue 244, ADR-0054
+     * § 1). *Back to Inbox* ritas då inte: uppgiften är redan där, och rutten
+     * hade svarat 422 `schedule.already_in_inbox`.
+     */
+    containerIsInbox: { type: Boolean, default: false },
     can: { type: Object, required: true },
 });
 
@@ -203,6 +209,33 @@ function chooseTarget(target) {
         },
     });
 }
+
+/*
+ * *Back to Inbox* (M27 · issue 244, [[ADR-0054 Inboxen]] § 6). En egen
+ * handling och inte ett val i väljaren: den går alltid till användarens EGEN
+ * inbox, och den skapas om den saknas. Knappen står bakom `can.delete`, som
+ * flytten intill — uppgiften lämnar sin plats — och servern prövar samma grind
+ * på nytt.
+ *
+ * Målet står inte i kroppen: kroppen är tom. Domänfelet —
+ * `schedule.has_dependencies` för en uppgift med beroenden, eller
+ * `schedule.already_in_inbox` — kommer som ett fältfel på `schedule` och ritas
+ * i samma ruta som flyttens. Svaret är en redirect till `/inbox`: uppgiften
+ * finns inte kvar på den här sidan.
+ */
+function toInbox() {
+    router.post(`${scheduleActionUrl}/inbox`, {}, {
+        preserveScroll: true,
+        onStart: () => { pending.value = true; },
+        onFinish: () => { pending.value = false; },
+        onError: (errors) => { moveError.value = errors.schedule ?? null; },
+        onHttpException: (response) => {
+            moveError.value = response.status === 403 ? t('error.403') : t('error.generic');
+
+            return false;
+        },
+    });
+}
 </script>
 
 <template>
@@ -270,6 +303,23 @@ function chooseTarget(target) {
                 {{ t('item.schedule.move') }}
             </button>
 
+            <!-- *Back to Inbox* (M27 · issue 244, ADR-0054 § 6): bredvid
+                 *Move…* och bakom samma `can.delete` — uppgiften lämnar sin
+                 plats. Handlingen går alltid till den EGNA inboxen och är
+                 därför aldrig ett val i väljaren. Servern prövar samma grind
+                 på nytt. Knappen ritas inte när uppgiften REDAN ligger i
+                 inboxen (`containerIsInbox`): rutten hade svarat 422
+                 `schedule.already_in_inbox`. -->
+            <button
+                v-if="can.delete && !containerIsInbox"
+                type="button"
+                :disabled="pending"
+                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                @click="toInbox"
+            >
+                {{ t('todo.back_to_inbox') }}
+            </button>
+
             <button
                 v-if="can.delete"
                 type="button"
@@ -281,9 +331,10 @@ function chooseTarget(target) {
             </button>
         </div>
 
-        <!-- Flyttens fel (issue 243): `schedule.has_dependencies` när målet
-             ligger i en annan container och uppgiften har beroenden, eller en
-             403:a ur grinden. Det står under knappen, och sidan står kvar. -->
+        <!-- Flyttens och *Back to Inbox*:s fel (issue 243 och 244):
+             `schedule.has_dependencies` när målet ligger i en annan container
+             och uppgiften har beroenden, eller en 403:a ur grinden. Det står
+             under knapparna, och sidan står kvar. -->
         <p v-if="moveError" role="alert" class="mt-2 text-sm text-red-700">
             {{ moveError }}
         </p>

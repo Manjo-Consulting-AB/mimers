@@ -6,6 +6,7 @@ use App\Actions\Access\ResolveItemScope;
 use App\Actions\Item\ResolveItemCover;
 use App\Http\Resources\TodoEntryResource;
 use App\Models\Container;
+use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
@@ -206,16 +207,38 @@ class ListTodo
     public const LIST_DONE = 'done';
 
     /**
-     * De sex värdena i `?list=`, i flikradens ordning (M26 · issue 237,
-     * Beslut 1). *Active* är frånvaron av värde och står därför inte här.
+     * Vyn *Inbox* (M27 · issue 244, [[ADR-0054 Inboxen]] § 5): aktiva
+     * förekomster vars schema ligger på användarens inbox-item.
      *
-     * De fyra första HÄRLEDS ur modellens `GTD_LISTS` och skrivs inte av:
-     * `gtd_list`-kolumnen är den enda sanningen om vilka listor som lagras,
-     * och en femte lista ska följa med hit utan att någon kommer ihåg den här
-     * raden.
+     * **Inte ett värde i `gtd_list`.** Sedan ADR-0054 § 5 är inboxen en PLATS
+     * och inte en lista — en förekomst där har `gtd_list = null` — precis som
+     * *Calendar* och *Done* är härledda vyer. Den som läste `inbox` ur
+     * kolumnen hade fått en tom lista som såg ut som ett svar.
+     */
+    public const LIST_INBOX = 'inbox';
+
+    /**
+     * Vyn *In progress* (M27 · issue 244, ADR-0054 § 5): förekomster med
+     * `status = in_progress`. Inte heller ett värde i `gtd_list` — statusen
+     * och listan är två egenskaper (ADR-0052 § 1).
+     */
+    public const LIST_IN_PROGRESS = 'in_progress';
+
+    /**
+     * Värdena i `?list=`, i flikradens ordning (M26 · issue 237, Beslut 1;
+     * M27 · issue 244). *Active* är frånvaron av värde och står därför inte
+     * här.
+     *
+     * De tre lagrade listorna HÄRLEDS ur modellens `GTD_LISTS` och skrivs inte
+     * av: `gtd_list`-kolumnen är den enda sanningen om vilka listor som
+     * lagras, och en fjärde lista ska följa med hit utan att någon kommer ihåg
+     * den här raden. *Inbox* och *In progress* är de två härledda vyer
+     * ADR-0054 § 5 lägger till.
      */
     public const LISTS = [
+        self::LIST_INBOX,
         ...ScheduleOccurrence::GTD_LISTS,
+        self::LIST_IN_PROGRESS,
         self::LIST_CALENDAR,
         self::LIST_DONE,
     ];
@@ -466,15 +489,17 @@ class ListTodo
     }
 
     /**
-     * Panelens tal: antalet aktiva förekomster per GTD-lista, plus *Calendar*
-     * och *Done* (M26 · issue 237, Beslut 3).
+     * Panelens tal: antalet aktiva förekomster per lista, plus *Calendar* och
+     * *Done* (M26 · issue 237, Beslut 3; utökat med *Inbox* och *In progress*
+     * i M27 · issue 244).
      *
-     * **Tre frågor, oavsett antal rader.** En `GROUP BY gtd_list` för de fyra
-     * lagrade listorna, en för *Calendar* (`due_at IS NOT NULL`) och en för
-     * *Done* — de avbockade de senaste `DONE_RECENT_DAYS` dagarna i
-     * användarens dag. Talet bor här och inte i vyn: en klient som räknade
-     * själv hade behövt hela mängden, och panelen hade blivit en andra fråga
-     * om samma sak.
+     * **Fem frågor, oavsett antal rader.** En `GROUP BY gtd_list` för de tre
+     * lagrade listorna, en för *Inbox* (förekomsterna på användarens
+     * inbox-item), en för *In progress* (`status = in_progress`), en för
+     * *Calendar* (`due_at IS NOT NULL`) och en för *Done* — de avbockade de
+     * senaste `DONE_RECENT_DAYS` dagarna i användarens dag. Talet bor här och
+     * inte i vyn: en klient som räknade själv hade behövt hela mängden, och
+     * panelen hade blivit en andra fråga om samma sak.
      *
      * **Samma omfång som listan** (Beslut 3): `scopeTodoFor()` — aktiv,
      * åtkomlig och inom användarens item-omfång — och containern när en
@@ -491,7 +516,7 @@ class ListTodo
      * *Done* visar alla avbockade, och en förekomst är `completed` oavsett
      * ålder; panelen är en glimt av hur mycket som hänt på sistone.
      *
-     * @return array{inbox: int, next: int, waiting: int, calendar: int, someday: int, done: int}
+     * @return array{inbox: int, next: int, waiting: int, someday: int, in_progress: int, calendar: int, done: int}
      */
     public function gtdCounts(User $user, ?Container $container = null): array
     {
@@ -502,6 +527,10 @@ class ListTodo
             ->groupBy('gtd_list')
             ->pluck('antal', 'gtd_list');
 
+        $inbox = $this->occurrences($user, $accountIds, false, $container, list: self::LIST_INBOX)->count();
+
+        $inProgress = $this->occurrences($user, $accountIds, false, $container, list: self::LIST_IN_PROGRESS)->count();
+
         $calendar = $this->occurrences($user, $accountIds, false, $container)
             ->whereNotNull('due_at')
             ->count();
@@ -511,11 +540,12 @@ class ListTodo
             ->count();
 
         return [
-            ScheduleOccurrence::GTD_INBOX => (int) ($perLista[ScheduleOccurrence::GTD_INBOX] ?? 0),
+            self::LIST_INBOX => $inbox,
             ScheduleOccurrence::GTD_NEXT => (int) ($perLista[ScheduleOccurrence::GTD_NEXT] ?? 0),
             ScheduleOccurrence::GTD_WAITING => (int) ($perLista[ScheduleOccurrence::GTD_WAITING] ?? 0),
-            self::LIST_CALENDAR => $calendar,
             ScheduleOccurrence::GTD_SOMEDAY => (int) ($perLista[ScheduleOccurrence::GTD_SOMEDAY] ?? 0),
+            self::LIST_IN_PROGRESS => $inProgress,
+            self::LIST_CALENDAR => $calendar,
             self::LIST_DONE => $done,
         ];
     }
@@ -924,12 +954,13 @@ class ListTodo
      * med automatiskt. Villkoret ligger på `schedule` och inte på raden:
      * återkommandetypen är schemats, och förekomsten ärver den.
      *
-     * **`$list` är GTD-filtret** (M26 · issue 237, Beslut 1 och 2). De fyra
-     * lagrade listorna går genom modellens `inGtdList()`, och *Calendar* —
-     * den härledda vyn — lägger `whereNotNull('due_at')` på, för det är hela
-     * dess villkor (ADR-0052 § 1). `null` och ett okänt värde lämnar frågan
-     * orörd: *Done* kommer aldrig hit, för den har sin egen fråga och sin
-     * egen radform.
+     * **`$list` är filtret** (M26 · issue 237, Beslut 1 och 2; M27 · issue
+     * 244). De tre lagrade listorna går genom modellens `inGtdList()`, och de
+     * tre härledda vyerna formulerar sina egna villkor: *Inbox* är
+     * användarens inbox-item, *In progress* är `status = in_progress`, och
+     * *Calendar* är `whereNotNull('due_at')` (ADR-0052 § 1 och ADR-0054 § 5).
+     * `null` och ett okänt värde lämnar frågan orörd: *Done* kommer aldrig
+     * hit, för den har sin egen fråga och sin egen radform.
      *
      * @param  list<int>  $accountIds
      * @return Builder<ScheduleOccurrence>
@@ -948,6 +979,22 @@ class ListTodo
 
         if ($list !== null && in_array($list, ScheduleOccurrence::GTD_LISTS, true)) {
             $query->inGtdList($list);
+        } elseif ($list === self::LIST_INBOX) {
+            // *Inbox* är en plats (ADR-0054 § 5): förekomster vars schema
+            // ligger på användarens inbox-item. Uppslaget SKAPAR ingenting —
+            // att läsa vyn ska inte skapa en inbox — och utan en inbox finns
+            // inget item att peka på: vyn är tom.
+            $inboxItemId = $this->inboxItemId($user);
+
+            if ($inboxItemId === null) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereHas('schedule', fn (Builder $query) => $query->where('item_id', $inboxItemId));
+            }
+        } elseif ($list === self::LIST_IN_PROGRESS) {
+            // *In progress* är statusen, inte listan (ADR-0052 § 1): en
+            // förekomst kan stå i *Next* och *In progress* samtidigt.
+            $query->where('status', ScheduleOccurrence::STATUS_IN_PROGRESS);
         } elseif ($list === self::LIST_CALENDAR) {
             $query->whereNotNull('due_at');
         }
@@ -975,6 +1022,29 @@ class ListTodo
         }
 
         return $query;
+    }
+
+    /**
+     * Användarens inbox-item, eller null när hon inte har någon (M27 · issue
+     * 244).
+     *
+     * **Uppslaget SKAPAR ingenting.** Att läsa vyn *Inbox* ska inte skapa en
+     * inbox — till skillnad från de handlingar som faktiskt lägger något där
+     * (App\Actions\Inbox\ResolveInbox, som skapar containern och itemet).
+     * Frågan är därför två läsningar i stället för ett anrop till ResolveInbox:
+     * containern på `inbox_user_id` — samma nyckel som ResolveInbox använder
+     * (ADR-0054 § 1) — och containerns första item, samma ordning som
+     * ResolveInbox::itemFor().
+     */
+    private function inboxItemId(User $user): ?int
+    {
+        $containerId = Container::query()->where('inbox_user_id', $user->id)->value('id');
+
+        if ($containerId === null) {
+            return null;
+        }
+
+        return Item::query()->where('container_id', $containerId)->orderBy('id')->value('id');
     }
 
     /**

@@ -87,18 +87,26 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * tomtexterna, sidnumreringen och lagringsstapelns meningar kommer ur `t()`.
  * Typens tre ord är `item.attachment.kind.*` — samma ord som raden bär.
  *
- * **Radens *Move…* och *Copy…*** (issue 243 · [[ADR-0053 Flytt och
- * kopiering]] § 2). Här möts rader från flera items, så grinden är radens
- * EGEN: `row.can.delete` ritar flytten — den som får radera bilagans item får
- * flytta den — och kopian står på varje rad, för en kopia rör inte
- * originalet och raden syns bara för den som får läsa itemet. Flaggan kommer
- * ur kontrollern (`ContainerDocumentController`), och rutten prövar samma
- * grind på nytt. Båda öppnar ItemTargetPicker (issue 242) och postar valet
- * som `target` i radens kropp; ett fel ritas på raden.
+ * **Radens *Move…*, *Copy…* och *Back to Inbox*** (issue 243 och 244 ·
+ * [[ADR-0053 Flytt och kopiering]] § 2, [[ADR-0054 Inboxen]] § 6). Här möts
+ * rader från flera items, så grinden är radens EGEN: `row.can.delete` ritar
+ * flytten — den som får radera bilagans item får flytta den — och kopian står
+ * på varje rad, för en kopia rör inte originalet och raden syns bara för den
+ * som får läsa itemet. Flaggan kommer ur kontrollern
+ * (`ContainerDocumentController`), och rutten prövar samma grind på nytt.
+ * Flytten och kopian öppnar ItemTargetPicker (issue 242) och postar valet som
+ * `target` i radens kropp; *Back to Inbox* går till användarens egen inbox och
+ * har ingen kropp. Ett fel ritas på raden.
  */
 const props = defineProps({
     /* Containern ur App\Http\Resources\ContainerResource. */
     container: { type: Object, required: true },
+    /*
+     * Sant när containern är en inbox (M27 · issue 244, ADR-0054 § 1).
+     * *Back to Inbox* ritas då inte på raderna — bilagan är redan där, och
+     * rutten hade svarat 422 `attachment.already_in_inbox`.
+     */
+    containerIsInbox: { type: Boolean, default: false },
     /*
      * `{ update }` — hjältens *Redigera container*. Flaggan är serverns svar
      * på samma policyfråga som rutten `PATCH /containers/{container}` ställer.
@@ -280,12 +288,16 @@ const hasFilter = computed(() =>
 );
 
 /*
- * Flytten och kopian (issue 243). Raden bär sin ULID och sitt verb, och
- * `picked` håller dem kvar till POST:en är skickad — `chooseTarget()` läser
- * dem ur argumentet och aldrig ur en ref som stängningen kan ha nollställt
- * medan anropet är i luften.
+ * Flytten, kopian och *Back to Inbox* (issue 243 och 244). Raden bär sin ULID
+ * och sitt verb, och `picked` håller dem kvar till POST:en är skickad —
+ * `chooseTarget()` läser dem ur argumentet och aldrig ur en ref som
+ * stängningen kan ha nollställt medan anropet är i luften. Verbet är det
+ * bokstavliga suffixet i adressen — `move`, `copy` och `inbox` — och står i en
+ * tabell, så att en fjärde handling inte kan råka bli `/move`.
  */
-const rowActionUrl = (row, action) => `/containers/${props.container.ulid}/items/${row.item.ulid}/attachments/${row.ulid}${action === 'copy' ? '/copy' : '/move'}`;
+const ROW_ACTIONS = { move: '/move', copy: '/copy', inbox: '/inbox' };
+
+const rowActionUrl = (row, action) => `/containers/${props.container.ulid}/items/${row.item.ulid}/attachments/${row.ulid}${ROW_ACTIONS[action]}`;
 
 const pickerOpen = ref(false);
 const pickerTrigger = ref(null);
@@ -322,6 +334,35 @@ function chooseTarget(target) {
     const { row, action } = picked.value;
 
     router.post(rowActionUrl(row, action), { target: target.ulid }, {
+        preserveScroll: true,
+        onStart: () => {
+            actionPending.value = row.ulid;
+            actionError.value = null;
+        },
+        onFinish: () => { actionPending.value = null; },
+        onError: (errors) => {
+            actionError.value = { ulid: row.ulid, message: errors.attachment };
+        },
+        onHttpException: (response) => {
+            actionError.value = {
+                ulid: row.ulid,
+                message: response.status === 403 ? t('error.403') : t('error.generic'),
+            };
+
+            return false;
+        },
+    });
+}
+
+/*
+ * *Back to Inbox* (M27 · issue 244, [[ADR-0054 Inboxen]] § 6). Ägaren blir
+ * personkontot och dess kvot prövas (ADR-0053 § 3 och 4), så ett kvotfel
+ * kommer som ett fältfel på `attachment` och ritas på raden — samma form som
+ * flyttens. Kroppen är tom: målet är användarens EGEN inbox och står inte i
+ * någon adress.
+ */
+function toInbox(row) {
+    router.post(rowActionUrl(row, 'inbox'), {}, {
         preserveScroll: true,
         onStart: () => {
             actionPending.value = row.ulid;
@@ -707,6 +748,24 @@ function chooseTarget(target) {
                                         @click="openPicker(row, 'move', $event)"
                                     >
                                         {{ t('item.attachment.move') }}
+                                    </button>
+
+                                    <!-- *Back to Inbox* (M27 · issue 244,
+                                         ADR-0054 § 6): bakom samma
+                                         `row.can.delete` som flytten intill.
+                                         Handlingen går alltid till den EGNA
+                                         inboxen, och servern prövar samma
+                                         grind på nytt. Raden ritas inte när
+                                         containern REDAN är en inbox —
+                                         bilagan är redan där. -->
+                                    <button
+                                        v-if="row.can.delete && !containerIsInbox"
+                                        type="button"
+                                        :disabled="actionPending === row.ulid"
+                                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                                        @click="toInbox(row)"
+                                    >
+                                        {{ t('todo.back_to_inbox') }}
                                     </button>
 
                                     <button

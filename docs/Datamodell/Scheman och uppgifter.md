@@ -26,7 +26,7 @@ Noll eller flera per item. En livflotte har både treårig service och ett certi
 | anchor_date | DATE NULL | Startpunkt för `fixed` |
 | lead_days | SMALLINT UNSIGNED | Hur många dagar innan förfall uppgiften dyker upp. Motsvarar OmniFocus defer. |
 | is_active | BOOLEAN | Pausad utan att raderas |
-| default_gtd_list | VARCHAR(10) NULL | `next` \| `someday` — förvalet för en ny förekomst. Null tills det lärs in, se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 2 |
+| default_gtd_list | VARCHAR(10) NULL | `next` \| `someday` — förvalet för en ny förekomst. Sätts när uppgiften skapas på ett item eller bearbetas ur inboxen; null när schemat ligger i inboxen, se [[ADR-0054 Inboxen]] § 5 |
 | deleted_at | | |
 
 Index: `(item_id, deleted_at)`.
@@ -51,7 +51,7 @@ Skillnaden är inte kosmetisk och kan inte uttryckas med ett enda nästa-datum-f
 | visible_from | DATE NULL | `due_at` minus `lead_days`. Innan detta syns uppgiften inte i todo-listan. Null när `due_at` är null. |
 | due_at | DATE NULL | Null för en uppgift utan datum. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3 |
 | status | VARCHAR(20) | `open` \| `in_progress` \| `completed` \| `skipped` |
-| gtd_list | VARCHAR(10) | `inbox` \| `next` \| `waiting` \| `someday`. Förval `next`. Se [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 |
+| gtd_list | VARCHAR(10) NULL | `next` \| `waiting` \| `someday`, eller null när förekomsten ligger i inboxen. Se [[ADR-0054 Inboxen]] § 5 |
 | completed_at | TIMESTAMP NULL | |
 | completed_by_user_id | FK NULL | |
 | completed_by_account_id | FK NULL | Varvet, inte den anställde |
@@ -66,6 +66,23 @@ Index: `(schedule_id, status)`, `(due_at, status)` för todo-listan över alla c
 **Förfallen** (`overdue`) är inte en status utan härleds: **aktiv** och `due_at < idag`, där `idag` är **användarens kalenderdag** — `User::today()` — och inte serverns. Se [[ADR-0044 Användarens dag]] § Beslut 1. Lagra aldrig ett tillstånd som klockan kan ändra åt dig — då måste ett jobb hålla det uppdaterat, och det jobbet kommer att missa körningar.
 
 **Historiken är loggen.** Avklarade förekomster är svaret på "när bytte jag impellern senast" — ingen separat historiktabell behövs.
+
+### Listorna, och inboxen som plats
+
+`gtd_list` bär en av tre listor: `next`, `waiting` och `someday`. **`inbox` är inget värde** — sedan [[ADR-0054 Inboxen]] § 5 är inboxen en PLATS och inte en lista. En förekomst vars schema ligger på användarens inbox-item har `gtd_list = null`, och varje annan förekomst har ett värde. Det gör `null` till en upplysning om var uppgiften ligger och inte om hur den ska hanteras.
+
+| Vy | Villkor |
+|---|---|
+| *Inbox* | aktiv och på användarens inbox-item |
+| *Next*, *Waiting*, *Someday* | aktiv och `gtd_list` med det värdet |
+| *Active* | aktiv, var den än ligger |
+| *In progress* | `status = in_progress` |
+| *Calendar* | aktiv och `due_at IS NOT NULL` |
+| *Done* | `status = completed` |
+
+En uppgift kan stå i flera vyer samtidigt: *Next*, *In progress* och ett datum ger *Next*, *Active*, *In progress* och *Calendar*. De tre sista är härledda ur `status` och `due_at` och lagras aldrig i `gtd_list` ([[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1).
+
+**Förvalet** (`default_gtd_list`) sätts när uppgiften skapas på ett item eller bearbetas ur inboxen, och nästa förekomst ärver det. Är uppgiften kvar i inboxen är både förekomstens lista och schemats förval null — den är obearbetad, och listan väljs först när den bearbetas. `waiting` blir aldrig ett förval. Se [[ADR-0054 Inboxen]] § 5 och 6.
 
 ## occurrence_dependency
 
@@ -112,9 +129,9 @@ Systemet är kraftigt säsongsbetonat — i april förfaller allting samtidigt. 
 | Skrivning | Rutt och kropp |
 |---|---|
 | Byta listan eller statusen på en aktiv förekomst | `PATCH /api/containers/{container}/items/{item}/schedules/{schedule}/occurrences/{occurrence}` — `{"gtd_list"?, "status"?}`, minst ett av fälten. `status` tar bara `open` och `in_progress`: att stänga går genom `complete` och `skip`, och en stängd förekomst svarar 422 `occurrence.not_open` |
-| Sätta listan för den första förekomsten | `gtd_list` i kroppen till `POST .../schedules` — förekomsten hamnar i listan, och `next`/`someday` blir dessutom schemats förval |
+| Sätta listan för den första förekomsten | `gtd_list` i kroppen till `POST .../schedules` — förekomsten hamnar i listan, och schemats förval blir samma lista (`next` när `waiting` valdes) |
 | Sätta schemats förval | `default_gtd_list` i kroppen till `PATCH .../schedules/{schedule}` — `next`, `someday` eller `null` |
 
-`gtd_list` och `default_gtd_list` är två egenskaper ([[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 och § 2): den första säger hur användaren tänker hantera uppgiften, den andra är regeln för nästa förekomst.
+`gtd_list` och `default_gtd_list` är två egenskaper ([[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 1 och § 2): den första säger hur användaren tänker hantera uppgiften, den andra är regeln för nästa förekomst. En lista kan inte sättas på en förekomst som ligger i inboxen — den sätts när uppgiften bearbetas — och ett sådant försök svarar 422 `occurrence.in_inbox` ([[ADR-0054 Inboxen]] § 5).
 
 `due_at` och `visible_from` är nullbara i svaret: en uppgift utan datum svarar `null`, aldrig ett påhittat datum ([[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3). Ett återkommande schema kräver fortfarande ett datum — bara `none` får sakna det.

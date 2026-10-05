@@ -203,14 +203,17 @@ function complete() {
  * App\Http\Controllers\ScheduleOccurrenceController::update() svarar på — och
  * `preserveScroll` håller kvar läsaren där hon var i en lång lista.
  *
- * **De fyra listorna är `todo.list.*`-nycklarna**, samma ord som
+ * **De tre listorna är `todo.list.*`-nycklarna**, samma ord som
  * `gtd_list`-kolumnens värden (ADR-0052 § 1). Servern skickar ingen
  * uppräkning att läsa — bara radens eget värde — så ordningen står här och
- * bor i katalogens fyra nycklar, inte i en egen lista i JavaScript.
+ * bor i katalogens nycklar, inte i en egen lista i JavaScript. *Inbox* är
+ * INTE med: den är en plats och inte en lista (ADR-0054 § 5), och väljaren
+ * ritas inte alls för en rad som ligger i inboxen — `gtd_list` är null där,
+ * och listan sätts först när uppgiften bearbetas (ProcessInboxTask).
  */
 const listForm = useForm({ gtd_list: null, status: null });
 
-const lists = ['inbox', 'next', 'waiting', 'someday'];
+const lists = ['next', 'waiting', 'someday'];
 
 const occurrenceUrl = computed(
     () => `${scheduleHref.value}/occurrences/${props.entry.ulid}`,
@@ -221,6 +224,15 @@ const listFieldId = computed(() => `todo-list-${props.entry.ulid}`);
 
 /* Växelns tillstånd: serverns `status`, aldrig ett eget (ADR-0052 § 1). */
 const inProgress = computed(() => props.entry.status === 'in_progress');
+
+/*
+ * Ligger raden i inboxen (ADR-0054 § 5)? Sedan M27 · issue 244 är `gtd_list`
+ * null exakt när förekomstens schema ligger på ett inbox-item — det är
+ * definitionen, inte en gissning. Listväljaren och listmärket ritas därför
+ * inte: en obearbetad uppgift har ingen lista att visa eller byta, och
+ * servern nekar en liständring med `occurrence.in_inbox`.
+ */
+const inInbox = computed(() => props.entry.gtd_list === null);
 
 /*
  * Radens ENDA felruta (Beslut 4). Domänfelet ur avbockningen eller bytet
@@ -346,9 +358,13 @@ function toggleProgress() {
                      samma grind som avbockningen och bara på en rad som inte
                      är *Done*. Den som saknar rätten får listans namn som ett
                      märke i stället — samma ord, ingen kontroll hon inte får
-                     använda. -->
+                     använda. Listväljaren ritas inte för en rad i inboxen
+                     (ADR-0054 § 5): den har ingen lista än, och servern nekar
+                     bytet med `occurrence.in_inbox`. Växeln står kvar — att
+                     påbörja en obearbetad uppgift är tillåtet. -->
                 <template v-if="! isDone && entry.can.update">
                     <select
+                        v-if="! inInbox"
                         :id="listFieldId"
                         :value="entry.gtd_list"
                         :disabled="listForm.processing"
@@ -374,7 +390,7 @@ function toggleProgress() {
                 </template>
 
                 <span
-                    v-else-if="! isDone"
+                    v-else-if="! isDone && ! inInbox"
                     class="rounded-pill border border-border bg-surface-sunken px-2 py-0.5 text-meta font-medium text-ink-muted"
                 >
                     {{ t(`todo.list.${entry.gtd_list}`) }}

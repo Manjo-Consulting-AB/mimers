@@ -22,6 +22,12 @@ use function Pest\Laravel\actingAs;
  *
  * Varje "Klart när"-punkt i issuen motsvarar ett namngivet test här.
  *
+ * **M27 · issue 244 skrev om filen** ([[ADR-0054 Inboxen]] § 5): `inbox` är
+ * inte längre ett värde i `gtd_list`, proven om att förvalet LÄRS IN är borta,
+ * och *en ny uppgift börjar i inbox* heter nu *en ny uppgift på ett item
+ * börjar i next*. Uppgifterna om inboxen som plats bor i
+ * tests/Feature/Inbox/InboxIGtdTest.php.
+ *
  * kontoMedMedlem(), oppnaForekomst(), forekomstSchemaKropp() och
  * avslutKropp() är globala testhjälpare i tests/Support/Testhjalpare.php.
  * Hjälparna nedan har prefixet `listans` — Pest lägger alla testfiler i samma
@@ -78,21 +84,6 @@ function listansSchema(Item $item, array $attribut = []): Schedule
 }
 
 /**
- * En förekomst byggd rakt i tabellen, med känd lista och status — proven som
- * prövar ytan behöver ingen kalenderräkning.
- */
-function listansRad(Schedule $schema, string $due, string $status = 'open', string $lista = 'inbox'): ScheduleOccurrence
-{
-    return ScheduleOccurrence::factory()->create([
-        'schedule_id' => $schema->id,
-        'due_at' => $due,
-        'visible_from' => $due,
-        'status' => $status,
-        'gtd_list' => $lista,
-    ]);
-}
-
-/**
  * Mottagarens URL: PATCH på förekomsten, samma fyra ULID:n som rutten bär.
  */
 function listansUrl(ScheduleOccurrence $rad): string
@@ -145,9 +136,11 @@ function listansMottagare(Container $container, Item $item, string $niva): User
 // --- var en ny förekomst hamnar ---------------------------------------------
 
 /*
- * Klart när: en ny uppgift börjar i inbox (ADR-0052 § 2).
+ * Klart när: en ny uppgift på ett item börjar i next (M27 · issue 244,
+ * [[ADR-0054 Inboxen]] § 5). Regeln i ADR-0052 § 2 — att varje manuellt
+ * skapad uppgift börjar i Inbox — är upphävd, och förvalet sätts samtidigt.
  */
-it('en ny uppgift börjar i inbox', function () {
+it('en ny uppgift på ett item börjar i next', function () {
     [, $anvandare, , $item] = listansKontext();
 
     actingAs($anvandare)
@@ -156,14 +149,13 @@ it('en ny uppgift börjar i inbox', function () {
 
     $schema = Schedule::query()->where('item_id', $item->id)->sole();
 
-    expect($schema->openOccurrence()->first()->gtd_list)->toBe('inbox')
-        ->and($schema->default_gtd_list)->toBeNull();
+    expect($schema->openOccurrence()->first()->gtd_list)->toBe('next')
+        ->and($schema->default_gtd_list)->toBe('next');
 });
 
 /*
  * Klart när: en ny uppgift med gtd_list next börjar i next och sätter
- * förvalet (Beslut 4). `waiting` blir aldrig förval — se provet nedan — och
- * `inbox` är redan svaret i det första provet.
+ * förvalet. `waiting` blir aldrig förval — se provet nedan.
  */
 it('en ny uppgift med gtd_list next börjar i next och sätter förvalet', function () {
     [, $anvandare, , $item] = listansKontext();
@@ -198,95 +190,17 @@ it('en ny uppgift med gtd_list waiting sätter inget förval', function () {
     $schema = Schedule::query()->where('item_id', $item->id)->sole();
 
     expect($schema->openOccurrence()->first()->gtd_list)->toBe('waiting')
-        ->and($schema->default_gtd_list)->toBeNull();
+        ->and($schema->default_gtd_list)->toBe('next');
 });
 
 /*
- * Klart när: första flytten från inbox till someday sätter förvalet someday
- * (Beslut 1).
+ * M27 · issue 244: proven om att förvalet LÄRS IN är borta. Regeln i
+ * ADR-0052 § 2 — att den första flytten ut ur Inbox satte förvalet, att en
+ * avbockning gjorde detsamma, och att ett satt förval stod kvar — utgår med
+ * [[ADR-0054 Inboxen]] § 5. Förvalet sätts när uppgiften skapas eller
+ * bearbetas (se CreateSchedule och tests/Feature/Inbox/InboxIGtdTest.php),
+ * och en senare flytt rör det inte: en lista är ett enskilt val.
  */
-it('första flytten från inbox till someday sätter förvalet someday', function () {
-    [, $anvandare, , $item] = listansKontext();
-    [$schema, $rad] = oppnaForekomst($item);
-
-    expect($rad->gtd_list)->toBe('inbox')
-        ->and($schema->default_gtd_list)->toBeNull();
-
-    actingAs($anvandare)
-        ->patch(listansUrl($rad), ['gtd_list' => 'someday'])
-        ->assertRedirect();
-
-    expect($rad->fresh()->gtd_list)->toBe('someday')
-        ->and($schema->fresh()->default_gtd_list)->toBe('someday');
-});
-
-/*
- * Klart när: en flytt till waiting sätter inget förval (Beslut 1). Att vänta
- * gäller en enskild gång, inte regeln.
- */
-it('en flytt till waiting sätter inget förval', function () {
-    [, $anvandare, , $item] = listansKontext();
-    [$schema, $rad] = oppnaForekomst($item);
-
-    actingAs($anvandare)
-        ->patch(listansUrl($rad), ['gtd_list' => 'waiting'])
-        ->assertRedirect();
-
-    expect($rad->fresh()->gtd_list)->toBe('waiting')
-        ->and($schema->fresh()->default_gtd_list)->toBeNull();
-});
-
-/*
- * Klart när: ett satt förval ändras inte av en senare flytt (Beslut 1) —
- * förvalet är `next`, och förekomsten flyttas till `someday`.
- */
-it('ett satt förval ändras inte av en senare flytt', function () {
-    [, $anvandare, , $item] = listansKontext();
-    [$schema, $rad] = oppnaForekomst($item);
-
-    $schema->default_gtd_list = 'next';
-    $schema->save();
-
-    actingAs($anvandare)
-        ->patch(listansUrl($rad), ['gtd_list' => 'someday'])
-        ->assertRedirect();
-
-    expect($rad->fresh()->gtd_list)->toBe('someday')
-        ->and($schema->fresh()->default_gtd_list)->toBe('next');
-});
-
-/*
- * Klart när: en avbockning direkt från inbox sätter förvalet next (Beslut 2)
- * — oavsett att den stängda förekomsten låg i inbox.
- */
-it('en avbockning direkt från inbox sätter förvalet next', function () {
-    [$konto, $anvandare, , $item] = listansKontext();
-    [$schema, $rad] = oppnaForekomst($item);
-
-    expect($rad->gtd_list)->toBe('inbox')
-        ->and($schema->default_gtd_list)->toBeNull();
-
-    actingAs($anvandare)
-        ->post(listansStangUrl($rad, 'complete'), avslutKropp($konto))
-        ->assertRedirect();
-
-    expect($schema->fresh()->default_gtd_list)->toBe('next');
-});
-
-/*
- * Klart när: ett överhopp direkt från inbox sätter förvalet next (Beslut 2).
- * Att hoppa över är också en stängning.
- */
-it('ett överhopp direkt från inbox sätter förvalet next', function () {
-    [$konto, $anvandare, , $item] = listansKontext();
-    [$schema, $rad] = oppnaForekomst($item);
-
-    actingAs($anvandare)
-        ->post(listansStangUrl($rad, 'skip'), avslutKropp($konto))
-        ->assertRedirect();
-
-    expect($schema->fresh()->default_gtd_list)->toBe('next');
-});
 
 /*
  * Klart när: nästa förekomst får förvalet (Beslut 3) — ett interval-schema
@@ -309,13 +223,12 @@ it('nästa förekomst får förvalet', function () {
 /*
  * Klart när: nästa förekomst utan förval börjar i inbox (Beslut 3).
  *
- * Vägen är återaktiveringen och inte en avbockning: en stängning sätter
- * förvalet till `next` (Beslut 2), så en förekomst som öppnas EFTER en
- * stängning har alltid ett förval. Ett pausat schema utan förval som
- * återupptas öppnar sin förekomst genom samma OpenNextOccurrence, och det är
- * där `?? 'inbox'` prövas.
+ * Vägen är återaktiveringen. Ett pausat schema utan förval som återupptas
+ * öppnar sin förekomst genom OpenNextOccurrence, och ett schema utanför
+ * inboxen får `next` när förvalet är tömt (ADR-0054 § 5: varje förekomst
+ * utanför inboxen har ett värde — null betyder *i inboxen*).
  */
-it('nästa förekomst utan förval börjar i inbox', function () {
+it('nästa förekomst utan förval får next', function () {
     [, $anvandare, , $item] = listansKontext();
 
     $schema = listansSchema($item, ['is_active' => false, 'default_gtd_list' => null]);
@@ -326,7 +239,7 @@ it('nästa förekomst utan förval börjar i inbox', function () {
         ->patch(listansSidaUrl($schema), ['is_active' => true])
         ->assertRedirect();
 
-    expect($schema->fresh()->openOccurrence()->first()->gtd_list)->toBe('inbox');
+    expect($schema->fresh()->openOccurrence()->first()->gtd_list)->toBe('next');
 });
 
 // --- statusen ---------------------------------------------------------------
@@ -383,7 +296,7 @@ it('en stängd förekomst kan inte ändras', function () {
         ->patch(listansUrl($rad), ['gtd_list' => 'someday'])
         ->assertSessionHasErrors('occurrence');
 
-    expect($rad->fresh()->gtd_list)->toBe('inbox')
+    expect($rad->fresh()->gtd_list)->toBe('next')
         ->and($rad->fresh()->status)->toBe('completed');
 });
 
@@ -399,7 +312,7 @@ it('en tom kropp avvisas', function () {
         ->patch(listansUrl($rad), [])
         ->assertSessionHasErrors(['gtd_list', 'status']);
 
-    expect($rad->fresh()->gtd_list)->toBe('inbox')
+    expect($rad->fresh()->gtd_list)->toBe('next')
         ->and($rad->fresh()->status)->toBe('open');
 });
 
@@ -422,7 +335,7 @@ it('en read-mottagare får 403 och en write-mottagare 302', function () {
         ->patch(listansUrl($lasarensRad), ['gtd_list' => 'next'])
         ->assertForbidden();
 
-    expect($lasarensRad->fresh()->gtd_list)->toBe('inbox');
+    expect($lasarensRad->fresh()->gtd_list)->toBe('next');
 
     actingAs($skrivare)
         ->from(listansSidaUrl($skrivarensSchema))
@@ -457,7 +370,7 @@ it('ändringen loggas med bara de fält som ändrades', function () {
         ]);
 
     actingAs($anvandare)
-        ->patch(listansUrl($rad), ['gtd_list' => 'next'])
+        ->patch(listansUrl($rad), ['gtd_list' => 'someday'])
         ->assertRedirect();
 
     $andra = AuditLog::query()
@@ -467,7 +380,7 @@ it('ändringen loggas med bara de fält som ändrades', function () {
 
     expect($andra->meta)->toBe([
         'changed' => ['gtd_list'],
-        'gtd_list' => ['from' => 'inbox', 'to' => 'next'],
+        'gtd_list' => ['from' => 'next', 'to' => 'someday'],
     ]);
 });
 

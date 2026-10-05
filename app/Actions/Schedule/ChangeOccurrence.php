@@ -5,6 +5,7 @@ namespace App\Actions\Schedule;
 use App\Actions\Audit\RecordAuditEvent;
 use App\Exceptions\Api\ApiException;
 use App\Models\AuditLog;
+use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
@@ -28,18 +29,24 @@ use RuntimeException;
  * värdet med 422; vakten här är den andra raden för samma regel, för
  * actionen anropas från fler än en yta (issue 238 kopplar på `/api`).
  *
- * **Förvalet lärs in en gång** (ADR-0052 § 2): går listan från `inbox` till
- * `next` eller `someday` och schemats `default_gtd_list` fortfarande är null,
- * sätts det till den nya listan. `waiting` blir aldrig förval — att vänta
- * gäller en enskild gång, inte regeln — och ett förval som redan är satt
- * ändras aldrig här.
+ * **Förvalet rörs inte här.** Regeln som lärde in det när förekomsten lämnade
+ * Inbox är borta (M27 · issue 244, [[ADR-0054 Inboxen]] § 5): förvalet sätts
+ * när uppgiften SKAPAS på ett item eller BEARBETAS ur inboxen, och en senare
+ * lista är ett enskilt val som inte säger något om regeln.
+ *
+ * **En förekomst i inboxen kan inte få en lista.** `gtd_list` sätts när
+ * uppgiften bearbetas (App\Actions\Inbox\ProcessInboxTask), och en PATCH med
+ * en lista på en obearbetad rad nekas med 422 `occurrence.in_inbox` — samma
+ * spärr och samma form som `occurrence.not_open` nedan. Utan den hade
+ * användaren kunnat sätta en lista på en uppgift som fortfarande ligger i
+ * inboxen, och de två vyerna hade sagt olika saker om samma rad.
  *
  * **Låset ligger på SCHEMAT, inte på förekomsten.** Samma ordning som
  * CloseOccurrence (issue 22b § Beslut 9): schemaraden `lockForUpdate()`:as
  * först och förekomsten läses om under det låset. Ordningen är inte valfri —
  * två anropare som tar samma två lås i olika ordning kan låsa varandra, och
- * eftersom schemat äger både förvalet och sin enda aktiva förekomst är
- * schemaraden den som serialiserar ändringen mot en samtidig avbockning.
+ * eftersom schemat äger sin enda aktiva förekomst är schemaraden den som
+ * serialiserar ändringen mot en samtidig avbockning.
  * Den som förlorar kapplöpningen ser då att förekomsten inte längre är aktiv
  * och faller på `occurrence.not_open` — samma svar som CloseOccurrence ger.
  *
@@ -84,14 +91,20 @@ class ChangeOccurrence
                 throw ApiException::make('occurrence.not_open', ['status' => $lockedOccurrence->status], 422);
             }
 
+            // En förekomst i inboxen har ingen lista och får ingen här
+            // (ADR-0054 § 5): listan sätts när uppgiften bearbetas, och den
+            // vägen är ProcessInboxTask. Spärren gäller bara ett faktiskt
+            // listbyte — en PATCH som bara rör statusen ska gå igenom.
+            if ($gtdList !== null && $gtdList !== $lockedOccurrence->gtd_list && $this->inInbox($lockedSchedule)) {
+                throw ApiException::make('occurrence.in_inbox', [], 422);
+            }
+
             $meta = [];
 
             if ($gtdList !== null && $gtdList !== $lockedOccurrence->gtd_list) {
                 $previous = $lockedOccurrence->gtd_list;
                 $lockedOccurrence->gtd_list = $gtdList;
                 $meta['gtd_list'] = ['from' => $previous, 'to' => $gtdList];
-
-                $this->learnDefaultList($lockedSchedule, $previous, $gtdList);
             }
 
             if ($status !== null && $status !== $lockedOccurrence->status) {
@@ -132,26 +145,12 @@ class ChangeOccurrence
     }
 
     /**
-     * Lär in schemats förval (ADR-0052 § 2). Bara den första flytten UT ur
-     * `inbox` räknas: kommer listan från `waiting` är det en ombearbetning av
-     * en enskild gång och säger ingenting om regeln. `waiting` som mål är
-     * aldrig ett förval, och ett förval som redan är satt står kvar.
+     * Ligger förekomstens schema på ett inbox-item ([[ADR-0054 Inboxen]]
+     * § 5)? `$schedule` är den LÅSTA raden, så itemet och dess container läses
+     * med ett eget uppslag — samma form som OpenNextOccurrence::inInbox().
      */
-    private function learnDefaultList(Schedule $schedule, string $from, string $to): void
+    private function inInbox(Schedule $schedule): bool
     {
-        if ($from !== ScheduleOccurrence::GTD_INBOX) {
-            return;
-        }
-
-        if (! in_array($to, Schedule::DEFAULT_GTD_LISTS, true)) {
-            return;
-        }
-
-        if ($schedule->default_gtd_list !== null) {
-            return;
-        }
-
-        $schedule->default_gtd_list = $to;
-        $schedule->save();
+        return (bool) Item::query()->find($schedule->item_id)?->container?->isInbox();
     }
 }

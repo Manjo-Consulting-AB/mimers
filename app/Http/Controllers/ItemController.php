@@ -713,6 +713,13 @@ class ItemController extends Controller
             'item' => (new ItemResource($item))->resolve($request),
             'categories' => $this->categoryNames([$item]),
 
+            // Sant när containern är en inbox (ADR-0054 § 1). Flaggan döljer
+            // *Back to Inbox* på bilageraden — bilagan är redan där. Ligger
+            // bredvid resursen och inte i den, samma linje som `paths` och
+            // `categories`: `ContainerResource` är `/api`:s format och har
+            // inte bett om ett vy-fält.
+            'containerIsInbox' => $container->isInbox(),
+
             // Förekomsterna (issue 95 · [[ADR-0041 Itemets vy]] § Beslut):
             // varje väg som sina led, och exakt en av dem märkt som den
             // AKTUELLA. Vägen står i querysträngen — hela ledet från roten,

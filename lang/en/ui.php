@@ -487,6 +487,15 @@ return [
         // confirmation says what happened to the task, not to the item it left.
         'schedule-moved' => 'The task has been moved.',
 
+        // Issue 244 · [[ADR-0054 Inboxen]] § 6. One code per action and not a
+        // shared "saved": *Back to Inbox* puts the row back in the queue (and
+        // nulls its list), while processing gives it a place, a list and
+        // maybe a date. `schedule-in-inbox` says the inbox, not "moved",
+        // because the target is not the user's to choose.
+        'schedule-in-inbox' => 'The task is back in the inbox.',
+        'attachment-in-inbox' => 'The attachment is back in the inbox.',
+        'schedule-processed' => 'The task has been processed.',
+
         // Issue 63b decisions 5 and 8. Checking off and skipping get one
         // sentence each: they close the same row but say different things
         // about the work, and a shared "the occurrence is closed" would make
@@ -574,6 +583,13 @@ return [
             // on. The picker will not offer it (issue 243), but the code is
             // reachable from a hand-made request and from /api (issue 247).
             'same_item' => 'The file is already on that item.',
+
+            // Issue 244 · [[ADR-0054 Inboxen]] § 6: *Back to Inbox* on a file
+            // that is already in the inbox. The action goes to the user's OWN
+            // inbox and is never a choice in the picker, so the only way to
+            // hit this is a hand-made request — or a second tap before the
+            // page redrew.
+            'already_in_inbox' => 'The file is already in the inbox.',
         ],
 
         // Issue 62a decision 7: `RestoreContent` throws `trash.parent_deleted`
@@ -699,6 +715,12 @@ return [
             // on the `depends_on` field. The cycle sentence uses `data`: the
             // code carries the two ULIDs of the edge that was attempted, and
             // the sentence names them with their schedule titles.
+            // Issue 244 · [[ADR-0054 Inboxen]] § 5: a list cannot be set on an
+            // occurrence that lies in the inbox. The list is set when the task
+            // is PROCESSED (App\Actions\Inbox\ProcessInboxTask), and the row's
+            // picker is not drawn for an inbox row either (issue 244 § 6).
+            'in_inbox' => 'This task is in the inbox. Process it to give it a list.',
+
             'dependency_self' => 'An occurrence cannot wait for itself.',
             'dependency_cycle' => 'This direction would create a circle: ":schedule" already waits for ":depends_on", directly or through other occurrences.',
             'dependency_not_in_container' => 'Dependencies only run between occurrences in the same container.',
@@ -724,6 +746,23 @@ return [
             // on. The picker will not offer it (issue 243), but the code is
             // reachable from a hand-made request and from /api (issue 247).
             'same_item' => 'The task is already on that item.',
+
+            // Issue 244 · [[ADR-0054 Inboxen]] § 6. Only a task that lies in
+            // the user's OWN inbox can be processed — the gate (`delete` on
+            // the source) stops someone else's inbox with a 403, and this code
+            // answers where the task actually lies.
+            'not_in_inbox' => 'Only a task in your own inbox can be processed.',
+
+            // Issue 244 · ADR-0054 § 6: *Back to Inbox* on a task that is
+            // already there. The action goes to the user's own inbox and is
+            // never a choice in the picker.
+            'already_in_inbox' => 'The task is already in the inbox.',
+
+            // Issue 244 · ADR-0054 § 6: processing a task whose target is an
+            // inbox item. The picker (issue 242) never offers one, but the
+            // code is reachable from a hand-made request and from /api
+            // (issue 247).
+            'not_a_valid_target' => 'Choose an item outside the inbox as the target.',
         ],
 
         // Issue 65b decision 5: the feature gate. `Entitlements::assertFeature()`
@@ -3324,8 +3363,10 @@ return [
                 // `todo.list.*` — samma fyra ord i båda formulären.
                 'gtd_list' => 'List',
                 'default_gtd_list' => 'Default list for new occurrences',
-                'default_gtd_list_hint' => 'The default is set the first time a task leaves Inbox.',
-                'default_gtd_list_none' => 'Not set',
+                // M27 · issue 244 (ADR-0054 § 5): regeln som lärde in förvalet
+                // när en uppgift lämnade Inbox är borta. Förvalet sätts när
+                // uppgiften skapas eller bearbetas, och meningen säger det.
+                'default_gtd_list_hint' => 'The default is set when the task is created, or when it is processed from the inbox.',
 
                 // `lead_days` is explained by what it DOES (decision 5): it is
                 // `visible_from`, and without the sentence the field is
@@ -3657,22 +3698,34 @@ return [
 
         // M26 · issue 237: flikraden över listorna. `active` är frånvaron av
         // `?list=` — alla aktiva förekomster — och `calendar` och `done` är
-        // de två härledda vyerna (ADR-0052 § 1). Flikens namn för de fyra
-        // lagrade listorna är `todo.list.*`; bara de här tre orden är nya.
+        // härledda vyer (ADR-0052 § 1). Flikens namn för de tre lagrade
+        // listorna är `todo.list.*`; bara de här orden är nya.
         // `label` är tablistens tillgängliga namn och behövs av `UiTabs`.
+        //
+        // M27 · issue 244: `in_progress` är den tredje härledda vyn
+        // (ADR-0054 § 5), och *Inbox* — flikens namn är `todo.list.inbox`,
+        // som förut. Fliken *Inbox* finns bara på `/tasks`: inboxen hör inte
+        // till någon container.
         'tabs' => [
             'label' => 'Task lists',
             'active' => 'Active',
+            'in_progress' => 'In progress',
             'calendar' => 'Calendar',
             'done' => 'Done',
         ],
 
         // Panelens rubrik (M26 · issue 237, Beslut 3). Raderna under den är
-        // `todo.list.*` och de två flikorden ovan — panelen är samma sex
-        // listor som flikraden bär, ritade som tal.
+        // `todo.list.*` och flikorden ovan — panelen är samma listor som
+        // flikraden bär, ritade som tal.
         'gtd_panel' => [
             'heading' => 'Lists',
         ],
+
+        // *Back to Inbox* (M27 · issue 244, ADR-0054 § 6): handlingen som
+        // skickar tillbaka en uppgift eller en bilaga till den egna inkorgen
+        // för att bearbetas igen. Den går alltid till användarens EGEN inbox
+        // och är därför aldrig ett val i målväljaren.
+        'back_to_inbox' => 'Back to Inbox',
 
         // Växeln på raden (issue 236): statusen `in_progress`, det frivilliga
         // mellantillståndet mellan `open` och avbockad (ADR-0052 § 1).

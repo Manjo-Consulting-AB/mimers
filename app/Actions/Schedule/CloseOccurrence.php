@@ -185,18 +185,13 @@ class CloseOccurrence
                 meta: ['due_at' => $lockedOccurrence->due_at?->toDateString()],
             );
 
-            // Förvalet lärs in när en förekomst stängs (ADR-0052 § 2, M26 ·
-            // issue 235 § Beslut 2): är schemats `default_gtd_list` fortfarande
-            // null sätts det till `next`, oavsett om förekomsten bockades av
-            // eller hoppades över. `next` och inte den stängda förekomstens
-            // lista — en avbockning säger "den här gången är gjord", inte
-            // "nästa gång hör till Waiting". Skrivningen ligger FÖRE
-            // OpenNextOccurrence nedan, så att den nya förekomsten ärver
-            // förvalet i samma transaktion och i samma läsning av raden.
-            if ($lockedSchedule->default_gtd_list === null) {
-                $lockedSchedule->default_gtd_list = ScheduleOccurrence::GTD_NEXT;
-                $lockedSchedule->save();
-            }
+            // **Förvalet sätts inte här** (M27 · issue 244, [[ADR-0054
+            // Inboxen]] § 5). Regeln från M26 · issue 235 § Beslut 2 — att en
+            // avbockning lärde in `next` när förvalet saknades — är borta:
+            // förvalet bestäms när uppgiften skapas eller bearbetas, och en
+            // avbockning säger ingenting om nästa gång. En uppgift i inboxen
+            // som bockas av får därför nästa förekomst UTAN lista, tills den
+            // bearbetas (ADR-0054 § 6).
 
             // Steg 3 och 4 — nästa förfall räknas och nästa förekomst skapas
             // av OpenNextOccurrence, i samma transaktion. `$from` är det enda
