@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import types
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import process_next_issue as p
@@ -1227,6 +1228,83 @@ def test_rott_pa_basen_lagger_inte_tradet_i_tmp():
 def test_stadningen_kors_for_varje_bana():
     huvud = open(p.__file__).read().split('if __name__ == "__main__":')[1]
     assert huvud.index("stada_bastrad()") < huvud.index('sys.argv[1] == "--resume-pr"')
+
+
+# =====================================================================
+# Tillfälliga API-fel: vänta och ta om i stället för needs-human (#517, #604)
+# =====================================================================
+
+KLOCKAN_TIO_UTC = datetime(2026, 9, 26, 10, 0, 14, tzinfo=timezone.utc)
+
+
+def test_sessionsgransen_vantar_till_aterstarten():
+    utskrift = "You've hit your session limit · resets 1:30pm (UTC)"
+    vantan = p.sessionsgransens_vantan(utskrift, KLOCKAN_TIO_UTC)
+    assert vantan == 3 * 3600 + 29 * 60 + 46 + p.SESSIONSGRANS_MARGINAL, vantan
+
+
+def test_sessionsgransen_som_redan_passerat_galler_i_morgon():
+    utskrift = "You've hit your session limit · resets 9am (UTC)"
+    vantan = p.sessionsgransens_vantan(utskrift, KLOCKAN_TIO_UTC)
+    assert 22 * 3600 < vantan < 24 * 3600, vantan
+
+
+def test_sessionsgransen_utan_lasbar_tid_vantar_en_halvtimme():
+    assert p.sessionsgransens_vantan("You've hit your usage limit", KLOCKAN_TIO_UTC) == \
+        p.SESSIONSGRANS_UTAN_TID
+
+
+def test_annat_fel_ar_ingen_sessionsgrans():
+    assert p.sessionsgransens_vantan("API Error: 529 Overloaded", KLOCKAN_TIO_UTC) is None
+
+
+def test_overbelastat_kanns_igen():
+    assert p.OVERBELASTAD.search("UT: API Error: 529 Overloaded. This is a server-side issue")
+    assert not p.OVERBELASTAD.search("UT: Error: 401 Unauthorized")
+
+
+def _kor_med_svar(svar):
+    """Kör call_claude_direct() mot en följd av påhittade processutfall, utan att sova."""
+    anrop, sovit = [], []
+    ursprung = (p.run_cmd, p.time.sleep, p.send_pushover)
+    utfall = iter(svar)
+    p.run_cmd = lambda *a, **k: anrop.append(a) or next(utfall)
+    p.time.sleep = sovit.append
+    p.send_pushover = lambda *a, **k: None
+    try:
+        return p.call_claude_direct("opus", "prompt", "/tmp"), anrop, sovit
+    finally:
+        p.run_cmd, p.time.sleep, p.send_pushover = ursprung
+
+
+def _utfall(kod, ut=""):
+    return types.SimpleNamespace(returncode=kod, stdout=ut, stderr="")
+
+
+def test_overbelastat_api_tas_om_och_lyckas():
+    svar, anrop, sovit = _kor_med_svar([_utfall(1, "API Error: 529 Overloaded"), _utfall(0, "klart")])
+    assert svar == "klart"
+    assert len(anrop) == 2
+    assert sovit == [p.OVERBELASTAD_PAUSER[0]]
+
+
+def test_overbelastat_api_ger_upp_efter_sista_pausen():
+    fel = [_utfall(1, "API Error: 529 Overloaded")] * (len(p.OVERBELASTAD_PAUSER) + 1)
+    try:
+        _kor_med_svar(fel)
+    except Exception as e:
+        assert "Kommando misslyckades" in str(e) and "529" in str(e)
+    else:
+        raise AssertionError("ett bestående 529 ska till slut resa ett fel")
+
+
+def test_vanligt_fel_tas_inte_om():
+    try:
+        _kor_med_svar([_utfall(1, "Error: 401 Unauthorized")])
+    except Exception as e:
+        assert "401" in str(e)
+    else:
+        raise AssertionError("ett fel som inte är tillfälligt ska resas direkt")
 
 
 if __name__ == "__main__":

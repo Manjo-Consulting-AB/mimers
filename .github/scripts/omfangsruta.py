@@ -303,6 +303,26 @@ OMFANGSLAGE_ETIKETT = "Omfångsläge"
 OMFANGSLAGE_SPARAD = "spårad"
 DEKLARATIONSMARKOR = "Utanför rutan:"
 
+# Issueformulärets ruta är ett kodblock, och den som skriver issuen förklarar
+# gärna en rad där den står: `app/Http/Controllers/TodoController.php
+# (bara konstanten)`. Läst rå blir raden en glob som aldrig matchar sin egen fil.
+# PR #723 (issue 225) fick be arkitekten om undantag för två filer som stod i
+# rutan, och i M24-M27 bar elva issues av trettioåtta minst en sådan rad. Två
+# blanksteg, eller ett blanksteg och en parentes, avslutar sökvägen - ett enda
+# blanksteg gör det inte, för valvets filnamn bär sådana ("docs/00 Index.md").
+KOMMENTAR_EFTER_SOKVAG = re.compile(r"\s{2,}|\s+\(")
+
+# Ett befintligt prov vars förväntan issuen gör felaktig hör till rutan, men
+# rutan skrivs innan någon vet vilka prov det är. Det var den vanligaste filen
+# utanför rutan i fyra retron i rad (M11, M12-M17, M23, M24-M27 - 42 av 58 filer
+# i den senaste), och i läget `fast` kostade varje sådan fil ett arkitektsvar för
+# att bevilja något ingen ifrågasatte. Villkoret är deterministiskt: provet fanns
+# på basen och namnger en konkret fil i `In scope` - sökvägen, sökvägen under
+# resources/ (det `resource_path()` tar), eller klassens namnrymd. Då följer det
+# med rutan. Ett NYTT prov följer inte med: det ska stå i rutan som allt annat.
+# `Out of scope` går fortfarande före, se bedom_fil().
+PROVKATALOG = "tests/"
+
 
 def pr_nummer_ur_handelsen() -> str | None:
     """PR-numret ur GITHUB_EVENT_PATH.
@@ -475,8 +495,36 @@ def globbar(text: str) -> list[str]:
         if citerade:
             rader.extend(citerade)
         elif not rad.startswith(("-", "*")):
-            rader.append(rad)
+            rader.append(KOMMENTAR_EFTER_SOKVAG.split(rad, 1)[0])
     return rader
+
+
+def namn_for_fil(fil: str) -> list[str]:
+    """Det ett prov skriver när det syftar på `fil`: sökvägen, sökvägen under
+    resources/ och, för en klass under app/, dess namnrymd."""
+    namn = [fil]
+    if fil.startswith("resources/"):
+        namn.append(fil.removeprefix("resources/"))
+    if fil.startswith("app/") and fil.endswith(".php"):
+        namn.append("App\\" + fil.removeprefix("app/").removesuffix(".php").replace("/", "\\"))
+    return namn
+
+
+def prov_foljer_rutan(fil: str, innanfor: list[str], innehall_pa_basen: str | None) -> str | None:
+    """Filen i `In scope` som ett befintligt prov namnger, eller None.
+
+    `innehall_pa_basen` är provets text på basen - None om provet är nytt, och
+    ett nytt prov följer aldrig med. Bara konkreta sökvägar räknas: en glob som
+    `app/Models/**` namnger ingen fil ett prov kan syfta på.
+    """
+    if not fil.startswith(PROVKATALOG) or innehall_pa_basen is None:
+        return None
+    for monster in innanfor:
+        if any(tecken in monster for tecken in "*?[") or monster.endswith("/"):
+            continue
+        if any(namn in innehall_pa_basen for namn in namn_for_fil(monster)):
+            return monster
+    return None
 
 
 def matchar(fil: str, monster: str) -> bool:
@@ -564,8 +612,11 @@ def bedom_fil(
     undantag: list[tuple[str, str]],
     deklarerade: list[str],
     lage: str,
+    foljer: str | None = None,
 ) -> tuple[str, str]:
-    """Utfallet för EN ändrad fil: ("ok" | "beviljad" | "deklarerad" | "brott", text).
+    """Utfallet för EN ändrad fil: ("ok" | "beviljad" | "följer" | "deklarerad" |
+    "brott", text). `foljer` är filen i rutan som provet namnger, se
+    prov_foljer_rutan().
 
     Bruten ur main() för att gå att testa: ordningen mellan `In scope`, ett
     beviljat undantag, `Out of scope` och en deklaration är hela regeln, och en
@@ -593,6 +644,13 @@ def bedom_fil(
             if lage == OMFANGSLAGE_SPARAD else ""
         )
         return "brott", f"{fil} ligger under Out of scope ({', '.join(traffad_utanfor)}){tillagg}"
+
+    # I båda lägena, och utan att någon behöver fråga: se PROVKATALOG.
+    if foljer:
+        return "följer", (
+            f"{fil} är ett befintligt prov som namnger {foljer} i In scope och följer "
+            "med rutan. Släpps igenom, räknas som omfångsdrift i retron."
+        )
 
     if lage == OMFANGSLAGE_SPARAD:
         if any(matchar(fil, monster) for monster in deklarerade):
@@ -910,10 +968,21 @@ def main() -> int:
     if pr_nummer:
         undantag = beviljade_undantag(repo, pr_nummer, token)
 
+    def innehall_pa_basen(fil: str) -> str | None:
+        svar = subprocess.run(
+            ["git", "show", f"{diffbas}:{fil}"], capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        return svar.stdout if svar.returncode == 0 else None
+
     brott: list[str] = []
     slapp_igenom = 0
     for fil in andrade:
-        utfall, text = bedom_fil(fil, innanfor, utanfor, undantag, deklarerade, lage)
+        foljer = (
+            prov_foljer_rutan(fil, innanfor, innehall_pa_basen(fil))
+            if fil.startswith(PROVKATALOG) else None
+        )
+        utfall, text = bedom_fil(fil, innanfor, utanfor, undantag, deklarerade, lage, foljer)
         if utfall == "ok":
             continue
         if utfall == "brott":

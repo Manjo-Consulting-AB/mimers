@@ -25,7 +25,8 @@ import fcntl
 import shutil
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 # Ovillkorligen oskiftad utskrift - relevant oavsett hur skriptet startas
 # (shebangens -u gäller bara vid direkt körning, inte `python3 script.py`).
@@ -775,8 +776,87 @@ def call_claude_direct(model, prompt, cwd):
         # ovan.
         "--setting-sources", "user,project",
     ]
-    result = run_cmd(cmd, check=True, cwd=cwd, input=prompt, timeout=AGENT_TIMEOUT)
-    return result.stdout
+    overbelastad = 0
+    vantat = 0
+    while True:
+        result = run_cmd(cmd, check=False, cwd=cwd, input=prompt, timeout=AGENT_TIMEOUT)
+        if result.returncode == 0:
+            return result.stdout
+        utskrift = f"{result.stdout or ''}\n{result.stderr or ''}"
+        paus = sessionsgransens_vantan(utskrift, datetime.now(timezone.utc))
+        if paus is not None and vantat + paus <= MAX_SESSIONSVANTAN:
+            print(f"  ⏸ Sessionsgränsen - väntar {paus // 60} min och tar om samma anrop.")
+            send_pushover(f"⏸️ {model}: sessionsgränsen. Väntar {paus // 60} min och tar om anropet.")
+            time.sleep(paus)
+            vantat += paus
+            continue
+        if paus is None and OVERBELASTAD.search(utskrift) and overbelastad < len(OVERBELASTAD_PAUSER):
+            paus = OVERBELASTAD_PAUSER[overbelastad]
+            overbelastad += 1
+            print(f"  ⏸ API:et är överbelastat - omtag {overbelastad}/{len(OVERBELASTAD_PAUSER)} om {paus} s.")
+            time.sleep(paus)
+            continue
+        raise Exception(
+            f"Kommando misslyckades: {' '.join(cmd)} (kod {result.returncode})"
+            f"\nUT: {(result.stdout or '').strip()[-2000:]}"
+            f"\nFEL: {(result.stderr or '').strip()[-2000:]}"
+        )
+
+
+# Två fel hos modell-API:et säger själva att de går över, och båda blev
+# `needs-human` med en stillastående kö: sessionsgränsen under issue 139 (#517,
+# tre timmar och fyrtiosju minuter till Tony såg det) och `529 Overloaded` under
+# issue 178 (#604). Se docs/Process/Lärdomar.md § Bekräftat. Att vänta i
+# processen i stället för att släppa issuen behåller worktreen och allt arbete
+# fram till anropet - en omstart från nästa kökörning gör om implementationen.
+#
+# Kön är seriell och håller låset medan den väntar, så väntan kostar inget annat
+# arbete. Taket är fönstrets längd plus marginal: en gräns som inte släpper inom
+# den har inte den form felet påstod, och då är det ett fel för en människa.
+OVERBELASTAD = re.compile(r"API Error: 5\d\d|\b529\b|overloaded", re.IGNORECASE)
+OVERBELASTAD_PAUSER = (60, 300, 900)
+SESSIONSGRANS = re.compile(
+    r"hit your (?:session|usage) limit.*?resets\s+(?:at\s+)?"
+    r"(?P<timme>\d{1,2})(?::(?P<minut>\d{2}))?\s*(?P<ampm>[ap]m)?"
+    r"(?:\s*\((?P<zon>[^)]+)\))?",
+    re.IGNORECASE | re.DOTALL,
+)
+SESSIONSGRANS_UTAN_TID = 30 * 60
+SESSIONSGRANS_MARGINAL = 2 * 60
+MAX_SESSIONSVANTAN = 5 * 60 * 60 + 15 * 60
+
+
+def sessionsgransens_vantan(utskrift, nu):
+    """Sekunder att vänta på en sessionsgräns, eller None om utskriften inte är en.
+
+    Tiden läses ur felet (*"resets 1:30pm (UTC)"*). Går klockslaget inte att
+    läsa - okänd tidszon, annan form - väntas en halvtimme i taget, och taket i
+    call_claude_direct() avgör när det får ta slut.
+    """
+    traff = SESSIONSGRANS.search(utskrift or "")
+    if not traff:
+        if re.search(r"hit your (?:session|usage) limit", utskrift or "", re.IGNORECASE):
+            return SESSIONSGRANS_UTAN_TID
+        return None
+    timme = int(traff["timme"])
+    minut = int(traff["minut"] or 0)
+    ampm = (traff["ampm"] or "").lower()
+    if ampm == "pm" and timme != 12:
+        timme += 12
+    elif ampm == "am" and timme == 12:
+        timme = 0
+    try:
+        namn = (traff["zon"] or "UTC").strip()
+        zon = timezone.utc if namn.upper() == "UTC" else ZoneInfo(namn)
+    except Exception:
+        return SESSIONSGRANS_UTAN_TID
+    if timme > 23 or minut > 59:
+        return SESSIONSGRANS_UTAN_TID
+    lokalt = nu.astimezone(zon)
+    aterstart = lokalt.replace(hour=timme, minute=minut, second=0, microsecond=0)
+    if aterstart <= lokalt:
+        aterstart += timedelta(days=1)
+    return int((aterstart - lokalt).total_seconds()) + SESSIONSGRANS_MARGINAL
 
 
 def usage_ok_to_proceed():
@@ -914,6 +994,11 @@ def bygg_granskningsprompt(issue_body, diff, uppfoljning=False, fragor="", pr_nu
             f"att CI:s omfångsgrind släpper igenom filen; din bekräftelse gör det inte, och "
             f"sätter du etiketten når frågan aldrig arkitekten (PR #522). Sätt INTE etiketten "
             f"då, och skriv din bedömning i svaret så att arkitekten får den.\n"
+            f"Två sorters filer utanför 'In scope' är INTE en begäran om undantag, för "
+            f"grinden släpper igenom dem själv: ett befintligt prov under tests/ som "
+            f"namnger en fil i 'In scope', och - när issuen står i läget `spårad` - en "
+            f"fil som PR-kroppen deklarerar under 'Utanför rutan:'. Nämner "
+            f"implementeraren bara sådana filer behandlar du punkten som besvarad.\n"
             f"Kräver en punkt en kodändring är den ett vanligt fynd i din numrerade lista "
             f"nedan, inte en etikett.\n"
             f"Vid minsta tvekan: sätt inte etiketten.\n"
@@ -2470,8 +2555,10 @@ def process_next_issue(issue_number=None):
 
 OMFANGSLINT_INSTRUKTION = (
     "\n\nLinten ovan är en UPPLYSNING, inte ett tillstånd. Omfångsrutan är "
-    "fortfarande bindande, och grinden kontrollerar den. Står issuen i läget "
-    "`fast` och du behöver en av filerna: lämna den orörd och skriv frågan "
+    "fortfarande bindande, och grinden kontrollerar den. Ett befintligt prov "
+    "under tests/ som namnger en fil i 'In scope' följer med rutan i båda "
+    "lägena - ändra det utan att fråga. Står issuen i läget "
+    "`fast` och du behöver någon annan av filerna: lämna den orörd och skriv frågan "
     "under '## Frågor och antaganden'. Står den i läget `spårad`: ändra filen "
     "och deklarera den i PR-kroppen under 'Utanför rutan:', med en rad om "
     "vilken 'Klart när'-punkt som kräver den.\n"
@@ -2553,7 +2640,11 @@ def _process_in_worktree(issue_num, issue_title, issue_body, labels, risk_class,
         "'## Frågor och antaganden' - hittade du inte svaret i issuens läslista, "
         "skriv frågan här i stället för att gissa i koden, och lista varje "
         "antagande du ändå tvingats göra. Ligger en ändrad fil utanför issuens "
-        "'In scope', skriv vilken och varför här. 'Inga.' är ett giltigt svar.\n\n"
+        "'In scope', skriv vilken och varför här - utom i två fall, som inte är "
+        "frågor och hör hemma under '## Sammanfattning': ett befintligt prov under "
+        "tests/ som namnger en fil i 'In scope' (det följer med rutan, grinden "
+        "släpper igenom det), och i läget `spårad` en fil du deklarerat under "
+        "'Utanför rutan:'. 'Inga.' är ett giltigt svar.\n\n"
         "'## Processnotering' - en rad: vad kostade mer än det borde? Fel axel, "
         "för tunn läslista, otydlig omfångsruta, test som var svårt att skriva. "
         "'Inget.' är ett giltigt och vanligt svar, men skriv det aktivt. Det här "
