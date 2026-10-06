@@ -49,6 +49,7 @@ Thumbs.db
 .claude/settings.local.json
 .claude/usage.jsonl
 .claude/process-next-issue.lock
+.claude/bas-rod.json 
 # headroom-proxyns låsfil. Följde med issue 86:s commit (PR #409) och fällde omfångsgrinden.
 .claude/.headroom_wrap_settings.lock
 .claude/hooks/__pycache__/
