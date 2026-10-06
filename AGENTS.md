@@ -17,7 +17,7 @@ Slå upp ditt issuenummer i [Backlog](docs/Backlog.md) och öppna **bara** din m
 | Gren `feature/issue-NN`, där NN är GitHub-numret | du |
 | PR mot `main`, CI grön | du |
 | Merge | Tony |
-| Deploy till staging | automatiskt vid merge |
+| Deploy till staging | automatiskt vid versionstagg |
 | Release `vX.Y.Z` och produktionsdeploy | Tony |
 
 Ingen pushar direkt till `main`, inte heller Tony.
