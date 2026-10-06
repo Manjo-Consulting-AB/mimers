@@ -248,6 +248,68 @@ def test_mallens_kommentar_ger_ingen_olasbar_deklaration():
     assert not o.olasbar_deklaration(kropp)
 
 
+# =====================================================================
+# globbar() - en kommentar efter sökvägen på en kodblocksrad (PR #723)
+# =====================================================================
+
+def test_kommentar_efter_tva_blanksteg_skars_bort():
+    text = "```\napp/Http/Controllers/TodoController.php        (bara konstanten)\n```"
+    assert o.globbar(text) == ["app/Http/Controllers/TodoController.php"]
+
+
+def test_parentes_efter_ett_blanksteg_skars_bort():
+    text = "```\ntests/Feature/Frontend/TodovyTest.php (grupprovet: 2026-06-20 blir this_week)\n```"
+    assert o.globbar(text) == ["tests/Feature/Frontend/TodovyTest.php"]
+
+
+def test_ett_blanksteg_i_filnamnet_behalls():
+    """Valvets filnamn bär blanksteg - ett ensamt avslutar inte sökvägen."""
+    assert o.globbar("```\ndocs/00 Index.md\n```") == ["docs/00 Index.md"]
+
+
+# =====================================================================
+# prov_foljer_rutan() - ett befintligt prov som namnger en fil i rutan
+# =====================================================================
+
+RUTA = ["app/Actions/Schedule/ListTodo.php", "resources/js/pages/Containers/Tasks.vue", "app/Models/**"]
+
+
+def test_prov_som_laser_vyn_som_text_foljer():
+    kalla = "file_get_contents(resource_path('js/pages/Containers/Tasks.vue'))"
+    assert o.prov_foljer_rutan("tests/Feature/Frontend/ContainerflikTest.php", RUTA, kalla) == \
+        "resources/js/pages/Containers/Tasks.vue"
+
+
+def test_prov_som_importerar_klassen_foljer():
+    kalla = "use App\\Actions\\Schedule\\ListTodo;"
+    assert o.prov_foljer_rutan("tests/Feature/Uppgift/TodoTest.php", RUTA, kalla) == \
+        "app/Actions/Schedule/ListTodo.php"
+
+
+def test_nytt_prov_foljer_inte():
+    assert o.prov_foljer_rutan("tests/Feature/Uppgift/NyttTest.php", RUTA, None) is None
+
+
+def test_prov_som_inte_namnger_rutan_foljer_inte():
+    assert o.prov_foljer_rutan("tests/Feature/Uppgift/TodoTest.php", RUTA, "use App\\Models\\Item;") is None
+
+
+def test_bara_prov_kan_folja():
+    kalla = "use App\\Actions\\Schedule\\ListTodo;"
+    assert o.prov_foljer_rutan("app/Http/Controllers/TodoController.php", RUTA, kalla) is None
+
+
+def test_foljande_prov_slapps_igenom_i_laget_fast():
+    utfall, text = o.bedom_fil("tests/Feature/Uppgift/TodoTest.php", INNANFOR, UTANFOR, [], [], "fast",
+                               "app/Support/Frontend/ActiveContainer.php")
+    assert utfall == "följer", (utfall, text)
+
+
+def test_out_of_scope_gar_fore_ett_foljande_prov():
+    utfall, _ = o.bedom_fil("lang/en/ui.php", INNANFOR, UTANFOR, [], [], "fast", "app/Models/Item.php")
+    assert utfall == "brott"
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())
