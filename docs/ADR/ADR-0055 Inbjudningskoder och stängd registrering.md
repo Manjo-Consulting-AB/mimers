@@ -107,7 +107,7 @@ Kommandona körs för hand och schemaläggs inte; de berörs därför inte av at
 
 ## Konsekvenser
 
-- **Pro löper i praktiken inte ut än.** `Account::currentPlan()` läser `status` och inte `current_period_end`, och ingenting sätter en utgången prenumeration till `cancelled`. Samma lucka gäller ägarbytets bonusår. Ingen betakod kan gå ut före oktober 2027, och frågan står i [[Tankar]] § Öppet.
+- **Pro löper ut genom planberäkningen, inte genom ett jobb** (Tonys beslut 2026-10-07). En `active`-prenumeration vars `current_period_end` passerat räknas som Free överallt där planen läses. Regeln står på ett ställe, `Subscription::isCurrent()`, och ingen rad skrivs om. `past_due` bär sin plan oavsett datum, eftersom en utebliven betalning hanteras av nedgraderingen. Regeln gäller också ägarbytets bonusår, som hade samma lucka. Ett konto över gratisgränsen efter utgången får sina nya uppladdningar nekade av kvoten, men inga filer raderas. Byggs i issue 265, före koderna delas ut.
 - **Två registreringar med samma enkla kod samtidigt.** Den andra nekas i transaktionen, efter att valideringen godkänt koden. Det felet bär `validation.invalid` på `voucher_code` i API:et i stället för `validation.redeemable_voucher`. Fallet är sällsynt nog att det inte motiverar mer.
 - **Befintliga användare kan inte lösa in en kod** i inställningarna. Modellen bär det, men ytan byggs när den behövs.
 

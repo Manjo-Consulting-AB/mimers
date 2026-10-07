@@ -58,7 +58,7 @@ B2B-nivåerna finns i [[ADR-0014 Prismodell]] och byggs inte i MVP.
 | account_id | FK | |
 | plan_id | FK | |
 | status | VARCHAR(20) | `active` \| `past_due` \| `cancelled` |
-| current_period_end | TIMESTAMP | |
+| current_period_end | TIMESTAMP | En `active`-rad bär sin plan bara före detta ögonblick; därefter gäller Free. `past_due` bär sin plan oavsett. Se [[ADR-0055 Inbjudningskoder och stängd registrering]] § Konsekvenser. |
 | grace_until | TIMESTAMP NULL | Sätts vid nedgradering, se nedan |
 | external_ref | VARCHAR(191) NULL | Merchant of record — tomt i MVP |
 
