@@ -4,7 +4,7 @@ Del av [[Backlog]]. Konventionerna som varje issue förutsätter står i indexet
 
 Tillagd 2026-10-07. Registreringen stängs för betan: en individuell inbjudningskod släpper in och ger Pro i 365 dagar, och en containerinbjudan är en egen väg in till Free. Bygger [[ADR-0055 Inbjudningskoder och stängd registrering]].
 
-**Ordningen är 262 → 263 → 264.** 263 och 264 ska ut i samma release, annars står API:et öppet medan webben är stängd. Efter releasen skapar Tony testarnas koder med `php artisan voucher:create --label=…` över SSH.
+**Ordningen är 262 → 263 → 264, och 265 står fritt** men ska vara ute innan första koden delas ut. 263 och 264 ska ut i samma release, annars står API:et öppet medan webben är stängd. Efter releasen skapar Tony testarnas koder med `php artisan voucher:create --label=…` över SSH.
 
 ---
 
@@ -37,3 +37,13 @@ GitHub #790. `POST /api/register` med `voucher_code` och `invitation_token`, und
 **Klart när:** utan kod ger 422 `validation.required`; en ogiltig kod ger `validation.redeemable_voucher`; en inbjudan ger Free; hela testsviten är grön.
 
 **Beror på:** 262, 263
+
+### 265. En utgången prenumeration räknas som Free
+
+GitHub #791. `Subscription::isCurrent()` och `scopeCurrent()`: en `active`-rad vars `current_period_end` passerat bär inte sin plan, i alla fem ställen som tolkar en prenumeration. Inget jobb.
+
+**Läs:** [[Planer och kvoter]] § subscription och § Nedgradering
+
+**Klart när:** ett utgånget Pro ger Free i planen, i kvoten och i livscykeljobben; `past_due` bär sin plan; ägarbytets bonus räknas från nu; ingen rad skrivs om; hela testsviten är grön.
+
+**Beror på:** —
