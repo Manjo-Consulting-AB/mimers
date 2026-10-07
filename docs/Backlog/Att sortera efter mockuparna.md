@@ -99,3 +99,5 @@ Genomgången av de två itemmockuparna mot datamodellen. Det som blev beslut st�
 **Delsträngssök kräver MariaDB i CI.** `LIKE '%ord%'` är dagens beteende via databasdrivaren; FULLTEXT-grenen i [[ADR-0012 Sök]] är avstängd tills sviten kan köras mot MariaDB. Den frågan står redan i [[Tankar]] § Öppet, rest i issue 2 och halvt besvarad 2026-09-03 — den behöver inte resas igen, den behöver avgöras.
 
 **Miniatyrer i itemlistan** står redan som öppen fråga i [[Tankar]] § Öppet, rest när 61b skrevs. Den avgörs av designen och behöver inget eget spår här.
+
+**Uppgiftens egen sida under inboxen**, observerat 2026-10-07 när [[M28 Testarnas fynd 2026-10-07]] skrevs. En uppgift i inboxen visar platsen *Inbox* på raden efter issue 249. Titeln länkar ändå till uppgiftens sida, och den sidans adress och brödsmulor hör till inboxens dolda container och item. Användaren hamnar alltså i systemets container genom en enda klickning. Tony beslutade samma dag att uppgiftens sida står kvar som den är tills det finns ett designunderlag för den. Fyndet tas med när den sidan designas.
