@@ -60,6 +60,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] | GTD-listan på förekomsten och skild från statusen; Calendar, Done och datumgrupperna härleds; en uppgift får sakna datum, ett återkommande schema får det inte | [[Scheman och uppgifter]] |
 | [[ADR-0053 Flytt och kopiering]] | Bilagor flyttas och kopieras, uppgifter flyttas; ägaren står för lagringen och blir målcontainerns ägarkonto om användaren är medlem där, annars användarens eget | [[Filer och lagring]], [[Planer och kvoter]] |
 | [[ADR-0054 Inboxen]] | En dold personlig container med ett item tar emot det som saknar hemvist; Inbox är en plats och inte en GTD-lista | [[Konton och åtkomst]], [[Scheman och uppgifter]] |
+| [[ADR-0055 Inbjudningskoder och stängd registrering]] | Registreringen är `open` eller `invite_only`; en hashad voucher per testare släpper in och ger Pro i 365 dagar, och en containerinbjudan är en egen väg in till Free | [[Planer och kvoter]], [[Konton och åtkomst]] |
 
 ## Om att ändra ett beslut
 
