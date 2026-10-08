@@ -3497,6 +3497,13 @@ return [
             // varje annan yta, se `todo.blocked` nedan och `TodoRow`.
             'include_children' => 'Include child items',
 
+            // M28 · issue 785: rubrikkortets underrad och växelns hjälptext,
+            // efter docs/Design/tasks-item.png. Underraden säger vad fliken
+            // visar; hjälptexten namnger itemet man står på och bär namnet i
+            // `:item`, samma mening som mockupen.
+            'subtitle' => 'Tasks linked to this item, including child items when selected.',
+            'children_help' => 'Shows tasks from :item and its child items.',
+
             'back' => 'Back to the item',
 
             // The next due date is the date of the OPEN occurrence (decision
