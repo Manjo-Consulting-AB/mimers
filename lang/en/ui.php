@@ -1219,7 +1219,8 @@ return [
                 'intro' => 'Two-factor authentication requires a one-time code from an authenticator app every time you log in.',
 
                 'enable' => 'Enable two-factor',
-                'setup_intro' => 'Scan the link with your authenticator app, or enter the secret by hand. Then confirm with the code the app shows.',
+                'setup_intro' => 'Scan the QR code with your authenticator app, or enter the secret by hand. Then confirm with the code the app shows.',
+                'qr_label' => 'QR code for your authenticator app',
                 'uri_label' => 'Link for the authenticator app',
                 'secret_label' => 'Secret to enter by hand',
                 'copy' => 'Copy the link',

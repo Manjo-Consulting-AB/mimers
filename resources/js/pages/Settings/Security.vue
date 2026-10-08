@@ -4,6 +4,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import FormField from '../../components/FormField.vue';
 import PasswordForm from '../../components/PasswordForm.vue';
+import TotpQrCode from '../../components/TotpQrCode.vue';
 import UiListRow from '../../components/UiListRow.vue';
 import UserDeletionForm from '../../components/UserDeletionForm.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -28,8 +29,8 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  * Sidan har tre lägen, och de följer av propsen (Beslut 5):
  *
  *   1. Ingen TOTP (`totpEnabled` false, inget `totpUri`): en knapp.
- *   2. Hemlighet genererad, inte bekräftad (`totpUri` finns): URI, hemlighet
- *      och ett kodfält som postar /totp/confirm.
+ *   2. Hemlighet genererad, inte bekräftad (`totpUri` finns): QR-kod, URI,
+ *      hemlighet och ett kodfält som postar /totp/confirm.
  *   3. Bekräftad (`totpEnabled` true): datum, antal koder kvar, knappen som
  *      genererar ett nytt ark och fältet som stänger av.
  *
@@ -83,9 +84,10 @@ const recoveryForm = useForm({});
 
 const showsSetup = computed(() => !props.totpEnabled && props.totpUri !== null);
 
-// `secret`-parametern ur otpauth://-URI:n, utan QR-kod (Beslut 4). Alla
-// autentiseringsappar har manuell inmatning; att visa hemligheten i grupper
-// om fyra går att läsa av och skriva in för hand.
+// `secret`-parametern ur otpauth://-URI:n. QR-koden ritas bredvid nyckeln
+// (issue 261 · GitHub #786), och den manuella inmatningen finns kvar för den
+// som hellre skriver in hemligheten för hand — i grupper om fyra går den att
+// läsa av och skriva in.
 const secret = computed(() => {
     const match = /[?&]secret=([^&]+)/.exec(props.totpUri ?? '');
 
@@ -174,6 +176,18 @@ function outcomeLabel(login) {
             <template v-else-if="showsSetup">
                 <p class="text-sm text-slate-700">{{ t('settings.security.totp.setup_intro') }}</p>
 
+                <!-- QR-koden till vänster och den manuella nyckeln till höger,
+                     staplade under md: — användaren väljer själv om hon skannar
+                     eller skriver in (issue 261 · GitHub #786). -->
+                <div class="flex flex-col gap-4 md:flex-row md:items-start">
+                    <TotpQrCode :uri="props.totpUri" />
+
+                    <div class="flex flex-col gap-1">
+                        <p class="text-sm font-medium text-slate-800">{{ t('settings.security.totp.secret_label') }}</p>
+                        <p class="font-mono text-lg tracking-widest">{{ secretGroups.join(' ') }}</p>
+                    </div>
+                </div>
+
                 <div class="flex flex-col gap-1">
                     <p class="text-sm font-medium text-slate-800">{{ t('settings.security.totp.uri_label') }}</p>
                     <code class="block break-all rounded border border-slate-300 bg-white px-3 py-2 text-xs">{{ props.totpUri }}</code>
@@ -184,11 +198,6 @@ function outcomeLabel(login) {
                     >
                         {{ copied ? t('settings.security.totp.copied') : t('settings.security.totp.copy') }}
                     </button>
-                </div>
-
-                <div class="flex flex-col gap-1">
-                    <p class="text-sm font-medium text-slate-800">{{ t('settings.security.totp.secret_label') }}</p>
-                    <p class="font-mono text-lg tracking-widest">{{ secretGroups.join(' ') }}</p>
                 </div>
 
                 <form class="flex flex-col gap-4" @submit.prevent="confirmTotp">
