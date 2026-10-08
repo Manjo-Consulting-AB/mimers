@@ -269,7 +269,7 @@ it('api svarar utan category', function () {
  * inte med ett uppslag per rad: ett och tio kategorier ska kosta lika många
  * frågor.
  */
-it('kostar samma antal frågor med en och med tio kategorier', function () {
+it('antalet frågor ändras inte av kategorin', function () {
     withoutVite();
 
     [, $anvandare, $container, $första] = kategoriKontext();
