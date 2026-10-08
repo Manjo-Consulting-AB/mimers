@@ -14,6 +14,7 @@ use App\Models\Item;
 use App\Models\User;
 use App\Support\Access\ItemScope;
 use App\Support\Cost\CostReport;
+use App\Support\Frontend\CreateTarget;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
@@ -129,6 +130,7 @@ class ContainerCostController extends Controller
         ListContainerCosts $listContainerCosts,
         ListCategories $listCategories,
         ListCostSuppliers $listCostSuppliers,
+        CreateTarget $createTarget,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -167,6 +169,12 @@ class ContainerCostController extends Controller
             ? $this->report($container, $report, $scope, $user, $filter)
             : null;
 
+        // Items användaren får skapa en kostnadsrad på, lästa EN gång och
+        // använda två (M28): som `items` bakom rubrikens *Lägg till kostnad*
+        // och som raderna i plusknappens meny. Två läsningar av samma fråga
+        // glider isär, och då hade de två ytorna erbjudit olika items.
+        $items = $this->creatableItems($user, $container, $scope);
+
         return Inertia::render('Containers/Costs', [
             'container' => ContainerResource::make($container)->resolve($request),
             'can' => [
@@ -189,7 +197,13 @@ class ContainerCostController extends Controller
             // grafen och nedbrytningen räknas ur. En gratisanvändare får inget
             // filter: raderna är containerns, precis som i 175.
             'rows' => $listContainerCosts->handle($user, $container, $reportData['filter'] ?? []),
-            'items' => $this->creatableItems($user, $container, $scope),
+            'items' => $items,
+            // Plusknappens mål på den här fliken (M28 · testarnas fynd
+            // 2026-10-07): en meny med samma items som rubrikknappen listar,
+            // och ett val leder till itemets kostnadsflik. Servern bygger
+            // raderna ur `$items` — samma grindar, en sanning; se
+            // App\Support\Frontend\CreateTarget::forContainerTab().
+            'create' => $createTarget->forContainerTab($container, 'costs', $items),
             'canReport' => $canReport,
             'canUpgrade' => Gate::forUser($user)->allows('viewStorage', $container->account),
             // Pro-delen (Beslut 3): grafen, nedbrytningen och jämförelsen, ur

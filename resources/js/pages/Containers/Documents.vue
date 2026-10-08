@@ -139,6 +139,13 @@ const props = defineProps({
     storage: { type: Object, default: null },
     /* Items användaren får skapa en bilaga på, `{ulid, name}`. */
     items: { type: Array, required: true },
+    /*
+     * Plusknappens mål på den här fliken (M28 · testarnas fynd 2026-10-07):
+     * en meny med samma items som `items` — ett val leder till itemets
+     * bilageflik. Servern bygger den ur samma lista, så samma grindar gäller,
+     * och en tom lista ger `null`: ingen meny, ingen knapp.
+     */
+    create: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -385,7 +392,7 @@ function toInbox(row) {
 </script>
 
 <template>
-    <ContainerLayout hero="compact" :container="container" :can="can">
+    <ContainerLayout hero="compact" :container="container" :can="can" :create="create">
         <Head :title="t('container.documents.title')" />
 
         <!--

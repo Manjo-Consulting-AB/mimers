@@ -124,6 +124,13 @@ const props = defineProps({
      */
     items: { type: Array, required: true },
     /*
+     * Plusknappens mål på den här fliken (M28 · testarnas fynd 2026-10-07):
+     * en meny med samma items som `items` — ett val leder till itemets
+     * kostnadsflik. Servern bygger den ur samma lista, så samma grindar gäller,
+     * och en tom lista ger `null`: ingen meny, ingen knapp.
+     */
+    create: { type: Object, default: null },
+    /*
      * Pro-grinden, läst på containerns konto: `planLimit('cost_reports')`.
      * Falsk ritar uppgraderingsytan, sann ritar ingenting (issue 176 fyller
      * platsen).
@@ -207,7 +214,7 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
 </script>
 
 <template>
-    <ContainerLayout hero="compact" :container="container" :can="can">
+    <ContainerLayout hero="compact" :container="container" :can="can" :create="create">
         <Head :title="t('container.costs.title')" />
 
         <div class="flex flex-wrap items-center justify-between gap-4">

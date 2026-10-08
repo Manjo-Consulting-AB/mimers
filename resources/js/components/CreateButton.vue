@@ -11,11 +11,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `App\Support\Frontend\CreateTarget` som sidans `create`-propp, och formen
  * avgör vad knappen blir:
  *
- *   - `{ kind: 'container' | 'item', href }` → en `<Link>` till formuläret
- *   - `{ kind: 'menu', rows }`               → en `<button>` som öppnar menyn
+ *   - `{ kind: 'container' | 'item' | 'task', href }` → en `<Link>` till
+ *     formuläret
+ *   - `{ kind: 'menu', rows }`                       → en `<button>` som
+ *     öppnar menyn
  *
  * Det är hela skillnaden mellan en knapp som skapar en container, en som
- * skapar ett item och en som öppnar en meny: samma knapp, tre mål. En knapp
+ * skapar ett item, en som öppnar uppgiftsformuläret och en som öppnar en meny:
+ * samma knapp, fyra mål. En knapp
  * som själv räknade ut sitt mål ur adressen hade varit samma fråga ställd på
  * två ställen — och den hade svarat fel på varje sida vars adress inte säger
  * vad man får skapa.

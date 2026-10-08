@@ -114,6 +114,13 @@ const props = defineProps({
      * som målruttens egen grind ställer; rutterna prövar dem på nytt.
      */
     can: { type: Object, default: null },
+    /*
+     * Plusknappens mål på den här fliken (M28 · testarnas fynd 2026-10-07):
+     * formuläret för en ny uppgift, med `?return` tillbaka hit — samma mål som
+     * *New task* i rubrikraden. Servern ritar det alltid, för inboxen är alltid
+     * ett möjligt mål (App\Support\Frontend\CreateTarget::forContainerTab()).
+     */
+    create: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -240,7 +247,7 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
 </script>
 
 <template>
-    <ContainerLayout hero="compact" :container="container" :can="can">
+    <ContainerLayout hero="compact" :container="container" :can="can" :create="create">
         <Head :title="t('container.tasks.title')" />
 
         <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">

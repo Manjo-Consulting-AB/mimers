@@ -456,14 +456,25 @@ const initials = computed(() => {
             <MobileMenu :open="menuOpen" :trigger="menuTrigger" @close="closeMenu" />
         </template>
 
-        <!-- Menyn ritas bara när målet ÄR en meny. En sida vars knapp leder
-             till ett formulär har ingenting att öppna, och ett ark utan rader
-             vore en tom yta. -->
+        <!--
+            Menyn ritas bara när målet ÄR en meny. En sida vars knapp leder
+            till ett formulär har ingenting att öppna, och ett ark utan rader
+            vore en tom yta.
+
+            **`create.heading` är en NYCKEL och ingen färdig mening.** Målet
+            kommer ur App\Support\Frontend\CreateTarget, som skickar
+            `pick_item` för containerns flikar (M28), och nyckeln går därför in
+            som `headingKey`, som CreateMenu slår upp. CreateMenus `heading` är
+            en annan prop: den bär färdig text — fokuskartans nodnamn (issue
+            156) — och ritas ordagrant, för användarens eget namn får aldrig
+            slås upp som en nyckel. Ett mål utan rubrik får skalets ord.
+        -->
         <CreateMenu
             v-if="create && create.kind === 'menu'"
             :open="createMenuOpen"
             :trigger="createTrigger"
             :rows="create.rows"
+            :heading-key="create.heading"
             @close="closeCreateMenu"
         />
     </div>
