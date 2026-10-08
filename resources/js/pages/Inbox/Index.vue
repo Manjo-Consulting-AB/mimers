@@ -395,17 +395,23 @@ function destroySelected() {
                         id="inbox-task-title"
                         :error="taskForm.errors.title"
                     >
-                        <UiInput
-                            id="inbox-task-title"
-                            v-model="taskForm.title"
-                            :described-by="describedBy"
-                            :placeholder="t('inbox.page.capture.task_placeholder')"
-                        />
-                    </FormField>
+                        <!-- Fältet och knappen i SAMMA rad (mockupen):
+                             etiketten står kvar ovanför dem båda, och felet
+                             under, för det är FormFields ordning. -->
+                        <div class="flex items-center gap-3">
+                            <UiInput
+                                id="inbox-task-title"
+                                v-model="taskForm.title"
+                                :described-by="describedBy"
+                                :placeholder="t('inbox.page.capture.task_placeholder')"
+                                class="min-w-0 flex-1"
+                            />
 
-                    <UiButton type="submit" :pending="taskForm.processing" class="self-start">
-                        {{ taskForm.processing ? t('common.pending.default') : t('inbox.page.capture.task_submit') }}
-                    </UiButton>
+                            <UiButton type="submit" :pending="taskForm.processing">
+                                {{ taskForm.processing ? t('common.pending.default') : t('inbox.page.capture.task_submit') }}
+                            </UiButton>
+                        </div>
+                    </FormField>
                 </form>
 
                 <form class="mt-6 flex flex-1 flex-col gap-3 lg:mt-0" @submit.prevent="captureFiles">
