@@ -5,6 +5,7 @@ use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 
 use function Pest\Laravel\actingAs;
@@ -185,6 +186,42 @@ it('en container användaren inte når ger en tom lista', function () {
         // Filtret TILLÄMPADES — det står kvar som det filter det är, för
         // nästa sidas länk ska bära samma fråga.
         ->and($svar->inertiaProps()['filters']['container'])->toBe($frammande->ulid);
+});
+
+/*
+ * Arkitektsvar på issue 257 (PR #803): formen avgör, inte uppslaget.
+ *
+ * Ett syntaktiskt giltigt ULID är alltid ett filter. Containern kan finnas och
+ * vara nåbar, finnas men vara onåbar, vara mjukraderad eller inte finnas alls —
+ * och alla fallen utom det första ger en TOM lista, för urvalet går genom
+ * `scopeTodoFor()`. Med ett uppslag hade "finns men inte din" (tom lista) och
+ * "finns inte" (hela listan) svarat olika, och svaret hade avslöjat om en
+ * container finns hos någon annan.
+ *
+ * Bara ett värde som inte är ett ULID ignoreras — det är vad "ett okänt värde
+ * ignoreras" betyder för den här parametern: en klistrad adress ska ge listan
+ * och inte ett fel.
+ */
+it('ett ULID utan container bakom ger en tom lista och ett felformat värde ignoreras', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = todovyKontext();
+
+    uppgiftsfilterRader($item, todovyDatum(10), 'next', 'open', 2, 'Min uppgift');
+
+    $utanContainer = (string) Str::ulid();
+
+    $svar = actingAs($anvandare)->get(uppgiftsfilterUrl(['container' => $utanContainer]))->assertOk();
+
+    expect(todovyRader($svar))->toBe([])
+        // Filtret TILLÄMPADES — det står kvar som det filter det är, så nästa
+        // sidas länk bär samma fråga och *Clear filters* ritas.
+        ->and($svar->inertiaProps()['filters']['container'])->toBe($utanContainer);
+
+    $felformat = actingAs($anvandare)->get(uppgiftsfilterUrl(['container' => 'inte-en-ulid']))->assertOk();
+
+    expect($felformat->inertiaProps()['filters']['container'])->toBeNull()
+        ->and(pagineringUlider(todovyRader($felformat)))->toHaveCount(2);
 });
 
 // --- listan och statusen ---------------------------------------------------

@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 /**
  * Todo-urvalet — "vad ska jag göra?", se issue 64, issue 122 och issue 123.
@@ -139,6 +140,11 @@ use Illuminate\Support\Facades\Gate;
  * listan och inte ett fel. **Containerfiltret går genom samma urval som
  * allt annat** — `scopeTodoFor()` — så en container användaren inte når ger en
  * TOM lista och inte ett fel; åtkomsten formuleras på ett ställe och inte två.
+ * **För containern är det FORMEN som avgör** (`normalizeContainer()`): ett
+ * syntaktiskt giltigt ULID är alltid ett filter och ger en tom lista när
+ * containern inte finns eller inte nås, och bara ett värde som inte är ett
+ * ULID ignoreras. Ett uppslag hade svarat olika för "finns men inte din" och
+ * "finns inte", och det avslöjar om en container finns hos någon annan.
  *
  * **Filtret som fliken redan bestämmer ritas inte och ignoreras** (Beslut 2):
  * `gtd` på *Inbox*, *Next*, *Waiting* och *Someday*, `status` på *In progress*
@@ -635,9 +641,12 @@ class ListTodo
      * den öppna listan, men det som redan är gjort är gjort. Med `$container`
      * osatt är omfånget användarens, över alla containrar hon når.
      *
-     * **`$container` är filterradens container** (M28 · issue 782): samma
-     * avgränsning som de öppna raderna får, så ett filter som står i adressen
-     * gäller fliken man står på och inte bara grannflikarna.
+     * **`$container` är containerns avgränsning och `$containerUlid` är
+     * filterradens** (M28 · issue 782): den förra är containerns egen flik och
+     * bär modellen, den senare kommer ur adressen och är ett ULID — samma
+     * avgränsning, men formen avgör och en container som inte finns ger en tom
+     * lista. Ett filter som står i adressen gäller alltså fliken man står på
+     * och inte bara grannflikarna.
      *
      * **`$sort` gäller avbockningsdatumet** (Beslut 3). Flikens naturliga
      * ordning är nyast först och står kvar som förval — det är den ordning
@@ -657,11 +666,12 @@ class ListTodo
         ?Container $container = null,
         bool $maintenanceOnly = false,
         string $sort = self::SORT_DUE_ASC,
+        ?string $containerUlid = null,
     ): array {
         return $this->completedPage(
             $user,
             $request,
-            $this->completedOccurrences($user, $container, $maintenanceOnly),
+            $this->completedOccurrences($user, $container, $maintenanceOnly, $containerUlid),
             $sort,
         );
     }
@@ -907,7 +917,7 @@ class ListTodo
         // Filtren (Beslut 1 och 2). List- och statusfiltret ignoreras på de
         // flikar som redan bestämmer samma sak — fliken vinner, och det som
         // står kvar i adressen ritas inte och följer inte med i nästa länk.
-        $container = $this->filterContainer($request->query(self::FILTER_CONTAINER));
+        $container = $this->normalizeContainer($request->query(self::FILTER_CONTAINER));
 
         $gtd = $this->acceptsGtd($list)
             ? $this->normalizeGtd($request->query(self::FILTER_GTD))
@@ -920,7 +930,7 @@ class ListTodo
         $sort = $this->normalizeSort($request->query(self::FILTER_SORT));
 
         $filters = [
-            self::FILTER_CONTAINER => $container?->ulid,
+            self::FILTER_CONTAINER => $container,
             self::FILTER_GTD => $gtd,
             self::FILTER_STATUS => $status,
             self::FILTER_SORT => $sort,
@@ -930,7 +940,7 @@ class ListTodo
         // bär `completed_at`. Grupperna lämnas tomma, så vyn ritar `completed`
         // i stället för datumgrupperna.
         if ($list === self::LIST_DONE) {
-            $done = $this->completed($user, $request, $container, false, $sort);
+            $done = $this->completed($user, $request, containerUlid: $container, sort: $sort);
 
             return [
                 'groups' => $this->emptyGroups($sort === self::SORT_DUE_DESC),
@@ -963,7 +973,7 @@ class ListTodo
         // växeln AV bär *No date* (ADR-0052 § 4). Filtren är villkor ovanpå
         // urvalet, precis som containerns avgränsning (Beslut 1): åtkomsten
         // formuleras alltjämt i `scopeTodoFor()`, aldrig här.
-        $query = $this->occurrences($user, $accountIds, null, $container, list: $list, gtd: $gtd, status: $status);
+        $query = $this->occurrences($user, $accountIds, null, list: $list, gtd: $gtd, status: $status, containerUlid: $container);
 
         // `whereDate()` och inte en rå kolumnjämförelse, av samma skäl som
         // `scopeTodoFor()` väljer det: `due_at` är en DATE-kolumn, men värdet
@@ -1095,6 +1105,13 @@ class ListTodo
      * containrar. Ingen tredje gren och ingen egen fråga: avgränsningen är ett
      * villkor ovanpå urvalet, inte ett urval bredvid det.
      *
+     * **`$containerUlid` är filterradens container** (M28 · issue 782), ett
+     * ULID ur adressen i stället för en modell. Formen avgör och uppslaget
+     * sker genom relationen: ett ULID som inte matchar någon container ger en
+     * TOM lista, i stället för att filtret faller bort och listan blir hel —
+     * "finns inte" och "finns men inte din" ska svara lika, annars avslöjar
+     * svaret om en container finns hos någon annan.
+     *
      * **`$maintenanceOnly` är underhållsfiltret** (issue 174 § Beslut 4):
      * schemats `recurrence_type` ska vara `fixed` eller `interval`, alltså
      * `Schedule::RECURRENCE_TYPES` utom `none` — listan HÄRLEDS ur modellens
@@ -1129,6 +1146,7 @@ class ListTodo
         ?string $list = null,
         ?string $gtd = null,
         ?string $status = null,
+        ?string $containerUlid = null,
     ): Builder {
         $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
@@ -1171,6 +1189,16 @@ class ListTodo
             $query->whereHas('schedule.item', fn (Builder $query) => $query->where('container_id', $container->id));
         }
 
+        // Filterradens container (M28 · issue 782) är ett ULID ur adressen och
+        // inte en modell: formen avgör, och en container som inte finns ger en
+        // TOM lista i stället för att filtret faller bort. Uppslagningen sker
+        // genom relationen, så en mjukraderad container (SoftDeletes' globala
+        // scope) matchar aldrig heller — och åtkomsten står alltjämt i
+        // `scopeTodoFor()` och ingen annanstans.
+        if ($containerUlid !== null) {
+            $query->whereHas('schedule.item.container', fn (Builder $query) => $query->where('ulid', $containerUlid));
+        }
+
         // `$gtd` och `$status` är filterradens två villkor (M28 · issue 782,
         // Beslut 1). De är redan prövade mot sina värden av anroparen
         // (`normalizeGtd()`/`normalizeStatus()`), så de läggs på som de är:
@@ -1178,9 +1206,7 @@ class ListTodo
         // tyst tom lista hade sett ut som ett svar.
         //
         // Containern ovan är samma sorts villkor och går samma väg — filtret
-        // är ett `where` ovanpå urvalet, aldrig ett urval bredvid det. Att
-        // containern är en modell och inte ett ULID är hela skillnaden: den
-        // som inte finns blir `null` och lägger ingenting på.
+        // är ett `where` ovanpå urvalet, aldrig ett urval bredvid det.
         if ($gtd !== null) {
             $query->inGtdList($gtd);
         }
@@ -1242,6 +1268,12 @@ class ListTodo
      * utan avgränsningen — och samma omfång, så en gäst med en itemgrant ser
      * sina avbockade och inga andras.
      *
+     * **`$containerUlid` är filterradens container** (M28 · issue 782): den
+     * slås upp utan åtkomstprövning, för scopet nedan är det enda som avgör
+     * vad användaren når. Ett ULID utan container bakom ger en tom
+     * `$containerIds` och därmed en tom lista — samma svar som en container
+     * användaren inte når, så svaret avslöjar inte om containern finns.
+     *
      * **Statusen prövas och är `completed`** (arkitektsvar på issue 174):
      * `skipped` är en egen status och hör i historiken, inte under *Done*
      * — se `completedForContainer()`.
@@ -1253,13 +1285,23 @@ class ListTodo
      *
      * @return Builder<ScheduleOccurrence>
      */
-    private function completedOccurrences(User $user, ?Container $container, bool $maintenanceOnly): Builder
-    {
+    private function completedOccurrences(
+        User $user,
+        ?Container $container,
+        bool $maintenanceOnly,
+        ?string $containerUlid = null,
+    ): Builder {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
-        $containerIds = $container !== null
-            ? [$container->id]
-            : Container::query()->accessibleBy($user, $accountIds)->pluck('id')->all();
+        // `$containerUlid` är filterradens container (M28 · issue 782) och
+        // slås upp på FORMEN, utan åtkomstprövning: scopet nedan avgör vad
+        // användaren når, och ett ULID utan container bakom ger en tom
+        // `$containerIds` — alltså en tom lista, inte hela listan.
+        $containerIds = match (true) {
+            $container !== null => [$container->id],
+            $containerUlid !== null => Container::query()->where('ulid', $containerUlid)->pluck('id')->all(),
+            default => Container::query()->accessibleBy($user, $accountIds)->pluck('id')->all(),
+        };
 
         $scopes = $this->resolveItemScope->forContainers($user, $containerIds);
 
@@ -1383,28 +1425,34 @@ class ListTodo
     }
 
     /**
-     * Containerfiltret ur adressen, som en modell (M28 · issue 782,
-     * Beslut 1).
+     * Containerfiltret ur adressen, som ett ULID (M28 · issue 782, Beslut 1).
      *
-     * **Ett ULID som inte finns blir inget filter** — samma regel som för de
-     * andra värdena, och av samma skäl: en klistrad adress ska ge listan, inte
-     * ett fel. Ett ULID som FINNS men som användaren inte når blir däremot ett
-     * filter, och svaret blir en tom lista: åtkomsten formuleras i
-     * `scopeTodoFor()` och ingen annanstans (Beslut 2), så den som går förbi
-     * den går förbi hela omfånget.
+     * **Formen avgör, inte uppslaget.** Ett syntaktiskt giltigt ULID är alltid
+     * ett filter: containern kan finnas och vara nåbar, finnas men vara
+     * onåbar, vara mjukraderad eller inte finnas alls — och alla fallen utom
+     * det första ger en TOM lista. Urvalet går genom `scopeTodoFor()` och
+     * ingen annanstans, så åtkomsten formuleras på ett ställe. Att i stället
+     * slå upp containern hade svarat olika för "finns men inte din" (tom
+     * lista) och "finns inte" (hela listan), och det svaret avslöjar om en
+     * container finns hos någon annan. Uppslaget behövs inte heller: en
+     * container som inte finns är för användaren samma sak som en hon inte
+     * når.
+     *
+     * **Bara ett värde som inte är ett ULID ignoreras** — det är vad "ett
+     * okänt värde ignoreras" betyder för den här parametern, och samma regel
+     * som `normalizeList()`: en klistrad adress ska ge listan och inte ett
+     * fel. Väljaren hittar då inget matchande alternativ och visar *All
+     * containers*, medan *Clear filters* ritas eftersom parametern är satt —
+     * så användaren kan ta sig ur läget.
      *
      * `listable()` läggs INTE på här: den egna inboxen ÄR en container
      * användaren når, och `?container=<inboxens ulid>` är samma svar som
      * fliken *Inbox*. Scopet hör till menyerna, som inte ska erbjuda den
      * (Beslut 5), och inte till tolkningen av ett värde någon redan skickat.
      */
-    private function filterContainer(mixed $value): ?Container
+    private function normalizeContainer(mixed $value): ?string
     {
-        if (! is_string($value) || $value === '') {
-            return null;
-        }
-
-        return Container::query()->where('ulid', $value)->first();
+        return is_string($value) && Str::isUlid($value) ? $value : null;
     }
 
     /**
