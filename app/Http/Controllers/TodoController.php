@@ -105,6 +105,11 @@ class TodoController extends Controller
         // värre än en kort.
         $query = $this->queryString($todo);
 
+        // Panelens tal räknas EN gång (granskningsfynd på issue 783):
+        // översikten bär samma *Done* som *Lists*-panelen, och `groupCounts()`
+        // får den färdiga siffran i stället för att ställa samma fråga igen.
+        $counts = $listTodo->gtdCounts($user);
+
         return Inertia::render('Tasks/Index', [
             'groups' => $todo['groups'],
             // *Done* är egen väg (Beslut 1): grupperna är tomma och raderna
@@ -116,11 +121,11 @@ class TodoController extends Controller
             'filters' => $todo['filters'],
             'containers' => $todo['containers'],
             // Panelens tal (Beslut 3) — alla användarens containrar.
-            'counts' => $listTodo->gtdCounts($user),
+            'counts' => $counts,
             // Högerspalten (M28 · issue 783): översiktens tal per datumgrupp
             // (Beslut 1) och containerkortets tal per container (Beslut 2).
             // Ingen av dem känner filtren eller fliken (Beslut 3).
-            'overview' => $listTodo->groupCounts($user),
+            'overview' => $listTodo->groupCounts($user, $counts[ListTodo::LIST_DONE]),
             // Containerkortets rader bär sin adress färdig, som panelens
             // övriga rader: `/tasks?container=<ulid>` (Beslut 2) byggs här och
             // inte i vyn — parameternamnet är actionens konstant, och adressen

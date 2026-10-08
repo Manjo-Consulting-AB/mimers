@@ -645,18 +645,31 @@ class ListTodo
      * grupperna är antalet öppna rader på *Active* utan bläddring — `page()`
      * visar en sida, den här räknar hela mängden.
      *
-     * **`done` är `gtdCounts()['done']`** (Beslut 1): de avbockade de senaste
-     * `DONE_RECENT_DAYS` dagarna, samma tal som *Lists*-panelen ritar, och
-     * aldrig en sjätte datumgrupp. Nycklarna står i ritningsordning —
-     * grupperna först, *Done* sist.
+     * **Bara `due_at` hämtas** (granskningsfynd på issue 783): raden behövs
+     * för sitt datum och ingenting annat, så frågan plockar kolumnen och
+     * hydrerar inga modeller. `setEagerLoads([])` tar bort de fyra
+     * relationsfrågorna som `occurrences()` sätter på för listans skull — de
+     * hör till radens presentation och en räkning läser dem aldrig. Annars
+     * växte minnet och tiden med användarens antal öppna uppgifter, utan tak.
+     * Grupperingen sker alltjämt med `group()` per datum, så gränserna står
+     * kvar på ett ställe.
+     *
+     * **`$done` kommer från anroparen** (granskningsfynd på issue 783):
+     * kontrollern räknar `gtdCounts()` en gång och skickar in `done` här, så
+     * samma tal inte ställs i två frågor. Talet är `gtdCounts()['done']`
+     * (Beslut 1) — de avbockade de senaste `DONE_RECENT_DAYS` dagarna, samma
+     * tal som *Lists*-panelen ritar, och aldrig en sjätte datumgrupp.
+     * Nycklarna står i ritningsordning — grupperna först, *Done* sist.
      *
      * @return array{overdue: int, today: int, this_week: int, upcoming: int, no_date: int, done: int}
      */
-    public function groupCounts(User $user): array
+    public function groupCounts(User $user, int $done): array
     {
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
-        $occurrences = $this->occurrences($user, $accountIds, null)->get();
+        $dueDates = $this->occurrences($user, $accountIds, null)
+            ->setEagerLoads([])
+            ->pluck('due_at');
 
         $today = $user->today();
 
@@ -668,13 +681,13 @@ class ListTodo
             self::GROUP_NO_DATE => 0,
         ];
 
-        foreach ($occurrences as $occurrence) {
-            $antal[$this->group($occurrence->due_at, $today)]++;
+        foreach ($dueDates as $dueAt) {
+            $antal[$this->group($dueAt, $today)]++;
         }
 
         return [
             ...$antal,
-            self::LIST_DONE => $this->gtdCounts($user)[self::LIST_DONE],
+            self::LIST_DONE => $done,
         ];
     }
 

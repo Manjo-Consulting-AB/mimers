@@ -381,7 +381,7 @@ it('containerraden länkar till filtret', function () {
  * dem inte — en avgränsad sida ritar samma tal och samma kort som en
  * oavgränsad.
  */
-it('panelerna påverkas inte av filtren eller fliken', function () {
+it('panelerna påverkas inte av filtren', function () {
     withoutVite();
 
     [$konto, $anvandare] = todovyKonto();
@@ -430,7 +430,7 @@ it('panelerna påverkas inte av filtren eller fliken', function () {
  * den scoped-bundna omfångsmemon före mätningen, så jämförelsen gäller
  * anropet och inte vad processen råkade ha löst upp tidigare.
  */
-it('kostar ett konstant antal frågor med containerkortet', function () {
+it('antalet frågor är konstant', function () {
     withoutVite();
 
     [$konto, $anvandare] = todovyKonto();
@@ -458,6 +458,36 @@ it('kostar ett konstant antal frågor med containerkortet', function () {
     });
 
     expect($medFem)->toBe($medEn);
+});
+
+/*
+ * Granskningsfynd på issue 783: räkningen hämtar bara `due_at` och laddar
+ * inga relationer.
+ *
+ * Med `->get()` kostade varje sidvisning varje öppen rad som modell plus fyra
+ * relationsfrågor — `schedule`, `item`, `container` och `account` hör till
+ * radens presentation och en räkning läser dem aldrig. Frågeräknaren ovan
+ * märker det inte, för den räknar frågor och inte rader: eager-laddningen
+ * ställer samma antal frågor oavsett hur många rader frågan bär, men den
+ * hydrerar dem alla.
+ *
+ * Provet jämför två LIKA anrop — samma användare, samma container — med olika
+ * många öppna uppgifter. Är räkningen ren kostar den lika mycket tom som full;
+ * hydrerar den modeller ställer den fyra relationsfrågor mer så snart det
+ * finns en rad, för en tom samling eager-laddas aldrig.
+ */
+it('översiktens räkning laddar inga relationer', function () {
+    withoutVite();
+
+    [, $anvandare, , $item] = todovyKontext();
+
+    $tomt = todovyFrågor(fn () => app(ListTodo::class)->groupCounts($anvandare->fresh(), 0));
+
+    panelRader($item, todovyDatum(0), 5, 'Uppgift');
+
+    $fullt = todovyFrågor(fn () => app(ListTodo::class)->groupCounts($anvandare->fresh(), 0));
+
+    expect($fullt)->toBe($tomt);
 });
 
 // --- vyn -------------------------------------------------------------------
