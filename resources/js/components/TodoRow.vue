@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from 'vue';
-import { Link, useForm } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
+import { Link, router, useForm } from '@inertiajs/vue3';
+import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiBadge from './UiBadge.vue';
 import { occurrenceActionUrl, scheduleUrl } from './occurrencePresentation.js';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
@@ -101,8 +102,21 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `ScheduleListSection.vue` ritar sina *Done*-rader med den här komponenten —
  * två formuleringar av samma rad blir en.
  *
- * **Ingen `…`-meny** (Beslut 6). Mockupen ritar en, men den har inga beslutade
- * handlingar; den tas in när det finns något att lägga i den.
+ * **`…`-menyn bär *Move…*** (M28 · issue 784, [[ADR-0053 Flytt och
+ * kopiering]] § 6). Raden fick sin första beslutade handling: en uppgift kan
+ * flyttas till ett annat item direkt från listan. Menyn är en `<details>` med
+ * det egna öppna-tillståndet i webbläsaren — samma grepp som
+ * Documents.vue och Inbox/Index.vue — och den ritas bara när ytan bär den
+ * (`movable`), när `entry.can.move` är sann, aldrig för en inboxuppgift (den
+ * bearbetas på `/inbox`), och aldrig på en avbockad rad.
+ *
+ * **Flytten är uppgiftens sidas flytt, ord för ord** (Beslut 3). *Move…*
+ * öppnar `ItemTargetPicker` med radens item som `excludeItem`, och valet
+ * postar till den befintliga rutten `containers.items.schedules.move` med
+ * samma kropp och samma väljare som `Schedules/Show.vue` — ingen egen rutt
+ * och ingen egen väljare. Domänfelet — en uppgift med beroenden kan flyttas
+ * inom containern men inte till en annan — kommer som ett fältfel på
+ * `schedule` och ritas i radens ENDA felruta, samma ställe som avbockningens.
  *
  * Färgrollerna kommer ur [[ADR-0042 Designsystemet]] § Beslut — inga råa
  * palettfärger i raden.
@@ -116,6 +130,14 @@ const props = defineProps({
      * `false`, för containern står redan i hjälten.
      */
     showContainer: { type: Boolean, default: true },
+    /*
+     * Ritar raden *Move…*-menyn (M28 · issue 784). `false` är förvalet: bara
+     * `/tasks` bär menyn, för det är där en uppgift flyttas i en lista. De
+     * andra ytorna — containerns och itemets flikar, dashboardens panel —
+     * skickar inget och får ingen meny, utan att någon av dem behöver veta
+     * varför.
+     */
+    movable: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -250,16 +272,62 @@ const inProgress = computed(() => props.entry.status === 'in_progress');
 const inInbox = computed(() => Boolean(props.entry.in_inbox));
 
 /*
+ * Flytten (M28 · issue 784 · [[ADR-0053 Flytt och kopiering]] § 6). Uppgiften
+ * flyttas men kopieras aldrig — historiken är svaret på när den gjordes
+ * senast (§ 1) — och knappen står därför bakom `entry.can.move`, som är
+ * `delete` på radens item (§ 2). Väljaren (issue 242) lämnar målet; valet
+ * postar till uppgiftens sidas EGEN rutt med `target` i kroppen.
+ *
+ * **Felet ritas på raden** (§ 6), inte mitt över sidan: `onHttpException`
+ * svarar `false`, så Inertias egen felruta stängs av och felet hamnar i
+ * radens ENDA felruta. Samma mönster som ItemAttachmentSection.vue (issue
+ * 243).
+ */
+const pickerOpen = ref(false);
+const pickerTrigger = ref(null);
+const moveError = ref(null);
+const movePending = ref(false);
+
+function openPicker(event) {
+    pickerTrigger.value = event.currentTarget;
+    moveError.value = null;
+    pickerOpen.value = true;
+}
+
+function closePicker() {
+    pickerOpen.value = false;
+}
+
+function chooseTarget(target) {
+    router.post(`${scheduleHref.value}/move`, { target: target.ulid }, {
+        preserveScroll: true,
+        onStart: () => {
+            movePending.value = true;
+            moveError.value = null;
+        },
+        onFinish: () => { movePending.value = false; },
+        onError: (errors) => { moveError.value = errors.schedule ?? null; },
+        onHttpException: (response) => {
+            moveError.value = response.status === 403 ? t('error.403') : t('error.generic');
+
+            return false;
+        },
+    });
+}
+
+/*
  * Radens ENDA felruta (Beslut 4). Domänfelet ur avbockningen eller bytet
- * (`occurrence.not_open`) och valideringsfelet på `gtd_list` eller `status`
- * ritas på samma ställe: samma förekomst, samma rad, och ett 422 som ingen ser
- * är lika stumt som ett race.
+ * (`occurrence.not_open`), valideringsfelet på `gtd_list` eller `status`, och
+ * flyttens `schedule.has_dependencies` (M28 · issue 784) ritas på samma
+ * ställe: samma förekomst, samma rad, och ett 422 som ingen ser är lika stumt
+ * som ett race.
  */
 const rowError = computed(
     () => form.errors.occurrence
         || listForm.errors.occurrence
         || listForm.errors.gtd_list
         || listForm.errors.status
+        || moveError.value
         || null,
 );
 
@@ -531,5 +599,52 @@ function toggleProgress() {
                 </svg>
             </span>
         </div>
+
+        <!-- Radmenyn (M28 · issue 784 · [[ADR-0053 Flytt och kopiering]]
+             § 6): en `<details>` med det egna öppna-tillståndet i
+             webbläsaren — samma grepp som Documents.vue och Inbox/Index.vue —
+             och *Move…* som sin enda rad. Den ritas bara när ytan bär den
+             (`movable`), när `entry.can.move` är sann, aldrig för en
+             inboxuppgift (den bearbetas på `/inbox`), och aldrig på en
+             avbockad rad. Servern prövar samma grind på nytt. -->
+        <details
+            v-if="movable && entry.can.move && ! entry.in_inbox && ! isDone"
+            class="relative shrink-0"
+        >
+            <summary
+                :aria-label="t('todo.row_menu')"
+                class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                <svg viewBox="0 0 24 24" fill="currentColor" class="size-5 shrink-0" aria-hidden="true">
+                    <circle cx="12" cy="5" r="1.6" />
+                    <circle cx="12" cy="12" r="1.6" />
+                    <circle cx="12" cy="19" r="1.6" />
+                </svg>
+            </summary>
+
+            <div class="absolute right-0 z-10 mt-2 w-40 rounded-card border border-border bg-surface p-1 shadow-sm">
+                <button
+                    type="button"
+                    :disabled="movePending"
+                    class="flex min-h-11 w-full items-center rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                    @click="openPicker($event)"
+                >
+                    {{ t('item.schedule.move') }}
+                </button>
+            </div>
+        </details>
+
+        <!-- Målväljaren (issue 242 och 243, M28 · issue 784): målet är ett
+             item, och `excludeItem` är itemet uppgiften står på — att flytta
+             den till sig själv är inget mål. Rubriken är uppgiftens egen
+             mening, för den som väljer ser vad som flyttas. -->
+        <ItemTargetPicker
+            :open="pickerOpen"
+            :trigger="pickerTrigger"
+            :exclude-item="entry.item.ulid"
+            :heading="t('item.schedule.move_heading')"
+            @choose="chooseTarget"
+            @close="closePicker"
+        />
     </li>
 </template>

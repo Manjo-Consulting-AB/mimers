@@ -4003,6 +4003,12 @@ return [
         // mellantillståndet mellan `open` och avbockad (ADR-0052 § 1).
         'in_progress' => 'In progress',
 
+        // Radens `…`-meny (M28 · issue 784): det tillgängliga namnet på
+        // menyknappen, samma ord som `inbox.page.row_menu`. Menyns enda rad är
+        // `item.schedule.move` — flytten är uppgiftens sidas handling, och två
+        // ord för samma handling hade lärt användaren två begrepp.
+        'row_menu' => 'Actions',
+
         // Raden utan datum (issue 236 § Beslut 5, ADR-0052 § 3). Samma ord
         // som grupprubriken `todo.group.no_date`, men en egen nyckel: rubriken
         // namnger GRUPPEN, den här fyller DATUMETS plats i raden.

@@ -89,6 +89,13 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * val fliken inte redan bestämt (Beslut 2). Panelen påverkas inte: `counts`
  * kommer ur `gtdCounts()`, som inte känner filtren (Beslut 4).
  *
+ * **Sidan är den ENDA ytan som skickar `movable`** (M28 · issue 784,
+ * [[ADR-0053 Flytt och kopiering]] § 6): en uppgift flyttas i listan, och
+ * raden ritar sin `…`-meny ur den flaggan. De andra ytorna som ritar `TodoRow`
+ * — containerns och itemets flikar och dashboardens panel — skickar inget och
+ * får ingen meny. Raden villkorar själv på `entry.can.move` och
+ * `entry.in_inbox`, så flaggan är ytan och inte rätten.
+ *
  * **Högerspalten bär tre kort** (M28 · issue 783): *Quick overview*,
  * *Lists* och *My containers*, i den ordningen, och spalten står under
  * listan under `lg:` precis som `GtdListPanel` gjorde förut. De tre
@@ -305,7 +312,7 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
                     :heading="t('todo.tabs.done')"
                     :count="completed.length"
                 >
-                    <TodoRow v-for="entry in completed" :key="entry.ulid" :entry="entry" />
+                    <TodoRow v-for="entry in completed" :key="entry.ulid" :entry="entry" movable />
                 </TaskGroup>
 
                 <!--
@@ -325,7 +332,7 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
                                 :count="entries.length"
                                 :tone="group === 'overdue' ? 'danger' : null"
                             >
-                                <TodoRow v-for="entry in entries" :key="entry.ulid" :entry="entry" />
+                                <TodoRow v-for="entry in entries" :key="entry.ulid" :entry="entry" movable />
                             </TaskGroup>
                         </template>
                     </div>
