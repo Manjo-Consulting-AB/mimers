@@ -130,6 +130,32 @@ use Illuminate\Support\Facades\Gate;
  * meningarna vet om något filtrerats bort, och ingen bär ett tal. Både
  * `/tasks` och `/dashboard` frågar efter samma flagga, och den kommer ur
  * samma fråga här — ingen av sidorna räknar containrar själv.
+ *
+ * **Filtren står i adressen bredvid listan och markören** (M28 · issue 782,
+ * Tonys beslut 2026-10-07): `container=<ulid>`, `gtd=next|waiting|someday`,
+ * `status=open|in_progress` och `sort=due_asc|due_desc`. Ett okänt värde
+ * behandlas som inget värde, av samma skäl som `normalizeList()`: filtret
+ * kommer ur ett adressfält någon klistrat i, och en klistrad adress ska ge
+ * listan och inte ett fel. **Containerfiltret går genom samma urval som
+ * allt annat** — `scopeTodoFor()` — så en container användaren inte når ger en
+ * TOM lista och inte ett fel; åtkomsten formuleras på ett ställe och inte två.
+ *
+ * **Filtret som fliken redan bestämmer ritas inte och ignoreras** (Beslut 2):
+ * `gtd` på *Inbox*, *Next*, *Waiting* och *Someday*, `status` på *In progress*
+ * och *Done*. Fliken vinner, och `acceptsGtd()`/`acceptsStatus()` är den enda
+ * formuleringen av vilken flik som äger vad. *Done* står utanför `gtd` av ett
+ * andra skäl: raden där har ingen `gtd_list` alls (se `completed()`).
+ *
+ * **Sorteringen styr ordningen och markörens riktning** (Beslut 3). `sort` är
+ * `due_at` med `ulid` som andra nyckel, och grupperna följer raderna — en
+ * fallande lista ritar alltså *Upcoming* först. Sektionen står kvar: de
+ * odaterade raderna ligger sist i BÅDA riktningarna, för en rad utan datum har
+ * inget datum att vända på (ADR-0052 § 3).
+ *
+ * **Panelen räknar som förut** (Beslut 4): `gtdCounts()` känner inte filtren,
+ * och en avgränsad lista ritar samma tal som en oavgränsad. Talet är
+ * användarens hela GTD-läge och inte det hon valt att visa just nu — samma
+ * regel som för växeln `show_upcoming_tasks`.
  */
 class ListTodo
 {
@@ -169,6 +195,42 @@ class ListTodo
      * Antalet rader per sida på `/tasks` (issue 123).
      */
     public const PER_PAGE = 50;
+
+    /**
+     * Filterradens fyra parametrar i querysträngen (M28 · issue 782).
+     *
+     * Namnen bor här av samma skäl som markörens: den som läser dem ur
+     * adressen och den som skriver dem i nästa sidas länk ska läsa samma
+     * konstant, och en kontroller som stavade dem själv hade varit en andra
+     * sanning om vad ett filter heter.
+     */
+    public const FILTER_CONTAINER = 'container';
+
+    /**
+     * Se `FILTER_CONTAINER`.
+     */
+    public const FILTER_GTD = 'gtd';
+
+    /**
+     * Se `FILTER_CONTAINER`.
+     */
+    public const FILTER_STATUS = 'status';
+
+    /**
+     * Se `FILTER_CONTAINER`.
+     */
+    public const FILTER_SORT = 'sort';
+
+    /**
+     * Sorteringens förval (Beslut 1): `due_at` stigande — samma ordning
+     * listan alltid haft.
+     */
+    public const SORT_DUE_ASC = 'due_asc';
+
+    /**
+     * Sorteringen som vänder på ordningen (Beslut 3).
+     */
+    public const SORT_DUE_DESC = 'due_desc';
 
     /**
      * Markörens två namn i querysträngen (issue 123).
@@ -573,6 +635,16 @@ class ListTodo
      * den öppna listan, men det som redan är gjort är gjort. Med `$container`
      * osatt är omfånget användarens, över alla containrar hon når.
      *
+     * **`$container` är filterradens container** (M28 · issue 782): samma
+     * avgränsning som de öppna raderna får, så ett filter som står i adressen
+     * gäller fliken man står på och inte bara grannflikarna.
+     *
+     * **`$sort` gäller avbockningsdatumet** (Beslut 3). Flikens naturliga
+     * ordning är nyast först och står kvar som förval — det är den ordning
+     * fliken alltid haft — och `due_desc` VÄNDER den. Att vända den naturliga
+     * ordningen i stället för att byta namn på den är vad som håller
+     * `/tasks?list=done` oförändrad för den som inte rör sorteringen.
+     *
      * @return array{
      *     rows: list<array<string, mixed>>,
      *     previous: string|null,
@@ -584,11 +656,13 @@ class ListTodo
         Request $request,
         ?Container $container = null,
         bool $maintenanceOnly = false,
+        string $sort = self::SORT_DUE_ASC,
     ): array {
         return $this->completedPage(
             $user,
             $request,
             $this->completedOccurrences($user, $container, $maintenanceOnly),
+            $sort,
         );
     }
 
@@ -642,6 +716,12 @@ class ListTodo
      * tidsstämpeln BREDVID resursen — samma mönster som `account` och `can`
      * följer: ett fält bara webben behöver hör inte inuti `/api`:s svar.
      *
+     * **`$sort` vänder ordningen** (M28 · issue 782, Beslut 3). Den visade
+     * ordningen är nyast först, och jämförelserna nedan är skrivna i den
+     * ordningen: "efter markören" betyder äldre. Vänder `due_desc` på listan
+     * vänder jämförelserna med — `$newestFirst` är den enda skillnaden, och
+     * markörens inklusiva ände (`before` pekar på en rad som FINNS) står kvar.
+     *
      * @param  Builder<ScheduleOccurrence>  $base
      * @return array{
      *     rows: list<array<string, mixed>>,
@@ -649,8 +729,11 @@ class ListTodo
      *     next: string|null
      * }
      */
-    private function completedPage(User $user, Request $request, Builder $base): array
+    private function completedPage(User $user, Request $request, Builder $base, string $sort = self::SORT_DUE_ASC): array
     {
+        // Nyast först är flikens naturliga ordning; `due_desc` vänder den.
+        $newestFirst = $sort !== self::SORT_DUE_DESC;
+
         $before = $this->completedCursor($request->query(self::CURSOR_BEFORE));
         $after = $this->completedCursor($request->query(self::CURSOR_AFTER));
 
@@ -660,27 +743,27 @@ class ListTodo
             $at = $this->completedAt($before['seconds']);
 
             // Bakåt: raderna från och med markören och framåt i den visade
-            // ordningen (nyare), alltså (completed_at, ulid) >= markören. Den
-            // sida som slutar på markören är den föregående.
+            // ordningen, alltså nyare när nyast står först. Den sida som
+            // slutar på markören är den föregående.
             $base->where(fn (Builder $query) => $query
-                ->where('completed_at', '>', $at)
+                ->where('completed_at', $newestFirst ? '>' : '<', $at)
                 ->orWhere(fn (Builder $query) => $query
                     ->where('completed_at', '=', $at)
-                    ->where('ulid', '>=', $before['ulid'])));
+                    ->where('ulid', $newestFirst ? '>=' : '<=', $before['ulid'])));
         } elseif ($after !== null) {
             $at = $this->completedAt($after['seconds']);
 
-            // Framåt: raderna strikt efter markören, alltså äldre.
+            // Framåt: raderna strikt efter markören i den visade ordningen.
             $base->where(fn (Builder $query) => $query
-                ->where('completed_at', '<', $at)
+                ->where('completed_at', $newestFirst ? '<' : '>', $at)
                 ->orWhere(fn (Builder $query) => $query
                     ->where('completed_at', '=', $at)
-                    ->where('ulid', '<', $after['ulid'])));
+                    ->where('ulid', $newestFirst ? '<' : '>', $after['ulid'])));
         }
 
         $occurrences = $base
-            ->orderBy('completed_at', $backwards ? 'asc' : 'desc')
-            ->orderBy('ulid', $backwards ? 'asc' : 'desc')
+            ->orderBy('completed_at', $backwards === $newestFirst ? 'asc' : 'desc')
+            ->orderBy('ulid', $backwards === $newestFirst ? 'asc' : 'desc')
             ->limit(self::PER_PAGE + 1)
             ->get();
 
@@ -780,11 +863,22 @@ class ListTodo
      * här metoden lämnar då `groups` tomma och lägger raderna i `completed`.
      * Markören bär inte listan (Beslut 2) — den står i adressen bredvid.
      *
+     * **Filtren läses ur samma request som markörerna** (M28 · issue 782):
+     * `container`, `gtd`, `status` och `sort`, normaliserade av
+     * `normalizeGtd()` med flera så att ett okänt värde blir inget värde. De
+     * följer med tillbaka i `filters` — normaliserade, så att kontrollern kan
+     * bygga nästa sidas adress ur dem utan att tolka dem en gång till — och
+     * `containers` bär menyens alternativ (Beslut 5). Filtret som fliken redan
+     * bestämmer står som `null` i `filters`: det tillämpades inte, och det ska
+     * varken ritas eller följa med i nästa länk.
+     *
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
      *     completed: list<array<string, mixed>>,
      *     list: string|null,
      *     hasContainers: bool,
+     *     filters: array{container: string|null, gtd: string|null, status: string|null, sort: string},
+     *     containers: list<array{ulid: string, name: string}>,
      *     previous: string|null,
      *     next: string|null
      * }
@@ -795,22 +889,56 @@ class ListTodo
 
         $accountIds = $user->accounts->pluck('id')->values()->all();
 
-        $containerIds = Container::query()
+        // Containrarna användaren når, i EN fråga (Beslut 8) — underlaget för
+        // `hasContainers` OCH för filterradens meny (Beslut 5). Inboxen är
+        // åtkomlig men inte ett VAL (Beslut 1): den har sin egen flik, och
+        // `isInbox()` tar bort den ur menyn utan att ta bort den ur urvalet.
+        $containers = Container::query()
             ->accessibleBy($user, $accountIds)
-            ->pluck('id')
+            ->orderBy('name')
+            ->get();
+
+        $options = $containers
+            ->reject(fn (Container $container): bool => $container->isInbox())
+            ->map(fn (Container $container): array => ['ulid' => $container->ulid, 'name' => $container->name])
+            ->values()
             ->all();
+
+        // Filtren (Beslut 1 och 2). List- och statusfiltret ignoreras på de
+        // flikar som redan bestämmer samma sak — fliken vinner, och det som
+        // står kvar i adressen ritas inte och följer inte med i nästa länk.
+        $container = $this->filterContainer($request->query(self::FILTER_CONTAINER));
+
+        $gtd = $this->acceptsGtd($list)
+            ? $this->normalizeGtd($request->query(self::FILTER_GTD))
+            : null;
+
+        $status = $this->acceptsStatus($list)
+            ? $this->normalizeStatus($request->query(self::FILTER_STATUS))
+            : null;
+
+        $sort = $this->normalizeSort($request->query(self::FILTER_SORT));
+
+        $filters = [
+            self::FILTER_CONTAINER => $container?->ulid,
+            self::FILTER_GTD => $gtd,
+            self::FILTER_STATUS => $status,
+            self::FILTER_SORT => $sort,
+        ];
 
         // *Done* går sin egen väg (Beslut 1): frågan är en annan och raden
         // bär `completed_at`. Grupperna lämnas tomma, så vyn ritar `completed`
         // i stället för datumgrupperna.
         if ($list === self::LIST_DONE) {
-            $done = $this->completed($user, $request);
+            $done = $this->completed($user, $request, $container, false, $sort);
 
             return [
-                'groups' => $this->emptyGroups(),
+                'groups' => $this->emptyGroups($sort === self::SORT_DUE_DESC),
                 'completed' => $done['rows'],
                 'list' => $list,
-                'hasContainers' => $containerIds !== [],
+                'hasContainers' => $containers->isNotEmpty(),
+                'filters' => $filters,
+                'containers' => $options,
                 'previous' => $done['previous'],
                 'next' => $done['next'],
             ];
@@ -823,12 +951,19 @@ class ListTodo
         // och frågan hämtar de femtio som slutar där.
         $backwards = $before !== null;
 
+        // Fallande ordning vänder på den daterade sektionen (Beslut 3).
+        // Sektionen själv står kvar: en rad utan datum ligger sist i båda
+        // riktningarna.
+        $descending = $sort === self::SORT_DUE_DESC;
+
         // Växeln lägger på ett villkor och rör inte markören: sidgränsen är
         // `(due_at, ulid)` över de rader frågan bär, och en avgränsning mot
         // dagens datum flyttar varken nycklarna eller deras ordning
         // (issue 134, issue 123). `null` är "följ användarens växel", och
-        // växeln AV bär *No date* (ADR-0052 § 4).
-        $query = $this->occurrences($user, $accountIds, null, list: $list);
+        // växeln AV bär *No date* (ADR-0052 § 4). Filtren är villkor ovanpå
+        // urvalet, precis som containerns avgränsning (Beslut 1): åtkomsten
+        // formuleras alltjämt i `scopeTodoFor()`, aldrig här.
+        $query = $this->occurrences($user, $accountIds, null, $container, list: $list, gtd: $gtd, status: $status);
 
         // `whereDate()` och inte en rå kolumnjämförelse, av samma skäl som
         // `scopeTodoFor()` väljer det: `due_at` är en DATE-kolumn, men värdet
@@ -836,14 +971,18 @@ class ListTodo
         // till kolumnens typ, sqlite gör det inte, så `due_at > '2026-06-15'`
         // hade räknat in samma dag i sviten och inte i drift. Varje jämförelse
         // står inuti sin sektion, så `whereDate()` aldrig får ett null.
+        //
+        // Jämförelserna är skrivna i STIGANDE riktning; `$descending` byter
+        // tecken på dem. Den odaterade sektionens `ulid` följer samma vändning,
+        // för sektionen är en lista som alla andra.
         if ($before !== null) {
-            $query->where(function (Builder $query) use ($before): void {
+            $query->where(function (Builder $query) use ($before, $descending): void {
                 if ($before['due_at'] === null) {
                     // Bakåt från en odaterad rad: de odaterade före och med
                     // markören, och därefter alla daterade.
                     $query->where(fn (Builder $query) => $query
                         ->whereNull('due_at')
-                        ->where('ulid', '<=', $before['ulid']))
+                        ->where('ulid', $descending ? '>=' : '<=', $before['ulid']))
                         ->orWhereNotNull('due_at');
 
                     return;
@@ -853,17 +992,17 @@ class ListTodo
                 // markören.
                 $query->whereNotNull('due_at')
                     ->where(fn (Builder $query) => $query
-                        ->whereDate('due_at', '<', $before['due_at'])
+                        ->whereDate('due_at', $descending ? '>' : '<', $before['due_at'])
                         ->orWhere(fn (Builder $query) => $query
                             ->whereDate('due_at', '=', $before['due_at'])
-                            ->where('ulid', '<=', $before['ulid'])));
+                            ->where('ulid', $descending ? '>=' : '<=', $before['ulid'])));
             });
         } elseif ($after !== null) {
-            $query->where(function (Builder $query) use ($after): void {
+            $query->where(function (Builder $query) use ($after, $descending): void {
                 if ($after['due_at'] === null) {
                     // Framåt från en odaterad rad: bara odaterade med större
                     // `ulid`.
-                    $query->whereNull('due_at')->where('ulid', '>', $after['ulid']);
+                    $query->whereNull('due_at')->where('ulid', $descending ? '<' : '>', $after['ulid']);
 
                     return;
                 }
@@ -873,21 +1012,26 @@ class ListTodo
                 $query->where(fn (Builder $query) => $query
                     ->whereNotNull('due_at')
                     ->where(fn (Builder $query) => $query
-                        ->whereDate('due_at', '>', $after['due_at'])
+                        ->whereDate('due_at', $descending ? '<' : '>', $after['due_at'])
                         ->orWhere(fn (Builder $query) => $query
                             ->whereDate('due_at', '=', $after['due_at'])
-                            ->where('ulid', '>', $after['ulid']))))
+                            ->where('ulid', $descending ? '<' : '>', $after['ulid']))))
                     ->orWhereNull('due_at');
             });
         }
+
+        // Den visade ordningen är sorteringens, och frågan vänder på den när
+        // `before` styr: den sida som SLUTAR på markören är den föregående, så
+        // de närmaste raderna hämtas först och vänds efteråt.
+        $order = $backwards !== $descending ? 'desc' : 'asc';
 
         $occurrences = $query
             // Första nyckeln är sektionen: daterade före odaterade framåt,
             // odaterade före daterade bakåt. Utan den sätter både MySQL och
             // sqlite null först.
             ->orderByRaw('due_at IS NULL'.($backwards ? ' desc' : ''))
-            ->orderBy('due_at', $backwards ? 'desc' : 'asc')
-            ->orderBy('ulid', $backwards ? 'desc' : 'asc')
+            ->orderBy('due_at', $order)
+            ->orderBy('ulid', $order)
             ->limit(self::PER_PAGE + 1)
             ->get();
 
@@ -903,12 +1047,14 @@ class ListTodo
         }
 
         return [
-            ...$this->present($user, $request, $page),
+            ...$this->present($user, $request, $page, $descending),
             // Den aktiva vägen bär ingen avbockad rad: *Done* är en egen flik
             // och en egen väg (Beslut 1).
             'completed' => [],
             'list' => $list,
-            'hasContainers' => $containerIds !== [],
+            'hasContainers' => $containers->isNotEmpty(),
+            'filters' => $filters,
+            'containers' => $options,
             // Föregående sida slutar på raden före den här sidans första rad.
             // Framåt är det markören vi kom in med; bakåt är det den
             // femtioförsta raden, den vi hämtade men inte visar.
@@ -964,6 +1110,13 @@ class ListTodo
      * `null` och ett okänt värde lämnar frågan orörd: *Done* kommer aldrig
      * hit, för den har sin egen fråga och sin egen radform.
      *
+     * **`$gtd` och `$status` är filterradens villkor** (M28 · issue 782,
+     * Beslut 1). De är normaliserade av anroparen och läggs på som de är: den
+     * lagrade listan genom modellens `inGtdList()`, statusen som en jämförelse
+     * mot kolumnen. `$list` och `$gtd` kan alltså bära samma värde samtidigt —
+     * fliken *Next* OCH filtret `gtd=next` — och det är rätt: fliken bestämmer
+     * vad som gäller, och `acceptsGtd()` ser till att de aldrig pekar olika.
+     *
      * @param  list<int>  $accountIds
      * @return Builder<ScheduleOccurrence>
      */
@@ -974,6 +1127,8 @@ class ListTodo
         ?Container $container = null,
         bool $maintenanceOnly = false,
         ?string $list = null,
+        ?string $gtd = null,
+        ?string $status = null,
     ): Builder {
         $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
@@ -1014,6 +1169,24 @@ class ListTodo
 
         if ($container !== null) {
             $query->whereHas('schedule.item', fn (Builder $query) => $query->where('container_id', $container->id));
+        }
+
+        // `$gtd` och `$status` är filterradens två villkor (M28 · issue 782,
+        // Beslut 1). De är redan prövade mot sina värden av anroparen
+        // (`normalizeGtd()`/`normalizeStatus()`), så de läggs på som de är:
+        // `inGtdList()` kastar på ett värde kolumnen inte kan bära, och en
+        // tyst tom lista hade sett ut som ett svar.
+        //
+        // Containern ovan är samma sorts villkor och går samma väg — filtret
+        // är ett `where` ovanpå urvalet, aldrig ett urval bredvid det. Att
+        // containern är en modell och inte ett ULID är hela skillnaden: den
+        // som inte finns blir `null` och lägger ingenting på.
+        if ($gtd !== null) {
+            $query->inGtdList($gtd);
+        }
+
+        if ($status !== null) {
+            $query->where('status', $status);
         }
 
         if ($maintenanceOnly) {
@@ -1165,10 +1338,26 @@ class ListTodo
      * `completed` ritar listan i stället. Att returnera en tom array i
      * stället för samma fem nycklar hade tvingat vyn att pröva formen.
      *
+     * **Ordningen är sorteringens** (M28 · issue 782, Beslut 3): grupperna
+     * följer raderna, så en fallande lista ritar *Upcoming* först. *No date*
+     * ligger sist i BÅDA riktningarna — en rad utan datum har inget datum att
+     * vända på, och den gruppen är listans sista oavsett åt vilket håll de
+     * daterade raderna pekar. Nycklarna är desamma; bara ordningen skiljer.
+     *
      * @return array<string, list<array<string, mixed>>>
      */
-    private function emptyGroups(): array
+    private function emptyGroups(bool $descending = false): array
     {
+        if ($descending) {
+            return [
+                self::GROUP_UPCOMING => [],
+                self::GROUP_THIS_WEEK => [],
+                self::GROUP_TODAY => [],
+                self::GROUP_OVERDUE => [],
+                self::GROUP_NO_DATE => [],
+            ];
+        }
+
         return [
             self::GROUP_OVERDUE => [],
             self::GROUP_TODAY => [],
@@ -1191,6 +1380,90 @@ class ListTodo
     private function normalizeList(?string $list): ?string
     {
         return $list !== null && in_array($list, self::LISTS, true) ? $list : null;
+    }
+
+    /**
+     * Containerfiltret ur adressen, som en modell (M28 · issue 782,
+     * Beslut 1).
+     *
+     * **Ett ULID som inte finns blir inget filter** — samma regel som för de
+     * andra värdena, och av samma skäl: en klistrad adress ska ge listan, inte
+     * ett fel. Ett ULID som FINNS men som användaren inte når blir däremot ett
+     * filter, och svaret blir en tom lista: åtkomsten formuleras i
+     * `scopeTodoFor()` och ingen annanstans (Beslut 2), så den som går förbi
+     * den går förbi hela omfånget.
+     *
+     * `listable()` läggs INTE på här: den egna inboxen ÄR en container
+     * användaren når, och `?container=<inboxens ulid>` är samma svar som
+     * fliken *Inbox*. Scopet hör till menyerna, som inte ska erbjuda den
+     * (Beslut 5), och inte till tolkningen av ett värde någon redan skickat.
+     */
+    private function filterContainer(mixed $value): ?Container
+    {
+        if (! is_string($value) || $value === '') {
+            return null;
+        }
+
+        return Container::query()->where('ulid', $value)->first();
+    }
+
+    /**
+     * Listfiltret ur adressen (M28 · issue 782, Beslut 1): en av de TRE
+     * lagrade listorna, eller `null`.
+     *
+     * *Inbox*, *Calendar*, *In progress* och *Done* är härledda vyer och inte
+     * värden i `gtd_list` — de har egna flikar, och en `gtd=inbox` hade varit
+     * en andra väg till samma lista.
+     */
+    private function normalizeGtd(mixed $value): ?string
+    {
+        return is_string($value) && in_array($value, ScheduleOccurrence::GTD_LISTS, true) ? $value : null;
+    }
+
+    /**
+     * Statusfiltret ur adressen (M28 · issue 782, Beslut 1): `open` eller
+     * `in_progress`. `ACTIVE_STATUSES` är listans två värden och skrivs inte av
+     * här — en status som inte är aktiv har ingen flik att filtrera.
+     */
+    private function normalizeStatus(mixed $value): ?string
+    {
+        return is_string($value) && in_array($value, ScheduleOccurrence::ACTIVE_STATUSES, true) ? $value : null;
+    }
+
+    /**
+     * Sorteringen ur adressen (M28 · issue 782, Beslut 1), med `due_asc` som
+     * förval. Ett okänt värde blir förvalet, för frågan är bara vilken av de
+     * två ordningarna som gäller — det finns ingen tredje att falla tillbaka
+     * på och inget att ignorera.
+     */
+    private function normalizeSort(mixed $value): string
+    {
+        return $value === self::SORT_DUE_DESC ? self::SORT_DUE_DESC : self::SORT_DUE_ASC;
+    }
+
+    /**
+     * Bestämmer fliken listfiltret? (Beslut 2.)
+     *
+     * *Inbox*, *Next*, *Waiting* och *Someday* ritar ingen listväljare: fliken
+     * ÄR listan, och två val för samma sak hade kunnat peka olika. Övriga
+     * flikar — *Active*, *Calendar* och *In progress* — bär filtret.
+     * *Done* står utanför av ett annat skäl: dess rader kommer ur en egen
+     * fråga utan `gtd_list` (se `completed()`).
+     */
+    private function acceptsGtd(?string $list): bool
+    {
+        return $list === null || $list === self::LIST_CALENDAR || $list === self::LIST_IN_PROGRESS;
+    }
+
+    /**
+     * Bestämmer fliken statusfiltret? (Beslut 2.)
+     *
+     * *In progress* ÄR statusen och *Done* är dess motsats; på dem hade
+     * väljaren varit en andra sanning om samma sak.
+     */
+    private function acceptsStatus(?string $list): bool
+    {
+        return $list !== self::LIST_IN_PROGRESS && $list !== self::LIST_DONE;
     }
 
     /**
@@ -1244,13 +1517,18 @@ class ListTodo
      * följer av raderna på just den sidan och aldrig av en räknare som minns
      * föregående sida.
      *
+     * **`$descending` är gruppordningen** (M28 · issue 782, Beslut 3):
+     * nycklarna skapas i den ordning raderna ska ritas, och vyn itererar dem
+     * som de kommer. Radernas egen ordning står i frågan — den här metoden
+     * lägger dem bara i sina grupper.
+     *
      * @param  Collection<int, ScheduleOccurrence>  $occurrences
      * @return array{
      *     groups: array<string, list<array<string, mixed>>>,
      *     rows: list<array<string, mixed>>
      * }
      */
-    private function present(User $user, Request $request, Collection $occurrences): array
+    private function present(User $user, Request $request, Collection $occurrences, bool $descending = false): array
     {
         // Värm omfånget för de containers listan bär, i ETT anrop. `forContainers`
         // med en tom lista ställer inga frågor alls, så en tom todo-vy kostar
@@ -1267,7 +1545,7 @@ class ListTodo
         // de öppna, efter *Upcoming* och före *Done*. Vyn itererar `groups`
         // och ritar rubriken för varje icke-tom grupp, så ordningen här ÄR
         // ordningen på sidan.
-        $groups = $this->emptyGroups();
+        $groups = $this->emptyGroups($descending);
 
         $covers = $this->covers($occurrences);
 

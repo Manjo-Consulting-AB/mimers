@@ -40,6 +40,11 @@ use Inertia\Response;
  * ingenting annat: växeln skriver till `PUT /settings/tasks` och svarar
  * `back()`, så nästa sidladdning bär det nya värdet.
  *
+ * **Filtren går samma väg som markören** (M28 · issue 782): kontrollern läser
+ * dem inte, den lägger dem bara tillbaka i nästa sidas adress — normaliserade
+ * av actionen, så att den som bygger en länk aldrig tolkar ett värde en gång
+ * till. Se `queryString()`.
+ *
  * Gruppkonstanterna står kvar här som alias mot actionens: de är nycklarna i
  * `lang/en/ui.php` och prövas mot `TodoController::GROUP_*` i
  * tests/Feature/Frontend/TodovyTest.php.
@@ -91,16 +96,25 @@ class TodoController extends Controller
 
         $todo = $listTodo->page($user, $request, is_string($list) ? $list : null);
 
-        // Markörens adresser bär listan (Beslut 2): listan står i adressen
-        // bredvid markören, så en bläddring stannar i samma flik. Är listan
-        // *Active* lämnas parametern utanför — en tom parameter är brus.
-        $query = $todo['list'] === null ? [] : ['list' => $todo['list']];
+        // Markörens adresser bär listan OCH filtren (Beslut 2 och M28 · issue
+        // 782, Beslut 1): båda står i adressen bredvid markören, så en
+        // bläddring stannar i samma flik med samma filter. Det som inte
+        // tillämpades — *Active*, ett okänt värde, filtret fliken redan
+        // bestämmer — står som `null` i `filters` och lämnas utanför: en tom
+        // parameter är brus, och en adress som säger något den inte gör är
+        // värre än en kort.
+        $query = $this->queryString($todo);
 
         return Inertia::render('Tasks/Index', [
             'groups' => $todo['groups'],
             // *Done* är egen väg (Beslut 1): grupperna är tomma och raderna
             // ligger här. Vyn ritar det ena eller det andra ur `list`.
             'completed' => $todo['completed'],
+            // Filterraden (M28 · issue 782, Beslut 5): filtren som de
+            // tillämpades, och menyens containrar. Vyn tolkar inget värde —
+            // den ritar de val den fick och låter servern äga urvalet.
+            'filters' => $todo['filters'],
+            'containers' => $todo['containers'],
             // Panelens tal (Beslut 3) — alla användarens containrar.
             'counts' => $listTodo->gtdCounts($user),
             // Fliken som är vald, ur `?list=` — vyn tänder sin flik ur den.
@@ -118,5 +132,41 @@ class TodoController extends Controller
                 ? null
                 : route('tasks', [...$query, ListTodo::CURSOR_AFTER => $todo['next']], false),
         ]);
+    }
+
+    /**
+     * Flikens och filternas parametrar, som de ska stå i en adress (M28 ·
+     * issue 782, Beslut 1 och 5).
+     *
+     * **Bara det som gäller skrivs ut.** *Active* är frånvaron av `list`, ett
+     * filter som inte tillämpades är `null` i `filters`, och `due_asc` är
+     * sorteringens förval — ingen av dem bär något i adressen. Regeln är
+     * `CostFilterBar`s och `Containers/Tasks.vue`s: en URL utan brus går att
+     * läsa och att dela.
+     *
+     * Parameternamnen kommer ur actionens konstanter, så den som skriver
+     * adressen och den som läser den inte kan glida ifrån varandra.
+     *
+     * @param  array{
+     *     list: string|null,
+     *     filters: array{container: string|null, gtd: string|null, status: string|null, sort: string}
+     * }  $todo
+     * @return array<string, string>
+     */
+    private function queryString(array $todo): array
+    {
+        $query = $todo['list'] === null ? [] : ['list' => $todo['list']];
+
+        foreach ([ListTodo::FILTER_CONTAINER, ListTodo::FILTER_GTD, ListTodo::FILTER_STATUS] as $namn) {
+            if ($todo['filters'][$namn] !== null) {
+                $query[$namn] = $todo['filters'][$namn];
+            }
+        }
+
+        if ($todo['filters'][ListTodo::FILTER_SORT] !== ListTodo::SORT_DUE_ASC) {
+            $query[ListTodo::FILTER_SORT] = $todo['filters'][ListTodo::FILTER_SORT];
+        }
+
+        return $query;
     }
 }
