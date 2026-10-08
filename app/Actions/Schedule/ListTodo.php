@@ -105,6 +105,9 @@ use Illuminate\Support\Str;
  * `ItemPolicy::update()` — samma grind som avbockningsrutten (63b) och
  * itemets skrivytor (issue 71) — och vyn ritar knappen bara när den är sann.
  * Rutten auktoriserar ändå; en postad avbockning utan rätt blir 403.
+ * `can.move` (M28 · issue 784) räknas med `ItemPolicy::delete()`, samma grind
+ * som flytten: en flytt tar bort något från källan ([[ADR-0053 Flytt och
+ * kopiering]] § 2), och rutten prövar den på nytt.
  *
  * **Kontots förval räknas här** (Beslut 4, 63b § Beslut 4).
  * `CompleteOccurrenceRequest` kräver `account`, och regeln är 63b:s: containerns
@@ -1799,6 +1802,13 @@ class ListTodo
             'account' => $this->account($item->container->account->ulid, $accountUlids),
             'can' => [
                 'update' => Gate::forUser($user)->allows('update', $item),
+                // Flytten (M28 · issue 784, [[ADR-0053 Flytt och kopiering]]
+                // § 2 och § 6): `delete` på radens item — samma grind som
+                // flytten på uppgiftens sida (issue 243). En flytt tar bort
+                // något från källan, och `update` räcker inte där. Rutten
+                // prövar samma grind på nytt; flaggan är presentation och
+                // ritar radmenyns *Move…*.
+                'move' => Gate::forUser($user)->allows('delete', $item),
             ],
             'cover' => $covers[$item->id] ?? null,
             'category' => $item->category === null ? null : ['name' => $item->category->name],
