@@ -127,8 +127,8 @@ it('har en plusknapp till formuläret på tasks-fliken', function () {
  * Klart när: "documents-fliken listar items användaren får skapa i".
  *
  * En rad per item, och raden leder till itemets bilageflik — samma mål som
- * rubrikknappen *Lägg till dokument* (Beslut 5). `heading` är en NYCKEL, inte
- * en färdig mening: skalet formulerar rubriken på användarens språk
+ * rubrikknappen *Lägg till dokument* (Beslut 5). `create.heading` är en NYCKEL,
+ * inte en färdig mening: skalet formulerar rubriken på användarens språk
  * ([[ADR-0021 Frontendteknik]]).
  */
 it('listar items användaren får skapa i på documents-fliken', function () {
@@ -220,20 +220,20 @@ it('ger en läsare ingen plusknapp på documents', function () {
  *
  * Raden bär `label` när namnet är användarens eget — ett itemnamn har ingen
  * nyckel i katalogen — och faller annars tillbaka på `create.rows.<key>`,
- * precis som förut. `t()` svarar med nyckeln själv när uppslagningen missar,
- * så en ny rubriknyckel (`pick_item`) och ett färdigt nodnamn från fokuskartan
- * (issue 156) ryms i samma prop.
+ * precis som förut. Rubriken är två props: serverns nyckel `pick_item` går in
+ * som `headingKey` och slås upp, medan `heading` bär färdig text (fokuskartans
+ * nodnamn, issue 156) och ritas ordagrant — användardata får aldrig bli en
+ * nyckel. AppLayout förmedlar serverns `create.heading` till `heading-key`.
  */
 it('ritar radens namn när den har ett', function () {
     $meny = flikknappKod('components/CreateMenu.vue');
 
     expect($meny)->toContain('row.label')
         ->toContain('create.rows.${row.key}')
-        ->toContain('create.heading');
+        ->toContain('create.heading')
+        ->toContain('props.headingKey');
 
-    // Rubriken förmedlas från målet, eller inte alls — ett mål utan `heading`
-    // får skalets ord som förut.
-    expect(flikknappKod('layouts/AppLayout.vue'))->toContain(':heading="create.heading"');
+    expect(flikknappKod('layouts/AppLayout.vue'))->toContain(':heading-key="create.heading"');
 });
 
 /*

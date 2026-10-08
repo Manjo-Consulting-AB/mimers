@@ -143,7 +143,10 @@ final class CreateTarget
      *
      * **`heading` är en NYCKEL efter `create.` och ingen färdig mening**
      * ([[ADR-0021 Frontendteknik]]): skalet slår upp `create.pick_item` och
-     * formulerar *Choose item* på användarens språk.
+     * formulerar *Choose item* på användarens språk. AppLayout skickar nyckeln
+     * vidare som `headingKey`, skild från `CreateMenu`s `heading`, som bär
+     * färdig text och ritas ordagrant — ett itemnamn är användarens eget och
+     * får aldrig slås upp som en nyckel.
      *
      * En flik utan plusknapp — och en okänd flik — ger null: skalet ritar
      * ingen knapp åt en sida som inte frågar.

@@ -42,22 +42,28 @@ import { useTranslations } from '../composables/useTranslations.js';
  * (*Item under*, *Relation*) är relativa till den noden, och en meny som inte
  * säger vilken nod den gäller är en meny man gissar på.
  *
- * `heading` bär därför antingen en NYCKEL efter `create.` — containerns
- * flikar skickar `pick_item`, som blir *Choose item* (M28) — eller en färdig
- * text, som fokuskartans nodnamn. En nyckel som inte finns i katalogen
- * returneras som sig själv av `t()`, och då ritas det skickade värdet
- * ordagrant: en nod som heter *Motor* hade annars fått rubriken
- * `create.Motor`. Standarden är skalets ord, och rubriken är en prop och
- * ingen egen sträng i den här filen.
+ * **Rubriken kommer ur två props, och det är skillnaden som gör den säker.**
+ * `headingKey` bär en NYCKEL efter `create.` och slås upp — containerns flikar
+ * skickar `pick_item`, som blir *Choose item* (M28) — medan `heading` bär
+ * FÄRDIG TEXT och ritas ordagrant: fokuskartans nodnamn är användarens eget och
+ * har ingen nyckel i katalogen.
+ *
+ * De två är åtskilda med flit. Ruttades nodnamnet genom uppslagningen hade en
+ * nod som heter *heading*, *label* eller *close* fått katalogens mening i
+ * stället för sitt namn, och en som heter *rows* fått en array som arkets
+ * rubrik — användardata får aldrig bli en nyckel. Standarden är skalets ord,
+ * och rubriken är en prop och ingen egen sträng i den här filen.
  */
 const props = defineProps({
     /* Sant medan menyn är öppen. AppLayout äger tillståndet. */
     open: { type: Boolean, default: false },
     /* Elementet som öppnade menyn: arkets fäste och fokus vid stängning. */
     trigger: { type: Object, default: null },
-    /* `[{ key, href }]` ur App\Support\Frontend\CreateTarget. */
+    /* `[{ key, label?, href }]` ur App\Support\Frontend\CreateTarget. */
     rows: { type: Array, required: true },
-    /* Arkets rubrik: en nyckel efter `create.`, eller en färdig text. */
+    /* Arkets rubrik som NYCKEL efter `create.` — containerns flikar (M28). */
+    headingKey: { type: String, default: null },
+    /* Arkets rubrik som FÄRDIG TEXT — fokuskartans nodnamn (issue 156). Ritas ordagrant. */
     heading: { type: String, default: null },
 });
 
@@ -66,20 +72,16 @@ const emit = defineEmits(['close']);
 const { t } = useTranslations();
 
 /*
- * Rubriken, ur `heading` och skalets eget ord (se docblocken ovan): en nyckel
- * slås upp, och ett värde utan nyckel ritas ordagrant. `t()` svarar med nyckeln
- * själv när uppslagningen missar, och jämförelsen är det som skiljer en nod som
- * heter *Motor* från en nyckel som saknas i katalogen.
+ * Rubriken, ur `headingKey`, `heading` och skalets eget ord (se docblocken
+ * ovan). Nyckeln först: den är serverns och ska formuleras på användarens
+ * språk, medan `heading` redan är färdig text och ritas som den står.
  */
 const sheetHeading = computed(() => {
-    if (props.heading === null) {
-        return t('create.heading');
+    if (props.headingKey !== null) {
+        return t(`create.${props.headingKey}`);
     }
 
-    const key = `create.${props.heading}`;
-    const text = t(key);
-
-    return text === key ? props.heading : text;
+    return props.heading ?? t('create.heading');
 });
 </script>
 
