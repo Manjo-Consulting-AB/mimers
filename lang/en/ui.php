@@ -132,11 +132,16 @@ return [
      * ordningen ur CreateTarget::forItem().
      */
     'create' => [
-        'label' => 'Create',
+        // Ordet är *Add* och inte *Create* (M28 · issue 248): resten av
+        // produkten säger *Add* — `nav.add_container`, `container.costs.add`
+        // och formulärknapparna — och plusmenyn var den enda ytan som sade
+        // något annat. Formulärknapparnas `submit`/`create` är andra nycklar
+        // och står kvar.
+        'label' => 'Add',
         'close' => 'Close',
         // Arkets rubrik. Samma ord som knappens — ytan är knappens meny, och
         // två ord för samma sak hade glidit isär.
-        'heading' => 'Create',
+        'heading' => 'Add',
         'rows' => [
             // Ett child till itemet man står på.
             'item' => 'Item below',
@@ -2037,8 +2042,10 @@ return [
          *
          * **`filter_maintenance` names the filter, not the rows.** The box
          * is unticked by default, so the sentence has to read as a
-         * restriction and not as the state of the board: *Maintenance only*,
-         * never *All tasks*.
+         * restriction and not as the state of the board: *Recurring tasks
+         * only*, never *All tasks*. The key keeps its name (M28 · issue 248)
+         * — only the word changed, because the filtered rows are the
+         * recurring tasks and *Maintenance* named something else.
          *
          * The page's `title` and `heading` are two keys with the same word,
          * like every other container page (`container.categories`,
@@ -2049,7 +2056,7 @@ return [
         'tasks' => [
             'title' => 'Tasks',
             'heading' => 'Tasks',
-            'filter_maintenance' => 'Maintenance only',
+            'filter_maintenance' => 'Recurring tasks only',
             'done' => 'Done',
             'empty' => 'No tasks in this container.',
             'shortcuts' => 'Shortcuts',

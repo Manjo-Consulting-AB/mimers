@@ -156,7 +156,10 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
         // ny rad, med flit (en rad som glöms i katalogen ska synas).
         'inbox',
         'containers',
-        'transfers',
+        // Ägarbytena står inte längre i skalet (M28 · issue 248): raden
+        // flyttade till inställningsmenyn, sist i
+        // resources/js/layouts/settingsSections.js. Provet listar skalets rader
+        // och fälls av en rad som glöms i katalogen, med flit.
         'search',
         'settings',
     ]);
@@ -295,7 +298,9 @@ it('svarar på varje mål i flikraden och i menyn', function () {
 
     // Menyns rader, ur samma lista som sidhuvudet: en rad som pekar på en
     // rutt ingen svarar på är en död länk ingen upptäcker förrän i handen.
-    foreach (['/tasks', '/containers', '/transfers'] as $url) {
+    // `/transfers` står inte längre här (M28 · issue 248): raden flyttade till
+    // inställningsmenyn, och SkalTest svarar för att varje sektion där nås.
+    foreach (['/tasks', '/containers'] as $url) {
         actingAs($anvandare)->get($url)->assertOk();
     }
 

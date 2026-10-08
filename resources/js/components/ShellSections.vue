@@ -16,7 +16,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * rad som tas bort försvinner från båda. Det är `Klart när`-punkten, och den
  * är därför komponenten finns och inte två avskrifter.
  *
- * **Ordningen är listans**, `dashboard, tasks, containers, transfers, search,
+ * **Ägarbytena flyttade till inställningarna** (M28 · issue 248): raden
+ * `transfers` står inte längre i skalet utan sist i
+ * resources/js/layouts/settingsSections.js, med samma `nav.transfers` som förut
+ * — menyn användaren når via avataren. Rutten `/transfers` är oförändrad.
+ *
+ * **Ordningen är listans**, `dashboard, tasks, containers, search,
  * settings`, samma ord som sidorna de leder till. Sedan issue 653 ritar en yta
  * bara en del av listan: `part` väljer vilka nycklar som ritas, och
  * sidopanelen staplar delarna i mockupens ordning ([[ADR-0050
@@ -101,7 +106,6 @@ const allSections = [
     // utan att användaren öppnar sidan.
     { key: 'inbox', href: '/inbox' },
     { key: 'containers', href: '/containers' },
-    { key: 'transfers', href: '/transfers' },
     { key: 'search', href: '/search' },
     // Inställningarna är den enda raden som också är aktuell på en UNDERSIDA:
     // `/settings` omdirigerar till profilen (issue 53c), så en jämförelse som
@@ -119,7 +123,7 @@ const allSections = [
  */
 const partKeys = {
     'top': ['dashboard'],
-    'rows': ['tasks', 'containers', 'transfers', 'search'],
+    'rows': ['tasks', 'containers', 'search'],
     'account': ['settings'],
 };
 
