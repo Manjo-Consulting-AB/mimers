@@ -1305,6 +1305,13 @@ class ListTodo
      * uppslaget", och en rad utan bild bär `cover: null` i stället för att
      * nyckeln saknas, så vyns uppslag är detsamma för alla rader.
      *
+     * **`in_inbox` säger att raden ligger i användarens inbox** (M28 · issue
+     * 774, [[ADR-0054 Inboxen]] § 1 och § 7). Containern är det enda som
+     * avgör — `Container::isInbox()` — och den är redan laddad för raden, så
+     * frågekostnaden står still. Fältet läggs BREDVID resursen som
+     * `account`, `can` och `cover`: `/api` ändras inte, och vyn ritar platsen
+     * *Inbox* i stället för det dolda itemet och den dolda containern.
+     *
      * @param  list<string>  $accountUlids
      * @param  array<int, array{ulid: string, hasThumb: bool}|null>  $covers
      * @return array<string, mixed>
@@ -1329,6 +1336,7 @@ class ListTodo
                 'update' => Gate::forUser($user)->allows('update', $item),
             ],
             'cover' => $covers[$item->id] ?? null,
+            'in_inbox' => $item->container->isInbox(),
         ];
     }
 

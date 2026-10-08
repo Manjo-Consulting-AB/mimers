@@ -900,13 +900,13 @@ it('kostar ett konstant antal frågor oavsett antal rader', function () {
  * Klart när: `/api/todo` svarar exakt som förut.
  *
  * Webben LÅNAR listan; den bygger ingen egen. Resursen fick inga nya nycklar
- * av `account`, `can` och `cover` — de ligger BREDVID den i webbens props,
- * samma uppdelning som SearchController gör med containern, och `/api` har
- * inte bett om dem.
+ * av `account`, `can`, `cover` och `in_inbox` — de ligger BREDVID den i
+ * webbens props, samma uppdelning som SearchController gör med containern, och
+ * `/api` har inte bett om dem.
  *
  * `status` och `gtd_list` ligger INUTI resursen sedan issue 232 (ADR-0052
  * § 1): de är förekomstens egna fält och hör till `/api`s rad, till skillnad
- * från webbens `account`, `can` och `cover`.
+ * från webbens `account`, `can`, `cover` och `in_inbox`.
  */
 it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', function () {
     withoutVite();
@@ -937,11 +937,13 @@ it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', func
         'container',
     ]);
 
-    // Samma rad i webbens svar, med de två nycklarna bredvid — aldrig inuti.
+    // Samma rad i webbens svar, med de fyra nycklarna bredvid — aldrig inuti.
+    // `in_inbox` kom med M28 · issue 774 (ADR-0054 § 1 och § 7): platsen på
+    // radens underrad, sann när containern är användarens inbox.
     $rad = todovyRader(actingAs($anvandare)->get('/tasks')->assertOk())[0];
 
     expect($rad['ulid'])->toBe($apiRaden['ulid'])
-        ->and(array_keys($rad))->toBe([...array_keys($apiRaden), 'account', 'can', 'cover']);
+        ->and(array_keys($rad))->toBe([...array_keys($apiRaden), 'account', 'can', 'cover', 'in_inbox']);
 });
 
 // --- språket ---------------------------------------------------------------
