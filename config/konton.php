@@ -67,4 +67,23 @@ return [
 
     'internal_pro_emails' => ['tony@manjo.me', 'mia@manjo.me'],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Registreringens läge
+    |--------------------------------------------------------------------------
+    |
+    | `open` eller `invite_only`, se [[ADR-0055 Inbjudningskoder och stängd
+    | registrering]] § 1. Förvalet är `invite_only`: Mimers är i privat beta,
+    | och den som registrerar sig behöver en voucher eller en utestående
+    | containerinbjudan. Att öppna registreringen är att byta det här värdet
+    | och ingenting annat.
+    |
+    | Läget prövas på ett ställe, App\Actions\Auth\AdmitRegistration, som
+    | både webbens och API:ets registrering går genom. Sätts i staging och
+    | produktion via ACCOUNT_REGISTRATION i shared/.env.
+    |
+    */
+
+    'registration' => env('ACCOUNT_REGISTRATION', 'invite_only'),
+
 ];
