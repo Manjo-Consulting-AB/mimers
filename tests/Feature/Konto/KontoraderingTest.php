@@ -273,7 +273,14 @@ it('en mjukraderad container med aktiva medlemmar blockerar raderingen', functio
 it('ett konto med aktiv prenumeration raderas aldrig', function () {
     [$konto] = kontoraderingVilande();
 
-    Subscription::factory()->create(['account_id' => $konto->id, 'status' => 'active']);
+    // Slutet ligger EFTER körningen: en `active`-rad bär sin plan bara före
+    // `current_period_end` (issue 265 § Beslut 1). Ett Pro som löpt ut
+    // undantar inte, se UtgangenPrenumerationTest.
+    Subscription::factory()->create([
+        'account_id' => $konto->id,
+        'status' => 'active',
+        'current_period_end' => Carbon::parse('2027-06-01 12:00:00'),
+    ]);
 
     Carbon::setTestNow('2026-09-04 12:00:00');
     kontoraderingKör();

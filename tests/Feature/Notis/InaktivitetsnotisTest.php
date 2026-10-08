@@ -67,7 +67,13 @@ it('ett konto som passerat tolv månader ger en account.inactive till varje medl
 it('ett konto med aktiv prenumeration varnas inte', function () {
     Carbon::setTestNow('2025-08-04 12:00:00');
     [$konto] = inaktivitetKontoMedÄgare();
-    Subscription::factory()->for($konto, 'account')->create(['status' => 'active']);
+    // Slutet ligger EFTER körningen: en `active`-rad bär sin plan bara före
+    // `current_period_end` (issue 265 § Beslut 1). Ett Pro som löpt ut
+    // undantar inte, se UtgangenPrenumerationTest.
+    Subscription::factory()->for($konto, 'account')->create([
+        'status' => 'active',
+        'current_period_end' => Carbon::parse('2027-08-04 12:00:00'),
+    ]);
 
     Carbon::setTestNow('2026-09-04 12:00:00');
     app(AdvancesAccountLifecycle::class)->handle();

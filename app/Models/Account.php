@@ -117,9 +117,13 @@ class Account extends Model
      * Den plan som gäller för kontot just nu — aldrig null.
      *
      * Reglerna, i ordning (issue 25 § Beslut 6): inga subscription-rad →
-     * `free`; `active` → prenumerationens plan; `past_due` → prenumerationens
-     * plan (en utebliven betalning ger read_only och frist, inte en omedelbar
-     * krympning av kvoten — nedgraderingen är issue 28); `cancelled` → `free`.
+     * `free`; raden bär sin plan → prenumerationens plan; annars `free`.
+     * Vad "bär sin plan" betyder står i `Subscription::isCurrent()`, och
+     * bara där (issue 265 § Beslut 1): en `active`-rad vars
+     * `current_period_end` passerat faller alltså till `free`, medan
+     * `past_due` behåller sin plan oavsett datum — en utebliven betalning ger
+     * read_only och frist, inte en omedelbar krympning av kvoten (nedgraderingen
+     * är issue 28). En `cancelled`-rad bär aldrig sin plan.
      *
      * Saknas free-planen är systemet trasigt och det ska märkas — kasta
      * hellre än att returnera null, annars ärver varje kontroll i 27 en
@@ -131,7 +135,7 @@ class Account extends Model
     {
         $subscription = $this->subscription;
 
-        if ($subscription !== null && in_array($subscription->status, ['active', 'past_due'], true)) {
+        if ($subscription !== null && $subscription->isCurrent()) {
             $plan = $subscription->plan;
 
             if ($plan !== null) {

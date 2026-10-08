@@ -440,12 +440,12 @@ class AcceptOwnershipTransfer
      * gratis, se [[ADR-0017 Missbruksvektorer]] § 4 och issue 49.
      *
      * Saknar kontot en subscription-rad skapas en aktiv Pro-rad från idag.
-     * Har kontot redan en aktiv Pro-rad FÖRLÄNGS perioden från sitt
-     * nuvarande värde, aldrig från `now()` — annars kortas en betalande
-     * kunds period av att hon får en båt. Ligger raden i något annat läge
-     * (uppsagd, obetald eller en annan plan) sätts den till Pro, aktiv, från
-     * idag. `account.status` rörs aldrig — ett `read_only`-konto blir inte
-     * aktivt av att få en container, och här nekas accepten redan i Beslut 3.
+     * Har kontot redan en aktiv Pro-rad FÖRLÄNGS perioden med ett år från
+     * `max(now(), current_period_end)` — se nedan — aldrig från ett värde som
+     * redan passerat. Ligger raden i något annat läge (uppsagd, obetald eller
+     * en annan plan) sätts den till Pro, aktiv, från idag. `account.status`
+     * rörs aldrig — ett `read_only`-konto blir inte aktivt av att få en
+     * container, och här nekas accepten redan i Beslut 3.
      *
      * Returnerar `true` om bonusen gavs, `false` om kontot redan konsumerat
      * den. Anroparen lägger det i `audit_log`-radens `meta`, så skillnaden
@@ -493,7 +493,16 @@ class AcceptOwnershipTransfer
         }
 
         if ($subscription->status === 'active' && $subscription->plan_id === $pro->id) {
-            $subscription->current_period_end = $subscription->current_period_end->addYear();
+            // Beslut 3 (issue 265): ett år räknas från det SENARE av nu och
+            // slutet. Låg slutet redan i det förflutna — ett Pro som löpt ut —
+            // hade `current_period_end->addYear()` lagt den nya perioden i det
+            // förflutna, och bonusen hade varit värdelös. Ett framtida slut
+            // förlängs som förut, så en betalande kunds period kortas aldrig.
+            $utgang = $subscription->current_period_end->greaterThan(now())
+                ? $subscription->current_period_end
+                : now();
+
+            $subscription->current_period_end = $utgang->copy()->addYear();
             $subscription->save();
 
             return true;

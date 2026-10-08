@@ -38,9 +38,12 @@ use Throwable;
  * — se Beslut 1 och Account::scopeInactiveSince(). Ett konto utan medlemmar
  * har ingen aktivitet alls och räknas som inaktivt sedan `created_at`.
  *
- * En aktiv prenumeration undantar alltid (Beslut 6): status `active` eller
- * `past_due` skyddar mot både påminnelse och stängning. `cancelled`
- * undantar inte.
+ * En prenumeration som bär sin plan undantar alltid (Beslut 6): status
+ * `active` före sitt slut, eller `past_due` oavsett datum — se
+ * App\Models\Subscription::isCurrent(), den enda formuleringen av regeln —
+ * skyddar mot både påminnelse och stängning. `cancelled` undantar inte, och
+ * det gör inte heller en `active`-rad vars `current_period_end` passerat
+ * (issue 265 § Beslut 1): ett utgånget Pro är ett gratiskonto.
  *
  * Stängningen körs före påminnelsen: ett konto som passerat 15 månader ska
  * stängas, inte få en påminnelse och stängas i samma körning. När
@@ -74,17 +77,21 @@ class AdvancesAccountLifecycle
 
     /**
      * Steg 2: konton som passerat 15 månader stängs. Urvalet är exakt
-     * (Beslut 5): `active`, ingen aktiv prenumeration, och inaktivt sedan
-     * gränsen. Ett `read_only`-konto (betalning) flyttas aldrig till
-     * `closed` — skälet i urvalet och i transaktionen nedan nämner båda
-     * `status` med flit.
+     * (Beslut 5): `active`, ingen prenumeration som bär sin plan, och inaktivt
+     * sedan gränsen. `Subscription::scopeCurrent()` är regeln (issue 265
+     * § Beslut 1) — ett utgånget Pro undantar alltså inte. Ett `read_only`-konto
+     * (betalning) flyttas aldrig till `closed` — skälet i urvalet och i
+     * transaktionen nedan nämner båda `status` med flit.
      */
     private function closeInactiveAccounts(Carbon $closeCutoff): void
     {
         $this->accountsToProcess(
             Account::query()
                 ->where('status', 'active')
-                ->whereDoesntHave('subscription', fn (Builder $q) => $q->whereIn('status', ['active', 'past_due']))
+                ->whereDoesntHave('subscription', function (Builder $q): void {
+                    /** @var Builder<Subscription> $q */
+                    $q->current();
+                })
                 ->inactiveSince($closeCutoff),
             fn (Account $account) => $this->closeAccount($account),
         );
@@ -107,7 +114,10 @@ class AdvancesAccountLifecycle
             Account::query()
                 ->select('account.*', DB::raw(Account::inactiveSinceExpression().' AS inactivity_since'))
                 ->where('status', 'active')
-                ->whereDoesntHave('subscription', fn (Builder $q) => $q->whereIn('status', ['active', 'past_due']))
+                ->whereDoesntHave('subscription', function (Builder $q): void {
+                    /** @var Builder<Subscription> $q */
+                    $q->current();
+                })
                 ->inactiveSince($noticeCutoff),
             function (Account $account): void {
                 // Kolumnen finns bara här — sätts i minnet av select-satsen
@@ -228,10 +238,12 @@ class AdvancesAccountLifecycle
             // Undantaget (Beslut 6) läses under lås, som EnforcesDowngrades
             // gör med subscription-raden: går en betalning igenom precis när
             // nattjobbet kör ska kontot inte stängas ändå — lockForUpdate är
-            // en current read som väntar in den transaktionen.
+            // en current read som väntar in den transaktionen. `current()` och
+            // inte `whereIn('status', ...)`: ett utgånget Pro undantar inte
+            // (issue 265 § Beslut 1).
             $subscription = Subscription::query()
                 ->where('account_id', $row->id)
-                ->whereIn('status', ['active', 'past_due'])
+                ->current()
                 ->lockForUpdate()
                 ->first();
 

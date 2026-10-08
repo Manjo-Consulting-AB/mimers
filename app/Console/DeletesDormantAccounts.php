@@ -23,15 +23,18 @@ use Throwable;
  * 29a byggde påminnelsen och stängningen; det här jobbet tar bort konton
  * som stängts för inaktivitet och legat orörda i `inactivity_delete_months`.
  * Urvalet (issue 29b § Beslut 1) är exakt: `status = 'closed'`,
- * `read_only_reason = 'inactivity'`, ingen aktiv prenumeration och inaktivt
- * sedan gränsen — ett konto som aldrig passerat 29a:s stängning raderas
- * aldrig. Formuleringen av inaktivitet återanvänder
+ * `read_only_reason = 'inactivity'`, ingen prenumeration som bär sin plan och
+ * inaktivt sedan gränsen — ett konto som aldrig passerat 29a:s stängning
+ * raderas aldrig. Formuleringen av inaktivitet återanvänder
  * Account::scopeInactiveSince() utan att skrivas om.
  *
  * Innan något raderas prövas de villkor ADR-0009 kräver (Beslut 2–4), igen
  * under radlås i samma transaktion som raderingen:
  *
- * - Aktiv prenumeration undantar alltid (Beslut 2).
+ * - En prenumeration som bär sin plan undantar alltid (Beslut 2) — se
+ *   App\Models\Subscription::isCurrent(). Ett utgånget Pro gör det inte
+ *   (issue 265 § Beslut 1), och kontot raderas som vilket gratiskonto som
+ *   helst.
  * - En ägd container med aktiva medlemmar — en giltig container_access eller
  *   en obesvarad, icke utgången inbjudan — blockerar hela kontot (Beslut
  *   3–4). Ägarskapet ska erbjudas dem först, och det är M6 issue 39; tills
@@ -79,7 +82,10 @@ class DeletesDormantAccounts
             Account::query()
                 ->where('status', 'closed')
                 ->where('read_only_reason', 'inactivity')
-                ->whereDoesntHave('subscription', fn (Builder $q) => $q->whereIn('status', ['active', 'past_due']))
+                ->whereDoesntHave('subscription', function (Builder $q): void {
+                    /** @var Builder<Subscription> $q */
+                    $q->current();
+                })
                 ->inactiveSince($deleteCutoff),
             fn (Account $account) => $this->deleteEligibleAccount($account),
         );
@@ -148,9 +154,11 @@ class DeletesDormantAccounts
 
             // Beslut 2 — undantaget läses under lås, som 29a gör: en betalning
             // som går igenom precis när nattjobbet kör ska inte radera kontot.
+            // `current()` och inte `whereIn('status', ...)`: ett utgånget Pro
+            // undantar inte (issue 265 § Beslut 1).
             $subscription = Subscription::query()
                 ->where('account_id', $row->id)
-                ->whereIn('status', ['active', 'past_due'])
+                ->current()
                 ->lockForUpdate()
                 ->first();
 
