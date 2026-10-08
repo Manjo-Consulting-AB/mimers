@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import TaskGroup from './TaskGroup.vue';
 import TodoRow from './TodoRow.vue';
+import UiCard from './UiCard.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -22,15 +23,24 @@ import { useTranslations } from '../composables/useTranslations.js';
  * avbockningen är `TodoRow`s snabbavbockning (Beslut 5). Ingen `OpenOccurrence`
  * och ingen egen skrivväg här.
  *
- * **Reglaget *Include child items* står i querysträngen** (Beslut 3).
- * Kryssrutan postar ingen kropp: `router.get` mot SAMMA rutt som sidan ligger
- * på, med `children=0` när den är av och utan parametern när den är på — så ett
- * avgränsat läge är en adress man kan spara, dela och backa ur (issue 59a
- * § Beslut 1). Servern äger svaret, och `props.includeChildren` speglas med
- * `watch` så att kryssrutan följer servern efter en bakåtknapp eller en
+ * **Rubrikkortet bär rubriken, underraden och knappen** (M28 · issue 785
+ * § Beslut 1, docs/Design/tasks-item.png). Kortet är `UiCard`s rubrikrad och
+ * åtgärdsplats: ikonrutan med bocken och rubriken *Tasks* till vänster,
+ * *New task* uppe till höger, och `item.schedule.subtitle` i kortets innehåll.
+ * Mockupens sökfält och filter byggs inte (Beslut 3): uppgifterna har varken
+ * tilldelning eller taggar, och fliken har inget filter i dag.
+ *
+ * **Reglaget *Include child items* är en växel och står i querysträngen**
+ * (Beslut 2 och 3). Växeln postar ingen kropp: `router.get` mot SAMMA rutt som
+ * sidan ligger på, med `children=0` när den är av och utan parametern när den
+ * är på — så ett avgränsat läge är en adress man kan spara, dela och backa ur
+ * (issue 59a § Beslut 1). Servern äger svaret, och `props.includeChildren`
+ * speglas med `watch` så att växeln följer servern efter en bakåtknapp eller en
  * omladdning. Vänteläget stänger kontrollen medan svaret är på väg (issue 68a
  * § Beslut 4). Samma konstruktion som underhållsfiltret i
- * resources/js/pages/Containers/Tasks.vue.
+ * resources/js/pages/Containers/Tasks.vue, och samma form som
+ * `UpcomingTasksToggle`: `role="switch"` med `aria-checked`, och etiketten
+ * ligger i knappen och blir därför dess namn.
  *
  * **En tom grupp ritas inte** (Beslut 4) — varken rubrik eller lista, och det
  * gäller också *Done*. Är allt tomt ritas `item.schedule.empty` i stället: en
@@ -72,7 +82,7 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
-/* Kryssrutans läge, speglat ur proppen — se docblocken ovan. */
+/* Växelns läge, speglat ur proppen — se docblocken ovan. */
 const onlyChildren = ref(props.includeChildren);
 
 /* Vänteläget för reglaget: en enda kontroll, en enda flagga (issue 68a). */
@@ -99,6 +109,17 @@ const hasAnyTask = computed(
  * `tab=schedules` står kvar och `children=0` läggs till eller utelämnas.
  */
 const tabUrl = () => `/containers/${props.containerUlid}/items/${props.itemUlid}?tab=schedules`;
+
+/*
+ * Växlingen vrider läget och skickar det — två steg, som kryssrutan före den
+ * gjorde med `v-model` och `@change`. Knappen är avstängd medan svaret är på
+ * väg, så ett dubbelklick kan inte vrida läget två gånger.
+ */
+function toggleChildren() {
+    onlyChildren.value = ! onlyChildren.value;
+
+    apply();
+}
 
 function apply() {
     const params = onlyChildren.value ? {} : { children: 0 };
@@ -130,66 +151,117 @@ const page = usePage();
 const createUrl = computed(
     () => `/tasks/create?item=${props.itemUlid}&return=${encodeURIComponent(page.url)}`,
 );
+
+/*
+ * Itemets namn till växelns hjälptext. Det läses ur `page.props.item` i
+ * stället för att skickas in, samma väg som `containerCounts` i ContainerHero
+ * och `costSuppliers` i ItemCostSection: sektionen får sitt item som ULID, och
+ * namnet är sidans — den som ritar fliken har det redan.
+ */
+const itemName = computed(() => page.props.item?.name ?? '');
 </script>
 
 <template>
     <section class="mt-10">
-        <div class="flex flex-wrap items-center gap-4">
-            <h2 class="text-lg font-semibold">{{ t('item.schedule.heading') }}</h2>
+        <!--
+            Rubrikkortet (Beslut 1). Ikonrutan med bocken och rubriken till
+            vänster, *New task* uppe till höger, och underraden i kortets
+            innehåll. Sökfältet och filtren i mockupen byggs inte (Beslut 3).
+        -->
+        <UiCard>
+            <template #heading>
+                <span class="flex items-center gap-2">
+                    <span
+                        aria-hidden="true"
+                        class="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="size-5"
+                        >
+                            <path d="M20 6 9 17l-5-5"></path>
+                        </svg>
+                    </span>
+
+                    {{ t('item.schedule.heading') }}
+                </span>
+            </template>
 
             <!-- *New task* (M27 · issue 246 § Beslut 2): den gamla textlänken
                  är en knapp, och den förväljer sektionens item. Grinden är
                  `can.create` — rutten prövar samma pinne på nytt. -->
-            <Link
-                v-if="can.create"
-                :href="createUrl"
-                class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-            >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="mr-2 h-4 w-4"
-                    aria-hidden="true"
+            <template #action>
+                <Link
+                    v-if="can.create"
+                    :href="createUrl"
+                    class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 >
-                    <path d="M12 5v14"></path>
-                    <path d="M5 12h14"></path>
-                </svg>
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="mr-2 h-4 w-4"
+                        aria-hidden="true"
+                    >
+                        <path d="M12 5v14"></path>
+                        <path d="M5 12h14"></path>
+                    </svg>
 
-                {{ t('todo.new') }}
-            </Link>
-        </div>
+                    {{ t('todo.new') }}
+                </Link>
+            </template>
+
+            <p class="text-body text-ink-muted">{{ t('item.schedule.subtitle') }}</p>
+        </UiCard>
 
         <!--
-            Reglaget (Beslut 3). En kryssruta och ingen skicka-knapp: valet är
-            ett värde i adressen, och svaret ritar servern. `:disabled` medan
-            svaret är på väg, så kontrollen inte ser död ut (issue 68a
-            § Beslut 4).
+            Reglaget (Beslut 2 och 3). En växel och ingen kryssruta: läget är
+            ett värde i adressen, och svaret ritar servern. Etiketten ligger i
+            knappen, `aria-checked` säger läget, och `:disabled` stänger
+            kontrollen medan svaret är på väg (issue 68a § Beslut 4).
         -->
-        <label
-            for="item-tasks-children"
-            class="mt-4 flex min-h-11 w-fit items-center gap-2 text-sm font-medium text-slate-800"
+        <button
+            type="button"
+            role="switch"
+            :aria-checked="onlyChildren ? 'true' : 'false'"
+            :disabled="pending"
+            class="mt-4 inline-flex min-h-11 w-fit items-center gap-2 text-meta font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+            @click="toggleChildren"
         >
-            <input
-                id="item-tasks-children"
-                v-model="onlyChildren"
-                type="checkbox"
-                name="children"
-                :disabled="pending"
-                @change="apply"
+            <span
+                aria-hidden="true"
+                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
+                :class="onlyChildren ? 'bg-accent' : 'bg-border'"
             >
-            {{ t('item.schedule.include_children') }}
-        </label>
+                <span
+                    class="inline-block size-3.5 rounded-full bg-surface transition-transform"
+                    :class="onlyChildren ? 'translate-x-[1.25rem]' : 'translate-x-1'"
+                />
+            </span>
+
+            <span>{{ t('item.schedule.include_children') }}</span>
+        </button>
+
+        <!-- Hjälptexten står under etiketten och i linje med den: spåret är
+             36 px och gapet 8, alltså `pl-11`. -->
+        <p class="mt-1 pl-11 text-meta text-ink-muted">
+            {{ t('item.schedule.children_help', { item: itemName }) }}
+        </p>
 
         <!--
             Det tomma läget (Beslut 4): först när allt är tomt — de fyra öppna
             grupperna OCH *Done* — annars hade en lista med bara avbockade
             rader sagt att itemet saknar uppgifter.
         -->
-        <p v-if="!hasAnyTask" class="mt-2 text-sm text-slate-600">
+        <p v-if="!hasAnyTask" class="mt-4 text-sm text-slate-600">
             {{ t('item.schedule.empty') }}
         </p>
 
