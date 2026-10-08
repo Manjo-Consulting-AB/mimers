@@ -112,11 +112,13 @@ use Illuminate\Support\Facades\Gate;
  * mottagare utanför ägarkontot får sitt eget konto och inte containerns.
  *
  * **Frågekostnaden är konstant** (Beslut 8). Förekomsterna hämtas med
- * `with(['schedule.item.container.account'])` — samma eager load som `/api`,
- * plus `account`, som `ItemPolicy::update()` läser för kontospärren (regel 4)
- * och som annars hade blivit ett uppslag per rad. Omfånget värms i ETT anrop
- * för de containers listan faktiskt bär: `ResolveItemScope` memoiserar per
- * `{user, container}`, så utan värmningen hade `can`-flaggan kostat en
+ * `with(['schedule.item.category', 'schedule.item.container.account'])` —
+ * samma eager load som `/api`, plus `account`, som `ItemPolicy::update()`
+ * läser för kontospärren (regel 4), och `category`, som `row()` läser för
+ * etiketten (M28 · issue 781) — båda hade annars blivit ett uppslag per rad.
+ * Omfånget värms i ETT anrop för de containers listan faktiskt bär:
+ * `ResolveItemScope` memoiserar per `{user, container}`, så utan värmningen
+ * hade `can`-flaggan kostat en
  * upplösning per container och listan vuxit i frågor med antalet containers i
  * stället för att vara konstant (issue 70 § Beslut 2, samma grepp som
  * `App\Actions\Item\SearchAccessibleItems`). Sidan bär samma kostnad som hela
@@ -975,7 +977,7 @@ class ListTodo
     ): Builder {
         $query = ScheduleOccurrence::query()
             ->todoFor($user, $accountIds)
-            ->with(['schedule.item.container.account']);
+            ->with(['schedule.item.category', 'schedule.item.container.account']);
 
         if ($list !== null && in_array($list, ScheduleOccurrence::GTD_LISTS, true)) {
             $query->inGtdList($list);
@@ -1103,7 +1105,7 @@ class ListTodo
 
         return ScheduleOccurrence::query()
             ->where('status', ScheduleOccurrence::STATUS_COMPLETED)
-            ->with(['schedule.item.container.account'])
+            ->with(['schedule.item.category', 'schedule.item.container.account'])
             ->whereHas('schedule', function (Builder $query) use ($unrestrictedContainers, $scopedItemIds, $maintenanceOnly): void {
                 // Det begränsade omfånget är en `whereIn` mot itemens
                 // löpnummer — och en TOM lista betyder "når ingenting", aldrig
@@ -1312,6 +1314,15 @@ class ListTodo
      * `account`, `can` och `cover`: `/api` ändras inte, och vyn ritar platsen
      * *Inbox* i stället för det dolda itemet och den dolda containern.
      *
+     * **`category` är itemets kategori som etikett** (M28 · issue 781, Tonys
+     * beslut 2026-10-07): `{ name }` när itemet har en, annars `null` — samma
+     * form som `cover` bär, och nyckeln finns på varje rad så vyns uppslag är
+     * detsamma för alla. Uppgifter får ingen egen tagg- eller kategorimodell;
+     * etiketten är itemets kategori och ingenting annat. Kategorin läses ur
+     * den ivriga laddningen — inte med ett uppslag per rad — och fältet läggs
+     * BREDVID resursen som `account`, `can`, `cover` och `in_inbox`: `/api`
+     * ändras inte.
+     *
      * @param  list<string>  $accountUlids
      * @param  array<int, array{ulid: string, hasThumb: bool}|null>  $covers
      * @return array<string, mixed>
@@ -1336,6 +1347,7 @@ class ListTodo
                 'update' => Gate::forUser($user)->allows('update', $item),
             ],
             'cover' => $covers[$item->id] ?? null,
+            'category' => $item->category === null ? null : ['name' => $item->category->name],
             'in_inbox' => $item->container->isInbox(),
         ];
     }
