@@ -51,6 +51,22 @@ function dashboardlayoutRamKlasser(string $markup, string $element): ?string
 }
 
 /**
+ * Klasserna på ett element, `$element` är markupen som inleder det. Till
+ * skillnad från dashboardlayoutRamKlasser letar den här efter klassattributet
+ * på elementet SJÄLVT och inte på `<div>`:en runt det.
+ */
+function dashboardlayoutKlasser(string $markup, string $element): ?string
+{
+    $monster = '/<'.preg_quote($element, '/').'[^>]*\bclass="([^"]*)"/s';
+
+    if (preg_match($monster, $markup, $träff) !== 1) {
+        return null;
+    }
+
+    return $träff[1];
+}
+
+/**
  * Positionen för en nål, med ett tydligt fel när den saknas.
  */
 function dashboardlayoutPosition(string $markup, string $nål): int
@@ -133,4 +149,56 @@ it('ritar inget kostnadskort utan kostnader', function () {
 
     expect(dashboardlayoutPosition($sida, 'v-if="props.costs.totals.length"'))
         ->toBeLessThan(dashboardlayoutPosition($sida, '<CostDonut'));
+});
+
+// --- mobilordningen --------------------------------------------------------
+
+/*
+ * Klart när (Beslut 3): under `lg:` är ordningen brickorna, kostnaden,
+ * uppgifterna, containrarna, händelserna och sist informationsytan.
+ *
+ * Beslut 2 binder uppgifterna och containrarna till var sin kolumn, och en
+ * kolumn är en enhet i källordningen — utan ett grepp om saken hade den ena
+ * följt den andra, och Beslut 3 hade varit omöjlig att uppfylla utan att bryta
+ * Beslut 2. Greppet är `contents`: under `lg:` ritar kolumnen ingen egen box,
+ * så hennes barn blir syskon i rutnätets flexkolumn och kan ordnas med
+ * `order-*`. Över `lg:` nollställs ordningen (`lg:order-none`), så rutnätets
+ * egen ordning står kvar — den prövas av proven ovan.
+ *
+ * Ordningens tal: uppgifterna 1, containrarna 2, händelserna 3 och
+ * informationsytan 4. Den översta raden (brickorna och kostnaden) bär inget
+ * tal och står först av sig själv.
+ */
+it('ordnar mobilen som Beslut 3: uppgifterna före containrarna', function () {
+    $sida = dashboardlayoutUtanKommentarer(File::get(resource_path('js/pages/Dashboard.vue')));
+
+    // Kolumnerna ritar ingen egen box under `lg:` — utan `contents` kunde
+    // deras barn inte ordnas mot varandra.
+    expect((string) dashboardlayoutRamKlasser($sida, 'section v-for="group in props.containerGroups"'))
+        ->toContain('contents')
+        ->and((string) dashboardlayoutRamKlasser($sida, 'DashboardTasksPanel'))
+        ->toContain('contents');
+
+    $uppgifter = dashboardlayoutKlasser($sida, 'DashboardTasksPanel');
+    $containrar = dashboardlayoutKlasser($sida, 'section v-for="group in props.containerGroups"');
+    $handelser = dashboardlayoutRamKlasser($sida, 'DashboardActivityPanel');
+    $information = dashboardlayoutRamKlasser($sida, 'InfoPanel');
+
+    expect($uppgifter)->not->toBeNull('uppgiftspanelen saknar klasser')
+        ->and($containrar)->not->toBeNull('containergrupperna saknar klasser')
+        ->and($handelser)->not->toBeNull('händelsepanelen saknar klasser')
+        ->and($information)->not->toBeNull('informationsytan saknar klasser');
+
+    // Uppgifterna (1) före containrarna (2), händelserna (3) efter dem och
+    // informationsytan (4) sist.
+    expect((string) $uppgifter)->toContain('order-1')
+        ->and((string) $containrar)->toContain('order-2')
+        ->and((string) $handelser)->toContain('order-3')
+        ->and((string) $information)->toContain('order-4');
+
+    // Och över `lg:` nollställs ordningen, så rutnätet ligger som källan.
+    expect((string) $uppgifter)->toContain('lg:order-none')
+        ->and((string) $containrar)->toContain('lg:order-none')
+        ->and((string) $handelser)->toContain('lg:order-none')
+        ->and((string) $information)->toContain('lg:order-none');
 });

@@ -72,10 +72,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * rader (issue 252 § Beslut 2). Panelerna är M19:s, propparna är desamma och
  * servern får ingen ny fråga.
  *
- * **Under `lg:` är rutnätet ett vanligt block och kolumnerna staplas i
- * källordningen**: brickorna, kostnaden, containergrupperna, uppgifterna,
- * händelserna och sist informationsytan. Mobilens startsida följer källan,
- * precis som före issue 171.
+ * **Under `lg:` är behållaren en flexkolumn och de två kolumnerna ritar ingen
+ * egen box** (`contents`): deras barn blir syskon i flexkolumnen och ordnas
+ * med `order-*` till Beslut 3:s ordning — brickorna, kostnaden, uppgifterna,
+ * containrarna, händelserna och sist informationsytan. Utan `contents` hade
+ * uppgifterna och containrarna följts åt i källordningen, och Beslut 3 hade
+ * inte gått att uppfylla utan att bryta Beslut 2.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -117,15 +119,21 @@ const { t } = useTranslations();
             tre kolumner: den översta raden spänner alla tre, och under den
             står två kolumner som var och en är en egen `flex flex-col`.
             Kolumnerna delar ingen radhöjd — det var det som lämnade tomrummet
-            när uppgiftspanelen växte (Beslut 2). Under `lg:` är rutnätet ett
-            vanligt block och kolumnerna staplas i källordningen (Beslut 3).
+            när uppgiftspanelen växte (Beslut 2).
+
+            Under `lg:` är behållaren en flexkolumn och de två kolumnerna ritar
+            ingen egen box (`contents`), så deras barn blir syskon här och kan
+            ordnas med `order-*` till Beslut 3. Utan `contents` hade
+            uppgifterna och containrarna följts åt i källordningen.
         -->
-        <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
+        <div class="flex flex-col lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
             <!--
                 Den översta raden (Beslut 1): brickorna till vänster och
                 kostnadskortet med donuten till höger om dem, i samma rad över
                 `lg:`. Finns inga kostnader ritas inget kort, och brickorna tar
-                raden — de är då radens enda barn och fyller den.
+                raden — de är då radens enda barn och fyller den. Under `lg:`
+                är raden ett vanligt block och står först av sig själv, utan
+                `order` (Beslut 3).
             -->
             <div class="mt-8 lg:col-span-3 lg:flex lg:items-start lg:gap-8">
                 <DashboardStats class="lg:flex-1" :stats="props.stats" :costs="props.costs.totals" />
@@ -143,12 +151,14 @@ const { t } = useTranslations();
 
             <!--
                 Vänster kolumn (Beslut 2): containergrupperna, en efter en.
-                Kolumnen är ett eget `flex flex-col`, så grupperna staplas här
-                och ligger inte i rutnätet — en högerkolumn som växer flyttar
-                dem därför inte.
+                Kolumnen är ett eget `flex flex-col` över `lg:`, så grupperna
+                staplas här och ligger inte i rutnätet — en högerkolumn som
+                växer flyttar dem därför inte. Under `lg:` ritar kolumnen ingen
+                box (`contents`), och grupperna bär sin egen marginal och sin
+                ordning efter uppgifterna (Beslut 3).
             -->
-            <div class="mt-8 flex flex-col gap-8 lg:col-span-2 lg:row-start-2">
-                <section v-for="group in props.containerGroups" :key="group.kind ?? 'others'">
+            <div class="contents lg:col-span-2 lg:row-start-2 lg:mt-8 lg:flex lg:flex-col lg:gap-8">
+                <section v-for="group in props.containerGroups" :key="group.kind ?? 'others'" class="order-2 mt-8 lg:order-none lg:mt-0">
                     <h2 class="text-title font-semibold text-ink">
                         {{ group.kind ?? t('dashboard.containers.others') }}
                     </h2>
@@ -168,20 +178,30 @@ const { t } = useTranslations();
                 och informationsytan sist, som förut. Marginalen sitter på
                 panelerna (informationsytan äger sin egen), så kolumnen bär
                 ingen `gap`: en ram runt panelen hade gjort ramen, och inte
-                kolumnen, till panelens förälder.
+                kolumnen, till panelens förälder. Under `lg:` ritar kolumnen
+                ingen box (`contents`), och barnen bär sin ordning (Beslut 3).
             -->
-            <div class="mt-8 flex flex-col lg:col-start-3 lg:row-start-2">
+            <div class="contents lg:col-start-3 lg:row-start-2 lg:mt-8 lg:flex lg:flex-col">
                 <DashboardTasksPanel
+                    class="order-1 mt-8 lg:order-none lg:mt-0"
                     :tasks="props.tasks"
                     :has-containers="props.hasContainers"
                     :show-upcoming-tasks="props.showUpcomingTasks"
                 />
 
-                <div class="mt-8">
+                <div class="order-3 mt-8 lg:order-none">
                     <DashboardActivityPanel :events="props.events" />
                 </div>
 
-                <InfoPanel :tips="props.tips" />
+                <!--
+                    Informationsytan äger sin egen marginal — den ritas bara när
+                    det finns tips — så den får bara sin ordning här, och
+                    därför en egen ram: en klass utifrån kan inte ärvas av en
+                    rot som är villkorad.
+                -->
+                <div class="order-4 lg:order-none">
+                    <InfoPanel :tips="props.tips" />
+                </div>
             </div>
         </div>
     </AppLayout>
