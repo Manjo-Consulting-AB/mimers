@@ -62,18 +62,20 @@ import { useTranslations } from '../composables/useTranslations.js';
  * komponenten. Den ritas överst, där mockupens exempelbanner stod, och bara
  * när listan har något kvar.
  *
- * **Rutnätet kom med issue 171** ([[ADR-0050 Desktopdesignen]] § 6): över
- * `lg:` står brickorna, kortraderna och kostnaderna i en vänsterdel och
- * uppgifterna, händelserna och informationsytan i en högerspalt. Det är hela
- * ändringen — panelerna är M19:s, propparna är desamma och servern får ingen
- * ny fråga.
+ * **Rutnätet kom med issue 171** ([[ADR-0050 Desktopdesignen]] § 6) och
+ * **ställdes om i issue 252**: över `lg:` ligger en översta rad med brickorna
+ * till vänster och kostnadskortet till höger, och under den två kolumner som
+ * var och en är en egen `flex flex-col` — containergrupperna i den vänstra,
+ * uppgifterna och händelserna i den högra. Kolumnerna delar ingen radhöjd, så
+ * en uppgiftspanel som växer flyttar ingenting i den vänstra kolumnen; det var
+ * just det som lämnade tomrummet när barnen låg i samma rutnät och delade
+ * rader (issue 252 § Beslut 2). Panelerna är M19:s, propparna är desamma och
+ * servern får ingen ny fråga.
  *
- * **Rutnätet är platt och ordningen är källans.** Panelerna ligger kvar i
- * markupen i samma ordning som före issue 171: under `lg:` är behållaren ett
- * vanligt block och staplar dem som förut, så mobilens startsida flyttar sig
- * inte för att skrivbordet fick ett rutnät. Placeringen sker med klasser —
- * högerspalten är tredje kolumnen med en uttalad rad per panel, vänsterdelens
- * block spänner två kolumner och hamnar i de lediga raderna.
+ * **Under `lg:` är rutnätet ett vanligt block och kolumnerna staplas i
+ * källordningen**: brickorna, kostnaden, containergrupperna, uppgifterna,
+ * händelserna och sist informationsytan. Mobilens startsida följer källan,
+ * precis som före issue 171.
  */
 const props = defineProps({
     /* Högst fem rader ur todo-urvalet, i serverns ordning. */
@@ -111,62 +113,75 @@ const { t } = useTranslations();
         <h1 class="text-2xl font-semibold">{{ t('dashboard.heading') }}</h1>
 
         <!--
-            Rutnätet (issue 171). Behållaren är ett vanligt block tills `lg:`
-            gör den till en grid om tre kolumner: barnen ligger kvar i
-            källordningen, och under `lg:` staplas de precis som förut.
-            Marginalen sitter kvar på varje panel — rutnätet lägger bara till
-            kolumnavståndet, så radrytmen är den samma på båda sidor om
-            brytpunkten.
+            Uppställningen (issue 252). Över `lg:` är behållaren ett rutnät om
+            tre kolumner: den översta raden spänner alla tre, och under den
+            står två kolumner som var och en är en egen `flex flex-col`.
+            Kolumnerna delar ingen radhöjd — det var det som lämnade tomrummet
+            när uppgiftspanelen växte (Beslut 2). Under `lg:` är rutnätet ett
+            vanligt block och kolumnerna staplas i källordningen (Beslut 3).
         -->
         <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
             <!--
-                Informationsytan äger sin egen marginal (se InfoPanel.vue), så
-                ramen bär ingen: den placerar panelen sist i högerspalten och
-                lämnar ingenting kvar när panelen inte ritas — en tom ram har
-                ingen höjd.
+                Den översta raden (Beslut 1): brickorna till vänster och
+                kostnadskortet med donuten till höger om dem, i samma rad över
+                `lg:`. Finns inga kostnader ritas inget kort, och brickorna tar
+                raden — de är då radens enda barn och fyller den.
             -->
-            <div class="lg:col-start-3 lg:row-start-3">
-                <InfoPanel :tips="props.tips" />
+            <div class="mt-8 lg:col-span-3 lg:flex lg:items-start lg:gap-8">
+                <DashboardStats class="lg:flex-1" :stats="props.stats" :costs="props.costs.totals" />
+
+                <section v-if="props.costs.totals.length" class="mt-8 lg:mt-0 lg:flex-1">
+                    <h2 class="text-title font-semibold text-ink">
+                        {{ t('dashboard.costs.heading') }}
+                    </h2>
+
+                    <div class="mt-3">
+                        <CostDonut :totals="props.costs.totals" :breakdown="props.costs.breakdown" />
+                    </div>
+                </section>
             </div>
 
-            <div class="mt-8 lg:col-span-2">
-                <DashboardStats :stats="props.stats" :costs="props.costs.totals" />
+            <!--
+                Vänster kolumn (Beslut 2): containergrupperna, en efter en.
+                Kolumnen är ett eget `flex flex-col`, så grupperna staplas här
+                och ligger inte i rutnätet — en högerkolumn som växer flyttar
+                dem därför inte.
+            -->
+            <div class="mt-8 flex flex-col gap-8 lg:col-span-2 lg:row-start-2">
+                <section v-for="group in props.containerGroups" :key="group.kind ?? 'others'">
+                    <h2 class="text-title font-semibold text-ink">
+                        {{ group.kind ?? t('dashboard.containers.others') }}
+                    </h2>
+
+                    <div class="mt-3 flex flex-wrap items-stretch gap-4 lg:grid lg:grid-cols-2">
+                        <ContainerCard
+                            v-for="container in group.containers"
+                            :key="container.ulid"
+                            :container="container"
+                        />
+                    </div>
+                </section>
             </div>
 
-            <section v-for="group in props.containerGroups" :key="group.kind ?? 'others'" class="mt-8 lg:col-span-2">
-                <h2 class="text-title font-semibold text-ink">
-                    {{ group.kind ?? t('dashboard.containers.others') }}
-                </h2>
-
-                <div class="mt-3 flex flex-wrap items-stretch gap-4 lg:grid lg:grid-cols-2">
-                    <ContainerCard
-                        v-for="container in group.containers"
-                        :key="container.ulid"
-                        :container="container"
-                    />
-                </div>
-            </section>
-
-            <section v-if="props.costs.totals.length" class="mt-8 lg:col-span-2">
-                <h2 class="text-title font-semibold text-ink">
-                    {{ t('dashboard.costs.heading') }}
-                </h2>
-
-                <div class="mt-3">
-                    <CostDonut :totals="props.costs.totals" :breakdown="props.costs.breakdown" />
-                </div>
-            </section>
-
-            <div class="mt-8 lg:col-start-3 lg:row-start-1">
+            <!--
+                Höger kolumn (Beslut 2): uppgifterna och därunder händelserna —
+                och informationsytan sist, som förut. Marginalen sitter på
+                panelerna (informationsytan äger sin egen), så kolumnen bär
+                ingen `gap`: en ram runt panelen hade gjort ramen, och inte
+                kolumnen, till panelens förälder.
+            -->
+            <div class="mt-8 flex flex-col lg:col-start-3 lg:row-start-2">
                 <DashboardTasksPanel
                     :tasks="props.tasks"
                     :has-containers="props.hasContainers"
                     :show-upcoming-tasks="props.showUpcomingTasks"
                 />
-            </div>
 
-            <div class="mt-8 lg:col-start-3 lg:row-start-2">
-                <DashboardActivityPanel :events="props.events" />
+                <div class="mt-8">
+                    <DashboardActivityPanel :events="props.events" />
+                </div>
+
+                <InfoPanel :tips="props.tips" />
             </div>
         </div>
     </AppLayout>
