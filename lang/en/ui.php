@@ -142,6 +142,11 @@ return [
         // Arkets rubrik. Samma ord som knappens — ytan är knappens meny, och
         // två ord för samma sak hade glidit isär.
         'heading' => 'Add',
+        // Rubriken på containerns flikar (M28 · testarnas fynd 2026-10-07).
+        // Fliken listar en rad per item man får skapa i, och rubriken säger
+        // vad valet är — nyckeln kommer från CreateTarget::forContainerTab()
+        // och slås upp som `create.pick_item`.
+        'pick_item' => 'Choose item',
         'rows' => [
             // Ett child till itemet man står på.
             'item' => 'Item below',

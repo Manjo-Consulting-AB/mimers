@@ -458,12 +458,15 @@ const initials = computed(() => {
 
         <!-- Menyn ritas bara när målet ÄR en meny. En sida vars knapp leder
              till ett formulär har ingenting att öppna, och ett ark utan rader
-             vore en tom yta. -->
+             vore en tom yta. `heading` förmedlas när målet bär en — containerns
+             flikar namnger sin meny (M28), och ett mål utan `heading` får
+             skalets ord som förut. -->
         <CreateMenu
             v-if="create && create.kind === 'menu'"
             :open="createMenuOpen"
             :trigger="createTrigger"
             :rows="create.rows"
+            :heading="create.heading"
             @close="closeCreateMenu"
         />
     </div>

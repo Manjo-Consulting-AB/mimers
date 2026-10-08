@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Actions\Schedule\ListTodo;
 use App\Http\Resources\ContainerResource;
 use App\Models\Container;
+use App\Support\Frontend\CreateTarget;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -87,7 +88,7 @@ class ContainerTaskController extends Controller
      * (Beslut 1): den gamla glimten på tjugo är borta, och den som vill se
      * hela historiken går vidare till historikfliken (issue 179).
      */
-    public function __invoke(Request $request, Container $container, ListTodo $listTodo): Response
+    public function __invoke(Request $request, Container $container, ListTodo $listTodo, CreateTarget $createTarget): Response
     {
         Gate::authorize('view', $container);
 
@@ -141,6 +142,13 @@ class ContainerTaskController extends Controller
                 'calendar' => $canView,
                 'export' => $canView,
             ],
+            // Plusknappens mål på den här fliken (M28 · testarnas fynd
+            // 2026-10-07): formuläret för en ny uppgift, med `?return` tillbaka
+            // till fliken — samma mål som *New task* i rubrikraden, och samma
+            // förvalda inbox (issue 246 § Beslut 2). Målet ritas alltid, för
+            // inboxen är alltid ett möjligt mål; se
+            // App\Support\Frontend\CreateTarget::forContainerTab().
+            'create' => $createTarget->forContainerTab($container, 'tasks'),
             // De fyra öppna grupperna, i ritningsordning: försenat, idag,
             // denna vecka, kommande. Vyn itererar objektets nycklar som de
             // kommer och räknar aldrig en grupp själv (issue 64 § Beslut 3).

@@ -15,6 +15,7 @@ use App\Models\UsageCounter;
 use App\Models\User;
 use App\Support\Access\ItemScope;
 use App\Support\Files\FileOrigin;
+use App\Support\Frontend\CreateTarget;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -117,6 +118,7 @@ class ContainerDocumentController extends Controller
         Container $container,
         ListContainerAttachments $listAttachments,
         ListRecentOpens $listRecentOpens,
+        CreateTarget $createTarget,
     ): Response {
         Gate::authorize('view', $container);
 
@@ -177,6 +179,12 @@ class ContainerDocumentController extends Controller
                 ];
             });
 
+        // Items användaren får skapa i, lästa EN gång och använda två (M28):
+        // som `items` bakom rubrikens *Lägg till dokument* (Beslut 5) och som
+        // raderna i plusknappens meny. Två läsningar av samma fråga glider
+        // isär, och då hade de två ytorna erbjudit olika items.
+        $items = $this->creatableItems($user, $container, $scope);
+
         return Inertia::render('Containers/Documents', [
             'container' => ContainerResource::make($container)->resolve($request),
             // Flaggan ritar hjältens *Redigera container* (issue 170);
@@ -224,7 +232,13 @@ class ContainerDocumentController extends Controller
             // något konto att visa — då ritas ingen stapel.
             'storage' => $this->storage($user, $container),
             // Itemväljaren bakom *Lägg till dokument* (Beslut 5).
-            'items' => $this->creatableItems($user, $container, $scope),
+            'items' => $items,
+            // Plusknappens mål på den här fliken (M28 · testarnas fynd
+            // 2026-10-07): en meny med samma items som rubrikknappen listar,
+            // och ett val leder till itemets bilageflik. Servern bygger raderna
+            // ur `$items` — samma grindar, en sanning; se
+            // App\Support\Frontend\CreateTarget::forContainerTab().
+            'create' => $createTarget->forContainerTab($container, 'documents', $items),
             // Sant när användarfiler levereras från en egen origin (issue 61a
             // § Beslut 2). Falsk betyder att allt levereras som `attachment`,
             // och då ritar rutnätet varken miniatyr eller filram — samma

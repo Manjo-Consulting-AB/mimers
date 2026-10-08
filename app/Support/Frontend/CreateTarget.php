@@ -16,12 +16,13 @@ use Illuminate\Contracts\Auth\Access\Gate;
  * Svaret blir sidans `create`-propp, och skalet ritar knappen ur den. En sida
  * som inte frågar får ingen propp — och därmed ingen knapp.
  *
- * **Vad knappen gör avgörs av sidan, inte av knappen.** Därför fyra metoder och
+ * **Vad knappen gör avgörs av sidan, inte av knappen.** Därför fem metoder och
  * inte en: `forContainers()` för dashboarden och containerlistan,
  * `forContainer()` för en sida inuti en container, `forItem()` för ett item —
- * där knappen öppnar en meny i stället för att leda någonstans — och
- * `forNode()` för en nod i fokuskartan, som bär de två raderna om noden själv
- * (issue 156).
+ * där knappen öppnar en meny i stället för att leda någonstans — `forNode()`
+ * för en nod i fokuskartan, som bär de två raderna om noden själv (issue 156),
+ * och `forContainerTab()` för en av containerns flikar, som gör flikens egen
+ * handling (M28).
  *
  * **Adresserna är relativa** (`route(..., absolute: false)`), som varje annan
  * href i skalet: `AppLayout` skriver `href="/dashboard"` och flikarna bygger
@@ -115,6 +116,73 @@ final class CreateTarget
         }
 
         return ['kind' => 'item', 'href' => $href];
+    }
+
+    /**
+     * Målet för plusknappen på en av containerns flikar — *Documents*,
+     * *Tasks* och *Costs* (M28 · testarnas fynd 2026-10-07).
+     *
+     * **Fliken säger redan vad användaren vill göra**, och knappen gör därför
+     * flikens EGEN handling i stället för att öppna den allmänna menyn från
+     * översikten.
+     *
+     * - **`tasks`** leder till formuläret för en ny uppgift, med `?return`
+     *   tillbaka till fliken. Uppgiften börjar i användarens inbox — en
+     *   container är inte ett item, så det finns ingen plats att ärva, och
+     *   platsen byts med *Change…* — precis som *New task* i flikens rubrikrad
+     *   (issue 246 § Beslut 2). Målet ritas alltid: inboxen är alltid ett
+     *   möjligt mål.
+     * - **`documents`** och **`costs`** öppnar en meny med en rad per item
+     *   användaren får skapa i, och raden leder till itemets bilage- respektive
+     *   kostnadsflik.
+     *
+     * **`$items` är flikens egen lista** — samma `creatableItems()` som
+     * rubrikknappen ritar, så samma grindar gäller och frågan "vilka items får
+     * hon skapa i" aldrig formuleras en andra gång. Är listan tom returneras
+     * null: ingen meny, ingen knapp.
+     *
+     * **`heading` är en NYCKEL efter `create.` och ingen färdig mening**
+     * ([[ADR-0021 Frontendteknik]]): skalet slår upp `create.pick_item` och
+     * formulerar *Choose item* på användarens språk.
+     *
+     * En flik utan plusknapp — och en okänd flik — ger null: skalet ritar
+     * ingen knapp åt en sida som inte frågar.
+     *
+     * @param  list<array{ulid: string, name: string}>  $items  items användaren får skapa i, redan grindade av kontrollern
+     * @return array{kind: string, href: string}|array{kind: string, heading: string, rows: list<array{key: string, label: string, href: string}>}|null
+     */
+    public function forContainerTab(Container $container, string $tab, array $items = []): ?array
+    {
+        if ($tab === 'tasks') {
+            return [
+                'kind' => 'task',
+                'href' => route('tasks.create', absolute: false)
+                    .'?return='.route('containers.tasks', $container, absolute: false),
+            ];
+        }
+
+        $targetTab = match ($tab) {
+            'documents' => 'attachments',
+            'costs' => 'costs',
+            default => null,
+        };
+
+        if ($targetTab === null || $items === []) {
+            return null;
+        }
+
+        $rows = [];
+
+        foreach ($items as $item) {
+            $rows[] = [
+                'key' => 'item_target',
+                'label' => $item['name'],
+                'href' => route('containers.items.show', [$container, $item['ulid']], absolute: false)
+                    .'?tab='.$targetTab,
+            ];
+        }
+
+        return ['kind' => 'menu', 'heading' => 'pick_item', 'rows' => $rows];
     }
 
     /**
