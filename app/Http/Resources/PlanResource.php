@@ -60,8 +60,9 @@ class PlanResource extends JsonResource
 
     /**
      * Grenen är App\Models\Account::currentPlan()s, oformulerad (issue 25
-     * § Beslut 6): en aktiv eller past_due-prenumeration bär sin plan, allt
-     * annat faller på `free`.
+     * § Beslut 6): en prenumeration som bär sin plan — se
+     * App\Models\Subscription::isCurrent(), den enda formuleringen av regeln
+     * (issue 265 § Beslut 1) — bär den, allt annat faller på `free`.
      *
      * Den upprepas här av ett enda skäl. currentPlan() slår upp free-planen
      * med en egen fråga varje gång ingen prenumeration bär, alltså en fråga
@@ -76,7 +77,7 @@ class PlanResource extends JsonResource
         $subscription = $account->subscription;
 
         if ($subscription !== null
-            && in_array($subscription->status, ['active', 'past_due'], true)
+            && $subscription->isCurrent()
             && $subscription->plan !== null) {
             return $subscription->plan;
         }

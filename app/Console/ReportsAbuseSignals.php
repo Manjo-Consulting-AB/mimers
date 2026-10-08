@@ -444,8 +444,14 @@ class ReportsAbuseSignals
      * oformulerad om:
      *
      *   gratiskonto = account utan rad i subscription
-     *               ELLER subscription.status = 'cancelled'
+     *               ELLER subscription bär INTE sin plan
      *               ELLER subscription -> plan.code = 'free'
+     *
+     * "Bär sin plan" är App\Models\Subscription::isCurrent() (issue 265
+     * § Beslut 1), och den tredje grenen nedan är dess komplement i
+     * SQL: en `active`-rad vars `current_period_end` passerat räknas som
+     * gratiskonto precis som en `cancelled` gör. `past_due` bär sin plan
+     * oavsett datum och faller därför inte in här.
      *
      * Samma disciplin som 26b har mot räknaren: glider rapportens definition
      * från modellens rapporterar den sin egen verklighet. `account` har inget
@@ -458,13 +464,22 @@ class ReportsAbuseSignals
      */
     private function freeAccountsQuery(): Builder
     {
+        $nu = now();
+
         return DB::table('account')
             ->leftJoin('subscription', 'subscription.account_id', '=', 'account.id')
             ->leftJoin('plan', 'plan.id', '=', 'subscription.plan_id')
-            ->where(function (Builder $q): void {
+            ->where(function (Builder $q) use ($nu): void {
                 $q->whereNull('subscription.id')
                     ->orWhere('subscription.status', 'cancelled')
-                    ->orWhere('plan.code', 'free');
+                    ->orWhere('plan.code', 'free')
+                    // Aktiv men utgången: ett Pro som löpt ut är ett
+                    // gratiskonto. Gränsen är strikt — exakt nu räknas som
+                    // utgånget (issue 265 § Beslut 1).
+                    ->orWhere(function (Builder $q) use ($nu): void {
+                        $q->where('subscription.status', 'active')
+                            ->where('subscription.current_period_end', '<=', $nu);
+                    });
             });
     }
 

@@ -6,6 +6,7 @@ use App\Models\Concerns\HasUlid;
 use Database\Factories\SubscriptionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\RouteKey;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -71,5 +72,56 @@ class Subscription extends Model
     public function plan(): BelongsTo
     {
         return $this->belongsTo(Plan::class);
+    }
+
+    /**
+     * Bär raden sin plan just nu? SANNINGEN om giltighet, formulerad EN gång
+     * (beslut 1 i issue 265 · [[ADR-0055 Inbjudningskoder och stängd
+     * registrering]] § Konsekvenser):
+     *
+     *   bär sin plan = status `active` och `current_period_end > now()`
+     *               ELLER status `past_due`, oavsett datum
+     *
+     * `past_due` lämnas med flit: en utebliven betalning hanteras av
+     * nedgraderingen och dess frist ([[Planer och kvoter]] § Nedgradering),
+     * inte av slutdatumet. `cancelled` bär aldrig sin plan. Gränsen är
+     * strikt — en rad vars slut är *nu* bär inte sin plan.
+     *
+     * Giltigheten avgörs när planen LÄSES. Ingen kolumn skrivs om och inget
+     * jobb sätter en utgången rad till `cancelled`: en Pro-period löper ut
+     * genom den här beräkningen och ingenting annat. Varje ställe som tolkar
+     * en prenumeration — `Account::currentPlan()`, `PlanResource::planFor()`,
+     * missbruksrapporten och de två livscykeljobben — går genom den här
+     * metoden eller `scopeCurrent()`; en andra formulering kan glida isär.
+     */
+    public function isCurrent(): bool
+    {
+        if ($this->status === 'past_due') {
+            return true;
+        }
+
+        return $this->status === 'active' && $this->current_period_end->isFuture();
+    }
+
+    /**
+     * Rader som bär sin plan just nu — `isCurrent()` som fråga, med samma
+     * regel och samma strikta gräns (`current_period_end > now()`).
+     *
+     * Livscykeljobben använder den för att undanta konton: ett konto vars Pro
+     * löpt ut undantas inte och kan alltså stängas och raderas som vilket
+     * gratiskonto som helst (beslut 2 i issue 265).
+     *
+     * @param  Builder<Subscription>  $query
+     * @return Builder<Subscription>
+     */
+    public function scopeCurrent(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q): void {
+            $q->where('status', 'past_due')
+                ->orWhere(function (Builder $q): void {
+                    $q->where('status', 'active')
+                        ->where('current_period_end', '>', now());
+                });
+        });
     }
 }

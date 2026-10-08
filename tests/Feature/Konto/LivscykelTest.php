@@ -238,7 +238,13 @@ it('ett stängt konto kan fortfarande läsas', function () {
 it('ett konto med aktiv prenumeration stängs aldrig', function () {
     Carbon::setTestNow('2025-05-04 12:00:00');
     [$konto] = livscykelKontoMedMedlem();
-    Subscription::factory()->for($konto, 'account')->create(['status' => 'active']);
+    // Slutet ligger EFTER körningen: en `active`-rad bär sin plan bara före
+    // `current_period_end` (issue 265 § Beslut 1). Ett Pro som löpt ut
+    // undantar inte, se UtgangenPrenumerationTest.
+    Subscription::factory()->for($konto, 'account')->create([
+        'status' => 'active',
+        'current_period_end' => Carbon::parse('2027-05-04 12:00:00'),
+    ]);
 
     Carbon::setTestNow('2026-09-04 12:00:00');
     (new AdvancesAccountLifecycle)->handle();
