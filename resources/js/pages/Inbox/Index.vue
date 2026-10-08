@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Head, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
 import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
@@ -194,6 +194,89 @@ function onTargetChosen(item) {
         },
     });
 }
+
+/* --- att radera ------------------------------------------------------------ */
+
+/*
+ * Raderingen (M28 · issue 775 · Beslut 1 och 3) följer de vanliga reglerna för
+ * varje objekttyp och har ingen egen modell: uppgiften går till
+ * `DELETE /inbox/tasks/{schedule}` och filen till
+ * `DELETE /inbox/attachments/{attachment}`, som båda anropar samma actioner som
+ * uppgiftens sida respektive bilagans väg (DeleteSchedule och TrashAttachment).
+ * *Delete selected* postar samma kropp som *Move selected…* (`attachments[]`)
+ * till `POST /inbox/attachments/delete`: hela satsen raderas eller inte alls.
+ *
+ * **Bekräftelsen är webbläsarens egen dialog** med serverns mening ur `lang/`,
+ * precis som *Delete* på uppgiftens sida (Show.vue): ingen modal och ingen
+ * sträng i JavaScript. En fråga per rad och en för satsen — satsen kan ta flera
+ * filer på en gång, och antalet är det enda som skiljer de två åt.
+ *
+ * **Felet ritas under listan.** Servern nekar med ett fältfel — `schedule` för
+ * en uppgift utanför inboxen, `attachments` för en fil — och `router.delete`
+ * har ingen form att hänga det på, så meningen hamnar i en `role="alert"`-rad
+ * under den lista den gällde. Utan den raden nekas raderingen i tysthet.
+ */
+const deletePending = ref(null);
+/* Två refs och inte en: felet hör till LISTAN det gällde, och en delad rad hade
+ * ritats på fel ställe — ett uppgiftsfel ovanför filerna. */
+const taskDeleteError = ref(null);
+const attachmentDeleteError = ref(null);
+
+function destroyTask(task) {
+    if (! window.confirm(t('inbox.page.delete_confirm'))) {
+        return;
+    }
+
+    taskDeleteError.value = null;
+
+    router.delete(`/inbox/tasks/${task.schedule.ulid}`, {
+        preserveScroll: true,
+        onStart: () => { deletePending.value = task.ulid; },
+        onFinish: () => { deletePending.value = null; },
+        onError: (errors) => {
+            taskDeleteError.value = errors.schedule ?? t('inbox.page.delete_error');
+        },
+    });
+}
+
+function destroyAttachment(attachment) {
+    if (! window.confirm(t('inbox.page.delete_confirm'))) {
+        return;
+    }
+
+    attachmentDeleteError.value = null;
+
+    router.delete(`/inbox/attachments/${attachment.ulid}`, {
+        preserveScroll: true,
+        onStart: () => { deletePending.value = attachment.ulid; },
+        onFinish: () => { deletePending.value = null; },
+        onError: (errors) => {
+            attachmentDeleteError.value = errors.attachment ?? t('inbox.page.delete_error');
+        },
+    });
+}
+
+/* Satsen: samma kropp som flytten, men ingen väljare — filerna försvinner utan
+ * mål. Felet hamnar i `deleteForm.errors.attachments`, som ritas i samma
+ * summering som flyttens. */
+const deleteForm = useForm({ attachments: [] });
+
+function destroySelected() {
+    if (! window.confirm(t('inbox.page.delete_selected_confirm'))) {
+        return;
+    }
+
+    attachmentDeleteError.value = null;
+    deleteForm.attachments = [...selected.value];
+
+    deleteForm.post('/inbox/attachments/delete', {
+        preserveScroll: true,
+        onSuccess: () => {
+            selected.value = [];
+            deleteForm.reset();
+        },
+    });
+}
 </script>
 
 <template>
@@ -279,6 +362,39 @@ function onTargetChosen(item) {
                     >
                         {{ t('inbox.page.process') }}
                     </button>
+
+                    <!-- Radens ⋯-meny (Beslut 3): en `<details>` som *Lägg till
+                         dokument*-menyn i Documents.vue, med *Delete* i
+                         panelen. Uppgiften raderas med samma action som på
+                         uppgiftens sida; servern prövar samma grind. -->
+                    <details class="relative">
+                        <summary
+                            class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                            :aria-label="t('inbox.page.row_menu')"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                class="size-5 shrink-0"
+                                aria-hidden="true"
+                            >
+                                <circle cx="12" cy="5" r="1.6" />
+                                <circle cx="12" cy="12" r="1.6" />
+                                <circle cx="12" cy="19" r="1.6" />
+                            </svg>
+                        </summary>
+
+                        <div class="absolute right-0 z-10 mt-2 w-40 rounded-card border border-border bg-surface p-1 shadow-sm">
+                            <button
+                                type="button"
+                                :disabled="deletePending !== null"
+                                class="flex min-h-11 w-full items-center rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                                @click="destroyTask(task)"
+                            >
+                                {{ t('inbox.page.delete') }}
+                            </button>
+                        </div>
+                    </details>
                 </li>
             </ul>
 
@@ -286,9 +402,10 @@ function onTargetChosen(item) {
                  ÖVER steget (ADR-0054 § 6): `schedule.*` för ett mål som inte
                  går att flytta till, `target` för ett ogiltigt mål. Utan den
                  här raden nekas bearbetningen tyst — felet hamnade på ett fält
-                 vyn inte läste. -->
+                 vyn inte läste. Raderingen av en uppgift ritar sin nekande
+                 mening här, av samma skäl. -->
             <p
-                v-if="processForm.errors.schedule || processForm.errors.target"
+                v-if="processForm.errors.schedule || processForm.errors.target || taskDeleteError"
                 class="mt-4 flex flex-col"
                 role="alert"
             >
@@ -297,6 +414,9 @@ function onTargetChosen(item) {
                 </span>
                 <span v-if="processForm.errors.target" class="text-body text-danger">
                     {{ processForm.errors.target }}
+                </span>
+                <span v-if="taskDeleteError" class="text-body text-danger">
+                    {{ taskDeleteError }}
                 </span>
             </p>
 
@@ -363,7 +483,7 @@ function onTargetChosen(item) {
                  meningen säger varför. Elementfelen (`attachments.N`) hör hit
                  de med. -->
             <p
-                v-if="moveForm.errors.attachments || attachmentElementErrors.length > 0"
+                v-if="moveForm.errors.attachments || attachmentElementErrors.length > 0 || deleteForm.errors.attachments || attachmentDeleteError"
                 class="mt-2 flex flex-col"
                 role="alert"
             >
@@ -376,6 +496,12 @@ function onTargetChosen(item) {
                     class="text-body text-danger"
                 >
                     {{ message }}
+                </span>
+                <span v-if="deleteForm.errors.attachments" class="text-body text-danger">
+                    {{ deleteForm.errors.attachments }}
+                </span>
+                <span v-if="attachmentDeleteError" class="text-body text-danger">
+                    {{ attachmentDeleteError }}
                 </span>
             </p>
 
@@ -406,17 +532,64 @@ function onTargetChosen(item) {
                         </UiCheckbox>
 
                         <span class="ml-auto text-meta text-ink-muted">{{ attachment.size }}</span>
+
+                        <!-- Filradens ⋯-meny (Beslut 3), samma `<details>`
+                             som uppgiftsradens ovan. Filen raderas med
+                             TrashAttachment: papperskorg och fördröjd
+                             radering som överallt annars. -->
+                        <details class="relative">
+                            <summary
+                                class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                                :aria-label="t('inbox.page.row_menu')"
+                            >
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="currentColor"
+                                    class="size-5 shrink-0"
+                                    aria-hidden="true"
+                                >
+                                    <circle cx="12" cy="5" r="1.6" />
+                                    <circle cx="12" cy="12" r="1.6" />
+                                    <circle cx="12" cy="19" r="1.6" />
+                                </svg>
+                            </summary>
+
+                            <div class="absolute right-0 z-10 mt-2 w-40 rounded-card border border-border bg-surface p-1 shadow-sm">
+                                <button
+                                    type="button"
+                                    :disabled="deletePending !== null"
+                                    class="flex min-h-11 w-full items-center rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                                    @click="destroyAttachment(attachment)"
+                                >
+                                    {{ t('inbox.page.delete') }}
+                                </button>
+                            </div>
+                        </details>
                     </li>
                 </ul>
 
-                <button
-                    type="button"
-                    :disabled="selected.length === 0"
-                    class="mt-4 inline-flex min-h-11 items-center rounded-control border border-border px-4 text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
-                    @click="openPicker('attachments', $event)"
-                >
-                    {{ t('inbox.page.move_selected') }}
-                </button>
+                <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        :disabled="selected.length === 0"
+                        class="inline-flex min-h-11 items-center rounded-control border border-border px-4 text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                        @click="openPicker('attachments', $event)"
+                    >
+                        {{ t('inbox.page.move_selected') }}
+                    </button>
+
+                    <!-- *Delete selected* (Beslut 3): bredvid *Move selected…*
+                         och inaktiv när ingen fil är markerad. Satsen raderas
+                         eller inte alls — servern prövar hela listan först. -->
+                    <button
+                        type="button"
+                        :disabled="selected.length === 0 || deleteForm.processing"
+                        class="inline-flex min-h-11 items-center rounded-control border border-border px-4 text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                        @click="destroySelected"
+                    >
+                        {{ deleteForm.processing ? t('common.pending.default') : t('inbox.page.delete_selected') }}
+                    </button>
+                </div>
             </template>
         </section>
 
