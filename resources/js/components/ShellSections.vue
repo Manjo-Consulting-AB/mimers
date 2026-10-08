@@ -21,9 +21,9 @@ import { useTranslations } from '../composables/useTranslations.js';
  * resources/js/layouts/settingsSections.js, med samma `nav.transfers` som förut
  * — menyn användaren når via avataren. Rutten `/transfers` är oförändrad.
  *
- * **Ordningen är listans**, `dashboard, tasks, containers, search,
- * settings`, samma ord som sidorna de leder till. Sedan issue 653 ritar en yta
- * bara en del av listan: `part` väljer vilka nycklar som ritas, och
+ * **Ordningen är listans**, `dashboard, tasks, inbox, documents, containers,
+ * search, settings`, samma ord som sidorna de leder till. Sedan issue 653
+ * ritar en yta bara en del av listan: `part` väljer vilka nycklar som ritas, och
  * sidopanelen staplar delarna i mockupens ordning ([[ADR-0050
  * Desktopdesignen]] § 1) — översikten överst (`top`), containrarna, resten av
  * raderna (`rows`, förvalet), de senast besökta, favoriterna och användarens
@@ -105,6 +105,11 @@ const allSections = [
     // plus bilagor — så att skalet säger till när det finns något att bearbeta
     // utan att användaren öppnar sidan.
     { key: 'inbox', href: '/inbox' },
+    // Den globala dokumentlistan (M28 · issue 255 · Beslut 1): raden står
+    // mellan inboxen och containrarna, samma plats dokumentet har inuti en
+    // container ([[ADR-0050 Desktopdesignen]] § 4), och etiketten är sidans
+    // eget ord (`documents.heading`).
+    { key: 'documents', href: '/documents' },
     { key: 'containers', href: '/containers' },
     { key: 'search', href: '/search' },
     // Inställningarna är den enda raden som också är aktuell på en UNDERSIDA:
@@ -123,7 +128,7 @@ const allSections = [
  */
 const partKeys = {
     'top': ['dashboard'],
-    'rows': ['tasks', 'containers', 'search'],
+    'rows': ['tasks', 'inbox', 'documents', 'containers', 'search'],
     'account': ['settings'],
 };
 

@@ -155,6 +155,11 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
         // och deklareras i PR:en — provet listar skalets rader och fälls av en
         // ny rad, med flit (en rad som glöms i katalogen ska synas).
         'inbox',
+        // Den globala dokumentlistan kom med M28 · issue 255 (Beslut 1): raden
+        // står mellan inboxen och containrarna, samma plats dokumentet har
+        // inuti en container. Provet listar skalets rader och fälls av en rad
+        // som glöms i katalogen, med flit.
+        'documents',
         'containers',
         // Ägarbytena står inte längre i skalet (M28 · issue 248): raden
         // flyttade till inställningsmenyn, sist i
