@@ -3975,6 +3975,24 @@ return [
             'heading' => 'Lists',
         ],
 
+        // *Quick overview* och *My containers* — de två panelerna ovanför och
+        // under listpanelen i högerspalten (M28 · issue 783). Översiktens
+        // rader är `todo.group.*` och `todo.tabs.done`, samma ord som
+        // grupprubrikerna och fliken bär — det är samma grupper, och två ord
+        // för en grupp hade lärt användaren två begrepp. `total` är etiketten
+        // under mittens siffra, som är summan av de öppna grupperna.
+        //
+        // Containerkortets rader är containrarnas EGNA namn och har ingen
+        // nyckel; bara rubriken är ett ord vi äger.
+        'overview' => [
+            'heading' => 'Quick overview',
+            'total' => 'tasks',
+        ],
+
+        'containers' => [
+            'heading' => 'My containers',
+        ],
+
         // *Back to Inbox* (M27 · issue 244, ADR-0054 § 6): handlingen som
         // skickar tillbaka en uppgift eller en bilaga till den egna inkorgen
         // för att bearbetas igen. Den går alltid till användarens EGEN inbox
