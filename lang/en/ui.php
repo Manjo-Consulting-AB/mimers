@@ -287,6 +287,31 @@ return [
             'move_heading' => 'Where do the files belong?',
             'move_confirm' => 'Move',
             'move_error' => 'The files could not be moved.',
+
+            /*
+             * M28 · issue 775 — the deletion, see [[ADR-0054 Inboxen]] § 2 and
+             * § 6. Each row carries a ⋯ menu with one word, and the file rows
+             * carry *Delete selected* beside *Move selected…*.
+             *
+             * **The confirmation is the browser's own dialogue**, the same as
+             * *Delete* on the task's page (issue 63a): one question for a row
+             * and one for the batch, because the batch can take several files
+             * at once and the count is the only thing telling the two apart.
+             */
+            'delete' => 'Delete',
+            'delete_selected' => 'Delete selected',
+            'delete_confirm' => 'Delete it?',
+            'delete_selected_confirm' => 'Delete the selected files?',
+
+            // The ⋯ summary carries no visible word, so it needs one for the
+            // screen reader — same job as the aria-label on the icon buttons
+            // in the shell.
+            'row_menu' => 'Actions',
+
+            // Drawn under the row or the list when the server refuses. The
+            // refusal is a field error (`schedule` or `attachments`), and
+            // without this sentence a 422 would pass in silence.
+            'delete_error' => 'It could not be deleted.',
         ],
     ],
 
@@ -579,6 +604,17 @@ return [
         'inbox-task-captured' => 'The task is in your inbox.',
         'inbox-files-captured' => 'The files are in your inbox.',
         'inbox-attachments-processed' => 'The files have been moved.',
+
+        // M28 · issue 775. The deletion on `/inbox` gets its own sentences and
+        // NOT `attachment-deleted`, which promises the trash can be emptied
+        // back within 30 days. That promise does not hold here: the inbox
+        // container is on no trash page, so a file deleted from the inbox
+        // cannot be restored in the web (ADR-0054 § 2 and Beslut 4). Saying
+        // "it is in the trash" is true; saying "you can get it back" would not
+        // be. A task uses `schedule-deleted` — that sentence promises nothing
+        // to restore, and the task's own page says the same thing.
+        'inbox-attachment-deleted' => 'The file is in the trash.',
+        'inbox-attachments-deleted' => 'The files are in the trash.',
 
         // Issue 63b decisions 5 and 8. Checking off and skipping get one
         // sentence each: they close the same row but say different things

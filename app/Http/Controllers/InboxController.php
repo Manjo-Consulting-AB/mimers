@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Attachment\StoreAttachment;
+use App\Actions\Attachment\TrashAttachment;
 use App\Actions\Inbox\ProcessInboxAttachments;
 use App\Actions\Inbox\ProcessInboxTask;
 use App\Actions\Inbox\ResolveInbox;
 use App\Actions\Schedule\CreateSchedule;
+use App\Actions\Schedule\DeleteSchedule;
 use App\Actions\Schedule\ListTodo;
 use App\Exceptions\Api\ApiException;
+use App\Http\Requests\Inbox\DeleteInboxAttachmentsRequest;
 use App\Http\Requests\Inbox\ProcessInboxAttachmentsRequest;
 use App\Http\Requests\Inbox\ProcessInboxTaskRequest;
 use App\Http\Requests\Inbox\StoreInboxAttachmentsRequest;
@@ -24,6 +27,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -307,6 +311,158 @@ class InboxController extends Controller
         }
 
         return back()->with('status', 'schedule-processed');
+    }
+
+    /**
+     * DELETE /inbox/tasks/{schedule} — 302 tillbaka till `/inbox`.
+     *
+     * **Inga nya raderingsregler** (M28 · issue 775 · Beslut 1): uppgiften
+     * raderas med App\Actions\Schedule\DeleteSchedule, exakt som *Delete* på
+     * uppgiftens sida. Mjukraderingen, händelseloggen och transaktionen bor i
+     * actionen; kontrollern prövar bara grinden och var uppgiften ligger.
+     *
+     * **Grinden är `delete` på källitemet**, samma pinne som bearbetningen
+     * intill (issue 63a § Beslut 7): en `write`-mottagare ändrar ett schema men
+     * tar inte bort det. Källitemet läses null-säkert med `withTrashed()` — ett
+     * schema vars item är mjukraderat har inget att pröva grinden på, och en rå
+     * `Gate::authorize` hade gett 500 i stället för 404 (samma form som
+     * `process()`).
+     *
+     * **Bara användarens EGEN inbox.** Ligger uppgiften på ett riktigt item —
+     * eller i någon annans inbox, vilket grinden redan har svarat 403 på —
+     * nekas anropet med 422 `schedule.not_in_inbox`, samma svar som
+     * bearbetningen ger. Grinden står först: den svarar på VEM som frågar, och
+     * 422:an på VAR uppgiften ligger.
+     */
+    public function destroyTask(
+        Request $request,
+        Schedule $schedule,
+        ResolveInbox $resolveInbox,
+        DeleteSchedule $deleteSchedule,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        $user = $request->user();
+
+        $source = Item::withTrashed()->find($schedule->item_id);
+
+        abort_if($source === null || $source->trashed(), 404);
+
+        Gate::authorize('delete', $source);
+
+        $inbox = $resolveInbox->existing($user);
+
+        if ($inbox === null || (int) $schedule->item_id !== (int) $inbox->id) {
+            throw ValidationException::withMessages([
+                'schedule' => $translator->message(ApiException::make('schedule.not_in_inbox', [], 422)),
+            ]);
+        }
+
+        $deleteSchedule->handle($schedule, $user);
+
+        return back()->with('status', 'schedule-deleted');
+    }
+
+    /**
+     * DELETE /inbox/attachments/{attachment} — 302 tillbaka till `/inbox`.
+     *
+     * **Inga nya raderingsregler** (M28 · issue 775 · Beslut 1): bilagan raderas
+     * med App\Actions\Attachment\TrashAttachment — papperskorg, referensräkning
+     * och fördröjd radering som överallt annars. Actionen öppnar sin egen
+     * transaktion och läser om raden under lås.
+     *
+     * **Grinden är `delete` på användarens eget inbox-item** (ADR-0054 § 2) —
+     * samma grind som `processAttachments()` prövar, och den enda som behövs:
+     * raden kan bara ligga i den egna inboxen, för någon annans inbox nekas
+     * redan av medlemskapsprövningen. En ULID som inte finns, en bilaga på ett
+     * riktigt item och en bilaga i någon annans inbox får samma svar: 422
+     * `attachment.not_in_inbox`, och raden är orörd (ADR-0054 § 6).
+     */
+    public function destroyAttachment(
+        Request $request,
+        Attachment $attachment,
+        ResolveInbox $resolveInbox,
+        TrashAttachment $trashAttachment,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        $user = $request->user();
+        $inbox = $resolveInbox->existing($user);
+
+        if ($inbox === null || (int) $attachment->item_id !== (int) $inbox->id) {
+            throw ValidationException::withMessages([
+                'attachment' => $translator->message(ApiException::make('attachment.not_in_inbox', [], 422)),
+            ]);
+        }
+
+        Gate::authorize('delete', $inbox);
+
+        $trashAttachment->handle($attachment, $user);
+
+        return back()->with('status', 'inbox-attachment-deleted');
+    }
+
+    /**
+     * POST /inbox/attachments/delete — 302 tillbaka till `/inbox`.
+     *
+     * **Flera bilagor på en gång, allt eller inget.** Kroppen är densamma som
+     * `inbox.attachments.process` tar emot (`attachments[]`), och hela satsen
+     * ligger i EN transaktion: `TrashAttachment` öppnar sin egen — den blir en
+     * savepoint i den här — så ett kast på bilaga tre rullar tillbaka både dess
+     * egen skrivning och de två första raderingarnas (ADR-0054 § 6).
+     *
+     * **Medlemskapsprövningen står FÖRE den första raderingen**, och raderna
+     * läses om under lås: en bilaga som inte ligger i användarens EGEN inbox
+     * nekar HELA satsen med 422 `attachment.not_in_inbox`, och ingen rad har
+     * rörts. Utan spärren hade rutten varit en radering bakvägen — kroppen bär
+     * ULID:er, och vilken bilaga som helst hade gått att träffa.
+     */
+    public function destroyAttachments(
+        DeleteInboxAttachmentsRequest $request,
+        ResolveInbox $resolveInbox,
+        TrashAttachment $trashAttachment,
+        ApiErrorTranslator $translator,
+    ): RedirectResponse {
+        $user = $request->user();
+        $inbox = $resolveInbox->existing($user);
+
+        if ($inbox === null) {
+            throw ValidationException::withMessages([
+                'attachments' => $translator->message(ApiException::make('attachment.not_in_inbox', [], 422)),
+            ]);
+        }
+
+        Gate::authorize('delete', $inbox);
+
+        /** @var list<string> $ulids */
+        $ulids = $request->validated('attachments');
+
+        try {
+            DB::transaction(function () use ($ulids, $inbox, $user, $trashAttachment): void {
+                $attachments = Attachment::query()
+                    ->whereIn('ulid', $ulids)
+                    ->lockForUpdate()
+                    ->get();
+
+                // Färre rader än ULID:er betyder att någon av dem inte finns —
+                // då ligger den inte i inboxen heller.
+                if ($attachments->count() !== count($ulids)) {
+                    throw ApiException::make('attachment.not_in_inbox', [], 422);
+                }
+
+                foreach ($attachments as $attachment) {
+                    if ((int) $attachment->item_id !== (int) $inbox->id) {
+                        throw ApiException::make('attachment.not_in_inbox', [], 422);
+                    }
+                }
+
+                foreach ($attachments as $attachment) {
+                    $trashAttachment->handle($attachment, $user);
+                }
+            });
+        } catch (ApiException $e) {
+            throw ValidationException::withMessages(['attachments' => $translator->message($e)]);
+        }
+
+        return back()->with('status', 'inbox-attachments-deleted');
     }
 
     /**

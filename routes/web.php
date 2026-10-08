@@ -171,6 +171,38 @@ Route::post('/inbox/tasks/{schedule}/process', [InboxController::class, 'process
     ->name('inbox.tasks.process');
 
 /*
+ * M28 · issue 775 · Raderingen i inboxen, se
+ * App\Http\Controllers\InboxController och [[ADR-0054 Inboxen]] § 2 och § 6.
+ *
+ * **Inga nya raderingsregler** (Beslut 1): en uppgift raderas med
+ * `DeleteSchedule` och en fil med `TrashAttachment` — samma actioner som
+ * uppgiftens sida respektive bilagans väg använder. Rutterna prövar grinden
+ * (`delete` på inboxens item) och var objektet ligger; reglerna bor kvar i
+ * actionerna.
+ *
+ * **Samma adressform som bearbetningen**, utan container: uppgiften binds
+ * globalt på ULID (`{schedule}`) och bilagan likaså (`{attachment}`), precis
+ * som `inbox.tasks.process`. En ULID i någon annans inbox nekas av grinden
+ * (403), och en uppgift eller fil som ligger utanför den EGNA inboxen nekas med
+ * 422 `*.not_in_inbox` — samma svar som bearbetningen ger.
+ *
+ * **Den flerfaldiga raderingen tar samma kropp som bearbetningen**
+ * (`attachments[]`), men ingen `target`: bilagorna försvinner ur inboxen och
+ * ska inte till någon annan plats. Svaret är `back()`.
+ */
+Route::delete('/inbox/tasks/{schedule}', [InboxController::class, 'destroyTask'])
+    ->middleware('auth')
+    ->name('inbox.tasks.destroy');
+
+Route::delete('/inbox/attachments/{attachment}', [InboxController::class, 'destroyAttachment'])
+    ->middleware('auth')
+    ->name('inbox.attachments.destroy');
+
+Route::post('/inbox/attachments/delete', [InboxController::class, 'destroyAttachments'])
+    ->middleware('auth')
+    ->name('inbox.attachments.destroy-many');
+
+/*
  * Issue 128 · Informationsytan, se App\Http\Controllers\
  * DismissedTipController och [[M19 Dashboarden]] § 128.
  *
