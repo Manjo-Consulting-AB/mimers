@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Actions\Voucher\GenerateVoucher;
+use Carbon\Exceptions\InvalidFormatException;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Carbon;
 
 /**
@@ -39,20 +41,84 @@ class VoucherCreate extends Command
 
     public function handle(GenerateVoucher $generate): int
     {
-        $expires = $this->text('expires');
+        // Värdena prövas innan något skrivs. Ett `(int)` på `--days=abc` blir
+        // 0, och en voucher som aldrig går att lösa in (eller ger noll dagar)
+        // är ett värre svar än ett felmeddelande: koden skrivs ju ut och
+        // lämnas till en testare. Negativa tal avvisas av kolumnens
+        // unsignedInteger med ett databasundantag i stället.
+        $days = $this->positiveInteger('days');
 
-        $resultat = $generate->handle(
-            $this->text('plan') ?? 'pro',
-            (int) $this->text('days'),
-            (int) $this->text('uses'),
-            ! $this->option('no-registration'),
-            $this->text('label'),
-            $expires === null ? null : Carbon::parse($expires)->endOfDay(),
-        );
+        if ($days === null) {
+            $this->error('--days måste vara ett heltal större än 0.');
+
+            return self::FAILURE;
+        }
+
+        $uses = $this->positiveInteger('uses');
+
+        if ($uses === null) {
+            $this->error('--uses måste vara ett heltal större än 0.');
+
+            return self::FAILURE;
+        }
+
+        try {
+            $expires = $this->expiresAt();
+        } catch (InvalidFormatException) {
+            $this->error('--expires måste vara ett datum i formen Y-m-d.');
+
+            return self::FAILURE;
+        }
+
+        try {
+            $resultat = $generate->handle(
+                $this->text('plan') ?? 'pro',
+                $days,
+                $uses,
+                ! $this->option('no-registration'),
+                $this->text('label'),
+                $expires,
+            );
+        } catch (ModelNotFoundException) {
+            // GenerateVoucher slår upp planen med firstOrFail(); en felstavad
+            // --plan ska bli ett felmeddelande, inte ett stacktrace.
+            $this->error('Ingen plan med den koden.');
+
+            return self::FAILURE;
+        }
 
         $this->line($resultat['code']);
 
         return self::SUCCESS;
+    }
+
+    /**
+     * `--expires` som dagens slut, eller null när det inte angetts. Kastar
+     * InvalidFormatException på ett datum som inte går att tolka.
+     */
+    private function expiresAt(): ?Carbon
+    {
+        $expires = $this->text('expires');
+
+        return $expires === null ? null : Carbon::parse($expires)->endOfDay();
+    }
+
+    /**
+     * Ett optionvärde som ett heltal >= 1, eller null när det inte är ett
+     * sådant. `ctype_digit` och inte `(int)`: "abc" och "-5" ska ge null, och
+     * "0" ska falla på gränsen, inte tolkas som ett tomt värde.
+     */
+    private function positiveInteger(string $name): ?int
+    {
+        $varde = $this->text($name);
+
+        if ($varde === null || ! ctype_digit($varde)) {
+            return null;
+        }
+
+        $tal = (int) $varde;
+
+        return $tal >= 1 ? $tal : null;
     }
 
     /**

@@ -22,7 +22,10 @@ use Illuminate\Validation\ValidationException;
  * - `invite_only`: en giltig kod krävs. Den måste dessutom bära
  *   `grants_registration` — en kod som bara ger Pro är ingen biljett in.
  *   Finns ingen sådan kod går en utestående containerinbjudan till samma
- *   adress bra i stället, och ger Free (ADR-0055 § 3).
+ *   adress bra i stället, och ger Free (ADR-0055 § 3). Inbjudan prövas
+ *   OBEROENDE av om en kod angavs: den som har en utestående inbjudan
+ *   släpps in även om hon skrev fel kod eller en Pro-kod utan
+ *   `grants_registration` (ADR-0055 § 3, sista stycket).
  *
  * Inbjudan prövas med sin TOKEN, inte bara med adressen: registreringen
  * kräver ingen verifierad adress, så en adress bevisar inte att man fått
@@ -65,8 +68,13 @@ class AdmitRegistration
             throw $this->notRedeemable();
         }
 
-        if ($voucherCode === null && $this->hasOutstandingInvitation($email, $invitationToken)) {
-            return null;
+        // `invite_only`: inbjudan prövas oberoende av om en kod angavs, och
+        // den som har en utestående inbjudan släpps in utan att koden måste
+        // bära `grants_registration` (ADR-0055 § 3). Är koden dessutom
+        // inlösbar returneras den, så att hon får kodens plan; annars blir
+        // det Free.
+        if ($this->hasOutstandingInvitation($email, $invitationToken)) {
+            return $voucher !== null && $voucher->isRedeemable() ? $voucher : null;
         }
 
         throw $this->missingCode();

@@ -157,6 +157,19 @@ it('invite_only med en kod utan grants_registration nekas', function () {
     expect($fel['voucher_code'])->toBe(['The voucher code field is required.']);
 });
 
+it('invite_only med inbjudan och en Pro-kod utan grants_registration släpper in med kodens plan', function () {
+    config(['konton.registration' => 'invite_only']);
+    inslappInbjudan('testare@example.com', 'hemlig-token');
+    $voucher = inslappVoucher('AAAA-BBBB-CCCC', ['grants_registration' => false]);
+
+    // Inbjudan prövas oberoende av om en kod angavs (ADR-0055 § 3, sista
+    // stycket). Koden är ingen biljett in — men när inbjudan väl släpper in
+    // får hon kodens plan, så vouchern returneras och löses in.
+    $släppsIn = app(AdmitRegistration::class)->handle('testare@example.com', 'AAAA-BBBB-CCCC', 'hemlig-token');
+
+    expect($släppsIn?->getKey())->toBe($voucher->getKey());
+});
+
 it('invite_only med en utestående inbjudan till samma adress släpper in utan kod', function () {
     config(['konton.registration' => 'invite_only']);
     inslappInbjudan('Testare@Example.com', 'hemlig-token');
@@ -164,6 +177,18 @@ it('invite_only med en utestående inbjudan till samma adress släpper in utan k
     // Adressen prövas skiftlägesokänsligt, och token är beviset — inte
     // adressen (ADR-0055 § 3).
     expect(app(AdmitRegistration::class)->handle('testare@example.com', null, 'hemlig-token'))->toBeNull();
+});
+
+it('en inbjudan med fel token släpper inte in', function () {
+    config(['konton.registration' => 'invite_only']);
+    inslappInbjudan('testare@example.com', 'hemlig-token');
+
+    // Adressen stämmer, men token är inte mejlets — och adressen är inget
+    // bevis på att man fått mejlet (ADR-0055 § 3). Utan det här provet hade
+    // en implementation som bara jämför adressen gått grön.
+    $fel = inslappFel('testare@example.com', null, 'fel-token');
+
+    expect($fel)->toHaveKey('voucher_code');
 });
 
 it('en inbjudan till en annan adress släpper inte in', function () {

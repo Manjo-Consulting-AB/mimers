@@ -2,6 +2,7 @@
 
 use App\Models\Plan;
 use App\Models\Voucher;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Artisan;
 
 /*
@@ -71,6 +72,30 @@ it('voucher:revoke gör koden oinlösbar', function () {
 
     expect($återkallad?->isRedeemable())->toBeFalse();
     expect($återkallad?->revoked_at)->not->toBeNull();
+});
+
+it('voucher:create nekar en okänd plan', function () {
+    $utgång = Artisan::call('voucher:create', ['--plan' => 'finns-inte']);
+
+    // Ett stacktrace är inte ett svar till den som skriver kommandot för hand.
+    expect($utgång)->toBe(Command::FAILURE);
+    expect(Artisan::output())->toContain('Ingen plan');
+});
+
+it('voucher:create nekar noll dagar', function () {
+    $utgång = Artisan::call('voucher:create', ['--days' => '0']);
+
+    // En voucher med noll dagar går att skapa men ger ingenting; hellre ett
+    // felmeddelande än en utskriven kod som inte betyder något.
+    expect($utgång)->toBe(Command::FAILURE);
+    expect(Artisan::output())->toContain('--days');
+});
+
+it('voucher:revoke säger till när koden inte finns', function () {
+    $utgång = Artisan::call('voucher:revoke', ['code' => 'AAAA-BBBB-CCCC']);
+
+    expect($utgång)->toBe(Command::FAILURE);
+    expect(Artisan::output())->toContain('Ingen voucher');
 });
 
 it('voucher:list visar aldrig koden', function () {

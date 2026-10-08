@@ -28,7 +28,9 @@ class VoucherRevoke extends Command
 
     public function handle(): int
     {
-        $voucher = Voucher::findByCode($this->argument('code'));
+        $code = $this->argumentText('code');
+
+        $voucher = $code === null ? null : Voucher::findByCode($code);
 
         if ($voucher === null) {
             $this->error('Ingen voucher med den koden.');
@@ -48,5 +50,21 @@ class VoucherRevoke extends Command
         $this->line('Koden är återkallad.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Argumentet som text, eller null.
+     *
+     * `argument()` ger `array|string|float|int|bool|null` — Laravel tillåter
+     * listargument — och ett listvärde på det här argumentet är ett skrivfel,
+     * inte en kod. Samma grepp som VoucherCreate::text(): nyckeln är en
+     * variabel, så unionen står kvar och `(string)` på en array blir aldrig
+     * en tyst "Array".
+     */
+    private function argumentText(string $name): ?string
+    {
+        $varde = $this->argument($name);
+
+        return is_string($varde) ? $varde : null;
     }
 }
