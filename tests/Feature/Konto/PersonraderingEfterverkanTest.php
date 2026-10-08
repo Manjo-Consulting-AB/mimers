@@ -32,6 +32,17 @@ use function Pest\Laravel\withHeaders;
 use function Pest\Laravel\withSession;
 
 /*
+ * Issue 263 (#789): webbens registrering kräver en voucher i läget
+ * `invite_only`, som är förvalet. Provet nedan registrerar en ny person för
+ * att följa vad som händer med den gamlas tillgångar och inte grinden, och
+ * öppnar därför läget. Grinden prövas i
+ * tests/Feature/Auth/PrivatBetaWebbTest.php.
+ */
+beforeEach(function () {
+    config(['konton.registration' => 'open']);
+});
+
+/*
  * Issue 579 · Vad personraderingen gör sett utifrån. Se
  * [[M22 Redo för testare]] § 579 och [[ADR-0045 Radering av konto och
  * person]] § Beslut 3.

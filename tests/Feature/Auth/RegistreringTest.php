@@ -25,6 +25,16 @@ use function Pest\Laravel\postJson;
  * här filen.
  */
 
+/*
+ * Issue 263 (#789): webbens registrering kräver en voucher i läget
+ * `invite_only`, som är förvalet. Proven här prövar registreringen i sig —
+ * namn, personkonto, roll — och inte grinden, och öppnar därför läget.
+ * Grinden prövas i tests/Feature/Auth/PrivatBetaWebbTest.php.
+ */
+beforeEach(function () {
+    config(['konton.registration' => 'open']);
+});
+
 it('skapar en användare med ett eget personkonto som ägare vid webbregistrering', function () {
     Notification::fake();
 
