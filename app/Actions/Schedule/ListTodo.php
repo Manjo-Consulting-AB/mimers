@@ -161,7 +161,10 @@ use Illuminate\Support\Str;
  * **Panelen räknar som förut** (Beslut 4): `gtdCounts()` känner inte filtren,
  * och en avgränsad lista ritar samma tal som en oavgränsad. Talet är
  * användarens hela GTD-läge och inte det hon valt att visa just nu — samma
- * regel som för växeln `show_upcoming_tasks`.
+ * regel som för växeln `show_upcoming_tasks`. Högerspalten bär två räknare
+ * till (M28 · issue 783): `groupCounts()` — de öppna per datumgrupp — och
+ * `containerCounts()` — de öppna per container. Ingen av dem känner filtren
+ * heller, och ingen av dem räknar vyn.
  */
 class ListTodo
 {
@@ -618,6 +621,118 @@ class ListTodo
             self::LIST_CALENDAR => $calendar,
             self::LIST_DONE => $done,
         ];
+    }
+
+    /**
+     * Översiktens tal: antalet ÖPPNA uppgifter per datumgrupp, plus *Done*
+     * (M28 · issue 783, Beslut 1).
+     *
+     * **Samma urval som fliken *Active*** (Beslut 1): `occurrences()` med
+     * `$onlyCurrent` som `null` följer användarens växel
+     * `show_upcoming_tasks` precis som `page()` gör när den ritar *Active* —
+     * är växeln av blir *This week* och *Upcoming* noll. `todoFor()` är
+     * alltjämt det enda urvalet.
+     *
+     * **Grupperna räknas med `group()`** och ingenting annat, så en rad
+     * hamnar i samma grupp här som i listan: gränserna — veckans slut på
+     * söndag, jämförelsen mot `User::today()` och `no_date` för en rad utan
+     * datum — formuleras på ETT ställe. En egen `CASE` i SQL hade varit den
+     * andra sanningen om var veckan slutar och hade glidit isär utan att
+     * något prov blev rött.
+     *
+     * **Talet räknas på servern och aldrig i vyn** (Beslut 1): vyn ritar sex
+     * färdiga tal och summerar dem inte ur rader. Summan av de fem öppna
+     * grupperna är antalet öppna rader på *Active* utan bläddring — `page()`
+     * visar en sida, den här räknar hela mängden.
+     *
+     * **`done` är `gtdCounts()['done']`** (Beslut 1): de avbockade de senaste
+     * `DONE_RECENT_DAYS` dagarna, samma tal som *Lists*-panelen ritar, och
+     * aldrig en sjätte datumgrupp. Nycklarna står i ritningsordning —
+     * grupperna först, *Done* sist.
+     *
+     * @return array{overdue: int, today: int, this_week: int, upcoming: int, no_date: int, done: int}
+     */
+    public function groupCounts(User $user): array
+    {
+        $accountIds = $user->accounts->pluck('id')->values()->all();
+
+        $occurrences = $this->occurrences($user, $accountIds, null)->get();
+
+        $today = $user->today();
+
+        $antal = [
+            self::GROUP_OVERDUE => 0,
+            self::GROUP_TODAY => 0,
+            self::GROUP_THIS_WEEK => 0,
+            self::GROUP_UPCOMING => 0,
+            self::GROUP_NO_DATE => 0,
+        ];
+
+        foreach ($occurrences as $occurrence) {
+            $antal[$this->group($occurrence->due_at, $today)]++;
+        }
+
+        return [
+            ...$antal,
+            self::LIST_DONE => $this->gtdCounts($user)[self::LIST_DONE],
+        ];
+    }
+
+    /**
+     * Containerkortets tal: antalet ÖPPNA uppgifter per container användaren
+     * når, i namnordning (M28 · issue 783, Beslut 2).
+     *
+     * **Samma containerurval som filterradens meny** (`page()`):
+     * `Container::scopeAccessibleBy()` och `scopeListable()`, i namnordning —
+     * meningen och panelen ska peka på samma mängd, så en rad i kortet finns
+     * också i väljaren. **Inboxen står inte med** (Beslut 2): den har sin
+     * egen flik, och `listable()` är modellens egen formulering av "en
+     * container som får synas i en lista" ([[ADR-0054 Inboxen]] § 2).
+     *
+     * **Talen är EN grupperad fråga** (Beslut 2): `item.container_id` och
+     * `COUNT(*)`, grupperat i databasen. En fråga per container hade vuxit
+     * med antalet containrar, och kortet hade blivit dyrare ju fler hon har.
+     * Villkoret är `todoFor()` — samma urval som listan — och `$onlyCurrent`
+     * är `false`, så växeln `show_upcoming_tasks` rör inte talet: kortet visar
+     * användarens hela läge, precis som `gtdCounts()`.
+     *
+     * **En container utan öppna uppgifter står kvar med noll.** Kortet är en
+     * förteckning över vad hon har och inte bara över det som har något att
+     * göra — en container som försvinner när den blir tom vore ett svar på en
+     * annan fråga än panelen ställer.
+     *
+     * @return list<array{ulid: string, name: string, count: int}>
+     */
+    public function containerCounts(User $user): array
+    {
+        $accountIds = $user->accounts->pluck('id')->values()->all();
+
+        $containers = Container::query()
+            ->accessibleBy($user, $accountIds)
+            ->listable()
+            ->orderBy('name')
+            ->get();
+
+        // `pluck` hämtar bara de två kolumnerna och hydrerar inga modeller —
+        // ingen ivrig laddning körs, och svaret är en karta container_id →
+        // antal. `item.container_id` är kvalificerad: både `schedule` och
+        // `item` är med i frågan, och en naken `container_id` hade varit
+        // tvetydig.
+        $antal = $this->occurrences($user, $accountIds, false)
+            ->join('schedule', 'schedule.id', '=', 'schedule_occurrence.schedule_id')
+            ->join('item', 'item.id', '=', 'schedule.item_id')
+            ->selectRaw('item.container_id as container_id, COUNT(*) as antal')
+            ->groupBy('item.container_id')
+            ->pluck('antal', 'container_id');
+
+        return $containers
+            ->map(fn (Container $container): array => [
+                'ulid' => $container->ulid,
+                'name' => $container->name,
+                'count' => (int) ($antal[$container->id] ?? 0),
+            ])
+            ->values()
+            ->all();
     }
 
     /**

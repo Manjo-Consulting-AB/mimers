@@ -5,6 +5,8 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import GtdListPanel from '../../components/GtdListPanel.vue';
 import TaskFilterBar from '../../components/TaskFilterBar.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
+import TaskContainerPanel from '../../components/TaskContainerPanel.vue';
+import TaskOverviewPanel from '../../components/TaskOverviewPanel.vue';
 import TodoRow from '../../components/TodoRow.vue';
 import UiTabs from '../../components/UiTabs.vue';
 import UpcomingTasksToggle from '../../components/UpcomingTasksToggle.vue';
@@ -86,6 +88,15 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * den skickar fyra värden i adressen och servern svarar — och den ritar bara de
  * val fliken inte redan bestämt (Beslut 2). Panelen påverkas inte: `counts`
  * kommer ur `gtdCounts()`, som inte känner filtren (Beslut 4).
+ *
+ * **Högerspalten bär tre kort** (M28 · issue 783): *Quick overview*,
+ * *Lists* och *My containers*, i den ordningen, och spalten står under
+ * listan under `lg:` precis som `GtdListPanel` gjorde förut. De tre
+ * panelerna visar alltid hela bilden (Beslut 3): talen kommer ur
+ * `groupCounts()`, `gtdCounts()` och `containerCounts()`, och ingen av dem
+ * känner filtren eller fliken. Vyn räknar ingenting — den ritar de tal och
+ * de rader servern gav, och översiktens rader följer `overview`-proppens
+ * nyckelordning så att de står stilla även när listan sorteras om.
  */
 const props = defineProps({
     /* Listorna per grupp, i ritningsordning: overdue, today, upcoming. */
@@ -106,6 +117,17 @@ const props = defineProps({
     containers: { type: Array, default: () => [] },
     /* Antalet per lista, ur ListTodo::gtdCounts() — panelens tal (Beslut 3). */
     counts: { type: Object, required: true },
+    /*
+     * Översiktens tal per datumgrupp, ur ListTodo::groupCounts() — samma
+     * nycklar som `groups` plus `done` (M28 · issue 783, Beslut 1).
+     */
+    overview: { type: Object, required: true },
+    /*
+     * Containerkortets rader, ur ListTodo::containerCounts():
+     * `[{ ulid, name, count, href }]`, i namnordning och utan inboxen
+     * (M28 · issue 783, Beslut 2).
+     */
+    myContainers: { type: Array, default: () => [] },
     /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
     hasContainers: { type: Boolean, required: true },
     /* Växelns sparade läge, se resources/js/components/UpcomingTasksToggle.vue. */
@@ -145,6 +167,23 @@ const tabs = computed(() => [
  * *Active* är summan av dem och inte en lista bland dem (Beslut 3).
  */
 const panelRows = computed(() => tabs.value.filter((tab) => tab.key !== 'active'));
+
+/*
+ * Översiktens rader (M28 · issue 783, Beslut 1): de fem datumgrupperna i
+ * ritningsordning, plus *Done* sist — den enda rad som står utanför ringen.
+ *
+ * Nycklarna kommer ur `overview`-proppen och inte ur en egen uppräkning här:
+ * serverns `groupCounts()` lägger dem i ritningsordning, och en lista i
+ * JavaScript hade kunnat glida ifrån grupperna på listan. Ordningen står
+ * därför stilla oavsett filtrering och sortering — panelerna visar alltid
+ * hela bilden (Beslut 3) — och orden är desamma som grupprubrikerna och
+ * fliken *Done* bär, för det är samma grupper.
+ */
+const overviewRows = computed(() => Object.keys(props.overview).map((key) => ({
+    key,
+    label: key === 'done' ? t('todo.tabs.done') : t(`todo.group.${key}`),
+    done: key === 'done',
+})));
 
 /*
  * *Done* ritas ur `completed` i stället för grupperna (Beslut 1 och 4).
@@ -311,7 +350,21 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
                 </nav>
             </div>
 
-            <GtdListPanel class="lg:w-72" :counts="counts" :rows="panelRows" />
+            <div class="flex flex-col gap-6 lg:w-72">
+                <!--
+                    Högerspalten, i ritningsordning (M28 · issue 783, Beslut
+                    4): *Quick overview*, *Lists* och *My containers*. Alla tre
+                    är syskonkolumner och inte en del av listan — deras tal
+                    gäller användarens hela läge och inte den valda fliken
+                    eller filtret (Beslut 3). Under `lg:` står spalten under
+                    listan, som `GtdListPanel` gjorde förut.
+                -->
+                <TaskOverviewPanel :counts="overview" :rows="overviewRows" />
+
+                <GtdListPanel :counts="counts" :rows="panelRows" />
+
+                <TaskContainerPanel :rows="myContainers" />
+            </div>
         </div>
     </AppLayout>
 </template>
