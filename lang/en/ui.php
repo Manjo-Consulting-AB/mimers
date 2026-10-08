@@ -77,6 +77,11 @@ return [
         // carries a count — the user's unsorted tasks and files — so the shell
         // tells her there is something to process without her opening the page.
         'inbox' => 'Inbox',
+        // The way into the global document list, see M28 · issue 255: the row
+        // sits after the inbox and before the containers — the same place the
+        // documents tab has inside a container ([[ADR-0050 Desktopdesignen]]
+        // § 4) — and its label is the page's own word (`documents.heading`).
+        'documents' => 'Documents',
         'containers' => 'Containers',
         // The last row of the shell's container list, see issue 677: the way
         // to create a container, drawn for every signed-in user. It carries no
@@ -369,30 +374,60 @@ return [
      * resources/js/pages/Documents/Index.vue.
      *
      * **Sidan är containerns dokumentflik över hela kontot**: samma filer, men
-     * i varje container användaren når och i hennes egen inbox på en gång. Den
-     * här filen är den ENKLA formen — en lista över filnamnen med sin plats —
-     * och designen kommer i #780 (issue 255).
+     * i varje container användaren når och i hennes egen inbox på en gång.
+     * Formen kom med #780 (issue 255): filterkolumnen till vänster, tabellen
+     * med kolumnen *Container* till höger (resources/js/pages/Documents/
+     * Index.vue).
      *
      * **Orden är sidans egna och inte `container.documents.*`.** Flikens ord
      * hör till fliken, och den globala listan har sin egen rubrik; att låna
      * flikens nycklar hade gjort två ytor till en och låst dem till varandra.
+     * `type`, `item` och `container` namnger både KOLUMNEN i tabellen och
+     * GRUPPEN i filterkolumnen: en kolumn och ett filter för samma sak ska
+     * inte heta två olika ord.
      *
      * **`inbox` är samma ord som i sidopanelen** (`nav.inbox`) och som
      * `/inbox`-sidans rubrik — platsen heter *Inbox* överallt ([[ADR-0054
      * Inboxen]] § 7), och raden för en inboxfil säger det ordet i stället för
-     * ett containernamn den inte får se.
+     * ett containernamn den inte får se. Det står i BÅDE item- och
+     * containerkolumnen, för en inboxfil har ingen av dem.
      *
-     * **Det tomma läget nämner inget tal** (issue 73 § Beslut 6): en lista som
-     * blev tom av ett filter ska inte påstå att användaren inte har några
-     * filer.
+     * **De två tomma lägena sägs åtskilda**, som på fliken: en lista som blev
+     * tom av ett filter svarar på FRÅGAN, en tom lista på innehållet (issue 73
+     * § Beslut 6). Ingen av dem nämner ett tal.
      */
     'documents' => [
         'title' => 'Documents',
         'heading' => 'Documents',
         'empty' => 'No files here.',
+        'empty_filtered' => 'No files match the filter.',
         'inbox' => 'Inbox',
         'previous' => 'Previous',
         'next' => 'Next',
+        'page' => 'Page :page of :last',
+
+        // Tabellens sex kolumner. `filename` är *File* och inte flikens fyra
+        // mockup-typer ([[ADR-0050 Desktopdesignen]] § 12): kolumnen bär
+        // filens namn, och typen är sin egen kolumn intill.
+        'filename' => 'File',
+        'type' => 'Type',
+        'item' => 'Item',
+        'container' => 'Container',
+        'uploaded' => 'Uploaded',
+        'size' => 'Size',
+
+        // Filterkolumnen (Beslut 3): rubriken, rensningen och de två
+        // gruppernas namn. Gruppnamnen är kolumnernas ord (`type`,
+        // `container`) — samma fråga, samma ord.
+        'filter_heading' => 'Filter',
+        'filter_clear_all' => 'Clear all',
+
+        // Sorteringen i verktygsraden. Samma fyra lägen som fliken.
+        'sort_label' => 'Sort',
+        'sort_newest' => 'Newest first',
+        'sort_oldest' => 'Oldest first',
+        'sort_name' => 'Name',
+        'sort_size' => 'Size',
     ],
 
     'auth' => [
