@@ -196,25 +196,32 @@ it('en läsare får can move false', function () {
 /*
  * Klart när: `bara tasks-sidan ritar menyn`.
  *
- * `Tasks/Index.vue` skickar `movable`; de fyra andra ytorna som ritar
- * `TodoRow` — containerns och itemets flikar och dashboardens panel — skickar
- * inget, och raden ritar då ingen meny. Flaggan är ytan och inte rätten.
+ * `Tasks/Index.vue` skickar `movable`; de andra ytorna som ritar `TodoRow` —
+ * containerns och itemets flikar och dashboardens panel — skickar inget, och
+ * raden ritar då ingen meny. Flaggan är ytan och inte rätten.
+ *
+ * **Ytorna hittas ur koden själv** (granskningsfynd): varje `.vue`-fil som
+ * importerar `TodoRow` ritar raden, och en handskriven lista missar den yta
+ * som tillkommer nästa gång. Sökningen står på importen och inte på ordet
+ * `TodoRow`, så rena omnämnanden i kommentarer — som i `Inbox/Index.vue`, vars
+ * rad är en egen — hålls utanför.
  */
 it('bara tasks-sidan ritar menyn', function () {
     $sidan = File::get(resource_path('js/pages/Tasks/Index.vue'));
 
     expect(str_contains($sidan, 'movable'))->toBeTrue('Tasks/Index.vue skickar inte movable');
 
-    foreach ([
-        'js/components/ContainerTasksPanel.vue',
-        'js/components/DashboardTasksPanel.vue',
-        'js/components/ScheduleListSection.vue',
-        'js/pages/Containers/Tasks.vue',
-    ] as $fil) {
-        $kod = File::get(resource_path($fil));
+    $ytor = collect(File::allFiles(resource_path('js')))
+        ->filter(fn ($fil) => $fil->getExtension() === 'vue')
+        ->filter(fn ($fil) => str_contains(File::get($fil), 'import TodoRow from'))
+        ->reject(fn ($fil) => str_ends_with(str_replace('\\', '/', $fil->getPathname()), 'pages/Tasks/Index.vue'))
+        ->values();
 
-        expect(str_contains($kod, 'movable'))
-            ->toBeFalse("{$fil} ritar TodoRow med movable — bara /tasks bär menyn");
+    expect($ytor)->not->toBeEmpty('ingen annan yta importerar TodoRow — provet prövar ingenting');
+
+    foreach ($ytor as $fil) {
+        expect(str_contains(File::get($fil), 'movable'))
+            ->toBeFalse($fil->getRelativePathname().' ritar TodoRow med movable — bara /tasks bär menyn');
     }
 });
 
