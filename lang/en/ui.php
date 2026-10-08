@@ -363,6 +363,38 @@ return [
         ],
     ],
 
+    /*
+     * M28 (testarnas fynd 2026-10-07) · Den globala dokumentlistan,
+     * `GET /documents`, se App\Http\Controllers\DocumentController och
+     * resources/js/pages/Documents/Index.vue.
+     *
+     * **Sidan är containerns dokumentflik över hela kontot**: samma filer, men
+     * i varje container användaren når och i hennes egen inbox på en gång. Den
+     * här filen är den ENKLA formen — en lista över filnamnen med sin plats —
+     * och designen kommer i #780 (issue 255).
+     *
+     * **Orden är sidans egna och inte `container.documents.*`.** Flikens ord
+     * hör till fliken, och den globala listan har sin egen rubrik; att låna
+     * flikens nycklar hade gjort två ytor till en och låst dem till varandra.
+     *
+     * **`inbox` är samma ord som i sidopanelen** (`nav.inbox`) och som
+     * `/inbox`-sidans rubrik — platsen heter *Inbox* överallt ([[ADR-0054
+     * Inboxen]] § 7), och raden för en inboxfil säger det ordet i stället för
+     * ett containernamn den inte får se.
+     *
+     * **Det tomma läget nämner inget tal** (issue 73 § Beslut 6): en lista som
+     * blev tom av ett filter ska inte påstå att användaren inte har några
+     * filer.
+     */
+    'documents' => [
+        'title' => 'Documents',
+        'heading' => 'Documents',
+        'empty' => 'No files here.',
+        'inbox' => 'Inbox',
+        'previous' => 'Previous',
+        'next' => 'Next',
+    ],
+
     'auth' => [
         'login' => [
             'title' => 'Log in',

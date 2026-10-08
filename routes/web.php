@@ -26,6 +26,7 @@ use App\Http\Controllers\ContainerTrashController;
 use App\Http\Controllers\CostEntryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DismissedTipController;
+use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\FavoriteController;
@@ -201,6 +202,30 @@ Route::delete('/inbox/attachments/{attachment}', [InboxController::class, 'destr
 Route::post('/inbox/attachments/delete', [InboxController::class, 'destroyAttachments'])
     ->middleware('auth')
     ->name('inbox.attachments.destroy-many');
+
+/*
+ * M28 (testarnas fynd 2026-10-07) · Den globala dokumentlistan, se
+ * App\Http\Controllers\DocumentController och App\Actions\Attachment\
+ * ListAccessibleAttachments.
+ *
+ * **Sidan är containerns dokumentflik över hela kontot.** Fliken (issue 178)
+ * visar en containers filer; här ser användaren samma sak i varje container
+ * hon når OCH i sin egen inbox, på ett ställe. Serverns halva är den här
+ * rutten; sidans design kommer i #780 (issue 255).
+ *
+ * **Ingen container i adressen.** Urvalet är användarens EGNA — det hon når
+ * plus hennes inbox ([[ADR-0054 Inboxen]] § 2) — och det finns ingen
+ * `{container}`-parameter att scope-binda mot. Filtren står i querysträngen
+ * (`container[]`, `kind[]` och `sort`) och en handredigerad adress ger listan
+ * och inte ett fel; `?page=` räknas av ramverket.
+ *
+ * **Sökvägen kolliderar med ingenting.** `/documents` är ett fast segment på
+ * toppnivå, som `/inbox` och `/tasks` — containerns flik ligger under
+ * `/containers/{container}/documents` och är en annan rutt.
+ */
+Route::get('/documents', DocumentController::class)
+    ->middleware('auth')
+    ->name('documents');
 
 /*
  * Issue 128 · Informationsytan, se App\Http\Controllers\
