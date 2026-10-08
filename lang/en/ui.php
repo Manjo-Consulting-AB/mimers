@@ -3790,6 +3790,15 @@ return [
             'someday' => 'Someday',
         ],
 
+        // M28 · issue 774: platsen på radens underrad. En uppgift i inboxen
+        // visar platsen *Inbox* i stället för itemet och containern, som
+        // användaren aldrig ser (ADR-0054 § 1 och § 7). Ordet är samma som
+        // `todo.list.inbox` och `todo.create.inbox`, med flit: det är samma
+        // plats, och två ord för den hade lärt användaren två begrepp.
+        'location' => [
+            'inbox' => 'Inbox',
+        ],
+
         // M26 · issue 237: flikraden över listorna. `active` är frånvaron av
         // `?list=` — alla aktiva förekomster — och `calendar` och `done` är
         // härledda vyer (ADR-0052 § 1). Flikens namn för de tre lagrade

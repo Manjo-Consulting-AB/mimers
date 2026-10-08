@@ -20,6 +20,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * containern: "Byt impeller" utan "Motorn" och "Havsörnen" går inte att handla
  * på när man har fyra containers.
  *
+ * **Underraden visar platsen, och i inboxen är platsen *Inbox*** (M28 · issue
+ * 774, ADR-0054 § 1 och § 7). Är `entry.in_inbox` sann ritas EN länk —
+ * `todo.location.inbox` till `/inbox` — i stället för itemet och containern,
+ * som båda är dolda för användaren. Titeln ovan rörs inte: den länkar
+ * fortfarande till uppgiftens sida.
+ *
  * **`showContainer` styr containerlänken** (Beslut 4). På `/tasks` och i
  * dashboardens panel behövs containernamnet — raden står bland andra containers
  * — men på containerns uppgiftsflik står containern redan i hjälten, och fliken
@@ -226,13 +232,13 @@ const listFieldId = computed(() => `todo-list-${props.entry.ulid}`);
 const inProgress = computed(() => props.entry.status === 'in_progress');
 
 /*
- * Ligger raden i inboxen (ADR-0054 § 5)? Sedan M27 · issue 244 är `gtd_list`
- * null exakt när förekomstens schema ligger på ett inbox-item — det är
- * definitionen, inte en gissning. Listväljaren och listmärket ritas därför
- * inte: en obearbetad uppgift har ingen lista att visa eller byta, och
- * servern nekar en liständring med `occurrence.in_inbox`.
+ * Ligger raden i inboxen (M28 · issue 774, ADR-0054 § 1 och § 7)? Serverns
+ * `entry.in_inbox` är svaret — containern bär `inbox_user_id`, och raden
+ * räknar ingenting själv. Listväljaren och listmärket ritas därför inte: en
+ * obearbetad uppgift har ingen lista att visa eller byta, och servern nekar en
+ * liständring med `occurrence.in_inbox`.
  */
-const inInbox = computed(() => props.entry.gtd_list === null);
+const inInbox = computed(() => Boolean(props.entry.in_inbox));
 
 /*
  * Radens ENDA felruta (Beslut 4). Domänfelet ur avbockningen eller bytet
@@ -398,21 +404,33 @@ function toggleProgress() {
             </div>
 
             <p class="mt-1 flex flex-wrap items-center gap-x-2 text-body text-ink-muted">
-                <Link :href="itemUrl" class="inline-flex min-h-11 items-center text-accent hover:underline">
-                    {{ entry.item.name }}
-                </Link>
-
-                <!-- Containernamnet ritas bara när ytan behöver det (Beslut 4),
-                     och det går till ITEMLISTAN (issue 89 · [[ADR-0039
-                     Containerns översikt]] § Konsekvenser): uppgiften hör till
-                     ett item, och den som följer containern ur todo-vyn letar i
-                     listan — inte på en översikt. -->
-                <template v-if="showContainer">
-                    <span aria-hidden="true">·</span>
-
-                    <Link :href="`/containers/${entry.container.ulid}/items`" class="inline-flex min-h-11 items-center text-accent hover:underline">
-                        {{ entry.container.name }}
+                <!-- Platsen (M28 · issue 774, ADR-0054 § 1 och § 7): en rad i
+                     inboxen visar EN plats — *Inbox* — och aldrig det dolda
+                     itemet och den dolda containern. Titeln ovan länkar
+                     fortfarande till uppgiftens sida (Beslut 3). -->
+                <template v-if="entry.in_inbox">
+                    <Link href="/inbox" class="inline-flex min-h-11 items-center text-accent hover:underline">
+                        {{ t('todo.location.inbox') }}
                     </Link>
+                </template>
+
+                <template v-else>
+                    <Link :href="itemUrl" class="inline-flex min-h-11 items-center text-accent hover:underline">
+                        {{ entry.item.name }}
+                    </Link>
+
+                    <!-- Containernamnet ritas bara när ytan behöver det (Beslut 4),
+                         och det går till ITEMLISTAN (issue 89 · [[ADR-0039
+                         Containerns översikt]] § Konsekvenser): uppgiften hör till
+                         ett item, och den som följer containern ur todo-vyn letar i
+                         listan — inte på en översikt. -->
+                    <template v-if="showContainer">
+                        <span aria-hidden="true">·</span>
+
+                        <Link :href="`/containers/${entry.container.ulid}/items`" class="inline-flex min-h-11 items-center text-accent hover:underline">
+                            {{ entry.container.name }}
+                        </Link>
+                    </template>
                 </template>
             </p>
 
