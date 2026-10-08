@@ -4052,6 +4052,32 @@ return [
             'previous' => 'Previous',
             'next' => 'Next',
         ],
+
+        // The filter row above the list, see M28 · issue 782 and
+        // resources/js/components/TaskFilterBar.vue. The values are column
+        // values, never invented names: `next`, `waiting` and `someday` are
+        // `todo.list.*` — the same words the tabs carry, because it is the
+        // same list — and `open`/`in_progress` are `ScheduleOccurrence`'s
+        // statuses. *In progress* is `todo.tabs.in_progress`, borrowed rather
+        // than repeated.
+        //
+        // The arrows belong to the VALUE and not to the view: ↑ and ↓ are the
+        // same sentence with two directions, and the view never assembles an
+        // arrow and a word itself.
+        'filters' => [
+            'label' => 'Task filters',
+            'container' => 'Container',
+            'all_containers' => 'All containers',
+            'list' => 'List',
+            'all_lists' => 'All lists',
+            'status' => 'Status',
+            'all_statuses' => 'All statuses',
+            'status_open' => 'Open',
+            'sort' => 'Sort',
+            'sort_due_asc' => 'Due date ↑',
+            'sort_due_desc' => 'Due date ↓',
+            'clear' => 'Clear filters',
+        ],
     ],
 
     // The sharing page, see issue 55a. Two sections with different audiences

@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import GtdListPanel from '../../components/GtdListPanel.vue';
+import TaskFilterBar from '../../components/TaskFilterBar.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
 import TodoRow from '../../components/TodoRow.vue';
 import UiTabs from '../../components/UiTabs.vue';
@@ -33,11 +34,13 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * uppgift till fel hög, och en `computed` som jämför `due_at` mot `Date.now()`
  * hade varit precis den klockan.
  *
- * **Sidan är paginerad och har ingen sorteringsväljare** (issue 123). Den
- * visar högst femtio rader och får `previousUrl` och `nextUrl` färdiga av
- * servern — vyn bygger ingen adress själv och vet inte vilken markör som står
- * i den. Ordningen är `due_at` stigande med `ulid` som andra nyckel, och
- * grupperingen är det som gör listan begriplig (Beslut 7).
+ * **Sidan är paginerad** (issue 123). Den visar högst femtio rader och får
+ * `previousUrl` och `nextUrl` färdiga av servern — vyn bygger ingen adress
+ * själv och vet inte vilken markör som står i den. Ordningen är `due_at` med
+ * `ulid` som andra nyckel, och grupperingen är det som gör listan begriplig
+ * (Beslut 7). Sedan M28 · issue 782 väljer filterraden sorteringens riktning
+ * (Beslut 3); vyn ritar fortfarande grupperna i den ordning servern gav dem,
+ * så en fallande lista ritar *Upcoming* först utan att vyn vet varför.
  *
  * **En sida kan börja mitt i en grupp** (issue 123). Servern grupperar de
  * rader sidan bär, per rad, så en grupp som sträcker sig över en sidgräns får
@@ -77,6 +80,12 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * ritas: *Done* kommer i `completed` och de övriga i `groups`. Panelen
  * (`GtdListPanel`) ritar antalet per lista ur `counts`, och den står till
  * höger över `lg:` och under listan under `lg:`.
+ *
+ * **Filterraden står ovanför listan** (M28 · issue 782, Beslut 5). Den är
+ * resources/js/components/TaskFilterBar.vue, den filtrerar ingenting själv —
+ * den skickar fyra värden i adressen och servern svarar — och den ritar bara de
+ * val fliken inte redan bestämt (Beslut 2). Panelen påverkas inte: `counts`
+ * kommer ur `gtdCounts()`, som inte känner filtren (Beslut 4).
  */
 const props = defineProps({
     /* Listorna per grupp, i ritningsordning: overdue, today, upcoming. */
@@ -88,6 +97,13 @@ const props = defineProps({
     completed: { type: Array, default: () => [] },
     /* Fliken ur `?list=`: en av listorna, eller null för *Active*. */
     list: { type: String, default: null },
+    /*
+     * Filtren ur adressen, så som servern tillämpade dem — se
+     * resources/js/components/TaskFilterBar.vue (M28 · issue 782).
+     */
+    filters: { type: Object, required: true },
+    /* Filterradens containrar: `[{ ulid, name }]`, utan inboxen. */
+    containers: { type: Array, default: () => [] },
     /* Antalet per lista, ur ListTodo::gtdCounts() — panelens tal (Beslut 3). */
     counts: { type: Object, required: true },
     /* Har användaren någon container alls? Skiljer de två tomma lägena åt. */
@@ -214,6 +230,19 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
         -->
         <div class="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
             <div class="lg:flex-1">
+                <!--
+                    Filterraden (Beslut 5): containern, listan, statusen och
+                    sorteringen, i adressen bredvid fliken. Den står ovanför
+                    listan och ritar bara de val fliken inte redan bestämt
+                    (Beslut 2).
+                -->
+                <TaskFilterBar
+                    class="mb-8"
+                    :list="list"
+                    :filters="filters"
+                    :containers="containers"
+                />
+
                 <template v-if="isEmpty">
                     <p class="text-slate-700">
                         <template v-if="hasContainers">{{ t('todo.empty.nothing') }}</template>
