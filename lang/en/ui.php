@@ -255,9 +255,19 @@ return [
             'title' => 'Inbox',
             'heading' => 'Inbox',
 
-            'tasks_heading' => 'Tasks',
+            // M28 · issue 776 · Beslut 1: the line under the heading, the
+            // mockup's own words (`docs/Design/findings_261007a/
+            // inkorgsoversikt.png`). It says what the place is FOR, and the
+            // two cards below do the two halves of it.
+            'tagline' => 'Capture now. Organize later.',
+
+            // The card headings carry their count, the mockup's *Tasks (2)*
+            // and *Files (1)*. The count is the prop's length, so an empty
+            // list reads *Tasks (0)* — the empty sentence below still says
+            // what that means.
+            'tasks_heading' => 'Tasks (:count)',
             'empty_tasks' => 'Nothing to process.',
-            'attachments_heading' => 'Files',
+            'attachments_heading' => 'Files (:count)',
             'empty_attachments' => 'No files here.',
 
             'capture' => [
@@ -265,9 +275,42 @@ return [
                 'task_placeholder' => 'What needs doing?',
                 'task_submit' => 'Add task',
                 'files_label' => 'Add files',
+                // The drop zone (Beslut 2). `files_drop` is the sentence
+                // inside it and `files_browse` the button that opens the
+                // browser's own picker; both fill the same field as the
+                // hidden `<input type="file">`, and the POST is unchanged.
+                'files_drop' => 'Drag and drop files here or choose files',
+                'files_browse' => 'Browse files',
                 'files_hint' => 'Documents and images. Pick one or more.',
                 'files_submit' => 'Add files',
             ],
+
+            /*
+             * The three tiles (Beslut 3): the tasks, the files and the sum of
+             * the two. **The third one never says *items*.** An item is a
+             * concept in Mimers — the thing a container holds — and a row
+             * waiting in the inbox is not one; the mockup's word would have
+             * taught the reader a second meaning for it.
+             *
+             * `tasks_one`/`files_one` exist for the same reason as
+             * `todo.group_count_one`: `t()` does not pluralise, so the
+             * singular has its own sentence. `to_process` is the label under
+             * all three, and it is the tile's word and not the number's.
+             */
+            'stats' => [
+                'tasks' => ':count tasks',
+                'tasks_one' => '1 task',
+                'files' => ':count files',
+                'files_one' => '1 file',
+                'total' => ':count',
+                'to_process' => 'to process',
+            ],
+
+            // The file row's sub-line (Beslut 4): the type, the size and
+            // *Added …* from `created_at`, written by the date rule
+            // (`resources/js/composables/useRelativeDate.js`) like every
+            // other date in the app.
+            'added' => 'Added :date',
 
             // The task row: *Process…* opens the item picker (issue 242) and
             // then the small step with the list and an optional date

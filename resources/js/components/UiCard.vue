@@ -14,6 +14,11 @@
  * slotten FINNS och aldrig om den är tom: en tom rad till höger är samma sak
  * som ingen rad, men med luft omkring sig.
  *
+ * **Rubriken ritas bara när någon skickar den** (granskningsfynd 2026-10-08).
+ * En tom `<h2>` är ett tillgänglighetsfel — skärmläsaren annonserar en rubrik
+ * utan ord — så villkoret står på elementet. Fångstkortet i `/inbox` skickar
+ * ingen rubrik och fick tidigare en tom sådan.
+ *
  * **Bilden kom med issue 159 · [[ADR-0047 Containerns bild]].** `media` är en
  * tredje valfri slot, och den ligger ÖVER rubrikraden och kant i kant med
  * kortets ram — så kortets foto ser ut som i `docs/Design/main.jpeg`, där
@@ -42,7 +47,7 @@
 
         <div class="p-4">
             <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <h2 class="text-title font-semibold text-ink">
+                <h2 v-if="$slots.heading" class="text-title font-semibold text-ink">
                     <slot name="heading" />
                 </h2>
 

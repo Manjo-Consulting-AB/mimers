@@ -5,18 +5,23 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import FormField from '../../components/FormField.vue';
 import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
 import UiButton from '../../components/UiButton.vue';
+import UiCard from '../../components/UiCard.vue';
 import UiCheckbox from '../../components/UiCheckbox.vue';
 import UiInput from '../../components/UiInput.vue';
 import UiSelect from '../../components/UiSelect.vue';
+import UiStat from '../../components/UiStat.vue';
 import { attachmentPreview, formatByteSize } from '../../components/attachmentPresentation.js';
+import { occurrenceActionUrl } from '../../components/occurrencePresentation.js';
+import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
 /*
- * Sidan `/inbox` — M27 · issue 245, se [[ADR-0054 Inboxen]] § 4, 6, 7 och 8.
+ * Sidan `/inbox` — M27 · issue 245 och M28 · issue 776 (formen), se
+ * [[ADR-0054 Inboxen]] § 4, 6, 7 och 8.
  *
  * **Där något fångas och bearbetas.** Sidan ligger i AppLayout, och raden
  * *Inbox* i sidopanelen visar antalet (issue 245 · Beslut 5). Uppgifterna och
- * bilagorna står sida vid sida: det är samma kö, och användaren ska kunna se
+ * bilagorna står i var sitt kort: det är samma kö, och användaren ska kunna se
  * hela sitt obearbetade innehåll på ett ställe.
  *
  * **Sidan räknar ingenting och filtrerar ingenting.** Uppgifterna kommer
@@ -24,7 +29,9 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * fliken *Inbox* på `/tasks`), bilagorna ur App\Http\Resources\
  * AttachmentResource med `variants` bredvid — och talet i sidopanelen ur den
  * delade proppen `inboxCount` (App\Http\Middleware\HandleInertiaRequests).
- * Vyn ritar, formaterar och postar.
+ * Vyn ritar, formaterar och postar. Det gäller brickorna också (issue 776 ·
+ * Beslut 3): de tre talen är propparnas längder, och det tredje är summan av
+ * de två — sidan ställer ingen fråga för att få dem.
  *
  * **Sidan skapar ingen inbox.** Är listorna tomma finns ingen inbox än, och
  * den skapas först av den första fångsten (ADR-0054 § 1). De två tomma lägena
@@ -34,7 +41,14 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * titel (ADR-0054 § 8): schemat blir `none` utan datum, och `CreateSchedule`
  * ser till att en uppgift på ett inbox-item inte får någon lista. Filerna går
  * i en `POST` med `forceFormData`, och servern bestämmer kontot — det är
- * personkontot (ADR-0054 § 3).
+ * personkontot (ADR-0054 § 3). Släppytan (issue 776 · Beslut 2) fyller SAMMA
+ * fält som väljaren och postar genom samma knapp: ingen ny uppladdningsväg.
+ *
+ * **Att bocka av är 63b:s rutt, rakt av.** Uppgiftsradens cirkel postar till
+ * samma `complete` som TodoRow på `/tasks` — en inboxuppgift är en vanlig
+ * förekomst (ADR-0054 § 5), och den avbockade raden lämnar listan eftersom
+ * `list: inbox` bara visar aktiva förekomster. Ingen ny rutt och ingen ny
+ * propp.
  *
  * **Att bearbeta är två steg för en uppgift och ett för bilagorna.** En
  * uppgiftsrad bär *Process…*: den öppnar målväljaren (issue 242) och därefter
@@ -66,6 +80,10 @@ const props = defineProps({
 });
 
 const { t } = useTranslations();
+/* Datumregeln (issue 104): raderna nedan skriver ut sina datum genom den och
+ * formaterar dem aldrig själva — `/inbox` och `/tasks` ska säga samma sak om
+ * samma datum. */
+const { dueDate, eventDate } = useRelativeDate();
 
 /* --- att fånga en uppgift -------------------------------------------------- */
 
@@ -86,6 +104,19 @@ const fileForm = useForm({ files: [] });
 
 function onFilesSelected(event) {
     selectedFiles.value = Array.from(event.target.files ?? []);
+}
+
+/*
+ * Släppytan (issue 776 · Beslut 2). Den lägger filerna i SAMMA `ref` som
+ * väljaren fyller, och postningen är oförändrad — `Browse files` öppnar
+ * webbläsarens egen väljare, och en släppt fil går samma väg.
+ */
+function onFilesDropped(event) {
+    selectedFiles.value = Array.from(event.dataTransfer?.files ?? []);
+}
+
+function browseFiles() {
+    fileInput.value?.click();
 }
 
 function captureFiles() {
@@ -109,8 +140,14 @@ function captureFiles() {
 
 const pickerOpen = ref(false);
 const pickerTrigger = ref(null);
-/* `task` eller `attachments`: vad valet gäller när det kommer tillbaka. */
+/* `task`, `file` eller `attachments`: vad valet gäller när det kommer
+ * tillbaka. `file` är EN rads *Process…* — samma väljare och samma rutt som
+ * satsen, men bara den filen. */
 const pickerMode = ref('task');
+
+/* Filen vars *Process…* öppnades (Beslut 4). Satsen läser i stället
+ * `selected`, så de två vägarna delar väljare men inte urval. */
+const processingAttachment = ref(null);
 
 const pickerHeading = computed(() => (pickerMode.value === 'task'
     ? t('inbox.page.process_heading')
@@ -120,6 +157,12 @@ function openPicker(mode, event) {
     pickerMode.value = mode;
     pickerTrigger.value = event.currentTarget;
     pickerOpen.value = true;
+}
+
+function startProcessFile(attachment, event) {
+    processingAttachment.value = attachment;
+
+    openPicker('file', event);
 }
 
 /* --- att bearbeta en uppgift ----------------------------------------------- */
@@ -150,6 +193,49 @@ function submitProcess() {
     });
 }
 
+/* --- att bocka av en uppgift ----------------------------------------------- */
+
+/*
+ * Avbockningen (granskningsfynd 2026-10-08): cirkeln på uppgiftsraden är inte
+ * dekor utan 63b:s `complete`-rutt, samma anrop som TodoRow gör på `/tasks`.
+ * En inboxuppgift är en vanlig förekomst ([[ADR-0054 Inboxen]] § 5), och
+ * rutten gäller den med — `account` följer med i kroppen precis som där.
+ *
+ * Serverns svar laddar om listan, och den avbockade raden lämnar inboxen:
+ * `list: inbox` visar bara aktiva förekomster.
+ */
+const completingTask = ref(null);
+
+/* Samma tillgängliga namn som på `/tasks`: handlingen och, när servern pekat
+ * ut ett tillstånd, orden för det. */
+function completeLabel(task) {
+    const state = task.overdue
+        ? t('todo.group.overdue')
+        : task.upcoming
+            ? t('todo.group.upcoming')
+            : null;
+
+    return state === null ? t('todo.complete') : `${t('todo.complete')}, ${state}`;
+}
+
+function completeTask(task) {
+    router.post(
+        occurrenceActionUrl(
+            task.container.ulid,
+            task.item.ulid,
+            task.schedule.ulid,
+            task.ulid,
+            'complete',
+        ),
+        { account: task.account },
+        {
+            preserveScroll: true,
+            onStart: () => { completingTask.value = task.ulid; },
+            onFinish: () => { completingTask.value = null; },
+        },
+    );
+}
+
 /* --- att bearbeta bilagor -------------------------------------------------- */
 
 const selected = ref([]);
@@ -166,12 +252,59 @@ const attachmentElementErrors = computed(() => Object.entries(moveForm.errors)
 
 /* Raderna: storleken formaterad och förhandsvisningen räknad, som i
  * dokumentfliken — `attachmentPreview()` läser `variants` och `inlineEnabled`
- * och vyn gissar ingenting (issue 61b § Beslut 1). */
+ * och vyn gissar ingenting (issue 61b § Beslut 1). Underraden bär typen,
+ * storleken och `created_at` genom datumregeln (issue 776 · Beslut 4): *Added*
+ * är samma form som uppgiftsradens datum, och ingen av dem är påhittad. */
 const attachmentRows = computed(() => props.attachments.map((attachment) => ({
     ...attachment,
     size: formatByteSize(attachment.byte_size),
     preview: attachmentPreview(attachment, props.variants, props.inlineEnabled),
+    added: eventDate(attachment.created_at).text,
 })));
+
+/*
+ * Uppgiftsradens datum (issue 776 · Beslut 4). Raden bär sitt eget datum —
+ * `due_at` med serverns `overdue`-flagga — och regeln för hur det skrivs bor
+ * i useRelativeDate. Sammansättningen är TodoRows: ett relativt datum bär sin
+ * egen preposition och står för sig självt, ett absolut får ordet *Due*
+ * framför sig. Utan datum ritas ingen rad alls, och raden visar bara platsen.
+ */
+function taskDate(task) {
+    const due = dueDate(task.due_at, task.overdue);
+
+    if (due.text === null) {
+        return null;
+    }
+
+    return due.relative ? due.text : t('todo.due', { date: due.text });
+}
+
+const taskRows = computed(() => props.tasks.map((task) => ({
+    ...task,
+    date: taskDate(task),
+})));
+
+/* --- de tre brickorna ------------------------------------------------------ */
+
+/*
+ * Talen (issue 776 · Beslut 3): uppgifterna, filerna och summan av de två.
+ * Den tredje säger *to process* och aldrig *items* — ett item är ett begrepp i
+ * Mimers, och en obearbetad post i inboxen är inte ett. Ental har sin egen
+ * nyckel av samma skäl som `todo.group_count_one`: `t()` pluraliserar inte.
+ */
+const taskCount = computed(() => t(
+    props.tasks.length === 1 ? 'inbox.page.stats.tasks_one' : 'inbox.page.stats.tasks',
+    { count: props.tasks.length },
+));
+
+const fileCount = computed(() => t(
+    props.attachments.length === 1 ? 'inbox.page.stats.files_one' : 'inbox.page.stats.files',
+    { count: props.attachments.length },
+));
+
+const totalCount = computed(() => t('inbox.page.stats.total', {
+    count: props.tasks.length + props.attachments.length,
+}));
 
 /* Valet ur väljaren. Uppgiften får sitt steg; bilagorna postas direkt. */
 function onTargetChosen(item) {
@@ -184,12 +317,24 @@ function onTargetChosen(item) {
         return;
     }
 
+    const batch = pickerMode.value !== 'file';
+
     moveForm.target = item.ulid;
-    moveForm.attachments = [...selected.value];
+    moveForm.attachments = batch
+        ? [...selected.value]
+        : [processingAttachment.value.ulid];
+
     moveForm.post('/inbox/attachments/process', {
         preserveScroll: true,
         onSuccess: () => {
-            selected.value = [];
+            processingAttachment.value = null;
+
+            // Bara satsen tömmer urvalet: en enstaka rads bearbetning får inte
+            // kasta ett kryss användaren satt på en annan rad.
+            if (batch) {
+                selected.value = [];
+            }
+
             moveForm.reset();
         },
     });
@@ -283,81 +428,176 @@ function destroySelected() {
     <AppLayout>
         <Head :title="t('inbox.page.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('inbox.page.heading') }}</h1>
+        <h1 class="text-2xl font-semibold text-ink">{{ t('inbox.page.heading') }}</h1>
+        <p class="mt-1 text-body text-ink-muted">{{ t('inbox.page.tagline') }}</p>
 
-        <!-- Fångsten: en uppgift med bara en titel och en filväljare. -->
-        <div class="mt-6 flex flex-col gap-6 md:flex-row md:items-start">
-            <form class="flex flex-1 flex-col gap-3" @submit.prevent="captureTask">
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('inbox.page.capture.task_label')"
-                    id="inbox-task-title"
-                    :error="taskForm.errors.title"
-                >
-                    <UiInput
+        <!--
+            Fångstkortet (Beslut 2): två halvor, åtskilda av en lodrät linje
+            över `lg:` och staplade under. Kortet har ingen egen rubrik — de
+            två etiketterna är halvornas, och de kommer ur FormField.
+        -->
+        <UiCard class="mt-6">
+            <div class="flex flex-col lg:flex-row lg:gap-6 lg:divide-x lg:divide-border">
+                <form class="flex flex-1 flex-col gap-3" @submit.prevent="captureTask">
+                    <FormField
+                        v-slot="{ describedBy }"
+                        :label="t('inbox.page.capture.task_label')"
                         id="inbox-task-title"
-                        v-model="taskForm.title"
-                        :described-by="describedBy"
-                        :placeholder="t('inbox.page.capture.task_placeholder')"
-                    />
-                </FormField>
+                        :error="taskForm.errors.title"
+                    >
+                        <!-- Fältet och knappen i SAMMA rad (mockupen):
+                             etiketten står kvar ovanför dem båda, och felet
+                             under, för det är FormFields ordning. -->
+                        <div class="flex items-center gap-3">
+                            <UiInput
+                                id="inbox-task-title"
+                                v-model="taskForm.title"
+                                :described-by="describedBy"
+                                :placeholder="t('inbox.page.capture.task_placeholder')"
+                                class="min-w-0 flex-1"
+                            />
 
-                <UiButton type="submit" :pending="taskForm.processing">
-                    {{ taskForm.processing ? t('common.pending.default') : t('inbox.page.capture.task_submit') }}
-                </UiButton>
-            </form>
+                            <UiButton type="submit" :pending="taskForm.processing">
+                                {{ taskForm.processing ? t('common.pending.default') : t('inbox.page.capture.task_submit') }}
+                            </UiButton>
+                        </div>
+                    </FormField>
+                </form>
 
-            <form class="flex flex-1 flex-col gap-3" @submit.prevent="captureFiles">
-                <FormField
-                    v-slot="{ describedBy }"
-                    :label="t('inbox.page.capture.files_label')"
-                    id="inbox-files"
-                    :error="fileForm.errors.files"
-                >
-                    <input
+                <form class="mt-6 flex flex-1 flex-col gap-3 lg:mt-0" @submit.prevent="captureFiles">
+                    <!-- Fältet är dolt för ögat men inte för skärmläsaren:
+                         etiketten ovan hör till det, och `Browse files` och
+                         släppytan skriver i samma fält. `tabindex="-1"` tar
+                         bort det ur tabbordningen — knappen är den väg som
+                         syns, och en fokusring på ett osynligt fält är ingen
+                         ring. -->
+                    <FormField
+                        v-slot="{ describedBy }"
+                        :label="t('inbox.page.capture.files_label')"
                         id="inbox-files"
-                        ref="fileInput"
-                        type="file"
-                        multiple
-                        :aria-describedby="describedBy"
-                        class="min-h-11 rounded-control border border-border bg-surface px-3 py-2 text-body text-ink file:mr-3 file:rounded-control file:border-0 file:bg-surface-sunken file:px-3 file:py-1 file:text-ink"
-                        @change="onFilesSelected"
-                    />
-                </FormField>
+                        :error="fileForm.errors.files"
+                    >
+                        <input
+                            id="inbox-files"
+                            ref="fileInput"
+                            type="file"
+                            multiple
+                            tabindex="-1"
+                            :aria-describedby="describedBy"
+                            class="sr-only"
+                            @change="onFilesSelected"
+                        >
+                    </FormField>
 
-                <p class="text-meta text-ink-muted">{{ t('inbox.page.capture.files_hint') }}</p>
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3 rounded-card border border-dashed border-border bg-surface-sunken px-4 py-3"
+                        @dragover.prevent
+                        @drop.prevent="onFilesDropped"
+                    >
+                        <p class="text-body text-ink-muted">{{ t('inbox.page.capture.files_drop') }}</p>
 
-                <UiButton
-                    type="submit"
-                    :pending="fileForm.processing"
-                    :disabled="selectedFiles.length === 0"
-                >
-                    {{ fileForm.processing ? t('common.pending.upload') : t('inbox.page.capture.files_submit') }}
-                </UiButton>
-            </form>
+                        <!-- Rå `<button>`: GenomgangTest tillåter bara
+                             `<Link>` bland komponenttaggarna, och en `@click`
+                             på en `<UiButton>` är en klickyta provet fäller. -->
+                        <button
+                            type="button"
+                            class="inline-flex min-h-11 items-center justify-center rounded-control border border-border bg-surface px-4 text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                            @click="browseFiles"
+                        >
+                            {{ t('inbox.page.capture.files_browse') }}
+                        </button>
+                    </div>
+
+                    <p class="text-meta text-ink-muted">{{ t('inbox.page.capture.files_hint') }}</p>
+
+                    <UiButton
+                        type="submit"
+                        :pending="fileForm.processing"
+                        :disabled="selectedFiles.length === 0"
+                        class="self-start"
+                    >
+                        {{ fileForm.processing ? t('common.pending.upload') : t('inbox.page.capture.files_submit') }}
+                    </UiButton>
+                </form>
+            </div>
+        </UiCard>
+
+        <!-- De tre brickorna (Beslut 3). -->
+        <div class="mt-6 flex flex-wrap gap-4">
+            <UiStat :value="taskCount" :label="t('inbox.page.stats.to_process')" />
+            <UiStat :value="fileCount" :label="t('inbox.page.stats.to_process')" />
+            <UiStat :value="totalCount" :label="t('inbox.page.stats.to_process')" />
         </div>
 
         <!-- Uppgifterna: en rad med *Process…*, och steget som följer på valet. -->
-        <section class="mt-10">
-            <h2 class="text-title font-semibold text-ink">{{ t('inbox.page.tasks_heading') }}</h2>
+        <UiCard class="mt-6">
+            <template #heading>
+                {{ t('inbox.page.tasks_heading', { count: taskRows.length }) }}
+            </template>
 
-            <p v-if="tasks.length === 0" class="mt-2 text-body text-ink-muted">
+            <p v-if="taskRows.length === 0" class="text-body text-ink-muted">
                 {{ t('inbox.page.empty_tasks') }}
             </p>
 
-            <ul v-else class="mt-2 flex flex-col">
+            <ul v-else class="flex flex-col divide-y divide-border">
                 <li
-                    v-for="task in tasks"
+                    v-for="task in taskRows"
                     :key="task.ulid"
-                    class="flex min-h-11 items-center gap-3 border-b border-border py-2"
+                    class="flex min-h-11 items-center gap-3 py-2"
                 >
-                    <span class="min-w-0 flex-1 truncate text-body text-ink">
-                        {{ task.schedule.title }}
+                    <!-- Cirkeln (avbockningen): 44 px träffyta med en ritad
+                         cirkel på 20 px, samma form och samma `complete`-rutt
+                         som TodoRow på `/tasks`. Läsaren får cirkeln utan
+                         knapp när servern inte ger `can.update`. -->
+                    <form v-if="task.can.update" class="shrink-0" @submit.prevent="completeTask(task)">
+                        <button
+                            type="submit"
+                            :disabled="completingTask === task.ulid"
+                            :aria-label="completingTask === task.ulid ? t('common.pending.complete') : completeLabel(task)"
+                            class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                        >
+                            <span aria-hidden="true" class="h-5 w-5 rounded-full border-2 border-border" />
+                        </button>
+                    </form>
+
+                    <span
+                        v-else
+                        aria-hidden="true"
+                        class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
+                    >
+                        <span class="h-5 w-5 rounded-full border-2 border-border" />
                     </span>
+
+                    <div class="min-w-0 flex-1">
+                        <span class="block truncate text-body text-ink">{{ task.schedule.title }}</span>
+
+                        <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-meta text-ink-muted">
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-4 w-4 shrink-0"
+                                aria-hidden="true"
+                            >
+                                <rect x="3" y="5" width="18" height="14" rx="2" />
+                                <path d="m3 7 9 6 9-6" />
+                            </svg>
+
+                            <span>{{ t('todo.location.inbox') }}</span>
+
+                            <template v-if="task.date">
+                                <span aria-hidden="true">&middot;</span>
+                                <span>{{ task.date }}</span>
+                            </template>
+                        </span>
+                    </div>
 
                     <button
                         type="button"
-                        class="inline-flex min-h-11 items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control bg-accent px-3 text-meta font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
                         @click="startProcess(task, $event)"
                     >
                         {{ t('inbox.page.process') }}
@@ -367,7 +607,7 @@ function destroySelected() {
                          dokument*-menyn i Documents.vue, med *Delete* i
                          panelen. Uppgiften raderas med samma action som på
                          uppgiftens sida; servern prövar samma grind. -->
-                    <details class="relative">
+                    <details class="relative shrink-0">
                         <summary
                             class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                             :aria-label="t('inbox.page.row_menu')"
@@ -424,7 +664,7 @@ function destroySelected() {
                  frivilligt datum. -->
             <form
                 v-if="processingTask && processTarget"
-                class="mt-4 flex flex-col gap-3 rounded-card border border-border bg-surface p-4 md:max-w-md"
+                class="mt-4 flex flex-col gap-3 rounded-card border border-border bg-surface-sunken p-4 md:max-w-md"
                 @submit.prevent="submitProcess"
             >
                 <p class="text-body text-ink">
@@ -469,106 +709,20 @@ function destroySelected() {
                     {{ t('inbox.page.due_none') }}
                 </p>
 
-                <UiButton type="submit" :pending="processForm.processing">
+                <UiButton type="submit" :pending="processForm.processing" class="self-start">
                     {{ processForm.processing ? t('common.pending.default') : t('inbox.page.process_confirm') }}
                 </UiButton>
             </form>
-        </section>
+        </UiCard>
 
         <!-- Bilagorna: en kryssruta var, och *Move selected…* mot samma väljare. -->
-        <section class="mt-10">
-            <h2 class="text-title font-semibold text-ink">{{ t('inbox.page.attachments_heading') }}</h2>
+        <UiCard class="mt-6">
+            <template #heading>
+                {{ t('inbox.page.attachments_heading', { count: attachmentRows.length }) }}
+            </template>
 
-            <!-- Felet ritas ÖVER listan (ADR-0054 § 6): hela satsen nekas, och
-                 meningen säger varför. Elementfelen (`attachments.N`) hör hit
-                 de med. -->
-            <p
-                v-if="moveForm.errors.attachments || attachmentElementErrors.length > 0 || deleteForm.errors.attachments || attachmentDeleteError"
-                class="mt-2 flex flex-col"
-                role="alert"
-            >
-                <span v-if="moveForm.errors.attachments" class="text-body text-danger">
-                    {{ moveForm.errors.attachments }}
-                </span>
-                <span
-                    v-for="(message, index) in attachmentElementErrors"
-                    :key="index"
-                    class="text-body text-danger"
-                >
-                    {{ message }}
-                </span>
-                <span v-if="deleteForm.errors.attachments" class="text-body text-danger">
-                    {{ deleteForm.errors.attachments }}
-                </span>
-                <span v-if="attachmentDeleteError" class="text-body text-danger">
-                    {{ attachmentDeleteError }}
-                </span>
-            </p>
-
-            <p v-if="attachments.length === 0" class="mt-2 text-body text-ink-muted">
-                {{ t('inbox.page.empty_attachments') }}
-            </p>
-
-            <template v-else>
-                <ul class="mt-2 flex flex-col">
-                    <li
-                        v-for="attachment in attachmentRows"
-                        :key="attachment.ulid"
-                        class="flex min-h-11 items-center gap-3 border-b border-border py-2"
-                    >
-                        <UiCheckbox
-                            :id="`inbox-attachment-${attachment.ulid}`"
-                            v-model="selected"
-                            :value="attachment.ulid"
-                        >
-                            <img
-                                v-if="attachment.preview.display === 'thumb'"
-                                :src="attachment.preview.thumbnail"
-                                alt=""
-                                class="size-10 shrink-0 rounded object-cover"
-                            />
-
-                            <span class="min-w-0 truncate text-body text-ink">{{ attachment.filename }}</span>
-                        </UiCheckbox>
-
-                        <span class="ml-auto text-meta text-ink-muted">{{ attachment.size }}</span>
-
-                        <!-- Filradens ⋯-meny (Beslut 3), samma `<details>`
-                             som uppgiftsradens ovan. Filen raderas med
-                             TrashAttachment: papperskorg och fördröjd
-                             radering som överallt annars. -->
-                        <details class="relative">
-                            <summary
-                                class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                                :aria-label="t('inbox.page.row_menu')"
-                            >
-                                <svg
-                                    viewBox="0 0 24 24"
-                                    fill="currentColor"
-                                    class="size-5 shrink-0"
-                                    aria-hidden="true"
-                                >
-                                    <circle cx="12" cy="5" r="1.6" />
-                                    <circle cx="12" cy="12" r="1.6" />
-                                    <circle cx="12" cy="19" r="1.6" />
-                                </svg>
-                            </summary>
-
-                            <div class="absolute right-0 z-10 mt-2 w-40 rounded-card border border-border bg-surface p-1 shadow-sm">
-                                <button
-                                    type="button"
-                                    :disabled="deletePending !== null"
-                                    class="flex min-h-11 w-full items-center rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
-                                    @click="destroyAttachment(attachment)"
-                                >
-                                    {{ t('inbox.page.delete') }}
-                                </button>
-                            </div>
-                        </details>
-                    </li>
-                </ul>
-
-                <div class="mt-4 flex flex-wrap items-center gap-3">
+            <template #action>
+                <div class="flex flex-wrap items-center gap-3">
                     <button
                         type="button"
                         :disabled="selected.length === 0"
@@ -591,7 +745,141 @@ function destroySelected() {
                     </button>
                 </div>
             </template>
-        </section>
+
+            <!-- Felet ritas ÖVER listan (ADR-0054 § 6): hela satsen nekas, och
+                 meningen säger varför. Elementfelen (`attachments.N`) hör hit
+                 de med. -->
+            <p
+                v-if="moveForm.errors.attachments || attachmentElementErrors.length > 0 || deleteForm.errors.attachments || attachmentDeleteError"
+                class="mb-3 flex flex-col"
+                role="alert"
+            >
+                <span v-if="moveForm.errors.attachments" class="text-body text-danger">
+                    {{ moveForm.errors.attachments }}
+                </span>
+                <span
+                    v-for="(message, index) in attachmentElementErrors"
+                    :key="index"
+                    class="text-body text-danger"
+                >
+                    {{ message }}
+                </span>
+                <span v-if="deleteForm.errors.attachments" class="text-body text-danger">
+                    {{ deleteForm.errors.attachments }}
+                </span>
+                <span v-if="attachmentDeleteError" class="text-body text-danger">
+                    {{ attachmentDeleteError }}
+                </span>
+            </p>
+
+            <p v-if="attachmentRows.length === 0" class="text-body text-ink-muted">
+                {{ t('inbox.page.empty_attachments') }}
+            </p>
+
+            <ul v-else class="flex flex-col divide-y divide-border">
+                <li
+                    v-for="attachment in attachmentRows"
+                    :key="attachment.ulid"
+                    class="flex min-h-11 items-center gap-3 py-2"
+                >
+                    <UiCheckbox
+                        :id="`inbox-attachment-${attachment.ulid}`"
+                        v-model="selected"
+                        :value="attachment.ulid"
+                        class="min-w-0 flex-1"
+                    >
+                        <img
+                            v-if="attachment.preview.display === 'thumb'"
+                            :src="attachment.preview.thumbnail"
+                            alt=""
+                            class="h-10 w-10 shrink-0 rounded object-cover"
+                        >
+
+                        <!-- Utan derivat ritas samma neutrala filikon som
+                             dokumentfliken: en `<img>` mot `?variant=thumb` på
+                             en fil utan derivat är en trasig bild (61b §
+                             Beslut 1). -->
+                        <span
+                            v-else
+                            aria-hidden="true"
+                            class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-muted"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="h-5 w-5"
+                            >
+                                <path d="M14 3v5h5" />
+                                <path d="M6 3h8l5 5v13H6z" />
+                            </svg>
+                        </span>
+
+                        <span class="flex min-w-0 flex-col">
+                            <span class="truncate text-body text-ink">{{ attachment.filename }}</span>
+
+                            <span class="flex flex-wrap items-center gap-1.5 text-meta text-ink-muted">
+                                <span>{{ t(`item.attachment.kind.${attachment.kind}`) }}</span>
+
+                                <template v-if="attachment.size">
+                                    <span aria-hidden="true">&middot;</span>
+                                    <span>{{ attachment.size }}</span>
+                                </template>
+
+                                <template v-if="attachment.added">
+                                    <span aria-hidden="true">&middot;</span>
+                                    <span>{{ t('inbox.page.added', { date: attachment.added }) }}</span>
+                                </template>
+                            </span>
+                        </span>
+                    </UiCheckbox>
+
+                    <button
+                        type="button"
+                        class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-control bg-accent px-3 text-meta font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                        @click="startProcessFile(attachment, $event)"
+                    >
+                        {{ t('inbox.page.process') }}
+                    </button>
+
+                    <!-- Filradens ⋯-meny (Beslut 3), samma `<details>`
+                         som uppgiftsradens ovan. Filen raderas med
+                         TrashAttachment: papperskorg och fördröjd
+                         radering som överallt annars. -->
+                    <details class="relative shrink-0">
+                        <summary
+                            class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                            :aria-label="t('inbox.page.row_menu')"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                class="size-5 shrink-0"
+                                aria-hidden="true"
+                            >
+                                <circle cx="12" cy="5" r="1.6" />
+                                <circle cx="12" cy="12" r="1.6" />
+                                <circle cx="12" cy="19" r="1.6" />
+                            </svg>
+                        </summary>
+
+                        <div class="absolute right-0 z-10 mt-2 w-40 rounded-card border border-border bg-surface p-1 shadow-sm">
+                            <button
+                                type="button"
+                                :disabled="deletePending !== null"
+                                class="flex min-h-11 w-full items-center rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                                @click="destroyAttachment(attachment)"
+                            >
+                                {{ t('inbox.page.delete') }}
+                            </button>
+                        </div>
+                    </details>
+                </li>
+            </ul>
+        </UiCard>
 
         <!-- Målväljaren, en och samma för båda bearbetningarna (issue 242). -->
         <ItemTargetPicker
