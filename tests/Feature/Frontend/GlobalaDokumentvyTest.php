@@ -48,6 +48,12 @@ function globalaDokumentvyKolumn(): string
  * Ordningen läses ur listan i skalet — samma grepp som MobilskalTest — och
  * *mellan* prövas och inte bara *med*: en rad på fel plats är samma fel som
  * en saknad rad.
+ *
+ * Listan är bara sanningen om vad en rad ÄR. Vilka rader som ritas står i
+ * `partKeys`: en rad som ligger i `allSections` men saknas i `rows` syns inte
+ * i sidopanelen eller sidomenyn (fynd 1 i granskningen av #780). Provet läser
+ * därför `rows` och kräver att `inbox`, `documents` och `containers` ligger
+ * där i den ordningen.
  */
 it('sidopanelen har Documents mellan Inbox och Containers', function () {
     $skal = File::get(resource_path('js/components/ShellSections.vue'));
@@ -64,6 +70,21 @@ it('sidopanelen har Documents mellan Inbox och Containers', function () {
 
     expect($documents)->toBe($inbox + 1)
         ->and($containers)->toBe($documents + 1);
+
+    // Raderna som RITAS: `rows` ur `partKeys`, i den ordning de staplas.
+    preg_match("/'rows': \[([^\]]+)\]/", $skal, $rad);
+    preg_match_all("/'([a-z0-9_]+)'/", $rad[1], $ritade);
+
+    $rader = $ritade[1];
+
+    expect($rader)->toContain('inbox')->toContain('documents')->toContain('containers');
+
+    $ritadInbox = array_search('inbox', $rader, true);
+    $ritadDocuments = array_search('documents', $rader, true);
+    $ritadContainers = array_search('containers', $rader, true);
+
+    expect($ritadDocuments)->toBe($ritadInbox + 1)
+        ->and($ritadContainers)->toBe($ritadDocuments + 1);
 
     // Etiketten slås upp i katalogen och är sidans eget ord; en rad utan
     // översättning renderas som sin egen nyckel, `nav.documents`.

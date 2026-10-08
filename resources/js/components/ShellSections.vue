@@ -128,7 +128,7 @@ const allSections = [
  */
 const partKeys = {
     'top': ['dashboard'],
-    'rows': ['tasks', 'documents', 'containers', 'search'],
+    'rows': ['tasks', 'inbox', 'documents', 'containers', 'search'],
     'account': ['settings'],
 };
 
