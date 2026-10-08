@@ -32,7 +32,22 @@ import { useErrorFocus } from './useErrorFocus.js';
  * fyra länkarna till informationssidorna ur issue 202.
  *
  * Texten är engelsk och kommer ur `lang/en/ui.php` under `auth` (Beslut 5).
+ *
+ * **Issue 263 § Beslut 4 · den privata betan.** Proppen `registrationMode`
+ * bär `konton.registration` ([[ADR-0055 Inbjudningskoder och stängd
+ * registrering]] § 1). Är läget `invite_only` står rubriken *Private beta ·
+ * Invite only* och raden *Have an invite code?* ovanför länken till
+ * registreringen — den som inte har någon ska veta varför hon inte kommer
+ * in, innan hon fyllt i formuläret. I läget `open` ritas ingenting: det
+ * finns ingen grind att förklara, och en rubrik om inbjudningar hade varit
+ * osann.
  */
+defineProps({
+    registrationMode: {
+        type: String,
+        required: true,
+    },
+});
 
 /*
  * Den arbetade förlagan för varje formulär i M10, se issue 51 § Beslut 9.
@@ -265,6 +280,18 @@ function submit() {
                         {{ form.processing ? t('common.pending.default') : t('auth.login.submit') }}
                     </button>
                 </form>
+
+                <!--
+                    Den privata betan, se Beslut 4. Bara i läget
+                    `invite_only` — se scriptets kommentar.
+                -->
+                <div v-if="registrationMode === 'invite_only'" class="mt-6 text-center">
+                    <p class="text-body font-semibold">{{ t('auth.login.beta_heading') }}</p>
+                    <p class="mt-1 text-body text-ink-muted">
+                        {{ t('auth.login.beta_prompt') }}
+                        <Link href="/register" class="font-medium text-blue-700 hover:underline">{{ t('auth.register.link') }}</Link>
+                    </p>
+                </div>
 
                 <p class="mt-6 text-center text-body text-ink-muted">
                     {{ t('auth.login.no_account') }}

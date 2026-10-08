@@ -27,6 +27,16 @@ use function Pest\Laravel\withServerVariables;
  * tests/Feature/Auth/RegistreringTest.php rörs inte.
  */
 
+/*
+ * Issue 263 (#789): webbens registrering kräver en voucher i läget
+ * `invite_only`, som är förvalet. Proven här registrerar konton för att mäta
+ * registrerings-IP:t och inte grinden, och öppnar därför läget. Grinden
+ * prövas i tests/Feature/Auth/PrivatBetaWebbTest.php.
+ */
+beforeEach(function () {
+    config(['konton.registration' => 'open']);
+});
+
 afterEach(function () {
     Carbon::setTestNow();
 });

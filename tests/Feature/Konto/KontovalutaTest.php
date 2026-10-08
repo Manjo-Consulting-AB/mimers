@@ -16,6 +16,16 @@ use function Pest\Laravel\postJson;
 use function Pest\Laravel\withoutVite;
 
 /*
+ * Issue 263 (#789): webbens registrering kräver en voucher i läget
+ * `invite_only`, som är förvalet. Provet nedan registrerar ett konto för att
+ * pröva valutans förval och inte grinden, och öppnar därför läget. Grinden
+ * prövas i tests/Feature/Auth/PrivatBetaWebbTest.php.
+ */
+beforeEach(function () {
+    config(['konton.registration' => 'open']);
+});
+
+/*
  * Issue 85 · Valutan ärvs nedåt — kontots halva. Se [[ADR-0037 Valutans
  * arv]].
  *

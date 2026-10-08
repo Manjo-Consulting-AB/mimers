@@ -438,6 +438,12 @@ return [
             'forgot' => 'Forgot your password?',
             'no_account' => 'Don\'t have an account?',
             'submit' => 'Log in',
+
+            // Issue 263 · den privata betan, se [[ADR-0055 Inbjudningskoder
+            // och stängd registrering]] § 1. Raderna ritas bara i läget
+            // `invite_only`; i läget `open` finns ingen grind att förklara.
+            'beta_heading' => 'Private beta · Invite only',
+            'beta_prompt' => 'Have an invite code?',
         ],
 
         /*
@@ -504,6 +510,20 @@ return [
             'link' => 'Create an account',
             'password_hint' => 'At least eight characters.',
             'login' => 'Already have an account? Log in',
+
+            /*
+             * Issue 263 · inbjudningskoden, se [[ADR-0055 Inbjudningskoder
+             * och stängd registrering]] § 2, § 3 och § 8.
+             *
+             * Fältet har tre ansikten och orden följer dem: koden KRÄVS i
+             * `invite_only` utan inbjudan, är FRIVILLIG i `open`, och
+             * behövs inte alls när sessionen bär en inbjudan. Den sista
+             * raden förklarar varför fältet då står tomt utan att vara fel.
+             */
+            'voucher_code' => 'Invite code',
+            'voucher_code_optional' => 'Invite code (optional)',
+            'voucher_help' => 'You need an invite code during the private beta.',
+            'via_invitation' => 'You\'re joining through an invitation — no code needed.',
         ],
 
         'magic_link' => [

@@ -37,7 +37,15 @@ use function Pest\Laravel\withoutVite;
  *
  * Backendflödena i sig prövas av tests/Feature/Auth; takgränsen av
  * tests/Feature/Frontend/TakgransTest.php.
+ *
+ * Issue 263 (#789): proven som registrerar en besökare prövar formulärets väg
+ * genom rutten och inte grinden — den prövas i
+ * tests/Feature/Auth/PrivatBetaWebbTest.php — och öppnar därför läget, som
+ * annars är `invite_only`.
  */
+beforeEach(function () {
+    config(['konton.registration' => 'open']);
+});
 
 it('renderar Auth/Register för en gäst', function () {
     withoutVite();

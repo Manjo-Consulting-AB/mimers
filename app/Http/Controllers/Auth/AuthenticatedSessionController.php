@@ -48,10 +48,18 @@ class AuthenticatedSessionController extends Controller
      *
      * Ingen logik här: vyn renderas och formuläret postar till store()
      * nedan, som redan validerar med LoginRequest.
+     *
+     * Issue 263 § Beslut 4: `registrationMode` bär `konton.registration`
+     * ([[ADR-0055 Inbjudningskoder och stängd registrering]] § 1) så att
+     * vyn kan säga att betan är privat och bara stängd. Texten ritas bara
+     * i läget `invite_only` — i läget `open` finns ingen grind att
+     * förklara, och en rubrik om inbjudningar hade då varit osann.
      */
     public function create(): Response
     {
-        return Inertia::render('Auth/Login');
+        return Inertia::render('Auth/Login', [
+            'registrationMode' => config('konton.registration'),
+        ]);
     }
 
     public function store(LoginRequest $request, RecordSecurityEvent $recordSecurityEvent): RedirectResponse
