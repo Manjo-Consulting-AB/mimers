@@ -20,7 +20,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Konto, issue 65 Notiser, issue 66 Plan.
  *
  * Texten kommer ur t() med nyckeln `settings.nav.<key>`, aldrig ur en
- * sträng i den här filen.
+ * sträng i den här filen — utom för en rad som bär sin EGEN nyckel i `label`,
+ * som ägarbytena (`nav.transfers`, M28 · issue 248): ordet bor redan i skalet,
+ * och en kopia under `settings.nav.transfers` hade varit samma mening två
+ * gånger ([[ADR-0013 Språk och i18n]]).
  *
  * **Sidlistan fälls ihop på en telefon** (issue 68a § Beslut 2), på samma
  * sätt och av samma skäl som ContainerLayouts sektionslista: sju rader
@@ -37,7 +40,11 @@ function isActive(section) {
     return page.url === section.href || page.url.startsWith(`${section.href}/`);
 }
 
-const sectionLabel = (section) => t(`settings.nav.${section.key}`);
+/*
+ * Radens ord: dess egen nyckel när den bär en (`label`), annars
+ * `settings.nav.<key>`. Se docblocket ovanför.
+ */
+const sectionLabel = (section) => t(section.label ?? `settings.nav.${section.key}`);
 </script>
 
 <template>

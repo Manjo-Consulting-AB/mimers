@@ -24,10 +24,18 @@
  * som förvaltar dem måste vara `owner` eller `admin`
  * (App\Policies\AccountPolicy::manageWebhooks()).
  *
+ * `transfers` kom med M28 · issue 248 och ligger sist: ägarbytena flyttade hit
+ * från skalets sidopanel — menyn användaren når via avataren — och rutten
+ * `/transfers` är oförändrad. Raden bär `label` med skalets gamla nyckel
+ * `nav.transfers`, för ordet är redan formulerat där och en andra nyckel hade
+ * varit samma mening på två ställen ([[ADR-0013 Språk och i18n]]).
+ *
  * `key` är både React-nyckeln och sista ledet i översättningsnyckeln
  * (`settings.nav.<key>` i lang/{locale}/ui.php). Ingen färdig mening här:
  * texten formuleras på servern och slås bara upp på klienten, se
  * [[ADR-0021 Frontendteknik]] och resources/js/composables/useTranslations.js.
+ * `label` är undantaget: den bär en hel nyckel för de rader vars ord bor
+ * någon annanstans än under `settings.nav.*`.
  */
 export const settingsSections = [
     { key: 'profile', href: '/settings/profile' },
@@ -37,4 +45,5 @@ export const settingsSections = [
     { key: 'notifications', href: '/settings/notifications' },
     { key: 'webhooks', href: '/settings/webhooks' },
     { key: 'security', href: '/settings/security' },
+    { key: 'transfers', href: '/transfers', label: 'nav.transfers' },
 ];

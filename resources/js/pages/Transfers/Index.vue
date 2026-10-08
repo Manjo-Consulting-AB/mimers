@@ -1,6 +1,6 @@
 <script setup>
 import { Head, usePage } from '@inertiajs/vue3';
-import AppLayout from '../../layouts/AppLayout.vue';
+import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import IncomingTransferCard from '../../components/IncomingTransferCard.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -8,9 +8,15 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * Mottagarens inkorg, se issue 67b § Beslut 1, 5 och 6.
  *
  * **Sidan ligger på TOPPNIVÅ, utanför containern.** Mottagaren har den inte ännu
- * — den är inte hennes att navigera i — så sidan ritas i AppLayout och inte i
- * ContainerLayout, och den har ingen `container`-prop. Det är samma skäl som
+ * — den är inte hennes att navigera i — så sidan ritas i SettingsLayout och inte
+ * i ContainerLayout, och den har ingen `container`-prop. Det är samma skäl som
  * gör att rutten är `/transfers` och inte `/containers/{container}/transfers`.
+ *
+ * **Sidan ritas i inställningslayouten** (M28 · issue 248): ägarbytena flyttade
+ * från skalets sidopanel till inställningarnas meny, och raden tänds när man
+ * står här. `SettingsLayout` wrappar `AppLayout`, så skalet — header, flash och
+ * footer — är detsamma som förut; det är bara sidomenyn bredvid innehållet som
+ * tillkommer.
  *
  * **Här hittar hon sin begäran på identitet, aldrig på en länk** (Beslut 5).
  * Ingen token finns i någon URL, ingen session bär något mellan två anrop, och
@@ -40,7 +46,7 @@ const page = usePage();
 </script>
 
 <template>
-    <AppLayout>
+    <SettingsLayout>
         <Head :title="t('transfer.inbox.title')" />
 
         <h1 class="text-2xl font-semibold">{{ t('transfer.inbox.heading') }}</h1>
@@ -73,5 +79,5 @@ const page = usePage();
                 :transfer="transfer"
             />
         </ul>
-    </AppLayout>
+    </SettingsLayout>
 </template>
