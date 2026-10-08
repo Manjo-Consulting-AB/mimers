@@ -11,6 +11,7 @@ import UiInput from '../../components/UiInput.vue';
 import UiSelect from '../../components/UiSelect.vue';
 import UiStat from '../../components/UiStat.vue';
 import { attachmentPreview, formatByteSize } from '../../components/attachmentPresentation.js';
+import { occurrenceActionUrl } from '../../components/occurrencePresentation.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -42,6 +43,12 @@ import { useTranslations } from '../../composables/useTranslations.js';
  * i en `POST` med `forceFormData`, och servern bestämmer kontot — det är
  * personkontot (ADR-0054 § 3). Släppytan (issue 776 · Beslut 2) fyller SAMMA
  * fält som väljaren och postar genom samma knapp: ingen ny uppladdningsväg.
+ *
+ * **Att bocka av är 63b:s rutt, rakt av.** Uppgiftsradens cirkel postar till
+ * samma `complete` som TodoRow på `/tasks` — en inboxuppgift är en vanlig
+ * förekomst (ADR-0054 § 5), och den avbockade raden lämnar listan eftersom
+ * `list: inbox` bara visar aktiva förekomster. Ingen ny rutt och ingen ny
+ * propp.
  *
  * **Att bearbeta är två steg för en uppgift och ett för bilagorna.** En
  * uppgiftsrad bär *Process…*: den öppnar målväljaren (issue 242) och därefter
@@ -184,6 +191,49 @@ function submitProcess() {
             processForm.reset();
         },
     });
+}
+
+/* --- att bocka av en uppgift ----------------------------------------------- */
+
+/*
+ * Avbockningen (granskningsfynd 2026-10-08): cirkeln på uppgiftsraden är inte
+ * dekor utan 63b:s `complete`-rutt, samma anrop som TodoRow gör på `/tasks`.
+ * En inboxuppgift är en vanlig förekomst ([[ADR-0054 Inboxen]] § 5), och
+ * rutten gäller den med — `account` följer med i kroppen precis som där.
+ *
+ * Serverns svar laddar om listan, och den avbockade raden lämnar inboxen:
+ * `list: inbox` visar bara aktiva förekomster.
+ */
+const completingTask = ref(null);
+
+/* Samma tillgängliga namn som på `/tasks`: handlingen och, när servern pekat
+ * ut ett tillstånd, orden för det. */
+function completeLabel(task) {
+    const state = task.overdue
+        ? t('todo.group.overdue')
+        : task.upcoming
+            ? t('todo.group.upcoming')
+            : null;
+
+    return state === null ? t('todo.complete') : `${t('todo.complete')}, ${state}`;
+}
+
+function completeTask(task) {
+    router.post(
+        occurrenceActionUrl(
+            task.container.ulid,
+            task.item.ulid,
+            task.schedule.ulid,
+            task.ulid,
+            'complete',
+        ),
+        { account: task.account },
+        {
+            preserveScroll: true,
+            onStart: () => { completingTask.value = task.ulid; },
+            onFinish: () => { completingTask.value = null; },
+        },
+    );
 }
 
 /* --- att bearbeta bilagor -------------------------------------------------- */
@@ -495,13 +545,28 @@ function destroySelected() {
                     :key="task.ulid"
                     class="flex min-h-11 items-center gap-3 py-2"
                 >
-                    <!-- Cirkeln är dekor: `inbox` har ingen avbockning, och en
-                         knapp utan rutt bakom sig är en död yta. Den ritas för
-                         att raden ska se ut som uppgiftsraden den blir. -->
+                    <!-- Cirkeln (avbockningen): 44 px träffyta med en ritad
+                         cirkel på 20 px, samma form och samma `complete`-rutt
+                         som TodoRow på `/tasks`. Läsaren får cirkeln utan
+                         knapp när servern inte ger `can.update`. -->
+                    <form v-if="task.can.update" class="shrink-0" @submit.prevent="completeTask(task)">
+                        <button
+                            type="submit"
+                            :disabled="completingTask === task.ulid"
+                            :aria-label="completingTask === task.ulid ? t('common.pending.complete') : completeLabel(task)"
+                            class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                        >
+                            <span aria-hidden="true" class="h-5 w-5 rounded-full border-2 border-border" />
+                        </button>
+                    </form>
+
                     <span
+                        v-else
                         aria-hidden="true"
-                        class="h-5 w-5 shrink-0 rounded-full border-2 border-border"
-                    />
+                        class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
+                    >
+                        <span class="h-5 w-5 rounded-full border-2 border-border" />
+                    </span>
 
                     <div class="min-w-0 flex-1">
                         <span class="block truncate text-body text-ink">{{ task.schedule.title }}</span>

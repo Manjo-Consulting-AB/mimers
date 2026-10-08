@@ -24,6 +24,11 @@ use Illuminate\Support\Facades\Lang;
  *
  * Ett prov per punkt i "Klart när". Den sista punkten — hela testsviten är
  * grön — är CI:s uppgift och ingen egen rad.
+ *
+ * **Ett prov kommer ur granskningen 2026-10-08 och inte ur "Klart när".**
+ * Cirkeln på uppgiftsraden var dekor — en kryssruta som inte gjorde något —
+ * och provet fäster den vid `complete`-rutten. En död kontroll är värre än
+ * ingen kontroll, och den som klickar på den ska få något att hända.
  */
 
 it('sidan har rubriken och underraden', function () {
@@ -92,6 +97,32 @@ it('varje rad har Process och en radmeny', function () {
         ->and(substr_count($vy, '<summary'))->toBe(2);
 
     expect(Lang::get('ui.inbox.page.process', [], 'en'))->toBe('Process…');
+});
+
+/*
+ * Granskningsfynd 2026-10-08: cirkeln är ingen dekor. Den postar till 63b:s
+ * `complete`-rutt genom samma hjälpare som TodoRow på `/tasks` — en
+ * inboxuppgift är en vanlig förekomst ([[ADR-0054 Inboxen]] § 5) — och den
+ * avbockade raden lämnar listan, för `list: inbox` visar bara aktiva
+ * förekomster. Rutten hade ingen egen grind mot inboxen: samma `update` på
+ * itemet som `can.update` räknas med.
+ */
+it('cirkeln på uppgiftsraden är en avbockning mot complete-rutten', function () {
+    $vy = File::get(resource_path('js/pages/Inbox/Index.vue'));
+
+    // Samma rutt och samma anrop som TodoRow: `occurrenceActionUrl` med
+    // `complete`, och `account` med i kroppen (CompleteOccurrenceRequest
+    // fordrar den).
+    expect($vy)->toContain('occurrenceActionUrl(')
+        ->toContain("'complete'")
+        ->toContain('@submit.prevent="completeTask(')
+        ->toContain('account: task.account');
+
+    // Samma väntetext och samma tillgängliga namn som på `/tasks`, och samma
+    // 44 px-träffyta — cirkeln är en riktig kontroll, inte en ritad prick.
+    expect($vy)->toContain("t('common.pending.complete')")
+        ->toContain("t('todo.complete')")
+        ->toContain('min-w-11');
 });
 
 it('filkortet har Move selected och Delete selected', function () {
