@@ -279,6 +279,40 @@ Delning med någon som inte har konto.
 
 Mottagaren måste skapa konto och verifiera sin e-post för att acceptera. Det är avsiktligt: alla som läser något i systemet ska vara identifierade.
 
+## voucher
+
+Inbjudningskoden in i betan. Bygger [[ADR-0055 Inbjudningskoder och stängd registrering]]; se även `config/konton.php` § Registreringens läge.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id, ulid | | |
+| code_hash | CHAR(64) UNIKT | SHA-256 av den normaliserade koden. Koden själv sparas aldrig. |
+| label | VARCHAR(191) NULL | Vem eller vad koden gavs till |
+| plan_id | FK → plan | Planen koden ger vid inlösen |
+| duration_days | INT UNSIGNED | Hur länge planen gäller från inlösen |
+| max_uses | INT UNSIGNED | Antal konton som får lösa in koden |
+| used_count | INT UNSIGNED | Räknas upp i inlösens transaktion |
+| grants_registration | BOOLEAN | Släpper koden in i läget `invite_only`? |
+| expires_at | TIMESTAMP NULL | Sista tidpunkten koden kan lösas in |
+| revoked_at | TIMESTAMP NULL | Återkallad — sätts av `voucher:revoke`, raden raderas aldrig |
+
+Koden normaliseras före hashningen (versaler, utan bindestreck och mellanslag, `O`/`I`/`L` läses som `0`/`1`/`1`) och visas en enda gång, när den skapas. `isRedeemable()` — inte återkallad, inte utgången, uttag kvar — är den enda formuleringen av villkoret.
+
+**En voucher är inte samma sak som en inbjudan.** `invitation` ger åtkomst till en container; en voucher ger ett konto och en plan. Den som registrerar sig med en utestående `invitation` behöver ingen voucher och får Free.
+
+### voucher_redemption
+
+En rad per inlösen: vem som kom in, på vilken kod, i vilket konto.
+
+| Kolumn | Typ | Not |
+|---|---|---|
+| id | | |
+| voucher_id | FK → voucher, RESTRICT | |
+| account_id | FK → account NULL, SET NULL | `NULL` när kontot raderats |
+| user_id | FK → user NULL, SET NULL | `NULL` när personen raderats |
+
+Unikt index på (`voucher_id`, `account_id`): en kod får lösas in högst en gång per konto — `max_uses` > 1 betyder flera konton. `SET NULL` är ett medvetet undantag från RESTRICT: en raderad person eller ett raderat konto ska inte hindras av en inlösen, och raden står kvar som historik över att koden använts ([[ADR-0045 Radering av konto och person]]).
+
 ## ownership_transfer
 
 Ägarbyte. Täcker nybyggnadsvarv → kund, mäklare → köpare och privat försäljning med samma mekanism.

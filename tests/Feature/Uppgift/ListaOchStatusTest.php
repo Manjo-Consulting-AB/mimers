@@ -351,9 +351,17 @@ it('resurserna bär gtd_list', function () {
  *
  * Provet läser KÄLLAN, för det är formen regeln gäller — ett `'open'` i en
  * kommentar eller i en nyckel kan ingen körning leta efter. Träffarna ska
- * bara finnas i ScheduleOccurrence.php (där konstanterna bor) och i
- * OpenNextOccurrence.php, på den enda rad som SKAPAR en förekomst med status
- * `open`.
+ * bara finnas i ScheduleOccurrence.php (där konstanterna bor), i
+ * OpenNextOccurrence.php på den enda rad som SKAPAR en förekomst med status
+ * `open`, och i AdmitRegistration.php på den enda rad som läser
+ * registreringens läge.
+ *
+ * Den sista är ett annat `open`: `config('konton.registration')` har värdet
+ * `open` eller `invite_only` ([[ADR-0055 Inbjudningskoder och stängd
+ * registrering]] § 1), och det är en inställning och inget förekomststatus.
+ * Svepet är en strängsökning och kan inte skilja de två, så raden nedan
+ * räknar upp den i stället för att tigas ihjäl — de två schemaraderna
+ * prövas fortfarande för sig.
  */
 it('har ingen jämförelse med open kvar utanför modellen', function () {
     $träffar = [];
@@ -369,6 +377,8 @@ it('har ingen jämförelse med open kvar utanför modellen', function () {
     sort($träffar);
 
     expect($träffar)->toBe([
+        // Registreringens läge (inställningen), inte förekomstens status.
+        'Actions/Auth/AdmitRegistration.php',
         'Actions/Schedule/OpenNextOccurrence.php',
         'Models/ScheduleOccurrence.php',
     ]);
