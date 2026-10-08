@@ -27,8 +27,13 @@ use Illuminate\Validation\Rules\Password;
  * alltså en påhittad, återkallad, utgången eller förbrukad kod redan i
  * valideringen; kvar till AdmitRegistration är frågan om koden släpper in i
  * det aktuella läget. Regeln ligger i den delade FormRequesten och gäller
- * därför även /api — men API:ets kontroll läser inte fältet förrän #790
- * (issue 264), så den här issuen stänger webben och lämnar API:et öppet.
+ * därför även /api.
+ *
+ * `invitation_token` tillagt i issue 264 (#790) — API:ets väg in utan kod.
+ * Webben läser sitt token ur sessionen (`InvitationResponseController`)
+ * och skickar därför inget sådant fält; API:et har ingen session och bär
+ * det i kroppen i stället (ADR-0055 § 3). Längden är exakt 64 tecken,
+ * samma form som `Invitation`-token har i produktionen.
  */
 class RegisterRequest extends FormRequest
 {
@@ -47,6 +52,7 @@ class RegisterRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:255', 'unique:user,email'],
             'password' => ['required', 'string', Password::defaults()],
             'voucher_code' => ['nullable', 'string', 'max:32', new RedeemableVoucher],
+            'invitation_token' => ['nullable', 'string', 'size:64'],
         ];
     }
 }
