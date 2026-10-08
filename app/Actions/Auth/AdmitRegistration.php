@@ -22,10 +22,15 @@ use Illuminate\Validation\ValidationException;
  * - `invite_only`: en giltig kod krävs. Den måste dessutom bära
  *   `grants_registration` — en kod som bara ger Pro är ingen biljett in.
  *   Finns ingen sådan kod går en utestående containerinbjudan till samma
- *   adress bra i stället, och ger Free (ADR-0055 § 3). Inbjudan prövas
- *   OBEROENDE av om en kod angavs: den som har en utestående inbjudan
- *   släpps in även om hon skrev fel kod eller en Pro-kod utan
- *   `grants_registration` (ADR-0055 § 3, sista stycket).
+ *   adress bra i stället (ADR-0055 § 3). Har hon både en inbjudan och en
+ *   inlösbar Pro-kod får hon kodens plan i stället för Free (ADR-0055 § 3,
+ *   sista stycket).
+ *
+ * En angiven kod prövas först, och lika i båda lägena: går den inte att lösa
+ * in NEKAS registreringen med `validation.redeemable_voucher`, även när en
+ * utestående inbjudan annars hade släppt in (ADR-0055 § 2 och § 8). Att
+ * neka hellre än att släppa in med Free är avsiktligt — annars kunde en
+ * felstavad kod passera som en inbjudan.
  *
  * Inbjudan prövas med sin TOKEN, inte bara med adressen: registreringen
  * kräver ingen verifierad adress, så en adress bevisar inte att man fått
@@ -38,10 +43,13 @@ use Illuminate\Validation\ValidationException;
  * RedeemVoucher inne i transaktionen som skapar kontot; actionen här varken
  * skriver eller låser något.
  *
- * Felen följer ADR-0055 § 8: en kod som inte släpper in ger samma svar som
- * en ogiltig kod, och i `invite_only` utan vare sig kod eller inbjudan är
- * fältet obligatoriskt. Svaren skiljer inte fallen åt, så det går inte att
- * pröva sig fram till vilka koder som finns.
+ * Felen följer ADR-0055 § 8. En kod som inte går att lösa in — påhittad,
+ * återkallad, utgången eller förbrukad — ger samma svar,
+ * `validation.redeemable_voucher`, så det går inte att pröva sig fram till
+ * vilka koder som finns. I `invite_only` utan vare sig giltig kod eller
+ * inbjudan är fältet i stället obligatoriskt: `validation.required`. Det är
+ * svaret även för en inlösbar Pro-kod utan `grants_registration` — den är
+ * ingen biljett in, men den är heller inte ogiltig.
  */
 class AdmitRegistration
 {
@@ -53,45 +61,40 @@ class AdmitRegistration
      */
     public function handle(string $email, ?string $voucherCode, ?string $invitationToken): ?Voucher
     {
-        $voucher = $voucherCode === null ? null : Voucher::findByCode($voucherCode);
-        $open = $this->registrationIsOpen();
+        // En angiven kod prövas först, och den prövas lika i båda lägena: en
+        // kod som inte går att lösa in är ett NEKANDE, även när en utestående
+        // inbjudan annars hade släppt in (ADR-0055 § 2 och § 8). Felet är det
+        // samma som i App\Actions\Voucher\RedeemVoucher, så svaret skiljer
+        // inte en påhittad kod från en återkallad.
+        $voucher = null;
 
-        if ($this->admits($voucher, $open)) {
+        if ($voucherCode !== null) {
+            $voucher = Voucher::findByCode($voucherCode);
+
+            if ($voucher === null || ! $voucher->isRedeemable()) {
+                throw $this->notRedeemable();
+            }
+        }
+
+        if ($this->registrationIsOpen()) {
             return $voucher;
         }
 
-        if ($open) {
-            if ($voucherCode === null) {
-                return null;
-            }
-
-            throw $this->notRedeemable();
+        // `invite_only`: koden måste bära `grants_registration` för att vara
+        // en biljett in — en Pro-kod utan flaggan är ingen inbjudan.
+        if ($voucher !== null && $voucher->grants_registration) {
+            return $voucher;
         }
 
-        // `invite_only`: inbjudan prövas oberoende av om en kod angavs, och
-        // den som har en utestående inbjudan släpps in utan att koden måste
-        // bära `grants_registration` (ADR-0055 § 3). Är koden dessutom
-        // inlösbar returneras den, så att hon får kodens plan; annars blir
-        // det Free.
+        // En utestående inbjudan till samma adress med rätt token är den
+        // andra vägen in (ADR-0055 § 3). Den släpper in utan kod, och när en
+        // inlösbar kod ändå angavs returneras den sist så att hon får kodens
+        // plan och inte bara Free.
         if ($this->hasOutstandingInvitation($email, $invitationToken)) {
-            return $voucher !== null && $voucher->isRedeemable() ? $voucher : null;
+            return $voucher;
         }
 
         throw $this->missingCode();
-    }
-
-    /**
-     * Släpper koden in? I `open` räcker det att den går att lösa in; i
-     * `invite_only` måste den dessutom bära `grants_registration` — annars är
-     * den en Pro-kod och ingen biljett in i betan.
-     */
-    private function admits(?Voucher $voucher, bool $open): bool
-    {
-        if ($voucher === null || ! $voucher->isRedeemable()) {
-            return false;
-        }
-
-        return $open || $voucher->grants_registration;
     }
 
     /**

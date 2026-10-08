@@ -179,16 +179,33 @@ it('invite_only med en utestående inbjudan till samma adress släpper in utan k
     expect(app(AdmitRegistration::class)->handle('testare@example.com', null, 'hemlig-token'))->toBeNull();
 });
 
-it('en inbjudan med fel token släpper inte in', function () {
+it('en inbjudan till samma adress med fel token släpper inte in', function () {
     config(['konton.registration' => 'invite_only']);
     inslappInbjudan('testare@example.com', 'hemlig-token');
 
     // Adressen stämmer, men token är inte mejlets — och adressen är inget
     // bevis på att man fått mejlet (ADR-0055 § 3). Utan det här provet hade
-    // en implementation som bara jämför adressen gått grön.
+    // en implementation som bara jämför adressen gått grön. Utan giltig kod
+    // och utan inbjudan är fältet obligatoriskt (ADR-0055 § 8).
     $fel = inslappFel('testare@example.com', null, 'fel-token');
 
     expect($fel)->toHaveKey('voucher_code');
+    expect($fel['voucher_code'])->toBe(['The voucher code field is required.']);
+});
+
+it('en ogiltig kod med en giltig inbjudan ger validation.redeemable_voucher', function () {
+    config(['konton.registration' => 'invite_only']);
+    inslappInbjudan('testare@example.com', 'hemlig-token');
+
+    // En kod som inte går att lösa in NEKAR registreringen, även när en
+    // utestående inbjudan annars hade släppt in: annars kunde en felstavad
+    // kod passera som en inbjudan, och personen tro att hon fått Pro
+    // (ADR-0055 § 2). Felet är detsamma som för en påhittad kod, alltså
+    // redeemable_voucher — inte validation.required (ADR-0055 § 8).
+    $fel = inslappFel('testare@example.com', 'AAAA-BBBB-CCCC', 'hemlig-token');
+
+    expect($fel)->toHaveKey('voucher_code');
+    expect($fel['voucher_code'])->toBe([__('validation.redeemable_voucher')]);
 });
 
 it('en inbjudan till en annan adress släpper inte in', function () {
