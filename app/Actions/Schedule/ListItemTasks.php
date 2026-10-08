@@ -207,7 +207,7 @@ class ListItemTasks
     {
         return ScheduleOccurrence::query()
             ->whereHas('schedule', fn (Builder $query) => $query->whereIn('item_id', $itemIds))
-            ->with(['schedule.item.container.account', 'dependsOn.schedule.item']);
+            ->with(['schedule.item.category', 'schedule.item.container.account', 'dependsOn.schedule.item']);
     }
 
     /**

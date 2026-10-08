@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Link, useForm } from '@inertiajs/vue3';
+import UiBadge from './UiBadge.vue';
 import { occurrenceActionUrl, scheduleUrl } from './occurrencePresentation.js';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -25,6 +26,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `todo.location.inbox` till `/inbox` — i stället för itemet och containern,
  * som båda är dolda för användaren. Titeln ovan rörs inte: den länkar
  * fortfarande till uppgiftens sida.
+ *
+ * **Etiketten till höger är itemets kategori** (M28 · issue 781, Tonys beslut
+ * 2026-10-07). `entry.category` kommer färdig ur `ListTodo::row()` som
+ * `{ name }` eller `null` och ritas som ett neutralt `UiBadge` bredvid
+ * datumet — mockupens etikett, med den information vi har. Uppgifter har ingen
+ * egen tagg- eller kategorimodell: etiketten är itemets kategori och ingenting
+ * annat, och den bär ingen färg. Saknar itemet kategori ritas ingen etikett
+ * och ingen tom plats.
  *
  * **`showContainer` styr containerlänken** (Beslut 4). På `/tasks` och i
  * dashboardens panel behövs containernamnet — raden står bland andra containers
@@ -449,11 +458,11 @@ function toggleProgress() {
             </p>
         </div>
 
-        <!-- Högerdelen (Beslut 3): datumet med kalenderikon och itemets
-             miniatyr. Under `md:` bryter den till en egen rad under mitten, och
-             miniatyren döljs — en telefon bär datumet, inte bilden. `md:` är
-             skalets brytpunkt, inte `sm:` (GenomgangTest § brytpunkter,
-             [[ADR-0050 Desktopdesignen]] § 6). -->
+        <!-- Högerdelen (Beslut 3): datumet med kalenderikon, etiketten och
+             itemets miniatyr. Under `md:` bryter den till en egen rad under
+             mitten, och miniatyren döljs — en telefon bär datumet, inte
+             bilden. `md:` är skalets brytpunkt, inte `sm:` (GenomgangTest
+             § brytpunkter, [[ADR-0050 Desktopdesignen]] § 6). -->
         <div class="flex w-full items-center gap-3 md:w-auto">
             <time
                 v-if="hasDateText"
@@ -484,6 +493,13 @@ function toggleProgress() {
             <span v-if="hasNoDate" class="inline-flex items-center text-meta text-ink-muted">
                 {{ t('todo.no_date') }}
             </span>
+
+            <!-- Etiketten är itemets kategori (M28 · issue 781, Tonys beslut
+                 2026-10-07): ett NEUTRALT `UiBadge`, för en kategori har ingen
+                 färg — brickan bär ordet, inte en nyans. Saknar itemet
+                 kategori ritas ingen etikett och ingen tom plats: `v-if` styr
+                 båda. Uppgifter har ingen egen tagg- eller kategorimodell. -->
+            <UiBadge v-if="entry.category">{{ entry.category.name }}</UiBadge>
 
             <img
                 v-if="entry.cover?.hasThumb"
