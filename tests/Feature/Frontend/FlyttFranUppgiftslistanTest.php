@@ -40,6 +40,12 @@ use function Pest\Laravel\withoutVite;
  * 6. **Ett domänfel ritas på raden**: en uppgift med beroenden nekas flytt
  *    till en annan container (§ 6), och raden läser fältfelet.
  *
+ * **M28 · issue 266 lägger till två källkodsprov på samma ytor** (Beslut 1):
+ * raden skickar `return: 'back'` i flyttens kropp, och uppgiftens egen sida
+ * (`Schedules/Show.vue`) skickar inget sådant fält och landar därför som förut
+ * på uppgiftens nya sida. Serverns svar prövas i
+ * tests/Feature/Uppgift/FlyttTillbakaTillListanTest.php.
+ *
  * Hjälparna har prefixet `flyttlista` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
  */
@@ -307,4 +313,28 @@ it('en flytt med beroenden till en annan container ger felet på raden', functio
 
     expect($vy)->toContain('errors.schedule')
         ->and($vy)->toContain('role="alert"');
+});
+
+// --- Beslut 1: klienten säger vart svaret ska gå (M28 · issue 266) ----------
+
+/*
+ * Klart när: `TodoRow skickar return back` — raden lägger `return: 'back'` i
+ * flyttens kropp (M28 · issue 266 § Beslut 1), så svaret landar tillbaka i
+ * listan användaren stod i. Utan fältet hade hon slitits ur sin vy.
+ */
+it('TodoRow skickar return back', function () {
+    $vy = File::get(resource_path('js/components/TodoRow.vue'));
+
+    expect($vy)->toContain("return: 'back'");
+});
+
+/*
+ * Klart när: `uppgiftens sida skickar inget return` — Schedules/Show.vue postar
+ * samma rutt utan fältet och landar därför på uppgiftens nya sida som förut
+ * (§ Beslut 1).
+ */
+it('uppgiftens sida skickar inget return', function () {
+    $vy = File::get(resource_path('js/pages/Containers/Items/Schedules/Show.vue'));
+
+    expect($vy)->not->toContain('return:');
 });
