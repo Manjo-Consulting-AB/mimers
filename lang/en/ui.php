@@ -293,6 +293,13 @@ return [
                 'files_browse' => 'Browse files',
                 'files_hint' => 'Documents and images. Pick one or more.',
                 'files_submit' => 'Add files',
+                // The heading over the chosen files (issue 268 · Beslut 3):
+                // what *Browse files* and the drop zone have collected, shown
+                // before the upload so a mis-picked file is visible. `t()`
+                // does not pluralise, so the singular has its own sentence —
+                // same reason as `stats.files_one` right below.
+                'files_selected' => ':count files selected',
+                'files_selected_one' => '1 file selected',
             ],
 
             /*
