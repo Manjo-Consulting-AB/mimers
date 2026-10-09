@@ -241,7 +241,7 @@ function onClosed() {
                             samma namn kan finnas i två containrar.
                         -->
                         <template v-for="group in filtered" :key="group.container.ulid">
-                            <p class="px-2 pt-2 text-meta font-semibold text-ink-muted">
+                            <p class="px-2 pt-2 text-body font-bold text-ink">
                                 {{ group.container.name }}
                             </p>
 

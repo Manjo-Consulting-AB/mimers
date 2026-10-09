@@ -150,7 +150,31 @@ const filtered = computed(() => props.filter.container.length > 0 || props.filte
     <AppLayout>
         <Head :title="t('documents.title')" />
 
-        <h1 class="text-heading font-semibold">{{ t('documents.heading') }}</h1>
+        <!--
+            Rubrikraden bär sorteringen (issue 269 § Beslut 3). `sort` är en
+            fråga om LISTAN och inte ett filter på den, och den stod förut i en
+            egen rad ovanför tabellen — den sköt ned kortet så att det och
+            filterkolumnen inte började på samma linje. Etiketten är `sr-only`:
+            väljarens värde säger redan vad den gör.
+        -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <h1 class="text-heading font-semibold">{{ t('documents.heading') }}</h1>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <label for="documents-sort" class="sr-only">{{ t('documents.sort_label') }}</label>
+
+                <UiSelect
+                    id="documents-sort"
+                    :model-value="filter.sort"
+                    :disabled="sortPending"
+                    @update:model-value="changeSort"
+                >
+                    <option v-for="value in sorts" :key="value" :value="value">
+                        {{ t(`documents.sort_${value}`) }}
+                    </option>
+                </UiSelect>
+            </div>
+        </div>
 
         <!--
             Layouten (Beslut 3): filterkolumnen till vänster och listan till
@@ -166,30 +190,10 @@ const filtered = computed(() => props.filter.container.length > 0 || props.filte
             />
 
             <div class="mt-6 lg:mt-0">
-                <!--
-                    Verktygsraden (Beslut 3): sorteringen. Filtret står i
-                    kolumnen till vänster, och `sort` är en fråga om LISTAN och
-                    inte ett filter på den.
-                -->
-                <div class="flex flex-wrap items-center justify-end gap-3">
-                    <label for="documents-sort" class="sr-only">{{ t('documents.sort_label') }}</label>
-
-                    <UiSelect
-                        id="documents-sort"
-                        :model-value="filter.sort"
-                        :disabled="sortPending"
-                        @update:model-value="changeSort"
-                    >
-                        <option v-for="value in sorts" :key="value" :value="value">
-                            {{ t(`documents.sort_${value}`) }}
-                        </option>
-                    </UiSelect>
-                </div>
-
                 <!-- Två tomma lägen, och de säger olika saker: ett filter som
                      inte matchar något är ett svar om frågan, en tom lista ett
                      svar om innehållet. -->
-                <p v-if="attachments.data.length === 0" class="mt-4 text-body text-ink-muted">
+                <p v-if="attachments.data.length === 0" class="mt-0 text-body text-ink-muted">
                     {{ filtered ? t('documents.empty_filtered') : t('documents.empty') }}
                 </p>
 
@@ -201,7 +205,7 @@ const filtered = computed(() => props.filter.container.length > 0 || props.filte
                     container, uppladdad och storlek — och ingen
                     åtgärdskolumn: filnamnet ÄR länken (Beslut 4).
                 -->
-                <div v-else class="mt-4 overflow-hidden rounded-card border border-border bg-surface">
+                <div v-else class="mt-0 overflow-hidden rounded-card border border-border bg-surface">
                     <table class="w-full border-collapse text-left">
                         <thead>
                             <tr class="border-b border-border">
