@@ -1009,8 +1009,11 @@ return [
             // written within one container, so a task that has any — on either
             // level and in either direction — cannot be moved to another one.
             // The move is refused, never silently stripped of its dependencies:
-            // the user removes them first.
-            'has_dependencies' => "Remove the task's dependencies before moving it to another container.",
+            // the user removes them first. The same error is also given by
+            // *Back to Inbox* (App\Actions\Inbox\SendToInbox): the inbox is a
+            // container too, so the wording names the action and not the target
+            // (issue 269 § Beslut 2).
+            'has_dependencies' => "Remove the task's dependencies before this action.",
 
             // Issue 240: a move whose target is the item the task is already
             // on. The picker will not offer it (issue 243), but the code is
