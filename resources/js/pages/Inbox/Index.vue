@@ -136,6 +136,28 @@ function captureFiles() {
     });
 }
 
+/*
+ * De valda filerna, synliga före uppladdningen (issue 268 · Beslut 2 och 3).
+ * Utan dem är *Browse files* och släppytan tysta: urvalet syns först när
+ * *Add files* tryckts, och en fil användaren valt av misstag går inte att
+ * upptäcka. Raden bär namnet och storleken genom `formatByteSize()` — samma
+ * par som bilageradens underrad — och rubriken bär antalet. `t()`
+ * pluraliserar inte, så entalet har sin egen nyckel av samma skäl som
+ * `stats.files_one`. Listan ritas bara när något är valt, och den töms med
+ * `selectedFiles` i `captureFiles()`.
+ */
+const selectedFileRows = computed(() => selectedFiles.value.map((file) => ({
+    name: file.name,
+    size: formatByteSize(file.size),
+})));
+
+const selectedCount = computed(() => t(
+    selectedFiles.value.length === 1
+        ? 'inbox.page.capture.files_selected_one'
+        : 'inbox.page.capture.files_selected',
+    { count: selectedFiles.value.length },
+));
+
 /* --- målväljaren, delad av de två bearbetningarna -------------------------- */
 
 const pickerOpen = ref(false);
@@ -508,6 +530,30 @@ function destroySelected() {
                         </button>
                     </div>
 
+                    <!-- De valda filerna (Beslut 2 och 3): raden per fil, med
+                         namnet och storleken ur `formatByteSize()` — samma par
+                         som bilageradens underrad — och en rubrik med antalet.
+                         Ingen knapp för att ta bort en enskild fil: ett nytt
+                         val ersätter hela urvalet, som förut. -->
+                    <div v-if="selectedFileRows.length > 0" class="flex flex-col gap-1">
+                        <p class="text-meta text-ink-muted">{{ selectedCount }}</p>
+
+                        <ul class="flex flex-col gap-1">
+                            <li
+                                v-for="(file, index) in selectedFileRows"
+                                :key="index"
+                                class="flex min-w-0 items-center gap-1.5 text-meta text-ink-muted"
+                            >
+                                <span class="truncate">{{ file.name }}</span>
+
+                                <template v-if="file.size">
+                                    <span aria-hidden="true">&middot;</span>
+                                    <span class="shrink-0">{{ file.size }}</span>
+                                </template>
+                            </li>
+                        </ul>
+                    </div>
+
                     <p class="text-meta text-ink-muted">{{ t('inbox.page.capture.files_hint') }}</p>
 
                     <UiButton
@@ -541,7 +587,7 @@ function destroySelected() {
 
             <ul v-else class="flex flex-col divide-y divide-border">
                 <li
-                    v-for="task in taskRows"
+                    v-for="(task, index) in taskRows"
                     :key="task.ulid"
                     class="flex min-h-11 items-center gap-3 py-2"
                 >
@@ -606,7 +652,12 @@ function destroySelected() {
                     <!-- Radens ⋯-meny (Beslut 3): en `<details>` som *Lägg till
                          dokument*-menyn i Documents.vue, med *Delete* i
                          panelen. Uppgiften raderas med samma action som på
-                         uppgiftens sida; servern prövar samma grind. -->
+                         uppgiftens sida; servern prövar samma grind.
+
+                         Sista radens panel öppnas UPPÅT (issue 268 · Beslut 1):
+                         `UiCard` bär `overflow-hidden` för bildhörnens skull,
+                         och ett högre `z-index` hjälper inte mot ett klipp som
+                         sker på kortet. Övriga rader öppnar nedåt som förut. -->
                     <details class="relative shrink-0">
                         <summary
                             class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
@@ -624,7 +675,10 @@ function destroySelected() {
                             </svg>
                         </summary>
 
-                        <div class="absolute right-0 z-10 mt-2 w-40 rounded-card border border-border bg-surface p-1 shadow-sm">
+                        <div
+                            class="absolute right-0 z-10 w-40 rounded-card border border-border bg-surface p-1 shadow-sm"
+                            :class="index === taskRows.length - 1 ? 'bottom-full mb-2' : 'mt-2'"
+                        >
                             <button
                                 type="button"
                                 :disabled="deletePending !== null"
@@ -778,7 +832,7 @@ function destroySelected() {
 
             <ul v-else class="flex flex-col divide-y divide-border">
                 <li
-                    v-for="attachment in attachmentRows"
+                    v-for="(attachment, index) in attachmentRows"
                     :key="attachment.ulid"
                     class="flex min-h-11 items-center gap-3 py-2"
                 >
@@ -846,7 +900,8 @@ function destroySelected() {
                     </button>
 
                     <!-- Filradens ⋯-meny (Beslut 3), samma `<details>`
-                         som uppgiftsradens ovan. Filen raderas med
+                         som uppgiftsradens ovan — sista radens panel öppnas
+                         uppåt av samma skäl. Filen raderas med
                          TrashAttachment: papperskorg och fördröjd
                          radering som överallt annars. -->
                     <details class="relative shrink-0">
@@ -866,7 +921,10 @@ function destroySelected() {
                             </svg>
                         </summary>
 
-                        <div class="absolute right-0 z-10 mt-2 w-40 rounded-card border border-border bg-surface p-1 shadow-sm">
+                        <div
+                            class="absolute right-0 z-10 w-40 rounded-card border border-border bg-surface p-1 shadow-sm"
+                            :class="index === attachmentRows.length - 1 ? 'bottom-full mb-2' : 'mt-2'"
+                        >
                             <button
                                 type="button"
                                 :disabled="deletePending !== null"
