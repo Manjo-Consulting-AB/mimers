@@ -358,7 +358,8 @@ class ScheduleController extends Controller
 
     /**
      * POST /containers/{container}/items/{item}/schedules/{schedule}/move —
-     * 302 till schemats sida på det NYA itemet.
+     * 302 tillbaka till ytan anropet kom från, annars till schemats sida på
+     * det NYA itemet.
      *
      * **Två grindar, och pinnen skiljer sig från raderingens** ([[ADR-0053
      * Flytt och kopiering]] § 2): `delete` på KÄLLANS item — en flytt tar bort
@@ -371,14 +372,24 @@ class ScheduleController extends Controller
      * mjukraderad ger 404, inte ett valideringsfel (ADR-0053 § 8). Målet kan
      * ligga i en annan container än ruttens `{container}`.
      *
-     * Svaret går till schemats sida och inte tillbaka till källan:
-     * uppgiften ligger inte kvar där, och `back()` hade landat på en sida som
-     * inte längre visar den. Flashkoden säger vad som hände — ingen papperskorg
-     * och inget ångra.
+     * **`return` är den nya ytans väg tillbaka** (M28 · issue 266 § Beslut
+     * 1–3). Listan på `/tasks` postar `back`, och `back()` landar på samma
+     * adress med samma frågesträng: servern filtrerar om listan, så en uppgift
+     * som inte längre matchar försvinner medan en som matchar står kvar — och
+     * användaren slits aldrig ur sin vy till uppgiftens nya sida. Utan fältet
+     * är svaret oförändrat och landar på uppgiftens nya sida; uppgiftens egen
+     * sida (resources/js/pages/Containers/Items/Schedules/Show.vue) skickar
+     * inget `return`.
+     *
+     * Fältet valideras här och inte i TargetItemRequest, som delas med
+     * bilagornas flytt (§ Beslut 2): `nullable` och `in:back`, så ett annat
+     * värde ger 422 på `return`. Grindarna och ordningen mellan dem är
+     * oförändrade.
      *
      * Domänfelet (beroenden mellan containrar, samma item) ritas som ett
      * fältfel på `schedule`, aldrig som en JSON-kropp mitt i sidan — samma väg
-     * som bilagans flytt (issue 60 § Beslut 5 och issue 242).
+     * som bilagans flytt (issue 60 § Beslut 5 och issue 242), och oavsett
+     * `return` (Beslut 4).
      */
     public function move(
         TargetItemRequest $request,
@@ -388,6 +399,10 @@ class ScheduleController extends Controller
         MoveSchedule $moveSchedule,
         ApiErrorTranslator $translator,
     ): RedirectResponse {
+        $request->validate([
+            'return' => ['nullable', 'in:back'],
+        ]);
+
         Gate::authorize('delete', $item);
 
         $target = $request->targetItem();
@@ -398,6 +413,10 @@ class ScheduleController extends Controller
             $moveSchedule->handle($schedule, $target, $request->user());
         } catch (ApiException $e) {
             throw ValidationException::withMessages(['schedule' => $translator->message($e)]);
+        }
+
+        if ($request->input('return') === 'back') {
+            return back()->with('status', 'schedule-moved');
         }
 
         return redirect()

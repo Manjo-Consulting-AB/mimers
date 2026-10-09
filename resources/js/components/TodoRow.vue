@@ -113,10 +113,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Flytten är uppgiftens sidas flytt, ord för ord** (Beslut 3). *Move…*
  * öppnar `ItemTargetPicker` med radens item som `excludeItem`, och valet
  * postar till den befintliga rutten `containers.items.schedules.move` med
- * samma kropp och samma väljare som `Schedules/Show.vue` — ingen egen rutt
- * och ingen egen väljare. Domänfelet — en uppgift med beroenden kan flyttas
- * inom containern men inte till en annan — kommer som ett fältfel på
- * `schedule` och ritas i radens ENDA felruta, samma ställe som avbockningens.
+ * samma väljare som `Schedules/Show.vue` — ingen egen rutt och ingen egen
+ * väljare. **En sak skiljer kropparna** (M28 · issue 266 § Beslut 1): raden
+ * skickar `return: 'back'`, så svaret landar tillbaka i listan i stället för
+ * på uppgiftens nya sida; uppgiftens egen sida skickar inget sådant fält.
+ * Domänfelet — en uppgift med beroenden kan flyttas inom containern men inte
+ * till en annan — kommer som ett fältfel på `schedule` och ritas i radens
+ * ENDA felruta, samma ställe som avbockningens.
  *
  * Färgrollerna kommer ur [[ADR-0042 Designsystemet]] § Beslut — inga råa
  * palettfärger i raden.
@@ -299,7 +302,14 @@ function closePicker() {
 }
 
 function chooseTarget(target) {
-    router.post(`${scheduleHref.value}/move`, { target: target.ulid }, {
+    /*
+     * `return: 'back'` säger vart svaret ska gå (M28 · issue 266 § Beslut 1):
+     * tillbaka till `/tasks` med samma frågesträng, så att servern filtrerar om
+     * listan och användaren står kvar i samma vy — samma flik, filter och
+     * sortering. Utan fältet hade svaret gått till uppgiftens nya sida.
+     * Kontrollern validerar fältet (`nullable`, `in:back`).
+     */
+    router.post(`${scheduleHref.value}/move`, { target: target.ulid, return: 'back' }, {
         preserveScroll: true,
         onStart: () => {
             movePending.value = true;
