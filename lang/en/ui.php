@@ -83,6 +83,12 @@ return [
         // § 4) — and its label is the page's own word (`documents.heading`).
         'documents' => 'Documents',
         'containers' => 'Containers',
+        // The way into the global history, see M30 · issue 272: the row sits
+        // after the containers and before the search — the history covers
+        // every container the user reaches, the same place the tab has inside
+        // a container ([[ADR-0050 Desktopdesignen]] § 17) — and its label is
+        // the page's own word (`history.heading`).
+        'history' => 'History',
         // The last row of the shell's container list, see issue 677: the way
         // to create a container, drawn for every signed-in user. It carries no
         // permission flag — `GET /containers/create` has no gate, and `POST
@@ -435,6 +441,23 @@ return [
         'sort_oldest' => 'Oldest first',
         'sort_name' => 'Name',
         'sort_size' => 'Size',
+    ],
+
+    /*
+     * The global history — `GET /history`, see M30 · issue 272 · [[ADR-0043
+     * Tre loggar]] § Händelseloggen and App\Http\Controllers\HistoryController.
+     *
+     * The page is the container's history tab over the whole account, so it
+     * borrows the tab's words: the day headings, the two empty states, the
+     * charts and the filter field all come from `audit.history.*`, and only
+     * the page's own title and heading live here. The two are separate keys
+     * and not `audit.history.title`: the tab's title names the TAB, this one
+     * names the PAGE — same split as `documents.title` against the container's
+     * documents tab (`container.documents.title`).
+     */
+    'history' => [
+        'title' => 'History',
+        'heading' => 'History',
     ],
 
     'auth' => [
@@ -2559,6 +2582,18 @@ return [
             // The filter field (issue 179 § Beslut 4). The query string carries
             // the values; these are their names in the form.
             'filter_aria' => 'Filter the history',
+            // The container select, which only the GLOBAL history has (M30 ·
+            // issue 272): the tab is already inside a container, and the page
+            // over the whole account has to say which one it shows. The three
+            // words are the field's label, the empty choice, and the choice
+            // for the rows that belong to no container at all (the third
+            // branch of ListAuditEvents — `account.deleted`). *All containers*
+            // is not
+            // `filter_all`: this one names what it lets through, because the
+            // list below it is a list of containers.
+            'filter_container' => 'Container',
+            'filter_container_all' => 'All containers',
+            'filter_account' => 'Account activity',
             'filter_type' => 'Type',
             'filter_user' => 'User',
             'filter_item' => 'Item',
@@ -2567,6 +2602,15 @@ return [
             'filter_all' => 'All',
             'filter_submit' => 'Filter',
             'filter_clear' => 'Clear filters',
+            // The place an account row stands in, on the global history (M30 ·
+            // issue 272). A row with `container: null` belongs to the account
+            // and not to any container, and the row has to say so where the
+            // container's name would have stood — an empty slot reads as a
+            // rendering fault, and the row is not broken, it is account-wide.
+            // *Account* is a PLACE and not the actor: the actor is already in
+            // the sentence (`:user`), which is why it is not *Account
+            // activity* here.
+            'account_place' => 'Account',
         ],
 
         /*

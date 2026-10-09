@@ -22,19 +22,36 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Ramen är `UiCard`** (issue 99): rubriken är kortets rubrikrad och länken
  * sitter i kortets åtgärdsplats — samma form som containerns uppgiftspanel.
  * Raden är en `<li>` med en `<Link>`, så träffytan är 44 px (issue 68a
- * § Beslut 3) och målet är itemets egen sida.
+ * § Beslut 3) och målet är itemets egen sida, inne i itemets EGEN container:
+ * posten bär `container_ulid` när panelen spänner över flera (M30 · issue
+ * 272 · Beslut 5), och fliken fyller i sin ur `containerUlid`.
  *
  * Ingen sträng står i filen (issue 52 · [[ADR-0013 Språk och i18n]]):
  * rubriken, länkens ord och varje rads tal kommer ur `t()`.
  */
 const props = defineProps({
-    /* Containerns ULID — målets adress byggs ur den. */
-    containerUlid: { type: String, required: true },
-    /* Itemerna i fallande antal: `[{ulid, name, count}]`, högst fem. */
+    /*
+     * Containerns ULID. Valfri sedan M30 · issue 272: på den globala
+     * historiken kommer posterna från flera containrar, och varje post bär
+     * sin egen i `container_ulid`. Fliken känner sin container och skickar
+     * den hit som förut.
+     */
+    containerUlid: { type: String, default: null },
+    /*
+     * Itemerna i fallande antal: `[{ulid, name, count, container_ulid}]`,
+     * högst fem. `container_ulid` följer med ur ListAuditEvents::statsForUser.
+     */
     items: { type: Array, required: true },
 });
 
 const { t } = useTranslations();
+
+/*
+ * Målet för en rad: itemets egen sida inne i sin container. Posten bär sin
+ * container när listan spänner över flera, och fliken fyller i sin egen ur
+ * `containerUlid` — samma adress ur två källor, och itemet avgör vilken.
+ */
+const itemUrl = (item) => `/containers/${item.container_ulid ?? props.containerUlid}/items/${item.ulid}`;
 
 const itemsUrl = computed(() => `/containers/${props.containerUlid}/items`);
 
@@ -46,7 +63,14 @@ const peak = computed(() => Math.max(1, ...props.items.map((item) => item.count)
     <UiCard>
         <template #heading>{{ t('audit.history.recent_items') }}</template>
 
-        <template #action>
+        <!--
+            *View all* ritas bara när panelen vet VILKEN lista den är vägen
+            vidare till (M30 · issue 272 · Beslut 5): på den globala historiken
+            kommer posterna från flera containrar, och det finns ingen enda
+            itemlista att länka till. Panelen ritar då bara raderna, och var
+            rad går till sitt eget item.
+        -->
+        <template v-if="containerUlid !== null" #action>
             <!--
                 Samma ord som containerns översikt använder för samma åtgärd:
                 *View all* är listans väg vidare, och en egen kopia här hade
@@ -59,7 +83,7 @@ const peak = computed(() => Math.max(1, ...props.items.map((item) => item.count)
 
         <ul class="flex flex-col divide-y divide-border">
             <li v-for="item in props.items" :key="item.ulid">
-                <Link :href="`${itemsUrl}/${item.ulid}`" class="flex min-h-11 items-center gap-3">
+                <Link :href="itemUrl(item)" class="flex min-h-11 items-center gap-3">
                     <span class="min-w-0 truncate text-body text-ink">{{ item.name }}</span>
 
                     <!-- Stapeln är dekorativ: talet står som text bredvid. -->

@@ -161,6 +161,12 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
         // som glöms i katalogen, med flit.
         'documents',
         'containers',
+        // Den globala historiken kom med M30 · issue 272 (Beslut 1): raden står
+        // mellan containrarna och sökningen — historiken spänner över varje
+        // container användaren når, samma plats fliken har inuti en container.
+        // Provet listar skalets rader och fälls av en rad som glöms i
+        // katalogen, med flit.
+        'history',
         // Ägarbytena står inte längre i skalet (M28 · issue 248): raden
         // flyttade till inställningsmenyn, sist i
         // resources/js/layouts/settingsSections.js. Provet listar skalets rader
