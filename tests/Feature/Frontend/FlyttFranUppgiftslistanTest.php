@@ -321,11 +321,15 @@ it('en flytt med beroenden till en annan container ger felet på raden', functio
  * Klart när: `TodoRow skickar return back` — raden lägger `return: 'back'` i
  * flyttens kropp (M28 · issue 266 § Beslut 1), så svaret landar tillbaka i
  * listan användaren stod i. Utan fältet hade hon slitits ur sin vy.
+ *
+ * Nålen är HELA kroppen och inte bara `return: 'back'`: filens kommentarer
+ * nämner fältet med, och ett prov som nöjer sig med strängen hade passerat på
+ * sin egen motivering.
  */
 it('TodoRow skickar return back', function () {
     $vy = File::get(resource_path('js/components/TodoRow.vue'));
 
-    expect($vy)->toContain("return: 'back'");
+    expect($vy)->toContain("target: target.ulid, return: 'back'");
 });
 
 /*
