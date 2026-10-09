@@ -160,3 +160,13 @@ GitHub #786. `uqr` och `TotpQrCode.vue` bredvid den manuella nyckeln, utan `v-ht
 **Klart när:** QR-koden ritas bredvid nyckeln; inget annat nytt paket; hela testsviten är grön.
 
 **Beror på:** —
+
+### 266. Kvar i listan efter Move… från /tasks
+
+GitHub #815. Efter en flytt från `/tasks` står användaren kvar i samma flik med samma filter och sortering; klienten skickar `return: 'back'` och kontrollern svarar `back()`. Tonys beslut 2026-10-09, uppföljning av gapet i PR #805.
+
+**Läs:** [[ADR-0053 Flytt och kopiering]] § 6
+
+**Klart när:** en flytt med `return: 'back'` landar på samma adress; utan fältet som i dag; hela testsviten är grön.
+
+**Beror på:** 259
