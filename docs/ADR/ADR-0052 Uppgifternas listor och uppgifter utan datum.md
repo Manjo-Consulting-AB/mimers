@@ -132,3 +132,7 @@ Datumdiagrammet räknar bara datumgrupperna. GTD-räkningen är en egen panel. D
 ## Uppföljning 2026-10-05 — Inbox är en plats
 
 [[ADR-0054 Inboxen]] ändrar § 1 och § 2. `gtd_list` får värdena `next`, `waiting` och `someday`, och null för en förekomst i användarens inbox. *Inbox* är en härledd vy över det som ligger i inboxen, inte ett värde. En uppgift som skapas på ett item får `next` som förval och hamnar aldrig i Inbox. Regeln som lär in schemats förval när en förekomst lämnar Inbox utgår: förvalet sätts till den lista som väljs när uppgiften skapas eller bearbetas. Vyn *In progress* tillkommer bredvid *Active*.
+
+## Uppföljning 2026-10-09 — växeln gäller bara Active
+
+Tonys beslut efter testarnas fynd 2026-10-09 ([[M30 Testarnas fynd 2026-10-09]], issue 270) begränsar konsekvensen om `show_upcoming_tasks` ovan. På `/tasks` gäller växeln bara fliken *Active*. Dashboardens uppgiftspanel och containeröversiktens panel följer den som förut. *Inbox*, *Next*, *Waiting*, *In progress*, *Calendar* och *Someday* visar hela sitt urval oavsett datum, och *Done* gjorde det redan. Skälet är att en flik är ett urval med en egen betydelse och ett eget tal i panelen *Lists*, och talet räknar aldrig med växeln. En flik som dolde framtida rader såg tom ut medan panelen sade något annat. Den påbörjade uppgiften med ett datum nästa vecka var exemplet.
