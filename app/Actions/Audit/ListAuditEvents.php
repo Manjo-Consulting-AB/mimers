@@ -83,6 +83,15 @@ use Illuminate\Support\Carbon;
  * `statsForContainer()` räknar historikflitens diagram (issue 180) över samma
  * läsregel och samma filter, men UTAN gränsen på hundra: ett tal över de
  * senaste raderna vore ett annat tal än rubriken lovar.
+ *
+ * **Den globala historiken (issue 271) är samma läsregel utan container.**
+ * `forUser()` tar samma filter som `forContainer()`, `facetsForUser()` samma
+ * val, `statsForUser()` samma tre tal — och alla tre byggs ur
+ * `readableQuery()` och `filtered()` precis som förut. Det som skiljer är
+ * startpunkten: containerns flik lägger sitt eget `where('container_id', ...)`
+ * ovanpå leden, `/history` gör det inte, och led 3 (kontoraderna utan
+ * container) räknas därför in. Läsregeln är oförändrad; en andra formulering
+ * av den hade varit en andra väg in i loggen.
  */
 class ListAuditEvents
 {
@@ -170,9 +179,41 @@ class ListAuditEvents
      */
     public function facets(User $viewer, Container $container): array
     {
+        return $this->facetsFrom(
+            $this->readableQuery($viewer)->where('container_id', $container->id),
+        );
+    }
+
+    /**
+     * Valen den GLOBALA historikens filter får bjuda på — `/history`, issue
+     * 271. Samma två frågor som `facets()`, ur samma läsregel, men utan
+     * containervillkoret: valen speglar allt användaren får läsa, och en
+     * användare som bara förekommer i en annan containers rader är därför
+     * valbar här men inte på den containerns flik.
+     *
+     * @return array{types: list<string>, users: Collection<int, User>}
+     */
+    public function facetsForUser(User $viewer): array
+    {
+        return $this->facetsFrom($this->readableQuery($viewer));
+    }
+
+    /**
+     * Kroppen `facets()` och `facetsForUser()` delar: de två `SELECT
+     * DISTINCT`-frågorna och namnuppslaget. Skillnaden mellan dem är bara
+     * vilka läsbara rader som kommer in, och den formuleras av anroparen.
+     *
+     * **Kloner och inte samma byggare två gånger.** `distinct()`, `orderBy()`
+     * och `whereNotNull()` muterar byggaren de sätts på, så den andra frågan
+     * hade ärvt den förstas urval och sortering.
+     *
+     * @param  Builder<AuditLog>  $readable
+     * @return array{types: list<string>, users: Collection<int, User>}
+     */
+    private function facetsFrom(Builder $readable): array
+    {
         /** @var list<string> $types */
-        $types = $this->readableQuery($viewer)
-            ->where('container_id', $container->id)
+        $types = (clone $readable)
             ->whereNotNull('subject_type')
             ->distinct()
             ->orderBy('subject_type')
@@ -180,8 +221,7 @@ class ListAuditEvents
             ->all();
 
         /** @var list<int> $userIds */
-        $userIds = $this->readableQuery($viewer)
-            ->where('container_id', $container->id)
+        $userIds = (clone $readable)
             ->whereNotNull('user_id')
             ->distinct()
             ->pluck('user_id')
@@ -256,11 +296,67 @@ class ListAuditEvents
             $filters,
         );
 
+        $scope = $this->resolveItemScope->handle($viewer, $container);
+
         return [
             'perDay' => $this->perDay(clone $base, $viewer, $filters),
             'perType' => $this->perType(clone $base),
-            'topItems' => $this->topItems(clone $base, $viewer, $container),
+            'topItems' => $this->topItems(clone $base, Item::query()->inScope($scope)->select('id')),
         ];
+    }
+
+    /**
+     * Samma tre tal över ALLA användarens läsbara rader — `/history`, issue
+     * 271.
+     *
+     * **Basen är `filtered(readableQuery($viewer))` utan containervillkor**,
+     * alltså exakt den mängd `forUser()` läser. `perDay` och `perType` anropas
+     * som de är, och bär därför samma gränser som på fliken: `perDay` fyller
+     * ut de senaste trettio dagarna (eller spannet filtret sätter) medan
+     * `perType` räknar hela den läsbara mängden. De två talen är inte varandras
+     * summa, och det gäller här lika lite som där.
+     *
+     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @return array{perDay: list<array{date: string, count: int}>, perType: list<array{type: string|null, count: int}>, topItems: list<array{ulid: string, name: string, count: int, container_ulid: string|null}>}
+     */
+    public function statsForUser(User $viewer, array $filters = []): array
+    {
+        $base = $this->filtered($this->readableQuery($viewer), $viewer, $filters);
+
+        return [
+            'perDay' => $this->perDay(clone $base, $viewer, $filters),
+            'perType' => $this->perType(clone $base),
+            'topItems' => $this->topItems(clone $base, $this->itemsInScope($viewer), withContainer: true),
+        ];
+    }
+
+    /**
+     * Itemens löpnummer över ALLA containrar användaren når, som underfråga —
+     * omfånget `statsForUser()`s topplista prövas mot.
+     *
+     * **Klassificeringen kommer ur `reachable()`**, läsregelns egen: containrar
+     * utan omfångsbegränsning (där varje item är nådd) och itemens löpnummer i
+     * de begränsade. Åtkomsten formuleras alltså inte en andra gång här, och
+     * ett item i en container där användaren bara har en itemgrant på ett
+     * ANNAT item faller utanför.
+     *
+     * Två tomma listor ger `(0 = 1 or 0 = 1)` — ett tomt svar, inte hela
+     * tabellen. Samma skydd som led 2 i `readableQuery()`.
+     *
+     * @return Builder<Item>
+     */
+    private function itemsInScope(User $viewer): Builder
+    {
+        $accountIds = $viewer->accounts->pluck('id')->values()->all();
+
+        [$unrestrictedContainerIds, $itemIds] = $this->reachable($viewer, $accountIds);
+
+        return Item::query()
+            ->select('id')
+            ->where(function (Builder $query) use ($unrestrictedContainerIds, $itemIds): void {
+                $query->whereIn('container_id', $unrestrictedContainerIds)
+                    ->orWhereIn('id', $itemIds);
+            });
     }
 
     /**
@@ -431,9 +527,12 @@ class ListAuditEvents
      *
      * **Omfånget och papperskorgen prövas FÖRE `LIMIT`**, i `whereIn`-under-
      * frågan: ett item användaren inte når, eller ett gallrat, får inte ta en
-     * av de fem platserna och tränga ut ett item hon ser. `Item::inScope()`
-     * är samma omfång som varje annan listning (issue 70), och SoftDeletes'
-     * globala scope filtrerar bort det gallrade på samma gång — en item i
+     * av de fem platserna och tränga ut ett item hon ser. Underfrågan kommer
+     * från anroparen (issue 271): containerns flik skickar `Item::inScope()`
+     * med containerns omfång, `/history` skickar `itemsInScope()` över alla
+     * containrar användaren når. Omfånget formulerades alltså på ett ställe —
+     * i `ResolveItemScope` — och den här metoden prövar det bara. SoftDeletes'
+     * globala scope filtrerar bort det gallrade på samma gång: en item i
      * papperskorgen blir ingen rad alls, inte en namnlös.
      *
      * **Namnen hämtas i en andra fråga** och inte genom att joina `item` i
@@ -456,15 +555,22 @@ class ListAuditEvents
      * deterministiskt (item_id är unikt), och de fem posterna presenteras i
      * namnordning.
      *
+     * **`container_ulid` kom med issue 271 och bärs bara av den globala
+     * historiken.** Där kommer raderna från flera containrar, och itemets rad
+     * måste kunna länka till rätt en (Tonys krav). Containerns flik känner sin
+     * container — varje rad i topplistan hör till samma — så fältet hade bara
+     * upprepat sidans egen rubrik, och `$withContainer` håller det borta där.
+     * En container som gallrats ger `null`, samma neutrala svar som namnen
+     * ovan; uppslaget är EN fråga för högst fem rader.
+     *
      * @param  Builder<AuditLog>  $base
-     * @return list<array{ulid: string, name: string, count: int}>
+     * @param  Builder<Item>  $itemsInScope
+     * @return list<array{ulid: string, name: string, count: int, container_ulid?: string|null}>
      */
-    private function topItems(Builder $base, User $viewer, Container $container): array
+    private function topItems(Builder $base, Builder $itemsInScope, bool $withContainer = false): array
     {
-        $scope = $this->resolveItemScope->handle($viewer, $container);
-
         $rows = $base
-            ->whereIn('item_id', Item::query()->inScope($scope)->select('id'))
+            ->whereIn('item_id', $itemsInScope)
             ->selectRaw('item_id AS item_id')
             ->selectRaw('COUNT(*) AS count')
             ->groupBy('item_id')
@@ -479,8 +585,20 @@ class ListAuditEvents
 
         $items = Item::query()
             ->whereIn('id', $rows->pluck('item_id')->all())
-            ->get(['id', 'ulid', 'name'])
+            ->get(['id', 'ulid', 'name', 'container_id'])
             ->keyBy('id');
+
+        /** @var array<int, string> $containerUlids */
+        $containerUlids = [];
+
+        if ($withContainer) {
+            /** @var list<int> $containerIds */
+            $containerIds = $items->pluck('container_id')->filter()->unique()->values()->all();
+
+            foreach (Container::query()->whereIn('id', $containerIds)->get(['id', 'ulid']) as $container) {
+                $containerUlids[(int) $container->id] = (string) $container->ulid;
+            }
+        }
 
         $top = [];
 
@@ -491,11 +609,17 @@ class ListAuditEvents
                 continue;
             }
 
-            $top[] = [
+            $post = [
                 'ulid' => (string) $item->ulid,
                 'name' => (string) $item->name,
                 'count' => (int) $row->getAttribute('count'),
             ];
+
+            if ($withContainer) {
+                $post['container_ulid'] = $containerUlids[(int) $item->container_id] ?? null;
+            }
+
+            $top[] = $post;
         }
 
         usort($top, static fn (array $a, array $b): int => ($b['count'] <=> $a['count']) ?: strcmp($a['name'], $b['name']));
@@ -532,11 +656,19 @@ class ListAuditEvents
      * `$limit` är dashboardens femma (issue 126) och har hundredra som reserv,
      * som förut.
      *
+     * **`$filters` kom med issue 271** och är den globala historikens sex:
+     * `container`, `type`, `user`, `item`, `from` och `to`, i den form
+     * App\Http\Requests\Audit\HistoryFilterRequest har prövat dem. De läggs
+     * genom `filtered()` och alltså OVANPÅ de tre leden i samma fråga — ett
+     * filter är ett urval av det läsbara, aldrig en ny väg in i loggen.
+     * Dashboardens anrop utan filter ger därför exakt samma svar som förut.
+     *
+     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
      * @return Collection<int, AuditLog>
      */
-    public function forUser(User $viewer, int $limit = self::LIMIT): Collection
+    public function forUser(User $viewer, int $limit = self::LIMIT, array $filters = []): Collection
     {
-        return $this->readable($viewer, $limit)->get();
+        return $this->filtered($this->readable($viewer, $limit), $viewer, $filters)->get();
     }
 
     /**
@@ -622,6 +754,14 @@ class ListAuditEvents
      * § Händelseloggen), och en fråga om ett item i papperskorgen är precis
      * den fråga en historik finns för.
      *
+     * **`container` kom med issue 271** och är den globala historikens eget
+     * fält: den bokstavliga strängen `account` betyder kontohändelserna utan
+     * container (led 3), alltså `whereNull('container_id')`, och ett ULID
+     * betyder den containern. Existensen prövas inte här heller — en container
+     * användaren inte når, eller en som inte finns, ger `container_id = 0` och
+     * en tom lista, samma svar och samma skäl som för `user` (Beslut 3).
+     * Containerns flik skickar aldrig `container`, så den är oförändrad.
+     *
      * **Datumgränserna räknas i användarens tidszon** ([[ADR-0044 Användarens
      * dag]]). `from` är midnatt den dagen och `to` är midnatt dagen EFTER —
      * övre gränsen är öppen, så hela `to`-dagen ingår. En händelse 23:30 UTC
@@ -629,11 +769,19 @@ class ListAuditEvents
      * UTC-dygn hade lagt den på fel dag.
      *
      * @param  Builder<AuditLog>  $query
-     * @param  array{type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
+     * @param  array{container?: string|null, type?: string|null, user?: string|null, item?: string|null, from?: string|null, to?: string|null}  $filters
      * @return Builder<AuditLog>
      */
     private function filtered(Builder $query, User $viewer, array $filters): Builder
     {
+        if (($container = $filters['container'] ?? null) !== null) {
+            if ($container === 'account') {
+                $query->whereNull('container_id');
+            } else {
+                $query->where('container_id', Container::query()->where('ulid', $container)->value('id') ?? 0);
+            }
+        }
+
         if (($type = $filters['type'] ?? null) !== null) {
             $query->where('subject_type', $type);
         }

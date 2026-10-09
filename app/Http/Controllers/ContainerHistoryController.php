@@ -7,11 +7,9 @@ use App\Actions\Audit\ListAuditEvents;
 use App\Actions\Audit\PresentAuditEvents;
 use App\Http\Requests\Audit\ContainerHistoryFilterRequest;
 use App\Http\Resources\ContainerResource;
-use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\Item;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
@@ -111,8 +109,9 @@ class ContainerHistoryController extends Controller
                 'update' => Gate::forUser($user)->allows('update', $container),
             ],
             // Händelserna grupperade per dag i användarens tidszon, nyast
-            // först — ordningen ListAuditEvents gav dem.
-            'days' => $this->days($logs, $user->preferredTimezone()),
+            // först — ordningen ListAuditEvents gav dem. Vikningen bor i
+            // PresentAuditEvents sedan issue 271, och delas med /history.
+            'days' => $this->presentAuditEvents->byDay($logs, $user->preferredTimezone()),
             // Diagrammens tre tal (issue 180 § Beslut 2): samma läsregel och
             // samma filter som `days`, men utan gränsen på hundra — se
             // ListAuditEvents::statsForContainer(). Utan datumfilter spänner
@@ -188,38 +187,5 @@ class ContainerHistoryController extends Controller
             ->map(static fn (Item $item): array => ['ulid' => (string) $item->ulid, 'name' => (string) $item->name])
             ->values()
             ->all();
-    }
-
-    /**
-     * Raderna vikta per dag i användarens tidszon — `days: [{date, rows}]`.
-     *
-     * `created_at` är en tidsstämpel i UTC, och dagen är den användaren ser:
-     * `setTimezone()` på en KOPIA, så radens egen tidsstämpel står orörd och
-     * `PresentAuditEvents` har redan skrivit den som ISO 8601. En händelse
-     * 23:30 UTC hör till nästa dygn i Stockholm, och den hamnar därför i
-     * morgondagens grupp — det är hela poängen med att låta servern räkna
-     * dagen ([[ADR-0044 Användarens dag]] § Beslut 4).
-     *
-     * Raderna kommer i `created_at` fallande ordning, så dagarna hamnar i
-     * samma ordning utan en egen sortering: en vikning bevarar insättnings-
-     * ordningen, och `array_values()` gör listan till en lista.
-     *
-     * @param  Collection<int, AuditLog>  $logs
-     * @return list<array{date: string, rows: list<array<string, mixed>>}>
-     */
-    private function days(Collection $logs, string $timezone): array
-    {
-        $rows = $this->presentAuditEvents->handle($logs);
-
-        $days = [];
-
-        foreach ($logs->values() as $index => $log) {
-            $date = $log->created_at->copy()->setTimezone($timezone)->toDateString();
-
-            $days[$date] ??= ['date' => $date, 'rows' => []];
-            $days[$date]['rows'][] = $rows[$index];
-        }
-
-        return array_values($days);
     }
 }

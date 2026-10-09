@@ -103,6 +103,44 @@ class PresentAuditEvents
     }
 
     /**
+     * Raderna vikta per dag i användarens tidszon — `days: [{date, rows}]`.
+     *
+     * Flyttad hit från ContainerHistoryController::days() i issue 271: den
+     * globala historiken viker sin lista på exakt samma sätt, och två kopior
+     * av vikningen hade glidit isär — dagrubriken är användarens dag
+     * ([[ADR-0044 Användarens dag]]) och räknas på ett ställe.
+     *
+     * `created_at` är en tidsstämpel i UTC, och dagen är den användaren ser:
+     * `setTimezone()` på en KOPIA, så radens egen tidsstämpel står orörd och
+     * `handle()` ovan har redan skrivit den som ISO 8601. En händelse 23:30 UTC
+     * hör till nästa dygn i Stockholm, och den hamnar därför i morgondagens
+     * grupp — det är hela poängen med att låta servern räkna dagen
+     * ([[ADR-0044 Användarens dag]] § Beslut 4).
+     *
+     * Raderna kommer i `created_at` fallande ordning, så dagarna hamnar i
+     * samma ordning utan en egen sortering: en vikning bevarar insättnings-
+     * ordningen, och `array_values()` gör listan till en lista.
+     *
+     * @param  Collection<int, AuditLog>  $logs
+     * @return list<array{date: string, rows: list<array<string, mixed>>}>
+     */
+    public function byDay(Collection $logs, string $timezone): array
+    {
+        $rows = $this->handle($logs);
+
+        $days = [];
+
+        foreach ($logs->values() as $index => $log) {
+            $date = $log->created_at->copy()->setTimezone($timezone)->toDateString();
+
+            $days[$date] ??= ['date' => $date, 'rows' => []];
+            $days[$date]['rows'][] = $rows[$index];
+        }
+
+        return array_values($days);
+    }
+
+    /**
      * Itemens namn per löpnummer, i EN fråga.
      *
      * En tom lista ger ingen fråga alls: en containerhistorik utan itemrader
