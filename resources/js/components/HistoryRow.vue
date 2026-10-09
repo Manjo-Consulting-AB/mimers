@@ -37,8 +37,10 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * säga vilken den gäller. `showContainer` är anroparens val, och namnet ritas
  * under meningen ur `audit.fallback.container` när containern inte längre
  * finns. `container` är `null` när raden inte gäller någon container alls
- * (kontoraderna) — då ritas ingen rad, för en kontorad har ingen container att
- * namnge.
+ * (kontoraderna): då står platsen *Account* i stället (M30 · issue 272 ·
+ * Beslut 3) — raden hör till kontot, och en tom plats där containernamnet
+ * annars står hade lästs som ett ritfel. Dashboardens händelsepanel ritar
+ * samma ord, och det är avsiktligt.
  *
  * **`changed` blir en uppräkning och aldrig ett innehåll.** En ändring bär
  * fältens NAMN (`meta.changed`), och orden kommer ur `audit.field.*` — vad som
@@ -62,9 +64,10 @@ const props = defineProps({
      */
     row: { type: Object, required: true },
     /*
-     * Ska raden säga vilken container den gäller? Falskt i historikflikarna,
-     * där containern är given av sidan (issue 116), sant i dashboardens
-     * händelsepanel, där raderna kommer från flera containrar (issue 126).
+     * Ska raden säga vilken plats den gäller? Falskt i historikflikarna, där
+     * containern är given av sidan (issue 116), sant i dashboardens
+     * händelsepanel (issue 126) och på den globala historiken (M30 · issue
+     * 272), där raderna kommer från flera containrar — och från ingen alls.
      */
     showContainer: { type: Boolean, default: false },
 });
@@ -96,14 +99,23 @@ const sentence = computed(() => t(`audit.action.${props.row.action}`, {
 const date = computed(() => eventDate(props.row.created_at));
 
 /*
- * Containern raden gäller, som ord — namnet eller ersättaren för en gallrad
- * container. `null` betyder att raden inte ska säga någon container alls:
- * antingen för att anroparen inte bad om den (flikarna) eller för att raden
- * inte gäller någon (kontoraderna, `container` är `null` i proppen).
+ * Platsen raden gäller, som ord — containerns namn, ersättaren för en gallrad
+ * container, eller *Account* för en kontorad. `null` betyder att raden inte
+ * ska säga någon plats alls: anroparen bad inte om den (flikarna), och där är
+ * containern given av sidan man står på.
  */
 const container = computed(() => {
-    if (!props.showContainer || props.row.container === null) {
+    if (!props.showContainer) {
         return null;
+    }
+
+    /*
+     * Kontoraden: ingen container att namnge, och platsen är kontot (M30 ·
+     * issue 272 · Beslut 3). `audit.fallback.container` hade varit osann —
+     * containern är inte gallrad, den har aldrig funnits.
+     */
+    if (props.row.container === null) {
+        return t('audit.history.account_place');
     }
 
     return props.row.container.name ?? t('audit.fallback.container');

@@ -111,6 +111,12 @@ const allSections = [
     // eget ord (`documents.heading`).
     { key: 'documents', href: '/documents' },
     { key: 'containers', href: '/containers' },
+    // Den globala historiken (M30 · issue 272 · Beslut 1): raden står efter
+    // containrarna och före sökningen — historiken spänner över varje
+    // container användaren når, samma plats fliken har inuti en container
+    // ([[ADR-0050 Desktopdesignen]] § 17) — och etiketten är sidans eget ord
+    // (`history.heading`).
+    { key: 'history', href: '/history' },
     { key: 'search', href: '/search' },
     // Inställningarna är den enda raden som också är aktuell på en UNDERSIDA:
     // `/settings` omdirigerar till profilen (issue 53c), så en jämförelse som
@@ -128,7 +134,7 @@ const allSections = [
  */
 const partKeys = {
     'top': ['dashboard'],
-    'rows': ['tasks', 'inbox', 'documents', 'containers', 'search'],
+    'rows': ['tasks', 'inbox', 'documents', 'containers', 'history', 'search'],
     'account': ['settings'],
 };
 
