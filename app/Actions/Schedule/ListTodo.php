@@ -1004,6 +1004,16 @@ class ListTodo
      * här metoden lämnar då `groups` tomma och lägger raderna i `completed`.
      * Markören bär inte listan (Beslut 2) — den står i adressen bredvid.
      *
+     * **Växeln `show_upcoming_tasks` gäller bara *Active*** (M30 · issue 270,
+     * Tonys beslut 2026-10-09): bara `$list === null` följer användarens växel,
+     * och varje annan flik skickar `false` och släpper den, så *Inbox*, *Next*,
+     * *Waiting*, *In progress*, *Calendar* och *Someday* visar HELA sitt urval
+     * oavsett datum. Fyndet var att flikarna förr följde växeln medan panelen
+     * *Lists* inte gjorde det: med växeln av var *In progress* tom fast panelen
+     * sa ett, för den påbörjade uppgiften hade ett framtida datum. Beslutet
+     * rör bara `page()` — containerns uppgiftsflik släppte växeln redan (issue
+     * 719), och dashboarden och API:et går genom `handle()` och är oförändrade.
+     *
      * **Filtren läses ur samma request som markörerna** (M28 · issue 782):
      * `container`, `gtd`, `status` och `sort`, normaliserade av
      * `normalizeGtd()` med flera så att ett okänt värde blir inget värde. De
@@ -1097,14 +1107,18 @@ class ListTodo
         // riktningarna.
         $descending = $sort === self::SORT_DUE_DESC;
 
-        // Växeln lägger på ett villkor och rör inte markören: sidgränsen är
-        // `(due_at, ulid)` över de rader frågan bär, och en avgränsning mot
-        // dagens datum flyttar varken nycklarna eller deras ordning
-        // (issue 134, issue 123). `null` är "följ användarens växel", och
-        // växeln AV bär *No date* (ADR-0052 § 4). Filtren är villkor ovanpå
-        // urvalet, precis som containerns avgränsning (Beslut 1): åtkomsten
-        // formuleras alltjämt i `scopeTodoFor()`, aldrig här.
-        $query = $this->occurrences($user, $accountIds, null, list: $list, gtd: $gtd, status: $status, containerUlid: $container);
+        // Växeln gäller BARA *Active* (M30 · issue 270, Tonys beslut
+        // 2026-10-09): `$list === null` är *Active* och följer användarens
+        // växel genom `null`, medan varje annan flik skickar `false` och
+        // släpper den — fliken visar hela sitt urval oavsett datum, samma svar
+        // som containerns uppgiftsflik ger (issue 719). `false` bär dessutom
+        // *No date* med sig (ADR-0052 § 4). Växeln rör inte markören:
+        // sidgränsen är `(due_at, ulid)` över de rader frågan bär, och en
+        // avgränsning mot dagens datum flyttar varken nycklarna eller deras
+        // ordning (issue 134, issue 123). Filtren är villkor ovanpå urvalet,
+        // precis som containerns avgränsning (Beslut 1): åtkomsten formuleras
+        // alltjämt i `scopeTodoFor()`, aldrig här.
+        $query = $this->occurrences($user, $accountIds, $list === null ? null : false, list: $list, gtd: $gtd, status: $status, containerUlid: $container);
 
         // `whereDate()` och inte en rå kolumnjämförelse, av samma skäl som
         // `scopeTodoFor()` väljer det: `due_at` är en DATE-kolumn, men värdet
