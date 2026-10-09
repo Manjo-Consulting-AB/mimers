@@ -32,6 +32,7 @@ use App\Http\Controllers\ExportDownloadController;
 use App\Http\Controllers\FavoriteController;
 use App\Http\Controllers\FileDeliveryController;
 use App\Http\Controllers\HeartbeatController;
+use App\Http\Controllers\HistoryController;
 use App\Http\Controllers\InboxController;
 use App\Http\Controllers\InvitationResponseController;
 use App\Http\Controllers\ItemController;
@@ -226,6 +227,33 @@ Route::post('/inbox/attachments/delete', [InboxController::class, 'destroyAttach
 Route::get('/documents', DocumentController::class)
     ->middleware('auth')
     ->name('documents');
+
+/*
+ * M30 (testarnas fynd 2026-10-09) · Den globala historiken, se
+ * App\Http\Controllers\HistoryController och [[ADR-0043 Tre loggar]]
+ * § Händelseloggen.
+ *
+ * **Sidan är containerns historikflik över hela kontot.** Fliken (issue 116)
+ * visar en containers händelser; här ser användaren samma lista, samma filter
+ * och samma tre diagram över varje container hon når OCH över
+ * kontohändelserna utan container. Serverns halva är den här rutten; sidans
+ * design kommer i #822 (issue 272).
+ *
+ * **Ingen container i adressen, och ingen grind.** Urvalet är användarens EGNA
+ * — det hon når — och det finns ingen `{container}`-parameter att pröva en
+ * grind mot. Regeln för vilka rader hon sedan får läsa bor i
+ * App\Actions\Audit\ListAuditEvents och är densamma som flikens (issue 108);
+ * kontrollern filtrerar ingenting själv. Filtren står i querysträngen
+ * (`container`, `type`, `user`, `item`, `from` och `to`) och en handredigerad
+ * adress ger valideringsfel på fältet, inte en krasch.
+ *
+ * **Sökvägen kolliderar med ingenting.** `/history` är ett fast segment på
+ * toppnivå, som `/documents` och `/inbox` — containerns flik ligger under
+ * `/containers/{container}/history` och är en annan rutt.
+ */
+Route::get('/history', HistoryController::class)
+    ->middleware('auth')
+    ->name('history');
 
 /*
  * Issue 128 · Informationsytan, se App\Http\Controllers\
