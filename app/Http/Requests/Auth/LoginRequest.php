@@ -42,7 +42,19 @@ class LoginRequest extends FormRequest
             // (kräver ett DB-uppslag på e-posten) — se authenticate()
             // nedan, som gör den kontrollen efter att lösenordet redan
             // är verifierat.
-            'code' => ['sometimes', 'string'],
+            //
+            // Issue 267 § Beslut 1: `nullable`, samma regel och samma skäl
+            // som App\Http\Requests\Settings\UpdatePasswordRequest redan
+            // har. Inloggningsformuläret skickar `code: ''` i varje anrop —
+            // fältet renderas först när servern ber om koden, men `useForm`
+            // postar hela objektet — och ett tomt fält blir null
+            // (ConvertEmptyStringsToNull, global middleware). Utan
+            // `nullable` föll valideringen på `code` som "inte en sträng"
+            // innan lösenordet ens prövats, för varje konto, och felet
+            // visade kodfältet med en mening som inte hörde dit. Fältet ska
+            // kunna vara tomt: det är frånvaron av en kod, inte en ogiltig
+            // sådan, och authenticate() nedan avgör om en kod alls krävs.
+            'code' => ['sometimes', 'nullable', 'string'],
         ];
     }
 

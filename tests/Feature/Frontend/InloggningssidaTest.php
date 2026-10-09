@@ -93,6 +93,24 @@ it('behåller formulärets fält och beteende', function () {
     }
 });
 
+it('kodfältet får fokus när servern ber om koden', function () {
+    // Issue 267 § Beslut 2. `focusFirstError` fokuserar felmeningen
+    // (`#code-error`), men när servern ber om engångskoden är `errors.code`
+    // en fråga och inte ett fel: markören ska hamna i inmatningen, annars
+    // måste användaren klicka i fältet innan hon kan skriva. Felhanteraren
+    // grenar därför på `errors.code` och fokuserar `#code`.
+    $kod = inloggningskalla();
+
+    // `errors.code` förekommer också i `codeRequested`-computed, så nålen
+    // måste peka på själva grenen i felhanteraren och inte på strängen.
+    expect(str_contains($kod, 'if (errors.code)'))->toBeTrue(
+        'Login.vue grenar inte på errors.code i felhanteringen',
+    );
+    expect(str_contains($kod, "getElementById('code')"))->toBeTrue(
+        'Login.vue fokuserar inte kodfältet när servern ber om koden',
+    );
+});
+
 it('länkar glömt lösenord till magic link och registreringen', function () {
     // Beslut 3 och 4. *Glömt lösenordet?* är vägen in för den som tappat
     // lösenordet — det finns ingen återställning för en utloggad — och den
