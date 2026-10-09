@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, nextTick } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import FlashMessage from '../../components/FlashMessage.vue';
 import FormField from '../../components/FormField.vue';
@@ -90,12 +90,20 @@ defineProps({
  * (App\Support\Auth\RecoveryCodeBroker), och en numerisk tangentbordsknapp
  * hade stängt ute den på en telefon.
  *
- * Fokuset på det fält som just dykt upp ägs av `focusFirstError` och ingen
- * annan. Ett eget `watch` på `codeRequested` som fokuserade själva inmatningen
- * körde samtidigt som `useErrorFocus` fokuserade `#code-error`, i samma
- * serversvar och utan inbördes ordning — vann inmatningen tystades exakt det
- * Beslut 10 kräver. En mekanism, inte två: `errors.code` är det första felet
- * servern sätter här, så `focusFirstError` landar på `#code-error`.
+ * **När servern ber om koden hamnar fokus i inmatningen** (issue 267 § Beslut
+ * 2). `focusFirstError` fokuserar `<fält>-error`, alltså meningen och inte
+ * fältet — rätt för ett fel, fel för en fråga: den som fick kodfältet ritat
+ * måste då klicka i det innan hon kan skriva. Felhanteraren nedan grenar
+ * därför på `errors.code`: finns det felet fokuseras `#code` efter
+ * `nextTick`, annars `focusFirstError(errors)` som förut. Fältet bär redan
+ * `:aria-describedby="describedBy"`, så en skärmläsare läser serverns mening
+ * när inmatningen får fokus — det är det som ersätter fokuset på `#code-error`.
+ *
+ * Fortfarande en mekanism, inte två. Ett tidigare försök hade ett eget `watch`
+ * på `codeRequested` som fokuserade inmatningen samtidigt som `useErrorFocus`
+ * fokuserade `#code-error`, i samma serversvar och utan inbördes ordning — vann
+ * inmatningen tystades exakt det Beslut 10 kräver. Nu väljer samma
+ * felhanterare, i samma anrop, vilket av de två som gäller.
  */
 const { t } = useTranslations();
 const { focusFirstError } = useErrorFocus();
@@ -137,11 +145,26 @@ const form = useForm({
 
 const codeRequested = computed(() => Boolean(form.errors.code));
 
+/*
+ * Serverns svar är antingen ett fel eller en fråga, och de vill ha fokus på
+ * olika ställen — se kommentaren vid `useErrorFocus` ovan. `errors.code` är
+ * frågan: fokus i inmatningen, så att nästa tangenttryck hamnar i koden.
+ */
+function focusOnError(errors) {
+    if (errors.code) {
+        nextTick(() => {
+            document.getElementById('code')?.focus();
+        });
+
+        return;
+    }
+
+    focusFirstError(errors);
+}
+
 function submit() {
     form.post('/login', {
-        // Tangentbordsanvändaren ska hamna på felet, inte kvar på knappen —
-        // se useErrorFocus.js.
-        onError: focusFirstError,
+        onError: focusOnError,
 
         // Lösenordet töms när svaret kommit. Undantaget är när servern bad om
         // engångskoden: då är lösenordet redan rätt och att tömma det tvingar
