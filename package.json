@@ -15,7 +15,7 @@
         "tailwindcss": "^4.3.3",
         "uqr": "^0.1.3",
         "vite": "^8.0.0",
-        "vue": "^3.5.41"
+        "vue": "^3.5.43"
     },
     "optionalDependencies": {
         "@laravel/multiplex": "^0.4.1"
