@@ -1,11 +1,14 @@
 <script setup>
 import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import SecretOnce from '../../components/SecretOnce.vue';
 import WebhookEndpointForm from '../../components/WebhookEndpointForm.vue';
 import WebhookEndpointRow from '../../components/WebhookEndpointRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({ layout: [AppLayout, SettingsLayout] });
 
 /*
  * Kontots webhooks, se issue 65b § Beslut 1, 3, 5 och 8.
@@ -92,72 +95,70 @@ function selectAccount(event) {
 </script>
 
 <template>
-    <SettingsLayout>
-        <Head :title="t('webhook.title')" />
+    <Head :title="t('webhook.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('webhook.heading') }}</h1>
-        <p class="mt-2 text-sm text-slate-700">{{ t('webhook.intro') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('webhook.heading') }}</h1>
+    <p class="mt-2 text-sm text-slate-700">{{ t('webhook.intro') }}</p>
 
-        <!-- Väljaren ritas bara när det finns något att välja mellan: ett
-             enkelt kontokonto har inget val, och en nedfällbar lista med ett
-             alternativ är en fråga utan svar. -->
-        <div v-if="props.accounts.length > 1" class="mt-6 flex flex-col gap-1">
-            <label for="account" class="text-sm font-medium text-slate-800">{{ t('webhook.account_label') }}</label>
+    <!-- Väljaren ritas bara när det finns något att välja mellan: ett
+         enkelt kontokonto har inget val, och en nedfällbar lista med ett
+         alternativ är en fråga utan svar. -->
+    <div v-if="props.accounts.length > 1" class="mt-6 flex flex-col gap-1">
+        <label for="account" class="text-sm font-medium text-slate-800">{{ t('webhook.account_label') }}</label>
 
-            <select
-                id="account"
-                :value="props.account.ulid"
-                :disabled="pending"
-                class="self-start rounded border border-slate-300 bg-white px-3 py-2"
-                @change="selectAccount"
-            >
-                <option v-for="option in props.accounts" :key="option.ulid" :value="option.ulid">
-                    {{ option.name }}
-                </option>
-            </select>
-        </div>
+        <select
+            id="account"
+            :value="props.account.ulid"
+            :disabled="pending"
+            class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+            @change="selectAccount"
+        >
+            <option v-for="option in props.accounts" :key="option.ulid" :value="option.ulid">
+                {{ option.name }}
+            </option>
+        </select>
+    </div>
 
-        <p v-if="props.planNotice" class="mt-6 rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-            {{ props.planNotice }}
+    <p v-if="props.planNotice" class="mt-6 rounded border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        {{ props.planNotice }}
+    </p>
+
+    <SecretOnce
+        v-if="props.secret"
+        class="mt-8"
+        :label="t('webhook.secret_label')"
+        :value="props.secret"
+        :description="t('webhook.secret_description')"
+        :once="t('webhook.secret_once')"
+        :copy-label="t('webhook.copy')"
+        :copied-label="t('webhook.copied')"
+    />
+
+    <section class="mt-8">
+        <h2 class="text-lg font-semibold">{{ t('webhook.create_heading') }}</h2>
+
+        <WebhookEndpointForm
+            class="mt-2"
+            :account-ulid="props.account.ulid"
+            :types="props.eventTypes"
+        />
+    </section>
+
+    <section class="mt-10">
+        <h2 class="text-lg font-semibold">{{ t('webhook.list_heading') }}</h2>
+
+        <p v-if="props.endpoints.length === 0" class="mt-2 text-sm text-slate-700">
+            {{ t('webhook.empty') }}
         </p>
 
-        <SecretOnce
-            v-if="props.secret"
-            class="mt-8"
-            :label="t('webhook.secret_label')"
-            :value="props.secret"
-            :description="t('webhook.secret_description')"
-            :once="t('webhook.secret_once')"
-            :copy-label="t('webhook.copy')"
-            :copied-label="t('webhook.copied')"
-        />
-
-        <section class="mt-8">
-            <h2 class="text-lg font-semibold">{{ t('webhook.create_heading') }}</h2>
-
-            <WebhookEndpointForm
-                class="mt-2"
+        <ul v-else class="mt-2 flex flex-col gap-2">
+            <WebhookEndpointRow
+                v-for="endpoint in props.endpoints"
+                :key="endpoint.ulid"
+                :endpoint="endpoint"
                 :account-ulid="props.account.ulid"
                 :types="props.eventTypes"
             />
-        </section>
-
-        <section class="mt-10">
-            <h2 class="text-lg font-semibold">{{ t('webhook.list_heading') }}</h2>
-
-            <p v-if="props.endpoints.length === 0" class="mt-2 text-sm text-slate-700">
-                {{ t('webhook.empty') }}
-            </p>
-
-            <ul v-else class="mt-2 flex flex-col gap-2">
-                <WebhookEndpointRow
-                    v-for="endpoint in props.endpoints"
-                    :key="endpoint.ulid"
-                    :endpoint="endpoint"
-                    :account-ulid="props.account.ulid"
-                    :types="props.eventTypes"
-                />
-            </ul>
-        </section>
-    </SettingsLayout>
+        </ul>
+    </section>
 </template>

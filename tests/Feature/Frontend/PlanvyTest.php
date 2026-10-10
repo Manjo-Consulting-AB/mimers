@@ -623,7 +623,7 @@ it('syns i inställningsnavigationen och länkar till städningsytan', function 
 
     $vy = File::get(resource_path('js/pages/Settings/Plan.vue'));
 
-    expect($vy)->toContain('<SettingsLayout>')
+    expect($vy)->toContain('layout: [AppLayout, SettingsLayout]')
         ->and($vy)->toContain('href="/settings/storage"');
 
     planvyNyckel('ui.plan.downgrade.preview.cleanup_link');

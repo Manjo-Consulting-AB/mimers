@@ -1,12 +1,15 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import NotificationPreferenceRow from '../../components/NotificationPreferenceRow.vue';
 import QuietHoursForm from '../../components/QuietHoursForm.vue';
 import { modeOf, valuesFor } from '../../components/notificationPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
+
+defineOptions({ layout: [AppLayout, SettingsLayout] });
 
 /*
  * Notisinställningarna, se issue 65a § Beslut 1, 3, 4 och 6.
@@ -95,44 +98,42 @@ function submitPreferences() {
 </script>
 
 <template>
-    <SettingsLayout>
-        <Head :title="t('notifications.title')" />
+    <Head :title="t('notifications.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('notifications.heading') }}</h1>
-        <p class="mt-2 text-sm text-slate-700">{{ t('notifications.intro') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('notifications.heading') }}</h1>
+    <p class="mt-2 text-sm text-slate-700">{{ t('notifications.intro') }}</p>
 
-        <form class="mt-8 flex flex-col gap-4" @submit.prevent="submitPreferences">
-            <h2 class="text-lg font-semibold">{{ t('notifications.types_heading') }}</h2>
+    <form class="mt-8 flex flex-col gap-4" @submit.prevent="submitPreferences">
+        <h2 class="text-lg font-semibold">{{ t('notifications.types_heading') }}</h2>
 
-            <!-- Förvalet och skälet till det (Beslut 3): säsongen. -->
-            <p class="text-sm text-slate-700">{{ t('notifications.digest_default') }}</p>
+        <!-- Förvalet och skälet till det (Beslut 3): säsongen. -->
+        <p class="text-sm text-slate-700">{{ t('notifications.digest_default') }}</p>
 
-            <NotificationPreferenceRow
-                v-for="preference in props.preferences"
-                :key="preference.type"
-                :preference="preference"
-                :mode="modeFor(preference)"
-                :touched="touched(preference)"
-                @update:mode="setMode(preference.type, $event)"
-            />
-
-            <p v-if="preferencesError" role="alert" tabindex="-1" class="text-sm text-red-700 outline-none">
-                {{ preferencesError }}
-            </p>
-
-            <button
-                type="submit"
-                :disabled="form.processing || changed.length === 0"
-                class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-            >
-                {{ form.processing ? t('common.pending.default') : t('notifications.submit') }}
-            </button>
-        </form>
-
-        <QuietHoursForm
-            :quiet-hours-start="props.quietHoursStart"
-            :quiet-hours-end="props.quietHoursEnd"
-            :timezone="props.timezone"
+        <NotificationPreferenceRow
+            v-for="preference in props.preferences"
+            :key="preference.type"
+            :preference="preference"
+            :mode="modeFor(preference)"
+            :touched="touched(preference)"
+            @update:mode="setMode(preference.type, $event)"
         />
-    </SettingsLayout>
+
+        <p v-if="preferencesError" role="alert" tabindex="-1" class="text-sm text-red-700 outline-none">
+            {{ preferencesError }}
+        </p>
+
+        <button
+            type="submit"
+            :disabled="form.processing || changed.length === 0"
+            class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+        >
+            {{ form.processing ? t('common.pending.default') : t('notifications.submit') }}
+        </button>
+    </form>
+
+    <QuietHoursForm
+        :quiet-hours-start="props.quietHoursStart"
+        :quiet-hours-end="props.quietHoursEnd"
+        :timezone="props.timezone"
+    />
 </template>

@@ -1,11 +1,14 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import EmailChangeForm from '../../components/EmailChangeForm.vue';
 import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
+
+defineOptions({ layout: [AppLayout, SettingsLayout] });
 
 /*
  * Profilsidan, se issue 53c § Beslut 2 och 6.
@@ -94,109 +97,107 @@ function submit() {
 </script>
 
 <template>
-    <SettingsLayout>
-        <Head :title="t('settings.profile.title')" />
+    <Head :title="t('settings.profile.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('settings.profile.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('settings.profile.heading') }}</h1>
 
-        <form class="mt-8 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('settings.profile.name')"
+    <form class="mt-8 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('settings.profile.name')"
+            id="name"
+            :error="form.errors.name"
+        >
+            <input
                 id="name"
-                :error="form.errors.name"
+                v-model="form.name"
+                :aria-describedby="describedBy"
+                type="text"
+                name="name"
+                autocomplete="name"
+                required
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <input
-                    id="name"
-                    v-model="form.name"
-                    :aria-describedby="describedBy"
-                    type="text"
-                    name="name"
-                    autocomplete="name"
-                    required
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-            </FormField>
+        </FormField>
 
-            <!-- E-postadressen: visad här, bytt i sitt eget formulär (issue
-                 130). Ingen FormField — den här PATCH:en tar inte emot
-                 fältet, och ett fält här hade sett ut som att det bytte
-                 adressen i samma steg. -->
-            <div class="flex flex-col gap-1">
-                <p class="text-sm font-medium text-slate-800">{{ t('settings.profile.email') }}</p>
-                <p>{{ props.email }}</p>
-                <p class="text-sm text-slate-600">
-                    {{ props.emailVerifiedAt ? t('settings.profile.email_verified') : t('settings.profile.email_unverified') }}
-                </p>
-            </div>
+        <!-- E-postadressen: visad här, bytt i sitt eget formulär (issue
+             130). Ingen FormField — den här PATCH:en tar inte emot
+             fältet, och ett fält här hade sett ut som att det bytte
+             adressen i samma steg. -->
+        <div class="flex flex-col gap-1">
+            <p class="text-sm font-medium text-slate-800">{{ t('settings.profile.email') }}</p>
+            <p>{{ props.email }}</p>
+            <p class="text-sm text-slate-600">
+                {{ props.emailVerifiedAt ? t('settings.profile.email_verified') : t('settings.profile.email_unverified') }}
+            </p>
+        </div>
 
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('settings.profile.locale')"
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('settings.profile.locale')"
+            id="locale"
+            :error="form.errors.locale"
+        >
+            <select
                 id="locale"
-                :error="form.errors.locale"
+                v-model="form.locale"
+                :aria-describedby="describedBy"
+                name="locale"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <select
-                    id="locale"
-                    v-model="form.locale"
-                    :aria-describedby="describedBy"
-                    name="locale"
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-                    <option :value="null">{{ localeFollowLabel }}</option>
-                    <option v-for="locale in locales" :key="locale" :value="locale">
-                        {{ t(`settings.locales.${locale}`) }}
-                    </option>
-                </select>
-            </FormField>
+                <option :value="null">{{ localeFollowLabel }}</option>
+                <option v-for="locale in locales" :key="locale" :value="locale">
+                    {{ t(`settings.locales.${locale}`) }}
+                </option>
+            </select>
+        </FormField>
 
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('settings.profile.timezone')"
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('settings.profile.timezone')"
+            id="timezone"
+            :error="form.errors.timezone"
+        >
+            <select
                 id="timezone"
-                :error="form.errors.timezone"
+                v-model="form.timezone"
+                :aria-describedby="describedBy"
+                name="timezone"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <select
-                    id="timezone"
-                    v-model="form.timezone"
-                    :aria-describedby="describedBy"
-                    name="timezone"
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-                    <option :value="null">{{ timezoneFollowLabel }}</option>
-                    <option v-for="zone in timezones" :key="zone" :value="zone">{{ zone }}</option>
-                </select>
-            </FormField>
+                <option :value="null">{{ timezoneFollowLabel }}</option>
+                <option v-for="zone in timezones" :key="zone" :value="zone">{{ zone }}</option>
+            </select>
+        </FormField>
 
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('settings.profile.unit_system')"
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('settings.profile.unit_system')"
+            id="unit_system"
+            :error="form.errors.unit_system"
+        >
+            <select
                 id="unit_system"
-                :error="form.errors.unit_system"
+                v-model="form.unit_system"
+                :aria-describedby="describedBy"
+                name="unit_system"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <select
-                    id="unit_system"
-                    v-model="form.unit_system"
-                    :aria-describedby="describedBy"
-                    name="unit_system"
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-                    <option :value="null">{{ unitFollowLabel }}</option>
-                    <option v-for="unit in units" :key="unit" :value="unit">
-                        {{ t(`settings.units.${unit}`) }}
-                    </option>
-                </select>
-            </FormField>
+                <option :value="null">{{ unitFollowLabel }}</option>
+                <option v-for="unit in units" :key="unit" :value="unit">
+                    {{ t(`settings.units.${unit}`) }}
+                </option>
+            </select>
+        </FormField>
 
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-            >
-                {{ form.processing ? t('common.pending.default') : t('settings.profile.submit') }}
-            </button>
-        </form>
+        <button
+            type="submit"
+            :disabled="form.processing"
+            class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+        >
+            {{ form.processing ? t('common.pending.default') : t('settings.profile.submit') }}
+        </button>
+    </form>
 
-        <EmailChangeForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
-    </SettingsLayout>
+    <EmailChangeForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
 </template>

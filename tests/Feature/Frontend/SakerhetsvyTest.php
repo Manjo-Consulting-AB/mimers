@@ -423,8 +423,8 @@ it('renderar inställningsnavigationen ur en lista', function () {
 
     expect($sektioner)->toContain("href: '/settings/security'");
 
-    // Och att säkerhetssidan är en av dem som renderas i skalet.
-    expect(File::get(resource_path('js/pages/Settings/Security.vue')))->toContain('<SettingsLayout>');
+    // Och att säkerhetssidan är en av dem som deklarerar skalet i sin kedja.
+    expect(File::get(resource_path('js/pages/Settings/Security.vue')))->toContain('layout: [AppLayout, SettingsLayout]');
 
     expect(trans('ui.settings.nav.security', [], 'en'))
         ->not->toBe('ui.settings.nav.security');

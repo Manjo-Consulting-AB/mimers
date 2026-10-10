@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import FormField from '../../components/FormField.vue';
 import PasswordForm from '../../components/PasswordForm.vue';
@@ -10,6 +11,8 @@ import UserDeletionForm from '../../components/UserDeletionForm.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
+
+defineOptions({ layout: [AppLayout, SettingsLayout] });
 
 /*
  * Säkerhetssidan, se issue 53b.
@@ -147,69 +150,142 @@ function outcomeLabel(login) {
 </script>
 
 <template>
-    <SettingsLayout>
-        <Head :title="t('settings.security.title')" />
+    <Head :title="t('settings.security.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('settings.security.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('settings.security.heading') }}</h1>
 
-        <PasswordForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
+    <PasswordForm :has-password="props.hasPassword" :totp-enabled="props.totpEnabled" />
 
-        <section class="mt-8 flex max-w-lg flex-col gap-4">
-            <h2 class="text-lg font-semibold">{{ t('settings.security.totp.heading') }}</h2>
+    <section class="mt-8 flex max-w-lg flex-col gap-4">
+        <h2 class="text-lg font-semibold">{{ t('settings.security.totp.heading') }}</h2>
 
-            <!-- Läge 1 · ingen TOTP. -->
-            <template v-if="!props.totpEnabled && !showsSetup">
-                <p class="text-sm text-slate-700">{{ t('settings.security.totp.intro') }}</p>
+        <!-- Läge 1 · ingen TOTP. -->
+        <template v-if="!props.totpEnabled && !showsSetup">
+            <p class="text-sm text-slate-700">{{ t('settings.security.totp.intro') }}</p>
 
-                <form @submit.prevent="enableTotp">
-                    <button
-                        type="submit"
-                        :disabled="setupForm.processing"
-                        class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                    >
-                        {{ setupForm.processing ? t('common.pending.default') : t('settings.security.totp.enable') }}
-                    </button>
-                </form>
-            </template>
+            <form @submit.prevent="enableTotp">
+                <button
+                    type="submit"
+                    :disabled="setupForm.processing"
+                    class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+                >
+                    {{ setupForm.processing ? t('common.pending.default') : t('settings.security.totp.enable') }}
+                </button>
+            </form>
+        </template>
 
-            <!-- Läge 2 · hemlighet genererad, inte bekräftad. -->
-            <template v-else-if="showsSetup">
-                <p class="text-sm text-slate-700">{{ t('settings.security.totp.setup_intro') }}</p>
+        <!-- Läge 2 · hemlighet genererad, inte bekräftad. -->
+        <template v-else-if="showsSetup">
+            <p class="text-sm text-slate-700">{{ t('settings.security.totp.setup_intro') }}</p>
 
-                <!-- QR-koden till vänster och den manuella nyckeln till höger,
-                     staplade under md: — användaren väljer själv om hon skannar
-                     eller skriver in (issue 261 · GitHub #786). -->
-                <div class="flex flex-col gap-4 md:flex-row md:items-start">
-                    <TotpQrCode :uri="props.totpUri" />
-
-                    <div class="flex flex-col gap-1">
-                        <p class="text-sm font-medium text-slate-800">{{ t('settings.security.totp.secret_label') }}</p>
-                        <p class="font-mono text-lg tracking-widest">{{ secretGroups.join(' ') }}</p>
-                    </div>
-                </div>
+            <!-- QR-koden till vänster och den manuella nyckeln till höger,
+                 staplade under md: — användaren väljer själv om hon skannar
+                 eller skriver in (issue 261 · GitHub #786). -->
+            <div class="flex flex-col gap-4 md:flex-row md:items-start">
+                <TotpQrCode :uri="props.totpUri" />
 
                 <div class="flex flex-col gap-1">
-                    <p class="text-sm font-medium text-slate-800">{{ t('settings.security.totp.uri_label') }}</p>
-                    <code class="block break-all rounded border border-slate-300 bg-white px-3 py-2 text-xs">{{ props.totpUri }}</code>
-                    <button
-                        type="button"
-                        class="self-start inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
-                        @click="copyUri"
-                    >
-                        {{ copied ? t('settings.security.totp.copied') : t('settings.security.totp.copy') }}
-                    </button>
+                    <p class="text-sm font-medium text-slate-800">{{ t('settings.security.totp.secret_label') }}</p>
+                    <p class="font-mono text-lg tracking-widest">{{ secretGroups.join(' ') }}</p>
                 </div>
+            </div>
 
-                <form class="flex flex-col gap-4" @submit.prevent="confirmTotp">
+            <div class="flex flex-col gap-1">
+                <p class="text-sm font-medium text-slate-800">{{ t('settings.security.totp.uri_label') }}</p>
+                <code class="block break-all rounded border border-slate-300 bg-white px-3 py-2 text-xs">{{ props.totpUri }}</code>
+                <button
+                    type="button"
+                    class="self-start inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
+                    @click="copyUri"
+                >
+                    {{ copied ? t('settings.security.totp.copied') : t('settings.security.totp.copy') }}
+                </button>
+            </div>
+
+            <form class="flex flex-col gap-4" @submit.prevent="confirmTotp">
+                <FormField
+                    v-slot="{ describedBy }"
+                    :label="t('settings.security.totp.code_label')"
+                    id="code"
+                    :error="confirmForm.errors.code"
+                >
+                    <input
+                        id="code"
+                        v-model="confirmForm.code"
+                        :aria-describedby="describedBy"
+                        type="text"
+                        name="code"
+                        inputmode="numeric"
+                        autocomplete="one-time-code"
+                        class="rounded border border-slate-300 bg-white px-3 py-2"
+                    >
+                </FormField>
+
+                <button
+                    type="submit"
+                    :disabled="confirmForm.processing"
+                    class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+                >
+                    {{ confirmForm.processing ? t('common.pending.default') : t('settings.security.totp.confirm') }}
+                </button>
+            </form>
+        </template>
+
+        <!-- Läge 3 · bekräftad. -->
+        <template v-else>
+            <p class="text-sm text-slate-700">
+                {{ t('settings.security.totp.confirmed_at', { date: props.totpConfirmedAt }) }}
+            </p>
+
+            <div class="flex flex-col gap-2 rounded border border-slate-200 bg-white p-4">
+                <h3 class="font-medium">{{ t('settings.security.totp.recovery_heading') }}</h3>
+                <p class="text-sm text-slate-700">
+                    {{ t('settings.security.totp.recovery_remaining', { count: props.recoveryCodesRemaining }) }}
+                </p>
+
+                <!-- Varningen står i vyn och läses av skärmläsaren innan
+                     knappen klickas — inte i en confirm()-dialog, som
+                     varken går att översätta eller att testa (Beslut 7).
+                     RecoveryCodeBroker § Beslut 3: hela radmängden raderas
+                     i en transaktion. -->
+                <p class="text-sm text-amber-800">{{ t('settings.security.totp.recovery_warning') }}</p>
+
+                <form @submit.prevent="generateRecoveryCodes">
+                    <button
+                        type="submit"
+                        :disabled="recoveryForm.processing"
+                        class="inline-flex min-h-11 items-center rounded border border-slate-400 bg-white px-4 font-medium disabled:opacity-50"
+                    >
+                        {{ recoveryForm.processing ? t('common.pending.default') : t('settings.security.totp.recovery_generate') }}
+                    </button>
+                </form>
+
+                <div v-if="props.recoveryCodes" class="flex flex-col gap-2">
+                    <p class="text-sm text-slate-700">{{ t('settings.security.totp.recovery_once') }}</p>
+                    <ul class="flex flex-col gap-1 font-mono text-sm">
+                        <li v-for="code in props.recoveryCodes" :key="code">{{ code }}</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-4 rounded border border-slate-200 bg-white p-4">
+                <h3 class="font-medium">{{ t('settings.security.totp.disable_heading') }}</h3>
+
+                <!-- RecoveryCodeBroker § Beslut 5: disable() anropar
+                     purge(). Ett nytt ark vid en ny aktivering, aldrig de
+                     gamla koderna tillbaka. -->
+                <p class="text-sm text-amber-800">{{ t('settings.security.totp.disable_warning') }}</p>
+
+                <form class="flex flex-col gap-4" @submit.prevent="disableTotp">
                     <FormField
                         v-slot="{ describedBy }"
                         :label="t('settings.security.totp.code_label')"
                         id="code"
-                        :error="confirmForm.errors.code"
+                        :error="disableForm.errors.code"
                     >
                         <input
                             id="code"
-                            v-model="confirmForm.code"
+                            v-model="disableForm.code"
                             :aria-describedby="describedBy"
                             type="text"
                             name="code"
@@ -221,130 +297,55 @@ function outcomeLabel(login) {
 
                     <button
                         type="submit"
-                        :disabled="confirmForm.processing"
-                        class="self-start inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+                        :disabled="disableForm.processing"
+                        class="self-start inline-flex min-h-11 items-center rounded bg-red-700 px-4 font-medium text-white disabled:opacity-50"
                     >
-                        {{ confirmForm.processing ? t('common.pending.default') : t('settings.security.totp.confirm') }}
+                        {{ disableForm.processing ? t('common.pending.default') : t('settings.security.totp.disable_submit') }}
                     </button>
                 </form>
-            </template>
+            </div>
+        </template>
+    </section>
 
-            <!-- Läge 3 · bekräftad. -->
-            <template v-else>
-                <p class="text-sm text-slate-700">
-                    {{ t('settings.security.totp.confirmed_at', { date: props.totpConfirmedAt }) }}
-                </p>
+    <!--
+        Inloggningshistoriken, issue 117. En <ul> med UiListRow i, som
+        varje annan lista: en skärmläsare ska höra hur många rader det
+        finns innan den läser den första. Ingen rad är klickbar — en
+        inloggning går inte att öppna, och en rad som ser klickbar ut utan
+        att leda någonstans är värre än en rad som inte gör det.
+    -->
+    <section class="mt-8 flex max-w-lg flex-col gap-4">
+        <h2 class="text-lg font-semibold">{{ t('settings.security.logins.heading') }}</h2>
 
-                <div class="flex flex-col gap-2 rounded border border-slate-200 bg-white p-4">
-                    <h3 class="font-medium">{{ t('settings.security.totp.recovery_heading') }}</h3>
-                    <p class="text-sm text-slate-700">
-                        {{ t('settings.security.totp.recovery_remaining', { count: props.recoveryCodesRemaining }) }}
-                    </p>
+        <p v-if="props.logins.length === 0" class="text-sm text-slate-700">
+            {{ t('settings.security.logins.empty') }}
+        </p>
 
-                    <!-- Varningen står i vyn och läses av skärmläsaren innan
-                         knappen klickas — inte i en confirm()-dialog, som
-                         varken går att översätta eller att testa (Beslut 7).
-                         RecoveryCodeBroker § Beslut 3: hela radmängden raderas
-                         i en transaktion. -->
-                    <p class="text-sm text-amber-800">{{ t('settings.security.totp.recovery_warning') }}</p>
+        <ul v-else class="flex flex-col">
+            <UiListRow v-for="(login, index) in props.logins" :key="`${login.created_at}-${index}`">
+                <template #title>{{ deviceLabel(login) }}</template>
 
-                    <form @submit.prevent="generateRecoveryCodes">
-                        <button
-                            type="submit"
-                            :disabled="recoveryForm.processing"
-                            class="inline-flex min-h-11 items-center rounded border border-slate-400 bg-white px-4 font-medium disabled:opacity-50"
-                        >
-                            {{ recoveryForm.processing ? t('common.pending.default') : t('settings.security.totp.recovery_generate') }}
-                        </button>
-                    </form>
+                <template #subtitle>{{ outcomeLabel(login) }}</template>
 
-                    <div v-if="props.recoveryCodes" class="flex flex-col gap-2">
-                        <p class="text-sm text-slate-700">{{ t('settings.security.totp.recovery_once') }}</p>
-                        <ul class="flex flex-col gap-1 font-mono text-sm">
-                            <li v-for="code in props.recoveryCodes" :key="code">{{ code }}</li>
-                        </ul>
-                    </div>
-                </div>
+                <template #meta>
+                    <time :datetime="login.created_at">{{ eventDate(login.created_at).text }}</time>
+                </template>
+            </UiListRow>
+        </ul>
+    </section>
 
-                <div class="flex flex-col gap-4 rounded border border-slate-200 bg-white p-4">
-                    <h3 class="font-medium">{{ t('settings.security.totp.disable_heading') }}</h3>
-
-                    <!-- RecoveryCodeBroker § Beslut 5: disable() anropar
-                         purge(). Ett nytt ark vid en ny aktivering, aldrig de
-                         gamla koderna tillbaka. -->
-                    <p class="text-sm text-amber-800">{{ t('settings.security.totp.disable_warning') }}</p>
-
-                    <form class="flex flex-col gap-4" @submit.prevent="disableTotp">
-                        <FormField
-                            v-slot="{ describedBy }"
-                            :label="t('settings.security.totp.code_label')"
-                            id="code"
-                            :error="disableForm.errors.code"
-                        >
-                            <input
-                                id="code"
-                                v-model="disableForm.code"
-                                :aria-describedby="describedBy"
-                                type="text"
-                                name="code"
-                                inputmode="numeric"
-                                autocomplete="one-time-code"
-                                class="rounded border border-slate-300 bg-white px-3 py-2"
-                            >
-                        </FormField>
-
-                        <button
-                            type="submit"
-                            :disabled="disableForm.processing"
-                            class="self-start inline-flex min-h-11 items-center rounded bg-red-700 px-4 font-medium text-white disabled:opacity-50"
-                        >
-                            {{ disableForm.processing ? t('common.pending.default') : t('settings.security.totp.disable_submit') }}
-                        </button>
-                    </form>
-                </div>
-            </template>
-        </section>
-
-        <!--
-            Inloggningshistoriken, issue 117. En <ul> med UiListRow i, som
-            varje annan lista: en skärmläsare ska höra hur många rader det
-            finns innan den läser den första. Ingen rad är klickbar — en
-            inloggning går inte att öppna, och en rad som ser klickbar ut utan
-            att leda någonstans är värre än en rad som inte gör det.
-        -->
-        <section class="mt-8 flex max-w-lg flex-col gap-4">
-            <h2 class="text-lg font-semibold">{{ t('settings.security.logins.heading') }}</h2>
-
-            <p v-if="props.logins.length === 0" class="text-sm text-slate-700">
-                {{ t('settings.security.logins.empty') }}
-            </p>
-
-            <ul v-else class="flex flex-col">
-                <UiListRow v-for="(login, index) in props.logins" :key="`${login.created_at}-${index}`">
-                    <template #title>{{ deviceLabel(login) }}</template>
-
-                    <template #subtitle>{{ outcomeLabel(login) }}</template>
-
-                    <template #meta>
-                        <time :datetime="login.created_at">{{ eventDate(login.created_at).text }}</time>
-                    </template>
-                </UiListRow>
-            </ul>
-        </section>
-
-        <!--
-            Personraderingen, issue 145. Sist på sidan och inte bland
-            inställningarna ovanför: det är den enda handlingen här som inte
-            går att ångra, och den ska inte ligga där en tumme landar när
-            någon söker tvåfaktorn. Formuläret äger sin egen form och sin egen
-            rutt, som lösenordsformuläret — uppdelningen av konton och
-            spärrarna kommer färdiga ur `deletion` och räknas inte om här.
-        -->
-        <UserDeletionForm
-            :accounts-to-delete="props.deletion.accountsToDelete"
-            :accounts-to-leave="props.deletion.accountsToLeave"
-            :blockers="props.deletion.blockers"
-            :totp-enabled="props.totpEnabled"
-        />
-    </SettingsLayout>
+    <!--
+        Personraderingen, issue 145. Sist på sidan och inte bland
+        inställningarna ovanför: det är den enda handlingen här som inte
+        går att ångra, och den ska inte ligga där en tumme landar när
+        någon söker tvåfaktorn. Formuläret äger sin egen form och sin egen
+        rutt, som lösenordsformuläret — uppdelningen av konton och
+        spärrarna kommer färdiga ur `deletion` och räknas inte om här.
+    -->
+    <UserDeletionForm
+        :accounts-to-delete="props.deletion.accountsToDelete"
+        :accounts-to-leave="props.deletion.accountsToLeave"
+        :blockers="props.deletion.blockers"
+        :totp-enabled="props.totpEnabled"
+    />
 </template>
