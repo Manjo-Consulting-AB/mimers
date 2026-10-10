@@ -580,8 +580,8 @@ return [
             'title' => 'Verify your email address',
             'heading' => 'Verify your email address',
             'banner' => 'Your email address is not verified yet.',
-            'body' => 'We will send an email with a verification link to your address. Click the link in the email to confirm it.',
-            'send' => 'Send the verification email',
+            'body' => 'We have sent an email with a verification link to your address. Click the link in the email to confirm it. Can\'t find it? Check your spam folder or send it again.',
+            'send' => 'Resend the verification email',
         ],
 
         'logout' => 'Log out',
