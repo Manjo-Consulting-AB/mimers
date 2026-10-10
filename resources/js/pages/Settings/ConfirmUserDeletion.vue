@@ -5,6 +5,8 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import UserDeletionSummary from '../../components/UserDeletionSummary.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Bekräftelsesidan i mejlet, se [[M22 Redo för testare]] § 145 och
  * [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-09-28.
@@ -52,40 +54,38 @@ function submit() {
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('settings.security.deletion_link.heading')" />
+    <Head :title="t('settings.security.deletion_link.heading')" />
 
-        <section class="mx-auto flex max-w-lg flex-col gap-4 py-12">
-            <h1 class="text-2xl font-semibold">{{ t('settings.security.deletion_link.heading') }}</h1>
+    <section class="mx-auto flex max-w-lg flex-col gap-4 py-12">
+        <h1 class="text-2xl font-semibold">{{ t('settings.security.deletion_link.heading') }}</h1>
 
-            <p class="text-sm text-slate-700">{{ t('settings.security.deletion_link.intro') }}</p>
+        <p class="text-sm text-slate-700">{{ t('settings.security.deletion_link.intro') }}</p>
 
-            <UserDeletionSummary
-                :accounts-to-delete="props.deletion.accountsToDelete"
-                :accounts-to-leave="props.deletion.accountsToLeave"
-                :blockers="props.deletion.blockers"
+        <UserDeletionSummary
+            :accounts-to-delete="props.deletion.accountsToDelete"
+            :accounts-to-leave="props.deletion.accountsToLeave"
+            :blockers="props.deletion.blockers"
+        >
+            <template #blocked>
+                <h3 class="font-medium text-amber-900">{{ t('settings.security.deletion.blocked_heading') }}</h3>
+                <p class="text-sm text-amber-900">{{ t('settings.security.deletion_link.blocked') }}</p>
+            </template>
+        </UserDeletionSummary>
+
+        <!-- Ingen felfältrad: formuläret har inget fält, och den här
+             rutten prövar ingen engångskod — takgränsen och dess
+             `email`-fel hör till BEGÄRAN, som har sitt eget formulär på
+             säkerhetssidan. -->
+        <form class="flex flex-col gap-4" @submit.prevent="submit">
+            <button
+                type="submit"
+                :disabled="blocked || form.processing"
+                class="self-start inline-flex min-h-11 items-center rounded bg-red-700 px-4 font-medium text-white disabled:opacity-50"
             >
-                <template #blocked>
-                    <h3 class="font-medium text-amber-900">{{ t('settings.security.deletion.blocked_heading') }}</h3>
-                    <p class="text-sm text-amber-900">{{ t('settings.security.deletion_link.blocked') }}</p>
-                </template>
-            </UserDeletionSummary>
-
-            <!-- Ingen felfältrad: formuläret har inget fält, och den här
-                 rutten prövar ingen engångskod — takgränsen och dess
-                 `email`-fel hör till BEGÄRAN, som har sitt eget formulär på
-                 säkerhetssidan. -->
-            <form class="flex flex-col gap-4" @submit.prevent="submit">
-                <button
-                    type="submit"
-                    :disabled="blocked || form.processing"
-                    class="self-start inline-flex min-h-11 items-center rounded bg-red-700 px-4 font-medium text-white disabled:opacity-50"
-                >
-                    {{ blocked
-                        ? t('settings.security.deletion.blocked_button')
-                        : (form.processing ? t('common.pending.default') : t('settings.security.deletion_link.submit')) }}
-                </button>
-            </form>
-        </section>
-    </AppLayout>
+                {{ blocked
+                    ? t('settings.security.deletion.blocked_button')
+                    : (form.processing ? t('common.pending.default') : t('settings.security.deletion_link.submit')) }}
+            </button>
+        </form>
+    </section>
 </template>

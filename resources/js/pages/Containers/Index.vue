@@ -7,6 +7,8 @@ import UiBadge from '../../components/UiBadge.vue';
 import UiCard from '../../components/UiCard.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });
+
 /*
  * Containerlistan, se issue 54 § Beslut 6, 9 och 10.
  *
@@ -93,93 +95,91 @@ const isShared = (container) => accountName(container) === null;
 </script>
 
 <template>
-    <AppLayout :create="create">
-        <Head :title="t('container.index.title')" />
+    <Head :title="t('container.index.title')" />
 
-        <div class="flex items-center justify-between gap-4">
-            <h1 class="text-2xl font-semibold">{{ t('container.index.heading') }}</h1>
+    <div class="flex items-center justify-between gap-4">
+        <h1 class="text-2xl font-semibold">{{ t('container.index.heading') }}</h1>
 
-            <Link href="/containers/create" class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 text-sm font-medium text-white">
-                {{ t('container.index.create') }}
-            </Link>
-        </div>
+        <Link href="/containers/create" class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 text-sm font-medium text-white">
+            {{ t('container.index.create') }}
+        </Link>
+    </div>
 
-        <p v-if="containers.length === 0" class="mt-8 text-slate-700">
-            {{ t('container.index.empty') }}
-        </p>
+    <p v-if="containers.length === 0" class="mt-8 text-slate-700">
+        {{ t('container.index.empty') }}
+    </p>
 
-        <ul v-else class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <li v-for="container in containers" :key="container.ulid">
-                <UiCard class="h-full">
-                    <template #media>
-                        <div class="aspect-video w-full">
-                            <ContainerCover :cover="container.cover" variant="medium" />
-                        </div>
-                    </template>
-
-                    <!-- Namnlänken går till ITEMLISTAN och inte till översikten
-                         (issue 89 · [[ADR-0039 Containerns översikt]]
-                         § Konsekvenser). Den menade listan redan före flytten, och
-                         den som väljer en container ur listan vill in i den — inte
-                         förbi en mellansida. -->
-                    <template #heading>
-                        <Link
-                            :href="`/containers/${container.ulid}/items`"
-                            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                        >
-                            {{ container.name }}
-                        </Link>
-                    </template>
-
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-                        <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
-                             Containerns art]]). Ingen översättningsnyckel byggs ur
-                             värdet: `t()` returnerar nyckeln själv när uppslaget
-                             misslyckas, så den gamla raden hade skrivit
-                             `container.kind.Segelbåt` på skärmen första gången någon
-                             skrev en egen art.
-                             Spärren frågar om fältet är SATT, aldrig vilket värde det
-                             bär — samma behandling som varje annat nullbart fält
-                             (`description`), och den domänlogik regeln stänger ute är
-                             en förgrening på VILKEN art det är. En rad med en tom art
-                             vore ett synligt fel, och "ingen art angiven" är ett
-                             tillstånd [[ADR-0036]] § Konsekvenser pekar ut. -->
-                        <span v-if="container.kind" class="text-sm text-slate-600">{{ container.kind }}</span>
-
-                        <span v-if="showsAccountName && !isShared(container)" class="text-sm text-slate-600">
-                            {{ accountName(container) }}
-                        </span>
-
-                        <UiBadge v-if="isShared(container)">
-                            {{ t('container.index.shared') }}
-                        </UiBadge>
-
-                        <UiBadge v-if="container.ulid === activeUlid" aria-current="true">
-                            {{ t('container.index.active') }}
-                        </UiBadge>
-
-                        <Link
-                            v-if="container.can.update"
-                            :href="`/containers/${container.ulid}/edit`"
-                            class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
-                        >
-                            {{ t('container.index.edit') }}
-                        </Link>
+    <ul v-else class="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <li v-for="container in containers" :key="container.ulid">
+            <UiCard class="h-full">
+                <template #media>
+                    <div class="aspect-video w-full">
+                        <ContainerCover :cover="container.cover" variant="medium" />
                     </div>
-                </UiCard>
-            </li>
-        </ul>
+                </template>
 
-        <!--
-            Vägen tillbaka, se issue 62b § Beslut 8. Raden ligger under listan
-            och är ALLTID synlig — också för en tom lista, för den som raderat
-            sin enda container är den som mest behöver den. Ingen räknare: ett tal
-            hade varit en fråga per sidladdning, och texten är konstant.
-        -->
-        <p class="mt-8 text-sm">
-            <Link href="/trash/containers" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
-                {{ t('trash.containers.link') }}
-            </Link>
-        </p>
-    </AppLayout>
+                <!-- Namnlänken går till ITEMLISTAN och inte till översikten
+                     (issue 89 · [[ADR-0039 Containerns översikt]]
+                     § Konsekvenser). Den menade listan redan före flytten, och
+                     den som väljer en container ur listan vill in i den — inte
+                     förbi en mellansida. -->
+                <template #heading>
+                    <Link
+                        :href="`/containers/${container.ulid}/items`"
+                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                    >
+                        {{ container.name }}
+                    </Link>
+                </template>
+
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
+                         Containerns art]]). Ingen översättningsnyckel byggs ur
+                         värdet: `t()` returnerar nyckeln själv när uppslaget
+                         misslyckas, så den gamla raden hade skrivit
+                         `container.kind.Segelbåt` på skärmen första gången någon
+                         skrev en egen art.
+                         Spärren frågar om fältet är SATT, aldrig vilket värde det
+                         bär — samma behandling som varje annat nullbart fält
+                         (`description`), och den domänlogik regeln stänger ute är
+                         en förgrening på VILKEN art det är. En rad med en tom art
+                         vore ett synligt fel, och "ingen art angiven" är ett
+                         tillstånd [[ADR-0036]] § Konsekvenser pekar ut. -->
+                    <span v-if="container.kind" class="text-sm text-slate-600">{{ container.kind }}</span>
+
+                    <span v-if="showsAccountName && !isShared(container)" class="text-sm text-slate-600">
+                        {{ accountName(container) }}
+                    </span>
+
+                    <UiBadge v-if="isShared(container)">
+                        {{ t('container.index.shared') }}
+                    </UiBadge>
+
+                    <UiBadge v-if="container.ulid === activeUlid" aria-current="true">
+                        {{ t('container.index.active') }}
+                    </UiBadge>
+
+                    <Link
+                        v-if="container.can.update"
+                        :href="`/containers/${container.ulid}/edit`"
+                        class="inline-flex min-h-11 items-center text-sm text-blue-700 hover:underline"
+                    >
+                        {{ t('container.index.edit') }}
+                    </Link>
+                </div>
+            </UiCard>
+        </li>
+    </ul>
+
+    <!--
+        Vägen tillbaka, se issue 62b § Beslut 8. Raden ligger under listan
+        och är ALLTID synlig — också för en tom lista, för den som raderat
+        sin enda container är den som mest behöver den. Ingen räknare: ett tal
+        hade varit en fråga per sidladdning, och texten är konstant.
+    -->
+    <p class="mt-8 text-sm">
+        <Link href="/trash/containers" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+            {{ t('trash.containers.link') }}
+        </Link>
+    </p>
 </template>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import CreateButton from '../components/CreateButton.vue';
 import CreateMenu from '../components/CreateMenu.vue';
@@ -212,6 +212,20 @@ function openCreateMenu(element) {
 function closeCreateMenu() {
     createMenuOpen.value = false;
 }
+
+/*
+ * Menyerna stängs vid navigering, se issue 273.
+ *
+ * Sedan sidorna deklarerar sin layout med `defineOptions` behåller Inertia
+ * skalets instans mellan två sidor — och därmed dess tillstånd. Utan raden
+ * står mobilmenyn öppen över nästa sida efter ett klick i den, för `menuOpen`
+ * överlevde bytet. `page.url` är den enda klocka som behövs: en visit som
+ * byter adress stänger båda menyerna, och en som stannar kvar rör dem inte.
+ */
+watch(() => page.url, () => {
+    menuOpen.value = false;
+    createMenuOpen.value = false;
+});
 
 const showsVerificationNotice = computed(
     () => Boolean(user.value) && user.value.email_verified_at === null && !page.url.startsWith('/email/verify'),

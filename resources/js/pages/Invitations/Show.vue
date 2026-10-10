@@ -4,6 +4,8 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Mejlets landningssida, se issue 55b § Beslut 2, 3 och 4, och listan över
  * väntande inbjudningar, se issue 131.
@@ -97,137 +99,135 @@ function answer(inbjudan, verb) {
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="state === 'pending' ? t('invitation.pending.title') : t('invitation.title')" />
+    <Head :title="state === 'pending' ? t('invitation.pending.title') : t('invitation.title')" />
 
-        <h1 class="text-2xl font-semibold">
-            {{ state === 'pending' ? t('invitation.pending.heading') : t('invitation.heading') }}
-        </h1>
+    <h1 class="text-2xl font-semibold">
+        {{ state === 'pending' ? t('invitation.pending.heading') : t('invitation.heading') }}
+    </h1>
 
-        <!--
-            Förhandsvisningen — containerns namn, inbjudaren och nivån — visas för
-            både en gäst och en inloggad mottagare. Containerns namn står redan i
-            mejlet (InvitationNotification), så den som har länken har fått
-            det. Adressen inbjudan gäller finns inte i propen alls.
-        -->
-        <template v-if="invitation">
-            <p class="mt-4 text-slate-700">
-                {{ t('invitation.intro', { inviter: invitation.inviter, container: invitation.container }) }}
-            </p>
-            <p class="mt-1 text-sm text-slate-600">
-                {{ t('invitation.level', { level: t(`sharing.level.${invitation.level}.label`) }) }}
-            </p>
-        </template>
+    <!--
+        Förhandsvisningen — containerns namn, inbjudaren och nivån — visas för
+        både en gäst och en inloggad mottagare. Containerns namn står redan i
+        mejlet (InvitationNotification), så den som har länken har fått
+        det. Adressen inbjudan gäller finns inte i propen alls.
+    -->
+    <template v-if="invitation">
+        <p class="mt-4 text-slate-700">
+            {{ t('invitation.intro', { inviter: invitation.inviter, container: invitation.container }) }}
+        </p>
+        <p class="mt-1 text-sm text-slate-600">
+            {{ t('invitation.level', { level: t(`sharing.level.${invitation.level}.label`) }) }}
+        </p>
+    </template>
 
-        <!--
-            Ett nekande från servern blir ett formulärfel på nyckeln
-            `invitation` (t.ex. en andra accept av samma token), aldrig en rå
-            JSON-kropp — se App\Http\Controllers\InvitationResponseController.
-        -->
-        <p
-            v-if="page.props.errors.invitation"
-            role="alert"
-            class="mt-4 max-w-sm rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        >
-            {{ page.props.errors.invitation }}
+    <!--
+        Ett nekande från servern blir ett formulärfel på nyckeln
+        `invitation` (t.ex. en andra accept av samma token), aldrig en rå
+        JSON-kropp — se App\Http\Controllers\InvitationResponseController.
+    -->
+    <p
+        v-if="page.props.errors.invitation"
+        role="alert"
+        class="mt-4 max-w-sm rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+    >
+        {{ page.props.errors.invitation }}
+    </p>
+
+    <div v-if="state === 'ready'" class="mt-6 flex max-w-sm flex-col gap-3">
+        <form @submit.prevent="accept">
+            <button
+                type="submit"
+                :disabled="acceptForm.processing"
+                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+            >
+                {{ acceptForm.processing ? t('common.pending.default') : t('invitation.accept') }}
+            </button>
+        </form>
+
+        <form @submit.prevent="reject">
+            <button
+                type="submit"
+                :disabled="rejectForm.processing"
+                class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
+            >
+                {{ rejectForm.processing ? t('common.pending.default') : t('invitation.reject') }}
+            </button>
+        </form>
+    </div>
+
+    <!--
+        Listan: en rad per väntande inbjudan, med samma två svar som
+        `ready` och samma ord om inbjudan — containerns namn, inbjudaren
+        och nivån. Adressen finns inte i proppen alls, av samma skäl som i
+        förhandsvisningen ovan.
+
+        Tomt är ett svar och inte ett fel: en verifierad användare utan
+        väntande inbjudningar är det vanliga läget, och proppen är en tom
+        LISTA och inte `null` just därför.
+    -->
+    <div v-else-if="state === 'pending'" class="mt-6 flex max-w-sm flex-col gap-4">
+        <p v-if="invitations.length === 0" class="text-sm text-slate-600">
+            {{ t('invitation.pending.empty') }}
         </p>
 
-        <div v-if="state === 'ready'" class="mt-6 flex max-w-sm flex-col gap-3">
-            <form @submit.prevent="accept">
-                <button
-                    type="submit"
-                    :disabled="acceptForm.processing"
-                    class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                >
-                    {{ acceptForm.processing ? t('common.pending.default') : t('invitation.accept') }}
-                </button>
-            </form>
-
-            <form @submit.prevent="reject">
-                <button
-                    type="submit"
-                    :disabled="rejectForm.processing"
-                    class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
-                >
-                    {{ rejectForm.processing ? t('common.pending.default') : t('invitation.reject') }}
-                </button>
-            </form>
-        </div>
-
-        <!--
-            Listan: en rad per väntande inbjudan, med samma två svar som
-            `ready` och samma ord om inbjudan — containerns namn, inbjudaren
-            och nivån. Adressen finns inte i proppen alls, av samma skäl som i
-            förhandsvisningen ovan.
-
-            Tomt är ett svar och inte ett fel: en verifierad användare utan
-            väntande inbjudningar är det vanliga läget, och proppen är en tom
-            LISTA och inte `null` just därför.
-        -->
-        <div v-else-if="state === 'pending'" class="mt-6 flex max-w-sm flex-col gap-4">
-            <p v-if="invitations.length === 0" class="text-sm text-slate-600">
-                {{ t('invitation.pending.empty') }}
+        <div
+            v-for="inbjudan in invitations"
+            :key="inbjudan.ulid"
+            class="flex flex-col gap-2 rounded border border-slate-300 bg-white p-4 text-sm"
+        >
+            <p class="text-slate-700">
+                {{ t('invitation.intro', { inviter: inbjudan.inviter, container: inbjudan.container }) }}
+            </p>
+            <p class="text-slate-600">
+                {{ t('invitation.level', { level: t(`sharing.level.${inbjudan.level}.label`) }) }}
             </p>
 
-            <div
-                v-for="inbjudan in invitations"
-                :key="inbjudan.ulid"
-                class="flex flex-col gap-2 rounded border border-slate-300 bg-white p-4 text-sm"
-            >
-                <p class="text-slate-700">
-                    {{ t('invitation.intro', { inviter: inbjudan.inviter, container: inbjudan.container }) }}
-                </p>
-                <p class="text-slate-600">
-                    {{ t('invitation.level', { level: t(`sharing.level.${inbjudan.level}.label`) }) }}
-                </p>
+            <div class="mt-1 flex flex-wrap gap-3">
+                <button
+                    type="button"
+                    :disabled="busy === inbjudan.ulid"
+                    class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+                    @click="answer(inbjudan, 'accept')"
+                >
+                    {{ busy === inbjudan.ulid ? t('common.pending.default') : t('invitation.accept') }}
+                </button>
 
-                <div class="mt-1 flex flex-wrap gap-3">
-                    <button
-                        type="button"
-                        :disabled="busy === inbjudan.ulid"
-                        class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-                        @click="answer(inbjudan, 'accept')"
-                    >
-                        {{ busy === inbjudan.ulid ? t('common.pending.default') : t('invitation.accept') }}
-                    </button>
-
-                    <button
-                        type="button"
-                        :disabled="busy === inbjudan.ulid"
-                        class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
-                        @click="answer(inbjudan, 'reject')"
-                    >
-                        {{ busy === inbjudan.ulid ? t('common.pending.default') : t('invitation.reject') }}
-                    </button>
-                </div>
+                <button
+                    type="button"
+                    :disabled="busy === inbjudan.ulid"
+                    class="inline-flex min-h-11 items-center rounded border border-slate-300 bg-white px-4 font-medium text-slate-800 disabled:opacity-50"
+                    @click="answer(inbjudan, 'reject')"
+                >
+                    {{ busy === inbjudan.ulid ? t('common.pending.default') : t('invitation.reject') }}
+                </button>
             </div>
         </div>
+    </div>
 
-        <div v-else-if="state === 'guest'" class="mt-6 flex max-w-sm flex-col gap-2 text-sm">
-            <p class="text-slate-700">{{ t('invitation.guest') }}</p>
-            <Link href="/login" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('nav.login') }}</Link>
-            <Link href="/register" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.register.heading') }}</Link>
-        </div>
+    <div v-else-if="state === 'guest'" class="mt-6 flex max-w-sm flex-col gap-2 text-sm">
+        <p class="text-slate-700">{{ t('invitation.guest') }}</p>
+        <Link href="/login" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('nav.login') }}</Link>
+        <Link href="/register" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.register.heading') }}</Link>
+    </div>
 
-        <!--
-            `unverified` har inget eget innehåll: AppLayouts banner bär redan
-            verifieringsuppmaningen (se dess docblock). Grenen finns kvar bara
-            för att tillståndet inte ska falla vidare till `mismatch` eller
-            `unavailable` nedan.
-        -->
-        <template v-else-if="state === 'unverified'"></template>
+    <!--
+        `unverified` har inget eget innehåll: AppLayouts banner bär redan
+        verifieringsuppmaningen (se dess docblock). Grenen finns kvar bara
+        för att tillståndet inte ska falla vidare till `mismatch` eller
+        `unavailable` nedan.
+    -->
+    <template v-else-if="state === 'unverified'"></template>
 
-        <div v-else-if="state === 'mismatch'" class="mt-6 max-w-sm">
-            <p class="text-slate-700">{{ t('invitation.mismatch') }}</p>
-        </div>
+    <div v-else-if="state === 'mismatch'" class="mt-6 max-w-sm">
+        <p class="text-slate-700">{{ t('invitation.mismatch') }}</p>
+    </div>
 
-        <!--
-            `unavailable` och ingenting annat: utgången, redan besvarad och
-            okänt token ger samma besked, med en väg vidare till startsidan.
-        -->
-        <div v-else class="mt-6 flex max-w-sm flex-col gap-2 text-sm">
-            <p class="text-slate-700">{{ t('invitation.unavailable') }}</p>
-            <Link href="/" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('invitation.home') }}</Link>
-        </div>
-    </AppLayout>
+    <!--
+        `unavailable` och ingenting annat: utgången, redan besvarad och
+        okänt token ger samma besked, med en väg vidare till startsidan.
+    -->
+    <div v-else class="mt-6 flex max-w-sm flex-col gap-2 text-sm">
+        <p class="text-slate-700">{{ t('invitation.unavailable') }}</p>
+        <Link href="/" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('invitation.home') }}</Link>
+    </div>
 </template>

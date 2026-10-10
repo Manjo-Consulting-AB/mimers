@@ -3,6 +3,8 @@ import { Head } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Informationssidorna — /about, /privacy, /terms och /help, se issue 202.
  *
@@ -24,12 +26,10 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t(`info.${page}.title`)" />
+    <Head :title="t(`info.${page}.title`)" />
 
-        <div class="py-12 text-center">
-            <h1 class="text-3xl font-semibold">{{ t(`info.${page}.title`) }}</h1>
-            <p class="mt-3 text-slate-600">{{ t('info.placeholder') }}</p>
-        </div>
-    </AppLayout>
+    <div class="py-12 text-center">
+        <h1 class="text-3xl font-semibold">{{ t(`info.${page}.title`) }}</h1>
+        <p class="mt-3 text-slate-600">{{ t('info.placeholder') }}</p>
+    </div>
 </template>

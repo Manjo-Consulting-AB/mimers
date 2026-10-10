@@ -4,6 +4,8 @@ import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../layouts/AppLayout.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Felsidan, se issue 51 § Beslut 6. Den renderas ur bootstrap/app.php:s
  * respond() — aldrig ur en controller — och får statuskoden som enda prop.
@@ -28,14 +30,12 @@ const text = computed(() => t(`error.${props.status}`));
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('error.title', { status })" />
+    <Head :title="t('error.title', { status })" />
 
-        <div class="py-12 text-center">
-            <p class="font-mono text-sm text-slate-600">{{ status }}</p>
-            <h1 class="mt-2 text-2xl font-semibold">{{ text }}</h1>
+    <div class="py-12 text-center">
+        <p class="font-mono text-sm text-slate-600">{{ status }}</p>
+        <h1 class="mt-2 text-2xl font-semibold">{{ text }}</h1>
 
-            <Link href="/" class="mt-6 inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('common.home') }}</Link>
-        </div>
-    </AppLayout>
+        <Link href="/" class="mt-6 inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('common.home') }}</Link>
+    </div>
 </template>

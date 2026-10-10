@@ -4,6 +4,8 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import TrashRow from '../../components/TrashRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Papperskorgen för raderade containers, se issue 62b § Beslut 1, 3, 7 och 8.
  *
@@ -46,35 +48,33 @@ const page = usePage();
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('trash.containers.title')" />
+    <Head :title="t('trash.containers.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('trash.containers.heading') }}</h1>
-        <p class="mt-1 text-sm text-slate-600">{{ t('trash.containers.description') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('trash.containers.heading') }}</h1>
+    <p class="mt-1 text-sm text-slate-600">{{ t('trash.containers.description') }}</p>
 
-        <p
-            v-if="page.props.errors.ulid"
-            role="alert"
-            class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        >
-            {{ page.props.errors.ulid }}
-        </p>
+    <p
+        v-if="page.props.errors.ulid"
+        role="alert"
+        class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+    >
+        {{ page.props.errors.ulid }}
+    </p>
 
-        <ul v-if="entries.length > 0" class="mt-6 flex flex-col gap-3">
-            <TrashRow
-                v-for="entry in entries"
-                :key="entry.ulid"
-                :entry="entry"
-                :can-restore="canRestore[entry.ulid] === true"
-            />
-        </ul>
+    <ul v-if="entries.length > 0" class="mt-6 flex flex-col gap-3">
+        <TrashRow
+            v-for="entry in entries"
+            :key="entry.ulid"
+            :entry="entry"
+            :can-restore="canRestore[entry.ulid] === true"
+        />
+    </ul>
 
-        <p v-else class="mt-6 text-sm text-slate-600">{{ t('trash.containers.empty') }}</p>
+    <p v-else class="mt-6 text-sm text-slate-600">{{ t('trash.containers.empty') }}</p>
 
-        <p class="mt-8 text-sm">
-            <Link href="/containers" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
-                {{ t('trash.containers.back') }}
-            </Link>
-        </p>
-    </AppLayout>
+    <p class="mt-8 text-sm">
+        <Link href="/containers" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+            {{ t('trash.containers.back') }}
+        </Link>
+    </p>
 </template>

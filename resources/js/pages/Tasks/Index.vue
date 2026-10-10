@@ -12,6 +12,8 @@ import UiTabs from '../../components/UiTabs.vue';
 import UpcomingTasksToggle from '../../components/UpcomingTasksToggle.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Todo-vyn — "vad ska jag göra?", se issue 64 § Beslut 1–8 och issue 122.
  *
@@ -225,153 +227,151 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('todo.title')" />
+    <Head :title="t('todo.title')" />
 
-        <!-- Rubrikraden bär växeln (issue 134) och *New task* (M27 · issue
-             246): frågan "vilka uppgifter ska listan visa?" ställs där listan
-             står, och svaret gäller både den här sidan och dashboardens panel.
-             Knappen ritas alltid — inboxen är alltid ett möjligt mål (Beslut
-             2). -->
-        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <h1 class="text-2xl font-semibold">{{ t('todo.heading') }}</h1>
+    <!-- Rubrikraden bär växeln (issue 134) och *New task* (M27 · issue
+         246): frågan "vilka uppgifter ska listan visa?" ställs där listan
+         står, och svaret gäller både den här sidan och dashboardens panel.
+         Knappen ritas alltid — inboxen är alltid ett möjligt mål (Beslut
+         2). -->
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 class="text-2xl font-semibold">{{ t('todo.heading') }}</h1>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <UpcomingTasksToggle :enabled="props.showUpcomingTasks" />
+        <div class="flex flex-wrap items-center gap-2">
+            <UpcomingTasksToggle :enabled="props.showUpcomingTasks" />
+
+            <Link
+                :href="createUrl"
+                class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="mr-2 h-4 w-4"
+                    aria-hidden="true"
+                >
+                    <path d="M12 5v14"></path>
+                    <path d="M5 12h14"></path>
+                </svg>
+
+                {{ t('todo.new') }}
+            </Link>
+        </div>
+    </div>
+
+    <!--
+        Flikraden (Beslut 4). Listan står i adressen, och `UiTabs` tänder
+        den flik vars `href` matchar den — vyn håller inget val i minnet.
+    -->
+    <UiTabs class="mt-4" :tabs="tabs" :label="t('todo.tabs.label')" />
+
+    <!--
+        Listan till vänster och panelen till höger över `lg:`, panelen
+        under listan under `lg:` (Beslut 3). Panelen är en syskonkolumn
+        och inte en del av listan: dess tal gäller alla listor, inte den
+        valda fliken.
+    -->
+    <div class="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
+        <div class="lg:flex-1">
+            <!--
+                Filterraden (Beslut 5): containern, listan, statusen och
+                sorteringen, i adressen bredvid fliken. Den står ovanför
+                listan och ritar bara de val fliken inte redan bestämt
+                (Beslut 2).
+            -->
+            <TaskFilterBar
+                class="mb-8"
+                :list="list"
+                :filters="filters"
+                :containers="containers"
+            />
+
+            <template v-if="isEmpty">
+                <p class="text-slate-700">
+                    <template v-if="hasContainers">{{ t('todo.empty.nothing') }}</template>
+
+                    <template v-else>
+                        {{ t('todo.empty.no_containers') }}
+                        <Link href="/containers/create" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+                            {{ t('todo.empty.create') }}
+                        </Link>
+                    </template>
+                </p>
+            </template>
+
+            <!--
+                *Done* (Beslut 1 och 4): de avbockade raderna, nyast
+                först, i stället för datumgrupperna. Rubriken är flikens
+                eget ord — samma nyckel som fliken bär.
+            -->
+            <TaskGroup
+                v-else-if="isDone"
+                :heading="t('todo.tabs.done')"
+                :count="completed.length"
+            >
+                <TodoRow v-for="entry in completed" :key="entry.ulid" :entry="entry" movable />
+            </TaskGroup>
+
+            <!--
+                Grupperna (Beslut 3 och 7). Rubriken med antalet och
+                ihopfällningen ritas av TaskGroup (M24 · issue 231) —
+                samma komponent som containerns och itemets flik. Antalet
+                är raderna på DEN HÄR sidan, eftersom listan är paginerad:
+                rubriken säger vad som står under den och ingenting om
+                resten av serien.
+            -->
+            <template v-else>
+                <div class="flex flex-col gap-8">
+                    <template v-for="(entries, group) in groups" :key="group">
+                        <TaskGroup
+                            v-if="entries.length > 0"
+                            :heading="t(`todo.group.${group}`)"
+                            :count="entries.length"
+                            :tone="group === 'overdue' ? 'danger' : null"
+                        >
+                            <TodoRow v-for="entry in entries" :key="entry.ulid" :entry="entry" movable />
+                        </TaskGroup>
+                    </template>
+                </div>
+            </template>
+
+            <nav v-if="previousUrl || nextUrl" class="mt-8 flex items-center gap-4">
+                <Link
+                    v-if="previousUrl"
+                    :href="previousUrl"
+                    class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                >
+                    {{ t('todo.pagination.previous') }}
+                </Link>
 
                 <Link
-                    :href="createUrl"
-                    class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                    v-if="nextUrl"
+                    :href="nextUrl"
+                    class="ml-auto inline-flex min-h-11 items-center text-blue-700 hover:underline"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="mr-2 h-4 w-4"
-                        aria-hidden="true"
-                    >
-                        <path d="M12 5v14"></path>
-                        <path d="M5 12h14"></path>
-                    </svg>
-
-                    {{ t('todo.new') }}
+                    {{ t('todo.pagination.next') }}
                 </Link>
-            </div>
+            </nav>
         </div>
 
-        <!--
-            Flikraden (Beslut 4). Listan står i adressen, och `UiTabs` tänder
-            den flik vars `href` matchar den — vyn håller inget val i minnet.
-        -->
-        <UiTabs class="mt-4" :tabs="tabs" :label="t('todo.tabs.label')" />
+        <div class="flex flex-col gap-6 lg:w-72">
+            <!--
+                Högerspalten, i ritningsordning (M28 · issue 783, Beslut
+                4): *Quick overview*, *Lists* och *My containers*. Alla tre
+                är syskonkolumner och inte en del av listan — deras tal
+                gäller användarens hela läge och inte den valda fliken
+                eller filtret (Beslut 3). Under `lg:` står spalten under
+                listan, som `GtdListPanel` gjorde förut.
+            -->
+            <TaskOverviewPanel :counts="overview" :rows="overviewRows" />
 
-        <!--
-            Listan till vänster och panelen till höger över `lg:`, panelen
-            under listan under `lg:` (Beslut 3). Panelen är en syskonkolumn
-            och inte en del av listan: dess tal gäller alla listor, inte den
-            valda fliken.
-        -->
-        <div class="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
-            <div class="lg:flex-1">
-                <!--
-                    Filterraden (Beslut 5): containern, listan, statusen och
-                    sorteringen, i adressen bredvid fliken. Den står ovanför
-                    listan och ritar bara de val fliken inte redan bestämt
-                    (Beslut 2).
-                -->
-                <TaskFilterBar
-                    class="mb-8"
-                    :list="list"
-                    :filters="filters"
-                    :containers="containers"
-                />
+            <GtdListPanel :counts="counts" :rows="panelRows" />
 
-                <template v-if="isEmpty">
-                    <p class="text-slate-700">
-                        <template v-if="hasContainers">{{ t('todo.empty.nothing') }}</template>
-
-                        <template v-else>
-                            {{ t('todo.empty.no_containers') }}
-                            <Link href="/containers/create" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
-                                {{ t('todo.empty.create') }}
-                            </Link>
-                        </template>
-                    </p>
-                </template>
-
-                <!--
-                    *Done* (Beslut 1 och 4): de avbockade raderna, nyast
-                    först, i stället för datumgrupperna. Rubriken är flikens
-                    eget ord — samma nyckel som fliken bär.
-                -->
-                <TaskGroup
-                    v-else-if="isDone"
-                    :heading="t('todo.tabs.done')"
-                    :count="completed.length"
-                >
-                    <TodoRow v-for="entry in completed" :key="entry.ulid" :entry="entry" movable />
-                </TaskGroup>
-
-                <!--
-                    Grupperna (Beslut 3 och 7). Rubriken med antalet och
-                    ihopfällningen ritas av TaskGroup (M24 · issue 231) —
-                    samma komponent som containerns och itemets flik. Antalet
-                    är raderna på DEN HÄR sidan, eftersom listan är paginerad:
-                    rubriken säger vad som står under den och ingenting om
-                    resten av serien.
-                -->
-                <template v-else>
-                    <div class="flex flex-col gap-8">
-                        <template v-for="(entries, group) in groups" :key="group">
-                            <TaskGroup
-                                v-if="entries.length > 0"
-                                :heading="t(`todo.group.${group}`)"
-                                :count="entries.length"
-                                :tone="group === 'overdue' ? 'danger' : null"
-                            >
-                                <TodoRow v-for="entry in entries" :key="entry.ulid" :entry="entry" movable />
-                            </TaskGroup>
-                        </template>
-                    </div>
-                </template>
-
-                <nav v-if="previousUrl || nextUrl" class="mt-8 flex items-center gap-4">
-                    <Link
-                        v-if="previousUrl"
-                        :href="previousUrl"
-                        class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                    >
-                        {{ t('todo.pagination.previous') }}
-                    </Link>
-
-                    <Link
-                        v-if="nextUrl"
-                        :href="nextUrl"
-                        class="ml-auto inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                    >
-                        {{ t('todo.pagination.next') }}
-                    </Link>
-                </nav>
-            </div>
-
-            <div class="flex flex-col gap-6 lg:w-72">
-                <!--
-                    Högerspalten, i ritningsordning (M28 · issue 783, Beslut
-                    4): *Quick overview*, *Lists* och *My containers*. Alla tre
-                    är syskonkolumner och inte en del av listan — deras tal
-                    gäller användarens hela läge och inte den valda fliken
-                    eller filtret (Beslut 3). Under `lg:` står spalten under
-                    listan, som `GtdListPanel` gjorde förut.
-                -->
-                <TaskOverviewPanel :counts="overview" :rows="overviewRows" />
-
-                <GtdListPanel :counts="counts" :rows="panelRows" />
-
-                <TaskContainerPanel :rows="myContainers" />
-            </div>
+            <TaskContainerPanel :rows="myContainers" />
         </div>
-    </AppLayout>
+    </div>
 </template>

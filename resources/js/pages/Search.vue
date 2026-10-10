@@ -4,6 +4,8 @@ import AppLayout from '../layouts/AppLayout.vue';
 import SearchField from '../components/SearchField.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Den globala sökningen, se issue 59b § Beslut 1, 3, 4, 6 och 8. Sidan
  * ligger under AppLayout och på toppnivå: frågan spänner över alla containers
@@ -64,62 +66,60 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('search.title')" />
+    <Head :title="t('search.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('search.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('search.heading') }}</h1>
 
-        <template v-if="q === null">
-            <p class="mt-4 text-slate-700">{{ t('search.intro') }}</p>
-            <p class="mt-2 text-sm text-slate-600">{{ t('search.match_rule') }}</p>
-        </template>
+    <template v-if="q === null">
+        <p class="mt-4 text-slate-700">{{ t('search.intro') }}</p>
+        <p class="mt-2 text-sm text-slate-600">{{ t('search.match_rule') }}</p>
+    </template>
 
-        <!-- Fältet står mellan grenarna med flit (issue 630 § Beslut 3): i
-             utgångsläget under förklaringen, efter en sökning under rubriken
-             med sökordet ifyllt — samma element, ett ställe. -->
-        <div class="mt-6">
-            <SearchField variant="page" />
-        </div>
+    <!-- Fältet står mellan grenarna med flit (issue 630 § Beslut 3): i
+         utgångsläget under förklaringen, efter en sökning under rubriken
+         med sökordet ifyllt — samma element, ett ställe. -->
+    <div class="mt-6">
+        <SearchField variant="page" />
+    </div>
 
-        <template v-if="q !== null">
-            <p v-if="results.length === 0" class="mt-8 text-slate-700">
-                {{ t('search.empty', { q }) }}
-            </p>
+    <template v-if="q !== null">
+        <p v-if="results.length === 0" class="mt-8 text-slate-700">
+            {{ t('search.empty', { q }) }}
+        </p>
 
-            <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
-                <li v-for="result in results" :key="result.ulid" class="py-4">
+        <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
+            <li v-for="result in results" :key="result.ulid" class="py-4">
+                <Link
+                    :href="`/containers/${result.container.ulid}/items/${result.ulid}`"
+                    class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                >
+                    {{ result.name }}
+                </Link>
+
+                <p class="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-600">
+                    <span>{{ t('search.in_container') }}</span>
+
+                    <!-- Containernamnet går till ITEMLISTAN (issue 89 ·
+                         [[ADR-0039 Containerns översikt]] § Konsekvenser):
+                         träffen är ett item, och den som följer containern
+                         ur en träff söker det sammanhang itemet låg i. -->
                     <Link
-                        :href="`/containers/${result.container.ulid}/items/${result.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+                        :href="`/containers/${result.container.ulid}/items`"
+                        class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
                     >
-                        {{ result.name }}
+                        {{ result.container.name }}
                     </Link>
 
-                    <p class="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-600">
-                        <span>{{ t('search.in_container') }}</span>
-
-                        <!-- Containernamnet går till ITEMLISTAN (issue 89 ·
-                             [[ADR-0039 Containerns översikt]] § Konsekvenser):
-                             träffen är ett item, och den som följer containern
-                             ur en träff söker det sammanhang itemet låg i. -->
-                        <Link
-                            :href="`/containers/${result.container.ulid}/items`"
-                            class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                        >
-                            {{ result.container.name }}
-                        </Link>
-
-                        <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
-                             Containerns art]]): fältet är fritt, och `t()`
-                             returnerar nyckeln själv när uppslaget misslyckas,
-                             så ingen nyckel får byggas ur värdet. Spärren
-                             frågar om fältet är SATT och aldrig vilket värde
-                             det bär — en sökträff i en container utan art
-                             visar ingen art, inte en tom fläck. -->
-                        <span v-if="result.container.kind">{{ result.container.kind }}</span>
-                    </p>
-                </li>
-            </ul>
-        </template>
-    </AppLayout>
+                    <!-- Arten skrivs ut ORDAGRANT (issue 84 · [[ADR-0036
+                         Containerns art]]): fältet är fritt, och `t()`
+                         returnerar nyckeln själv när uppslaget misslyckas,
+                         så ingen nyckel får byggas ur värdet. Spärren
+                         frågar om fältet är SATT och aldrig vilket värde
+                         det bär — en sökträff i en container utan art
+                         visar ingen art, inte en tom fläck. -->
+                    <span v-if="result.container.kind">{{ result.container.kind }}</span>
+                </p>
+            </li>
+        </ul>
+    </template>
 </template>
