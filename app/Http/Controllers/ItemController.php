@@ -563,7 +563,15 @@ class ItemController extends Controller
         // tjugo rader, i samma förfrågan. Ingen middleware gör det här: bara
         // itemsidan räknas, och containerns sidor, sökträffar och kartan är
         // andra ytor.
-        $recordRecentVisit->handle($user, $item);
+        //
+        // En förhämtning är inget besök (issue 276 · [[ADR-0056 Flytande
+        // navigering]]): Inertia märker den med `Purpose: prefetch`, och raden
+        // skrivs bara när headern saknas. Svaret är detsamma som för ett
+        // vanligt besök — grinden ovan prövades ändå, så en nekad förhämtning
+        // gav 403 utan att skriva.
+        if ($request->header('Purpose') !== 'prefetch') {
+            $recordRecentVisit->handle($user, $item);
+        }
 
         $links = $listItemLinks->handle($user, $container, $item);
 
