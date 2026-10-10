@@ -9,6 +9,8 @@ import { formatByteSize } from '../../components/attachmentPresentation.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Den globala dokumentlistan — `GET /documents`, se M28 (testarnas fynd
  * 2026-10-07) · issue 255 och App\Http\Controllers\DocumentController.
@@ -147,191 +149,189 @@ const filtered = computed(() => props.filter.container.length > 0 || props.filte
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('documents.title')" />
+    <Head :title="t('documents.title')" />
 
-        <!--
-            Rubrikraden bär sorteringen (issue 269 § Beslut 3). `sort` är en
-            fråga om LISTAN och inte ett filter på den, och den stod förut i en
-            egen rad ovanför tabellen — den sköt ned kortet så att det och
-            filterkolumnen inte började på samma linje. Etiketten är `sr-only`:
-            väljarens värde säger redan vad den gör.
-        -->
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <h1 class="text-heading font-semibold">{{ t('documents.heading') }}</h1>
+    <!--
+        Rubrikraden bär sorteringen (issue 269 § Beslut 3). `sort` är en
+        fråga om LISTAN och inte ett filter på den, och den stod förut i en
+        egen rad ovanför tabellen — den sköt ned kortet så att det och
+        filterkolumnen inte började på samma linje. Etiketten är `sr-only`:
+        väljarens värde säger redan vad den gör.
+    -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-heading font-semibold">{{ t('documents.heading') }}</h1>
 
-            <div class="flex flex-wrap items-center gap-2">
-                <label for="documents-sort" class="sr-only">{{ t('documents.sort_label') }}</label>
+        <div class="flex flex-wrap items-center gap-2">
+            <label for="documents-sort" class="sr-only">{{ t('documents.sort_label') }}</label>
 
-                <UiSelect
-                    id="documents-sort"
-                    :model-value="filter.sort"
-                    :disabled="sortPending"
-                    @update:model-value="changeSort"
-                >
-                    <option v-for="value in sorts" :key="value" :value="value">
-                        {{ t(`documents.sort_${value}`) }}
-                    </option>
-                </UiSelect>
-            </div>
+            <UiSelect
+                id="documents-sort"
+                :model-value="filter.sort"
+                :disabled="sortPending"
+                @update:model-value="changeSort"
+            >
+                <option v-for="value in sorts" :key="value" :value="value">
+                    {{ t(`documents.sort_${value}`) }}
+                </option>
+            </UiSelect>
         </div>
+    </div>
 
-        <!--
-            Layouten (Beslut 3): filterkolumnen till vänster och listan till
-            höger över `lg:`; under `lg:` staplas de, så filtret finns kvar på
-            en telefon också. `items-start` så kolumnen inte tänjs ut över en
-            lång lista.
-        -->
-        <div class="mt-6 lg:grid lg:grid-cols-[16rem_1fr] lg:items-start lg:gap-6">
-            <DocumentScopeFilterColumn
-                :filter="filter"
-                :containers="containers"
-                :kinds="kinds"
-            />
+    <!--
+        Layouten (Beslut 3): filterkolumnen till vänster och listan till
+        höger över `lg:`; under `lg:` staplas de, så filtret finns kvar på
+        en telefon också. `items-start` så kolumnen inte tänjs ut över en
+        lång lista.
+    -->
+    <div class="mt-6 lg:grid lg:grid-cols-[16rem_1fr] lg:items-start lg:gap-6">
+        <DocumentScopeFilterColumn
+            :filter="filter"
+            :containers="containers"
+            :kinds="kinds"
+        />
 
-            <div class="mt-6 lg:mt-0">
-                <!-- Två tomma lägen, och de säger olika saker: ett filter som
-                     inte matchar något är ett svar om frågan, en tom lista ett
-                     svar om innehållet. -->
-                <p v-if="attachments.data.length === 0" class="mt-0 text-body text-ink-muted">
-                    {{ filtered ? t('documents.empty_filtered') : t('documents.empty') }}
-                </p>
+        <div class="mt-6 lg:mt-0">
+            <!-- Två tomma lägen, och de säger olika saker: ett filter som
+                 inte matchar något är ett svar om frågan, en tom lista ett
+                 svar om innehållet. -->
+            <p v-if="attachments.data.length === 0" class="mt-0 text-body text-ink-muted">
+                {{ filtered ? t('documents.empty_filtered') : t('documents.empty') }}
+            </p>
 
-                <!--
-                    Listan (Beslut 2), inramad i ett kort. Kolumnrubrikerna är
-                    `<th scope="col">`, som i kostnadstabellen: en skärmläsare
-                    läser då cellen som "Container, Förrådet" i stället för att
-                    läsa sex namn i rad. Sex kolumner — namn, typ, item,
-                    container, uppladdad och storlek — och ingen
-                    åtgärdskolumn: filnamnet ÄR länken (Beslut 4).
-                -->
-                <div v-else class="mt-0 overflow-hidden rounded-card border border-border bg-surface">
-                    <table class="w-full border-collapse text-left">
-                        <thead>
-                            <tr class="border-b border-border">
-                                <th scope="col" class="py-2 pl-4 pr-4 text-meta font-medium text-ink-subtle">
-                                    {{ t('documents.filename') }}
-                                </th>
-                                <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                    {{ t('documents.type') }}
-                                </th>
-                                <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                    {{ t('documents.item') }}
-                                </th>
-                                <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                    {{ t('documents.container') }}
-                                </th>
-                                <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                    {{ t('documents.uploaded') }}
-                                </th>
-                                <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                    {{ t('documents.size') }}
-                                </th>
-                            </tr>
-                        </thead>
+            <!--
+                Listan (Beslut 2), inramad i ett kort. Kolumnrubrikerna är
+                `<th scope="col">`, som i kostnadstabellen: en skärmläsare
+                läser då cellen som "Container, Förrådet" i stället för att
+                läsa sex namn i rad. Sex kolumner — namn, typ, item,
+                container, uppladdad och storlek — och ingen
+                åtgärdskolumn: filnamnet ÄR länken (Beslut 4).
+            -->
+            <div v-else class="mt-0 overflow-hidden rounded-card border border-border bg-surface">
+                <table class="w-full border-collapse text-left">
+                    <thead>
+                        <tr class="border-b border-border">
+                            <th scope="col" class="py-2 pl-4 pr-4 text-meta font-medium text-ink-subtle">
+                                {{ t('documents.filename') }}
+                            </th>
+                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                                {{ t('documents.type') }}
+                            </th>
+                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                                {{ t('documents.item') }}
+                            </th>
+                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                                {{ t('documents.container') }}
+                            </th>
+                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                                {{ t('documents.uploaded') }}
+                            </th>
+                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                                {{ t('documents.size') }}
+                            </th>
+                        </tr>
+                    </thead>
 
-                        <tbody>
-                            <tr v-for="row in attachments.data" :key="row.ulid" class="border-b border-border last:border-b-0">
-                                <td class="py-1 pl-4 pr-4">
-                                    <span class="flex items-center gap-2">
-                                        <!-- Filikonen är dekor; filnamnet säger
-                                             redan vad raden är. -->
-                                        <span
-                                            role="img"
-                                            :aria-label="t('item.attachment.file_icon')"
-                                            class="flex size-8 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                    <tbody>
+                        <tr v-for="row in attachments.data" :key="row.ulid" class="border-b border-border last:border-b-0">
+                            <td class="py-1 pl-4 pr-4">
+                                <span class="flex items-center gap-2">
+                                    <!-- Filikonen är dekor; filnamnet säger
+                                         redan vad raden är. -->
+                                    <span
+                                        role="img"
+                                        :aria-label="t('item.attachment.file_icon')"
+                                        class="flex size-8 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                                    >
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="1.5"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            class="size-4"
+                                            aria-hidden="true"
                                         >
-                                            <svg
-                                                viewBox="0 0 24 24"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                stroke-width="1.5"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                class="size-4"
-                                                aria-hidden="true"
-                                            >
-                                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                                <path d="M14 2v6h6" />
-                                            </svg>
-                                        </span>
-
-                                        <!-- Filnamnet är radens ENDA handling
-                                             (Beslut 4): den öppnar och laddar
-                                             ner filen. -->
-                                        <Link
-                                            :href="fileUrl(row.ulid)"
-                                            class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                                        >
-                                            {{ row.filename }}
-                                        </Link>
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                            <path d="M14 2v6h6" />
+                                        </svg>
                                     </span>
-                                </td>
 
-                                <td class="py-1 pr-4">
-                                    <UiBadge>{{ t(`item.attachment.kind.${row.kind}`) }}</UiBadge>
-                                </td>
-
-                                <!-- Platsen (Beslut 2). Itemkolumnen är ingen
-                                     länk; för en inboxfil finns inget item, och
-                                     då står *Inbox* i båda kolumnerna. -->
-                                <td class="py-1 pr-4 text-ink-muted">
-                                    {{ row.in_inbox ? t('documents.inbox') : row.item.name }}
-                                </td>
-
-                                <td class="py-1 pr-4">
-                                    <!-- Inboxen: EN länk till `/inbox`, aldrig
-                                         till det dolda itemet eller containern
-                                         ([[ADR-0054 Inboxen]] § 1). -->
+                                    <!-- Filnamnet är radens ENDA handling
+                                         (Beslut 4): den öppnar och laddar
+                                         ner filen. -->
                                     <Link
-                                        v-if="row.in_inbox"
-                                        href="/inbox"
-                                        class="inline-flex min-h-11 items-center text-accent hover:underline"
+                                        :href="fileUrl(row.ulid)"
+                                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                                     >
-                                        {{ t('documents.inbox') }}
+                                        {{ row.filename }}
                                     </Link>
-                                    <Link
-                                        v-else
-                                        :href="containerUrl(row)"
-                                        class="inline-flex min-h-11 items-center text-accent hover:underline"
-                                    >
-                                        {{ row.container.name }}
-                                    </Link>
-                                </td>
+                                </span>
+                            </td>
 
-                                <td class="py-1 pr-4 text-ink-muted">
-                                    <time :datetime="row.created_at">{{ uploaded(row) }}</time>
-                                </td>
+                            <td class="py-1 pr-4">
+                                <UiBadge>{{ t(`item.attachment.kind.${row.kind}`) }}</UiBadge>
+                            </td>
 
-                                <td class="py-1 pr-4 text-ink-muted">{{ size(row) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                            <!-- Platsen (Beslut 2). Itemkolumnen är ingen
+                                 länk; för en inboxfil finns inget item, och
+                                 då står *Inbox* i båda kolumnerna. -->
+                            <td class="py-1 pr-4 text-ink-muted">
+                                {{ row.in_inbox ? t('documents.inbox') : row.item.name }}
+                            </td>
 
-                <!-- Bläddringen (Beslut 2). Länkarna bär filtret — se pageUrl(). -->
-                <nav v-if="attachments.last_page > 1" class="mt-6 flex items-center gap-4">
-                    <Link
-                        v-if="attachments.current_page > 1"
-                        :href="pageUrl(attachments.current_page - 1)"
-                        class="inline-flex min-h-11 items-center text-accent hover:underline"
-                    >
-                        {{ t('documents.previous') }}
-                    </Link>
+                            <td class="py-1 pr-4">
+                                <!-- Inboxen: EN länk till `/inbox`, aldrig
+                                     till det dolda itemet eller containern
+                                     ([[ADR-0054 Inboxen]] § 1). -->
+                                <Link
+                                    v-if="row.in_inbox"
+                                    href="/inbox"
+                                    class="inline-flex min-h-11 items-center text-accent hover:underline"
+                                >
+                                    {{ t('documents.inbox') }}
+                                </Link>
+                                <Link
+                                    v-else
+                                    :href="containerUrl(row)"
+                                    class="inline-flex min-h-11 items-center text-accent hover:underline"
+                                >
+                                    {{ row.container.name }}
+                                </Link>
+                            </td>
 
-                    <span class="text-body text-ink-muted">
-                        {{ t('documents.page', { page: attachments.current_page, last: attachments.last_page }) }}
-                    </span>
+                            <td class="py-1 pr-4 text-ink-muted">
+                                <time :datetime="row.created_at">{{ uploaded(row) }}</time>
+                            </td>
 
-                    <Link
-                        v-if="attachments.current_page < attachments.last_page"
-                        :href="pageUrl(attachments.current_page + 1)"
-                        class="inline-flex min-h-11 items-center text-accent hover:underline"
-                    >
-                        {{ t('documents.next') }}
-                    </Link>
-                </nav>
+                            <td class="py-1 pr-4 text-ink-muted">{{ size(row) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
+
+            <!-- Bläddringen (Beslut 2). Länkarna bär filtret — se pageUrl(). -->
+            <nav v-if="attachments.last_page > 1" class="mt-6 flex items-center gap-4">
+                <Link
+                    v-if="attachments.current_page > 1"
+                    :href="pageUrl(attachments.current_page - 1)"
+                    class="inline-flex min-h-11 items-center text-accent hover:underline"
+                >
+                    {{ t('documents.previous') }}
+                </Link>
+
+                <span class="text-body text-ink-muted">
+                    {{ t('documents.page', { page: attachments.current_page, last: attachments.last_page }) }}
+                </span>
+
+                <Link
+                    v-if="attachments.current_page < attachments.last_page"
+                    :href="pageUrl(attachments.current_page + 1)"
+                    class="inline-flex min-h-11 items-center text-accent hover:underline"
+                >
+                    {{ t('documents.next') }}
+                </Link>
+            </nav>
         </div>
-    </AppLayout>
+    </div>
 </template>

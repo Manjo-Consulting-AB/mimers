@@ -6,6 +6,8 @@ import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Skapa en container, se issue 54 § Beslut 5 och 8.
  *
@@ -71,118 +73,116 @@ function submit() {
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('container.create.title')" />
+    <Head :title="t('container.create.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('container.create.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('container.create.heading') }}</h1>
 
-        <p
-            v-if="form.errors.quota"
-            id="quota-error"
-            role="alert"
-            tabindex="-1"
-            class="mt-6 max-w-2xl rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 outline-none"
+    <p
+        v-if="form.errors.quota"
+        id="quota-error"
+        role="alert"
+        tabindex="-1"
+        class="mt-6 max-w-2xl rounded border border-red-300 bg-red-50 px-4 py-3 text-red-800 outline-none"
+    >
+        {{ form.errors.quota }}
+    </p>
+
+    <form class="mt-8 flex max-w-2xl flex-col gap-4" @submit.prevent="submit">
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('container.create.name')"
+            id="name"
+            :error="form.errors.name"
         >
-            {{ form.errors.quota }}
-        </p>
-
-        <form class="mt-8 flex max-w-2xl flex-col gap-4" @submit.prevent="submit">
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('container.create.name')"
+            <input
                 id="name"
-                :error="form.errors.name"
+                v-model="form.name"
+                :aria-describedby="describedBy"
+                type="text"
+                name="name"
+                required
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <input
-                    id="name"
-                    v-model="form.name"
-                    :aria-describedby="describedBy"
-                    type="text"
-                    name="name"
-                    required
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-            </FormField>
+        </FormField>
 
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('container.create.kind')"
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('container.create.kind')"
+            id="kind"
+            :error="form.errors.kind"
+        >
+            <!-- Fritext med autocomplete, inte en väljare: värdet är
+                 användarens eget, och de arter hon redan använt är
+                 förslag. Tomt fält är ett giltigt svar. -->
+            <input
                 id="kind"
-                :error="form.errors.kind"
+                v-model="form.kind"
+                :aria-describedby="describedBy"
+                type="text"
+                name="kind"
+                list="container-kinds"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <!-- Fritext med autocomplete, inte en väljare: värdet är
-                     användarens eget, och de arter hon redan använt är
-                     förslag. Tomt fält är ett giltigt svar. -->
-                <input
-                    id="kind"
-                    v-model="form.kind"
-                    :aria-describedby="describedBy"
-                    type="text"
-                    name="kind"
-                    list="container-kinds"
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-                <datalist id="container-kinds">
-                    <option v-for="kind in kinds" :key="kind" :value="kind" />
-                </datalist>
-            </FormField>
+            <datalist id="container-kinds">
+                <option v-for="kind in kinds" :key="kind" :value="kind" />
+            </datalist>
+        </FormField>
 
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('container.create.description')"
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('container.create.description')"
+            id="description"
+            :error="form.errors.description"
+        >
+            <!-- Ett enda fritextfält, frivilligt (issue 88 ·
+                 [[ADR-0039 Containerns översikt]]). Ingen struktur och
+                 ingen hjälprad som ber om modell eller årtal: fältet
+                 visas som det skrivs, och ingen kod plockar isär det. -->
+            <textarea
                 id="description"
-                :error="form.errors.description"
-            >
-                <!-- Ett enda fritextfält, frivilligt (issue 88 ·
-                     [[ADR-0039 Containerns översikt]]). Ingen struktur och
-                     ingen hjälprad som ber om modell eller årtal: fältet
-                     visas som det skrivs, och ingen kod plockar isär det. -->
-                <textarea
-                    id="description"
-                    v-model="form.description"
-                    :aria-describedby="describedBy"
-                    name="description"
-                    rows="4"
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                />
-            </FormField>
+                v-model="form.description"
+                :aria-describedby="describedBy"
+                name="description"
+                rows="4"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
+            />
+        </FormField>
 
-            <!-- Ett enda konto: värdet är förvalt och visas som text. Ingen
-                 gömd väljare — det finns ingenting att välja. -->
-            <div v-if="singleAccount" class="flex flex-col gap-1">
-                <p class="text-sm font-medium text-slate-800">{{ t('container.create.account') }}</p>
-                <p>{{ singleAccount.name }}</p>
-            </div>
+        <!-- Ett enda konto: värdet är förvalt och visas som text. Ingen
+             gömd väljare — det finns ingenting att välja. -->
+        <div v-if="singleAccount" class="flex flex-col gap-1">
+            <p class="text-sm font-medium text-slate-800">{{ t('container.create.account') }}</p>
+            <p>{{ singleAccount.name }}</p>
+        </div>
 
-            <FormField
-                v-else
-                v-slot="{ describedBy }"
-                :label="t('container.create.account')"
+        <FormField
+            v-else
+            v-slot="{ describedBy }"
+            :label="t('container.create.account')"
+            id="account"
+            :error="form.errors.account"
+        >
+            <select
                 id="account"
-                :error="form.errors.account"
+                v-model="form.account"
+                :aria-describedby="describedBy"
+                name="account"
+                required
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <select
-                    id="account"
-                    v-model="form.account"
-                    :aria-describedby="describedBy"
-                    name="account"
-                    required
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-                    <option value="" disabled>{{ t('container.create.account_choose') }}</option>
-                    <option v-for="account in accounts" :key="account.ulid" :value="account.ulid">
-                        {{ account.name }}
-                    </option>
-                </select>
-            </FormField>
+                <option value="" disabled>{{ t('container.create.account_choose') }}</option>
+                <option v-for="account in accounts" :key="account.ulid" :value="account.ulid">
+                    {{ account.name }}
+                </option>
+            </select>
+        </FormField>
 
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-            >
-                {{ form.processing ? t('common.pending.default') : t('container.create.submit') }}
-            </button>
-        </form>
-    </AppLayout>
+        <button
+            type="submit"
+            :disabled="form.processing"
+            class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+        >
+            {{ form.processing ? t('common.pending.default') : t('container.create.submit') }}
+        </button>
+    </form>
 </template>

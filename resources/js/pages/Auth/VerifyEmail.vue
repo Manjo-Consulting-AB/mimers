@@ -4,6 +4,8 @@ import AppLayout from '../../layouts/AppLayout.vue';
 import VerifyEmailNotice from '../../components/VerifyEmailNotice.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * /email/verify (`verification.notice`), se issue 53a § Beslut 7.
  *
@@ -19,13 +21,11 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('auth.verify.title')" />
+    <Head :title="t('auth.verify.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('auth.verify.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('auth.verify.heading') }}</h1>
 
-        <div class="mt-6 max-w-sm">
-            <VerifyEmailNotice />
-        </div>
-    </AppLayout>
+    <div class="mt-6 max-w-sm">
+        <VerifyEmailNotice />
+    </div>
 </template>

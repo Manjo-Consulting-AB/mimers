@@ -11,6 +11,8 @@ import UiCard from '../../components/UiCard.vue';
 import { formatLocaleDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Den globala historiken — `GET /history`, se M30 (testarnas fynd 2026-10-09)
  * · issue 272, App\Http\Controllers\HistoryController och [[ADR-0043 Tre
@@ -168,83 +170,81 @@ function dayLabel(date) {
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('history.title')" />
+    <Head :title="t('history.title')" />
 
-        <h1 class="text-heading font-semibold text-ink">{{ t('history.heading') }}</h1>
+    <h1 class="text-heading font-semibold text-ink">{{ t('history.heading') }}</h1>
 
-        <!--
-            Sidans egen adress i `url` (Beslut 4): den globala historiken har
-            ingen container att bygga en adress av, och fältet faller annars
-            tillbaka på containerns.
-        -->
-        <HistoryFilterBar
-            url="/history"
-            :filter="filter"
-            :options="options"
-        />
+    <!--
+        Sidans egen adress i `url` (Beslut 4): den globala historiken har
+        ingen container att bygga en adress av, och fältet faller annars
+        tillbaka på containerns.
+    -->
+    <HistoryFilterBar
+        url="/history"
+        :filter="filter"
+        :options="options"
+    />
 
-        <!--
-            Rutnätet (issue 180 · [[ADR-0050 Desktopdesignen]] § 17): listan
-            till vänster och diagrammen till höger, som i
-            docs/Design/Historik.png. Under `lg:` är behållaren ett vanligt
-            block och panelerna staplas under listan — källordningen är
-            läsordningen.
-        -->
-        <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
-            <div class="lg:col-span-2">
-                <p v-if="days.length === 0" class="mt-6 text-body text-ink-muted">
-                    {{ filtered ? t('audit.history.empty_filtered') : t('audit.history.empty') }}
-                </p>
-
-                <!--
-                    En dag är en grupp med sin egen rubrik, och raderna är <li>
-                    — samma form `UiListRow` kräver, och av samma skäl som i
-                    varje annan lista: en skärmläsare ska höra hur många rader
-                    det finns innan den läser den första.
-                -->
-                <section v-for="day in days" :key="day.date" class="mt-6">
-                    <h2 class="flex items-baseline gap-2 text-title font-semibold text-ink">
-                        {{ dayLabel(day.date) }}
-                        <span class="text-meta font-normal text-ink-subtle">
-                            {{ t('audit.history.day_count', { count: day.rows.length }) }}
-                        </span>
-                    </h2>
-
-                    <ul class="mt-2">
-                        <HistoryRow v-for="row in day.rows" :key="row.ulid" :row="row" show-container />
-                    </ul>
-                </section>
-            </div>
+    <!--
+        Rutnätet (issue 180 · [[ADR-0050 Desktopdesignen]] § 17): listan
+        till vänster och diagrammen till höger, som i
+        docs/Design/Historik.png. Under `lg:` är behållaren ett vanligt
+        block och panelerna staplas under listan — källordningen är
+        läsordningen.
+    -->
+    <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
+        <div class="lg:col-span-2">
+            <p v-if="days.length === 0" class="mt-6 text-body text-ink-muted">
+                {{ filtered ? t('audit.history.empty_filtered') : t('audit.history.empty') }}
+            </p>
 
             <!--
-                Diagrammen. Var och en ritar en propp ur `stats` och ställer
-                ingen egen fråga; talen kommer ur samma läsregel och samma
-                filter som listan bredvid (issue 180 § Beslut 1).
+                En dag är en grupp med sin egen rubrik, och raderna är <li>
+                — samma form `UiListRow` kräver, och av samma skäl som i
+                varje annan lista: en skärmläsare ska höra hur många rader
+                det finns innan den läser den första.
             -->
-            <aside class="mt-8 flex flex-col gap-6 lg:col-start-3 lg:mt-0">
-                <UiCard>
-                    <template #heading>{{ t('audit.history.activity_over_time') }}</template>
+            <section v-for="day in days" :key="day.date" class="mt-6">
+                <h2 class="flex items-baseline gap-2 text-title font-semibold text-ink">
+                    {{ dayLabel(day.date) }}
+                    <span class="text-meta font-normal text-ink-subtle">
+                        {{ t('audit.history.day_count', { count: day.rows.length }) }}
+                    </span>
+                </h2>
 
-                    <ActivityTimeChart :days="stats.perDay" />
-                </UiCard>
-
-                <UiCard v-if="stats.perType.length > 0">
-                    <template #heading>{{ t('audit.history.activity_types') }}</template>
-
-                    <ActivityTypeChart :types="stats.perType" />
-                </UiCard>
-
-                <!--
-                    Utan `container-ulid` (Beslut 5): posterna kommer från flera
-                    containrar, och varje rad länkar till sitt eget item genom
-                    sin egen `container_ulid`. *View all* ritas därför inte.
-                -->
-                <ActiveItemsPanel
-                    v-if="stats.topItems.length > 0"
-                    :items="stats.topItems"
-                />
-            </aside>
+                <ul class="mt-2">
+                    <HistoryRow v-for="row in day.rows" :key="row.ulid" :row="row" show-container />
+                </ul>
+            </section>
         </div>
-    </AppLayout>
+
+        <!--
+            Diagrammen. Var och en ritar en propp ur `stats` och ställer
+            ingen egen fråga; talen kommer ur samma läsregel och samma
+            filter som listan bredvid (issue 180 § Beslut 1).
+        -->
+        <aside class="mt-8 flex flex-col gap-6 lg:col-start-3 lg:mt-0">
+            <UiCard>
+                <template #heading>{{ t('audit.history.activity_over_time') }}</template>
+
+                <ActivityTimeChart :days="stats.perDay" />
+            </UiCard>
+
+            <UiCard v-if="stats.perType.length > 0">
+                <template #heading>{{ t('audit.history.activity_types') }}</template>
+
+                <ActivityTypeChart :types="stats.perType" />
+            </UiCard>
+
+            <!--
+                Utan `container-ulid` (Beslut 5): posterna kommer från flera
+                containrar, och varje rad länkar till sitt eget item genom
+                sin egen `container_ulid`. *View all* ritas därför inte.
+            -->
+            <ActiveItemsPanel
+                v-if="stats.topItems.length > 0"
+                :items="stats.topItems"
+            />
+        </aside>
+    </div>
 </template>

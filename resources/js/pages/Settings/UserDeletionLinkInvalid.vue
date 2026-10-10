@@ -3,6 +3,8 @@ import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * En raderingslänk som inte gäller, se [[M22 Redo för testare]] § 145 och
  * [[ADR-0045 Radering av konto och person]] § Uppföljning 2026-09-28,
@@ -25,15 +27,13 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('settings.security.deletion_link.invalid_heading')" />
+    <Head :title="t('settings.security.deletion_link.invalid_heading')" />
 
-        <div class="py-12 text-center">
-            <h1 class="text-2xl font-semibold">{{ t('settings.security.deletion_link.invalid_heading') }}</h1>
+    <div class="py-12 text-center">
+        <h1 class="text-2xl font-semibold">{{ t('settings.security.deletion_link.invalid_heading') }}</h1>
 
-            <p class="mx-auto mt-2 max-w-lg text-slate-700">{{ t('settings.security.deletion_link.invalid') }}</p>
+        <p class="mx-auto mt-2 max-w-lg text-slate-700">{{ t('settings.security.deletion_link.invalid') }}</p>
 
-            <Link href="/" class="mt-6 inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('common.home') }}</Link>
-        </div>
-    </AppLayout>
+        <Link href="/" class="mt-6 inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('common.home') }}</Link>
+    </div>
 </template>

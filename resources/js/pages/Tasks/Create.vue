@@ -6,6 +6,8 @@ import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
 import ScheduleForm from '../../components/ScheduleForm.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Skapa en uppgift — M27 · issue 246, se [[ADR-0054 Inboxen]] § 5 och § 8 och
  * förlagan docs/Design/tasks-container.png.
@@ -97,68 +99,66 @@ function onTargetChosen(item) {
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('todo.create.title')" />
+    <Head :title="t('todo.create.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('todo.new') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('todo.new') }}</h1>
 
-        <div class="mt-8 max-w-lg">
-            <!--
-                Platsen (Beslut 1). *Inbox* är ett eget val och inte bara
-                frånvaron av ett item: efter ett byte till ett item ska vägen
-                tillbaka till inboxen finnas kvar, och den står därför bredvid
-                *Change…* på samma rad.
+    <div class="mt-8 max-w-lg">
+        <!--
+            Platsen (Beslut 1). *Inbox* är ett eget val och inte bara
+            frånvaron av ett item: efter ett byte till ett item ska vägen
+            tillbaka till inboxen finnas kvar, och den står därför bredvid
+            *Change…* på samma rad.
 
-                Två råa `<button>` och inte `UiButton`: båda bär en `@click`,
-                och GenomgangTest tillåter bara webbläsarens egna element som
-                klickbar yta (samma skäl som ItemTargetPicker anger för sin
-                bekräftelseknapp). Klasserna är `UiButton`s, så formen är
-                designsystemets.
-            -->
-            <p class="text-sm font-medium text-slate-700">{{ t('todo.create.place') }}</p>
+            Två råa `<button>` och inte `UiButton`: båda bär en `@click`,
+            och GenomgangTest tillåter bara webbläsarens egna element som
+            klickbar yta (samma skäl som ItemTargetPicker anger för sin
+            bekräftelseknapp). Klasserna är `UiButton`s, så formen är
+            designsystemets.
+        -->
+        <p class="text-sm font-medium text-slate-700">{{ t('todo.create.place') }}</p>
 
-            <div class="mt-2 flex flex-wrap items-center gap-2">
-                <button
-                    type="button"
-                    :aria-pressed="place === null"
-                    class="inline-flex min-h-11 items-center justify-center rounded-control border px-3 text-meta font-medium outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                    :class="place === null
-                        ? 'border-accent bg-accent text-ink-on-accent'
-                        : 'border-border bg-surface text-ink hover:bg-surface-sunken'"
-                    @click="chooseInbox"
-                >
-                    {{ t('todo.create.inbox') }}
-                </button>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+            <button
+                type="button"
+                :aria-pressed="place === null"
+                class="inline-flex min-h-11 items-center justify-center rounded-control border px-3 text-meta font-medium outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                :class="place === null
+                    ? 'border-accent bg-accent text-ink-on-accent'
+                    : 'border-border bg-surface text-ink hover:bg-surface-sunken'"
+                @click="chooseInbox"
+            >
+                {{ t('todo.create.inbox') }}
+            </button>
 
-                <span v-if="place !== null" class="text-body text-ink">{{ placeName }}</span>
+            <span v-if="place !== null" class="text-body text-ink">{{ placeName }}</span>
 
-                <button
-                    type="button"
-                    class="inline-flex min-h-11 items-center justify-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                    @click="openPicker"
-                >
-                    {{ t('todo.create.change') }}
-                </button>
-            </div>
-
-            <ScheduleForm
-                :key="formKey"
-                class="mt-8"
-                :container-ulid="place?.container.ulid ?? ''"
-                :item-ulid="place?.ulid ?? ''"
-                :create-url="createUrl"
-                :return-url="returnUrl ?? '/tasks'"
-                :show-list="place !== null"
-            />
+            <button
+                type="button"
+                class="inline-flex min-h-11 items-center justify-center rounded-control border border-border bg-surface px-3 text-meta font-medium text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                @click="openPicker"
+            >
+                {{ t('todo.create.change') }}
+            </button>
         </div>
 
-        <!-- Samma väljare som flytten och bearbetningen (issue 242). -->
-        <ItemTargetPicker
-            :open="pickerOpen"
-            :trigger="pickerTrigger"
-            :heading="t('todo.create.place')"
-            @choose="onTargetChosen"
-            @close="pickerOpen = false"
+        <ScheduleForm
+            :key="formKey"
+            class="mt-8"
+            :container-ulid="place?.container.ulid ?? ''"
+            :item-ulid="place?.ulid ?? ''"
+            :create-url="createUrl"
+            :return-url="returnUrl ?? '/tasks'"
+            :show-list="place !== null"
         />
-    </AppLayout>
+    </div>
+
+    <!-- Samma väljare som flytten och bearbetningen (issue 242). -->
+    <ItemTargetPicker
+        :open="pickerOpen"
+        :trigger="pickerTrigger"
+        :heading="t('todo.create.place')"
+        @choose="onTargetChosen"
+        @close="pickerOpen = false"
+    />
 </template>

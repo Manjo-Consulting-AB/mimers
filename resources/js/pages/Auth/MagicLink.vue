@@ -5,6 +5,8 @@ import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from './useErrorFocus.js';
 
+defineOptions({ layout: AppLayout });
+
 /*
  * Magic link — formuläret som begär länken, se issue 53a § Beslut 5. Samma
  * mönster som Auth/Login.vue; de tre stegen upprepas inte här.
@@ -38,37 +40,35 @@ function submit() {
 </script>
 
 <template>
-    <AppLayout>
-        <Head :title="t('auth.magic_link.title')" />
+    <Head :title="t('auth.magic_link.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('auth.magic_link.heading') }}</h1>
-        <p class="mt-3 max-w-sm text-sm text-slate-600">{{ t('auth.magic_link.intro') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('auth.magic_link.heading') }}</h1>
+    <p class="mt-3 max-w-sm text-sm text-slate-600">{{ t('auth.magic_link.intro') }}</p>
 
-        <form class="mt-6 flex max-w-sm flex-col gap-4" @submit.prevent="submit">
-            <FormField v-slot="{ describedBy }" :label="t('form.email')" id="email" :error="form.errors.email">
-                <input
-                    id="email"
-                    v-model="form.email"
-                    :aria-describedby="describedBy"
-                    type="email"
-                    name="email"
-                    autocomplete="email"
-                    required
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-            </FormField>
-
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+    <form class="mt-6 flex max-w-sm flex-col gap-4" @submit.prevent="submit">
+        <FormField v-slot="{ describedBy }" :label="t('form.email')" id="email" :error="form.errors.email">
+            <input
+                id="email"
+                v-model="form.email"
+                :aria-describedby="describedBy"
+                type="email"
+                name="email"
+                autocomplete="email"
+                required
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                {{ form.processing ? t('common.pending.default') : t('auth.magic_link.submit') }}
-            </button>
-        </form>
+        </FormField>
 
-        <p class="mt-6 max-w-sm text-sm">
-            <Link href="/login" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.magic_link.login') }}</Link>
-        </p>
-    </AppLayout>
+        <button
+            type="submit"
+            :disabled="form.processing"
+            class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+        >
+            {{ form.processing ? t('common.pending.default') : t('auth.magic_link.submit') }}
+        </button>
+    </form>
+
+    <p class="mt-6 max-w-sm text-sm">
+        <Link href="/login" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">{{ t('auth.magic_link.login') }}</Link>
+    </p>
 </template>

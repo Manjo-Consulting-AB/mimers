@@ -336,11 +336,14 @@ it('ritar knappen i skalet och i flikraden ur sidans mål', function () {
     // Containerns skal förmedlar målet och bygger det inte själv.
     expect(plusknappKod('layouts/ContainerLayout.vue'))->toContain('<AppLayout :create="create">');
 
-    // Och de fem sidorna skickar sitt mål vidare till sitt skal. En sida som
-    // glömmer raden får ingen knapp, och det är tyst — därför räknas de upp.
+    // Och de fem sidorna skickar sitt mål vidare till sitt skal. Sedan issue
+    // 273 deklarerar de två toppnivåsidorna sin layout med `defineOptions` och
+    // bär målet som en layoutprop; containerns sidor wrappar fortfarande
+    // `ContainerLayout` i mallen. En sida som glömmer raden får ingen knapp,
+    // och det är tyst — därför räknas de upp.
     foreach ([
-        'pages/Dashboard.vue' => '<AppLayout :create="create">',
-        'pages/Containers/Index.vue' => '<AppLayout :create="create">',
+        'pages/Dashboard.vue' => 'defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });',
+        'pages/Containers/Index.vue' => 'defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });',
         'pages/Containers/Overview.vue' => '<ContainerLayout hero="large" :container="container" :create="create" :can="can">',
         'pages/Containers/Items/Index.vue' => '<ContainerLayout hero="compact" :container="container" :can="can" :create="create">',
         'pages/Containers/Items/Show.vue' => '<ContainerLayout :container="container" :create="create">',
