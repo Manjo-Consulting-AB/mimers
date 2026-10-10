@@ -266,9 +266,10 @@ it('ger en read-innehavare en detaljvy utan skrivytor', function () {
     // Och plusknappen i skalet får inget mål: en tom meny ger ingen knapp
     // (issue 152 · [[ADR-0048 Mobilen och plusknappen]] § 2). `can.create` är
     // falskt, alltså blir varje menyrad utanför `update`-raden struken — och
-    // den är också struken, för `can.update` är falskt. Raderna prövas i
+    // den är också struken, för `can.update` är falskt. Målet går till
+    // `AppLayout` i sidans kedja sedan issue 275, och raderna prövas i
     // tests/Feature/Frontend/PlusknappTest.php.
-    expect($vy)->toContain(':create="create"');
+    expect($vy)->toContain('[AppLayout, { create: props.create }]');
 });
 
 /*

@@ -278,3 +278,247 @@ it('sektionsmenyn stängs vid navigering', function () {
     expect($vakt)->not->toBeEmpty('vakten kring page.url saknas');
     expect($vakt[1])->toContain('sectionsOpen.value = false');
 });
+
+/*
+ * Containerns sidor — M31 Flytande navigering · issue 275 (#834), se
+ * resources/js/layouts/ContainerLayout.vue och
+ * resources/js/layouts/ContainerSettingsLayout.vue.
+ *
+ * **Kedjan deklareras av sidan, och ingen layout ritar en annan** (Beslut 1, 2
+ * och 4): `ContainerLayout` och `ContainerSettingsLayout` ritar bara sin egen
+ * del, och var och en av de tjugo sidorna skriver sin kedja i `defineOptions`.
+ * Mallen bär ingen layouttagg — samma form som issue 273 och 274, nu för
+ * containerns sidor. Efter den här issuen bär ingen sida under
+ * `resources/js/pages/` en layout i sin mall.
+ *
+ * **Proppen följer med till det led som läser den** (Beslut 3). Regeln är
+ * mekanisk: en `:create="create"` på sidans gamla layouttagg blir
+ * `create: props.create` i `AppLayout`-ledet, `hero`, `container` och `can`
+ * stannar i `ContainerLayout`-ledet, och en prop sidan inte skickade förut
+ * skickas inte efteråt. Följden är att `ContainerLayout` inte längre tar
+ * `create`, och att `ContainerSettingsLayout` varken tar `create` eller `can`
+ * — den läste dem aldrig, den vidarebefordrade dem bara.
+ *
+ * **Toppraden på mobilen flyttade till skalet.** Den ritas av `AppLayout` och
+ * läses ur sidans `container`-prop; markupen i `ContainerLayout` kunde inte
+ * fyllas när skalet ligger utanför i kedjan (en slot fylls nedåt). Det är
+ * ändringen `MobilskalTest` och `ContainerbildvyTest` följer.
+ */
+
+/**
+ * De tolv sidorna under `ContainerLayout`, relativa `resources/js/pages/`.
+ *
+ * @return list<string>
+ */
+function bestaendeSkalContainerSidor(): array
+{
+    return [
+        'Containers/Costs.vue',
+        'Containers/Documents.vue',
+        'Containers/History.vue',
+        'Containers/Overview.vue',
+        'Containers/Tasks.vue',
+        'Containers/Items/Create.vue',
+        'Containers/Items/Edit.vue',
+        'Containers/Items/Index.vue',
+        'Containers/Items/Show.vue',
+        'Containers/Items/Schedules/Create.vue',
+        'Containers/Items/Schedules/Edit.vue',
+        'Containers/Items/Schedules/Show.vue',
+    ];
+}
+
+/**
+ * De åtta sidorna under `ContainerSettingsLayout`, relativa
+ * `resources/js/pages/`. Kedjan har ett tredje led för dem.
+ *
+ * @return list<string>
+ */
+function bestaendeSkalContainerinstallningssidor(): array
+{
+    return [
+        'Containers/CalendarFeed.vue',
+        'Containers/Categories.vue',
+        'Containers/Edit.vue',
+        'Containers/Export.vue',
+        'Containers/Sharing.vue',
+        'Containers/Tags.vue',
+        'Containers/Transfers.vue',
+        'Containers/Trash.vue',
+    ];
+}
+
+/*
+ * Klart när: `ingen sida bär en layout i mallen` — ingen fil under
+ * `resources/js/pages/` innehåller `<AppLayout`, `<SettingsLayout`,
+ * `<ContainerLayout` eller `<ContainerSettingsLayout` (Beslut 4).
+ *
+ * Katalogen läses och inte en avskrift: en ny sida möts av kravet utan att
+ * någon kommer ihåg provet, och räkningen fäller en genomsökning som tyst
+ * läste nästan ingenting.
+ */
+it('ingen sida bär en layout i mallen', function () {
+    $granskade = 0;
+
+    foreach (File::allFiles(resource_path('js/pages')) as $fil) {
+        if ($fil->getExtension() !== 'vue') {
+            continue;
+        }
+
+        $granskade++;
+
+        $kod = bestaendeSkalKod('js/pages/'.$fil->getRelativePathname());
+
+        foreach (['<AppLayout', '<SettingsLayout', '<ContainerLayout', '<ContainerSettingsLayout'] as $tagg) {
+            expect(str_contains($kod, $tagg))->toBeFalse(
+                "{$fil->getRelativePathname()} bär {$tagg} i mallen",
+            );
+        }
+    }
+
+    expect($granskade)->toBeGreaterThan(20, 'provningen läste nästan inga sidor');
+});
+
+/*
+ * Klart när: `ingen layout ritar en annan` — ingen fil under
+ * `resources/js/layouts/` innehåller `<AppLayout`, `<ContainerLayout` eller
+ * `<SettingsLayout` (Beslut 1 och 2).
+ */
+it('ingen layout ritar en annan', function () {
+    $granskade = 0;
+
+    foreach (File::allFiles(resource_path('js/layouts')) as $fil) {
+        if (! in_array($fil->getExtension(), ['js', 'vue'], true)) {
+            continue;
+        }
+
+        $granskade++;
+
+        $kod = bestaendeSkalKod('js/layouts/'.$fil->getRelativePathname());
+
+        foreach (['<AppLayout', '<ContainerLayout', '<SettingsLayout'] as $tagg) {
+            expect(str_contains($kod, $tagg))->toBeFalse(
+                "{$fil->getRelativePathname()} ritar {$tagg}",
+            );
+        }
+    }
+
+    expect($granskade)->toBeGreaterThan(3, 'provningen läste nästan inga layouter');
+});
+
+/*
+ * Klart när: `containerns sidor deklarerar kedjan` — var och en av de tolv
+ * `ContainerLayout`-sidorna innehåller `[AppLayout` och `[ContainerLayout`,
+ * och var och en av de åtta `ContainerSettingsLayout`-sidorna innehåller
+ * dessutom `[ContainerSettingsLayout` (Beslut 3).
+ *
+ * Listorna räknas och inte bara läsas: en sida som tappas ur rutan ska falla
+ * här, och antalen är issuens egna — tolv och åtta.
+ */
+it('containerns sidor deklarerar kedjan', function () {
+    $sidor = bestaendeSkalContainerSidor();
+
+    expect($sidor)->toHaveCount(12);
+
+    foreach ($sidor as $sida) {
+        expect(bestaendeSkalKod("js/pages/{$sida}"))
+            ->toContain('defineOptions(')
+            ->toContain('[AppLayout')
+            ->toContain('[ContainerLayout');
+    }
+
+    $installningar = bestaendeSkalContainerinstallningssidor();
+
+    expect($installningar)->toHaveCount(8);
+
+    foreach ($installningar as $sida) {
+        expect(bestaendeSkalKod("js/pages/{$sida}"))
+            ->toContain('defineOptions(')
+            ->toContain('[AppLayout')
+            ->toContain('[ContainerLayout')
+            ->toContain('[ContainerSettingsLayout');
+    }
+});
+
+/*
+ * Klart när: `plusknappen följer med där den fanns` — sidorna som skickade ett
+ * mål före issuen bär `[AppLayout, { create: props.create }]`, och en sida som
+ * inte skickade `create` gör det inte heller efteråt (Beslut 3).
+ *
+ * **Sex sidor och inte tre.** Issuens `Klart när` räknar upp tre; regeln i
+ * Beslut 3 är mekanisk, och en genomsökning av de gamla layouttaggarna visar
+ * att `Containers/Costs.vue`, `Containers/Documents.vue` och
+ * `Containers/Tasks.vue` också bar `:create="create"`. De får målet av samma
+ * skäl som de tre andra — en sida som glömmer raden får ingen knapp, och det
+ * är tyst.
+ */
+it('plusknappen följer med där den fanns', function () {
+    $medMal = [
+        'Containers/Costs.vue',
+        'Containers/Documents.vue',
+        'Containers/Overview.vue',
+        'Containers/Tasks.vue',
+        'Containers/Items/Index.vue',
+        'Containers/Items/Show.vue',
+    ];
+
+    foreach ($medMal as $sida) {
+        expect(bestaendeSkalKod("js/pages/{$sida}"))
+            ->toContain('[AppLayout, { create: props.create }]');
+    }
+
+    $utanMal = array_merge(
+        array_values(array_diff(bestaendeSkalContainerSidor(), $medMal)),
+        bestaendeSkalContainerinstallningssidor(),
+    );
+
+    foreach ($utanMal as $sida) {
+        expect(bestaendeSkalKod("js/pages/{$sida}"))
+            ->not->toContain('create: props.create');
+    }
+});
+
+/*
+ * Klart när: `ContainerLayout tar inte create` och `ContainerSettingsLayout
+ * tar varken create eller can` — propdeklarationerna saknar dem (Beslut 1, 2).
+ *
+ * `can` står kvar i `ContainerLayout`: hjälten ritar sin redigeringsknapp ur
+ * den. Det är `create` som är borta, och `ContainerSettingsLayout` läser
+ * varken den eller `can`.
+ */
+it('ContainerLayout tar inte create och ContainerSettingsLayout varken create eller can', function () {
+    $containerLayout = bestaendeSkalKod('js/layouts/ContainerLayout.vue');
+
+    expect($containerLayout)->not->toContain('create: { type: Object, default: null }');
+    expect($containerLayout)->toContain('can: { type: Object, default: null }');
+
+    $installningar = bestaendeSkalKod('js/layouts/ContainerSettingsLayout.vue');
+
+    expect($installningar)->not->toContain('create: { type: Object, default: null }');
+    expect($installningar)->not->toContain('can: { type: Object, default: null }');
+    expect($installningar)->toContain('container: { type: Object, required: true }');
+});
+
+/*
+ * Klart när: `sektionsmenyn stängs vid navigering` — `ContainerSettingsLayout`
+ * vaktar `page.url` och nollställer `sectionsOpen` (Beslut 5).
+ *
+ * Samma vakt och samma skäl som i AppLayout och SettingsLayout: skalet står
+ * kvar mellan två sidor, och utan raden står den hopfällda sektionsmenyn öppen
+ * på mobilen efter ett klick i den.
+ */
+it('sektionsmenyn i containern stängs vid navigering', function () {
+    $layout = bestaendeSkalKod('js/layouts/ContainerSettingsLayout.vue');
+
+    preg_match("/import \{([^}]*)\} from 'vue'/", $layout, $vue);
+
+    expect($vue)->not->toBeEmpty('importen från vue saknas');
+    expect($vue[1])->toContain('watch');
+
+    expect($layout)->toContain('watch(() => page.url');
+
+    preg_match('#watch\(\(\) => page\.url, \(\) => \{(.*?)\}\)#s', $layout, $vakt);
+
+    expect($vakt)->not->toBeEmpty('vakten kring page.url saknas');
+    expect($vakt[1])->toContain('sectionsOpen.value = false');
+});

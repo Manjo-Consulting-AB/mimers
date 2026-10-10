@@ -175,10 +175,11 @@ function trepanelFragor(Container $container, Item $item, User $anvandare): int
  * Klart när: de tre panelerna renderas inuti containerns ram.
  *
  * Strukturen till vänster, itemet i mitten, kartans plats till höger — och
- * alla tre innanför `ContainerLayout`, för itemet bor i containern
- * ([[ADR-0041 Itemets vy]] § Beslut). Provet läser ordningen i källkoden: en
- * panel som hamnat i en egen layout, eller utanför ramen, är den globala
- * navigering som är avvisad två gånger.
+ * alla tre i mallens rot, för itemet bor i containern ([[ADR-0041 Itemets vy]]
+ * § Beslut). Ramen är `ContainerLayout`, som sidan deklarerar i sin kedja
+ * sedan issue 275; mallen bär den inte (Beslut 6). Provet läser ordningen i
+ * källkoden: en panel som hamnat i en egen layout, eller utanför ramen, är den
+ * globala navigering som är avvisad två gånger.
  */
 it('renderar de tre panelerna inuti containerns ram', function () {
     withoutVite();
@@ -188,11 +189,14 @@ it('renderar de tre panelerna inuti containerns ram', function () {
 
     $vy = trepanelKod('pages/Containers/Items/Show.vue');
 
-    $start = strpos($vy, '<ContainerLayout');
-    $slut = strpos($vy, '</ContainerLayout>');
+    // Ramen är mallens rot sedan issue 275: sidan deklarerar sin layoutkedja i
+    // `defineOptions` i stället för att wrappa innehållet i `ContainerLayout`.
+    // Avgränsningen är därför mallens första och sista tagg (Beslut 6).
+    $start = strpos($vy, '<template>');
+    $slut = strrpos($vy, '</template>');
 
-    expect($start)->not->toBeFalse('vyn ritar ingen ContainerLayout');
-    expect($slut)->not->toBeFalse('ContainerLayout stängs aldrig');
+    expect($start)->not->toBeFalse('vyn har ingen mall');
+    expect($slut)->not->toBeFalse('mallen stängs aldrig');
 
     $ram = substr($vy, (int) $start, (int) $slut - (int) $start);
 
@@ -213,9 +217,10 @@ it('renderar de tre panelerna inuti containerns ram', function () {
     expect($ram)->toContain('grid grid-cols-1 gap-6 md:grid-cols-4')
         ->toContain('md:col-span-3');
 
-    // Skalet deklareras inte om här: containerns ram bär det. Och
+    // Skalet deklareras inte om här i mallen: containerns ram bär det, och
+    // sedan issue 275 bor den i kedjan — ingen layouttagg står i vyn. Och
     // navigeringen i vyn är fortfarande brödsmulan och ingenting annat.
-    expect($vy)->not->toContain('AppLayout');
+    expect($vy)->not->toContain('<AppLayout');
     expect(preg_match_all('/<nav\b/', $vy))->toBe(1);
 
     // Strukturen kommer med som prop, ur samma svar som resten av sidan.
@@ -463,11 +468,11 @@ it('ritar förekomsterna i en egen panel under kartan', function () {
 
     $kartan = strpos($vy, '<ItemMapPanel');
     $panelen = strrpos($vy, '<ItemPlacementsPanel');
-    $ramen = strpos($vy, '</ContainerLayout>');
+    $ramen = strrpos($vy, '</template>');
 
     expect($kartan)->not->toBeFalse('kartans panel saknas')
         ->and($panelen)->not->toBeFalse('förekomstpanelen saknas')
-        ->and($ramen)->not->toBeFalse('ContainerLayout stängs aldrig');
+        ->and($ramen)->not->toBeFalse('mallen stängs aldrig');
 
     // Efter kartan och före ramens slut.
     expect((int) $kartan)->toBeLessThan((int) $panelen)
@@ -806,7 +811,7 @@ it('panelernas ordning i markupen är struktur, item, karta', function () {
     // Alla tre ligger i SAMMA rutnät: ordningen är rutnätets och inte tre
     // ytor som råkar stå under varandra i källan.
     expect((int) strpos($vy, 'grid-cols-1'))->toBeLessThan((int) $strukturen)
-        ->and((int) $kartan)->toBeLessThan((int) strpos($vy, '</ContainerLayout>'));
+        ->and((int) $kartan)->toBeLessThan((int) strrpos($vy, '</template>'));
 });
 
 /*

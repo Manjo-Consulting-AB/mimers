@@ -89,10 +89,13 @@ it('ritar toppraden och flikraden under md: och har kvar desktopraden över', fu
     expect($layout)->toContain('hidden border-b border-slate-200 bg-white md:block')
         ->toContain('id="huvudmenyn"');
 
-    // Den gamla menyknappen finns inte: ingen `<button>` alls i layouten, och
-    // inget tillstånd som fäller upp en lista. Skalets menyknapp är flikradens
-    // *Meny* (MobileTabBar), och den öppnar en dialog.
-    expect($layout)->not->toContain('<button');
+    // Den gamla menyknappen finns inte: inget tillstånd som fäller upp en
+    // lista, och ingen knapp som pekar på `huvudmenyn`. Skalets menyknapp är
+    // flikradens *Meny* (MobileTabBar), och den öppnar en dialog.
+    //
+    // Layouten bär EN `<button>` sedan issue 275 — pennan på containerns bild
+    // i toppraden, som flyttade hit från ContainerLayout. Det är inte
+    // menyknappen, och de två raderna nedan skiljer dem åt.
     expect($layout)->not->toContain('menuOpen = !menuOpen');
     expect($layout)->not->toContain('aria-controls="huvudmenyn"');
 });
@@ -288,10 +291,14 @@ it('ger varje mål i flikraden en träffyta på minst 44 px och en plats i tabor
 });
 
 it('visar containerns namn och en tillbakaknapp i toppraden', function () {
-    $layout = mobilskalKod('layouts/ContainerLayout.vue');
+    // Innehållet flyttade från ContainerLayout till skalet i issue 275: skalet
+    // ligger utanför containerns layout i kedjan, och en slot kan bara fyllas
+    // nedåt. Markupen är oförändrad, och skalet läser containern ur
+    // `page.props.container` — en prop bara en containersida bär.
+    $layout = mobilskalKod('layouts/AppLayout.vue');
 
-    expect($layout)->toContain('<template #topbar>')
-        ->toContain('{{ heading }}')
+    expect($layout)->toContain('<slot name="topbar">')
+        ->toContain('{{ container.name }}')
         ->toContain('href="/containers"')
         ->toContain("t('nav.back')");
 });

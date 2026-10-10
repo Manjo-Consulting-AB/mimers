@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
 import ContainerCoverSheet from '../../components/ContainerCoverSheet.vue';
@@ -8,13 +9,21 @@ import FormField from '../../components/FormField.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { hero: 'compact', container: props.container, can: props.can }],
+        [ContainerSettingsLayout, { container: props.container }],
+    ],
+});
+
 /*
  * Containerns inställningar, se issue 54 § Beslut 7, 8 och 9 och issue 62b
  * § Beslut 4, 5 och 6.
  *
- * Sidan ligger i ContainerSettingsLayout, som wrappar ContainerLayout, och
- * bär den prop layouten kräver: `container` ur
- * App\Http\Resources\ContainerResource.
+ * Sidan deklarerar sin kedja — `AppLayout`, `ContainerLayout`,
+ * `ContainerSettingsLayout` — och bär den prop leden kräver: `container` ur
+ * App\Http\Resources\ContainerResource (issue 275).
  *
  * EN PATCH mot /containers/{ulid}, och bara `name`, `kind`, `description` —
  * sedan issue 88 · [[ADR-0039 Containerns översikt]] — och `currency` (issue
@@ -82,7 +91,7 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
  *
  * **Bildavsnittet kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut**
  * och är den andra av de två vägarna till samma val: pennan på bilden i
- * containerns topprad (resources/js/layouts/ContainerLayout.vue) och det här
+ * containerns topprad (resources/js/layouts/AppLayout.vue sedan issue 275) och det här
  * avsnittet öppnar SAMMA ark ur SAMMA komponent,
  * `ContainerCoverSheet`. Att avsnittet ligger HÄR och inte i formuläret är
  * med flit: bilden är inte ett fält i `PATCH /containers/{container}` utan sin
@@ -150,158 +159,156 @@ async function destroy() {
 </script>
 
 <template>
-    <ContainerSettingsLayout :container="container" :can="can">
-        <!-- Sidtiteln och rubriken följer samma gren som formuläret: *Redigera
-             container* åt någon som inte får redigera är en osanning, och den
-             som kommer hit för sektionernas skull möts av listans namn i
-             stället. `title`/`heading`-paret är det befintliga och betyder
-             samma sak här; båda grenarna finns i `lang/`. -->
-        <Head :title="can.update ? t('container.edit.title') : t('container.edit.sections')" />
+    <!-- Sidtiteln och rubriken följer samma gren som formuläret: *Redigera
+         container* åt någon som inte får redigera är en osanning, och den
+         som kommer hit för sektionernas skull möts av listans namn i
+         stället. `title`/`heading`-paret är det befintliga och betyder
+         samma sak här; båda grenarna finns i `lang/`. -->
+    <Head :title="can.update ? t('container.edit.title') : t('container.edit.sections')" />
 
-        <h1 class="text-2xl font-semibold">
-            {{ can.update ? t('container.edit.heading') : t('container.edit.sections') }}
-        </h1>
+    <h1 class="text-2xl font-semibold">
+        {{ can.update ? t('container.edit.heading') : t('container.edit.sections') }}
+    </h1>
 
-        <form v-if="can.update" class="mt-8 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('container.edit.name')"
+    <form v-if="can.update" class="mt-8 flex max-w-lg flex-col gap-4" @submit.prevent="submit">
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('container.edit.name')"
+            id="name"
+            :error="form.errors.name"
+        >
+            <input
                 id="name"
-                :error="form.errors.name"
+                v-model="form.name"
+                :aria-describedby="describedBy"
+                type="text"
+                name="name"
+                required
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <input
-                    id="name"
-                    v-model="form.name"
-                    :aria-describedby="describedBy"
-                    type="text"
-                    name="name"
-                    required
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-            </FormField>
+        </FormField>
 
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('container.edit.kind')"
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('container.edit.kind')"
+            id="kind"
+            :error="form.errors.kind"
+        >
+            <!-- Fritext med autocomplete, inte en väljare: värdet är
+                 användarens eget, och kontots arter är förslag. Att
+                 tömma fältet är ett giltigt svar. -->
+            <input
                 id="kind"
-                :error="form.errors.kind"
+                v-model="form.kind"
+                :aria-describedby="describedBy"
+                type="text"
+                name="kind"
+                list="container-kinds"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
             >
-                <!-- Fritext med autocomplete, inte en väljare: värdet är
-                     användarens eget, och kontots arter är förslag. Att
-                     tömma fältet är ett giltigt svar. -->
-                <input
-                    id="kind"
-                    v-model="form.kind"
-                    :aria-describedby="describedBy"
-                    type="text"
-                    name="kind"
-                    list="container-kinds"
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                >
-                <datalist id="container-kinds">
-                    <option v-for="kind in kinds" :key="kind" :value="kind" />
-                </datalist>
-            </FormField>
+            <datalist id="container-kinds">
+                <option v-for="kind in kinds" :key="kind" :value="kind" />
+            </datalist>
+        </FormField>
 
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('container.edit.description')"
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('container.edit.description')"
+            id="description"
+            :error="form.errors.description"
+        >
+            <!-- Ett enda fritextfält, frivilligt hela vägen: det får
+                 sättas, ändras och TÖMMAS (issue 88 · [[ADR-0039
+                 Containerns översikt]]). Ingen struktur och ingen
+                 hjälprad som ber om modell eller årtal — fältet visas
+                 som det skrivs, och ingen kod plockar isär det. -->
+            <textarea
                 id="description"
-                :error="form.errors.description"
-            >
-                <!-- Ett enda fritextfält, frivilligt hela vägen: det får
-                     sättas, ändras och TÖMMAS (issue 88 · [[ADR-0039
-                     Containerns översikt]]). Ingen struktur och ingen
-                     hjälprad som ber om modell eller årtal — fältet visas
-                     som det skrivs, och ingen kod plockar isär det. -->
-                <textarea
-                    id="description"
-                    v-model="form.description"
-                    :aria-describedby="describedBy"
-                    name="description"
-                    rows="4"
-                    class="rounded border border-slate-300 bg-white px-3 py-2"
-                />
-            </FormField>
+                v-model="form.description"
+                :aria-describedby="describedBy"
+                name="description"
+                rows="4"
+                class="rounded border border-slate-300 bg-white px-3 py-2"
+            />
+        </FormField>
 
-            <FormField
-                v-slot="{ describedBy }"
-                :label="t('container.edit.currency')"
+        <FormField
+            v-slot="{ describedBy }"
+            :label="t('container.edit.currency')"
+            id="currency"
+            :error="form.errors.currency"
+        >
+            <!-- Containerns egen valuta, se issue 85 · [[ADR-0037 Valutans
+                 arv]]. Fältet är FÖRIFYLLT och ändringsbart, aldrig dolt:
+                 rutan visar vad containern står på och vad en ny
+                 kostnadsrad föreslås i. Tre bokstäver, versaler —
+                 servern normaliserar till versaler, så `sek` och `SEK` är
+                 samma valuta. En tom ruta är svaret "ärv kontots", och
+                 därför står kontots valuta i hjälptexten och inte bara
+                 "kontots". Ingen lista att välja ur: en valuta är ingen
+                 uppräkning, och en lista i koden vore domänen inbyggd i
+                 den ([[ADR-0033 Produktens omfång]]). -->
+            <input
                 id="currency"
-                :error="form.errors.currency"
+                v-model="form.currency"
+                :aria-describedby="describedBy"
+                type="text"
+                name="currency"
+                maxlength="3"
+                autocomplete="off"
+                class="w-24 rounded border border-slate-300 bg-white px-3 py-2 uppercase"
+                :placeholder="accountCurrency"
             >
-                <!-- Containerns egen valuta, se issue 85 · [[ADR-0037 Valutans
-                     arv]]. Fältet är FÖRIFYLLT och ändringsbart, aldrig dolt:
-                     rutan visar vad containern står på och vad en ny
-                     kostnadsrad föreslås i. Tre bokstäver, versaler —
-                     servern normaliserar till versaler, så `sek` och `SEK` är
-                     samma valuta. En tom ruta är svaret "ärv kontots", och
-                     därför står kontots valuta i hjälptexten och inte bara
-                     "kontots". Ingen lista att välja ur: en valuta är ingen
-                     uppräkning, och en lista i koden vore domänen inbyggd i
-                     den ([[ADR-0033 Produktens omfång]]). -->
-                <input
-                    id="currency"
-                    v-model="form.currency"
-                    :aria-describedby="describedBy"
-                    type="text"
-                    name="currency"
-                    maxlength="3"
-                    autocomplete="off"
-                    class="w-24 rounded border border-slate-300 bg-white px-3 py-2 uppercase"
-                    :placeholder="accountCurrency"
+        </FormField>
+
+        <p class="-mt-2 text-sm text-slate-600">
+            {{ t('container.edit.currency_hint', { currency: accountCurrency }) }}
+        </p>
+
+        <button
+            type="submit"
+            :disabled="form.processing"
+            class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+        >
+            {{ form.processing ? t('common.pending.default') : t('container.edit.submit') }}
+        </button>
+    </form>
+
+    <!--
+        Bilden (issue 159). Eget avsnitt och inte ett fält i formuläret
+        ovan: den har sin egen rutt, och en sparande knapp som gjorde två
+        saker hade varit två svar på frågan vad knappen gör.
+    -->
+    <section v-if="can.update" class="mt-12 border-t border-border pt-6">
+        <h2 class="text-title">{{ t('container.cover.heading') }}</h2>
+
+        <p class="mt-1 text-sm text-ink-subtle">{{ t('container.cover.description') }}</p>
+
+        <div class="mt-4 flex flex-wrap items-center gap-4">
+            <span class="h-16 w-16 shrink-0 overflow-hidden rounded-control">
+                <ContainerCover :cover="container.cover" />
+            </span>
+
+            <ContainerCoverSheet :container="container" v-slot="{ open }">
+                <button
+                    type="button"
+                    class="inline-flex min-h-11 items-center rounded border border-border px-4 text-sm font-medium text-ink hover:bg-surface-muted"
+                    @click="open"
                 >
-            </FormField>
-
-            <p class="-mt-2 text-sm text-slate-600">
-                {{ t('container.edit.currency_hint', { currency: accountCurrency }) }}
-            </p>
-
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="inline-flex min-h-11 items-center self-start rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-            >
-                {{ form.processing ? t('common.pending.default') : t('container.edit.submit') }}
-            </button>
-        </form>
-
-        <!--
-            Bilden (issue 159). Eget avsnitt och inte ett fält i formuläret
-            ovan: den har sin egen rutt, och en sparande knapp som gjorde två
-            saker hade varit två svar på frågan vad knappen gör.
-        -->
-        <section v-if="can.update" class="mt-12 border-t border-border pt-6">
-            <h2 class="text-title">{{ t('container.cover.heading') }}</h2>
-
-            <p class="mt-1 text-sm text-ink-subtle">{{ t('container.cover.description') }}</p>
-
-            <div class="mt-4 flex flex-wrap items-center gap-4">
-                <span class="h-16 w-16 shrink-0 overflow-hidden rounded-control">
-                    <ContainerCover :cover="container.cover" />
-                </span>
-
-                <ContainerCoverSheet :container="container" v-slot="{ open }">
-                    <button
-                        type="button"
-                        class="inline-flex min-h-11 items-center rounded border border-border px-4 text-sm font-medium text-ink hover:bg-surface-muted"
-                        @click="open"
-                    >
-                        {{ t('container.cover.edit') }}
-                    </button>
-                </ContainerCoverSheet>
-            </div>
-        </section>
-
-        <div v-if="can.delete" class="mt-12 border-t border-slate-200 pt-6">
-            <button
-                type="button"
-                :disabled="pending"
-                class="inline-flex min-h-11 items-center rounded border border-red-300 px-4 text-sm font-medium text-red-700 hover:bg-red-50"
-                @click="destroy"
-            >
-                {{ pending ? t('common.pending.default') : t('container.destroy.action') }}
-            </button>
+                    {{ t('container.cover.edit') }}
+                </button>
+            </ContainerCoverSheet>
         </div>
-    </ContainerSettingsLayout>
+    </section>
+
+    <div v-if="can.delete" class="mt-12 border-t border-slate-200 pt-6">
+        <button
+            type="button"
+            :disabled="pending"
+            class="inline-flex min-h-11 items-center rounded border border-red-300 px-4 text-sm font-medium text-red-700 hover:bg-red-50"
+            @click="destroy"
+        >
+            {{ pending ? t('common.pending.default') : t('container.destroy.action') }}
+        </button>
+    </div>
 </template>

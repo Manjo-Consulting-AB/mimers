@@ -1,9 +1,17 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ItemForm from '../../../components/ItemForm.vue';
 import { useTranslations } from '../../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Skapa ett item, se issue 57b § Beslut 1, 4 och 5.
@@ -68,22 +76,20 @@ const account = computed(() => {
 </script>
 
 <template>
-    <ContainerLayout :container="container">
-        <Head :title="t('item.create.title')" />
+    <Head :title="t('item.create.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('item.create.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('item.create.heading') }}</h1>
 
-        <ItemForm
-            class="mt-8"
-            :container-ulid="container.ulid"
-            :container-name="container.name"
-            :categories="categories"
-            :tags="tags"
-            :accounts="accounts"
-            :account="account"
-            :parent="parent"
-            :structure="structure"
-            :can-create-root="canCreateRoot"
-        />
-    </ContainerLayout>
+    <ItemForm
+        class="mt-8"
+        :container-ulid="container.ulid"
+        :container-name="container.name"
+        :categories="categories"
+        :tags="tags"
+        :accounts="accounts"
+        :account="account"
+        :parent="parent"
+        :structure="structure"
+        :can-create-root="canCreateRoot"
+    />
 </template>

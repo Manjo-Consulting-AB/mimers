@@ -1,11 +1,20 @@
 <script setup>
 import { computed, onMounted, onUnmounted } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ExportRow from '../../components/ExportRow.vue';
 import { isOpenExport } from '../../components/exportPresentation.js';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { hero: 'compact', container: props.container }],
+        [ContainerSettingsLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Containerns export, se issue 67c § Beslut 1–8.
@@ -113,58 +122,56 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <ContainerSettingsLayout :container="container">
-        <Head :title="t('export.title')" />
+    <Head :title="t('export.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('export.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('export.heading') }}</h1>
 
-        <!--
-            Vad påsen innehåller, INNAN den beställs (Beslut 7): den som tar
-            en export ska veta vad hon får, och den som hoppas på något annat
-            slipper vänta i onödan.
-        -->
-        <p class="mt-2 text-sm text-slate-700">{{ t('export.intro') }}</p>
+    <!--
+        Vad påsen innehåller, INNAN den beställs (Beslut 7): den som tar
+        en export ska veta vad hon får, och den som hoppas på något annat
+        slipper vänta i onödan.
+    -->
+    <p class="mt-2 text-sm text-slate-700">{{ t('export.intro') }}</p>
 
-        <!--
-            Domänfelet ur en beställning — containern har redan en export som
-            packas — blir en ruta och inte en rå felkod. Nyckeln är `export`:
-            felet gäller containerns tillstånd och inte ett fält.
-        -->
-        <p
-            v-if="page.props.errors.export"
-            id="export-error"
-            role="alert"
-            tabindex="-1"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 outline-none"
+    <!--
+        Domänfelet ur en beställning — containern har redan en export som
+        packas — blir en ruta och inte en rå felkod. Nyckeln är `export`:
+        felet gäller containerns tillstånd och inte ett fält.
+    -->
+    <p
+        v-if="page.props.errors.export"
+        id="export-error"
+        role="alert"
+        tabindex="-1"
+        class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 outline-none"
+    >
+        {{ page.props.errors.export }}
+    </p>
+
+    <form class="mt-6" @submit.prevent="request">
+        <button
+            type="submit"
+            :disabled="form.processing || hasOpenRow"
+            class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
         >
-            {{ page.props.errors.export }}
-        </p>
+            {{ form.processing ? t('common.pending.export') : t('export.create') }}
+        </button>
 
-        <form class="mt-6" @submit.prevent="request">
-            <button
-                type="submit"
-                :disabled="form.processing || hasOpenRow"
-                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-            >
-                {{ form.processing ? t('common.pending.export') : t('export.create') }}
-            </button>
+        <!--
+            Varför knappen är stängd, i ord: en avstängd knapp utan
+            förklaring är en återvändsgränd. Samma mening som felet ovan
+            säger, för det är samma tillstånd.
+        -->
+        <p v-if="hasOpenRow" class="mt-2 text-sm text-slate-600">{{ t('export.running_notice') }}</p>
+    </form>
 
-            <!--
-                Varför knappen är stängd, i ord: en avstängd knapp utan
-                förklaring är en återvändsgränd. Samma mening som felet ovan
-                säger, för det är samma tillstånd.
-            -->
-            <p v-if="hasOpenRow" class="mt-2 text-sm text-slate-600">{{ t('export.running_notice') }}</p>
-        </form>
+    <section class="mt-10">
+        <h2 class="text-lg font-semibold">{{ t('export.list_heading') }}</h2>
 
-        <section class="mt-10">
-            <h2 class="text-lg font-semibold">{{ t('export.list_heading') }}</h2>
+        <p v-if="exports.length === 0" class="mt-2 text-sm text-slate-600">{{ t('export.empty') }}</p>
 
-            <p v-if="exports.length === 0" class="mt-2 text-sm text-slate-600">{{ t('export.empty') }}</p>
-
-            <ul v-else class="mt-4 flex flex-col gap-2">
-                <ExportRow v-for="row in exports" :key="row.ulid" :row="row" />
-            </ul>
-        </section>
-    </ContainerSettingsLayout>
+        <ul v-else class="mt-4 flex flex-col gap-2">
+            <ExportRow v-for="row in exports" :key="row.ulid" :row="row" />
+        </ul>
+    </section>
 </template>

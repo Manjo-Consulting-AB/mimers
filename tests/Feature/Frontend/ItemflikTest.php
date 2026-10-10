@@ -565,8 +565,10 @@ it('utlåningen har en egen flik', function () {
  * [[ADR-0042 Designsystemet]] § Beslut står fast vid det. Bilden ritar en
  * global vänstermeny med egna rader för Struktur, Karta, Uppgifter, Dokument
  * och Kostnader; den tas inte in, och det är avgjort två gånger. Ramen är
- * `ContainerLayout` — containerns namn och flikrad ur issue 101 — och itemets
- * flikrad står i dess slot.
+ * `ContainerLayout` — containerns namn och flikrad ur issue 101 — som sidan
+ * deklarerar i sin kedja sedan issue 275, och itemets flikrad står i dess slot
+ * (mallen är nu mallens rot, så avgränsningen är första och sista
+ * `<template>`, Beslut 6).
  *
  * Provet faller på tre sätt en global navigering hade kunnat smyga in: en egen
  * layout i vyn, en andra `<nav>`, eller en adress som lämnar containern. Det
@@ -580,18 +582,22 @@ it('utlåningen har en egen flik', function () {
 it('flikraden ligger inuti containerns ram', function () {
     $vy = itemflikKod('pages/Containers/Items/Show.vue');
 
-    $start = strpos($vy, '<ContainerLayout');
-    $slut = strpos($vy, '</ContainerLayout>');
+    // Ramen är mallens rot sedan issue 275: sidan deklarerar sin layoutkedja i
+    // `defineOptions` i stället för att wrappa innehållet i `ContainerLayout`.
+    // Avgränsningen är därför mallens första och sista tagg (Beslut 6).
+    $start = strpos($vy, '<template>');
+    $slut = strrpos($vy, '</template>');
 
-    expect($start)->not->toBeFalse('vyn ritar ingen ContainerLayout');
-    expect($slut)->not->toBeFalse('ContainerLayout stängs aldrig');
+    expect($start)->not->toBeFalse('vyn har ingen mall');
+    expect($slut)->not->toBeFalse('mallen stängs aldrig');
 
     // Flikraden står INUTI ramen — mellan öppningen och stängningen — och
     // alltså i layoutens slot, jämte brödsmulan och namnet.
     expect(substr($vy, (int) $start, (int) $slut - (int) $start))->toContain('<UiTabs');
 
-    // Skalet deklareras inte om här: containerns ram bär det.
-    expect($vy)->not->toContain('AppLayout');
+    // Skalet deklareras inte om här i mallen: containerns ram bär det, och
+    // sedan issue 275 bor den i kedjan — ingen layouttagg står i vyn.
+    expect($vy)->not->toContain('<AppLayout');
 
     // EN navigering i vyn, och det är brödsmulan. En global meny hade varit
     // en <nav> till — eller en sidopanel, som bilden ritar den.

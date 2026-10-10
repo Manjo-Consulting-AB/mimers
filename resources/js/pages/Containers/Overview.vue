@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerDetailsPanel from '../../components/ContainerDetailsPanel.vue';
 import ContainerTasksPanel from '../../components/ContainerTasksPanel.vue';
@@ -12,6 +13,13 @@ import UiCard from '../../components/UiCard.vue';
 import UiListRow from '../../components/UiListRow.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, { create: props.create }],
+        [ContainerLayout, { hero: 'large', container: props.container, can: props.can }],
+    ],
+});
 
 /*
  * Containerns översikt — containerns egen sida, se issue 89 ·
@@ -169,162 +177,160 @@ const itemUrl = (item) => `/containers/${props.container.ulid}/items/${item.ulid
 </script>
 
 <template>
-    <ContainerLayout hero="large" :container="container" :create="create" :can="can">
-        <Head :title="container.name" />
+    <Head :title="container.name" />
+
+    <!--
+        Rutnätet (issue 172). Behållaren är ett vanligt block tills `lg:`
+        gör den till ett rutnät om tre kolumner; barnen ligger kvar i
+        källordningen, och under `lg:` staplas de precis som förut.
+        Marginalen sitter kvar på varje panel — rutnätet lägger bara till
+        kolumnavståndet, så radrytmen är den samma på båda sidor om
+        brytpunkten.
+    -->
+    <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
+        <!--
+            Sidans eget huvud ritas bara under `md:`. Över brytpunkten är
+            hjälten sidans huvud (ADR-0050 § 2), och den bär samma namn, art
+            och beskrivning — två rader med samma text är både en synlig
+            dubblett och en skärmläsare som läser fel. Namnet är hjältens
+            `<h1>` där, så sidan har en rubrik på varje bredd.
+        -->
+        <h1 class="text-2xl font-semibold md:hidden">{{ container.name }}</h1>
 
         <!--
-            Rutnätet (issue 172). Behållaren är ett vanligt block tills `lg:`
-            gör den till ett rutnät om tre kolumner; barnen ligger kvar i
-            källordningen, och under `lg:` staplas de precis som förut.
-            Marginalen sitter kvar på varje panel — rutnätet lägger bara till
-            kolumnavståndet, så radrytmen är den samma på båda sidor om
-            brytpunkten.
+            Informationsytan äger sin egen marginal (se InfoPanel.vue), så
+            ramen bär ingen: den placerar panelen sist i högerspalten och
+            lämnar ingenting kvar när panelen inte ritas — en tom ram har
+            ingen höjd.
         -->
-        <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
-            <!--
-                Sidans eget huvud ritas bara under `md:`. Över brytpunkten är
-                hjälten sidans huvud (ADR-0050 § 2), och den bär samma namn, art
-                och beskrivning — två rader med samma text är både en synlig
-                dubblett och en skärmläsare som läser fel. Namnet är hjältens
-                `<h1>` där, så sidan har en rubrik på varje bredd.
-            -->
-            <h1 class="text-2xl font-semibold md:hidden">{{ container.name }}</h1>
-
-            <!--
-                Informationsytan äger sin egen marginal (se InfoPanel.vue), så
-                ramen bär ingen: den placerar panelen sist i högerspalten och
-                lämnar ingenting kvar när panelen inte ritas — en tom ram har
-                ingen höjd.
-            -->
-            <div class="lg:col-start-3 lg:row-start-3">
-                <InfoPanel :tips="props.tips" />
-            </div>
-
-            <!-- Varje rad i listan är ett fält hjälten upprepar — arten och
-                 beskrivningen — så hela listan hör till huvudet under `md:`. -->
-            <dl class="mt-2 flex flex-col gap-1 text-slate-700 md:hidden">
-                <div v-if="container.kind" class="flex flex-wrap gap-x-2">
-                    <dt class="font-medium">{{ t('container.overview.kind') }}</dt>
-                    <dd>{{ container.kind }}</dd>
-                </div>
-
-                <div v-if="container.description" class="flex flex-wrap gap-x-2">
-                    <dt class="font-medium">{{ t('container.overview.description') }}</dt>
-                    <dd class="whitespace-pre-line">{{ container.description }}</dd>
-                </div>
-            </dl>
-
-            <!-- Talen i sidans flöde under `md:`, där hjälten inte ritas. Samma
-                 två tal ur samma `counts` — ingen tredje bricka och ingen egen
-                 räkning. -->
-            <div class="mt-8 flex flex-wrap gap-4 md:hidden">
-                <UiStat :value="counts.items" :label="t('container.overview.items')" />
-                <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
-            </div>
-
-            <!-- Kommande uppgifter. Panelen äger sin egen ram och sitt eget
-                 tomma läge; här står bara var i rutnätet den hör hemma. -->
-            <div class="mt-8 lg:col-start-1 lg:row-start-1">
-                <ContainerTasksPanel :tasks="props.tasks" />
-            </div>
-
-            <!-- Kostnaderna. Panelen ritas inte alls när containern saknar
-                 kostnadsrader — en rubrik över en tom ring är ett påstående om
-                 att det finns något att visa. Bildtexten i ringens mitt säger
-                 *Total* och inte *This month*: den fasta summeringen är hela
-                 containern och har ingen period (ADR-0038). -->
-            <div v-if="props.costs.totals.length" class="mt-8 lg:col-start-2 lg:row-start-1">
-                <UiCard>
-                    <template #heading>{{ t('container.overview.costs') }}</template>
-
-                    <CostDonut
-                        :totals="props.costs.totals"
-                        :breakdown="props.costs.breakdown"
-                        :label="t('container.overview.costs_total')"
-                    />
-                </UiCard>
-            </div>
-
-            <!-- Containerdetaljer. -->
-            <div class="mt-8 lg:col-start-3 lg:row-start-1">
-                <ContainerDetailsPanel :details="props.details" />
-            </div>
-
-            <!-- Items. Samma lista som itembrickan räknar, klippt till sex av
-                 servern; raden leder till itemet och panelen vidare till hela
-                 listan. -->
-            <div class="mt-8 lg:col-span-2 lg:col-start-1 lg:row-start-2">
-                <UiCard>
-                    <template #heading>{{ t('container.overview.items') }}</template>
-
-                    <template #action>
-                        <Link
-                            :href="itemListUrl"
-                            class="inline-flex min-h-11 items-center text-accent hover:underline"
-                        >
-                            {{ t('container.overview.view_all') }}
-                        </Link>
-                    </template>
-
-                    <p v-if="props.items.length === 0" class="text-slate-700">
-                        {{ t('item.index.empty') }}
-                    </p>
-
-                    <!-- Listan är en <ul> och raderna är <li> — formen
-                         `UiListRow` kräver, och av samma skäl som i
-                         itemlistan: en skärmläsare ska höra hur många rader
-                         det finns innan den läser den första. -->
-                    <ul v-else class="flex flex-col divide-y divide-slate-200">
-                        <UiListRow v-for="item in props.items" :key="item.ulid">
-                            <template #title>
-                                <Link
-                                    :href="itemUrl(item)"
-                                    class="inline-flex min-h-11 items-center hover:underline"
-                                >
-                                    {{ item.name }}
-                                </Link>
-                            </template>
-                        </UiListRow>
-                    </ul>
-                </UiCard>
-            </div>
-
-            <!-- Senaste aktiviteter. Raden är `HistoryRow` och ber INTE om
-                 containerraden: raderna står inuti sin container här, till
-                 skillnad från dashboardens panel (issue 126). Det tomma läget
-                 är historikflikens eget ord — samma container, samma svar. -->
-            <div class="mt-8 lg:col-start-3 lg:row-start-2">
-                <UiCard>
-                    <template #heading>{{ t('container.overview.activity') }}</template>
-
-                    <p v-if="props.events.length === 0" class="text-slate-700">
-                        {{ t('audit.history.empty') }}
-                    </p>
-
-                    <ul v-else class="flex flex-col divide-y divide-slate-200">
-                        <HistoryRow
-                            v-for="event in props.events"
-                            :key="event.ulid"
-                            :row="event"
-                        />
-                    </ul>
-                </UiCard>
-            </div>
-
-            <!-- Senaste bilder (issue 173). Panelen ritas inte alls när
-                 containern saknar bilder, och den ritas av sin egen komponent:
-                 sidan äger bara platsen i rutnätet. Bilderna är länkar till
-                 sina items, och miniatyren kräver att servern sagt att
-                 `thumb`-varianten finns. -->
-            <div
-                v-if="props.recentImages.length"
-                class="mt-8 lg:col-span-2 lg:col-start-1 lg:row-start-3"
-            >
-                <RecentImagesPanel
-                    :images="props.recentImages"
-                    :container-ulid="props.container.ulid"
-                />
-            </div>
+        <div class="lg:col-start-3 lg:row-start-3">
+            <InfoPanel :tips="props.tips" />
         </div>
-    </ContainerLayout>
+
+        <!-- Varje rad i listan är ett fält hjälten upprepar — arten och
+             beskrivningen — så hela listan hör till huvudet under `md:`. -->
+        <dl class="mt-2 flex flex-col gap-1 text-slate-700 md:hidden">
+            <div v-if="container.kind" class="flex flex-wrap gap-x-2">
+                <dt class="font-medium">{{ t('container.overview.kind') }}</dt>
+                <dd>{{ container.kind }}</dd>
+            </div>
+
+            <div v-if="container.description" class="flex flex-wrap gap-x-2">
+                <dt class="font-medium">{{ t('container.overview.description') }}</dt>
+                <dd class="whitespace-pre-line">{{ container.description }}</dd>
+            </div>
+        </dl>
+
+        <!-- Talen i sidans flöde under `md:`, där hjälten inte ritas. Samma
+             två tal ur samma `counts` — ingen tredje bricka och ingen egen
+             räkning. -->
+        <div class="mt-8 flex flex-wrap gap-4 md:hidden">
+            <UiStat :value="counts.items" :label="t('container.overview.items')" />
+            <UiStat :value="counts.todos" :label="t('container.overview.todos')" />
+        </div>
+
+        <!-- Kommande uppgifter. Panelen äger sin egen ram och sitt eget
+             tomma läge; här står bara var i rutnätet den hör hemma. -->
+        <div class="mt-8 lg:col-start-1 lg:row-start-1">
+            <ContainerTasksPanel :tasks="props.tasks" />
+        </div>
+
+        <!-- Kostnaderna. Panelen ritas inte alls när containern saknar
+             kostnadsrader — en rubrik över en tom ring är ett påstående om
+             att det finns något att visa. Bildtexten i ringens mitt säger
+             *Total* och inte *This month*: den fasta summeringen är hela
+             containern och har ingen period (ADR-0038). -->
+        <div v-if="props.costs.totals.length" class="mt-8 lg:col-start-2 lg:row-start-1">
+            <UiCard>
+                <template #heading>{{ t('container.overview.costs') }}</template>
+
+                <CostDonut
+                    :totals="props.costs.totals"
+                    :breakdown="props.costs.breakdown"
+                    :label="t('container.overview.costs_total')"
+                />
+            </UiCard>
+        </div>
+
+        <!-- Containerdetaljer. -->
+        <div class="mt-8 lg:col-start-3 lg:row-start-1">
+            <ContainerDetailsPanel :details="props.details" />
+        </div>
+
+        <!-- Items. Samma lista som itembrickan räknar, klippt till sex av
+             servern; raden leder till itemet och panelen vidare till hela
+             listan. -->
+        <div class="mt-8 lg:col-span-2 lg:col-start-1 lg:row-start-2">
+            <UiCard>
+                <template #heading>{{ t('container.overview.items') }}</template>
+
+                <template #action>
+                    <Link
+                        :href="itemListUrl"
+                        class="inline-flex min-h-11 items-center text-accent hover:underline"
+                    >
+                        {{ t('container.overview.view_all') }}
+                    </Link>
+                </template>
+
+                <p v-if="props.items.length === 0" class="text-slate-700">
+                    {{ t('item.index.empty') }}
+                </p>
+
+                <!-- Listan är en <ul> och raderna är <li> — formen
+                     `UiListRow` kräver, och av samma skäl som i
+                     itemlistan: en skärmläsare ska höra hur många rader
+                     det finns innan den läser den första. -->
+                <ul v-else class="flex flex-col divide-y divide-slate-200">
+                    <UiListRow v-for="item in props.items" :key="item.ulid">
+                        <template #title>
+                            <Link
+                                :href="itemUrl(item)"
+                                class="inline-flex min-h-11 items-center hover:underline"
+                            >
+                                {{ item.name }}
+                            </Link>
+                        </template>
+                    </UiListRow>
+                </ul>
+            </UiCard>
+        </div>
+
+        <!-- Senaste aktiviteter. Raden är `HistoryRow` och ber INTE om
+             containerraden: raderna står inuti sin container här, till
+             skillnad från dashboardens panel (issue 126). Det tomma läget
+             är historikflikens eget ord — samma container, samma svar. -->
+        <div class="mt-8 lg:col-start-3 lg:row-start-2">
+            <UiCard>
+                <template #heading>{{ t('container.overview.activity') }}</template>
+
+                <p v-if="props.events.length === 0" class="text-slate-700">
+                    {{ t('audit.history.empty') }}
+                </p>
+
+                <ul v-else class="flex flex-col divide-y divide-slate-200">
+                    <HistoryRow
+                        v-for="event in props.events"
+                        :key="event.ulid"
+                        :row="event"
+                    />
+                </ul>
+            </UiCard>
+        </div>
+
+        <!-- Senaste bilder (issue 173). Panelen ritas inte alls när
+             containern saknar bilder, och den ritas av sin egen komponent:
+             sidan äger bara platsen i rutnätet. Bilderna är länkar till
+             sina items, och miniatyren kräver att servern sagt att
+             `thumb`-varianten finns. -->
+        <div
+            v-if="props.recentImages.length"
+            class="mt-8 lg:col-span-2 lg:col-start-1 lg:row-start-3"
+        >
+            <RecentImagesPanel
+                :images="props.recentImages"
+                :container-ulid="props.container.ulid"
+            />
+        </div>
+    </div>
 </template>

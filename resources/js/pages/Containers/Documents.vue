@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import DocumentFilterBar from '../../components/DocumentFilterBar.vue';
 import DocumentFilterColumn from '../../components/DocumentFilterColumn.vue';
@@ -15,6 +16,13 @@ import { attachmentPreview, formatByteSize } from '../../components/attachmentPr
 import { documentFilterQuery } from '../../components/documentFilter.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, { create: props.create }],
+        [ContainerLayout, { hero: 'compact', container: props.container, can: props.can }],
+    ],
+});
 
 /*
  * Containerns dokumentflik — se issue 178 · [[ADR-0050 Desktopdesignen]]
@@ -392,496 +400,494 @@ function toInbox(row) {
 </script>
 
 <template>
-    <ContainerLayout hero="compact" :container="container" :can="can" :create="create">
-        <Head :title="t('container.documents.title')" />
+    <Head :title="t('container.documents.title')" />
 
-        <!--
-            Rubrikraden (Beslut 1): ikonen och rubriken till vänster, lagrings-
-            stapeln (§ 15) och *Lägg till dokument* (Beslut 2) till höger.
-            Underraden namnger containern, och ikonen är dekor — `aria-hidden`
-            — för rubriken säger redan vad ytan är.
-        -->
-        <div class="flex flex-wrap items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="size-10 shrink-0 text-accent"
-                    aria-hidden="true"
-                >
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <path d="M14 2v6h6" />
-                </svg>
+    <!--
+        Rubrikraden (Beslut 1): ikonen och rubriken till vänster, lagrings-
+        stapeln (§ 15) och *Lägg till dokument* (Beslut 2) till höger.
+        Underraden namnger containern, och ikonen är dekor — `aria-hidden`
+        — för rubriken säger redan vad ytan är.
+    -->
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="size-10 shrink-0 text-accent"
+                aria-hidden="true"
+            >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2v6h6" />
+            </svg>
 
-                <div>
-                    <h1 class="text-heading font-semibold">{{ t('container.documents.heading') }}</h1>
-                    <p class="text-body text-ink-muted">
-                        {{ t('container.documents.subheading', { container: container.name }) }}
-                    </p>
-                </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-3">
-                <StorageBar v-if="storage" class="w-full md:w-80" :storage="storage" />
-
-                <!--
-                    *Lägg till dokument* (Beslut 2). En `<details>` och inget
-                    eget öppet-tillstånd i JavaScript — samma grepp som *Lägg
-                    till kostnad* på kostnadsfliken — och listan innehåller de
-                    items användaren får SKAPA på. Ett val leder till itemets
-                    bilageflik, där uppladdningen skrivs. Panelen ligger
-                    absolut och ritas därför inte i flödet.
-                -->
-                <details v-if="items.length > 0" class="relative">
-                    <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control bg-accent px-4 font-medium text-ink-on-accent">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="size-5 shrink-0"
-                            aria-hidden="true"
-                        >
-                            <path d="M12 5v14M5 12h14" />
-                        </svg>
-
-                        {{ t('container.documents.add') }}
-
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="size-5 shrink-0"
-                            aria-hidden="true"
-                        >
-                            <path d="m6 9 6 6 6-6" />
-                        </svg>
-                    </summary>
-
-                    <div class="absolute right-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
-                        <p class="text-meta text-ink-subtle">{{ t('container.documents.add_choose_item') }}</p>
-
-                        <ul class="mt-1 flex flex-col">
-                            <li v-for="option in items" :key="option.ulid">
-                                <Link
-                                    :href="`/containers/${container.ulid}/items/${option.ulid}?tab=attachments`"
-                                    class="flex min-h-11 items-center rounded-control px-2 text-body text-ink hover:bg-surface-sunken"
-                                >
-                                    {{ option.name }}
-                                </Link>
-                            </li>
-                        </ul>
-                    </div>
-                </details>
+            <div>
+                <h1 class="text-heading font-semibold">{{ t('container.documents.heading') }}</h1>
+                <p class="text-body text-ink-muted">
+                    {{ t('container.documents.subheading', { container: container.name }) }}
+                </p>
             </div>
         </div>
 
-        <!--
-            Layouten (issue 217 § Beslut 5). Filterkolumnen till vänster och listan till
-            höger, över `lg:`; under `lg:` är kolumnen gömd och filterbaren från
-            issue 178 står kvar orörd — mobilen behåller enkelvalet. `items-start`
-            så kolumnen inte tänjs ut över en lång lista, och `lg:mt-8` så
-            kolumnens överkant möter kortet *Senast öppnade* i stället för
-            rubrikraden — högerkolumnens första element bär sin egen `mt-8`.
-        -->
-        <div class="lg:grid lg:grid-cols-[16rem_1fr] lg:items-start lg:gap-6">
-            <DocumentFilterColumn
-                class="hidden lg:block lg:mt-8"
-                :container-ulid="container.ulid"
-                :filter="filter"
-                :filter-options="filterOptions"
-                :view="view"
-            />
-
-            <div>
-            <!--
-                *Senast öppnade* (Beslut 4): användarens EGNA öppningar, nyast
-                först och högst fem, som ett kort med miniatyrer. Kortet ritas bara
-                när det finns något att visa — en rubrik över ingenting är ett
-                påstående om att något finns.
-
-                Miniatyren ritas bara när servern säger att `thumb`-varianten finns
-                (`hasThumb`): en `<img>` mot en bilaga utan derivat är 404 (issue
-                19a § Beslut 5), och filerna levereras som `attachment` när
-                `inlineEnabled` är falsk (issue 61a § Beslut 2). Annars filikonen,
-                aldrig en trasig bild.
-
-                Kortet är EN länk till itemets bilageflik — hela fliken leder dit,
-                och den som kommer tillbaka till en fil vill se den bland sina
-                andra. Itemnamnet står inte i kortet: fliken är redan itemets, och
-                namnet upprepade bara var man är. Ingen *Visa alla* — någon sådan
-                vy finns inte.
-            -->
-            <UiCard v-if="recentOpens.length > 0" class="mt-8">
-                <template #heading>{{ t('container.documents.recent') }}</template>
-
-                <ul class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
-                    <li v-for="open in recentOpens" :key="open.ulid">
-                        <Link
-                            :href="`/containers/${container.ulid}/items/${open.item.ulid}?tab=attachments`"
-                            class="flex min-h-11 flex-col gap-2"
-                        >
-                            <img
-                                v-if="open.hasThumb && inlineEnabled"
-                                :src="`/files/${open.ulid}?variant=thumb`"
-                                :alt="open.filename"
-                                class="h-24 w-full rounded object-cover"
-                            >
-
-                            <span
-                                v-else
-                                role="img"
-                                :aria-label="t('item.attachment.file_icon')"
-                                class="flex h-24 w-full items-center justify-center rounded bg-surface-sunken text-ink-subtle"
-                            >
-                                <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="1.5"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    class="size-8"
-                                    aria-hidden="true"
-                                >
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <path d="M14 2v6h6" />
-                                </svg>
-                            </span>
-
-                            <span class="truncate font-medium text-ink">{{ open.filename }}</span>
-                            <time :datetime="open.opened_at" class="text-meta text-ink-subtle">
-                                {{ t('container.documents.opened', { date: openedAt(open) }) }}
-                            </time>
-                        </Link>
-                    </li>
-                </ul>
-            </UiCard>
+        <div class="flex flex-wrap items-center gap-3">
+            <StorageBar v-if="storage" class="w-full md:w-80" :storage="storage" />
 
             <!--
-                Filterfältet (§ 12). Det står mellan kortet och verktygsraden, och
-                filtret kommer ur `filter`-proppen — serverns läsning — så vyn
-                håller ingenting i minnet och en omladdning landar i samma
-                träfflista.
-
-                Under `lg:` (issue 217 § Beslut 5). Över `lg:` tar filterkolumnen över, och
-                den här raden är gömd — mobilen behåller sitt enkelval, och två
-                filterytor för samma fråga hade glidit isär.
+                *Lägg till dokument* (Beslut 2). En `<details>` och inget
+                eget öppet-tillstånd i JavaScript — samma grepp som *Lägg
+                till kostnad* på kostnadsfliken — och listan innehåller de
+                items användaren får SKAPA på. Ett val leder till itemets
+                bilageflik, där uppladdningen skrivs. Panelen ligger
+                absolut och ritas därför inte i flödet.
             -->
-            <div class="lg:hidden">
-                <DocumentFilterBar
-                    :container-ulid="container.ulid"
-                    :items="filterOptions.items"
-                    :uploaders="filterOptions.uploaders"
-                    :filter="filter"
-                />
-            </div>
-
-            <!--
-                Verktygsraden (issue 217 § Beslut 4 och 6): sökfältet till vänster,
-                sorteringen och lägesväxeln till höger. Sökningen är ett `q` som
-                varje annat filter, och Enter ställer samma fråga som ett kryss i
-                kolumnen — en GET utan `page`. Sorteringen är en fråga om LISTAN
-                och inte ett filter på den, och står därför här i stället för i
-                filterfältet. Läget kommer ur adressen genom `view` — servern
-                läser den inte (Beslut 2 i issue 178).
-            -->
-            <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
-                <form role="search" class="w-full md:w-80" @submit.prevent="submitSearch">
-                    <label for="document-search" class="sr-only">
-                        {{ t('container.documents.search_label') }}
-                    </label>
-
-                    <UiInput
-                        id="document-search"
-                        v-model="q"
-                        type="search"
-                        :disabled="searchPending"
-                        :placeholder="t('container.documents.search_placeholder')"
-                        class="w-full"
-                    />
-                </form>
-
-                <div class="flex flex-wrap items-center gap-3">
-                    <label for="document-sort" class="sr-only">{{ t('container.documents.sort_label') }}</label>
-
-                    <UiSelect
-                        id="document-sort"
-                        :model-value="filter.sort"
-                        :disabled="sortPending"
-                        @update:model-value="changeSort"
+            <details v-if="items.length > 0" class="relative">
+                <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control bg-accent px-4 font-medium text-ink-on-accent">
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-5 shrink-0"
+                        aria-hidden="true"
                     >
-                        <option v-for="value in sorts" :key="value" :value="value">
-                            {{ t(`container.documents.sort_${value}`) }}
-                        </option>
-                    </UiSelect>
+                        <path d="M12 5v14M5 12h14" />
+                    </svg>
 
-                    <ItemViewSwitch
-                        :views="views"
-                        :current="view"
-                        :label="t('container.documents.view_label')"
-                    />
+                    {{ t('container.documents.add') }}
+
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-5 shrink-0"
+                        aria-hidden="true"
+                    >
+                        <path d="m6 9 6 6 6-6" />
+                    </svg>
+                </summary>
+
+                <div class="absolute right-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
+                    <p class="text-meta text-ink-subtle">{{ t('container.documents.add_choose_item') }}</p>
+
+                    <ul class="mt-1 flex flex-col">
+                        <li v-for="option in items" :key="option.ulid">
+                            <Link
+                                :href="`/containers/${container.ulid}/items/${option.ulid}?tab=attachments`"
+                                class="flex min-h-11 items-center rounded-control px-2 text-body text-ink hover:bg-surface-sunken"
+                            >
+                                {{ option.name }}
+                            </Link>
+                        </li>
+                    </ul>
                 </div>
-            </div>
+            </details>
+        </div>
+    </div>
 
-            <!-- Två tomma lägen, och de säger olika saker: ett filter som inte
-                 matchar något är ett svar om FRÅGAN, en tom container ett svar om
-                 innehållet. -->
-            <p v-if="attachments.data.length === 0" class="mt-6 text-sm text-slate-600">
-                {{ hasFilter ? t('container.documents.empty_filtered') : t('container.documents.empty') }}
-            </p>
+    <!--
+        Layouten (issue 217 § Beslut 5). Filterkolumnen till vänster och listan till
+        höger, över `lg:`; under `lg:` är kolumnen gömd och filterbaren från
+        issue 178 står kvar orörd — mobilen behåller enkelvalet. `items-start`
+        så kolumnen inte tänjs ut över en lång lista, och `lg:mt-8` så
+        kolumnens överkant möter kortet *Senast öppnade* i stället för
+        rubrikraden — högerkolumnens första element bär sin egen `mt-8`.
+    -->
+    <div class="lg:grid lg:grid-cols-[16rem_1fr] lg:items-start lg:gap-6">
+        <DocumentFilterColumn
+            class="hidden lg:block lg:mt-8"
+            :container-ulid="container.ulid"
+            :filter="filter"
+            :filter-options="filterOptions"
+            :view="view"
+        />
 
-            <!--
-                Listan (Beslut 7), inramad i ett kort. Kolumnrubrikerna är
-                `<th scope="col">`, som i kostnadstabellen: en skärmläsare läser då
-                cellen som "Item, Motor" i stället för att läsa tolv namn i rad.
+        <div>
+        <!--
+            *Senast öppnade* (Beslut 4): användarens EGNA öppningar, nyast
+            först och högst fem, som ett kort med miniatyrer. Kortet ritas bara
+            när det finns något att visa — en rubrik över ingenting är ett
+            påstående om att något finns.
 
-                Ingen checkboxkolumn och ingen ⋯-meny: det finns inga massåtgärder,
-                och raden har bara en åtgärd — nedladdningen, vars kolumnrubrik är
-                `sr-only` därför att länkens eget ord redan säger vad den gör.
-                Typen ritas som en neutral bricka; UiBadge har inga typfärger, och
-                en egen färg per typ hade varit en femte färg vid sidan av tokens
-                ([[ADR-0042 Designsystemet]]).
-            -->
-            <div v-else-if="view === 'list'" class="mt-4 overflow-hidden rounded-card border border-border bg-surface">
-                <table class="w-full border-collapse text-left">
-                    <thead>
-                        <tr class="border-b border-border">
-                            <th scope="col" class="py-2 pl-4 pr-4 text-meta font-medium text-ink-subtle">
-                                {{ t('container.documents.filename') }}
-                            </th>
-                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                {{ t('container.documents.type') }}
-                            </th>
-                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                {{ t('container.documents.item') }}
-                            </th>
-                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                {{ t('container.documents.date') }}
-                            </th>
-                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                {{ t('container.documents.size') }}
-                            </th>
-                            <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
-                                <span class="sr-only">{{ t('container.documents.download') }}</span>
-                            </th>
-                        </tr>
-                    </thead>
+            Miniatyren ritas bara när servern säger att `thumb`-varianten finns
+            (`hasThumb`): en `<img>` mot en bilaga utan derivat är 404 (issue
+            19a § Beslut 5), och filerna levereras som `attachment` när
+            `inlineEnabled` är falsk (issue 61a § Beslut 2). Annars filikonen,
+            aldrig en trasig bild.
 
-                    <tbody>
-                        <tr v-for="row in attachments.data" :key="row.ulid" class="border-b border-border last:border-b-0">
-                            <td class="py-1 pl-4 pr-4">
-                                <span class="flex items-center gap-2">
-                                    <!-- Miniatyren bara när varianten finns; annars
-                                         en liten filikon, aldrig en trasig bild. -->
-                                    <img
-                                        v-if="preview(row).display === 'thumb'"
-                                        :src="preview(row).thumbnail"
-                                        :alt="row.filename"
-                                        class="h-8 w-8 shrink-0 rounded object-cover"
-                                    >
+            Kortet är EN länk till itemets bilageflik — hela fliken leder dit,
+            och den som kommer tillbaka till en fil vill se den bland sina
+            andra. Itemnamnet står inte i kortet: fliken är redan itemets, och
+            namnet upprepade bara var man är. Ingen *Visa alla* — någon sådan
+            vy finns inte.
+        -->
+        <UiCard v-if="recentOpens.length > 0" class="mt-8">
+            <template #heading>{{ t('container.documents.recent') }}</template>
 
-                                    <span
-                                        v-else
-                                        role="img"
-                                        :aria-label="t('item.attachment.file_icon')"
-                                        class="flex size-8 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-subtle"
-                                    >
-                                        <svg
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            stroke-width="1.5"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            class="size-4"
-                                            aria-hidden="true"
-                                        >
-                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                            <path d="M14 2v6h6" />
-                                        </svg>
-                                    </span>
-
-                                    <span class="font-medium text-ink">{{ row.filename }}</span>
-                                </span>
-                            </td>
-
-                            <td class="py-1 pr-4">
-                                <UiBadge>{{ t(`item.attachment.kind.${row.kind}`) }}</UiBadge>
-                            </td>
-
-                            <td class="py-1 pr-4">
-                                <Link
-                                    :href="itemUrl(row)"
-                                    class="inline-flex min-h-11 items-center text-accent hover:underline"
-                                >
-                                    {{ row.item.name }}
-                                </Link>
-                            </td>
-
-                            <td class="py-1 pr-4 text-ink-muted">
-                                <time :datetime="row.created_at">{{ opened(row) }}</time>
-                            </td>
-
-                            <td class="py-1 pr-4 text-ink-muted">{{ size(row) }}</td>
-
-                            <td class="py-1 pr-4">
-                                <div class="flex flex-wrap items-center gap-3">
-                                    <a
-                                        :href="fileUrl(row.ulid)"
-                                        class="inline-flex min-h-11 items-center text-accent hover:underline"
-                                    >
-                                        {{ t('container.documents.download') }}
-                                    </a>
-
-                                    <!-- *Move…* bakom radens `can.delete`,
-                                         *Copy…* på varje rad (issue 243 ·
-                                         [[ADR-0053 Flytt och kopiering]] § 2).
-                                         Servern prövar samma grindar. -->
-                                    <button
-                                        v-if="row.can.delete"
-                                        type="button"
-                                        :disabled="actionPending === row.ulid"
-                                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                                        @click="openPicker(row, 'move', $event)"
-                                    >
-                                        {{ t('item.attachment.move') }}
-                                    </button>
-
-                                    <!-- *Back to Inbox* (M27 · issue 244,
-                                         ADR-0054 § 6): bakom samma
-                                         `row.can.delete` som flytten intill.
-                                         Handlingen går alltid till den EGNA
-                                         inboxen, och servern prövar samma
-                                         grind på nytt. Raden ritas inte när
-                                         containern REDAN är en inbox —
-                                         bilagan är redan där. -->
-                                    <button
-                                        v-if="row.can.delete && !containerIsInbox"
-                                        type="button"
-                                        :disabled="actionPending === row.ulid"
-                                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                                        @click="toInbox(row)"
-                                    >
-                                        {{ t('todo.back_to_inbox') }}
-                                    </button>
-
-                                    <button
-                                        type="button"
-                                        :disabled="actionPending === row.ulid"
-                                        class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
-                                        @click="openPicker(row, 'copy', $event)"
-                                    >
-                                        {{ t('item.attachment.copy') }}
-                                    </button>
-                                </div>
-
-                                <!-- Radens fel: kvotfelet eller 403:an, ritat
-                                     under raden det gäller. -->
-                                <p
-                                    v-if="actionError && actionError.ulid === row.ulid"
-                                    role="alert"
-                                    class="text-sm text-danger"
-                                >
-                                    {{ actionError.message }}
-                                </p>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!--
-                Rutnätet (Beslut 2). Samma rader, ritade som kort: miniatyren när
-                den finns, filnamnet, itemet och storleken. Kortet är EN länk till
-                itemets bilageflik — filen nås genom nedladdningslänken i listan,
-                och ett kort med tre länkar är tre träffytor i en ruta.
-            -->
-            <ul
-                v-else
-                class="mt-4 flex flex-col gap-4 md:grid md:grid-cols-3 lg:grid-cols-4"
-            >
-                <li
-                    v-for="row in attachments.data"
-                    :key="row.ulid"
-                    class="flex flex-col gap-2 rounded-card border border-border bg-surface p-3"
-                >
-                    <img
-                        v-if="preview(row).display === 'thumb'"
-                        :src="preview(row).thumbnail"
-                        :alt="row.filename"
-                        class="h-32 w-full rounded object-cover"
-                    >
-                    <span
-                        v-else
-                        role="img"
-                        :aria-label="t(`item.attachment.kind.${row.kind}`)"
-                        class="flex h-32 w-full items-center justify-center rounded bg-surface-sunken text-ink-subtle"
-                    >
-                        {{ t(`item.attachment.kind.${row.kind}`) }}
-                    </span>
-
+            <ul class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+                <li v-for="open in recentOpens" :key="open.ulid">
                     <Link
-                        :href="itemUrl(row)"
-                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                        :href="`/containers/${container.ulid}/items/${open.item.ulid}?tab=attachments`"
+                        class="flex min-h-11 flex-col gap-2"
                     >
-                        {{ row.filename }}
-                    </Link>
+                        <img
+                            v-if="open.hasThumb && inlineEnabled"
+                            :src="`/files/${open.ulid}?variant=thumb`"
+                            :alt="open.filename"
+                            class="h-24 w-full rounded object-cover"
+                        >
 
-                    <span class="text-meta text-ink-muted">{{ row.item.name }}</span>
-                    <time :datetime="row.created_at" class="text-meta text-ink-subtle">{{ opened(row) }}</time>
-                    <span class="text-meta text-ink-subtle">{{ size(row) }}</span>
+                        <span
+                            v-else
+                            role="img"
+                            :aria-label="t('item.attachment.file_icon')"
+                            class="flex h-24 w-full items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                        >
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.5"
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                class="size-8"
+                                aria-hidden="true"
+                            >
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                <path d="M14 2v6h6" />
+                            </svg>
+                        </span>
+
+                        <span class="truncate font-medium text-ink">{{ open.filename }}</span>
+                        <time :datetime="open.opened_at" class="text-meta text-ink-subtle">
+                            {{ t('container.documents.opened', { date: openedAt(open) }) }}
+                        </time>
+                    </Link>
                 </li>
             </ul>
+        </UiCard>
 
-            <!-- Sidnumreringen. Länkarna bär filtret och läget — se pageUrl(). -->
-            <nav v-if="attachments.last_page > 1" class="mt-6 flex items-center gap-4">
-                <Link
-                    v-if="attachments.current_page > 1"
-                    :href="pageUrl(attachments.current_page - 1)"
-                    class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+        <!--
+            Filterfältet (§ 12). Det står mellan kortet och verktygsraden, och
+            filtret kommer ur `filter`-proppen — serverns läsning — så vyn
+            håller ingenting i minnet och en omladdning landar i samma
+            träfflista.
+
+            Under `lg:` (issue 217 § Beslut 5). Över `lg:` tar filterkolumnen över, och
+            den här raden är gömd — mobilen behåller sitt enkelval, och två
+            filterytor för samma fråga hade glidit isär.
+        -->
+        <div class="lg:hidden">
+            <DocumentFilterBar
+                :container-ulid="container.ulid"
+                :items="filterOptions.items"
+                :uploaders="filterOptions.uploaders"
+                :filter="filter"
+            />
+        </div>
+
+        <!--
+            Verktygsraden (issue 217 § Beslut 4 och 6): sökfältet till vänster,
+            sorteringen och lägesväxeln till höger. Sökningen är ett `q` som
+            varje annat filter, och Enter ställer samma fråga som ett kryss i
+            kolumnen — en GET utan `page`. Sorteringen är en fråga om LISTAN
+            och inte ett filter på den, och står därför här i stället för i
+            filterfältet. Läget kommer ur adressen genom `view` — servern
+            läser den inte (Beslut 2 i issue 178).
+        -->
+        <div class="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <form role="search" class="w-full md:w-80" @submit.prevent="submitSearch">
+                <label for="document-search" class="sr-only">
+                    {{ t('container.documents.search_label') }}
+                </label>
+
+                <UiInput
+                    id="document-search"
+                    v-model="q"
+                    type="search"
+                    :disabled="searchPending"
+                    :placeholder="t('container.documents.search_placeholder')"
+                    class="w-full"
+                />
+            </form>
+
+            <div class="flex flex-wrap items-center gap-3">
+                <label for="document-sort" class="sr-only">{{ t('container.documents.sort_label') }}</label>
+
+                <UiSelect
+                    id="document-sort"
+                    :model-value="filter.sort"
+                    :disabled="sortPending"
+                    @update:model-value="changeSort"
                 >
-                    {{ t('container.documents.previous') }}
-                </Link>
+                    <option v-for="value in sorts" :key="value" :value="value">
+                        {{ t(`container.documents.sort_${value}`) }}
+                    </option>
+                </UiSelect>
 
-                <span class="text-sm text-slate-600">
-                    {{ t('container.documents.page', { page: attachments.current_page, last: attachments.last_page }) }}
+                <ItemViewSwitch
+                    :views="views"
+                    :current="view"
+                    :label="t('container.documents.view_label')"
+                />
+            </div>
+        </div>
+
+        <!-- Två tomma lägen, och de säger olika saker: ett filter som inte
+             matchar något är ett svar om FRÅGAN, en tom container ett svar om
+             innehållet. -->
+        <p v-if="attachments.data.length === 0" class="mt-6 text-sm text-slate-600">
+            {{ hasFilter ? t('container.documents.empty_filtered') : t('container.documents.empty') }}
+        </p>
+
+        <!--
+            Listan (Beslut 7), inramad i ett kort. Kolumnrubrikerna är
+            `<th scope="col">`, som i kostnadstabellen: en skärmläsare läser då
+            cellen som "Item, Motor" i stället för att läsa tolv namn i rad.
+
+            Ingen checkboxkolumn och ingen ⋯-meny: det finns inga massåtgärder,
+            och raden har bara en åtgärd — nedladdningen, vars kolumnrubrik är
+            `sr-only` därför att länkens eget ord redan säger vad den gör.
+            Typen ritas som en neutral bricka; UiBadge har inga typfärger, och
+            en egen färg per typ hade varit en femte färg vid sidan av tokens
+            ([[ADR-0042 Designsystemet]]).
+        -->
+        <div v-else-if="view === 'list'" class="mt-4 overflow-hidden rounded-card border border-border bg-surface">
+            <table class="w-full border-collapse text-left">
+                <thead>
+                    <tr class="border-b border-border">
+                        <th scope="col" class="py-2 pl-4 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.filename') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.type') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.item') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.date') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            {{ t('container.documents.size') }}
+                        </th>
+                        <th scope="col" class="py-2 pr-4 text-meta font-medium text-ink-subtle">
+                            <span class="sr-only">{{ t('container.documents.download') }}</span>
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <tr v-for="row in attachments.data" :key="row.ulid" class="border-b border-border last:border-b-0">
+                        <td class="py-1 pl-4 pr-4">
+                            <span class="flex items-center gap-2">
+                                <!-- Miniatyren bara när varianten finns; annars
+                                     en liten filikon, aldrig en trasig bild. -->
+                                <img
+                                    v-if="preview(row).display === 'thumb'"
+                                    :src="preview(row).thumbnail"
+                                    :alt="row.filename"
+                                    class="h-8 w-8 shrink-0 rounded object-cover"
+                                >
+
+                                <span
+                                    v-else
+                                    role="img"
+                                    :aria-label="t('item.attachment.file_icon')"
+                                    class="flex size-8 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                                >
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.5"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        class="size-4"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                        <path d="M14 2v6h6" />
+                                    </svg>
+                                </span>
+
+                                <span class="font-medium text-ink">{{ row.filename }}</span>
+                            </span>
+                        </td>
+
+                        <td class="py-1 pr-4">
+                            <UiBadge>{{ t(`item.attachment.kind.${row.kind}`) }}</UiBadge>
+                        </td>
+
+                        <td class="py-1 pr-4">
+                            <Link
+                                :href="itemUrl(row)"
+                                class="inline-flex min-h-11 items-center text-accent hover:underline"
+                            >
+                                {{ row.item.name }}
+                            </Link>
+                        </td>
+
+                        <td class="py-1 pr-4 text-ink-muted">
+                            <time :datetime="row.created_at">{{ opened(row) }}</time>
+                        </td>
+
+                        <td class="py-1 pr-4 text-ink-muted">{{ size(row) }}</td>
+
+                        <td class="py-1 pr-4">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <a
+                                    :href="fileUrl(row.ulid)"
+                                    class="inline-flex min-h-11 items-center text-accent hover:underline"
+                                >
+                                    {{ t('container.documents.download') }}
+                                </a>
+
+                                <!-- *Move…* bakom radens `can.delete`,
+                                     *Copy…* på varje rad (issue 243 ·
+                                     [[ADR-0053 Flytt och kopiering]] § 2).
+                                     Servern prövar samma grindar. -->
+                                <button
+                                    v-if="row.can.delete"
+                                    type="button"
+                                    :disabled="actionPending === row.ulid"
+                                    class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                                    @click="openPicker(row, 'move', $event)"
+                                >
+                                    {{ t('item.attachment.move') }}
+                                </button>
+
+                                <!-- *Back to Inbox* (M27 · issue 244,
+                                     ADR-0054 § 6): bakom samma
+                                     `row.can.delete` som flytten intill.
+                                     Handlingen går alltid till den EGNA
+                                     inboxen, och servern prövar samma
+                                     grind på nytt. Raden ritas inte när
+                                     containern REDAN är en inbox —
+                                     bilagan är redan där. -->
+                                <button
+                                    v-if="row.can.delete && !containerIsInbox"
+                                    type="button"
+                                    :disabled="actionPending === row.ulid"
+                                    class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                                    @click="toInbox(row)"
+                                >
+                                    {{ t('todo.back_to_inbox') }}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    :disabled="actionPending === row.ulid"
+                                    class="inline-flex min-h-11 items-center text-sm font-medium text-accent hover:underline"
+                                    @click="openPicker(row, 'copy', $event)"
+                                >
+                                    {{ t('item.attachment.copy') }}
+                                </button>
+                            </div>
+
+                            <!-- Radens fel: kvotfelet eller 403:an, ritat
+                                 under raden det gäller. -->
+                            <p
+                                v-if="actionError && actionError.ulid === row.ulid"
+                                role="alert"
+                                class="text-sm text-danger"
+                            >
+                                {{ actionError.message }}
+                            </p>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!--
+            Rutnätet (Beslut 2). Samma rader, ritade som kort: miniatyren när
+            den finns, filnamnet, itemet och storleken. Kortet är EN länk till
+            itemets bilageflik — filen nås genom nedladdningslänken i listan,
+            och ett kort med tre länkar är tre träffytor i en ruta.
+        -->
+        <ul
+            v-else
+            class="mt-4 flex flex-col gap-4 md:grid md:grid-cols-3 lg:grid-cols-4"
+        >
+            <li
+                v-for="row in attachments.data"
+                :key="row.ulid"
+                class="flex flex-col gap-2 rounded-card border border-border bg-surface p-3"
+            >
+                <img
+                    v-if="preview(row).display === 'thumb'"
+                    :src="preview(row).thumbnail"
+                    :alt="row.filename"
+                    class="h-32 w-full rounded object-cover"
+                >
+                <span
+                    v-else
+                    role="img"
+                    :aria-label="t(`item.attachment.kind.${row.kind}`)"
+                    class="flex h-32 w-full items-center justify-center rounded bg-surface-sunken text-ink-subtle"
+                >
+                    {{ t(`item.attachment.kind.${row.kind}`) }}
                 </span>
 
                 <Link
-                    v-if="attachments.current_page < attachments.last_page"
-                    :href="pageUrl(attachments.current_page + 1)"
-                    class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                    :href="itemUrl(row)"
+                    class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
                 >
-                    {{ t('container.documents.next') }}
+                    {{ row.filename }}
                 </Link>
-            </nav>
 
-            </div>
+                <span class="text-meta text-ink-muted">{{ row.item.name }}</span>
+                <time :datetime="row.created_at" class="text-meta text-ink-subtle">{{ opened(row) }}</time>
+                <span class="text-meta text-ink-subtle">{{ size(row) }}</span>
+            </li>
+        </ul>
+
+        <!-- Sidnumreringen. Länkarna bär filtret och läget — se pageUrl(). -->
+        <nav v-if="attachments.last_page > 1" class="mt-6 flex items-center gap-4">
+            <Link
+                v-if="attachments.current_page > 1"
+                :href="pageUrl(attachments.current_page - 1)"
+                class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+            >
+                {{ t('container.documents.previous') }}
+            </Link>
+
+            <span class="text-sm text-slate-600">
+                {{ t('container.documents.page', { page: attachments.current_page, last: attachments.last_page }) }}
+            </span>
+
+            <Link
+                v-if="attachments.current_page < attachments.last_page"
+                :href="pageUrl(attachments.current_page + 1)"
+                class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+            >
+                {{ t('container.documents.next') }}
+            </Link>
+        </nav>
+
         </div>
+    </div>
 
-        <!--
-            Målväljaren (issue 242 och 243). EN för hela listan: raden som
-            öppnade den bär sin ULID och sitt verb, och `excludeItem` är
-            radens item, så ett item aldrig erbjuds som mål för sin egen
-            bilaga.
-        -->
-        <ItemTargetPicker
-            :open="pickerOpen"
-            :trigger="pickerTrigger"
-            :exclude-item="picked?.row.item.ulid ?? null"
-            :heading="pickerHeading"
-            @choose="chooseTarget"
-            @close="closePicker"
-        />
-    </ContainerLayout>
+    <!--
+        Målväljaren (issue 242 och 243). EN för hela listan: raden som
+        öppnade den bär sin ULID och sitt verb, och `excludeItem` är
+        radens item, så ett item aldrig erbjuds som mål för sin egen
+        bilaga.
+    -->
+    <ItemTargetPicker
+        :open="pickerOpen"
+        :trigger="pickerTrigger"
+        :exclude-item="picked?.row.item.ulid ?? null"
+        :heading="pickerHeading"
+        @choose="chooseTarget"
+        @close="closePicker"
+    />
 </template>

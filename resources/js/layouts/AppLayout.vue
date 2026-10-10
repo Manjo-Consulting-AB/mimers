@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
+import ContainerCover from '../components/ContainerCover.vue';
+import ContainerCoverSheet from '../components/ContainerCoverSheet.vue';
 import CreateButton from '../components/CreateButton.vue';
 import CreateMenu from '../components/CreateMenu.vue';
 import FlashMessage from '../components/FlashMessage.vue';
@@ -16,10 +18,10 @@ import { useTranslations } from '../composables/useTranslations.js';
 /*
  * Den enda layouten i M10.
  *
- * Varje sida under resources/js/pages/ wrappar sitt innehåll i den här
- * komponenten — <AppLayout> ... </AppLayout> — och lägger ingenting eget i
- * navigeringen. Femton issues renderar sina vyer här; uppfinner en av dem
- * en egen header har den byggt den sextonde.
+ * Varje sida under resources/js/pages/ deklarerar den här i sin layoutkedja
+ * (issue 273; kedjan för containerns sidor kom med issue 275) och lägger
+ * ingenting eget i navigeringen. Femton issues renderar sina vyer här;
+ * uppfinner en av dem en egen header har den byggt den sextonde.
  *
  * Layouten läser de delade propsen (auth och flash) och skickar ingenting
  * vidare nedåt — en sida som behöver användaren läser usePage().props själv.
@@ -78,10 +80,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * [[ADR-0048 Mobilen och plusknappen]] § 1. Under `md:` ritas i stället för
  * den hopfällda desktopraden (issue 68a § Beslut 2):
  *
- *   - **En mörk topprad** (`--color-shell`) med sidans titel. Sidor som vet
- *     vad de heter skickar in den i sloten `topbar` — ContainerLayout lägger
- *     containerns namn och en tillbakaknapp där. Utan slot ritas märket, som i
- *     bildens första skärm; ingen sida behöver göra något för att få en rad.
+ *   - **En mörk topprad** (`--color-shell`) med sidans titel. Ligger sidan i
+ *     en container bär raden containerns bild, namn och en tillbakaknapp
+ *     (issue 151); annars märket, som i bildens första skärm, och ingen sida
+ *     behöver göra något för att få en rad. **Markupen flyttade hit från
+ *     ContainerLayout i issue 275**: skalet ligger utanför containerns layout i
+ *     kedjan, och en slot kan bara fyllas nedåt, så den inre layouten kan inte
+ *     skicka innehåll till den yttre. Containern läses ur `page.props.container`
+ *     — en prop bara en containersida bär, så raden ritas på rätt sidor.
  *   - **En flikrad i botten** (MobileTabBar) med *Översikt*, *Sök*,
  *     plusknappens plats, *Notiser* och *Meny*.
  *   - **En sidomeny bakom *Meny*** (MobileMenu), med skalets sektioner.
@@ -188,6 +194,21 @@ defineProps({
 const { t } = useTranslations();
 const page = usePage();
 const user = computed(() => page.props.auth.user);
+
+/*
+ * Containern, när sidan ligger i en. Skalet får varje sidas props, och bara
+ * containerns sidor bär en `container`-prop (ur ContainerResource) — de
+ * globala listorna skickar `containers` eller ett filter, aldrig den här.
+ * Toppraden på mobilen ritas därför ur den (issue 151, flyttad hit i 275).
+ */
+const container = computed(() => page.props.container ?? null);
+
+/*
+ * Pennan på bilden ritas bara för den som får ändra containern (ADR-0047
+ * § Beslut, "Vem som får göra vad"). Flaggan kommer som `can` från sidan och
+ * är presentation: rutten prövar samma grind på nytt.
+ */
+const canUpdateCover = computed(() => page.props.can?.update === true);
 
 const menuOpen = ref(false);
 const menuTrigger = ref(null);
@@ -409,14 +430,75 @@ const initials = computed(() => {
             </header>
 
             <!--
-                Toppraden på mobilen. Titeln kommer ur sloten när sidan har en
-                egen — ContainerLayout lägger containerns namn och en
-                tillbakaknapp där — och är märket annars.
+                Toppraden på mobilen. Ligger sidan i en container bär den
+                containerns bild, namn och en tillbakaknapp (issue 151), och
+                märket annars. Sloten står kvar som skalets egen förlängning;
+                containerns markup flyttade hit från ContainerLayout i issue
+                275, för skalet ligger utanför dess layout i kedjan och en slot
+                bara kan fyllas nedåt.
             -->
             <header class="bg-shell text-white md:hidden">
                 <div class="mx-auto flex w-full max-w-[96rem] items-center gap-2 px-4 py-2">
                     <slot name="topbar">
-                        <p class="text-title font-semibold">{{ t('common.brand') }}</p>
+                        <template v-if="container">
+                            <Link
+                                href="/containers"
+                                class="inline-flex min-h-11 min-w-11 items-center justify-center"
+                                :aria-label="t('nav.back')"
+                            >
+                                <svg
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    class="h-5 w-5"
+                                    aria-hidden="true"
+                                >
+                                    <path d="M15 5l-7 7 7 7"></path>
+                                </svg>
+                            </Link>
+
+                            <!-- Containerns bild, i samma fyrkant som bild 2 i
+                                 docs/Design/mobil.png. Utan bild ritar
+                                 `ContainerCover` den neutrala ytan med
+                                 containertecknet (ADR-0047 § Beslut). -->
+                            <span class="h-10 w-10 shrink-0 overflow-hidden rounded-control">
+                                <ContainerCover :cover="container.cover" />
+                            </span>
+
+                            <p class="text-title font-semibold">{{ container.name }}</p>
+
+                            <ContainerCoverSheet
+                                v-if="canUpdateCover"
+                                :container="container"
+                                v-slot="{ open }"
+                            >
+                                <button
+                                    type="button"
+                                    class="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center"
+                                    :aria-label="t('container.cover.edit')"
+                                    @click="open"
+                                >
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        stroke-width="1.5"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        class="h-5 w-5"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M4 20h4l10-10-4-4L4 16z"></path>
+                                        <path d="m14 6 4 4"></path>
+                                    </svg>
+                                </button>
+                            </ContainerCoverSheet>
+                        </template>
+
+                        <p v-else class="text-title font-semibold">{{ t('common.brand') }}</p>
                     </slot>
 
                     <!-- Gästen har ingen flikrad (den är mål för en inloggad) och

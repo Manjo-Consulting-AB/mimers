@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
+import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ContainerMap from '../../../components/ContainerMap.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
@@ -8,6 +9,13 @@ import ItemStructureTree from '../../../components/ItemStructureTree.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
 import { activeFilters, filterSummary } from '../../../components/itemFilter.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, { create: props.create }],
+        [ContainerLayout, { hero: 'compact', container: props.container, can: props.can }],
+    ],
+});
 
 /*
  * Containerns itemlista — containerns förstasida till och med issue 88, se
@@ -247,100 +255,79 @@ const views = computed(() => {
 </script>
 
 <template>
-    <ContainerLayout hero="compact" :container="container" :can="can" :create="create">
-        <Head :title="t('item.index.title')" />
+    <Head :title="t('item.index.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('item.index.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('item.index.heading') }}</h1>
 
-        <Link
-            v-if="can.create"
-            :href="`/containers/${container.ulid}/items/create`"
-            class="mt-4 inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
-        >
-            {{ t('item.index.create') }}
-        </Link>
+    <Link
+        v-if="can.create"
+        :href="`/containers/${container.ulid}/items/create`"
+        class="mt-4 inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
+    >
+        {{ t('item.index.create') }}
+    </Link>
 
-        <!--
-            Växeln (issue 154 · [[ADR-0046 Containerns karta]]). Den står över
-            båda ytorna och byter mellan dem med en adress: *Lista* är förvalet
-            och skrivs utan `view`, *Träd* bär `?view=tree`. Läget kommer ur
-            `view`-proppen — serverns läsning av adressen — så vyn håller
-            ingenting i minnet och en omladdning landar i samma läge.
-        -->
-        <ItemViewSwitch
-            class="mt-6"
-            :views="views"
-            :current="view"
-            :label="t('item.view.label')"
+    <!--
+        Växeln (issue 154 · [[ADR-0046 Containerns karta]]). Den står över
+        båda ytorna och byter mellan dem med en adress: *Lista* är förvalet
+        och skrivs utan `view`, *Träd* bär `?view=tree`. Läget kommer ur
+        `view`-proppen — serverns läsning av adressen — så vyn håller
+        ingenting i minnet och en omladdning landar i samma läge.
+    -->
+    <ItemViewSwitch
+        class="mt-6"
+        :views="views"
+        :current="view"
+        :label="t('item.view.label')"
+    />
+
+    <!-- Listan, oförändrad: filterraden, de tre tomma lägena och raderna. -->
+    <template v-if="view === 'list'">
+        <ItemFilterBar
+            :container-ulid="container.ulid"
+            :tags="tags"
+            :categories="categoryTree"
+            :filter="filter"
         />
 
-        <!-- Listan, oförändrad: filterraden, de tre tomma lägena och raderna. -->
-        <template v-if="view === 'list'">
-            <ItemFilterBar
-                :container-ulid="container.ulid"
-                :tags="tags"
-                :categories="categoryTree"
-                :filter="filter"
-            />
+        <p v-if="items.length === 0 && !hasFilter" class="mt-8 text-slate-700">
+            {{ t('item.index.empty') }}
+        </p>
 
-            <p v-if="items.length === 0 && !hasFilter" class="mt-8 text-slate-700">
-                {{ t('item.index.empty') }}
-            </p>
+        <p v-else-if="items.length === 0" class="mt-8 text-slate-700">
+            {{ t('item.index.filter_empty', { filters: summary }) }}
+        </p>
 
-            <p v-else-if="items.length === 0" class="mt-8 text-slate-700">
-                {{ t('item.index.filter_empty', { filters: summary }) }}
-            </p>
-
-            <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
-                <li v-for="item in items" :key="item.ulid">
-                    <!--
-                        Hela raden är länken (issue 212 · [[ADR-0050
-                        Desktopdesignen]]), och den bär fyra saker: miniatyren,
-                        namnet, beskrivningen och en pil. Status, kategori,
-                        tillverkare, modell och taggar står inte längre här —
-                        mockupen ritar dem inte, och statusen hör till kartan.
-                    -->
-                    <Link
-                        :href="`/containers/${container.ulid}/items/${item.ulid}`"
-                        class="flex min-h-11 items-center gap-4 py-3 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+        <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
+            <li v-for="item in items" :key="item.ulid">
+                <!--
+                    Hela raden är länken (issue 212 · [[ADR-0050
+                    Desktopdesignen]]), och den bär fyra saker: miniatyren,
+                    namnet, beskrivningen och en pil. Status, kategori,
+                    tillverkare, modell och taggar står inte längre här —
+                    mockupen ritar dem inte, och statusen hör till kartan.
+                -->
+                <Link
+                    :href="`/containers/${container.ulid}/items/${item.ulid}`"
+                    class="flex min-h-11 items-center gap-4 py-3 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    <img
+                        v-if="covers[item.ulid]?.hasThumb"
+                        :src="`/files/${covers[item.ulid].ulid}?variant=thumb`"
+                        alt=""
+                        class="h-12 w-12 shrink-0 rounded border border-slate-200 object-cover"
                     >
-                        <img
-                            v-if="covers[item.ulid]?.hasThumb"
-                            :src="`/files/${covers[item.ulid].ulid}?variant=thumb`"
-                            alt=""
-                            class="h-12 w-12 shrink-0 rounded border border-slate-200 object-cover"
-                        >
 
-                        <!--
-                            Utan derivat ritas en lådikon i stället för en
-                            `<img>` mot en variant som inte finns — samma val
-                            som RecentImagesPanel gör (issue 61b § Beslut 1).
-                        -->
-                        <span
-                            v-else
-                            aria-hidden="true"
-                            class="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400"
-                        >
-                            <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                class="h-6 w-6"
-                            >
-                                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-                                <path d="m3.3 7 8.7 5 8.7-5" />
-                                <path d="M12 22V12" />
-                            </svg>
-                        </span>
-
-                        <span class="min-w-0 flex-1">
-                            <span class="block truncate font-medium text-ink">{{ item.name }}</span>
-                            <span v-if="item.description" class="block truncate text-sm text-ink-muted">{{ item.description }}</span>
-                        </span>
-
+                    <!--
+                        Utan derivat ritas en lådikon i stället för en
+                        `<img>` mot en variant som inte finns — samma val
+                        som RecentImagesPanel gör (issue 61b § Beslut 1).
+                    -->
+                    <span
+                        v-else
+                        aria-hidden="true"
+                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400"
+                    >
                         <svg
                             viewBox="0 0 24 24"
                             fill="none"
@@ -348,56 +335,75 @@ const views = computed(() => {
                             stroke-width="1.5"
                             stroke-linecap="round"
                             stroke-linejoin="round"
-                            class="h-4 w-4 shrink-0 text-ink-subtle"
-                            aria-hidden="true"
+                            class="h-6 w-6"
                         >
-                            <path d="m9 6 6 6-6 6" />
+                            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                            <path d="m3.3 7 8.7 5 8.7-5" />
+                            <path d="M12 22V12" />
                         </svg>
-                    </Link>
-                </li>
-            </ul>
-        </template>
+                    </span>
 
-        <!--
-            Trädläget (issue 154). Containerns struktur, ritad av
-            ItemStructureTree med fällknappar: rötterna syns och grenarna
-            väntar, så en container med sjuhundra items inte står mellan
-            användaren och sidan. Trädet är HELA containern inom omfånget —
-            filtret hör till listan och ritas därför inte här — och varje led
-            är en länk till sitt item (`?path=` följer med, se
-            ItemStructureTree.vue).
+                    <span class="min-w-0 flex-1">
+                        <span class="block truncate font-medium text-ink">{{ item.name }}</span>
+                        <span v-if="item.description" class="block truncate text-sm text-ink-muted">{{ item.description }}</span>
+                    </span>
 
-            Ingen rubrik och ingen egen tom-text: växeln säger vilket läge man
-            står i, och ett tomt träd ritar ingenting. Att säga "containern är
-            tom" här hade varit samma sak som listans rad, och att säga något
-            om vad som dolts är förbjudet (issue 73 § Beslut 6).
-        -->
-        <section v-else-if="view === 'tree'" class="mt-6">
-            <ItemStructureTree
-                collapsible
-                :nodes="structure ?? []"
-                :container-ulid="container.ulid"
-            />
-        </section>
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-4 w-4 shrink-0 text-ink-subtle"
+                        aria-hidden="true"
+                    >
+                        <path d="m9 6 6 6-6 6" />
+                    </svg>
+                </Link>
+            </li>
+        </ul>
+    </template>
 
-        <!--
-            Kartläget (issue 157 · [[ADR-0046 Containerns karta]]). Samma
-            struktur som trädet, ritad som noder med en öppen gren per nivå:
-            kolumner över `md:` och ett rutnät med sökväg under. Den öppna
-            vägen står i adressen, och `trail` är serverns LÖSTA väg — en
-            begärd väg som inte längre finns är kapad där den brister, så
-            markeringen pekar alltid på en nod som finns.
+    <!--
+        Trädläget (issue 154). Containerns struktur, ritad av
+        ItemStructureTree med fällknappar: rötterna syns och grenarna
+        väntar, så en container med sjuhundra items inte står mellan
+        användaren och sidan. Trädet är HELA containern inom omfånget —
+        filtret hör till listan och ritas därför inte här — och varje led
+        är en länk till sitt item (`?path=` följer med, se
+        ItemStructureTree.vue).
 
-            Ingen rubrik och ingen egen tom-text, av samma skäl som trädet: en
-            tom karta ritar ingenting, och ett ord om vad som dolts är förbjudet
-            (issue 73 § Beslut 6).
-        -->
-        <section v-else class="mt-6">
-            <ContainerMap
-                :map="map ?? { trail: [], levels: [] }"
-                :statuses="statuses"
-                :container-ulid="container.ulid"
-            />
-        </section>
-    </ContainerLayout>
+        Ingen rubrik och ingen egen tom-text: växeln säger vilket läge man
+        står i, och ett tomt träd ritar ingenting. Att säga "containern är
+        tom" här hade varit samma sak som listans rad, och att säga något
+        om vad som dolts är förbjudet (issue 73 § Beslut 6).
+    -->
+    <section v-else-if="view === 'tree'" class="mt-6">
+        <ItemStructureTree
+            collapsible
+            :nodes="structure ?? []"
+            :container-ulid="container.ulid"
+        />
+    </section>
+
+    <!--
+        Kartläget (issue 157 · [[ADR-0046 Containerns karta]]). Samma
+        struktur som trädet, ritad som noder med en öppen gren per nivå:
+        kolumner över `md:` och ett rutnät med sökväg under. Den öppna
+        vägen står i adressen, och `trail` är serverns LÖSTA väg — en
+        begärd väg som inte längre finns är kapad där den brister, så
+        markeringen pekar alltid på en nod som finns.
+
+        Ingen rubrik och ingen egen tom-text, av samma skäl som trädet: en
+        tom karta ritar ingenting, och ett ord om vad som dolts är förbjudet
+        (issue 73 § Beslut 6).
+    -->
+    <section v-else class="mt-6">
+        <ContainerMap
+            :map="map ?? { trail: [], levels: [] }"
+            :statuses="statuses"
+            :container-ulid="container.ulid"
+        />
+    </section>
 </template>
