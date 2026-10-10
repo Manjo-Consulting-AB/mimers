@@ -1,8 +1,6 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, provide, ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
-import ContainerCover from '../components/ContainerCover.vue';
-import ContainerCoverSheet from '../components/ContainerCoverSheet.vue';
 import CreateButton from '../components/CreateButton.vue';
 import CreateMenu from '../components/CreateMenu.vue';
 import FlashMessage from '../components/FlashMessage.vue';
@@ -83,11 +81,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  *   - **En mörk topprad** (`--color-shell`) med sidans titel. Ligger sidan i
  *     en container bär raden containerns bild, namn och en tillbakaknapp
  *     (issue 151); annars märket, som i bildens första skärm, och ingen sida
- *     behöver göra något för att få en rad. **Markupen flyttade hit från
- *     ContainerLayout i issue 275**: skalet ligger utanför containerns layout i
+ *     behöver göra något för att få en rad. **Containerns markup ritas av
+ *     `ContainerLayout` och teleporteras in hit** (issue 275 · [[ADR-0056
+ *     Flytande navigering]] § 1): skalet ligger utanför containerns layout i
  *     kedjan, och en slot kan bara fyllas nedåt, så den inre layouten kan inte
- *     skicka innehåll till den yttre. Containern läses ur `page.props.container`
- *     — en prop bara en containersida bär, så raden ritas på rätt sidor.
+ *     skicka innehåll uppåt. Målet `#shell-topbar` står därför här, och
+ *     containern märker raden som tagen — märket viker då för hennes bild och
+ *     namn. Skalet självt läser varken `container` eller `can`: den som har
+ *     svaret ritar det.
  *   - **En flikrad i botten** (MobileTabBar) med *Översikt*, *Sök*,
  *     plusknappens plats, *Notiser* och *Meny*.
  *   - **En sidomeny bakom *Meny*** (MobileMenu), med skalets sektioner.
@@ -182,27 +183,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * i Tailwind 4, där `screen-*`-nycklarna flyttat till `--breakpoint-*`, och
  * `max-w-7xl` är för smalt mot ADR-0050:s "över 1 200 px".
  */
-const props = defineProps({
+defineProps({
     /*
      * Plusknappens mål, ur App\Support\Frontend\CreateTarget, eller null.
      * Formen är `{ kind, href }` för ett mål och `{ kind: 'menu', rows }` för
      * en meny — se CreateButton.
      */
     create: { type: Object, default: null },
-    /*
-     * `{ update }` — containerns behörighetsflagga. Pennan på mobilens topprad
-     * ritas ur den (issue 159 · [[ADR-0047 Containerns bild]] § Beslut), och
-     * den kommer från sidan precis som `create` ([[ADR-0056 Flytande
-     * navigering]] § 1: en layout som behöver props ur sidan får dem i kedjan).
-     *
-     * **Den läses INTE ur `page.props.can`** (issue 275, fynd 2). Den proppen
-     * bär sidans EGNA flaggor: på en item- eller schemasida är `can.update`
-     * itemets eller schemats behörighet, och en medlem som får ändra itemet men
-     * inte containern hade då sett en penna som servern nekar. Sidan skickar
-     * därför samma `can` som den skickar till `ContainerLayout`, och bara de
-     * sidor som skickar den i dag gör det — en sida utan `can` får ingen penna.
-     */
-    can: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -210,20 +197,17 @@ const page = usePage();
 const user = computed(() => page.props.auth.user);
 
 /*
- * Containern, när sidan ligger i en. Skalet får varje sidas props, och bara
- * containerns sidor bär en `container`-prop (ur ContainerResource) — de
- * globala listorna skickar `containers` eller ett filter, aldrig den här.
- * Toppraden på mobilen ritas därför ur den (issue 151, flyttad hit i 275).
+ * Toppraden på mobilen ägs av skalet men fylls av containern (issue 275 ·
+ * [[ADR-0056 Flytande navigering]] § 1). Skalet ritar målet `#shell-topbar`
+ * och ett märke; ligger sidan i en container teleporterar `ContainerLayout`
+ * in sin bild, sitt namn och sin tillbakaknapp i målet och sätter den här
+ * flaggan, så att märket viker. Flaggan är skalets tillstånd och går nedåt
+ * som en `provide`: den inre layouten kan inte skriva till en slot, men den
+ * kan märka raden som tagen.
  */
-const container = computed(() => page.props.container ?? null);
+const topbarClaimed = ref(false);
 
-/*
- * Pennan på bilden ritas bara för den som får ändra containern (ADR-0047
- * § Beslut, "Vem som får göra vad"). Flaggan kommer som layoutprop ur sidans
- * kedja — samma `can` och samma värde som `ContainerLayout` får — och är
- * presentation: rutten prövar samma grind på nytt.
- */
-const canUpdateCover = computed(() => props.can?.update === true);
+provide('shellTopbar', topbarClaimed);
 
 const menuOpen = ref(false);
 const menuTrigger = ref(null);
@@ -447,80 +431,27 @@ const initials = computed(() => {
             <!--
                 Toppraden på mobilen. Ligger sidan i en container bär den
                 containerns bild, namn och en tillbakaknapp (issue 151), och
-                märket annars. Sloten står kvar som skalets egen förlängning;
-                containerns markup flyttade hit från ContainerLayout i issue
-                275, för skalet ligger utanför dess layout i kedjan och en slot
-                bara kan fyllas nedåt.
+                märket annars.
 
-                **Pennan ritas ur layoutproppen `can` och inte ur
-                `page.props.can`** (issue 275, fynd 2): den senare bär sidans
-                egna flaggor, och på en item- eller schemasida betyder
-                `can.update` att användaren får ändra itemet — inte containern.
-                Sidan skickar samma flagga hit som till `ContainerLayout`.
+                **Innehållet kommer från `ContainerLayout`, teleporterat in i
+                `#shell-topbar`** (issue 275 · [[ADR-0056 Flytande navigering]]
+                § 1). Skalet ligger utanför containerns layout i kedjan, och en
+                slot fylls nedåt — så den inre layouten kan inte fylla en slot
+                här, men den kan teleportera sin markup in i målet och märka
+                raden som tagen. Skalet läser därför varken `container` eller
+                `can`; den som har svaret ritar det.
             -->
             <header class="bg-shell text-white md:hidden">
                 <div class="mx-auto flex w-full max-w-[96rem] items-center gap-2 px-4 py-2">
-                    <slot name="topbar">
-                        <template v-if="container">
-                            <Link
-                                href="/containers"
-                                class="inline-flex min-h-11 min-w-11 items-center justify-center"
-                                :aria-label="t('nav.back')"
-                            >
-                                <svg
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    stroke-width="1.5"
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    class="h-5 w-5"
-                                    aria-hidden="true"
-                                >
-                                    <path d="M15 5l-7 7 7 7"></path>
-                                </svg>
-                            </Link>
+                    <!--
+                        Målet för containerns teleport. `contents` gör att
+                        omslaget inte deltar i flexraden: innehållet lägger sig
+                        där målet står, jämte märket.
+                    -->
+                    <div id="shell-topbar" class="contents"></div>
 
-                            <!-- Containerns bild, i samma fyrkant som bild 2 i
-                                 docs/Design/mobil.png. Utan bild ritar
-                                 `ContainerCover` den neutrala ytan med
-                                 containertecknet (ADR-0047 § Beslut). -->
-                            <span class="h-10 w-10 shrink-0 overflow-hidden rounded-control">
-                                <ContainerCover :cover="container.cover" />
-                            </span>
-
-                            <p class="text-title font-semibold">{{ container.name }}</p>
-
-                            <ContainerCoverSheet
-                                v-if="canUpdateCover"
-                                :container="container"
-                                v-slot="{ open }"
-                            >
-                                <button
-                                    type="button"
-                                    class="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center"
-                                    :aria-label="t('container.cover.edit')"
-                                    @click="open"
-                                >
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="1.5"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        class="h-5 w-5"
-                                        aria-hidden="true"
-                                    >
-                                        <path d="M4 20h4l10-10-4-4L4 16z"></path>
-                                        <path d="m14 6 4 4"></path>
-                                    </svg>
-                                </button>
-                            </ContainerCoverSheet>
-                        </template>
-
-                        <p v-else class="text-title font-semibold">{{ t('common.brand') }}</p>
-                    </slot>
+                    <!-- Märket, så länge ingen container har tagit raden. -->
+                    <p v-if="!topbarClaimed" class="text-title font-semibold">{{ t('common.brand') }}</p>
 
                     <!-- Gästen har ingen flikrad (den är mål för en inloggad) och
                          behöver ändå en väg in. -->

@@ -346,14 +346,14 @@ it('ritar knappen i skalet och i flikraden ur sidans mål', function () {
     // sin kedja, och målet står i `AppLayout`-ledet i var och en. En sida som
     // glömmer raden får ingen knapp, och det är tyst — därför räknas de upp.
     //
-    // `can` står bredvid målet på översikten och itemlistan (fynd 2): de
-    // skickar containerns behörighetsflagga till skalet, som ritar pennan på
-    // mobilens topprad ur den. Itemvyn gör det inte — dess `can` är itemets.
+    // `can` står inte här: containerns behörighetsflagga hör till
+    // `ContainerLayout`-ledet, och pennan ritas av `ContainerLayout` i
+    // toppraden och teleporteras in i skalet (issue 275).
     foreach ([
         'pages/Dashboard.vue' => 'defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });',
         'pages/Containers/Index.vue' => 'defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });',
-        'pages/Containers/Overview.vue' => '[AppLayout, { create: props.create, can: props.can }]',
-        'pages/Containers/Items/Index.vue' => '[AppLayout, { create: props.create, can: props.can }]',
+        'pages/Containers/Overview.vue' => '[AppLayout, { create: props.create }]',
+        'pages/Containers/Items/Index.vue' => '[AppLayout, { create: props.create }]',
         'pages/Containers/Items/Show.vue' => '[AppLayout, { create: props.create }]',
     ] as $sokvag => $rad) {
         expect(plusknappKod($sokvag))->toContain($rad);

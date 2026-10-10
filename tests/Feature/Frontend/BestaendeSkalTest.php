@@ -315,17 +315,18 @@ it('sektionsmenyn stängs vid navigering', function () {
  * `create`, och att `ContainerSettingsLayout` varken tar `create` eller `can`
  * — den läste dem aldrig, den vidarebefordrade dem bara.
  *
- * **Toppraden på mobilen flyttade till skalet.** Den ritas av `AppLayout` och
- * läses ur sidans `container`-prop; markupen i `ContainerLayout` kunde inte
- * fyllas när skalet ligger utanför i kedjan (en slot fylls nedåt). Det är
- * ändringen `MobilskalTest` och `ContainerbildvyTest` följer.
+ * **Toppraden på mobilen teleporteras in i skalet.** Skalet ligger utanför
+ * containerns layout i kedjan, och en slot kan bara fyllas nedåt — så
+ * markupen ritas av `ContainerLayout` och flyttas in i skalets mål
+ * `#shell-topbar` med `<Teleport defer>` (issue 275 · [[ADR-0056 Flytande
+ * navigering]] § 1). Det är ändringen `MobilskalTest` och
+ * `ContainerbildvyTest` följer.
  *
- * **Pennans flagga går i kedjan och inte i `page.props.can`** (fynd 2 i
- * granskningen). `page.props.can` är sidans EGNA flaggor: på en item- eller
- * schemasida är `can.update` itemets behörighet, och skalet ritade då pennan
- * för en medlem som får ändra itemet men inte containern. De sidor som skickar
- * containerns `can` skickar den därför också till `AppLayout`, precis som de
- * skickar `create` ([[ADR-0056 Flytande navigering]] § 1) — och bara de.
+ * **Pennans flagga stannar i `ContainerLayout`-ledet.** `can` läses ur
+ * containerns `can`-prop och aldrig ur `page.props.can`: den senare bär sidans
+ * EGNA flaggor, och på en item- eller schemasida betyder `can.update` itemets
+ * behörighet. Skalet ritar varken `container` eller `can` — den som har svaret
+ * ritar det.
  */
 
 /**
@@ -504,9 +505,9 @@ it('containerns sidor deklarerar kedjan', function () {
  * skäl som de tre andra — en sida som glömmer raden får ingen knapp, och det
  * är tyst.
  *
- * Nålen läses ur LEDET och inte ur filen: sedan fynd 2 står `can: props.can`
- * bredvid `create` på fem av de sex, och en lös sträng hade inte sagt vilket
- * led proppen står i.
+ * Nålen läses ur LEDET och inte ur filen: en lös sträng hade inte sagt vilket
+ * led proppen står i. Sidan som verkligen saknade `create` — `Trash.vue` — står
+ * i listan över dem utan mål.
  */
 it('plusknappen följer med där den fanns', function () {
     $medMal = [
@@ -535,64 +536,53 @@ it('plusknappen följer med där den fanns', function () {
 });
 
 /*
- * Klart när (fynd 2): `pennan följer med till skalet där sidan skickar
- * containerns can`.
+ * Klart när: `ingen layout ritar en annan` — toppraden ritas av
+ * `ContainerLayout` och teleporteras in i skalet, och containerns `can`
+ * stannar i `ContainerLayout`-ledet.
  *
- * Pennan på mobilens topprad ritas av `AppLayout` (issue 275), men flaggan
- * läses ur sidans kedja och inte ur `page.props.can`. Den senare bär sidans
- * EGNA flaggor: på en item- eller schemasida betyder `can.update` att
- * användaren får ändra ITEMET, och skalet ritade då en penna som servern
- * nekar — en medlem som får ändra itemet men inte containern såg den.
- * Flaggan följer samma regel som `create` ([[ADR-0056 Flytande navigering]]
- * § 1): den sida som har svaret skickar det till ledet som ritar.
+ * Skalet ligger utanför containerns layout i kedjan, och en slot kan bara
+ * fyllas nedåt. `AppLayout` ritar därför bara ett mål (`#shell-topbar`) och ett
+ * märke; markupen — tillbakaknappen, bilden, namnet och pennan — ritas av
+ * `ContainerLayout` och flyttas in i målet med `<Teleport defer>` (issue 275 ·
+ * [[ADR-0056 Flytande navigering]] § 1). Skalet läser varken `container` eller
+ * `can`: den som har svaret ritar det.
  *
- * Listorna är de sju sidor som skickade containerns `can` till
- * `ContainerLayout` före issuen, och de sidor vars `can` betyder något annat.
- * De räknas upp och läses ur ledet, så att en sida som flyttar flaggan ur
- * `AppLayout`-ledet faller här.
+ * **Pennan läser containerns `can` ur sin egen prop** och aldrig ur
+ * `page.props.can`. Den senare bär sidans EGNA flaggor: på en item- eller
+ * schemasida betyder `can.update` att användaren får ändra ITEMET, och skalet
+ * ritade då en penna som servern nekar — en medlem som får ändra itemet men
+ * inte containern såg den.
  */
-it('pennan följer med till skalet där sidan skickar containerns can', function () {
-    // Skalet läser proppen och ritar ur den. `page.props.can` får inte finnas
-    // kvar i filen: det var den läsningen som gav fel behörighet.
+it('teleporterar toppraden in i skalet och låter can stanna i ContainerLayout-ledet', function () {
+    // Skalet: målet och flaggan som får märket att vika. Ingen läsning av
+    // containerns eller sidans egna flaggor.
     $skal = bestaendeSkalKod('js/layouts/AppLayout.vue');
 
-    expect($skal)->toContain('can: { type: Object, default: null }')
-        ->toContain('props.can?.update === true');
+    expect($skal)->toContain('id="shell-topbar"')
+        ->toContain("provide('shellTopbar'");
+
+    expect($skal)->not->toContain('can: { type: Object, default: null }');
     expect($skal)->not->toContain('page.props.can');
+    expect($skal)->not->toContain('page.props.container');
 
-    $medCan = [
-        'Containers/Costs.vue',
-        'Containers/Documents.vue',
-        'Containers/Edit.vue',
-        'Containers/History.vue',
-        'Containers/Overview.vue',
-        'Containers/Tasks.vue',
-        'Containers/Items/Index.vue',
-    ];
+    // Containern: markupen och teleporten, och `can` kvar i sin deklaration.
+    $container = bestaendeSkalKod('js/layouts/ContainerLayout.vue');
 
-    foreach ($medCan as $sida) {
-        expect(bestaendeSkalLed(bestaendeSkalKod("js/pages/{$sida}"), 'AppLayout'))
-            ->toContain('can: props.can');
-    }
+    expect($container)->toContain('<Teleport defer to="#shell-topbar">')
+        ->toContain("inject('shellTopbar'")
+        ->toContain('can: { type: Object, default: null }')
+        ->toContain('props.can?.update === true');
 
-    // Itemvyn och schemasidorna bär itemets respektive schemats flaggor. De
-    // skickade dem aldrig till `ContainerLayout`, och de ska inte skicka dem
-    // till skalet heller.
-    foreach ([
-        'Containers/CalendarFeed.vue',
-        'Containers/Categories.vue',
-        'Containers/Export.vue',
-        'Containers/Sharing.vue',
-        'Containers/Tags.vue',
-        'Containers/Transfers.vue',
-        'Containers/Trash.vue',
-        'Containers/Items/Create.vue',
-        'Containers/Items/Edit.vue',
-        'Containers/Items/Show.vue',
-        'Containers/Items/Schedules/Create.vue',
-        'Containers/Items/Schedules/Edit.vue',
-        'Containers/Items/Schedules/Show.vue',
-    ] as $sida) {
+    // Och ingen sida skickar containerns `can` till skalet: den stannar i
+    // `ContainerLayout`-ledet, dit den hör.
+    $sidor = array_merge(
+        bestaendeSkalContainerSidor(),
+        bestaendeSkalContainerinstallningssidor(),
+    );
+
+    expect($sidor)->toHaveCount(20);
+
+    foreach ($sidor as $sida) {
         expect(bestaendeSkalLed(bestaendeSkalKod("js/pages/{$sida}"), 'AppLayout'))
             ->not->toContain('can: props.can');
     }

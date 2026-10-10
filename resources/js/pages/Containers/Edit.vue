@@ -12,7 +12,7 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
 defineOptions({
     layout: (props) => [
-        [AppLayout, { can: props.can }],
+        [AppLayout, {}],
         [ContainerLayout, { hero: 'compact', container: props.container, can: props.can }],
         [ContainerSettingsLayout, { container: props.container }],
     ],

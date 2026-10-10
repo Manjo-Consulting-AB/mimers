@@ -1,6 +1,8 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, inject, onBeforeUnmount, onMounted } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import ContainerCover from '../components/ContainerCover.vue';
+import ContainerCoverSheet from '../components/ContainerCoverSheet.vue';
 import ContainerHero from '../components/ContainerHero.vue';
 import UiTabs from '../components/UiTabs.vue';
 import { containerTabs } from './containerSections.js';
@@ -65,10 +67,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * flikrad; över `md:` bryter bandet som förut.
  *
  * **Toppraden på mobilen bär containerns bild, namn och en tillbakaknapp**
- * (issue 151) — men den ritas av `AppLayout` sedan issue 275. Skalet ligger
- * utanför den här layouten i kedjan, och en slot kan bara fyllas nedåt: den
- * som är innerst kan inte skicka innehåll till den som är ytterst. Toppradens
- * markup flyttade därför till skalet, som läser `container` ur sidans props.
+ * (issue 151), och den ritas HÄR och teleporteras in i skalet (issue 275 ·
+ * [[ADR-0056 Flytande navigering]] § 1). Skalet ligger utanför den här
+ * layouten i kedjan, och en slot kan bara fyllas nedåt: den som är innerst
+ * kan inte fylla en slot hos den som är ytterst. Skalet ritar därför ett mål
+ * (`#shell-topbar`) och ett märke, och den här layouten teleporterar in sin
+ * markup i målet och märker raden som tagen — märket viker då. Markupen är
+ * oförändrad; det är bara var den ritas från som flyttade.
  *
  * **Bilden kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut**, och
  * det är den tredje av de tre ytor bilden ritas på: containerlistan,
@@ -103,14 +108,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * § Beslut, "Vem som får göra vad"). Den kommer från sidan och läses ur samma
  * policyfråga som formuläret på inställningssidan — `ContainerPolicy::update`
  * — och den är presentation: rutten prövar samma grind på nytt. Här ritar den
- * hjältens *Redigera container*; pennan på containerns bild och arket den
- * öppnar (`ContainerCoverSheet`) flyttade till `AppLayout` med toppraden i
- * issue 275, och är detsamma som avsnittet under containerns inställningar
- * öppnar (resources/js/pages/Containers/Edit.vue): två vägar till samma val.
- * Pennan ritas ur skalets egen `can`-layoutprop, och en sida som skickar
- * flaggan hit skickar den därför också till `AppLayout` — annars visade
- * skalets penna `page.props.can`, som på en item- eller schemasida bär en
- * annan behörighet (issue 275, fynd 2).
+ * hjältens *Redigera container* och pennan på containerns bild i toppraden;
+ * arket pennan öppnar (`ContainerCoverSheet`) är detsamma som avsnittet under
+ * containerns inställningar öppnar (resources/js/pages/Containers/Edit.vue):
+ * två vägar till samma val. Pennan läser `can` ur sin egen prop och aldrig ur
+ * `page.props.can`: den senare bär sidans EGNA flaggor, och på en item- eller
+ * schemasida betyder `can.update` itemets behörighet (issue 275).
  *
  * **Plusknappen byggs inte här och förmedlas inte härifrån** (issue 152 ·
  * [[ADR-0048 Mobilen och plusknappen]] § 2). Den som har ett mål skickar det
@@ -160,6 +163,32 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
+/*
+ * Toppraden på mobilen ritas här men bor i skalet (issue 275 · [[ADR-0056
+ * Flytande navigering]] § 1). Skalet ritar målet `#shell-topbar` och ett
+ * märke; den här layouten teleporterar in sin markup i målet och sätter
+ * flaggan, så att märket viker. Flaggan är skalets och kommer nedåt som en
+ * `provide` — den inre layouten kan inte fylla en slot hos den yttre, men den
+ * kan märka raden som tagen. `null` för en layout som ritas utanför skalet.
+ */
+const topbarClaimed = inject('shellTopbar', null);
+
+onMounted(() => {
+    if (topbarClaimed) {
+        topbarClaimed.value = true;
+    }
+});
+
+onBeforeUnmount(() => {
+    if (topbarClaimed) {
+        topbarClaimed.value = false;
+    }
+});
+
+/* Pennan i toppraden ritas bara för den som får ändra containern (ADR-0047
+   § Beslut). Flaggan är presentation: rutten prövar samma grind på nytt. */
+const canUpdateCover = computed(() => props.can?.update === true);
+
 const heading = computed(() => props.container.name);
 
 /*
@@ -181,6 +210,79 @@ const tabs = computed(() =>
 
 <template>
     <div class="flex flex-col gap-8">
+        <!--
+            Toppraden på mobilen, teleporterad in i skalet (issue 275 ·
+            [[ADR-0056 Flytande navigering]] § 1). Skalet ligger utanför den
+            här layouten i kedjan, och en slot kan bara fyllas nedåt — så
+            markupen ritas här och flyttas in i målet `#shell-topbar`, medan
+            flaggan `topbarClaimed` får skalets märke att vika. `defer` gör att
+            teleporten väntar till efter renderingen: målet finns i skalet,
+            som ligger utanför, och är alltså inte klart när det här ledet
+            renderas.
+
+            Markupen är oförändrad sedan issue 151 — tillbakaknappen, bilden,
+            namnet och pennan bakom `can.update`.
+        -->
+        <Teleport defer to="#shell-topbar">
+            <template v-if="container">
+                <Link
+                    href="/containers"
+                    class="inline-flex min-h-11 min-w-11 items-center justify-center"
+                    :aria-label="t('nav.back')"
+                >
+                    <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-5 w-5"
+                        aria-hidden="true"
+                    >
+                        <path d="M15 5l-7 7 7 7"></path>
+                    </svg>
+                </Link>
+
+                <!-- Containerns bild, i samma fyrkant som bild 2 i
+                     docs/Design/mobil.png. Utan bild ritar
+                     `ContainerCover` den neutrala ytan med
+                     containertecknet (ADR-0047 § Beslut). -->
+                <span class="h-10 w-10 shrink-0 overflow-hidden rounded-control">
+                    <ContainerCover :cover="container.cover" />
+                </span>
+
+                <p class="text-title font-semibold">{{ container.name }}</p>
+
+                <ContainerCoverSheet
+                    v-if="canUpdateCover"
+                    :container="container"
+                    v-slot="{ open }"
+                >
+                    <button
+                        type="button"
+                        class="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center"
+                        :aria-label="t('container.cover.edit')"
+                        @click="open"
+                    >
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="1.5"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-5 w-5"
+                            aria-hidden="true"
+                        >
+                            <path d="M4 20h4l10-10-4-4L4 16z"></path>
+                            <path d="m14 6 4 4"></path>
+                        </svg>
+                    </button>
+                </ContainerCoverSheet>
+            </template>
+        </Teleport>
+
         <div>
             <!--
                 Hjälten, där sidan har en (issue 170). Den ersätter

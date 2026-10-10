@@ -12,7 +12,7 @@ import { useTranslations } from '../../composables/useTranslations.js';
 
 defineOptions({
     layout: (props) => [
-        [AppLayout, { create: props.create, can: props.can }],
+        [AppLayout, { create: props.create }],
         [ContainerLayout, { hero: 'compact', container: props.container, can: props.can }],
     ],
 });
