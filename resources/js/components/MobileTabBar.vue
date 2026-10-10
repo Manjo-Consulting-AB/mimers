@@ -52,6 +52,7 @@ const { t } = useTranslations();
             <li class="flex-1">
                 <Link
                     href="/dashboard"
+                    prefetch
                     class="flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-2 py-1 text-meta text-ink-muted"
                 >
                     <svg
@@ -75,6 +76,7 @@ const { t } = useTranslations();
             <li class="flex-1">
                 <Link
                     href="/search"
+                    prefetch
                     class="flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-2 py-1 text-meta text-ink-muted"
                 >
                     <svg

@@ -312,7 +312,7 @@ const tabs = computed(() =>
                  skärmläsare som läser fel. -->
             <p v-else class="hidden px-3 py-2 font-medium text-title md:block">{{ heading }}</p>
 
-            <UiTabs :tabs="tabs" :label="heading" />
+            <UiTabs :tabs="tabs" :label="heading" prefetch-on-mount />
 
             <!--
                 Under `md:` ritas ingen hjälte, och *Inställningar* lämnade

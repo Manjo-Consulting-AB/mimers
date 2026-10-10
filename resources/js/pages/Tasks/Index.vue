@@ -267,7 +267,7 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
         Flikraden (Beslut 4). Listan står i adressen, och `UiTabs` tänder
         den flik vars `href` matchar den — vyn håller inget val i minnet.
     -->
-    <UiTabs class="mt-4" :tabs="tabs" :label="t('todo.tabs.label')" />
+    <UiTabs class="mt-4" :tabs="tabs" :label="t('todo.tabs.label')" prefetch-on-mount />
 
     <!--
         Listan till vänster och panelen till höger över `lg:`, panelen
