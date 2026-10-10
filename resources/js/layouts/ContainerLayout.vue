@@ -136,8 +136,8 @@ const props = defineProps({
     /*
      * `{ update }` — samma flagga som inställningssidan ritar sitt formulär ur
      * (issue 159). Sedan issue 170 styr den *Redigera container* i hjälten —
-     * pennan på bilden flyttade till skalets topprad i issue 275 — och arket
-     * och rutten prövar behörigheten ändå.
+     * pennan på bilden ritas här och teleporteras in i skalets topprad sedan
+     * issue 275 — och arket och rutten prövar behörigheten ändå.
      *
      * Flaggan kan inte bo i `container`-proppen: `can` är webbens fält och
      * läggs BREDVID `ContainerResource`, aldrig inuti den (issue 54 § Beslut

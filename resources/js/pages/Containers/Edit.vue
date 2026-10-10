@@ -92,8 +92,9 @@ defineOptions({
  *
  * **Bildavsnittet kom med issue 159 · [[ADR-0047 Containerns bild]] § Beslut**
  * och är den andra av de två vägarna till samma val: pennan på bilden i
- * containerns topprad (resources/js/layouts/AppLayout.vue sedan issue 275) och det här
- * avsnittet öppnar SAMMA ark ur SAMMA komponent,
+ * containerns topprad (resources/js/layouts/ContainerLayout.vue sedan issue 275,
+ * teleporterad in i skalet) och det här avsnittet öppnar SAMMA ark ur SAMMA
+ * komponent,
  * `ContainerCoverSheet`. Att avsnittet ligger HÄR och inte i formuläret är
  * med flit: bilden är inte ett fält i `PATCH /containers/{container}` utan sin
  * egen rutt, och att blanda in den i formulärets `useForm` hade gett en
