@@ -92,3 +92,33 @@
     --color-ink-muted: #cbd5e1;
     --color-ink-subtle: #94a3b8;
 }
+
+/*
+ * Mjuka övergångar mellan sidorna — se issue 279 § Beslut 2.
+ *
+ * Webbläsarens View Transitions tonar över ett sidbyte. Förvalet är 250 ms,
+ * och under den tiden går sidan inte att klicka i; 150 ms märks som mjukhet
+ * och inte som väntan. Varaktigheten sitter på båda halvorna — den gamla
+ * sidan som tonar ut och den nya som tonar in.
+ *
+ * Ingen `view-transition-name` sätts på enskilda element (Beslut 3): skalet
+ * står kvar efter issue 273–275, och en övertoning av identiskt innehåll syns
+ * inte.
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation-duration: 150ms;
+}
+
+/*
+ * Den som bett operativsystemet om mindre rörelse får ingen animation
+ * (Beslut 2). `*`-varianterna gäller varje övergång, inte bara rotens, så
+ * regeln står kvar även om en namngiven övergång införs senare.
+ */
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-group(*),
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        animation: none;
+    }
+}
