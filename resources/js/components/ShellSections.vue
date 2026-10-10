@@ -164,6 +164,7 @@ function isCurrent(section) {
             <Link
                 v-if="user"
                 :href="section.href"
+                prefetch
                 :title="section.key === 'settings' ? t('nav.settings') : undefined"
                 :aria-current="isCurrent(section) ? 'page' : undefined"
                 class="inline-flex min-h-11 items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"

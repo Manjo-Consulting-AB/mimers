@@ -136,6 +136,7 @@ function isActive(container) {
                 <li v-for="container in group.containers" :key="container.ulid" class="flex">
                     <Link
                         :href="`/containers/${container.ulid}`"
+                        prefetch
                         :aria-current="isActive(container) ? 'page' : undefined"
                         class="inline-flex min-h-11 w-full items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                         :class="isActive(container) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50'"
@@ -166,6 +167,7 @@ function isActive(container) {
             <li class="flex">
                 <Link
                     href="/containers/create"
+                    prefetch
                     class="inline-flex min-h-11 w-full items-center gap-2 rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 >
                     <svg

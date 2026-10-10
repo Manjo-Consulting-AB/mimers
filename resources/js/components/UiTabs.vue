@@ -104,6 +104,14 @@ const props = defineProps({
     tabs: { type: Array, required: true },
     /* Tablistens tillgängliga namn, ur `lang/` hos anroparen. */
     label: { type: String, required: true },
+    /*
+     * Förhämtning redan när raden monteras, inte bara vid hovring — se issue
+     * 277 § Beslut 3. Förvalet är av: en flikrad kan peka på tunga sidor, och
+     * den som sätter proppen säger uttryckligen att förhämtningen är värd
+     * förfrågningarna. Itemets flikrad sätter den därför aldrig — dess flikar
+     * går alla till `ItemController::show()`, webbens tyngsta sida.
+     */
+    prefetchOnMount: { type: Boolean, default: false },
 });
 
 const page = usePage();
@@ -236,6 +244,7 @@ function onKeydown(event, index) {
             <Link
                 :ref="(element) => setTabElement(element, index)"
                 :href="tab.href"
+                :prefetch="prefetchOnMount ? ['mount', 'hover'] : 'hover'"
                 role="tab"
                 :aria-selected="isActive(tab) ? 'true' : 'false'"
                 :tabindex="isTabbable(index) ? 0 : -1"
