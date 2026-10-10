@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Item\RecordRecentVisit;
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -8,6 +9,7 @@ use App\Models\Item;
 use App\Models\RecentVisit;
 use App\Models\User;
 use App\Support\Access\AccessLevel;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 use function Pest\Laravel\actingAs;
@@ -36,6 +38,11 @@ use function Pest\Laravel\withoutVite;
  *
  * Hjälparna har prefixet `nyligen` — Pest lägger alla testfiler i samma
  * namnrymd när hela sviten körs.
+ *
+ * Issue 276 · En förhämtning skriver inget besök ([[ADR-0056 Flytande
+ * navigering]]) lägger fyra prov längst ner: förhämtningen känns igen på
+ * `Purpose: prefetch` och ska varken skriva en rad eller flytta `visited_at`,
+ * medan samma förfrågan utan headern skriver som förut.
  */
 
 /**
@@ -200,4 +207,96 @@ it('håller taket per person och inte över alla', function () {
 
     expect(RecentVisit::query()->where('user_id', $ägare->id)->count())->toBe(RecordRecentVisit::LIMIT)
         ->and(RecentVisit::query()->where('user_id', $mottagare->id)->count())->toBe(1);
+});
+
+/**
+ * Huvudena på en förhämtning: ett vanligt Inertia-besök plus `Purpose:
+ * prefetch`. Inertia sätter den på varje förhämtning och tar bort den när den
+ * förhämtade sidan används — versionsheadern är därför samma som middleware
+ * skulle svara med, annars vore svaret 409 och inte 200.
+ *
+ * `false` ger exakt samma förfrågan utan `Purpose`, vilket är vad provet "ett
+ * vanligt besök skriver fortfarande" jämför mot: headern är den enda
+ * skillnaden.
+ */
+function nyligenFörhämtning(bool $förhämtning = true): array
+{
+    $huvuden = [
+        'X-Inertia' => 'true',
+        'X-Inertia-Version' => app(HandleInertiaRequests::class)->version(Request::create('/')),
+    ];
+
+    if ($förhämtning) {
+        $huvuden['Purpose'] = 'prefetch';
+    }
+
+    return $huvuden;
+}
+
+// --- förhämtningen (issue 276) ------------------------------------------
+
+it('en förhämtning skriver inget besök', function () {
+    withoutVite();
+
+    [, $ägare, $container, $motorn] = nyligenKontext();
+
+    // En förhämtning är inget besök ([[ADR-0056 Flytande navigering]]): svaret
+    // är ett vanligt Inertia-svar, men raden i `recent_visits` uteblir.
+    actingAs($ägare)->get(nyligenUrl($container, $motorn), nyligenFörhämtning())->assertOk();
+
+    expect(RecentVisit::query()->where('user_id', $ägare->id)->count())->toBe(0);
+});
+
+it('en förhämtning flyttar inte visited_at', function () {
+    withoutVite();
+
+    [, $ägare, $container, $motorn] = nyligenKontext();
+
+    Carbon::setTestNow('2026-09-28 10:00:00');
+
+    actingAs($ägare)->get(nyligenUrl($container, $motorn))->assertOk();
+
+    // Timmen går, och flikraden förhämtar sidan användaren redan står på.
+    // Besöket ligger kvar på 10:00 — förhämtningen rörde det inte.
+    Carbon::setTestNow('2026-09-28 11:00:00');
+
+    actingAs($ägare)->get(nyligenUrl($container, $motorn), nyligenFörhämtning())->assertOk();
+
+    expect(RecentVisit::query()->where('user_id', $ägare->id)->count())->toBe(1)
+        ->and(RecentVisit::query()->where('user_id', $ägare->id)->sole()->visited_at->toDateTimeString())
+        ->toBe('2026-09-28 10:00:00');
+
+    Carbon::setTestNow();
+});
+
+it('ett vanligt besök skriver fortfarande', function () {
+    withoutVite();
+
+    [, $ägare, $container, $motorn] = nyligenKontext();
+
+    // Samma förfrågan som förhämtningen, men utan `Purpose`: `X-Inertia`-
+    // huvudena står kvar, så det är headern och inget annat som skiljer.
+    actingAs($ägare)->get(nyligenUrl($container, $motorn), nyligenFörhämtning(false))->assertOk();
+
+    expect(RecentVisit::query()->where('user_id', $ägare->id)->count())->toBe(1);
+});
+
+it('en nekad förhämtning ger 403 och skriver ingenting', function () {
+    withoutVite();
+
+    [, , $container, $motorn, $masten] = nyligenKontext();
+
+    $mottagare = nyligenMottagare($container, $motorn);
+
+    // Grinden ligger före skrivningen och prövas även för en förhämtning:
+    // masten ligger utanför mottagarens omfång.
+    actingAs($mottagare)->get(nyligenUrl($container, $masten), nyligenFörhämtning())->assertForbidden();
+
+    expect(RecentVisit::query()->where('user_id', $mottagare->id)->count())->toBe(0);
+
+    // Och en förhämtning hon NÅR skriver inte heller — så provet kan inte
+    // passera på en kontroller som slutat skriva för henne.
+    actingAs($mottagare)->get(nyligenUrl($container, $motorn), nyligenFörhämtning())->assertOk();
+
+    expect(RecentVisit::query()->where('user_id', $mottagare->id)->count())->toBe(0);
 });
