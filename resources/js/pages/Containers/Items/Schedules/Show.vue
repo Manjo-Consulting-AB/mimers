@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../../layouts/ContainerLayout.vue';
 import ItemTargetPicker from '../../../../components/ItemTargetPicker.vue';
 import OpenOccurrence from '../../../../components/OpenOccurrence.vue';
@@ -10,6 +11,13 @@ import { formatDateOnly } from '../../../../components/itemPresentation.js';
 import { occurrenceStatusLabel, scheduleUrl } from '../../../../components/occurrencePresentation.js';
 import { recurrenceLabel } from '../../../../components/schedulePresentation.js';
 import { useTranslations } from '../../../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Schemats sida — regeln, den öppna förekomsten och historiken, se issue 63b
@@ -239,212 +247,210 @@ function toInbox() {
 </script>
 
 <template>
-    <ContainerLayout :container="container">
-        <Head :title="schedule.title" />
+    <Head :title="schedule.title" />
 
-        <h1 class="text-2xl font-semibold">{{ schedule.title }}</h1>
+    <h1 class="text-2xl font-semibold">{{ schedule.title }}</h1>
 
-        <div class="mt-2 flex flex-wrap items-center gap-3">
-            <p class="text-sm text-slate-600">{{ recurrence }}</p>
+    <div class="mt-2 flex flex-wrap items-center gap-3">
+        <p class="text-sm text-slate-600">{{ recurrence }}</p>
 
-            <!-- Pausen är synlig och reversibel (issue 720 § Beslut 3): samma
-                 märke och samma mening som listan använder, så att ett pausat
-                 schema går att känna igen på båda ytorna. -->
-            <span
-                v-if="! schedule.is_active"
-                class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
-            >
-                {{ t('item.schedule.paused') }}
-            </span>
-        </div>
+        <!-- Pausen är synlig och reversibel (issue 720 § Beslut 3): samma
+             märke och samma mening som listan använder, så att ett pausat
+             schema går att känna igen på båda ytorna. -->
+        <span
+            v-if="! schedule.is_active"
+            class="rounded bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700"
+        >
+            {{ t('item.schedule.paused') }}
+        </span>
+    </div>
 
-        <p v-if="! schedule.is_active" class="mt-2 text-sm text-slate-600">
-            {{ t('item.schedule.paused_note') }}
-        </p>
+    <p v-if="! schedule.is_active" class="mt-2 text-sm text-slate-600">
+        {{ t('item.schedule.paused_note') }}
+    </p>
 
-        <p v-if="schedule.notes" class="mt-2 whitespace-pre-line text-slate-900">{{ schedule.notes }}</p>
+    <p v-if="schedule.notes" class="mt-2 whitespace-pre-line text-slate-900">{{ schedule.notes }}</p>
 
-        <div class="mt-4 flex flex-wrap gap-4 text-sm">
-            <Link
-                :href="`/containers/${container.ulid}/items/${item.ulid}`"
-                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-            >
-                {{ t('item.schedule.back') }}
-            </Link>
+    <div class="mt-4 flex flex-wrap gap-4 text-sm">
+        <Link
+            :href="`/containers/${container.ulid}/items/${item.ulid}`"
+            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+        >
+            {{ t('item.schedule.back') }}
+        </Link>
 
-            <Link
-                v-if="can.update"
-                :href="`/containers/${container.ulid}/items/${item.ulid}/schedules/${schedule.ulid}/edit`"
-                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-            >
-                {{ t('item.schedule.edit') }}
-            </Link>
+        <Link
+            v-if="can.update"
+            :href="`/containers/${container.ulid}/items/${item.ulid}/schedules/${schedule.ulid}/edit`"
+            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+        >
+            {{ t('item.schedule.edit') }}
+        </Link>
 
-            <button
-                v-if="can.update"
-                type="button"
-                :disabled="pending"
-                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                @click="toggle"
-            >
-                {{ pending ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
-            </button>
+        <button
+            v-if="can.update"
+            type="button"
+            :disabled="pending"
+            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+            @click="toggle"
+        >
+            {{ pending ? t('common.pending.default') : (schedule.is_active ? t('item.schedule.pause') : t('item.schedule.resume')) }}
+        </button>
 
-            <!-- Flytten (issue 243 · [[ADR-0053 Flytt och kopiering]] § 6):
-                 bakom `can.delete`, som raderingen intill — en flytt tar bort
-                 något från källan. Servern prövar samma grind på nytt. -->
-            <button
-                v-if="can.delete"
-                type="button"
-                :disabled="pending"
-                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                @click="openPicker($event)"
-            >
-                {{ t('item.schedule.move') }}
-            </button>
+        <!-- Flytten (issue 243 · [[ADR-0053 Flytt och kopiering]] § 6):
+             bakom `can.delete`, som raderingen intill — en flytt tar bort
+             något från källan. Servern prövar samma grind på nytt. -->
+        <button
+            v-if="can.delete"
+            type="button"
+            :disabled="pending"
+            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+            @click="openPicker($event)"
+        >
+            {{ t('item.schedule.move') }}
+        </button>
 
-            <!-- *Back to Inbox* (M27 · issue 244, ADR-0054 § 6): bredvid
-                 *Move…* och bakom samma `can.delete` — uppgiften lämnar sin
-                 plats. Handlingen går alltid till den EGNA inboxen och är
-                 därför aldrig ett val i väljaren. Servern prövar samma grind
-                 på nytt. Knappen ritas inte när uppgiften REDAN ligger i
-                 inboxen (`containerIsInbox`): rutten hade svarat 422
-                 `schedule.already_in_inbox`. -->
-            <button
-                v-if="can.delete && !containerIsInbox"
-                type="button"
-                :disabled="pending"
-                class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
-                @click="toInbox"
-            >
-                {{ t('todo.back_to_inbox') }}
-            </button>
+        <!-- *Back to Inbox* (M27 · issue 244, ADR-0054 § 6): bredvid
+             *Move…* och bakom samma `can.delete` — uppgiften lämnar sin
+             plats. Handlingen går alltid till den EGNA inboxen och är
+             därför aldrig ett val i väljaren. Servern prövar samma grind
+             på nytt. Knappen ritas inte när uppgiften REDAN ligger i
+             inboxen (`containerIsInbox`): rutten hade svarat 422
+             `schedule.already_in_inbox`. -->
+        <button
+            v-if="can.delete && !containerIsInbox"
+            type="button"
+            :disabled="pending"
+            class="inline-flex min-h-11 items-center font-medium text-blue-700 hover:underline"
+            @click="toInbox"
+        >
+            {{ t('todo.back_to_inbox') }}
+        </button>
 
-            <button
-                v-if="can.delete"
-                type="button"
-                :disabled="pending"
-                class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
-                @click="destroy"
-            >
-                {{ pending ? t('common.pending.default') : t('item.schedule.destroy') }}
-            </button>
-        </div>
+        <button
+            v-if="can.delete"
+            type="button"
+            :disabled="pending"
+            class="inline-flex min-h-11 items-center font-medium text-red-700 hover:underline"
+            @click="destroy"
+        >
+            {{ pending ? t('common.pending.default') : t('item.schedule.destroy') }}
+        </button>
+    </div>
 
-        <!-- Flyttens och *Back to Inbox*:s fel (issue 243 och 244):
-             `schedule.has_dependencies` när målet ligger i en annan container
-             och uppgiften har beroenden, eller en 403:a ur grinden. Det står
-             under knapparna, och sidan står kvar. -->
-        <p v-if="moveError" role="alert" class="mt-2 text-sm text-red-700">
-            {{ moveError }}
-        </p>
+    <!-- Flyttens och *Back to Inbox*:s fel (issue 243 och 244):
+         `schedule.has_dependencies` när målet ligger i en annan container
+         och uppgiften har beroenden, eller en 403:a ur grinden. Det står
+         under knapparna, och sidan står kvar. -->
+    <p v-if="moveError" role="alert" class="mt-2 text-sm text-red-700">
+        {{ moveError }}
+    </p>
 
-        <section class="mt-8">
-            <!-- Den öppna förekomsten med sin avbockning (Beslut 1). En
-                 engångsuppgift som redan är klar har ingen öppen rad — då
-                 sägs det i stället, och historiken nedanför bär raden. -->
-            <OpenOccurrence
-                v-if="open"
-                :container-ulid="container.ulid"
-                :item-ulid="item.ulid"
-                :schedule-ulid="schedule.ulid"
-                :occurrence="open"
-                :container-account="container.account"
-                :can="can"
-            />
-
-            <p v-else class="text-sm text-slate-600">
-                {{ schedule.recurrence_type === 'none'
-                    ? t('item.schedule.occurrence.done')
-                    : t('item.schedule.occurrence.none') }}
-            </p>
-        </section>
-
-        <section class="mt-10">
-            <h2 class="text-lg font-semibold">{{ t('item.schedule.occurrence.history') }}</h2>
-
-            <p v-if="history.length === 0" class="mt-2 text-sm text-slate-600">
-                {{ t('item.schedule.occurrence.history_empty') }}
-            </p>
-
-            <ul v-else class="mt-2 flex flex-col gap-2">
-                <li
-                    v-for="occurrence in history"
-                    :key="occurrence.ulid"
-                    class="rounded border border-slate-300 bg-white px-4 py-3"
-                >
-                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span class="rounded px-2 py-0.5 text-xs font-medium" :class="badgeClass(occurrence)">
-                            {{ occurrenceStatusLabel(t, occurrence) }}
-                        </span>
-
-                        <span class="text-sm text-slate-700">
-                            {{ t('item.schedule.occurrence.due', { date: date(occurrence.due_at) }) }}
-                        </span>
-
-                        <span v-if="occurrence.completed_at" class="text-sm text-slate-600">
-                            {{ t('item.schedule.occurrence.completed_at', { date: formatDate(occurrence.completed_at, locale) }) }}
-                        </span>
-
-                        <!-- Kontot är varvet och inte den anställde (Beslut 4):
-                             det är det som står i loggen, och det är därför
-                             resursen bär `completed_by_account` och aldrig
-                             `completed_by_user`. -->
-                        <span v-if="occurrence.completed_by_account" class="text-sm text-slate-600">
-                            {{ t('item.schedule.occurrence.completed_by', { name: occurrence.completed_by_account.name }) }}
-                        </span>
-                    </div>
-
-                    <p v-if="occurrence.completion_note" class="mt-2 whitespace-pre-line text-sm text-slate-800">
-                        {{ occurrence.completion_note }}
-                    </p>
-                </li>
-            </ul>
-        </section>
-
-        <!--
-            Beroendena, i två sektioner och aldrig en (63c § Beslut 2).
-            Schemanivån är REGELN som ärvs av varje ny förekomst; förekomstnivån
-            är UNDANTAGET som bara gäller den här gången. Rubrikerna bär
-            skillnaden — en gemensam lista med en typkolumn hade krävt att
-            användaren först förstod modellen ([[ADR-0005 Schema och
-            förekomst]] § Motivering).
-
-            Båda listorna kom med sidan (63c § Beslut 1): ingen av dem har en
-            egen rutt, och ingen av dem hämtas av vyn.
-        -->
-        <ScheduleDependencySection
-            level="schedule"
+    <section class="mt-8">
+        <!-- Den öppna förekomsten med sin avbockning (Beslut 1). En
+             engångsuppgift som redan är klar har ingen öppen rad — då
+             sägs det i stället, och historiken nedanför bär raden. -->
+        <OpenOccurrence
+            v-if="open"
             :container-ulid="container.ulid"
             :item-ulid="item.ulid"
-            :rows="scheduleRows"
-            :url="scheduleDependencyUrl"
-            :counterparts="counterparts.schedule"
+            :schedule-ulid="schedule.ulid"
+            :occurrence="open"
+            :container-account="container.account"
             :can="can"
         />
 
-        <ScheduleDependencySection
-            level="occurrence"
-            :container-ulid="container.ulid"
-            :item-ulid="item.ulid"
-            :rows="occurrenceRows"
-            :url="occurrenceDependencyUrl"
-            :counterparts="counterparts.occurrence"
-            :active="hasOpenOccurrence"
-            :can="can"
-        />
+        <p v-else class="text-sm text-slate-600">
+            {{ schedule.recurrence_type === 'none'
+                ? t('item.schedule.occurrence.done')
+                : t('item.schedule.occurrence.none') }}
+        </p>
+    </section>
 
-        <!-- Målväljaren (issue 242 och 243): målet är ett item, och
-             `excludeItem` är itemet uppgiften står på — att flytta den till
-             sig själv är inget mål. Rubriken är uppgiftens egen mening, för
-             den som väljer ser vad som flyttas. -->
-        <ItemTargetPicker
-            :open="pickerOpen"
-            :trigger="pickerTrigger"
-            :exclude-item="item.ulid"
-            :heading="t('item.schedule.move_heading')"
-            @choose="chooseTarget"
-            @close="closePicker"
-        />
-    </ContainerLayout>
+    <section class="mt-10">
+        <h2 class="text-lg font-semibold">{{ t('item.schedule.occurrence.history') }}</h2>
+
+        <p v-if="history.length === 0" class="mt-2 text-sm text-slate-600">
+            {{ t('item.schedule.occurrence.history_empty') }}
+        </p>
+
+        <ul v-else class="mt-2 flex flex-col gap-2">
+            <li
+                v-for="occurrence in history"
+                :key="occurrence.ulid"
+                class="rounded border border-slate-300 bg-white px-4 py-3"
+            >
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span class="rounded px-2 py-0.5 text-xs font-medium" :class="badgeClass(occurrence)">
+                        {{ occurrenceStatusLabel(t, occurrence) }}
+                    </span>
+
+                    <span class="text-sm text-slate-700">
+                        {{ t('item.schedule.occurrence.due', { date: date(occurrence.due_at) }) }}
+                    </span>
+
+                    <span v-if="occurrence.completed_at" class="text-sm text-slate-600">
+                        {{ t('item.schedule.occurrence.completed_at', { date: formatDate(occurrence.completed_at, locale) }) }}
+                    </span>
+
+                    <!-- Kontot är varvet och inte den anställde (Beslut 4):
+                         det är det som står i loggen, och det är därför
+                         resursen bär `completed_by_account` och aldrig
+                         `completed_by_user`. -->
+                    <span v-if="occurrence.completed_by_account" class="text-sm text-slate-600">
+                        {{ t('item.schedule.occurrence.completed_by', { name: occurrence.completed_by_account.name }) }}
+                    </span>
+                </div>
+
+                <p v-if="occurrence.completion_note" class="mt-2 whitespace-pre-line text-sm text-slate-800">
+                    {{ occurrence.completion_note }}
+                </p>
+            </li>
+        </ul>
+    </section>
+
+    <!--
+        Beroendena, i två sektioner och aldrig en (63c § Beslut 2).
+        Schemanivån är REGELN som ärvs av varje ny förekomst; förekomstnivån
+        är UNDANTAGET som bara gäller den här gången. Rubrikerna bär
+        skillnaden — en gemensam lista med en typkolumn hade krävt att
+        användaren först förstod modellen ([[ADR-0005 Schema och
+        förekomst]] § Motivering).
+
+        Båda listorna kom med sidan (63c § Beslut 1): ingen av dem har en
+        egen rutt, och ingen av dem hämtas av vyn.
+    -->
+    <ScheduleDependencySection
+        level="schedule"
+        :container-ulid="container.ulid"
+        :item-ulid="item.ulid"
+        :rows="scheduleRows"
+        :url="scheduleDependencyUrl"
+        :counterparts="counterparts.schedule"
+        :can="can"
+    />
+
+    <ScheduleDependencySection
+        level="occurrence"
+        :container-ulid="container.ulid"
+        :item-ulid="item.ulid"
+        :rows="occurrenceRows"
+        :url="occurrenceDependencyUrl"
+        :counterparts="counterparts.occurrence"
+        :active="hasOpenOccurrence"
+        :can="can"
+    />
+
+    <!-- Målväljaren (issue 242 och 243): målet är ett item, och
+         `excludeItem` är itemet uppgiften står på — att flytta den till
+         sig själv är inget mål. Rubriken är uppgiftens egen mening, för
+         den som väljer ser vad som flyttas. -->
+    <ItemTargetPicker
+        :open="pickerOpen"
+        :trigger="pickerTrigger"
+        :exclude-item="item.ulid"
+        :heading="t('item.schedule.move_heading')"
+        @choose="chooseTarget"
+        @close="closePicker"
+    />
 </template>

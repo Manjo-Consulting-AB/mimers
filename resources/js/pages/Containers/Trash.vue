@@ -1,8 +1,18 @@
 <script setup>
 import { Head, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import TrashRow from '../../components/TrashRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { hero: 'compact', container: props.container }],
+        [ContainerSettingsLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Containerns papperskorg, se issue 62a § Beslut 1, 4, 5, 6 och 7.
@@ -47,31 +57,29 @@ const page = usePage();
 </script>
 
 <template>
-    <ContainerSettingsLayout :container="container">
-        <Head :title="t('trash.title')" />
+    <Head :title="t('trash.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('trash.heading') }}</h1>
-        <p class="mt-1 text-sm text-slate-600">{{ t('trash.description') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('trash.heading') }}</h1>
+    <p class="mt-1 text-sm text-slate-600">{{ t('trash.description') }}</p>
 
-        <p
-            v-if="page.props.errors.trash"
-            role="alert"
-            class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        >
-            {{ page.props.errors.trash }}
-        </p>
+    <p
+        v-if="page.props.errors.trash"
+        role="alert"
+        class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+    >
+        {{ page.props.errors.trash }}
+    </p>
 
-        <ul v-if="entries.length > 0" class="mt-6 flex flex-col gap-3">
-            <TrashRow
-                v-for="entry in entries"
-                :key="entry.ulid"
-                :container-ulid="container.ulid"
-                :entry="entry"
-                :can-restore="canRestore[entry.ulid] === true"
-                :subcategory-count="subcategoryCounts[entry.ulid] ?? 0"
-            />
-        </ul>
+    <ul v-if="entries.length > 0" class="mt-6 flex flex-col gap-3">
+        <TrashRow
+            v-for="entry in entries"
+            :key="entry.ulid"
+            :container-ulid="container.ulid"
+            :entry="entry"
+            :can-restore="canRestore[entry.ulid] === true"
+            :subcategory-count="subcategoryCounts[entry.ulid] ?? 0"
+        />
+    </ul>
 
-        <p v-else class="mt-6 text-sm text-slate-600">{{ t('trash.empty') }}</p>
-    </ContainerSettingsLayout>
+    <p v-else class="mt-6 text-sm text-slate-600">{{ t('trash.empty') }}</p>
 </template>

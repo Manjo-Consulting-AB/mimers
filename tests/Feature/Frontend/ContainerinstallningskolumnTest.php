@@ -172,16 +172,17 @@ it('lägger sektionslistan i en sidokolumn bredvid innehållet', function () {
 });
 
 /*
- * Klart när: layouten ritar listan ur containerSettingsSections och skickar
- * propsen vidare.
+ * Klart när: layouten ritar listan ur containerSettingsSections och bara sin
+ * egen del.
  *
- * `container`, `create` och `can` deklareras och skickas oförändrade till
- * `ContainerLayout`, som är ramen och inte ändras: flikraden, rubriken, bilden
- * och plusknappen beter sig som förut. Listan kommer ur modulen och renderas
- * med `v-for` — en ny sektion är en ny rad i containerSections.js och ingen
- * ändring i layouten.
+ * Listan kommer ur modulen och renderas med `v-for` — en ny sektion är en ny
+ * rad i containerSections.js och ingen ändring i layouten. Sedan issue 275
+ * ritar layouten inte längre `ContainerLayout`: den ligger innanför den i
+ * kedjan, och `container` är den enda prop den läser själv. `create` och `can`
+ * deklarerades här förut men lästes aldrig — de vidarebefordrades bara, och nu
+ * går de förbi layouten i sidans kedja.
  */
-it('ritar sidokolumnen ur containerSettingsSections och skickar propsen vidare', function () {
+it('ritar sidokolumnen ur containerSettingsSections och bara sin egen del', function () {
     $kod = containerinstallningskolumnKod('layouts/ContainerSettingsLayout.vue');
 
     expect($kod)->toContain('import { containerSettingsSections }')
@@ -189,19 +190,15 @@ it('ritar sidokolumnen ur containerSettingsSections och skickar propsen vidare',
         ->toContain('section.href(container.ulid)')
         ->toContain('container.nav.${section.key}');
 
-    // Ramen och de tre propparna.
-    expect($kod)->toContain('<ContainerLayout')
-        ->toContain('</ContainerLayout>')
-        ->toContain(':container="container"')
-        ->toContain(':create="create"')
-        ->toContain(':can="can"');
+    // Den ritar ingen annan layout, och de två propparna den bara skickade
+    // vidare finns inte kvar.
+    expect($kod)->not->toContain('<ContainerLayout');
+    expect($kod)->not->toContain('create: { type: Object, default: null }');
+    expect($kod)->not->toContain('can: { type: Object, default: null }');
 
-    // Deklarerade med samma namn och samma krav som ContainerLayout själv:
-    // `container` är det enda som krävs, och en sida som inte skickar `create`
-    // eller `can` får ingen plusknapp och ingen penna.
-    expect($kod)->toContain('container: { type: Object, required: true }')
-        ->toContain('create: { type: Object, default: null }')
-        ->toContain('can: { type: Object, default: null }');
+    // Kvar står `container`, det enda den läser själv — samma krav som
+    // ContainerLayout ställer.
+    expect($kod)->toContain('container: { type: Object, required: true }');
 });
 
 /*
@@ -259,24 +256,33 @@ it('når alla sektioner från inställningskolumnen, inställningarna först', f
 /*
  * Klart när: alla åtta inställningssidor har samma sidokolumn.
  *
- * Provet är ett dataset över de åtta filerna och var och en möts av samma tre
- * krav: sidan importerar layouten, öppnar och stänger den, och ritar ingen
- * `ContainerLayout` själv. Den sista halvan är den som håller kolumnen på
- * plats — en sida som byter tillbaka till ramen tappar menyn utan att något
- * annat syns.
+ * Provet är ett dataset över de åtta filerna och var och en möts av samma krav:
+ * sidan importerar BÅDA layouterna i kedjan, deklarerar dem i sin ordning, och
+ * ritar ingen layouttagg i mallen. Sedan issue 275 är det sista ledet som
+ * håller kolumnen på plats — en sida som tappar `ContainerSettingsLayout` ur
+ * kedjan tappar menyn utan att något annat syns, och en tagg i mallen rivs vid
+ * varje visit.
+ *
+ * **Importen av `ContainerLayout` prövas också** (fynd 1 i granskningen): ledet
+ * mellan skalet och kolumnen är ett fritt namn inuti en pilfunktion, och en
+ * sida som glömt importen bygger utan att något klagar — felet kommer först när
+ * layoutfunktionen anropas, alltså vid nästa navigering.
  */
 it('ger alla åtta inställningssidor samma sidokolumn', function (string $sida) {
     $kod = containerinstallningskolumnKod("pages/Containers/{$sida}.vue");
 
     expect($kod)->not->toBe('', "pages/Containers/{$sida}.vue saknas");
 
-    expect($kod)->toContain("import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue'")
-        ->toContain('<ContainerSettingsLayout')
-        ->toContain('</ContainerSettingsLayout>');
+    expect($kod)->toContain("import ContainerLayout from '../../layouts/ContainerLayout.vue'")
+        ->toContain("import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue'")
+        ->toContain('[AppLayout')
+        ->toContain('[ContainerLayout')
+        ->toContain('[ContainerSettingsLayout, { container: props.container }]');
 
     // Ingen förklaring till `not->toContain`: Pest läser ett andra argument som
     // en andra nål, inte som ett meddelande (samma fälla som ContainerflikTest
     // undviker).
+    expect($kod)->not->toContain('<ContainerSettingsLayout');
     expect($kod)->not->toContain('<ContainerLayout');
 })->with(containerinstallningskolumnSidor());
 
@@ -306,7 +312,7 @@ it('lämnar flikarna utan sidokolumn', function () {
     foreach ($flikar as $sokvag) {
         $kod = containerinstallningskolumnKod($sokvag);
 
-        expect($kod)->toContain('<ContainerLayout');
+        expect($kod)->toContain('[ContainerLayout');
 
         expect($kod)->not->toContain('ContainerSettingsLayout');
     }

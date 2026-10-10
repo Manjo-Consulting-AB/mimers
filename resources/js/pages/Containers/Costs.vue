@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import CostCategoryBreakdown from '../../components/CostCategoryBreakdown.vue';
 import CostDonut, { formatAmount } from '../../components/CostDonut.vue';
@@ -10,6 +11,13 @@ import CostTimeChart from '../../components/CostTimeChart.vue';
 import UiCard from '../../components/UiCard.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, { create: props.create }],
+        [ContainerLayout, { hero: 'compact', container: props.container, can: props.can }],
+    ],
+});
 
 /*
  * Containerns kostnadsflik — den fria delen, se issue 175 · [[ADR-0050
@@ -214,204 +222,202 @@ const signedPercent = (percent) => `${percent > 0 ? '+' : ''}${percent}`;
 </script>
 
 <template>
-    <ContainerLayout hero="compact" :container="container" :can="can" :create="create">
-        <Head :title="t('container.costs.title')" />
+    <Head :title="t('container.costs.title')" />
 
-        <div class="flex flex-wrap items-center justify-between gap-4">
-            <h1 class="text-2xl font-semibold">{{ t('container.costs.heading') }}</h1>
-
-            <!--
-                *Lägg till kostnad* (Beslut 1). En `<details>` och inget eget
-                tillstånd: webbläsaren äger uppfällningen, tangentbordet når
-                den, och en meny som står kvar över en navigering finns inte.
-                Listan är de items användaren får skapa på, och ett val leder
-                till itemets kostnadsflik — fliken skriver ingenting själv.
-            -->
-            <details v-if="items.length > 0">
-                <summary
-                    class="inline-flex min-h-11 cursor-pointer items-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent"
-                >
-                    {{ t('container.costs.add') }}
-                </summary>
-
-                <div class="mt-2 rounded-card border border-border bg-surface p-2">
-                    <p class="px-2 py-1 text-meta text-ink-subtle">
-                        {{ t('container.costs.add_choose_item') }}
-                    </p>
-
-                    <ul class="flex max-h-80 flex-col overflow-y-auto">
-                        <li v-for="item in items" :key="item.ulid">
-                            <Link
-                                :href="itemUrl(item)"
-                                class="flex min-h-11 items-center rounded-control px-2 text-body text-ink hover:bg-surface-sunken"
-                            >
-                                {{ item.name }}
-                            </Link>
-                        </li>
-                    </ul>
-                </div>
-            </details>
-        </div>
+    <div class="flex flex-wrap items-center justify-between gap-4">
+        <h1 class="text-2xl font-semibold">{{ t('container.costs.heading') }}</h1>
 
         <!--
-            Brickorna: en per valuta, alltid två grupper och aldrig en summa
-            över dem. Etiketten är densamma i varje tuta och talet skiljer dem
-            åt — beloppet bär sin egen valuta.
+            *Lägg till kostnad* (Beslut 1). En `<details>` och inget eget
+            tillstånd: webbläsaren äger uppfällningen, tangentbordet når
+            den, och en meny som står kvar över en navigering finns inte.
+            Listan är de items användaren får skapa på, och ett val leder
+            till itemets kostnadsflik — fliken skriver ingenting själv.
         -->
-        <div class="mt-6 flex flex-wrap gap-4">
-            <UiStat
-                v-for="total in costs.totals"
-                :key="`total-${total.currency}`"
-                :value="formatAmount(total.amount, total.currency)"
-                :label="t('container.costs.total')"
-            />
-
-            <UiStat
-                v-for="total in yearCosts"
-                :key="`year-${total.currency}`"
-                :value="formatAmount(total.amount, total.currency)"
-                :label="t('container.costs.this_year', { year })"
-            />
-        </div>
-
-        <!--
-            Uppgraderingsytan (Beslut 4). Den ritas bara när `canReport` är
-            falsk, och den står där Pro-delen kommer att stå — issue 176
-            fyller platsen med periodväljaren, filtren och grafen.
-        -->
-        <div
-            v-if="! canReport"
-            class="mt-6 rounded-card border border-border bg-surface-sunken p-4 text-body text-ink"
-        >
-            <p>{{ t('container.costs.upgrade') }}</p>
-
-            <Link
-                v-if="canUpgrade"
-                :href="planUrl"
-                class="mt-2 inline-flex min-h-11 items-center text-accent underline"
+        <details v-if="items.length > 0">
+            <summary
+                class="inline-flex min-h-11 cursor-pointer items-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent"
             >
-                {{ t('container.costs.upgrade_link') }}
-            </Link>
+                {{ t('container.costs.add') }}
+            </summary>
 
-            <p v-else class="mt-2 text-ink-muted">{{ t('container.costs.upgrade_owner') }}</p>
-        </div>
+            <div class="mt-2 rounded-card border border-border bg-surface p-2">
+                <p class="px-2 py-1 text-meta text-ink-subtle">
+                    {{ t('container.costs.add_choose_item') }}
+                </p>
 
-        <!--
-            Pro-delen (Beslut 3). Filterfältet, grafen över tid, nedbrytningen
-            per kategori och jämförelsen mot föregående period — allt ur
-            `report`, som är null för en gratisanvändare. Ordningen är
-            bildens: först det man ställer frågan med, sedan svaret.
-        -->
-        <template v-if="canReport && report">
-            <CostFilterBar
-                :container-ulid="container.ulid"
-                :filter="report.filter"
-                :options="filterOptions"
-            />
-
-            <!--
-                Jämförelsen (Beslut 3): periodens total per valuta mot en lika
-                lång period direkt före. En post per valuta och aldrig en
-                jämförelse över två — och `percent` är null när föregående
-                period saknar total i valutan, för då finns ingen kvot att visa.
-            -->
-            <div v-if="report.comparison.length > 0" class="mt-4">
-                <p class="text-meta text-ink-subtle">{{ t('container.costs.comparison') }}</p>
-
-                <ul class="mt-1 flex flex-wrap gap-4">
-                    <li v-for="row in report.comparison" :key="row.currency" class="text-body text-ink">
-                        <span class="font-semibold">{{ formatAmount(row.current, row.currency) }}</span>
-
-                        <span v-if="row.percent !== null" class="ml-2 text-ink-muted">
-                            {{ t('container.costs.comparison_percent', { percent: signedPercent(row.percent) }) }}
-                        </span>
+                <ul class="flex max-h-80 flex-col overflow-y-auto">
+                    <li v-for="item in items" :key="item.ulid">
+                        <Link
+                            :href="itemUrl(item)"
+                            class="flex min-h-11 items-center rounded-control px-2 text-body text-ink hover:bg-surface-sunken"
+                        >
+                            {{ item.name }}
+                        </Link>
                     </li>
                 </ul>
             </div>
+        </details>
+    </div>
 
-            <!-- Grafen över tid. En graf per valuta, som donuten. -->
-            <div v-if="report.period.groups.length > 0" class="mt-8">
-                <UiCard>
-                    <template #heading>{{ t('container.costs.chart') }}</template>
+    <!--
+        Brickorna: en per valuta, alltid två grupper och aldrig en summa
+        över dem. Etiketten är densamma i varje tuta och talet skiljer dem
+        åt — beloppet bär sin egen valuta.
+    -->
+    <div class="mt-6 flex flex-wrap gap-4">
+        <UiStat
+            v-for="total in costs.totals"
+            :key="`total-${total.currency}`"
+            :value="formatAmount(total.amount, total.currency)"
+            :label="t('container.costs.total')"
+        />
 
-                    <CostTimeChart :groups="report.period.groups" :totals="report.period.totals" />
-                </UiCard>
-            </div>
+        <UiStat
+            v-for="total in yearCosts"
+            :key="`year-${total.currency}`"
+            :value="formatAmount(total.amount, total.currency)"
+            :label="t('container.costs.this_year', { year })"
+        />
+    </div>
 
-            <!-- Nedbrytningen per itemets kategori, med *Övrigt* för raderna
-                 utan kategori ([[ADR-0040 Underträdets summor]]). Staplar och
-                 ingen ring: motorns grupper rullas upp över underträdet och
-                 överlappar, så en andel av totalen hade påstått en partition —
-                 se CostCategoryBreakdown. -->
-            <div v-if="report.category.groups.length > 0" class="mt-8">
-                <UiCard>
-                    <template #heading>{{ t('container.costs.breakdown') }}</template>
+    <!--
+        Uppgraderingsytan (Beslut 4). Den ritas bara när `canReport` är
+        falsk, och den står där Pro-delen kommer att stå — issue 176
+        fyller platsen med periodväljaren, filtren och grafen.
+    -->
+    <div
+        v-if="! canReport"
+        class="mt-6 rounded-card border border-border bg-surface-sunken p-4 text-body text-ink"
+    >
+        <p>{{ t('container.costs.upgrade') }}</p>
 
-                    <CostCategoryBreakdown
-                        :totals="report.category.totals"
-                        :groups="report.category.groups"
-                    />
-                </UiCard>
-            </div>
-        </template>
+        <Link
+            v-if="canUpgrade"
+            :href="planUrl"
+            class="mt-2 inline-flex min-h-11 items-center text-accent underline"
+        >
+            {{ t('container.costs.upgrade_link') }}
+        </Link>
 
-        <!-- Donuten per item. Ritas inte alls för en container utan rader. -->
-        <div v-if="hasCosts" class="mt-8">
+        <p v-else class="mt-2 text-ink-muted">{{ t('container.costs.upgrade_owner') }}</p>
+    </div>
+
+    <!--
+        Pro-delen (Beslut 3). Filterfältet, grafen över tid, nedbrytningen
+        per kategori och jämförelsen mot föregående period — allt ur
+        `report`, som är null för en gratisanvändare. Ordningen är
+        bildens: först det man ställer frågan med, sedan svaret.
+    -->
+    <template v-if="canReport && report">
+        <CostFilterBar
+            :container-ulid="container.ulid"
+            :filter="report.filter"
+            :options="filterOptions"
+        />
+
+        <!--
+            Jämförelsen (Beslut 3): periodens total per valuta mot en lika
+            lång period direkt före. En post per valuta och aldrig en
+            jämförelse över två — och `percent` är null när föregående
+            period saknar total i valutan, för då finns ingen kvot att visa.
+        -->
+        <div v-if="report.comparison.length > 0" class="mt-4">
+            <p class="text-meta text-ink-subtle">{{ t('container.costs.comparison') }}</p>
+
+            <ul class="mt-1 flex flex-wrap gap-4">
+                <li v-for="row in report.comparison" :key="row.currency" class="text-body text-ink">
+                    <span class="font-semibold">{{ formatAmount(row.current, row.currency) }}</span>
+
+                    <span v-if="row.percent !== null" class="ml-2 text-ink-muted">
+                        {{ t('container.costs.comparison_percent', { percent: signedPercent(row.percent) }) }}
+                    </span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Grafen över tid. En graf per valuta, som donuten. -->
+        <div v-if="report.period.groups.length > 0" class="mt-8">
             <UiCard>
-                <template #heading>{{ t('container.costs.donut') }}</template>
+                <template #heading>{{ t('container.costs.chart') }}</template>
 
-                <CostDonut
-                    :totals="costs.totals"
-                    :breakdown="costs.breakdown"
-                    :label="t('container.costs.total')"
-                />
+                <CostTimeChart :groups="report.period.groups" :totals="report.period.totals" />
             </UiCard>
         </div>
 
-        <!--
-            Tabellen. Rubriken är *Kostnader* och inte bildens *Senaste
-            kostnader*: det är hela listan, en sida i taget, och bildens
-            *Senaste kostnader* är de första raderna av den (Beslut 1).
-        -->
-        <div class="mt-8">
-            <h2 class="text-title font-semibold text-ink">{{ t('container.costs.heading') }}</h2>
+        <!-- Nedbrytningen per itemets kategori, med *Övrigt* för raderna
+             utan kategori ([[ADR-0040 Underträdets summor]]). Staplar och
+             ingen ring: motorns grupper rullas upp över underträdet och
+             överlappar, så en andel av totalen hade påstått en partition —
+             se CostCategoryBreakdown. -->
+        <div v-if="report.category.groups.length > 0" class="mt-8">
+            <UiCard>
+                <template #heading>{{ t('container.costs.breakdown') }}</template>
 
-            <p v-if="! hasRows" class="mt-2 text-body text-ink-muted">
-                {{ emptyText }}
-            </p>
-
-            <CostTable v-else :rows="rows.data" :container-ulid="container.ulid" />
-
-            <!--
-                Sidnumreringen. Länkarna ritas bara när det finns en sida att
-                gå till, och sidtalet är serverns — vyn räknar inte sidor.
-            -->
-            <nav
-                v-if="rows.last_page > 1"
-                class="mt-4 flex flex-wrap items-center gap-4 text-body"
-            >
-                <Link
-                    v-if="rows.prev_page_url"
-                    :href="pageUrl(rows.current_page - 1)"
-                    preserve-scroll
-                    class="inline-flex min-h-11 items-center text-accent hover:underline"
-                >
-                    {{ t('container.costs.previous') }}
-                </Link>
-
-                <span class="text-ink-muted">
-                    {{ t('container.costs.page', { page: rows.current_page, last: rows.last_page }) }}
-                </span>
-
-                <Link
-                    v-if="rows.next_page_url"
-                    :href="pageUrl(rows.current_page + 1)"
-                    preserve-scroll
-                    class="inline-flex min-h-11 items-center text-accent hover:underline"
-                >
-                    {{ t('container.costs.next') }}
-                </Link>
-            </nav>
+                <CostCategoryBreakdown
+                    :totals="report.category.totals"
+                    :groups="report.category.groups"
+                />
+            </UiCard>
         </div>
-    </ContainerLayout>
+    </template>
+
+    <!-- Donuten per item. Ritas inte alls för en container utan rader. -->
+    <div v-if="hasCosts" class="mt-8">
+        <UiCard>
+            <template #heading>{{ t('container.costs.donut') }}</template>
+
+            <CostDonut
+                :totals="costs.totals"
+                :breakdown="costs.breakdown"
+                :label="t('container.costs.total')"
+            />
+        </UiCard>
+    </div>
+
+    <!--
+        Tabellen. Rubriken är *Kostnader* och inte bildens *Senaste
+        kostnader*: det är hela listan, en sida i taget, och bildens
+        *Senaste kostnader* är de första raderna av den (Beslut 1).
+    -->
+    <div class="mt-8">
+        <h2 class="text-title font-semibold text-ink">{{ t('container.costs.heading') }}</h2>
+
+        <p v-if="! hasRows" class="mt-2 text-body text-ink-muted">
+            {{ emptyText }}
+        </p>
+
+        <CostTable v-else :rows="rows.data" :container-ulid="container.ulid" />
+
+        <!--
+            Sidnumreringen. Länkarna ritas bara när det finns en sida att
+            gå till, och sidtalet är serverns — vyn räknar inte sidor.
+        -->
+        <nav
+            v-if="rows.last_page > 1"
+            class="mt-4 flex flex-wrap items-center gap-4 text-body"
+        >
+            <Link
+                v-if="rows.prev_page_url"
+                :href="pageUrl(rows.current_page - 1)"
+                preserve-scroll
+                class="inline-flex min-h-11 items-center text-accent hover:underline"
+            >
+                {{ t('container.costs.previous') }}
+            </Link>
+
+            <span class="text-ink-muted">
+                {{ t('container.costs.page', { page: rows.current_page, last: rows.last_page }) }}
+            </span>
+
+            <Link
+                v-if="rows.next_page_url"
+                :href="pageUrl(rows.current_page + 1)"
+                preserve-scroll
+                class="inline-flex min-h-11 items-center text-accent hover:underline"
+            >
+                {{ t('container.costs.next') }}
+            </Link>
+        </nav>
+    </div>
 </template>

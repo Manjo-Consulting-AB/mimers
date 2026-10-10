@@ -1,12 +1,22 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import CategoryCreateForm from '../../components/CategoryCreateForm.vue';
 import CategoryPresetCard from '../../components/CategoryPresetCard.vue';
 import CategoryTree from '../../components/CategoryTree.vue';
 import { buildCategoryTree } from '../../components/categoryTree.js';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { hero: 'compact', container: props.container }],
+        [ContainerSettingsLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Kategoriträdet, se issue 56a § Beslut 1, 2, 4 och 8.
@@ -83,42 +93,40 @@ const showsPreset = computed(
 </script>
 
 <template>
-    <ContainerSettingsLayout :container="container">
-        <Head :title="t('container.categories.title')" />
+    <Head :title="t('container.categories.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('container.categories.heading') }}</h1>
-        <p class="mt-1 text-sm text-slate-600">{{ t('container.categories.description') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('container.categories.heading') }}</h1>
+    <p class="mt-1 text-sm text-slate-600">{{ t('container.categories.description') }}</p>
 
-        <p
-            v-if="deleteErrorUlid === null && page.props.errors.category"
-            role="alert"
-            class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-        >
-            {{ page.props.errors.category }}
-        </p>
+    <p
+        v-if="deleteErrorUlid === null && page.props.errors.category"
+        role="alert"
+        class="mt-4 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+    >
+        {{ page.props.errors.category }}
+    </p>
 
-        <ul v-if="tree.length > 0" class="mt-6">
-            <CategoryTree
-                :nodes="tree"
-                :container-ulid="container.ulid"
-                :categories="categories"
-                :counts="counts"
-                :delete-error-ulid="deleteErrorUlid"
-                @delete="deleteErrorUlid = $event"
-            />
-        </ul>
-
-        <CategoryPresetCard
-            v-else-if="showsPreset"
+    <ul v-if="tree.length > 0" class="mt-6">
+        <CategoryTree
+            :nodes="tree"
             :container-ulid="container.ulid"
+            :categories="categories"
+            :counts="counts"
+            :delete-error-ulid="deleteErrorUlid"
+            @delete="deleteErrorUlid = $event"
         />
+    </ul>
 
-        <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.categories.empty') }}</p>
+    <CategoryPresetCard
+        v-else-if="showsPreset"
+        :container-ulid="container.ulid"
+    />
 
-        <section v-if="can.manage" class="mt-10">
-            <h2 class="text-lg font-semibold">{{ t('container.categories.create_heading') }}</h2>
+    <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.categories.empty') }}</p>
 
-            <CategoryCreateForm class="mt-4" :container-ulid="container.ulid" :categories="categories" />
-        </section>
-    </ContainerSettingsLayout>
+    <section v-if="can.manage" class="mt-10">
+        <h2 class="text-lg font-semibold">{{ t('container.categories.create_heading') }}</h2>
+
+        <CategoryCreateForm class="mt-4" :container-ulid="container.ulid" :categories="categories" />
+    </section>
 </template>

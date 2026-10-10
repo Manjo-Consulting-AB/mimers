@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import GtdListPanel from '../../components/GtdListPanel.vue';
 import TaskGroup from '../../components/TaskGroup.vue';
@@ -8,6 +9,13 @@ import TodoRow from '../../components/TodoRow.vue';
 import UiEmptyState from '../../components/UiEmptyState.vue';
 import UiTabs from '../../components/UiTabs.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, { create: props.create }],
+        [ContainerLayout, { hero: 'compact', container: props.container, can: props.can }],
+    ],
+});
 
 /*
  * Containerns uppgiftsflik — listan, se issue 174 · [[ADR-0050
@@ -247,181 +255,179 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
 </script>
 
 <template>
-    <ContainerLayout hero="compact" :container="container" :can="can" :create="create">
-        <Head :title="t('container.tasks.title')" />
+    <Head :title="t('container.tasks.title')" />
 
-        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <h1 class="text-2xl font-semibold">{{ t('container.tasks.heading') }}</h1>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h1 class="text-2xl font-semibold">{{ t('container.tasks.heading') }}</h1>
 
-            <!-- *New task* (M27 · issue 246 § Beslut 2). Knappen ritas alltid:
-                 inboxen är alltid ett möjligt mål, och containern behöver
-                 därför ingen `can`-flagga. -->
-            <Link
-                :href="createUrl"
-                class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-            >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="mr-2 h-4 w-4"
-                    aria-hidden="true"
-                >
-                    <path d="M12 5v14"></path>
-                    <path d="M5 12h14"></path>
-                </svg>
-
-                {{ t('todo.new') }}
-            </Link>
-        </div>
-
-        <!--
-            Flikraden (Beslut 4). Listan står i adressen, och `UiTabs` tänder
-            den flik vars `href` matchar den — vyn håller inget val i minnet.
-            Är underhållsfiltret på bär varje fliks adress det med.
-        -->
-        <UiTabs class="mt-4" :tabs="tabs" :label="t('todo.tabs.label')" />
-
-        <!--
-            Underhållsfiltret (Beslut 4). En kryssruta och ingen
-            skicka-knapp: valet är ett värde i adressen, och svaret ritar
-            servern. `:disabled` medan svaret är på väg, så kontrollen inte
-            ser död ut (issue 68a § Beslut 4).
-        -->
-        <label
-            for="tasks-maintenance"
-            class="mt-4 flex min-h-11 w-fit items-center gap-2 text-sm font-medium text-slate-800"
+        <!-- *New task* (M27 · issue 246 § Beslut 2). Knappen ritas alltid:
+             inboxen är alltid ett möjligt mål, och containern behöver
+             därför ingen `can`-flagga. -->
+        <Link
+            :href="createUrl"
+            class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
         >
-            <input
-                id="tasks-maintenance"
-                v-model="onlyMaintenance"
-                type="checkbox"
-                name="maintenance"
-                :disabled="pending"
-                @change="apply"
+            <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="mr-2 h-4 w-4"
+                aria-hidden="true"
             >
-            {{ t('container.tasks.filter_maintenance') }}
-        </label>
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+            </svg>
 
-        <!--
-            Listan till vänster och panelen till höger över `lg:`, panelen
-            under listan under `lg:` (Beslut 3).
-        -->
-        <div class="mt-6 flex flex-col gap-8 lg:flex-row lg:items-start">
-            <div class="lg:flex-1">
-                <!--
-                    Det tomma läget (Beslut 3). Först när alla listor är tomma
-                    — de fyra öppna grupperna OCH *Done* — annars hade en
-                    lista med bara avbockade rader sagt att containern saknar
-                    uppgifter.
-                -->
-                <div v-if="!hasAnyTask">
-                    <UiEmptyState>
-                        {{ t('container.tasks.empty') }}
-                    </UiEmptyState>
-                </div>
+            {{ t('todo.new') }}
+        </Link>
+    </div>
 
-                <!--
-                    Listan (Beslut 1 och 3): grupperna i den ordning servern
-                    gav dem, sedan *Done*. En sektion ritas bara när den har
-                    rader — en tom grupp har ingen rubrik att visa. Rubriken
-                    med antalet och ihopfällningen ritas av TaskGroup (M24 ·
-                    issue 231): samma komponent som de två andra ytorna, så de
-                    inte glider isär. `completed` är tom utanför *Done*-fliken,
-                    så gruppen ritas bara där (Beslut 4).
-                -->
-                <div v-else class="flex flex-col gap-8">
-                    <template v-for="(entries, group) in groups" :key="group">
-                        <TaskGroup
-                            v-if="entries.length > 0"
-                            :heading="t(`todo.group.${group}`)"
-                            :count="entries.length"
-                            :tone="group === 'overdue' ? 'danger' : null"
-                        >
-                            <TodoRow
-                                v-for="entry in entries"
-                                :key="entry.ulid"
-                                :entry="entry"
-                                :show-container="false"
-                            />
-                        </TaskGroup>
-                    </template>
+    <!--
+        Flikraden (Beslut 4). Listan står i adressen, och `UiTabs` tänder
+        den flik vars `href` matchar den — vyn håller inget val i minnet.
+        Är underhållsfiltret på bär varje fliks adress det med.
+    -->
+    <UiTabs class="mt-4" :tabs="tabs" :label="t('todo.tabs.label')" />
 
-                    <!--
-                        *Done* (Beslut 3 och 4). Raden bär samma upplysningar
-                        som de öppna raderna — schemats titel, itemet, ett
-                        datum — men datumet är `completed_at`, och
-                        avbockningsknappen ritas inte: det finns ingenting kvar
-                        att bocka av, och rutten hade svarat att förekomsten
-                        inte är öppen. Rubriken är containerns fliks ord, och
-                        gruppen har ingen egen ton.
-                    -->
+    <!--
+        Underhållsfiltret (Beslut 4). En kryssruta och ingen
+        skicka-knapp: valet är ett värde i adressen, och svaret ritar
+        servern. `:disabled` medan svaret är på väg, så kontrollen inte
+        ser död ut (issue 68a § Beslut 4).
+    -->
+    <label
+        for="tasks-maintenance"
+        class="mt-4 flex min-h-11 w-fit items-center gap-2 text-sm font-medium text-slate-800"
+    >
+        <input
+            id="tasks-maintenance"
+            v-model="onlyMaintenance"
+            type="checkbox"
+            name="maintenance"
+            :disabled="pending"
+            @change="apply"
+        >
+        {{ t('container.tasks.filter_maintenance') }}
+    </label>
+
+    <!--
+        Listan till vänster och panelen till höger över `lg:`, panelen
+        under listan under `lg:` (Beslut 3).
+    -->
+    <div class="mt-6 flex flex-col gap-8 lg:flex-row lg:items-start">
+        <div class="lg:flex-1">
+            <!--
+                Det tomma läget (Beslut 3). Först när alla listor är tomma
+                — de fyra öppna grupperna OCH *Done* — annars hade en
+                lista med bara avbockade rader sagt att containern saknar
+                uppgifter.
+            -->
+            <div v-if="!hasAnyTask">
+                <UiEmptyState>
+                    {{ t('container.tasks.empty') }}
+                </UiEmptyState>
+            </div>
+
+            <!--
+                Listan (Beslut 1 och 3): grupperna i den ordning servern
+                gav dem, sedan *Done*. En sektion ritas bara när den har
+                rader — en tom grupp har ingen rubrik att visa. Rubriken
+                med antalet och ihopfällningen ritas av TaskGroup (M24 ·
+                issue 231): samma komponent som de två andra ytorna, så de
+                inte glider isär. `completed` är tom utanför *Done*-fliken,
+                så gruppen ritas bara där (Beslut 4).
+            -->
+            <div v-else class="flex flex-col gap-8">
+                <template v-for="(entries, group) in groups" :key="group">
                     <TaskGroup
-                        v-if="completed.length > 0"
-                        :heading="t('container.tasks.done')"
-                        :count="completed.length"
+                        v-if="entries.length > 0"
+                        :heading="t(`todo.group.${group}`)"
+                        :count="entries.length"
+                        :tone="group === 'overdue' ? 'danger' : null"
                     >
                         <TodoRow
-                            v-for="entry in completed"
+                            v-for="entry in entries"
                             :key="entry.ulid"
                             :entry="entry"
                             :show-container="false"
                         />
                     </TaskGroup>
-                </div>
+                </template>
 
-                <nav v-if="previousUrl || nextUrl" class="mt-8 flex items-center gap-4">
-                    <Link
-                        v-if="previousUrl"
-                        :href="previousUrl"
-                        class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                    >
-                        {{ t('todo.pagination.previous') }}
-                    </Link>
-
-                    <Link
-                        v-if="nextUrl"
-                        :href="nextUrl"
-                        class="ml-auto inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                    >
-                        {{ t('todo.pagination.next') }}
-                    </Link>
-                </nav>
+                <!--
+                    *Done* (Beslut 3 och 4). Raden bär samma upplysningar
+                    som de öppna raderna — schemats titel, itemet, ett
+                    datum — men datumet är `completed_at`, och
+                    avbockningsknappen ritas inte: det finns ingenting kvar
+                    att bocka av, och rutten hade svarat att förekomsten
+                    inte är öppen. Rubriken är containerns fliks ord, och
+                    gruppen har ingen egen ton.
+                -->
+                <TaskGroup
+                    v-if="completed.length > 0"
+                    :heading="t('container.tasks.done')"
+                    :count="completed.length"
+                >
+                    <TodoRow
+                        v-for="entry in completed"
+                        :key="entry.ulid"
+                        :entry="entry"
+                        :show-container="false"
+                    />
+                </TaskGroup>
             </div>
 
-            <GtdListPanel class="lg:w-72" :counts="counts" :rows="panelRows" />
+            <nav v-if="previousUrl || nextUrl" class="mt-8 flex items-center gap-4">
+                <Link
+                    v-if="previousUrl"
+                    :href="previousUrl"
+                    class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                >
+                    {{ t('todo.pagination.previous') }}
+                </Link>
+
+                <Link
+                    v-if="nextUrl"
+                    :href="nextUrl"
+                    class="ml-auto inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                >
+                    {{ t('todo.pagination.next') }}
+                </Link>
+            </nav>
         </div>
 
-        <!--
-            Snabblänkarna (Beslut 5), ur `can` och aldrig ur en hårdkodad
-            sanning: flaggan är serverns svar på målrutternas egen grind, och
-            en genväg ingen får följa ritas inte alls.
-        -->
-        <section v-if="can && (can.calendar || can.export)" class="mt-8">
-            <h2 class="text-sm font-medium text-slate-700">{{ t('container.tasks.shortcuts') }}</h2>
+        <GtdListPanel class="lg:w-72" :counts="counts" :rows="panelRows" />
+    </div>
 
-            <ul class="mt-2 flex flex-col gap-2 md:flex-row md:gap-4">
-                <li v-if="can.calendar">
-                    <Link
-                        :href="calendarUrl()"
-                        class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                    >
-                        {{ t('container.nav.calendar') }}
-                    </Link>
-                </li>
+    <!--
+        Snabblänkarna (Beslut 5), ur `can` och aldrig ur en hårdkodad
+        sanning: flaggan är serverns svar på målrutternas egen grind, och
+        en genväg ingen får följa ritas inte alls.
+    -->
+    <section v-if="can && (can.calendar || can.export)" class="mt-8">
+        <h2 class="text-sm font-medium text-slate-700">{{ t('container.tasks.shortcuts') }}</h2>
 
-                <li v-if="can.export">
-                    <Link
-                        :href="exportUrl()"
-                        class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
-                    >
-                        {{ t('container.nav.export') }}
-                    </Link>
-                </li>
-            </ul>
-        </section>
-    </ContainerLayout>
+        <ul class="mt-2 flex flex-col gap-2 md:flex-row md:gap-4">
+            <li v-if="can.calendar">
+                <Link
+                    :href="calendarUrl()"
+                    class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                >
+                    {{ t('container.nav.calendar') }}
+                </Link>
+            </li>
+
+            <li v-if="can.export">
+                <Link
+                    :href="exportUrl()"
+                    class="inline-flex min-h-11 items-center text-blue-700 hover:underline"
+                >
+                    {{ t('container.nav.export') }}
+                </Link>
+            </li>
+        </ul>
+    </section>
 </template>

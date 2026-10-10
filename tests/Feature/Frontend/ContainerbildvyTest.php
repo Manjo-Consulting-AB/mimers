@@ -228,7 +228,7 @@ it('väljer den begärda varianten och annars originalet', function () {
  * Ett källkodsprov, för det som avgör är VILKEN variant anroparen ber om och
  * ingenting annat. Taggen skärs ut ur varje fil, så att nålen hör till just
  * `<ContainerCover>` och inte till en granne — `ContainerLayout.vue` bär också
- * `<ContainerCoverSheet`.
+ * `<ContainerCoverSheet` i toppraden.
  */
 it('ritar medium i hjälten och på korten men thumb i toppraden', function () {
     foreach ([
@@ -240,6 +240,8 @@ it('ritar medium i hjälten och på korten men thumb i toppraden', function () {
     }
 
     // De små fyrkanterna: förvalet `thumb`, alltså ingen propp alls.
+    // Toppradens fyrkant ritas av `ContainerLayout` och teleporteras in i
+    // skalet (issue 275 · [[ADR-0056 Flytande navigering]] § 1).
     foreach ([
         'js/layouts/ContainerLayout.vue',
         'js/pages/Containers/Edit.vue',
@@ -368,11 +370,11 @@ it('visar inte pennan för den som bara läser, och nekar skrivningen', function
  * glömma en rad på.
  */
 it('öppnar samma ark från pennan och från inställningarna', function () {
-    $skal = File::get(resource_path('js/layouts/ContainerLayout.vue'));
+    $topprad = File::get(resource_path('js/layouts/ContainerLayout.vue'));
     $inställningar = File::get(resource_path('js/pages/Containers/Edit.vue'));
     $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
 
-    expect($skal)->toContain('<ContainerCoverSheet')
+    expect($topprad)->toContain('<ContainerCoverSheet')
         ->and($inställningar)->toContain('<ContainerCoverSheet');
 
     // De tre valen, ur samma nycklar ([[ADR-0047 Containerns bild]] § Beslut).
@@ -404,7 +406,8 @@ it('öppnar samma ark från pennan och från inställningarna', function () {
  * anroparna fyller den.
  *
  * `ContainerCoverSheet.vue` ritar `<slot name="trigger" :open="show" />`, men
- * både pennan (ContainerLayout.vue) och inställningarna (Containers/Edit.vue)
+ * både pennan (`ContainerLayout.vue`, i toppraden) och inställningarna
+ * (Containers/Edit.vue)
  * fyller STANDARDSLOTTEN med `v-slot="{ open }"`. Vue ritar då ingenting: en
  * namngiven slot utan innehåll är tom, och knappen respektive pennan blev
  * aldrig ett element i DOM:en. Det befintliga provet ovan såg bara att
@@ -417,7 +420,7 @@ it('öppnar samma ark från pennan och från inställningarna', function () {
  * var de sitter, och ingenting annat.
  */
 it('ritar öppnaren i arkets standardslot som båda anroparna fyller', function () {
-    $skal = File::get(resource_path('js/layouts/ContainerLayout.vue'));
+    $topprad = File::get(resource_path('js/layouts/ContainerLayout.vue'));
     $inställningar = File::get(resource_path('js/pages/Containers/Edit.vue'));
     $ark = File::get(resource_path('js/components/ContainerCoverSheet.vue'));
 
@@ -430,7 +433,7 @@ it('ritar öppnaren i arkets standardslot som båda anroparna fyller', function 
     // Anroparna: båda fyller sheet-elementets slot med `v-slot="{ open }"` och
     // binder öppnaren till `@click="open"`. Blocket skärs ut så att nålarna
     // hör till just den komponenten och inte till en granne på samma sida.
-    foreach ([$skal, $inställningar] as $anropare) {
+    foreach ([$topprad, $inställningar] as $anropare) {
         $block = substr($anropare, (int) strpos($anropare, '<ContainerCoverSheet'));
         $block = substr($block, 0, (int) strpos($block, '</ContainerCoverSheet>'));
 
@@ -680,16 +683,19 @@ it('lämnar toppraden under md: oförändrad när hjälten ritas', function () {
     // över brytpunkten — samma `hidden ... md:block` som förut.
     expect($vy)->toContain('class="hidden md:block"');
 
-    // Toppraden: sloten, tillbakaknappen, bilden, namnet och pennan.
-    $topprad = substr($vy, (int) strpos($vy, '<template #topbar>'));
-    $topprad = substr($topprad, 0, (int) strpos($topprad, '</template>'));
+    // Toppraden: teleporten, tillbakaknappen, bilden, namnet och pennan.
+    // Sedan issue 275 ritas markupen av `ContainerLayout` och teleporteras in
+    // i skalets mål `#shell-topbar` — skalet ligger utanför containerns layout
+    // i kedjan, och en slot kan bara fyllas nedåt.
+    $topprad = substr($vy, (int) strpos($vy, '<Teleport defer to="#shell-topbar">'));
+    $topprad = substr($topprad, 0, (int) strpos($topprad, '</Teleport>'));
 
     expect($topprad)->toContain('href="/containers"')
         ->and($topprad)->toContain("t('nav.back')")
         ->and($topprad)->toContain('<ContainerCover :cover="container.cover" />')
-        ->and($topprad)->toContain('{{ heading }}')
+        ->and($topprad)->toContain('{{ container.name }}')
         ->and($topprad)->toContain('<ContainerCoverSheet')
-        ->and($topprad)->toContain('v-if="canUpdate"');
+        ->and($topprad)->toContain('v-if="canUpdateCover"');
 
     // Och hjälten ritas av en sida som ber om den, i toppradens ställe över
     // brytpunkten — aldrig i den.

@@ -717,6 +717,10 @@ it('nekar en itemåtkomst på write att redigera containern', function () {
 /*
  * Layouten är skalet fem issues fyller (Beslut 7), och redigeringssidan är
  * den första som bor i den. Sidpropen `container` är kontraktet.
+ *
+ * **Sidan deklarerar kedjan** (issue 275): mallen bär ingen layouttagg längre,
+ * och `can` — flaggan pennan ritades ur (issue 159) — står i
+ * `ContainerLayout`-ledet, dit den hörde hela tiden.
  */
 it('renderar redigeringssidan i ContainerSettingsLayout med containerns namn', function () {
     withoutVite();
@@ -736,10 +740,12 @@ it('renderar redigeringssidan i ContainerSettingsLayout med containerns namn', f
     $vy = File::get(resource_path('js/pages/Containers/Edit.vue'));
     $layout = File::get(resource_path('js/layouts/ContainerLayout.vue'));
 
-    // `:can` kom med issue 159: skalet ritar pennan på containerns bild ur
+    // `can` kom med issue 159: skalet ritar pennan på containerns bild ur
     // samma flagga som formuläret ritas ur ([[ADR-0047 Containerns bild]]
-    // § Beslut, "Vem som får göra vad").
-    expect($vy)->toContain('<ContainerSettingsLayout :container="container" :can="can">');
+    // § Beslut, "Vem som får göra vad"). Sedan issue 275 står den i
+    // `ContainerLayout`-ledet i sidans kedja, jämte hjältens form.
+    expect($vy)->toContain("[ContainerLayout, { hero: 'compact', container: props.container, can: props.can }]")
+        ->toContain('[ContainerSettingsLayout, { container: props.container }]');
     expect($layout)->toContain('container.name');
 });
 

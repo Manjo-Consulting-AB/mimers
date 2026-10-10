@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, provide, ref, watch } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import CreateButton from '../components/CreateButton.vue';
 import CreateMenu from '../components/CreateMenu.vue';
@@ -16,10 +16,10 @@ import { useTranslations } from '../composables/useTranslations.js';
 /*
  * Den enda layouten i M10.
  *
- * Varje sida under resources/js/pages/ wrappar sitt innehåll i den här
- * komponenten — <AppLayout> ... </AppLayout> — och lägger ingenting eget i
- * navigeringen. Femton issues renderar sina vyer här; uppfinner en av dem
- * en egen header har den byggt den sextonde.
+ * Varje sida under resources/js/pages/ deklarerar den här i sin layoutkedja
+ * (issue 273; kedjan för containerns sidor kom med issue 275) och lägger
+ * ingenting eget i navigeringen. Femton issues renderar sina vyer här;
+ * uppfinner en av dem en egen header har den byggt den sextonde.
  *
  * Layouten läser de delade propsen (auth och flash) och skickar ingenting
  * vidare nedåt — en sida som behöver användaren läser usePage().props själv.
@@ -78,10 +78,17 @@ import { useTranslations } from '../composables/useTranslations.js';
  * [[ADR-0048 Mobilen och plusknappen]] § 1. Under `md:` ritas i stället för
  * den hopfällda desktopraden (issue 68a § Beslut 2):
  *
- *   - **En mörk topprad** (`--color-shell`) med sidans titel. Sidor som vet
- *     vad de heter skickar in den i sloten `topbar` — ContainerLayout lägger
- *     containerns namn och en tillbakaknapp där. Utan slot ritas märket, som i
- *     bildens första skärm; ingen sida behöver göra något för att få en rad.
+ *   - **En mörk topprad** (`--color-shell`) med sidans titel. Ligger sidan i
+ *     en container bär raden containerns bild, namn och en tillbakaknapp
+ *     (issue 151); annars märket, som i bildens första skärm, och ingen sida
+ *     behöver göra något för att få en rad. **Containerns markup ritas av
+ *     `ContainerLayout` och teleporteras in hit** (issue 275 · [[ADR-0056
+ *     Flytande navigering]] § 1): skalet ligger utanför containerns layout i
+ *     kedjan, och en slot kan bara fyllas nedåt, så den inre layouten kan inte
+ *     skicka innehåll uppåt. Målet `#shell-topbar` står därför här, och
+ *     containern märker raden som tagen — märket viker då för hennes bild och
+ *     namn. Skalet självt läser varken `container` eller `can`: den som har
+ *     svaret ritar det.
  *   - **En flikrad i botten** (MobileTabBar) med *Översikt*, *Sök*,
  *     plusknappens plats, *Notiser* och *Meny*.
  *   - **En sidomeny bakom *Meny*** (MobileMenu), med skalets sektioner.
@@ -188,6 +195,19 @@ defineProps({
 const { t } = useTranslations();
 const page = usePage();
 const user = computed(() => page.props.auth.user);
+
+/*
+ * Toppraden på mobilen ägs av skalet men fylls av containern (issue 275 ·
+ * [[ADR-0056 Flytande navigering]] § 1). Skalet ritar målet `#shell-topbar`
+ * och ett märke; ligger sidan i en container teleporterar `ContainerLayout`
+ * in sin bild, sitt namn och sin tillbakaknapp i målet och sätter den här
+ * flaggan, så att märket viker. Flaggan är skalets tillstånd och går nedåt
+ * som en `provide`: den inre layouten kan inte skriva till en slot, men den
+ * kan märka raden som tagen.
+ */
+const topbarClaimed = ref(false);
+
+provide('shellTopbar', topbarClaimed);
 
 const menuOpen = ref(false);
 const menuTrigger = ref(null);
@@ -409,15 +429,29 @@ const initials = computed(() => {
             </header>
 
             <!--
-                Toppraden på mobilen. Titeln kommer ur sloten när sidan har en
-                egen — ContainerLayout lägger containerns namn och en
-                tillbakaknapp där — och är märket annars.
+                Toppraden på mobilen. Ligger sidan i en container bär den
+                containerns bild, namn och en tillbakaknapp (issue 151), och
+                märket annars.
+
+                **Innehållet kommer från `ContainerLayout`, teleporterat in i
+                `#shell-topbar`** (issue 275 · [[ADR-0056 Flytande navigering]]
+                § 1). Skalet ligger utanför containerns layout i kedjan, och en
+                slot fylls nedåt — så den inre layouten kan inte fylla en slot
+                här, men den kan teleportera sin markup in i målet och märka
+                raden som tagen. Skalet läser därför varken `container` eller
+                `can`; den som har svaret ritar det.
             -->
             <header class="bg-shell text-white md:hidden">
                 <div class="mx-auto flex w-full max-w-[96rem] items-center gap-2 px-4 py-2">
-                    <slot name="topbar">
-                        <p class="text-title font-semibold">{{ t('common.brand') }}</p>
-                    </slot>
+                    <!--
+                        Målet för containerns teleport. `contents` gör att
+                        omslaget inte deltar i flexraden: innehållet lägger sig
+                        där målet står, jämte märket.
+                    -->
+                    <div id="shell-topbar" class="contents"></div>
+
+                    <!-- Märket, så länge ingen container har tagit raden. -->
+                    <p v-if="!topbarClaimed" class="text-title font-semibold">{{ t('common.brand') }}</p>
 
                     <!-- Gästen har ingen flikrad (den är mål för en inloggad) och
                          behöver ändå en väg in. -->

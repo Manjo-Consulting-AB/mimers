@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import HistoryRow from '../../../components/HistoryRow.vue';
 import ItemActivityPanel from '../../../components/ItemActivityPanel.vue';
@@ -17,6 +18,13 @@ import ScheduleListSection from '../../../components/ScheduleListSection.vue';
 import UiTabs from '../../../components/UiTabs.vue';
 import { itemFields } from '../../../components/itemPresentation.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, { create: props.create }],
+        [ContainerLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Itemets detaljvy, se issue 57a § Beslut 4, 5, 6, 7 och 8, och issue 58.
@@ -658,485 +666,483 @@ function toggleFavorite() {
 </script>
 
 <template>
-    <ContainerLayout :container="container" :create="create">
-        <Head :title="item.name" />
+    <Head :title="item.name" />
 
-        <!--
-            Trepanelslayouten (issue 103, 181 · [[ADR-0042 Designsystemet]]
-            § Beslut och [[ADR-0041 Itemets vy]] § Beslut): strukturen till
-            vänster, itemet i mitten, kartan till höger — allt inuti containerns
-            ram, som i `docs/Design/struktur - item.jpeg`.
+    <!--
+        Trepanelslayouten (issue 103, 181 · [[ADR-0042 Designsystemet]]
+        § Beslut och [[ADR-0041 Itemets vy]] § Beslut): strukturen till
+        vänster, itemet i mitten, kartan till höger — allt inuti containerns
+        ram, som i `docs/Design/struktur - item.jpeg`.
 
-            Under `md:` staplas panelerna i dokumentordningen: strukturen
-            först, itemet sedan, kartan sist. Strukturen blir där en utfällbar
-            yta — se ItemStructurePanel.vue — och aldrig en egen sida: en andra
-            sida hade varit bildens globala navigering, som är avvisad två
-            gånger. Där är vyn oförändrad sedan issue 154.
+        Under `md:` staplas panelerna i dokumentordningen: strukturen
+        först, itemet sedan, kartan sist. Strukturen blir där en utfällbar
+        yta — se ItemStructurePanel.vue — och aldrig en egen sida: en andra
+        sida hade varit bildens globala navigering, som är avvisad två
+        gånger. Där är vyn oförändrad sedan issue 154.
 
-            Brytpunkterna är två: `md:` (issue 68a § Beslut 2) och `lg:`
-            (M24 · [[ADR-0050 Desktopdesignen]]).
+        Brytpunkterna är två: `md:` (issue 68a § Beslut 2) och `lg:`
+        (M24 · [[ADR-0050 Desktopdesignen]]).
 
-            **`md:` till `lg:` — fyra spår.** Strukturen ett, itemet tre,
-            kartan tre. Kartan börjar i mittkolumnens första spår och får
-            därför en EGEN rad under itemet i stället för en tredje kolumn:
-            1 + 3 fyller fyra spår, och kartan hamnar under itemet och inte
-            vid sidan om det.
+        **`md:` till `lg:` — fyra spår.** Strukturen ett, itemet tre,
+        kartan tre. Kartan börjar i mittkolumnens första spår och får
+        därför en EGEN rad under itemet i stället för en tredje kolumn:
+        1 + 3 fyller fyra spår, och kartan hamnar under itemet och inte
+        vid sidan om det.
 
-            **`lg:` och uppåt — tre spår:**
-            `minmax(16rem,20rem) minmax(0,1fr) minmax(18rem,24rem)`, alltså
-            struktur, item, karta. Sidopanelerna har ett golv och ett tak i
-            rem i stället för en andel: strukturträdets längsta rad bestämmer
-            golvet, kartans teckenförklaring taket, och itemet tar resten. En
-            andel hade krympt trädet under läsbarhet på en smalare skärm och
-            låtit itemet svälla på en bredare.
+        **`lg:` och uppåt — tre spår:**
+        `minmax(16rem,20rem) minmax(0,1fr) minmax(18rem,24rem)`, alltså
+        struktur, item, karta. Sidopanelerna har ett golv och ett tak i
+        rem i stället för en andel: strukturträdets längsta rad bestämmer
+        golvet, kartans teckenförklaring taket, och itemet tar resten. En
+        andel hade krympt trädet under läsbarhet på en smalare skärm och
+        låtit itemet svälla på en bredare.
 
-            `min-w-0` behövs för att en lång rad i itemet ska brytas i stället
-            för att tvinga ut kolumnen — samma skäl som ContainerLayouts egen
-            slot bär den.
-        -->
-        <div class="grid grid-cols-1 gap-6 md:grid-cols-4 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]">
-            <ItemStructurePanel
-                :nodes="structure"
-                :container-ulid="container.ulid"
-                :active-trail="activeTrail"
-            />
+        `min-w-0` behövs för att en lång rad i itemet ska brytas i stället
+        för att tvinga ut kolumnen — samma skäl som ContainerLayouts egen
+        slot bär den.
+    -->
+    <div class="grid grid-cols-1 gap-6 md:grid-cols-4 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)_minmax(18rem,24rem)]">
+        <ItemStructurePanel
+            :nodes="structure"
+            :container-ulid="container.ulid"
+            :active-trail="activeTrail"
+        />
 
-            <div class="min-w-0 md:col-span-3 lg:col-span-1">
-                <!--
-                    Brödsmulan (issue 95): vägen från roten ned till itemet, den
-                    aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
-                    länk — rubriken strax under säger samma namn. Sista ledet bär
-                    `aria-current="page"`, och <nav> bär sitt namn ur `lang/`:
-                    `breadcrumb` är ordet för ytan, inte för någon av förekomsterna.
-                -->
-                <nav
-                    v-if="currentPath"
-                    :aria-label="t('item.show.breadcrumb')"
-                    class="mb-2 text-sm text-ink-muted"
+        <div class="min-w-0 md:col-span-3 lg:col-span-1">
+            <!--
+                Brödsmulan (issue 95): vägen från roten ned till itemet, den
+                aktuella förekomsten. Sista ledet är itemet självt, alltså ingen
+                länk — rubriken strax under säger samma namn. Sista ledet bär
+                `aria-current="page"`, och <nav> bär sitt namn ur `lang/`:
+                `breadcrumb` är ordet för ytan, inte för någon av förekomsterna.
+            -->
+            <nav
+                v-if="currentPath"
+                :aria-label="t('item.show.breadcrumb')"
+                class="mb-2 text-sm text-ink-muted"
+            >
+                <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <li
+                        v-for="(node, index) in currentPath.nodes"
+                        :key="`${node.ulid}-${index}`"
+                        class="flex items-center gap-2"
+                    >
+                        <Link
+                            v-if="index < currentPath.nodes.length - 1"
+                            :href="pathHref(currentPath.nodes.slice(0, index + 1))"
+                            class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                        >
+                            {{ node.name }}
+                        </Link>
+                        <span v-else aria-current="page">{{ node.name }}</span>
+
+                        <span v-if="index < currentPath.nodes.length - 1" aria-hidden="true">›</span>
+                    </li>
+                </ol>
+            </nav>
+
+            <!--
+                Rubriken och stjärnan (issue 105) på samma rad: namnet är
+                vad läsaren söker, och markeringen hör till itemet och inte
+                till någon av handlingarna i raden under. `items-start` och
+                inte `items-center`, så att en rubrik som bryts över två
+                rader behåller stjärnan i höjd med den första.
+
+                Stjärnan är en VÄXLING och ingen länk: `aria-pressed` bär
+                tillståndet, och den tillgängliga namnens text säger vad
+                ett tryck GÖR — *Add to favourites* eller *Remove from
+                favourites* ur `lang/` — så den flippar med tillståndet.
+                Fyllningen är en form och inte bara en färg (fylld stjärna
+                mot kontur), så markeringen syns också utan färgseende.
+
+                Färgen kommer ur en ROLL och inte ur en färgkod
+                ([[ADR-0042 Designsystemet]] § Beslut): `text-accent` när
+                itemet är märkt, `text-ink-subtle` när det inte är det.
+                Vill designern ha en annan ton är det en rad i `app.css`,
+                inte ett svep genom komponenterna.
+
+                Fokusringen får aldrig tas bort — samma
+                `focus-visible:ring-focus` som UiButton bär, för fokuset
+                sätts av en tabb och inte av kod.
+            -->
+            <div class="flex items-start justify-between gap-4">
+                <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
+
+                <button
+                    type="button"
+                    :aria-pressed="isFavorite ? 'true' : 'false'"
+                    :aria-label="isFavorite ? t('item.show.favorite_remove') : t('item.show.favorite_add')"
+                    :disabled="favoritePending"
+                    class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                    :class="isFavorite ? 'text-accent' : 'text-ink-subtle'"
+                    @click="toggleFavorite"
                 >
-                    <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <li
-                            v-for="(node, index) in currentPath.nodes"
-                            :key="`${node.ulid}-${index}`"
-                            class="flex items-center gap-2"
-                        >
-                            <Link
-                                v-if="index < currentPath.nodes.length - 1"
-                                :href="pathHref(currentPath.nodes.slice(0, index + 1))"
-                                class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                            >
-                                {{ node.name }}
-                            </Link>
-                            <span v-else aria-current="page">{{ node.name }}</span>
-
-                            <span v-if="index < currentPath.nodes.length - 1" aria-hidden="true">›</span>
-                        </li>
-                    </ol>
-                </nav>
-
-                <!--
-                    Rubriken och stjärnan (issue 105) på samma rad: namnet är
-                    vad läsaren söker, och markeringen hör till itemet och inte
-                    till någon av handlingarna i raden under. `items-start` och
-                    inte `items-center`, så att en rubrik som bryts över två
-                    rader behåller stjärnan i höjd med den första.
-
-                    Stjärnan är en VÄXLING och ingen länk: `aria-pressed` bär
-                    tillståndet, och den tillgängliga namnens text säger vad
-                    ett tryck GÖR — *Add to favourites* eller *Remove from
-                    favourites* ur `lang/` — så den flippar med tillståndet.
-                    Fyllningen är en form och inte bara en färg (fylld stjärna
-                    mot kontur), så markeringen syns också utan färgseende.
-
-                    Färgen kommer ur en ROLL och inte ur en färgkod
-                    ([[ADR-0042 Designsystemet]] § Beslut): `text-accent` när
-                    itemet är märkt, `text-ink-subtle` när det inte är det.
-                    Vill designern ha en annan ton är det en rad i `app.css`,
-                    inte ett svep genom komponenterna.
-
-                    Fokusringen får aldrig tas bort — samma
-                    `focus-visible:ring-focus` som UiButton bär, för fokuset
-                    sätts av en tabb och inte av kod.
-                -->
-                <div class="flex items-start justify-between gap-4">
-                    <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
-
-                    <button
-                        type="button"
-                        :aria-pressed="isFavorite ? 'true' : 'false'"
-                        :aria-label="isFavorite ? t('item.show.favorite_remove') : t('item.show.favorite_add')"
-                        :disabled="favoritePending"
-                        class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
-                        :class="isFavorite ? 'text-accent' : 'text-ink-subtle'"
-                        @click="toggleFavorite"
+                    <svg
+                        viewBox="0 0 24 24"
+                        :fill="isFavorite ? 'currentColor' : 'none'"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="h-6 w-6"
+                        aria-hidden="true"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            :fill="isFavorite ? 'currentColor' : 'none'"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-6 w-6"
-                            aria-hidden="true"
-                        >
-                            <path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"></path>
-                        </svg>
-                    </button>
-                </div>
+                        <path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"></path>
+                    </svg>
+                </button>
+            </div>
 
-                <div class="mt-4 flex flex-wrap gap-4 text-sm">
-                    <Link
-                        v-if="can.update"
-                        :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
-                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.edit.action') }}
-                    </Link>
+            <div class="mt-4 flex flex-wrap gap-4 text-sm">
+                <Link
+                    v-if="can.update"
+                    :href="`/containers/${container.ulid}/items/${item.ulid}/edit`"
+                    class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                >
+                    {{ t('item.edit.action') }}
+                </Link>
 
-                    <button
-                        v-if="can.delete"
-                        type="button"
-                        :disabled="pending"
-                        class="inline-flex min-h-11 items-center font-medium text-danger hover:underline"
-                        @click="destroy"
-                    >
-                        {{ pending ? t('common.pending.default') : t('item.destroy.action') }}
-                    </button>
-
-                    <!--
-                        Barn-itemet (issue 58 § Beslut 7). Föräldern kommer ur länken
-                        och formuläret visar den som en rad text — den här vyn är
-                        detaljvyn för just det itemet, så frågan "under vad?" är redan
-                        besvarad och ställs inte igen.
-                    -->
-                    <Link
-                        v-if="can.create"
-                        :href="`/containers/${container.ulid}/items/create?parent=${item.ulid}`"
-                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.links.create_child.action') }}
-                    </Link>
-                </div>
+                <button
+                    v-if="can.delete"
+                    type="button"
+                    :disabled="pending"
+                    class="inline-flex min-h-11 items-center font-medium text-danger hover:underline"
+                    @click="destroy"
+                >
+                    {{ pending ? t('common.pending.default') : t('item.destroy.action') }}
+                </button>
 
                 <!--
-                    Förekomstpanelen under `md:` (issue 95 och 633 ·
-                    ItemPlacementsPanel.vue). Under brytpunkten är högerkolumnen
-                    dold, och panelen ritas därför en gång till här i
-                    mittenkolumnen — samma mönster och samma skäl som kartan,
-                    som står i högerpanelen över `md:` och i relationsfliken
-                    under (FokuskartaTest). Samma yta två gånger på samma skärm
-                    hade varit samma väg två gånger, och därför bär den här
-                    kopian `md:hidden`.
-
-                    Villkoret — itemet ska ha MER än en förekomst — bor i
-                    panelen och inte här: anroparen ritar den två gånger och
-                    ska inte behöva komma ihåg samma regel på två ställen.
+                    Barn-itemet (issue 58 § Beslut 7). Föräldern kommer ur länken
+                    och formuläret visar den som en rad text — den här vyn är
+                    detaljvyn för just det itemet, så frågan "under vad?" är redan
+                    besvarad och ställs inte igen.
                 -->
-                <ItemPlacementsPanel
-                    class="mt-6 md:hidden"
-                    :paths="paths"
-                    :path-href="pathHref"
-                />
-
-                <!--
-                    Flikraden (issue 102). `label` är tablistens tillgängliga namn och
-                    är itemets namn — samma namn rubriken ovanför bär, och det som
-                    säger vilket item raden hör till (issue 100, samma val som
-                    containerns layout gör).
-                -->
-                <UiTabs class="mt-8" :tabs="tabs" :label="item.name" />
-
-                <!--
-                    Översikten (issue 102 och 154 · [[ADR-0041 Itemets vy]]
-                    § Beslut): anteckningen och beskrivningen som vyns ledande
-                    stycken — de är två fält sedan issue 96, beskrivningen
-                    säger vad itemet ÄR och anteckningen vad användaren VET om
-                    det — och sedan *Snabbfakta*, som sammanfattar itemet.
-
-                    **Fältlistan flyttade till informationsfliken i issue
-                    154.** Översikten är den sammanfattning en läsare möter
-                    först: tillverkaren, modellen och serienumret ur
-                    `ItemQuickFacts`, och raden *Visa alla fält* som öppnar
-                    fliken där resten står. Formen är mobilmockupens — bild 4
-                    ritar omslaget, *Snabbfakta*, raden och uppgifterna — och
-                    fälten bor därmed på ETT ställe: en avskrift här hade varit
-                    samma uppgifter i två vyer som glider isär.
-
-                    Ett item utan både stycken och fält är oskrivet och inte
-                    trasigt, och raden i stället för innehållet säger vilket:
-                    fliken är den första en läsare möter, och en tom panel där
-                    hade sagt att sidan är sönder. Raden är kvar sedan issue 102
-                    och svarar på HELA itemet — inte på den här fliken — så ett
-                    item vars enda uppgift är inköpsdatum är fortfarande
-                    skrivet, även om ingenting av det står här.
-                -->
-                <section v-if="activeTab === 'overview'" class="mt-8 space-y-8">
-                    <dl v-if="item.description || item.notes" class="flex flex-col gap-6">
-                        <div v-if="item.description">
-                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.description') }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-ink">{{ item.description }}</dd>
-                        </div>
-
-                        <div v-if="item.notes">
-                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.notes') }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-ink">{{ item.notes }}</dd>
-                        </div>
-                    </dl>
-
-                    <!--
-                        Snabbfakta (issue 154). Komponenten ritar ingenting när
-                        ingen av de tre uppgifterna har ett värde — ingen
-                        rubrik över en tom lista — och urvalet bor i
-                        itemPresentation.js så att regeln går att pröva i node.
-                    -->
-                    <ItemQuickFacts :item="item" :locale="locale" />
-
-                    <!--
-                        Vägen till resten av fälten (issue 154). Adressen är
-                        informationsflikens egen, ur `tabs` ovan, så den bär
-                        den aktuella förekomsten precis som flikraden gör.
-                    -->
-                    <Link
-                        :href="informationHref"
-                        class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.show.all_fields') }}
-                    </Link>
-
-                    <p v-if="overviewEmpty" class="text-sm text-ink-muted">{{ t('item.show.overview_empty') }}</p>
-
-                    <!--
-                        Händelsepanelen (issue 213): itemets fem senaste
-                        händelser, sist i översiktspanelen. Mittkolumnen syns på
-                        alla bredder — högerkolumnen är `hidden md:block` och
-                        fick därför inte panelen. `docs/Design/struktur -
-                        item.jpeg` ritar ingen aktivitetspanel; panelen kom
-                        efter testarnas fynd 2026-10-03.
-
-                        Proppen finns bara på översikten (`events !== null`) —
-                        se ItemController::show() och `events`-proppen ovan.
-                    -->
-                    <ItemActivityPanel v-if="events !== null" :events="events" />
-                </section>
-
-                <!--
-                    Informationsfliken (issue 154 · [[M23 Mobilen och kartan]]
-                    § 154): itemets fältrader, kategorin inräknad — den är ett
-                    strukturerat fält och ingen tagg — och ingenting annat.
-                    Fälten kommer ur `fields` (itemPresentation.js), som
-                    utelämnar varje tomt fält i stället för att visa en tom
-                    etikett eller ett streck (issue 57a § Beslut 8).
-
-                    Fliken nås genom *Visa alla fält* på översikten, och en
-                    panel som vore tom hade mött en läsare som just tryckt på
-                    en rad — därför raden i stället, samma val som översikten
-                    gör (issue 102).
-                -->
-                <section v-if="activeTab === 'information'" class="mt-8">
-                    <dl
-                        v-if="fields.length > 0 || categoryName"
-                        class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2"
-                    >
-                        <div v-for="field in fields" :key="field.key">
-                            <dt class="text-sm font-medium text-ink-muted">{{ field.label }}</dt>
-                            <dd class="mt-1 whitespace-pre-line text-ink">{{ field.value }}</dd>
-                        </div>
-
-                        <div v-if="categoryName">
-                            <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.category') }}</dt>
-                            <dd class="mt-1 text-ink">{{ categoryName }}</dd>
-                        </div>
-                    </dl>
-
-                    <p v-else class="text-sm text-ink-muted">{{ t('item.show.information_empty') }}</p>
-                </section>
-
-                <!--
-                    Relationerna (issue 58 § Beslut 9), i sin egen flik. Sedan
-                    issue 155 ritar sektionen dem som en figur — föräldrarna,
-                    itemet självt, barnen och de relaterade — och får därför
-                    itemets namn till noden i mitten ([[M23 Mobilen och kartan]]
-                    § 155).
-                -->
-                <ItemLinkSection
-                    v-if="activeTab === 'relations'"
-                    :container-ulid="container.ulid"
-                    :item-ulid="item.ulid"
-                    :item-name="item.name"
-                    :links="links"
-                    :counterparts="counterparts"
-                    :can="can"
-                    :map="map"
-                    :overflow-href="relationsHref"
-                    :view="linkView"
-                    :views="linkViews"
-                />
-
-                <!-- Bilagorna (issue 60 § Beslut 1): itemets innehåll och inte en egen
-                     vy. `container.account` är containerns ägarkonto — sektionens
-                     förval när användaren är medlem i det. -->
-                <ItemAttachmentSection
-                    v-if="activeTab === 'attachments'"
-                    :container-ulid="container.ulid"
-                    :item-ulid="item.ulid"
-                    :attachments="attachments"
-                    :variants="variants"
-                    :inline-enabled="inlineEnabled"
-                    :max-upload-bytes="maxUploadBytes"
-                    :container-account="container.account"
-                    :container-is-inbox="containerIsInbox"
-                    :can="can"
-                />
-
-                <!--
-                    Uppgifterna (M24 · issue 227): förekomsterna på itemet och —
-                    med reglaget på — ättlingarna, i samma grupper och med samma
-                    rad som containerns flik (se ScheduleListSection.vue).
-                    Regellistan med pausa, redigera och radera bor på schemats
-                    egen sida sedan issue 226, dit radens titel länkar.
-                -->
-                <ScheduleListSection
-                    v-if="activeTab === 'schedules'"
-                    :container-ulid="container.ulid"
-                    :item-ulid="item.ulid"
-                    :groups="itemTasks.groups"
-                    :completed="itemTasks.completed"
-                    :include-children="includeChildren"
-                    :can="can"
-                />
-
-                <!--
-                    Utlåningen (issue 67a § Beslut 2): den öppna utlåningen överst,
-                    historiken under. Sektionen får `today` — serverns datum — och
-                    `openLoanOverdue` från detaljvyns props och jämför aldrig något
-                    datum själv; se ItemLoanSection.vue.
-
-                    Den har ingen flik i bilden (issue 102) och får en ändå: itemets
-                    enda status en annan medlem behöver se på en sekund får inte
-                    försvinna i en omfördelning, och en yta ingen hittar är samma sak
-                    som en yta som inte finns.
-                -->
-                <ItemLoanSection
-                    v-if="activeTab === 'loans'"
-                    :container-ulid="container.ulid"
-                    :item-ulid="item.ulid"
-                    :open-loan="openLoan"
-                    :open-loan-overdue="openLoanOverdue"
-                    :loan-history="loanHistory"
-                    :today="today"
-                    :can="can"
-                />
-
-                <!--
-                    Kostnaderna (issue 168 · [[ADR-0050 Desktopdesignen]] § 8):
-                    itemets rader, nyast först, och formuläret som lägger till,
-                    ändrar och tar bort dem. Sektionen får `costs`,
-                    `costDefaults` och `can` ur detaljvyns props — och hämtar
-                    leverantörslistan själv med en partiell omladdning när
-                    formuläret ritas, se ItemCostSection.vue.
-
-                    Serverns regler är API:ets, och skrivningarna går mot
-                    App\Http\Controllers\CostEntryController. Rubriken är samma
-                    ord som flikens etikett, så raden och ytan under den inte
-                    kan säga olika saker.
-                -->
-                <ItemCostSection
-                    v-if="activeTab === 'costs'"
-                    :container-ulid="container.ulid"
-                    :item-ulid="item.ulid"
-                    :costs="costs"
-                    :cost-defaults="costDefaults"
-                    :can="can"
-                />
-
-                <!-- Taggarna (issue 56a): itemets fria ord bredvid kategorin. Ett item
-                     utan taggar ritar ingenting här, och räknaren i fliken säger det. -->
-                <section v-if="activeTab === 'tags'" class="mt-8">
-                    <template v-if="item.tags.length > 0">
-                        <h2 class="text-sm font-medium text-ink-muted">{{ t('item.show.tags') }}</h2>
-
-                        <ItemTagList class="mt-2" :tags="item.tags" />
-                    </template>
-                </section>
-
-                <!--
-                    Historiken (issue 116 · [[ADR-0043 Tre loggar]]
-                    § Händelseloggen): itemets rader, nyast först, ur
-                    `history`-proppen — som servern BARA skickar när den här
-                    fliken är aktiv. Raderna är desamma som containerns
-                    historikflik visar för itemet, genom samma läsregel (issue
-                    108): en gäst ser sina egna rader här och ägaren allas.
-
-                    Raden formulerar sig själv i HistoryRow.vue — meningen, de
-                    två ersättarna och datumet ur `lang/` — och den här panelen
-                    ritar bara listan. Rubriken är samma ord som flikens
-                    etikett, så raden och ytan under den inte kan säga olika
-                    saker.
-
-                    Ett item utan rader är inte trasigt: `audit_log` börjar
-                    tomt och fylls av det som händer, och raden i stället för
-                    listan säger vilket — samma val som översiktsfliken gör.
-                -->
-                <section v-if="activeTab === 'history'" class="mt-8">
-                    <h2 class="text-sm font-medium text-ink-muted">{{ t('audit.history.heading') }}</h2>
-
-                    <p v-if="history.length === 0" class="mt-2 text-sm text-ink-muted">
-                        {{ t('audit.history.empty') }}
-                    </p>
-
-                    <ul v-else class="mt-2">
-                        <HistoryRow v-for="row in history" :key="row.ulid" :row="row" />
-                    </ul>
-                </section>
+                <Link
+                    v-if="can.create"
+                    :href="`/containers/${container.ulid}/items/create?parent=${item.ulid}`"
+                    class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                >
+                    {{ t('item.links.create_child.action') }}
+                </Link>
             </div>
 
             <!--
-                Kartans plats (issue 156, 181): fokuskartan i högerpanelen över
-                `md:`. Under brytpunkten är panelen dold med flit — där är
-                kartan ett LÄGE i itemets relationsflik i stället (se
-                ItemLinkSection.vue), och samma karta två gånger på samma
-                skärm hade varit samma nod två gånger.
+                Förekomstpanelen under `md:` (issue 95 och 633 ·
+                ItemPlacementsPanel.vue). Under brytpunkten är högerkolumnen
+                dold, och panelen ritas därför en gång till här i
+                mittenkolumnen — samma mönster och samma skäl som kartan,
+                som står i högerpanelen över `md:` och i relationsfliken
+                under (FokuskartaTest). Samma yta två gånger på samma skärm
+                hade varit samma väg två gånger, och därför bär den här
+                kopian `md:hidden`.
 
-                Placeringen sker med klasserna och inte genom att flytta
-                markupen: strukturen, itemet och kartan står i samma ordning i
-                källan på varje bredd ([[ADR-0041 Itemets vy]] § Beslut), och
-                tangentbordsordningen följer den. Över `lg:` tar kartan det
-                tredje spåret; mellan `md:` och `lg:` är rutnätet fyra spår och
-                kartan börjar i mittkolumnens första — samma tre spår som
-                itemet och alltså en egen rad under det. Kartan får ingen egen
-                höjdberäkning: FocusMap växer med sitt innehåll, och den
-                smalare kolumnen bryter rader i stället för att klippa.
-
-                Spåren sätts på det omslutande elementet och inte på panelen:
-                panelen bär kvar `hidden md:block` från issue 156, och dess
-                innehåll och proppar är orörda (Beslut 3). Omslaget bär samma
-                `hidden md:block`, så den dolda panelen inte lämnar en tom
-                rad med ett `gap-6` efter sig på en telefon.
+                Villkoret — itemet ska ha MER än en förekomst — bor i
+                panelen och inte här: anroparen ritar den två gånger och
+                ska inte behöva komma ihåg samma regel på två ställen.
             -->
-            <div class="hidden md:block md:col-start-2 md:col-span-3 lg:col-start-3 lg:col-span-1">
-                <ItemMapPanel
-                    class="hidden md:block"
-                    :map="map"
-                    :overflow-href="relationsHref"
-                />
+            <ItemPlacementsPanel
+                class="mt-6 md:hidden"
+                :paths="paths"
+                :path-href="pathHref"
+            />
+
+            <!--
+                Flikraden (issue 102). `label` är tablistens tillgängliga namn och
+                är itemets namn — samma namn rubriken ovanför bär, och det som
+                säger vilket item raden hör till (issue 100, samma val som
+                containerns layout gör).
+            -->
+            <UiTabs class="mt-8" :tabs="tabs" :label="item.name" />
+
+            <!--
+                Översikten (issue 102 och 154 · [[ADR-0041 Itemets vy]]
+                § Beslut): anteckningen och beskrivningen som vyns ledande
+                stycken — de är två fält sedan issue 96, beskrivningen
+                säger vad itemet ÄR och anteckningen vad användaren VET om
+                det — och sedan *Snabbfakta*, som sammanfattar itemet.
+
+                **Fältlistan flyttade till informationsfliken i issue
+                154.** Översikten är den sammanfattning en läsare möter
+                först: tillverkaren, modellen och serienumret ur
+                `ItemQuickFacts`, och raden *Visa alla fält* som öppnar
+                fliken där resten står. Formen är mobilmockupens — bild 4
+                ritar omslaget, *Snabbfakta*, raden och uppgifterna — och
+                fälten bor därmed på ETT ställe: en avskrift här hade varit
+                samma uppgifter i två vyer som glider isär.
+
+                Ett item utan både stycken och fält är oskrivet och inte
+                trasigt, och raden i stället för innehållet säger vilket:
+                fliken är den första en läsare möter, och en tom panel där
+                hade sagt att sidan är sönder. Raden är kvar sedan issue 102
+                och svarar på HELA itemet — inte på den här fliken — så ett
+                item vars enda uppgift är inköpsdatum är fortfarande
+                skrivet, även om ingenting av det står här.
+            -->
+            <section v-if="activeTab === 'overview'" class="mt-8 space-y-8">
+                <dl v-if="item.description || item.notes" class="flex flex-col gap-6">
+                    <div v-if="item.description">
+                        <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.description') }}</dt>
+                        <dd class="mt-1 whitespace-pre-line text-ink">{{ item.description }}</dd>
+                    </div>
+
+                    <div v-if="item.notes">
+                        <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.notes') }}</dt>
+                        <dd class="mt-1 whitespace-pre-line text-ink">{{ item.notes }}</dd>
+                    </div>
+                </dl>
 
                 <!--
-                    Förekomstpanelen över `md:` (issue 633 ·
-                    `docs/Design/struktur - item.jpeg`, panelen under kartan):
-                    samma vägar som brödsmulan visar en av, med den aktuella
-                    utmärkt. Raderna kommer i serverns ordning och sorteras
-                    aldrig här — för samma användare står brödsmulan och
-                    panelen därför alltid i samma ordning (issue 57a § Beslut 8).
-                    Omslaget ovanför bär redan `hidden md:block`, så panelen
-                    behöver ingen egen brytpunkt.
+                    Snabbfakta (issue 154). Komponenten ritar ingenting när
+                    ingen av de tre uppgifterna har ett värde — ingen
+                    rubrik över en tom lista — och urvalet bor i
+                    itemPresentation.js så att regeln går att pröva i node.
                 -->
-                <ItemPlacementsPanel
-                    class="mt-6"
-                    :paths="paths"
-                    :path-href="pathHref"
-                />
-            </div>
+                <ItemQuickFacts :item="item" :locale="locale" />
+
+                <!--
+                    Vägen till resten av fälten (issue 154). Adressen är
+                    informationsflikens egen, ur `tabs` ovan, så den bär
+                    den aktuella förekomsten precis som flikraden gör.
+                -->
+                <Link
+                    :href="informationHref"
+                    class="inline-flex min-h-11 items-center font-medium text-accent hover:underline"
+                >
+                    {{ t('item.show.all_fields') }}
+                </Link>
+
+                <p v-if="overviewEmpty" class="text-sm text-ink-muted">{{ t('item.show.overview_empty') }}</p>
+
+                <!--
+                    Händelsepanelen (issue 213): itemets fem senaste
+                    händelser, sist i översiktspanelen. Mittkolumnen syns på
+                    alla bredder — högerkolumnen är `hidden md:block` och
+                    fick därför inte panelen. `docs/Design/struktur -
+                    item.jpeg` ritar ingen aktivitetspanel; panelen kom
+                    efter testarnas fynd 2026-10-03.
+
+                    Proppen finns bara på översikten (`events !== null`) —
+                    se ItemController::show() och `events`-proppen ovan.
+                -->
+                <ItemActivityPanel v-if="events !== null" :events="events" />
+            </section>
+
+            <!--
+                Informationsfliken (issue 154 · [[M23 Mobilen och kartan]]
+                § 154): itemets fältrader, kategorin inräknad — den är ett
+                strukturerat fält och ingen tagg — och ingenting annat.
+                Fälten kommer ur `fields` (itemPresentation.js), som
+                utelämnar varje tomt fält i stället för att visa en tom
+                etikett eller ett streck (issue 57a § Beslut 8).
+
+                Fliken nås genom *Visa alla fält* på översikten, och en
+                panel som vore tom hade mött en läsare som just tryckt på
+                en rad — därför raden i stället, samma val som översikten
+                gör (issue 102).
+            -->
+            <section v-if="activeTab === 'information'" class="mt-8">
+                <dl
+                    v-if="fields.length > 0 || categoryName"
+                    class="grid grid-cols-1 gap-x-8 gap-y-4 md:grid-cols-2"
+                >
+                    <div v-for="field in fields" :key="field.key">
+                        <dt class="text-sm font-medium text-ink-muted">{{ field.label }}</dt>
+                        <dd class="mt-1 whitespace-pre-line text-ink">{{ field.value }}</dd>
+                    </div>
+
+                    <div v-if="categoryName">
+                        <dt class="text-sm font-medium text-ink-muted">{{ t('item.show.category') }}</dt>
+                        <dd class="mt-1 text-ink">{{ categoryName }}</dd>
+                    </div>
+                </dl>
+
+                <p v-else class="text-sm text-ink-muted">{{ t('item.show.information_empty') }}</p>
+            </section>
+
+            <!--
+                Relationerna (issue 58 § Beslut 9), i sin egen flik. Sedan
+                issue 155 ritar sektionen dem som en figur — föräldrarna,
+                itemet självt, barnen och de relaterade — och får därför
+                itemets namn till noden i mitten ([[M23 Mobilen och kartan]]
+                § 155).
+            -->
+            <ItemLinkSection
+                v-if="activeTab === 'relations'"
+                :container-ulid="container.ulid"
+                :item-ulid="item.ulid"
+                :item-name="item.name"
+                :links="links"
+                :counterparts="counterparts"
+                :can="can"
+                :map="map"
+                :overflow-href="relationsHref"
+                :view="linkView"
+                :views="linkViews"
+            />
+
+            <!-- Bilagorna (issue 60 § Beslut 1): itemets innehåll och inte en egen
+                 vy. `container.account` är containerns ägarkonto — sektionens
+                 förval när användaren är medlem i det. -->
+            <ItemAttachmentSection
+                v-if="activeTab === 'attachments'"
+                :container-ulid="container.ulid"
+                :item-ulid="item.ulid"
+                :attachments="attachments"
+                :variants="variants"
+                :inline-enabled="inlineEnabled"
+                :max-upload-bytes="maxUploadBytes"
+                :container-account="container.account"
+                :container-is-inbox="containerIsInbox"
+                :can="can"
+            />
+
+            <!--
+                Uppgifterna (M24 · issue 227): förekomsterna på itemet och —
+                med reglaget på — ättlingarna, i samma grupper och med samma
+                rad som containerns flik (se ScheduleListSection.vue).
+                Regellistan med pausa, redigera och radera bor på schemats
+                egen sida sedan issue 226, dit radens titel länkar.
+            -->
+            <ScheduleListSection
+                v-if="activeTab === 'schedules'"
+                :container-ulid="container.ulid"
+                :item-ulid="item.ulid"
+                :groups="itemTasks.groups"
+                :completed="itemTasks.completed"
+                :include-children="includeChildren"
+                :can="can"
+            />
+
+            <!--
+                Utlåningen (issue 67a § Beslut 2): den öppna utlåningen överst,
+                historiken under. Sektionen får `today` — serverns datum — och
+                `openLoanOverdue` från detaljvyns props och jämför aldrig något
+                datum själv; se ItemLoanSection.vue.
+
+                Den har ingen flik i bilden (issue 102) och får en ändå: itemets
+                enda status en annan medlem behöver se på en sekund får inte
+                försvinna i en omfördelning, och en yta ingen hittar är samma sak
+                som en yta som inte finns.
+            -->
+            <ItemLoanSection
+                v-if="activeTab === 'loans'"
+                :container-ulid="container.ulid"
+                :item-ulid="item.ulid"
+                :open-loan="openLoan"
+                :open-loan-overdue="openLoanOverdue"
+                :loan-history="loanHistory"
+                :today="today"
+                :can="can"
+            />
+
+            <!--
+                Kostnaderna (issue 168 · [[ADR-0050 Desktopdesignen]] § 8):
+                itemets rader, nyast först, och formuläret som lägger till,
+                ändrar och tar bort dem. Sektionen får `costs`,
+                `costDefaults` och `can` ur detaljvyns props — och hämtar
+                leverantörslistan själv med en partiell omladdning när
+                formuläret ritas, se ItemCostSection.vue.
+
+                Serverns regler är API:ets, och skrivningarna går mot
+                App\Http\Controllers\CostEntryController. Rubriken är samma
+                ord som flikens etikett, så raden och ytan under den inte
+                kan säga olika saker.
+            -->
+            <ItemCostSection
+                v-if="activeTab === 'costs'"
+                :container-ulid="container.ulid"
+                :item-ulid="item.ulid"
+                :costs="costs"
+                :cost-defaults="costDefaults"
+                :can="can"
+            />
+
+            <!-- Taggarna (issue 56a): itemets fria ord bredvid kategorin. Ett item
+                 utan taggar ritar ingenting här, och räknaren i fliken säger det. -->
+            <section v-if="activeTab === 'tags'" class="mt-8">
+                <template v-if="item.tags.length > 0">
+                    <h2 class="text-sm font-medium text-ink-muted">{{ t('item.show.tags') }}</h2>
+
+                    <ItemTagList class="mt-2" :tags="item.tags" />
+                </template>
+            </section>
+
+            <!--
+                Historiken (issue 116 · [[ADR-0043 Tre loggar]]
+                § Händelseloggen): itemets rader, nyast först, ur
+                `history`-proppen — som servern BARA skickar när den här
+                fliken är aktiv. Raderna är desamma som containerns
+                historikflik visar för itemet, genom samma läsregel (issue
+                108): en gäst ser sina egna rader här och ägaren allas.
+
+                Raden formulerar sig själv i HistoryRow.vue — meningen, de
+                två ersättarna och datumet ur `lang/` — och den här panelen
+                ritar bara listan. Rubriken är samma ord som flikens
+                etikett, så raden och ytan under den inte kan säga olika
+                saker.
+
+                Ett item utan rader är inte trasigt: `audit_log` börjar
+                tomt och fylls av det som händer, och raden i stället för
+                listan säger vilket — samma val som översiktsfliken gör.
+            -->
+            <section v-if="activeTab === 'history'" class="mt-8">
+                <h2 class="text-sm font-medium text-ink-muted">{{ t('audit.history.heading') }}</h2>
+
+                <p v-if="history.length === 0" class="mt-2 text-sm text-ink-muted">
+                    {{ t('audit.history.empty') }}
+                </p>
+
+                <ul v-else class="mt-2">
+                    <HistoryRow v-for="row in history" :key="row.ulid" :row="row" />
+                </ul>
+            </section>
         </div>
-    </ContainerLayout>
+
+        <!--
+            Kartans plats (issue 156, 181): fokuskartan i högerpanelen över
+            `md:`. Under brytpunkten är panelen dold med flit — där är
+            kartan ett LÄGE i itemets relationsflik i stället (se
+            ItemLinkSection.vue), och samma karta två gånger på samma
+            skärm hade varit samma nod två gånger.
+
+            Placeringen sker med klasserna och inte genom att flytta
+            markupen: strukturen, itemet och kartan står i samma ordning i
+            källan på varje bredd ([[ADR-0041 Itemets vy]] § Beslut), och
+            tangentbordsordningen följer den. Över `lg:` tar kartan det
+            tredje spåret; mellan `md:` och `lg:` är rutnätet fyra spår och
+            kartan börjar i mittkolumnens första — samma tre spår som
+            itemet och alltså en egen rad under det. Kartan får ingen egen
+            höjdberäkning: FocusMap växer med sitt innehåll, och den
+            smalare kolumnen bryter rader i stället för att klippa.
+
+            Spåren sätts på det omslutande elementet och inte på panelen:
+            panelen bär kvar `hidden md:block` från issue 156, och dess
+            innehåll och proppar är orörda (Beslut 3). Omslaget bär samma
+            `hidden md:block`, så den dolda panelen inte lämnar en tom
+            rad med ett `gap-6` efter sig på en telefon.
+        -->
+        <div class="hidden md:block md:col-start-2 md:col-span-3 lg:col-start-3 lg:col-span-1">
+            <ItemMapPanel
+                class="hidden md:block"
+                :map="map"
+                :overflow-href="relationsHref"
+            />
+
+            <!--
+                Förekomstpanelen över `md:` (issue 633 ·
+                `docs/Design/struktur - item.jpeg`, panelen under kartan):
+                samma vägar som brödsmulan visar en av, med den aktuella
+                utmärkt. Raderna kommer i serverns ordning och sorteras
+                aldrig här — för samma användare står brödsmulan och
+                panelen därför alltid i samma ordning (issue 57a § Beslut 8).
+                Omslaget ovanför bär redan `hidden md:block`, så panelen
+                behöver ingen egen brytpunkt.
+            -->
+            <ItemPlacementsPanel
+                class="mt-6"
+                :paths="paths"
+                :path-href="pathHref"
+            />
+        </div>
+    </div>
 </template>

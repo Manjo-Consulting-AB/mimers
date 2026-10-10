@@ -333,20 +333,28 @@ it('ritar knappen i skalet och i flikraden ur sidans mål', function () {
         ->toContain('<button')
         ->toContain("t('create.label')");
 
-    // Containerns skal förmedlar målet och bygger det inte själv.
-    expect(plusknappKod('layouts/ContainerLayout.vue'))->toContain('<AppLayout :create="create">');
+    // Containerns skal förmedlar inte målet längre (issue 275): sidan skickar
+    // det direkt till `AppLayout`, som ligger först i kedjan, och
+    // `ContainerLayout` ligger innanför och rör det inte. Fram till issue 275
+    // tog den emot `create` och skickade den vidare; nu går målet förbi den.
+    expect(plusknappKod('layouts/ContainerLayout.vue'))
+        ->not->toContain('create: { type: Object, default: null }');
 
     // Och de fem sidorna skickar sitt mål vidare till sitt skal. Sedan issue
     // 273 deklarerar de två toppnivåsidorna sin layout med `defineOptions` och
-    // bär målet som en layoutprop; containerns sidor wrappar fortfarande
-    // `ContainerLayout` i mallen. En sida som glömmer raden får ingen knapp,
-    // och det är tyst — därför räknas de upp.
+    // bär målet som en layoutprop; sedan issue 275 deklarerar containerns sidor
+    // sin kedja, och målet står i `AppLayout`-ledet i var och en. En sida som
+    // glömmer raden får ingen knapp, och det är tyst — därför räknas de upp.
+    //
+    // `can` står inte här: containerns behörighetsflagga hör till
+    // `ContainerLayout`-ledet, och pennan ritas av `ContainerLayout` i
+    // toppraden och teleporteras in i skalet (issue 275).
     foreach ([
         'pages/Dashboard.vue' => 'defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });',
         'pages/Containers/Index.vue' => 'defineOptions({ layout: (props) => [AppLayout, { create: props.create }] });',
-        'pages/Containers/Overview.vue' => '<ContainerLayout hero="large" :container="container" :create="create" :can="can">',
-        'pages/Containers/Items/Index.vue' => '<ContainerLayout hero="compact" :container="container" :can="can" :create="create">',
-        'pages/Containers/Items/Show.vue' => '<ContainerLayout :container="container" :create="create">',
+        'pages/Containers/Overview.vue' => '[AppLayout, { create: props.create }]',
+        'pages/Containers/Items/Index.vue' => '[AppLayout, { create: props.create }]',
+        'pages/Containers/Items/Show.vue' => '[AppLayout, { create: props.create }]',
     ] as $sokvag => $rad) {
         expect(plusknappKod($sokvag))->toContain($rad);
     }

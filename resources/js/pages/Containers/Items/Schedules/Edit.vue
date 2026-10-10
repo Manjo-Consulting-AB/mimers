@@ -1,8 +1,16 @@
 <script setup>
 import { Head, Link } from '@inertiajs/vue3';
+import AppLayout from '../../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../../layouts/ContainerLayout.vue';
 import ScheduleForm from '../../../../components/ScheduleForm.vue';
 import { useTranslations } from '../../../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Redigera ett schema, se issue 63a § Beslut 1, 3, 4 och 5.
@@ -35,26 +43,24 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerLayout :container="container">
-        <Head :title="t('item.schedule.update.title')" />
+    <Head :title="t('item.schedule.update.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('item.schedule.update.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('item.schedule.update.heading') }}</h1>
 
-        <p class="mt-1 text-sm text-slate-600">{{ item.name }}</p>
+    <p class="mt-1 text-sm text-slate-600">{{ item.name }}</p>
 
-        <Link
-            :href="`/containers/${container.ulid}/items/${item.ulid}`"
-            class="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
-        >
-            {{ t('item.schedule.back') }}
-        </Link>
+    <Link
+        :href="`/containers/${container.ulid}/items/${item.ulid}`"
+        class="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-blue-700 hover:underline"
+    >
+        {{ t('item.schedule.back') }}
+    </Link>
 
-        <ScheduleForm
-            class="mt-8"
-            :container-ulid="container.ulid"
-            :item-ulid="item.ulid"
-            :schedule="schedule"
-            :open-due-at="openDueAt"
-        />
-    </ContainerLayout>
+    <ScheduleForm
+        class="mt-8"
+        :container-ulid="container.ulid"
+        :item-ulid="item.ulid"
+        :schedule="schedule"
+        :open-due-at="openDueAt"
+    />
 </template>

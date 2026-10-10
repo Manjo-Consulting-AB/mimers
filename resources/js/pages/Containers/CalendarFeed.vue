@@ -1,10 +1,20 @@
 <script setup>
 import { Head, useForm } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import CalendarFeedRow from '../../components/CalendarFeedRow.vue';
 import SecretOnce from '../../components/SecretOnce.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { hero: 'compact', container: props.container }],
+        [ContainerSettingsLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Containerns kalenderlänk, se issue 65b § Beslut 1, 2 och 4.
@@ -58,47 +68,45 @@ function create() {
 </script>
 
 <template>
-    <ContainerSettingsLayout :container="props.container">
-        <Head :title="t('calendar.title')" />
+    <Head :title="t('calendar.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('calendar.heading') }}</h1>
-        <p class="mt-2 text-sm text-slate-700">{{ t('calendar.intro') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('calendar.heading') }}</h1>
+    <p class="mt-2 text-sm text-slate-700">{{ t('calendar.intro') }}</p>
 
-        <SecretOnce
-            v-if="props.url"
-            :label="t('calendar.url_label')"
-            :value="props.url"
-            :description="t('calendar.url_description')"
-            :once="t('calendar.url_once')"
-            :copy-label="t('calendar.copy')"
-            :copied-label="t('calendar.copied')"
-        />
+    <SecretOnce
+        v-if="props.url"
+        :label="t('calendar.url_label')"
+        :value="props.url"
+        :description="t('calendar.url_description')"
+        :once="t('calendar.url_once')"
+        :copy-label="t('calendar.copy')"
+        :copied-label="t('calendar.copied')"
+    />
 
-        <form class="mt-8" @submit.prevent="create">
-            <button
-                type="submit"
-                :disabled="form.processing"
-                class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
-            >
-                {{ form.processing ? t('common.pending.default') : t('calendar.create') }}
-            </button>
-        </form>
+    <form class="mt-8" @submit.prevent="create">
+        <button
+            type="submit"
+            :disabled="form.processing"
+            class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white disabled:opacity-50"
+        >
+            {{ form.processing ? t('common.pending.default') : t('calendar.create') }}
+        </button>
+    </form>
 
-        <section class="mt-8">
-            <h2 class="text-lg font-semibold">{{ t('calendar.list_heading') }}</h2>
+    <section class="mt-8">
+        <h2 class="text-lg font-semibold">{{ t('calendar.list_heading') }}</h2>
 
-            <p v-if="props.feeds.length === 0" class="mt-2 text-sm text-slate-700">
-                {{ t('calendar.empty') }}
-            </p>
+        <p v-if="props.feeds.length === 0" class="mt-2 text-sm text-slate-700">
+            {{ t('calendar.empty') }}
+        </p>
 
-            <ul v-else class="mt-2 flex flex-col gap-2">
-                <CalendarFeedRow
-                    v-for="feed in props.feeds"
-                    :key="feed.ulid"
-                    :container-ulid="props.container.ulid"
-                    :feed="feed"
-                />
-            </ul>
-        </section>
-    </ContainerSettingsLayout>
+        <ul v-else class="mt-2 flex flex-col gap-2">
+            <CalendarFeedRow
+                v-for="feed in props.feeds"
+                :key="feed.ulid"
+                :container-ulid="props.container.ulid"
+                :feed="feed"
+            />
+        </ul>
+    </section>
 </template>

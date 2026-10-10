@@ -1,8 +1,16 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
+import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ItemForm from '../../../components/ItemForm.vue';
 import { useTranslations } from '../../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Redigera ett item, se issue 57b § Beslut 1, 5 och 6.
@@ -43,19 +51,17 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerLayout :container="container">
-        <Head :title="t('item.edit.title')" />
+    <Head :title="t('item.edit.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('item.edit.heading') }}</h1>
+    <h1 class="text-2xl font-semibold">{{ t('item.edit.heading') }}</h1>
 
-        <ItemForm
-            class="mt-8"
-            :container-ulid="container.ulid"
-            :categories="categories"
-            :tags="tags"
-            :item="item"
-            :images="images"
-            :cover="cover"
-        />
-    </ContainerLayout>
+    <ItemForm
+        class="mt-8"
+        :container-ulid="container.ulid"
+        :categories="categories"
+        :tags="tags"
+        :item="item"
+        :images="images"
+        :cover="cover"
+    />
 </template>

@@ -167,9 +167,10 @@ it('ritar brickorna i hjälten ur den delade proppen', function () {
             ->and($kod)->not->toContain('name="stats"');
     }
 
-    // Och sidan ber fortfarande om den höga formen.
-    expect(hjalteTagg(hjalteKod('pages/Containers/Overview.vue'), 'ContainerLayout'))
-        ->toContain('hero="large"');
+    // Och sidan ber fortfarande om den höga formen — sedan issue 275 i sin
+    // layoutkedja i stället för i mallen.
+    expect(hjalteKod('pages/Containers/Overview.vue'))
+        ->toContain("[ContainerLayout, { hero: 'large', container: props.container, can: props.can }]");
 });
 
 /*
@@ -199,7 +200,7 @@ it('ritar brickorna i den låga hjälten på flikarna', function () {
 
         $vy = hjalteKod($sokvag);
 
-        expect(hjalteTagg($vy, 'ContainerLayout'))->toContain('hero="compact"');
+        expect($vy)->toContain("[ContainerLayout, { hero: 'compact'");
     }
 });
 
@@ -262,19 +263,20 @@ it('ritar den låga hjälten på alla inställningssidor', function () {
 
     [, $ägare, $container] = hjalteKontext();
 
-    // Skalets svar och inte sidornas: attributet står i
-    // `ContainerSettingsLayout` och saknas på var och en av de åtta sidorna.
-    expect(hjalteTagg(hjalteKod('layouts/ContainerSettingsLayout.vue'), 'ContainerLayout'))
-        ->toContain('hero="compact"');
+    // Sedan issue 275 är attributet sidans: det står i `ContainerLayout`-ledet
+    // i var och en av de åttas kedja, och `ContainerSettingsLayout`-ledet bär
+    // det inte. Fram till issue 275 satte inställningslayouten `hero` när den
+    // ritade `ContainerLayout`; nu ligger den innanför och rör ingen hjälte.
+    expect(hjalteKod('layouts/ContainerSettingsLayout.vue'))->not->toContain('hero');
 
     foreach ([
         'Edit', 'Categories', 'Tags', 'Sharing',
         'CalendarFeed', 'Export', 'Trash', 'Transfers',
     ] as $sida) {
-        $tagg = hjalteTagg(hjalteKod("pages/Containers/{$sida}.vue"), 'ContainerSettingsLayout');
+        $vy = hjalteKod("pages/Containers/{$sida}.vue");
 
-        expect($tagg)->not->toBe('', "{$sida}.vue ritar ingen ContainerSettingsLayout");
-        expect($tagg)->not->toContain('hero');
+        expect($vy)->toContain("[ContainerLayout, { hero: 'compact'");
+        expect($vy)->toContain('[ContainerSettingsLayout, { container: props.container }]');
     }
 
     // Och ägaren når två av dem hela vägen genom servern.
@@ -294,8 +296,8 @@ it('ritar den låga hjälten på alla inställningssidor', function () {
 it('ritar ingen hjälte i itemvyn', function () {
     $vy = hjalteKod('pages/Containers/Items/Show.vue');
 
-    expect(hjalteTagg($vy, 'ContainerLayout'))->not->toBe('', 'itemvyn ritar ingen ContainerLayout');
-    expect(hjalteTagg($vy, 'ContainerLayout'))->not->toContain('hero');
+    // Kedjan står i vyn, och `ContainerLayout`-ledet bär ingen hjälteform.
+    expect($vy)->toContain('[ContainerLayout, { container: props.container }]');
 
     $skal = hjalteKod('layouts/ContainerLayout.vue');
 

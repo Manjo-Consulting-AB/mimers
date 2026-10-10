@@ -239,6 +239,11 @@ it('ritar radens namn när den har ett', function () {
 /*
  * Och de tre flikarna skickar sitt mål vidare till sitt skal. En sida som
  * glömmer raden får ingen knapp, och det är tyst — därför räknas de upp.
+ *
+ * Sedan issue 275 står målet i `AppLayout`-ledet i sidans kedja: skalet ligger
+ * först, och `ContainerLayout` — som förmedlade det förut — rör det inte.
+ * Containerns `can` står i `ContainerLayout`-ledet, inte här: pennan ritas av
+ * `ContainerLayout` i toppraden och teleporteras in i skalet.
  */
 it('skickar flikens mål vidare till containerns skal', function () {
     foreach ([
@@ -246,7 +251,7 @@ it('skickar flikens mål vidare till containerns skal', function () {
         'pages/Containers/Tasks.vue',
         'pages/Containers/Costs.vue',
     ] as $sokvag) {
-        expect(flikknappKod($sokvag))->toContain(':create="create"');
+        expect(flikknappKod($sokvag))->toContain('[AppLayout, { create: props.create }]');
     }
 });
 

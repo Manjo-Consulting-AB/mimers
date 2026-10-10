@@ -1,9 +1,19 @@
 <script setup>
 import { Head } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import TagCreateForm from '../../components/TagCreateForm.vue';
 import TagRow from '../../components/TagRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({
+    layout: (props) => [
+        [AppLayout, {}],
+        [ContainerLayout, { hero: 'compact', container: props.container }],
+        [ContainerSettingsLayout, { container: props.container }],
+    ],
+});
 
 /*
  * Tagglistan, se issue 56a § Beslut 1, 6 och 8.
@@ -38,28 +48,26 @@ const { t } = useTranslations();
 </script>
 
 <template>
-    <ContainerSettingsLayout :container="container">
-        <Head :title="t('container.tags.title')" />
+    <Head :title="t('container.tags.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('container.tags.heading') }}</h1>
-        <p class="mt-1 text-sm text-slate-600">{{ t('container.tags.description') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('container.tags.heading') }}</h1>
+    <p class="mt-1 text-sm text-slate-600">{{ t('container.tags.description') }}</p>
 
-        <ul v-if="tags.length > 0" class="mt-6 flex flex-col gap-3">
-            <TagRow
-                v-for="tag in tags"
-                :key="tag.ulid"
-                :container-ulid="container.ulid"
-                :tag="tag"
-                :count="counts[tag.ulid]"
-            />
-        </ul>
+    <ul v-if="tags.length > 0" class="mt-6 flex flex-col gap-3">
+        <TagRow
+            v-for="tag in tags"
+            :key="tag.ulid"
+            :container-ulid="container.ulid"
+            :tag="tag"
+            :count="counts[tag.ulid]"
+        />
+    </ul>
 
-        <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.tags.empty') }}</p>
+    <p v-else class="mt-6 text-sm text-slate-600">{{ t('container.tags.empty') }}</p>
 
-        <section v-if="can.manage" class="mt-10">
-            <h2 class="text-lg font-semibold">{{ t('container.tags.create_heading') }}</h2>
+    <section v-if="can.manage" class="mt-10">
+        <h2 class="text-lg font-semibold">{{ t('container.tags.create_heading') }}</h2>
 
-            <TagCreateForm class="mt-4" :container-ulid="container.ulid" />
-        </section>
-    </ContainerSettingsLayout>
+        <TagCreateForm class="mt-4" :container-ulid="container.ulid" />
+    </section>
 </template>

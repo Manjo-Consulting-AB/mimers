@@ -81,7 +81,7 @@ it('ritar toppraden och flikraden under md: och har kvar desktopraden över', fu
     // Toppraden är mörk — rollen ur ADR-0042, ingen palettfärg — och bär
     // sidans titel, som en sida med ett eget namn fyller i.
     expect($layout)->toContain('bg-shell text-white md:hidden')
-        ->toContain('<slot name="topbar">');
+        ->toContain('id="shell-topbar"');
 
     // Och desktopraden står kvar, dold under brytpunkten i stället för
     // hopfälld: över `md:` möter användaren exakt den navigering hon mötte
@@ -89,10 +89,13 @@ it('ritar toppraden och flikraden under md: och har kvar desktopraden över', fu
     expect($layout)->toContain('hidden border-b border-slate-200 bg-white md:block')
         ->toContain('id="huvudmenyn"');
 
-    // Den gamla menyknappen finns inte: ingen `<button>` alls i layouten, och
-    // inget tillstånd som fäller upp en lista. Skalets menyknapp är flikradens
-    // *Meny* (MobileTabBar), och den öppnar en dialog.
-    expect($layout)->not->toContain('<button');
+    // Den gamla menyknappen finns inte: inget tillstånd som fäller upp en
+    // lista, och ingen knapp som pekar på `huvudmenyn`. Skalets menyknapp är
+    // flikradens *Meny* (MobileTabBar), och den öppnar en dialog.
+    //
+    // Layouten bär ingen rå `<button>` sedan issue 275: pennan på containerns
+    // bild, som flyttade hit med toppraden, flyttade tillbaka till
+    // `ContainerLayout` och ritas in i målet `#shell-topbar`.
     expect($layout)->not->toContain('menuOpen = !menuOpen');
     expect($layout)->not->toContain('aria-controls="huvudmenyn"');
 });
@@ -288,10 +291,18 @@ it('ger varje mål i flikraden en träffyta på minst 44 px och en plats i tabor
 });
 
 it('visar containerns namn och en tillbakaknapp i toppraden', function () {
-    $layout = mobilskalKod('layouts/ContainerLayout.vue');
+    // Markupen ritas av `ContainerLayout` och teleporteras in i skalet (issue
+    // 275 · [[ADR-0056 Flytande navigering]] § 1): skalet ligger utanför
+    // containerns layout i kedjan, och en slot kan bara fyllas nedåt. Skalet
+    // ritar därför målet `#shell-topbar` och ett märke, och containern
+    // teleporterar in sin bild, sitt namn och sin tillbakaknapp och märker
+    // raden som tagen.
+    expect(mobilskalKod('layouts/AppLayout.vue'))->toContain('id="shell-topbar"');
 
-    expect($layout)->toContain('<template #topbar>')
-        ->toContain('{{ heading }}')
+    $container = mobilskalKod('layouts/ContainerLayout.vue');
+
+    expect($container)->toContain('<Teleport defer to="#shell-topbar">')
+        ->toContain('{{ container.name }}')
         ->toContain('href="/containers"')
         ->toContain("t('nav.back')");
 });
