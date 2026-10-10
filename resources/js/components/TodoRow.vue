@@ -214,7 +214,26 @@ const scheduleHref = computed(
 
 const form = useForm({ account: props.entry.account });
 
+/*
+ * Bocken syns i samma ögonblick som knappen trycks (M31 · issue 278, Beslut 1).
+ * Ett LOKALT tillstånd och inte Inertias `optimistic`: `TodoRow` används på sex
+ * ytor med olika propformer, och `optimistic` skriver om sidans props och hade
+ * krävt en funktion per form. `completing` rör bara den här radens knapp.
+ *
+ * Flaggan byter inte grenen `isDone` (Beslut 2): knappen — och
+ * tangentbordsfokuset — står kvar medan svaret är på väg, och cirkeln inuti
+ * ritas som den fyllda bocken. När svaret kommer ritar servern om listan som i
+ * dag, och raden försvinner ur *Active* eller visas som klar; då behövs flaggan
+ * inte längre.
+ *
+ * Går förfrågan fel — eller avbryts den av en nyare — tas bocken bort igen, och
+ * felet ritas i radens felruta precis som förut.
+ */
+const completing = ref(false);
+
 function complete() {
+    completing.value = true;
+
     form.post(
         occurrenceActionUrl(
             props.entry.container.ulid,
@@ -223,7 +242,11 @@ function complete() {
             props.entry.ulid,
             'complete',
         ),
-        { preserveScroll: true },
+        {
+            preserveScroll: true,
+            onError: () => { completing.value = false; },
+            onCancel: () => { completing.value = false; },
+        },
     );
 }
 
@@ -399,15 +422,35 @@ function toggleProgress() {
         <template v-else>
             <!-- Den runda bocken (Beslut 1): 44 px träffyta med en ritad
                  cirkel på 20 px. `:disabled` medan svaret är på väg, och
-                 `:aria-label` bär både handlingen och tillståndet. -->
+                 `:aria-label` bär både handlingen och tillståndet.
+                 Medan svaret är på väg ritas i stället den fyllda bocken
+                 (M31 · issue 278, Beslut 2), så att avbockningen syns direkt;
+                 knappen står kvar och bär kvar fokuset. `disabled:opacity-100`
+                 hindrar den dämpade tonen från att göra bocken grå (Beslut 3). -->
             <form v-if="entry.can.update" @submit.prevent="complete">
                 <button
                     type="submit"
                     :disabled="form.processing"
                     :aria-label="form.processing ? t('common.pending.complete') : completeLabel"
                     class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 disabled:opacity-50"
+                    :class="{ 'disabled:opacity-100': completing }"
                 >
-                    <span aria-hidden="true" class="h-5 w-5 rounded-full border-2" :class="circleClass" />
+                    <span v-if="! completing" aria-hidden="true" class="h-5 w-5 rounded-full border-2" :class="circleClass" />
+
+                    <!-- Samma fyllda gröna bock som grenen `isDone` ritar. -->
+                    <span v-else class="flex h-5 w-5 items-center justify-center rounded-full bg-success">
+                        <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="h-3 w-3 text-ink-on-accent"
+                        >
+                            <path d="m5 13 4 4L19 7" />
+                        </svg>
+                    </span>
                 </button>
             </form>
 
