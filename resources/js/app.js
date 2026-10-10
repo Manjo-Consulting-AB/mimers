@@ -56,6 +56,22 @@ createInertiaApp({
      */
     defaults: {
         prefetch: { cacheFor: ['30s', '5m'] },
+
+        /*
+         * Mjuka övergångar mellan sidorna — se issue 279 § Beslut 1.
+         *
+         * Webbläsarens View Transitions tonar över ett sidbyte i stället för
+         * att byta tvärt. Bara GET och bara när tillståndet inte bevaras: en
+         * filterrad går med `preserveState: true`, och en lista som tonar för
+         * varje tangenttryckning i ett sökfält är värre än ingen övergång.
+         * Ändringar (POST, PUT, PATCH, DELETE) tonar inte heller.
+         *
+         * Funktionen returnerar BARA nyckeln `viewTransition` eller ett tomt
+         * objekt. Inertia 3.7 lägger resultatet ovanpå besökets egna val, så en
+         * returnerad kopia av `options` hade skrivit över dem.
+         */
+        visitOptions: (href, options) =>
+            (options.method ?? 'get') === 'get' && ! options.preserveState ? { viewTransition: true } : {},
     },
 
     resolve: (name) => {
