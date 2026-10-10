@@ -635,7 +635,7 @@ it('syns i inställningsnavigationen och länkas från plansidan', function () {
     lagringsvyNyckel('ui.settings.nav.storage');
 
     expect(File::get(resource_path('js/pages/Settings/Plan.vue')))->toContain('href="/settings/storage"');
-    expect(File::get(resource_path('js/pages/Settings/Storage.vue')))->toContain('<SettingsLayout>');
+    expect(File::get(resource_path('js/pages/Settings/Storage.vue')))->toContain('layout: [AppLayout, SettingsLayout]');
 });
 
 /*

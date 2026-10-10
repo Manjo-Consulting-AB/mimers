@@ -122,20 +122,17 @@ it('har ägarbyten sist i inställningsmenyn', function () {
 
 /*
  * Klart när: sidan transfers ritas i inställningslayouten — `Transfers/Index.vue`
- * använder `SettingsLayout` (Beslut 3).
+ * deklarerar `[AppLayout, SettingsLayout]` som sin layout (Beslut 3, omgjort i
+ * issue 274).
  *
  * Rutten `/transfers` är oförändrad, så provet gäller bara skalet sidan ritas
- * i: `SettingsLayout` wrappar `AppLayout`, och den gamla `AppLayout`-importen
- * ska vara borta.
+ * i: sedan issue 274 deklarerar sidan hela kedjan, och `AppLayout` är därför
+ * ett väntat namn igen — den gamla `not->toContain('AppLayout')`-raden är
+ * borta.
  */
 it('ritar transferssidan i inställningslayouten', function () {
     $sida = ordOchMenyerKod('pages/Transfers/Index.vue');
 
     expect($sida)->toContain("import SettingsLayout from '../../layouts/SettingsLayout.vue'")
-        ->toContain('<SettingsLayout>')
-        ->toContain('</SettingsLayout>');
-
-    // Den gamla layouten är borta. Eget påstående: `->not` efter en
-    // `toContain`-kedja tappar typen för PHPStan.
-    expect($sida)->not->toContain('AppLayout');
+        ->toContain('layout: [AppLayout, SettingsLayout]');
 });

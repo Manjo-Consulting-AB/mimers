@@ -1,9 +1,12 @@
 <script setup>
 import { ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import StorageCleanupSection from '../../components/StorageCleanupSection.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({ layout: [AppLayout, SettingsLayout] });
 
 /*
  * Lagringsytan, se issue 66b § Beslut 1–9 och [[Planer och kvoter]]
@@ -79,69 +82,67 @@ function selectAccount(event) {
 </script>
 
 <template>
-    <SettingsLayout>
-        <Head :title="t('storage.title')" />
+    <Head :title="t('storage.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('storage.heading') }}</h1>
-        <p class="mt-2 text-sm text-slate-700">{{ t('storage.intro') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('storage.heading') }}</h1>
+    <p class="mt-2 text-sm text-slate-700">{{ t('storage.intro') }}</p>
 
-        <div v-if="props.accounts.length > 1" class="mt-6 flex flex-col gap-1">
-            <label for="account" class="text-sm font-medium text-slate-800">{{ t('storage.account_label') }}</label>
+    <div v-if="props.accounts.length > 1" class="mt-6 flex flex-col gap-1">
+        <label for="account" class="text-sm font-medium text-slate-800">{{ t('storage.account_label') }}</label>
 
-            <select
-                id="account"
-                :value="props.account.ulid"
-                :disabled="pending"
-                class="self-start rounded border border-slate-300 bg-white px-3 py-2"
-                @change="selectAccount"
-            >
-                <option v-for="option in props.accounts" :key="option.ulid" :value="option.ulid">
-                    {{ option.name }}
-                </option>
-            </select>
-        </div>
-
-        <!-- Vad rensningen gjorde, med serverns tal (Beslut 8). Rutan ritas
-             bara direkt efter en rensning, och den säger papperskorgen och de
-             30 dagarna — aldrig "raderat permanent". -->
-        <section
-            v-if="props.removed"
-            role="status"
-            class="mt-6 rounded border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900"
+        <select
+            id="account"
+            :value="props.account.ulid"
+            :disabled="pending"
+            class="self-start rounded border border-slate-300 bg-white px-3 py-2"
+            @change="selectAccount"
         >
-            <p>
-                {{ props.removed.removed === 1
-                    ? t('storage.result.one')
-                    : props.removed.removed > 1
-                        ? t('storage.result.many', { count: props.removed.removed })
-                        : t('storage.result.none') }}
-            </p>
-            <p class="mt-1">{{ t('storage.result.usage', { used: props.removed.storageLabel }) }}</p>
-        </section>
+            <option v-for="option in props.accounts" :key="option.ulid" :value="option.ulid">
+                {{ option.name }}
+            </option>
+        </select>
+    </div>
 
-        <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
-            <h2 class="text-lg font-semibold">{{ t('storage.usage_heading') }}</h2>
+    <!-- Vad rensningen gjorde, med serverns tal (Beslut 8). Rutan ritas
+         bara direkt efter en rensning, och den säger papperskorgen och de
+         30 dagarna — aldrig "raderat permanent". -->
+    <section
+        v-if="props.removed"
+        role="status"
+        class="mt-6 rounded border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900"
+    >
+        <p>
+            {{ props.removed.removed === 1
+                ? t('storage.result.one')
+                : props.removed.removed > 1
+                    ? t('storage.result.many', { count: props.removed.removed })
+                    : t('storage.result.none') }}
+        </p>
+        <p class="mt-1">{{ t('storage.result.usage', { used: props.removed.storageLabel }) }}</p>
+    </section>
 
-            <dl class="mt-4 flex flex-col gap-1 text-sm">
-                <div class="flex flex-col gap-1 md:flex-row md:gap-2">
-                    <dt class="shrink-0 text-slate-600 md:w-40">{{ t('storage.account_label') }}</dt>
-                    <dd>{{ props.account.name }}</dd>
-                </div>
-                <div class="flex flex-col gap-1 md:flex-row md:gap-2">
-                    <dt class="shrink-0 text-slate-600 md:w-40">{{ t('plan.limits.storage_bytes') }}</dt>
-                    <dd>
-                        {{ props.usage.limitBytes === null
-                            ? t('plan.of_unlimited', { used: props.usage.usedLabel })
-                            : t('plan.of', { used: props.usage.usedLabel, limit: props.usage.limitLabel }) }}
-                    </dd>
-                </div>
-            </dl>
-        </section>
+    <section class="mt-8 rounded border border-slate-200 bg-white p-4 md:p-6">
+        <h2 class="text-lg font-semibold">{{ t('storage.usage_heading') }}</h2>
 
-        <StorageCleanupSection
-            :account-ulid="props.account.ulid"
-            :attachments="props.attachments"
-            :used-bytes="props.usage.usedBytes"
-        />
-    </SettingsLayout>
+        <dl class="mt-4 flex flex-col gap-1 text-sm">
+            <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                <dt class="shrink-0 text-slate-600 md:w-40">{{ t('storage.account_label') }}</dt>
+                <dd>{{ props.account.name }}</dd>
+            </div>
+            <div class="flex flex-col gap-1 md:flex-row md:gap-2">
+                <dt class="shrink-0 text-slate-600 md:w-40">{{ t('plan.limits.storage_bytes') }}</dt>
+                <dd>
+                    {{ props.usage.limitBytes === null
+                        ? t('plan.of_unlimited', { used: props.usage.usedLabel })
+                        : t('plan.of', { used: props.usage.usedLabel, limit: props.usage.limitLabel }) }}
+                </dd>
+            </div>
+        </dl>
+    </section>
+
+    <StorageCleanupSection
+        :account-ulid="props.account.ulid"
+        :attachments="props.attachments"
+        :used-bytes="props.usage.usedBytes"
+    />
 </template>

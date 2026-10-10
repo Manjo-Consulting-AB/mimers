@@ -84,6 +84,28 @@ function bestaendeSkalKod(string $sokvag): string
     return (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
 }
 
+/**
+ * De åtta inställningssidorna i rutan, relativa `resources/js/pages/`.
+ *
+ * Kedjan `[AppLayout, SettingsLayout]` gäller dem och ingen av de tjugo andra:
+ * en sida utan sektionsmeny deklarerar bara `AppLayout` (issue 274).
+ *
+ * @return list<string>
+ */
+function bestaendeSkalInstallningssidor(): array
+{
+    return [
+        'Settings/Accounts.vue',
+        'Settings/Notifications.vue',
+        'Settings/Plan.vue',
+        'Settings/Profile.vue',
+        'Settings/Security.vue',
+        'Settings/Storage.vue',
+        'Settings/Webhooks.vue',
+        'Transfers/Index.vue',
+    ];
+}
+
 /*
  * Klart när: `de tjugo sidorna deklarerar AppLayout` — var och en av sidorna i
  * rutan innehåller `defineOptions(`, `layout:` och `AppLayout` (Beslut 1).
@@ -170,4 +192,89 @@ it('menyerna stängs vid navigering', function () {
 
     expect($vakt[1])->toContain('menuOpen.value = false')
         ->toContain('createMenuOpen.value = false');
+});
+
+/*
+ * Inställningarnas sidor — M31 Flytande navigering · issue 274 (#833), se
+ * resources/js/layouts/SettingsLayout.vue.
+ *
+ * **Kedjan deklareras av sidan** (Beslut 2): var och en av de åtta sidorna får
+ * `defineOptions({ layout: [AppLayout, SettingsLayout] })`, och
+ * `<SettingsLayout>`-taggarna försvinner ur mallen. Sidan är då rotvyn och
+ * inställningarnas sidonavigering står kvar när användaren går mellan två
+ * inställningssidor — och mellan en inställningssida och en sida från issue
+ * 273.
+ *
+ * **SettingsLayout ritar bara sin egen del** (Beslut 1): `<AppLayout>` och
+ * importen av den är borta. Skalet kommer in utifrån, ur kedjan.
+ */
+
+/*
+ * Klart när: `inställningarnas sidor deklarerar kedjan` — var och en av de
+ * åtta sidorna innehåller `layout: [AppLayout, SettingsLayout]` (Beslut 2).
+ *
+ * Listan räknas och inte bara läsas: en sida som tappas ur rutan ska falla
+ * här, och antalet är issuens eget — åtta.
+ */
+it('inställningarnas sidor deklarerar kedjan', function () {
+    $sidor = bestaendeSkalInstallningssidor();
+
+    expect($sidor)->toHaveCount(8);
+
+    foreach ($sidor as $sida) {
+        expect(bestaendeSkalKod("js/pages/{$sida}"))
+            ->toContain('defineOptions(')
+            ->toContain('layout: [AppLayout, SettingsLayout]');
+    }
+});
+
+/*
+ * Klart när: `ingen inställningssida bär SettingsLayout i mallen` (Beslut 2).
+ *
+ * Sidan får nämna `SettingsLayout` i importen och i `defineOptions`, men
+ * taggen ska vara borta ur mallen — samma regel som för `<AppLayout>` i issue
+ * 273.
+ */
+it('ingen inställningssida bär SettingsLayout i mallen', function () {
+    foreach (bestaendeSkalInstallningssidor() as $sida) {
+        $kod = bestaendeSkalKod("js/pages/{$sida}");
+
+        expect($kod)->not->toContain('<SettingsLayout');
+        expect($kod)->not->toContain('</SettingsLayout>');
+    }
+});
+
+/*
+ * Klart när: `SettingsLayout ritar inte AppLayout` — varken taggen eller
+ * importen finns kvar (Beslut 1).
+ */
+it('SettingsLayout ritar inte AppLayout', function () {
+    $layout = bestaendeSkalKod('js/layouts/SettingsLayout.vue');
+
+    expect($layout)->not->toContain('<AppLayout');
+    expect($layout)->not->toContain('import AppLayout');
+});
+
+/*
+ * Klart när: `sektionsmenyn stängs vid navigering` — `SettingsLayout.vue`
+ * vaktar `page.url` och nollställer `sectionsOpen` (Beslut 3).
+ *
+ * Provet fäster både vakten och dess innehåll, som för AppLayouts två menyer:
+ * en `watch` som inte rör menyn är samma bugg som ingen vakt alls, och den
+ * hopfällda sektionsmenyn står då öppen på mobilen över nästa sida.
+ */
+it('sektionsmenyn stängs vid navigering', function () {
+    $layout = bestaendeSkalKod('js/layouts/SettingsLayout.vue');
+
+    preg_match("/import \{([^}]*)\} from 'vue'/", $layout, $vue);
+
+    expect($vue)->not->toBeEmpty('importen från vue saknas');
+    expect($vue[1])->toContain('watch');
+
+    expect($layout)->toContain('watch(() => page.url');
+
+    preg_match('#watch\(\(\) => page\.url, \(\) => \{(.*?)\}\)#s', $layout, $vakt);
+
+    expect($vakt)->not->toBeEmpty('vakten kring page.url saknas');
+    expect($vakt[1])->toContain('sectionsOpen.value = false');
 });

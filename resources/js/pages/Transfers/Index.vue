@@ -1,8 +1,11 @@
 <script setup>
 import { Head, usePage } from '@inertiajs/vue3';
+import AppLayout from '../../layouts/AppLayout.vue';
 import SettingsLayout from '../../layouts/SettingsLayout.vue';
 import IncomingTransferCard from '../../components/IncomingTransferCard.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
+
+defineOptions({ layout: [AppLayout, SettingsLayout] });
 
 /*
  * Mottagarens inkorg, se issue 67b § Beslut 1, 5 och 6.
@@ -14,9 +17,9 @@ import { useTranslations } from '../../composables/useTranslations.js';
  *
  * **Sidan ritas i inställningslayouten** (M28 · issue 248): ägarbytena flyttade
  * från skalets sidopanel till inställningarnas meny, och raden tänds när man
- * står här. `SettingsLayout` wrappar `AppLayout`, så skalet — header, flash och
- * footer — är detsamma som förut; det är bara sidomenyn bredvid innehållet som
- * tillkommer.
+ * står här. Sidan deklarerar `[AppLayout, SettingsLayout]` som sin layout, så
+ * skalet — header, flash och footer — är detsamma som förut; det är bara
+ * sidomenyn bredvid innehållet som tillkommer.
  *
  * **Här hittar hon sin begäran på identitet, aldrig på en länk** (Beslut 5).
  * Ingen token finns i någon URL, ingen session bär något mellan två anrop, och
@@ -46,38 +49,36 @@ const page = usePage();
 </script>
 
 <template>
-    <SettingsLayout>
-        <Head :title="t('transfer.inbox.title')" />
+    <Head :title="t('transfer.inbox.title')" />
 
-        <h1 class="text-2xl font-semibold">{{ t('transfer.inbox.heading') }}</h1>
-        <p class="mt-2 text-sm text-slate-700">{{ t('transfer.inbox.intro') }}</p>
+    <h1 class="text-2xl font-semibold">{{ t('transfer.inbox.heading') }}</h1>
+    <p class="mt-2 text-sm text-slate-700">{{ t('transfer.inbox.intro') }}</p>
 
-        <!--
-            Meningen formulerades på servern ur `lang/` av
-            App\Support\Frontend\ApiErrorTranslator — ett kvotfel bär sin gräns
-            och sitt värde (:limit och :used), och en rå felkod når aldrig
-            skärmen (Beslut 6).
-        -->
-        <p
-            v-if="page.props.errors.transfer"
-            id="transfer-error"
-            role="alert"
-            tabindex="-1"
-            class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 outline-none"
-        >
-            {{ page.props.errors.transfer }}
-        </p>
+    <!--
+        Meningen formulerades på servern ur `lang/` av
+        App\Support\Frontend\ApiErrorTranslator — ett kvotfel bär sin gräns
+        och sitt värde (:limit och :used), och en rå felkod når aldrig
+        skärmen (Beslut 6).
+    -->
+    <p
+        v-if="page.props.errors.transfer"
+        id="transfer-error"
+        role="alert"
+        tabindex="-1"
+        class="mt-6 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 outline-none"
+    >
+        {{ page.props.errors.transfer }}
+    </p>
 
-        <p v-if="transfers.length === 0" class="mt-6 text-sm text-slate-600">
-            {{ t('transfer.inbox.empty') }}
-        </p>
+    <p v-if="transfers.length === 0" class="mt-6 text-sm text-slate-600">
+        {{ t('transfer.inbox.empty') }}
+    </p>
 
-        <ul v-else class="mt-6 flex flex-col gap-4">
-            <IncomingTransferCard
-                v-for="transfer in transfers"
-                :key="transfer.ulid"
-                :transfer="transfer"
-            />
-        </ul>
-    </SettingsLayout>
+    <ul v-else class="mt-6 flex flex-col gap-4">
+        <IncomingTransferCard
+            v-for="transfer in transfers"
+            :key="transfer.ulid"
+            :transfer="transfer"
+        />
+    </ul>
 </template>
