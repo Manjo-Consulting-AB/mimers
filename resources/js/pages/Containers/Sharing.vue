@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerAccessRow from '../../components/ContainerAccessRow.vue';
 import InvitationForm from '../../components/InvitationForm.vue';

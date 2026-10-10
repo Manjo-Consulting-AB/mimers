@@ -1,6 +1,7 @@
 <script setup>
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import TrashRow from '../../components/TrashRow.vue';
 import { useTranslations } from '../../composables/useTranslations.js';

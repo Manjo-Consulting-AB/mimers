@@ -85,6 +85,22 @@ function bestaendeSkalKod(string $sokvag): string
 }
 
 /**
+ * Ett led ur sidans kedja, som det står i källkoden: `[Komponent, { … }]`.
+ *
+ * Läses med regex och inte med en lös strängnål: det som ska fästas är att
+ * proppen står i RÄTT led. `[ContainerLayout, …]` matchar inte
+ * `[ContainerSettingsLayout, …]` — hakparentesen före namnet är en del av
+ * mönstret — och den första träffen är den första förekomsten, alltså ledet
+ * i den ordning sidan skriver sin kedja.
+ */
+function bestaendeSkalLed(string $kod, string $komponent): string
+{
+    preg_match('#\['.$komponent.', \{[^}]*\}\]#', $kod, $träff);
+
+    return $träff[0] ?? '';
+}
+
+/**
  * De åtta inställningssidorna i rutan, relativa `resources/js/pages/`.
  *
  * Kedjan `[AppLayout, SettingsLayout]` gäller dem och ingen av de tjugo andra:
@@ -303,6 +319,13 @@ it('sektionsmenyn stängs vid navigering', function () {
  * läses ur sidans `container`-prop; markupen i `ContainerLayout` kunde inte
  * fyllas när skalet ligger utanför i kedjan (en slot fylls nedåt). Det är
  * ändringen `MobilskalTest` och `ContainerbildvyTest` följer.
+ *
+ * **Pennans flagga går i kedjan och inte i `page.props.can`** (fynd 2 i
+ * granskningen). `page.props.can` är sidans EGNA flaggor: på en item- eller
+ * schemasida är `can.update` itemets behörighet, och skalet ritade då pennan
+ * för en medlem som får ändra itemet men inte containern. De sidor som skickar
+ * containerns `can` skickar den därför också till `AppLayout`, precis som de
+ * skickar `create` ([[ADR-0056 Flytande navigering]] § 1) — och bara de.
  */
 
 /**
@@ -421,10 +444,21 @@ it('containerns sidor deklarerar kedjan', function () {
     expect($sidor)->toHaveCount(12);
 
     foreach ($sidor as $sida) {
-        expect(bestaendeSkalKod("js/pages/{$sida}"))
-            ->toContain('defineOptions(')
+        $kod = bestaendeSkalKod("js/pages/{$sida}");
+
+        expect($kod)->toContain('defineOptions(')
             ->toContain('[AppLayout')
             ->toContain('[ContainerLayout');
+
+        // Importen och inte bara strängen (fynd 1 i granskningen): `[ContainerLayout, …]`
+        // är ett fritt namn inuti en pilfunktion, och en sida som glömt
+        // importen bygger utan att något klagar — sedan kastar den
+        // `ReferenceError` första gången man byter flik.
+        expect($kod)->toContain("import ContainerLayout from '");
+
+        // `container` står i `ContainerLayout`-ledet: det är den enda prop
+        // layouten kräver.
+        expect(bestaendeSkalLed($kod, 'ContainerLayout'))->toContain('container: props.container');
     }
 
     $installningar = bestaendeSkalContainerinstallningssidor();
@@ -432,18 +466,36 @@ it('containerns sidor deklarerar kedjan', function () {
     expect($installningar)->toHaveCount(8);
 
     foreach ($installningar as $sida) {
-        expect(bestaendeSkalKod("js/pages/{$sida}"))
-            ->toContain('defineOptions(')
+        $kod = bestaendeSkalKod("js/pages/{$sida}");
+
+        expect($kod)->toContain('defineOptions(')
             ->toContain('[AppLayout')
             ->toContain('[ContainerLayout')
             ->toContain('[ContainerSettingsLayout');
+
+        // Båda layouterna i kedjan importeras, av samma skäl som ovan.
+        expect($kod)->toContain("import ContainerLayout from '")
+            ->toContain("import ContainerSettingsLayout from '");
+
+        // `hero: 'compact'` är SIDANS svar sedan issue 275 (issue 678):
+        // `ContainerSettingsLayout` satte attributet själv så länge den ritade
+        // `ContainerLayout`. De åtta är EN flik, och en hjälte som fanns på en
+        // av dem men försvann på nästa hade hoppat när man bytte rad.
+        expect(bestaendeSkalLed($kod, 'ContainerLayout'))
+            ->toContain("hero: 'compact'")
+            ->toContain('container: props.container');
+
+        // Och det sista ledet läser bara `container`: `create` och `can` gick
+        // förbi det redan förut, och `container` står sist i kedjan.
+        expect(bestaendeSkalLed($kod, 'ContainerSettingsLayout'))
+            ->toBe('[ContainerSettingsLayout, { container: props.container }]');
     }
 });
 
 /*
  * Klart när: `plusknappen följer med där den fanns` — sidorna som skickade ett
- * mål före issuen bär `[AppLayout, { create: props.create }]`, och en sida som
- * inte skickade `create` gör det inte heller efteråt (Beslut 3).
+ * mål före issuen bär `create: props.create` i `AppLayout`-ledet, och en sida
+ * som inte skickade `create` gör det inte heller efteråt (Beslut 3).
  *
  * **Sex sidor och inte tre.** Issuens `Klart när` räknar upp tre; regeln i
  * Beslut 3 är mekanisk, och en genomsökning av de gamla layouttaggarna visar
@@ -451,6 +503,10 @@ it('containerns sidor deklarerar kedjan', function () {
  * `Containers/Tasks.vue` också bar `:create="create"`. De får målet av samma
  * skäl som de tre andra — en sida som glömmer raden får ingen knapp, och det
  * är tyst.
+ *
+ * Nålen läses ur LEDET och inte ur filen: sedan fynd 2 står `can: props.can`
+ * bredvid `create` på fem av de sex, och en lös sträng hade inte sagt vilket
+ * led proppen står i.
  */
 it('plusknappen följer med där den fanns', function () {
     $medMal = [
@@ -463,8 +519,8 @@ it('plusknappen följer med där den fanns', function () {
     ];
 
     foreach ($medMal as $sida) {
-        expect(bestaendeSkalKod("js/pages/{$sida}"))
-            ->toContain('[AppLayout, { create: props.create }]');
+        expect(bestaendeSkalLed(bestaendeSkalKod("js/pages/{$sida}"), 'AppLayout'))
+            ->toContain('create: props.create');
     }
 
     $utanMal = array_merge(
@@ -475,6 +531,70 @@ it('plusknappen följer med där den fanns', function () {
     foreach ($utanMal as $sida) {
         expect(bestaendeSkalKod("js/pages/{$sida}"))
             ->not->toContain('create: props.create');
+    }
+});
+
+/*
+ * Klart när (fynd 2): `pennan följer med till skalet där sidan skickar
+ * containerns can`.
+ *
+ * Pennan på mobilens topprad ritas av `AppLayout` (issue 275), men flaggan
+ * läses ur sidans kedja och inte ur `page.props.can`. Den senare bär sidans
+ * EGNA flaggor: på en item- eller schemasida betyder `can.update` att
+ * användaren får ändra ITEMET, och skalet ritade då en penna som servern
+ * nekar — en medlem som får ändra itemet men inte containern såg den.
+ * Flaggan följer samma regel som `create` ([[ADR-0056 Flytande navigering]]
+ * § 1): den sida som har svaret skickar det till ledet som ritar.
+ *
+ * Listorna är de sju sidor som skickade containerns `can` till
+ * `ContainerLayout` före issuen, och de sidor vars `can` betyder något annat.
+ * De räknas upp och läses ur ledet, så att en sida som flyttar flaggan ur
+ * `AppLayout`-ledet faller här.
+ */
+it('pennan följer med till skalet där sidan skickar containerns can', function () {
+    // Skalet läser proppen och ritar ur den. `page.props.can` får inte finnas
+    // kvar i filen: det var den läsningen som gav fel behörighet.
+    $skal = bestaendeSkalKod('js/layouts/AppLayout.vue');
+
+    expect($skal)->toContain('can: { type: Object, default: null }')
+        ->toContain('props.can?.update === true');
+    expect($skal)->not->toContain('page.props.can');
+
+    $medCan = [
+        'Containers/Costs.vue',
+        'Containers/Documents.vue',
+        'Containers/Edit.vue',
+        'Containers/History.vue',
+        'Containers/Overview.vue',
+        'Containers/Tasks.vue',
+        'Containers/Items/Index.vue',
+    ];
+
+    foreach ($medCan as $sida) {
+        expect(bestaendeSkalLed(bestaendeSkalKod("js/pages/{$sida}"), 'AppLayout'))
+            ->toContain('can: props.can');
+    }
+
+    // Itemvyn och schemasidorna bär itemets respektive schemats flaggor. De
+    // skickade dem aldrig till `ContainerLayout`, och de ska inte skicka dem
+    // till skalet heller.
+    foreach ([
+        'Containers/CalendarFeed.vue',
+        'Containers/Categories.vue',
+        'Containers/Export.vue',
+        'Containers/Sharing.vue',
+        'Containers/Tags.vue',
+        'Containers/Transfers.vue',
+        'Containers/Trash.vue',
+        'Containers/Items/Create.vue',
+        'Containers/Items/Edit.vue',
+        'Containers/Items/Show.vue',
+        'Containers/Items/Schedules/Create.vue',
+        'Containers/Items/Schedules/Edit.vue',
+        'Containers/Items/Schedules/Show.vue',
+    ] as $sida) {
+        expect(bestaendeSkalLed(bestaendeSkalKod("js/pages/{$sida}"), 'AppLayout'))
+            ->not->toContain('can: props.can');
     }
 });
 

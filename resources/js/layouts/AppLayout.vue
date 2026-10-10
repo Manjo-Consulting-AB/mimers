@@ -182,13 +182,27 @@ import { useTranslations } from '../composables/useTranslations.js';
  * i Tailwind 4, där `screen-*`-nycklarna flyttat till `--breakpoint-*`, och
  * `max-w-7xl` är för smalt mot ADR-0050:s "över 1 200 px".
  */
-defineProps({
+const props = defineProps({
     /*
      * Plusknappens mål, ur App\Support\Frontend\CreateTarget, eller null.
      * Formen är `{ kind, href }` för ett mål och `{ kind: 'menu', rows }` för
      * en meny — se CreateButton.
      */
     create: { type: Object, default: null },
+    /*
+     * `{ update }` — containerns behörighetsflagga. Pennan på mobilens topprad
+     * ritas ur den (issue 159 · [[ADR-0047 Containerns bild]] § Beslut), och
+     * den kommer från sidan precis som `create` ([[ADR-0056 Flytande
+     * navigering]] § 1: en layout som behöver props ur sidan får dem i kedjan).
+     *
+     * **Den läses INTE ur `page.props.can`** (issue 275, fynd 2). Den proppen
+     * bär sidans EGNA flaggor: på en item- eller schemasida är `can.update`
+     * itemets eller schemats behörighet, och en medlem som får ändra itemet men
+     * inte containern hade då sett en penna som servern nekar. Sidan skickar
+     * därför samma `can` som den skickar till `ContainerLayout`, och bara de
+     * sidor som skickar den i dag gör det — en sida utan `can` får ingen penna.
+     */
+    can: { type: Object, default: null },
 });
 
 const { t } = useTranslations();
@@ -205,10 +219,11 @@ const container = computed(() => page.props.container ?? null);
 
 /*
  * Pennan på bilden ritas bara för den som får ändra containern (ADR-0047
- * § Beslut, "Vem som får göra vad"). Flaggan kommer som `can` från sidan och
- * är presentation: rutten prövar samma grind på nytt.
+ * § Beslut, "Vem som får göra vad"). Flaggan kommer som layoutprop ur sidans
+ * kedja — samma `can` och samma värde som `ContainerLayout` får — och är
+ * presentation: rutten prövar samma grind på nytt.
  */
-const canUpdateCover = computed(() => page.props.can?.update === true);
+const canUpdateCover = computed(() => props.can?.update === true);
 
 const menuOpen = ref(false);
 const menuTrigger = ref(null);
@@ -436,6 +451,12 @@ const initials = computed(() => {
                 containerns markup flyttade hit från ContainerLayout i issue
                 275, för skalet ligger utanför dess layout i kedjan och en slot
                 bara kan fyllas nedåt.
+
+                **Pennan ritas ur layoutproppen `can` och inte ur
+                `page.props.can`** (issue 275, fynd 2): den senare bär sidans
+                egna flaggor, och på en item- eller schemasida betyder
+                `can.update` att användaren får ändra itemet — inte containern.
+                Sidan skickar samma flagga hit som till `ContainerLayout`.
             -->
             <header class="bg-shell text-white md:hidden">
                 <div class="mx-auto flex w-full max-w-[96rem] items-center gap-2 px-4 py-2">

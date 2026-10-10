@@ -242,6 +242,8 @@ it('ritar radens namn när den har ett', function () {
  *
  * Sedan issue 275 står målet i `AppLayout`-ledet i sidans kedja: skalet ligger
  * först, och `ContainerLayout` — som förmedlade det förut — rör det inte.
+ * Flikarna skickar containerns `can` i samma led (fynd 2), för skalet ritar
+ * pennan på mobilens topprad ur den.
  */
 it('skickar flikens mål vidare till containerns skal', function () {
     foreach ([
@@ -249,7 +251,7 @@ it('skickar flikens mål vidare till containerns skal', function () {
         'pages/Containers/Tasks.vue',
         'pages/Containers/Costs.vue',
     ] as $sokvag) {
-        expect(flikknappKod($sokvag))->toContain('[AppLayout, { create: props.create }]');
+        expect(flikknappKod($sokvag))->toContain('[AppLayout, { create: props.create, can: props.can }]');
     }
 });
 

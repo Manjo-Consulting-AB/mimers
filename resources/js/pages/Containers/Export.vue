@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted } from 'vue';
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ExportRow from '../../components/ExportRow.vue';
 import { isOpenExport } from '../../components/exportPresentation.js';

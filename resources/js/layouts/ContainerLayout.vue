@@ -107,6 +107,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * öppnar (`ContainerCoverSheet`) flyttade till `AppLayout` med toppraden i
  * issue 275, och är detsamma som avsnittet under containerns inställningar
  * öppnar (resources/js/pages/Containers/Edit.vue): två vägar till samma val.
+ * Pennan ritas ur skalets egen `can`-layoutprop, och en sida som skickar
+ * flaggan hit skickar den därför också till `AppLayout` — annars visade
+ * skalets penna `page.props.can`, som på en item- eller schemasida bär en
+ * annan behörighet (issue 275, fynd 2).
  *
  * **Plusknappen byggs inte här och förmedlas inte härifrån** (issue 152 ·
  * [[ADR-0048 Mobilen och plusknappen]] § 2). Den som har ett mål skickar det

@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
 import ContainerCoverSheet from '../../components/ContainerCoverSheet.vue';
@@ -11,7 +12,7 @@ import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
 defineOptions({
     layout: (props) => [
-        [AppLayout, {}],
+        [AppLayout, { can: props.can }],
         [ContainerLayout, { hero: 'compact', container: props.container, can: props.can }],
         [ContainerSettingsLayout, { container: props.container }],
     ],

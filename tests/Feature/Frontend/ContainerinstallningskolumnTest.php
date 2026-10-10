@@ -257,17 +257,24 @@ it('når alla sektioner från inställningskolumnen, inställningarna först', f
  * Klart när: alla åtta inställningssidor har samma sidokolumn.
  *
  * Provet är ett dataset över de åtta filerna och var och en möts av samma krav:
- * sidan importerar layouten, deklarerar den sist i sin kedja, och ritar ingen
- * layouttagg i mallen. Sedan issue 275 är det sista ledet som håller kolumnen
- * på plats — en sida som tappar `ContainerSettingsLayout` ur kedjan tappar
- * menyn utan att något annat syns, och en tagg i mallen rivs vid varje visit.
+ * sidan importerar BÅDA layouterna i kedjan, deklarerar dem i sin ordning, och
+ * ritar ingen layouttagg i mallen. Sedan issue 275 är det sista ledet som
+ * håller kolumnen på plats — en sida som tappar `ContainerSettingsLayout` ur
+ * kedjan tappar menyn utan att något annat syns, och en tagg i mallen rivs vid
+ * varje visit.
+ *
+ * **Importen av `ContainerLayout` prövas också** (fynd 1 i granskningen): ledet
+ * mellan skalet och kolumnen är ett fritt namn inuti en pilfunktion, och en
+ * sida som glömt importen bygger utan att något klagar — felet kommer först när
+ * layoutfunktionen anropas, alltså vid nästa navigering.
  */
 it('ger alla åtta inställningssidor samma sidokolumn', function (string $sida) {
     $kod = containerinstallningskolumnKod("pages/Containers/{$sida}.vue");
 
     expect($kod)->not->toBe('', "pages/Containers/{$sida}.vue saknas");
 
-    expect($kod)->toContain("import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue'")
+    expect($kod)->toContain("import ContainerLayout from '../../layouts/ContainerLayout.vue'")
+        ->toContain("import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue'")
         ->toContain('[AppLayout')
         ->toContain('[ContainerLayout')
         ->toContain('[ContainerSettingsLayout, { container: props.container }]');

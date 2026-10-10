@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
+import ContainerLayout from '../../layouts/ContainerLayout.vue';
 import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import CategoryCreateForm from '../../components/CategoryCreateForm.vue';
 import CategoryPresetCard from '../../components/CategoryPresetCard.vue';
