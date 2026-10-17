@@ -238,4 +238,37 @@ export const icons = {
         ['path', { d: 'M20 21h.01' }],
         ['path', { d: 'M21.25 8.2A10 10 0 1 0 16 21.16' }],
     ],
+    // camera · lucide-static 1.59.0
+    camera: [
+        ['path', { d: 'M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z' }],
+        ['circle', { cx: '12', cy: '13', r: '3' }],
+    ],
+    // menu · lucide-static 1.59.0
+    menu: [
+        ['path', { d: 'M4 5h16' }],
+        ['path', { d: 'M4 12h16' }],
+        ['path', { d: 'M4 19h16' }],
+    ],
+    // calendar · lucide-static 1.59.0
+    calendar: [
+        ['path', { d: 'M8 2v3' }],
+        ['path', { d: 'M16 2v3' }],
+        ['rect', { x: '3', y: '3', width: '18', height: '18', rx: '2' }],
+        ['path', { d: 'M3 9h18' }],
+    ],
+    // ellipsis-vertical · lucide-static 1.59.0
+    'more-vertical': [
+        ['circle', { cx: '12', cy: '12', r: '1' }],
+        ['circle', { cx: '12', cy: '5', r: '1' }],
+        ['circle', { cx: '12', cy: '19', r: '1' }],
+    ],
+    // chevron-left · lucide-static 1.59.0
+    'chevron-left': [
+        ['path', { d: 'm15 18-6-6 6-6' }],
+    ],
+    // mail · lucide-static 1.59.0
+    mail: [
+        ['path', { d: 'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7' }],
+        ['rect', { x: '2', y: '4', width: '20', height: '16', rx: '2' }],
+    ],
 };

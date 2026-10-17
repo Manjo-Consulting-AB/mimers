@@ -7,6 +7,7 @@ import ItemTargetPicker from '../../components/ItemTargetPicker.vue';
 import UiButton from '../../components/UiButton.vue';
 import UiCard from '../../components/UiCard.vue';
 import UiCheckbox from '../../components/UiCheckbox.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import UiInput from '../../components/UiInput.vue';
 import UiSelect from '../../components/UiSelect.vue';
 import UiStat from '../../components/UiStat.vue';
@@ -619,19 +620,7 @@ function destroySelected() {
                     <span class="block truncate text-body text-ink">{{ task.schedule.title }}</span>
 
                     <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-meta text-ink-muted">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-4 w-4 shrink-0"
-                            aria-hidden="true"
-                        >
-                            <rect x="3" y="5" width="18" height="14" rx="2" />
-                            <path d="m3 7 9 6 9-6" />
-                        </svg>
+                        <UiIcon name="mail" :size="16" class="h-4 w-4 shrink-0" />
 
                         <span>{{ t('todo.location.inbox') }}</span>
 
@@ -664,16 +653,7 @@ function destroySelected() {
                         class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                         :aria-label="t('inbox.page.row_menu')"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            class="size-5 shrink-0"
-                            aria-hidden="true"
-                        >
-                            <circle cx="12" cy="5" r="1.6" />
-                            <circle cx="12" cy="12" r="1.6" />
-                            <circle cx="12" cy="19" r="1.6" />
-                        </svg>
+                        <UiIcon name="more-vertical" :size="20" class="size-5 shrink-0" />
                     </summary>
 
                     <div
@@ -859,18 +839,7 @@ function destroySelected() {
                         aria-hidden="true"
                         class="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-muted"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-5 w-5"
-                        >
-                            <path d="M14 3v5h5" />
-                            <path d="M6 3h8l5 5v13H6z" />
-                        </svg>
+                        <UiIcon name="document" :size="20" class="h-5 w-5" />
                     </span>
 
                     <span class="flex min-w-0 flex-col">
@@ -910,16 +879,7 @@ function destroySelected() {
                         class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                         :aria-label="t('inbox.page.row_menu')"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            class="size-5 shrink-0"
-                            aria-hidden="true"
-                        >
-                            <circle cx="12" cy="5" r="1.6" />
-                            <circle cx="12" cy="12" r="1.6" />
-                            <circle cx="12" cy="19" r="1.6" />
-                        </svg>
+                        <UiIcon name="more-vertical" :size="20" class="size-5 shrink-0" />
                     </summary>
 
                     <div

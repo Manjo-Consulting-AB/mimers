@@ -3,6 +3,7 @@ import { computed, watch } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import UiButton from './UiButton.vue';
+import UiIcon from './UiIcon.vue';
 import UiInput from './UiInput.vue';
 import UiSelect from './UiSelect.vue';
 import UiTextarea from './UiTextarea.vue';
@@ -410,18 +411,7 @@ function submit() {
                     class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control border border-border text-ink-muted outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                     @click="form.anchor_date = ''"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="h-4 w-4"
-                        aria-hidden="true"
-                    >
-                        <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
+                    <UiIcon name="close" :size="16" class="h-4 w-4" />
                 </button>
             </div>
         </FormField>

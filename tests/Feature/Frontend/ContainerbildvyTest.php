@@ -315,7 +315,8 @@ it('visar den neutrala ytan när bilden tas bort', function () {
 
     expect($vy)->toContain('<img v-if="url"')
         ->and($vy)->toContain('v-else')
-        ->and($vy)->toContain('<svg');
+        ->and($vy)->toContain('name="container"')
+        ->and($vy)->not->toContain('<svg');
 });
 
 /*

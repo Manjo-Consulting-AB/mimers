@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
+import UiIcon from './UiIcon.vue';
 import UiInput from './UiInput.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -199,19 +200,7 @@ function onClosed() {
                             :aria-label="t('item.form.parent_cancel')"
                             @click="close"
                         >
-                            <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                class="h-5 w-5"
-                                aria-hidden="true"
-                            >
-                                <path d="m6 6 12 12"></path>
-                                <path d="m18 6-12 12"></path>
-                            </svg>
+                            <UiIcon name="close" :size="20" class="h-5 w-5" />
                         </button>
                     </div>
 

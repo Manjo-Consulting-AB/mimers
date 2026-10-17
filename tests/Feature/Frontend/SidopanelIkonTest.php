@@ -157,8 +157,13 @@ it('låter sidomenyn och sidopanelen rita samma roll på samma rad', function ()
             ->and($yta)->toContain('<ShellContainerList');
     }
 
-    expect($layout)->not->toContain('<UiIcon')
-        ->and($meny)->not->toContain('<UiIcon');
+    expect($layout)->not->toContain('<UiIcon');
+
+    // Menyns enda egna ikon är stängknappen. Raderna — sektionerna och
+    // containrarna — kommer ur listorna och har ingen egen mappning här.
+    preg_match_all('/<UiIcon[^>]*\bname="([^"]+)"/', $meny, $roller);
+
+    expect($roller[1])->toBe(['close']);
 });
 
 /*

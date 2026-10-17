@@ -4,6 +4,7 @@ import { Link, router, usePage } from '@inertiajs/vue3';
 import TaskGroup from './TaskGroup.vue';
 import TodoRow from './TodoRow.vue';
 import UiCard from './UiCard.vue';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -175,17 +176,7 @@ const itemName = computed(() => page.props.item?.name ?? '');
                         aria-hidden="true"
                         class="inline-flex size-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="size-5"
-                        >
-                            <path d="M20 6 9 17l-5-5"></path>
-                        </svg>
+                        <UiIcon name="check" :size="20" class="size-5" />
                     </span>
 
                     {{ t('item.schedule.heading') }}
@@ -201,19 +192,7 @@ const itemName = computed(() => page.props.item?.name ?? '');
                     :href="createUrl"
                     class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 text-body font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="mr-2 h-4 w-4"
-                        aria-hidden="true"
-                    >
-                        <path d="M12 5v14"></path>
-                        <path d="M5 12h14"></path>
-                    </svg>
+                    <UiIcon name="add" :size="16" class="mr-2 h-4 w-4" />
 
                     {{ t('todo.new') }}
                 </Link>

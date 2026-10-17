@@ -156,18 +156,7 @@ function dismiss() {
                     :disabled="busy"
                     @click="dismiss"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        class="h-5 w-5"
-                        aria-hidden="true"
-                    >
-                        <path d="M6 6l12 12"></path>
-                        <path d="M18 6L6 18"></path>
-                    </svg>
+                    <UiIcon name="close" :size="20" class="h-5 w-5" />
                 </button>
             </div>
         </template>

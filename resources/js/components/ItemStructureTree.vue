@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -180,19 +181,12 @@ function isChosen(node) {
                     class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-ink-muted outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                     @click="toggle(node)"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
+                    <UiIcon
+                        name="chevron-right"
+                        :size="16"
                         class="h-4 w-4"
                         :class="isOpen(node) ? 'rotate-90' : ''"
-                        aria-hidden="true"
-                    >
-                        <path d="m9 6 6 6-6 6"></path>
-                    </svg>
+                    />
                 </button>
 
                 <button

@@ -8,6 +8,7 @@ import TaskGroup from '../../components/TaskGroup.vue';
 import TaskContainerPanel from '../../components/TaskContainerPanel.vue';
 import TaskOverviewPanel from '../../components/TaskOverviewPanel.vue';
 import TodoRow from '../../components/TodoRow.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import UiTabs from '../../components/UiTabs.vue';
 import UpcomingTasksToggle from '../../components/UpcomingTasksToggle.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
@@ -244,19 +245,7 @@ const createUrl = computed(() => `/tasks/create?return=${encodeURIComponent(page
                 :href="createUrl"
                 class="inline-flex min-h-11 items-center justify-center rounded-control bg-accent px-4 font-medium text-ink-on-accent outline-none hover:bg-accent/90 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="mr-2 h-4 w-4"
-                    aria-hidden="true"
-                >
-                    <path d="M12 5v14"></path>
-                    <path d="M5 12h14"></path>
-                </svg>
+                <UiIcon name="add" :size="16" class="mr-2 h-4 w-4" />
 
                 {{ t('todo.new') }}
             </Link>

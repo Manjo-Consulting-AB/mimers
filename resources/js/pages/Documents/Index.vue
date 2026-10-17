@@ -4,6 +4,7 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import AppLayout from '../../layouts/AppLayout.vue';
 import DocumentScopeFilterColumn from '../../components/DocumentScopeFilterColumn.vue';
 import UiBadge from '../../components/UiBadge.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import UiSelect from '../../components/UiSelect.vue';
 import { formatByteSize } from '../../components/attachmentPresentation.js';
 import { useRelativeDate } from '../../composables/useRelativeDate.js';
@@ -242,19 +243,7 @@ const filtered = computed(() => props.filter.container.length > 0 || props.filte
                                         :aria-label="t('item.attachment.file_icon')"
                                         class="flex size-8 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-subtle"
                                     >
-                                        <svg
-                                            viewBox="0 0 24 24"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            stroke-width="1.5"
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            class="size-4"
-                                            aria-hidden="true"
-                                        >
-                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                            <path d="M14 2v6h6" />
-                                        </svg>
+                                        <UiIcon name="document" :size="16" class="size-4" />
                                     </span>
 
                                     <!-- Filnamnet är radens ENDA handling
