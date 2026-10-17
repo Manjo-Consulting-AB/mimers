@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import UiCard from './UiCard.vue';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -44,6 +45,13 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /* Nycklarna på de tips användaren inte dolt, i serverns ordning. */
     tips: { type: Array, required: true },
+    /*
+     * Rubrikens ikonroll ur den slutna listan, eller null (issue 288 ·
+     * [[M32 Formspråket]]). Containerns översikt skickar `tip`; dashboarden
+     * skickar ingenting och ritas som förut — dess ikoner kommer i en senare
+     * milstolpe, och en hårdkodad roll här hade gett den en i förväg.
+     */
+    icon: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -114,7 +122,10 @@ function dismiss() {
         rot som är villkorad.
     -->
     <UiCard v-if="props.tips.length" class="mt-8">
-        <template #heading>{{ t(titleKey) }}</template>
+        <template #heading>
+            <UiIcon v-if="props.icon" :name="props.icon" />
+            {{ t(titleKey) }}
+        </template>
 
         <template #action>
             <div class="flex items-center gap-1">

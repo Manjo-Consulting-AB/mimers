@@ -1,6 +1,8 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
 import UiCard from './UiCard.vue';
+import UiEmptyState from './UiEmptyState.vue';
+import UiIcon from './UiIcon.vue';
 import TodoRow from './TodoRow.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -53,7 +55,10 @@ const { t } = useTranslations();
 
 <template>
     <UiCard>
-        <template #heading>{{ t('container.overview.tasks') }}</template>
+        <template #heading>
+            <UiIcon name="tasks" />
+            {{ t('container.overview.tasks') }}
+        </template>
 
         <template #action>
             <Link href="/tasks" class="inline-flex min-h-11 items-center text-accent hover:underline">
@@ -61,9 +66,9 @@ const { t } = useTranslations();
             </Link>
         </template>
 
-        <p v-if="props.tasks.length === 0" class="text-slate-700">
+        <UiEmptyState v-if="props.tasks.length === 0">
             {{ t('todo.empty.nothing') }}
-        </p>
+        </UiEmptyState>
 
         <ul v-else class="flex flex-col divide-y divide-slate-200">
             <TodoRow v-for="task in props.tasks" :key="task.ulid" :entry="task" icon-tile />

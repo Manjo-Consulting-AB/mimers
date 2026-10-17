@@ -1,6 +1,7 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
 import UiCard from './UiCard.vue';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -60,7 +61,10 @@ const thumbUrl = (image) => `/files/${image.ulid}?variant=thumb`;
 
 <template>
     <UiCard>
-        <template #heading>{{ t('container.overview.images') }}</template>
+        <template #heading>
+            <UiIcon name="image" />
+            {{ t('container.overview.images') }}
+        </template>
 
         <!--
             Bilden och de fyra små, som docs/Design/container.jpeg ritar dem:

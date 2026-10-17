@@ -11,6 +11,8 @@ import InfoPanel from '../../components/InfoPanel.vue';
 import ItemRow from '../../components/ItemRow.vue';
 import RecentImagesPanel from '../../components/RecentImagesPanel.vue';
 import UiCard from '../../components/UiCard.vue';
+import UiEmptyState from '../../components/UiEmptyState.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -121,18 +123,27 @@ defineOptions({
  * **Rutnätet följer bilden över `lg:` och staplar panelerna under den.**
  * Behållaren är ett vanligt block tills `lg:` gör den till ett rutnät om tre
  * kolumner; barnen ligger kvar i källordningen, så mobilens sida flyttar sig
- * inte för att skrivbordet fick ett rutnät. Placeringen sker med klasser —
- * samma grepp och samma skäl som dashboardens rutnät (issue 171) — och
- * marginalen sitter kvar på varje panel, så radrytmen är den samma på båda
- * sidor om brytpunkten.
+ * inte för att skrivbordet fick ett rutnät. Placeringen sker med
+ * `lg:grid-flow-dense` och spann, inte med fasta `row-start` (issue 288 ·
+ * [[M32 Formspråket]]), och marginalen sitter kvar på varje panel, så
+ * radrytmen är den samma på båda sidor om brytpunkten.
+ *
+ * **Rutnätet lämnar ingen tom kolumn.** *Kostnader* och *Senaste bilder* ritas
+ * inte alls när de saknar innehåll, och då tar nästa panel deras plats i
+ * stället: utan kostnader spänner *Containerdetaljer* två kolumner, och utan
+ * bilder spänner *Items* alla tre med *Senaste aktiviteter* över två. Varje
+ * kombination går därför jämnt ut i tre kolumner.
+ *
+ * Den visuella ordningen sätts med `lg:order-*` — uppgifterna, kostnaderna,
+ * detaljerna, itemen, aktiviteterna, bilderna och sist informationsytan. Den
+ * gäller bara över `lg:`: under brytpunkten är behållaren ett block, där
+ * `order` inte har någon verkan, och källordningen är den samma som förut.
  *
  * Rutnätet är fullt: uppgifterna, kostnaderna och detaljerna på första raden,
  * itemen över två kolumner med aktiviteterna i den tredje, och
  * informationsytan sist i högerspalten — där bilden har den. *Senaste bilder*
- * (issue 173) flyttade in i den tredje radens lediga två kolumner, bredvid
- * informationsytan, och ingen panel flyttade för den: rutnätet hade platsen
- * kvar, och en omflyttning av panelerna hade varit en ändring av issue 172:s
- * yta som den här issuen inte har bett om.
+ * (issue 173) står i den tredje radens lediga två kolumner, bredvid
+ * informationsytan.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -189,14 +200,16 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
     <Head :title="container.name" />
 
     <!--
-        Rutnätet (issue 172). Behållaren är ett vanligt block tills `lg:`
-        gör den till ett rutnät om tre kolumner; barnen ligger kvar i
-        källordningen, och under `lg:` staplas de precis som förut.
+        Rutnätet (issue 172, omlagt i issue 288). Behållaren är ett vanligt
+        block tills `lg:` gör den till ett rutnät om tre kolumner; barnen
+        ligger kvar i källordningen, och under `lg:` staplas de precis som
+        förut. `grid-flow-dense` låter varje panel ta första lediga plats,
+        och spannet växer när en panel som skulle ha delat raden inte ritas.
         Marginalen sitter kvar på varje panel — rutnätet lägger bara till
         kolumnavståndet, så radrytmen är den samma på båda sidor om
         brytpunkten.
     -->
-    <div class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8">
+    <div class="lg:grid lg:grid-flow-dense lg:grid-cols-3 lg:items-start lg:gap-x-8">
         <!--
             Sidans eget huvud ritas bara under `md:`. Över brytpunkten är
             hjälten sidans huvud (ADR-0050 § 2), och den bär samma namn, art
@@ -208,12 +221,13 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
 
         <!--
             Informationsytan äger sin egen marginal (se InfoPanel.vue), så
-            ramen bär ingen: den placerar panelen sist i högerspalten och
-            lämnar ingenting kvar när panelen inte ritas — en tom ram har
-            ingen höjd.
+            ramen bär ingen: `lg:order-7` placerar panelen sist, och
+            `grid-flow-dense` lägger den i första lediga plats — den sista
+            kolumnen på den sista raden. Panelen ritas aldrig utan tips, och
+            då lämnar ramen ingenting kvar: en tom ram har ingen höjd.
         -->
-        <div class="lg:col-start-3 lg:row-start-3">
-            <InfoPanel :tips="props.tips" />
+        <div class="lg:order-7">
+            <InfoPanel :tips="props.tips" icon="tip" />
         </div>
 
         <!-- Varje rad i listan är ett fält hjälten upprepar — arten och
@@ -239,19 +253,24 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
         </div>
 
         <!-- Kommande uppgifter. Panelen äger sin egen ram och sitt eget
-             tomma läge; här står bara var i rutnätet den hör hemma. -->
-        <div class="mt-8 lg:col-start-1 lg:row-start-1">
+             tomma läge; här står bara var i rutnätet den hör hemma. Den
+             visuella ordningen sätts över `lg:` och rör inte källan. -->
+        <div class="mt-8 lg:order-1">
             <ContainerTasksPanel :tasks="props.tasks" />
         </div>
 
         <!-- Kostnaderna. Panelen ritas inte alls när containern saknar
              kostnadsrader — en rubrik över en tom ring är ett påstående om
-             att det finns något att visa. Bildtexten i ringens mitt säger
+             att det finns något att visa — och då spänner detaljerna två
+             kolumner i stället (issue 288). Bildtexten i ringens mitt säger
              *Total* och inte *This month*: den fasta summeringen är hela
              containern och har ingen period (ADR-0038). -->
-        <div v-if="props.costs.totals.length" class="mt-8 lg:col-start-2 lg:row-start-1">
+        <div v-if="props.costs.totals.length" class="mt-8 lg:order-2">
             <UiCard>
-                <template #heading>{{ t('container.overview.costs') }}</template>
+                <template #heading>
+                    <UiIcon name="cost" />
+                    {{ t('container.overview.costs') }}
+                </template>
 
                 <CostDonut
                     :totals="props.costs.totals"
@@ -261,17 +280,28 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
             </UiCard>
         </div>
 
-        <!-- Containerdetaljer. -->
-        <div class="mt-8 lg:col-start-3 lg:row-start-1">
+        <!-- Containerdetaljer. Utan kostnadspanel tar detaljerna dess
+             kolumn och spänner två, så första raden ändå går jämnt ut. -->
+        <div
+            class="mt-8 lg:order-3"
+            :class="props.costs.totals.length ? '' : 'lg:col-span-2'"
+        >
             <ContainerDetailsPanel :details="props.details" />
         </div>
 
         <!-- Items. Samma lista som itembrickan räknar, klippt till sex av
              servern; raden leder till itemet och panelen vidare till hela
-             listan. -->
-        <div class="mt-8 lg:col-span-2 lg:col-start-1 lg:row-start-2">
+             listan. Utan bildpanel spänner panelen alla tre kolumner, så
+             raden inte lämnas halv. -->
+        <div
+            class="mt-8 lg:order-4"
+            :class="props.recentImages.length ? 'lg:col-span-2' : 'lg:col-span-3'"
+        >
             <UiCard>
-                <template #heading>{{ t('container.overview.items') }}</template>
+                <template #heading>
+                    <UiIcon name="item" />
+                    {{ t('container.overview.items') }}
+                </template>
 
                 <template #action>
                     <Link
@@ -282,9 +312,9 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
                     </Link>
                 </template>
 
-                <p v-if="props.items.length === 0" class="text-slate-700">
+                <UiEmptyState v-if="props.items.length === 0">
                     {{ t('item.index.empty') }}
-                </p>
+                </UiEmptyState>
 
                 <!--
                     Listan är en <ul> och raderna är <li> — formen `ItemRow`
@@ -308,14 +338,22 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
         <!-- Senaste aktiviteter. Raden är `HistoryRow` och ber INTE om
              containerraden: raderna står inuti sin container här, till
              skillnad från dashboardens panel (issue 126). Det tomma läget
-             är historikflikens eget ord — samma container, samma svar. -->
-        <div class="mt-8 lg:col-start-3 lg:row-start-2">
+             är historikflikens eget ord — samma container, samma svar.
+             Utan bildpanel spänner panelen två kolumner, bredvid
+             informationsytan. -->
+        <div
+            class="mt-8 lg:order-5"
+            :class="props.recentImages.length ? '' : 'lg:col-span-2'"
+        >
             <UiCard>
-                <template #heading>{{ t('container.overview.activity') }}</template>
+                <template #heading>
+                    <UiIcon name="history" />
+                    {{ t('container.overview.activity') }}
+                </template>
 
-                <p v-if="props.events.length === 0" class="text-slate-700">
+                <UiEmptyState v-if="props.events.length === 0">
                     {{ t('audit.history.empty') }}
-                </p>
+                </UiEmptyState>
 
                 <ul v-else class="flex flex-col divide-y divide-slate-200">
                     <HistoryRow
@@ -334,7 +372,7 @@ const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
              `thumb`-varianten finns. -->
         <div
             v-if="props.recentImages.length"
-            class="mt-8 lg:col-span-2 lg:col-start-1 lg:row-start-3"
+            class="mt-8 lg:order-6 lg:col-span-2"
         >
             <RecentImagesPanel
                 :images="props.recentImages"
