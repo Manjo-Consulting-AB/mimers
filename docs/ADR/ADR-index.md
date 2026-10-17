@@ -63,6 +63,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0055 Inbjudningskoder och stängd registrering]] | Registreringen är `open` eller `invite_only`; en hashad voucher per testare släpper in och ger Pro i 365 dagar, och en containerinbjudan är en egen väg in till Free | [[Planer och kvoter]], [[Konton och åtkomst]] |
 | [[ADR-0056 Flytande navigering]] | Layouten deklareras av sidan och står kvar; Inertias förhämtning med ett cache i minnet som töms vid varje ändring; itemsidan förhämtas aldrig från en annan sida; ingen beständig klientcache | Frontend |
 | [[ADR-0057 Ikoner och typsnitt]] | Ikonerna är Lucides, kopierade in under rollnamn och ritade av `UiIcon`; ikonrutans ton följer datumregeln eller domänen; Inter från egen server; `title` medelfet; skuggan och glaset som tokens | Frontend |
+| [[ADR-0058 Trädet som tabell]] | Itemflikens träd är en tabell med egna siffror per item och containern som rotrad; filtret gäller trädet och visar träffarna med vägen dit; *Expand all*; ett huvud för de tre lägena | Frontend |
 
 ## Om att ändra ett beslut
 
