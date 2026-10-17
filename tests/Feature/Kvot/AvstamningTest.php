@@ -324,6 +324,26 @@ it('containerräknaren stäms av på samma sätt', function () {
     expect(avstamningRad($account->id)->storage_bytes)->toBe(0);
 });
 
+it('inboxen räknas inte som en container', function () {
+    $account = Account::factory()->create();
+    $user = User::factory()->create();
+    Container::factory()->for($account, 'account')->create();
+    Container::factory()->for($account, 'account')->create(['inbox_user_id' => $user->id]);
+
+    UsageCounter::factory()->create([
+        'account_id' => $account->id,
+        'storage_bytes' => 0,
+        'container_count' => 1,
+    ]);
+
+    (new ReconcilesUsageCounters)->handle();
+
+    // Inboxen räknas aldrig upp när den skapas (ResolveInbox), så
+    // avstämningen får inte heller räkna den — annars visar plansidan 2.
+    expect(avstamningRad($account->id)->container_count)->toBe(1);
+    expect(UsageCounter::calculateContainerCount($account->id))->toBe(1);
+});
+
 it('en andra körning direkt efter den första hittar ingen avvikelse', function () {
     [$account, $user, , $item] = avstamningSetup();
     avstamningBilaga($item, $account, $user, avstamningStoredFil(1000));

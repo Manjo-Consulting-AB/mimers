@@ -66,11 +66,17 @@ class UsageCounter extends Model
     /**
      * Sanningen som `container_count` cachar: antalet levande containers som
      * ägs av kontot (issue 26a § Beslut 2).
+     *
+     * **Inboxen räknas inte.** Den räknas aldrig upp när den skapas
+     * (App\Actions\Inbox\ResolveInbox) och visas aldrig som en container
+     * ([[ADR-0054 Inboxen]]); räknades den här skulle avstämningen lägga till
+     * en container användaren aldrig skapat.
      */
     public static function calculateContainerCount(int $accountId): int
     {
         return (int) DB::table('container')
             ->where('account_id', $accountId)
+            ->whereNull('inbox_user_id')
             ->whereNull('deleted_at')
             ->count();
     }
