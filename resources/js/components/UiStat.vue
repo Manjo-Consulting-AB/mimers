@@ -17,16 +17,51 @@
  *
  * Talet är ett `<span>` och inte en rubrik: siffran är innehåll, inte ytans
  * struktur, och sex taltutor hade gett sex rubriknivåer i dokumentordningen.
+ *
+ * **`icon` och `tone` kom med issue 283.** `icon` ritar en `UiIcon` i 24px
+ * före talet; utan den ritas taltutan med samma markup som förut.
+ * `tone="on-image"` är formen för en taltuta ovanpå ett foto: glaset ur
+ * [[ADR-0057 Ikoner och typsnitt]] § 6 — `--color-glass` med
+ * `--color-glass-border` — och texten i `--color-ink-on-accent`.
  */
-defineProps({
+import { computed } from 'vue';
+import UiIcon from './UiIcon.vue';
+
+const props = defineProps({
     value: { type: [Number, String], required: true },
     label: { type: String, required: true },
+    icon: { type: String, default: null },
+    tone: { type: String, default: null },
 });
+
+const TONES = {
+    surface: {
+        box: 'border-border bg-surface',
+        value: 'text-ink',
+        label: 'text-ink-subtle',
+    },
+    'on-image': {
+        box: 'border-glass-border bg-glass',
+        value: 'text-ink-on-accent',
+        label: 'text-ink-on-accent',
+    },
+};
+
+const toneClasses = computed(() => TONES[props.tone] ?? TONES.surface);
 </script>
 
 <template>
-    <div class="flex min-w-32 flex-col rounded-card border border-border bg-surface px-4 py-3">
-        <span class="text-heading font-semibold text-ink">{{ value }}</span>
-        <span class="text-meta text-ink-subtle">{{ label }}</span>
+    <div class="flex min-w-32 flex-col rounded-card border px-4 py-3" :class="toneClasses.box">
+        <span
+            v-if="icon"
+            class="flex items-center gap-2 text-heading font-semibold"
+            :class="toneClasses.value"
+        >
+            <UiIcon :name="icon" :size="24" />
+            {{ value }}
+        </span>
+        <span v-else class="text-heading font-semibold" :class="toneClasses.value">{{ value }}</span>
+
+        <span class="text-meta" :class="toneClasses.label">{{ label }}</span>
     </div>
 </template>
