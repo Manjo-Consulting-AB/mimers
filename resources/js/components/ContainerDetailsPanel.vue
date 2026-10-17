@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import UiCard from './UiCard.vue';
+import UiIcon from './UiIcon.vue';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -46,7 +47,10 @@ const created = computed(() => eventDate(props.details.created_at));
 
 <template>
     <UiCard>
-        <template #heading>{{ t('container.overview.details') }}</template>
+        <template #heading>
+            <UiIcon name="container" />
+            {{ t('container.overview.details') }}
+        </template>
 
         <dl class="flex flex-col gap-2">
             <!-- Arten är ett FRITT fält: strängen skrivs ut som den är, och

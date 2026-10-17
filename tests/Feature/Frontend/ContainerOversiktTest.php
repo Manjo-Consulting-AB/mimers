@@ -850,7 +850,9 @@ it('monterar panelerna i rutnätet över lg', function () {
     $vy = oversiktUtanKommentarer(File::get(resource_path('js/pages/Containers/Overview.vue')));
 
     // Rutnätet är sidans eget: tre kolumner över `lg:`, och ingenting under.
-    expect($vy)->toContain('class="lg:grid lg:grid-cols-3 lg:items-start lg:gap-x-8"');
+    // `grid-flow-dense` kom med issue 288 och låter panelerna fylla lediga
+    // platser när kostnads- eller bildpanelen inte ritas.
+    expect($vy)->toContain('class="lg:grid lg:grid-flow-dense lg:grid-cols-3 lg:items-start lg:gap-x-8"');
 
     expect($vy)->toContain('import ContainerTasksPanel from')
         ->toContain('<ContainerTasksPanel :tasks="props.tasks" />')
