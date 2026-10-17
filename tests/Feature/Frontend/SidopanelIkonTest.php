@@ -69,10 +69,10 @@ it('ger varje sektionsrad en ikon ur samma lista som raden', function () {
 
     expect($mappning)->toBe([
         'dashboard' => 'dashboard',
-        'tasks' => 'tasks',
         'inbox' => 'inbox',
-        'documents' => 'documents',
+        'tasks' => 'tasks',
         'containers' => 'container',
+        'documents' => 'documents',
         'history' => 'history',
         'search' => 'search',
         'settings' => 'settings',
