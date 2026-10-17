@@ -20,6 +20,8 @@ Frågor **utan svar**. Så fort en punkt här är besvarad flyttar den till rät
 
 - **Maila Mimers.** Att skicka in information via e-post till kontot, en container eller ett item. Diskussionen, det som är avgjort och det som är öppet samlas i [[Maila Mimers]] tills funktionen blir en ADR. Restes 2026-09-24.
 
+- **Ska en relation kunna gå mellan två containrar?** I dag avvisar `LinkItems` det med `item_link.cross_container`. Frågan är om det ska tillåtas, och vad det i så fall kostar. Det kolliderar med flera beslut. `parent`/`child` ger behörighet nedåt ([[ADR-0028 Åtkomst på itemnivå]]), så ett barn i en annan container, kanske i ett annat konto, skulle ärva en delning förbi containergränsen. En relation till en annan container visar åtminstone motpartens namn, men en logg nämner aldrig den andra containern ([[ADR-0053 Flytt och kopiering]]) och sökningen läcker aldrig mellan containrar (issue 15). Det behövs regler för vad som händer med länken när den andra containern raderas, läggs i papperskorgen eller lämnas över. Rotregeln, underträdets summor och kartan förutsätter att strukturen ligger i en container ([[ADR-0059 Kartan med en mitt]] § 11). Den minst riskabla formen som har skisserats är att bara `related` får gå mellan containrar, och bara mellan containrar med samma ägarkonto: `related` ger ingen behörighet, och med samma ägare finns ingen främmande part som kan få se något. Restes vid genomgången av kartans mockup, 2026-10-18.
+
 ## Avgjort och flyttat
 
 Punkterna nedan låg här som frågor och är besvarade. De står kvar som spår av var svaret hamnade, inget annat.
