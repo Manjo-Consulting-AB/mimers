@@ -1512,12 +1512,12 @@ it('har inga användarvända strängar kvar i Vue-komponenterna', function () {
 it('har ingen hårdkodad text i Ui-komponenterna', function () {
     $filer = File::glob(resource_path('js/components/Ui*.vue'));
 
-    // Tolv: de fem primitiverna (issue 425), de fem ytorna (issue 426),
-    // flikraden (issue 100) och arket (issue 152). Räkningen är en spärr och
-    // inte en bekvämlighet — en trettonde `Ui*.vue` är en komponent någon
-    // byggt utan att en issue bad om den, och den ska mötas av det här provet
-    // och inte av tystnad.
-    expect($filer)->toHaveCount(12);
+    // Tretton: de fem primitiverna (issue 425), de fem ytorna (issue 426),
+    // flikraden (issue 100), arket (issue 152) och ikonen (issue 282).
+    // Räkningen är en spärr och inte en bekvämlighet — en fjortonde `Ui*.vue`
+    // är en komponent någon byggt utan att en issue bad om den, och den ska
+    // mötas av det här provet och inte av tystnad.
+    expect($filer)->toHaveCount(13);
 
     foreach ($filer as $fil) {
         $kod = (string) preg_replace('#/\*.*?\*/#s', '', File::get($fil));
