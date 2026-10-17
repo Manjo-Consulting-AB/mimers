@@ -125,8 +125,8 @@ function hjalteHjalten(): string
  * genom skalet är borta: sidan skickar inga tal, och hjälten frågar inte sidan
  * om dem.
  *
- * Sedan issue 284 bär bara den HÖGA hjälten talen (ADR-0050 § 2–3): den låga
- * har toningen men inga taltutor.
+ * Sedan 2026-10-17 bär båda formerna talen — de försvann annars så fort
+ * användaren lämnade översikten.
  */
 it('ritar brickorna i hjälten ur den delade proppen', function () {
     withoutVite();
@@ -149,16 +149,15 @@ it('ritar brickorna i hjälten ur den delade proppen', function () {
         ->and($hjalte)->toMatch('#<UiStat\b[^>]*:value="counts\.items"#s')
         ->and($hjalte)->toMatch('#<UiStat\b[^>]*:value="counts\.todos"#s');
 
-    // Brickorna ritas bara i den höga hjälten: villkoret är både talens
-    // närvaro — `counts` — och formen.
-    preg_match('#<div\b[^>]*v-if="counts && hero === \'large\'"[^>]*>#s', $hjalte, $träffar);
+    // Brickorna ritas i båda formerna: villkoret är bara talens närvaro.
+    preg_match('#<div\b[^>]*v-if="counts"[^>]*>#s', $hjalte, $träffar);
 
     $brickrad = $träffar[0] ?? '';
 
-    expect($brickrad)->not->toBe('', 'brickorna ritas inte ur `counts` och den höga formen');
+    expect($brickrad)->not->toBe('', 'brickorna ritas inte ur `counts`');
 
     expect($hjalte)->toMatch(
-        '#<div\b[^>]*v-if="counts && hero === \'large\'"[^>]*>\s*<Link\b.*?<UiStat#s',
+        '#<div\b[^>]*v-if="counts"[^>]*>\s*<Link\b.*?<UiStat#s',
         'brickorna står inte inuti brickraden',
     );
 
@@ -176,15 +175,15 @@ it('ritar brickorna i hjälten ur den delade proppen', function () {
 });
 
 /*
- * Klart när: den låga hjälten har toningen men inga tal.
+ * Den låga hjälten har toningen OCH talen.
  *
- * `compact` på varje flik utom översikten (ADR-0050 § 2), och sedan issue 284
- * är det skillnaden mot den höga: proppen `containerCounts` finns på varje
- * containersida, men bara den höga hjälten ritar taltutorna. Provet fäster
- * båda leden: flikarna svarar med proppen satt, deras skal ber om den låga
- * formen, och talen står bakom formvillkoret.
+ * `compact` på varje flik utom översikten (ADR-0050 § 2). Issue 284 tog bort
+ * talen ur den låga formen, men då försvann de så fort användaren lämnade
+ * översikten; sedan 2026-10-17 ritas de i båda. Provet fäster båda leden:
+ * flikarna svarar med proppen satt, deras skal ber om den låga formen, och
+ * talen står inte bakom något formvillkor.
  */
-it('har toningen men inga tal i den låga hjälten', function () {
+it('har toningen och talen i den låga hjälten', function () {
     withoutVite();
 
     [, $ägare, $container] = hjalteKontext();
@@ -205,14 +204,15 @@ it('har toningen men inga tal i den låga hjälten', function () {
         expect($vy)->toContain("[ContainerLayout, { hero: 'compact'");
     }
 
-    // Toningen ritas i båda formerna, men talen bara i den höga: villkoret
-    // nämner formen, och det finns ingen taltuta utanför brickraden.
+    // Toningen och talen ritas i båda formerna: villkoret nämner inte
+    // formen, och det finns ingen taltuta utanför brickraden.
     $hjalte = hjalteHjalten();
 
     expect($hjalte)->toContain('bg-linear-to-r')
-        ->and($hjalte)->toContain("counts && hero === 'large'")
+        ->and($hjalte)->toContain('v-if="counts"')
+        ->and($hjalte)->not->toContain("hero === 'large'\"")
         ->and(substr_count($hjalte, '<UiStat'))
-        ->toBe(2, 'den låga hjälten ritar fler taltutor än den höga');
+        ->toBe(2, 'hjälten ritar fler taltutor än brickraden');
 });
 
 /*
@@ -435,7 +435,8 @@ it('ersätter mörkläggningen med en toning och behåller den neutrala ytan', f
 
     // Texten står i den täta delen: toningen håller full täthet en bit in, och
     // spalten är kapad så att den aldrig växer in i den glesa delen.
-    expect($hjalte)->toContain('from-40%')
+    expect($hjalte)->toContain('from-20%')
+        ->and($hjalte)->toContain('via-30%')
         ->and($hjalte)->toContain('max-w-lg');
 
     // Bilden — eller den neutrala ytan — ritas utan villkor under toningen.

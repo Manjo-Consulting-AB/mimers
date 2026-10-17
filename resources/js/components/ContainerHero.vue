@@ -26,16 +26,19 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Texten står alltid på den täta delen av toningen.** Lagret ovanpå bilden
  * är en toning från `--color-shell` till genomskinnligt, vänster till höger
  * ([[ADR-0057 Ikoner och typsnitt]] § 6), i stället för den jämna
- * mörkläggningen. Toningen håller full täthet en bit in och planar sedan ut:
+ * mörkläggningen. Toningen håller full täthet en bit in — till 20 %, nästan
+ * full till 30 % — och planar sedan ut:
  * namn, art och beskrivning står i den täta delen med vit text, och bilden
  * syns utan mörkläggning i hjältens högra del. Textspalten är kapad så att
  * den aldrig växer in i den glesa delen. Utan bild ritar `ContainerCover`
  * fortfarande den neutrala ytan ur [[ADR-0047 Containerns bild]] § Beslut —
  * toningen läggs över den som över varje annan yta.
  *
- * **Talen bärs av den höga hjälten och är länkar.** `hero` styr hjältens HÖJD
- * (`min-h-56` / `min-h-32`) och talen: den låga hjälten har toningen men inga
- * tal ([[ADR-0050 Desktopdesignen]] § 2–3). Talen kommer ur den delade
+ * **Talen står på varje flik och är länkar.** `hero` styr bara hjältens
+ * minsta HÖJD (`min-h-56` / `min-h-32`). Den låga hjälten bar först inga tal
+ * ([[ADR-0050 Desktopdesignen]] § 2–3), men de försvann då så fort
+ * användaren lämnade översikten — sedan 2026-10-17 ritas de i båda
+ * formerna. Talen kommer ur den delade
  * proppen `containerCounts` — `{ items, todos }`, byggd i
  * App\Http\Middleware\HandleInertiaRequests::containerCounts() (issue 679) —
  * och hjälten läser den själv ur `page.props`. Hjälten frågar alltså ingenting
@@ -74,8 +77,8 @@ import { useTranslations } from '../composables/useTranslations.js';
 const props = defineProps({
     /*
      * `large` på översikten, `compact` på de andra flikarna — ADR-0050 § 2.
-     * Formen styr hjältens HÖJD (`min-h-56` / `min-h-32`) och talen: bara den
-     * höga hjälten bär dem. Den här komponenten ritas bara när skalet har ett
+     * Formen styr hjältens minsta HÖJD (`min-h-56` / `min-h-32`); talen ritas
+     * i båda. Den här komponenten ritas bara när skalet har ett
      * värde att ge den; frånvaron av en hjälte är skalets beslut och inte
      * hjältens.
      */
@@ -146,7 +149,7 @@ const { t } = useTranslations();
             hela ytan.
         -->
         <span
-            class="absolute inset-0 rounded-card bg-linear-to-r from-shell from-40% via-shell/90 to-transparent"
+            class="absolute inset-0 rounded-card bg-linear-to-r from-shell from-20% via-shell/90 via-30% to-transparent"
             aria-hidden="true"
         ></span>
 
@@ -223,12 +226,11 @@ const { t } = useTranslations();
             </div>
 
             <!--
-                Talen, bara i den höga hjälten (ADR-0050 § 2) och bara när den
-                delade proppen finns. Varje taltuta är en länk — samma grepp
+                Talen, i båda formerna, bara när den delade proppen finns. Varje taltuta är en länk — samma grepp
                 som dashboardens brickor (issue 654): *Items* till itemlistan,
                 *Open tasks* till uppgiftsfliken.
             -->
-            <div v-if="counts && hero === 'large'" class="mt-2 flex flex-wrap gap-4">
+            <div v-if="counts" class="mt-2 flex flex-wrap gap-4">
                 <Link
                     :href="`/containers/${container.ulid}/items`"
                     class="rounded-card outline-none hover:shadow-sm focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
