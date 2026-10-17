@@ -5,6 +5,26 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
 /*
+ * Inter, från vår egen server — se [[ADR-0057 Ikoner och typsnitt]] § 4.
+ *
+ * Filen är Inters officiella variabla release (4.1) och ligger i
+ * resources/fonts/ med sin licens. Vite paketerar den med resten av bygget;
+ * ingen förfrågan går till Google Fonts eller något annat CDN. Den variabla
+ * filen bär hela viktskalan, så `font-weight: 100 900` räcker för de tre
+ * vikter vi använder (400, 500 och 600).
+ *
+ * `swap` visar reservtypsnittet direkt och byter när filen är hämtad, i
+ * stället för att lämna texten osynlig under tiden.
+ */
+@font-face {
+    font-family: 'Inter';
+    src: url('../fonts/InterVariable.woff2') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+/*
  * Designtokens, se [[ADR-0042 Designsystemet]] § Beslut.
  *
  * Rollnamn, aldrig färgnamn: `--color-surface` och inte `--color-blue-600`.
@@ -15,7 +35,7 @@
  * Värdena är lästa ur ADR-0042:s tabell och ska inte hämtas ur bilderna igen.
  */
 @theme {
-    --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif,
+    --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
     /* Ytor och kanter */
@@ -57,7 +77,7 @@
     --text-meta: 12px;
     --text-body: 14px;
     --text-title: 15px;
-    --text-title--font-weight: 600;
+    --text-title--font-weight: 500;
     --text-heading: 24px;
     --text-display: 30px;
 
