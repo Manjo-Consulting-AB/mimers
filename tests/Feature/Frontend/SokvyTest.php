@@ -653,7 +653,7 @@ it('har en väg till sökningen i navigeringen för en inloggad och ingen för e
 
     // Raden bor i skalets sektionslista (issue 151), innanför samma
     // `v-if="user"` som de andra raderna.
-    expect($sektioner)->toContain("{ key: 'search', href: '/search' }")
+    expect($sektioner)->toContain("{ key: 'search', href: '/search', icon: 'search' }")
         ->and($sektioner)->toContain('v-if="user"')
         ->and($sektioner)->toContain('t(`nav.${section.key}`)');
 

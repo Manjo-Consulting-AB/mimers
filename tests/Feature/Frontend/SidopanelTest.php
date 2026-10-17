@@ -290,11 +290,10 @@ it('leder sista raden i containerlistan till att skapa en container', function (
         ->and($raden)->not->toBeFalse()
         ->and($raden)->toBeGreaterThan($grupper);
 
-    // Målet, etiketten och ikonen — plustecknet ur CreateButton.vue.
+    // Målet, etiketten och ikonen — rollen `add` ur den slutna listan
+    // (issue 289).
     expect($lista)->toContain("t('nav.add_container')")
-        ->toContain('<path d="M12 5v14">')
-        ->toContain('<path d="M5 12h14">')
-        ->toContain('class="h-5 w-5"')
+        ->toContain('<UiIcon name="add"')
         ->toContain('hover:bg-shell-active/50');
 
     expect(route('containers.create', [], false))->toBe('/containers/create');
