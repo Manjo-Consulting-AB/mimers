@@ -1,5 +1,4 @@
-# Utvecklingsmiljön: samma PHP som CI (.github/workflows/ci.yml). Node är
-# 22 och inte CI:s 20, som är end-of-life och borta ur nixpkgs.
+# Utvecklingsmiljön: samma PHP och Node som CI (.github/workflows/ci.yml).
 # Aktiveras av direnv genom .envrc, eller för hand med `nix develop`.
 {
   description = "Mimers – utvecklingsmiljö";
