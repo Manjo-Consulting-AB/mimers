@@ -281,7 +281,6 @@ const tabs = computed(() =>
                 class="hidden md:block"
                 :hero="hero"
                 :container="container"
-                :can="can"
             />
 
             <!-- Namnraden, på varje sida utan hjälte. Under `md:` bär den
