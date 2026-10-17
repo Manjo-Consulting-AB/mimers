@@ -54,8 +54,9 @@ function globalHistorikvyKod(string $sokvag): string
 }
 
 /*
- * Klart när: `sidopanelen har History mellan Containers och Search` — i både
- * `allSections` och `partKeys.rows` (Beslut 1).
+ * Klart när: `sidopanelen har History före Search` — i både `allSections`
+ * och `partKeys.rows` (Beslut 1). Sedan 2026-10-17 står Documents mellan
+ * Containers och History — Tonys ordning.
  *
  * Ordningen läses ur listen i skalet — samma grepp som MobilskalTest och
  * GlobalaDokumentvyTest — och *mellan* prövas och inte bara *med*: en rad på
@@ -64,23 +65,23 @@ function globalHistorikvyKod(string $sokvag): string
  * Listan är bara sanningen om vad en rad ÄR. Vilka rader som ritas står i
  * `partKeys`: en rad som ligger i `allSections` men saknas i `rows` syns inte
  * i sidopanelen eller i sidomenyn. Provet läser därför båda och kräver att
- * `containers`, `history` och `search` ligger i den ordningen på båda
+ * `documents`, `history` och `search` ligger i den ordningen på båda
  * ställena.
  */
-it('sidopanelen har History mellan Containers och Search', function () {
+it('sidopanelen har History mellan Documents och Search', function () {
     $skal = File::get(resource_path('js/components/ShellSections.vue'));
 
     preg_match_all("/key: '([a-z0-9_]+)', href: '([^']+)'/", $skal, $träffar, PREG_SET_ORDER);
 
     $nycklar = array_column($träffar, 1);
 
-    expect($nycklar)->toContain('containers')->toContain('history')->toContain('search');
+    expect($nycklar)->toContain('documents')->toContain('history')->toContain('search');
 
-    $containers = array_search('containers', $nycklar, true);
+    $documents = array_search('documents', $nycklar, true);
     $history = array_search('history', $nycklar, true);
     $search = array_search('search', $nycklar, true);
 
-    expect($history)->toBe($containers + 1)
+    expect($history)->toBe($documents + 1)
         ->and($search)->toBe($history + 1);
 
     // Raderna som RITAS: `rows` ur `partKeys`, i den ordning de staplas.
@@ -89,13 +90,13 @@ it('sidopanelen har History mellan Containers och Search', function () {
 
     $rader = $ritade[1];
 
-    expect($rader)->toContain('containers')->toContain('history')->toContain('search');
+    expect($rader)->toContain('documents')->toContain('history')->toContain('search');
 
-    $ritadContainers = array_search('containers', $rader, true);
+    $ritadDocuments = array_search('documents', $rader, true);
     $ritadHistory = array_search('history', $rader, true);
     $ritadSearch = array_search('search', $rader, true);
 
-    expect($ritadHistory)->toBe($ritadContainers + 1)
+    expect($ritadHistory)->toBe($ritadDocuments + 1)
         ->and($ritadSearch)->toBe($ritadHistory + 1);
 
     // Etiketten slås upp i katalogen och är sidans eget ord; en rad utan

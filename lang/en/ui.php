@@ -1886,11 +1886,11 @@ return [
             // `history` in containerSections.js — the place ADR-0050 § 4
             // gives it (*Overview, Items, Documents, Tasks, Costs, History*).
             // It is
-            // *Tasks* and not the mockup's *Maintenance* beside it: the two
+            // *To do* (renamed from *Tasks* 2026-10-17, matching the main menu) and not the mockup's *Maintenance* beside it: the two
             // are ONE surface and the difference is a filter on
             // `recurrence_type` (§ 4, [[ADR-0042 Designsystemet]]
             // § Bildernas avvikelser).
-            'tasks' => 'Tasks',
+            'tasks' => 'To do',
             // Issue 175 · [[ADR-0050 Desktopdesignen]] § 9: the container's
             // costs tab. The row sits after `tasks` and before `history` in
             // containerSections.js — the next step of the same enumeration
@@ -2259,8 +2259,8 @@ return [
          * the key is already there.
          */
         'tasks' => [
-            'title' => 'Tasks',
-            'heading' => 'Tasks',
+            'title' => 'To do',
+            'heading' => 'To do',
             'filter_maintenance' => 'Recurring tasks only',
             'done' => 'Done',
             'empty' => 'No tasks in this container.',

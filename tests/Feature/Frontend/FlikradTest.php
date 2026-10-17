@@ -419,7 +419,7 @@ it('fliken finns i containerns flikrad på sin plats', function () {
 
     // Och etiketten finns i katalogen — `t()` skriver annars nyckeln själv i
     // raden.
-    expect(trans('ui.container.nav.tasks', [], 'en'))->toBe('Tasks');
+    expect(trans('ui.container.nav.tasks', [], 'en'))->toBe('To do');
 });
 
 /*
