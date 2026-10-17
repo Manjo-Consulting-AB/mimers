@@ -144,7 +144,7 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
     // `v-if="user"` som de fyra raderna ovanför (Beslut 2).
     // `matchPrefix` kom med issue 169: raden är den enda som också är aktuell
     // på en undersida, eftersom `/settings` omdirigerar till profilen (53c).
-    expect($sektioner)->toContain("{ key: 'settings', href: '/settings', matchPrefix: true }")
+    expect($sektioner)->toContain("{ key: 'settings', href: '/settings', icon: 'settings', matchPrefix: true }")
         ->and($sektioner)->toContain('v-if="user"');
 
     // Listan ritas innanför `#huvudmenyn` — samma div som raderna låg i förut
@@ -161,7 +161,7 @@ it('har en väg till inställningarna i navigeringen för en inloggad och ingen 
     // sidopanelen: `outline-none` utan en ring som tar över river
     // tangentbordsarbetet ([[ADR-0042 Designsystemet]] § Beslut).
     expect(strpos($sektioner, "{ key: 'settings'"))->toBeLessThan(strpos($sektioner, "t('auth.logout')"))
-        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
+        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center gap-2 rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
 
     // Texten bor i lang/ (Beslut 5).
     expect(trans('ui.nav.settings', [], 'en'))->toBe('Settings');
@@ -225,7 +225,7 @@ it('visar användarens namn som länken till inställningarna', function () {
     // `user` är `auth.user` ur den delade proppen, som är null för en gäst, så
     // en gäst ser varken länken eller något namn.
     expect($raden)->toContain('v-if="user"')
-        ->and($sektioner)->toContain("{ key: 'settings', href: '/settings', matchPrefix: true }")
+        ->and($sektioner)->toContain("{ key: 'settings', href: '/settings', icon: 'settings', matchPrefix: true }")
         ->and($sektioner)->toContain('const user = computed(() => page.props.auth.user)');
 
     // Namnet ritas på ETT ställe i filen — i länkens etikett — och inte i en
@@ -270,8 +270,8 @@ it('har en väg till uppgifterna i navigeringen för en inloggad och ingen för 
     // ritar (issue 151).
     // Träffytan (44 px) och fokusringen delas av varje rad i skalet — se
     // provet för inställningsraden ovanför, där klassen står med skäl.
-    expect($sektioner)->toContain("{ key: 'tasks', href: '/tasks' }")
-        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
+    expect($sektioner)->toContain("{ key: 'tasks', href: '/tasks', icon: 'tasks' }")
+        ->and($sektioner)->toContain('class="inline-flex min-h-11 items-center gap-2 rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"');
 
     // Texten bor i lang/, och ordet är sidans eget (`todo.heading`) och inte
     // ruttens — användaren ska möta samma ord i menyn som på sidan.

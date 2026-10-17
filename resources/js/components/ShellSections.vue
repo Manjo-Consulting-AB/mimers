@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import UiBadge from './UiBadge.vue';
+import UiIcon from './UiIcon.vue';
 import UiListRow from './UiListRow.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -38,6 +39,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `nav.settings` bor kvar som radens `title`, bara där, eftersom den är det
  * enda som säger vad raden GÖR. Grannradernas `title` hade bara upprepat deras
  * synliga text och gett dem en tooltip ingen beställt.
+ *
+ * **Varje rad bär en ikon ur den slutna listan** (issue 289 ·
+ * [[ADR-0057 Ikoner och typsnitt]] § 1). Rollen står i `allSections` bredvid
+ * `key` och `href`, så raden och ikonen följs åt mellan ytorna. Containerns
+ * rad pekar på sidan `/containers` och bär därför `container` — samma roll
+ * som varje container i ShellContainerList, aldrig artens. `UiIcon` målar med
+ * `currentColor`, så raden behåller sin textfärg och den aktiva raden sitt
+ * `text-white`; ingen egen färg sätts här.
  *
  * **Nyligen besökta är INGEN av delarna** (issue 160 · [[ADR-0049
  * Nyligen besökta]] § Beslut). Den är en lista över items och inte en rad i
@@ -98,33 +107,33 @@ const favorites = computed(() => page.props.favorites ?? []);
 const inboxCount = computed(() => page.props.inboxCount ?? 0);
 
 const allSections = [
-    { key: 'dashboard', href: '/dashboard' },
-    { key: 'tasks', href: '/tasks' },
+    { key: 'dashboard', href: '/dashboard', icon: 'dashboard' },
+    { key: 'tasks', href: '/tasks', icon: 'tasks' },
     // Inboxen (M27 · issue 245, [[ADR-0054 Inboxen]] § 7): raden står bredvid
     // uppgifterna, som den hör ihop med, och bär antalet obearbetat — uppgifter
     // plus bilagor — så att skalet säger till när det finns något att bearbeta
     // utan att användaren öppnar sidan.
-    { key: 'inbox', href: '/inbox' },
+    { key: 'inbox', href: '/inbox', icon: 'inbox' },
     // Den globala dokumentlistan (M28 · issue 255 · Beslut 1): raden står
     // mellan inboxen och containrarna, samma plats dokumentet har inuti en
     // container ([[ADR-0050 Desktopdesignen]] § 4), och etiketten är sidans
     // eget ord (`documents.heading`).
-    { key: 'documents', href: '/documents' },
-    { key: 'containers', href: '/containers' },
+    { key: 'documents', href: '/documents', icon: 'documents' },
+    { key: 'containers', href: '/containers', icon: 'container' },
     // Den globala historiken (M30 · issue 272 · Beslut 1): raden står efter
     // containrarna och före sökningen — historiken spänner över varje
     // container användaren når, samma plats fliken har inuti en container
     // ([[ADR-0050 Desktopdesignen]] § 17) — och etiketten är sidans eget ord
     // (`history.heading`).
-    { key: 'history', href: '/history' },
-    { key: 'search', href: '/search' },
+    { key: 'history', href: '/history', icon: 'history' },
+    { key: 'search', href: '/search', icon: 'search' },
     // Inställningarna är den enda raden som också är aktuell på en UNDERSIDA:
     // `/settings` omdirigerar till profilen (issue 53c), så en jämförelse som
     // bara såg den exakta adressen hade lämnat raden omarkerad på varje
     // inställningssida. `matchPrefix` står därför på den och ingen annan —
     // `/containers` får inte samma flagga, för på en containersida är det
     // containerraden i sidopanelen som är den aktuella (issue 169).
-    { key: 'settings', href: '/settings', matchPrefix: true },
+    { key: 'settings', href: '/settings', icon: 'settings', matchPrefix: true },
 ];
 
 /*
@@ -167,9 +176,11 @@ function isCurrent(section) {
                 prefetch
                 :title="section.key === 'settings' ? t('nav.settings') : undefined"
                 :aria-current="isCurrent(section) ? 'page' : undefined"
-                class="inline-flex min-h-11 items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="inline-flex min-h-11 items-center gap-2 rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :class="['w-full', isCurrent(section) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50']"
             >
+                <UiIcon :name="section.icon" class="shrink-0" />
+
                 {{ section.key === 'settings' ? user.name : t(`nav.${section.key}`) }}
 
                 <!--
@@ -205,8 +216,10 @@ function isCurrent(section) {
                 href="/logout"
                 method="post"
                 as="button"
-                class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="inline-flex min-h-11 w-full items-center gap-2 rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
+                <UiIcon name="arrow-right" class="shrink-0" />
+
                 {{ t('auth.logout') }}
             </Link>
         </li>
@@ -214,8 +227,10 @@ function isCurrent(section) {
         <li v-else-if="props.part === 'account'" class="flex">
             <Link
                 href="/login"
-                class="inline-flex min-h-11 w-full items-center rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                class="inline-flex min-h-11 w-full items-center gap-2 rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
+                <UiIcon name="arrow-right" class="shrink-0" />
+
                 {{ t('nav.login') }}
             </Link>
         </li>
@@ -235,6 +250,10 @@ function isCurrent(section) {
 
         <ul class="flex flex-col">
             <UiListRow v-for="favorite in favorites" :key="favorite.url">
+                <template #icon>
+                    <UiIcon name="favorite" />
+                </template>
+
                 <template #title>
                     <Link :href="favorite.url" class="flex min-h-11 items-center rounded-control hover:bg-shell-active/50">
                         {{ favorite.name }}

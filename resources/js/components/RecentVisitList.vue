@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import UiIcon from './UiIcon.vue';
 import UiListRow from './UiListRow.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
@@ -40,6 +41,10 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * ([[ADR-0041 Itemets vy]]). Tiden skrivs av `useRelativeDate()` och aldrig
  * här — servern skickar tidsstämpeln som ISO 8601 och regeln för hur den
  * skrivs bor i EN modul (issue 104 · [[ADR-0042 Designsystemet]]).
+ *
+ * **Raden bär `item`-ikonen** i `UiListRow`s `icon`-slot (issue 289): ett
+ * besök är en genväg till ett item, och ikonen upprepar den rollen i stället
+ * för att gissa ur namnet.
  */
 const props = defineProps({
     /*
@@ -88,6 +93,10 @@ watch(
 
         <ul class="flex flex-col">
             <UiListRow v-for="visit in rows" :key="visit.url">
+                <template #icon>
+                    <UiIcon name="item" />
+                </template>
+
                 <template #title>
                     <Link :href="visit.url" class="flex min-h-11 items-center hover:underline">
                         {{ visit.name }}

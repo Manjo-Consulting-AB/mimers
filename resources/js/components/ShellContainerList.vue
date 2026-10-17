@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -57,6 +58,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * issue 68a § Beslut 3) och ringen är `--color-focus` ([[ADR-0042
  * Designsystemet]] § Beslut) — samma form som raderna i ShellSections, och
  * `outline-none` utan en ring som tar över river tangentbordsarbetet.
+ *
+ * **Varje rad bär samma ikon, oavsett art** (issue 289 · [[ADR-0057 Ikoner
+ * och typsnitt]] § 1). `kind` är fritt ([[ADR-0036 Containerns art]]), och en
+ * ikon gissad ur fritext ger fel bild åt den som skrev något eget — därför
+ * ritas varje container med `container` och *Add container* med `add`.
+ * `UiIcon` målar med `currentColor`, så den aktiva raden behåller sitt
+ * `text-white` och den inaktiva ärver panelens textroll.
  *
  * **Hover är en bakgrund, inte en understrykning** (issue 676): klassen är
  * `hover:bg-shell-active/50` i `:class`-grenen för en INAKTIV rad, så den
@@ -138,9 +146,11 @@ function isActive(container) {
                         :href="`/containers/${container.ulid}`"
                         prefetch
                         :aria-current="isActive(container) ? 'page' : undefined"
-                        class="inline-flex min-h-11 w-full items-center rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                        class="inline-flex min-h-11 w-full items-center gap-2 rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                         :class="isActive(container) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50'"
                     >
+                        <UiIcon name="container" class="shrink-0" />
+
                         {{ container.name }}
                     </Link>
                 </li>
@@ -170,19 +180,7 @@ function isActive(container) {
                     prefetch
                     class="inline-flex min-h-11 w-full items-center gap-2 rounded-control outline-none hover:bg-shell-active/50 focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="h-5 w-5"
-                        aria-hidden="true"
-                    >
-                        <path d="M12 5v14"></path>
-                        <path d="M5 12h14"></path>
-                    </svg>
+                    <UiIcon name="add" class="shrink-0" />
 
                     {{ t('nav.add_container') }}
                 </Link>
