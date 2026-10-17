@@ -47,6 +47,11 @@
 
         <div class="p-4">
             <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <!--
+                    `font-semibold` är lastbärande sedan issue 280: `text-title`
+                    ger numera 500 ([[ADR-0057 Ikoner och typsnitt]] § 5), och
+                    kortets rubrik ska vara en nivå över listraden.
+                -->
                 <h2 v-if="$slots.heading" class="text-title font-semibold text-ink">
                     <slot name="heading" />
                 </h2>
