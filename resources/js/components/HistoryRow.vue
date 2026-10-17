@@ -1,6 +1,8 @@
 <script setup>
 import { computed } from 'vue';
+import UiIcon from './UiIcon.vue';
 import UiListRow from './UiListRow.vue';
+import { presentationFor } from './iconPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
 
@@ -53,6 +55,15 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * och den här filen formaterar ingenting själv. `<time datetime>` bär
  * tidsstämpeln maskinläsbart jämte det lästa datumet, samma form som en
  * loggrad förtjänar.
+ *
+ * **Ikonrutan följer domänen** (issue 286 · [[ADR-0057 Ikoner och typsnitt]]
+ * § 3). Domänen är handlingens första led — `cost_entry.created` blir
+ * `cost_entry` — och rollen och tonen kommer ur `iconPresentation.js`
+ * (issue 283). Rutan väljs efter vad raden handlar om och aldrig för
+ * omväxlingens skull; en okänd domän ritar `history` i `neutral` i stället för
+ * att kasta, så en ny handling syns som en rad även innan mappningen känner
+ * den. `UiIcon` äger storlek, linjebredd, färg och `aria-hidden` (issue 282),
+ * och `UiListRow` centrerar rutan mot texten (issue 283).
  */
 const props = defineProps({
     /*
@@ -99,6 +110,18 @@ const sentence = computed(() => t(`audit.action.${props.row.action}`, {
 const date = computed(() => eventDate(props.row.created_at));
 
 /*
+ * Domänen: handlingens första led. `cost_entry.created` blir `cost_entry`,
+ * och det är domänen och inte den fulla handlingen som väljer ikonen.
+ */
+const domain = computed(() => props.row.action.split('.')[0]);
+
+/*
+ * Rollen och tonen ur presentationsmodulen. En okänd domän ger `history` i
+ * `neutral` där — raden behöver ingen egen fallback.
+ */
+const presentation = computed(() => presentationFor(domain.value));
+
+/*
  * Platsen raden gäller, som ord — containerns namn, ersättaren för en gallrad
  * container, eller *Account* för en kontorad. `null` betyder att raden inte
  * ska säga någon plats alls: anroparen bad inte om den (flikarna), och där är
@@ -124,6 +147,10 @@ const container = computed(() => {
 
 <template>
     <UiListRow>
+        <template #icon>
+            <UiIcon :name="presentation.role" :tile="presentation.tone" />
+        </template>
+
         <template #title>{{ sentence }}</template>
 
         <template v-if="container !== null" #subtitle>{{ container }}</template>
