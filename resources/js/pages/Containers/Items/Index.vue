@@ -173,6 +173,17 @@ const props = defineProps({
      */
     structure: { type: Array, default: null },
     /*
+     * Trädets kolumner, item-ULID → `{category, tags, documents, tasks,
+     * updated_at}`, ur App\Actions\Item\ResolveItemTreeRows (issue 292 ·
+     * [[ADR-0058 Trädet som tabell]] § 1, 3 och 4). Proppen finns BARA i
+     * trädläget, samma form och samma skäl som `structure` ovan: `null`
+     * betyder INTE HÄMTAD, och en tom tabell är ett svar servern HAR gett.
+     *
+     * Vyn ritar ingenting ur den än: tabellen kommer i issue 294, och den
+     * läser kolumnerna härifrån i stället för att räkna dem i klienten.
+     */
+    treeRows: { type: Object, default: null },
+    /*
      * Kartan i kartläget, ur App\Actions\Item\ResolveItemMap: `{trail, levels}`.
      * `trail` är den LÖSTA öppna vägen — en begärd väg som inte längre finns är
      * kapad där den brister, så markeringen pekar alltid på en nod som finns —

@@ -15,6 +15,7 @@ use App\Actions\Item\ResolveItemCover;
 use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Item\ResolveItemTree;
+use App\Actions\Item\ResolveItemTreeRows;
 use App\Actions\Item\UpdateItem;
 use App\Actions\Schedule\ListItemTasks;
 use App\Actions\Tag\ListTags;
@@ -203,6 +204,10 @@ class ItemController extends Controller
      * öppnar listan ska inte betala två frågor för en yta hon inte ser — och
      * båda kostar sina två oavsett hur många items containern har
      * (App\Actions\Item\ResolveItemTree och App\Actions\Item\ResolveItemMap).
+     * Trädläget bär sedan issue 292 även kolumnerna ur
+     * App\Actions\Item\ResolveItemTreeRows — fem frågor för hela trädet,
+     * oavsett hur många noder det har, och ingen av dem ställs i list- eller
+     * kartläget.
      *
      * `can.create` är `ContainerPolicy::createItem()` — samma grind som
      * `Api\ItemController::store()` prövar för ett toppnivå-item, och bara en
@@ -245,6 +250,7 @@ class ItemController extends Controller
         ResolveItemCover $resolveItemCover,
         CreateTarget $createTarget,
         ResolveItemTree $resolveItemTree,
+        ResolveItemTreeRows $resolveItemTreeRows,
         ResolveItemMap $resolveItemMap,
     ): Response {
         Gate::authorize('view', $container);
@@ -323,6 +329,28 @@ class ItemController extends Controller
         // för sina kandidater.
         $marked = $map['marked'] ?? null;
         $marked?->setRelation('container', $container);
+
+        // Trädet och dess kolumner (issue 292 · [[ADR-0058 Trädet som tabell]]
+        // § 1, 3 och 4). Trädet löses upp EN gång och båda propparna byggs ur
+        // samma svar — annars hade sidan betalat två frågor för trädet.
+        //
+        // Kolumnerna bor i App\Actions\Item\ResolveItemTreeRows, bredvid
+        // ResolveItemTree och inte inuti den: strukturpanelen och
+        // föräldraväljaren anropar samma träd och ska inte betala för
+        // kolumner de inte ritar. Upplösningen räknar exakt de items trädet
+        // bär, så en omfångsbegränsad mottagare aldrig får en rad för ett
+        // item utanför sitt omfång ([[ADR-0028 Åtkomst på itemnivå]]).
+        //
+        // `null` och inte en tom tabell utanför trädläget, samma form och
+        // samma skäl som `structure` nedan: en tom tabell är ett svar servern
+        // HAR gett, och vyn ska kunna skilja det från "inte hämtad".
+        $tree = $view === 'tree'
+            ? $resolveItemTree->handle($user, $container)
+            : null;
+
+        $treeRows = $tree === null
+            ? null
+            : $resolveItemTreeRows->handle($container, $tree);
 
         return Inertia::render('Containers/Items/Index', [
             'container' => ContainerResource::make($container)->resolve($request),
@@ -410,9 +438,15 @@ class ItemController extends Controller
             // är ett svar servern HAR gett — "hon når ingenting" — och vyn
             // ska kunna skilja det från "inte hämtad" (samma form och samma
             // skäl som `history`-proppen i show()).
-            'structure' => $view === 'tree'
-                ? $this->structure($resolveItemTree->handle($user, $container))
-                : null,
+            'structure' => $tree === null ? null : $this->structure($tree),
+
+            // Trädets kolumner, item-ULID → `{category, tags, documents,
+            // tasks, updated_at}`, och BARA i trädläget — samma grind och
+            // samma `null`-betydelse som `structure` ovan. Formen ägs av
+            // App\Actions\Item\ResolveItemTreeRows; vyn ritar den inte än
+            // (issue 294 gör tabellen), men svaret är sidans redan nu så att
+            // tabellen kan läsas ur servern och inte räknas i klienten.
+            'treeRows' => $treeRows,
 
             // Kartan, och BARA i kartläget (samma linje som `structure` ovan).
             // `trail` är den LÖSTA vägen — den begärda strängen kapad där den
