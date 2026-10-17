@@ -1,6 +1,6 @@
 # ADR-0042 Designsystemet
 
-**Status:** Antagen 2026-09-22 · Bygger vidare på [[ADR-0021 Frontendteknik]] · Löser ut designberoendet i [[ADR-0039 Containerns översikt]] och [[ADR-0041 Itemets vy]] · [[ADR-index]]
+**Status:** Antagen 2026-09-22 · Bygger vidare på [[ADR-0021 Frontendteknik]] · Löser ut designberoendet i [[ADR-0039 Containerns översikt]] och [[ADR-0041 Itemets vy]] · Ändrad av [[ADR-0057 Ikoner och typsnitt]] på punkterna om `title`-stegets vikt och antalet kärnkomponenter · [[ADR-index]]
 
 Fattat när designern lämnade fyra färdiga bilder. De ligger i `docs/Design/` och är den första designkällan valvet haft — fram till nu har *"väntar på designen"* betytt att ingen kunde peka på något.
 
