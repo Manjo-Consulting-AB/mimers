@@ -152,20 +152,20 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
 
     expect(array_column($träffar, 1))->toBe([
         'dashboard',
-        'tasks',
-        // Inboxen kom med M27 · issue 245: raden står bredvid uppgifterna och
-        // bär antalet obearbetat. Ändringen ligger utanför issue 245:s ruta
+        // Inboxen kom med M27 · issue 245 och står sedan 2026-10-17 först under
+        // dashboarden (Tonys ordning, [[ADR-0050 Desktopdesignen]] § Uppföljning
+        // 2026-10-17). Den bär antalet obearbetat. Ändringen ligger utanför issue 245:s ruta
         // och deklareras i PR:en — provet listar skalets rader och fälls av en
         // ny rad, med flit (en rad som glöms i katalogen ska synas).
         'inbox',
-        // Den globala dokumentlistan kom med M28 · issue 255 (Beslut 1): raden
-        // står mellan inboxen och containrarna, samma plats dokumentet har
-        // inuti en container. Provet listar skalets rader och fälls av en rad
-        // som glöms i katalogen, med flit.
-        'documents',
+        'tasks',
         'containers',
+        // Den globala dokumentlistan kom med M28 · issue 255 (Beslut 1) och
+        // står sedan 2026-10-17 efter containrarna. Provet listar skalets rader
+        // och fälls av en rad som glöms i katalogen, med flit.
+        'documents',
         // Den globala historiken kom med M30 · issue 272 (Beslut 1): raden står
-        // mellan containrarna och sökningen — historiken spänner över varje
+        // före sökningen — historiken spänner över varje
         // container användaren når, samma plats fliken har inuti en container.
         // Provet listar skalets rader och fälls av en rad som glöms i
         // katalogen, med flit.

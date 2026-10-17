@@ -42,8 +42,8 @@ function globalaDokumentvyKolumn(): string
 }
 
 /*
- * Klart när: `sidopanelen har Documents mellan Inbox och Containers`
- * (Beslut 1).
+ * Klart när: `sidopanelen har Documents` (Beslut 1). Sedan 2026-10-17 står
+ * raden mellan Containers och History — Tonys ordning.
  *
  * Ordningen läses ur listan i skalet — samma grepp som MobilskalTest — och
  * *mellan* prövas och inte bara *med*: en rad på fel plats är samma fel som
@@ -52,24 +52,24 @@ function globalaDokumentvyKolumn(): string
  * Listan är bara sanningen om vad en rad ÄR. Vilka rader som ritas står i
  * `partKeys`: en rad som ligger i `allSections` men saknas i `rows` syns inte
  * i sidopanelen eller sidomenyn (fynd 1 i granskningen av #780). Provet läser
- * därför `rows` och kräver att `inbox`, `documents` och `containers` ligger
+ * därför `rows` och kräver att `containers`, `documents` och `history` ligger
  * där i den ordningen.
  */
-it('sidopanelen har Documents mellan Inbox och Containers', function () {
+it('sidopanelen har Documents mellan Containers och History', function () {
     $skal = File::get(resource_path('js/components/ShellSections.vue'));
 
     preg_match_all("/key: '([a-z0-9_]+)', href: '([^']+)'/", $skal, $träffar, PREG_SET_ORDER);
 
     $nycklar = array_column($träffar, 1);
 
-    expect($nycklar)->toContain('inbox')->toContain('documents')->toContain('containers');
+    expect($nycklar)->toContain('containers')->toContain('documents')->toContain('history');
 
-    $inbox = array_search('inbox', $nycklar, true);
-    $documents = array_search('documents', $nycklar, true);
     $containers = array_search('containers', $nycklar, true);
+    $documents = array_search('documents', $nycklar, true);
+    $history = array_search('history', $nycklar, true);
 
-    expect($documents)->toBe($inbox + 1)
-        ->and($containers)->toBe($documents + 1);
+    expect($documents)->toBe($containers + 1)
+        ->and($history)->toBe($documents + 1);
 
     // Raderna som RITAS: `rows` ur `partKeys`, i den ordning de staplas.
     preg_match("/'rows': \[([^\]]+)\]/", $skal, $rad);
@@ -77,14 +77,14 @@ it('sidopanelen har Documents mellan Inbox och Containers', function () {
 
     $rader = $ritade[1];
 
-    expect($rader)->toContain('inbox')->toContain('documents')->toContain('containers');
+    expect($rader)->toContain('containers')->toContain('documents')->toContain('history');
 
-    $ritadInbox = array_search('inbox', $rader, true);
-    $ritadDocuments = array_search('documents', $rader, true);
     $ritadContainers = array_search('containers', $rader, true);
+    $ritadDocuments = array_search('documents', $rader, true);
+    $ritadHistory = array_search('history', $rader, true);
 
-    expect($ritadDocuments)->toBe($ritadInbox + 1)
-        ->and($ritadContainers)->toBe($ritadDocuments + 1);
+    expect($ritadDocuments)->toBe($ritadContainers + 1)
+        ->and($ritadHistory)->toBe($ritadDocuments + 1);
 
     // Etiketten slås upp i katalogen och är sidans eget ord; en rad utan
     // översättning renderas som sin egen nyckel, `nav.documents`.

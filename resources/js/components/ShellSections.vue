@@ -108,23 +108,21 @@ const inboxCount = computed(() => page.props.inboxCount ?? 0);
 
 const allSections = [
     { key: 'dashboard', href: '/dashboard', icon: 'dashboard' },
-    { key: 'tasks', href: '/tasks', icon: 'tasks' },
-    // Inboxen (M27 · issue 245, [[ADR-0054 Inboxen]] § 7): raden står bredvid
-    // uppgifterna, som den hör ihop med, och bär antalet obearbetat — uppgifter
-    // plus bilagor — så att skalet säger till när det finns något att bearbeta
-    // utan att användaren öppnar sidan.
+    // Inboxen (M27 · issue 245, [[ADR-0054 Inboxen]] § 7): raden står först
+    // under dashboarden, bredvid uppgifterna som den hör ihop med, och bär
+    // antalet obearbetat — uppgifter plus bilagor — så att skalet säger till
+    // när det finns något att bearbeta utan att användaren öppnar sidan.
+    // Ordningen Inbox, To do, Containers, Documents, History, Search är
+    // Tonys, 2026-10-17.
     { key: 'inbox', href: '/inbox', icon: 'inbox' },
-    // Den globala dokumentlistan (M28 · issue 255 · Beslut 1): raden står
-    // mellan inboxen och containrarna, samma plats dokumentet har inuti en
-    // container ([[ADR-0050 Desktopdesignen]] § 4), och etiketten är sidans
-    // eget ord (`documents.heading`).
-    { key: 'documents', href: '/documents', icon: 'documents' },
+    { key: 'tasks', href: '/tasks', icon: 'tasks' },
     { key: 'containers', href: '/containers', icon: 'container' },
-    // Den globala historiken (M30 · issue 272 · Beslut 1): raden står efter
-    // containrarna och före sökningen — historiken spänner över varje
-    // container användaren når, samma plats fliken har inuti en container
-    // ([[ADR-0050 Desktopdesignen]] § 17) — och etiketten är sidans eget ord
-    // (`history.heading`).
+    // Den globala dokumentlistan (M28 · issue 255 · Beslut 1): etiketten är
+    // sidans eget ord (`documents.heading`).
+    { key: 'documents', href: '/documents', icon: 'documents' },
+    // Den globala historiken (M30 · issue 272 · Beslut 1): raden står före
+    // sökningen — historiken spänner över varje container användaren når —
+    // och etiketten är sidans eget ord (`history.heading`).
     { key: 'history', href: '/history', icon: 'history' },
     { key: 'search', href: '/search', icon: 'search' },
     // Inställningarna är den enda raden som också är aktuell på en UNDERSIDA:
@@ -143,7 +141,7 @@ const allSections = [
  */
 const partKeys = {
     'top': ['dashboard'],
-    'rows': ['tasks', 'inbox', 'documents', 'containers', 'history', 'search'],
+    'rows': ['inbox', 'tasks', 'containers', 'documents', 'history', 'search'],
     'account': ['settings'],
 };
 
