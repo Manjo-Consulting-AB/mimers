@@ -2051,7 +2051,7 @@ return [
             'title' => 'Settings',
             'heading' => 'Settings',
 
-            'name' => 'Name',
+            'name' => 'Container name',
             'kind' => 'Type',
             'description' => 'Description',
 
