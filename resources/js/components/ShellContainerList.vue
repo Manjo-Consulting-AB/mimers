@@ -19,9 +19,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * — av samma skäl som `recentVisits` (issue 160 · [[ADR-0049 Nyligen
  * besökta]]): raden behövs bara i de två ytorna, och en vanlig sidladdning
  * ska inte bära den. `load` är ytans svar på frågan "ritas jag?": AppLayout
- * sätter den när sidopanelen ritas, MobileMenu när menyn öppnas. Är den sann
- * en enda gång ställs frågan — `requested` ser till att en stängd och åter
- * öppnad meny inte frågar servern igen om samma lista.
+ * sätter den när sidopanelen ritas, MobileMenu när menyn öppnas.
+ *
+ * **Frågan ställs om efter varje navigering.** Layouten är persistent, men en
+ * vanlig sidladdning bär inte proppen — efter ett klick i menyn är den
+ * `undefined` igen. Att fråga en gång per komponent (som förut) tömde därför
+ * sidopanelen på varje sida utom den första. Listan hämtas nu varje gång
+ * ytan ritas och sidan saknar proppen, och det senaste svaret står kvar under
+ * tiden — blocket blinkar inte bort mellan sidorna, och en container som
+ * just skapats eller bytt namn syns vid nästa sidbyte.
  *
  * **Proppen är `undefined` till dess att svaret är här, och `[]` när det
  * kommit och är tomt** — samma skillnad som i RecentVisitList: en rubrik över
@@ -83,15 +89,32 @@ const props = defineProps({
 const { t } = useTranslations();
 const page = usePage();
 
-const groups = computed(() => page.props.shellContainers ?? []);
+/*
+ * Har sidan svaret? `undefined` är "frågan är inte besvarad för den här
+ * sidan" — efter varje vanlig navigering, se docblocken.
+ */
+const answered = computed(() => page.props.shellContainers !== undefined);
 
 /*
- * Har svaret kommit? `undefined` är "frågan är ställd men inte besvarad", och
- * `[]` är ett svar: användaren har inga containrar. Blocket ritas i båda fallen
- * — se docblocken — men bara det sista fallet betyder att raden *Add container*
- * står ensam.
+ * Det senaste svaret, kvar över navigeringarna. `undefined` till dess att det
+ * första kommit, och `[]` är ett svar: användaren har inga containrar. Blocket
+ * ritas i det senare fallet — se docblocken — med raden *Add container* ensam.
  */
-const loaded = computed(() => page.props.shellContainers !== undefined);
+const latest = ref(undefined);
+
+watch(
+    () => page.props.shellContainers,
+    (list) => {
+        if (list !== undefined) {
+            latest.value = list;
+        }
+    },
+    { immediate: true },
+);
+
+const groups = computed(() => latest.value ?? []);
+
+const loaded = computed(() => latest.value !== undefined);
 
 /*
  * Sidans väg, utan querysträngen — samma form som `currentPath` i
@@ -99,19 +122,17 @@ const loaded = computed(() => page.props.shellContainers !== undefined);
  */
 const currentPath = computed(() => page.url.split('?')[0]);
 
-/* "Frågan är ställd" — en gång per komponent, se docblocken. */
-const requested = ref(false);
-
+/*
+ * Ritas ytan och saknar sidan svaret — fråga. Villkoret blir sant igen efter
+ * varje navigering och förblir sant medan omladdningen pågår, så samma sida
+ * frågar bara en gång.
+ */
 watch(
-    () => props.load,
-    (load) => {
-        if (!load || requested.value) {
-            return;
+    () => props.load && !answered.value,
+    (missing) => {
+        if (missing) {
+            router.reload({ only: ['shellContainers'] });
         }
-
-        requested.value = true;
-
-        router.reload({ only: ['shellContainers'] });
     },
     { immediate: true },
 );
