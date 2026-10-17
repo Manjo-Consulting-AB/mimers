@@ -56,3 +56,6 @@ Thumbs.db
 .claude/.headroom_wrap_marker.json
 .claude/.headroom_wrap_owners.json
 .github/scripts/__pycache__/
+
+# direnv
+.direnv/
