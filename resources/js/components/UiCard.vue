@@ -36,7 +36,7 @@
 </script>
 
 <template>
-    <section class="overflow-hidden rounded-card border border-border bg-surface">
+    <section class="overflow-hidden rounded-card border border-border bg-surface shadow-card">
         <!--
             Kortets bild. `overflow-hidden` på ramen skär hörnen, så bilden
             följer kortets radie utan att klippas i en egen ruta.
