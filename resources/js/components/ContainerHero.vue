@@ -1,9 +1,7 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { Link, usePage } from '@inertiajs/vue3';
 import ContainerCover from './ContainerCover.vue';
-import ContainerCoverSheet from './ContainerCoverSheet.vue';
-import UiIcon from './UiIcon.vue';
 import UiStat from './UiStat.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -51,17 +49,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * § Beslut). Taltutan ritas i formen `on-image` med ikonerna `item` och
  * `task` (issue 283), så den står på glaset ur ADR-0057 § 6.
  *
- * ***Redigera container* och menyknappen står på glaset.** Knappen leder till
- * inställningssidan ([[ADR-0050 Desktopdesignen]] § 3) och ritas bara när
- * `can.update` är sann — flaggan är presentation, och rutten prövar
- * `ContainerPolicy::update` på nytt (ADR-0047 § Beslut, "Vem som får göra
- * vad"). Flikradens *Settings* och pennan i skalets topprad är andra vägar
- * till samma val. Menyn samlar hjältens sekundära handling — *Byt bild*,
- * samma ark som pennan och inställningssidan öppnar (ADR-0047 § Beslut) —
- * och ritas på samma villkor som knappen, eftersom arket kräver samma
- * behörighet. Den ritas som en `<details>`, samma grepp som radmenyn i
- * `TodoRow`: webbläsaren äger öppet-tillståndet, och menyn stängs när
- * användaren klickar på `<summary>` igen eller väljer en rad.
+ * **Hjälten bär inga handlingar** ([[ADR-0050 Desktopdesignen]], uppföljning
+ * 2026-10-17 § 3). *Edit container* och menyn med *Byt bild* stod här till
+ * dess, men båda ledde till val som flikradens *Settings* redan bär — där
+ * står också bildbytet (ADR-0047 § Beslut). Hjälten läser därför ingen
+ * `can`-flagga.
  *
  * **Namnet är sidans `<h1>`.** Över `md:` är hjälten sidans huvud, och
  * översikten döljer sitt eget huvud där (se resources/js/pages/Containers/
@@ -85,39 +77,11 @@ const props = defineProps({
     hero: { type: String, required: true },
     /* Containern, ur App\Http\Resources\ContainerResource. */
     container: { type: Object, required: true },
-    /*
-     * `{ update }` — samma flagga som inställningssidan ritar sitt formulär ur.
-     * Den styr *Redigera container* och menyn (ADR-0050 § 3), och rutten prövar
-     * samma grind på nytt.
-     */
-    can: { type: Object, default: null },
 });
 
 const page = usePage();
 
 const counts = computed(() => page.props.containerCounts ?? null);
-
-const canUpdate = computed(() => props.can?.update === true);
-
-/*
- * Menyns `<details>`: webbläsaren äger öppet-tillståndet, men raden *Byt bild*
- * öppnar ett ark ovanpå. Stäng menyn innan arket öppnas, annars står den kvar
- * uppfälld när arket stängs.
- *
- * Arket fäster sig under öppnaren och lämnar tillbaka fokus dit. Raden ligger
- * i en stängd `<details>` när arket stängs och kan då inte ta emot fokus, så
- * öppnaren vi skickar är `<summary>` och inte knappen.
- */
-const menu = ref(null);
-const menuButton = ref(null);
-
-function openCover(event, open) {
-    if (menu.value) {
-        menu.value.open = false;
-    }
-
-    open({ currentTarget: menuButton.value ?? event.currentTarget });
-}
 
 const { t } = useTranslations();
 </script>
@@ -125,9 +89,8 @@ const { t } = useTranslations();
 <template>
     <!--
         `overflow-hidden` sitter på bild- och toningslagren och inte på
-        sektionen: menyn i hörnet får inte klippas av hjältens kant, men
-        bilden ska fortfarande ha hjältens rundning. Sektionens egen bakgrund
-        klipps av `rounded-card` ändå.
+        sektionen: bilden ska ha hjältens rundning, och sektionens egen
+        bakgrund klipps av `rounded-card` ändå.
     -->
     <section
         class="relative rounded-card bg-shell"
@@ -154,75 +117,31 @@ const { t } = useTranslations();
         ></span>
 
         <div class="relative flex flex-col gap-4 p-6 text-ink-on-accent">
-            <div class="flex items-start gap-4">
-                <!--
-                    Textspalten är kapad: namn, art och beskrivning ska stå på
-                    den täta delen av toningen och aldrig växa in i den glesa.
-                -->
-                <div class="min-w-0 max-w-lg flex-1">
-                    <!-- Arten är ett fritt textfält och skrivs ordagrant. -->
-                    <p v-if="container.kind" class="text-meta">{{ container.kind }}</p>
-
-                    <!--
-                        Namnet är sidans `<h1>`: över `md:` är hjälten
-                        containerns huvud, och de sidor som ritar den döljer
-                        sitt eget.
-                    -->
-                    <h1 class="text-heading font-semibold">{{ container.name }}</h1>
-
-                    <!--
-                        Hela beskrivningen, radbrytningarna bevarade och inget
-                        avkortande: `whitespace-pre-line` är samma form som
-                        översiktens huvud bar (issue 88).
-                    -->
-                    <p
-                        v-if="container.description"
-                        class="mt-1 whitespace-pre-line text-body"
-                    >
-                        {{ container.description }}
-                    </p>
-                </div>
+            <!--
+                Textspalten är kapad: namn, art och beskrivning ska stå på den
+                täta delen av toningen och aldrig växa in i den glesa.
+            -->
+            <div class="min-w-0 max-w-lg">
+                <!-- Arten är ett fritt textfält och skrivs ordagrant. -->
+                <p v-if="container.kind" class="text-meta">{{ container.kind }}</p>
 
                 <!--
-                    Hjältens två handlingar står på glaset (ADR-0057 § 6), med
-                    samma kant och fokusring som de andra ytorna på bilden.
-                    Båda kräver `can.update`: arket menyn öppnar prövar samma
-                    grind som rutten.
+                    Namnet är sidans `<h1>`: över `md:` är hjälten containerns
+                    huvud, och de sidor som ritar den döljer sitt eget.
                 -->
-                <div v-if="canUpdate" class="flex shrink-0 items-center gap-2">
-                    <Link
-                        :href="`/containers/${container.ulid}/edit`"
-                        class="inline-flex min-h-11 items-center gap-2 rounded-control border border-glass-border bg-glass px-4 font-medium text-ink-on-accent outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                    >
-                        <UiIcon name="edit" :size="20" />
-                        {{ t('container.hero.edit') }}
-                    </Link>
+                <h1 class="text-heading font-semibold">{{ container.name }}</h1>
 
-                    <ContainerCoverSheet :container="container" v-slot="{ open }">
-                        <details ref="menu" class="relative">
-                            <summary
-                                ref="menuButton"
-                                :aria-label="t('nav.menu')"
-                                class="inline-flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-control border border-glass-border bg-glass text-ink-on-accent outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                            >
-                                <UiIcon name="more" :size="20" />
-                            </summary>
-
-                            <div
-                                class="absolute right-0 z-10 mt-2 w-48 rounded-card border border-border bg-surface p-1 shadow-card"
-                            >
-                                <button
-                                    type="button"
-                                    class="flex min-h-11 w-full items-center gap-2 rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                                    @click="openCover($event, open)"
-                                >
-                                    <UiIcon name="image" :size="16" />
-                                    {{ t('container.cover.edit') }}
-                                </button>
-                            </div>
-                        </details>
-                    </ContainerCoverSheet>
-                </div>
+                <!--
+                    Hela beskrivningen, radbrytningarna bevarade och inget
+                    avkortande: `whitespace-pre-line` är samma form som
+                    översiktens huvud bar (issue 88).
+                -->
+                <p
+                    v-if="container.description"
+                    class="mt-1 whitespace-pre-line text-body"
+                >
+                    {{ container.description }}
+                </p>
             </div>
 
             <!--

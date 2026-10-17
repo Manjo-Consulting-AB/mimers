@@ -461,109 +461,33 @@ it('lämnar markupen under md orörd', function () {
 });
 
 /*
- * Klart när: *Redigera container* och menyknappen står på glaset.
+ * Klart när: hjälten bär inga handlingar ([[ADR-0050 Desktopdesignen]],
+ * uppföljning 2026-10-17 § 3).
  *
- * Issue 646 tog bort den gamla redigeringslänken när *Settings* flyttade in i
- * flikraden. Issue 284 ritar tillbaka knappen enligt `docs/Design/container.jpeg`
- * och [[ADR-0050 Desktopdesignen]] § 3: den leder till inställningssidan, står
- * på glaset ur [[ADR-0057 Ikoner och typsnitt]] § 6 och bär `edit`. Menyn
- * bredvid bär `more` och öppnar *Byt bild* — samma ark som pennan och
- * inställningssidan öppnar ([[ADR-0047 Containerns bild]] § Beslut).
- *
- * Båda ritas bara för den som får ändra, och flaggan är presentation: rutten
- * prövar samma grind. Läsaren nekas fortfarande `PATCH`.
+ * *Edit container* och menyknappen med *Byt bild* är borttagna: båda ledde
+ * till val som flikradens *Settings* redan bär, och där står också bildbytet.
+ * Hjälten läser därför ingen `can`-flagga, och skalet skickar ingen. Vägen
+ * till inställningssidan står kvar för den som får ändra.
  */
-it('ritar redigera container och menyknappen på glaset', function () {
+it('ritar ingen redigeringsknapp eller meny i hjälten', function () {
     withoutVite();
 
     [, $ägare, $container] = hjalteKontext();
-    $läsare = hjalteLasare($container);
 
     $hjalte = hjalteHjalten();
 
-    // Knappen är hjältens väg till inställningssidan (ADR-0050 § 3) och bär
-    // ikonen `edit`.
-    expect($hjalte)->toContain('`/containers/${container.ulid}/edit`')
-        ->and($hjalte)->toContain("t('container.hero.edit')")
-        ->and($hjalte)->toContain('<UiIcon name="edit"');
+    expect($hjalte)->not->toContain('/edit`');
+    expect($hjalte)->not->toContain("t('container.hero.edit')");
+    expect($hjalte)->not->toContain('<details');
+    expect($hjalte)->not->toContain('ContainerCoverSheet');
+    expect($hjalte)->not->toContain('props.can');
 
-    // Menyknappen bär `more` och öppnar bildvalet.
-    expect($hjalte)->toContain(":aria-label=\"t('nav.menu')\"")
-        ->and($hjalte)->toContain('<UiIcon name="more"')
-        ->and($hjalte)->toContain("t('container.cover.edit')");
+    expect(hjalteTagg(hjalteKod('layouts/ContainerLayout.vue'), 'ContainerHero'))
+        ->not->toContain(':can=');
 
-    // Båda står på glaset: `bg-glass` med `border-glass-border`, och båda
-    // bär fokusringen.
-    expect($hjalte)->toMatch(
-        '#<Link\b[^>]*border-glass-border bg-glass[^>]*>.*?<UiIcon name="edit"#s',
-        'redigeringsknappen står inte på glaset med sin ikon',
-    );
-    expect($hjalte)->toMatch(
-        '#<summary\b[^>]*border-glass-border bg-glass[^>]*>.*?<UiIcon name="more"#s',
-        'menyknappen står inte på glaset med sin ikon',
-    );
+    expect(trans('ui.container.hero.edit', [], 'en'))->toBe('ui.container.hero.edit');
 
-    preg_match_all('/<Link\b[^>]*focus-visible:ring-2[^>]*>\s*<UiIcon name="edit"/s', $hjalte, $knappar);
-    expect($knappar[0])->not->toBe([], 'redigeringsknappen saknar fokusring');
-
-    preg_match_all('/<summary\b[^>]*focus-visible:ring-2[^>]*>/s', $hjalte, $menyer);
-    expect($menyer[0])->not->toBe([], 'menyknappen saknar fokusring');
-
-    // Flaggan styr båda och är presentation, aldrig grinden.
-    expect($hjalte)->toContain('v-if="canUpdate"');
-
-    // Sidan svarar 200 för båda — vägen dit är grindad på `view` — och
-    // flaggan skiljer dem åt.
-    $adress = "/containers/{$container->ulid}/edit";
-
-    actingAs($ägare)->get($adress)->assertOk();
-    actingAs($läsare)->get($adress)->assertOk();
-
-    actingAs($ägare)->get("/containers/{$container->ulid}")
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', true));
-
-    actingAs($läsare)->get("/containers/{$container->ulid}")
-        ->assertOk()
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', false));
-
-    // Och läsaren nekas fortfarande skrivningen, som varje annan gång flaggan
-    // är presentation.
-    actingAs($läsare)->patch("/containers/{$container->ulid}", ['name' => 'Tjuvnamn'])
-        ->assertForbidden();
-
-    expect($container->fresh()->name)->toBe($container->name);
-});
-
-/*
- * Klart när: menyns *Byt bild* öppnar arket.
- *
- * `ContainerCoverSheet` skickar ut `show(event)` som slotens `open`, och den
- * läser `event.currentTarget` för att fästa arket under öppnaren och lämna
- * tillbaka fokus dit. Ett anrop utan händelse kastar `TypeError`, och arket
- * öppnas aldrig sedan menyn redan stängts. Raden skickar därför `$event`
- * vidare, och fästet är `<summary>`: raden ligger i en stängd `<details>` när
- * arket stängs och kan då inte ta emot fokus.
- */
-it('skickar öppnarens händelse till bildarket', function () {
-    $hjalte = hjalteHjalten();
-
-    expect($hjalte)->toMatch(
-        '#openCover\(\s*\$event\s*,\s*open\s*\)#',
-        'menyraden skickar inte öppnarens händelse till arket',
-    );
-
-    expect($hjalte)->toMatch(
-        '#function openCover\([^)]*event[^)]*\)#s',
-        'openCover tar inte emot öppnarens händelse',
-    );
-
-    expect(hjalteTagg($hjalte, 'summary'))->toContain('ref="menuButton"');
-
-    expect($hjalte)->toMatch(
-        '#currentTarget:\s*menuButton\.value#',
-        'arket fäster inte vid menyknappen',
-    );
+    actingAs($ägare)->get("/containers/{$container->ulid}/edit")->assertOk();
 });
 
 /*

@@ -97,4 +97,6 @@ Tonys beslut 2026-10-17, efter att ha gått igenom staging.
 
 **§ 2: talen står i hjälten på varje flik.** Den lägre hjälten fick först inga tal. Då försvann *Items* och *Tasks due* så fort användaren lämnade översikten, och det var precis de talen hen ville se. Talen ritas nu i båda formerna. Formen styr bara hjältens minsta höjd. Toningen över bilden är samtidigt kortare: den täta delen slutar vid ungefär 30 % av bredden i stället för vid hälften, så att mer av bilden syns.
 
+**§ 3: hjälten bär inga handlingar.** Knappen *Edit container* och menyknappen bredvid den, med *Change cover* som enda rad, är borttagna ur hjälten. Båda ledde till val som redan finns under fliken *Settings*, där också bildbytet står. Mobilens penna i toppraden står kvar. Hjälten visar bilden, namnet, arten, beskrivningen och talen.
+
 **§ 4: fliken *Uppgifter* heter *To do*.** Fliken och dess sidrubrik bär samma ord som huvudmenyns rad, så att samma sorts lista inte har två namn. Flikarna är fortfarande samma, i samma ordning.
