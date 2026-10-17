@@ -1,6 +1,6 @@
 # ADR-0050 Desktopdesignen
 
-**Status:** Antagen 2026-09-30 · § 16 ersatt i frågan om GTD-listorna av [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] · Bygger vidare på [[ADR-0042 Designsystemet]], [[ADR-0038 Gränsen för Pro i kostnaderna]] och [[ADR-0041 Itemets vy]] · [[ADR-index]]
+**Status:** Antagen 2026-09-30 · § 1, 2 och 4 justerade 2026-10-17 · § 16 ersatt i frågan om GTD-listorna av [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] · Bygger vidare på [[ADR-0042 Designsystemet]], [[ADR-0038 Gränsen för Pro i kostnaderna]] och [[ADR-0041 Itemets vy]] · [[ADR-index]]
 
 Tonys beslut 2026-09-29 och 30, vid gapanalysen efter [[M23 Mobilen och kartan]] och genomgången av designerns fyra nya bilder: `kostnader.png`, `dokument.png`, `uppgifter_1.png` och `Historik.png` i `docs/Design/`.
 
@@ -88,3 +88,13 @@ De fyra nya bilderna ritar containerns flikar *Dokument*, *Uppgifter*, *Kostnade
 ## Uppföljning 2026-10-04 — GTD-listorna
 
 § 16 sköt GTD-listorna till efter MVP. [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] tar in dem före lansering: listan lagras på förekomsten, och Calendar och Done härleds. Tavlan som vy är fortfarande ett senare steg. Containerns flik är en lista sedan issue 225.
+
+## Uppföljning 2026-10-17 — sidopanelens ordning, hjältens tal och *To do*
+
+Tonys beslut 2026-10-17, efter att ha gått igenom staging.
+
+**§ 1: sidopanelens rader och deras ordning.** Raderna har vuxit sedan beslutet och står nu, under *Dashboard*: *Inbox*, *To do*, *Containers*, *Documents*, *History* och *Search*. Inboxen står överst, eftersom det är där det obearbetade landar. *Documents* och *History* står efter *Containers* i stället för mellan inboxen och containrarna. Både `allSections` och `partKeys.rows` i `ShellSections.vue` följer ordningen.
+
+**§ 2: talen står i hjälten på varje flik.** Den lägre hjälten fick först inga tal. Då försvann *Items* och *Tasks due* så fort användaren lämnade översikten, och det var precis de talen hen ville se. Talen ritas nu i båda formerna. Formen styr bara hjältens minsta höjd. Toningen över bilden är samtidigt kortare: den täta delen slutar vid ungefär 30 % av bredden i stället för vid hälften, så att mer av bilden syns.
+
+**§ 4: fliken *Uppgifter* heter *To do*.** Fliken och dess sidrubrik bär samma ord som huvudmenyns rad, så att samma sorts lista inte har två namn. Flikarna är fortfarande samma, i samma ordning.
