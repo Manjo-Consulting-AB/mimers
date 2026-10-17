@@ -183,8 +183,12 @@ it('panelen visar de fem senaste bilderna nyast först', function () {
     expect($rader)->toHaveCount(5)
         ->and(array_column($rader, 'ulid'))->toBe(array_map(fn (Attachment $b): string => $b->ulid, $förväntade));
 
-    // Den äldsta bilden finns inte i svaret alls.
-    expect($svar->getContent())->not->toContain($bilder[0]->ulid);
+    // Den äldsta bilden finns inte bland panelens rader. Att den ändå kan
+    // bäras i `covers` som itemets eget omslag är en annan propp sedan issue
+    // 285 — panelen ritar fem, och omslaget väljer den äldsta bilden
+    // (App\Actions\Item\ResolveItemCover), så svarets råa innehåll är inte
+    // längre rätt plats att leta på.
+    expect(array_column($rader, 'ulid'))->not->toContain($bilder[0]->ulid);
 
     // Radens fyra fält: filnamnet, variantsvaret och itemets ULID och namn.
     expect($rader[0])->toBe([

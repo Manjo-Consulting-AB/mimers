@@ -5,6 +5,7 @@ import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ContainerMap from '../../../components/ContainerMap.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
+import ItemRow from '../../../components/ItemRow.vue';
 import ItemStructureTree from '../../../components/ItemStructureTree.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
 import { activeFilters, filterSummary } from '../../../components/itemFilter.js';
@@ -64,13 +65,18 @@ defineOptions({
  *
  * **Serienumret ritas inte här** (57a § Beslut 8). Det hör till detaljvyn.
  *
+ * **Raden är `ItemRow` sedan issue 285** · [[M32 Formspråket]]: raden med
+ * miniatyr, namn, beskrivning och pil bor i
+ * `resources/js/components/ItemRow.vue`, och översiktens itempanel ritar
+ * samma komponent. Här står bara listan — formen på raden ägs av den filen.
+ *
  * **Raden ritar itemets EGET omslag** (issue 212 · [[ADR-0050
  * Desktopdesignen]]): `covers` är itemets ULID → `{ulid, hasThumb}` eller
  * null, och urvalet är App\Actions\Item\ResolveItemCover — samma bild och
  * samma omfång som servern räknade, ritat som en miniatyr mot
  * `/files/{ulid}?variant=thumb` ([[ADR-0019 Filleverans]]). Servern har
- * prövat att derivatet finns (`hasThumb`); utan det ritas en lådikon i
- * stället, för en `<img>` mot en variant som inte finns är en trasig bild
+ * prövat att derivatet finns (`hasThumb`); utan det ritas `item`-ikonen i en
+ * neutral ruta, för en `<img>` mot en variant som inte finns är en trasig bild
  * (issue 61b § Beslut 1). Containerns eget omslag läses ALDRIG i raden — ett
  * item utan bild ärver inte containerns foto.
  *
@@ -299,69 +305,19 @@ const views = computed(() => {
         </p>
 
         <ul v-else class="mt-8 flex flex-col divide-y divide-slate-200">
-            <li v-for="item in items" :key="item.ulid">
-                <!--
-                    Hela raden är länken (issue 212 · [[ADR-0050
-                    Desktopdesignen]]), och den bär fyra saker: miniatyren,
-                    namnet, beskrivningen och en pil. Status, kategori,
-                    tillverkare, modell och taggar står inte längre här —
-                    mockupen ritar dem inte, och statusen hör till kartan.
-                -->
-                <Link
-                    :href="`/containers/${container.ulid}/items/${item.ulid}`"
-                    class="flex min-h-11 items-center gap-4 py-3 outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                >
-                    <img
-                        v-if="covers[item.ulid]?.hasThumb"
-                        :src="`/files/${covers[item.ulid].ulid}?variant=thumb`"
-                        alt=""
-                        class="h-12 w-12 shrink-0 rounded border border-slate-200 object-cover"
-                    >
-
-                    <!--
-                        Utan derivat ritas en lådikon i stället för en
-                        `<img>` mot en variant som inte finns — samma val
-                        som RecentImagesPanel gör (issue 61b § Beslut 1).
-                    -->
-                    <span
-                        v-else
-                        aria-hidden="true"
-                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400"
-                    >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-6 w-6"
-                        >
-                            <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-                            <path d="m3.3 7 8.7 5 8.7-5" />
-                            <path d="M12 22V12" />
-                        </svg>
-                    </span>
-
-                    <span class="min-w-0 flex-1">
-                        <span class="block truncate font-medium text-ink">{{ item.name }}</span>
-                        <span v-if="item.description" class="block truncate text-sm text-ink-muted">{{ item.description }}</span>
-                    </span>
-
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="h-4 w-4 shrink-0 text-ink-subtle"
-                        aria-hidden="true"
-                    >
-                        <path d="m9 6 6 6-6 6" />
-                    </svg>
-                </Link>
-            </li>
+            <!--
+                Raden är `ItemRow` (issue 285 · [[M32 Formspråket]]), samma
+                komponent som översiktens itempanel ritar. Listan äger bara
+                formen runt raderna: `<ul>` med skiljelinjer, i serverns
+                ordning.
+            -->
+            <ItemRow
+                v-for="item in items"
+                :key="item.ulid"
+                :item="item"
+                :cover="covers[item.ulid]"
+                :container-ulid="container.ulid"
+            />
         </ul>
     </template>
 

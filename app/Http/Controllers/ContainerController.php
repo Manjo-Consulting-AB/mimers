@@ -10,6 +10,7 @@ use App\Actions\Container\CreateContainer;
 use App\Actions\Container\TrashContainer;
 use App\Actions\Container\UpdateContainer;
 use App\Actions\Item\ListItems;
+use App\Actions\Item\ResolveItemCover;
 use App\Actions\Schedule\ListTodo;
 use App\Exceptions\Api\ApiException;
 use App\Http\Requests\Container\StoreContainerRequest;
@@ -19,6 +20,7 @@ use App\Http\Resources\ItemResource;
 use App\Models\Account;
 use App\Models\Attachment;
 use App\Models\Container;
+use App\Models\Item;
 use App\Models\User;
 use App\Support\Cost\CostReport;
 use App\Support\Frontend\ActiveContainer;
@@ -250,6 +252,10 @@ class ContainerController extends Controller
      * - `items` är samma App\Actions\Item\ListItems-svar som `counts.items`
      *   räknar, klippt till `ITEM_LIMIT` rader. Listan hämtas EN gång och
      *   svarar på båda frågorna.
+     * - `covers` är radens eget omslag, item-ULID → `{ulid, hasThumb}` eller
+     *   null, ur App\Actions\Item\ResolveItemCover — och gäller EXAKT de
+     *   `ITEM_LIMIT` items panelen ritar (issue 285). En klippning efter
+     *   uppslaget hade burit bilagor för items utanför svaret.
      * - `events` är containerns händelselogg genom läsregeln, högst
      *   `ACTIVITY_LIMIT` rader ([[ADR-0043 Tre loggar]]).
      * - `recentImages` är de senaste bildbilagorna på containerns items, högst
@@ -299,6 +305,7 @@ class ContainerController extends Controller
         ListAuditEvents $listAuditEvents,
         PresentAuditEvents $presentAuditEvents,
         ListRecentImages $listRecentImages,
+        ResolveItemCover $resolveItemCover,
         CostReport $report,
         ActiveContainer $activeContainer,
         CreateTarget $createTarget,
@@ -320,6 +327,13 @@ class ContainerController extends Controller
         // sanningar om vilka items användaren når — samma skäl som gjorde
         // brickan till en `ListItems`-räkning från början (issue 89).
         $items = $listItems->handle($user, $container);
+
+        // Panelen ritar de sex första, och omslagen gäller EXAKT dem (issue
+        // 285 · [[M32 Formspråket]]): en klippning efter uppslaget hade gett
+        // bilagor för items användaren inte ser, och en gäst hade kunnat
+        // läsa en ULID ur svaret som hör till ett item utanför omfånget.
+        // Samma `ListItems`-svar bär både raden och dess omslag.
+        $visade = $items->take(self::ITEM_LIMIT);
 
         $todo = $listTodo->forContainer($user, $request, $container, self::TASK_LIMIT);
 
@@ -350,7 +364,13 @@ class ContainerController extends Controller
             // här och en rad i vyn och inte om varandras innehåll.
             'tasks' => $todo['rows'],
             'costs' => $report->summary($container, $scope),
-            'items' => ItemResource::collection($items->take(self::ITEM_LIMIT))->resolve($request),
+            'items' => ItemResource::collection($visade)->resolve($request),
+            // Radens eget omslag (issue 285), samma linje som `statuses` i
+            // ItemController::index(): upplösningen ligger BREDVID
+            // `ItemResource`, som delas med `/api` och inte har bett om
+            // fältet. Ett anrop för hela listan, oavsett antal rader — se
+            // App\Actions\Item\ResolveItemCover::thumbnails().
+            'covers' => $this->covers($visade, $resolveItemCover),
             'events' => $presentAuditEvents->handle(
                 $listAuditEvents->forContainer($user, $container, self::ACTIVITY_LIMIT),
             ),
@@ -684,6 +704,36 @@ class ContainerController extends Controller
             ->orderBy('kind')
             ->pluck('kind')
             ->all();
+    }
+
+    /**
+     * Radens omslag, nycklat på itemets ULID (issue 285 · [[M32 Formspråket]]).
+     *
+     * **Formen bor i App\Actions\Item\ResolveItemCover::thumbnails()**, samma
+     * uppslag som itemlistans rader använder (issue 229): `{ulid, hasThumb}`
+     * eller null per item. Här nycklas svaret bara om från item-`id` till
+     * item-`ulid`, vilket är vad `covers`-proppen är nycklad på — vyn slår upp
+     * sitt omslag med itemets ULID.
+     *
+     * Ett item utan bild får `null` i stället för att saknas: vyns uppslag är
+     * detsamma för alla rader. Ett anrop för hela samlingen, oavsett antal
+     * rader — en vandring per rad hade varit den N+1 listan byggdes för att
+     * undvika.
+     *
+     * @param  iterable<int, Item>  $items
+     * @return array<string, array{ulid: string, hasThumb: bool}|null>
+     */
+    private function covers(iterable $items, ResolveItemCover $resolveItemCover): array
+    {
+        $uppslaget = $resolveItemCover->thumbnails($items);
+
+        $covers = [];
+
+        foreach ($items as $item) {
+            $covers[$item->ulid] = $uppslaget[$item->id];
+        }
+
+        return $covers;
     }
 
     /**

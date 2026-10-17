@@ -8,9 +8,9 @@ import ContainerTasksPanel from '../../components/ContainerTasksPanel.vue';
 import CostDonut from '../../components/CostDonut.vue';
 import HistoryRow from '../../components/HistoryRow.vue';
 import InfoPanel from '../../components/InfoPanel.vue';
+import ItemRow from '../../components/ItemRow.vue';
 import RecentImagesPanel from '../../components/RecentImagesPanel.vue';
 import UiCard from '../../components/UiCard.vue';
-import UiListRow from '../../components/UiListRow.vue';
 import UiStat from '../../components/UiStat.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 
@@ -102,6 +102,9 @@ defineOptions({
  * - *Kommande uppgifter* och *Items* är egna komponenter respektive egna
  *   rader, och båda länkar vidare: uppgifterna till `/tasks` till dess att
  *   containerns uppgiftsflik finns (issue 174), itemen till itemlistan.
+ *   *Items* ritar `ItemRow` — samma rad som itemlistan (issue 285 ·
+ *   [[M32 Formspråket]]) — i två kolumner över `lg:` och en under. Servern
+ *   skickar `covers` för exakt de sex rader panelen visar.
  * - *Kostnader* ritas av `CostDonut` — samma komponent som dashboardens — och
  *   panelen ritas inte alls när containern saknar kostnadsrader: en rubrik över
  *   en tom ring är en yta som påstår att det finns något att visa.
@@ -149,6 +152,14 @@ const props = defineProps({
     costs: { type: Object, required: true },
     /* Högst sex items användaren når, ur samma ListItems-svar som `counts.items` (issue 172). */
     items: { type: Array, required: true },
+    /*
+     * Item-ULID → `{ulid, hasThumb}` eller null, ur
+     * App\Actions\Item\ResolveItemCover: radens eget omslag (issue 285 ·
+     * [[M32 Formspråket]]). Uppslaget gäller EXAKT de items panelen ritar —
+     * de sex första ur samma `ListItems`-svar — så en gäst aldrig får ett
+     * omslag för ett item hon inte når.
+     */
+    covers: { type: Object, required: true },
     /* Högst fem rader ur containerns händelselogg, nyast först (issue 172). */
     events: { type: Array, required: true },
     /*
@@ -172,8 +183,6 @@ const props = defineProps({
 const { t } = useTranslations();
 
 const itemListUrl = computed(() => `/containers/${props.container.ulid}/items`);
-
-const itemUrl = (item) => `/containers/${props.container.ulid}/items/${item.ulid}`;
 </script>
 
 <template>
@@ -277,21 +286,21 @@ const itemUrl = (item) => `/containers/${props.container.ulid}/items/${item.ulid
                     {{ t('item.index.empty') }}
                 </p>
 
-                <!-- Listan är en <ul> och raderna är <li> — formen
-                     `UiListRow` kräver, och av samma skäl som i
-                     itemlistan: en skärmläsare ska höra hur många rader
-                     det finns innan den läser den första. -->
-                <ul v-else class="flex flex-col divide-y divide-slate-200">
-                    <UiListRow v-for="item in props.items" :key="item.ulid">
-                        <template #title>
-                            <Link
-                                :href="itemUrl(item)"
-                                class="inline-flex min-h-11 items-center hover:underline"
-                            >
-                                {{ item.name }}
-                            </Link>
-                        </template>
-                    </UiListRow>
+                <!--
+                    Listan är en <ul> och raderna är <li> — formen `ItemRow`
+                    ritar — så en skärmläsare hör hur många rader det finns
+                    innan den läser den första. Två kolumner över `lg:`
+                    enligt docs/Design/container.jpeg, en under: rutnätet är
+                    listans eget och raden vet inte vilken kolumn den står i.
+                -->
+                <ul v-else class="lg:grid lg:grid-cols-2 lg:gap-x-8">
+                    <ItemRow
+                        v-for="item in props.items"
+                        :key="item.ulid"
+                        :item="item"
+                        :cover="props.covers[item.ulid]"
+                        :container-ulid="props.container.ulid"
+                    />
                 </ul>
             </UiCard>
         </div>

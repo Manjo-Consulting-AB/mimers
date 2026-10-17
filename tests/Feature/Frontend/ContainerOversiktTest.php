@@ -2,19 +2,24 @@
 
 use App\Http\Controllers\ContainerController;
 use App\Models\Account;
+use App\Models\Attachment;
 use App\Models\AuditLog;
 use App\Models\Container;
 use App\Models\ContainerAccess;
 use App\Models\CostEntry;
+use App\Models\ImageDerivative;
 use App\Models\Item;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Testing\TestResponse;
+use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\get;
 use function Pest\Laravel\withoutVite;
 
 /*
@@ -194,6 +199,53 @@ function oversiktHandelse(
         'action' => AuditLog::ACTION_CONTAINER_CREATED,
         'created_at' => $nar ?? now(),
     ]);
+}
+
+/**
+ * En bild på itemet, med ett `thumb`-derivat när $thumb är sant — samma form
+ * som `itemlistaBild()` i ItemlistaTest och av samma skäl: derivatet byggs
+ * direkt så att `hasThumb` är känt utan att köa ett jobb (issue 61b).
+ */
+function oversiktBild(Item $item, string $filnamn = 'foto.jpg', bool $thumb = true): Attachment
+{
+    $bilaga = Attachment::factory()->for($item, 'item')->create([
+        'filename' => $filnamn,
+        'kind' => 'image',
+    ]);
+
+    if ($thumb) {
+        ImageDerivative::factory()->create([
+            'stored_file_id' => $bilaga->stored_file_id,
+            'variant' => 'thumb',
+            'storage_path' => $bilaga->storedFile->storage_path.'_thumb.jpg',
+        ]);
+    }
+
+    return $bilaga;
+}
+
+/**
+ * Antalet frågor $anrop ställer, mätt efter ett omätt anrop som värmer
+ * guarderna och kontocachen — samma mönster som `itemlistaFrågor()` i
+ * ItemlistaTest.
+ */
+function oversiktFrågor(Closure $värm, Closure $anrop): int
+{
+    // ResolveItemScope är `scoped` och memoiserar per request i drift, men i
+    // testsviten överlever den mellan HTTP-anropen. Glöm den därför inför
+    // varje mätning — annars mäter man förra anropets omfång.
+    app()->forgetScopedInstances();
+
+    $värm();
+
+    $frågor = 0;
+    DB::listen(function () use (&$frågor) {
+        $frågor++;
+    });
+
+    $anrop();
+
+    return $frågor;
 }
 
 /**
@@ -451,6 +503,145 @@ it('visar högst sex items användaren når', function () {
         ->and(array_column($props['items'], 'name'))->toBe(['Item 1', 'Item 2', 'Item 3', 'Item 4', 'Item 5', 'Item 6']);
 
     expect($svar->getContent())->not->toContain($sjunde->ulid);
+});
+
+/*
+ * Klart när: `show()` skickar `covers` för exakt de items panelen visar.
+ *
+ * Panelen ritar `ITEM_LIMIT` rader, och `covers` ska vara nycklad på exakt
+ * dem — inte på hela listan. Provet fäster båda ändarna: varje visad rad bär
+ * ett omslag, och det sjunde itemets ULID finns varken som nyckel eller i
+ * svarets råa innehåll. En klippning EFTER uppslaget hade gett ett omslag för
+ * ett item panelen inte ritar.
+ */
+it('skickar covers för exakt de items panelen visar', function () {
+    withoutVite();
+
+    [$konto, $agare] = oversiktKonto();
+    $container = oversiktParm($konto);
+
+    $bilder = [];
+
+    // Sju items, alla med en bild: det sjunde faller utanför panelen.
+    foreach (range(1, 7) as $i) {
+        $item = oversiktItem($container, "Item {$i}");
+        $bilder[$item->ulid] = oversiktBild($item, "foto-{$i}.jpg");
+    }
+
+    $svar = actingAs($agare)->get("/containers/{$container->ulid}")->assertOk();
+    $props = oversiktProps($svar);
+
+    $visade = array_column($props['items'], 'ulid');
+
+    expect($visade)->toHaveCount(ContainerController::ITEM_LIMIT)
+        ->and(array_keys($props['covers']))->toBe($visade);
+
+    foreach ($visade as $ulid) {
+        expect($props['covers'][$ulid])->not->toBeNull()
+            ->and($props['covers'][$ulid]['ulid'])->toBe($bilder[$ulid]->ulid)
+            ->and($props['covers'][$ulid]['hasThumb'])->toBeTrue();
+    }
+
+    // Det sjunde itemet finns inte bland omslagen. Att det ändå kan stå i
+    // `recentImages` är en annan panel och en annan fråga — bildpanelen
+    // räknar containerns bilder, inte itempanelens rader.
+    $sjunde = array_key_last($bilder);
+
+    expect(array_keys($props['covers']))->not->toContain($sjunde);
+});
+
+/*
+ * Klart när: en gäst med åtkomst till ett item får inget omslag för ett item
+ * utanför omfånget.
+ *
+ * `covers` är den yta som exponerar BILAGOR, och omfånget måste följa med
+ * hela vägen ([[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser). Gästen når
+ * motorn och ingenting annat, så uppslaget bär motorns omslag — och varken
+ * det hemliga itemets ULID eller dess bilagas ULID finns i svaret.
+ */
+it('ger en gäst omslag bara för item inom omfånget', function () {
+    withoutVite();
+
+    [$konto] = oversiktKonto();
+    $container = oversiktParm($konto);
+
+    $motorn = oversiktItem($container, 'Motorn');
+    $hemlig = oversiktItem($container, 'Hemlig motor');
+
+    $motornsBild = oversiktBild($motorn, 'motor.jpg');
+    $hemligBild = oversiktBild($hemlig, 'hemlig.jpg');
+
+    $gast = oversiktGast($container, $motorn);
+
+    $svar = actingAs($gast)->get("/containers/{$container->ulid}")->assertOk();
+    $props = oversiktProps($svar);
+
+    expect(array_keys($props['covers']))->toBe([$motorn->ulid])
+        ->and($props['covers'][$motorn->ulid]['ulid'])->toBe($motornsBild->ulid);
+
+    foreach ([$hemlig->ulid, $hemligBild->ulid] as $dold) {
+        expect($svar->getContent())->not->toContain($dold);
+    }
+});
+
+/*
+ * Klart när: antalet frågor för översikten är detsamma med ett och sex items.
+ *
+ * Omslaget hämtas EN gång för hela samlingen
+ * (App\Actions\Item\ResolveItemCover::thumbnails()), inte en gång per rad.
+ * Provet mäter hela översikten — panelerna, brickan och omslagen — med en
+ * rad och med panelens sex, och varje rad bär en bild så en vandring per rad
+ * hade synts som en växande summa.
+ *
+ * Klockan är fryst i `beforeEach`, så `UpdateLastActiveAt` skriver
+ * deterministiskt (issue 80, 477).
+ */
+it('kostar samma antal frågor med ett och sex items', function () {
+    withoutVite();
+
+    [$konto, $agare] = oversiktKonto();
+    $container = oversiktParm($konto);
+
+    oversiktBild(oversiktItem($container, 'Item 1'), 'foto-1.jpg');
+
+    actingAs($agare);
+
+    $url = "/containers/{$container->ulid}";
+
+    $värm = fn () => get($url)->assertOk();
+
+    $ettItem = oversiktFrågor($värm, function () use ($url) {
+        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 1));
+    });
+
+    // Fem till, alla med en bild: panelens sex rader.
+    foreach (range(2, 6) as $i) {
+        oversiktBild(oversiktItem($container, "Item {$i}"), "foto-{$i}.jpg");
+    }
+
+    $sexItems = oversiktFrågor($värm, function () use ($url) {
+        get($url)->assertOk()->assertInertia(fn (AssertableInertia $page) => $page->has('items', 6));
+    });
+
+    expect($sexItems)->toBe($ettItem);
+});
+
+/*
+ * Klart när: översiktens panel står i två kolumner över `lg:` och en under.
+ *
+ * Rutnätet är listans eget, inte radens: `lg:`-prefixet gör att raden står i
+ * ett flöde på en telefon och i två kolumner över brytpunkten — samma grepp
+ * som sidans rutnät (issue 171/172). Panelen ritar samma `ItemRow` som
+ * itemlistan, och ingen egen rad.
+ */
+it('ritar itempanelen i två kolumner över lg med samma rad som listan', function () {
+    $vy = oversiktUtanKommentarer(File::get(resource_path('js/pages/Containers/Overview.vue')));
+
+    expect($vy)->toContain('lg:grid lg:grid-cols-2 lg:gap-x-8');
+    expect($vy)->toContain("import ItemRow from '../../components/ItemRow.vue'");
+    expect($vy)->toContain('<ItemRow');
+
+    expect($vy)->not->toContain('<UiListRow');
 });
 
 // --- aktivitetspanelen -----------------------------------------------------
