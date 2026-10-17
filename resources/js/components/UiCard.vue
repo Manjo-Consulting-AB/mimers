@@ -27,6 +27,9 @@
  * Kortet har fortfarande inga proppar, och de sex anropare som inte skickar
  * `media` ritas precis som förut.
  *
+ * **Rubrikraden är `inline-flex`** sedan issue 283, så att en `UiIcon` i
+ * `heading`-slotten står centrerad mot texten i stället för på baslinjen.
+ *
  * Rubriken är en `<h2>`. Sidan äger sin `<h1>` (GenomgangTest), och korten
  * ligger under den — därför ingen rubriknivå som propp.
  *
@@ -52,7 +55,10 @@
                     ger numera 500 ([[ADR-0057 Ikoner och typsnitt]] § 5), och
                     kortets rubrik ska vara en nivå över listraden.
                 -->
-                <h2 v-if="$slots.heading" class="text-title font-semibold text-ink">
+                <h2
+                    v-if="$slots.heading"
+                    class="inline-flex items-center gap-2 text-title font-semibold text-ink"
+                >
                     <slot name="heading" />
                 </h2>
 

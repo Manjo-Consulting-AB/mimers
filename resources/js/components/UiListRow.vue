@@ -17,7 +17,9 @@
  * § Beslut 1).
  *
  * Ikonen är `aria-hidden`: den färgar raden och upprepar aldrig titeln, och
- * en skärmläsare som läste upp den hade läst samma sak två gånger.
+ * en skärmläsare som läste upp den hade läst samma sak två gånger. Hållaren
+ * är `inline-flex items-center` sedan issue 283, så en `UiIcon` i slotten
+ * står centrerad mot textraden och inte på baslinjen.
  *
  * Raden är en `<li>` och hör i en `<ul>` — ingen annan stans.
  */
@@ -25,7 +27,11 @@
 
 <template>
     <li class="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 py-2">
-        <span v-if="$slots.icon" class="shrink-0 text-ink-subtle" aria-hidden="true">
+        <span
+            v-if="$slots.icon"
+            class="inline-flex shrink-0 items-center text-ink-subtle"
+            aria-hidden="true"
+        >
             <slot name="icon" />
         </span>
 
