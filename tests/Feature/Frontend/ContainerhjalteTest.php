@@ -535,6 +535,37 @@ it('ritar redigera container och menyknappen på glaset', function () {
 });
 
 /*
+ * Klart när: menyns *Byt bild* öppnar arket.
+ *
+ * `ContainerCoverSheet` skickar ut `show(event)` som slotens `open`, och den
+ * läser `event.currentTarget` för att fästa arket under öppnaren och lämna
+ * tillbaka fokus dit. Ett anrop utan händelse kastar `TypeError`, och arket
+ * öppnas aldrig sedan menyn redan stängts. Raden skickar därför `$event`
+ * vidare, och fästet är `<summary>`: raden ligger i en stängd `<details>` när
+ * arket stängs och kan då inte ta emot fokus.
+ */
+it('skickar öppnarens händelse till bildarket', function () {
+    $hjalte = hjalteHjalten();
+
+    expect($hjalte)->toMatch(
+        '#openCover\(\s*\$event\s*,\s*open\s*\)#',
+        'menyraden skickar inte öppnarens händelse till arket',
+    );
+
+    expect($hjalte)->toMatch(
+        '#function openCover\([^)]*event[^)]*\)#s',
+        'openCover tar inte emot öppnarens händelse',
+    );
+
+    expect(hjalteTagg($hjalte, 'summary'))->toContain('ref="menuButton"');
+
+    expect($hjalte)->toMatch(
+        '#currentTarget:\s*menuButton\.value#',
+        'arket fäster inte vid menyknappen',
+    );
+});
+
+/*
  * Klart när: itemlistan och historiken bär `can.update`.
  *
  * De två flikarna skickade inte flaggan förut (den kom med pennan i skalets

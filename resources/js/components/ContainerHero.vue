@@ -57,7 +57,8 @@ import { useTranslations } from '../composables/useTranslations.js';
  * samma ark som pennan och inställningssidan öppnar (ADR-0047 § Beslut) —
  * och ritas på samma villkor som knappen, eftersom arket kräver samma
  * behörighet. Den ritas som en `<details>`, samma grepp som radmenyn i
- * `TodoRow`: webbläsaren äger öppet-tillståndet, och Escape stänger den.
+ * `TodoRow`: webbläsaren äger öppet-tillståndet, och menyn stängs när
+ * användaren klickar på `<summary>` igen eller väljer en rad.
  *
  * **Namnet är sidans `<h1>`.** Över `md:` är hjälten sidans huvud, och
  * översikten döljer sitt eget huvud där (se resources/js/pages/Containers/
@@ -99,15 +100,20 @@ const canUpdate = computed(() => props.can?.update === true);
  * Menyns `<details>`: webbläsaren äger öppet-tillståndet, men raden *Byt bild*
  * öppnar ett ark ovanpå. Stäng menyn innan arket öppnas, annars står den kvar
  * uppfälld när arket stängs.
+ *
+ * Arket fäster sig under öppnaren och lämnar tillbaka fokus dit. Raden ligger
+ * i en stängd `<details>` när arket stängs och kan då inte ta emot fokus, så
+ * öppnaren vi skickar är `<summary>` och inte knappen.
  */
 const menu = ref(null);
+const menuButton = ref(null);
 
-function openCover(open) {
+function openCover(event, open) {
     if (menu.value) {
         menu.value.open = false;
     }
 
-    open();
+    open({ currentTarget: menuButton.value ?? event.currentTarget });
 }
 
 const { t } = useTranslations();
@@ -192,6 +198,7 @@ const { t } = useTranslations();
                     <ContainerCoverSheet :container="container" v-slot="{ open }">
                         <details ref="menu" class="relative">
                             <summary
+                                ref="menuButton"
                                 :aria-label="t('nav.menu')"
                                 class="inline-flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-control border border-glass-border bg-glass text-ink-on-accent outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                             >
@@ -204,7 +211,7 @@ const { t } = useTranslations();
                                 <button
                                     type="button"
                                     class="flex min-h-11 w-full items-center gap-2 rounded-control px-3 text-left text-body text-ink outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-                                    @click="openCover(open)"
+                                    @click="openCover($event, open)"
                                 >
                                     <UiIcon name="image" :size="16" />
                                     {{ t('container.cover.edit') }}
