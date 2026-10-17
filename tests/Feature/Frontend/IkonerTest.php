@@ -335,7 +335,10 @@ it('fäller ett UiIcon-name som inte finns i listan', function () {
         $kod = ikonUtanKommentarer($fil->getContents());
 
         foreach (ikonAnrop($kod) as $namn) {
-            expect($roller)->toContain($namn, sprintf(
+            // `toContain` tar VARIABLA nålar, inte ett meddelande som andra
+            // argument — det hade letats efter som en andra nål. Jämförelsen
+            // står därför i `in_array`, med meddelandet på `toBeTrue`.
+            expect(in_array($namn, $roller, true))->toBeTrue(sprintf(
                 '%s kallar UiIcon med name="%s", som inte finns i resources/js/icons/index.js',
                 $fil->getRelativePathname(),
                 $namn,

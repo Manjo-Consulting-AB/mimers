@@ -124,6 +124,9 @@ function hjalteHjalten(): string
  * hjälten läser den själv ur `page.props` (issue 680). Sloten `stats` och vägen
  * genom skalet är borta: sidan skickar inga tal, och hjälten frågar inte sidan
  * om dem.
+ *
+ * Sedan issue 284 bär bara den HÖGA hjälten talen (ADR-0050 § 2–3): den låga
+ * har toningen men inga taltutor.
  */
 it('ritar brickorna i hjälten ur den delade proppen', function () {
     withoutVite();
@@ -143,20 +146,19 @@ it('ritar brickorna i hjälten ur den delade proppen', function () {
 
     // Hjälten läser proppen själv och fyller brickorna ur den.
     expect($hjalte)->toContain('page.props.containerCounts')
-        ->and($hjalte)->toContain('<UiStat :value="counts.items"')
-        ->and($hjalte)->toContain('<UiStat :value="counts.todos"');
+        ->and($hjalte)->toMatch('#<UiStat\b[^>]*:value="counts\.items"#s')
+        ->and($hjalte)->toMatch('#<UiStat\b[^>]*:value="counts\.todos"#s');
 
-    // Brickorna ritas i båda formerna: villkoret är talens närvaro — `counts`
-    // — och inte hjältens höjd.
-    preg_match('#<div\b[^>]*v-if="counts"[^>]*>#s', $hjalte, $träffar);
+    // Brickorna ritas bara i den höga hjälten: villkoret är både talens
+    // närvaro — `counts` — och formen.
+    preg_match('#<div\b[^>]*v-if="counts && hero === \'large\'"[^>]*>#s', $hjalte, $träffar);
 
     $brickrad = $träffar[0] ?? '';
 
-    expect($brickrad)->not->toBe('', 'brickorna ritas inte ur `counts`');
-    expect($brickrad)->not->toContain("hero === 'large'");
+    expect($brickrad)->not->toBe('', 'brickorna ritas inte ur `counts` och den höga formen');
 
     expect($hjalte)->toMatch(
-        '#<div\b[^>]*v-if="counts"[^>]*>\s*<Link\b.*?<UiStat#s',
+        '#<div\b[^>]*v-if="counts && hero === \'large\'"[^>]*>\s*<Link\b.*?<UiStat#s',
         'brickorna står inte inuti brickraden',
     );
 
@@ -174,15 +176,15 @@ it('ritar brickorna i hjälten ur den delade proppen', function () {
 });
 
 /*
- * Klart när: brickorna står i den låga hjälten på flikarna.
+ * Klart när: den låga hjälten har toningen men inga tal.
  *
- * `compact` på varje flik utom översikten (ADR-0050 § 2), och sedan issue 680
- * bär den låga hjälten samma två brickor som den höga: den delade proppen
- * `containerCounts` är satt på varje containersida (issue 679), och hjälten
- * ritar talen när den finns. Provet fäster båda leden: flikarna svarar med
- * proppen satt, och deras skal ber om den låga formen.
+ * `compact` på varje flik utom översikten (ADR-0050 § 2), och sedan issue 284
+ * är det skillnaden mot den höga: proppen `containerCounts` finns på varje
+ * containersida, men bara den höga hjälten ritar taltutorna. Provet fäster
+ * båda leden: flikarna svarar med proppen satt, deras skal ber om den låga
+ * formen, och talen står bakom formvillkoret.
  */
-it('ritar brickorna i den låga hjälten på flikarna', function () {
+it('har toningen men inga tal i den låga hjälten', function () {
     withoutVite();
 
     [, $ägare, $container] = hjalteKontext();
@@ -202,6 +204,15 @@ it('ritar brickorna i den låga hjälten på flikarna', function () {
 
         expect($vy)->toContain("[ContainerLayout, { hero: 'compact'");
     }
+
+    // Toningen ritas i båda formerna, men talen bara i den höga: villkoret
+    // nämner formen, och det finns ingen taltuta utanför brickraden.
+    $hjalte = hjalteHjalten();
+
+    expect($hjalte)->toContain('bg-linear-to-r')
+        ->and($hjalte)->toContain("counts && hero === 'large'")
+        ->and(substr_count($hjalte, '<UiStat'))
+        ->toBe(2, 'den låga hjälten ritar fler taltutor än den höga');
 });
 
 /*
@@ -243,8 +254,12 @@ it('länkar itembrickan till itemlistan och uppgiftsbrickan till uppgiftsfliken'
 
     expect($träffar[0][1])->toContain('focus-visible:ring-2')
         ->and($träffar[0][2])->toContain(':value="counts.items"')
+        ->and($träffar[0][2])->toContain('icon="item"')
+        ->and($träffar[0][2])->toContain('tone="on-image"')
         ->and($träffar[1][1])->toContain('focus-visible:ring-2')
-        ->and($träffar[1][2])->toContain(':value="counts.todos"');
+        ->and($träffar[1][2])->toContain(':value="counts.todos"')
+        ->and($träffar[1][2])->toContain('icon="task"')
+        ->and($träffar[1][2])->toContain('tone="on-image"');
 });
 
 /*
@@ -400,20 +415,64 @@ it('utelämnar undertiteln när beskrivningen saknas', function () {
 });
 
 /*
- * Klart när: hjälten ritar ingen väg till inställningssidan (issue 646).
+ * Klart när: `bg-shell/70` är ersatt av en toning, och bilden syns till höger.
  *
- * Hjälten bar två grenar till `/containers/{ulid}/edit` — *Redigera container*
- * för den som får ändra (ADR-0050 § 3) och länken *Inställningar* för läsaren.
- * Båda togs bort i issue 646, som i stället lade *Settings* i flikraden för
- * alla som når containern: fliken är samma adress och samma `view`-grindade
- * sida, och två vägar till samma val var just det ADR-0050 § 3 ville bort.
- *
- * Provet fäster frånvaron i källkoden och att sidan själv står kvar: både
- * ägaren och läsaren får 200 på adressen — vägen dit är flikens och skalets,
- * inte hjältens — och läsaren nekas fortfarande `PATCH`, för flaggan var
- * presentation och aldrig grinden.
+ * ADR-0057 § 6 vill ha en toning från `--color-shell` till genomskinligt,
+ * vänster till höger, med texten på den täta delen — i stället för den jämna
+ * mörkläggningen. Utan bild ritar `ContainerCover` den neutrala ytan ur
+ * [[ADR-0047 Containerns bild]] § Beslut som förut; toningen läggs över samma
+ * lager, så hjälten har en form och inte två.
  */
-it('ritar ingen redigeringslänk i hjälten', function () {
+it('ersätter mörkläggningen med en toning och behåller den neutrala ytan', function () {
+    $hjalte = hjalteHjalten();
+
+    expect($hjalte)->not->toContain('bg-shell/70');
+
+    expect($hjalte)->toContain('bg-linear-to-r')
+        ->and($hjalte)->toContain('from-shell')
+        ->and($hjalte)->toContain('via-shell/90')
+        ->and($hjalte)->toContain('to-transparent');
+
+    // Texten står i den täta delen: toningen håller full täthet en bit in, och
+    // spalten är kapad så att den aldrig växer in i den glesa delen.
+    expect($hjalte)->toContain('from-40%')
+        ->and($hjalte)->toContain('max-w-lg');
+
+    // Bilden — eller den neutrala ytan — ritas utan villkor under toningen.
+    expect($hjalte)->toContain('<ContainerCover :cover="container.cover" variant="medium" />');
+
+    expect($hjalte)->not->toMatch('#<ContainerCover\b[^>]*v-if#s');
+});
+
+/*
+ * Klart när: under `md:` är markupen oförändrad.
+ *
+ * Hjälten ritas bara över brytpunkten. Under den bär skalets mörka topprad
+ * containerns bild och namn, och den teleporteras in i skalet precis som förut.
+ * Provet fäster båda leden i layouten.
+ */
+it('lämnar markupen under md orörd', function () {
+    $skal = hjalteKod('layouts/ContainerLayout.vue');
+
+    expect($skal)->toMatch('#<ContainerHero\b[^>]*class="hidden md:block"#s')
+        ->and($skal)->toContain('<Teleport defer to="#shell-topbar">')
+        ->and($skal)->toContain('md:hidden');
+});
+
+/*
+ * Klart när: *Redigera container* och menyknappen står på glaset.
+ *
+ * Issue 646 tog bort den gamla redigeringslänken när *Settings* flyttade in i
+ * flikraden. Issue 284 ritar tillbaka knappen enligt `docs/Design/container.jpeg`
+ * och [[ADR-0050 Desktopdesignen]] § 3: den leder till inställningssidan, står
+ * på glaset ur [[ADR-0057 Ikoner och typsnitt]] § 6 och bär `edit`. Menyn
+ * bredvid bär `more` och öppnar *Byt bild* — samma ark som pennan och
+ * inställningssidan öppnar ([[ADR-0047 Containerns bild]] § Beslut).
+ *
+ * Båda ritas bara för den som får ändra, och flaggan är presentation: rutten
+ * prövar samma grind. Läsaren nekas fortfarande `PATCH`.
+ */
+it('ritar redigera container och menyknappen på glaset', function () {
     withoutVite();
 
     [, $ägare, $container] = hjalteKontext();
@@ -421,19 +480,44 @@ it('ritar ingen redigeringslänk i hjälten', function () {
 
     $hjalte = hjalteHjalten();
 
-    expect($hjalte)->not->toContain('/edit');
-    expect($hjalte)->not->toContain('container.hero.edit');
+    // Knappen är hjältens väg till inställningssidan (ADR-0050 § 3) och bär
+    // ikonen `edit`.
+    expect($hjalte)->toContain('`/containers/${container.ulid}/edit`')
+        ->and($hjalte)->toContain("t('container.hero.edit')")
+        ->and($hjalte)->toContain('<UiIcon name="edit"');
 
-    // Ingen av dem tappar vägen dit: sidan svarar 200 för båda, och fliken i
-    // raden (ContainerflikTest, FlikradTest) och skalets rad under `md:`
-    // (provet nedanför) bär den.
+    // Menyknappen bär `more` och öppnar bildvalet.
+    expect($hjalte)->toContain(":aria-label=\"t('nav.menu')\"")
+        ->and($hjalte)->toContain('<UiIcon name="more"')
+        ->and($hjalte)->toContain("t('container.cover.edit')");
+
+    // Båda står på glaset: `bg-glass` med `border-glass-border`, och båda
+    // bär fokusringen.
+    expect($hjalte)->toMatch(
+        '#<Link\b[^>]*border-glass-border bg-glass[^>]*>.*?<UiIcon name="edit"#s',
+        'redigeringsknappen står inte på glaset med sin ikon',
+    );
+    expect($hjalte)->toMatch(
+        '#<summary\b[^>]*border-glass-border bg-glass[^>]*>.*?<UiIcon name="more"#s',
+        'menyknappen står inte på glaset med sin ikon',
+    );
+
+    preg_match_all('/<Link\b[^>]*focus-visible:ring-2[^>]*>\s*<UiIcon name="edit"/s', $hjalte, $knappar);
+    expect($knappar[0])->not->toBe([], 'redigeringsknappen saknar fokusring');
+
+    preg_match_all('/<summary\b[^>]*focus-visible:ring-2[^>]*>/s', $hjalte, $menyer);
+    expect($menyer[0])->not->toBe([], 'menyknappen saknar fokusring');
+
+    // Flaggan styr båda och är presentation, aldrig grinden.
+    expect($hjalte)->toContain('v-if="canUpdate"');
+
+    // Sidan svarar 200 för båda — vägen dit är grindad på `view` — och
+    // flaggan skiljer dem åt.
     $adress = "/containers/{$container->ulid}/edit";
 
     actingAs($ägare)->get($adress)->assertOk();
     actingAs($läsare)->get($adress)->assertOk();
 
-    // Flaggan finns kvar och skiljer dem åt på översikten — den styr pennan i
-    // skalets topprad, som är en annan väg till samma val.
     actingAs($ägare)->get("/containers/{$container->ulid}")
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page->where('can.update', true));
