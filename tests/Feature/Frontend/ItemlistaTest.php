@@ -246,6 +246,23 @@ function itemlistaListblock(): string
     return $träff[0];
 }
 
+/**
+ * Index.vue med kommentarerna borttagna.
+ *
+ * Ordningskontrollerna nedan letar efter markup, och docblocken räknar upp
+ * samma ord (`<h1>`, *New item*, `ItemFilterBar`) i prosa. Utan den här
+ * städningen hade en kontroll kunnat stanna på en mening i stället för på
+ * raden den gäller.
+ */
+function itemlistaKod(): string
+{
+    $kod = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
+    $kod = (string) preg_replace('#/\*.*?\*/#s', '', $kod);
+    $kod = (string) preg_replace('#<!--.*?-->#s', '', $kod);
+
+    return (string) preg_replace('#^[ \t]*//.*$#m', '', $kod);
+}
+
 /*
  * Beslut 1: båda rutterna ligger bakom `auth`. En utloggad besökare skickas
  * till inloggningen och når aldrig en kontrollermetod.
@@ -962,4 +979,67 @@ it('ritar listan med ItemRow och behåller listformen i övrigt', function () {
     expect($raden)->not->toContain('categories[item.category]');
     expect($raden)->not->toContain('statuses[item.ulid]');
     expect($raden)->not->toContain('<ItemTagList');
+});
+
+/*
+ * Klart när (issue 291 · [[ADR-0058 Trädet som tabell]] § 7): rubriken,
+ * *New item* och växeln står på en rad, i den ordningen, i alla tre lägena.
+ *
+ * Raden ritas en gång och utanför lägesgrenarna — det är därför den gäller
+ * alla tre — och provet läser därför markupen. En rad som låg inuti
+ * listgrenen hade gett rätt ordning i listan och ingen rad alls i trädet och
+ * kartan, och en kontroll mot de tre svaren hade inte kunnat se skillnaden.
+ */
+it('ställer rubriken, New item och växeln på en rad i alla tre lägena', function () {
+    $vy = itemlistaKod();
+
+    $start = strpos($vy, '<div class="mt-6 flex flex-wrap items-center gap-3">');
+
+    expect($start)->not->toBeFalse('huvudraden saknas i Index.vue');
+
+    $slut = strpos($vy, '</div>', (int) $start);
+    $huvud = substr($vy, (int) $start, (int) $slut - (int) $start);
+
+    // En rad, inte en stapel.
+    expect($huvud)->toContain('flex flex-wrap items-center');
+    expect($huvud)->not->toContain('flex-col');
+
+    // Ordningen är bindande: rubriken först, därefter *New item* och växeln.
+    $rubrik = strpos($huvud, '<h1');
+    $nytt = strpos($huvud, 'item.index.create');
+    $vaxel = strpos($huvud, '<ItemViewSwitch');
+
+    expect($rubrik)->not->toBeFalse()
+        ->and($nytt)->toBeGreaterThan((int) $rubrik)
+        ->and($vaxel)->toBeGreaterThan((int) $nytt);
+
+    // *New item* ritas bara när hon får skapa (57b § Beslut 2).
+    expect($huvud)->toContain('v-if="can.create"');
+
+    // Huvudet står före lägesgrenen, alltså också i träd- och kartläget.
+    expect($start)->toBeLessThan(strpos($vy, '<template v-if="view === \'list\'">'));
+});
+
+/*
+ * Klart när (issue 291): filterraden ritas i listläget och inte i träd- eller
+ * kartläget. Trädet får den i issue 293, och då flyttar det här provet.
+ *
+ * Eftersom raden bara får finnas en gång räcker det att bevisa att den enda
+ * förekomsten ligger i listgrenen — kartan står efter trädet.
+ */
+it('ritar filterraden i listläget och inte i träd- eller kartläget', function () {
+    $vy = itemlistaKod();
+
+    $lista = strpos($vy, '<template v-if="view === \'list\'">');
+    $trad = strpos($vy, '<section v-else-if="view === \'tree\'"');
+
+    expect($lista)->not->toBeFalse()
+        ->and($trad)->toBeGreaterThan((int) $lista);
+
+    expect(substr_count($vy, '<ItemFilterBar'))->toBe(1);
+
+    $filter = strpos($vy, '<ItemFilterBar');
+
+    expect($filter)->toBeGreaterThan((int) $lista)
+        ->and($filter)->toBeLessThan((int) $trad);
 });
