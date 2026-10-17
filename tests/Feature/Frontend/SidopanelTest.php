@@ -604,3 +604,29 @@ it('gör varje rad i sidopanelen till en länk med träffyta och fokusring', fun
         expect($länk)->toMatch('#\bmin-h-11\b#', "ett mål i skalet har en träffyta under 44 px:\n{$länk}");
     }
 });
+
+/*
+ * Skalets två optionala listor — containrarna och de senast besökta — ska stå
+ * kvar efter en navigering. Layouten är persistent, men en vanlig sidladdning
+ * bär inte proppen; en komponent som frågade en gång och sedan aldrig igen
+ * tömde sidopanelen på varje sida utom den första.
+ *
+ * Båda frågar därför när ytan ritas OCH sidan saknar proppen, och ritar ur det
+ * senaste svaret, inte ur sidans propp direkt.
+ */
+it('hämtar skalets listor igen efter varje navigering och behåller det senaste svaret', function () {
+    foreach ([
+        'components/ShellContainerList.vue' => 'shellContainers',
+        'components/RecentVisitList.vue' => 'recentVisits',
+    ] as $sokvag => $propp) {
+        $lista = sidopanelKod($sokvag);
+
+        expect($lista)->toContain("page.props.{$propp} !== undefined")
+            ->toContain('() => props.load && !answered.value')
+            ->toContain("router.reload({ only: ['{$propp}'] })")
+            ->toContain('latest.value = list');
+
+        expect($lista)->not->toContain('requested');
+        expect($lista)->not->toContain("page.props.{$propp} ??");
+    }
+});

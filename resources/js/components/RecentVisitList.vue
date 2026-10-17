@@ -21,9 +21,15 @@ import { useRelativeDate } from '../composables/useRelativeDate.js';
  * **Listan är en OPTIONAL prop, och den hämtas först när ytan ritas**
  * ([[ADR-0049 Nyligen besökta]] § Beslut). `load` är den ytans svar på frågan
  * "ritas jag?": AppLayout sätter den när desktopens sidopanel ritas, och
- * MobileMenu när sidomenyn öppnas. Är den sann en enda gång ställs frågan —
- * `requested` ser till att en stängd och åter öppnad meny inte frågar servern
- * igen om samma lista, samma mönster som `loaded` i NotificationBell.
+ * MobileMenu när sidomenyn öppnas.
+ *
+ * **Frågan ställs om efter varje navigering**, samma regel som i
+ * ShellContainerList. Layouten är persistent, men en vanlig sidladdning bär
+ * inte proppen — att fråga en gång per komponent tömde sektionen på varje sida
+ * utom den första. Listan hämtas nu varje gång ytan ritas och sidan saknar
+ * proppen, och det senaste svaret står kvar under tiden så att sektionen inte
+ * blinkar bort. Ett besök läggs till vid varje navigering, så en ny fråga per
+ * sida är dessutom det som håller listan aktuell.
  *
  * **Proppen är `undefined` till dess att svaret är här, och `[]` när det
  * kommit och är tomt.** Skillnaden är hela villkoret nedan: en rubrik över en
@@ -58,21 +64,38 @@ const { t } = useTranslations();
 const { eventDate } = useRelativeDate();
 const page = usePage();
 
-const rows = computed(() => page.props.recentVisits ?? []);
+/*
+ * Har sidan svaret? `undefined` är "frågan är inte besvarad för den här
+ * sidan" — efter varje vanlig navigering, se docblocken.
+ */
+const answered = computed(() => page.props.recentVisits !== undefined);
 
-/* "Frågan är ställd" — en gång per komponent, se docblocken. */
-const requested = ref(false);
+/* Det senaste svaret, kvar över navigeringarna — se docblocken. */
+const latest = ref(undefined);
 
 watch(
-    () => props.load,
-    (load) => {
-        if (!load || requested.value) {
-            return;
+    () => page.props.recentVisits,
+    (list) => {
+        if (list !== undefined) {
+            latest.value = list;
         }
+    },
+    { immediate: true },
+);
 
-        requested.value = true;
+const rows = computed(() => latest.value ?? []);
 
-        router.reload({ only: ['recentVisits'] });
+/*
+ * Ritas ytan och saknar sidan svaret — fråga. Villkoret blir sant igen efter
+ * varje navigering och förblir sant medan omladdningen pågår, så samma sida
+ * frågar bara en gång.
+ */
+watch(
+    () => props.load && !answered.value,
+    (missing) => {
+        if (missing) {
+            router.reload({ only: ['recentVisits'] });
+        }
     },
     { immediate: true },
 );
