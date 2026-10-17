@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import UiIcon from './UiIcon.vue';
 import UiListRow from './UiListRow.vue';
 import { notificationMessage } from './notificationPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -221,19 +222,7 @@ function clear() {
                  positionerad, och siffran hänger kvar på knappens hörn precis
                  som förut. -->
             <span class="inline-flex" :class="isTab ? 'relative' : ''">
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="h-5 w-5"
-                    aria-hidden="true"
-                >
-                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                </svg>
+                <UiIcon name="notifications" :size="20" class="h-5 w-5" />
 
                 <span
                     v-if="unread > 0"

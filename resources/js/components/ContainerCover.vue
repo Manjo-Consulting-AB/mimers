@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import UiIcon from './UiIcon.vue';
 import { coverUrl } from './coverPresentation.js';
 
 /*
@@ -76,18 +77,6 @@ const position = computed(() => (props.cover?.focus
         aria-hidden="true"
         class="flex h-full w-full items-center justify-center bg-surface-sunken text-ink-subtle"
     >
-        <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="h-1/3 w-1/3 max-h-6 max-w-6"
-        >
-            <path d="M3 8.5 12 4l9 4.5v7L12 20l-9-4.5z"></path>
-            <path d="M3 8.5 12 13l9-4.5"></path>
-            <path d="M12 13v7"></path>
-        </svg>
+        <UiIcon name="container" :size="24" class="h-1/3 w-1/3 max-h-6 max-w-6" />
     </span>
 </template>

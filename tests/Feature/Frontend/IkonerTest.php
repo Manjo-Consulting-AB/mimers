@@ -79,6 +79,12 @@ function ikonRoller(): array
         'arrow-right' => 'arrow-right',
         'warning' => 'triangle-alert',
         'overdue' => 'clock-alert',
+        'camera' => 'camera',
+        'menu' => 'menu',
+        'calendar' => 'calendar',
+        'more-vertical' => 'ellipsis-vertical',
+        'chevron-left' => 'chevron-left',
+        'mail' => 'mail',
     ];
 }
 
@@ -352,4 +358,65 @@ it('fäller ett UiIcon-name som inte finns i listan', function () {
     expect(ikonAnrop('<UiIcon name="finns-inte" />'))->toBe(['finns-inte']);
     expect(ikonAnrop("<UiIcon :name=\"'item'\" />"))->toBe(['item']);
     expect(ikonAnrop('<UiIcon :name="role" />'))->toBe([]);
+});
+
+it('fäller en ny handskriven svg utanför undantagen', function () {
+    /*
+     * Undantagen ritar data och inte ikoner ([[ADR-0057 Ikoner och typsnitt]]
+     * § 2): diagram, donut, kartor, lagringsstapeln och QR-koden.
+     *
+     * Listan är issue 290:s nio filer. `TaskOverviewPanel` står inte här: dess
+     * ring ritas som en `conic-gradient`, inte som `<svg>`, så den behöver
+     * inget undantag.
+     */
+    $undantag = [
+        'components/UiIcon.vue',
+        'components/CostDonut.vue',
+        'components/CostTimeChart.vue',
+        'components/CostCategoryBreakdown.vue',
+        'components/ActivityTimeChart.vue',
+        'components/ActivityTypeChart.vue',
+        'components/StorageBar.vue',
+        'components/TotpQrCode.vue',
+        'components/FocusMapNode.vue',
+    ];
+
+    $vueFiler = array_values(array_filter(
+        File::allFiles(resource_path('js')),
+        fn ($fil): bool => $fil->getExtension() === 'vue',
+    ));
+
+    expect($vueFiler)->not->toBeEmpty();
+
+    $granskade = 0;
+
+    foreach ($vueFiler as $fil) {
+        $relativ = $fil->getRelativePathname();
+
+        if (in_array($relativ, $undantag, true)) {
+            continue;
+        }
+
+        $granskade++;
+
+        expect(str_contains(ikonUtanKommentarer($fil->getContents()), '<svg'))->toBeFalse(sprintf(
+            '%s ritar en egen <svg> — ikoner går genom UiIcon, se ADR-0057 § 2',
+            $relativ,
+        ));
+    }
+
+    // Ett prov som granskar noll filer är tyst, inte grönt.
+    expect($granskade)->toBe(count($vueFiler) - count($undantag));
+
+    // Undantagen ska vara riktiga. UiIcon bygger svg:en med h() och bär
+    // därför ingen literal; de övriga ska fortfarande rita data.
+    foreach ($undantag as $relativ) {
+        if ($relativ === 'components/UiIcon.vue') {
+            continue;
+        }
+
+        expect(str_contains(ikonUtanKommentarer(ikonKod($relativ)), '<svg'))->toBeTrue(
+            "{$relativ} står som undantag men ritar ingen <svg>",
+        );
+    }
 });

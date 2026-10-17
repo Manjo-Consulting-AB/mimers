@@ -56,12 +56,11 @@ const props = defineProps({
 const { t } = useTranslations();
 
 /*
- * Ringens geometri, samma som CostDonuts och ActivityTypeCharts: `RADIUS` är
- * vald så att omkretsen blir exakt 100, alltså är `stroke-dasharray` en
- * procentsats rakt av. `GAP` är ytan mellan två bitar, så att två bitar med
- * liknande färg inte smälter ihop.
+ * Ringens andelar är procent rakt av, och `GAP` är ytan mellan två bitar, så
+ * att två bitar med liknande färg inte smälter ihop. Ringen ritas som en
+ * `conic-gradient` och inte som `<svg>`: den ritar data, men ADR-0057 § 2
+ * undantar bara SVG, och en gradient behöver inget undantag.
  */
-const RADIUS = 15.9155;
 const GAP = 0.8;
 
 /** Gruppens färg, nycklad på serverns gruppnamn. */
@@ -76,9 +75,13 @@ const GROUP_COLORS = {
 
 /*
  * Ritordningen: de öppna grupperna i den ordning anroparen gav dem, och
- * *Done* utanför ringen. `sum()` är de öppna gruppernas tal — panelens
- * mittsiffra — och `arcs` bär bara de fem, för en andel av en ring kan inte
- * vara en rad som inte hör till de öppna.
+ * *Done* utanför ringen. `total` är de öppna gruppernas tal — panelens
+ * mittsiffra — och gradienten bär bara de fem, för en andel av en ring kan
+ * inte vara en rad som inte hör till de öppna.
+ *
+ * Varje bit börjar där den förra slutade. `conic-gradient` räknar från
+ * klockan tolv och medurs, samma ordning som ringen alltid har haft, och
+ * `transparent` i glappet visar kortets yta.
  */
 const chart = computed(() => {
     const open = props.rows.filter((row) => !row.done);
@@ -90,27 +93,23 @@ const chart = computed(() => {
     const gap = open.length > 1 ? GAP : 0;
 
     let cumulative = 0;
+    const stops = [];
 
-    const arcs = open.map((row) => {
+    for (const row of open) {
         const count = props.counts[row.key] ?? 0;
         const share = total === 0 ? 0 : (count / total) * 100;
         const drawn = Math.max(share - gap, 0);
 
-        const arc = {
-            key: row.key,
-            color: GROUP_COLORS[row.key],
-            dash: `${drawn} ${100 - drawn}`,
-            // 25 flyttar bitens start till klockan tolv; `cumulative` är hur
-            // mycket av ringen som redan är riden.
-            offset: 25 - cumulative,
-        };
+        stops.push(`${colorOf(row.key)} ${cumulative}% ${cumulative + drawn}%`);
+
+        if (gap > 0) {
+            stops.push(`transparent ${cumulative + drawn}% ${cumulative + share}%`);
+        }
 
         cumulative += share;
+    }
 
-        return arc;
-    });
-
-    return { total, arcs };
+    return { total, ring: `conic-gradient(${stops.join(', ')})` };
 });
 
 /** Radens färg, eller den neutrala grå för en nyckel paletten inte känner. */
@@ -131,20 +130,17 @@ function colorOf(key) {
                 data. Talet i mitten är däremot text som allt annat.
             -->
             <div class="relative h-28 w-28 shrink-0">
-                <svg viewBox="0 0 42 42" class="h-full w-full" aria-hidden="true">
-                    <circle
-                        v-for="arc in chart.arcs"
-                        :key="arc.key"
-                        cx="21"
-                        cy="21"
-                        :r="RADIUS"
-                        fill="none"
-                        :stroke="arc.color"
-                        stroke-width="4"
-                        :stroke-dasharray="arc.dash"
-                        :stroke-dashoffset="arc.offset"
-                    />
-                </svg>
+                <!--
+                    Ringen fyller 85,3 % av rutan, samma mått som den tidigare
+                    svg:ens ytterkant, och hålet 66,3 %. Hålet bär kortets yta.
+                -->
+                <div
+                    class="absolute inset-[7.34%] rounded-pill"
+                    :style="{ background: chart.ring }"
+                    aria-hidden="true"
+                >
+                    <div class="absolute inset-[11.16%] rounded-pill bg-surface" />
+                </div>
 
                 <div class="absolute inset-0 flex flex-col items-center justify-center">
                     <span class="text-title font-semibold text-ink">{{ chart.total }}</span>

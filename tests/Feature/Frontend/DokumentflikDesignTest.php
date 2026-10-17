@@ -27,9 +27,10 @@ use Illuminate\Support\Facades\Lang;
 it('ritar rubrikraden med ikon, rubrik och underrad om containern', function () {
     $vy = File::get(resource_path('js/pages/Containers/Documents.vue'));
 
-    // Underraden namnger containern, och ikonen är dekor.
+    // Underraden namnger containern, och ikonen är dekor — `UiIcon` är alltid
+    // `aria-hidden`.
     expect($vy)->toContain("t('container.documents.subheading', { container: container.name })")
-        ->toContain('aria-hidden="true"');
+        ->toContain('<UiIcon name="document"');
 
     expect(Lang::get('ui.container.documents.subheading', ['container' => 'Min båt'], 'en'))
         ->toBe('All documents belonging to Min båt');

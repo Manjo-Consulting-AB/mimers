@@ -120,7 +120,7 @@ it('knappen står kvar medan svaret är på väg', function () {
     // … och ersätts då av den fyllda gröna bocken, samma som den klara raden.
     expect($knapp)->toContain('bg-success')
         ->toContain('v-else')
-        ->toContain('m5 13 4 4L19 7');
+        ->toContain('<UiIcon name="check"');
 });
 
 /*

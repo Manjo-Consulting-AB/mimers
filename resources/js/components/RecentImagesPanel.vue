@@ -99,19 +99,7 @@ const thumbUrl = (image) => `/files/${image.ulid}?variant=thumb`;
                         :aria-label="t('item.attachment.file_icon')"
                         class="flex h-24 w-full items-center justify-center rounded border border-slate-300 bg-slate-50 text-slate-600"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-8 w-8"
-                            aria-hidden="true"
-                        >
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <path d="M14 2v6h6" />
-                        </svg>
+                        <UiIcon name="document" :size="24" class="h-8 w-8" />
                     </span>
                 </Link>
             </li>

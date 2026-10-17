@@ -4,6 +4,7 @@ import { Link } from '@inertiajs/vue3';
 import ContainerCover from '../components/ContainerCover.vue';
 import ContainerCoverSheet from '../components/ContainerCoverSheet.vue';
 import ContainerHero from '../components/ContainerHero.vue';
+import UiIcon from '../components/UiIcon.vue';
 import UiTabs from '../components/UiTabs.vue';
 import { containerTabs } from './containerSections.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -230,18 +231,7 @@ const tabs = computed(() =>
                     class="inline-flex min-h-11 min-w-11 items-center justify-center"
                     :aria-label="t('nav.back')"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="h-5 w-5"
-                        aria-hidden="true"
-                    >
-                        <path d="M15 5l-7 7 7 7"></path>
-                    </svg>
+                    <UiIcon name="chevron-left" :size="20" class="h-5 w-5" />
                 </Link>
 
                 <!-- Containerns bild, i samma fyrkant som bild 2 i
@@ -265,19 +255,7 @@ const tabs = computed(() =>
                         :aria-label="t('container.cover.edit')"
                         @click="open"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-5 w-5"
-                            aria-hidden="true"
-                        >
-                            <path d="M4 20h4l10-10-4-4L4 16z"></path>
-                            <path d="m14 6 4 4"></path>
-                        </svg>
+                        <UiIcon name="edit" :size="20" class="h-5 w-5" />
                     </button>
                 </ContainerCoverSheet>
             </template>

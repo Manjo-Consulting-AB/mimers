@@ -15,6 +15,7 @@ import ItemQuickFacts from '../../../components/ItemQuickFacts.vue';
 import ItemStructurePanel from '../../../components/ItemStructurePanel.vue';
 import ItemTagList from '../../../components/ItemTagList.vue';
 import ScheduleListSection from '../../../components/ScheduleListSection.vue';
+import UiIcon from '../../../components/UiIcon.vue';
 import UiTabs from '../../../components/UiTabs.vue';
 import { itemFields } from '../../../components/itemPresentation.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
@@ -777,18 +778,12 @@ function toggleFavorite() {
                     :class="isFavorite ? 'text-accent' : 'text-ink-subtle'"
                     @click="toggleFavorite"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        :fill="isFavorite ? 'currentColor' : 'none'"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
+                    <UiIcon
+                        name="favorite"
+                        :size="24"
                         class="h-6 w-6"
-                        aria-hidden="true"
-                    >
-                        <path d="M12 3.5l2.6 5.3 5.9.85-4.25 4.15 1 5.85L12 16.9l-5.25 2.75 1-5.85L3.5 9.65l5.9-.85z"></path>
-                    </svg>
+                        :class="isFavorite ? 'fill-current' : ''"
+                    />
                 </button>
             </div>
 

@@ -10,6 +10,7 @@ import ItemViewSwitch from '../../components/ItemViewSwitch.vue';
 import StorageBar from '../../components/StorageBar.vue';
 import UiBadge from '../../components/UiBadge.vue';
 import UiCard from '../../components/UiCard.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import UiInput from '../../components/UiInput.vue';
 import UiSelect from '../../components/UiSelect.vue';
 import { attachmentPreview, formatByteSize } from '../../components/attachmentPresentation.js';
@@ -410,19 +411,7 @@ function toInbox(row) {
     -->
     <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="size-10 shrink-0 text-accent"
-                aria-hidden="true"
-            >
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <path d="M14 2v6h6" />
-            </svg>
+            <UiIcon name="document" :size="24" class="size-10 shrink-0 text-accent" />
 
             <div>
                 <h1 class="text-heading font-semibold">{{ t('container.documents.heading') }}</h1>
@@ -445,33 +434,11 @@ function toInbox(row) {
             -->
             <details v-if="items.length > 0" class="relative">
                 <summary class="inline-flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-control bg-accent px-4 font-medium text-ink-on-accent">
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="size-5 shrink-0"
-                        aria-hidden="true"
-                    >
-                        <path d="M12 5v14M5 12h14" />
-                    </svg>
+                    <UiIcon name="add" :size="20" class="size-5 shrink-0" />
 
                     {{ t('container.documents.add') }}
 
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="size-5 shrink-0"
-                        aria-hidden="true"
-                    >
-                        <path d="m6 9 6 6 6-6" />
-                    </svg>
+                    <UiIcon name="chevron-down" :size="20" class="size-5 shrink-0" />
                 </summary>
 
                 <div class="absolute right-0 z-10 mt-2 w-64 rounded-card border border-border bg-surface p-3 shadow-sm">
@@ -550,19 +517,7 @@ function toInbox(row) {
                             :aria-label="t('item.attachment.file_icon')"
                             class="flex h-24 w-full items-center justify-center rounded bg-surface-sunken text-ink-subtle"
                         >
-                            <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                class="size-8"
-                                aria-hidden="true"
-                            >
-                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                <path d="M14 2v6h6" />
-                            </svg>
+                            <UiIcon name="document" :size="24" class="size-8" />
                         </span>
 
                         <span class="truncate font-medium text-ink">{{ open.filename }}</span>
@@ -703,19 +658,7 @@ function toInbox(row) {
                                     :aria-label="t('item.attachment.file_icon')"
                                     class="flex size-8 shrink-0 items-center justify-center rounded bg-surface-sunken text-ink-subtle"
                                 >
-                                    <svg
-                                        viewBox="0 0 24 24"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        stroke-width="1.5"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        class="size-4"
-                                        aria-hidden="true"
-                                    >
-                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                        <path d="M14 2v6h6" />
-                                    </svg>
+                                    <UiIcon name="document" :size="16" class="size-4" />
                                 </span>
 
                                 <span class="font-medium text-ink">{{ row.filename }}</span>

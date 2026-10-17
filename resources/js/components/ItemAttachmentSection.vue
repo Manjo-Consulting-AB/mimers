@@ -4,6 +4,7 @@ import { router, usePage } from '@inertiajs/vue3';
 import FormField from './FormField.vue';
 import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiButton from './UiButton.vue';
+import UiIcon from './UiIcon.vue';
 import UiSelect from './UiSelect.vue';
 import { attachmentPreview, formatByteSize } from './attachmentPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -778,18 +779,7 @@ function toInbox(attachment) {
                         :aria-label="t('item.attachment.file_icon')"
                         class="flex h-16 w-16 shrink-0 items-center justify-center rounded border border-border bg-surface-sunken text-ink-muted"
                     >
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-8 w-8"
-                            aria-hidden="true"
-                        >
-                            <path d="M14 3v5h5M6 3h8l5 5v13H6z"></path>
-                        </svg>
+                        <UiIcon name="document" :size="24" class="h-8 w-8" />
                     </span>
 
                     <span class="font-medium text-ink">{{ attachment.filename }}</span>

@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -55,19 +56,12 @@ const open = ref(true);
             :aria-expanded="open"
             @click="open = !open"
         >
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
+            <UiIcon
+                name="chevron-down"
+                :size="16"
                 class="h-4 w-4 shrink-0"
                 :class="open ? '' : '-rotate-90'"
-                aria-hidden="true"
-            >
-                <path d="m6 9 6 6 6-6"></path>
-            </svg>
+            />
 
             <span
                 class="text-sm font-medium"

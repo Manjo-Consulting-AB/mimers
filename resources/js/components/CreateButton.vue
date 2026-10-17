@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -67,19 +68,7 @@ const isMenu = computed(() => props.create.kind === 'menu');
         :aria-label="t('create.label')"
         @click="emit('open', $event.currentTarget)"
     >
-        <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent"
-            aria-hidden="true"
-        >
-            <path d="M12 5v14"></path>
-            <path d="M5 12h14"></path>
-        </svg>
+        <UiIcon name="add" :size="24" class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent" />
     </button>
 
     <Link
@@ -88,18 +77,6 @@ const isMenu = computed(() => props.create.kind === 'menu');
         class="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-2 py-1"
         :aria-label="t('create.label')"
     >
-        <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent"
-            aria-hidden="true"
-        >
-            <path d="M12 5v14"></path>
-            <path d="M5 12h14"></path>
-        </svg>
+        <UiIcon name="add" :size="24" class="h-9 w-9 rounded-pill bg-accent p-1.5 text-ink-on-accent" />
     </Link>
 </template>

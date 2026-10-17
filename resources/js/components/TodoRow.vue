@@ -470,17 +470,7 @@ function toggleProgress() {
                 class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center"
             >
                 <span class="flex h-5 w-5 items-center justify-center rounded-full bg-success">
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="3"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="h-3 w-3 text-ink-on-accent"
-                    >
-                        <path d="m5 13 4 4L19 7" />
-                    </svg>
+                    <UiIcon name="check" :size="16" class="h-3 w-3 text-ink-on-accent" />
                 </span>
             </span>
         </template>
@@ -505,17 +495,7 @@ function toggleProgress() {
 
                     <!-- Samma fyllda gröna bock som grenen `isDone` ritar. -->
                     <span v-else class="flex h-5 w-5 items-center justify-center rounded-full bg-success">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="3"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="h-3 w-3 text-ink-on-accent"
-                        >
-                            <path d="m5 13 4 4L19 7" />
-                        </svg>
+                        <UiIcon name="check" :size="16" class="h-3 w-3 text-ink-on-accent" />
                     </span>
                 </button>
             </form>
@@ -657,19 +637,7 @@ function toggleProgress() {
                 class="inline-flex items-center gap-1.5 text-meta"
                 :class="dateTone"
             >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="h-4 w-4 shrink-0"
-                    aria-hidden="true"
-                >
-                    <rect x="3" y="5" width="18" height="16" rx="2" />
-                    <path d="M8 3v4M16 3v4M3 10h18" />
-                </svg>
+                <UiIcon name="calendar" :size="16" class="h-4 w-4 shrink-0" />
 
                 {{ isDone ? completed.text : (due.relative ? due.text : t('todo.due', { date: due.text })) }}
             </time>
@@ -703,19 +671,7 @@ function toggleProgress() {
                 aria-hidden="true"
                 class="hidden h-10 w-10 shrink-0 items-center justify-center rounded border border-border bg-surface-sunken text-ink-subtle md:flex"
             >
-                <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    class="h-5 w-5"
-                >
-                    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-                    <path d="m3.3 7 8.7 5 8.7-5" />
-                    <path d="M12 22V12" />
-                </svg>
+                <UiIcon name="item" :size="20" class="h-5 w-5" />
             </span>
         </div>
 
@@ -734,11 +690,7 @@ function toggleProgress() {
                 :aria-label="t('todo.row_menu')"
                 class="inline-flex min-h-11 cursor-pointer list-none items-center rounded-control px-3 text-meta text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
             >
-                <svg viewBox="0 0 24 24" fill="currentColor" class="size-5 shrink-0" aria-hidden="true">
-                    <circle cx="12" cy="5" r="1.6" />
-                    <circle cx="12" cy="12" r="1.6" />
-                    <circle cx="12" cy="19" r="1.6" />
-                </svg>
+                <UiIcon name="more-vertical" :size="20" class="size-5 shrink-0" />
             </summary>
 
             <div class="absolute right-0 z-10 mt-2 w-40 rounded-card border border-border bg-surface p-1 shadow-sm">

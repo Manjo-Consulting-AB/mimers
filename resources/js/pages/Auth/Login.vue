@@ -3,6 +3,7 @@ import { computed, nextTick } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import FlashMessage from '../../components/FlashMessage.vue';
 import FormField from '../../components/FormField.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from './useErrorFocus.js';
 
@@ -19,7 +20,7 @@ import { useErrorFocus } from './useErrorFocus.js';
  *
  * **Vänsterkolumnen** (Beslut 2) är `hidden lg:flex` — på en telefon finns
  * bara kortet — och bär märket, rubriken, brödtexten och de fyra punkterna ur
- * `auth.landing.features.*`. Ikonerna är inline-SVG:er som i NotificationBell.
+ * `auth.landing.features.*`. Ikonerna är roller ur `UiIcon`.
  * Fotot, raden *Används för* och rutan om molnlagringen ritas inte: de har
  * ingen datakälla och byggs inte nu (Beslut 6).
  *
@@ -118,22 +119,22 @@ const landingFeatures = [
     {
         title: 'auth.landing.features.documents.title',
         body: 'auth.landing.features.documents.body',
-        icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2Z',
+        role: 'document',
     },
     {
         title: 'auth.landing.features.maintenance.title',
         body: 'auth.landing.features.maintenance.body',
-        icon: 'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+        role: 'task',
     },
     {
         title: 'auth.landing.features.costs.title',
         body: 'auth.landing.features.costs.body',
-        icon: 'M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+        role: 'cost',
     },
     {
         title: 'auth.landing.features.relations.title',
         body: 'auth.landing.features.relations.body',
-        icon: 'M13.828 10.172a4 4 0 0 0-5.656 0l-4 4a4 4 0 1 0 5.656 5.656l1.102-1.101m-.758-4.899a4 4 0 0 0 5.656 0l4-4a4 4 0 0 0-5.656-5.656l-1.1 1.1',
+        role: 'link',
     },
 ];
 
@@ -203,18 +204,7 @@ function submit() {
                 <ul class="mt-8 flex flex-col gap-6">
                     <li v-for="feature in landingFeatures" :key="feature.title" class="flex items-start gap-4">
                         <span class="shrink-0 rounded-control bg-white/10 p-2">
-                            <svg
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.5"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                class="h-6 w-6"
-                                aria-hidden="true"
-                            >
-                                <path :d="feature.icon"></path>
-                            </svg>
+                            <UiIcon :name="feature.role" :size="24" class="h-6 w-6" />
                         </span>
 
                         <span>

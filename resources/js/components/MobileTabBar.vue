@@ -2,6 +2,7 @@
 import { Link } from '@inertiajs/vue3';
 import CreateButton from './CreateButton.vue';
 import NotificationBell from './NotificationBell.vue';
+import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
@@ -55,19 +56,7 @@ const { t } = useTranslations();
                     prefetch
                     class="flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-2 py-1 text-meta text-ink-muted"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="h-5 w-5"
-                        aria-hidden="true"
-                    >
-                        <path d="M3 10.5 12 3l9 7.5"></path>
-                        <path d="M5 9.5V21h14V9.5"></path>
-                    </svg>
+                    <UiIcon name="dashboard" :size="20" class="h-5 w-5" />
 
                     {{ t('nav.dashboard') }}
                 </Link>
@@ -79,19 +68,7 @@ const { t } = useTranslations();
                     prefetch
                     class="flex min-h-11 w-full flex-col items-center justify-center gap-0.5 px-2 py-1 text-meta text-ink-muted"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="h-5 w-5"
-                        aria-hidden="true"
-                    >
-                        <circle cx="11" cy="11" r="7"></circle>
-                        <path d="m20 20-3.5-3.5"></path>
-                    </svg>
+                    <UiIcon name="search" :size="20" class="h-5 w-5" />
 
                     {{ t('nav.search') }}
                 </Link>
@@ -124,20 +101,7 @@ const { t } = useTranslations();
                     :aria-expanded="props.menuOpen"
                     @click="emit('open-menu', $event.currentTarget)"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="h-5 w-5"
-                        aria-hidden="true"
-                    >
-                        <path d="M4 7h16"></path>
-                        <path d="M4 12h16"></path>
-                        <path d="M4 17h16"></path>
-                    </svg>
+                    <UiIcon name="menu" :size="20" class="h-5 w-5" />
 
                     {{ t('nav.menu') }}
                 </button>

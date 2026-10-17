@@ -2,6 +2,7 @@
 import { computed, ref, useId } from 'vue';
 import { router, usePage } from '@inertiajs/vue3';
 import UiSheet from './UiSheet.vue';
+import UiIcon from './UiIcon.vue';
 import { coverUrl } from './coverPresentation.js';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -269,19 +270,7 @@ function setFocus(point) {
             :disabled="pending"
             @click="chooseCamera"
         >
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="h-5 w-5 shrink-0"
-                aria-hidden="true"
-            >
-                <path d="M4 8h3l1.5-2h7L17 8h3v11H4z"></path>
-                <circle cx="12" cy="13" r="3.5"></circle>
-            </svg>
+            <UiIcon name="camera" :size="20" class="h-5 w-5 shrink-0" />
 
             {{ t('container.cover.camera') }}
         </button>
@@ -292,19 +281,7 @@ function setFocus(point) {
             :disabled="pending"
             @click="chooseDevice"
         >
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="h-5 w-5 shrink-0"
-                aria-hidden="true"
-            >
-                <path d="M4 6h16v12H4z"></path>
-                <path d="m4 16 5-5 4 4 3-3 4 4"></path>
-            </svg>
+            <UiIcon name="image" :size="20" class="h-5 w-5 shrink-0" />
 
             {{ t('container.cover.device') }}
         </button>
@@ -315,20 +292,7 @@ function setFocus(point) {
             :disabled="pending"
             @click="remove"
         >
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                class="h-5 w-5 shrink-0"
-                aria-hidden="true"
-            >
-                <path d="M5 7h14"></path>
-                <path d="M10 7V5h4v2"></path>
-                <path d="M7 7l1 13h8l1-13"></path>
-            </svg>
+            <UiIcon name="trash" :size="20" class="h-5 w-5 shrink-0" />
 
             {{ t('container.cover.remove') }}
         </button>
