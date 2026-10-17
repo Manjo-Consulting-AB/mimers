@@ -313,8 +313,9 @@ const views = computed(() => {
         Filterraden står under huvudet i lägena *Lista* och *Träd* (issue 293
         · [[ADR-0058 Trädet som tabell]] § 7). Kartan filtreras inte och ritar
         därför ingen rad. Raden ritas en gång och utanför lägesgrenarna, så att
-        listan och trädet ser samma filter och samma aktiva chips; `view`
-        följer med så att ett filter som skickas i trädläget stannar där.
+        listan och trädet ser samma filter och samma aktiva chips. Trädet
+        filtreras ur samma querysträng (`?view=tree&q=…`), och växeln bär
+        filtret med sig mellan lägena.
     -->
     <ItemFilterBar
         v-if="view !== 'map'"
@@ -322,7 +323,6 @@ const views = computed(() => {
         :tags="tags"
         :categories="categoryTree"
         :filter="filter"
-        :view="view"
     />
 
     <!-- Listan, oförändrad: de tre tomma lägena och raderna. -->

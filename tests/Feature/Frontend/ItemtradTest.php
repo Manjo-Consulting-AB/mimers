@@ -507,23 +507,16 @@ it('ritar filterraden i trädläget och den tomma texten för ett filter utan tr
     $vy = itemtradKod('pages/Containers/Items/Index.vue');
 
     // Filterraden ritas en gång, i både list- och trädläget, och aldrig i
-    // kartläget. Läget följer med, så ett filter stannar i trädet.
+    // kartläget. Komponenten är oförändrad: filtret är samma querysträng i
+    // båda lägena, och växeln bär det mellan dem.
     expect(substr_count($vy, '<ItemFilterBar'))->toBe(1)
-        ->and($vy)->toContain('v-if="view !== \'map\'"')
-        ->and($vy)->toContain(':view="view"');
+        ->and($vy)->toContain('v-if="view !== \'map\'"');
 
     // Den tomma texten är listans nyckel, med samma sammanfattning: träffar
     // filtret ingenting säger trädet samma sak som listan och ingenting om
     // vad som dolts (issue 73 § Beslut 6).
     expect($vy)->toContain("t('item.index.filter_empty', { filters: summary })")
         ->and($vy)->toContain('structure !== null && structure.length === 0 && hasFilter');
-
-    // Filterraden behåller läget när den submittar: i trädläget skrivs
-    // `view=tree` i adressen, i listan lämnas parametern borta.
-    $rad = itemtradKod('components/ItemFilterBar.vue');
-
-    expect($rad)->toContain("params.view = 'tree'")
-        ->and($rad)->toContain("view: { type: String, default: 'list' }");
 
     // Ett filter utan träffar är ett giltigt svar: tomt träd, filtret kvar.
     actingAs($anvandare)->get(itemtradUrl($container, 'view=tree&q=FinnsInte'))->assertOk()->assertInertia(
