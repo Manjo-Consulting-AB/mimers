@@ -3,6 +3,7 @@ import { computed, ref } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
 import ItemTargetPicker from './ItemTargetPicker.vue';
 import UiBadge from './UiBadge.vue';
+import UiIcon from './UiIcon.vue';
 import { occurrenceActionUrl, scheduleUrl } from './occurrencePresentation.js';
 import { useRelativeDate } from '../composables/useRelativeDate.js';
 import { useTranslations } from '../composables/useTranslations.js';
@@ -88,6 +89,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * som cirkelns kant, men svagare. Färgen är aldrig den enda bäraren: datumet
  * står kvar med sina egna ord.
  *
+ * **Ikonrutan är en propp** (M32 · issue 287, [[ADR-0057 Ikoner och
+ * typsnitt]] § 3). `iconTile` är av som förval: rutan hör till översiktens
+ * uppgiftspanel, och de andra ytorna som ritar raden får sina ikoner i en
+ * senare milstolpe. Rollen är `schedule` för ett återkommande schema och
+ * `task` för resten, ur `entry.recurring`; tonen är datumregelns `due.state`,
+ * samma värde som datumtexten färgas med.
+ *
  * **En rad utan datum ritar ingen datumtext** (M26 · issue 234). `due_at` är
  * nullbart sedan [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3,
  * och `dueDate(null)` svarar `null`; raden ritar då ingen `<time>` alls i
@@ -141,6 +149,12 @@ const props = defineProps({
      * varför.
      */
     movable: { type: Boolean, default: false },
+    /*
+     * Ritar radens ikonruta (M32 · issue 287). `false` är förvalet: rutan hör
+     * till översiktens uppgiftspanel, och de andra ytorna som ritar raden får
+     * sina ikoner i en senare milstolpe ([[M32 Formspråket]]).
+     */
+    iconTile: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -153,6 +167,16 @@ const { dueDate, eventDate } = useRelativeDate();
  * bär sin egen preposition ("In 24 days", inte "Due In 24 days").
  */
 const due = computed(() => dueDate(props.entry.due_at, props.entry.overdue));
+
+/*
+ * Ikonrutan (M32 · issue 287, [[ADR-0057 Ikoner och typsnitt]] § 3).
+ *
+ * **Rollen är schemats, inte datumets.** `entry.recurring` räknas på servern
+ * ur schemats `recurrence_type` — `fixed` och `interval` återkommer, `none`
+ * gör det inte — och väljer `schedule` eller `task`. Raden läser flaggan och
+ * jämför aldrig återkommetypen själv.
+ */
+const iconRole = computed(() => (props.entry.recurring ? 'schedule' : 'task'));
 
 /* Avbockad (Beslut 5): fylld bock, ingen knapp, och ett händelsedatum. */
 const isDone = computed(() => Boolean(props.entry.completed_at));
@@ -175,6 +199,30 @@ const hasDateText = computed(() => (isDone.value ? completed.value.text !== null
  * rad har sitt händelsedatum.
  */
 const hasNoDate = computed(() => ! isDone.value && due.value.text === null);
+
+/*
+ * Datumtextens ton. Utan rutan behåller raden sin gamla ton — bara `danger`
+ * färgas — och med rutan följer den datumregelns tre toner. Båda grenarna
+ * läser `due.state` ur `useRelativeDate` (issue 104), samma värde som rutan
+ * färgas med: rutan och datumet kan därför inte säga olika saker om samma rad.
+ */
+const DATE_TONES = {
+    danger: 'text-danger',
+    warning: 'text-warning',
+    neutral: 'text-ink-muted',
+};
+
+const dateTone = computed(() => {
+    if (isDone.value) {
+        return 'text-ink-muted';
+    }
+
+    if (! props.iconTile) {
+        return due.value.state === 'danger' ? 'text-danger' : 'text-ink-muted';
+    }
+
+    return DATE_TONES[due.value.state] ?? 'text-ink-muted';
+});
 
 /*
  * Cirkelns kant (Beslut 1): serverns fält avgör, aldrig klockan. Idag är
@@ -397,6 +445,14 @@ function toggleProgress() {
         class="flex flex-wrap items-start gap-x-4 gap-y-2 py-4"
         :class="{ 'bg-danger/5': entry.overdue }"
     >
+        <!-- Ikonrutan (M32 · issue 287): rollen följer schemat, tonen
+             datumet. Panelen på containerns översikt slår på den; de andra
+             ytorna ritar samma rad utan ruta till dess att deras milstolpe
+             ger dem ikoner. -->
+        <span v-if="props.iconTile" class="inline-flex min-h-11 shrink-0 items-center">
+            <UiIcon :name="iconRole" :tile="due.state" />
+        </span>
+
         <!-- Klar (Beslut 5): en fylld bock, ingen knapp och inget formulär. -->
         <template v-if="isDone">
             <span
@@ -589,7 +645,7 @@ function toggleProgress() {
                 v-if="hasDateText"
                 :datetime="isDone ? entry.completed_at : entry.due_at"
                 class="inline-flex items-center gap-1.5 text-meta"
-                :class="!isDone && due.state === 'danger' ? 'text-danger' : 'text-ink-muted'"
+                :class="dateTone"
             >
                 <svg
                     viewBox="0 0 24 24"

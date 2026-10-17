@@ -1794,6 +1794,12 @@ class ListTodo
      * BREDVID resursen som `account`, `can`, `cover` och `in_inbox`: `/api`
      * ändras inte.
      *
+     * **`recurring` väljer radens ikonroll** (M32 · issue 287, [[ADR-0057
+     * Ikoner och typsnitt]] § 3): sant för `fixed` och `interval`, falskt för
+     * `none` — samma gräns som underhållsfiltret. Flaggan läggs BREDVID
+     * resursen som `in_inbox`, så `/api` förblir orörd; den som ritar raden
+     * jämför aldrig återkommetypen själv.
+     *
      * @param  list<string>  $accountUlids
      * @param  array<int, array{ulid: string, hasThumb: bool}|null>  $covers
      * @return array<string, mixed>
@@ -1827,6 +1833,7 @@ class ListTodo
             'cover' => $covers[$item->id] ?? null,
             'category' => $item->category === null ? null : ['name' => $item->category->name],
             'in_inbox' => $item->container->isInbox(),
+            'recurring' => $occurrence->schedule->recurrence_type !== 'none',
         ];
     }
 

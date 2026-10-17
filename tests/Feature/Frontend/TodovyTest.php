@@ -900,13 +900,14 @@ it('kostar ett konstant antal frågor oavsett antal rader', function () {
  * Klart när: `/api/todo` svarar exakt som förut.
  *
  * Webben LÅNAR listan; den bygger ingen egen. Resursen fick inga nya nycklar
- * av `account`, `can`, `cover`, `category` och `in_inbox` — de ligger BREDVID
- * den i webbens props, samma uppdelning som SearchController gör med
- * containern, och `/api` har inte bett om dem.
+ * av `account`, `can`, `cover`, `category`, `in_inbox` och `recurring` — de
+ * ligger BREDVID den i webbens props, samma uppdelning som SearchController
+ * gör med containern, och `/api` har inte bett om dem. `recurring` kom med
+ * M32 · issue 287 och väljer radens ikonroll.
  *
  * `status` och `gtd_list` ligger INUTI resursen sedan issue 232 (ADR-0052
  * § 1): de är förekomstens egna fält och hör till `/api`s rad, till skillnad
- * från webbens `account`, `can`, `cover` och `in_inbox`.
+ * från webbens `account`, `can`, `cover`, `in_inbox` och `recurring`.
  */
 it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', function () {
     withoutVite();
@@ -945,7 +946,7 @@ it('lämnar /api/todo orört och lägger webbens nycklar bredvid resursen', func
     $rad = todovyRader(actingAs($anvandare)->get('/tasks')->assertOk())[0];
 
     expect($rad['ulid'])->toBe($apiRaden['ulid'])
-        ->and(array_keys($rad))->toBe([...array_keys($apiRaden), 'account', 'can', 'cover', 'category', 'in_inbox']);
+        ->and(array_keys($rad))->toBe([...array_keys($apiRaden), 'account', 'can', 'cover', 'category', 'in_inbox', 'recurring']);
 });
 
 // --- språket ---------------------------------------------------------------

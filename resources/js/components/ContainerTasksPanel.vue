@@ -20,6 +20,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * item, samma schema, samma container, samma avbockning. `complete`-rutten
  * svarar `back()`, så översikten ritas om när en uppgift bockas av härifrån.
  *
+ * **Raden bär en ikonruta** (M32 · issue 287, [[ADR-0057 Ikoner och
+ * typsnitt]] § 3). Panelen slår på den med `icon-tile`; rollen och tonen
+ * räknas i `TodoRow` — rollen ur schemats återkommetyp och tonen ur
+ * datumregeln — så att panelen inte kan få en andra uppfattning om samma rad.
+ * De andra ytorna ritar samma komponent utan rutan, till dess att deras
+ * milstolpe ger dem ikoner.
+ *
  * **Ramen är `UiCard`** (issue 99): rubriken är kortets rubrikrad och länken
  * sitter i kortets åtgärdsplats. Är `tasks` tom är det växeln för framtida
  * uppgifter som är av — servern har redan avgränsat listan — och panelen säger
@@ -59,7 +66,7 @@ const { t } = useTranslations();
         </p>
 
         <ul v-else class="flex flex-col divide-y divide-slate-200">
-            <TodoRow v-for="task in props.tasks" :key="task.ulid" :entry="task" />
+            <TodoRow v-for="task in props.tasks" :key="task.ulid" :entry="task" icon-tile />
         </ul>
     </UiCard>
 </template>
