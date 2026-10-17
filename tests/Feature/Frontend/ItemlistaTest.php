@@ -924,64 +924,42 @@ it('har statusens text i lang och inte i vyn', function () {
 });
 
 /*
- * Klart när (issue 212): raden ritar itemets EGET omslag som miniatyr, och en
- * ikon när omslaget saknas eller inte har något `thumb`-derivat.
+ * Klart när (issue 212): raden ritar itemets EGET omslag.
  *
- * Omslaget kommer ur `covers` (App\Actions\Item\ResolveItemCover), och
- * `hasThumb` är serverns svar på om `?variant=thumb` svarar — utan derivat är
- * en `<img>` mot varianten en trasig bild, och då ritas lådikonen. Provet
- * läser KÄLLAN och inte det renderade svaret: det är samma sorts kontroll som
- * `har statusens text i lang och inte i vyn`, och den fångar att containerns
- * eget omslag aldrig lånas in i raden.
+ * **Omslagsregeln flyttade till `ItemRow` i issue 285** · [[M32
+ * Formspråket]]: formen `{ulid, hasThumb}` och reservikonen prövas i
+ * tests/Feature/Frontend/ItemradTest.php. Här står det listan äger — att
+ * `covers` följer med varje rad, nycklat på itemets ULID — och att containerns
+ * eget omslag aldrig lånas in i listan.
  */
-it('ritar itemets eget omslag som miniatyr och annars en ikon', function () {
+it('räcker varje rad sitt eget omslag', function () {
     $vy = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
 
     expect($vy)->toContain('covers: { type: Object, required: true }');
-    expect($vy)->toContain('covers[item.ulid]?.hasThumb');
-    expect($vy)->toContain('?variant=thumb');
+    expect($vy)->toContain(':cover="covers[item.ulid]"');
 
-    // Lådikonen på reservytan: sista ledet i den inline-ritade ikonen.
-    expect($vy)->toContain('d="M12 22V12"');
-
-    // Containerns omslag läses aldrig i raden — ett item utan bild ärver inte
-    // containerns foto.
     expect($vy)->not->toContain('container.cover');
 });
 
 /*
- * Klart när (issue 212): raden bär namnet, beskrivningen och en pil — och
- * ingenting av det mockupen inte längre ritar.
+ * Klart när (issue 285): itemlistan ritar samma `ItemRow` som översikten, och
+ * listans egen markup är oförändrad i övrigt.
  *
- * Kontrollerna mot det borttagna är lika viktiga som de mot det nya: en rad
- * som behöll `item.manufacturer` eller `statuses[item.ulid]` hade sett rätt ut
- * vid en blick och ändå burit en yta issuen tog bort.
+ * Kontrollerna mot det borttagna är lika viktiga som de mot det nya: en lista
+ * som behöll en egen rad, en status eller en tagglista hade sett rätt ut vid
+ * en blick och ändå burit en yta som flyttat eller tagits bort.
  */
-it('visar namn, beskrivning och pil på raden', function () {
+it('ritar listan med ItemRow och behåller listformen i övrigt', function () {
     $raden = itemlistaListblock();
 
-    expect($raden)->toContain('item.name');
-    expect($raden)->toContain('item.description');
-    expect($raden)->toContain('d="m9 6 6 6-6 6"');
+    expect($raden)->toContain('<ItemRow');
+    expect($raden)->toContain('v-for="item in items"');
+    expect($raden)->toContain(':item="item"');
 
+    expect($raden)->not->toContain('<Link');
     expect($raden)->not->toContain('item.manufacturer');
     expect($raden)->not->toContain('item.model');
     expect($raden)->not->toContain('categories[item.category]');
     expect($raden)->not->toContain('statuses[item.ulid]');
     expect($raden)->not->toContain('<ItemTagList');
-});
-
-/*
- * Klart när (issue 212): HELA raden är länken till itemet.
- *
- * Exakt en `<Link` i blocket: en andra hade delat raden i två mål, och en rad
- * som bara länkade namnet är den form issuen tar bort. Träffytan är
- * `min-h-11` — 44 px (issue 68a § Beslut 3) — och adressen är itemets egen.
- */
-it('gör hela raden till en länk till itemet', function () {
-    $raden = itemlistaListblock();
-
-    expect(substr_count($raden, '<Link'))->toBe(1);
-    expect($raden)->toContain(':href="`/containers/${container.ulid}/items/${item.ulid}`"');
-    expect($raden)->toContain('min-h-11');
 });
