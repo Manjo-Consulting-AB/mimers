@@ -38,6 +38,21 @@ use Illuminate\Support\Facades\DB;
  * resten inte fanns (issue 73 § Beslut 6), och en upplysning om att något
  * dolts är hela det läckage [[ADR-0028 Åtkomst på itemnivå]] stänger.
  *
+ * FILTRET ÄR ETT URVAL AV TRÄFFAR (issue 293 · [[ADR-0058 Trädet som tabell]]
+ * § 5). `handle()` tar emot item-id:na som `ListItems` gav för samma filter —
+ * eller `null`, som betyder "inget filter". Med ett urval behålls varje träff
+ * och vägen från roten ned till den; en gren som inte leder till en träff
+ * ritas inte, och en förfader som bara är väg bär `match: false`. Träffarna
+ * själva, och varje nod i ett ofiltrerat träd, bär `match: true`. Ett tomt
+ * urval är ett giltigt svar och ger ett tomt träd — det är listans "inga
+ * träffar", inte ett fel. Vägen består bara av items i omfånget, eftersom
+ * rotregeln redan har gjort varje item vars förälder är dold till en rot.
+ *
+ * URVALET ÄR REDAN OMFÅNGSFILTRERAT när det kommer hit: det är `ListItems`
+ * som har svarat på samma fråga som listan. Klassens egen itemfråga prövar
+ * ändå omfånget på nytt, så ett id utanför omfånget — skickat förbi
+ * `ListItems` av ett fel — aldrig kan dra in en nod.
+ *
  * ÅTKOMSTEN LÅNAS, DEN BYGGS INTE HÄR. Omfånget kommer ur
  * App\Actions\Access\ResolveItemScope, samma anrop som
  * App\Actions\Item\ListItems gör — två formuleringar av "vad mottagaren når"
@@ -65,12 +80,23 @@ class ResolveItemTree
     /**
      * Trädet för $user i $container. Ett tomt träd är ett giltigt svar: når
      * hon ingenting finns det inga rötter.
+     *
+     * `$matches` är item-id:na som filtret gav, eller `null` utan filter.
+     * Skillnaden mellan `null` och `[]` är bindande: utan filter är hela
+     * trädet urvalet och varje nod är en träff, medan ett tomt filter är
+     * listans "inga träffar" och ger ett tomt träd.
+     *
+     * @param  list<int>|null  $matches
      */
-    public function handle(User $user, Container $container): ItemTree
+    public function handle(User $user, Container $container, ?array $matches = null): ItemTree
     {
         $scope = $this->resolveItemScope->handle($user, $container);
 
-        return $this->forest($container, $this->itemsInScope($container, $scope));
+        return $this->forest(
+            $container,
+            $this->itemsInScope($container, $scope),
+            $matches === null ? null : array_fill_keys($matches, true),
+        );
     }
 
     /**
@@ -117,9 +143,14 @@ class ResolveItemTree
      * Ingen fråga ställs för en tom itemmängd — kanterna hade ändå inte
      * kunnat bära en enda nod.
      *
+     * `$matchIds` är `null` utan filter. Med ett urval kapas varje nod som
+     * varken är en träff eller har en träff under sig: kvar blir träffarna
+     * och vägen ned till dem, och ingenting annat.
+     *
      * @param  array<int, Item>  $items  item_id → itemet, namnet stigande
+     * @param  array<int, true>|null  $matchIds
      */
-    private function forest(Container $container, array $items): ItemTree
+    private function forest(Container $container, array $items, ?array $matchIds): ItemTree
     {
         if ($items === []) {
             return ItemTree::of([]);
@@ -147,7 +178,11 @@ class ResolveItemTree
         $tree = [];
 
         foreach ($roots as $rootId) {
-            $tree[] = $this->node($rootId, [$rootId => true], $items, $childrenByParent);
+            $node = $this->node($rootId, [$rootId => true], $items, $childrenByParent, $matchIds);
+
+            if ($node !== null) {
+                $tree[] = $node;
+            }
         }
 
         return ItemTree::of($tree);
@@ -230,12 +265,24 @@ class ResolveItemTree
      * ett träd har ingenstans att hänga dem. En cykel som nås från en rot
      * kapas i stället vid det led som redan ligger på vägen.
      *
+     * MED ETT FILTER returneras `null` för en nod som varken är en träff
+     * eller har en träff under sig. Föräldern ovanför hoppar då över grenen,
+     * och en rot som inte leder till någon träff faller bort helt. Noden som
+     * bara är väg behålls med `match: false`; utan filter är `match` sann på
+     * varje nod.
+     *
      * @param  array<int, true>  $path
      * @param  array<int, Item>  $items
      * @param  array<int, list<int>>  $childrenByParent
+     * @param  array<int, true>|null  $matchIds
      */
-    private function node(int $itemId, array $path, array $items, array $childrenByParent): ItemTreeNode
-    {
+    private function node(
+        int $itemId,
+        array $path,
+        array $items,
+        array $childrenByParent,
+        ?array $matchIds,
+    ): ?ItemTreeNode {
         $children = [];
 
         foreach ($childrenByParent[$itemId] ?? [] as $childId) {
@@ -243,9 +290,19 @@ class ResolveItemTree
                 continue;
             }
 
-            $children[] = $this->node($childId, $path + [$childId => true], $items, $childrenByParent);
+            $child = $this->node($childId, $path + [$childId => true], $items, $childrenByParent, $matchIds);
+
+            if ($child !== null) {
+                $children[] = $child;
+            }
         }
 
-        return new ItemTreeNode($items[$itemId]->ulid, $items[$itemId]->name, $children);
+        $match = $matchIds === null || isset($matchIds[$itemId]);
+
+        if (! $match && $children === []) {
+            return null;
+        }
+
+        return new ItemTreeNode($items[$itemId]->ulid, $items[$itemId]->name, $match, $children);
     }
 }

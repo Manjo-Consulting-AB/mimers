@@ -334,6 +334,15 @@ class ItemController extends Controller
         // § 1, 3 och 4). Trädet löses upp EN gång och båda propparna byggs ur
         // samma svar — annars hade sidan betalat två frågor för trädet.
         //
+        // **Filtret gäller trädet** (issue 293 · [[ADR-0058 Trädet som tabell]]
+        // § 5). Träffarna är `ListItems` med samma filter som listan, och
+        // urvalet skickas till App\Actions\Item\ResolveItemTree, som behåller
+        // träffarna och vägen ned till dem. Utan filter anropas `ListItems`
+        // inte alls: hela trädet är då urvalet, och en yta ingen ser ska inte
+        // kosta en fråga (samma linje som `structure` nedan). `null` och `[]`
+        // betyder olika saker — inget filter respektive ett filter utan
+        // träffar — och skillnaden är bindande.
+        //
         // Kolumnerna bor i App\Actions\Item\ResolveItemTreeRows, bredvid
         // ResolveItemTree och inte inuti den: strukturpanelen och
         // föräldraväljaren anropar samma träd och ska inte betala för
@@ -344,9 +353,23 @@ class ItemController extends Controller
         // `null` och inte en tom tabell utanför trädläget, samma form och
         // samma skäl som `structure` nedan: en tom tabell är ett svar servern
         // HAR gett, och vyn ska kunna skilja det från "inte hämtad".
-        $tree = $view === 'tree'
-            ? $resolveItemTree->handle($user, $container)
-            : null;
+        $hasFilter = $filter['q'] !== null
+            || $filter['tags'] !== []
+            || $filter['category'] !== null;
+
+        $tree = null;
+
+        if ($view === 'tree') {
+            $matches = $hasFilter
+                ? array_map('intval', $listItems->handle($user, $container, [
+                    'tags' => $filter['tags'],
+                    'category' => $filter['category'],
+                    'q' => $filter['q'],
+                ])->pluck('id')->all())
+                : null;
+
+            $tree = $resolveItemTree->handle($user, $container, $matches);
+        }
 
         $treeRows = $tree === null
             ? null
@@ -434,11 +457,17 @@ class ItemController extends Controller
             // samma rotregel och samma omfångsfilter som detaljvyns
             // vänsterpanel, så de två inte kan säga olika saker om samma graf.
             //
+            // `match` följer med i trädlägets noder (issue 293): sant på en
+            // träff och på varje nod utan filter, falskt på en förfader som
+            // bara är vägen ned till en träff. Detaljvyns panel ritar samma
+            // träd utan fältet — `structure()` lägger det bara på begäran, så
+            // panelens svar är ordagrant det det var.
+            //
             // `null` och inte en tom lista när läget är listan: en tom lista
             // är ett svar servern HAR gett — "hon når ingenting" — och vyn
             // ska kunna skilja det från "inte hämtad" (samma form och samma
             // skäl som `history`-proppen i show()).
-            'structure' => $tree === null ? null : $this->structure($tree),
+            'structure' => $tree === null ? null : $this->structure($tree, true),
 
             // Trädets kolumner, item-ULID → `{category, tags, documents,
             // tasks, updated_at}`, och BARA i trädläget — samma grind och
@@ -1969,6 +1998,12 @@ class ItemController extends Controller
      * föräldra-ULID hade frestat vyn att bygga en andra väg vid sidan av
      * `?path=`, och den vägen är issue 95:s.
      *
+     * **`match` läggs bara på begäran** (issue 293). Trädläget i itemfliken
+     * ritar ett filtrerat träd och behöver veta vilka noder som är träffar;
+     * detaljvyns panel och föräldraväljaren ritar samma träd utan filtret och
+     * ska inte få ett fält de inte använder. Standardvärdet `false` håller
+     * deras svar ordagrant som förut.
+     *
      * **Ett item med två föräldrar förekommer två gånger**, som två noder
      * (App\Support\Item\ItemTreeNode): panelen ritar dem båda, precis som
      * mockupen gör, och den som klickar på den ena landar på den förekomsten.
@@ -1977,24 +2012,25 @@ class ItemController extends Controller
      * ingenting, eller containern är tom. De två går inte att skilja åt, med
      * flit (issue 73 § Beslut 6).
      *
-     * @return list<array{ulid: string, name: string, children: list<array<string, mixed>>}>
+     * @return list<array{ulid: string, name: string, match?: bool, children: list<array<string, mixed>>}>
      */
-    private function structure(ItemTree $tree): array
+    private function structure(ItemTree $tree, bool $withMatch = false): array
     {
-        return $this->structureNodes($tree->roots());
+        return $this->structureNodes($tree->roots(), $withMatch);
     }
 
     /**
      * @param  list<ItemTreeNode>  $nodes
-     * @return list<array{ulid: string, name: string, children: list<array<string, mixed>>}>
+     * @return list<array{ulid: string, name: string, match?: bool, children: list<array<string, mixed>>}>
      */
-    private function structureNodes(array $nodes): array
+    private function structureNodes(array $nodes, bool $withMatch = false): array
     {
         return array_map(
             fn (ItemTreeNode $node): array => [
                 'ulid' => $node->ulid(),
                 'name' => $node->name(),
-                'children' => $this->structureNodes($node->children()),
+                ...($withMatch ? ['match' => $node->match()] : []),
+                'children' => $this->structureNodes($node->children(), $withMatch),
             ],
             $nodes,
         );

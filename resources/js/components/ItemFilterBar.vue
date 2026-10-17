@@ -56,6 +56,15 @@ const props = defineProps({
     categories: { type: Array, required: true },
     /* Filtret så som servern tillämpade det: { q, tags, category, dropped }. */
     filter: { type: Object, required: true },
+    /*
+     * Läget raden står i: `list`, `tree` eller `map` (issue 293 ·
+     * [[ADR-0058 Trädet som tabell]] § 7). Raden ritas i list- och trädläget,
+     * och ett filter som skickas i trädläget måste stanna i trädläget —
+     * annars hade ett klick på *Filtrera* tyst bytt till listan och svaret
+     * hade varit en annan yta än den man stod i. `list` skrivs inte i
+     * adressen, av samma skäl som växelns förval.
+     */
+    view: { type: String, default: 'list' },
 });
 
 const { t } = useTranslations();
@@ -111,6 +120,15 @@ function apply(overrides = {}) {
 
     if (chosen !== null && chosen !== '') {
         params.category = chosen;
+    }
+
+    /*
+     * Läget följer med i trädläget (issue 293). Raden ritas också i listan,
+     * och där skrivs ingen `view` — förvalet är frånvaron av parametern,
+     * samma form som växeln använder.
+     */
+    if (props.view === 'tree') {
+        params.view = 'tree';
     }
 
     router.get(`/containers/${props.containerUlid}/items`, params, {

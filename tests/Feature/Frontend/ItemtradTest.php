@@ -35,7 +35,10 @@ use function Pest\Laravel\withoutVite;
  * att växelns adresser skriver det — en växel vars länkar tappar läget ser
  * rätt ut i en strukturell kontroll och gör ingenting i en webbläsare.
  *
- * **Trädet är hela containern inom omfånget.** Rötter enligt [[ADR-0041
+ * **Trädet tar samma filter som listan sedan issue 293.** `q`, `tags[]` och
+ * `category` ger träffarna ur `ListItems`, och trädet visar varje träff plus
+ * vägen från roten ned till den ([[ADR-0058 Trädet som tabell]] § 5). Utan
+ * filter är trädet hela containern inom omfånget: rötter enligt [[ADR-0041
  * Itemets vy]] § Beslut, ett item med två föräldrar på båda ställena, och
  * ingenting om dem hon inte når (issue 73 § Beslut 6). Upplösningen är
  * App\Actions\Item\ResolveItemTree och skrivs inte om här: proven jämför mot
@@ -262,10 +265,12 @@ it('svarar listan för ett okänt läge', function () {
  * Klart när: *Träd* visar containerns rötter enligt ADR-0041 och ett item med
  * två föräldrar på båda ställena.
  *
- * Trädet är App\Actions\Item\ResolveItemTree, oförändrat: samma nodform
- * (`{ulid, name, children}`), namnet stigande på varje nivå, och ett item med
- * två föräldrar på båda ställena — som två noder och inte som en sammanlagd
- * rad ([[ADR-0041 Itemets vy]] § Beslut: ingen kolumn pekar ut en huvudplats).
+ * Trädet är App\Actions\Item\ResolveItemTree, oförändrat utan filter: samma
+ * nodform (`{ulid, name, match, children}`), namnet stigande på varje nivå,
+ * och ett item med två föräldrar på båda ställena — som två noder och inte
+ * som en sammanlagd rad ([[ADR-0041 Itemets vy]] § Beslut: ingen kolumn
+ * pekar ut en huvudplats). `match` är sann på varje nod utan filter
+ * (issue 293 · [[ADR-0058 Trädet som tabell]] § 5).
  *
  * Rötter är de items vars samtliga föräldrar ligger utanför omfånget eller
  * saknas. Provet visar båda: en vanlig rot (båten) och en mottagare vars
@@ -296,12 +301,13 @@ it('visar containerns rötter och ett item med två föräldrar på båda ställ
                 [
                     'ulid' => $båten->ulid,
                     'name' => 'Båten',
+                    'match' => true,
                     'children' => [
-                        ['ulid' => $masten->ulid, 'name' => 'Masten', 'children' => [
-                            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'children' => []],
+                        ['ulid' => $masten->ulid, 'name' => 'Masten', 'match' => true, 'children' => [
+                            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'children' => []],
                         ]],
-                        ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'children' => [
-                            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'children' => []],
+                        ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'children' => [
+                            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'children' => []],
                         ]],
                     ],
                 ],
@@ -315,7 +321,7 @@ it('visar containerns rötter och ett item med två föräldrar på båda ställ
 
     actingAs($mottagare)->get(itemtradUrl($container, 'view=tree'))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page->where('structure', [
-            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'children' => []],
+            ['ulid' => $impellern->ulid, 'name' => 'Impellern', 'match' => true, 'children' => []],
         ])
     );
 });
@@ -426,13 +432,14 @@ it('kostar ett konstant antal frågor oavsett antal items', function () {
 });
 
 /*
- * Klart när: filtret följer med genom växeln.
+ * Klart när: filtret följer med genom växeln, och trädläget tar samma filter
+ * som listan (issue 293 · [[ADR-0058 Trädet som tabell]] § 5).
  *
- * Trädläget filtrerar ingenting — trädet är containern som användaren når,
- * medan `q`, `tags[]` och `category` hör till listan ([[ADR-0046 Containerns
- * karta]] § Beslut) — och därför ritas filterraden bara i listläget. Men
- * växelns länkar bär filtret med sig, så den som står i en filtrerad lista och
- * tittar på trädet kommer tillbaka till samma träfflista.
+ * Sedan issue 293 filtreras trädet: `q`, `tags[]` och `category` är samma
+ * filter som listan, träffarna är `ListItems` och trädet visar varje träff
+ * plus vägen från roten ned till den. Växelns länkar bär fortfarande filtret
+ * med sig, så den som står i en filtrerad lista och tittar på trädet kommer
+ * till samma träffmängd — och ett filter som skickas i trädläget stannar där.
  *
  * Provet läser adresserna ur vyns egen växel och prövar dem mot servern: en
  * länk som tappar filtret ser rätt ut i en strukturell kontroll och gör
@@ -470,11 +477,59 @@ it('bär filtret med sig genom växeln', function () {
             ->where('items.0.ulid', $motorn->ulid)
     );
 
-    // Trädläget svarar med hela containern: filtret hör till listan, och det
-    // är därför `items`-proppen inte styr trädet.
+    // Trädläget svarar med träffarna och ingenting annat: masten är ingen
+    // träff och ligger inte på vägen till en, så den ritas inte.
     actingAs($anvandare)->get(itemtradUrl($container, 'view=tree&q=Motor'))->assertOk()->assertInertia(
         fn (AssertableInertia $page) => $page
             ->where('view', 'tree')
-            ->has('structure', 2)
+            ->where('structure', [
+                ['ulid' => $motorn->ulid, 'name' => 'Motorn', 'match' => true, 'children' => []],
+            ])
+    );
+});
+
+/*
+ * Klart när (issue 293 · [[ADR-0058 Trädet som tabell]] § 7): trädläget ritar
+ * filterraden, och ett filter utan träffar ritar listans tomma text
+ * (`item.index.filter_empty`) med de filter användaren själv satt.
+ *
+ * Ett OFILTRERAT tomt träd ritar ingenting, som förut. Proven läser markupen,
+ * eftersom sviten inte kör en webbläsare: filterraden ritas en gång utanför
+ * lägesgrenarna, grindad på kartan, och den tomma texten hänger på
+ * `hasFilter` — samma propp som listans tomma lägen räknar ur.
+ */
+it('ritar filterraden i trädläget och den tomma texten för ett filter utan träffar', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = itemtradKontext();
+    itemtradItem($container, 'Motorn');
+
+    $vy = itemtradKod('pages/Containers/Items/Index.vue');
+
+    // Filterraden ritas en gång, i både list- och trädläget, och aldrig i
+    // kartläget. Läget följer med, så ett filter stannar i trädet.
+    expect(substr_count($vy, '<ItemFilterBar'))->toBe(1)
+        ->and($vy)->toContain('v-if="view !== \'map\'"')
+        ->and($vy)->toContain(':view="view"');
+
+    // Den tomma texten är listans nyckel, med samma sammanfattning: träffar
+    // filtret ingenting säger trädet samma sak som listan och ingenting om
+    // vad som dolts (issue 73 § Beslut 6).
+    expect($vy)->toContain("t('item.index.filter_empty', { filters: summary })")
+        ->and($vy)->toContain('structure !== null && structure.length === 0 && hasFilter');
+
+    // Filterraden behåller läget när den submittar: i trädläget skrivs
+    // `view=tree` i adressen, i listan lämnas parametern borta.
+    $rad = itemtradKod('components/ItemFilterBar.vue');
+
+    expect($rad)->toContain("params.view = 'tree'")
+        ->and($rad)->toContain("view: { type: String, default: 'list' }");
+
+    // Ett filter utan träffar är ett giltigt svar: tomt träd, filtret kvar.
+    actingAs($anvandare)->get(itemtradUrl($container, 'view=tree&q=FinnsInte'))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('view', 'tree')
+            ->where('filter.q', 'FinnsInte')
+            ->where('structure', [])
     );
 });

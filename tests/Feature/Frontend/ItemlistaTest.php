@@ -1021,13 +1021,15 @@ it('ställer rubriken, New item och växeln på en rad i alla tre lägena', func
 });
 
 /*
- * Klart när (issue 291): filterraden ritas i listläget och inte i träd- eller
- * kartläget. Trädet får den i issue 293, och då flyttar det här provet.
+ * Klart när (issue 293 · [[ADR-0058 Trädet som tabell]] § 7): filterraden
+ * ritas i list- OCH trädläget, och inte i kartläget.
  *
- * Eftersom raden bara får finnas en gång räcker det att bevisa att den enda
- * förekomsten ligger i listgrenen — kartan står efter trädet.
+ * Provet flyttade hit i issue 293: fram till dess hörde raden bara till
+ * listan. Den ritas en gång och utanför lägesgrenarna, med kartan som enda
+ * undantag — en rad inuti listgrenen hade gett rätt svar i listan och ingen
+ * rad alls i trädet.
  */
-it('ritar filterraden i listläget och inte i träd- eller kartläget', function () {
+it('ritar filterraden i list- och trädläget och inte i kartläget', function () {
     $vy = itemlistaKod();
 
     $lista = strpos($vy, '<template v-if="view === \'list\'">');
@@ -1036,10 +1038,11 @@ it('ritar filterraden i listläget och inte i träd- eller kartläget', function
     expect($lista)->not->toBeFalse()
         ->and($trad)->toBeGreaterThan((int) $lista);
 
+    // Raden finns en gång, före båda lägesgrenarna, och grindas på kartan.
     expect(substr_count($vy, '<ItemFilterBar'))->toBe(1);
 
     $filter = strpos($vy, '<ItemFilterBar');
 
-    expect($filter)->toBeGreaterThan((int) $lista)
-        ->and($filter)->toBeLessThan((int) $trad);
+    expect($filter)->toBeLessThan((int) $lista)
+        ->and($vy)->toContain('v-if="view !== \'map\'"');
 });

@@ -18,6 +18,13 @@ namespace App\Support\Item;
  * etiketten och sorteringsnyckeln. Löpnumret stannar i upplösningen —
  * det läcker aldrig ut, och en nod som bar det hade frestat en vy att
  * bygga en väg på det.
+ *
+ * MATCH SÄGER OM NODEN ÄR EN TRÄFF (issue 293 · [[ADR-0058 Trädet som
+ * tabell]] § 5). Utan filter är den sann på varje nod; med filter är den
+ * sann på träffarna och falsk på de förfäder som bara är vägen ned till
+ * en träff. Fältet är en EGENSKAP HOS FÖREKOMSTEN, inte hos itemet: samma
+ * item på två ställen kan vara träff i båda grenarna, och flaggan följer
+ * därför med varje nod i stället för att slås upp på ULID:t i vyn.
  */
 final class ItemTreeNode
 {
@@ -27,6 +34,7 @@ final class ItemTreeNode
     public function __construct(
         private readonly string $ulid,
         private readonly string $name,
+        private readonly bool $match,
         private readonly array $children,
     ) {}
 
@@ -50,5 +58,17 @@ final class ItemTreeNode
     public function children(): array
     {
         return $this->children;
+    }
+
+    /**
+     * Är noden en träff i det filter trädet byggdes för?
+     *
+     * Utan filter är svaret alltid sant — hela trädet är urvalet. Med
+     * filter är det falskt på en förfader som bara bär vägen ned till en
+     * träff (issue 293 · [[ADR-0058 Trädet som tabell]] § 5).
+     */
+    public function match(): bool
+    {
+        return $this->match;
     }
 }
