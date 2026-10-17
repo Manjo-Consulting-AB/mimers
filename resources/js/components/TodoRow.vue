@@ -96,6 +96,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `task` för resten, ur `entry.recurring`; tonen är datumregelns `due.state`,
  * samma värde som datumtexten färgas med.
  *
+ * **En avbockad rad är neutral i både ruta och datumtext.** Raden visar då
+ * händelsedatumet och inte förfallodagen (Beslut 5), och en gammal förfallodag
+ * får inte färga en avslutad rad röd: rutan tar `neutral` när `isDone`, samma
+ * ton som `dateTone` ger den grenen. Utan grenen hade rutan och datumtexten
+ * kunnat säga olika saker om samma rad.
+ *
  * **En rad utan datum ritar ingen datumtext** (M26 · issue 234). `due_at` är
  * nullbart sedan [[ADR-0052 Uppgifternas listor och uppgifter utan datum]] § 3,
  * och `dueDate(null)` svarar `null`; raden ritar då ingen `<time>` alls i
@@ -204,7 +210,9 @@ const hasNoDate = computed(() => ! isDone.value && due.value.text === null);
  * Datumtextens ton. Utan rutan behåller raden sin gamla ton — bara `danger`
  * färgas — och med rutan följer den datumregelns tre toner. Båda grenarna
  * läser `due.state` ur `useRelativeDate` (issue 104), samma värde som rutan
- * färgas med: rutan och datumet kan därför inte säga olika saker om samma rad.
+ * färgas med — utom på en avbockad rad, där båda är `neutral`: datumet som
+ * visas är händelsens och inte förfallodagens. Rutan och datumtexten kan
+ * därför inte säga olika saker om samma rad.
  */
 const DATE_TONES = {
     danger: 'text-danger',
@@ -446,11 +454,13 @@ function toggleProgress() {
         :class="{ 'bg-danger/5': entry.overdue }"
     >
         <!-- Ikonrutan (M32 · issue 287): rollen följer schemat, tonen
-             datumet. Panelen på containerns översikt slår på den; de andra
-             ytorna ritar samma rad utan ruta till dess att deras milstolpe
-             ger dem ikoner. -->
+             datumet. En avbockad rad är neutral i både ruta och datumtext —
+             raden visar händelsedatumet, och förfallodagen får inte färga en
+             avslutad rad. Panelen på containerns översikt slår på rutan; de
+             andra ytorna ritar samma rad utan ruta till dess att deras
+             milstolpe ger dem ikoner. -->
         <span v-if="props.iconTile" class="inline-flex min-h-11 shrink-0 items-center">
-            <UiIcon :name="iconRole" :tile="due.state" />
+            <UiIcon :name="iconRole" :tile="isDone ? 'neutral' : due.state" />
         </span>
 
         <!-- Klar (Beslut 5): en fylld bock, ingen knapp och inget formulär. -->

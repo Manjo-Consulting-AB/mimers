@@ -169,9 +169,30 @@ it('ritar UiIcon med rutan på raden', function () {
         ->toContain('iconTile');
 
     expect($raden)->toMatch(
-        '~<UiIcon[^>]*:name="iconRole"[^>]*:tile="due\.state"~s',
+        '~<UiIcon[^>]*:name="iconRole"[^>]*:tile="isDone \? \'neutral\' : due\.state"~s',
         'TodoRow ritar inte UiIcon med roll och datumregelns ton',
     );
+});
+
+/*
+ * Klart när: rutan och datumtexten har samma ton också på en avbockad rad.
+ *
+ * En avbockad rad visar händelsedatumet, inte förfallodagen, och rutan får
+ * därför `neutral` — samma `text-ink-muted` som `dateTone` ger grenen
+ * `isDone`. Utan grenen hade en gammal förfallodag färgat rutan röd medan
+ * datumtexten var dämpad.
+ */
+it('ger rutan och datumtexten neutral ton på en avbockad rad', function () {
+    $raden = uppgiftspanelIkonKod('components/TodoRow.vue');
+
+    expect($raden)->toContain(":tile=\"isDone ? 'neutral' : due.state\"");
+
+    expect($raden)->toMatch(
+        '~const dateTone = computed\(\(\) => \{\s*if \(isDone\.value\) \{\s*return \'text-ink-muted\';~s',
+        'dateTone ger inte en avbockad rad den dämpade tonen',
+    );
+
+    expect($raden)->toContain("neutral: 'text-ink-muted'");
 });
 
 /*
@@ -198,20 +219,36 @@ it('ger ett återkommande schema schedule och resten task', function () {
 });
 
 /*
- * Klart när: tonen kommer ur `useRelativeDate`.
+ * Klart när: tonen kommer ur `useRelativeDate`, och varje tillstånd avbildas
+ * på sin egen klass.
  *
  * Raden frågar datumregeln — den jämför inga dagar själv — och rutan färgas
  * med svaret. `DATE_TONES` är den enda platsen som översätter regelns tre
- * tillstånd till klassnamn.
+ * tillstånd till klassnamn, så provet läser MAPPNINGEN och inte bara att
+ * strängarna finns någonstans i filen: tre nycklar, rätt klasser, och tre
+ * olika klasser — annars hade två tillstånd kunnat se likadana ut.
  */
 it('tar tonen ur datumregeln', function () {
     $raden = uppgiftspanelIkonKod('components/TodoRow.vue');
 
     expect($raden)->toContain('dueDate(props.entry.due_at, props.entry.overdue)')
-        ->toContain("danger: 'text-danger'")
-        ->toContain("warning: 'text-warning'")
-        ->toContain("neutral: 'text-ink-muted'")
         ->toContain('DATE_TONES[due.value.state]');
+
+    preg_match('~const DATE_TONES = \{(?<par>.*?)\};~s', $raden, $matcher);
+
+    expect($matcher)->toHaveKey('par');
+
+    preg_match_all("~(\w+): '([^']+)'~", $matcher['par'], $toner, PREG_SET_ORDER);
+
+    $karta = collect($toner)->mapWithKeys(fn ($ton) => [$ton[1] => $ton[2]])->all();
+
+    expect(array_keys($karta))->toBe(['danger', 'warning', 'neutral'])
+        ->and($karta)->toBe([
+            'danger' => 'text-danger',
+            'warning' => 'text-warning',
+            'neutral' => 'text-ink-muted',
+        ])
+        ->and(array_unique(array_values($karta)))->toHaveCount(3);
 });
 
 /*
