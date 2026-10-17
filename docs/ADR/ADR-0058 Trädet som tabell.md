@@ -1,6 +1,6 @@
 # ADR-0058 Trädet som tabell
 
-**Status:** Antagen 2026-10-18 · Ändrar läget *Träd* ur [[ADR-0046 Containerns karta]] och issue 154: trädet filtreras · Bygger vidare på [[ADR-0041 Itemets vy]] och [[ADR-0028 Åtkomst på itemnivå]] · [[ADR-index]]
+**Status:** Antagen 2026-10-18 · Ändrar läget *Träd* ur [[ADR-0046 Containerns karta]] och issue 154: trädet filtreras · § 7 ändrad av [[ADR-0059 Kartan med en mitt]]: kartan filtreras · Bygger vidare på [[ADR-0041 Itemets vy]] och [[ADR-0028 Åtkomst på itemnivå]] · [[ADR-index]]
 
 Tonys beslut 2026-10-18, vid genomgången av `docs/Design/items-tree.png`.
 
