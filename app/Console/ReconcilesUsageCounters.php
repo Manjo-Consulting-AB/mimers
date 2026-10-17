@@ -165,14 +165,15 @@ class ReconcilesUsageCounters
 
     /**
      * Sanningen bakom `usage_counter.container_count`: antalet levande
-     * containers per ägande konto. Aggregate-formen av
-     * UsageCounter::calculateContainerCount().
+     * containers per ägande konto, inboxen undantagen. Aggregate-formen av
+     * UsageCounter::calculateContainerCount() — samma predikat.
      *
      * @return array<int, int>
      */
     private function containerCountPerAccount(): array
     {
         return DB::table('container')
+            ->whereNull('inbox_user_id')
             ->whereNull('deleted_at')
             ->groupBy('account_id')
             ->selectRaw('account_id, COUNT(*) as total')
