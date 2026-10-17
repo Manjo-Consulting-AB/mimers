@@ -46,6 +46,14 @@
     --color-surface-sunken: #eff4f8;
     --color-border: #e2e8f0;
 
+    /*
+     * Glaset ovanpå hjältens bild — se [[ADR-0057 Ikoner och typsnitt]] § 6.
+     * Taltutan och knapparna ligger på ett foto, där en ogenomskinlig yta
+     * hade skurit ett hål i bilden.
+     */
+    --color-glass: rgb(255 255 255 / 0.12);
+    --color-glass-border: rgb(255 255 255 / 0.28);
+
     /* Text */
     --color-ink: #0f172a;
     --color-ink-muted: #475569;
@@ -68,6 +76,15 @@
     --color-success: #15803d;
 
     /*
+     * Ikonrutans mjuka ytor i tonerna `success`, `warning` och `danger` — se
+     * [[ADR-0057 Ikoner och typsnitt]] § 6. `accent` och `neutral` har redan
+     * sina: `--color-accent-soft` och `--color-surface-sunken`.
+     */
+    --color-success-soft: #ecfdf3;
+    --color-warning-soft: #fff7ed;
+    --color-danger-soft: #fef2f2;
+
+    /*
      * Fokusringen. Får aldrig tas bort — en nollställd outline utan ring
      * river tangentbordsarbetet i issue 68a och 68b. Se FormField.vue.
      */
@@ -85,6 +102,13 @@
     --radius-card: 12px;
     --radius-control: 8px;
     --radius-pill: 9999px;
+
+    /*
+     * Kortets skugga — se [[ADR-0057 Ikoner och typsnitt]] § 6. Två lager:
+     * en hårfin kant och en mjukare yta under, så kortet lyfts från botten
+     * utan att kanten syns som en linje.
+     */
+    --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 2px 6px rgb(15 23 42 / 0.04);
 }
 
 /*
