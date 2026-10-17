@@ -1,6 +1,7 @@
 <?php
 
 use App\Actions\Item\ResolveItemTree;
+use App\Actions\Item\ResolveItemTreeRows;
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\ContainerAccess;
@@ -282,4 +283,33 @@ it('ställer två frågor också för en omfångsbegränsad mottagare', function
     expect($frågor)->toBe(2);
 
     Carbon::setTestNow();
+});
+
+/*
+ * Issue 292 · Trädraderna följer samma omfång som trädet. En mottagare med en
+ * itemgrant får bara poster för de items hennes träd bär — räkningen sker på
+ * trädet och aldrig på containern i stort ([[ADR-0058 Trädet som tabell]] § 4,
+ * [[ADR-0028 Åtkomst på itemnivå]] § Konsekvenser).
+ */
+it('ger trädrader bara för items inom mottagarens omfång', function () {
+    [$container, , , , $impeller] = strukturBåt();
+
+    $mottagare = strukturMottagare();
+    strukturGrant($container, $mottagare, $impeller);
+
+    $träd = app(ResolveItemTree::class)->handle($mottagare, $container);
+    $rader = app(ResolveItemTreeRows::class)->handle($container, $träd);
+
+    // Trädet är impellern ensam — motorn, masten och båten ligger utanför
+    // omfånget — och raderna är exakt dess item.
+    expect(array_keys($rader))->toBe([$impeller->ulid]);
+
+    // Medlemmen i ägarkontot når allt och får en rad per item.
+    $medlem = strukturMedlem($container->account);
+    $helaTrädet = app(ResolveItemTree::class)->handle($medlem, $container);
+    $allaRader = app(ResolveItemTreeRows::class)->handle($container, $helaTrädet);
+
+    $forvantade = $container->items()->orderBy('name')->orderBy('id')->pluck('ulid')->all();
+
+    expect(array_keys($allaRader))->toBe($forvantade);
 });
