@@ -263,29 +263,35 @@ const views = computed(() => {
 <template>
     <Head :title="t('item.index.title')" />
 
-    <h1 class="text-2xl font-semibold">{{ t('item.index.heading') }}</h1>
-
-    <Link
-        v-if="can.create"
-        :href="`/containers/${container.ulid}/items/create`"
-        class="mt-4 inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
-    >
-        {{ t('item.index.create') }}
-    </Link>
-
     <!--
+        Huvudet är gemensamt för de tre lägena (issue 291 · [[ADR-0058 Trädet
+        som tabell]] § 7): rubriken, *New item* och växeln står på en rad, i den
+        ordningen, och raden ritas utanför lägesgrenarna. `mr-auto` trycker
+        knappen och växeln till höger även när `can.create` är falsk.
+
         Växeln (issue 154 · [[ADR-0046 Containerns karta]]). Den står över
         båda ytorna och byter mellan dem med en adress: *Lista* är förvalet
         och skrivs utan `view`, *Träd* bär `?view=tree`. Läget kommer ur
         `view`-proppen — serverns läsning av adressen — så vyn håller
         ingenting i minnet och en omladdning landar i samma läge.
     -->
-    <ItemViewSwitch
-        class="mt-6"
-        :views="views"
-        :current="view"
-        :label="t('item.view.label')"
-    />
+    <div class="mt-6 flex flex-wrap items-center gap-3">
+        <h1 class="mr-auto text-2xl font-semibold">{{ t('item.index.heading') }}</h1>
+
+        <Link
+            v-if="can.create"
+            :href="`/containers/${container.ulid}/items/create`"
+            class="inline-flex min-h-11 items-center rounded bg-blue-700 px-4 font-medium text-white"
+        >
+            {{ t('item.index.create') }}
+        </Link>
+
+        <ItemViewSwitch
+            :views="views"
+            :current="view"
+            :label="t('item.view.label')"
+        />
+    </div>
 
     <!-- Listan, oförändrad: filterraden, de tre tomma lägena och raderna. -->
     <template v-if="view === 'list'">
