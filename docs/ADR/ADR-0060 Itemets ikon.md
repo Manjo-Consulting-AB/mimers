@@ -1,6 +1,6 @@
 # ADR-0060 Itemets ikon
 
-**Status:** Antagen 2026-10-18 · Kompletterar [[ADR-0057 Ikoner och typsnitt]]: gränssnittets slutna lista står kvar, itemets ikon är en egen sak · Undantag från [[ADR-0042 Designsystemet]] om rollnamn på färgtokens · Ändrar [[ADR-0058 Trädet som tabell]] § 2: rotraden fälls inte · [[ADR-index]]
+**Status:** Antagen 2026-10-18 · Kompletterar [[ADR-0057 Ikoner och typsnitt]]: gränssnittets slutna lista står kvar, itemets ikon är en egen sak · Undantag från [[ADR-0042 Designsystemet]] om rollnamn på färgtokens · Ändrar [[ADR-0058 Trädet som tabell]] § 2: rotraden fälls inte · § 9 ändrad av [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]]: listan visar bild eller ikon, aldrig båda · [[ADR-index]]
 
 Tonys beslut 2026-10-18, vid genomgången av fynden i v0.23.0 och `docs/Design/findings/Freya Items Tree Dashboard.png`.
 

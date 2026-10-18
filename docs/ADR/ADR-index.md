@@ -67,6 +67,7 @@ Tillbaka till [[00 Index]].
 | [[ADR-0059 Kartan med en mitt]] | Kartläget är en fokuskarta med containern eller ett item i mitten och `focus` i adressen; klick centrerar, ikonen öppnar, plusmenyn bara på mitten; vägen till mitten ovanför; filtret väljer mitten och gömmer inga grannar | Frontend, [[Items och organisation]] |
 | [[ADR-0060 Itemets ikon]] | Itemets ikon väljs ur hela Lucide och laddas en i taget; ett okänt namn ritar den neutrala; åtta färger i en fast palett utan rött; trädets rotrad fälls inte | Frontend, [[Items och organisation]] |
 | [[ADR-0061 Kartans kort och kanter]] | Kartans kort har ikonen till vänster och öppna-ikonen i hörnet; ingen räknare för barn, statusen bara som försenad; böjda linjer med pilspetsar i ett SVG-lager som mäter korten | Frontend |
+| [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]] | Kartan utan pilspetsar och med mer luft, de relaterade på varannan sida, ögat öppnar och plusmenyn i mittkortet; listans ruta visar vald bild, ikon, automatisk bild eller den grå i den ordningen; filterraden söker medan man skriver | Frontend, [[Items och organisation]] |
 
 ## Om att ändra ett beslut
 
