@@ -25,8 +25,8 @@ use function Pest\Laravel\withoutVite;
  * app/Actions/Schedule/ListItemTasks. Se [[ADR-0050 Desktopdesignen]].
  *
  * Filen prövar att varje rad i uppgiftslistorna bär itemets omslagsbild i den
- * form `/containers/{container}/items` redan använder — `{ulid, hasThumb}`
- * eller null — och att formen bor på ETT ställe:
+ * form `/containers/{container}/items` redan använder — `{ulid, hasThumb,
+ * chosen}` eller null — och att formen bor på ETT ställe:
  *
  * 1. **Regeln och formen bor i `ResolveItemCover::thumbnails()`** (Beslut 1).
  *    Raden på `/tasks` bär itemets bild, och en rad utan bild bär `cover:
@@ -204,7 +204,7 @@ function radomslagRader(TestResponse $svar): array
  * jämföras mellan två ytor utan att radernas ordning spelar roll.
  *
  * @param  list<array<string, mixed>>  $rader
- * @return array<string, array{ulid: string, hasThumb: bool}|null>
+ * @return array<string, array{ulid: string, hasThumb: bool, chosen: bool}|null>
  */
 function radomslagKarta(array $rader): array
 {
@@ -259,7 +259,13 @@ it('raden på tasks bär itemets omslag', function () {
 
     $rad = radomslagRader(actingAs($anvandare)->get('/tasks')->assertOk())[0];
 
-    expect($rad['cover'])->toBe(['ulid' => $bild->ulid, 'hasThumb' => true]);
+    // `chosen` är falsk: bilden är den automatiska, inte ett val. Nyckeln
+    // följer med formen sedan issue 310 och uppgiftslistan ignorerar den.
+    expect($rad['cover'])->toBe([
+        'ulid' => $bild->ulid,
+        'hasThumb' => true,
+        'chosen' => false,
+    ]);
 });
 
 /*
@@ -299,7 +305,7 @@ it('containerns flik, itemets flik och Done bär samma cover', function () {
     $oppenRad = radomslagOppen(radomslagSchema($item, 'Byt olja'), radomslagDatum(1));
     $klarRad = radomslagKlar(radomslagSchema($item, 'Byt impeller'));
 
-    $förväntat = ['ulid' => $bild->ulid, 'hasThumb' => true];
+    $förväntat = ['ulid' => $bild->ulid, 'hasThumb' => true, 'chosen' => false];
 
     // /tasks — grupperna.
     $tasks = radomslagKarta(radomslagRader(actingAs($anvandare)->get('/tasks')->assertOk()));
