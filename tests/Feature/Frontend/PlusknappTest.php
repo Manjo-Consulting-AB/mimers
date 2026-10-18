@@ -24,10 +24,11 @@ use function Pest\Laravel\withoutVite;
  * gränssnittet.
  *
  * **Det som kräver en webbläsare prövas inte här.** Att arket glider upp
- * nedifrån, att fästet hamnar under knappen över `md:`, och att fokusfällan
- * håller i handen står i PR-kroppens handprov. Det som går att avgöra ur
- * källkoden är att fällan är webbläsarens — `<dialog>` med `showModal()` — och
- * inte en egen tabbhanterare, samma form som MobilskalTest och GenomgangTest.
+ * nedifrån, att fästet hamnar rätt över `md:` i handen, och att fokusfällan
+ * håller i handen står i PR-kroppens handprov. Regeln som väljer sida prövas i
+ * ArketsFasteTest (issue 323). Det som går att avgöra ur källkoden är att
+ * fällan är webbläsarens — `<dialog>` med `showModal()` — och inte en egen
+ * tabbhanterare, samma form som MobilskalTest och GenomgangTest.
  *
  * Kommentarer rensas bort före varje källkodsprov, som i grannfilerna: filerna
  * är fulla av svensk prosa, och en regel som letar efter `showModal()` ska

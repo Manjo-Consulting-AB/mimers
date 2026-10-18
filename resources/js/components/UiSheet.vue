@@ -11,15 +11,20 @@ import { useTranslations } from '../composables/useTranslations.js';
  * desktop.** Den ena ytan är den andra ytans form: samma panel, samma rubrik,
  * samma innehåll, och bara fästet skiljer. Under `md:` ligger panelen i
  * botten av skärmen (`inset-x-0 bottom-0`, rundade hörn uppåt); över `md:`
- * ligger den under elementet som öppnade den, i den storlek en meny har.
+ * ligger den vid elementet som öppnade den — under det när platsen räcker,
+ * annars över — i den storlek en meny har.
  *
  * **Fästet över `md:` räknas ur öppnarens rektangel och inte ur en klasstext.**
- * Panelens `top` och `right` är CSS-variabler som sätts när arket öppnas, och
- * klasserna läser dem bara i sin `md:`-form — under brytpunkten vinner
- * bottenfästet, och variablerna rör ingenting. En klass som räknade fram
- * sidhuvudets högerkant hade varit samma tal skrivet i två filer: flyttar
- * knappen i sidhuvudet en rad pekar menyn på fel ställe, utan att något prov
- * faller.
+ * Panelen fästs 8 px under öppnaren när platsen under räcker till 70vh, eller
+ * när den är större än platsen över; annars fästs den 8 px över öppnaren, med
+ * `bottom` räknat ur fönstrets höjd. Båda måtten lämnar 16 px till skärmens
+ * kant, och högsta höjden är det minsta av 70vh och platsen på den valda
+ * sidan — innehåll som är högre rullar. `top`, `bottom`, `right` och
+ * `max-height` är CSS-variabler som sätts när arket öppnas, och klasserna
+ * läser dem bara i sin `md:`-form — under brytpunkten vinner bottenfästet, och
+ * variablerna rör ingenting. En klass som räknade fram sidhuvudets högerkant
+ * hade varit samma tal skrivet i två filer: flyttar knappen i sidhuvudet en
+ * rad pekar menyn på fel ställe, utan att något prov faller.
  *
  * **Fokusfällan är webbläsarens** (issue 68b § Beslut 2): `showModal()` håller
  * fokus i arket medan det är öppet och Esc fyrar `close`, precis som i
@@ -62,11 +67,43 @@ const { t } = useTranslations();
 const sheetElement = ref(null);
 
 /*
- * Panelens fäste över `md:`, som `--sheet-top` och `--sheet-right`. Tomma när
- * ingen öppnare finns — då faller panelen tillbaka på sin statiska plats, och
- * mobilens bottenfäste gäller oavsett.
+ * Fästet över `md:` ur öppnarens rektangel och fönstrets höjd. Under
+ * öppnaren när platsen räcker till 70vh eller är större än platsen över;
+ * annars över, med `bottom` räknat ur fönstret. Högsta höjden ryms på den
+ * valda sidan.
+ *
+ * Ren funktion: proven kör den i node mot givna rektanglar och höjder.
  */
-const anchor = ref({ top: '', right: '' });
+function sheetAnchor(rect, viewportHeight) {
+    const gap = 8;
+    const edge = 16;
+
+    const below = viewportHeight - rect.bottom - gap - edge;
+    const above = rect.top - gap - edge;
+    const ceiling = viewportHeight * 0.7;
+
+    if (below >= ceiling || below > above) {
+        return {
+            top: `${Math.round(rect.bottom + gap)}px`,
+            bottom: '',
+            maxHeight: `${Math.round(Math.min(ceiling, below))}px`,
+        };
+    }
+
+    return {
+        top: '',
+        bottom: `${Math.round(viewportHeight - rect.top + gap)}px`,
+        maxHeight: `${Math.round(Math.min(ceiling, above))}px`,
+    };
+}
+
+/*
+ * Panelens fäste över `md:`, som `--sheet-top`, `--sheet-bottom`,
+ * `--sheet-right` och `--sheet-max-height`. Tomma när ingen öppnare finns —
+ * då faller panelen tillbaka på sin statiska plats, och mobilens bottenfäste
+ * gäller oavsett.
+ */
+const anchor = ref({ top: '', right: '', bottom: '', maxHeight: '' });
 
 watch(
     () => props.open,
@@ -76,10 +113,10 @@ watch(
 
             anchor.value = rect
                 ? {
-                    top: `${Math.round(rect.bottom + 8)}px`,
+                    ...sheetAnchor(rect, window.innerHeight),
                     right: `${Math.round(window.innerWidth - rect.right)}px`,
                 }
-                : { top: '', right: '' };
+                : { top: '', right: '', bottom: '', maxHeight: '' };
 
             // Innehållet finns i DOM:en redan, men arket ska vara öppet innan
             // fokus flyttas in i det.
@@ -115,7 +152,12 @@ function onClosed() {
         ref="sheetElement"
         :aria-label="heading"
         class="m-0 h-full max-h-none w-full max-w-none bg-transparent p-0 backdrop:bg-ink/50 md:backdrop:bg-transparent"
-        :style="{ '--sheet-top': anchor.top, '--sheet-right': anchor.right }"
+        :style="{
+            '--sheet-top': anchor.top,
+            '--sheet-right': anchor.right,
+            '--sheet-bottom': anchor.bottom,
+            '--sheet-max-height': anchor.maxHeight,
+        }"
         @close="onClosed"
     >
         <div class="flex h-full w-full flex-col justify-end">
@@ -131,7 +173,7 @@ function onClosed() {
             ></button>
 
             <div
-                class="relative flex max-h-full flex-col gap-2 overflow-y-auto rounded-t-card bg-surface p-4 md:fixed md:top-[var(--sheet-top)] md:right-[var(--sheet-right)] md:max-h-[70vh] md:w-72 md:rounded-card md:border md:border-border"
+                class="relative flex max-h-full flex-col gap-2 overflow-y-auto rounded-t-card bg-surface p-4 md:fixed md:top-[var(--sheet-top)] md:bottom-[var(--sheet-bottom)] md:right-[var(--sheet-right)] md:max-h-[var(--sheet-max-height)] md:w-72 md:rounded-card md:border md:border-border"
             >
                 <div class="flex items-center justify-between gap-2">
                     <h2 class="text-title font-semibold text-ink">{{ heading }}</h2>
