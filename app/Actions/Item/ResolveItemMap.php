@@ -42,6 +42,16 @@ use Illuminate\Support\Facades\DB;
  * någon grupp och räknas därför inte i någon status: `drawn` bär bara mitten
  * och de ritade noderna, och statusfrågan ställs för dem.
  *
+ * **Vägen till mitten räknas i minnet** (issue 298 · [[ADR-0059 Kartan med en
+ * mitt]] § 9). `path` är `{ulid, name}` från roten ned till mitten, med mitten
+ * sist, och den följer den första föräldern i namnordning på varje nivå. Ett
+ * item med flera platser har därför en väg och inte flera; ⇄ och antalet
+ * platser säger att de andra finns. Kring containern är vägen tom. `via` på
+ * varje föräldranod är namnen från roten ned till förälderns egen första
+ * förälder — tom för en rot. Båda vandringarna kapas på samma sätt som
+ * `countPlacements`: en förälder som redan ligger på vägen följs inte, så en
+ * cykel ger ett ändligt svar. Ingen av dem ställer en fråga.
+ *
  * **Frågekostnaden är konstant: klassens EGNA frågor är TVÅ** — en för itemen
  * i omfånget, en för containerns kanter — oavsett hur många grannar mitten
  * har. Omfånget tillkommer ur den memoiserade ResolveItemScope och kostar inga
@@ -98,7 +108,8 @@ class ResolveItemMap
      *
      * @return array{
      *     center: array{kind: string, ulid: string, name: string, children: ?int, placements: ?int},
-     *     parent: array{nodes: list<array{ulid: string, name: string, children: int, placements: int}>, total: int},
+     *     path: list<array{ulid: string, name: string}>,
+     *     parent: array{nodes: list<array{ulid: string, name: string, children: int, placements: int, via: list<string>}>, total: int},
      *     child: array{nodes: list<array{ulid: string, name: string, children: int, placements: int}>, total: int},
      *     related: array{nodes: list<array{ulid: string, name: string, children: int, placements: int}>, total: int},
      *     centerItem: ?Item,
@@ -119,6 +130,12 @@ class ResolveItemMap
         $this->sortByName($relatedByItem, $rank);
 
         $centerId = $this->centerId($focus, $items);
+
+        // Vägen till mitten, räknad ur kanterna ovan — ingen fråga. Kring
+        // containern finns ingen väg: containern är inte en item-nod.
+        $path = $centerId === null
+            ? []
+            : $this->pathFromRoot($centerId, $items, $parentsByChild);
 
         // Minnet mellan platsräkningarna. Det ligger här och inte i metoden:
         // samma item kan ritas i flera grupper, och en DAG där många vägar
@@ -143,6 +160,30 @@ class ResolveItemMap
 
             foreach (array_slice($itemIds, 0, $limit) as $itemId) {
                 $nodes[] = $nodeOf($itemId);
+            }
+
+            return ['nodes' => $nodes, 'total' => count($itemIds)];
+        };
+
+        // Förälderns egen väg från roten (ADR:ns beslut 9): namnen ned till
+        // dess första förälder, tom för en rot. Samma vandring som mittens,
+        // bara startad ett steg högre upp.
+        $parentGroup = function (array $itemIds, int $limit) use ($nodeOf, $items, $parentsByChild): array {
+            $nodes = [];
+
+            foreach (array_slice($itemIds, 0, $limit) as $itemId) {
+                $node = $nodeOf($itemId);
+
+                $grandParents = $parentsByChild[$itemId] ?? [];
+
+                $node['via'] = $grandParents === []
+                    ? []
+                    : array_column(
+                        $this->pathFromRoot($grandParents[0], $items, $parentsByChild),
+                        'name',
+                    );
+
+                $nodes[] = $node;
             }
 
             return ['nodes' => $nodes, 'total' => count($itemIds)];
@@ -174,13 +215,14 @@ class ResolveItemMap
                 'placements' => $placements[$centerId] ??= $this->countPlacements($centerId, $parentsByChild, $placements, [$centerId => true]),
             ];
 
-            $parent = $groupOf($parentsByChild[$centerId] ?? [], self::PARENT_LIMIT);
+            $parent = $parentGroup($parentsByChild[$centerId] ?? [], self::PARENT_LIMIT);
             $child = $groupOf($childrenByParent[$centerId] ?? [], self::CHILD_LIMIT);
             $related = $groupOf($relatedByItem[$centerId] ?? [], self::RELATED_LIMIT);
         }
 
         return [
             'center' => $center,
+            'path' => $path,
             'parent' => $parent,
             'child' => $child,
             'related' => $related,
@@ -378,6 +420,43 @@ class ResolveItemMap
         }
 
         return null;
+    }
+
+    /**
+     * Vägen från roten ned till $itemId, mitten sist — en slutning i minnet.
+     *
+     * Varje nivå följer den FÖRSTA föräldern i namnordning: `parentsByChild`
+     * är redan sorterad, så ett item med flera platser får en väg och inte
+     * flera (ADR-0059 § 9). Vandringen stannar vid en förälder som redan
+     * ligger på vägen — samma kapning och samma skäl som `countPlacements` —
+     * så en cykel som skrivits förbi LinkItems ger ett ändligt svar.
+     *
+     * @param  array<int, Item>  $items
+     * @param  array<int, list<int>>  $parentsByChild
+     * @return list<array{ulid: string, name: string}> roten först, $itemId sist
+     */
+    private function pathFromRoot(int $itemId, array $items, array $parentsByChild): array
+    {
+        $ids = [$itemId];
+        $seen = [$itemId => true];
+        $current = $itemId;
+
+        while (($parents = $parentsByChild[$current] ?? []) !== []) {
+            $parentId = $parents[0];
+
+            if (isset($seen[$parentId])) {
+                break;
+            }
+
+            $seen[$parentId] = true;
+            $ids[] = $parentId;
+            $current = $parentId;
+        }
+
+        return array_map(
+            fn (int $id): array => ['ulid' => $items[$id]->ulid, 'name' => $items[$id]->name],
+            array_reverse($ids),
+        );
     }
 
     /**

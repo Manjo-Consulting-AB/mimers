@@ -36,6 +36,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * Träffytorna är `min-h-11` — 44 px ur issue 68a § Beslut 3 — och fokusringen
  * får aldrig tas bort ([[ADR-0042 Designsystemet]] § Beslut).
+ *
+ * **En föräldranod bär sin egen väg från roten** (issue 298 · [[ADR-0059 Kartan
+ * med en mitt]] § 9): `node.via` är namnen ned till dess första förälder och
+ * står under namnet, skild med ›. Raden klipps av och hela vägen ligger i
+ * `title`. För en rot är `via` tom och ingen rad ritas.
  */
 defineProps({
     /* Noden: `{ulid, name, children, placements}`, talen null för containern. */
@@ -80,6 +85,15 @@ const { t } = useTranslations();
             </span>
 
             <span v-if="label" class="text-meta text-ink-subtle">{{ label }}</span>
+
+            <!-- Förälderns egen väg från roten, avklippt med hela i `title`. -->
+            <span
+                v-if="node.via && node.via.length > 0"
+                class="w-full truncate text-meta text-ink-subtle"
+                :title="node.via.join(' › ')"
+            >
+                {{ node.via.join(' › ') }}
+            </span>
 
             <span
                 v-if="status || node.children != null"

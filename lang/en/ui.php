@@ -3143,6 +3143,7 @@ return [
 
             'legend' => ':kind (:count)',
             'same_item' => 'Same item',
+            'path' => 'Path',
             'children' => ':count children',
             'placements' => ':count placements',
             'open' => 'Open :name',
