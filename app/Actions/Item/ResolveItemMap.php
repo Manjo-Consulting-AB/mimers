@@ -54,10 +54,12 @@ use Illuminate\Support\Facades\DB;
  *
  * **Itemets ikon följer med i samma fråga** (issue 305 · [[ADR-0060 Itemets
  * ikon]] § 6 och 9): `icon` och `icon_color` läses tillsammans med `ulid` och
- * `name` och läggs på varje nod och på mitten. Kring containern är de `null`,
- * för containern är inget item och har ingen egen ikon. `children` står kvar i
- * svaret även om kortet inte ritar antalet: fältet är serverns och tas bort
- * först när ingen yta läser det.
+ * `name` och läggs på varje nod och på mitten. Är mitten containern bär den
+ * containerns EGET valda ikon (issue 316 · [[ADR-0064 Containerns ikon]] § 5)
+ * — containern är inget item, men den har samma presentationsval sedan issue
+ * 314, så fälten är inte längre `null` där. `children` står kvar i svaret även
+ * om kortet inte ritar antalet: fältet är serverns och tas bort först när
+ * ingen yta läser det.
  *
  * **Frågekostnaden är konstant: klassens EGNA frågor är TVÅ** — en för itemen
  * i omfånget, en för containerns kanter — oavsett hur många grannar mitten
@@ -100,9 +102,10 @@ class ResolveItemMap
      * containern som mitt, utan en rad om varför.
      *
      * `center` är `{kind, ulid, name, icon, icon_color, children, placements}`.
-     * `icon`, `icon_color`, `children` och `placements` är `null` för
-     * containern, som inte är ett item, inte har en egen ikon och inte
-     * förekommer i strukturen.
+     * `icon` och `icon_color` är mitten av det slag den är: itemets egna när
+     * mitten är ett item, containerns egna när mitten är containern. `children`
+     * och `placements` är `null` för containern, som inte förekommer i
+     * strukturen.
      *
      * `drawn` är modellerna för mitten (när den är ett item) och de ritade
      * noderna, nycklade på ULID. Den finns för att statusfrågan
@@ -206,8 +209,11 @@ class ResolveItemMap
                 'kind' => 'container',
                 'ulid' => $container->ulid,
                 'name' => $container->name,
-                'icon' => null,
-                'icon_color' => null,
+                // Containerns eget ikonval (issue 316 · [[ADR-0064
+                // Containerns ikon]] § 5). Fälten ligger på containerraden,
+                // som redan är hämtad, så frågan kostar ingenting extra.
+                'icon' => $container->icon,
+                'icon_color' => $container->icon_color,
                 'children' => null,
                 'placements' => null,
             ];

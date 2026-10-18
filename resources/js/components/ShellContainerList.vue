@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
+import ItemIcon from './ItemIcon.vue';
 import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
@@ -65,12 +66,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  * Designsystemet]] § Beslut) — samma form som raderna i ShellSections, och
  * `outline-none` utan en ring som tar över river tangentbordsarbetet.
  *
- * **Varje rad bär samma ikon, oavsett art** (issue 289 · [[ADR-0057 Ikoner
- * och typsnitt]] § 1). `kind` är fritt ([[ADR-0036 Containerns art]]), och en
- * ikon gissad ur fritext ger fel bild åt den som skrev något eget — därför
- * ritas varje container med `container` och *Add container* med `add`.
- * `UiIcon` målar med `currentColor`, så den aktiva raden behåller sitt
- * `text-white` och den inaktiva ärver panelens textroll.
+ * **Varje rad bär containerns egen ikon, annars rollen `container`** (issue
+ * 316 · [[ADR-0064 Containerns ikon]] § 5). Containerns valda ikon ritas med
+ * `ItemIcon` i sin färg, i storleken 20 och i `tile` före namnet; en container
+ * utan ikon — eller med ett namn som inte finns — ritar lådan via
+ * `fallback="container"`. Ikonen väljs aldrig ur `kind`, som är fritt
+ * ([[ADR-0036 Containerns art]]). *Add container* bär rollen `add`. Den
+ * aktiva raden behåller `bg-shell-active text-white` som förut; ikonen bär
+ * sin egen palettfärg.
  *
  * **Hover är en bakgrund, inte en understrykning** (issue 676): klassen är
  * `hover:bg-shell-active/50` i `:class`-grenen för en INAKTIV rad, så den
@@ -170,7 +173,14 @@ function isActive(container) {
                         class="inline-flex min-h-11 w-full items-center gap-2 rounded-control outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                         :class="isActive(container) ? 'bg-shell-active text-white' : 'hover:bg-shell-active/50'"
                     >
-                        <UiIcon name="container" class="shrink-0" />
+                        <ItemIcon
+                            :name="container.icon"
+                            :color="container.icon_color"
+                            :size="20"
+                            tile
+                            fallback="container"
+                            class="shrink-0"
+                        />
 
                         {{ container.name }}
                     </Link>

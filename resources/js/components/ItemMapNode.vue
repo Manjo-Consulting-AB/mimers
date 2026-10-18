@@ -20,8 +20,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Mitten är större** (ADR:ns beslut 2): ikonen ovanför namnet, slagets ord
  * under och en kant i `accent` med `accent-soft` som bakgrund. Kring
- * containern ritas `UiIcon` `container` i stället för en item-ikon, och ordet
- * *Container* i stället för *Current item*.
+ * containern ritas containerns egen ikon med `ItemIcon`, `tile` och
+ * `fallback="container"` (issue 316 · [[ADR-0064 Containerns ikon]] § 5), och
+ * ordet *Container* i stället för *Current item*. Utan ett ikonval ritar
+ * fallbacken lådan som förut.
  *
  * **Öppna-ikonen är ett öga i kortets övre högra hörn** ([[ADR-0062 Kartans
  * luft, listans ruta och den löpande sökningen]] § 4 och 5): rollen `open` bär
@@ -118,11 +120,14 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
             >
                 <!-- Mitten: ikonen ovanför namnet, ordet under. -->
                 <template v-if="current">
-                    <UiIcon
+                    <ItemIcon
                         v-if="node.kind === 'container'"
-                        name="container"
+                        :name="node.icon"
+                        :color="node.icon_color"
                         :size="24"
-                        class="text-accent"
+                        tile
+                        fallback="container"
+                        class="shrink-0"
                     />
                     <ItemIcon
                         v-else

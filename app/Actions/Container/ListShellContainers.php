@@ -9,8 +9,8 @@ use App\Models\User;
  * Skalets containerlista, se issue 169 · [[ADR-0050 Desktopdesignen]] § 1 och
  * [[ADR-0036 Containerns art]].
  *
- * **Listan är navigering och inte en översikt.** Den bär containerns namn och
- * ULID — adressen byggs av klienten ur ULID:n, samma form som
+ * **Listan är navigering och inte en översikt.** Den bär containerns namn,
+ * ULID och ikonval — adressen byggs av klienten ur ULID:n, samma form som
  * `ContainerCard` — och ingenting mer. Talen, bilden och undertiteln hör till
  * dashboardens kort (App\Actions\Container\ListContainerSummaries) och
  * räknas inte här: en rad i sidopanelen är ett mål, inte en sammanfattning,
@@ -32,13 +32,19 @@ use App\Models\User;
  * avgöras mot ALLA containrar — en art med två containrar är en egen grupp
  * även när den andra står utanför en godtycklig gräns.
  *
+ * **Raden bär containerns ikon sedan issue 316** ([[ADR-0064 Containerns
+ * ikon]] § 5): `icon` och `icon_color` läses i SAMMA fråga som `ulid`, `name`
+ * och `kind` och skickas med varje rad. Det kostar inga nya frågor — fälten
+ * ligger på samma containerrad — och skalet ritar dem med `ItemIcon`, med
+ * `container` som fallback när de är null.
+ *
  * **Frågekostnaden är två frågor**: kontona och containrarna. Ingen
  * `ResolveItemScope` och ingen itemräkning, för raden bär inga tal.
  */
 final class ListShellContainers
 {
     /**
-     * @return list<array{kind: string|null, containers: list<array{ulid: string, name: string}>}>
+     * @return list<array{kind: string|null, containers: list<array{ulid: string, name: string, icon: string|null, icon_color: string|null}>}>
      */
     public function handle(User $user): array
     {
@@ -48,14 +54,16 @@ final class ListShellContainers
             ->accessibleBy($user, $accountIds)
             ->listable()
             ->orderBy('name')
-            ->get(['ulid', 'name', 'kind']);
+            ->get(['ulid', 'name', 'kind', 'icon', 'icon_color']);
 
-        /** @var list<array{kind: string|null, containers: list<array{ulid: string, name: string}>}> $grupper */
+        /** @var list<array{kind: string|null, containers: list<array{ulid: string, name: string, icon: string|null, icon_color: string|null}>}> $grupper */
         $grupper = ContainerKindGroups::byKind(
             $containers,
             fn (Container $container): array => [
                 'ulid' => $container->ulid,
                 'name' => $container->name,
+                'icon' => $container->icon,
+                'icon_color' => $container->icon_color,
             ],
         );
 

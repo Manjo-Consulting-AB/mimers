@@ -25,6 +25,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * 44 px-kolumn som rötternas fällknappar, så att toppnivåns items står i
  * linje under den.
  *
+ * **Rotradens ikon är containerns egen** (issue 316 · [[ADR-0064 Containerns
+ * ikon]] § 5). `containerIcon` och `containerIconColor` kommer ur sidproppen
+ * `container` och ritas med `ItemIcon` i `tile` — samma kolumn och storlek som
+ * förut. Utan ett val ritar `fallback="container"` lådan, som i dag.
+ *
  * **Itemraden bär itemets ikon** ([[ADR-0060 Itemets ikon]] § 6 och 10).
  * `ItemIcon` med `tile` står mellan fällknappen — eller platshållaren för
  * ett löv — och namnet, i storleken 20. Ikonen kommer ur radens celler
@@ -83,6 +88,13 @@ const props = defineProps({
     treeRows: { type: Object, default: () => ({}) },
     containerUlid: { type: String, required: true },
     containerName: { type: String, required: true },
+    /*
+     * Containerns ikonval ur sidproppen `container` (ContainerResource,
+     * issue 314 · [[ADR-0064 Containerns ikon]] § 5). `null` ritar
+     * `fallback="container"`, alltså lådan som förut.
+     */
+    containerIcon: { type: String, default: null },
+    containerIconColor: { type: String, default: null },
     /*
      * Sant när servern har filtrerat trädet (issue 293): träffarna ritas
      * halvfeta och grenarna till dem är öppna från början. Utan filter är
@@ -218,7 +230,14 @@ function isMatch(node) {
                 <td class="py-1 pr-4 text-body">
                     <div class="flex items-center gap-1">
                         <span class="inline-flex min-w-11 shrink-0 items-center justify-center">
-                            <UiIcon name="container" :size="20" tile="neutral" />
+                            <ItemIcon
+                                :name="containerIcon"
+                                :color="containerIconColor"
+                                :size="20"
+                                tile
+                                fallback="container"
+                                class="shrink-0"
+                            />
                         </span>
 
                         <span class="inline-flex min-h-11 items-center px-2 font-semibold text-ink">

@@ -123,14 +123,14 @@ it('ritar ikonen med h och utan v-html', function () {
     expect($komponent)->toMatch('/height:\s*size\.value/');
 });
 
-it('ritar item i neutral ton i samma storlek när ikonen saknas', function () {
+it('ritar fallback-rollen i neutral ton i samma storlek när ikonen saknas', function () {
     $komponent = itemikonUtanKommentarer(itemikonKod('components/ItemIcon.vue'));
 
     // Tre lägen faller tillbaka på samma ikon: `name` är null, namnet finns
     // inte i globben, och filen hämtas fortfarande. Två UiIcon-anrop: ett med
     // ruta och ett utan.
     expect(preg_match_all('/<UiIcon\b/', $komponent))->toBe(2);
-    expect(substr_count($komponent, 'name="item"'))->toBe(2);
+    expect(substr_count($komponent, ':name="fallback"'))->toBe(2);
 
     // Samma normaliserade storlek i båda fallen, så att raden inte hoppar när
     // ikonen kommer.
@@ -140,6 +140,51 @@ it('ritar item i neutral ton i samma storlek när ikonen saknas', function () {
 
     // Rutan i fallet utan ikon är UiIcons neutrala ton, inte paletten.
     expect($komponent)->toContain('tile="neutral"');
+});
+
+/*
+ * Klart när (issue 316 · [[ADR-0064 Containerns ikon]] § 4): `ItemIcon` ritar
+ * rollen i `fallback` när `name` är tomt eller okänt, och rollen `item` när
+ * proppen inte skickas.
+ *
+ * Fallbacken är en roll ur den slutna listan i `resources/js/icons/index.js`
+ * — inte ett Lucide-namn. Båda vägarna till en tom ikon (ett `name` som är
+ * `null`, och ett namn som inte finns i globben) landar i samma två grenar,
+ * eftersom `nodes` förblir null i båda fallen.
+ */
+it('ritar fallback för ett tomt eller okänt namn och item utan proppen', function () {
+    $komponent = itemikonUtanKommentarer(itemikonKod('components/ItemIcon.vue'));
+
+    expect($komponent)->toMatch(
+        '/fallback:\s*\{\s*type:\s*String,\s*default:\s*\'item\'\s*\}/',
+        'ItemIcon saknar proppen fallback med item som förval',
+    );
+
+    // Båda fallback-grenarna läser proppen — den med ruta och den utan.
+    expect(substr_count($komponent, ':name="fallback"'))->toBe(2);
+
+    // Ett okänt namn ger ingen loader, och noderna töms innan nästa ikon
+    // hämtas: fallbacken ritas alltså både för null och för ett okänt namn.
+    expect($komponent)->toContain('const loader = loadIcon(name)')
+        ->toContain('if (!loader)')
+        ->toContain('nodes.value = null');
+});
+
+/*
+ * Klart när (issue 316 · [[ADR-0064 Containerns ikon]] § 5): rollen `container`
+ * står kvar där den betyder containrar som BEGREPP och inte en viss container
+ * — *Containers* i navigeringen, detaljpanelens rubrik och historikens
+ * typfilter. De tre ytorna ritas med `UiIcon` och rörs inte av containerns
+ * egen ikon.
+ */
+it('låter rollen container stå kvar i navigeringen, detaljpanelen och historikfiltret', function () {
+    $sektioner = itemikonUtanKommentarer(itemikonKod('components/ShellSections.vue'));
+    $panelen = itemikonUtanKommentarer(itemikonKod('components/ContainerDetailsPanel.vue'));
+    $filtret = itemikonUtanKommentarer(itemikonKod('components/HistoryFilterBar.vue'));
+
+    expect($sektioner)->toContain("icon: 'container'")
+        ->and($panelen)->toContain('<UiIcon name="container"')
+        ->and($filtret)->toContain('name="container"');
 });
 
 it('ritar rutan i paletten och faller tillbaka på slate', function () {

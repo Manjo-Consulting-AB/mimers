@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Container\ListShellContainers;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Account;
 use App\Models\Container;
@@ -9,6 +10,8 @@ use App\Models\User;
 use App\Support\Access\AccessLevel;
 use App\Support\Frontend\ActiveContainer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Testing\TestResponse;
 
@@ -154,11 +157,11 @@ function sidopanelSvar(User $anvandare, string $url = '/dashboard', string $komp
 /**
  * Grupperna ur det partiella svaret, i serverns ordning.
  *
- * @return list<array{kind: string|null, containers: list<array{ulid: string, name: string}>}>
+ * @return list<array{kind: string|null, containers: list<array{ulid: string, name: string, icon: string|null, icon_color: string|null}>}>
  */
 function sidopanelGrupper(TestResponse $svar): array
 {
-    /** @var list<array{kind: string|null, containers: list<array{ulid: string, name: string}>}> $grupper */
+    /** @var list<array{kind: string|null, containers: list<array{ulid: string, name: string, icon: string|null, icon_color: string|null}>}> $grupper */
     $grupper = $svar->json('props.shellContainers');
 
     return $grupper;
@@ -167,7 +170,7 @@ function sidopanelGrupper(TestResponse $svar): array
 /**
  * Containernamnen i en grupp, i serverns ordning.
  *
- * @param  array{kind: string|null, containers: list<array{ulid: string, name: string}>}  $grupp
+ * @param  array{kind: string|null, containers: list<array{ulid: string, name: string, icon: string|null, icon_color: string|null}>}  $grupp
  * @return list<string>
  */
 function sidopanelNamn(array $grupp): array
@@ -432,9 +435,9 @@ it('gör en art med två containrar till en grupp och lägger en ensam art i hö
     expect(sidopanelNamn($grupper[0]))->toBe(['Traktorn', 'Utan art'])
         ->and(sidopanelNamn($grupper[1]))->toBe(['Båten', 'Jollen']);
 
-    // Raden bär namn och ULID och ingenting mer: talen och bilden hör till
-    // dashboardens kort, och adressen byggs i klienten ur ULID:n.
-    expect(array_keys($grupper[0]['containers'][0]))->toBe(['ulid', 'name'])
+    // Raden bär namn, ULID och ikonval och ingenting mer: talen och bilden
+    // hör till dashboardens kort, och adressen byggs i klienten ur ULID:n.
+    expect(array_keys($grupper[0]['containers'][0]))->toBe(['ulid', 'name', 'icon', 'icon_color'])
         ->and($grupper[0]['containers'][0]['ulid'])->toBe(
             Container::query()->where('name', 'Traktorn')->firstOrFail()->ulid
         );
@@ -470,6 +473,103 @@ it('visar bara de containrar användaren når', function () {
     // Mottagaren når containern genom sin grant på ett ENSKILT item — samma
     // väg in som `/containers` ger henne — och ser den därför i listan.
     expect(sidopanelNamn(sidopanelGrupper(sidopanelSvar($mottagare))[0]))->toBe([$container->name]);
+});
+
+/*
+ * Klart när (issue 316 · [[ADR-0064 Containerns ikon]] § 5): servern skickar
+ * containerns `icon` och `icon_color` på varje rad i skalets lista, och
+ * klienten ritar dem med `ItemIcon` i storleken 20 före namnet.
+ *
+ * Fälten läses i SAMMA fråga som namn och ULID — det är därför raden kan bära
+ * dem utan en fråga per container. Provet prövar båda halvorna: svaret bär
+ * värdena (och `null` när ingen ikon är vald), och källan ritar dem med
+ * containerns färg och `container` som fallback.
+ */
+it('skickar containerns ikon och färg i skalets lista', function () {
+    withoutVite();
+
+    [$konto, $ägare] = sidopanelKonto();
+
+    $medIkon = sidopanelContainer($konto, 'Båten', 'Båt');
+    $medIkon->update(['icon' => 'anchor', 'icon_color' => 'blue']);
+
+    sidopanelContainer($konto, 'Huset', 'Båt');
+
+    $rader = collect(sidopanelGrupper(sidopanelSvar($ägare)))
+        ->flatMap(fn (array $grupp): array => $grupp['containers'])
+        ->keyBy('name');
+
+    expect($rader['Båten']['icon'])->toBe('anchor')
+        ->and($rader['Båten']['icon_color'])->toBe('blue')
+        ->and($rader['Huset']['icon'])->toBeNull()
+        ->and($rader['Huset']['icon_color'])->toBeNull();
+});
+
+/*
+ * Klart när: containerns ikon ritas i huvudmenyns lista i storleken 20 före
+ * namnet, i dess färg, och lådan ritas när ingen ikon är vald.
+ *
+ * Det är ett källkodsprov — raderna ritas i webbläsaren — så det som går att
+ * avgöra är att `ItemIcon` får containerns fält, `tile` och `fallback`.
+ */
+it('ritar varje containers ikon i dess färg i containerlistan', function () {
+    $lista = sidopanelKod('components/ShellContainerList.vue');
+
+    expect($lista)->toContain("import ItemIcon from './ItemIcon.vue'")
+        ->toContain(':name="container.icon"')
+        ->toContain(':color="container.icon_color"')
+        ->toContain(':size="20"')
+        ->toContain('fallback="container"');
+
+    // Ikonen står före namnet och i samma rad.
+    $start = (int) strpos($lista, 'v-for="container in group.containers"');
+    $namn = (int) strpos($lista, '{{ container.name }}', $start);
+    $raden = substr($lista, $start, $namn - $start);
+
+    expect($raden)->toContain('<ItemIcon')
+        ->and($raden)->toContain('tile');
+});
+
+/*
+ * Klart när: antalet frågor för skalet är oförändrat när containerns ikon
+ * tillkommer.
+ *
+ * Listan var två frågor före issue 316 — kontona och containrarna — och
+ * ikonfälten ligger på samma containerrad. Provet mäter mot samma lista med
+ * en och med tjugo containrar: växer antalet med antalet rader har ikonen
+ * dragit in en N+1.
+ */
+it('kostar samma antal frågor för en och tjugo containrar i skalet', function () {
+    [$konto, $ägare] = sidopanelKonto();
+
+    sidopanelContainer($konto, 'En', 'Båt');
+
+    // Frys tiden runt mätningarna, som varje fil som räknar frågor gör
+    // (issue 477).
+    Carbon::setTestNow(now());
+
+    // Ett omätt anrop värmer guarder och kontocachen, som i itemtradFragor().
+    app(ListShellContainers::class)->handle($ägare);
+
+    $frågor = 0;
+    DB::listen(function () use (&$frågor) {
+        $frågor++;
+    });
+
+    app(ListShellContainers::class)->handle($ägare);
+
+    $ett = $frågor;
+
+    for ($i = 1; $i <= 20; $i++) {
+        sidopanelContainer($konto, sprintf('Container %02d', $i), 'Båt');
+    }
+
+    $frågor = 0;
+    app(ListShellContainers::class)->handle($ägare);
+
+    expect($frågor)->toBe($ett, 'skalets lista ställer fler frågor när den växer');
+
+    Carbon::setTestNow();
 });
 
 /*
