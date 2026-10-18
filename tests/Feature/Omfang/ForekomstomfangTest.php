@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Item\ResolveItemMap;
 use App\Actions\Item\ResolveItemPaths;
 use App\Actions\Item\ResolveItemTree;
 use App\Models\Account;
@@ -271,4 +272,27 @@ it('ger samma vägar som trädet ritar, led för led', function () {
         ['Masten', 'Impellern'],
         ['Motorn', 'Impellern'],
     ]);
+});
+
+/*
+ * Kartans rötter är trädets, sedd från containern. Issue 296 bytte kartans
+ * svar till en mitt och tre grupper ([[ADR-0059 Kartan med en mitt]] § 1), men
+ * rotregeln är oförändrad: kring containern är barnen containerns rötter i
+ * omfånget. Provet jämför de två upplösningarna på samma graf, så att kartan
+ * inte kan bli generösare än trädet utan att sviten faller.
+ */
+it('ger samma rötter som trädet ritar', function () {
+    [$container, , $motor, $mast] = vagOmfangBåt();
+
+    $mottagare = vagOmfangMottagare();
+    vagOmfangGrant($container, $mottagare, $motor);
+    vagOmfangGrant($container, $mottagare, $mast);
+
+    $träd = app(ResolveItemTree::class)->handle($mottagare, $container);
+    $karta = app(ResolveItemMap::class)->handle($mottagare, $container);
+
+    $trädrötter = array_map(fn (ItemTreeNode $nod): string => $nod->name(), $träd->roots());
+
+    expect(array_column($karta['child']['nodes'], 'name'))->toBe($trädrötter)
+        ->and($karta['child']['total'])->toBe(count($trädrötter));
 });

@@ -1099,56 +1099,12 @@ it('hämtar itemväxelns strängar ur ui.php', function () {
 });
 
 /*
- * Containerkartans strängar, se issue 157 · [[M23 Mobilen och kartan]] § 157
- * och resources/js/components/ContainerMap.vue samt ContainerMapNode.vue.
- *
- * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
- * att räknas upp här, så en mening som läggs till i en komponent och glöms i
- * katalogen faller. Det betyder något särskilt för de två talen, för
- * `translate()` skriver NYCKELN SJÄLV när uppslaget misslyckas — en glömd
- * nyckel står då som `item.board.children` i en nod i stället för *3 children*.
- *
- * `status`-uppslaget är BYGGT — ``t(`item.index.status_${status}`) `` — och
- * fångas därför inte av mönstret. Det prövas i stället för sig, och det är
- * översiktens nycklar: samma regel ska heta samma sak på båda ytorna, och en
- * egen kopia här hade varit den andra sanningen om vad OK heter.
+ * Containerkartans gamla strängprov togs bort i issue 296, då
+ * `ContainerMap.vue` och `ContainerMapNode.vue` utgick
+ * ([[ADR-0059 Kartan med en mitt]]). Kartan ritas under tiden med
+ * `FocusMap`, och `item.board.*`-nycklarna tas bort tillsammans med den nya
+ * noden i issue 297.
  */
-it('hämtar containerkartans strängar ur ui.php', function () {
-    $nycklar = [];
-
-    foreach ([
-        'js/components/ContainerMap.vue',
-        'js/components/ContainerMapNode.vue',
-    ] as $fil) {
-        preg_match_all("/(?<![\w$.])t\('([a-z0-9_.]+)'/", File::get(resource_path($fil)), $träffar);
-
-        expect($träffar[1])->not->toBeEmpty("{$fil} slår inte upp någon nyckel");
-
-        $nycklar = [...$nycklar, ...$träffar[1]];
-    }
-
-    expect($nycklar)->toContain('item.board.label')
-        ->toContain('item.board.path')
-        ->toContain('item.board.up')
-        ->toContain('item.board.children')
-        ->toContain('item.board.placements');
-
-    foreach (array_unique($nycklar) as $nyckel) {
-        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
-    }
-
-    // Talen bär sitt värde, och förälderns knapp namnger noden den leder till.
-    expect(Lang::get('ui.item.board.children', ['count' => 3], 'en'))->toBe('3 children')
-        ->and(Lang::get('ui.item.board.placements', ['count' => 2], 'en'))->toBe('2 placements')
-        ->and(Lang::get('ui.item.board.up', ['name' => 'Båten'], 'en'))->toBe('Up to Båten');
-
-    // Statusordet är översiktens, och det finns bara på ett ställe.
-    expect(File::get(resource_path('js/components/ContainerMapNode.vue')))
-        ->toContain('item.index.status_${status}');
-
-    expect(Lang::get('ui.item.index.status_ok', [], 'en'))->toBe('OK')
-        ->and(Lang::get('ui.item.index.status_overdue', [], 'en'))->toBe('Overdue');
-});
 
 /*
  * Fällknappen i trädet, se issue 154 och

@@ -9,13 +9,12 @@ use App\Models\ItemLink;
 use App\Models\Schedule;
 use App\Models\ScheduleOccurrence;
 use App\Models\User;
-use App\Support\Item\ItemStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /*
- * Issue 157 · Containerns karta. Se [[ADR-0046 Containerns karta]] § Beslut,
- * [[ADR-0040 Underträdets summor]] och App\Actions\Item\ResolveItemMap.
+ * Issue 296 · Kartan med en mitt. Se [[ADR-0059 Kartan med en mitt]] § 1, 2,
+ * 4, 5, 6 och 11 och App\Actions\Item\ResolveItemMap.
  *
  * Fixturen är ADR:ns, samma som i tests/Feature/Item/StrukturuplosningTest.php:
  *
@@ -23,10 +22,11 @@ use Illuminate\Support\Facades\DB;
  *   ├── mast
  *   └── motor ── impeller
  *
- * Här prövas FORMEN — nivåerna, den öppna vägen, barnantalet, platserna, den
- * kapade vägen, cykeln, det mjukraderade itemet och frågeantalet. Rotregeln är
- * en ÅTKOMSTREGEL, och den prövas med grants här: en mottagare vars förälder
- * ligger utanför omfånget ser sitt eget item som rot, precis som i trädet.
+ * Här prövas FORMEN — mitten, de tre grupperna, nimmtalen, taket, `related`-
+ * kantens frånvaro i rotregeln och platsräkningen, det mjukraderade itemet och
+ * frågeantalet. Rotregeln är en ÅTKOMSTREGEL, och den prövas med grants här:
+ * en mottagare vars förälder ligger utanför omfånget ser sitt eget item som
+ * rot, precis som i trädet.
  *
  * Kanterna skrivs DIREKT i tabellen, förbi App\Actions\Item\LinkItems — den
  * Actionen är garanten för att API:et aldrig skapar en cykel eller en
@@ -137,41 +137,35 @@ function kartaFörekomst(Item $item, int $dagar): ScheduleOccurrence
 }
 
 /**
- * Kartan för $trail.
+ * Kartan för $focus — null betyder containern som mitt.
  *
- * @param  list<string>  $trail
- * @return array{trail: list<string>, levels: list<list<array<string, mixed>>>, marked: ?Item, drawn: array<string, Item>}
+ * @return array{center: array<string, mixed>, parent: array<string, mixed>, child: array<string, mixed>, related: array<string, mixed>, centerItem: ?Item, drawn: array<string, Item>}
  */
-function kartaKarta(User $user, Container $container, array $trail = []): array
+function kartaKarta(User $user, Container $container, ?string $focus = null): array
 {
-    return app(ResolveItemMap::class)->handle($user, $container, $trail);
+    return app(ResolveItemMap::class)->handle($user, $container, $focus);
 }
 
 /**
- * Nivåerna i en läsbar form: `Namn` med `*` för den markerade noden och
- * `[barn/platser]` efter.
+ * Noderna i en grupp som `Namn [barn/platser]`.
  *
  * Proven jämför mot den här avskriften och inte mot en nästlad array: formen
- * är vad som prövas — vilka noder som ritas på vilken nivå — och en nästlad
+ * är vad som prövas — vilka noder som ritas i vilken grupp — och en nästlad
  * array hade dränkt den i nycklar.
  *
- * @param  array{levels: list<list<array<string, mixed>>>}  $karta
- * @return list<list<string>>
+ * @param  array{nodes: list<array<string, mixed>>, total: int}  $grupp
+ * @return list<string>
  */
-function kartaKolumner(array $karta): array
+function kartaNoder(array $grupp): array
 {
     return array_map(
-        fn (array $kolumn): array => array_map(
-            fn (array $nod): string => sprintf(
-                '%s%s [%d/%d]',
-                $nod['name'],
-                $nod['current'] ? '*' : '',
-                $nod['children'],
-                $nod['placements'],
-            ),
-            $kolumn,
+        fn (array $nod): string => sprintf(
+            '%s [%d/%d]',
+            $nod['name'],
+            $nod['children'],
+            $nod['placements'],
         ),
-        $karta['levels'],
+        $grupp['nodes'],
     );
 }
 
@@ -200,191 +194,272 @@ function kartaFrågor(Closure $värm, Closure $anrop): int
 }
 
 /*
- * Klart när: bara en gren är öppen per nivå, och att öppna en annan nod på
- * samma nivå stänger den förra.
+ * Klart när: utan focus är mitten containern, och child är containerns rötter
+ * i omfånget.
  *
- * Den öppna vägen är svaret på vilka nivåer som ritas: nivå 0 är rötterna,
- * nivå n är barnen till vägens n:te led, och den sista nivån är fronten —
- * barnen till noden man står på. Att öppna motorn i stället för masten byter
- * markering i nivå 1 och byter därmed nivå 2; syskonen står kvar i båda fallen,
- * för det är grenen och inte noden som öppnas.
+ * Kring containern är föräldrar och relaterade tomma grupper, och de två
+ * talen på mitten är null: en container är inte ett item och förekommer inte i
+ * strukturen.
  */
-it('ritar nivåerna ur den öppna vägen', function () {
+it('ritar containern som mitt utan focus', function () {
+    [$container, $medlem, $båt] = kartaBåt();
+
+    $karta = kartaKarta($medlem, $container);
+
+    expect($karta['center'])->toBe([
+        'kind' => 'container',
+        'ulid' => $container->ulid,
+        'name' => $container->name,
+        'children' => null,
+        'placements' => null,
+    ])
+        ->and($karta['parent'])->toBe(['nodes' => [], 'total' => 0])
+        ->and($karta['related'])->toBe(['nodes' => [], 'total' => 0])
+        ->and(kartaNoder($karta['child']))->toBe(['Båten [2/1]'])
+        ->and($karta['child']['total'])->toBe(1)
+        ->and($karta['centerItem'])->toBeNull()
+        ->and($karta['drawn'])->toHaveKeys([$båt->ulid]);
+});
+
+/*
+ * Klart när: med focus är mitten itemet, och parent, child och related är dess
+ * grannar i omfånget.
+ *
+ * Barnen står i namnordning, och talen är de samma som i dag: antalet barn och
+ * antalet platser i strukturen.
+ */
+it('ritar itemet som mitt med focus', function () {
     [$container, $medlem, $båt, $motor, $mast, $impeller] = kartaBåt();
 
-    // Ingen gren öppen: rötterna och ingenting mer.
-    expect(kartaKolumner(kartaKarta($medlem, $container)))->toBe([
-        ['Båten [2/1]'],
-    ]);
+    $motorn = kartaKarta($medlem, $container, $motor->ulid);
 
-    // Båten öppen: dess barn i namnordning, och båten markerad.
-    expect(kartaKolumner(kartaKarta($medlem, $container, [$båt->ulid])))->toBe([
-        ['Båten* [2/1]'],
-        ['Masten [0/1]', 'Motorn [1/1]'],
-    ]);
+    expect($motorn['center'])->toBe([
+        'kind' => 'item',
+        'ulid' => $motor->ulid,
+        'name' => 'Motorn',
+        'children' => 1,
+        'placements' => 1,
+    ])
+        ->and(kartaNoder($motorn['parent']))->toBe(['Båten [2/1]'])
+        ->and($motorn['parent']['total'])->toBe(1)
+        ->and(kartaNoder($motorn['child']))->toBe(['Impellern [0/1]'])
+        ->and($motorn['child']['total'])->toBe(1)
+        ->and($motorn['related'])->toBe(['nodes' => [], 'total' => 0]);
 
-    // Motorn öppen: fronten är dess barn.
-    expect(kartaKolumner(kartaKarta($medlem, $container, [$båt->ulid, $motor->ulid])))->toBe([
-        ['Båten* [2/1]'],
-        ['Masten [0/1]', 'Motorn* [1/1]'],
-        ['Impellern [0/1]'],
-    ]);
+    // Båten är en rot: ingen förälder, och barnen i namnordning.
+    $båten = kartaKarta($medlem, $container, $båt->ulid);
 
-    // Masten öppen i stället: samma nivå 1, en annan markering — och motorn
-    // är stängd, vilket syns på att fronten är mastens barn och inte motorns.
-    expect(kartaKolumner(kartaKarta($medlem, $container, [$båt->ulid, $mast->ulid])))->toBe([
-        ['Båten* [2/1]'],
-        ['Masten* [0/1]', 'Motorn [1/1]'],
-        [],
-    ]);
+    expect(kartaNoder($båten['parent']))->toBe([])
+        ->and(kartaNoder($båten['child']))->toBe(['Masten [0/1]', 'Motorn [1/1]'])
+        ->and($båten['child']['total'])->toBe(2);
 
-    // Hela vägen ned: ett löv har en tom front, och vägen är oförändrad.
-    expect(kartaKolumner(kartaKarta($medlem, $container, [$båt->ulid, $motor->ulid, $impeller->ulid])))->toBe([
-        ['Båten* [2/1]'],
-        ['Masten [0/1]', 'Motorn* [1/1]'],
-        ['Impellern* [0/1]'],
-        [],
-    ]);
+    // Ett löv har en förälder och inga barn.
+    $impellern = kartaKarta($medlem, $container, $impeller->ulid);
+
+    expect(kartaNoder($impellern['parent']))->toBe(['Motorn [1/1]'])
+        ->and($impellern['child'])->toBe(['nodes' => [], 'total' => 0]);
+
+    // En av de andra föräldrarna ger samma mitt men en annan granne.
+    $masten = kartaKarta($medlem, $container, $mast->ulid);
+
+    expect($masten['center']['name'])->toBe('Masten')
+        ->and(kartaNoder($masten['parent']))->toBe(['Båten [2/1]']);
 });
 
 /*
- * Klart när: varje nod visar antalet barn, och ett item med två föräldrar
- * markeras med antalet platser.
- *
- * Antalet platser är antalet vägar från en rot ned till itemet — samma tal som
- * App\Actions\Item\ResolveItemPaths räknar upp som en lista — och det räknas
- * vidare nedåt: ett barn till ett item på två platser står självt på två.
- */
-it('räknar barnen och platserna', function () {
-    $container = Container::factory()->create();
-    $medlem = kartaMedlem($container->account);
-
-    $båt = kartaItem($container, 'Båten');
-    $mast = kartaItem($container, 'Masten');
-    $motor = kartaItem($container, 'Motorn');
-    $impeller = kartaItem($container, 'Impellern');
-    $propeller = kartaItem($container, 'Propellern');
-
-    kartaKant($båt, $mast);
-    kartaKant($båt, $motor);
-    // Samma item under två föräldrar: grafen är en DAG och inte ett träd.
-    kartaKant($mast, $impeller);
-    kartaKant($motor, $impeller);
-    kartaKant($impeller, $propeller);
-
-    // Impellern ligger på två platser, och propellern — som bara har en
-    // förälder — ligger på två den med: två vägar leder ned till den.
-    expect(kartaKolumner(kartaKarta($medlem, $container, [$båt->ulid, $mast->ulid, $impeller->ulid])))->toBe([
-        ['Båten* [2/1]'],
-        ['Masten* [1/1]', 'Motorn [1/1]'],
-        ['Impellern* [1/2]'],
-        ['Propellern [0/2]'],
-    ]);
-});
-
-/*
- * Klart när: ett item utanför omfånget syns inte.
+ * Klart när: ett item utanför omfånget finns inte i någon grupp och räknas
+ * inte i något total.
  *
  * Rotregeln är en ÅTKOMSTREGEL och ordagrant trädets: en mottagare vars
  * samtliga föräldrar ligger utanför omfånget ser sitt eget item som rot — inte
- * föräldern, och inte ett tomrum där föräldern skulle stått. Mottagaren här
- * når motorn och ingenting annat, och hennes karta är ordagrant den hon hade
+ * föräldern, och inte ett tomrum där föräldern skulle stått. Här når hon
+ * motorn och impellern under den, och hennes karta är ordagrant den hon hade
  * sett om resten inte fanns (issue 73 § Beslut 6).
  */
-it('gör ett item vars förälder ligger utanför omfånget till en rot', function () {
-    [$container, , $båt, $motor, , $impeller] = kartaBåt();
+it('visar inget item utanför omfånget i någon grupp eller i något total', function () {
+    [$container, , $båt, $motor, $mast, $impeller] = kartaBåt();
 
     $mottagare = kartaMottagare($container, $motor);
 
-    expect(kartaKolumner(kartaKarta($mottagare, $container)))->toBe([
-        ['Motorn [1/1]'],
-    ]);
+    // Kring motorn: båten är utanför omfånget och därför ingen förälder.
+    $karta = kartaKarta($mottagare, $container, $motor->ulid);
 
-    expect(kartaKolumner(kartaKarta($mottagare, $container, [$motor->ulid])))->toBe([
-        ['Motorn* [1/1]'],
-        ['Impellern [0/1]'],
-    ]);
+    expect(kartaNoder($karta['parent']))->toBe([])
+        ->and($karta['parent']['total'])->toBe(0)
+        ->and(kartaNoder($karta['child']))->toBe(['Impellern [0/1]'])
+        ->and($karta['child']['total'])->toBe(1)
+        ->and($karta['related']['total'])->toBe(0)
+        ->and($karta['drawn'])->toHaveKeys([$motor->ulid, $impeller->ulid])
+        ->and($karta['drawn'])->not->toHaveKey($båt->ulid)
+        ->and($karta['drawn'])->not->toHaveKey($mast->ulid);
 
-    // Och en väg som börjar i ett item hon inte når kapas vid första ledet:
-    // hon får sin egen karta och ingen upplysning om vad som dolts.
-    expect(kartaKolumner(kartaKarta($mottagare, $container, [$båt->ulid, $motor->ulid])))->toBe([
-        ['Motorn [1/1]'],
-    ]);
+    // Och kring containern är barnen hennes rötter: motorn, inte båten.
+    $containern = kartaKarta($mottagare, $container);
+
+    expect($containern['center']['kind'])->toBe('container')
+        ->and(kartaNoder($containern['child']))->toBe(['Motorn [1/1]'])
+        ->and($containern['child']['total'])->toBe(1)
+        ->and($containern['drawn'])->toHaveKeys([$motor->ulid])
+        ->and($containern['drawn'])->not->toHaveKey($mast->ulid);
 });
 
 /*
- * Klart när: den öppna vägen överlever en omladdning och bakåtknappen.
+ * Klart när: ett okänt, raderat eller dolt focus ger containern som mitt och
+ * inget fel.
  *
- * Läsningen av vägen är serverregeln, och den har tre svar: en väg som finns
- * löses upp, en väg som inte längre finns KAPAS där den brister, och ett led på
- * fel nivå är samma sak som ett okänt led. Aldrig ett fel — en delad länk som
- * slutar fungera för att någon flyttat ett item är en fälla, inte ett fel,
- * samma regel som `?path=` i itemvyn (issue 95).
+ * Samma regel som en kapad `?path=` ([[ADR-0041 Itemets vy]] § Beslut): den
+ * som klickade på en gammal länk är inte här, och svaret får inte avslöja om
+ * itemet finns. Ett mjukraderat item faller redan ur itemfrågan, och ett item
+ * utanför omfånget ur samma fråga — de tre fallen får därför samma svar.
  */
-it('kapar en väg som inte längre finns', function () {
-    [$container, $medlem, $båt, $motor, $mast] = kartaBåt();
+it('ger containern som mitt för ett okänt, raderat eller dolt focus', function () {
+    [$container, $medlem, $båt, $motor] = kartaBåt();
 
-    // Ett led som inte finns alls: vägen blir båten, och resten ignoreras.
-    $karta = kartaKarta($medlem, $container, [$båt->ulid, 'inte-en-ulid-men-26-tecken', $mast->ulid]);
+    foreach (['inte-en-ulid-men-26-tecken', ''] as $okänt) {
+        $karta = kartaKarta($medlem, $container, $okänt);
 
-    expect($karta['trail'])->toBe([$båt->ulid])
-        ->and(kartaKolumner($karta))->toBe([
-            ['Båten* [2/1]'],
-            ['Masten [0/1]', 'Motorn [1/1]'],
-        ]);
+        expect($karta['center']['kind'])->toBe('container')
+            ->and($karta['center']['ulid'])->toBe($container->ulid)
+            ->and($karta['centerItem'])->toBeNull();
+    }
 
-    // Ett led som finns men på fel nivå: motorn är inget barn till masten.
-    $karta = kartaKarta($medlem, $container, [$båt->ulid, $mast->ulid, $motor->ulid]);
-
-    expect($karta['trail'])->toBe([$båt->ulid, $mast->ulid]);
-
-    // Ett led som inte är en rot: vägen blir tom, och kartan är toppen.
-    expect(kartaKarta($medlem, $container, [$motor->ulid])['trail'])->toBe([]);
-
-    // Skräp och en tom sträng är samma sak som ingen väg.
-    expect(kartaKarta($medlem, $container, ['', 'skräp'])['trail'])->toBe([]);
-});
-
-/*
- * Klart när: ett item utanför omfånget räknas inte i någon status.
- *
- * Statusfrågan ställs för de noder som RITAS — App\Support\Item\ItemStatus
- * anropas med kartans `drawn` och ingenting annat — så ett syskon utanför
- * mottagarens omfång kan inte färga hennes nod. Här bär masten en förfallen
- * förekomst: ägaren ser den på sin karta, och mottagaren som bara nått motorn
- * får motorn som `ok`, för masten finns inte i hennes svar.
- */
-it('räknar inte ett item utanför omfånget i någon status', function () {
-    [$container, $medlem, $båt, $motor, $mast] = kartaBåt();
-
-    kartaFörekomst($mast, -3);
-
-    $status = app(ItemStatus::class);
-
-    $ägarens = kartaKarta($medlem, $container, [$båt->ulid]);
-    $ägarensStatus = $status->forItems($container, $medlem, array_values($ägarens['drawn']));
-
-    expect($ägarensStatus[$mast->ulid] ?? null)->toBe(ItemStatus::OVERDUE)
-        ->and($ägarensStatus[$motor->ulid] ?? null)->toBe(ItemStatus::OK);
-
+    // Ett item mottagaren inte når är lika okänt som ett som inte finns.
     $mottagare = kartaMottagare($container, $motor);
-    $mottagarens = kartaKarta($mottagare, $container, [$motor->ulid]);
-    $mottagarensStatus = $status->forItems($container, $mottagare, array_values($mottagarens['drawn']));
 
-    expect($mottagarensStatus)->toHaveKey($motor->ulid)
-        ->and($mottagarensStatus[$motor->ulid])->toBe(ItemStatus::OK)
-        ->and($mottagarensStatus)->not->toHaveKey($mast->ulid);
+    expect(kartaKarta($mottagare, $container, $båt->ulid)['center']['kind'])->toBe('container');
+
+    // Ett mjukraderat item ger också containern som mitt.
+    $motor->delete();
+
+    $karta = kartaKarta($medlem, $container, $motor->ulid);
+
+    expect($karta['center']['kind'])->toBe('container')
+        ->and(kartaNoder($karta['child']))->toBe(['Båten [1/1]', 'Impellern [0/1]'])
+        ->and($karta['child']['total'])->toBe(2);
 });
 
 /*
- * Klart när: antalet frågor per öppnad nod är konstant oavsett antal barn.
+ * Klart när: en grupp över taket har taket antal noder i namnordning och rätt
+ * total.
  *
- * Upplösningen är två frågor — itemen i omfånget och containerns kanter — och
- * slutningen sker i minnet (App\Actions\Item\ResolveItemMap § Frågekostnaden).
- * Provet öppnar SAMMA nod före och efter att grenen växer från tre barn till
- * trettiotre: samma sida, samma frågor, en större gren.
+ * Taken är fyra föräldrar, tolv barn och sex relaterade
+ * ([[ADR-0059 Kartan med en mitt]] § 6). Servern skickar bara de noder som
+ * ritas, plus antalet i gruppen.
  */
-it('kostar ett konstant antal frågor oavsett antal barn', function () {
+it('tar taket antal noder i namnordning och räknar hela gruppen', function () {
+    $container = Container::factory()->create();
+    $medlem = kartaMedlem($container->account);
+    $mitten = kartaItem($container, 'Mitten');
+
+    foreach (['Alfa', 'Beta', 'Delta', 'Epsilon', 'Gamma'] as $namn) {
+        kartaKant(kartaItem($container, $namn), $mitten);
+    }
+
+    foreach (range(1, 13) as $i) {
+        kartaKant($mitten, kartaItem($container, sprintf('Barn %02d', $i)));
+    }
+
+    foreach (range(1, 7) as $i) {
+        kartaKant($mitten, kartaItem($container, sprintf('Granne %02d', $i)), 'related');
+    }
+
+    $karta = kartaKarta($medlem, $container, $mitten->ulid);
+
+    expect(array_column($karta['parent']['nodes'], 'name'))
+        ->toBe(['Alfa', 'Beta', 'Delta', 'Epsilon'])
+        ->and($karta['parent']['total'])->toBe(5)
+        ->and(array_column($karta['child']['nodes'], 'name'))
+        ->toBe([
+            'Barn 01', 'Barn 02', 'Barn 03', 'Barn 04', 'Barn 05', 'Barn 06',
+            'Barn 07', 'Barn 08', 'Barn 09', 'Barn 10', 'Barn 11', 'Barn 12',
+        ])
+        ->and($karta['child']['total'])->toBe(13)
+        ->and(array_column($karta['related']['nodes'], 'name'))
+        ->toBe(['Granne 01', 'Granne 02', 'Granne 03', 'Granne 04', 'Granne 05', 'Granne 06'])
+        ->and($karta['related']['total'])->toBe(7);
+});
+
+/*
+ * Klart när: en related-kant ändrar varken rötterna eller placements.
+ *
+ * Kanten läses i samma fråga som föräldrakanterna men läggs i en egen
+ * struktur. Drevet blir därför ingen child till motorn — det är en rot av eget
+ * slag, precis som förut — och motorns barnantal och platser är oförändrade.
+ * Kring motorn är drevet en relaterad granne.
+ */
+it('låter en related-kant röra varken rötterna eller platserna', function () {
+    [$container, $medlem, , $motor] = kartaBåt();
+
+    $drev = kartaItem($container, 'Drevet');
+    kartaKant($motor, $drev, 'related');
+
+    // Drevet är fortfarande en rot, inte ett barn till motorn.
+    expect(kartaNoder(kartaKarta($medlem, $container)['child']))
+        ->toBe(['Båten [2/1]', 'Drevet [0/1]']);
+
+    $karta = kartaKarta($medlem, $container, $motor->ulid);
+
+    expect($karta['center']['children'])->toBe(1)
+        ->and($karta['center']['placements'])->toBe(1)
+        ->and(kartaNoder($karta['child']))->toBe(['Impellern [0/1]'])
+        ->and(kartaNoder($karta['related']))->toBe(['Drevet [0/1]'])
+        ->and($karta['related']['total'])->toBe(1);
+});
+
+/*
+ * Klart när: en related-kant ändrar varken rötterna eller placements — sedd
+ * mellan två items som båda ligger i strukturen. Masten och motorn är syskon,
+ * och en related-kant mellan dem får inte göra någon av dem till en förälder
+ * eller ändra antalet platser.
+ */
+it('låter en related-kant mellan syskon lämna strukturen orörd', function () {
+    [$container, $medlem, $båt, $motor, $mast] = kartaBåt();
+
+    kartaKant($mast, $motor, 'related');
+
+    expect(kartaNoder(kartaKarta($medlem, $container)['child']))->toBe(['Båten [2/1]'])
+        ->and(kartaNoder(kartaKarta($medlem, $container, $båt->ulid)['child']))
+        ->toBe(['Masten [0/1]', 'Motorn [1/1]']);
+
+    $karta = kartaKarta($medlem, $container, $motor->ulid);
+
+    expect(kartaNoder($karta['related']))->toBe(['Masten [0/1]'])
+        ->and($karta['center']['placements'])->toBe(1);
+});
+
+/*
+ * Klart när: statusarna räknas för mitten och de ritade noderna och inga
+ * andra (se även tests/Feature/Frontend/ContainerkartaTest.php).
+ *
+ * Här prövas underlaget: `drawn` bär mitten och varje ritad nod en gång, och
+ * ett item som ligger utanför grupperna finns inte med. Statusfrågan ställs
+ * sedan bara för den listan.
+ */
+it('samlar mitten och de ritade noderna i drawn', function () {
+    [$container, $medlem, $båt, $motor, $mast, $impeller] = kartaBåt();
+
+    $karta = kartaKarta($medlem, $container, $motor->ulid);
+
+    expect($karta['drawn'])->toHaveKeys([$motor->ulid, $båt->ulid, $impeller->ulid])
+        ->and($karta['drawn'])->not->toHaveKey($mast->ulid);
+
+    // Kring containern är de ritade noderna rötterna, och mitten är ingen
+    // item-modell.
+    $containern = kartaKarta($medlem, $container);
+
+    expect($containern['drawn'])->toHaveKeys([$båt->ulid])
+        ->and($containern['drawn'])->not->toHaveKey($motor->ulid);
+});
+
+/*
+ * Klart när: antalet frågor är detsamma för 3 och 30 items.
+ *
+ * Upplösningen är två frågor — itemen i omfånget och containerns kanter —
+ * oavsett hur många grannar mitten har, och slutningen sker i minnet
+ * (App\Actions\Item\ResolveItemMap § Frågekostnaden). Provet mäter samma mitt
+ * före och efter att barnaskaran växer från tre till trettiotre.
+ */
+it('kostar ett konstant antal frågor oavsett antal grannar', function () {
     [$container, $medlem, $båt] = kartaBåt();
 
     foreach (range(1, 3) as $i) {
@@ -395,11 +470,9 @@ it('kostar ett konstant antal frågor oavsett antal barn', function () {
     // (issue 80, 477).
     Carbon::setTestNow(now());
 
-    $väg = [$båt->ulid];
-
     $medFyra = kartaFrågor(
-        fn () => kartaKarta($medlem, $container, $väg),
-        fn () => kartaKarta($medlem, $container, $väg),
+        fn () => kartaKarta($medlem, $container, $båt->ulid),
+        fn () => kartaKarta($medlem, $container, $båt->ulid),
     );
 
     foreach (range(4, 33) as $i) {
@@ -407,70 +480,23 @@ it('kostar ett konstant antal frågor oavsett antal barn', function () {
     }
 
     $medTrettiofyra = kartaFrågor(
-        fn () => kartaKarta($medlem, $container, $väg),
-        fn () => kartaKarta($medlem, $container, $väg),
+        fn () => kartaKarta($medlem, $container, $båt->ulid),
+        fn () => kartaKarta($medlem, $container, $båt->ulid),
     );
 
     Carbon::setTestNow();
 
     expect($medTrettiofyra)->toBe(
         $medFyra,
-        'kartan kostar fler frågor när grenen växer — upplösningen vandrar per nod',
+        'kartan kostar fler frågor när gruppen växer — upplösningen vandrar per nod',
     );
 });
 
 /*
- * Ett mjukraderat item bryter kedjan, precis som i trädet: kanten till det
- * faller bort, och därmed också kanten från det. Ett barnbarn under ett raderat
- * barn blir sitt eget första led — en rot — och det raderade itemet ritas inte.
- */
-it('räknar inte ett mjukraderat item och bryter kedjan vid det', function () {
-    [$container, $medlem, $båt, $motor] = kartaBåt();
-
-    $motor->delete();
-
-    // Båten tappar motorn men behåller masten, och impellern — som hängde
-    // under motorn — blir sitt eget första led i stället för att försvinna med
-    // sin förälder.
-    expect(kartaKolumner(kartaKarta($medlem, $container)))->toBe([
-        ['Båten [1/1]', 'Impellern [0/1]'],
-    ]);
-
-    // En väg genom det raderade ledet kapas vid båten.
-    expect(kartaKolumner(kartaKarta($medlem, $container, [$båt->ulid, $motor->ulid])))->toBe([
-        ['Båten* [1/1]', 'Impellern [0/1]'],
-        ['Masten [0/1]'],
-    ]);
-});
-
-/*
- * En `related`-kant ritas inte och bär ingenting ([[ADR-0035 Relationen mellan
- * objekt]]): drevet är en rot av eget slag och påverkar varken motorns barnantal
- * eller någon plats. Den hör till itemets fokuskarta och inte till containerns.
- */
-it('ritar inte en related-kant', function () {
-    [$container, $medlem, $båt, $motor] = kartaBåt();
-
-    $drev = kartaItem($container, 'Drevet');
-    kartaKant($motor, $drev, 'related');
-
-    // Drevet hänger inte under motorn: det är en rot av eget slag, och motorn
-    // har fortfarande ett barn.
-    expect(kartaKolumner(kartaKarta($medlem, $container)))->toBe([
-        ['Båten [2/1]', 'Drevet [0/1]'],
-    ]);
-
-    expect(kartaKolumner(kartaKarta($medlem, $container, [$båt->ulid])))->toBe([
-        ['Båten* [2/1]', 'Drevet [0/1]'],
-        ['Masten [0/1]', 'Motorn [1/1]'],
-    ]);
-});
-
-/*
  * En cykel som skrivits förbi LinkItems ger ett ändligt svar i stället för en
- * hängd request. Vandringen nedåt är kapad av vägens längd, och platsräkningen
- * följer inte en förälder som redan ligger på vägen — samma försvar och samma
- * skäl som ResolveItemTree::node().
+ * hängd request. Platsräkningen följer inte en förälder som redan ligger på
+ * vägen — samma försvar och samma skäl som ResolveItemTree::node() — och en
+ * cykel har ingen rot, så mitten får noll platser.
  */
 it('tål en cykel', function () {
     $container = Container::factory()->create();
@@ -484,11 +510,10 @@ it('tål en cykel', function () {
     kartaKant($b, $c);
     kartaKant($c, $a);
 
-    // Varje item har en förälder i omfånget, alltså finns ingen rot: kartan är
-    // tom, precis som trädet är det för samma graf. Ingen väg kan heller börja
-    // i en cykel — ett led slås upp i en nivå, och nivå 0 är tom.
-    $karta = kartaKarta($medlem, $container, [$a->ulid, $b->ulid, $c->ulid, $a->ulid]);
+    $karta = kartaKarta($medlem, $container, $a->ulid);
 
-    expect($karta['trail'])->toBe([])
-        ->and(kartaKolumner($karta))->toBe([[]]);
+    expect($karta['center']['kind'])->toBe('item')
+        ->and($karta['center']['placements'])->toBe(0)
+        ->and(kartaNoder($karta['parent']))->toBe(['Gamma [1/0]'])
+        ->and(kartaNoder($karta['child']))->toBe(['Beta [1/0]']);
 });
