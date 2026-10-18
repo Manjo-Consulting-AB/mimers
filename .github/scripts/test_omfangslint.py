@@ -236,6 +236,36 @@ def test_rapporten_namner_inte_deklarationen_i_fast_lage():
     assert o.DEKLARATIONSMARKOR not in text
 
 
+def test_modellfynd_out_of_scope_pekas_ut_som_motsagelse():
+    svar = "SAKNAS: app/Http/Controllers/ItemController.php — punkt 2\n"
+    fynd = l.fynd_ur_modellsvar(svar, ["docs/**"], ROT, utanfor=["app/Http/Controllers/**"])
+    assert len(fynd) == 1, fynd
+    assert "**Out of scope**" in fynd[0] and "går inte att deklarera" in fynd[0], fynd
+    assert "app/Http/Controllers/**" in fynd[0] and "punkt 2" in fynd[0], fynd
+
+
+def test_modellfynd_utan_utanfor_ar_oforandrat():
+    svar = "SAKNAS: app/Http/Controllers/ItemController.php — punkt 2\n"
+    fynd = l.fynd_ur_modellsvar(svar, ["docs/**"], ROT)
+    assert fynd == l.fynd_ur_modellsvar(svar, ["docs/**"], ROT, utanfor=["resources/**"])
+    assert len(fynd) == 1 and "matchar ingen glob i `In scope`" in fynd[0], fynd
+    assert "Out of scope" not in fynd[0] and "går inte att deklarera" not in fynd[0], fynd
+
+
+_OOS = "- `x` verkar bära en `Klart när`-punkt men ligger **Out of scope** (y) — issuen säger emot sig själv."
+
+
+def test_rapporten_foreslar_ingen_deklaration_for_bara_out_of_scope():
+    text = l.rapport([], [_OOS], o.OMFANGSLAGE_SPARAD)
+    assert "Utanför rutan:" not in text and o.DEKLARATIONSMARKOR not in text, text
+
+
+def test_rapporten_undantar_out_of_scope_vid_blandade_fynd():
+    text = l.rapport([], [_OOS, "- `z` verkar bära en `Klart när`-punkt men matchar ingen glob i `In scope`"],
+                     o.OMFANGSLAGE_SPARAD)
+    assert "Utanför rutan:" in text and "utom filerna under Out of scope" in text, text
+
+
 # =====================================================================
 # Läslistan
 # =====================================================================
