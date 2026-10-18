@@ -185,7 +185,7 @@ function closeMenu() {
             barnen i stället, så att ingenting skrollar i sidled.
         -->
         <div class="flex items-center justify-center">
-            <div class="hidden min-w-0 flex-1 flex-col items-end gap-2 md:flex">
+            <ul class="hidden min-w-0 flex-1 flex-col items-end gap-2 md:flex">
                 <ItemMapNode
                     v-for="node in relatedLeft"
                     :key="node.ulid"
@@ -196,7 +196,7 @@ function closeMenu() {
                     :open-href="openHref(node)"
                     @open-menu="openMenu"
                 />
-            </div>
+            </ul>
 
             <div
                 v-if="relatedLeft.length > 0"
@@ -204,15 +204,17 @@ function closeMenu() {
                 class="hidden w-3 shrink-0 border-t border-dashed border-border md:block"
             ></div>
 
-            <ItemMapNode
-                :node="center"
-                :label="centerLabel"
-                :status="statusFor(center)"
-                :open-href="centerOpenHref"
-                :rows="map.rows"
-                current
-                @open-menu="openMenu"
-            />
+            <ul class="shrink-0">
+                <ItemMapNode
+                    :node="center"
+                    :label="centerLabel"
+                    :status="statusFor(center)"
+                    :open-href="centerOpenHref"
+                    :rows="map.rows"
+                    current
+                    @open-menu="openMenu"
+                />
+            </ul>
 
             <div
                 v-if="relatedRight.length > 0"
@@ -224,7 +226,7 @@ function closeMenu() {
                 De relaterade är fler än sex: *+N till* står sist i den högra
                 kolumnen, i samma flöde som noderna den räknar.
             -->
-            <div class="hidden min-w-0 flex-1 flex-col items-start gap-2 md:flex">
+            <ul class="hidden min-w-0 flex-1 flex-col items-start gap-2 md:flex">
                 <ItemMapNode
                     v-for="node in relatedRight"
                     :key="node.ulid"
@@ -236,14 +238,15 @@ function closeMenu() {
                     @open-menu="openMenu"
                 />
 
-                <Link
-                    v-if="moreRelated > 0"
-                    :href="overflowHref"
-                    class="flex min-h-11 items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
-                >
-                    {{ t('item.map.more', { count: moreRelated }) }}
-                </Link>
-            </div>
+                <li v-if="moreRelated > 0">
+                    <Link
+                        :href="overflowHref"
+                        class="flex min-h-11 items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
+                    >
+                        {{ t('item.map.more', { count: moreRelated }) }}
+                    </Link>
+                </li>
+            </ul>
         </div>
 
         <div
