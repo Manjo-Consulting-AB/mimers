@@ -107,15 +107,17 @@ defineOptions({
  * överlever läget en omladdning och en delad länk. `ItemViewSwitch` ritar
  * växeln, och ordningen i `views` är bindande: det första läget är förvalet.
  *
- * **Trädläget och kartläget filtrerar ingenting.** Trädet och kartan är
- * containern som användaren når (App\Actions\Item\ResolveItemTree och
- * App\Actions\Item\ResolveItemMap, samma rotregel som detaljvyns
- * vänsterpanel), medan filtret hör till listan — därför ritas filterraden
- * bara i listläget, och därför bär växelns länkar filtret med sig: ett
- * flikbyte ska kunna gå tillbaka till samma träfflista. Strukturen och kartan
- * kommer i `structure`- och `map`-propparna, och de finns BARA i sina egna
- * lägen — `null` betyder "inte hämtad", och en tom lista hade varit ett svar
- * servern hade gett.
+ * **Trädläget tar samma filter som listan sedan issue 293**
+ * ([[ADR-0058 Trädet som tabell]] § 5). `q`, `tags[]` och `category` är
+ * samma filter som i listan, träffarna är `ListItems` och trädet visar varje
+ * träff plus vägen från roten ned till den. Filterraden ritas därför i både
+ * list- och trädläget, medan kartläget fortfarande inte filtreras: kartan är
+ * containern som användaren når (App\Actions\Item\ResolveItemMap, samma
+ * rotregel som detaljvyns vänsterpanel). Växelns länkar bär filtret med sig:
+ * ett flikbyte ska kunna gå tillbaka till samma träfflista. Strukturen och
+ * kartan kommer i `structure`- och `map`-propparna, och de finns BARA i sina
+ * egna lägen — `null` betyder "inte hämtad", och en tom lista hade varit ett
+ * svar servern hade gett.
  *
  * **Kartans öppna väg bor i adressen och inte i vyn.** `?path=` bär ledet från
  * roten ned till noden man står på, och `ContainerMap` bygger den nya adressen
@@ -161,8 +163,11 @@ const props = defineProps({
     view: { type: String, required: true },
     /*
      * Containerns struktur i trädläget, ur App\Actions\Item\ResolveItemTree:
-     * `{ulid, name, children}` per nod, rötterna enligt [[ADR-0041 Itemets vy]]
-     * och ett item med två föräldrar på båda ställena.
+     * `{ulid, name, match, children}` per nod, rötterna enligt [[ADR-0041
+     * Itemets vy]] och ett item med två föräldrar på båda ställena. `match`
+     * är sant på en träff — och på varje nod utan filter — och falskt på en
+     * förfader som bara är vägen ned till en träff (issue 293 ·
+     * [[ADR-0058 Trädet som tabell]] § 5).
      *
      * `null` betyder INTE HÄMTAD — servern skickar den bara när läget är
      * trädet, av samma skäl som historikens rader bara kommer när den fliken
@@ -304,15 +309,30 @@ const views = computed(() => {
         />
     </div>
 
-    <!-- Listan, oförändrad: filterraden, de tre tomma lägena och raderna. -->
-    <template v-if="view === 'list'">
-        <ItemFilterBar
-            :container-ulid="container.ulid"
-            :tags="tags"
-            :categories="categoryTree"
-            :filter="filter"
-        />
+    <!--
+        Filterraden står under huvudet i lägena *Lista* och *Träd* (issue 293
+        · [[ADR-0058 Trädet som tabell]] § 7). Kartan filtreras inte och ritar
+        därför ingen rad. Raden ritas en gång och utanför lägesgrenarna, så att
+        listan och trädet ser samma filter och samma aktiva chips. Trädet
+        filtreras ur samma querysträng (`?view=tree&q=…`), och växeln bär
+        filtret med sig mellan lägena.
 
+        Trädläget ger raden `view=tree`, så att ett filter som SKICKAS där
+        stannar i trädet i stället för att landa i listan: raden submittar en
+        GET mot samma rutt, och läget är en del av adressen. Listan skickar
+        `null` — komponentens standard — och skriver därför ingen `view`.
+    -->
+    <ItemFilterBar
+        v-if="view !== 'map'"
+        :container-ulid="container.ulid"
+        :tags="tags"
+        :categories="categoryTree"
+        :filter="filter"
+        :view="view === 'tree' ? 'tree' : null"
+    />
+
+    <!-- Listan, oförändrad: de tre tomma lägena och raderna. -->
+    <template v-if="view === 'list'">
         <p v-if="items.length === 0 && !hasFilter" class="mt-8 text-slate-700">
             {{ t('item.index.empty') }}
         </p>
@@ -342,18 +362,25 @@ const views = computed(() => {
         Trädläget (issue 154). Containerns struktur, ritad av
         ItemStructureTree med fällknappar: rötterna syns och grenarna
         väntar, så en container med sjuhundra items inte står mellan
-        användaren och sidan. Trädet är HELA containern inom omfånget —
-        filtret hör till listan och ritas därför inte här — och varje led
-        är en länk till sitt item (`?path=` följer med, se
+        användaren och sidan. Sedan issue 293 tar trädet samma filter som
+        listan ([[ADR-0058 Trädet som tabell]] § 5): servern skickar
+        träffarna och vägen ned till dem, och varje nod bär `match`. Varje
+        led är en länk till sitt item (`?path=` följer med, se
         ItemStructureTree.vue).
 
-        Ingen rubrik och ingen egen tom-text: växeln säger vilket läge man
-        står i, och ett tomt träd ritar ingenting. Att säga "containern är
-        tom" här hade varit samma sak som listans rad, och att säga något
-        om vad som dolts är förbjudet (issue 73 § Beslut 6).
+        Ett filter UTAN träffar säger samma sak som listan, med de filter
+        användaren själv satt — `item.index.filter_empty` — och ingenting om
+        vad som dolts. Ett OFILTRERAT tomt träd ritar ingenting, som förut:
+        växeln säger vilket läge man står i, och att säga "containern är tom"
+        här hade varit listans rad (issue 73 § Beslut 6).
     -->
     <section v-else-if="view === 'tree'" class="mt-6">
+        <p v-if="structure !== null && structure.length === 0 && hasFilter" class="mt-8 text-slate-700">
+            {{ t('item.index.filter_empty', { filters: summary }) }}
+        </p>
+
         <ItemStructureTree
+            v-else
             collapsible
             :nodes="structure ?? []"
             :container-ulid="container.ulid"

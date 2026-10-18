@@ -286,6 +286,36 @@ it('ställer två frågor också för en omfångsbegränsad mottagare', function
 });
 
 /*
+ * Issue 293 · Ett filtrerat träd får inte visa en förfader utanför omfånget
+ * eller avslöja vad som dolts ([[ADR-0058 Trädet som tabell]] § 5, issue 73
+ * § Beslut 6). Urvalet kommer från `ListItems` och är redan omfångsfiltrerat;
+ * upplösningen prövar omfånget på nytt, så ett id utanför det kan aldrig dra
+ * in en nod.
+ */
+it('filtrerar trädet inom omfånget och visar aldrig en förfader utanför det', function () {
+    [$container, , $motor, $mast, $impeller] = strukturBåt();
+
+    $mottagare = strukturMottagare();
+    strukturGrant($container, $mottagare, $motor);
+
+    $resolver = app(ResolveItemTree::class);
+
+    // Mottagaren når motorn och impellern. Träffen är impellern, och vägen
+    // ned till den är motorn — ingenting över den, och ingenting vid sidan.
+    $träd = $resolver->handle($mottagare, $container, [$impeller->id]);
+
+    expect(strukturNamn($träd))->toBe(['Motorn', 'Impellern']);
+    expect($träd->roots()[0]->name())->toBe('Motorn');
+    expect($träd->roots()[0]->match())->toBeFalse();
+    expect($träd->roots()[0]->children()[0]->ulid())->toBe($impeller->ulid);
+    expect($träd->roots()[0]->children()[0]->match())->toBeTrue();
+
+    // En träff utanför omfånget — masten, som ligger vid sidan av granten —
+    // drar inte in något alls: hon kan aldrig se att den finns.
+    expect($resolver->handle($mottagare, $container, [$mast->id])->roots())->toBe([]);
+});
+
+/*
  * Issue 292 · Trädraderna följer samma omfång som trädet. En mottagare med en
  * itemgrant får bara poster för de items hennes träd bär — räkningen sker på
  * trädet och aldrig på containern i stort ([[ADR-0058 Trädet som tabell]] § 4,
