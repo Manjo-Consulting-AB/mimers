@@ -508,11 +508,11 @@ it('ritar filterraden i trädläget och den tomma texten för ett filter utan tr
 
     $vy = itemtradKod('pages/Containers/Items/Index.vue');
 
-    // Filterraden ritas en gång, i både list- och trädläget, och aldrig i
-    // kartläget. Komponenten är oförändrad: filtret är samma querysträng i
-    // båda lägena, och växeln bär det mellan dem.
+    // Filterraden ritas en gång, i alla tre lägena (kartan fick den i issue
+    // 299). Komponenten är oförändrad: filtret är samma querysträng i alla
+    // lägena, och växeln bär det mellan dem.
     expect(substr_count($vy, '<ItemFilterBar'))->toBe(1)
-        ->and($vy)->toContain('v-if="view !== \'map\'"');
+        ->and(str_contains($vy, 'v-if="view !== \'map\'"'))->toBeFalse();
 
     // Den tomma texten är listans nyckel, med samma sammanfattning: träffar
     // filtret ingenting säger trädet samma sak som listan och ingenting om
@@ -543,8 +543,8 @@ it('ritar filterraden i trädläget och den tomma texten för ett filter utan tr
 it('låter ett filter som skickas från trädläget stanna i trädläget', function () {
     $vy = itemtradKod('pages/Containers/Items/Index.vue');
 
-    // Bara trädläget ger raden ett läge; listan skickar null.
-    expect($vy)->toContain(":view=\"view === 'tree' ? 'tree' : null\"");
+    // Träd- och kartläget ger raden sitt läge; listan skickar null.
+    expect($vy)->toContain(":view=\"view === 'list' ? null : view\"");
 
     $rad = itemtradKod('components/ItemFilterBar.vue');
 
@@ -731,8 +731,9 @@ it('ritar Expand all i trädläget och låter texten följa läget', function ()
     // tabellen får flaggan som propp.
     expect((int) $knapp)->toBeLessThan((int) strpos($vy, '<section v-else-if="view === \'tree\'"'))
         ->and($vy)->toContain(':expand-all="allOpen"')
-        // Raden grindas fortfarande på kartan, och knappen på trädet.
-        ->and($vy)->toContain('v-if="view !== \'map\'"');
+        // Knappen grindas på trädet; raden är gemensam för alla tre lägena
+        // sedan issue 299 och har ingen grind kvar.
+        ->and(str_contains($vy, 'v-if="view !== \'map\'"'))->toBeFalse();
 });
 
 /*

@@ -559,7 +559,7 @@ it('gör varje nod utom mitten till en länk till kartan', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
     $noden = kartavyKod('components/ItemMapNode.vue');
 
-    expect($kartan)->toContain('const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}`;')
+    expect($kartan)->toContain('const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}${filterTail.value}`;')
         ->toContain(':href="focusHref(node)"');
 
     expect(str_contains($kartan, ':href="focusHref(center)"'))->toBeFalse(
@@ -761,7 +761,7 @@ it('ritar vägen ovanför kartan med containern först och länkar för varje le
 
     expect($kartan)->toContain('v-if="map.path.length > 0"')
         ->toContain('{{ map.container.name }}')
-        ->toContain('const containerHref = computed(() => `${base.value}?view=map`);')
+        ->toContain('const containerHref = computed(() => `${base.value}?view=map${filterTail.value}`);')
         ->toContain(':href="containerHref"')
         ->toContain('v-for="(led, index) in map.path"')
         ->toContain('v-if="index < pathLast"')
@@ -848,4 +848,102 @@ it('hämtar kartans ord ur ui.php och har tagit bort item.board', function () {
         ->and(Lang::get('ui.item.map.children', ['count' => 3], 'en'))->toBe('3 children')
         ->and(Lang::get('ui.item.map.placements', ['count' => 2], 'en'))->toBe('2 placements')
         ->and(Lang::get('ui.item.map.legend', ['kind' => 'Parent', 'count' => 2], 'en'))->toBe('Parent (2)');
+});
+
+/*
+ * Klart när (issue 299 · [[ADR-0059 Kartan med en mitt]] § 10): kartläget
+ * ritar filterraden, och med ett filter ritas träfflistan bredvid kartan.
+ *
+ * Träfflistan står före kartan i DOM-ordningen — till vänster från `md:` och
+ * ovanför den under `md:` — och ritas bara när servern har skickat en:
+ * `hits === null` är inget filter. Serverns svar prövas i KartfilterTest; här
+ * prövas ytan.
+ */
+it('ritar filterraden och träfflistan i kartläget', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = kartavyKontext();
+    kartavyItem($container, 'Motorn');
+    kartavyItem($container, 'Masten');
+
+    $vy = kartavyKod('pages/Containers/Items/Index.vue');
+
+    expect(substr_count($vy, '<ItemFilterBar'))->toBe(1)
+        ->and($vy)->toContain('<ItemMapHits')
+        ->and($vy)->toContain('v-if="hits !== null"')
+        ->and($vy)->toContain('md:flex-row');
+
+    // Träfflistan före kartan i dokumentet: vänster i en rad, överst i en
+    // kolumn.
+    expect(strpos($vy, '<ItemMapHits'))->toBeLessThan((int) strpos($vy, "<ItemMap\n"));
+
+    actingAs($anvandare)
+        ->get(kartavyUrl($container, 'view=map&q=Motorn'))
+        ->assertOk()
+        ->assertInertia(
+            fn (AssertableInertia $page) => $page
+                ->where('map.center.kind', 'container')
+                ->has('hits.nodes', 1)
+                ->where('hits.nodes.0.name', 'Motorn')
+                ->where('hits.total', 1)
+        );
+});
+
+/*
+ * Klart när: en träff leder till kartan med träffen som mitt och filtret kvar;
+ * den träff som är mitten är ingen länk och bär `aria-current`.
+ *
+ * Adressen byggs av `ItemMapHits` med samma `filterTail` som växeln: `view`
+ * först och filtret efter, så att ett mittbyte stannar i samma träfflista.
+ */
+it('låter träffarna centrera kartan med filtret kvar och markerar mitten', function () {
+    $traffar = kartavyKod('components/ItemMapHits.vue');
+
+    expect($traffar)->toContain('const filterTail = computed(')
+        ->and($traffar)->toContain(
+            'const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}${filterTail.value}`;',
+        )
+        ->and($traffar)->toContain('v-if="isCurrent(node)"')
+        ->and($traffar)->toContain('aria-current="true"')
+        ->and($traffar)->toContain('v-else');
+});
+
+/*
+ * Klart när: *Show all N in list* visas bara när `total` är större än antalet
+ * noder och leder till listläget med samma filter, och ett filter utan
+ * träffar ritar `item.index.filter_empty`.
+ *
+ * Tröskeln är serverns `total` mot antalet skickade noder — vyn räknar inget
+ * själv — och listadressen skriver ingen `view`, som växelns *Lista*.
+ */
+it('visar Show all N in list vid fler träffar och den tomma texten utan träffar', function () {
+    $traffar = kartavyKod('components/ItemMapHits.vue');
+
+    expect($traffar)->toContain(
+        'const hasMore = computed(() => props.hits.total > props.hits.nodes.length);',
+    )
+        ->and($traffar)->toContain('v-if="hasMore"')
+        ->and($traffar)->toContain("t('item.map.show_all', { count: hits.total })")
+        ->and($traffar)->toContain('const listHref = computed(')
+        ->and($traffar)->toContain("t('item.index.filter_empty', { filters: summary })");
+});
+
+/*
+ * Klart när: nodernas, sökvägens och växelns länkar bär filtret.
+ *
+ * Samma `filterTail` som växeln redan byggde (issue 293) bärs nu av kartans
+ * noder och sökväg: ett mittbyte är ett läge man ska kunna backa ur och dela,
+ * och filtret hör till läget.
+ */
+it('bär filtret i nodernas, sökvägens och växelns länkar', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+    $vy = kartavyKod('pages/Containers/Items/Index.vue');
+
+    expect($kartan)->toContain("filterQuery: { type: String, default: '' }")
+        ->and($kartan)->toContain('const filterTail = computed(')
+        ->and($kartan)->toContain('?view=map&focus=${node.ulid}${filterTail.value}')
+        ->and($kartan)->toContain('`${base.value}?view=map${filterTail.value}`');
+
+    expect($vy)->toContain('const filterTail = query === \'\' ? \'\' : `&${query}`;')
+        ->and($vy)->toContain(':filter-query="filterQuery"');
 });

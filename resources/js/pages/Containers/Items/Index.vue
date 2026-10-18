@@ -5,6 +5,7 @@ import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
 import ItemMap from '../../../components/ItemMap.vue';
+import ItemMapHits from '../../../components/ItemMapHits.vue';
 import ItemRow from '../../../components/ItemRow.vue';
 import ItemTreeTable from '../../../components/ItemTreeTable.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
@@ -112,14 +113,16 @@ defineOptions({
  * **Trädläget tar samma filter som listan sedan issue 293**
  * ([[ADR-0058 Trädet som tabell]] § 5). `q`, `tags[]` och `category` är
  * samma filter som i listan, träffarna är `ListItems` och trädet visar varje
- * träff plus vägen från roten ned till den. Filterraden ritas därför i både
- * list- och trädläget, medan kartläget fortfarande inte filtreras: kartan är
- * containern som användaren når (App\Actions\Item\ResolveItemMap, samma
- * rotregel som detaljvyns vänsterpanel). Växelns länkar bär filtret med sig:
- * ett flikbyte ska kunna gå tillbaka till samma träfflista. Strukturen och
- * kartan kommer i `structure`- och `map`-propparna, och de finns BARA i sina
- * egna lägen — `null` betyder "inte hämtad", och en tom lista hade varit ett
- * svar servern hade gett.
+ * träff plus vägen från roten ned till den. **Kartläget tar samma filter sedan
+ * issue 299** ([[ADR-0059 Kartan med en mitt]] § 10): träffarna står i en
+ * träfflista bredvid kartan, men filtret **väljer mitten och gömmer aldrig
+ * något runt den** — kartans grannar ritas oavsett om de matchar. Filterraden
+ * ritas därför i alla tre lägena. Växelns länkar bär filtret med sig, liksom
+ * kartans nod- och sökvägslänkar: ett flikbyte eller ett mittbyte ska behålla
+ * samma träfflista. Strukturen, kartan och träfflistan kommer i `structure-`,
+ * `map`- och `hits`-propparna, och de finns BARA i sina egna lägen — `null`
+ * betyder "inte hämtad", och en tom lista hade varit ett svar servern hade
+ * gett.
  *
  * **Kartans mitt bor i adressen och inte i vyn.** `?focus=` bär itemet i
  * mitten; utan det är containern mitten och rötterna barnen
@@ -210,6 +213,16 @@ const props = defineProps({
      * `structure` ovan.
      */
     map: { type: Object, default: null },
+    /*
+     * Träfflistan i kartläget, ur `ListItems` med samma filter (issue 299 ·
+     * [[ADR-0059 Kartan med en mitt]] § 10): `{nodes: [{ulid, name}], total}`
+     * med högst tjugo noder i listans ordning.
+     *
+     * `null` betyder att inget filter är satt och att `ListItems` inte
+     * anropades — ingen träfflista ritas. `{nodes: [], total: 0}` är ett
+     * filter utan träffar och ritar listans tomma text.
+     */
+    hits: { type: Object, default: null },
     /*
      * Plusknappens mål, ur App\Support\Frontend\CreateTarget (issue 152 ·
      * [[ADR-0048 Mobilen och plusknappen]] § 2), eller null. Här skapar
@@ -348,26 +361,25 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
     </div>
 
     <!--
-        Filterraden står under huvudet i lägena *Lista* och *Träd* (issue 293
-        · [[ADR-0058 Trädet som tabell]] § 7). Kartan filtreras inte och ritar
-        därför ingen rad. Raden ritas en gång och utanför lägesgrenarna, så att
-        listan och trädet ser samma filter och samma aktiva chips. Trädet
-        filtreras ur samma querysträng (`?view=tree&q=…`), och växeln bär
-        filtret med sig mellan lägena.
+        Filterraden står under huvudet i alla tre lägena (issue 293 ·
+        [[ADR-0058 Trädet som tabell]] § 7 och issue 299 · [[ADR-0059 Kartan
+        med en mitt]] § 10). Raden ritas en gång och utanför lägesgrenarna, så
+        att listan, trädet och kartan ser samma filter och samma aktiva chips.
+        Trädet och kartan filtreras ur samma querysträng (`?view=tree&q=…`,
+        `?view=map&q=…`), och växeln bär filtret med sig mellan lägena.
 
-        Trädläget ger raden `view=tree`, så att ett filter som SKICKAS där
-        stannar i trädet i stället för att landa i listan: raden submittar en
-        GET mot samma rutt, och läget är en del av adressen. Listan skickar
-        `null` — komponentens standard — och skriver därför ingen `view`.
+        Träd- och kartläget ger raden sitt `view`, så att ett filter som SKICKAS
+        där stannar i samma läge i stället för att landa i listan: raden
+        submittar en GET mot samma rutt, och läget är en del av adressen. Listan
+        skickar `null` — komponentens standard — och skriver därför ingen
+        `view`.
 
         Trädläget har också *Expand all* i raden (issue 295 · [[ADR-0058
         Trädet som tabell]] § 6). Knappen öppnar varje gren och blir
         *Collapse all* när trädet är öppet; en andra tryckning återgår till
-        utgångsläget. Den ritas med `v-if` på läget, precis som raden själv
-        grindas på kartan.
+        utgångsläget. Den ritas med `v-if` på läget.
     -->
     <div
-        v-if="view !== 'map'"
         class="mt-6 flex flex-wrap items-end gap-3 [&>div]:order-last [&>div]:w-full [&>form]:mt-0 [&>p]:order-last [&>p]:w-full"
     >
         <!--
@@ -381,7 +393,7 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
             :tags="tags"
             :categories="categoryTree"
             :filter="filter"
-            :view="view === 'tree' ? 'tree' : null"
+            :view="view === 'list' ? null : view"
         />
 
         <!--
@@ -462,21 +474,41 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
     </section>
 
     <!--
-        Kartläget (issue 296 och 297 · [[ADR-0059 Kartan med en mitt]] § 1).
-        Mitten är containern utan `focus` och itemet med `focus`, med föräldrar,
-        barn och relaterade runt sig. `ItemMap` äger formen och bygger
-        adresserna; vyn skickar serverns svar och målet för *+N till*.
+        Kartläget (issue 296, 297 och 299 · [[ADR-0059 Kartan med en mitt]]
+        § 1 och 10). Mitten är containern utan `focus` och itemet med `focus`,
+        med föräldrar, barn och relaterade runt sig. `ItemMap` äger formen och
+        bygger adresserna; vyn skickar serverns svar och målet för *+N till*.
+
+        Med ett filter står träfflistan till vänster om kartan från `md:` och
+        ovanför den under `md:` — samma DOM-ordning, två riktningar. Filtret
+        väljer mitten men gömmer aldrig något runt den: `ItemMapHits` ritar bara
+        träffarna, och kartan ritar samma grannar som utan filter.
 
         Ingen rubrik och ingen egen tom-text, av samma skäl som trädet: en
         tom karta ritar ingenting, och ett ord om vad som dolts är förbjudet
-        (issue 73 § Beslut 6).
+        (issue 73 § Beslut 6). Ett filter UTAN träffar är däremot listans tomma
+        text, ritad av `ItemMapHits` på samma sätt som listan.
     -->
     <section v-else class="mt-6">
-        <ItemMap
-            :map="map"
-            :statuses="statuses"
-            :container-ulid="container.ulid"
-            :overflow-href="overflowHref"
-        />
+        <div class="flex flex-col gap-4 md:flex-row md:items-start">
+            <ItemMapHits
+                v-if="hits !== null"
+                :hits="hits"
+                :center="map.center"
+                :container-ulid="container.ulid"
+                :filter-query="filterQuery"
+                :summary="summary"
+            />
+
+            <div class="min-w-0 flex-1">
+                <ItemMap
+                    :map="map"
+                    :statuses="statuses"
+                    :container-ulid="container.ulid"
+                    :overflow-href="overflowHref"
+                    :filter-query="filterQuery"
+                />
+            </div>
+        </div>
     </section>
 </template>

@@ -359,6 +359,38 @@ class ItemController extends Controller
             || $filter['tags'] !== []
             || $filter['category'] !== null;
 
+        // Träfflistan i kartläget (issue 299 · [[ADR-0059 Kartan med en mitt]]
+        // § 10). Med ett filter väljer `ListItems` samma träffar som listan och
+        // trädet, och de står bredvid kartan. **Filtret väljer mitten men gömmer
+        // aldrig något runt den:** kartans `map`-svar är oförändrat och räknas
+        // före den här grenen, så en förälder som inte matchar ritas ändå.
+        //
+        // Utan filter anropas `ListItems` inte alls: `hits` är `null`, och en
+        // yta ingen ser ska inte kosta en fråga (samma linje som `structure`
+        // och `map` ovan). `null` betyder "inget filter" och `{nodes: [],
+        // total: 0}` ett filter utan träffar — skillnaden är bindande.
+        //
+        // `nodes` är de första tjugo i listans ordning och bär bara det
+        // träfflistan ritar; `total` är hela antalet, så vyn kan säga *Show
+        // all N in list* utan att räkna själv.
+        $hits = null;
+
+        if ($view === 'map' && $hasFilter) {
+            $matches = $listItems->handle($user, $container, [
+                'tags' => $filter['tags'],
+                'category' => $filter['category'],
+                'q' => $filter['q'],
+            ]);
+
+            $hits = [
+                'nodes' => $matches->take(20)->map(fn (Item $item): array => [
+                    'ulid' => $item->ulid,
+                    'name' => $item->name,
+                ])->values()->all(),
+                'total' => $matches->count(),
+            ];
+        }
+
         $tree = null;
 
         if ($view === 'tree') {
@@ -509,6 +541,14 @@ class ItemController extends Controller
                 'related' => $map['related'],
                 'rows' => $center === null ? [] : $createTarget->forNode($user, $container, $center),
             ],
+
+            // Träfflistan i kartläget (issue 299 · [[ADR-0059 Kartan med en
+            // mitt]] § 10): `{nodes: [{ulid, name}], total}` med högst tjugo
+            // noder i listans ordning, eller `null` när inget filter är satt.
+            // `null` betyder "ingen träfflista ska ritas" och `{nodes: [],
+            // total: 0}` ett filter utan träffar — samma skillnad som mellan
+            // `structure`s `null` och `[]` ovan.
+            'hits' => $hits,
         ]);
     }
 
