@@ -68,12 +68,17 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Varje rad bär containerns egen ikon, annars rollen `container`** (issue
  * 316 · [[ADR-0064 Containerns ikon]] § 5). Containerns valda ikon ritas med
- * `ItemIcon` i sin färg, i storleken 20 och i `tile` före namnet; en container
- * utan ikon — eller med ett namn som inte finns — ritar lådan via
- * `fallback="container"`. Ikonen väljs aldrig ur `kind`, som är fritt
- * ([[ADR-0036 Containerns art]]). *Add container* bär rollen `add`. Den
- * aktiva raden behåller `bg-shell-active text-white` som förut; ikonen bär
- * sin egen palettfärg.
+ * `ItemIcon` i storleken 20 före namnet; en container utan ikon — eller med
+ * ett namn som inte finns — ritar lådan via `fallback="container"`. Ikonen
+ * väljs aldrig ur `kind`, som är fritt ([[ADR-0036 Containerns art]]).
+ * *Add container* bär rollen `add`. Containerns ikon ritas med `plain`
+ * (issue 322 · [[M41 Fynd 2026-10-19]] § 322) och inte med `tile`: panelen
+ * är mörk, och palettens ruta är nästan vit och blir en fläck mot
+ * `--color-shell`. Med `plain` ärver linjen radens textfärg — panelens för
+ * en inaktiv rad och `text-white` för den aktiva — som varje annan ikon i
+ * skalet. Containerns valda färg visas därför inte i menyn; den står kvar i
+ * trädets rotrad, kartans mitt och containerns ruta. Den aktiva raden
+ * behåller `bg-shell-active text-white` som förut.
  *
  * **Hover är en bakgrund, inte en understrykning** (issue 676): klassen är
  * `hover:bg-shell-active/50` i `:class`-grenen för en INAKTIV rad, så den
@@ -177,7 +182,7 @@ function isActive(container) {
                             :name="container.icon"
                             :color="container.icon_color"
                             :size="20"
-                            tile
+                            plain
                             fallback="container"
                             class="shrink-0"
                         />

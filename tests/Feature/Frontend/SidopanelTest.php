@@ -542,10 +542,12 @@ it('skickar containerns ikon och färg i skalets lista', function () {
 
 /*
  * Klart när: containerns ikon ritas i huvudmenyns lista i storleken 20 före
- * namnet, i dess färg, och lådan ritas när ingen ikon är vald.
+ * namnet, och lådan ritas när ingen ikon är vald.
  *
  * Det är ett källkodsprov — raderna ritas i webbläsaren — så det som går att
- * avgöra är att `ItemIcon` får containerns fält, `tile` och `fallback`.
+ * avgöra är att `ItemIcon` får containerns fält, `plain` och `fallback`.
+ * Sedan issue 322 ritas ikonen utan ruta i radens färg; containerns valda
+ * färg följer med som propp men visas inte i menyn.
  */
 it('ritar varje containers ikon i dess färg i containerlistan', function () {
     $lista = sidopanelKod('components/ShellContainerList.vue');
@@ -562,7 +564,7 @@ it('ritar varje containers ikon i dess färg i containerlistan', function () {
     $raden = substr($lista, $start, $namn - $start);
 
     expect($raden)->toContain('<ItemIcon')
-        ->and($raden)->toContain('tile');
+        ->and($raden)->toContain('plain');
 });
 
 /*

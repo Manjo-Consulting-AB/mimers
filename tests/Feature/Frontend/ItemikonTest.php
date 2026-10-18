@@ -171,6 +171,36 @@ it('ritar fallback för ett tomt eller okänt namn och item utan proppen', funct
 });
 
 /*
+ * Klart när (issue 322 · [[M41 Fynd 2026-10-19]] § 322): med `plain` ritas
+ * linjen i `currentColor` och ingen ruta, oavsett `color`; fallbacken ritas
+ * med `UiIcon` utan den neutrala tonen. Utan proppen ritar komponenten som
+ * förut — `tile` och dess palettklasser står kvar oförändrade.
+ */
+it('ritar linjen i currentColor utan ruta med plain', function () {
+    $komponent = itemikonUtanKommentarer(itemikonKod('components/ItemIcon.vue'));
+
+    expect($komponent)->toMatch(
+        '/plain:\s*\{\s*type:\s*Boolean,\s*default:\s*false\s*\}/',
+        'ItemIcon saknar proppen plain med false som förval',
+    );
+
+    // Rutan ritas bara utan plain — proppen vinner även om `tile` skickas med.
+    expect($komponent)->toMatch('/v-if="tile\s*&&\s*!plain\s*&&\s*icon"/')
+        ->and($komponent)->toMatch('/v-else-if="tile\s*&&\s*!plain"/');
+
+    // Linjen bär palettklassen bara utan plain; med plain ärver den
+    // `currentColor` ur raden som varje annan ikon i skalet.
+    expect($komponent)->toContain('class: props.plain ? undefined : tone.value.line');
+
+    // Fallbacken med plain — lådan för en container utan ikon — får ingen
+    // neutral ton, så att den ritas i radens färg.
+    expect($komponent)->toContain(":class=\"plain ? undefined : 'text-ink-muted'\"");
+
+    // Utan plain står den neutrala rutan kvar, som förut.
+    expect($komponent)->toContain('tile="neutral"');
+});
+
+/*
  * Klart när (issue 316 · [[ADR-0064 Containerns ikon]] § 5): rollen `container`
  * står kvar där den betyder containrar som BEGREPP och inte en viss container
  * — *Containers* i navigeringen, detaljpanelens rubrik och historikens

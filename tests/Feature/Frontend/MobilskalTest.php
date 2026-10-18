@@ -200,6 +200,33 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
 });
 
 /*
+ * Klart när (issue 322 · [[M41 Fynd 2026-10-19]] § 322): containerns ikon
+ * ritas utan ruta också i mobilmenyn.
+ *
+ * Menyn ritar SAMMA `ShellContainerList` som sidopanelen, så raden och dess
+ * ikon följer med — menyn har ingen egen ikonmappning för containrar. Provet
+ * läser raden i listan en gång till, här som bevis för att den yta menyn
+ * faktiskt ritar bär `plain` och ingen ruta.
+ */
+it('ritar containerns ikon utan ruta också i sidomenyn', function () {
+    $meny = mobilskalKod('components/MobileMenu.vue');
+
+    expect($meny)->toContain('<ShellContainerList');
+
+    preg_match(
+        '/<ItemIcon\b[^>]*>/',
+        mobilskalKod('components/ShellContainerList.vue'),
+        $ikon,
+    );
+
+    $tagg = $ikon[0] ?? '';
+
+    expect($tagg)->not->toBe('', 'containerraden ritar ingen ItemIcon')
+        ->and($tagg)->toMatch('/\bplain\b/', 'containerns ikon ritas inte med plain')
+        ->and($tagg)->not->toMatch('/\btile\b/', 'containerns ikon ritar fortfarande en ruta');
+});
+
+/*
  * Klart när (issue 653 och 677): sidomenyn staplar samma fem anrop i samma
  * ordning som sidopanelen — översikten, containrarna, raderna, favoriterna och
  * användaren sist ([[ADR-0050 Desktopdesignen]] § 1). *Nyligen besökta* är

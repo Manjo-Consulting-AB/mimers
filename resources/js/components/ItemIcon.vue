@@ -26,6 +26,14 @@ import { ICON_COLORS, loadIcon } from './itemIconPresentation.js';
  * ritas rutan i `--color-tint-<nyckel>-soft` och linjen i
  * `--color-tint-<nyckel>`. Utan `tile` får linjen färgen och ingen ruta ritas.
  *
+ * **`plain` ritar linjen i `currentColor` utan ruta** (issue 322 · [[M41
+ * Fynd 2026-10-19]] § 322). Proppen är till för ytor där rutan är gjord för
+ * en ljus bakgrund och blir en vit fläck, som skalets containerlista: ytan
+ * äger färgen och ikonen ärver radens, oavsett `color`. Fallbacken ritas då
+ * med `UiIcon` utan den neutrala tonen, så att också en container utan ikon
+ * får radens färg. Utan proppen ritar komponenten exakt som förut, med och
+ * utan `tile`.
+ *
  * **Storleken, linjebredden och `aria-hidden` följer `UiIcon`.** Tre
  * storlekar, 1,75 i linjebredd och alltid `aria-hidden` (ADR-0057 § 2).
  */
@@ -34,6 +42,7 @@ const props = defineProps({
     color: { type: String, default: null },
     size: { type: Number, default: 20 },
     tile: { type: Boolean, default: false },
+    plain: { type: Boolean, default: false },
     /*
      * Rollen som ritas när `name` är tomt eller okänt — en nyckel ur
      * `resources/js/icons/index.js`, inte ett Lucide-namn. `item` är förvalet,
@@ -87,7 +96,9 @@ const icon = computed(() => {
             'stroke-linecap': 'round',
             'stroke-linejoin': 'round',
             'aria-hidden': 'true',
-            class: tone.value.line,
+            // Med `plain` bär linjen ingen palettklass: den ärver radens
+            // textfärg genom `currentColor`, som varje annan ikon i skalet.
+            class: props.plain ? undefined : tone.value.line,
         },
         nodes.value.map(([tag, attributes]) => h(tag, attributes)),
     );
@@ -119,13 +130,13 @@ watch(
 
 <template>
     <span
-        v-if="tile && icon"
+        v-if="tile && !plain && icon"
         class="inline-flex items-center justify-center rounded-control p-1.5"
         :class="tone.box"
     >
         <component :is="icon" />
     </span>
-    <UiIcon v-else-if="tile" :name="fallback" :size="size" tile="neutral" />
+    <UiIcon v-else-if="tile && !plain" :name="fallback" :size="size" tile="neutral" />
     <component :is="icon" v-else-if="icon" />
-    <UiIcon v-else :name="fallback" :size="size" class="text-ink-muted" />
+    <UiIcon v-else :name="fallback" :size="size" :class="plain ? undefined : 'text-ink-muted'" />
 </template>
