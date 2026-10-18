@@ -237,7 +237,8 @@ it('visar båda föräldrarna när itemet har två', function () {
  * (issue 156 · [[M23 Mobilen och kartan]] § 156).
  *
  * Fliken har två ytor under `md:`: sektionen — listan, figuren och formuläret
- * — och fokuskartan. Växeln är `ItemViewSwitch`, samma komponent som itemfliken
+ * — och kartan (`ItemMap` med `compact` sedan issue 313). Växeln är
+ * `ItemViewSwitch`, samma komponent som itemfliken
  * använder (issue 154), och den är `md:hidden`: över brytpunkten står kartan i
  * högerpanelen, och där visar fliken alltid listan.
  *
@@ -255,10 +256,15 @@ it('växlar fliken mellan fokus och lista under md:', function () {
         ->toContain(':current="view"')
         ->toContain('md:hidden');
 
-    // Fokusläget ritar kartan, och bara under `md:`.
-    expect($vy)->toContain("import FocusMap from './FocusMap.vue'")
-        ->toContain('<FocusMap')
-        ->toContain(':map="map"')
+    // Fokusläget ritar kartan, och bara under `md:`. Sedan issue 313 är det
+    // `ItemMap` i sin smala form ([[ADR-0063 Itemets karta i containerkartans
+    // form]] § 1).
+    expect($vy)->toContain("import ItemMap from './ItemMap.vue'")
+        ->toContain('<ItemMap')
+        ->toContain('compact')
+        ->toContain(':map="itemMap"')
+        ->toContain(':statuses="statuses"')
+        ->toContain(':container-ulid="containerUlid"')
         ->toContain(':overflow-href="overflowHref"');
 
     // Och listan viker för kartan i samma läge — men bara under brytpunkten:

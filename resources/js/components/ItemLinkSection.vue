@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
-import FocusMap from './FocusMap.vue';
+import ItemMap from './ItemMap.vue';
 import FormField from './FormField.vue';
 import ItemViewSwitch from './ItemViewSwitch.vue';
 import UiButton from './UiButton.vue';
@@ -14,17 +14,23 @@ import { useErrorFocus } from '../pages/Auth/useErrorFocus.js';
  * och 9, issue 155 och issue 156 · [[M23 Mobilen och kartan]] § 155 och § 156.
  *
  * **Fliken har två lägen under `md:`** (§ 156): *Lista* är sektionen nedan och
- * förvalet, och *Fokus* är fokuskartan. Växeln är `ItemViewSwitch` — samma
+ * förvalet, och *Fokus* är kartan. Växeln är `ItemViewSwitch` — samma
  * komponent som itemfliken använder — och läget står i querysträngen
  * (`?view=focus`), som varje annat läge i den här produkten: ett läge man kan
  * länka till är ett läge man kan dela, och ett val i minnet försvinner vid en
  * omladdning eller pekar fel när webbläsaren går bakåt.
  *
+ * **Kartan i fokusläget är `ItemMap` i sin smala form** (issue 313 ·
+ * [[ADR-0063 Itemets karta i containerkartans form]] § 1). Den ritas med
+ * `compact`: inga sidokolumner, inget linjelager, inget öga och högst fyra
+ * noder per grupp — samma karta som högerpanelen
+ * (resources/js/components/ItemMapPanel.vue) och som containerns kartläge. Den
+ * gamla `FocusMap` är borta.
+ *
  * **Kartan är ett läge i fliken, inte en andra sektion** (§ 156). Över `md:`
- * står kartan i högerpanelen (resources/js/components/ItemMapPanel.vue), och
- * där ritar den här fliken alltid listan: växeln och fokuskartan är därför
- * `md:hidden`, och listan är dold UNDER `md:` när fokus är valt. Formen är
- * densamma på båda ställena — bara platsen skiljer.
+ * står kartan i högerpanelen, och där ritar den här fliken alltid listan:
+ * växeln och kartan är därför `md:hidden`, och listan är dold UNDER `md:` när
+ * fokus är valt. Formen är densamma på båda ställena — bara platsen skiljer.
  *
  * **Fyra ytor i en ordning** (§ 155): föräldrarna överst, itemet självt i
  * mitten, barnen under och de relaterade i en lista sist. Det är
@@ -103,9 +109,15 @@ const props = defineProps({
     /* Items användaren får ändra och som inte redan är kopplade. */
     counterparts: { type: Array, required: true },
     can: { type: Object, required: true },
-    /* Kartan ur `map`-proppen (issue 156): `{self, parent, child, related}`. */
-    map: { type: Object, required: true },
-    /* Relationsfliken — målet för *+N till*, ur `tabs` i Show.vue. */
+    /*
+     * Kartan ur `itemMap`-proppen (issue 312 och 313): containerkartans form
+     * med itemet som mitt, `{center, container, path, parent, child, related,
+     * rows}` (App\Actions\Item\ResolveItemMap).
+     */
+    itemMap: { type: Object, required: true },
+    /* Item-ULID → `ok` eller `overdue`, ur App\Support\Item\ItemStatus. */
+    statuses: { type: Object, required: true },
+    /* Hela kartan med itemet som mitt — målet för *Open in map* och *+N till*. */
     overflowHref: { type: String, required: true },
     /* Läget som gäller: `list` eller `focus`, ur serverns läsning. */
     view: { type: String, required: true },
@@ -204,13 +216,17 @@ function remove(counterpart) {
         <!--
             Fokusläget (§ 156): kartan, i fliken och bara under `md:`. Över
             brytpunkten ritas den av högerpanelen, och två kopior av samma
-            karta på samma skärm hade varit samma nod två gånger.
+            karta på samma skärm hade varit samma nod två gånger. Sedan issue
+            313 är det `ItemMap` i sin smala form (ADR-0063 § 1).
         -->
-        <FocusMap
+        <ItemMap
             v-if="focusing"
             class="mt-4 md:hidden"
-            :map="map"
+            :map="itemMap"
+            :statuses="statuses"
+            :container-ulid="containerUlid"
             :overflow-href="overflowHref"
+            compact
         />
 
         <!--

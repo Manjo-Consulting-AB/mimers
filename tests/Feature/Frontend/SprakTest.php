@@ -1101,9 +1101,10 @@ it('hämtar itemväxelns strängar ur ui.php', function () {
 /*
  * Containerkartans gamla strängprov togs bort i issue 296, då
  * `ContainerMap.vue` och `ContainerMapNode.vue` utgick
- * ([[ADR-0059 Kartan med en mitt]]). Kartan ritas under tiden med
- * `FocusMap`, och `item.board.*`-nycklarna tas bort tillsammans med den nya
- * noden i issue 297.
+ * ([[ADR-0059 Kartan med en mitt]]). `item.board.*`-nycklarna togs bort
+ * tillsammans med den nya noden i issue 297, och fokuskartans egna
+ * komponenter försvann i issue 313 ([[ADR-0063 Itemets karta i
+ * containerkartans form]]).
  */
 
 /*
@@ -1167,9 +1168,9 @@ it('hämtar trädtabellens strängar ur ui.php', function () {
 });
 
 /*
- * Fokuskartan, se issue 156 · [[M23 Mobilen och kartan]] § 156 och
- * resources/js/components/FocusMap.vue, FocusMapNode.vue och
- * ItemMapPanel.vue.
+ * Kartan, se issue 156 · [[M23 Mobilen och kartan]] § 156, issue 313 ·
+ * [[ADR-0063 Itemets karta i containerkartans form]] § 1 och 6, och
+ * resources/js/components/ItemMap.vue, ItemMapNode.vue och ItemMapPanel.vue.
  *
  * Samma form som proven ovanför: nycklarna läses ur källkoden i stället för
  * att räknas upp här, så en mening som läggs till i en komponent och glöms i
@@ -1178,7 +1179,7 @@ it('hämtar trädtabellens strängar ur ui.php', function () {
  *   - **Teckenförklaringen** har tre sorter, och `translate()` skriver NYCKELN
  *     SJÄLV när uppslaget misslyckas — en glömd nyckel står alltså som
  *     `item.map.kind.parent` i förklaringen i stället för *Parent*.
- *   - **Plusknappen på en nod** ritar ett plustecken och ingenting mer, så
+ *   - **Plusknappen på mittkortet** ritar ett plustecken och ingenting mer, så
  *     `item.map.node_menu` är det ENDA en skärmläsare hör. Den fylls med
  *     nodens namn, och provet prövar att parametern finns i meningen.
  *
@@ -1186,12 +1187,12 @@ it('hämtar trädtabellens strängar ur ui.php', function () {
  * därför inte av mönstret; de tre slagen räknas upp uttryckligen, och orden
  * prövas ordagrant, för det är de sorterna issuen namnger.
  */
-it('hämtar fokuskartans strängar ur ui.php', function () {
+it('hämtar kartans strängar ur ui.php', function () {
     $nycklar = [];
 
     foreach ([
-        'js/components/FocusMap.vue',
-        'js/components/FocusMapNode.vue',
+        'js/components/ItemMap.vue',
+        'js/components/ItemMapNode.vue',
         'js/components/ItemMapPanel.vue',
         // Växelns eget namn slås upp av relationsfliken, som äger läget, och
         // lägenas etiketter av vyn, som bygger deras adresser.
@@ -1210,7 +1211,8 @@ it('hämtar fokuskartans strängar ur ui.php', function () {
         ->toContain('item.map.view.focus')
         ->toContain('item.map.view.list')
         ->toContain('item.map.node_menu')
-        ->toContain('item.map.more');
+        ->toContain('item.map.more')
+        ->toContain('item.map.open_full');
 
     foreach (array_unique($nycklar) as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe("ui.{$nyckel}", "ui.{$nyckel} saknas");
@@ -1223,9 +1225,11 @@ it('hämtar fokuskartans strängar ur ui.php', function () {
         ->and(Lang::get('ui.item.map.view.list', [], 'en'))->toBe('List')
         ->and(Lang::get('ui.item.map.view.focus', [], 'en'))->toBe('Focus');
 
-    // *+N till* bär talet, och nodens knapp namnger noden.
+    // *+N till* bär talet, nodens knapp namnger noden och *Open in map* är
+    // länken till hela kartan (ADR-0063 § 6).
     expect(Lang::get('ui.item.map.more', ['count' => 2], 'en'))->toBe('+2 more')
-        ->and(Lang::get('ui.item.map.node_menu', ['name' => 'Motor'], 'en'))->toBe('Create in Motor');
+        ->and(Lang::get('ui.item.map.node_menu', ['name' => 'Motor'], 'en'))->toBe('Create in Motor')
+        ->and(Lang::get('ui.item.map.open_full', [], 'en'))->toBe('Open in map');
 });
 
 /*

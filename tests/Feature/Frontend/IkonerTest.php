@@ -384,7 +384,6 @@ it('fäller en ny handskriven svg utanför undantagen', function () {
         'components/ActivityTypeChart.vue',
         'components/StorageBar.vue',
         'components/TotpQrCode.vue',
-        'components/FocusMapNode.vue',
         'components/ItemMapEdges.vue',
     ];
 

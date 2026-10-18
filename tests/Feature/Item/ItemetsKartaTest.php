@@ -22,11 +22,10 @@ use function Pest\Laravel\withoutVite;
  * § 312, samt App\Http\Controllers\ItemController::show(),
  * App\Actions\Item\ResolveItemMap och App\Support\Item\ItemStatus.
  *
- * **Propparna ligger BREDVID den gamla `map`.** `itemMap` är samma upplösning
- * som containerns kartläge, men med itemet som mitt, och `itemMapStatuses` är
- * statusen för mitten och de ritade noderna. Den gamla `map` ritas av
- * fokuskartan till dess att issue 313 tar bort den — det här provet låser att
- * den är oförändrad medan de två lever sida vid sida.
+ * **`itemMap` är samma upplösning som containerns kartläge**, men med itemet
+ * som mitt, och `itemMapStatuses` är statusen för mitten och de ritade
+ * noderna. Sedan issue 313 är det den enda kartan i svaret: den gamla `map`
+ * är borta.
  *
  * Fixturen är samma släktträd som i ContainerkartaTest:
  *
@@ -417,34 +416,20 @@ it('kostar ett konstant antal frågor oavsett antal noder', function () {
     );
 });
 
-// --- den gamla map: oförändrad -------------------------------------------
+// --- den gamla map: borta -------------------------------------------------
 
 /*
- * Klart när: den gamla map är oförändrad.
- *
- * Fokuskartan ritar `map` tills issue 313 tar bort den, och issue 312 lägger
- * bara den nya datan BREDVID. Proppen behåller därför sin form: itemet självt
- * i mitten med sina rader, och föräldrar, barn och relaterade som noder.
+ * Klart när: den gamla `map` finns inte längre (issue 313 · [[ADR-0063
+ * Itemets karta i containerkartans form]] § Konsekvenser).
  */
-it('lämnar den gamla map oförändrad', function () {
+it('skickar inte med den gamla map', function () {
     withoutVite();
 
     [, $anvandare, $container] = itemetsKartaKontext();
 
-    $båten = itemetsKartaItem($container, 'Båten');
     $motorn = itemetsKartaItem($container, 'Motorn');
-    $impellern = itemetsKartaItem($container, 'Impellern');
-
-    itemetsKartaKant($båten, $motorn);
-    itemetsKartaKant($motorn, $impellern);
 
     actingAs($anvandare)->get(itemetsKartaUrl($container, $motorn))->assertOk()->assertInertia(
-        fn (AssertableInertia $page) => $page
-            ->where('map.self.ulid', $motorn->ulid)
-            ->where('map.self.href', null)
-            ->has('map.self.rows', 2)
-            ->where('map.parent.0.ulid', $båten->ulid)
-            ->where('map.child.0.ulid', $impellern->ulid)
-            ->has('map.related', 0)
+        fn (AssertableInertia $page) => $page->missing('map')
     );
 });

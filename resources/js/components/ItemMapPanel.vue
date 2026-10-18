@@ -1,24 +1,26 @@
 <script setup>
 import UiCard from './UiCard.vue';
-import FocusMap from './FocusMap.vue';
+import ItemMap from './ItemMap.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Kartans plats, högerpanelen i trepanelslayouten — se
  * resources/js/pages/Containers/Items/Show.vue, issue 103 och 156 ·
- * [[M23 Mobilen och kartan]] § 156 och [[ADR-0042 Designsystemet]] § Beslut.
+ * [[M23 Mobilen och kartan]] § 156, [[ADR-0042 Designsystemet]] § Beslut och
+ * issue 313 · [[ADR-0063 Itemets karta i containerkartans form]] § 1.
  *
- * **Panelen var TOM med flit från issue 103 till issue 156.** Fokuskartan
- * behövde ingen ny fråga — `ListItemLinks` *är* dess noder — men den behövde
- * en layout, och den är eget arbete som inte var beslutat. Nu är den byggd:
- * innehållet är resources/js/components/FocusMap.vue, och den här filen är
- * kortets ram runt det — rubriken, kanten och ytan.
+ * **Panelen ritar `ItemMap` i sin smala form.** Sedan issue 313 är det samma
+ * karta som i containerns kartläge, med `compact`: inga sidokolumner, inget
+ * linjelager, inget öga och högst fyra noder per grupp. Under teckenförklaringen
+ * leder *Open in map* till hela kartan med itemet som mitt. Den här filen är
+ * kortets ram — rubriken, kanten och ytan — och äger ingen form av egen.
  *
  * **Panelen ställer ingen egen fråga.** Noderna kommer färdiga i `map`, ur
- * samma svar som relationsfliken ritar, och varje nods menyrader är prövade på
- * servern. Panelen vandrar inte i grafen, sorterar inte och räknar ingenting:
- * en panel som byggde en egen upplösning vore den andra regeln
- * [[ADR-0041 Itemets vy]] byggde en gemensam rot för att slippa.
+ * samma svar som containerns kartläge (App\Actions\Item\ResolveItemMap), och
+ * `statuses` är statusen för de ritade noderna (App\Support\Item\ItemStatus).
+ * Panelen vandrar inte i grafen, sorterar inte och räknar ingenting: en panel
+ * som byggde en egen upplösning vore den andra regeln [[ADR-0041 Itemets vy]]
+ * byggde en gemensam rot för att slippa.
  *
  * **Ramen är `UiCard`** (issue 99), som varje annan panel på ytan, och ytan är
  * densamma på båda ställena: under `md:` ritas kartan i itemets relationsflik
@@ -31,9 +33,13 @@ import { useTranslations } from '../composables/useTranslations.js';
  * trasig yta.
  */
 defineProps({
-    /* Kartan ur `map`-proppen: `{self, parent, child, related}`. */
+    /* App\Actions\Item\ResolveItemMap:s svar: `{center, container, path, parent, child, related, rows}`. */
     map: { type: Object, required: true },
-    /* Relationsfliken — målet för *+N till*, ur `tabs` i Show.vue. */
+    /* Item-ULID → `ok` eller `overdue`, ur App\Support\Item\ItemStatus. */
+    statuses: { type: Object, required: true },
+    /* Containerns ULID — kartans adresser byggs ur den. */
+    containerUlid: { type: String, required: true },
+    /* Hela kartan med itemet som mitt — målet för *Open in map* och *+N till*. */
     overflowHref: { type: String, required: true },
 });
 
@@ -44,6 +50,12 @@ const { t } = useTranslations();
     <UiCard>
         <template #heading>{{ t('item.map.heading') }}</template>
 
-        <FocusMap :map="map" :overflow-href="overflowHref" />
+        <ItemMap
+            :map="map"
+            :statuses="statuses"
+            :container-ulid="containerUlid"
+            :overflow-href="overflowHref"
+            compact
+        />
     </UiCard>
 </template>

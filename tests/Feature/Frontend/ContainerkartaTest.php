@@ -31,10 +31,10 @@ use function Pest\Laravel\withoutVite;
  * strukturell kontroll och gör ingenting i en webbläsare.
  *
  * **Vyn ritar svaret med `ItemMap`** sedan issue 297, med `ItemMapNode` som
- * nod. Högerpanelen i itemvyn ritar `FocusMap` som förut, och de gamla
- * kolumnkomponenterna är borta. Sedan issue 306 står korten i ett rutnät från
- * `md:`, och linjerna ritas av `ItemMapEdges` — ett SVG-lager i kartans ram
- * ([[ADR-0061 Kartans kort och kanter]] § 5–8).
+ * nod. Sedan issue 313 ritar itemets högerpanel samma komponent med `compact`,
+ * och de gamla kolumnkomponenterna är borta. Sedan issue 306 står korten i ett
+ * rutnät från `md:`, och linjerna ritas av `ItemMapEdges` — ett SVG-lager i
+ * kartans ram ([[ADR-0061 Kartans kort och kanter]] § 5–8).
  *
  * **Frågekostnaden är konstant.** Kartan är två frågor — itemen och kanterna
  * — oavsett hur många grannar mitten har, och det mäts på samma sida före och
@@ -528,14 +528,14 @@ it('bygger nodernas adresser och har tagit bort kolumnkomponenterna', function (
 });
 
 /*
- * Klart när: kartläget ritar `ItemMap`, och itemets högerpanel ritar
- * `FocusMap` som förut.
+ * Klart när: kartläget ritar `ItemMap` i sin fulla form, och itemets
+ * högerpanel ritar samma komponent i sin smala form (issue 313 ·
+ * [[ADR-0063 Itemets karta i containerkartans form]] § 1).
  *
- * Två ytor, två komponenter: containerns karta är flikens fulla bredd och
- * itemets högerpanel är den smala panelen. De delar ingen form, och därför
- * ska den ena bytet inte röra den andra.
+ * Bytet i itemets panel rör inte containerns kartläge: `compact` är `false`
+ * som förval, så ytan som inte ber om den smala formen ritar som förut.
  */
-it('låter kartläget rita ItemMap och högerpanelen behålla FocusMap', function () {
+it('låter kartläget rita ItemMap och högerpanelen rita den med compact', function () {
     $vy = kartavyKod('pages/Containers/Items/Index.vue');
     $panelen = kartavyKod('components/ItemLinkSection.vue');
 
@@ -546,8 +546,9 @@ it('låter kartläget rita ItemMap och högerpanelen behålla FocusMap', functio
         'Index.vue ritar fortfarande FocusMap i kartläget',
     );
 
-    expect($panelen)->toContain("import FocusMap from './FocusMap.vue'")
-        ->toContain('<FocusMap');
+    expect($panelen)->toContain("import ItemMap from './ItemMap.vue'")
+        ->toContain('<ItemMap')
+        ->toContain('compact');
 });
 
 /*
@@ -915,8 +916,9 @@ it('fördelar de relaterade på varannan sida utan att sortera om', function () 
         ->toContain("index === 1 ? 'md:mr-8' : ''")
         ->toContain("index === 1 ? 'md:ml-8' : ''");
 
-    // Under md: ritar listan alla relaterade i serverns ordning.
-    expect($kartan)->toContain('v-for="node in map.related.nodes"');
+    // Under md: ritar listan alla relaterade i serverns ordning; med
+    // `compact` kapas den till fyra (issue 313 · ADR-0063 § 5).
+    expect($kartan)->toContain('v-for="node in relatedBelow"');
 
     // *+N till* står sist i den högra kolumnen: efter v-for:n där.
     $höger = strpos($kartan, 'items-start gap-3 md:flex');
@@ -1089,9 +1091,15 @@ it('förklarar de fyra slagen med gruppernas total', function () {
 it('visar +N till när gruppen är större än antalet noder', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
 
-    foreach (['parent', 'child', 'related'] as $grupp) {
+    // Med `compact` räknas de ritade noderna efter den smala formens tak
+    // (issue 313 · ADR-0063 § 5).
+    foreach ([
+        'parent' => 'parents',
+        'child' => 'children',
+        'related' => 'relatedBelow',
+    ] as $grupp => $ritade) {
         expect($kartan)->toContain(
-            "props.map.{$grupp}.total - props.map.{$grupp}.nodes.length",
+            "props.map.{$grupp}.total - {$ritade}.value.length",
         );
     }
 

@@ -838,9 +838,9 @@ class ItemController extends Controller
 
         // Itemets karta (issue 312 · [[ADR-0063 Itemets karta i
         // containerkartans form]] § 2): samma upplösning som containerns
-        // kartläge, med itemet som mitt i stället för containern. Den gamla
-        // `map` nedan ritas av fokuskartan till dess att issue 313 tar bort
-        // den; de två lever sida vid sida så länge.
+        // kartläge, med itemet som mitt i stället för containern. Sedan issue
+        // 313 ritar ItemMap den i sin smala form i både högerpanelen och
+        // relationsflikens fokusläge.
         //
         // Upplösningen kostar sina två frågor och statusen sina två,
         // oavsett hur många grannar itemet har
@@ -850,8 +850,7 @@ class ItemController extends Controller
         $itemMap = $resolveItemMap->handle($user, $container, $item->ulid);
 
         // Relationerna i sitt resursformat, EN gång: `links`-proppen grupperar
-        // de här raderna och fokuskartan bygger sina noder ur dem (issue 156),
-        // så relationsfliken och kartan bevisligen ritar samma lista.
+        // de här raderna, och `counterparts` bygger urvalet ur samma lista.
         $linkRows = ItemLinkResource::collection($links)->resolve($request);
 
         // Reglaget *Include child items* (M24 · issue 227, Beslut 3): förvalet
@@ -988,14 +987,6 @@ class ItemController extends Controller
             'inlineEnabled' => FileOrigin::host() !== null,
             'links' => $this->groupLinks($linkRows),
             'counterparts' => $this->counterparts($user, $item, $links, $candidates),
-
-            // Fokuskartan (issue 156 · [[M23 Mobilen och kartan]] § 156).
-            // Noderna ÄR relationerna — App\Actions\Item\ListItemLinks — och
-            // uppslaget mot kandidaterna ger varje nods plusknapp dess rader.
-            // Ligger BREDVID resursen och inte i den, samma linje som
-            // `paths`, `structure` och `counterparts`: `ItemResource` är
-            // `/api`:s format och har inte bett om fältet.
-            'map' => $this->map($user, $container, $item, $links, $candidates, $path, $createTarget),
 
             // Itemets karta (issue 312 · [[ADR-0063 Itemets karta i
             // containerkartans form]] § 2): containerkartans form med itemet
@@ -1840,9 +1831,8 @@ class ItemController extends Controller
      * nekas där.
      *
      * **Kandidaterna kommer färdiga och hämtas inte här** (issue 156).
-     * `show()` läser dem en gång ur App\Actions\Item\ListItems, för
-     * fokuskartans noder väljer ur samma lista — `container` är redan satt på
-     * dem, så ItemPolicy slipper slå upp den per rad, och
+     * `show()` läser dem en gång ur App\Actions\Item\ListItems — `container`
+     * är redan satt på dem, så ItemPolicy slipper slå upp den per rad, och
      * App\Actions\Access\ResolveItemScope är memoiserad per
      * `{user}:{container}` — samma resonemang som `can`-flaggorna i klassen.
      *
@@ -1870,104 +1860,10 @@ class ItemController extends Controller
     }
 
     /**
-     * Fokuskartans noder (issue 156 · [[M23 Mobilen och kartan]] § 156).
-     *
-     * **Noderna är relationslistan och ingen ny fråga.** Varje nod kommer ur
-     * App\Actions\Item\ListItemLinks — samma svar som relationsfliken ritar —
-     * så en motpart utanför anroparens omfång finns inte här heller: den
-     * föll bort i Actionens namnfråga och lämnar varken namn, ULID eller en
-     * räknare efter sig (issue 73 § Beslut 7). Vyn lägger ingenting ovanpå,
-     * och det finns därför ingen `v-if` i kartan som gömmer en nod.
-     *
-     * **Ordningen är Actionens**, alltså motpartens namn stigande inom varje
-     * grupp. Kartan sorterar inte om något: den fasta layouten ritar de
-     * första noderna i den ordning de kom, och en andra sortering hade gjort
-     * "den första" till två olika noder på två ytor.
-     *
-     * **Varje nod bär sin egen plusmeny.** Raderna är
-     * App\Support\Frontend\CreateTarget::forNode() prövad på NODEN, så en nod
-     * anroparen bara får läsa ritas utan plus, och en `create`-mottagare får
-     * *Item under* men inte *Relation* (som kräver `update` i båda ändar).
-     *
-     * **Itemet självt är noden i mitten**, och den är ingen länk: den ÄR
-     * sidan man står på. Den bär `href => null` och ritas som aktuell i
-     * stället.
-     *
-     * **Noderna byggs ur Actionens svar**, samma `ListItemLinks` som
-     * relationsfliken ritar, med de otypade minnesattributen
-     * (`counterpart_ulid`, `counterpart_name`, `relation_to_item`) lästa här.
-     * `ItemLinkResource` bär bara `ulid` och `name` — API-kontraktet är
-     * oförändrat — så kartan läser modellerna direkt i stället för resursens
-     * rader. Kartan och relationsfliken ritar därmed bevisligen samma lista.
-     *
-     * **Ikonen följer med varje nod** (issue 303 · [[ADR-0060 Itemets ikon]]
-     * § 9): `counterpart_icon` och `counterpart_icon_color` kommer ur samma
-     * rad och ur samma fråga som namnet, och `self` läser dem ur `$item`. Ett
-     * item utan ikon får `null` och ritar den neutrala.
-     *
-     * @param  Collection<int, ItemLink>  $links
-     * @param  Collection<int, Item>  $candidates
-     * @return array{self: array<string, mixed>, parent: list<array<string, mixed>>, child: list<array<string, mixed>>, related: list<array<string, mixed>>}
-     */
-    private function map(?User $user, Container $container, Item $item, Collection $links, Collection $candidates, ?string $path, CreateTarget $createTarget): array
-    {
-        $byUlid = $candidates->keyBy('ulid');
-
-        $groups = ['parent' => [], 'child' => [], 'related' => []];
-
-        foreach ($links as $link) {
-            $ulid = $link->getAttribute('counterpart_ulid');
-
-            $groups[$link->getAttribute('relation_to_item')][] = [
-                'ulid' => $ulid,
-                'name' => $link->getAttribute('counterpart_name'),
-                'icon' => $link->getAttribute('counterpart_icon'),
-                'icon_color' => $link->getAttribute('counterpart_icon_color'),
-                'href' => route('containers.items.show', [$container, $ulid], absolute: false),
-                'rows' => $this->nodeRows($user, $container, $byUlid->get($ulid), $createTarget),
-            ];
-        }
-
-        return [
-            'self' => [
-                'ulid' => $item->ulid,
-                'name' => $item->name,
-                'icon' => $item->icon,
-                'icon_color' => $item->icon_color,
-                'href' => null,
-                'rows' => $this->nodeRows($user, $container, $item, $createTarget, $path),
-            ],
-            ...$groups,
-        ];
-    }
-
-    /**
-     * Plusknappens rader för EN nod, eller en tom lista: noden ritas utan
-     * plus när ingen av policyerna tillåter något ([[ADR-0048 Mobilen och
-     * plusknappen]] § 2 — blir menyn tom visas inte knappen).
-     *
-     * `$node` är nollbar därför att modellen slås upp i kandidatlistan medan
-     * noden kommer ur länklistan. Faller uppslaget bort ritas noden utan plus
-     * i stället för att sidan faller; de två listorna löser upp SAMMA omfång
-     * (båda genom App\Actions\Access\ResolveItemScope), så i drift gör de
-     * aldrig olika svar.
-     *
-     * @return list<array{key: string, href: string}>
-     */
-    private function nodeRows(?User $user, Container $container, ?Item $node, CreateTarget $createTarget, ?string $path = null): array
-    {
-        if ($user === null || $node === null) {
-            return [];
-        }
-
-        return $createTarget->forNode($user, $container, $node, $path);
-    }
-
-    /**
      * Relationsflikens läge ur querysträngen — issue 156 ·
      * [[M23 Mobilen och kartan]] § 156.
      *
-     * `list` är flikens sektion och förvalet; `focus` är fokuskartan, som
+     * `list` är flikens sektion och förvalet; `focus` är kartan, som
      * under `md:` är ett läge i samma flik. Läget är en LÄNK och inget
      * tillstånd i vyn, samma konstruktion som `?view=` i itemfliken (issue
      * 154) och `?path=` i issue 95: ett läge man kan länka till är ett läge
