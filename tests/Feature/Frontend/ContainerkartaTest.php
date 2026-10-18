@@ -32,7 +32,9 @@ use function Pest\Laravel\withoutVite;
  *
  * **Vyn ritar svaret med `ItemMap`** sedan issue 297, med `ItemMapNode` som
  * nod. Högerpanelen i itemvyn ritar `FocusMap` som förut, och de gamla
- * kolumnkomponenterna är borta.
+ * kolumnkomponenterna är borta. Sedan issue 306 står korten i ett rutnät från
+ * `md:`, och linjerna ritas av `ItemMapEdges` — ett SVG-lager i kartans ram
+ * ([[ADR-0061 Kartans kort och kanter]] § 5–8).
  *
  * **Frågekostnaden är konstant.** Kartan är två frågor — itemen och kanterna
  * — oavsett hur många grannar mitten har, och det mäts på samma sida före och
@@ -785,24 +787,213 @@ it('ritar pricken bara för overdue och ⇄ bara vid fler än en plats', functio
 });
 
 /*
- * Klart när: linjerna till de relaterade är streckade och de andra heldragna,
- * utan pilspetsar.
+ * Klart när (issue 306 · [[ADR-0061 Kartans kort och kanter]] § 5–8): från
+ * `md:` står korten i rutnätet, och ett SVG-lager under dem ritar en linje per
+ * ritat kort.
  *
- * Förbindarna är kanten på en `div` — samma enkla form som `FocusMap` ritar —
- * och ingen SVG: en pilspets hade påstått en riktning som raderna redan säger.
+ * Korten märks av `ItemMapNode` med `data-map-node` och `data-map-kind`, och
+ * lagret mäter dem med `getBoundingClientRect()` relativt kartans ram
+ * (`data-map-frame`). Lagret ritar en `<path>` per post i `edges`.
  */
-it('ritar streckade linjer till de relaterade och heldragna till strukturerna', function () {
+it('ställer korten i rutnätet och ritar ett SVG-lager under dem', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
     $noden = kartavyKod('components/ItemMapNode.vue');
+    $lagret = kartavyKod('components/ItemMapEdges.vue');
 
-    expect(substr_count($kartan, 'border-t border-dashed border-border'))->toBe(2);
-    expect(substr_count($kartan, 'h-4 w-px bg-border'))->toBe(2);
+    expect($kartan)->toContain("import ItemMapEdges from './ItemMapEdges.vue'")
+        ->toContain('data-map-frame')
+        ->toContain('<ItemMapEdges :map="map" />');
 
-    expect(str_contains($kartan, '<svg'))->toBeFalse()
-        ->and(str_contains($noden, '<svg'))->toBeFalse();
+    // Lagret står före korten i ramen och korten ovanpå det.
+    expect(strpos($kartan, '<ItemMapEdges'))->toBeLessThan((int) strpos($kartan, 'relative z-10'));
 
-    expect(str_contains($kartan, 'marker'))->toBeFalse()
-        ->and(str_contains($noden, 'marker'))->toBeFalse();
+    expect($noden)->toContain(':data-map-node="node.ulid"')
+        ->toContain(":data-map-kind=\"current ? 'center' : kind\"");
+
+    expect($lagret)->toContain('const props = defineProps({')
+        ->toContain("frame.querySelectorAll('[data-map-node]')")
+        ->toContain("frame.querySelector('[data-map-kind=\"center\"]')")
+        ->toContain('v-for="edge in edges"')
+        ->toContain(':d="edge.d"');
+});
+
+/*
+ * Klart när: föräldrarna står på en rad ovanför mitten, barnen under med högst
+ * fyra per rad, och de relaterade i en båge på var sida.
+ *
+ * Bredden `max-w-[51rem]` rymmer fyra kort (4 × `w-48` plus `gap-3`), så en
+ * femte nod bryter raden. De relaterade är riktade mot mitten, och den
+ * mittersta noden på var sida — `index === 1` i serverns ordning — skjuts ut:
+ * `mr-8` åt vänster och `ml-8` åt höger. Ordningen i DOM:en är föräldrar,
+ * mitten, barn.
+ */
+it('ställer föräldrarna ovanför, barnen under och de relaterade i en båge', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    // Samma bredd på båda raderna: fyra kort och tre mellanrum.
+    expect(substr_count($kartan, 'md:max-w-[51rem]'))->toBe(2);
+
+    $föräldrar = strpos($kartan, 'kind="parent"');
+    $mitten = strpos($kartan, ':node="center"');
+    $barn = strpos($kartan, 'kind="child"');
+
+    expect($föräldrar)->not->toBeFalse()
+        ->and($mitten)->not->toBeFalse()
+        ->and($barn)->not->toBeFalse()
+        ->and($föräldrar)->toBeLessThan($mitten)
+        ->and($mitten)->toBeLessThan($barn);
+
+    // Bågen: kolumnerna är riktade mot mitten, och den mittersta skjuts ut.
+    expect($kartan)->toContain('items-end gap-3 md:flex')
+        ->toContain('items-start gap-3 md:flex')
+        ->toContain("index === 1 ? 'md:mr-8' : ''")
+        ->toContain("index === 1 ? 'md:ml-8' : ''");
+
+    // *+N till* står kvar under sin grupp.
+    expect($kartan)->toContain("t('item.map.more', { count: moreParents })")
+        ->toContain("t('item.map.more', { count: moreChildren })")
+        ->toContain("t('item.map.more', { count: moreRelated })");
+});
+
+/*
+ * Klart när: linjerna till föräldrar och barn är heldragna i `accent` och
+ * `success`, och linjerna till de relaterade streckade i `ink-subtle`
+ * ([[ADR-0061 Kartans kort och kanter]] § 5).
+ *
+ * Färgerna skrivs som token — aldrig som hex — så att mörkt läge byter dem på
+ * samma ställe som resten av ytan. Streckningen hör till det relaterade slaget
+ * och till ingen annan.
+ */
+it('färgar linjerna ur tokens och streckar de relaterade', function () {
+    $lagret = kartavyKod('components/ItemMapEdges.vue');
+
+    expect($lagret)->toContain("parent: 'var(--color-accent)'")
+        ->toContain("child: 'var(--color-success)'")
+        ->toContain("related: 'var(--color-ink-subtle)'")
+        ->toContain(":stroke-dasharray=\"edge.dashed ? '6 5' : undefined\"");
+
+    // Streckningen sätts bara på de relaterade, som är de enda med `dashed`.
+    expect(substr_count($lagret, 'dashed: true'))->toBe(1);
+
+    expect($lagret)->not->toMatch('/#[0-9a-fA-F]{3,8}/');
+});
+
+/*
+ * Klart när: pilspetsarna pekar mot föräldern, mot barnet och åt båda hållen
+ * mot en relaterad.
+ *
+ * En `<marker>` per färg i lagrets `<defs>`. Föräldrar och barn har bara
+ * `marker-end` — linjen går från mitten mot noden — och den relaterade har
+ * både start och slut, med `auto-start-reverse` som vänder den första utåt.
+ */
+it('sätter pilspetsar mot föräldern, mot barnet och åt båda hållen mot en relaterad', function () {
+    $lagret = kartavyKod('components/ItemMapEdges.vue');
+
+    foreach (['map-edge-parent', 'map-edge-child', 'map-edge-related'] as $marke) {
+        expect($lagret)->toContain("id=\"{$marke}\"");
+    }
+
+    expect(substr_count($lagret, '<marker'))->toBe(3)
+        ->and(substr_count($lagret, '<defs>'))->toBe(1);
+
+    expect($lagret)->toContain(':marker-end="`url(#map-edge-${edge.kind})`"')
+        ->toContain(':marker-start="edge.dashed ? `url(#map-edge-${edge.kind})` : undefined"');
+
+    expect($lagret)->toContain('orient="auto-start-reverse"')
+        ->and(substr_count($lagret, 'orient="auto"'))->toBe(2);
+});
+
+/*
+ * Klart när: linjerna ritas om när fönstret ändrar storlek och när mitten
+ * byts.
+ *
+ * Lagret mäter korten med `getBoundingClientRect()` relativt ramen, lyssnar på
+ * en `ResizeObserver` på ramen och mäter igen efter varje nytt `map` — efter
+ * `nextTick`, eftersom korten byts först då.
+ */
+it('mäter korten relativt ramen och ritar om vid storlek och nytt mitt', function () {
+    $lagret = kartavyKod('components/ItemMapEdges.vue');
+
+    expect($lagret)->toContain('getBoundingClientRect()')
+        ->toContain('new ResizeObserver(')
+        ->toContain('observer.observe(frame)')
+        ->toContain('observer?.disconnect()')
+        ->toContain('watch(() => props.map')
+        ->toContain('await nextTick()');
+
+    // Koordinaterna är ramens egna: både mitten och korten mäts mot den.
+    expect($lagret)->toContain('frameBox = frame.getBoundingClientRect()')
+        ->toContain('centerBox = center?.getBoundingClientRect()')
+        ->toContain('const box = card.getBoundingClientRect()');
+});
+
+/*
+ * Klart när: SVG-lagret är `aria-hidden` och tar inga klick.
+ *
+ * Lagret är en förklaring till korten och inte ett mål: skärmläsaren ska inte
+ * möta det, och en pekare ska gå rakt igenom till korten och länkarna.
+ */
+it('gömmer SVG-lagret för skärmläsaren och för pekaren', function () {
+    $lagret = kartavyKod('components/ItemMapEdges.vue');
+
+    expect($lagret)->toContain('aria-hidden="true"')
+        ->toContain('pointer-events-none');
+});
+
+/*
+ * Klart när: under `md:` finns inget SVG-lager och ingenting skrollar i
+ * sidled ([[ADR-0061 Kartans kort och kanter]] § 8).
+ *
+ * Lagret är `hidden md:block`, och sidokolumnerna är `hidden … md:flex`, så
+ * under brytpunkten ritas ingen båge. Rutnätets bredd är `md:`-prefiksad och
+ * kan därför inte tvinga fram en sidledsskroll på en telefon.
+ */
+it('ritar inget lager under md: och skrollar inte i sidled', function () {
+    $lagret = kartavyKod('components/ItemMapEdges.vue');
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($lagret)->toContain('hidden h-full w-full md:block')
+        ->and(str_contains($lagret, 'overflow-x'))->toBeFalse();
+
+    expect(substr_count($kartan, 'hidden min-w-0 flex-1 flex-col'))->toBe(2)
+        ->and(str_contains($kartan, 'overflow-x'))->toBeFalse();
+
+    // Lagret mäter inte när det inte har en box: under md: är det display:none.
+    expect($lagret)->toContain('layerBox.width === 0 || layerBox.height === 0');
+});
+
+/*
+ * Klart när: teckenförklaringens prickar har linjernas färger
+ * ([[ADR-0061 Kartans kort och kanter]] § 5).
+ */
+it('ger teckenförklaringens prickar linjernas färger', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)->toContain("parent: 'bg-accent'")
+        ->toContain("child: 'bg-success'")
+        ->toContain("related: 'bg-ink-subtle'");
+
+    expect(str_contains($kartan, 'bg-warning'))->toBeFalse(
+        'teckenförklaringen bär fortfarande den gamla färgen',
+    );
+});
+
+/*
+ * Klart när: inget nytt npm-paket.
+ *
+ * Lagret importerar bara Vue — mätningen och kurvorna är skrivna här — och
+ * `package.json` är orörd. Provet läser importraderna, som är det som hade
+ * dragit in ett bibliotek.
+ */
+it('ritar lagret utan ett nytt npm-paket', function () {
+    $lagret = kartavyKod('components/ItemMapEdges.vue');
+
+    preg_match_all('/^import .*$/m', $lagret, $importer);
+
+    expect($importer[0])->toBe(["import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';"]);
+
+    expect(str_contains($lagret, "from 'd3"))->toBeFalse()
+        ->and(str_contains($lagret, "from '@"))->toBeFalse();
 });
 
 /*

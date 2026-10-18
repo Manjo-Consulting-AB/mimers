@@ -38,6 +38,12 @@ import { useTranslations } from '../composables/useTranslations.js';
  * står under slagets ord, skild med ›. Raden klipps av och hela vägen ligger i
  * `title`. För en rot är `via` tom och ingen rad ritas.
  *
+ * **Kortet märker sig för linjerna** (issue 306 · [[ADR-0061 Kartans kort och
+ * kanter]] § 6): `data-map-node` bär ULID:n och `data-map-kind` slaget, så att
+ * `ItemMapEdges` kan mäta kortet med `getBoundingClientRect()` och veta vilken
+ * linje det ska ha. Märket sitter på kortet och inte på raden, eftersom det är
+ * kortets kant linjen slutar vid.
+ *
  * Träffytorna är `min-h-11` — 44 px ur issue 68a § Beslut 3 — och fokusringen
  * får aldrig tas bort ([[ADR-0042 Designsystemet]] § Beslut).
  */
@@ -95,6 +101,8 @@ const overdueWord = computed(() => t('item.index.status_overdue'));
                 :is="href ? Link : 'span'"
                 :href="href ?? undefined"
                 :aria-current="current ? 'page' : undefined"
+                :data-map-node="node.ulid"
+                :data-map-kind="current ? 'center' : kind"
                 class="flex min-h-11 min-w-0 items-center rounded-card border shadow-card outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
                 :class="current
                     ? 'w-56 flex-col justify-center gap-1 border-accent bg-accent-soft px-8 py-3 text-center'
