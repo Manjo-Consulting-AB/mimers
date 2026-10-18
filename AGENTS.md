@@ -69,7 +69,7 @@ Reglerna står i blocket ovan. Här står bara kommandona de motsvarar.
 | Riktat test | `php artisan test --filter=DittTest` |
 | Hela sviten, en gång före PR | `composer test` |
 | Installation | `composer install --no-progress -q`, `npm install --silent` |
-| Statisk analys | `vendor/bin/phpstan analyse --memory-limit=512M` |
+| Statisk analys | `vendor/bin/phpstan analyse --memory-limit=2G` |
 
 Minnesflaggan behövs i en worktree. Ändra inte `phpstan.neon` för att komma runt det.
 

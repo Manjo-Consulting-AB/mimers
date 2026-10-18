@@ -14,7 +14,7 @@ Deras kontext och resonemang finns inte kvar och går inte att rekonstruera. Skr
 
 1. **Processnoteringarna** i milstolpens mergeade PR:er. Använd GitHub-verktygen; sök PR:er mot `main` vars gren heter `feature/issue-NN*` för milstolpens issuenummer enligt [Backlog](docs/Backlog.md).
 2. **`docs/Process/Lärdomar.md` § Observerat** — det som redan väntar på en andra träff.
-3. **Grenar per issue** — hur många separata grenar issuen behövde innan den var färdig. Räkna `feature/issue-NN*` i `git log origin/main --merges`. Detta är metriken med bevisad signal; se `docs/Process/Lärdomar.md`.
+3. **Grenar per issue** — hur många separata grenar issuen behövde innan den var färdig. Räkna PR:er per `feature/issue-NN*`, mergade och stängda (`gh pr list --state all`). Repot squash-mergar, så `git log --merges` ger noll träffar. Detta är metriken med bevisad signal; se `docs/Process/Lärdomar.md`.
 4. **Per PR:** antal commits och tid från öppnad till merge.
 5. **Ändrade filer mot issuens `In scope`-globbar.** Hämta rutan ur GitHub-issuen, jämför med PR:ens filer. Drift ut ur rutan är den enda helt automatiska mätningen av om issue-skrivandet håller.
 6. **PR:er där `Frågor och antaganden` inte var "Inga."**
