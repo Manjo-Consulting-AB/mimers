@@ -3071,6 +3071,13 @@ return [
             'documents' => 'Documents',
             'tasks' => 'Tasks',
             'last_updated' => 'Last updated',
+            // One button, and its text names the action a press performs:
+            // *Expand all* while the tree is folded and *Collapse all* once
+            // it is open, the same rule as the favorite button above. The
+            // state is a temporary view and stays in the component, never in
+            // the address (issue 295 · [[ADR-0058 Trädet som tabell]] § 6).
+            'expand_all' => 'Expand all',
+            'collapse_all' => 'Collapse all',
         ],
 
         // The switch on the container's item tab, see issue 154 and 157 ·

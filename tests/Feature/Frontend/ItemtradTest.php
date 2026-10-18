@@ -698,7 +698,85 @@ it('halvfetar träffarna och öppnar grenarna till dem i ett filtrerat träd', f
     expect($kod)->toContain('props.filtered && node.match === true')
         ->toContain('font-semibold text-ink')
         // Utgångsläget: stängt, utom i ett filtrerat träd där grenen leder
-        // till en träff och alltså ska synas utan klick.
-        ->toContain('return open.value[key] ?? props.filtered')
+        // till en träff och alltså ska synas utan klick — eller när *Expand
+        // all* är påslaget (issue 295).
+        ->toContain('return open.value[key] ?? (props.expandAll || props.filtered)')
         ->toContain('filtered: { type: Boolean, default: false }');
+});
+
+/*
+ * Klart när (issue 295 · [[ADR-0058 Trädet som tabell]] § 6): knappen finns
+ * bara i trädläget, och dess text och `aria-pressed` följer läget.
+ *
+ * Knappen ritas i filterraden, som är sidans och inte filterkomponentens:
+ * `ItemFilterBar` ligger utanför rutans `In scope` och ritar sitt eget
+ * formulär, så ramen kring raden och knappen bor här. Texten namnger trycket
+ * — *Expand all* medan trädet är fällt och *Collapse all* när det är öppet —
+ * och nycklarna kommer ur `lang/en/ui.php` som varje annan användarvänd text.
+ */
+it('ritar Expand all i trädläget och låter texten följa läget', function () {
+    $vy = itemtradKod('pages/Containers/Items/Index.vue');
+
+    $knapp = strpos($vy, '@click="allOpen = ! allOpen"');
+
+    expect($knapp)->not->toBeFalse('vyn ritar ingen Expand all-knapp');
+
+    expect($vy)->toContain('v-if="view === \'tree\'"')
+        ->toContain('type="button"')
+        ->toContain(':aria-pressed="allOpen ? \'true\' : \'false\'"')
+        ->toContain("t('item.tree.expand_all')")
+        ->toContain("t('item.tree.collapse_all')");
+
+    // Knappen står i filterraden, alltså före båda lägesgrenarna, och
+    // tabellen får flaggan som propp.
+    expect((int) $knapp)->toBeLessThan((int) strpos($vy, '<section v-else-if="view === \'tree\'"'))
+        ->and($vy)->toContain(':expand-all="allOpen"')
+        // Raden grindas fortfarande på kartan, och knappen på trädet.
+        ->and($vy)->toContain('v-if="view !== \'map\'"');
+});
+
+/*
+ * Klart när (issue 295 · [[ADR-0058 Trädet som tabell]] § 6): ett tryck
+ * öppnar varje rad som har barn, och en andra tryckning återgår till
+ * utgångsläget — rotraden öppen och, med filter, grenarna till träffarna.
+ *
+ * Flaggan är standarden och ett eget tryck på en fällknapp vinner över den.
+ * Varje växling nollställer de egna trycken, så att den andra tryckningen
+ * landar i utgångsläget och inte i en blandning av tryck gjorda däremellan.
+ */
+it('öppnar varje gren med Expand all och återgår till utgångsläget', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect($kod)->toContain('expandAll: { type: Boolean, default: false }')
+        ->toContain('open.value[key] ?? (props.expandAll || props.filtered)')
+        ->toContain('watch(() => props.expandAll')
+        ->toContain('open.value = {}')
+        ->toContain('containerOpen.value = true')
+        // Rotraden är öppen i utgångsläget och styr om itemraderna ritas.
+        ->toContain('containerOpen.value ? walk(props.nodes, [], 0, []) : []');
+});
+
+/*
+ * Klart när (issue 295 · [[ADR-0058 Trädet som tabell]] § 6): en ny
+ * filtrering börjar i utgångsläget, och knappen ändrar inte adressen.
+ *
+ * Filterraden navigerar med `preserveState`, så sidans instans lever vidare
+ * över en ny träfflista. Flaggan nollställs därför när `filter`-proppen byts,
+ * och tabellen nycklas på `filterQuery` så att även dess egna fällda grenar
+ * börjar om. Knappen själv är ett `type="button"` som bara slår om en `ref`:
+ * ingen router, ingen länk, ingen querysträng.
+ */
+it('börjar om i utgångsläget vid en ny filtrering utan att röra adressen', function () {
+    $vy = itemtradKod('pages/Containers/Items/Index.vue');
+
+    expect($vy)->toContain('const allOpen = ref(false)')
+        ->toContain('watch(() => props.filter')
+        ->toContain('allOpen.value = false')
+        ->toContain(':key="filterQuery"');
+
+    // Adressen rörs inte av knappen: sidan har ingen egen router och ingen
+    // länk byggs för trycket.
+    expect($vy)->not->toContain('router.')
+        ->and($vy)->not->toContain('usePage')
+        ->and($vy)->not->toContain('page.url');
 });
