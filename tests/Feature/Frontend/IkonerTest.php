@@ -368,9 +368,10 @@ it('fäller en ny handskriven svg utanför undantagen', function () {
      * Undantagen ritar data och inte ikoner ([[ADR-0057 Ikoner och typsnitt]]
      * § 2): diagram, donut, kartor, lagringsstapeln och QR-koden.
      *
-     * Listan är issue 290:s nio filer. `TaskOverviewPanel` står inte här: dess
-     * ring ritas som en `conic-gradient`, inte som `<svg>`, så den behöver
-     * inget undantag.
+     * Listan är issue 290:s nio filer, plus kartans linjelager från issue 306
+     * ([[ADR-0061 Kartans kort och kanter]] § 5): det ritar kurvor mellan
+     * korten och ingen ikon. `TaskOverviewPanel` står inte här: dess ring ritas
+     * som en `conic-gradient`, inte som `<svg>`, så den behöver inget undantag.
      */
     $undantag = [
         'components/UiIcon.vue',
@@ -382,6 +383,7 @@ it('fäller en ny handskriven svg utanför undantagen', function () {
         'components/StorageBar.vue',
         'components/TotpQrCode.vue',
         'components/FocusMapNode.vue',
+        'components/ItemMapEdges.vue',
     ];
 
     $vueFiler = array_values(array_filter(

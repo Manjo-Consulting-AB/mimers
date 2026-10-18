@@ -2,12 +2,14 @@
 import { computed, ref } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import CreateMenu from './CreateMenu.vue';
+import ItemMapEdges from './ItemMapEdges.vue';
 import ItemMapNode from './ItemMapNode.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * Containerns karta, se issue 297 · [[M34 Kartan med en mitt]] § 297 och
- * [[ADR-0059 Kartan med en mitt]] § 3–8.
+ * [[ADR-0059 Kartan med en mitt]] § 3–8, omritad i issue 306 ·
+ * [[ADR-0061 Kartans kort och kanter]] § 5–8.
  *
  * **En mitt och en ring.** Mitten står i mitten, föräldrarna ovanför, barnen
  * under och de relaterade i två kolumner på var sin sida — de första tre till
@@ -19,7 +21,19 @@ import { useTranslations } from '../composables/useTranslations.js';
  * **Kortets form bor i `ItemMapNode`** (issue 305 · [[ADR-0061 Kartans kort och
  * kanter]] § 1–4): ikonen till vänster, namnet och slagets ord till höger, och
  * öppna-ikonen i kortets hörn. Vyn skickar slaget som propp så att noden kan
- * färga ordet rätt; rutnätet och de böjda linjerna kommer i issue 306.
+ * färga ordet rätt.
+ *
+ * **Rutnätet fyller panelen** (ADR:ns beslut 7): föräldrarna står på en rad
+ * ovanför mitten, barnen under med högst fyra per rad — bredden `max-w` rymmer
+ * fyra kort, så en femte rad bryts och serverns tak på tolv ger högst tre
+ * rader — och de relaterade står i en båge på var sida. Den mittersta på en
+ * sida står längst ut: kolumnen är riktad mot mitten och den mittersta noden
+ * skjuts ut med en marginal. Korten har fast bredd, så raderna står i linje.
+ * Under `md:` står allt i en kolumn med de relaterade under barnen.
+ *
+ * **Linjerna bor i `ItemMapEdges`** (ADR:ns beslut 5 och 6): ett SVG-lager
+ * under korten, i kartans ram, som mäter korten och ritar en kubisk kurva per
+ * ritat kort. Det finns bara från `md:`, där rutnätet finns.
  *
  * **Alla noder utom mitten är länkar till kartan med sig själva som mitt** —
  * `?view=map&focus=<ulid>` — och öppna-ikonen bredvid leder till itemets sida.
@@ -34,17 +48,14 @@ import { useTranslations } from '../composables/useTranslations.js';
  *
  * **Formen är fast.** Taken per grupp är serverns — fyra föräldrar, tolv barn
  * och sex relaterade — och vyn delar bara de relaterade på två sidor om tre.
- * Ingenting mäts och ingenting skrollar i sidled. Över `md:` står de relaterade
- * på sidorna; under `md:` står de under barnen (ADR:ns beslut 6).
+ * Ingenting mäts här och ingenting skrollar i sidled: linjerna mäts i
+ * `ItemMapEdges`. Över `md:` står de relaterade på sidorna; under `md:` står de
+ * under barnen (ADR:ns beslut 8).
  *
- * **Linjerna är raka och utan pilspetsar** (ADR:ns beslut 7): heldragna till
- * föräldrar och barn, streckade till de relaterade. Det är samma enkla
- * förbindare som `FocusMap` ritar — en `div` med en kant — och ingen SVG.
- * Föräldrar ovanför och barn under säger redan åt vilket håll strukturen går.
- *
- * **Teckenförklaringen har fyra rader** (ADR:ns beslut 8): *Parent*, *Child*
+ * **Teckenförklaringen har fyra rader** (ADR-0059 § 8): *Parent*, *Child*
  * och *Related* med gruppens `total`, och *Same item*, som förklarar ⇄. Orden
- * kommer ur `lang/` som all annan text ([[ADR-0013 Språk och i18n]]).
+ * kommer ur `lang/` som all annan text ([[ADR-0013 Språk och i18n]]), och
+ * prickarna bär linjernas färger (ADR-0061 § 5).
  *
  * ***+N till* visas när `total` är större än antalet ritade noder** och leder
  * till relationsfliken kring ett item och till listläget kring containern —
@@ -133,11 +144,11 @@ const moreRelated = computed(
 /* Slagen i teckenförklaringens ordning, och samma tre noderna ritas i. */
 const kinds = ['parent', 'child', 'related'];
 
-/* Slagens prickar. Mitten har ingen: den bär accentens kant i stället. */
+/* Slagens prickar, i linjernas färger (ADR-0061 § 5). Mitten har ingen. */
 const DOTS = {
     parent: 'bg-accent',
     child: 'bg-success',
-    related: 'bg-warning',
+    related: 'bg-ink-subtle',
 };
 
 const legend = computed(() => kinds.map((kind) => ({
@@ -228,138 +239,140 @@ function closeMenu() {
         </nav>
 
         <!--
-            Föräldrarna ovanför. Linjen ned till mitten ritas bara när raden har
-            något att knyta ihop: en kant mot ingenting är en kant ingen
-            förstår.
+            Kartans ram (issue 306 · [[ADR-0061 Kartans kort och kanter]]
+            § 6–7). SVG-lagret ligger i ramen och mäter korten relativt den;
+            korten ligger ovanpå det. Från `md:` står de i rutnätet — under
+            `md:` är ramen en kolumn, och de relaterade ritas under barnen.
         -->
-        <ul v-if="parents.length > 0" class="flex flex-wrap justify-center gap-2">
-            <ItemMapNode
-                v-for="node in parents"
-                :key="node.ulid"
-                :node="node"
-                kind="parent"
-                :label="t('item.map.kind.parent')"
-                :status="statusFor(node)"
-                :href="focusHref(node)"
-                :open-href="openHref(node)"
-                @open-menu="openMenu"
-            />
-        </ul>
+        <div data-map-frame class="relative">
+            <ItemMapEdges :map="map" />
 
-        <Link
-            v-if="moreParents > 0"
-            :href="overflowHref"
-            class="mx-auto mt-2 flex min-h-11 w-fit items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
-        >
-            {{ t('item.map.more', { count: moreParents }) }}
-        </Link>
+            <div class="relative z-10 flex w-full flex-col items-center">
+                <!--
+                    Föräldrarna ovanför, högst fyra. Bredden rymmer fyra kort,
+                    så raden bryts aldrig före serverns tak.
+                -->
+                <ul
+                    v-if="parents.length > 0"
+                    class="flex w-full flex-wrap justify-center gap-3 md:max-w-[51rem]"
+                >
+                    <ItemMapNode
+                        v-for="node in parents"
+                        :key="node.ulid"
+                        :node="node"
+                        kind="parent"
+                        :label="t('item.map.kind.parent')"
+                        :status="statusFor(node)"
+                        :href="focusHref(node)"
+                        :open-href="openHref(node)"
+                        @open-menu="openMenu"
+                    />
+                </ul>
 
-        <div
-            v-if="parents.length > 0"
-            aria-hidden="true"
-            class="mx-auto h-4 w-px bg-border"
-        ></div>
+                <Link
+                    v-if="moreParents > 0"
+                    :href="overflowHref"
+                    class="mt-2 flex min-h-11 w-fit items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
+                >
+                    {{ t('item.map.more', { count: moreParents }) }}
+                </Link>
 
-        <!--
-            Mitten med de relaterade på var sin sida. BÅDA kolumnerna ritas även
-            när en sida är tom över `md:` — de är lika breda och håller mitten i
-            mitten. Under `md:` är sidorna gömda och de relaterade står under
-            barnen i stället, så att ingenting skrollar i sidled.
-        -->
-        <div class="flex items-center justify-center">
-            <ul class="hidden min-w-0 flex-1 flex-col items-end gap-2 md:flex">
-                <ItemMapNode
-                    v-for="node in relatedLeft"
-                    :key="node.ulid"
-                    :node="node"
-                    kind="related"
-                    :label="t('item.map.kind.related')"
-                    :status="statusFor(node)"
-                    :href="focusHref(node)"
-                    :open-href="openHref(node)"
-                    @open-menu="openMenu"
-                />
-            </ul>
+                <!--
+                    Mitten med de relaterade i en båge på var sin sida. BÅDA
+                    kolumnerna ritas även när en sida är tom över `md:` — de är
+                    lika breda och håller mitten i mitten. Kolumnerna är
+                    riktade mot mitten, och den mittersta noden skjuts ut:
+                    `mr-8` åt vänster och `ml-8` åt höger. Den mittersta är
+                    `index === 1` i serverns ordning. Under `md:` är sidorna
+                    gömda och de relaterade står under barnen i stället.
+                -->
+                <div class="mt-6 flex w-full items-center justify-center">
+                    <ul class="hidden min-w-0 flex-1 flex-col items-end gap-3 md:flex">
+                        <ItemMapNode
+                            v-for="(node, index) in relatedLeft"
+                            :key="node.ulid"
+                            :class="index === 1 ? 'md:mr-8' : ''"
+                            :node="node"
+                            kind="related"
+                            :label="t('item.map.kind.related')"
+                            :status="statusFor(node)"
+                            :href="focusHref(node)"
+                            :open-href="openHref(node)"
+                            @open-menu="openMenu"
+                        />
+                    </ul>
 
-            <div
-                v-if="relatedLeft.length > 0"
-                aria-hidden="true"
-                class="hidden w-3 shrink-0 border-t border-dashed border-border md:block"
-            ></div>
+                    <ul class="shrink-0">
+                        <ItemMapNode
+                            :node="center"
+                            :label="centerLabel"
+                            :status="statusFor(center)"
+                            :open-href="centerOpenHref"
+                            :rows="map.rows"
+                            current
+                            @open-menu="openMenu"
+                        />
+                    </ul>
 
-            <ul class="shrink-0">
-                <ItemMapNode
-                    :node="center"
-                    :label="centerLabel"
-                    :status="statusFor(center)"
-                    :open-href="centerOpenHref"
-                    :rows="map.rows"
-                    current
-                    @open-menu="openMenu"
-                />
-            </ul>
+                    <!--
+                        De relaterade är fler än sex: *+N till* står sist i den
+                        högra kolumnen, i samma flöde som noderna den räknar.
+                    -->
+                    <ul class="hidden min-w-0 flex-1 flex-col items-start gap-3 md:flex">
+                        <ItemMapNode
+                            v-for="(node, index) in relatedRight"
+                            :key="node.ulid"
+                            :class="index === 1 ? 'md:ml-8' : ''"
+                            :node="node"
+                            kind="related"
+                            :label="t('item.map.kind.related')"
+                            :status="statusFor(node)"
+                            :href="focusHref(node)"
+                            :open-href="openHref(node)"
+                            @open-menu="openMenu"
+                        />
 
-            <div
-                v-if="relatedRight.length > 0"
-                aria-hidden="true"
-                class="hidden w-3 shrink-0 border-t border-dashed border-border md:block"
-            ></div>
+                        <li v-if="moreRelated > 0">
+                            <Link
+                                :href="overflowHref"
+                                class="flex min-h-11 items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
+                            >
+                                {{ t('item.map.more', { count: moreRelated }) }}
+                            </Link>
+                        </li>
+                    </ul>
+                </div>
 
-            <!--
-                De relaterade är fler än sex: *+N till* står sist i den högra
-                kolumnen, i samma flöde som noderna den räknar.
-            -->
-            <ul class="hidden min-w-0 flex-1 flex-col items-start gap-2 md:flex">
-                <ItemMapNode
-                    v-for="node in relatedRight"
-                    :key="node.ulid"
-                    :node="node"
-                    kind="related"
-                    :label="t('item.map.kind.related')"
-                    :status="statusFor(node)"
-                    :href="focusHref(node)"
-                    :open-href="openHref(node)"
-                    @open-menu="openMenu"
-                />
+                <!--
+                    Barnen under, högst fyra per rad. Serverns tak är tolv, så
+                    det blir högst tre rader; bredden rymmer fyra kort.
+                -->
+                <ul
+                    v-if="children.length > 0"
+                    class="mt-6 flex w-full flex-wrap justify-center gap-3 md:max-w-[51rem]"
+                >
+                    <ItemMapNode
+                        v-for="node in children"
+                        :key="node.ulid"
+                        :node="node"
+                        kind="child"
+                        :label="t('item.map.kind.child')"
+                        :status="statusFor(node)"
+                        :href="focusHref(node)"
+                        :open-href="openHref(node)"
+                        @open-menu="openMenu"
+                    />
+                </ul>
 
-                <li v-if="moreRelated > 0">
-                    <Link
-                        :href="overflowHref"
-                        class="flex min-h-11 items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
-                    >
-                        {{ t('item.map.more', { count: moreRelated }) }}
-                    </Link>
-                </li>
-            </ul>
+                <Link
+                    v-if="moreChildren > 0"
+                    :href="overflowHref"
+                    class="mt-2 flex min-h-11 w-fit items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
+                >
+                    {{ t('item.map.more', { count: moreChildren }) }}
+                </Link>
+            </div>
         </div>
-
-        <div
-            v-if="children.length > 0"
-            aria-hidden="true"
-            class="mx-auto h-4 w-px bg-border"
-        ></div>
-
-        <ul v-if="children.length > 0" class="flex flex-wrap justify-center gap-2">
-            <ItemMapNode
-                v-for="node in children"
-                :key="node.ulid"
-                :node="node"
-                kind="child"
-                :label="t('item.map.kind.child')"
-                :status="statusFor(node)"
-                :href="focusHref(node)"
-                :open-href="openHref(node)"
-                @open-menu="openMenu"
-            />
-        </ul>
-
-        <Link
-            v-if="moreChildren > 0"
-            :href="overflowHref"
-            class="mx-auto mt-2 flex min-h-11 w-fit items-center rounded-control px-2 text-meta font-medium text-accent hover:underline"
-        >
-            {{ t('item.map.more', { count: moreChildren }) }}
-        </Link>
 
         <!--
             Under `md:` står de relaterade under barnen. Samma noder och samma
