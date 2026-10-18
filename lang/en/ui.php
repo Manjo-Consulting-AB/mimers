@@ -3052,6 +3052,27 @@ return [
             'collapse' => 'Collapse :name',
         ],
 
+        // The tree table in the item tab (issue 294 · [[ADR-0058 Trädet som
+        // tabell]] § 1). The six column headings are the table's only visible
+        // words of its own — names, category names and tag names come from
+        // the domain, and `+N` beside the tags is a count and not a word.
+        // *Category* is the mockup's *Type* under the name § 1 chose, and
+        // *Tags* is the column the mockup lacked.
+        //
+        // `documents` and `tasks` head COUNTS and are plural because the
+        // column holds a number per item, not one document. `last_updated`
+        // is written as a phrase and not as `updated`: the column answers
+        // when the item was last touched, and the date itself comes from
+        // `useRelativeDate().eventDate()`.
+        'tree' => [
+            'name' => 'Name',
+            'category' => 'Category',
+            'tags' => 'Tags',
+            'documents' => 'Documents',
+            'tasks' => 'Tasks',
+            'last_updated' => 'Last updated',
+        ],
+
         // The switch on the container's item tab, see issue 154 and 157 ·
         // [[ADR-0046 Containerns karta]]. *List* is the tab's list as it was
         // and stays the default; *Tree* is the whole container drawn as the

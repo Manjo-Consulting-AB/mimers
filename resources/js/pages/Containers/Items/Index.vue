@@ -6,7 +6,7 @@ import ContainerLayout from '../../../layouts/ContainerLayout.vue';
 import ContainerMap from '../../../components/ContainerMap.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
 import ItemRow from '../../../components/ItemRow.vue';
-import ItemStructureTree from '../../../components/ItemStructureTree.vue';
+import ItemTreeTable from '../../../components/ItemTreeTable.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
 import { activeFilters, filterSummary } from '../../../components/itemFilter.js';
 import { useTranslations } from '../../../composables/useTranslations.js';
@@ -100,12 +100,13 @@ defineOptions({
  *
  * **Fliken har tre lägen sedan issue 154 och 157** · [[ADR-0046 Containerns
  * karta]]: *Lista*, som är sidan som den var och förblir förval, *Träd*, som
- * ritar containerns struktur med `ItemStructureTree`, och *Karta*, som ritar
- * samma struktur som noder med en öppen gren per nivå (`ContainerMap`). Läget
- * står i querysträngen (`?view=tree`, `?view=map`) och `view`-proppen är
- * serverns läsning av den — vyn håller inget eget tillstånd, och därför
- * överlever läget en omladdning och en delad länk. `ItemViewSwitch` ritar
- * växeln, och ordningen i `views` är bindande: det första läget är förvalet.
+ * ritar containerns struktur som tabell med `ItemTreeTable` (issue 294 ·
+ * [[ADR-0058 Trädet som tabell]]), och *Karta*, som ritar samma struktur som
+ * noder med en öppen gren per nivå (`ContainerMap`). Läget står i
+ * querysträngen (`?view=tree`, `?view=map`) och `view`-proppen är serverns
+ * läsning av den — vyn håller inget eget tillstånd, och därför överlever
+ * läget en omladdning och en delad länk. `ItemViewSwitch` ritar växeln, och
+ * ordningen i `views` är bindande: det första läget är förvalet.
  *
  * **Trädläget tar samma filter som listan sedan issue 293**
  * ([[ADR-0058 Trädet som tabell]] § 5). `q`, `tags[]` och `category` är
@@ -184,8 +185,8 @@ const props = defineProps({
      * trädläget, samma form och samma skäl som `structure` ovan: `null`
      * betyder INTE HÄMTAD, och en tom tabell är ett svar servern HAR gett.
      *
-     * Vyn ritar ingenting ur den än: tabellen kommer i issue 294, och den
-     * läser kolumnerna härifrån i stället för att räkna dem i klienten.
+     * Vyn ritar ingenting ur den själv: `ItemTreeTable` slår upp raderna och
+     * räknar aldrig i klienten.
      */
     treeRows: { type: Object, default: null },
     /*
@@ -359,14 +360,12 @@ const views = computed(() => {
     </template>
 
     <!--
-        Trädläget (issue 154). Containerns struktur, ritad av
-        ItemStructureTree med fällknappar: rötterna syns och grenarna
-        väntar, så en container med sjuhundra items inte står mellan
-        användaren och sidan. Sedan issue 293 tar trädet samma filter som
-        listan ([[ADR-0058 Trädet som tabell]] § 5): servern skickar
-        träffarna och vägen ned till dem, och varje nod bär `match`. Varje
-        led är en länk till sitt item (`?path=` följer med, se
-        ItemStructureTree.vue).
+        Trädläget (issue 154, tabell sedan issue 294 · [[ADR-0058 Trädet som
+        tabell]]): containerns struktur som tabell, med containern som öppen
+        rotrad och kolumnerna ur `treeRows`. Sedan issue 293 tar trädet samma
+        filter som listan (§ 5): servern skickar träffarna och vägen ned till
+        dem, och varje nod bär `match`. Varje led är en länk till sitt item
+        (`?path=` följer med, se ItemTreeTable.vue).
 
         Ett filter UTAN träffar säger samma sak som listan, med de filter
         användaren själv satt — `item.index.filter_empty` — och ingenting om
@@ -379,11 +378,13 @@ const views = computed(() => {
             {{ t('item.index.filter_empty', { filters: summary }) }}
         </p>
 
-        <ItemStructureTree
+        <ItemTreeTable
             v-else
-            collapsible
             :nodes="structure ?? []"
+            :tree-rows="treeRows ?? {}"
             :container-ulid="container.ulid"
+            :container-name="container.name"
+            :filtered="hasFilter"
         />
     </section>
 
