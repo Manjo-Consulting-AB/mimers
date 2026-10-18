@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
-import ContainerMap from '../../../components/ContainerMap.vue';
+import FocusMap from '../../../components/FocusMap.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
 import ItemRow from '../../../components/ItemRow.vue';
 import ItemTreeTable from '../../../components/ItemTreeTable.vue';
@@ -87,26 +87,27 @@ defineOptions({
  * Flaggan är presentation; ruttens `Gate::authorize()` gäller oavsett vad
  * sidan visade.
  *
- * **Statusen visas bara i kartläget** (issue 212 · [[ADR-0050
- * Desktopdesignen]]). `statuses` är itemets ULID → `ok` eller `overdue`,
- * räknat på servern över itemets underträd (issue 92 · [[ADR-0040
- * Underträdets summor]]). Listans rad ritade den förr, men mockupen bär namn,
- * beskrivning och en pil — statusen hör till kartan, som ritar den per nod
- * (`ContainerMapNode.vue`), och proppen står kvar för kartans skull. Vyn
- * räknar ingenting själv — den slår upp och översätter, och TEXTEN ligger i
- * `lang/` precis som resten av sidans ord. Uppslaget ligger bredvid
+ * **Statusen räknas för kartans mitt och ritade noder** (issue 212 ·
+ * [[ADR-0050 Desktopdesignen]], formen omgjord i issue 296 ·
+ * [[ADR-0059 Kartan med en mitt]]). `statuses` är itemets ULID → `ok` eller
+ * `overdue`, räknat på servern över itemets underträd (issue 92 ·
+ * [[ADR-0040 Underträdets summor]]). Listans rad ritar den inte — mockupen
+ * bär namn, beskrivning och en pil — och proppen står kvar för kartans skull.
+ * Vyn räknar ingenting själv — den slår upp och översätter, och TEXTEN ligger
+ * i `lang/` precis som resten av sidans ord. Uppslaget ligger bredvid
  * `ItemResource` av samma skäl som `categories` gör det: resursen delas med
  * `/api`, som inte har bett om fältet.
  *
  * **Fliken har tre lägen sedan issue 154 och 157** · [[ADR-0046 Containerns
- * karta]]: *Lista*, som är sidan som den var och förblir förval, *Träd*, som
- * ritar containerns struktur som tabell med `ItemTreeTable` (issue 294 ·
- * [[ADR-0058 Trädet som tabell]]), och *Karta*, som ritar samma struktur som
- * noder med en öppen gren per nivå (`ContainerMap`). Läget står i
- * querysträngen (`?view=tree`, `?view=map`) och `view`-proppen är serverns
- * läsning av den — vyn håller inget eget tillstånd, och därför överlever
- * läget en omladdning och en delad länk. `ItemViewSwitch` ritar växeln, och
- * ordningen i `views` är bindande: det första läget är förvalet.
+ * karta]], kartan omgjord i [[ADR-0059 Kartan med en mitt]]: *Lista*, som är
+ * sidan som den var och förblir förval, *Träd*, som ritar containerns struktur
+ * som tabell med `ItemTreeTable` (issue 294 · [[ADR-0058 Trädet som tabell]]),
+ * och *Karta*, som ritar en mitt med föräldrar, barn och relaterade runt sig
+ * med `FocusMap` (issue 296). Läget står i querysträngen (`?view=tree`,
+ * `?view=map`) och `view`-proppen är serverns läsning av den — vyn håller
+ * inget eget tillstånd, och därför överlever läget en omladdning och en delad
+ * länk. `ItemViewSwitch` ritar växeln, och ordningen i `views` är bindande:
+ * det första läget är förvalet.
  *
  * **Trädläget tar samma filter som listan sedan issue 293**
  * ([[ADR-0058 Trädet som tabell]] § 5). `q`, `tags[]` och `category` är
@@ -120,11 +121,13 @@ defineOptions({
  * egna lägen — `null` betyder "inte hämtad", och en tom lista hade varit ett
  * svar servern hade gett.
  *
- * **Kartans öppna väg bor i adressen och inte i vyn.** `?path=` bär ledet från
- * roten ned till noden man står på, och `ContainerMap` bygger den nya adressen
- * när en nod öppnas. Servern läser samma sträng igen, så en omladdning och en
- * bakåtknapp landar i samma läge — samma konstruktion som `?path=` i itemvyn
- * (issue 95).
+ * **Kartans mitt bor i adressen och inte i vyn.** `?focus=` bär itemet i
+ * mitten; utan det är containern mitten och rötterna barnen
+ * ([[ADR-0059 Kartan med en mitt]] § 1). `Index.vue` bygger den nya adressen
+ * när en nod väljs, och servern läser samma sträng igen, så en omladdning och
+ * en bakåtknapp landar i samma läge — samma konstruktion som `?path=` i
+ * itemvyn (issue 95). Ett okänt, raderat eller dolt `focus` ger containern som
+ * mitt, utan fel.
  *
  * **Trädets *Expand all* bor i vyn och inte i adressen** (issue 295 ·
  * [[ADR-0058 Trädet som tabell]] § 6). `allOpen` är sidans enda egna
@@ -196,10 +199,12 @@ const props = defineProps({
      */
     treeRows: { type: Object, default: null },
     /*
-     * Kartan i kartläget, ur App\Actions\Item\ResolveItemMap: `{trail, levels}`.
-     * `trail` är den LÖSTA öppna vägen — en begärd väg som inte längre finns är
-     * kapad där den brister, så markeringen pekar alltid på en nod som finns —
-     * och `levels` är nivåerna i ritad ordning, rötterna först.
+     * Kartan i kartläget, ur App\Actions\Item\ResolveItemMap (issue 296 ·
+     * [[ADR-0059 Kartan med en mitt]] § 1): `{center, parent, child, related,
+     * rows}`. `center` är `{kind, ulid, name, children, placements}` —
+     * containern eller itemet — och varje grupp är `{nodes, total}`, där
+     * `nodes` är högst taket antal i namnordning och `total` hela antalet i
+     * omfånget. `rows` är mittens menyrader, tom när mitten är containern.
      *
      * `null` betyder INTE HÄMTAD, på samma villkor och av samma skäl som
      * `structure` ovan.
@@ -298,6 +303,48 @@ const views = computed(() => {
         { key: 'map', label: t('item.view.map'), href: `${base.value}?view=map${filterTail}` },
     ];
 });
+
+/*
+ * Kartans svar i `FocusMap`s form (issue 296 · [[ADR-0059 Kartan med en mitt]]
+ * § 1). Fokuskartan är byggd för `{self, parent, child, related}` med noder
+ * `{ulid, name, href, rows}` — samma form som högerpanelen i itemvyn ritar —
+ * och serverns grupper görs om här och inte i komponenten: `FocusMap` ägs av
+ * en annan yta och ska inte bära containerns adressregler.
+ *
+ * **Mitten är ingen länk.** Den ÄR sidan man står på och bär `href: null` och
+ * sina egna menyrader ur `map.rows`. De andra noderna leder till kartan med
+ * sig själva som mitt — `?view=map&focus=<ulid>` — och bär inga rader:
+ * plusmenyn sitter bara på mitten (ADR:ns beslut 4).
+ */
+const focusMap = computed(() => {
+    const neighbour = (node) => ({
+        ulid: node.ulid,
+        name: node.name,
+        href: `${base.value}?view=map&focus=${node.ulid}`,
+        rows: [],
+    });
+
+    return {
+        self: {
+            ulid: props.map.center.ulid,
+            name: props.map.center.name,
+            href: null,
+            rows: props.map.rows,
+        },
+        parent: props.map.parent.nodes.map(neighbour),
+        child: props.map.child.nodes.map(neighbour),
+        related: props.map.related.nodes.map(neighbour),
+    };
+});
+
+/*
+ * *+N till* i `FocusMap` leder hit. Kring ett item är det itemets
+ * relationsflik, som listar alla; kring containern är det listläget
+ * ([[ADR-0059 Kartan med en mitt]] § 6).
+ */
+const overflowHref = computed(() => (props.map.center.kind === 'item'
+    ? `${base.value}/${props.map.center.ulid}?tab=relations`
+    : base.value));
 </script>
 
 <template>
@@ -448,22 +495,20 @@ const views = computed(() => {
     </section>
 
     <!--
-        Kartläget (issue 157 · [[ADR-0046 Containerns karta]]). Samma
-        struktur som trädet, ritad som noder med en öppen gren per nivå:
-        kolumner över `md:` och ett rutnät med sökväg under. Den öppna
-        vägen står i adressen, och `trail` är serverns LÖSTA väg — en
-        begärd väg som inte längre finns är kapad där den brister, så
-        markeringen pekar alltid på en nod som finns.
+        Kartläget (issue 296 · [[ADR-0059 Kartan med en mitt]] § 1). Mitten är
+        containern utan `focus` och itemet med `focus`, med föräldrar, barn och
+        relaterade runt sig. `FocusMap` äger formen — samma komponent som
+        högerpanelen i itemvyn ritar — och vyn gör bara om serverns grupper
+        till dess form och bygger adresserna.
 
         Ingen rubrik och ingen egen tom-text, av samma skäl som trädet: en
         tom karta ritar ingenting, och ett ord om vad som dolts är förbjudet
         (issue 73 § Beslut 6).
     -->
     <section v-else class="mt-6">
-        <ContainerMap
-            :map="map ?? { trail: [], levels: [] }"
-            :statuses="statuses"
-            :container-ulid="container.ulid"
+        <FocusMap
+            :map="focusMap"
+            :overflow-href="overflowHref"
         />
     </section>
 </template>

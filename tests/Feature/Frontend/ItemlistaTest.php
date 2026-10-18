@@ -916,12 +916,13 @@ it('kostar ett konstant antal frågor även när raderna har bilder', function (
  * en komponent blir aldrig engelsk (issue 52 § Beslut 4, [[ADR-0021
  * Frontendteknik]]).
  *
- * **Uppslaget läses ur kartan sedan issue 212** · [[ADR-0050
+ * **Uppslaget lämnade listans rad i issue 212** · [[ADR-0050
  * Desktopdesignen]]: listans rad ritar ingen status längre, så raden som bar
- * `t(\`item.index.status_${statuses[item.ulid]}\`)` finns inte kvar. Samma
- * nyckel, samma ord — nu per nod i `ContainerMapNode.vue`
- * (`t(\`item.index.status_${status}\`)`). Att orden inte hamnat i listans vy
- * prövas fortfarande mot `Index.vue`: ett `OK` där vore en text utanför
+ * `t(\`item.index.status_${statuses[item.ulid]}\`)` finns inte kvar.
+ * Källkodsprovet mot den nod som ritade ordet togs bort i issue 296, då
+ * `ContainerMapNode.vue` utgick ([[ADR-0059 Kartan med en mitt]]); den nya
+ * noden ritas i issue 297. Kvar här är katalogens ord och kontrollen att
+ * listans vy inte bär ett eget `OK` — ett `OK` där vore en text utanför
  * `lang/`, oavsett vilken rad som ritar den.
  */
 it('har statusens text i lang och inte i vyn', function () {
@@ -929,10 +930,6 @@ it('har statusens text i lang och inte i vyn', function () {
 
     expect($en['item']['index']['status_ok'])->toBe('OK');
     expect($en['item']['index']['status_overdue'])->not->toBe('');
-
-    $noden = File::get(resource_path('js/components/ContainerMapNode.vue'));
-
-    expect($noden)->toContain('t(`item.index.status_${status}`)');
 
     $vy = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
 

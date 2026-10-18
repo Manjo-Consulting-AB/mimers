@@ -10,47 +10,46 @@ use App\Support\Access\ItemScope;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Kartan: strukturträdet ritat som noder, en nivå i taget, ur en öppen väg i
- * querysträngen — se [[ADR-0046 Containerns karta]] § Beslut och
- * [[M23 Mobilen och kartan]] § 157.
+ * Kartan: en mitt och tre grupper runt den — se [[ADR-0059 Kartan med en
+ * mitt]] § Beslut och [[M34 Kartan med en mitt]] § 296.
+ *
+ * **Mitten är containern utan `focus` och itemet med `focus`.** Utan `focus`
+ * är barnen containerns rötter, och föräldrar och relaterade är tomma grupper.
+ * Med `focus` är mitten itemet, med dess föräldrar, barn och relaterade runt
+ * sig. Ett `focus` som inte finns, är raderat eller ligger utanför omfånget
+ * ger containern som mitt, utan fel — samma regel som en kapad `?path=` i
+ * [[ADR-0041 Itemets vy]] § Beslut.
  *
  * **Kartan läser samma träd som strukturpanelen och ingenting annat.**
  * Föräldra- och barnrelationerna i `item_link`, rötterna enligt [[ADR-0041
  * Itemets vy]] och omfångsfiltret enligt [[ADR-0028 Åtkomst på itemnivå]] —
- * ordagrant samma tre stycken som App\Actions\Item\ResolveItemTree. En
- * `related`-kant kommer aldrig med: den bär ingenting ([[ADR-0035 Relationen
- * mellan objekt]]) och hör till itemets fokuskarta, som är en egen vy med en
- * egen fråga.
+ * ordagrant samma tre stycken som App\Actions\Item\ResolveItemTree.
  *
- * **Den öppna vägen är svaret på vilka nivåer som ritas.** Bara EN gren är
- * öppen per nivå (ADR:ns beslut), så det som ritas är den öppna vägen plus
- * syskonen på varje nivå längs den — hur stor containern än är. Nivå 0 är
- * rötterna, nivå n är barnen till vägens n:te led, och den sista nivån är
- * fronten: barnen till den nod man står på. Noden som är markerad i en nivå är
- * vägens led där.
+ * **En `related`-kant läses i samma fråga men påverkar ingenting annat.** Den
+ * bär ingenting ([[ADR-0035 Relationen mellan objekt]]) och läggs i en egen
+ * struktur: den bygger varken en rot, ett barn eller en plats. Rader lagras
+ * normaliserade (App\Actions\Item\LinkItems), så motparten är den ände som
+ * inte är mitten.
  *
- * **En väg som inte längre finns ignoreras, och den kapas där den brister.**
- * Trädet har byggts om, ett led har raderats, någon har delat en gammal länk:
- * svaret är kartan från roten ned till det sista led som fortfarande finns,
- * utan en rad om varför. Aldrig ett fel — en delad länk som slutar fungera för
- * att någon flyttat ett item är en fälla, inte ett fel. Samma regel och samma
- * skäl som `?path=` i App\Http\Controllers\ItemController::itemPaths().
+ * **Varje grupp är `{nodes, total}`.** `nodes` är högst taket antal noder i
+ * namnordning — fyra föräldrar, tolv barn och sex relaterade — och `total` är
+ * hela antalet i omfånget. Servern skickar bara de noder som ritas, plus
+ * antalet (ADR:ns beslut 6).
  *
  * **Markeringen läcker ingenting.** Antalet noder i svaret är antalet hon ser,
- * och `current` säger vilken av DEM som är markerad — ingenting om hur många
+ * och `total` räknar bara det som ligger i omfånget — ingenting om hur många
  * som föll bort (issue 73 § Beslut 6). Ett item utanför omfånget finns inte i
- * någon nivå och räknas därför inte i någon status: statusfrågan ställs bara
- * för de noder som ritas.
+ * någon grupp och räknas därför inte i någon status: `drawn` bär bara mitten
+ * och de ritade noderna, och statusfrågan ställs för dem.
  *
  * **Frågekostnaden är konstant: klassens EGNA frågor är TVÅ** — en för itemen
- * i omfånget, en för containerns kanter — oavsett hur många barn en nod har
- * och oavsett hur djupt vägen går. Omfånget tillkommer ur den memoiserade
- * ResolveItemScope och kostar inga frågor alls när samma request redan löst
- * upp det. Slutningen sker i minnet, samma teknik och samma skäl som
- * ResolveItemTree, ResolveItemDescendants och ResolveItemPaths: `WITH
- * RECURSIVE` finns inte i sqlite på det sätt testsviten behöver, och en fråga
- * per nivå eller per nod vore precis den N+1 hela åtkomstlösningen byggdes för
- * att undvika.
+ * i omfånget, en för containerns kanter — oavsett hur många grannar mitten
+ * har. Omfånget tillkommer ur den memoiserade ResolveItemScope och kostar inga
+ * frågor alls när samma request redan löst upp det. Slutningen sker i minnet,
+ * samma teknik och samma skäl som ResolveItemTree, ResolveItemDescendants och
+ * ResolveItemPaths: `WITH RECURSIVE` finns inte i sqlite på det sätt
+ * testsviten behöver, och en fråga per grupp eller per nod vore precis den
+ * N+1 hela åtkomstlösningen byggdes för att undvika.
  *
  * Klassen är MEDVETET en tredje läsning av samma kanter som ResolveItemTree
  * och ResolveItemPaths läser, och rotregeln står ordagrant i alla tre. Det är
@@ -62,80 +61,130 @@ use Illuminate\Support\Facades\DB;
  */
 class ResolveItemMap
 {
+    /*
+     * Taken per grupp ([[ADR-0059 Kartan med en mitt]] § 6). Fler noder än så
+     * ritas inte, men `total` räknar hela gruppen.
+     */
+    private const PARENT_LIMIT = 4;
+
+    private const CHILD_LIMIT = 12;
+
+    private const RELATED_LIMIT = 6;
+
     public function __construct(
         private readonly ResolveItemScope $resolveItemScope,
     ) {}
 
     /**
-     * Kartan för $trail ur $user:s omfång i $container.
+     * Kartan för $focus ur $user:s omfång i $container.
      *
-     * `$trail` är item-ULID:n från roten ned till den nod man står på, i den
-     * ordning användaren gick dem — alltså samma sträng som `?path=` i
-     * itemvyn, läst av anroparen.
+     * `$focus` är mitten som item-ULID, eller null när containern är mitten.
+     * Ett värde som inte matchar något item i omfånget ignoreras: svaret blir
+     * containern som mitt, utan en rad om varför.
      *
-     * `drawn` är de ritade nodernas modeller, nycklade på ULID. Den finns för
-     * att statusfrågan (App\Support\Item\ItemStatus) behöver modellerna och
-     * för att anroparen inte ska behöva hämta samma rader en gång till — den
-     * serialiseras aldrig, och `levels` bär bara det vyn ritar.
+     * `center` är `{kind, ulid, name, children, placements}`. `children` och
+     * `placements` är `null` för containern, som inte är ett item och inte
+     * förekommer i strukturen.
      *
-     * `marked` är modellen för det sista ledet i den LÖSTA vägen, alltså noden
-     * man står på, eller null när vägen är tom. Plusknappen skapar sitt item
-     * under den ([[ADR-0048 Mobilen och plusknappen]] § 2).
+     * `drawn` är modellerna för mitten (när den är ett item) och de ritade
+     * noderna, nycklade på ULID. Den finns för att statusfrågan
+     * (App\Support\Item\ItemStatus) behöver modellerna och för att anroparen
+     * inte ska behöva hämta samma rader en gång till — den serialiseras
+     * aldrig.
      *
-     * @param  list<string>  $trail
+     * `centerItem` är modellen bakom mitten, eller null för containern. Den
+     * bär plusknappens mål och mittens menyrader
+     * (App\Support\Frontend\CreateTarget).
+     *
      * @return array{
-     *     trail: list<string>,
-     *     levels: list<list<array{ulid: string, name: string, children: int, placements: int, current: bool}>>,
-     *     marked: ?Item,
+     *     center: array{kind: string, ulid: string, name: string, children: ?int, placements: ?int},
+     *     parent: array{nodes: list<array{ulid: string, name: string, children: int, placements: int}>, total: int},
+     *     child: array{nodes: list<array{ulid: string, name: string, children: int, placements: int}>, total: int},
+     *     related: array{nodes: list<array{ulid: string, name: string, children: int, placements: int}>, total: int},
+     *     centerItem: ?Item,
      *     drawn: array<string, Item>,
      * }
      */
-    public function handle(User $user, Container $container, array $trail): array
+    public function handle(User $user, Container $container, ?string $focus = null): array
     {
         $scope = $this->resolveItemScope->handle($user, $container);
 
         $items = $this->itemsInScope($container, $scope);
-        $parentsByChild = $this->parentsByChild($container, $items);
+        [$parentsByChild, $relatedByItem] = $this->edges($container, $items);
         $childrenByParent = $this->childrenByParent($items, $parentsByChild);
 
-        $roots = $this->roots($items, $parentsByChild);
-        $open = $this->openPath($trail, $items, $roots, $childrenByParent);
+        $rank = array_flip(array_keys($items));
 
-        $levels = [];
-        $drawn = [];
+        $this->sortByName($parentsByChild, $rank);
+        $this->sortByName($relatedByItem, $rank);
+
+        $centerId = $this->centerId($focus, $items);
+
         // Minnet mellan platsräkningarna. Det ligger här och inte i metoden:
-        // samma item kan ritas i flera nivåer, och en DAG där många vägar möts
-        // hade annars räknats om för varje gång.
+        // samma item kan ritas i flera grupper, och en DAG där många vägar
+        // möts hade annars räknats om för varje gång.
         $placements = [];
+        $drawn = [];
 
-        $ids = $roots;
+        $nodeOf = function (int $itemId) use (&$drawn, &$placements, $items, $childrenByParent, $parentsByChild): array {
+            $item = $items[$itemId];
+            $drawn[$item->ulid] = $item;
 
-        for ($nivå = 0, $djup = count($open); $nivå <= $djup; $nivå++) {
-            $kolumn = [];
+            return [
+                'ulid' => $item->ulid,
+                'name' => $item->name,
+                'children' => count($childrenByParent[$itemId] ?? []),
+                'placements' => $placements[$itemId] ??= $this->countPlacements($itemId, $parentsByChild, $placements, [$itemId => true]),
+            ];
+        };
 
-            foreach ($ids as $itemId) {
-                $placements[$itemId] ??= $this->countPlacements($itemId, $parentsByChild, $placements, [$itemId => true]);
+        $groupOf = function (array $itemIds, int $limit) use ($nodeOf): array {
+            $nodes = [];
 
-                $kolumn[] = [
-                    'ulid' => $items[$itemId]->ulid,
-                    'name' => $items[$itemId]->name,
-                    'children' => count($childrenByParent[$itemId] ?? []),
-                    'placements' => $placements[$itemId],
-                    'current' => ($open[$nivå] ?? null) === $itemId,
-                ];
-
-                $drawn[$items[$itemId]->ulid] = $items[$itemId];
+            foreach (array_slice($itemIds, 0, $limit) as $itemId) {
+                $nodes[] = $nodeOf($itemId);
             }
 
-            $levels[] = $kolumn;
+            return ['nodes' => $nodes, 'total' => count($itemIds)];
+        };
 
-            $ids = isset($open[$nivå]) ? ($childrenByParent[$open[$nivå]] ?? []) : [];
+        if ($centerId === null) {
+            $centerItem = null;
+
+            $center = [
+                'kind' => 'container',
+                'ulid' => $container->ulid,
+                'name' => $container->name,
+                'children' => null,
+                'placements' => null,
+            ];
+
+            $parent = ['nodes' => [], 'total' => 0];
+            $child = $groupOf($this->roots($items, $parentsByChild), self::CHILD_LIMIT);
+            $related = ['nodes' => [], 'total' => 0];
+        } else {
+            $centerItem = $items[$centerId];
+            $drawn[$centerItem->ulid] = $centerItem;
+
+            $center = [
+                'kind' => 'item',
+                'ulid' => $centerItem->ulid,
+                'name' => $centerItem->name,
+                'children' => count($childrenByParent[$centerId] ?? []),
+                'placements' => $placements[$centerId] ??= $this->countPlacements($centerId, $parentsByChild, $placements, [$centerId => true]),
+            ];
+
+            $parent = $groupOf($parentsByChild[$centerId] ?? [], self::PARENT_LIMIT);
+            $child = $groupOf($childrenByParent[$centerId] ?? [], self::CHILD_LIMIT);
+            $related = $groupOf($relatedByItem[$centerId] ?? [], self::RELATED_LIMIT);
         }
 
         return [
-            'trail' => array_map(fn (int $itemId): string => $items[$itemId]->ulid, $open),
-            'levels' => $levels,
-            'marked' => $open === [] ? null : $items[$open[count($open) - 1]],
+            'center' => $center,
+            'parent' => $parent,
+            'child' => $child,
+            'related' => $related,
+            'centerItem' => $centerItem,
             'drawn' => $drawn,
         ];
     }
@@ -147,7 +196,7 @@ class ResolveItemMap
      * ResolveItemTree::itemsInScope(): `inScope()` är
      * App\Models\Item::scopeInScope(), alltså samma formulering som itemlistan
      * filtrerar med, och `id` är skiljetecken för två items med samma namn så
-     * att samma request ger samma karta. Ordningen är också den varje nivå
+     * att samma request ger samma karta. Ordningen är också den varje grupp
      * sorteras i — vyn sorterar aldrig om (issue 57a § Beslut 8).
      *
      * Ett mjukraderat item finns inte med — SoftDeletes-scopet sitter på
@@ -174,8 +223,9 @@ class ResolveItemMap
     }
 
     /**
-     * Föräldrarna för varje item i omfånget: barn_id → list<förälder_id>, på
-     * EN fråga.
+     * Containerns kanter i EN fråga, uppdelade i två strukturer:
+     * föräldrar (barn_id → list<förälder_id>) och relaterade
+     * (item_id → list<motpart_id>).
      *
      * Bara kanter där BÅDA ändarna finns i $items prövas — det är rotregeln
      * sedd från barnets håll: en förälder utanför omfånget är ingen förälder,
@@ -185,9 +235,12 @@ class ResolveItemMap
      * en `child`-rad kan bara ha kommit förbi LinkItems via en migrering eller
      * en import, och att läsa den som en förälderkant hade vänt på ledet.
      *
-     * `related` kommer aldrig med i frågan: kanten bär ingenting och fick den
-     * bygga en nivå hade ett syskon och allt som hänger under syskonet dragits
-     * in i kartan.
+     * `related` läses i SAMMA fråga men hamnar i en egen struktur. Kanten bär
+     * ingenting ([[ADR-0035 Relationen mellan objekt]]): den bygger varken en
+     * nivå, en rot eller en plats, och ett syskon som råkar vara relaterat
+     * drar inte in sitt underträd i mitten. Rader lagras normaliserade med
+     * lägst id först (App\Actions\Item\LinkItems), så motparten är den ände
+     * som inte är itemet självt.
      *
      * Båda ändarna prövas mot `deleted_at`, och båda begränsas till
      * containern: en `parent`-kant har alltid båda sina ändar där
@@ -196,45 +249,53 @@ class ResolveItemMap
      * kartan.
      *
      * @param  array<int, Item>  $items
-     * @return array<int, list<int>> barn_id → list<förälder_id>
+     * @return array{0: array<int, list<int>>, 1: array<int, list<int>>} [barn_id → list<förälder_id>, item_id → list<motpart_id>]
      */
-    private function parentsByChild(Container $container, array $items): array
+    private function edges(Container $container, array $items): array
     {
         // DB::table och inte ItemLink::query(): raden är en projektion över
         // två tabeller, och SoftDeletes-scopet sitter på Item — en join förbi
         // modellen filtrerar ingenting av sig själv.
         $rows = DB::table('item_link')
-            ->join('item as parent', 'parent.id', '=', 'item_link.from_item_id')
-            ->join('item as child', 'child.id', '=', 'item_link.to_item_id')
-            ->where('parent.container_id', $container->id)
-            ->where('child.container_id', $container->id)
-            ->whereNull('parent.deleted_at')
-            ->whereNull('child.deleted_at')
-            ->whereIn('item_link.relation', ['parent', 'child'])
+            ->join('item as from_item', 'from_item.id', '=', 'item_link.from_item_id')
+            ->join('item as to_item', 'to_item.id', '=', 'item_link.to_item_id')
+            ->where('from_item.container_id', $container->id)
+            ->where('to_item.container_id', $container->id)
+            ->whereNull('from_item.deleted_at')
+            ->whereNull('to_item.deleted_at')
+            ->whereIn('item_link.relation', ['parent', 'child', 'related'])
             ->get(['item_link.from_item_id', 'item_link.to_item_id', 'item_link.relation']);
 
         $parentsByChild = [];
+        $relatedByItem = [];
 
         foreach ($rows as $row) {
+            if (! isset($items[$row->from_item_id], $items[$row->to_item_id])) {
+                continue;
+            }
+
+            if ($row->relation === 'related') {
+                $relatedByItem[$row->from_item_id][] = $row->to_item_id;
+                $relatedByItem[$row->to_item_id][] = $row->from_item_id;
+
+                continue;
+            }
+
             [$parentId, $childId] = $row->relation === 'parent'
                 ? [$row->from_item_id, $row->to_item_id]
                 : [$row->to_item_id, $row->from_item_id];
 
-            if (! isset($items[$parentId], $items[$childId])) {
-                continue;
-            }
-
             $parentsByChild[$childId][] = $parentId;
         }
 
-        return $parentsByChild;
+        return [$parentsByChild, $relatedByItem];
     }
 
     /**
      * Kanterna vända: förälder_id → list<barn_id>, i namnets ordning.
      *
      * Ingen fråga — samma tabell sedd från andra hållet — och ordningen
-     * kommer ur att $items läses i sin egen ordning: en nivå ska stå i samma
+     * kommer ur att $items läses i sin egen ordning: en grupp ska stå i samma
      * ordning som trädet och listan gör (issue 57a § Beslut 8), och vyn
      * sorterar aldrig om.
      *
@@ -253,6 +314,23 @@ class ResolveItemMap
         }
 
         return $childrenByParent;
+    }
+
+    /**
+     * Sorterar varje lista i namnets ordning — `$rank` är item-id → plats i
+     * den namnordnade itemlistan. `childrenByParent` behöver det inte: den
+     * byggs genom att $items läsas i sin egen ordning.
+     *
+     * @param  array<int, list<int>>  $byItem
+     * @param  array<int, int>  $rank
+     */
+    private function sortByName(array &$byItem, array $rank): void
+    {
+        foreach ($byItem as &$itemIds) {
+            usort($itemIds, fn (int $a, int $b): int => $rank[$a] <=> $rank[$b]);
+        }
+
+        unset($itemIds);
     }
 
     /**
@@ -277,49 +355,29 @@ class ResolveItemMap
     }
 
     /**
-     * Den begärda vägen, kapad där den brister.
+     * Mitten: itemet med `$focus` om det finns i omfånget, annars null —
+     * containern.
      *
-     * Varje led slås upp i den nivå det skulle ligga på — det första i rötterna,
-     * nästa i den förras barn — och ett led som inte finns där avslutar
-     * läsningen. Resten av strängen ignoreras: den beskriver en väg som inte
-     * längre finns, och svaret blir kartan från roten ned till det sista led
-     * som gör det.
+     * Ett okänt, raderat eller dolt ULID ger samma svar som ett saknat
+     * `focus`: containern, utan fel och utan en rad om varför (issue 73
+     * § Beslut 6). Mjukraderade items finns inte i `$items`, så raderade och
+     * okända värden behandlas lika redan där.
      *
-     * En REN cykel, där varje item har en förälder i omfånget, har ingen rot
-     * alls och förekommer därför inte i något svar — samma följd av rotregeln
-     * som ResolveItemTree::forest() ger för samma graf.
-     *
-     * @param  list<string>  $trail
      * @param  array<int, Item>  $items
-     * @param  list<int>  $roots
-     * @param  array<int, list<int>>  $childrenByParent
-     * @return list<int> den lösta vägen, roten först
      */
-    private function openPath(array $trail, array $items, array $roots, array $childrenByParent): array
+    private function centerId(?string $focus, array $items): ?int
     {
-        $open = [];
-        $ids = $roots;
-
-        foreach ($trail as $ulid) {
-            $found = null;
-
-            foreach ($ids as $itemId) {
-                if ($items[$itemId]->ulid === $ulid) {
-                    $found = $itemId;
-
-                    break;
-                }
-            }
-
-            if ($found === null) {
-                break;
-            }
-
-            $open[] = $found;
-            $ids = $childrenByParent[$found] ?? [];
+        if ($focus === null) {
+            return null;
         }
 
-        return $open;
+        foreach ($items as $itemId => $item) {
+            if ($item->ulid === $focus) {
+                return $itemId;
+            }
+        }
+
+        return null;
     }
 
     /**
