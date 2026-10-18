@@ -85,6 +85,30 @@
     --color-danger-soft: #fef2f2;
 
     /*
+     * Itemets ikonfärger — se [[ADR-0060 Itemets ikon]] § 5. Ett undantag
+     * från rollnamnen: färgen är användarens val och inte en roll, så
+     * nycklarna heter som färgerna. Varje nyckel har en linje och en mjuk
+     * ruta. Paletten saknar rött med flit — `danger` betyder att något har
+     * passerat, och en röd ikon användaren valt skulle läsas som en varning.
+     */
+    --color-tint-slate: #475569;
+    --color-tint-slate-soft: #f1f5f9;
+    --color-tint-blue: #2563eb;
+    --color-tint-blue-soft: #eff6ff;
+    --color-tint-sky: #0284c7;
+    --color-tint-sky-soft: #f0f9ff;
+    --color-tint-teal: #0d9488;
+    --color-tint-teal-soft: #f0fdfa;
+    --color-tint-green: #15803d;
+    --color-tint-green-soft: #ecfdf3;
+    --color-tint-amber: #d97706;
+    --color-tint-amber-soft: #fffbeb;
+    --color-tint-orange: #ea580c;
+    --color-tint-orange-soft: #fff7ed;
+    --color-tint-violet: #7c3aed;
+    --color-tint-violet-soft: #f5f3ff;
+
+    /*
      * Fokusringen. Får aldrig tas bort — en nollställd outline utan ring
      * river tangentbordsarbetet i issue 68a och 68b. Se FormField.vue.
      */
