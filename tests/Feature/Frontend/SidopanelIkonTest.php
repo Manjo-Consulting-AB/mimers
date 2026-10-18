@@ -77,6 +77,8 @@ it('ger varje sektionsrad en ikon ur samma lista som raden', function () {
         'history' => 'history',
         'search' => 'search',
         'settings' => 'settings',
+        // Papperskorgen (M39 · issue 320): samma roll ur den slutna listan.
+        'trash' => 'trash',
     ]);
 
     // Mallen ritar rollen ur listan och inte en ikon per `@if`-gren.

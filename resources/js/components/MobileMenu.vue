@@ -125,7 +125,7 @@ function onClosed() {
                 <!--
                     Mockupens ordning (issue 653 och 677), samma som
                     sidopanelen: översikten, containrarna, resten av raderna,
-                    favoriterna och användaren sist. Ingen `mt-auto`: menyn
+                    favoriterna, papperskorgen och användaren sist. Ingen `mt-auto`: menyn
                     skrollar, och en botten som trycks dit hade följt med i
                     skrollen i stället för att stå still.
                 -->
@@ -143,6 +143,13 @@ function onClosed() {
                 <ShellSections />
 
                 <ShellSections part="favorites" />
+
+                <!--
+                    Papperskorgen står närmast ovanför användarens rad, samma
+                    plats som i sidopanelen (M39 · issue 320 · [[ADR-0065 Den
+                    samlade papperskorgen]] § 1).
+                -->
+                <ShellSections part="trash" />
 
                 <ShellSections part="account" />
             </aside>

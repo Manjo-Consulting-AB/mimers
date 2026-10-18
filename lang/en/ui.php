@@ -105,6 +105,12 @@ return [
         // someone already standing there. The link points at /settings, which
         // redirects to the profile (issue 53c).
         'settings' => 'Settings',
+        // The way into the collected trash, see M39 · issue 320 and
+        // [[ADR-0065 Den samlade papperskorgen]] § 1: the row sits at the
+        // bottom of the shell, above the user's own row. The word is the
+        // page's own (`trash.heading`) and the same word the container's
+        // trash tab carries (`container.nav.trash`) — one word for one place.
+        'trash' => 'Trash',
         'login' => 'Log in',
         // The FAVOURITES section in the shell, see issue 106. The word is the
         // section's heading AND the nav element's accessible name: the section

@@ -176,6 +176,10 @@ it('visar samma sektioner i samma ordning ur samma data i menyn som i sidopanele
         // och fälls av en rad som glöms i katalogen, med flit.
         'search',
         'settings',
+        // Papperskorgen kom med M39 · issue 320
+        // ([[ADR-0065 Den samlade papperskorgen]] § 1): raden står sist i
+        // listan och ritas i sin egen del längst ned i båda ytorna.
+        'trash',
     ]);
 
     // Etiketten byggs ur nyckeln och slås upp i katalogen — ingen färdig
@@ -218,17 +222,18 @@ it('ritar sidomenyn i samma ordning som sidopanelen', function () {
     expect($panelen)->not->toBeEmpty('layouten har ingen sidopanel')
         ->and($menyn)->not->toBeEmpty('menyn har ingen sidopanel');
 
-    $sektion = '#<ShellSections part="top" />|<ShellContainerList|<ShellSections />|<ShellSections part="favorites" />|<ShellSections part="account" />#';
+    $sektion = '#<ShellSections part="top" />|<ShellContainerList|<ShellSections />|<ShellSections part="favorites" />|<ShellSections part="trash" />|<ShellSections part="account" />#';
 
     preg_match_all($sektion, $panelen, $iPanelen);
     preg_match_all($sektion, $menyn, $iMenyn);
 
-    // Alla fem anrop står i båda ytorna, och i mockupens ordning.
+    // Alla sex anrop står i båda ytorna, och i mockupens ordning.
     expect($iPanelen[0])->toBe([
         '<ShellSections part="top" />',
         '<ShellContainerList',
         '<ShellSections />',
         '<ShellSections part="favorites" />',
+        '<ShellSections part="trash" />',
         '<ShellSections part="account" />',
     ])->and($iMenyn[0])->toBe($iPanelen[0]);
 });
