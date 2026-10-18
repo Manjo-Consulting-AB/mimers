@@ -26,8 +26,12 @@ use function Pest\Laravel\withoutVite;
  * Klart när: package.json har uqr och inget annat nytt paket. Nycklarna
  * listas i stället för att räknas: en ny rad ska fälla provet, inte bara ändra
  * ett tal. `uqr` ligger i `devDependencies` — allt Vite buntar in hör dit,
- * precis som `vue`, och paketet når appen bara genom bundeln — så
- * `dependencies` ska vara tomt.
+ * precis som `vue`, och paketet når appen bara genom bundeln.
+ *
+ * `lucide` kom med issue 300 och står i `dependencies`: itemets ikon väljs av
+ * användaren och är en del av produkten, inte ett utvecklingsverktyg. Det är
+ * det enda undantaget från den tomma listan, och det står utskrivet här så att
+ * en tredje ny rad fortfarande fäller provet.
  */
 it('har uqr och inget annat nytt paket', function () {
     $paket = json_decode(File::get(base_path('package.json')), true);
@@ -35,7 +39,7 @@ it('har uqr och inget annat nytt paket', function () {
     $beroenden = array_keys($paket['dependencies'] ?? []);
     sort($beroenden);
 
-    expect($beroenden)->toBe([]);
+    expect($beroenden)->toBe(['lucide']);
 
     $utvecklingsberoenden = array_keys($paket['devDependencies'] ?? []);
     sort($utvecklingsberoenden);
