@@ -4,24 +4,26 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 /*
  * Kartans linjer, se resources/js/components/ItemMap.vue, issue 306 ·
  * [[M35 Itemets ikon och kartans kort]] § 306 och
- * [[ADR-0061 Kartans kort och kanter]] § 5–8.
+ * [[ADR-0061 Kartans kort och kanter]] § 5–8, utan pilspetsar sedan issue
+ * 308 · [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]] § 1.
  *
  * **Lagret ritar en kubisk kurva per ritat kort.** Korten står i ett rutnät
- * med fasta platser (ADR:ns beslut 7), så lagret behöver ingen layoutalgoritm:
+ * med fasta platser (ADR-0061 § 7), så lagret behöver ingen layoutalgoritm:
  * det läser kortens lägen med `getBoundingClientRect()` relativt kartans ram
- * och en linje går från mittens kant till kortets närmaste kant (beslut 6).
+ * och en linje går från mittens kant till kortets närmaste kant (ADR-0061 § 6).
  * Ingen mätning sker i förväg och ingenting räknas fram ur rutnätet — kortens
  * höjd beror på `via` och på teckensnittet.
  *
- * **Färgen säger slaget** (beslut 5): föräldrar i `accent`, barn i `success`
- * och relaterade i `ink-subtle`. Färgerna skrivs som token och aldrig som hex,
- * så att mörkt läge byter dem på samma ställe som resten av ytan. De
- * relaterade är streckade, eftersom en relation inte är en struktur.
+ * **Färgen säger slaget** (ADR-0061 § 5): föräldrar i `accent`, barn i
+ * `success` och relaterade i `ink-subtle`. Färgerna skrivs som token och
+ * aldrig som hex, så att mörkt läge byter dem på samma ställe som resten av
+ * ytan. De relaterade är streckade, eftersom en relation inte är en struktur.
  *
- * **Pilspetsarna bor i `<defs>`** och pekar från mitten mot noden: mot
- * föräldern, mot barnet och åt båda hållen mot en relaterad, som saknar
- * riktning. Den sista använder `orient="auto-start-reverse"`, som vänder
- * startmarkören utåt.
+ * **Linjerna har inga pilspetsar** (ADR-0062 § 1): lagret ritar ingen
+ * `<marker>` och ingen `<defs>`, och ingen `<path>` bär `marker-start` eller
+ * `marker-end`. Placeringen säger riktningen — mitten i mitten, föräldrarna
+ * ovanför och barnen under — och streckningen skiljer relationen från
+ * strukturen.
  *
  * **Lagret är osynligt för skärmläsaren och för pekaren** — det är en
  * förklaring till korten, inte ett mål. Det ritas bara från `md:`, där rutnätet
@@ -211,49 +213,6 @@ onBeforeUnmount(() => {
         aria-hidden="true"
         class="pointer-events-none absolute inset-0 z-0 hidden h-full w-full md:block"
     >
-        <defs>
-            <!-- En pilspets per färg, med spetsen i ändpunkten. -->
-            <marker
-                id="map-edge-parent"
-                viewBox="0 0 10 10"
-                refX="10"
-                refY="5"
-                markerWidth="6"
-                markerHeight="6"
-                orient="auto"
-            >
-                <path d="M 0 0 L 10 5 L 0 10 Z" fill="var(--color-accent)" />
-            </marker>
-
-            <marker
-                id="map-edge-child"
-                viewBox="0 0 10 10"
-                refX="10"
-                refY="5"
-                markerWidth="6"
-                markerHeight="6"
-                orient="auto"
-            >
-                <path d="M 0 0 L 10 5 L 0 10 Z" fill="var(--color-success)" />
-            </marker>
-
-            <!--
-                En relation har ingen riktning: pilen sitter i båda ändarna,
-                och `auto-start-reverse` vänder den första utåt.
-            -->
-            <marker
-                id="map-edge-related"
-                viewBox="0 0 10 10"
-                refX="10"
-                refY="5"
-                markerWidth="6"
-                markerHeight="6"
-                orient="auto-start-reverse"
-            >
-                <path d="M 0 0 L 10 5 L 0 10 Z" fill="var(--color-ink-subtle)" />
-            </marker>
-        </defs>
-
         <path
             v-for="edge in edges"
             :key="edge.key"
@@ -263,8 +222,6 @@ onBeforeUnmount(() => {
             stroke-width="2"
             stroke-linecap="round"
             :stroke-dasharray="edge.dashed ? '6 5' : undefined"
-            :marker-end="`url(#map-edge-${edge.kind})`"
-            :marker-start="edge.dashed ? `url(#map-edge-${edge.kind})` : undefined"
         />
     </svg>
 </template>

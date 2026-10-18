@@ -9,13 +9,14 @@ import { useTranslations } from '../composables/useTranslations.js';
 /*
  * Containerns karta, se issue 297 · [[M34 Kartan med en mitt]] § 297 och
  * [[ADR-0059 Kartan med en mitt]] § 3–8, omritad i issue 306 ·
- * [[ADR-0061 Kartans kort och kanter]] § 5–8.
+ * [[ADR-0061 Kartans kort och kanter]] § 5–8 och luftad i issue 308 ·
+ * [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]] § 1–3.
  *
  * **En mitt och en ring.** Mitten står i mitten, föräldrarna ovanför, barnen
- * under och de relaterade i två kolumner på var sin sida — de första tre till
- * vänster och de nästa tre till höger, i serverns ordning. Komponenten vandrar
- * inte i grafen, sorterar inte om en grupp och räknar ingenting: servern har
- * redan skickat de noder som ritas och gruppens `total`
+ * under och de relaterade i två kolumner på var sin sida — index 0, 2 och 4
+ * till vänster och index 1, 3 och 5 till höger, i serverns ordning.
+ * Komponenten vandrar inte i grafen, sorterar inte om en grupp och räknar
+ * ingenting: servern har redan skickat de noder som ritas och gruppens `total`
  * (App\Actions\Item\ResolveItemMap).
  *
  * **Kortets form bor i `ItemMapNode`** (issue 305 · [[ADR-0061 Kartans kort och
@@ -23,17 +24,22 @@ import { useTranslations } from '../composables/useTranslations.js';
  * öppna-ikonen i kortets hörn. Vyn skickar slaget som propp så att noden kan
  * färga ordet rätt.
  *
- * **Rutnätet fyller panelen** (ADR:ns beslut 7): föräldrarna står på en rad
- * ovanför mitten, barnen under med högst fyra per rad — bredden `max-w` rymmer
- * fyra kort, så en femte rad bryts och serverns tak på tolv ger högst tre
- * rader — och de relaterade står i en båge på var sida. Den mittersta på en
- * sida står längst ut: kolumnen är riktad mot mitten och den mittersta noden
- * skjuts ut med en marginal. Korten har fast bredd, så raderna står i linje.
- * Under `md:` står allt i en kolumn med de relaterade under barnen.
+ * **Rutnätet fyller panelen** (ADR-0061 § 7 och ADR-0062 § 2): föräldrarna
+ * står på en rad ovanför mitten, barnen under med högst fyra per rad — bredden
+ * `md:max-w-[52.5rem]` rymmer fyra kort (4 × `w-48`) och tre mellanrum på
+ * 24 px, så en femte rad bryts och serverns tak på tolv ger högst tre rader —
+ * och de relaterade står i en båge på var sida. Från `md:` är det `gap-6`
+ * mellan korten, 24 px mellan barnens rader, `mt-14` mellan raderna föräldrar,
+ * mitten och barnen, och `gap-12` mellan mitten och de relaterades kolumner.
+ * Den mittersta på en sida — den andra noden på den sidan — står längst ut:
+ * kolumnen är riktad mot mitten och den noden skjuts ut med en marginal.
+ * Korten har fast bredd, så raderna står i linje. Under `md:` gäller dagens
+ * avstånd, och allt står i en kolumn med de relaterade under barnen.
  *
- * **Linjerna bor i `ItemMapEdges`** (ADR:ns beslut 5 och 6): ett SVG-lager
- * under korten, i kartans ram, som mäter korten och ritar en kubisk kurva per
- * ritat kort. Det finns bara från `md:`, där rutnätet finns.
+ * **Linjerna bor i `ItemMapEdges`** (ADR-0061 § 5 och 6, ADR-0062 § 1): ett
+ * SVG-lager under korten, i kartans ram, som mäter korten och ritar en kubisk
+ * kurva per ritat kort. Linjerna har inga pilspetsar. Lagret finns bara från
+ * `md:`, där rutnätet finns.
  *
  * **Alla noder utom mitten är länkar till kartan med sig själva som mitt** —
  * `?view=map&focus=<ulid>` — och öppna-ikonen bredvid leder till itemets sida.
@@ -47,10 +53,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * som föds med `open` redan sant hade aldrig visats.
  *
  * **Formen är fast.** Taken per grupp är serverns — fyra föräldrar, tolv barn
- * och sex relaterade — och vyn delar bara de relaterade på två sidor om tre.
+ * och sex relaterade — och vyn fördelar bara de relaterade på två sidor:
+ * varannan nod till vänster och varannan till höger, utan att sortera om.
  * Ingenting mäts här och ingenting skrollar i sidled: linjerna mäts i
- * `ItemMapEdges`. Över `md:` står de relaterade på sidorna; under `md:` står de
- * under barnen (ADR:ns beslut 8).
+ * `ItemMapEdges`. Över `md:` står de relaterade på sidorna; under `md:` står
+ * de under barnen i serverns ordning (ADR-0061 § 8 och ADR-0062 § 3).
  *
  * **Teckenförklaringen har fyra rader** (ADR-0059 § 8): *Parent*, *Child*
  * och *Related* med gruppens `total`, och *Same item*, som förklarar ⇄. Orden
@@ -87,9 +94,6 @@ const props = defineProps({
 
 const { t } = useTranslations();
 
-/* Tre relaterade per sida, som ADR:ns tak säger. */
-const RELATED_PER_SIDE = 3;
-
 const base = computed(() => `/containers/${props.containerUlid}/items`);
 
 /*
@@ -117,14 +121,17 @@ const parents = computed(() => props.map.parent.nodes);
 const children = computed(() => props.map.child.nodes);
 
 /*
- * De relaterade fördelas på två sidor i tur och ordning: de första tre till
- * vänster, de nästa tre till höger. Ordningen är serverns — motpartens namn
- * stigande — och den delas av, aldrig sorteras om: "den första" ska vara samma
- * nod i kartan som i relationsfliken.
+ * De relaterade fördelas på varannan sida (ADR-0062 § 3): index 0, 2 och 4
+ * till vänster och index 1, 3 och 5 till höger. Ordningen är serverns —
+ * motpartens namn stigande — och den delas av, aldrig sorteras om: "den
+ * första" ska vara samma nod i kartan som i relationsfliken. Serverns tak är
+ * sex relaterade, alltså tre per sida.
  */
-const relatedLeft = computed(() => props.map.related.nodes.slice(0, RELATED_PER_SIDE));
+const relatedLeft = computed(
+    () => props.map.related.nodes.filter((_, index) => index % 2 === 0),
+);
 const relatedRight = computed(
-    () => props.map.related.nodes.slice(RELATED_PER_SIDE, RELATED_PER_SIDE * 2),
+    () => props.map.related.nodes.filter((_, index) => index % 2 === 1),
 );
 
 /*
@@ -249,12 +256,13 @@ function closeMenu() {
 
             <div class="relative z-10 flex w-full flex-col items-center">
                 <!--
-                    Föräldrarna ovanför, högst fyra. Bredden rymmer fyra kort,
-                    så raden bryts aldrig före serverns tak.
+                    Föräldrarna ovanför, högst fyra. Från `md:` är det `gap-6`
+                    mellan korten och bredden rymmer fyra kort och tre
+                    mellanrum på 24 px, så raden bryts aldrig före serverns tak.
                 -->
                 <ul
                     v-if="parents.length > 0"
-                    class="flex w-full flex-wrap justify-center gap-3 md:max-w-[51rem]"
+                    class="flex w-full flex-wrap justify-center gap-3 md:gap-6 md:max-w-[52.5rem]"
                 >
                     <ItemMapNode
                         v-for="node in parents"
@@ -280,13 +288,16 @@ function closeMenu() {
                 <!--
                     Mitten med de relaterade i en båge på var sin sida. BÅDA
                     kolumnerna ritas även när en sida är tom över `md:` — de är
-                    lika breda och håller mitten i mitten. Kolumnerna är
-                    riktade mot mitten, och den mittersta noden skjuts ut:
-                    `mr-8` åt vänster och `ml-8` åt höger. Den mittersta är
-                    `index === 1` i serverns ordning. Under `md:` är sidorna
-                    gömda och de relaterade står under barnen i stället.
+                    lika breda och håller mitten i mitten. Noderna fördelas på
+                    varannan sida: index 0, 2 och 4 till vänster och 1, 3 och 5
+                    till höger. Kolumnerna är riktade mot mitten, och den andra
+                    noden på varje sida — `index === 1` i den sidans ordning —
+                    skjuts ut: `mr-8` åt vänster och `ml-8` åt höger. `gap-12`
+                    håller luft mellan mitten och kolumnerna. Under `md:` är
+                    sidorna gömda och de relaterade står under barnen i
+                    serverns ordning i stället.
                 -->
-                <div class="mt-6 flex w-full items-center justify-center">
+                <div class="mt-6 flex w-full items-center justify-center md:mt-14 md:gap-12">
                     <ul class="hidden min-w-0 flex-1 flex-col items-end gap-3 md:flex">
                         <ItemMapNode
                             v-for="(node, index) in relatedLeft"
@@ -345,11 +356,13 @@ function closeMenu() {
 
                 <!--
                     Barnen under, högst fyra per rad. Serverns tak är tolv, så
-                    det blir högst tre rader; bredden rymmer fyra kort.
+                    det blir högst tre rader; från `md:` rymmer bredden fyra
+                    kort och tre mellanrum på 24 px, med `gap-6` både mellan
+                    korten och mellan raderna.
                 -->
                 <ul
                     v-if="children.length > 0"
-                    class="mt-6 flex w-full flex-wrap justify-center gap-3 md:max-w-[51rem]"
+                    class="mt-6 flex w-full flex-wrap justify-center gap-3 md:mt-14 md:gap-6 md:max-w-[52.5rem]"
                 >
                     <ItemMapNode
                         v-for="node in children"
@@ -375,9 +388,9 @@ function closeMenu() {
         </div>
 
         <!--
-            Under `md:` står de relaterade under barnen. Samma noder och samma
-            ord som i sidokolumnerna — bara en annan plats, för en karta som
-            skrollar i sidled är en karta man inte ser.
+            Under `md:` står de relaterade under barnen, i serverns ordning.
+            Samma noder som i sidokolumnerna, men utan varannan-fördelningen —
+            en karta som skrollar i sidled är en karta man inte ser.
         -->
         <ul
             v-if="relatedLeft.length > 0 || relatedRight.length > 0"

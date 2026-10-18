@@ -818,20 +818,28 @@ it('ställer korten i rutnätet och ritar ett SVG-lager under dem', function () 
 });
 
 /*
- * Klart när: föräldrarna står på en rad ovanför mitten, barnen under med högst
- * fyra per rad, och de relaterade i en båge på var sida.
+ * Klart när (issue 308 · [[ADR-0062 Kartans luft, listans ruta och den löpande
+ * sökningen]] § 2): föräldrarna står på en rad ovanför mitten, barnen under
+ * med högst fyra per rad, och luften kommer från `md:`.
  *
- * Bredden `max-w-[51rem]` rymmer fyra kort (4 × `w-48` plus `gap-3`), så en
- * femte nod bryter raden. De relaterade är riktade mot mitten, och den
- * mittersta noden på var sida — `index === 1` i serverns ordning — skjuts ut:
- * `mr-8` åt vänster och `ml-8` åt höger. Ordningen i DOM:en är föräldrar,
- * mitten, barn.
+ * Bredden `md:max-w-[52.5rem]` rymmer fyra kort (4 × `w-48`) och tre mellanrum
+ * på 24 px (`gap-6`), så en femte nod bryter raden. `gap-6` gäller både mellan
+ * korten och mellan barnens rader, `mt-14` skiljer raderna, och `gap-12`
+ * skiljer mitten från de relaterades kolumner. Under `md:` gäller dagens
+ * avstånd: `gap-3` och `mt-6`. Ordningen i DOM:en är föräldrar, mitten, barn.
  */
-it('ställer föräldrarna ovanför, barnen under och de relaterade i en båge', function () {
+it('ställer föräldrarna ovanför, barnen under och ger kartan luft från md:', function () {
     $kartan = kartavyKod('components/ItemMap.vue');
 
-    // Samma bredd på båda raderna: fyra kort och tre mellanrum.
-    expect(substr_count($kartan, 'md:max-w-[51rem]'))->toBe(2);
+    // Fyra kort och tre mellanrum på 24 px.
+    expect(substr_count($kartan, 'md:max-w-[52.5rem]'))->toBe(2)
+        ->and(substr_count($kartan, 'md:gap-6'))->toBe(2)
+        ->and(substr_count($kartan, 'md:mt-14'))->toBe(2)
+        ->and(substr_count($kartan, 'md:gap-12'))->toBe(1);
+
+    // Under md: står dagens avstånd kvar på båda listorna.
+    expect(substr_count($kartan, 'flex-wrap justify-center gap-3'))->toBe(2)
+        ->and($kartan)->toContain('flex w-full items-center justify-center md:mt-14 md:gap-12');
 
     $föräldrar = strpos($kartan, 'kind="parent"');
     $mitten = strpos($kartan, ':node="center"');
@@ -843,16 +851,46 @@ it('ställer föräldrarna ovanför, barnen under och de relaterade i en båge',
         ->and($föräldrar)->toBeLessThan($mitten)
         ->and($mitten)->toBeLessThan($barn);
 
-    // Bågen: kolumnerna är riktade mot mitten, och den mittersta skjuts ut.
+    // *+N till* står kvar under sin grupp.
+    expect($kartan)->toContain("t('item.map.more', { count: moreParents })")
+        ->toContain("t('item.map.more', { count: moreChildren })")
+        ->toContain("t('item.map.more', { count: moreRelated })");
+});
+
+/*
+ * Klart när (issue 308 · [[ADR-0062 Kartans luft, listans ruta och den löpande
+ * sökningen]] § 3): de relaterade fördelas på varannan sida — index 0, 2 och 4
+ * till vänster och index 1, 3 och 5 till höger — utan att sorteras om.
+ *
+ * Den mittersta på en sida är den andra noden där, och den skjuts fortfarande
+ * ut med `md:mr-8` respektive `md:ml-8`. *+N till* står sist i den högra
+ * kolumnen, och under `md:` ritar listan alla relaterade i serverns ordning.
+ */
+it('fördelar de relaterade på varannan sida utan att sortera om', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)->toContain(
+        'props.map.related.nodes.filter((_, index) => index % 2 === 0)',
+    )->toContain(
+        'props.map.related.nodes.filter((_, index) => index % 2 === 1)',
+    );
+
+    // Den andra noden på varje sida skjuts ut.
     expect($kartan)->toContain('items-end gap-3 md:flex')
         ->toContain('items-start gap-3 md:flex')
         ->toContain("index === 1 ? 'md:mr-8' : ''")
         ->toContain("index === 1 ? 'md:ml-8' : ''");
 
-    // *+N till* står kvar under sin grupp.
-    expect($kartan)->toContain("t('item.map.more', { count: moreParents })")
-        ->toContain("t('item.map.more', { count: moreChildren })")
-        ->toContain("t('item.map.more', { count: moreRelated })");
+    // Under md: ritar listan alla relaterade i serverns ordning.
+    expect($kartan)->toContain('v-for="node in map.related.nodes"');
+
+    // *+N till* står sist i den högra kolumnen: efter v-for:n där.
+    $höger = strpos($kartan, 'items-start gap-3 md:flex');
+    $mer = strpos($kartan, "t('item.map.more', { count: moreRelated })");
+
+    expect($höger)->not->toBeFalse()
+        ->and($mer)->not->toBeFalse()
+        ->and($mer)->toBeGreaterThan($höger);
 });
 
 /*
@@ -879,28 +917,22 @@ it('färgar linjerna ur tokens och streckar de relaterade', function () {
 });
 
 /*
- * Klart när: pilspetsarna pekar mot föräldern, mot barnet och åt båda hållen
- * mot en relaterad.
+ * Klart när (issue 308 · [[ADR-0062 Kartans luft, listans ruta och den löpande
+ * sökningen]] § 1): linjelagret har ingen `<marker>` och ingen `<defs>`, och
+ * ingen linje har `marker-start` eller `marker-end`.
  *
- * En `<marker>` per färg i lagrets `<defs>`. Föräldrar och barn har bara
- * `marker-end` — linjen går från mitten mot noden — och den relaterade har
- * både start och slut, med `auto-start-reverse` som vänder den första utåt.
+ * Placeringen säger riktningen: mitten i mitten, föräldrarna ovanför och
+ * barnen under. Streckningen skiljer relationen från strukturen.
  */
-it('sätter pilspetsar mot föräldern, mot barnet och åt båda hållen mot en relaterad', function () {
+it('ritar linjerna utan pilspetsar och utan defs', function () {
     $lagret = kartavyKod('components/ItemMapEdges.vue');
 
-    foreach (['map-edge-parent', 'map-edge-child', 'map-edge-related'] as $marke) {
-        expect($lagret)->toContain("id=\"{$marke}\"");
-    }
-
-    expect(substr_count($lagret, '<marker'))->toBe(3)
-        ->and(substr_count($lagret, '<defs>'))->toBe(1);
-
-    expect($lagret)->toContain(':marker-end="`url(#map-edge-${edge.kind})`"')
-        ->toContain(':marker-start="edge.dashed ? `url(#map-edge-${edge.kind})` : undefined"');
-
-    expect($lagret)->toContain('orient="auto-start-reverse"')
-        ->and(substr_count($lagret, 'orient="auto"'))->toBe(2);
+    expect(str_contains($lagret, '<marker'))->toBeFalse('lagret ritar fortfarande en <marker>')
+        ->and(str_contains($lagret, '<defs>'))->toBeFalse('lagret har fortfarande en <defs>')
+        ->and(str_contains($lagret, '</defs>'))->toBeFalse()
+        ->and(str_contains($lagret, 'marker-start'))->toBeFalse()
+        ->and(str_contains($lagret, 'marker-end'))->toBeFalse()
+        ->and(str_contains($lagret, 'orient='))->toBeFalse();
 });
 
 /*
