@@ -145,6 +145,35 @@ it('ritar varje container med sin ikon och container som fallback, oavsett art',
 });
 
 /*
+ * Klart när (issue 322 · [[M41 Fynd 2026-10-19]] § 322): containerns ikon
+ * ritas utan ruta, i radens textfärg.
+ *
+ * Rutan är palettens nästan vita ton och gjord för ljusa ytor; mot panelens
+ * `--color-shell` blev den en fläck. Raden skickar därför `plain` i stället
+ * för `tile`, och `ItemIcon` sätter ingen egen `text-*`-klass: den ärver
+ * radens färg. Den aktiva raden bär `text-white`, den inaktiva panelens
+ * textfärg — samma väg som *Add container*.
+ */
+it('ritar containerikonen utan ruta i radens textfärg', function () {
+    $lista = sidopanelIkonKod('components/ShellContainerList.vue');
+
+    $start = (int) strpos($lista, 'v-for="container in group.containers"');
+    $namn = (int) strpos($lista, '{{ container.name }}', $start);
+    $raden = substr($lista, $start, $namn - $start);
+
+    preg_match('/<ItemIcon\b[^>]*>/', $raden, $ikon);
+    $tagg = $ikon[0] ?? '';
+
+    expect($tagg)->not->toBe('', 'containerraden ritar ingen ItemIcon')
+        ->and($tagg)->toMatch('/\bplain\b/', 'containerns ikon ritas inte med plain')
+        ->and($tagg)->not->toMatch('/\btile\b/', 'containerns ikon ritar fortfarande en ruta')
+        // Ingen egen färg på ikonen: den ärver radens.
+        ->and($tagg)->not->toMatch('~\btext-~');
+
+    expect($raden)->toContain("'bg-shell-active text-white'");
+});
+
+/*
  * Klart när: sidomenyn och sidopanelen visar samma roll på samma rad.
  *
  * Båda ytorna ritar `ShellSections` och `ShellContainerList` — samma anrop,
