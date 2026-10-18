@@ -709,6 +709,106 @@ it('visar +N till när gruppen är större än antalet noder', function () {
 });
 
 /*
+ * Klart när: vägen går från roten ned till mitten och slutar med mitten, och
+ * den är tom kring containern.
+ *
+ * Svaret bär `map.path` ur App\Actions\Item\ResolveItemMap och containerns
+ * namn — sökvägen i vyn börjar med det, och containern är inget item
+ * (issue 298 · [[ADR-0059 Kartan med en mitt]] § 9).
+ */
+it('skickar vägen från roten ned till mitten och containerns namn', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = kartavyKontext();
+
+    $båten = kartavyItem($container, 'Båten');
+    $motorn = kartavyItem($container, 'Motorn');
+    $impellern = kartavyItem($container, 'Impellern');
+
+    kartavyKant($båten, $motorn);
+    kartavyKant($motorn, $impellern);
+
+    actingAs($anvandare)->get(kartavyUrl($container, "view=map&focus={$impellern->ulid}"))
+        ->assertOk()->assertInertia(
+            fn (AssertableInertia $page) => $page
+                ->where('map.container.name', $container->name)
+                ->has('map.path', 3)
+                ->where('map.path.0.ulid', $båten->ulid)
+                ->where('map.path.0.name', 'Båten')
+                ->where('map.path.1.name', 'Motorn')
+                ->where('map.path.2.ulid', $impellern->ulid)
+                ->where('map.path.2.name', 'Impellern')
+        );
+
+    // Kring containern är vägen tom, men containerns namn följer med.
+    actingAs($anvandare)->get(kartavyUrl($container, 'view=map'))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('map.container.name', $container->name)
+            ->where('map.path', [])
+    );
+});
+
+/*
+ * Klart när: sökvägen ovanför kartan börjar med containerns namn, och varje
+ * led utom det sista är en länk som centrerar.
+ *
+ * Containern leder till kartan utan `focus`; varje led i `map.path` utom det
+ * sista blir `?view=map&focus=<ulid>`, och mitten själv är ingen länk
+ * ([[ADR-0059 Kartan med en mitt]] § 9).
+ */
+it('ritar vägen ovanför kartan med containern först och länkar för varje led utom det sista', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)->toContain('v-if="map.path.length > 0"')
+        ->toContain('{{ map.container.name }}')
+        ->toContain('const containerHref = computed(() => `${base.value}?view=map`);')
+        ->toContain(':href="containerHref"')
+        ->toContain('v-for="(led, index) in map.path"')
+        ->toContain('v-if="index < pathLast"')
+        ->toContain(':href="focusHref(led)"')
+        ->toContain('<span v-else class="px-1 py-0.5 font-medium text-ink">');
+
+    // Bara de mellersta leden länkas — mitten är sidan man står på.
+    expect(substr_count($kartan, 'focusHref(led)'))->toBe(1);
+});
+
+/*
+ * Klart när: ⇄ står efter vägen när mitten har fler platser än en.
+ *
+ * Tecknet och antalet är mittens `placements`, och raden står i sökvägen efter
+ * sista ledet — den hör till vägen, inte till mittnoden.
+ */
+it('ställer ⇄ efter vägen när mitten har fler platser än en', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    $vägen = strpos($kartan, 'v-for="(led, index) in map.path"');
+    $mer = strpos($kartan, 'map.center.placements > 1');
+
+    expect($vägen)->not->toBeFalse()
+        ->and($mer)->not->toBeFalse()
+        ->and($mer)->toBeGreaterThan($vägen);
+
+    expect($kartan)->toContain('&harr; {{ map.center.placements }}')
+        ->toContain("t('item.map.placements', { count: map.center.placements })");
+});
+
+/*
+ * Klart när: via på en föräldranod står under namnet, skild med ›, avklippt,
+ * med hela vägen i `title`.
+ *
+ * Servern skickar namnen; noden klistrar ihop dem och klipper av raden, medan
+ * `title` bär hela vägen för den som pekar (ADR-0059 § 9).
+ */
+it('visar förälderns väg under namnet med hela vägen i title', function () {
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect($noden)->toContain('v-if="node.via && node.via.length > 0"')
+        ->toContain('class="w-full truncate text-meta text-ink-subtle"')
+        ->toContain(':title="node.via.join(\' › \')"')
+        ->toContain("{{ node.via.join(' › ') }}");
+});
+
+/*
  * Klart när: orden kommer ur lang/en/ui.php, och item.board-nycklar som ingen
  * använder längre är borttagna.
  *
@@ -726,6 +826,7 @@ it('hämtar kartans ord ur ui.php och har tagit bort item.board', function () {
     foreach ([
         'item.map.legend',
         'item.map.same_item',
+        'item.map.path',
         'item.map.children',
         'item.map.placements',
         'item.map.open',

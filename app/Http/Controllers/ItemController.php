@@ -498,6 +498,12 @@ class ItemController extends Controller
             // och statusfrågan.
             'map' => $map === null ? null : [
                 'center' => $map['center'],
+                // Vägen till mitten (issue 298 · [[ADR-0059 Kartan med en
+                // mitt]] § 9) går från roten ned till mitten och är tom kring
+                // containern. Containerns namn står först i sökvägen i vyn, och
+                // containern är inget item — därför följer den med här.
+                'container' => ['ulid' => $container->ulid, 'name' => $container->name],
+                'path' => $map['path'],
                 'parent' => $map['parent'],
                 'child' => $map['child'],
                 'related' => $map['related'],

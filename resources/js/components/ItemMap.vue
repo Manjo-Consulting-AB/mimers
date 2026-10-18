@@ -44,9 +44,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * ***+N till* visas när `total` är större än antalet ritade noder** och leder
  * till relationsfliken kring ett item och till listläget kring containern —
  * målen byggs av `Index.vue`, som äger containerns adresser.
+ *
+ * **Vägen till mitten står ovanför kartan** (issue 298 · ADR:ns beslut 9):
+ * containerns namn först, som leder till kartan utan `focus`, sedan varje led i
+ * `map.path`. Alla led utom det sista görs till mitten; det sista är mitten och
+ * är ingen länk. ⇄ med antalet platser står efter vägen när mitten har fler än
+ * en. Vägen räknas av servern — vyn vandrar inte i grafen.
  */
 const props = defineProps({
-    /* App\Actions\Item\ResolveItemMap:s svar: `{center, parent, child, related, rows}`. */
+    /* App\Actions\Item\ResolveItemMap:s svar: `{center, container, path, parent, child, related, rows}`. */
     map: { type: Object, required: true },
     /* Item-ULID → `ok` eller `overdue`, ur `ItemStatus`. */
     statuses: { type: Object, required: true },
@@ -66,6 +72,13 @@ const base = computed(() => `/containers/${props.containerUlid}/items`);
 const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}`;
 
 const openHref = (node) => `${base.value}/${node.ulid}`;
+
+/*
+ * Sökvägens första led: containern, som leder till kartan utan `focus`.
+ * Sista ledet i `map.path` är mitten och ritas utan länk — de övriga centrerar.
+ */
+const containerHref = computed(() => `${base.value}?view=map`);
+const pathLast = computed(() => props.map.path.length - 1);
 
 const statusFor = (node) => props.statuses[node.ulid] ?? '';
 
@@ -146,6 +159,50 @@ function closeMenu() {
 
 <template>
     <div>
+        <!--
+            Vägen till mitten (issue 298 · ADR:ns beslut 9): containern först,
+            sedan leden från roten ned till mitten. Varje led utom det sista
+            centrerar; mitten själv är ingen länk. Kring containern är vägen
+            tom och raden ritas inte.
+        -->
+        <nav
+            v-if="map.path.length > 0"
+            :aria-label="t('item.map.path')"
+            class="mb-4 flex flex-wrap items-center justify-center gap-1 text-meta text-ink-muted"
+        >
+            <Link
+                :href="containerHref"
+                class="rounded-control px-1 py-0.5 text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                {{ map.container.name }}
+            </Link>
+
+            <template v-for="(led, index) in map.path" :key="led.ulid">
+                <span aria-hidden="true">›</span>
+
+                <Link
+                    v-if="index < pathLast"
+                    :href="focusHref(led)"
+                    class="rounded-control px-1 py-0.5 text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                >
+                    {{ led.name }}
+                </Link>
+
+                <span v-else class="px-1 py-0.5 font-medium text-ink">{{ led.name }}</span>
+            </template>
+
+            <!-- Fler platser än en: ⇄ och antalet står efter vägen. -->
+            <span
+                v-if="map.center.placements > 1"
+                class="ml-1 flex items-center gap-1"
+            >
+                <span aria-hidden="true">&harr; {{ map.center.placements }}</span>
+                <span class="sr-only">
+                    {{ t('item.map.placements', { count: map.center.placements }) }}
+                </span>
+            </span>
+        </nav>
+
         <!--
             Föräldrarna ovanför. Linjen ned till mitten ritas bara när raden har
             något att knyta ihop: en kant mot ingenting är en kant ingen

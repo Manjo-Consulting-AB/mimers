@@ -139,7 +139,7 @@ function kartaFörekomst(Item $item, int $dagar): ScheduleOccurrence
 /**
  * Kartan för $focus — null betyder containern som mitt.
  *
- * @return array{center: array<string, mixed>, parent: array<string, mixed>, child: array<string, mixed>, related: array<string, mixed>, centerItem: ?Item, drawn: array<string, Item>}
+ * @return array{center: array<string, mixed>, path: list<array{ulid: string, name: string}>, parent: array<string, mixed>, child: array<string, mixed>, related: array<string, mixed>, centerItem: ?Item, drawn: array<string, Item>}
  */
 function kartaKarta(User $user, Container $container, ?string $focus = null): array
 {
@@ -452,6 +452,109 @@ it('samlar mitten och de ritade noderna i drawn', function () {
 });
 
 /*
+ * Klart när: map.path går från roten till mitten och slutar med mitten, och
+ * kring containern är vägen tom.
+ *
+ * Vägen räknas i minnet ur samma kanter som grupperna — ingen ny fråga — och
+ * sista ledet är mitten självt (issue 298 · [[ADR-0059 Kartan med en mitt]]
+ * § 9).
+ */
+it('räknar vägen från roten ned till mitten', function () {
+    [$container, $medlem, $båt, $motor, , $impeller] = kartaBåt();
+
+    $namn = fn (array $karta): array => array_column($karta['path'], 'name');
+
+    expect($namn(kartaKarta($medlem, $container, $båt->ulid)))->toBe(['Båten'])
+        ->and($namn(kartaKarta($medlem, $container, $motor->ulid)))
+        ->toBe(['Båten', 'Motorn'])
+        ->and($namn(kartaKarta($medlem, $container, $impeller->ulid)))
+        ->toBe(['Båten', 'Motorn', 'Impellern'])
+        ->and(kartaKarta($medlem, $container)['path'])->toBe([]);
+
+    // Sista ledet är mitten, med dess ULID — vägen pekar på samma item som
+    // `center` gör.
+    $väg = kartaKarta($medlem, $container, $impeller->ulid)['path'];
+
+    expect($väg[array_key_last($väg)])->toBe([
+        'ulid' => $impeller->ulid,
+        'name' => 'Impellern',
+    ]);
+});
+
+/*
+ * Klart när: ett item med två föräldrar får vägen genom den förälder som
+ * kommer först i namnordning — på varje nivå.
+ *
+ * Mitten har två rötter som föräldrar, och den första av dem har en egen
+ * förälder. Vägen följer Alfa framför Beta, och sedan Zeta uppåt: den första
+ * föräldern väljs om vid varje steg (ADR-0059 § 9).
+ */
+it('följer den första föräldern i namnordning på varje nivå', function () {
+    $container = Container::factory()->create();
+    $medlem = kartaMedlem($container->account);
+
+    $alfa = kartaItem($container, 'Alfa');
+    $beta = kartaItem($container, 'Beta');
+    $zeta = kartaItem($container, 'Zeta');
+    $mitten = kartaItem($container, 'Mitten');
+
+    kartaKant($beta, $mitten);
+    kartaKant($alfa, $mitten);
+    kartaKant($zeta, $alfa);
+
+    expect(array_column(kartaKarta($medlem, $container, $mitten->ulid)['path'], 'name'))
+        ->toBe(['Zeta', 'Alfa', 'Mitten']);
+});
+
+/*
+ * Klart när: via på en föräldranod är förfädernas namn från roten, och tom för
+ * en rot.
+ *
+ * Kring impellern är motorn förälder; motorns egen väg går från skrovet via
+ * båten ned till motorn, och den står i `via`. Kring båten är skrovet förälder
+ * och en rot — ingen rad.
+ */
+it('ger föräldranoden dess egen väg från roten', function () {
+    [$container, $medlem, $båt, $motor, , $impeller] = kartaBåt();
+
+    $skrov = kartaItem($container, 'Skrovet');
+    kartaKant($skrov, $båt);
+
+    expect(kartaKarta($medlem, $container, $impeller->ulid)['parent']['nodes'][0]['via'])
+        ->toBe(['Skrovet', 'Båten']);
+
+    // Kring båten är skrovet förälder och en rot — ingen väg ovanför den.
+    expect(kartaKarta($medlem, $container, $båt->ulid)['parent']['nodes'][0]['via'])
+        ->toBe([]);
+});
+
+/*
+ * Klart när: vägarna innehåller bara items i omfånget; en förälder utanför
+ * omfånget gör barnet till rot, som i rotregeln.
+ *
+ * Mottagaren når motorn och impellern under den. Båten och skrovet ligger
+ * utanför omfånget och får därför varken synas i `path` eller i `via` — en
+ * förfader utanför omfånget avslöjas inte (issue 73 § Beslut 6).
+ */
+it('låter vägarna bara innehålla items i omfånget', function () {
+    [$container, , $båt, $motor, , $impeller] = kartaBåt();
+
+    $skrov = kartaItem($container, 'Skrovet');
+    kartaKant($skrov, $båt);
+
+    $mottagare = kartaMottagare($container, $motor);
+
+    expect(array_column(kartaKarta($mottagare, $container, $motor->ulid)['path'], 'name'))
+        ->toBe(['Motorn'])
+        ->and(array_column(kartaKarta($mottagare, $container, $impeller->ulid)['path'], 'name'))
+        ->toBe(['Motorn', 'Impellern']);
+
+    // Förälderns via ser inte heller föräldern utanför omfånget: motorn är rot.
+    expect(kartaKarta($mottagare, $container, $impeller->ulid)['parent']['nodes'][0]['via'])
+        ->toBe([]);
+});
+
+/*
  * Klart när: antalet frågor är detsamma för 3 och 30 items.
  *
  * Upplösningen är två frågor — itemen i omfånget och containerns kanter —
@@ -515,5 +618,9 @@ it('tål en cykel', function () {
     expect($karta['center']['kind'])->toBe('item')
         ->and($karta['center']['placements'])->toBe(0)
         ->and(kartaNoder($karta['parent']))->toBe(['Gamma [1/0]'])
-        ->and(kartaNoder($karta['child']))->toBe(['Beta [1/0]']);
+        ->and(kartaNoder($karta['child']))->toBe(['Beta [1/0]'])
+        // Vägen kapas på samma sätt: den följer första föräldern tills en
+        // förälder redan ligger på vägen, och slutar med mitten.
+        ->and(array_column($karta['path'], 'name'))->toBe(['Beta', 'Gamma', 'Alfa'])
+        ->and($karta['path'][array_key_last($karta['path'])]['ulid'])->toBe($a->ulid);
 });
