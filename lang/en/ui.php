@@ -2854,6 +2854,8 @@ return [
             'due_at' => 'the due date',
             'expires_at' => 'the expiry date',
             'gtd_list' => 'the list',
+            'icon' => 'the icon',
+            'icon_color' => 'the icon colour',
             'incurred_on' => 'the date',
             'interval_count' => 'the interval',
             'interval_unit' => 'the interval',

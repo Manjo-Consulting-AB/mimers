@@ -884,3 +884,35 @@ it('monterar panelerna i rutnätet över lg', function () {
     expect($vy)->toContain('itemListUrl');
     expect($vy)->not->toContain('show-container');
 });
+
+/*
+ * Klart när: Items och Senaste bilder står i en gemensam vänsterkolumn, med
+ * Senaste aktiviteter bredvid i den tredje kolumnen (issue 321).
+ *
+ * Källkodsprov som rutnätsprovet: bildpanelen ligger innanför omslaget med
+ * itemen i stället för på en egen plats i rutnätet, så bilderna börjar direkt
+ * under itemen oavsett hur hög aktivitetspanelen är. Omslaget spänner två
+ * rader när bilderna finns, så informationsytan behåller sin plats i tredje
+ * kolumnen. Utan bilder spänner omslaget alla tre och aktiviteterna två,
+ * precis som före issue 321.
+ */
+it('lägger bilderna i samma kolumn som itemen', function () {
+    $vy = oversiktUtanKommentarer(File::get(resource_path('js/pages/Containers/Overview.vue')));
+
+    expect($vy)->toContain("props.recentImages.length ? 'lg:col-span-2 lg:row-span-2' : 'lg:col-span-3'")
+        // Aktiviterna ligger kvar i den tredje kolumnen.
+        ->toContain("props.recentImages.length ? '' : 'lg:col-span-2'");
+
+    // Bildpanelen är inget eget rutnätsbarn längre.
+    expect($vy)->not->toContain('lg:order-6');
+
+    // Omslaget är ett enda grid-barn: Items-kortet och bildpanelen ligger
+    // innanför samma `lg:order-4`, före aktiviteternas `lg:order-5`.
+    expect(preg_match(
+        '~<div\s+class="mt-8 lg:order-4"[^>]*>(.*?)<div\s+class="mt-8 lg:order-5"~s',
+        $vy,
+        $träff,
+    ))->toBe(1);
+
+    expect($träff[1])->toContain('<RecentImagesPanel');
+});
