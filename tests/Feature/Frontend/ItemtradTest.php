@@ -526,3 +526,28 @@ it('ritar filterraden i trädläget och den tomma texten för ett filter utan tr
             ->where('structure', [])
     );
 });
+
+/*
+ * Klart när (arkitektens svar på granskningen av issue 293): ett filter som
+ * skickas från trädläget stannar i trädläget.
+ *
+ * Filterraden submittar en GET mot samma rutt som sidan ligger på, så läget
+ * måste följa med i frågan för att träfflistan ska stanna i trädet. Trädläget
+ * ger därför raden `view=tree`; submit, chipkryss och "rensa" går alla genom
+ * samma `apply()` och bär parametern. Listan skickar `null` — komponentens
+ * standard — och då skrivs ingen `view` alls, så listans beteende är
+ * oförändrat. Provet läser källkoden eftersom sviten inte kör en webbläsare.
+ */
+it('låter ett filter som skickas från trädläget stanna i trädläget', function () {
+    $vy = itemtradKod('pages/Containers/Items/Index.vue');
+
+    // Bara trädläget ger raden ett läge; listan skickar null.
+    expect($vy)->toContain(":view=\"view === 'tree' ? 'tree' : null\"");
+
+    $rad = itemtradKod('components/ItemFilterBar.vue');
+
+    // Läget ligger i samma params-objekt som filtret, så adressen blir
+    // `?view=tree&q=…` i varje väg genom `apply()`.
+    expect($rad)->toContain('view: { type: String, default: null }')
+        ->and($rad)->toContain('params.view = props.view');
+});

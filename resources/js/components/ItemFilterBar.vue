@@ -56,6 +56,14 @@ const props = defineProps({
     categories: { type: Array, required: true },
     /* Filtret så som servern tillämpade det: { q, tags, category, dropped }. */
     filter: { type: Object, required: true },
+    /*
+     * Läget raden står i, när det ska följa med filtret (issue 293 ·
+     * [[ADR-0058 Trädet som tabell]] § 5 och 7). Trädläget skickar `tree`,
+     * och då bär varje submit — även chipkryss och "rensa" — `view=tree`, så
+     * att ett filter som sätts i trädet stannar där i stället för att landa i
+     * listan. Utelämnad betyder listan, och då skrivs ingen `view` alls.
+     */
+    view: { type: String, default: null },
 });
 
 const { t } = useTranslations();
@@ -100,6 +108,15 @@ function apply(overrides = {}) {
     const chosen = overrides.category === undefined ? category.value : overrides.category;
 
     const params = {};
+
+    /*
+     * Läget först, så adressen blir `?view=tree&q=…` och filtret stannar i
+     * trädet. Utan `view`-propp skrivs parametern inte alls — listans
+     * beteende är oförändrat.
+     */
+    if (props.view !== null && props.view !== '') {
+        params.view = props.view;
+    }
 
     if (String(query ?? '').trim() !== '') {
         params.q = String(query).trim();

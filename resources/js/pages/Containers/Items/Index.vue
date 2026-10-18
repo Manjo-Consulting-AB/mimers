@@ -316,6 +316,11 @@ const views = computed(() => {
         listan och trädet ser samma filter och samma aktiva chips. Trädet
         filtreras ur samma querysträng (`?view=tree&q=…`), och växeln bär
         filtret med sig mellan lägena.
+
+        Trädläget ger raden `view=tree`, så att ett filter som SKICKAS där
+        stannar i trädet i stället för att landa i listan: raden submittar en
+        GET mot samma rutt, och läget är en del av adressen. Listan skickar
+        `null` — komponentens standard — och skriver därför ingen `view`.
     -->
     <ItemFilterBar
         v-if="view !== 'map'"
@@ -323,6 +328,7 @@ const views = computed(() => {
         :tags="tags"
         :categories="categoryTree"
         :filter="filter"
+        :view="view === 'tree' ? 'tree' : null"
     />
 
     <!-- Listan, oförändrad: de tre tomma lägena och raderna. -->
