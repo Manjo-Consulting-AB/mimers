@@ -14,7 +14,7 @@ Tillagd 2026-10-18, efter genomgången av fynden i v0.23.0. Det här ingår: en 
 
 ### 300. `ItemIcon` och Lucide
 
-Paketet `lucide` läggs till i `package.json` (godkänt av Tony 2026-10-18). En ny komponent, `ItemIcon.vue`, ritar itemets ikon ur proppen `name` (ett Lucide-namn eller `null`) och `color` (en palettnyckel eller `null`). Ikonerna läses med `import.meta.glob('/node_modules/lucide/dist/esm/icons/*.mjs', { import: 'default' })` i lat form. Noderna ritas med `h()` som i `UiIcon`, med samma tre storlekar, linjebredden 1,75, `currentColor` och `aria-hidden`. Med `tile` ritas rutan i `--color-tint-<color>-soft` och linjen i `--color-tint-<color>`.
+GitHub #909. Paketet `lucide` läggs till i `package.json` (godkänt av Tony 2026-10-18). En ny komponent, `ItemIcon.vue`, ritar itemets ikon ur proppen `name` (ett Lucide-namn eller `null`) och `color` (en palettnyckel eller `null`). Ikonerna läses med `import.meta.glob('/node_modules/lucide/dist/esm/icons/*.mjs', { import: 'default' })` i lat form. Noderna ritas med `h()` som i `UiIcon`, med samma tre storlekar, linjebredden 1,75, `currentColor` och `aria-hidden`. Med `tile` ritas rutan i `--color-tint-<color>-soft` och linjen i `--color-tint-<color>`.
 
 `null`, ett namn som inte finns och en ikon som ännu inte laddats ritar rollen `item` ur `UiIcon` i neutral ton. Rutan har samma storlek i alla tre fallen, så att raden inte hoppar när ikonen kommer. En okänd färg ritas som `slate`. En modul, `itemIconPresentation.js`, exporterar namnlistan (`iconNames()`, ur globbens nycklar, sorterad) och paletten (`ICON_COLORS`, de åtta nycklarna i ADR-0060 § 5) så att väljaren i 302 och komponenten läser samma lista. De sexton tokens läggs till i `resources/css/app.css` med en kommentar om undantaget från rollnamnen.
 
@@ -26,7 +26,7 @@ Paketet `lucide` läggs till i `package.json` (godkänt av Tony 2026-10-18). En 
 
 ### 301. Itemets ikon i datamodellen
 
-En migration lägger till `icon VARCHAR(64) NULL` och `icon_color VARCHAR(16) NULL` på `item`. `Item` får båda i `Fillable` och en konstant `ICON_COLORS` med de åtta nycklarna. `StoreItemRequest` och `UpdateItemRequest` validerar `icon` som `nullable`, gemener, siffror och bindestreck (`^[a-z0-9]+(-[a-z0-9]+)*$`) och högst 64 tecken, och `icon_color` som `nullable` och i `Item::ICON_COLORS`. I `UpdateItemRequest` är båda `sometimes`, som de andra fälten. `ItemResource` bär båda och alltid, även som `null`. `UpdateItem` loggar dem med gamla och nya värdet under `meta.values`, eftersom ingen av dem är fritext. `ContainerExportBuilder` tar med båda på varje item.
+GitHub #910. En migration lägger till `icon VARCHAR(64) NULL` och `icon_color VARCHAR(16) NULL` på `item`. `Item` får båda i `Fillable` och en konstant `ICON_COLORS` med de åtta nycklarna. `StoreItemRequest` och `UpdateItemRequest` validerar `icon` som `nullable`, gemener, siffror och bindestreck (`^[a-z0-9]+(-[a-z0-9]+)*$`) och högst 64 tecken, och `icon_color` som `nullable` och i `Item::ICON_COLORS`. I `UpdateItemRequest` är båda `sometimes`, som de andra fälten. `ItemResource` bär båda och alltid, även som `null`. `UpdateItem` loggar dem med gamla och nya värdet under `meta.values`, eftersom ingen av dem är fritext. `ContainerExportBuilder` tar med båda på varje item.
 
 Servern kontrollerar aldrig att namnet finns i Lucide (ADR-0060 § 4).
 
@@ -38,7 +38,7 @@ Servern kontrollerar aldrig att namnet finns i Lucide (ADR-0060 § 4).
 
 ### 302. Väljaren under *Edit item*
 
-`ItemForm` får en sektion *Icon* bredvid *Cover image*, och den ritas bara i redigeringsläget. Sektionen visar den valda ikonen i sin ruta, eller den neutrala, och en knapp som öppnar väljaren i ett `UiSheet`. Väljaren har ett sökfält som filtrerar `iconNames()` på delsträng i namnet, ett rutnät med ikonerna och under det de åtta färgerna. Rutnätet ritar högst 120 ikoner åt gången, med *Show more* under, så att alla 1 900 aldrig hämtas på en gång. Ett klick på en ikon väljer den, ett klick på en färg väljer färgen, och *Remove icon* tömmer båda. Valet skickas med formuläret som `icon` och `icon_color`, och `ItemController::edit()` skickar de nuvarande värdena ur `ItemResource`.
+GitHub #911. `ItemForm` får en sektion *Icon* bredvid *Cover image*, och den ritas bara i redigeringsläget. Sektionen visar den valda ikonen i sin ruta, eller den neutrala, och en knapp som öppnar väljaren i ett `UiSheet`. Väljaren har ett sökfält som filtrerar `iconNames()` på delsträng i namnet, ett rutnät med ikonerna och under det de åtta färgerna. Rutnätet ritar högst 120 ikoner åt gången, med *Show more* under, så att alla 1 900 aldrig hämtas på en gång. Ett klick på en ikon väljer den, ett klick på en färg väljer färgen, och *Remove icon* tömmer båda. Valet skickas med formuläret som `icon` och `icon_color`, och `ItemController::edit()` skickar de nuvarande värdena ur `ItemResource`.
 
 Varje ikon i rutnätet är en knapp med namnet som `aria-label`. Varje färg är en knapp med färgens ord ur `lang/`. Det valda bär `aria-pressed`.
 
@@ -50,7 +50,7 @@ Varje ikon i rutnätet är en knapp med namnet som `aria-label`. Varje färg är
 
 ### 303. Ikonen i listan, överdelen och fokuskartan
 
-Itemets ikon ritas med `ItemIcon` och `tile` på tre ställen. I **listan** (`ItemRow`) står den före namnet, och omslagets miniatyr står kvar där den står. I **itemets överdel** (`Show.vue`) står den före rubriken i storleken 24. I **fokuskartan** i högerpanelen (`FocusMapNode`) står den före namnet på varje nod. `ListItemLinks` hämtar `icon` och `icon_color` tillsammans med `ulid` och `name`, och `ItemController::map()` skickar dem på varje nod och på `self`.
+GitHub #912. Itemets ikon ritas med `ItemIcon` och `tile` på tre ställen. I **listan** (`ItemRow`) står den före namnet, och omslagets miniatyr står kvar där den står. I **itemets överdel** (`Show.vue`) står den före rubriken i storleken 24. I **fokuskartan** i högerpanelen (`FocusMapNode`) står den före namnet på varje nod. `ListItemLinks` hämtar `icon` och `icon_color` tillsammans med `ulid` och `name`, och `ItemController::map()` skickar dem på varje nod och på `self`.
 
 **Läs:** [[ADR-0060 Itemets ikon]] § 6 och 9, `resources/js/components/ItemRow.vue`, `resources/js/components/FocusMapNode.vue`, `resources/js/pages/Containers/Items/Show.vue` (överdelen), `app/Actions/Item/ListItemLinks.php`, `app/Http/Controllers/ItemController.php` (`map`)
 
@@ -60,7 +60,7 @@ Itemets ikon ritas med `ItemIcon` och `tile` på tre ställen. I **listan** (`It
 
 ### 304. Trädets rotrad och ikonerna i trädet
 
-`ItemTreeTable`s rotrad får ingen fällknapp. Containerns ikon (`UiIcon` `container` med `tile` `neutral`) står i den kolumn där knappen stod, och `containerOpen` utgår. Trädets rötter är alltid synliga. *Expand all* och filtret rör inte längre rotraden. På varje itemrad står `ItemIcon` med `tile` mellan fällknappen (eller platshållaren) och namnet. `ResolveItemTreeRows` hämtar `icon` och `icon_color` i samma fråga som namnet och kategorin och skickar dem i radens celler.
+GitHub #913. `ItemTreeTable`s rotrad får ingen fällknapp. Containerns ikon (`UiIcon` `container` med `tile` `neutral`) står i den kolumn där knappen stod, och `containerOpen` utgår. Trädets rötter är alltid synliga. *Expand all* och filtret rör inte längre rotraden. På varje itemrad står `ItemIcon` med `tile` mellan fällknappen (eller platshållaren) och namnet. `ResolveItemTreeRows` hämtar `icon` och `icon_color` i samma fråga som namnet och kategorin och skickar dem i radens celler.
 
 Rötternas fällknappar står i samma kolumn som containerns ikon, och djupet räknas från rötterna som i dag. Under `md:` gäller samma form.
 
@@ -72,7 +72,7 @@ Rötternas fällknappar står i samma kolumn som containerns ikon, och djupet r�
 
 ### 305. Kartans kort
 
-`ResolveItemMap` hämtar `icon` och `icon_color` i samma fråga som namnet och lägger dem på varje nod och på mitten. Kring containern är de `null`. `ItemMapNode` ritas om enligt [[ADR-0061 Kartans kort och kanter]] § 1–4. Kortet har `ItemIcon` med `tile` i 40 px till vänster, namnet och slagets ord i slagets färg till höger, `via` under en förälder, öppna-ikonen i övre högra hörnet och ⇄ med antalet när platserna är fler än en. Statusen ritas bara som *overdue*, en prick i `danger` med ordet i `sr-only` och `title`. Antal barn ritas inte. Mitten har ikonen ovanför namnet och *Current item* under, med kant i `accent` och `accent-soft` som bakgrund. Kring containern står `container` och *Container*.
+GitHub #914. `ResolveItemMap` hämtar `icon` och `icon_color` i samma fråga som namnet och lägger dem på varje nod och på mitten. Kring containern är de `null`. `ItemMapNode` ritas om enligt [[ADR-0061 Kartans kort och kanter]] § 1–4. Kortet har `ItemIcon` med `tile` i 40 px till vänster, namnet och slagets ord i slagets färg till höger, `via` under en förälder, öppna-ikonen i övre högra hörnet och ⇄ med antalet när platserna är fler än en. Statusen ritas bara som *overdue*, en prick i `danger` med ordet i `sr-only` och `title`. Antal barn ritas inte. Mitten har ikonen ovanför namnet och *Current item* under, med kant i `accent` och `accent-soft` som bakgrund. Kring containern står `container` och *Container*.
 
 Kortets bredd är fast. Rutnätet och linjerna kommer i 306, och fram till dess står korten i dagens uppställning.
 
@@ -84,7 +84,7 @@ Kortets bredd är fast. Rutnätet och linjerna kommer i 306, och fram till dess 
 
 ### 306. Kartans linjer
 
-`ItemMap` ställer korten i ett rutnät med fasta platser från `md:` ([[ADR-0061 Kartans kort och kanter]] § 7). Föräldrarna står på en rad ovanför mitten. Barnen står under mitten med högst fyra per rad. De relaterade står i en båge, tre på varje sida, där den mittersta står längst ut. Ett SVG-lager under korten ritar en kubisk kurva från mittens kant till varje kort. Föräldrar och barn får heldragna linjer, föräldrar i `accent` och barn i `success`. De relaterade får streckade linjer i `ink-subtle`. Pilspetsarna är `<marker>`: mot föräldern, mot barnet och åt båda hållen mot en relaterad. Lagret läser kortens lägen med `getBoundingClientRect()` relativt kartans ram och ritar om vid `ResizeObserver` och när `map` byts. Lagret är `aria-hidden`.
+GitHub #915. `ItemMap` ställer korten i ett rutnät med fasta platser från `md:` ([[ADR-0061 Kartans kort och kanter]] § 7). Föräldrarna står på en rad ovanför mitten. Barnen står under mitten med högst fyra per rad. De relaterade står i en båge, tre på varje sida, där den mittersta står längst ut. Ett SVG-lager under korten ritar en kubisk kurva från mittens kant till varje kort. Föräldrar och barn får heldragna linjer, föräldrar i `accent` och barn i `success`. De relaterade får streckade linjer i `ink-subtle`. Pilspetsarna är `<marker>`: mot föräldern, mot barnet och åt båda hållen mot en relaterad. Lagret läser kortens lägen med `getBoundingClientRect()` relativt kartans ram och ritar om vid `ResizeObserver` och när `map` byts. Lagret är `aria-hidden`.
 
 Teckenförklaringen får samma färger som linjerna. Under `md:` ritas inget SVG-lager, och korten står i en kolumn med de relaterade under barnen, som i dag.
 
@@ -96,7 +96,7 @@ Teckenförklaringen får samma färger som linjerna. Under `md:` ritas inget SVG
 
 ### 307. Itemets bild på översikten
 
-`ItemController::show()` skickar `cover`: itemets omslag ur `ResolveItemCover::handle()` som `{ulid, variants}`, eller `null`. Det är samma regel som listan använder, så den automatiska bilden visas när ingen bild är vald. På översikten står bilden till vänster om *Quick facts* från `md:`, och under `md:` står den ovanför. Bilden skalas med `object-contain` inom en ruta med fast maxhöjd och beskärs aldrig. Adressen byggs med `coverUrl(cover, 'medium')` ur `coverPresentation.js`. Utan bild tar *Quick facts* hela bredden, och ingen tom ram ritas. Bildens `alt` är itemets namn.
+GitHub #916. `ItemController::show()` skickar `cover`: itemets omslag ur `ResolveItemCover::handle()` som `{ulid, variants}`, eller `null`. Det är samma regel som listan använder, så den automatiska bilden visas när ingen bild är vald. På översikten står bilden till vänster om *Quick facts* från `md:`, och under `md:` står den ovanför. Bilden skalas med `object-contain` inom en ruta med fast maxhöjd och beskärs aldrig. Adressen byggs med `coverUrl(cover, 'medium')` ur `coverPresentation.js`. Utan bild tar *Quick facts* hela bredden, och ingen tom ram ritas. Bildens `alt` är itemets namn.
 
 **Läs:** [[ADR-0041 Itemets vy]] § Beslut, `app/Actions/Item/ResolveItemCover.php` (docblocken), `resources/js/components/coverPresentation.js`, `resources/js/components/ItemQuickFacts.vue`, `resources/js/pages/Containers/Items/Show.vue` (översikten), `app/Http/Controllers/ItemController.php` (`show`, `variants`)
 
