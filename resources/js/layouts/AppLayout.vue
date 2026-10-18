@@ -305,8 +305,8 @@ const initials = computed(() => {
             SIDOPANELEN över `md:` — desktopens skal, se issue 169 och
             [[ADR-0050 Desktopdesignen]] § 1. Mörk yta ur `--color-shell`, och
             sektionerna i mockupens ordning (issue 653 och 677): översikten,
-            containrarna, resten av raderna, favoriterna — och användaren
-            med vägen ut sist, tryckt till botten av `mt-auto`.
+            containrarna, resten av raderna, favoriterna, papperskorgen — och
+            användaren med vägen ut sist, tryckt till botten av `mt-auto`.
 
             **Sektionerna ritas av samma komponenter som mobilens sidomeny**
             (ShellSections, ShellContainerList), och samma proppar går till
@@ -355,8 +355,16 @@ const initials = computed(() => {
 
             <ShellSections part="favorites" />
 
-            <!-- Användarens namn och vägen ut, tryckta till panelens botten. -->
+            <!--
+                Användarens namn och vägen ut, tryckta till panelens botten.
+                Papperskorgen står i samma block och strax ovanför avdelaren
+                (M39 · issue 320 · [[ADR-0065 Den samlade papperskorgen]] § 1):
+                den hör till panelens nederkant och inte till raderna, och
+                därför ritas den ur sin egen del.
+            -->
             <div class="mt-auto">
+                <ShellSections part="trash" />
+
                 <hr class="my-2 border-white/10" />
 
                 <ShellSections part="account" />

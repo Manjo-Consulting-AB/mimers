@@ -209,11 +209,12 @@ it('ritar sidopanelen i mockupens ordning', function () {
             '<ShellContainerList',
             '<ShellSections />',
             '<ShellSections part="favorites" />',
+            '<ShellSections part="trash" />',
             '<ShellSections part="account" />',
         ],
     );
 
-    // Fem anrop, och alla fem står i panelen.
+    // Sex anrop, och alla sex står i panelen.
     foreach ($ordning as $position) {
         expect($position)->not->toBeFalse();
     }
@@ -229,13 +230,47 @@ it('ritar sidopanelen i mockupens ordning', function () {
 
     // Användarens rad står sist och är tryckt till panelens botten: den ska
     // inte följa med i skrollen när panelen är lång. Linjen överst i blocket
-    // kom med issue 677.
-    expect($panel)->toMatch('/<div class="mt-auto">\s*<hr class="my-2 border-white\/10" \/>\s*<ShellSections part="account" \/>/');
+    // kom med issue 677, och papperskorgen står i samma block strax ovanför
+    // den (M39 · issue 320).
+    expect($panel)->toMatch('/<div class="mt-auto">\s*<ShellSections part="trash" \/>\s*<hr class="my-2 border-white\/10" \/>\s*<ShellSections part="account" \/>/');
 
     // Listan som frågar servern får sin `load` av layouten, som är den som vet
     // att panelen ritas; favoriterna och kontoraden är delade och behöver
     // inget besked.
     expect($panel)->toContain('<ShellContainerList v-if="user" :load="isDesktopPanel" />');
+});
+
+/*
+ * Klart när (M39 · issue 320): papperskorgen står strax ovanför avdelaren i
+ * sidopanelen, leder till `/trash`, är aktuell också under den vägen, och bär
+ * ingen räknare.
+ *
+ * Raden är en egen del ur SAMMA lista som de andra — `partKeys.trash` — och
+ * AppLayout ritar den i bottenblocket ovanför linjen över användarens namn.
+ * `matchPrefix` gör den aktuell på undersidorna; `isCurrent` jämför vägen utan
+ * querysträngen, så `/trash?type=item` markeras också. Räknaren ritas bara för
+ * `inbox`, och papperskorgen ställer ingen fråga — listan är statisk.
+ */
+it('ger papperskorgen en egen del strax ovanför användarens rad', function () {
+    $sektioner = sidopanelKod('components/ShellSections.vue');
+    $layout = sidopanelKod('layouts/AppLayout.vue');
+
+    // Posten: målet, ikonen ur den slutna listan, och prefixmatchningen.
+    expect($sektioner)->toContain(
+        "{ key: 'trash', href: '/trash', icon: 'trash', matchPrefix: true }",
+        "'trash': ['trash']",
+        'section.matchPrefix === true && currentPath.value.startsWith(`${section.href}/`)',
+    );
+
+    // Ingen räknare: brickan ritas bara för inboxen.
+    expect($sektioner)->toContain("section.key === 'inbox' && inboxCount > 0");
+    expect($sektioner)->not->toContain("section.key === 'trash'");
+
+    // AppLayout ritar delen i bottenblocket, ovanför avdelaren.
+    expect($layout)->toMatch('/<div class="mt-auto">\s*<ShellSections part="trash" \/>\s*<hr class="my-2 border-white\/10" \/>/');
+
+    // Katalogen äger ordet, och det är papperskorgens eget.
+    expect(trans('ui.nav.trash', [], 'en'))->toBe('Trash');
 });
 
 /*

@@ -27,9 +27,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * ritar en yta bara en del av listan: `part` väljer vilka nycklar som ritas, och
  * sidopanelen staplar delarna i mockupens ordning ([[ADR-0050
  * Desktopdesignen]] § 1) — översikten överst (`top`), containrarna, resten av
- * raderna (`rows`, förvalet), de senast besökta, favoriterna och användarens
- * egen rad sist (`account`). Delarna är urval ur SAMMA lista och inte egna
- * listor, så en rad som flyttar flyttar i varje yta.
+ * raderna (`rows`, förvalet), de senast besökta, favoriterna, papperskorgen
+ * (`trash`) och användarens egen rad sist (`account`). Delarna är urval ur
+ * SAMMA lista och inte egna listor, så en rad som flyttar flyttar i varje yta.
+ *
+ * **Papperskorgen fick en egen del** (M39 · issue 320 · [[ADR-0065 Den samlade
+ * papperskorgen]] § 1): raden står längst ned i sidopanelen, strax ovanför
+ * avdelaren över användarens namn, och den ritas därför ur `trash` och inte ur
+ * `rows`. Posten har ingen räknare — en sådan hade kostat en fråga per
+ * sidladdning — och `matchPrefix` gör den aktuell även under `/trash/…`.
  *
  * **Etiketten slås upp ur `nav.<key>`** och kommer aldrig ur en sträng här
  * ([[ADR-0013 Språk och i18n]]): texten formuleras på servern och slås bara
@@ -71,14 +77,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * rollen ADR-0042 ger "den aktiva raden i sidopanelen".
  *
  * `part` skiljer blocken åt. `top` är översikten som står överst i panelen,
- * `rows` är navigeringen mellan sidorna, `account` är användarens egen rad med
- * vägen ut, och `favorites` är `FAVORITER`-sektionen ur issue 106. De är anrop
- * av SAMMA komponent i stället för fyra komponenter: raderna är desamma, och
- * det är bara urvalet och var de står som skiljer.
+ * `rows` är navigeringen mellan sidorna, `trash` är papperskorgen strax
+ * ovanför användarens rad, `account` är användarens egen rad med vägen ut, och
+ * `favorites` är `FAVORITER`-sektionen ur issue 106. De är anrop av SAMMA
+ * komponent i stället för fem komponenter: raderna är desamma, och det är bara
+ * urvalet och var de står som skiljer.
  */
 const props = defineProps({
     /*
-     * Vilket block som ritas: `top`, `rows` (förval), `account` eller
+     * Vilket block som ritas: `top`, `rows` (förval), `trash`, `account` eller
      * `favorites`.
      */
     part: { type: String, default: 'rows' },
@@ -132,6 +139,12 @@ const allSections = [
     // `/containers` får inte samma flagga, för på en containersida är det
     // containerraden i sidopanelen som är den aktuella (issue 169).
     { key: 'settings', href: '/settings', icon: 'settings', matchPrefix: true },
+    // Den samlade papperskorgen (M39 · issue 320 · [[ADR-0065 Den samlade
+    // papperskorgen]] § 1): raden står sist i listan och ritas i sin egen del
+    // längst ned i sidopanelen, strax ovanför användarens namn. Den är aktuell
+    // också under `/trash/…`, och den bär ingen räknare — en sådan hade krävt
+    // en fråga per sidladdning.
+    { key: 'trash', href: '/trash', icon: 'trash', matchPrefix: true },
 ];
 
 /*
@@ -142,6 +155,7 @@ const allSections = [
 const partKeys = {
     'top': ['dashboard'],
     'rows': ['inbox', 'tasks', 'containers', 'documents', 'history', 'search'],
+    'trash': ['trash'],
     'account': ['settings'],
 };
 
