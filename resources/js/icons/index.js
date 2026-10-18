@@ -271,4 +271,9 @@ export const icons = {
         ['path', { d: 'm22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7' }],
         ['rect', { x: '2', y: '4', width: '20', height: '16', rx: '2' }],
     ],
+    // arrow-up-right · lucide-static 1.59.0
+    open: [
+        ['path', { d: 'M7 7h10v10' }],
+        ['path', { d: 'M7 17 17 7' }],
+    ],
 };

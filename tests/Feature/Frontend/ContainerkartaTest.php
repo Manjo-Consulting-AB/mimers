@@ -12,6 +12,7 @@ use App\Support\Item\ItemStatus;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Lang;
 use Inertia\Testing\AssertableInertia;
 
 use function Pest\Laravel\actingAs;
@@ -29,9 +30,9 @@ use function Pest\Laravel\withoutVite;
  * adresserna ur dem. En karta vars länkar tappar mitten ser rätt ut i en
  * strukturell kontroll och gör ingenting i en webbläsare.
  *
- * **Vyn ritar svaret med `FocusMap`** — samma komponent som högerpanelen i
- * itemvyn — och de gamla kolumnkomponenterna är borta. Den nya noden ritas i
- * issue 297.
+ * **Vyn ritar svaret med `ItemMap`** sedan issue 297, med `ItemMapNode` som
+ * nod. Högerpanelen i itemvyn ritar `FocusMap` som förut, och de gamla
+ * kolumnkomponenterna är borta.
  *
  * **Frågekostnaden är konstant.** Kartan är två frågor — itemen och kanterna
  * — oavsett hur många grannar mitten har, och det mäts på samma sida före och
@@ -206,12 +207,13 @@ it('visar Karta i växeln och containern som mitt utan focus', function () {
 
     $vy = kartavyKod('pages/Containers/Items/Index.vue');
 
-    expect($vy)->toContain("import FocusMap from '../../../components/FocusMap.vue'")
-        ->toContain('<FocusMap')
-        ->toContain(':map="focusMap"')
+    expect($vy)->toContain("import ItemMap from '../../../components/ItemMap.vue'")
+        ->toContain('<ItemMap')
+        ->toContain(':map="map"')
+        ->toContain(':statuses="statuses"')
         ->toContain(':overflow-href="overflowHref"');
 
-    expect($vy)->not->toContain('ContainerMap');
+    expect(str_contains($vy, 'ContainerMap'))->toBeFalse();
 
     preg_match_all("/key: '(\w+)'/", $vy, $träffar);
 
@@ -503,21 +505,246 @@ it('kostar ett konstant antal frågor oavsett antal grannar', function () {
  * ContainerMap.vue och ContainerMapNode.vue finns inte, och *+N till* leder
  * till relationsfliken kring ett item och till listläget kring containern.
  *
- * Vyn håller inget eget tillstånd: adresserna byggs ur serverns svar, och
- * mitten är ingen länk eftersom den ÄR sidan man står på.
+ * Adresserna byggs sedan issue 297 av `ItemMap`, som äger kartans form och
+ * dess länkar; vyn äger bara målet för *+N till*.
  */
 it('bygger nodernas adresser och har tagit bort kolumnkomponenterna', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
     $vy = kartavyKod('pages/Containers/Items/Index.vue');
 
-    expect($vy)->toContain('?view=map&focus=${node.ulid}')
-        ->toContain('href: null')
-        ->toContain('rows: props.map.rows')
-        ->toContain('?tab=relations');
+    expect($kartan)->toContain('?view=map&focus=${node.ulid}')
+        ->toContain('`${base.value}/${node.ulid}`');
 
-    expect($vy)->not->toContain('usePage');
+    expect($vy)->toContain('?tab=relations');
 
-    expect($vy)->not->toContain('page.url');
+    expect(str_contains($vy, 'usePage'))->toBeFalse();
+
+    expect(str_contains($vy, 'page.url'))->toBeFalse();
 
     expect(File::exists(resource_path('js/components/ContainerMap.vue')))->toBeFalse()
         ->and(File::exists(resource_path('js/components/ContainerMapNode.vue')))->toBeFalse();
+});
+
+/*
+ * Klart när: kartläget ritar `ItemMap`, och itemets högerpanel ritar
+ * `FocusMap` som förut.
+ *
+ * Två ytor, två komponenter: containerns karta är flikens fulla bredd och
+ * itemets högerpanel är den smala panelen. De delar ingen form, och därför
+ * ska den ena bytet inte röra den andra.
+ */
+it('låter kartläget rita ItemMap och högerpanelen behålla FocusMap', function () {
+    $vy = kartavyKod('pages/Containers/Items/Index.vue');
+    $panelen = kartavyKod('components/ItemLinkSection.vue');
+
+    expect($vy)->toContain("import ItemMap from '../../../components/ItemMap.vue'")
+        ->toContain('<ItemMap');
+
+    expect(str_contains($vy, 'FocusMap'))->toBeFalse(
+        'Index.vue ritar fortfarande FocusMap i kartläget',
+    );
+
+    expect($panelen)->toContain("import FocusMap from './FocusMap.vue'")
+        ->toContain('<FocusMap');
+});
+
+/*
+ * Klart när: varje nod utom mitten är en länk till ?view=map&focus=<ulid>.
+ *
+ * Mitten ÄR sidan man står på och får därför ingen centreringslänk: den bär
+ * `current` och `aria-current` i stället ([[ADR-0059 Kartan med en mitt]] § 2
+ * och 3).
+ */
+it('gör varje nod utom mitten till en länk till kartan', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect($kartan)->toContain('const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}`;')
+        ->toContain(':href="focusHref(node)"');
+
+    expect(str_contains($kartan, ':href="focusHref(center)"'))->toBeFalse(
+        'mitten ritar en centreringslänk',
+    );
+
+    expect($noden)->toContain("current ? 'page' : undefined");
+});
+
+/*
+ * Klart när: varje item-nod har en öppna-länk till itemets sida med ett
+ * aria-label som namnger itemet, ritad med UiIcon och rollen `open`.
+ *
+ * Länken går till `/containers/{c}/items/{ulid}` och byggs av `ItemMap`, som
+ * äger containerns adresser. Containern som mitt har ingen öppna-länk — den är
+ * inget item.
+ */
+it('öppnar itemet från noden med open-ikonen', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect($kartan)->toContain('const openHref = (node) => `${base.value}/${node.ulid}`;')
+        ->toContain(':open-href="openHref(node)"');
+
+    expect($noden)->toContain("import UiIcon from './UiIcon.vue'")
+        ->toContain('<UiIcon name="open"')
+        ->toContain("t('item.map.open', { name: node.name })");
+});
+
+/*
+ * Klart när: plusknappen finns bara på mittnoden, och bara när map.rows inte
+ * är tom.
+ *
+ * Raderna skickas bara till mitten — `:rows="map.rows"` står en gång — och
+ * noden ritar ingen knapp när listan är tom ([[ADR-0048 Mobilen och
+ * plusknappen]] § 2).
+ */
+it('ritar plusknappen bara på mitten och bara när raderna finns', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect(substr_count($kartan, ':rows="map.rows"'))->toBe(1);
+    expect(str_contains($kartan, ':rows="node.rows"'))->toBeFalse();
+
+    expect($noden)->toContain('v-if="rows.length > 0"')
+        ->toContain('<UiIcon name="add"')
+        ->toContain("t('item.map.node_menu', { name: node.name })");
+});
+
+/*
+ * Klart när: mittnoden bär aria-current; kring containern har den varken
+ * öppna-länk eller plus, och visar bara namnet.
+ *
+ * Namnet är allt containern har: statusen och talen är itemets, och
+ * `centerOpenHref` är null när mitten är containern. Menyn är tom av samma
+ * skäl — `map.rows` är tom kring containern.
+ */
+it('markerar mitten med aria-current och visar bara namnet kring containern', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect($noden)->toContain('aria-current')
+        ->toContain("current ? 'page' : undefined");
+
+    expect($kartan)->toContain("center.value.kind === 'item' ? openHref(center.value) : null")
+        ->toContain("center.value.kind === 'item' ? t('item.links.current') : ''");
+
+    // Utan status och utan barn ritas ingen metarad — kvar står namnet.
+    expect($noden)->toContain('v-if="status || node.children != null"');
+});
+
+/*
+ * Klart när: noden visar statusens ord och antal barn, och ⇄ bara när
+ * placements är större än ett.
+ *
+ * Talen har en mening i `sr-only`, som i `ContainerMapNode` före issue 296:
+ * siffran ensam säger ingenting till en skärmläsare.
+ */
+it('visar statusens ord, antal barn och platser med ord', function () {
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect($noden)->toContain('t(`item.index.status_${status}`)')
+        ->toContain("t('item.map.children', { count: node.children })")
+        ->toContain("t('item.map.placements', { count: node.placements })")
+        ->toContain('node.placements != null && node.placements > 1')
+        ->toContain('&harr;')
+        ->toContain('sr-only');
+});
+
+/*
+ * Klart när: linjerna till de relaterade är streckade och de andra heldragna,
+ * utan pilspetsar.
+ *
+ * Förbindarna är kanten på en `div` — samma enkla form som `FocusMap` ritar —
+ * och ingen SVG: en pilspets hade påstått en riktning som raderna redan säger.
+ */
+it('ritar streckade linjer till de relaterade och heldragna till strukturerna', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect(substr_count($kartan, 'border-t border-dashed border-border'))->toBe(2);
+    expect(substr_count($kartan, 'h-4 w-px bg-border'))->toBe(2);
+
+    expect(str_contains($kartan, '<svg'))->toBeFalse()
+        ->and(str_contains($noden, '<svg'))->toBeFalse();
+
+    expect(str_contains($kartan, 'marker'))->toBeFalse()
+        ->and(str_contains($noden, 'marker'))->toBeFalse();
+});
+
+/*
+ * Klart när: teckenförklaringen har fyra rader med gruppernas total på de tre
+ * första.
+ *
+ * *Parent*, *Child* och *Related* visar `total` och inte antalet ritade noder,
+ * och *Same item* förklarar ⇄ utan tal ([[ADR-0059 Kartan med en mitt]] § 8).
+ */
+it('förklarar de fyra slagen med gruppernas total', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($kartan)->toContain("const kinds = ['parent', 'child', 'related'];")
+        ->toContain('props.map[kind].total')
+        ->toContain("t('item.map.legend', { kind: row.label, count: row.total })")
+        ->toContain("t('item.map.same_item')")
+        ->toContain('&harr;');
+});
+
+/*
+ * Klart när: +N till visas när total är större än antalet noder.
+ *
+ * Servern skickar bara de noder som ritas, plus gruppens total, och vyn räknar
+ * skillnaden. Målet är `overflowHref` — relationsfliken kring ett item och
+ * listläget kring containern.
+ */
+it('visar +N till när gruppen är större än antalet noder', function () {
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    foreach (['parent', 'child', 'related'] as $grupp) {
+        expect($kartan)->toContain(
+            "props.map.{$grupp}.total - props.map.{$grupp}.nodes.length",
+        );
+    }
+
+    expect($kartan)->toContain("t('item.map.more', { count: moreParents })")
+        ->toContain("t('item.map.more', { count: moreChildren })")
+        ->toContain("t('item.map.more', { count: moreRelated })");
+});
+
+/*
+ * Klart när: orden kommer ur lang/en/ui.php, och item.board-nycklar som ingen
+ * använder längre är borttagna.
+ *
+ * `ContainerMap.vue` och `ContainerMapNode.vue` utgick i issue 296, och den här
+ * noden tar de två sista orden. Kvar i `item.board` skulle de vara en katalog
+ * över en yta som inte finns.
+ */
+it('hämtar kartans ord ur ui.php och har tagit bort item.board', function () {
+    $lang = File::get(lang_path('en/ui.php'));
+
+    expect(str_contains($lang, "'board' =>"))->toBeFalse(
+        'item.board-nycklarna finns kvar utan användare',
+    );
+
+    foreach ([
+        'item.map.legend',
+        'item.map.same_item',
+        'item.map.children',
+        'item.map.placements',
+        'item.map.open',
+        'item.map.node_menu',
+        'item.map.more',
+        'item.map.kind.parent',
+        'item.map.kind.child',
+        'item.map.kind.related',
+        'item.links.current',
+    ] as $nyckel) {
+        expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe(
+            "ui.{$nyckel}",
+            "ui.{$nyckel} saknas",
+        );
+    }
+
+    expect(Lang::get('ui.item.map.same_item', [], 'en'))->toBe('Same item')
+        ->and(Lang::get('ui.item.map.open', ['name' => 'Motor'], 'en'))->toBe('Open Motor')
+        ->and(Lang::get('ui.item.map.children', ['count' => 3], 'en'))->toBe('3 children')
+        ->and(Lang::get('ui.item.map.placements', ['count' => 2], 'en'))->toBe('2 placements')
+        ->and(Lang::get('ui.item.map.legend', ['kind' => 'Parent', 'count' => 2], 'en'))->toBe('Parent (2)');
 });

@@ -36,6 +36,8 @@ function ikonVersion(): string
 
 /**
  * Startlistan ur [[ADR-0057 Ikoner och typsnitt]] § 1: roll → Lucide-namn.
+ * `open` kom med issue 297 och containerns karta
+ * ([[ADR-0059 Kartan med en mitt]] § 3); övriga står i ADR-0057.
  *
  * @return array<string, string>
  */
@@ -85,6 +87,7 @@ function ikonRoller(): array
         'more-vertical' => 'ellipsis-vertical',
         'chevron-left' => 'chevron-left',
         'mail' => 'mail',
+        'open' => 'arrow-up-right',
     ];
 }
 

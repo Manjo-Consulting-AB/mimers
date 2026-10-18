@@ -3103,36 +3103,22 @@ return [
             'map' => 'Map',
         ],
 
-        // The container map (issue 157 · [[M23 Mobilen och kartan]] § 157):
-        // the structure tree drawn as nodes, one open branch per level.
-        //
-        // `label` is the region's accessible name — the map has no heading of
-        // its own, since the switch already says which mode one is in.
-        // `path` names the breadcrumb on a narrow screen, where the map shows
-        // one level at a time and the trail above it says where one is.
-        // `up` is the parent button's accessible name: the button shows the
-        // parent's NAME as its visible text, so the name alone would not say
-        // that the press moves up a level.
-        //
-        // `children` and `placements` are the two counts a node carries, and
-        // they are written as sentences rather than bare numbers because a
-        // lone digit says nothing to a screen reader. `placements` is the same
-        // word as `item.show.placements` and counts the same thing — how many
-        // spots in the structure an item occupies — so the badge and the
-        // occurrence list on the item page cannot drift apart.
-        'board' => [
-            'label' => 'Container map',
-            'path' => 'Path',
-            'up' => 'Up to :name',
-            'children' => ':count children',
-            'placements' => ':count placements',
-        ],
-
         // The right-hand panel: the focus map (issue 156 · [[M23 Mobilen och
         // kartan]] § 156). The item sits in the middle, its parents above it,
         // its children below and the related items on the two sides, and the
         // nodes are App\Actions\Item\ListItemLinks' own answer — the map asks
         // no question of its own.
+        //
+        // The same namespace also carries the container's map (issue 297 ·
+        // [[ADR-0059 Kartan med en mitt]] § 3–8): the item in the middle, its
+        // parents above, its children below and the related items in two
+        // columns. `kind` is the legend AND the word under each node, so the
+        // legend and the node cannot drift apart. `legend` adds the group's
+        // total to the three sorts and `same_item` explains ⇄; `children` and
+        // `placements` are the two counts a node carries, written as sentences
+        // because a lone digit says nothing to a screen reader. `open` is the
+        // open icon's accessible name — an icon says nothing on its own — and
+        // `node_menu` is the plus on the centre node.
         //
         // `heading` names the place and is the only word on the wide screen's
         // panel. `view` is the switch the relations tab carries under `md:`:
@@ -3140,13 +3126,6 @@ return [
         // is read in the querystring (`?view=focus`) like every other mode in
         // this product. Its `label` is the group's accessible name and not a
         // visible word — the two modes name themselves.
-        //
-        // `kind` is the legend: three sorts, one word each, and the SAME three
-        // keys label the nodes themselves, so the legend and the node under it
-        // cannot drift apart. `node_menu` is the plus on a node — the button
-        // draws an icon, so its accessible name is the only word it carries —
-        // and `more` is the row that appears when a row is full and leads to
-        // the relations tab.
         'map' => [
             'heading' => 'Map',
 
@@ -3162,6 +3141,11 @@ return [
                 'related' => 'Related',
             ],
 
+            'legend' => ':kind (:count)',
+            'same_item' => 'Same item',
+            'children' => ':count children',
+            'placements' => ':count placements',
+            'open' => 'Open :name',
             'node_menu' => 'Create in :name',
             'more' => '+:count more',
         ],
