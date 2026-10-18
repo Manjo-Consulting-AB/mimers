@@ -1,6 +1,6 @@
 # ADR-0057 Ikoner och typsnitt
 
-**Status:** Antagen 2026-10-17 · Ändrar [[ADR-0042 Designsystemet]] på två punkter: typskalans `title` och antalet kärnkomponenter · Bygger vidare på [[ADR-0050 Desktopdesignen]] · [[ADR-index]]
+**Status:** Antagen 2026-10-17 · Ändrar [[ADR-0042 Designsystemet]] på två punkter: typskalans `title` och antalet kärnkomponenter · Kompletterad av [[ADR-0060 Itemets ikon]]: itemets ikon väljs ur hela Lucide och ritas av `ItemIcon`, den slutna listan gäller gränssnittet · Bygger vidare på [[ADR-0050 Desktopdesignen]] · [[ADR-index]]
 
 ## Kontext
 

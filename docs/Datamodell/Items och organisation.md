@@ -21,6 +21,8 @@ Grundenheten. Allt användaren vill komma ihåg är ett item — en MPPT-regulat
 | purchased_at | DATE NULL | |
 | warranty_until | DATE NULL | |
 | position_note | VARCHAR(255) NULL | Fritext, t.ex. "bakom panelen i akterruffen" |
+| icon | VARCHAR(64) NULL | Ett Lucide-namn i kebab-case. Servern kontrollerar formatet, inte att ikonen finns. Se [[ADR-0060 Itemets ikon]] |
+| icon_color | VARCHAR(16) NULL | En av paletten i `Item::ICON_COLORS`. `NULL` ritas som `slate` |
 | created_by_user_id | FK NULL | `NULL` när personen raderats |
 | created_by_account_id | FK NULL | Vilket *konto* posten tillskrivs — varvet, inte den anställde. `NULL` när kontot raderats |
 | deleted_at | | |
