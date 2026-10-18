@@ -3,8 +3,8 @@ import { computed, ref, watch } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
-import FocusMap from '../../../components/FocusMap.vue';
 import ItemFilterBar from '../../../components/ItemFilterBar.vue';
+import ItemMap from '../../../components/ItemMap.vue';
 import ItemRow from '../../../components/ItemRow.vue';
 import ItemTreeTable from '../../../components/ItemTreeTable.vue';
 import ItemViewSwitch from '../../../components/ItemViewSwitch.vue';
@@ -103,7 +103,7 @@ defineOptions({
  * sidan som den var och förblir förval, *Träd*, som ritar containerns struktur
  * som tabell med `ItemTreeTable` (issue 294 · [[ADR-0058 Trädet som tabell]]),
  * och *Karta*, som ritar en mitt med föräldrar, barn och relaterade runt sig
- * med `FocusMap` (issue 296). Läget står i querysträngen (`?view=tree`,
+ * med `ItemMap` (issue 296 och 297). Läget står i querysträngen (`?view=tree`,
  * `?view=map`) och `view`-proppen är serverns läsning av den — vyn håller
  * inget eget tillstånd, och därför överlever läget en omladdning och en delad
  * länk. `ItemViewSwitch` ritar växeln, och ordningen i `views` är bindande:
@@ -123,7 +123,7 @@ defineOptions({
  *
  * **Kartans mitt bor i adressen och inte i vyn.** `?focus=` bär itemet i
  * mitten; utan det är containern mitten och rötterna barnen
- * ([[ADR-0059 Kartan med en mitt]] § 1). `Index.vue` bygger den nya adressen
+ * ([[ADR-0059 Kartan med en mitt]] § 1). `ItemMap` bygger den nya adressen
  * när en nod väljs, och servern läser samma sträng igen, så en omladdning och
  * en bakåtknapp landar i samma läge — samma konstruktion som `?path=` i
  * itemvyn (issue 95). Ett okänt, raderat eller dolt `focus` ger containern som
@@ -305,40 +305,7 @@ const views = computed(() => {
 });
 
 /*
- * Kartans svar i `FocusMap`s form (issue 296 · [[ADR-0059 Kartan med en mitt]]
- * § 1). Fokuskartan är byggd för `{self, parent, child, related}` med noder
- * `{ulid, name, href, rows}` — samma form som högerpanelen i itemvyn ritar —
- * och serverns grupper görs om här och inte i komponenten: `FocusMap` ägs av
- * en annan yta och ska inte bära containerns adressregler.
- *
- * **Mitten är ingen länk.** Den ÄR sidan man står på och bär `href: null` och
- * sina egna menyrader ur `map.rows`. De andra noderna leder till kartan med
- * sig själva som mitt — `?view=map&focus=<ulid>` — och bär inga rader:
- * plusmenyn sitter bara på mitten (ADR:ns beslut 4).
- */
-const focusMap = computed(() => {
-    const neighbour = (node) => ({
-        ulid: node.ulid,
-        name: node.name,
-        href: `${base.value}?view=map&focus=${node.ulid}`,
-        rows: [],
-    });
-
-    return {
-        self: {
-            ulid: props.map.center.ulid,
-            name: props.map.center.name,
-            href: null,
-            rows: props.map.rows,
-        },
-        parent: props.map.parent.nodes.map(neighbour),
-        child: props.map.child.nodes.map(neighbour),
-        related: props.map.related.nodes.map(neighbour),
-    };
-});
-
-/*
- * *+N till* i `FocusMap` leder hit. Kring ett item är det itemets
+ * *+N till* i `ItemMap` leder hit. Kring ett item är det itemets
  * relationsflik, som listar alla; kring containern är det listläget
  * ([[ADR-0059 Kartan med en mitt]] § 6).
  */
@@ -495,19 +462,20 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
     </section>
 
     <!--
-        Kartläget (issue 296 · [[ADR-0059 Kartan med en mitt]] § 1). Mitten är
-        containern utan `focus` och itemet med `focus`, med föräldrar, barn och
-        relaterade runt sig. `FocusMap` äger formen — samma komponent som
-        högerpanelen i itemvyn ritar — och vyn gör bara om serverns grupper
-        till dess form och bygger adresserna.
+        Kartläget (issue 296 och 297 · [[ADR-0059 Kartan med en mitt]] § 1).
+        Mitten är containern utan `focus` och itemet med `focus`, med föräldrar,
+        barn och relaterade runt sig. `ItemMap` äger formen och bygger
+        adresserna; vyn skickar serverns svar och målet för *+N till*.
 
         Ingen rubrik och ingen egen tom-text, av samma skäl som trädet: en
         tom karta ritar ingenting, och ett ord om vad som dolts är förbjudet
         (issue 73 § Beslut 6).
     -->
     <section v-else class="mt-6">
-        <FocusMap
-            :map="focusMap"
+        <ItemMap
+            :map="map"
+            :statuses="statuses"
+            :container-ulid="container.ulid"
             :overflow-href="overflowHref"
         />
     </section>
