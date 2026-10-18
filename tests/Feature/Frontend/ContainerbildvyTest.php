@@ -320,6 +320,96 @@ it('visar den neutrala ytan när bilden tas bort', function () {
 });
 
 /*
+ * Klart när (issue 317): bilden vinner över ikonen, och ikonen över lådan.
+ *
+ * Ett källkodsprov, för ordningen är mallens form och ingenting annat. Bilden
+ * är `v-if="url"`, ikonen är den grenens `v-if="icon"`, och lådan är den sista
+ * `v-else`: en container har högst en bild och den är alltid ett val, så en
+ * ikon får aldrig skymma den ([[ADR-0064 Containerns ikon]] § 5).
+ */
+it('ritar bilden före ikonen och lådan när containern har båda', function () {
+    $vy = File::get(resource_path('js/components/ContainerCover.vue'));
+
+    $bild = strpos($vy, '<img v-if="url"');
+    $ikon = strpos($vy, 'v-if="icon"');
+    $lada = strpos($vy, 'name="container"');
+
+    expect($bild)->toBeInt()
+        ->and($ikon)->toBeInt()
+        ->and($lada)->toBeInt();
+
+    expect($bild)->toBeLessThan($ikon);
+    expect($ikon)->toBeLessThan($lada);
+
+    // Ikonen ritas med `ItemIcon` i sin ruta, sin färg och containerns
+    // fallback — en container ska inte se ut som ett item.
+    $tagg = bildvyTagg('js/components/ContainerCover.vue', 'ItemIcon');
+
+    expect($tagg)->toContain(':name="icon"')
+        ->and($tagg)->toContain(':color="color"')
+        ->and($tagg)->toContain('tile')
+        ->and($tagg)->toContain('fallback="container"');
+
+    // Propparna har `null` som förval, så en anropare som inte säger något får
+    // lådan som i dag.
+    expect($vy)->toContain('icon: { type: String, default: null }')
+        ->and($vy)->toContain('color: { type: String, default: null }');
+});
+
+/*
+ * Klart när (issue 317): alla som ritar `ContainerCover` skickar containerns
+ * `icon` och `icon_color`.
+ *
+ * Containerlistan, dashboardens kort, hjälten, ramens topprad och
+ * inställningarna är de fem ytorna. Kortet får dem ur
+ * App\Actions\Container\ListContainerSummaries, de övriga ur sidproppen
+ * `container` (App\Http\Resources\ContainerResource, issue 314).
+ */
+it('skickar containerns ikon och färg från alla som ritar rutan', function () {
+    foreach ([
+        'js/components/ContainerCard.vue',
+        'js/components/ContainerHero.vue',
+        'js/layouts/ContainerLayout.vue',
+        'js/pages/Containers/Index.vue',
+        'js/pages/Containers/Edit.vue',
+    ] as $fil) {
+        expect(bildvyTagg($fil))->toContain(':icon=')
+            ->and(bildvyTagg($fil))->toContain(':color=');
+    }
+});
+
+/*
+ * Klart när (issue 317): rutans storlek och form är oförändrade på alla
+ * ställen.
+ *
+ * Måtten bor hos anroparen ([[ADR-0047 Containerns bild]] § Beslut), och
+ * `ContainerCover` fyller bara den ruta den får. Provet fäster varje ytas ram
+ * och komponentens egen fyllning, så att en ikon i rutan inte kan ändra
+ * vare sig fyrkantens mått eller bildens beskärning.
+ */
+it('behåller rutans mått och beskärning på alla ställen', function () {
+    $ruta = File::get(resource_path('js/components/ContainerCover.vue'));
+
+    expect($ruta)->toContain('class="h-full w-full object-cover"')
+        ->and($ruta)->toContain('class="flex h-full w-full items-center justify-center bg-surface-sunken text-ink-subtle"');
+
+    expect(File::get(resource_path('js/components/ContainerCard.vue')))
+        ->toContain('class="aspect-video w-full"');
+
+    expect(File::get(resource_path('js/pages/Containers/Index.vue')))
+        ->toContain('class="aspect-video w-full"');
+
+    expect(File::get(resource_path('js/components/ContainerHero.vue')))
+        ->toContain('class="absolute inset-0 overflow-hidden rounded-card"');
+
+    expect(File::get(resource_path('js/layouts/ContainerLayout.vue')))
+        ->toContain('class="h-10 w-10 shrink-0 overflow-hidden rounded-control"');
+
+    expect(File::get(resource_path('js/pages/Containers/Edit.vue')))
+        ->toContain('class="h-16 w-16 shrink-0 overflow-hidden rounded-control"');
+});
+
+/*
  * Klart när: pennan visas inte för den som bara läser.
  *
  * Flaggan `can.update` räknas i App\Http\Controllers\ContainerController::
@@ -693,7 +783,9 @@ it('lämnar toppraden under md: oförändrad när hjälten ritas', function () {
 
     expect($topprad)->toContain('href="/containers"')
         ->and($topprad)->toContain("t('nav.back')")
-        ->and($topprad)->toContain('<ContainerCover :cover="container.cover" />')
+        ->and($topprad)->toContain(':cover="container.cover"')
+        ->and($topprad)->toContain(':icon="container.icon"')
+        ->and($topprad)->toContain(':color="container.icon_color"')
         ->and($topprad)->toContain('{{ container.name }}')
         ->and($topprad)->toContain('<ContainerCoverSheet')
         ->and($topprad)->toContain('v-if="canUpdateCover"');

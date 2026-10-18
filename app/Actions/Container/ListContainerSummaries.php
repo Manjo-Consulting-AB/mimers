@@ -81,7 +81,9 @@ class ListContainerSummaries
      *             name: string,
      *             items: int,
      *             todos: int,
-     *             cover: array{ulid: string, variants: list<string>}|null
+     *             cover: array{ulid: string, variants: list<string>}|null,
+     *             icon: string|null,
+     *             icon_color: string|null
      *         }>
      *     }>
      * }
@@ -101,12 +103,27 @@ class ListContainerSummaries
         // ägarkontot i API:et: utan det blir dashboarden N+1, och kravet är ett
         // KONSTANT antal frågor oavsett antal containrar (issue 159 § Klart
         // när, issue 70 § Beslut 2).
+        //
+        // `icon` och `icon_color` står i samma urval av samma skäl (issue 317
+        // · [[ADR-0064 Containerns ikon]] § 5): kortet ritar containerns ikon
+        // när bilden saknas, och en kolumn som inte hämtats hade tyst gett
+        // lådan i stället för den valda ikonen.
         $containers = Container::query()
             ->accessibleBy($user, $accountIds)
             ->listable()
             ->with('coverAttachment.storedFile.derivatives')
             ->orderBy('name')
-            ->get(['id', 'ulid', 'name', 'kind', 'cover_attachment_id', 'cover_focus_x', 'cover_focus_y']);
+            ->get([
+                'id',
+                'ulid',
+                'name',
+                'kind',
+                'icon',
+                'icon_color',
+                'cover_attachment_id',
+                'cover_focus_x',
+                'cover_focus_y',
+            ]);
 
         $itemCounts = $this->itemCounts(
             $user,
@@ -239,7 +256,9 @@ class ListContainerSummaries
      *         name: string,
      *         items: int,
      *         todos: int,
-     *         cover: array{ulid: string, variants: list<string>}|null
+     *         cover: array{ulid: string, variants: list<string>}|null,
+     *         icon: string|null,
+     *         icon_color: string|null
      *     }>
      * }>
      */
@@ -252,7 +271,9 @@ class ListContainerSummaries
          *         name: string,
          *         items: int,
          *         todos: int,
-         *         cover: array{ulid: string, variants: list<string>}|null
+         *         cover: array{ulid: string, variants: list<string>}|null,
+         *         icon: string|null,
+         *         icon_color: string|null
          *     }>
          * }> $grupper
          */
@@ -268,6 +289,11 @@ class ListContainerSummaries
                 // inte av här: kortet och containerlistan bär samma bild i
                 // samma form, och två formuleringar av den hade glidit isär.
                 'cover' => ContainerResource::cover($container),
+                // Ikonen och färgen (issue 317 · [[ADR-0064 Containerns
+                // ikon]] § 5), ur samma rad som namnet. Kortet skickar dem
+                // vidare till `ContainerCover` när bilden saknas.
+                'icon' => $container->icon,
+                'icon_color' => $container->icon_color,
             ],
         );
 

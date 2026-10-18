@@ -235,11 +235,16 @@ const tabs = computed(() =>
                 </Link>
 
                 <!-- Containerns bild, i samma fyrkant som bild 2 i
-                     docs/Design/mobil.png. Utan bild ritar
-                     `ContainerCover` den neutrala ytan med
-                     containertecknet (ADR-0047 § Beslut). -->
+                     docs/Design/mobil.png. Utan bild väljer
+                     `ContainerCover` containerns ikon eller den neutrala ytan
+                     med containertecknet (ADR-0047 § Beslut, [[ADR-0064
+                     Containerns ikon]] § 5). -->
                 <span class="h-10 w-10 shrink-0 overflow-hidden rounded-control">
-                    <ContainerCover :cover="container.cover" />
+                    <ContainerCover
+                        :cover="container.cover"
+                        :icon="container.icon"
+                        :color="container.icon_color"
+                    />
                 </span>
 
                 <p class="text-title font-semibold">{{ container.name }}</p>

@@ -16,9 +16,10 @@ import { useTranslations } from '../composables/useTranslations.js';
  * något saknas, samma regel som översiktens huvud.
  *
  * **Bilden är `ContainerCover` och ingenting annat.** Komponenten väljer inte
- * sin egen storlek — den fyller rutan anroparen ställer den i — och ritar den
- * neutrala ytan med containertecknet när containern saknar bild (ADR-0047
- * § Beslut). Hjälten lägger den som ett lager UNDER texten i stället för att
+ * sin egen storlek — den fyller rutan anroparen ställer den i — och väljer
+ * bild, containerns ikon eller den neutrala ytan med containertecknet
+ * (ADR-0047 § Beslut, [[ADR-0064 Containerns ikon]] § 5). Hjälten lägger den
+ * som ett lager UNDER texten i stället för att
  * bygga en andra väg till samma bild.
  *
  * **Texten står alltid på den täta delen av toningen.** Lagret ovanpå bilden
@@ -102,7 +103,12 @@ const { t } = useTranslations();
             `alt=""` av samma skäl (issue 68a § Beslut 8).
         -->
         <span class="absolute inset-0 overflow-hidden rounded-card" aria-hidden="true">
-            <ContainerCover :cover="container.cover" variant="medium" />
+            <ContainerCover
+                :cover="container.cover"
+                :icon="container.icon"
+                :color="container.icon_color"
+                variant="medium"
+            />
         </span>
 
         <!--

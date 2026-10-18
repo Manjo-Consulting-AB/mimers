@@ -426,6 +426,35 @@ it('gör hela containerkortet till länkens klickyta', function () {
         ->and(substr_count($kort, '<Link'))->toBe(1);
 });
 
+/*
+ * Klart när (issue 317): dashboardens kort bär containerns ikon och färg.
+ *
+ * Kortet ritar `ContainerCover` (issue 159), och när bilden saknas väljer
+ * komponenten containerns ikon ([[ADR-0064 Containerns ikon]] § 5).
+ * App\Actions\Container\ListContainerSummaries läser `icon` och `icon_color` i
+ * SAMMA fråga som namnet, så dashboardens frågeantal är oförändrat — det
+ * mäts i provet ovan.
+ */
+it('skickar containerns ikon och färg på dashboardens kort', function () {
+    withoutVite();
+
+    [$konto, $anvandare] = brickaKonto();
+    $container = brickaPärm($konto);
+
+    $container->update(['icon' => 'anchor', 'icon_color' => 'teal']);
+
+    $svar = actingAs($anvandare)->get('/dashboard')->assertOk();
+    $kort = brickaGrupper($svar)[0]['containers'][0];
+
+    expect($kort['icon'])->toBe('anchor')
+        ->and($kort['icon_color'])->toBe('teal');
+
+    $komponent = File::get(resource_path('js/components/ContainerCard.vue'));
+
+    expect($komponent)->toContain(':icon="props.container.icon"')
+        ->and($komponent)->toContain(':color="props.container.icon_color"');
+});
+
 // --- grupperingen ----------------------------------------------------------
 
 /*
