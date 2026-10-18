@@ -959,7 +959,7 @@ class ItemController extends Controller
             // Ligger BREDVID resursen och inte i den, samma linje som
             // `paths`, `structure` och `counterparts`: `ItemResource` är
             // `/api`:s format och har inte bett om fältet.
-            'map' => $this->map($user, $container, $item, $linkRows, $candidates, $path, $createTarget),
+            'map' => $this->map($user, $container, $item, $links, $candidates, $path, $createTarget),
 
             // Relationsflikens läge (issue 156): *Lista* är förvalet och
             // *Fokus* är kartan. Läget står i querysträngen och ingenstans
@@ -1827,28 +1827,36 @@ class ItemController extends Controller
      * sidan man står på. Den bär `href => null` och ritas som aktuell i
      * stället.
      *
-     * **Noderna byggs ur samma radform som `links`-proppen**, alltså ur
-     * `ItemLinkResource` och inte ur modellerna: de tre minnesattributen
-     * (`counterpart_ulid`, `counterpart_name`, `relation_to_item`) är otypade
-     * och läses på ett ställe i klassen. Kartan och relationsfliken ritar
-     * därmed bevisligen samma lista.
+     * **Noderna byggs ur Actionens svar**, samma `ListItemLinks` som
+     * relationsfliken ritar, med de otypade minnesattributen
+     * (`counterpart_ulid`, `counterpart_name`, `relation_to_item`) lästa här.
+     * `ItemLinkResource` bär bara `ulid` och `name` — API-kontraktet är
+     * oförändrat — så kartan läser modellerna direkt i stället för resursens
+     * rader. Kartan och relationsfliken ritar därmed bevisligen samma lista.
      *
-     * @param  list<array{item: array{ulid: string, name: string}, relation: string}>  $links
+     * **Ikonen följer med varje nod** (issue 303 · [[ADR-0060 Itemets ikon]]
+     * § 9): `counterpart_icon` och `counterpart_icon_color` kommer ur samma
+     * rad och ur samma fråga som namnet, och `self` läser dem ur `$item`. Ett
+     * item utan ikon får `null` och ritar den neutrala.
+     *
+     * @param  Collection<int, ItemLink>  $links
      * @param  Collection<int, Item>  $candidates
      * @return array{self: array<string, mixed>, parent: list<array<string, mixed>>, child: list<array<string, mixed>>, related: list<array<string, mixed>>}
      */
-    private function map(?User $user, Container $container, Item $item, array $links, Collection $candidates, ?string $path, CreateTarget $createTarget): array
+    private function map(?User $user, Container $container, Item $item, Collection $links, Collection $candidates, ?string $path, CreateTarget $createTarget): array
     {
         $byUlid = $candidates->keyBy('ulid');
 
         $groups = ['parent' => [], 'child' => [], 'related' => []];
 
         foreach ($links as $link) {
-            $ulid = $link['item']['ulid'];
+            $ulid = $link->getAttribute('counterpart_ulid');
 
-            $groups[$link['relation']][] = [
+            $groups[$link->getAttribute('relation_to_item')][] = [
                 'ulid' => $ulid,
-                'name' => $link['item']['name'],
+                'name' => $link->getAttribute('counterpart_name'),
+                'icon' => $link->getAttribute('counterpart_icon'),
+                'icon_color' => $link->getAttribute('counterpart_icon_color'),
                 'href' => route('containers.items.show', [$container, $ulid], absolute: false),
                 'rows' => $this->nodeRows($user, $container, $byUlid->get($ulid), $createTarget),
             ];
@@ -1858,6 +1866,8 @@ class ItemController extends Controller
             'self' => [
                 'ulid' => $item->ulid,
                 'name' => $item->name,
+                'icon' => $item->icon,
+                'icon_color' => $item->icon_color,
                 'href' => null,
                 'rows' => $this->nodeRows($user, $container, $item, $createTarget, $path),
             ],

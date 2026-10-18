@@ -37,6 +37,13 @@ use Illuminate\Support\Collection;
  * och samma linje som App\Actions\Item\ListItems: skulle den vara null blir
  * omfånget `restricted([])` — "når ingenting" — aldrig ett obegränsat.
  *
+ * **Motpartens ikon följer med i samma fråga** (issue 303 ·
+ * [[ADR-0060 Itemets ikon]] § 9): `icon` och `icon_color` väljs tillsammans med
+ * `ulid` och `name` och sätts som `counterpart_icon`/`counterpart_icon_color`
+ * bredvid de andra minnesattributen. Det är samma fråga som förut — inga nya
+ * kolumner i svaret kostar ingen ny fråga — och fokuskartan ritar samma värden
+ * som relationsfliken fick.
+ *
  * **Ingen `Gate::authorize()`.** Behörigheten prövas av anroparen — samma
  * linje som varje tidigare utbrytning i M10 (issue 57a § Beslut 3, 55a
  * § Beslut 8, 56a § Beslut 7).
@@ -71,7 +78,7 @@ class ListItemLinks
         $itemsById = Item::query()
             ->whereIn('id', $counterpartIds)
             ->inScope($scope)
-            ->get(['id', 'ulid', 'name'])
+            ->get(['id', 'ulid', 'name', 'icon', 'icon_color'])
             ->keyBy('id');
 
         $visible = $links->filter(fn (ItemLink $link) => $itemsById->has($this->counterpartId($link, $item)));
@@ -81,6 +88,8 @@ class ListItemLinks
 
             $link->setAttribute('counterpart_ulid', $counterpart->ulid);
             $link->setAttribute('counterpart_name', $counterpart->name);
+            $link->setAttribute('counterpart_icon', $counterpart->icon);
+            $link->setAttribute('counterpart_icon_color', $counterpart->icon_color);
             $link->setAttribute('relation_to_item', $link->relationSeenFromItem($item->id));
         });
 

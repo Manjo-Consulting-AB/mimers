@@ -7,6 +7,7 @@ import HistoryRow from '../../../components/HistoryRow.vue';
 import ItemActivityPanel from '../../../components/ItemActivityPanel.vue';
 import ItemAttachmentSection from '../../../components/ItemAttachmentSection.vue';
 import ItemCostSection from '../../../components/ItemCostSection.vue';
+import ItemIcon from '../../../components/ItemIcon.vue';
 import ItemLinkSection from '../../../components/ItemLinkSection.vue';
 import ItemLoanSection from '../../../components/ItemLoanSection.vue';
 import ItemMapPanel from '../../../components/ItemMapPanel.vue';
@@ -767,7 +768,22 @@ function toggleFavorite() {
                 sätts av en tabb och inte av kod.
             -->
             <div class="flex items-start justify-between gap-4">
-                <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
+                <div class="flex min-w-0 items-center gap-3">
+                    <!--
+                        Itemets egen ikon står före rubriken, i storleken 24
+                        (issue 303 · [[ADR-0060 Itemets ikon]] § 6 och 9). Ett
+                        item utan ikon ritar den neutrala i samma storlek, så
+                        att rubriken står på samma plats.
+                    -->
+                    <ItemIcon
+                        :name="item.icon"
+                        :color="item.icon_color"
+                        :size="24"
+                        tile
+                        class="shrink-0"
+                    />
+                    <h1 class="text-2xl font-semibold">{{ item.name }}</h1>
+                </div>
 
                 <button
                     type="button"

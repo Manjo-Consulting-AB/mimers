@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import ItemIcon from './ItemIcon.vue';
 import UiIcon from './UiIcon.vue';
 
 /*
@@ -27,10 +28,18 @@ import UiIcon from './UiIcon.vue';
  * varit trasig (issue 61b § Beslut 1). Containerns eget omslag läses aldrig
  * här — ett item utan bild ärver inte containerns foto.
  *
- * **Ikonrutan är `neutral`** ([[ADR-0057 Ikoner och typsnitt]] § 3): ett item
- * utan bild har ingen domän som ger en annan ton, och `neutral` är regeln för
- * allt annat. Ikonen är `item` — samma roll som containerns itemyta använder —
- * och `UiIcon` äger storlek, linjebredd, färg och `aria-hidden` (issue 282).
+ * **Itemets egen ikon står före namnet** (issue 303 ·
+ * [[ADR-0060 Itemets ikon]] § 6 och 9): `ItemIcon` med `tile`, i storleken 20,
+ * ur `item.icon` och `item.icon_color` som `ItemResource` bär sedan issue 301.
+ * Ett item utan ikon ritar den neutrala `item`-ikonen i samma storlek, så att
+ * raderna står i linje. Omslagets miniatyr står kvar där den står — ikonen
+ * ersätter den inte.
+ *
+ * **Omslagsrutan är `neutral`** ([[ADR-0057 Ikoner och typsnitt]] § 3): ett
+ * item utan bild har ingen domän som ger en annan ton, och `neutral` är regeln
+ * för allt annat. Ikonen är `item` — samma roll som containerns itemyta
+ * använder — och `UiIcon` äger storlek, linjebredd, färg och `aria-hidden`
+ * (issue 282).
  *
  * **Hela raden är länken** (issue 212). Träffytan är `min-h-11` — 44 px ur
  * issue 68a § Beslut 3 — och bor på länken, som GenomgangTest mäter.
@@ -81,6 +90,14 @@ const itemUrl = computed(
                 :size="24"
                 tile="neutral"
                 class="h-12 w-12 shrink-0"
+            />
+
+            <ItemIcon
+                :name="props.item.icon"
+                :color="props.item.icon_color"
+                :size="20"
+                tile
+                class="shrink-0"
             />
 
             <span class="min-w-0 flex-1">

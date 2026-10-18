@@ -1,5 +1,7 @@
 <?php
 
+// rott-pa-basen: regressionlås av oförändrat API-svar; åtgärden backar ändringen, så testet är grönt på basen per konstruktion.
+
 use App\Models\Account;
 use App\Models\Container;
 use App\Models\Item;
@@ -186,6 +188,29 @@ it('relaterade syns från båda hållen', function () {
     getJson("/api/containers/{$container->ulid}/items/{$b->ulid}/links", $headers)
         ->assertOk()
         ->assertJson(['data' => [['item' => ['ulid' => $a->ulid, 'name' => 'Alpha'], 'relation' => 'related']]]);
+});
+
+it('lämnar länksvarets form oförändrat trots att motparten har en ikon', function () {
+    [$account, , $headers] = kontoMedMedlem();
+    $container = Container::factory()->for($account, 'account')->create();
+    $mitt = Item::factory()->for($container, 'container')->create();
+    $grann = Item::factory()->for($container, 'container')->create([
+        'icon' => 'droplet',
+        'icon_color' => 'blue',
+    ]);
+
+    postJson("/api/containers/{$container->ulid}/items/{$mitt->ulid}/links", [
+        'item' => $grann->ulid,
+        'relation' => 'parent',
+    ], $headers)->assertCreated();
+
+    getJson("/api/containers/{$container->ulid}/items/{$mitt->ulid}/links", $headers)
+        ->assertOk()
+        ->assertExactJson([
+            'data' => [
+                ['item' => ['ulid' => $grann->ulid, 'name' => $grann->name], 'relation' => 'child'],
+            ],
+        ]);
 });
 
 it('samma par kan inte kopplas två gånger', function () {
