@@ -3238,6 +3238,38 @@ return [
             // unmade choice.
             'cover' => 'Cover image',
             'cover_none' => '— no cover image —',
+
+            /*
+             * Itemets ikon (issue 302 · [[ADR-0060 Itemets ikon]] § 8). The
+             * section is drawn only in the edit form — an item that does not
+             * exist yet has nothing to show — and these are the words around
+             * it: `icon` labels the section, `icon_heading` the sheet,
+             * `icon_search` the search field's visible label, and the rest
+             * the buttons. `icon_colors` holds the eight palette keys' own
+             * names: the colours are the user's choice and not roles, which
+             * is exactly the exception ADR-0060 § 5 makes to the role names.
+             * The picker looks each key up by the palette's spelling, so a
+             * key that changes in `itemIconPresentation.js` must change here
+             * too — the test reads the list from that module.
+             */
+            'icon' => 'Icon',
+            'icon_choose' => 'Choose icon',
+            'icon_heading' => 'Choose an icon',
+            'icon_search' => 'Search icons',
+            'icon_show_more' => 'Show more',
+            'icon_color' => 'Colour',
+            'icon_colors' => [
+                'slate' => 'Slate',
+                'blue' => 'Blue',
+                'sky' => 'Sky',
+                'teal' => 'Teal',
+                'green' => 'Green',
+                'amber' => 'Amber',
+                'orange' => 'Orange',
+                'violet' => 'Violet',
+            ],
+            'icon_remove' => 'Remove icon',
+            'icon_done' => 'Done',
         ],
 
         /*
