@@ -19,7 +19,8 @@ use function Pest\Laravel\withoutVite;
  * App\Http\Controllers\ItemController::index(),
  * App\Actions\Item\ResolveItemTree,
  * resources/js/pages/Containers/Items/Index.vue,
- * resources/js/components/ItemViewSwitch.vue och
+ * resources/js/components/ItemViewSwitch.vue,
+ * resources/js/components/ItemTreeTable.vue och
  * resources/js/components/ItemStructureTree.vue.
  *
  * **Växeln har tre lägen sedan issue 157.** [[ADR-0046 Containerns karta]]
@@ -420,6 +421,7 @@ it('kostar ett konstant antal frågor oavsett antal items', function () {
     // Och komponenterna ber aldrig servern om något: trädet och växeln ritar
     // proppar, och ingen av dem hämtar eller navigerar själv.
     foreach ([
+        'components/ItemTreeTable.vue',
         'components/ItemStructureTree.vue',
         'components/ItemViewSwitch.vue',
     ] as $fil) {
@@ -550,4 +552,153 @@ it('låter ett filter som skickas från trädläget stanna i trädläget', funct
     // `?view=tree&q=…` i varje väg genom `apply()`.
     expect($rad)->toContain('view: { type: String, default: null }')
         ->and($rad)->toContain('params.view = props.view');
+});
+
+/*
+ * Klart när (issue 294 · [[ADR-0058 Trädet som tabell]]): trädläget ritar
+ * `ItemTreeTable`, och panelen och väljaren ritar `ItemStructureTree` som
+ * förut.
+ *
+ * Tabellen är en EGEN komponent och inte en fjärde form av trädet: en
+ * tabellrad och ett led i en panel är olika element (§ Konsekvenser). Provet
+ * läser vyn och de två ytorna, eftersom sviten inte kör en webbläsare.
+ */
+it('ritar trädtabellen i trädläget och lämnar trädet åt panelen och väljaren', function () {
+    $vy = itemtradKod('pages/Containers/Items/Index.vue');
+
+    expect($vy)->toContain("import ItemTreeTable from '../../../components/ItemTreeTable.vue'")
+        ->toContain('<ItemTreeTable')
+        ->toContain(':nodes="structure ?? []"')
+        ->toContain(':tree-rows="treeRows ?? {}"')
+        ->toContain(':filtered="hasFilter"');
+
+    // Trädläget ritar inte längre strukturträdet: komponenten står kvar för
+    // panelen (issue 103) och föräldraväljaren (issue 153).
+    expect($vy)->not->toContain('ItemStructureTree');
+
+    foreach (['components/ItemStructurePanel.vue', 'components/ParentPicker.vue'] as $yta) {
+        $kod = itemtradKod($yta);
+
+        expect($kod)->toContain('<ItemStructureTree')
+            ->and($kod)->not->toContain('<ItemTreeTable');
+    }
+});
+
+/*
+ * Klart när: första raden är containerns namn, utan länk, med fällknapp och
+ * öppen från början (§ 2).
+ *
+ * Rotraden är tabellens ram och inte en förekomst: den pekar ingenstans, och
+ * den är öppen så att trädet ser ut som i dag tills någon fäller upp en gren.
+ */
+it('ritar containern som en öppen, olänkad rotrad', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect($kod)->toContain('const containerOpen = ref(true)')
+        ->toContain('@click="containerOpen = ! containerOpen"');
+
+    // Rotraden läses ut för sig: containerns namn finns i hela filen även som
+    // etikett på fällknappen, och provet gäller raden.
+    $start = strpos($kod, 'bg-surface-muted');
+    $slut = strpos($kod, '</tr>', (int) $start);
+    $rot = substr($kod, (int) $start, (int) $slut - (int) $start);
+
+    expect($rot)->toContain('{{ containerName }}')
+        ->toContain('aria-expanded');
+
+    expect($rot)->not->toContain('<Link');
+});
+
+/*
+ * Klart när: fällknappen finns bara på rader med barn och bär
+ * `aria-expanded` och `aria-label` ur `item.structure.expand`/`collapse`.
+ *
+ * Två knappar finns: rotraden och itemraderna. Itemknappen är grindad på
+ * `row.node.children.length`, så ett löv — som inte har något att fälla upp —
+ * aldrig får en knapp som inte gör något.
+ */
+it('ger fällknappen bara till rader med barn och märker den med aria-expanded', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect(substr_count($kod, 'aria-expanded'))->toBe(2)
+        ->and($kod)->toContain('v-if="row.node.children.length > 0"')
+        ->and($kod)->toContain("t('item.structure.expand', { name: row.node.name })")
+        ->and($kod)->toContain("t('item.structure.collapse', { name: row.node.name })")
+        ->and($kod)->toContain("t('item.structure.expand', { name: containerName })")
+        ->and($kod)->toContain("t('item.structure.collapse', { name: containerName })");
+});
+
+/*
+ * Klart när: namnet är en länk till itemet med hela ledet i `?path=`, som i
+ * `ItemStructureTree`, och radens nyckel är ledet. Ett item på två platser är
+ * därför två rader med samma siffror (§ 3).
+ */
+it('länkar namnet med hela ledet i ?path= och nycklar raden på samma led', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect($kod)->toContain('?path=${row.key}')
+        ->toContain('const nodeTrail = [...trail, node.ulid]')
+        ->toContain('trailKey(nodeTrail)')
+        ->toContain(':key="row.key"')
+        // Ledet är ULID:na från roten ned, med punkt emellan — samma sträng i
+        // adressen och i nyckeln.
+        ->toContain("return trail.join('.')");
+});
+
+/*
+ * Klart när: kategori, taggar, dokument, uppgifter och tid läses ur
+ * `treeRows`; en saknad kategori ritar en tom cell; högst två taggar ritas
+ * som i `ItemTagList` och därefter `+N`; *Last updated* ritas med
+ * `eventDate()` (§ 1).
+ *
+ * Vyn räknar ingenting själv — siffrorna kommer ur
+ * App\Actions\Item\ResolveItemTreeRows (issue 292).
+ */
+it('läser kolumnerna ur treeRows med tom kategori, två taggar och datumregeln', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect($kod)->toContain('props.treeRows[node.ulid]')
+        // Saknad kategori är en tom cell och inte en påhittad text.
+        ->toContain("cells(row.node).category ?? ''")
+        // Taggraderna återbrukar listans och detaljvyns komponent.
+        ->toContain("import ItemTagList from './ItemTagList.vue'")
+        ->toContain('.slice(0, 2)')
+        ->toContain('+{{ extraTags(row.node) }}')
+        // Last updated är en händelse och ritas av datumregeln.
+        ->toContain('eventDate(cells(row.node).updated_at).text')
+        ->toContain("import { useRelativeDate } from '../composables/useRelativeDate.js'");
+});
+
+/*
+ * Klart när: under `md:` visas bara namnet, med kategorin som undertext, och
+ * kolumnerna kommer fram från `md:` (§ 8).
+ *
+ * Tabellen skrollar aldrig i sidled (GenomgangTest): de fem kolumnerna göms
+ * med `md:table-cell`, och kategorin ritas i stället om som undertext.
+ */
+it('visar bara namn och kategori under md:', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect($kod)->toContain('text-xs text-ink-muted md:hidden')
+        // Fem rubriker, fem tomma rotceller och fem itemceller.
+        ->and(substr_count($kod, 'md:table-cell'))->toBe(15);
+});
+
+/*
+ * Klart när: med filter är träffarna halvfeta och vägen inte, och grenarna
+ * som leder till en träff är öppna från början (§ 5).
+ *
+ * Vikten är skillnaden, inte bara en färg, och `filtered` är serverns besked
+ * om att ett filter är på — utan filter är varje nod en träff, och då hade
+ * flaggan gjort hela trädet halvfett.
+ */
+it('halvfetar träffarna och öppnar grenarna till dem i ett filtrerat träd', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect($kod)->toContain('props.filtered && node.match === true')
+        ->toContain('font-semibold text-ink')
+        // Utgångsläget: stängt, utom i ett filtrerat träd där grenen leder
+        // till en träff och alltså ska synas utan klick.
+        ->toContain('return open.value[key] ?? props.filtered')
+        ->toContain('filtered: { type: Boolean, default: false }');
 });

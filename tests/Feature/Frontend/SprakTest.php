@@ -1171,6 +1171,35 @@ it('hämtar fällknappens strängar ur ui.php', function () {
 });
 
 /*
+ * Trädtabellen, se issue 294 och resources/js/components/ItemTreeTable.vue.
+ *
+ * Rubrikerna är tabellens ENDA egna ord: itemnamn, kategorier och taggar
+ * kommer ur domänen, och `+N` är ett tal. Nycklarna läses ur källkoden i
+ * stället för att räknas upp här, så en rubrik som byter namn eller tillkommer
+ * utan att följa med i katalogen faller.
+ *
+ * Fällknappens etiketter är samma två nycklar som trädet i panelen bär —
+ * tabellen och panelen ska inte ha två ord för samma tryck.
+ */
+it('hämtar trädtabellens strängar ur ui.php', function () {
+    $tabellen = File::get(resource_path('js/components/ItemTreeTable.vue'));
+
+    foreach (['name', 'category', 'tags', 'documents', 'tasks', 'last_updated'] as $nyckel) {
+        expect($tabellen)->toContain("t('item.tree.{$nyckel}')");
+    }
+
+    expect($tabellen)->toContain("t('item.structure.expand', { name: row.node.name })")
+        ->toContain("t('item.structure.collapse', { name: row.node.name })");
+
+    expect(Lang::get('ui.item.tree.name', [], 'en'))->toBe('Name')
+        ->and(Lang::get('ui.item.tree.category', [], 'en'))->toBe('Category')
+        ->and(Lang::get('ui.item.tree.tags', [], 'en'))->toBe('Tags')
+        ->and(Lang::get('ui.item.tree.documents', [], 'en'))->toBe('Documents')
+        ->and(Lang::get('ui.item.tree.tasks', [], 'en'))->toBe('Tasks')
+        ->and(Lang::get('ui.item.tree.last_updated', [], 'en'))->toBe('Last updated');
+});
+
+/*
  * Fokuskartan, se issue 156 · [[M23 Mobilen och kartan]] § 156 och
  * resources/js/components/FocusMap.vue, FocusMapNode.vue och
  * ItemMapPanel.vue.

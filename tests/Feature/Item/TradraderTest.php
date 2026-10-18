@@ -408,18 +408,23 @@ it('kostar samma antal frågor för tre och trettio items', function () {
 });
 
 /*
- * Klart när: Index.vue tar emot `treeRows` som propp med `null` som standard
- * och ritar ingenting nytt.
+ * Klart när: Index.vue tar emot `treeRows` som propp med `null` som standard.
+ *
+ * Sedan issue 294 ritar trädläget tabellen och mallen läser `treeRows`:
+ * kolumnerna kommer därifrån och räknas inte i klienten
+ * ([[ADR-0058 Trädet som tabell]] § 1). Proppen finns fortfarande BARA i
+ * trädläget — `null` betyder "inte hämtad" — så den som öppnar listan slipper
+ * betala för kolumner hon inte ser.
  */
-it('tar emot treeRows som propp med null som standard och ritar ingenting nytt', function () {
+it('tar emot treeRows som propp med null som standard och skickar den till tabellen', function () {
     $vy = tradradKod('pages/Containers/Items/Index.vue');
 
     expect($vy)->toContain('treeRows: { type: Object, default: null }');
 
-    // Trädläget ritar fortfarande `structure`, och mallen läser inte
-    // `treeRows` alls: kolumnerna ritas i issue 294.
+    // Trädläget ritar trädet ur `structure` och kolumnerna ur `treeRows`
+    // (issue 294): tabellen får båda, och vyn räknar ingenting själv.
     $mal = substr($vy, (int) strpos($vy, '<template>'));
 
-    expect($mal)->toContain(':nodes="structure ?? []"');
-    expect($mal)->not->toContain('treeRows');
+    expect($mal)->toContain(':nodes="structure ?? []"')
+        ->toContain(':tree-rows="treeRows ?? {}"');
 });
