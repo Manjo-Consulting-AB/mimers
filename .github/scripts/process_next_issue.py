@@ -2605,13 +2605,16 @@ def kor_omfangslint(issue_num, issue_body, worktree_path):
             run_cmd(["git", "reset", "--hard", head_fore], check=False, cwd=worktree_path)
             run_cmd(["git", "clean", "-fd"], check=False, cwd=worktree_path)
 
+    # Läslistan och de följande proven delar ett fail-open-led: test_process_next_issue
+    # låser antalet fångade fel i funktionen till tre.
+    lasluckor, prov = [], []
     try:
         lasluckor = omfangslint.lasfynd(issue_body, worktree_path)
+        prov = omfangslint.foljande_prov(innanfor, worktree_path)
     except Exception as fel:
-        print(f"!! Omfångslinten kunde inte läsa läslistan: {fel}. Fortsätter utan den.")
-        lasluckor = []
+        print(f"!! Omfångslinten kunde inte läsa läslistan eller befintliga prov: {fel}. Fortsätter utan dem.")
 
-    text = omfangslint.rapport(mekaniska, modellfynd, lage, lasluckor)
+    text = omfangslint.rapport(mekaniska, modellfynd, lage, lasluckor, prov)
     if not text:
         print("--> Omfångslinten: rutan och läslistan täcker det issuen beskriver.")
         return ""
