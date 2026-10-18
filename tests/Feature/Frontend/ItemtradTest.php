@@ -585,27 +585,37 @@ it('ritar trädtabellen i trädläget och lämnar trädet åt panelen och välja
 });
 
 /*
- * Klart när: första raden är containerns namn, utan länk, med fällknapp och
- * öppen från början (§ 2).
+ * Klart när (issue 304 · [[ADR-0060 Itemets ikon]] § 10): första raden är
+ * containerns namn, utan länk och utan fällknapp, med containerns ikon i
+ * kolumnen där knappen stod. Rötterna syns alltid, så raden har ingen
+ * `aria-expanded` och ingen `containerOpen` att växla.
  *
  * Rotraden är tabellens ram och inte en förekomst: den pekar ingenstans, och
- * den är öppen så att trädet ser ut som i dag tills någon fäller upp en gren.
+ * `visibleRows` vandrar över `nodes` utan villkor.
  */
-it('ritar containern som en öppen, olänkad rotrad', function () {
+it('ritar containern som en olänkad rotrad med containerns ikon och utan fällknapp', function () {
     $kod = itemtradKod('components/ItemTreeTable.vue');
 
-    expect($kod)->toContain('const containerOpen = ref(true)')
-        ->toContain('@click="containerOpen = ! containerOpen"');
+    expect($kod)->not->toContain('containerOpen')
+        // Rötterna syns utan klick — ingen flagga grindar vandringen.
+        ->toContain('walk(props.nodes, [], 0, [])')
+        ->toContain('name="container"')
+        ->toContain('tile="neutral"');
 
     // Rotraden läses ut för sig: containerns namn finns i hela filen även som
-    // etikett på fällknappen, och provet gäller raden.
+    // etikett på en fällknapp, och provet gäller raden.
     $start = strpos($kod, 'bg-surface-muted');
     $slut = strpos($kod, '</tr>', (int) $start);
     $rot = substr($kod, (int) $start, (int) $slut - (int) $start);
 
     expect($rot)->toContain('{{ containerName }}')
-        ->toContain('aria-expanded');
+        ->toContain('<UiIcon name="container"')
+        // Ikonen står i samma 44 px-kolumn som itemradernas fällknappar.
+        ->toContain('min-w-11');
 
+    // Ingen knapp och ingen `aria-expanded`: raden går inte att fälla.
+    expect($rot)->not->toContain('<button');
+    expect($rot)->not->toContain('aria-expanded');
     expect($rot)->not->toContain('<Link');
 });
 
@@ -613,19 +623,81 @@ it('ritar containern som en öppen, olänkad rotrad', function () {
  * Klart när: fällknappen finns bara på rader med barn och bär
  * `aria-expanded` och `aria-label` ur `item.structure.expand`/`collapse`.
  *
- * Två knappar finns: rotraden och itemraderna. Itemknappen är grindad på
+ * Sedan issue 304 finns bara EN knapp: rotraden fälls aldrig
+ * ([[ADR-0060 Itemets ikon]] § 10). Itemknappen är grindad på
  * `row.node.children.length`, så ett löv — som inte har något att fälla upp —
  * aldrig får en knapp som inte gör något.
  */
 it('ger fällknappen bara till rader med barn och märker den med aria-expanded', function () {
     $kod = itemtradKod('components/ItemTreeTable.vue');
 
-    expect(substr_count($kod, 'aria-expanded'))->toBe(2)
+    expect(substr_count($kod, 'aria-expanded'))->toBe(1)
         ->and($kod)->toContain('v-if="row.node.children.length > 0"')
         ->and($kod)->toContain("t('item.structure.expand', { name: row.node.name })")
-        ->and($kod)->toContain("t('item.structure.collapse', { name: row.node.name })")
-        ->and($kod)->toContain("t('item.structure.expand', { name: containerName })")
-        ->and($kod)->toContain("t('item.structure.collapse', { name: containerName })");
+        ->and($kod)->toContain("t('item.structure.collapse', { name: row.node.name })");
+
+    // Rotraden bär ingen fällknapp alls: etiketterna med containerns namn är
+    // borta tillsammans med knappen.
+    expect($kod)->not->toContain('{ name: containerName }');
+});
+
+/*
+ * Klart när (issue 304 · [[ADR-0060 Itemets ikon]] § 6 och 10): varje
+ * itemrad ritar `ItemIcon` med itemets ikon och färg, med `tile` i storleken
+ * 20, mellan fällknappen (eller platshållaren) och namnet.
+ *
+ * Ikonen kommer ur radens celler — vyn slår inte upp något själv — och står
+ * i samma form under `md:`, eftersom den ligger i namncellen och inte i en
+ * kolumn som göms.
+ */
+it('ritar itemets ikon mellan fällknappen och namnet', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    expect($kod)->toContain("import ItemIcon from './ItemIcon.vue'")
+        ->toContain(':name="cells(row.node).icon"')
+        ->toContain(':color="cells(row.node).icon_color"')
+        ->toContain(':size="20"');
+
+    // Ordningen i raden: knappen, platshållaren, ikonen, namnet.
+    $knapp = strpos($kod, 'v-if="row.node.children.length > 0"');
+    $ikon = strpos($kod, '<ItemIcon');
+    $namn = strpos($kod, '{{ row.node.name }}');
+
+    expect($knapp)->not->toBeFalse('raden ritar ingen fällknapp')
+        ->and($ikon)->not->toBeFalse('raden ritar ingen itemikon')
+        ->and($namn)->not->toBeFalse('raden ritar inget namn');
+
+    expect((int) $knapp)->toBeLessThan((int) $ikon)
+        ->and((int) $ikon)->toBeLessThan((int) $namn);
+
+    // Ikonen är inte grindad på skärmbredd: under `md:` gäller samma form.
+    $start = strpos($kod, '<ItemIcon');
+    $slut = strpos($kod, '/>', (int) $start);
+    $ikonMarkup = substr($kod, (int) $start, (int) $slut - (int) $start);
+
+    expect($ikonMarkup)->toContain('tile')
+        ->and($ikonMarkup)->not->toContain('md:')
+        ->and($ikonMarkup)->not->toContain('hidden');
+});
+
+/*
+ * Klart när (issue 304 · [[ADR-0060 Itemets ikon]] § 10): rötternas
+ * fällknappar står i samma kolumn som containerns ikon, så att toppnivåns
+ * items står i linje under den.
+ *
+ * Rotradens ikon och itemradens knapp (eller platshållare) är båda 44 px
+ * breda och står först i namncellen, och indraget läggs på flexraden med
+ * djupet räknat från rötterna — på toppnivån är indraget noll.
+ */
+it('ställer rötternas fällknappar i samma kolumn som containerns ikon', function () {
+    $kod = itemtradKod('components/ItemTreeTable.vue');
+
+    // Tre 44 px-kolumner: containerns ikon, fällknappen och platshållaren
+    // för ett löv.
+    expect(substr_count($kod, 'min-w-11'))->toBe(3);
+
+    expect($kod)->toContain('${row.depth * 20}px')
+        ->toContain('walk(props.nodes, [], 0, [])');
 });
 
 /*
@@ -737,9 +809,11 @@ it('ritar Expand all i trädläget och låter texten följa läget', function ()
 });
 
 /*
- * Klart när (issue 295 · [[ADR-0058 Trädet som tabell]] § 6): ett tryck
- * öppnar varje rad som har barn, och en andra tryckning återgår till
- * utgångsläget — rotraden öppen och, med filter, grenarna till träffarna.
+ * Klart när (issue 295 · [[ADR-0058 Trädet som tabell]] § 6 och issue 304 ·
+ * [[ADR-0060 Itemets ikon]] § 10): ett tryck öppnar varje gren som har barn,
+ * och en andra tryckning återgår till utgångsläget — med filter grenarna till
+ * träffarna. Rotraden rörs aldrig: rötterna syns alltid, så det finns ingen
+ * rot att stänga och ingen `containerOpen` att nollställa.
  *
  * Flaggan är standarden och ett eget tryck på en fällknapp vinner över den.
  * Varje växling nollställer de egna trycken, så att den andra tryckningen
@@ -752,9 +826,10 @@ it('öppnar varje gren med Expand all och återgår till utgångsläget', functi
         ->toContain('open.value[key] ?? (props.expandAll || props.filtered)')
         ->toContain('watch(() => props.expandAll')
         ->toContain('open.value = {}')
-        ->toContain('containerOpen.value = true')
-        // Rotraden är öppen i utgångsläget och styr om itemraderna ritas.
-        ->toContain('containerOpen.value ? walk(props.nodes, [], 0, []) : []');
+        // Rötterna grindas inte av flaggan: vandringen är ovillkorlig.
+        ->toContain('walk(props.nodes, [], 0, [])');
+
+    expect($kod)->not->toContain('containerOpen');
 });
 
 /*
