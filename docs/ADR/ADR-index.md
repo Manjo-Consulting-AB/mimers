@@ -68,6 +68,8 @@ Tillbaka till [[00 Index]].
 | [[ADR-0060 Itemets ikon]] | Itemets ikon väljs ur hela Lucide och laddas en i taget; ett okänt namn ritar den neutrala; åtta färger i en fast palett utan rött; trädets rotrad fälls inte | Frontend, [[Items och organisation]] |
 | [[ADR-0061 Kartans kort och kanter]] | Kartans kort har ikonen till vänster och öppna-ikonen i hörnet; ingen räknare för barn, statusen bara som försenad; böjda linjer med pilspetsar i ett SVG-lager som mäter korten | Frontend |
 | [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]] | Kartan utan pilspetsar och med mer luft, de relaterade på varannan sida, ögat öppnar och plusmenyn i mittkortet; listans ruta visar vald bild, ikon, automatisk bild eller den grå i den ordningen; filterraden söker medan man skriver | Frontend, [[Items och organisation]] |
+| [[ADR-0063 Itemets karta i containerkartans form]] | Kartan på itemets sida är `ItemMap` i sin smala form med containerkartans data, plusmenyn bara i mitten, egna tak och en länk till hela kartan; `FocusMap` tas bort | Frontend, [[Items och organisation]] |
+| [[ADR-0064 Containerns ikon]] | Containern får itemets ikon och palett med samma väljare; ikonen syns i huvudmenyn, trädets rotrad, kartans mitt och i rutan när bilden saknas | Frontend, [[Konton och åtkomst]] |
 
 ## Om att ändra ett beslut
 

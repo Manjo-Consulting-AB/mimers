@@ -1,6 +1,6 @@
 # ADR-0061 Kartans kort och kanter
 
-**Status:** Antagen 2026-10-18 · Ändrar [[ADR-0059 Kartan med en mitt]] § 3 (var öppna-ikonen sitter), § 5 (vad noden visar) och § 7 (linjerna) · Bygger vidare på [[ADR-0060 Itemets ikon]] · § 3, 5 och 7 ändrade av [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]]: ögat i stället för pilen, plusmenyn i mittkortet, inga pilspetsar, mer luft och de relaterade på varannan sida · [[ADR-index]]
+**Status:** Antagen 2026-10-18 · Ändrar [[ADR-0059 Kartan med en mitt]] § 3 (var öppna-ikonen sitter), § 5 (vad noden visar) och § 7 (linjerna) · Bygger vidare på [[ADR-0060 Itemets ikon]] · § 3, 5 och 7 ändrade av [[ADR-0062 Kartans luft, listans ruta och den löpande sökningen]]: ögat i stället för pilen, plusmenyn i mittkortet, inga pilspetsar, mer luft och de relaterade på varannan sida · Konsekvensen om `FocusMap` ändrad av [[ADR-0063 Itemets karta i containerkartans form]]: itemets karta ritas med `ItemMap` · [[ADR-index]]
 
 Tonys beslut 2026-10-18, vid genomgången av fynden i v0.23.0: `docs/Design/findings/map_20261018_082238.png` jämförd med `Minimalist Boat Container Map Dashboard.png` i samma katalog, och vad som avses i `map_20261018_093613.png`.
 
