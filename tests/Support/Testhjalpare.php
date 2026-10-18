@@ -532,3 +532,105 @@ function mejletsÄmne(NotificationMail $mail): string
 
     return $mail->subject;
 }
+
+// --- Källkodsprov mot .vue-filer -----------------------------------------
+
+/**
+ * Mallen i en `.vue`-fil under `resources/`, utan HTML-kommentarer — för ett
+ * prov som läser källkoden i stället för att rendera den.
+ *
+ * Sökvägen är relativ `resources/`: `vueMall('js/components/ItemRow.vue')`.
+ * Saknas filen eller mallen kastas `RuntimeException` med sökvägen, så att
+ * provet faller högljutt i stället för att matcha mot en tom sträng.
+ *
+ * **Tre fällor har kostat varv, och hjälparna tar bara två av dem:**
+ *
+ * 1. **Kommentarer räknas som källkod.** En nål som bara står i en docblock
+ *    eller en `<!-- -->` matchar en `file_get_contents` rakt av (#807, #444).
+ *    Därför tar hjälparna bort kommentarer.
+ * 2. **En nål kan stå i både skript och mall.** Prövar du mallen mot hela
+ *    filen träffar du skriptblocket (#827, #807). Använd `vueMall` för det
+ *    som ritas och `vueSkript` för det som körs, aldrig hela filen.
+ * 3. **Pests `toContain($a, $b)` tar två nålar och inget felmeddelande**
+ *    (#438, #862). Det går inte att lösa i en hjälpare: skriv en
+ *    `toContain()` per nål.
+ */
+function vueMall(string $sokvag): string
+{
+    return vueMallUr(vueFilInnehall($sokvag), $sokvag);
+}
+
+/**
+ * Innehållet i varje `<script>`-block i en `.vue`-fil, med eller utan `setup`,
+ * i filens ordning, utan blockkommentarer och utan rader som börjar med `//`.
+ * Fällorna står vid vueMall().
+ */
+function vueSkript(string $sokvag): string
+{
+    return vueSkriptUr(vueFilInnehall($sokvag), $sokvag);
+}
+
+/**
+ * Ren kärna för vueMall(): texten mellan den första raden som börjar med
+ * `<template` och den sista raden som är `</template>`, med varje
+ * `<!-- … -->` borttagen, även över flera rader. En inre `<template #slot>`
+ * är indragen och stör inte avgränsningen.
+ *
+ * @throws RuntimeException om mallen saknas
+ */
+function vueMallUr(string $innehall, string $sokvag = '(sträng)'): string
+{
+    $rader = preg_split('/\R/', $innehall) ?: [];
+
+    $start = null;
+    $slut = null;
+    foreach ($rader as $i => $rad) {
+        if ($start === null && str_starts_with($rad, '<template')) {
+            $start = $i;
+        }
+        if ($rad === '</template>') {
+            $slut = $i;
+        }
+    }
+
+    if ($start === null || $slut === null || $slut <= $start) {
+        throw new RuntimeException("Hittade ingen <template> i {$sokvag}.");
+    }
+
+    $mall = implode("\n", array_slice($rader, $start + 1, $slut - $start - 1));
+
+    return preg_replace('/<!--.*?-->/s', '', $mall) ?? $mall;
+}
+
+/**
+ * Ren kärna för vueSkript(). `//` mitt på en rad står kvar, eftersom det kan
+ * vara en URL i en sträng.
+ *
+ * @throws RuntimeException om skriptblock saknas
+ */
+function vueSkriptUr(string $innehall, string $sokvag = '(sträng)'): string
+{
+    if (preg_match_all('/<script\b[^>]*>(.*?)<\/script>/s', $innehall, $traffar) === 0) {
+        throw new RuntimeException("Hittade inget <script>-block i {$sokvag}.");
+    }
+
+    $skript = implode("\n", $traffar[1]);
+    $skript = preg_replace('/\/\*.*?\*\//s', '', $skript) ?? $skript;
+
+    return preg_replace('/^[ \t]*\/\/.*(\R|$)/m', '', $skript) ?? $skript;
+}
+
+/**
+ * Läser en fil under `resources/` eller kastar `RuntimeException` med sökvägen.
+ */
+function vueFilInnehall(string $sokvag): string
+{
+    $fil = dirname(__DIR__, 2).'/resources/'.ltrim($sokvag, '/');
+    $innehall = is_file($fil) ? file_get_contents($fil) : false;
+
+    if ($innehall === false) {
+        throw new RuntimeException("Hittade inte {$sokvag} ({$fil}).");
+    }
+
+    return $innehall;
+}
