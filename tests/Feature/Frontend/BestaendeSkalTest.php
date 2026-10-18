@@ -65,7 +65,7 @@ function bestaendeSkalSidor(): array
         'Settings/UserDeletionLinkInvalid.vue',
         'Tasks/Create.vue',
         'Tasks/Index.vue',
-        'Trash/Containers.vue',
+        'Trash/Index.vue',
         'Welcome.vue',
     ];
 }

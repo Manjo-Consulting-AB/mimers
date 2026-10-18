@@ -4665,18 +4665,52 @@ return [
 
         'restore' => 'Restore',
 
-        // The trash for deleted CONTAINERS, see issue 62b decisions 7 and 8. It
-        // sits at the TOP level — a deleted container is not resolved by the
-        // route binding — and `link` is the row under the container list, always
-        // visible. The text is constant and counts nothing: a number would be
-        // a query per page load (decision 8).
+        /*
+         * The unified trash, see issue 319 ·
+         * [[ADR-0065 Den samlade papperskorgen]] § 4, 6, 7 and 9.
+         *
+         * `description` is separate from the container's `trash.description`:
+         * this surface lists everything the user reaches, in all containers
+         * and in the inbox, not only what was deleted in one container.
+         *
+         * `empty_filtered` is a sentence of its own, separate from
+         * `trash.empty` above: an empty trash and a filter with no hits are
+         * two different answers to two different questions, and someone who
+         * searched for a word should not be told the trash is empty.
+         *
+         * `deleted_by` carries `:user` from the latest `*.deleted` event;
+         * `deleted_by_former` is the same sentence when the lookup has no
+         * name — a job or a deleted user. Same word as the history
+         * ([[ADR-0043 Tre loggar]], [[ADR-0065 Den samlade papperskorgen]]
+         * § 5).
+         */
+        'overview' => [
+            'description' => 'Everything you have deleted, in all your containers and in your inbox. After 30 days it is removed for good.',
+            'search' => [
+                'label' => 'Search the trash',
+                'placeholder' => 'Search by name',
+            ],
+            'filter' => [
+                'label' => 'Show',
+                'all' => 'All',
+                'item' => 'Items',
+                'attachment' => 'Attachments',
+                'container' => 'Containers',
+            ],
+            'empty_filtered' => 'Nothing in the trash matches your search.',
+            'load_more' => 'Load more',
+            'in_container' => 'In :container',
+            'in_item' => 'On :item in :container',
+            'deleted_by' => 'Deleted :date by :user',
+            'deleted_by_former' => 'Deleted :date by a former user',
+        ],
+
+        // The row under the container list, see issue 62b decision 8 and issue
+        // 319: the link leads to the unified trash since [[ADR-0065 Den
+        // samlade papperskorgen]] § 9. The text is constant and counts
+        // nothing — a number would be a query per page load.
         'containers' => [
-            'title' => 'Trash',
-            'heading' => 'Deleted containers',
-            'description' => 'Containers you have deleted. After 30 days they are removed for good.',
-            'empty' => 'No deleted containers.',
             'link' => 'Trash',
-            'back' => 'Back to the containers',
         ],
     ],
 
