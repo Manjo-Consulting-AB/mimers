@@ -248,6 +248,35 @@ it('container.json bär varje items innehåll och inga åtkomst-, inbjudnings- e
     expect($json)->not->toContain('invitation');
 });
 
+it('container.json bär itemets ikon och färg', function () {
+    [$account, $user, $headers, $container] = exporteringKontext();
+
+    exporteringItem($container, $account, $user, [
+        'name' => 'Med ikon',
+        'icon' => 'droplet',
+        'icon_color' => 'blue',
+    ]);
+    exporteringItem($container, $account, $user, ['name' => 'Utan ikon']);
+
+    $export = exporteringBeställOchKör($headers, $container);
+
+    $zip = new ZipArchive;
+    expect($zip->open(Storage::disk('files')->path($export->storage_path)))->toBeTrue();
+    $payload = json_decode($zip->getFromName('container.json'), true);
+    $zip->close();
+
+    $items = collect($payload['items'])->keyBy('name');
+
+    expect($items['Med ikon']['icon'])->toBe('droplet');
+    expect($items['Med ikon']['icon_color'])->toBe('blue');
+
+    // Alltid med som nycklar, även när itemet inte har någon ikon.
+    expect($items['Utan ikon'])->toHaveKey('icon');
+    expect($items['Utan ikon'])->toHaveKey('icon_color');
+    expect($items['Utan ikon']['icon'])->toBeNull();
+    expect($items['Utan ikon']['icon_color'])->toBeNull();
+});
+
 it('index.html är fristående: bara relativa sökvägar, ingen extern resurs', function () {
     [$account, $user, $headers, $container] = exporteringKontext();
 

@@ -207,6 +207,11 @@ class ContainerExportBuilder
                 'purchased_at' => self::toDate($item->purchased_at),
                 'warranty_until' => self::toDate($item->warranty_until),
                 'position_note' => $item->position_note,
+                // Itemets ikon och palettnyckel (issue 301 ·
+                // [[ADR-0060 Itemets ikon]] § 7). Alltid med som nycklar,
+                // även som null, som resten av itemets innehåll.
+                'icon' => $item->icon,
+                'icon_color' => $item->icon_color,
                 'category_ulid' => $item->category_id !== null
                     ? $this->categoryUlid($item)
                     : null,

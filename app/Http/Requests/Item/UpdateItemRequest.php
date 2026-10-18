@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Item;
 
+use App\Models\Item;
 use App\Models\Tag;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -20,6 +21,14 @@ use Illuminate\Validation\Rule;
  * omitted `notes` leaves the column alone, while `notes: null` EMPTIES it.
  * The three states — unset, set, emptied — are all reachable, and the field
  * is never filled from `description` or the other way round.
+ *
+ * `icon` and `icon_color` (issue 301 · [[ADR-0060 Itemets ikon]] § 4, 5
+ * and 7) follow `notes` exactly: both are `sometimes` + `nullable`, so an
+ * omitted field leaves the column alone while `null` empties it. `icon` is
+ * a Lucide name in kebab-case and is checked for FORMAT only — never
+ * against Lucide's list, which lives in the frontend build (ADR-0060 § 4).
+ * `icon_color` is a key from `Item::ICON_COLORS`, never a hex colour
+ * (ADR-0060 § 5).
  *
  * `tags` works the same way but is NOT nullable: a present `tags` REPLACES
  * the whole set (issue 13b § Beslut 4) — `tags: []` clears it, an omitted
@@ -103,6 +112,8 @@ class UpdateItemRequest extends FormRequest
             'purchased_at' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             'warranty_until' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             'position_note' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'icon' => ['sometimes', 'nullable', 'string', 'max:64', 'regex:/^[a-z0-9]+(-[a-z0-9]+)*$/'],
+            'icon_color' => ['sometimes', 'nullable', Rule::in(Item::ICON_COLORS)],
             'category' => [
                 'sometimes',
                 'nullable',

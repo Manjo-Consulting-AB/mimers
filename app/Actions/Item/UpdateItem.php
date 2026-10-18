@@ -29,8 +29,11 @@ use Illuminate\Support\Facades\DB;
  * `position_note` — följer aldrig med, inte ens som gammalt värde: loggen
  * får inte bli ett andra register över vad användaren skrivit. `meta.values`
  * bär gamla och nya värdet för de fält som inte ÄR fritext: datumen
- * `purchased_at` och `warranty_until`, och referenserna `category` och
- * `cover`, som ULID:er — aldrig löpnummer (AGENTS.md § Databaskonventioner).
+ * `purchased_at` och `warranty_until`, referenserna `category` och
+ * `cover`, som ULID:er — aldrig löpnummer (AGENTS.md
+ * § Databaskonventioner) — samt `icon` och `icon_color` (issue 301 ·
+ * [[ADR-0060 Itemets ikon]] § 7). Ikonnamnet och palettnyckeln är valda
+ * värden och inte fritext, precis som `category` och `cover`.
  *
  * **En ändring som inte ändrar något skriver ingen rad.** En PATCH med
  * samma värden som förut sparar ingenting (Eloquent rör ingen rad när inget
@@ -59,6 +62,15 @@ class UpdateItem
      * @var list<string>
      */
     private const DATE_FIELDS = ['purchased_at', 'warranty_until'];
+
+    /**
+     * Itemets ikon och dess färg. Båda är valda värden och inte fritext, så
+     * gamla och nya värdet följer med i `meta.values` (issue 301 ·
+     * [[ADR-0060 Itemets ikon]] § 7). Kolumnnamnen är också fältnamnen.
+     *
+     * @var list<string>
+     */
+    private const ICON_FIELDS = ['icon', 'icon_color'];
 
     public function __construct(
         private readonly RecordAuditEvent $recordAuditEvent,
@@ -163,6 +175,13 @@ class UpdateItem
             return [
                 'from' => $this->attachmentUlid($item->getOriginal($column)),
                 'to' => $this->attachmentUlid($item->cover_attachment_id),
+            ];
+        }
+
+        if (in_array($column, self::ICON_FIELDS, true)) {
+            return [
+                'from' => $item->getOriginal($column),
+                'to' => $item->{$column},
             ];
         }
 
