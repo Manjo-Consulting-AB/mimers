@@ -5,7 +5,42 @@ Repot har inga python-tester sedan tidigare, och den här filen inför
 medvetet ingen testberoende (issue 259, beslut 11): bara stdlib-`assert` och
 ett `if __name__ == "__main__"`-block som kör och rapporterar. Modulen är
 importerbar utan sidoeffekter - allt som faktiskt kör ett kommando ligger
-bakom `if __name__ == "__main__":` i process_next_issue.py - så den här filen
+bakom `import pr_kroppen  # noqa: E402
+
+_KROPP_AV = "Closes #1\n\n## Sammanfattning\n\nx\n\n## Frågor och antaganden\n\nInga.\n\n## Processnotering\n\nInget."
+
+
+def test_atgardsvarv_skapar_avsnittet_sist():
+    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
+    assert ny.index("## Åtgärdsvarv") > ny.index("## Processnotering")
+    assert "- Varv 1 (DeepSeek, `1a2b3c4d`): `a.php`" in ny
+
+
+def test_atgardsvarv_lagger_till_rad_i_befintligt_avsnitt():
+    ett = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["*"])
+    tva = p.atgardsvarv_i_kropp(ett, 2, "Sonnet", "9f8e7d6c5b", ["b.vue"], ["*"])
+    assert tva.count("## Åtgärdsvarv") == 1
+    assert tva.index("Varv 1") < tva.index("Varv 2")
+
+
+def test_atgardsvarv_markerar_fil_utanfor_rutan():
+    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 2, "DeepSeek", "1a2b3c4d5e",
+                               ["app/a.php", "ui/b.vue"], ["app/**"])
+    assert "`ui/b.vue` (utanför In scope)" in ny
+    assert "`app/a.php` (utanför" not in ny
+
+
+def test_atgardsvarv_ar_idempotent_per_sha():
+    ett = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
+    assert p.atgardsvarv_i_kropp(ett, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"]) == ett
+
+
+def test_processnoteringen_lases_oforandrad_efter_atgardsvarv():
+    ny = p.atgardsvarv_i_kropp(_KROPP_AV, 1, "DeepSeek", "1a2b3c4d5e", ["a.php"], ["a.php"])
+    assert pr_kroppen.innehall_under(ny, "Processnotering") == pr_kroppen.innehall_under(_KROPP_AV, "Processnotering")
+
+
+if __name__ == "__main__":` i process_next_issue.py - så den här filen
 importerar den direkt i stället för att mocka den. De tre funktioner som
 testas (`ska_eskalera_till_arkitekt`, `bygg_granskningsprompt`, `oppna_fragor`,
 `ar_arkitektsvar`) är rena: inget `gh`-anrop att mocka bort.
