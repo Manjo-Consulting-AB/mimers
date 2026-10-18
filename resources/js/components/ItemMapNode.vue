@@ -1,50 +1,51 @@
 <script setup>
+import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
+import ItemIcon from './ItemIcon.vue';
 import UiIcon from './UiIcon.vue';
 import { useTranslations } from '../composables/useTranslations.js';
 
 /*
  * En nod i containerns karta, se resources/js/components/ItemMap.vue,
- * issue 297 · [[M34 Kartan med en mitt]] § 297 och
- * [[ADR-0059 Kartan med en mitt]] § 3–6.
+ * issue 305 · [[M35 Itemets ikon och kartans kort]] § 305 och
+ * [[ADR-0061 Kartans kort och kanter]] § 1–4.
  *
- * **Noden är två mål.** Hela kortet är en länk som gör noden till kartans mitt,
- * och öppna-ikonen bredvid leder till itemets sida — den ena centrerar, den
- * andra öppnar (ADR:ns beslut 3). Mittnoden har ingen centreringslänk, för den
- * ÄR mitten, och bär `aria-current` i stället; containern som mitt har ingen
- * öppna-ikon, för en container är inget item.
+ * **Kortet har ikonen till vänster** (ADR:ns beslut 1): `ItemIcon` med `tile` i
+ * en ruta på 40 px och ikonen i storleken 24, och till höger namnet i medelfet
+ * med slagets ord under. Slagets ord färgas av slaget — *Parent* i `accent`,
+ * *Child* i `success` och *Related* i `ink-muted` — men ordet självt kommer
+ * färdigöversatt från anroparen, som äger teckenförklaringen. Kortet har fast
+ * bredd, `--radius-card`, `--shadow-card` och en kant i `border`, så att
+ * kartans rader står i linje (rutnätet kommer i issue 306).
  *
- * **Noden visar namnet, slagets ord, statusen med ord, antal barn och ⇄ med
- * antalet platser** när de är fler än ett (ADR:ns beslut 5). Talen kommer
- * färdigräknade i `node`; komponenten vandrar inte i grafen och räknar
- * ingenting. Statusordet är översiktens (`item.index.status_*`), så samma regel
- * heter samma sak på båda ytorna.
+ * **Mitten är större** (ADR:ns beslut 2): ikonen ovanför namnet, slagets ord
+ * under och en kant i `accent` med `accent-soft` som bakgrund. Kring
+ * containern ritas `UiIcon` `container` i stället för en item-ikon, och ordet
+ * *Container* i stället för *Current item*.
  *
- * **Talens etiketter ligger i `sr-only`.** Siffran ensam är ingenting för en
- * skärmläsare — "3" säger varken barn eller platser — så varje tal har en
- * mening bredvid sig, och siffran är `aria-hidden` för att inte läsas två
- * gånger. Samma form som `ContainerMapNode` bar före issue 296.
+ * **Öppna-ikonen sitter i kortets övre högra hörn** (ADR:ns beslut 3) men är
+ * fortfarande ett eget mål för tangentbordet, med samma `aria-label` som
+ * namnger itemet ([[ADR-0059 Kartan med en mitt]] § 3). Den ritas med `UiIcon`
+ * och rollen `open`. Plusmenyn sitter kvar bara på mitten (ADR-0059 § 4).
  *
- * **Öppna-ikonen ritas med `UiIcon`** och rollen `open` — ingen egen `<svg>` —
- * och bär ett `aria-label` som namnger itemet, för ikonen säger ingenting själv
- * ([[ADR-0057 Ikoner och typsnitt]] § 2).
- *
- * **Plusknappen är mittens meny** och ritas bara när `rows` har något att visa.
- * Raderna kommer färdigprövade från servern, och en tom meny ger ingen knapp
- * ([[ADR-0048 Mobilen och plusknappen]] § 2). Noden skickar med raderna, sitt
- * eget element och sitt namn, som `FocusMapNode` gör.
- *
- * Träffytorna är `min-h-11` — 44 px ur issue 68a § Beslut 3 — och fokusringen
- * får aldrig tas bort ([[ADR-0042 Designsystemet]] § Beslut).
+ * **Noden visar inte antal barn** (ADR:ns beslut 4). Statusen ritas bara när
+ * den är `overdue`: en prick i `danger` vid namnet, med ordet i `sr-only` och
+ * i `title`. En nod som är `ok` har ingen prick, för den säger bara att
+ * ingenting hänt. ⇄ och antalet platser står kvar när platserna är fler än en.
  *
  * **En föräldranod bär sin egen väg från roten** (issue 298 · [[ADR-0059 Kartan
  * med en mitt]] § 9): `node.via` är namnen ned till dess första förälder och
- * står under namnet, skild med ›. Raden klipps av och hela vägen ligger i
+ * står under slagets ord, skild med ›. Raden klipps av och hela vägen ligger i
  * `title`. För en rot är `via` tom och ingen rad ritas.
+ *
+ * Träffytorna är `min-h-11` — 44 px ur issue 68a § Beslut 3 — och fokusringen
+ * får aldrig tas bort ([[ADR-0042 Designsystemet]] § Beslut).
  */
-defineProps({
-    /* Noden: `{ulid, name, children, placements}`, talen null för containern. */
+const props = defineProps({
+    /* Noden: `{ulid, name, icon, icon_color, children, placements}`. */
     node: { type: Object, required: true },
+    /* Slaget: `parent`, `child` eller `related` — tomt för mitten. */
+    kind: { type: String, default: '' },
     /* Slagets ord, färdigöversatt av anroparen — tomt för containern. */
     label: { type: String, default: '' },
     /* `ok`, `overdue` eller tomt — tomt för containern, som inte är ett item. */
@@ -62,75 +63,156 @@ defineProps({
 const emit = defineEmits(['open-menu']);
 
 const { t } = useTranslations();
+
+/*
+ * Slagens färger (ADR-0061 § 1). Klasserna står som hela strängar: Tailwind
+ * läser källkoden statiskt och ser inte en klass som byggs med mallsträng.
+ * Mitten har tomt slag och bär accentens färg.
+ */
+const KIND_CLASSES = {
+    parent: 'text-accent',
+    child: 'text-success',
+    related: 'text-ink-muted',
+};
+
+const kindClass = computed(() => KIND_CLASSES[props.kind] ?? 'text-accent');
+
+/* Statusordet är översiktens (`item.index.status_*`), som i listan. */
+const overdueWord = computed(() => t('item.index.status_overdue'));
 </script>
 
 <template>
-    <li class="flex min-w-0 items-stretch gap-1">
+    <li class="flex items-stretch gap-1">
         <!--
             Kortet är en länk för varje nod utom mitten. `component :is` håller
             formen i en enda uppsättning markup: en `<Link>` när noden har en
-            adress, en `<span>` med `aria-current` när den är mitten.
+            adress, en `<span>` med `aria-current` när den är mitten. Ramen är
+            `relative`, så att öppna-ikonen hamnar i KORTETS hörn och inte i
+            radens — plusknappen står utanför ramen.
         -->
-        <component
-            :is="href ? Link : 'span'"
-            :href="href ?? undefined"
-            :aria-current="current ? 'page' : undefined"
-            class="flex min-h-11 w-32 min-w-0 flex-col justify-center gap-0.5 rounded-control border px-2 py-1.5 text-center outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-            :class="href
-                ? 'border-border bg-surface hover:bg-surface-sunken'
-                : 'border-accent bg-accent-soft'"
-        >
-            <span class="w-full truncate text-meta font-medium text-ink" :title="node.name">
-                {{ node.name }}
-            </span>
-
-            <span v-if="label" class="text-meta text-ink-subtle">{{ label }}</span>
-
-            <!-- Förälderns egen väg från roten, avklippt med hela i `title`. -->
-            <span
-                v-if="node.via && node.via.length > 0"
-                class="w-full truncate text-meta text-ink-subtle"
-                :title="node.via.join(' › ')"
+        <div class="relative flex">
+            <component
+                :is="href ? Link : 'span'"
+                :href="href ?? undefined"
+                :aria-current="current ? 'page' : undefined"
+                class="flex min-h-11 min-w-0 items-center rounded-card border shadow-card outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+                :class="current
+                    ? 'w-56 flex-col justify-center gap-1 border-accent bg-accent-soft px-8 py-3 text-center'
+                    : 'w-48 gap-3 border-border bg-surface py-2 pl-3 pr-10 text-left'"
             >
-                {{ node.via.join(' › ') }}
-            </span>
+                <!-- Mitten: ikonen ovanför namnet, ordet under. -->
+                <template v-if="current">
+                    <UiIcon
+                        v-if="node.kind === 'container'"
+                        name="container"
+                        :size="24"
+                        class="text-accent"
+                    />
+                    <ItemIcon
+                        v-else
+                        :name="node.icon"
+                        :color="node.icon_color"
+                        :size="24"
+                        class="shrink-0"
+                    />
 
-            <span
-                v-if="status || node.children != null"
-                class="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-meta"
-            >
-                <span
-                    v-if="status"
-                    :class="status === 'overdue' ? 'font-medium text-danger' : 'text-ink-subtle'"
-                >
-                    {{ t(`item.index.status_${status}`) }}
-                </span>
+                    <span class="flex max-w-full min-w-0 items-center gap-1">
+                        <span
+                            class="min-w-0 truncate text-body font-medium text-ink"
+                            :title="node.name"
+                        >
+                            {{ node.name }}
+                        </span>
 
-                <template v-if="node.children != null">
-                    <span aria-hidden="true" class="text-ink-subtle">{{ node.children }}</span>
-                    <span class="sr-only">
-                        {{ t('item.map.children', { count: node.children }) }}
+                        <!-- Pricken ritas bara för overdue, med ordet för skärmläsaren. -->
+                        <span
+                            v-if="status === 'overdue'"
+                            class="h-2 w-2 shrink-0 rounded-pill bg-danger"
+                            :title="overdueWord"
+                            aria-hidden="true"
+                        ></span>
+                        <span v-if="status === 'overdue'" class="sr-only">{{ overdueWord }}</span>
+                    </span>
+
+                    <span v-if="label" class="text-meta text-accent">{{ label }}</span>
+
+                    <span
+                        v-if="node.placements != null && node.placements > 1"
+                        class="flex items-center gap-1 text-meta text-ink-muted"
+                    >
+                        <span aria-hidden="true">&harr; {{ node.placements }}</span>
+                        <span class="sr-only">
+                            {{ t('item.map.placements', { count: node.placements }) }}
+                        </span>
                     </span>
                 </template>
 
-                <template v-if="node.placements != null && node.placements > 1">
-                    <span aria-hidden="true" class="text-ink-subtle">&harr; {{ node.placements }}</span>
-                    <span class="sr-only">
-                        {{ t('item.map.placements', { count: node.placements }) }}
+                <!-- Noderna: ikonen till vänster, namnet och slagets ord till höger. -->
+                <template v-else>
+                    <ItemIcon
+                        :name="node.icon"
+                        :color="node.icon_color"
+                        :size="24"
+                        tile
+                        class="h-10 w-10 shrink-0"
+                    />
+
+                    <span class="flex min-w-0 flex-col">
+                        <span class="flex min-w-0 items-center gap-1">
+                            <span
+                                class="min-w-0 truncate text-body font-medium text-ink"
+                                :title="node.name"
+                            >
+                                {{ node.name }}
+                            </span>
+
+                            <span
+                                v-if="status === 'overdue'"
+                                class="h-2 w-2 shrink-0 rounded-pill bg-danger"
+                                :title="overdueWord"
+                                aria-hidden="true"
+                            ></span>
+                            <span v-if="status === 'overdue'" class="sr-only">{{ overdueWord }}</span>
+                        </span>
+
+                        <span v-if="label" class="text-meta" :class="kindClass">{{ label }}</span>
+
+                        <!-- Förälderns egen väg från roten, avklippt med hela i `title`. -->
+                        <span
+                            v-if="node.via && node.via.length > 0"
+                            class="w-full truncate text-meta text-ink-subtle"
+                            :title="node.via.join(' › ')"
+                        >
+                            {{ node.via.join(' › ') }}
+                        </span>
+
+                        <span
+                            v-if="node.placements != null && node.placements > 1"
+                            class="flex items-center gap-1 text-meta text-ink-muted"
+                        >
+                            <span aria-hidden="true">&harr; {{ node.placements }}</span>
+                            <span class="sr-only">
+                                {{ t('item.map.placements', { count: node.placements }) }}
+                            </span>
+                        </span>
                     </span>
                 </template>
-            </span>
-        </component>
+            </component>
 
-        <!-- Öppna itemet. Ikonen är `aria-hidden`; etiketten bär namnet. -->
-        <Link
-            v-if="openHref"
-            :href="openHref"
-            :aria-label="t('item.map.open', { name: node.name })"
-            class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-accent outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-        >
-            <UiIcon name="open" :size="16" />
-        </Link>
+            <!--
+                Öppna itemet, i kortets övre högra hörn. Ikonen är
+                `aria-hidden`; etiketten bär namnet, och ytan är 44 px som
+                varje annat mål.
+            -->
+            <Link
+                v-if="openHref"
+                :href="openHref"
+                :aria-label="t('item.map.open', { name: node.name })"
+                class="absolute right-0 top-0 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-control text-accent outline-none hover:bg-surface-sunken focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            >
+                <UiIcon name="open" :size="16" />
+            </Link>
+        </div>
 
         <!-- Plusmenyn: bara mitten har rader, och en tom meny ger ingen knapp. -->
         <button

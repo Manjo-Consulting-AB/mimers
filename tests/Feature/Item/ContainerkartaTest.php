@@ -73,9 +73,9 @@ function kartaMedlem(Account $konto): User
     return $user;
 }
 
-function kartaItem(Container $container, string $namn): Item
+function kartaItem(Container $container, string $namn, array $attribut = []): Item
 {
-    return Item::factory()->for($container, 'container')->create(['name' => $namn]);
+    return Item::factory()->for($container, 'container')->create(array_merge(['name' => $namn], $attribut));
 }
 
 /**
@@ -210,6 +210,8 @@ it('ritar containern som mitt utan focus', function () {
         'kind' => 'container',
         'ulid' => $container->ulid,
         'name' => $container->name,
+        'icon' => null,
+        'icon_color' => null,
         'children' => null,
         'placements' => null,
     ])
@@ -237,6 +239,8 @@ it('ritar itemet som mitt med focus', function () {
         'kind' => 'item',
         'ulid' => $motor->ulid,
         'name' => 'Motorn',
+        'icon' => null,
+        'icon_color' => null,
         'children' => 1,
         'placements' => 1,
     ])
@@ -264,6 +268,49 @@ it('ritar itemet som mitt med focus', function () {
 
     expect($masten['center']['name'])->toBe('Masten')
         ->and(kartaNoder($masten['parent']))->toBe(['Båten [2/1]']);
+});
+
+/*
+ * Klart när: varje nod i parent, child och related bär itemets `icon` och
+ * `icon_color`, mitten bär sina egna, och kring containern är de null.
+ *
+ * Ikonen läses i samma fråga som namnet (issue 305 · [[ADR-0060 Itemets ikon]]
+ * § 6 och 9), så antalet frågor är oförändrat — det mäts i provet om
+ * frågekostnaden nedan.
+ */
+it('bär itemets ikon på varje nod och på mitten', function () {
+    [$container, $medlem, $båt, $motor] = kartaBåt();
+
+    $båt->update(['icon' => 'anchor', 'icon_color' => 'blue']);
+    $motor->update(['icon' => 'cog', 'icon_color' => 'amber']);
+
+    // En relaterad granne till mitten, så att alla tre grupperna prövas.
+    $drev = kartaItem($container, 'Drevet', ['icon' => 'zap', 'icon_color' => 'violet']);
+    kartaKant($motor, $drev, 'related');
+
+    $karta = kartaKarta($medlem, $container, $motor->ulid);
+
+    expect($karta['center']['icon'])->toBe('cog')
+        ->and($karta['center']['icon_color'])->toBe('amber')
+        ->and($karta['parent']['nodes'][0])->toMatchArray([
+            'name' => 'Båten',
+            'icon' => 'anchor',
+            'icon_color' => 'blue',
+        ])
+        ->and($karta['related']['nodes'][0])->toMatchArray([
+            'name' => 'Drevet',
+            'icon' => 'zap',
+            'icon_color' => 'violet',
+        ])
+        ->and($karta['child']['nodes'][0]['icon'])->toBeNull()
+        ->and($karta['child']['nodes'][0]['icon_color'])->toBeNull();
+
+    // Kring containern har mitten ingen ikon: containern är inget item.
+    $containern = kartaKarta($medlem, $container);
+
+    expect($containern['center']['icon'])->toBeNull()
+        ->and($containern['center']['icon_color'])->toBeNull()
+        ->and($containern['child']['nodes'][0]['icon'])->toBe('anchor');
 });
 
 /*

@@ -52,6 +52,13 @@ use Illuminate\Support\Facades\DB;
  * `countPlacements`: en förälder som redan ligger på vägen följs inte, så en
  * cykel ger ett ändligt svar. Ingen av dem ställer en fråga.
  *
+ * **Itemets ikon följer med i samma fråga** (issue 305 · [[ADR-0060 Itemets
+ * ikon]] § 6 och 9): `icon` och `icon_color` läses tillsammans med `ulid` och
+ * `name` och läggs på varje nod och på mitten. Kring containern är de `null`,
+ * för containern är inget item och har ingen egen ikon. `children` står kvar i
+ * svaret även om kortet inte ritar antalet: fältet är serverns och tas bort
+ * först när ingen yta läser det.
+ *
  * **Frågekostnaden är konstant: klassens EGNA frågor är TVÅ** — en för itemen
  * i omfånget, en för containerns kanter — oavsett hur många grannar mitten
  * har. Omfånget tillkommer ur den memoiserade ResolveItemScope och kostar inga
@@ -92,8 +99,9 @@ class ResolveItemMap
      * Ett värde som inte matchar något item i omfånget ignoreras: svaret blir
      * containern som mitt, utan en rad om varför.
      *
-     * `center` är `{kind, ulid, name, children, placements}`. `children` och
-     * `placements` är `null` för containern, som inte är ett item och inte
+     * `center` är `{kind, ulid, name, icon, icon_color, children, placements}`.
+     * `icon`, `icon_color`, `children` och `placements` är `null` för
+     * containern, som inte är ett item, inte har en egen ikon och inte
      * förekommer i strukturen.
      *
      * `drawn` är modellerna för mitten (när den är ett item) och de ritade
@@ -107,11 +115,11 @@ class ResolveItemMap
      * (App\Support\Frontend\CreateTarget).
      *
      * @return array{
-     *     center: array{kind: string, ulid: string, name: string, children: ?int, placements: ?int},
+     *     center: array{kind: string, ulid: string, name: string, icon: ?string, icon_color: ?string, children: ?int, placements: ?int},
      *     path: list<array{ulid: string, name: string}>,
-     *     parent: array{nodes: list<array{ulid: string, name: string, children: int, placements: int, via: list<string>}>, total: int},
-     *     child: array{nodes: list<array{ulid: string, name: string, children: int, placements: int}>, total: int},
-     *     related: array{nodes: list<array{ulid: string, name: string, children: int, placements: int}>, total: int},
+     *     parent: array{nodes: list<array{ulid: string, name: string, icon: ?string, icon_color: ?string, children: int, placements: int, via: list<string>}>, total: int},
+     *     child: array{nodes: list<array{ulid: string, name: string, icon: ?string, icon_color: ?string, children: int, placements: int}>, total: int},
+     *     related: array{nodes: list<array{ulid: string, name: string, icon: ?string, icon_color: ?string, children: int, placements: int}>, total: int},
      *     centerItem: ?Item,
      *     drawn: array<string, Item>,
      * }
@@ -150,6 +158,8 @@ class ResolveItemMap
             return [
                 'ulid' => $item->ulid,
                 'name' => $item->name,
+                'icon' => $item->icon,
+                'icon_color' => $item->icon_color,
                 'children' => count($childrenByParent[$itemId] ?? []),
                 'placements' => $placements[$itemId] ??= $this->countPlacements($itemId, $parentsByChild, $placements, [$itemId => true]),
             ];
@@ -196,6 +206,8 @@ class ResolveItemMap
                 'kind' => 'container',
                 'ulid' => $container->ulid,
                 'name' => $container->name,
+                'icon' => null,
+                'icon_color' => null,
                 'children' => null,
                 'placements' => null,
             ];
@@ -211,6 +223,8 @@ class ResolveItemMap
                 'kind' => 'item',
                 'ulid' => $centerItem->ulid,
                 'name' => $centerItem->name,
+                'icon' => $centerItem->icon,
+                'icon_color' => $centerItem->icon_color,
                 'children' => count($childrenByParent[$centerId] ?? []),
                 'placements' => $placements[$centerId] ??= $this->countPlacements($centerId, $parentsByChild, $placements, [$centerId => true]),
             ];
@@ -244,6 +258,11 @@ class ResolveItemMap
      * Ett mjukraderat item finns inte med — SoftDeletes-scopet sitter på
      * modellen — och dess kanter faller därför bort redan här.
      *
+     * Ikonen läses i samma fråga (issue 305 · [[ADR-0060 Itemets ikon]] § 6
+     * och 9): `icon` och `icon_color` kostar inga kolumner som gör frågan
+     * dyrare, och en andra fråga per nod hade varit precis den N+1 kartan
+     * byggdes för att undvika.
+     *
      * @return array<int, Item> item_id → itemet, namnet stigande
      */
     private function itemsInScope(Container $container, ItemScope $scope): array
@@ -253,7 +272,7 @@ class ResolveItemMap
             ->inScope($scope)
             ->orderBy('name')
             ->orderBy('id')
-            ->get(['id', 'ulid', 'name']);
+            ->get(['id', 'ulid', 'name', 'icon', 'icon_color']);
 
         $byId = [];
 

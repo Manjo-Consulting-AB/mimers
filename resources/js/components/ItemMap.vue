@@ -16,6 +16,11 @@ import { useTranslations } from '../composables/useTranslations.js';
  * redan skickat de noder som ritas och gruppens `total`
  * (App\Actions\Item\ResolveItemMap).
  *
+ * **Kortets form bor i `ItemMapNode`** (issue 305 · [[ADR-0061 Kartans kort och
+ * kanter]] § 1–4): ikonen till vänster, namnet och slagets ord till höger, och
+ * öppna-ikonen i kortets hörn. Vyn skickar slaget som propp så att noden kan
+ * färga ordet rätt; rutnätet och de böjda linjerna kommer i issue 306.
+ *
  * **Alla noder utom mitten är länkar till kartan med sig själva som mitt** —
  * `?view=map&focus=<ulid>` — och öppna-ikonen bredvid leder till itemets sida.
  * Mitten ÄR sidan man står på och är därför ingen centreringslänk
@@ -142,11 +147,15 @@ const legend = computed(() => kinds.map((kind) => ({
 })));
 
 /*
- * Mitten: containern eller itemet. Kring containern visas bara namnet — den är
- * inget item, har ingen status, inga tal, ingen öppna-ikon och inga rader.
+ * Mitten: containern eller itemet. Kring containern bär kortet ikonen
+ * `container` och ordet *Container* i stället för *Current item* — den är inget
+ * item och har därför ingen status, ingen öppna-ikon och inga rader
+ * ([[ADR-0061 Kartans kort och kanter]] § 2).
  */
 const center = computed(() => props.map.center);
-const centerLabel = computed(() => (center.value.kind === 'item' ? t('item.links.current') : ''));
+const centerLabel = computed(() => (
+    center.value.kind === 'item' ? t('item.links.current') : t('item.map.kind.container')
+));
 const centerOpenHref = computed(
     () => (center.value.kind === 'item' ? openHref(center.value) : null),
 );
@@ -228,6 +237,7 @@ function closeMenu() {
                 v-for="node in parents"
                 :key="node.ulid"
                 :node="node"
+                kind="parent"
                 :label="t('item.map.kind.parent')"
                 :status="statusFor(node)"
                 :href="focusHref(node)"
@@ -262,6 +272,7 @@ function closeMenu() {
                     v-for="node in relatedLeft"
                     :key="node.ulid"
                     :node="node"
+                    kind="related"
                     :label="t('item.map.kind.related')"
                     :status="statusFor(node)"
                     :href="focusHref(node)"
@@ -303,6 +314,7 @@ function closeMenu() {
                     v-for="node in relatedRight"
                     :key="node.ulid"
                     :node="node"
+                    kind="related"
                     :label="t('item.map.kind.related')"
                     :status="statusFor(node)"
                     :href="focusHref(node)"
@@ -332,6 +344,7 @@ function closeMenu() {
                 v-for="node in children"
                 :key="node.ulid"
                 :node="node"
+                kind="child"
                 :label="t('item.map.kind.child')"
                 :status="statusFor(node)"
                 :href="focusHref(node)"

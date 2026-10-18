@@ -590,6 +590,135 @@ it('öppnar itemet från noden med open-ikonen', function () {
 });
 
 /*
+ * Klart när: varje nod och mitten i `map` har `icon` och `icon_color`, och
+ * kring containern är de null på mitten.
+ *
+ * Servern läser dem i samma fråga som namnet
+ * (App\Actions\Item\ResolveItemMap::itemsInScope), och svaret är det kartan
+ * ritar — provet här prövar att fälten följer med hela vägen ut.
+ */
+it('skickar ikonen på varje nod och null på containern som mitt', function () {
+    withoutVite();
+
+    [, $anvandare, $container] = kartavyKontext();
+
+    $båten = kartavyItem($container, 'Båten', ['icon' => 'anchor', 'icon_color' => 'blue']);
+    $motorn = kartavyItem($container, 'Motorn', ['icon' => 'cog', 'icon_color' => 'amber']);
+    kartavyKant($båten, $motorn);
+
+    actingAs($anvandare)->get(kartavyUrl($container, "view=map&focus={$motorn->ulid}"))
+        ->assertOk()->assertInertia(
+            fn (AssertableInertia $page) => $page
+                ->where('map.center.icon', 'cog')
+                ->where('map.center.icon_color', 'amber')
+                ->where('map.parent.nodes.0.icon', 'anchor')
+                ->where('map.parent.nodes.0.icon_color', 'blue')
+        );
+
+    actingAs($anvandare)->get(kartavyUrl($container, 'view=map'))->assertOk()->assertInertia(
+        fn (AssertableInertia $page) => $page
+            ->where('map.center.icon', null)
+            ->where('map.center.icon_color', null)
+            ->where('map.child.nodes.0.icon', 'anchor')
+            ->where('map.child.nodes.0.icon_color', 'blue')
+    );
+});
+
+/*
+ * Klart när: kortet ritar ikonen till vänster och namnet och slagets ord till
+ * höger (issue 305 · [[ADR-0061 Kartans kort och kanter]] § 1).
+ *
+ * Ikonen är `ItemIcon` med `tile` i en ruta på 40 px och storleken 24. Kortet
+ * har fast bredd, `--radius-card`, `--shadow-card` och en kant i `border`.
+ * Slagets ord färgas av slaget: *Parent* i `accent`, *Child* i `success` och
+ * *Related* i `ink-muted`; mitten har tomt slag och bär accentens färg.
+ */
+it('ritar ikonen till vänster och namnet och slagets ord till höger', function () {
+    $noden = kartavyKod('components/ItemMapNode.vue');
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($noden)->toContain("import ItemIcon from './ItemIcon.vue'")
+        ->toContain(':name="node.icon"')
+        ->toContain(':color="node.icon_color"')
+        ->toContain(':size="24"')
+        ->toContain('tile')
+        ->toContain('h-10 w-10')
+        ->toContain('w-48')
+        ->toContain('rounded-card')
+        ->toContain('shadow-card')
+        ->toContain('border-border')
+        ->toContain('font-medium');
+
+    expect($noden)->toContain("parent: 'text-accent'")
+        ->toContain("child: 'text-success'")
+        ->toContain("related: 'text-ink-muted'")
+        ->toContain("KIND_CLASSES[props.kind] ?? 'text-accent'")
+        ->toContain(':class="kindClass"');
+
+    // Vyn skickar slaget till varje nod; mitten behöver det inte.
+    expect($kartan)->toContain('kind="parent"')
+        ->toContain('kind="child"')
+        ->toContain('kind="related"');
+});
+
+/*
+ * Klart när: öppna-ikonen sitter i kortets övre högra hörn och har kvar sitt
+ * `aria-label` ([[ADR-0061 Kartans kort och kanter]] § 3).
+ *
+ * Den är fortfarande ett eget mål för tangentbordet, med en yta på 44 px —
+ * ADR:n flyttar den bara, den tar inte bort den.
+ */
+it('sätter öppna-ikonen i kortets övre högra hörn med kvarvarande aria-label', function () {
+    $noden = kartavyKod('components/ItemMapNode.vue');
+
+    expect($noden)->toContain('absolute right-0 top-0')
+        ->toContain("t('item.map.open', { name: node.name })")
+        ->toContain('<UiIcon name="open"')
+        ->toContain('min-h-11 min-w-11');
+});
+
+/*
+ * Klart när: mitten är större, bär *Current item*, och kring containern står
+ * `UiIcon` `container` och ordet *Container* (ADR:ns beslut 2).
+ *
+ * Kanten är i `accent` och bakgrunden `accent-soft`; plusmenyn sitter kvar på
+ * mitten som i dag.
+ */
+it('ritar en större mitt med Current item och containern som ikon och ord', function () {
+    $noden = kartavyKod('components/ItemMapNode.vue');
+    $kartan = kartavyKod('components/ItemMap.vue');
+
+    expect($noden)->toContain('w-56')
+        ->toContain('border-accent')
+        ->toContain('bg-accent-soft')
+        ->toContain("node.kind === 'container'")
+        ->toContain('name="container"')
+        ->toContain('v-if="label" class="text-meta text-accent"');
+
+    expect($kartan)->toContain("t('item.links.current') : t('item.map.kind.container')");
+});
+
+/*
+ * Klart när: antal barn ritas inte (ADR:ns beslut 4).
+ *
+ * `children` står kvar i serverns svar — det är serverns fält och tas bort
+ * först när ingen yta läser det — men kortet vandrar inte i det och ordet
+ * `item.map.children` har ingen användare längre.
+ */
+it('ritar inte antal barn', function () {
+    $noden = kartavyKod('components/ItemMapNode.vue');
+    $lang = File::get(lang_path('en/ui.php'));
+
+    expect(str_contains($noden, 'node.children'))->toBeFalse(
+        'kortet ritar fortfarande antal barn',
+    );
+
+    expect(str_contains($lang, "'children' => ':count children'"))->toBeFalse(
+        'item.map.children finns kvar utan användare',
+    );
+});
+
+/*
  * Klart när: plusknappen finns bara på mittnoden, och bara när map.rows inte
  * är tom.
  *
@@ -625,28 +754,34 @@ it('markerar mitten med aria-current och visar bara namnet kring containern', fu
         ->toContain("current ? 'page' : undefined");
 
     expect($kartan)->toContain("center.value.kind === 'item' ? openHref(center.value) : null")
-        ->toContain("center.value.kind === 'item' ? t('item.links.current') : ''");
-
-    // Utan status och utan barn ritas ingen metarad — kvar står namnet.
-    expect($noden)->toContain('v-if="status || node.children != null"');
+        ->toContain("center.value.kind === 'item' ? t('item.links.current') : t('item.map.kind.container')");
 });
 
 /*
- * Klart när: noden visar statusens ord och antal barn, och ⇄ bara när
- * placements är större än ett.
+ * Klart när: pricken ritas bara för overdue, med ordet för skärmläsaren, och
+ * en nod som är ok har ingen prick. ⇄ syns bara när placements är större än
+ * ett (issue 305 · [[ADR-0061 Kartans kort och kanter]] § 4).
  *
- * Talen har en mening i `sr-only`, som i `ContainerMapNode` före issue 296:
- * siffran ensam säger ingenting till en skärmläsare.
+ * Talet har en mening i `sr-only`: siffran ensam säger ingenting till en
+ * skärmläsare. Pricken bär ordet i `title` och i `sr-only`, eftersom en prick
+ * inte säger någonting alls.
  */
-it('visar statusens ord, antal barn och platser med ord', function () {
+it('ritar pricken bara för overdue och ⇄ bara vid fler än en plats', function () {
     $noden = kartavyKod('components/ItemMapNode.vue');
 
-    expect($noden)->toContain('t(`item.index.status_${status}`)')
-        ->toContain("t('item.map.children', { count: node.children })")
+    expect($noden)->toContain("status === 'overdue'")
+        ->toContain('bg-danger')
+        ->toContain("const overdueWord = computed(() => t('item.index.status_overdue'));")
+        ->toContain(':title="overdueWord"')
         ->toContain("t('item.map.placements', { count: node.placements })")
         ->toContain('node.placements != null && node.placements > 1')
         ->toContain('&harr;')
         ->toContain('sr-only');
+
+    // Ingen gren för `ok`: pricken finns bara i overdue-villkoret.
+    expect(str_contains($noden, "'ok'"))->toBeFalse(
+        'kortet ritar något för ok — pricken ska bara finnas för overdue',
+    );
 });
 
 /*
@@ -827,7 +962,6 @@ it('hämtar kartans ord ur ui.php och har tagit bort item.board', function () {
         'item.map.legend',
         'item.map.same_item',
         'item.map.path',
-        'item.map.children',
         'item.map.placements',
         'item.map.open',
         'item.map.node_menu',
@@ -835,6 +969,7 @@ it('hämtar kartans ord ur ui.php och har tagit bort item.board', function () {
         'item.map.kind.parent',
         'item.map.kind.child',
         'item.map.kind.related',
+        'item.map.kind.container',
         'item.links.current',
     ] as $nyckel) {
         expect(Lang::get("ui.{$nyckel}", [], 'en'))->not->toBe(
@@ -845,9 +980,12 @@ it('hämtar kartans ord ur ui.php och har tagit bort item.board', function () {
 
     expect(Lang::get('ui.item.map.same_item', [], 'en'))->toBe('Same item')
         ->and(Lang::get('ui.item.map.open', ['name' => 'Motor'], 'en'))->toBe('Open Motor')
-        ->and(Lang::get('ui.item.map.children', ['count' => 3], 'en'))->toBe('3 children')
         ->and(Lang::get('ui.item.map.placements', ['count' => 2], 'en'))->toBe('2 placements')
-        ->and(Lang::get('ui.item.map.legend', ['kind' => 'Parent', 'count' => 2], 'en'))->toBe('Parent (2)');
+        ->and(Lang::get('ui.item.map.legend', ['kind' => 'Parent', 'count' => 2], 'en'))->toBe('Parent (2)')
+        ->and(Lang::get('ui.item.map.kind.container', [], 'en'))->toBe('Container');
+
+    // Barnantalet ritades inte längre i issue 305, och ordet följde med ut.
+    expect(Lang::get('ui.item.map.children', [], 'en'))->toBe('ui.item.map.children');
 });
 
 /*

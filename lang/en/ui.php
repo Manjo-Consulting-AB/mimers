@@ -3114,11 +3114,14 @@ return [
         // parents above, its children below and the related items in two
         // columns. `kind` is the legend AND the word under each node, so the
         // legend and the node cannot drift apart. `legend` adds the group's
-        // total to the three sorts and `same_item` explains ⇄; `children` and
-        // `placements` are the two counts a node carries, written as sentences
-        // because a lone digit says nothing to a screen reader. `open` is the
-        // open icon's accessible name — an icon says nothing on its own — and
-        // `node_menu` is the plus on the centre node.
+        // total to the three sorts and `same_item` explains ⇄; `placements` is
+        // the only count a node carries (the child count left the card in
+        // issue 305 · [[ADR-0061 Kartans kort och kanter]] § 4), written as a
+        // sentence because a lone digit says nothing to a screen reader.
+        // `open` is the open icon's accessible name — an icon says nothing on
+        // its own — and `node_menu` is the plus on the centre node. `kind`
+        // carries a fourth word for the container as centre: the card shows
+        // `container` and *Container* where an item shows *Current item*.
         //
         // `heading` names the place and is the only word on the wide screen's
         // panel. `view` is the switch the relations tab carries under `md:`:
@@ -3139,12 +3142,12 @@ return [
                 'parent' => 'Parent',
                 'child' => 'Child',
                 'related' => 'Related',
+                'container' => 'Container',
             ],
 
             'legend' => ':kind (:count)',
             'same_item' => 'Same item',
             'path' => 'Path',
-            'children' => ':count children',
             'placements' => ':count placements',
             'open' => 'Open :name',
             'node_menu' => 'Create in :name',
