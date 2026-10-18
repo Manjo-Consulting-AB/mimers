@@ -638,6 +638,38 @@ it('skickar inte ett oförändrat sökord och avbryter den förra sökningen', f
 });
 
 /*
+ * Klart när (ADR-0062 § 7): ett ord som blir oförändrat igen avbryter den
+ * sökning som redan är på väg.
+ *
+ * Fallet: `filter.q` är tomt, användaren skriver "abc" och sökningen skickas.
+ * Innan svaret kommer raderas fältet till tomt — nu är ordet oförändrat mot
+ * `filter.q`, som fortfarande är tomt. Utan avbrottet landar "abc" och
+ * filtrerar listan på ett ord fältet inte längre visar, medan `watch` står
+ * still eftersom en sökning från fältet är på väg. En avbruten visit lämnar
+ * ingen `onFinish` som nollställer flaggorna, så grenen gör det själv.
+ */
+it('avbryter en sökning som är på väg när ordet blir oförändrat igen', function () {
+    $rad = File::get(resource_path('js/components/ItemFilterBar.vue'));
+
+    preg_match('/function search\(\) \{(.*?)\n\}/s', $rad, $sok);
+
+    expect($sok)->toHaveCount(2);
+
+    expect($sok[1])->toContain('if (next === current)')
+        ->toContain('if (searchInFlight.value)')
+        ->toContain('cancelToken.cancel()')
+        ->toContain('searchInFlight.value = false')
+        ->toContain('pending.value = false');
+
+    // Avbrottet bor i grenen för "oförändrat", före den tidiga returen.
+    $oforandrat = (int) strpos($sok[1], 'if (next === current)');
+    $avbryt = (int) strpos($sok[1], 'if (searchInFlight.value)');
+
+    expect($avbryt)->toBeGreaterThan($oforandrat)
+        ->and((int) strpos($sok[1], 'return;', $avbryt))->toBeGreaterThan($avbryt);
+});
+
+/*
  * Klart när (ADR-0062 § 7): sökningar från fältet ersätter historikposten, de
  * andra vägarna lägger till en, och fältet är aldrig inaktiverat medan svaret
  * är på väg.

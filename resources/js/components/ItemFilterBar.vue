@@ -238,6 +238,27 @@ function search() {
     const current = String(props.filter.q ?? '').trim();
 
     if (next === current) {
+        /*
+         * Ordet är det servern redan tillämpat, men en sökning från fältet kan
+         * vara på väg med ett ANNAT ord: användaren skrev något och raderade
+         * det igen innan svaret kom. Den visiten avbryts, annars landar den och
+         * filtrerar listan på ett ord fältet inte längre visar. En avbruten
+         * visit lämnar ingen `onFinish` som nollställer flaggorna, så det görs
+         * här; `visitSeq` höjs så att en sen återkallelse från den avbrutna
+         * visiten inte rör den som eventuellt startar sedan.
+         */
+        if (searchInFlight.value) {
+            visitSeq++;
+
+            if (cancelToken !== null) {
+                cancelToken.cancel();
+                cancelToken = null;
+            }
+
+            pending.value = false;
+            searchInFlight.value = false;
+        }
+
         return;
     }
 

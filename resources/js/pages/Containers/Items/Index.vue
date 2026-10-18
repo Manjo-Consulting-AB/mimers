@@ -387,9 +387,8 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
             marginalen och låter formuläret växa (`flex-1` med `min-w-0`), så
             att sökfältet fyller raden från `sm:` (issue 311 · [[ADR-0062
             Kartans luft, listans ruta och den löpande sökningen]] § 8).
-            Knappen står kvar på samma rad. Radens övriga rotnoder — den
-            bortfallna filterns rad och de aktiva chipsen — tvingas ned på egna
-            rader, så att de ser ut som förut.
+            Radens övriga rotnoder — den bortfallna filterns rad och de aktiva
+            chipsen — tvingas ned på egna rader, så att de ser ut som förut.
         -->
         <ItemFilterBar
             :container-ulid="container.ulid"
