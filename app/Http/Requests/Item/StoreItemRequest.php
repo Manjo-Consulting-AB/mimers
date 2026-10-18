@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Item;
 
+use App\Models\Item;
 use App\Models\Tag;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -52,6 +53,14 @@ use Illuminate\Validation\Rule;
  * follows it exactly: nullable, no length rule, and its own column — the
  * two say different things and neither falls back on the other.
  *
+ * `icon` (issue 301 · [[ADR-0060 Itemets ikon]] § 4) is a Lucide name in
+ * kebab-case: lower-case letters, digits and single hyphens, at most 64
+ * characters. The rule checks the FORMAT only — never whether Lucide has
+ * the icon, because the name list lives in the frontend build and keeping
+ * a second copy here would drift (ADR-0060 § 4). `icon_color` is a key from
+ * `Item::ICON_COLORS`, never a hex colour (ADR-0060 § 5); the palette is
+ * the only place the server knows the colours.
+ *
  * Neither `created_by_user_id` nor `created_by_account_id` is accepted
  * here — the former always comes from the token (controller), the latter
  * from `account` above. A client-sent `created_by_*` field is therefore
@@ -97,6 +106,8 @@ class StoreItemRequest extends FormRequest
             'purchased_at' => ['nullable', 'date_format:Y-m-d'],
             'warranty_until' => ['nullable', 'date_format:Y-m-d'],
             'position_note' => ['nullable', 'string', 'max:255'],
+            'icon' => ['nullable', 'string', 'max:64', 'regex:/^[a-z0-9]+(-[a-z0-9]+)*$/'],
+            'icon_color' => ['nullable', Rule::in(Item::ICON_COLORS)],
             'category' => [
                 'nullable',
                 'string',

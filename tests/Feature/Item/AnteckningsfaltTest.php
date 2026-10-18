@@ -126,6 +126,8 @@ it('har en nullbar textkolumn för anteckningen, skild från description', funct
         'purchased_at',
         'warranty_until',
         'position_note',
+        'icon',
+        'icon_color',
         'cover_attachment_id',
         'created_by_user_id',
         'created_by_account_id',

@@ -50,6 +50,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * `loadMissing([...])`, store: `setRelation(...)`) — otherwise the list
  * becomes N+1, see App\Http\Controllers\Api\ItemController.
  *
+ * `icon` and `icon_color` (issue 301 · [[ADR-0060 Itemets ikon]] § 7) are
+ * itemets egna kolumner och står här som varje annan nullbar nyckel — alltid
+ * med, även som `null`. Servern har redan validerat formatet och paletten;
+ * resursen skickar vidare det som står i kolumnen.
+ *
  * `tags` (issue 13b § Beslut 8) is always present — `[]` for an item with
  * no tags, never omitted, same rule as the nullable fields above. Each
  * entry is built INLINE here rather than reusing TagResource: that class
@@ -79,6 +84,8 @@ class ItemResource extends JsonResource
             'purchased_at' => $this->purchased_at?->toDateString(),
             'warranty_until' => $this->warranty_until?->toDateString(),
             'position_note' => $this->position_note,
+            'icon' => $this->icon,
+            'icon_color' => $this->icon_color,
             'category' => $this->category?->ulid,
             'created_by_account' => $this->createdByAccount?->ulid,
             'created_at' => $this->created_at->toIso8601String(),

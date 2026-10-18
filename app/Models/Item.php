@@ -33,12 +33,24 @@ use Laravel\Scout\Searchable;
  * `model` is a column name here — `$item->model` is a product designation,
  * not an Eloquent model. It is the document's name and does not change.
  */
-#[Fillable(['name', 'description', 'notes', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note'])]
+#[Fillable(['name', 'description', 'notes', 'manufacturer', 'model', 'serial_number', 'purchased_at', 'warranty_until', 'position_note', 'icon', 'icon_color'])]
 #[RouteKey('ulid')]
 class Item extends Model
 {
     /** @use HasFactory<ItemFactory> */
     use HasFactory, HasUlid, Searchable, SoftDeletes;
+
+    /**
+     * Paletten för itemets ikonfärg — åtta nycklar, aldrig en hex-kod
+     * ([[ADR-0060 Itemets ikon]] § 5). Det här är det enda stället servern
+     * känner till färgerna; klientens tokens `--color-tint-<nyckel>` läses
+     * ur samma lista i `itemIconPresentation.js`, men servern validerar mot
+     * den här. Paletten saknar rött med flit: `danger` betyder att något
+     * har passerat ([[ADR-0057 Ikoner och typsnitt]] § 3).
+     *
+     * @var list<string>
+     */
+    public const ICON_COLORS = ['slate', 'blue', 'sky', 'teal', 'green', 'amber', 'orange', 'violet'];
 
     /**
      * The table is called `item`, not Eloquent's default plural `items`.
