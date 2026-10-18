@@ -59,6 +59,7 @@ use App\Http\Controllers\TagController;
 use App\Http\Controllers\TaskCreateController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TrashController;
+use App\Http\Controllers\TrashOverviewController;
 use App\Http\Controllers\UnsubscribeController;
 use App\Http\Controllers\WebhookEndpointController;
 use App\Support\Auth\BindsMagicLinkCodeThrottleToPendingLogin;
@@ -1935,8 +1936,39 @@ Route::middleware('auth')->group(function () {
         ->name('containers.trash.restore');
 
     /*
-     * Issue 62b § Beslut 1, 2 och 3 · Papperskorgen för raderade CONTAINERS, se
-     * App\Http\Controllers\ContainerTrashController.
+     * M39 · issue 319 — den samlade papperskorgen, se
+     * App\Http\Controllers\TrashOverviewController och
+     * [[ADR-0065 Den samlade papperskorgen]] § 2–9.
+     *
+     * Två rutter, samma form som de två befintliga papperskorgarna: LISTAN är
+     * en GET med filtret i querysträngen (`?q=…&type=…`), och
+     * återställningen tar `type` och `ulid` i KROPPEN eftersom tre slag delar
+     * en lista. `type` i kroppen är radens slag; `type` i querysträngen är
+     * filtret. De två krockar inte: `RestoreAnyRequest` läser kroppen och
+     * kontrollern läser querysträngen för att kunna leda tillbaka till samma
+     * vy.
+     *
+     * **En rutt per slag hade gett tre rutter mot samma skrivning**, och
+     * `POST /trash/containers/restore` står kvar oförändrad för `/api`-paret
+     * och för äldre klienter. Den nya återställningen prövar samma grindar
+     * som de befintliga — se TrashOverviewController.
+     *
+     * `GET /trash/containers` ligger kvar i 62b-gruppen nedanför och leder
+     * sedan issue 319 vidare hit med containerväxeln förvald (§ 9).
+     */
+    Route::get('/trash', [TrashOverviewController::class, 'index'])
+        ->name('trash.index');
+
+    Route::post('/trash/restore', [TrashOverviewController::class, 'restore'])
+        ->name('trash.restore');
+
+    /*
+     * Issue 62b § Beslut 1, 2 och 3 · Papperskorgen för raderade CONTAINERS,
+     * se App\Http\Controllers\ContainerTrashController.
+     *
+     * Sedan issue 319 är LISTAN en omdirigering till `/trash?type=container`
+     * ([[ADR-0065 Den samlade papperskorgen]] § 9); återställningen nedan
+     * står oförändrad och svarar fortfarande på samma adress.
      *
      * Två rutter (Beslut 1), samma form som `/api` (issue 20c § Beslut 1):
      * LISTAN är en GET, och återställningen tar ULID:en i KROPPEN och inte i

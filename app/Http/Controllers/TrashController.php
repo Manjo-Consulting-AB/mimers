@@ -165,8 +165,14 @@ class TrashController extends Controller
      * på, och de två containervida typerna mot containern: en tagg eller
      * kategori är containerns organisation och inte någons item, så en
      * omfångsbegränsad mottagare får 403 här.
+     *
+     * **Publik sedan issue 319**, av samma skäl som den ligger kvar här:
+     * den samlade papperskorgens återställning (`TrashOverviewController`)
+     * prövar exakt samma grind för item och bilaga, och den ska anropas —
+     * inte kopieras och inte flyttas (ADR-0065 § 8,
+     * [[ADR-0024 Tunna controllers och actions]]).
      */
-    private function authorizeRestore(Container $container, Item|Attachment|Category|Tag $model): void
+    public function authorizeRestore(Container $container, Item|Attachment|Category|Tag $model): void
     {
         if ($model instanceof Item) {
             Gate::authorize('delete', $model);

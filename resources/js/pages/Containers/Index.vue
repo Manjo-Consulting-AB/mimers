@@ -177,13 +177,16 @@ const isShared = (container) => accountName(container) === null;
     </ul>
 
     <!--
-        Vägen tillbaka, se issue 62b § Beslut 8. Raden ligger under listan
+        Vägen tillbaka, se issue 62b § Beslut 8 och issue 319 ·
+        [[ADR-0065 Den samlade papperskorgen]] § 9. Raden ligger under listan
         och är ALLTID synlig — också för en tom lista, för den som raderat
-        sin enda container är den som mest behöver den. Ingen räknare: ett tal
-        hade varit en fråga per sidladdning, och texten är konstant.
+        sin enda container är den som mest behöver den. Sedan issue 319 leder
+        den till den samlade papperskorgen, inte bara containrarna. Ingen
+        räknare: ett tal hade varit en fråga per sidladdning, och texten är
+        konstant.
     -->
     <p class="mt-8 text-sm">
-        <Link href="/trash/containers" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
+        <Link href="/trash" class="inline-flex min-h-11 items-center text-blue-700 hover:underline">
             {{ t('trash.containers.link') }}
         </Link>
     </p>

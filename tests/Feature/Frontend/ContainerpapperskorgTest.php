@@ -32,7 +32,7 @@ use function Pest\Laravel\withoutVite;
  * App\Http\Controllers\ContainerController::destroy(),
  * App\Actions\Container\TrashContainer, App\Actions\Trash\
  * ListTrashedContainers, App\Actions\Trash\RestoreTrashedContainer,
- * resources/js/pages/Trash/Containers.vue,
+ * resources/js/pages/Trash/Index.vue,
  * resources/js/pages/Containers/Edit.vue, resources/js/components/TrashRow.vue
  * och [[ADR-0008 Soft delete och papperskorg]] § Retentionstiden i MVP.
  *
@@ -393,11 +393,14 @@ it('rensar den aktiva containern när den raderas, och bara då', function () {
 });
 
 /*
- * Klart när: `/trash/containers` listar raderade containers i konton användaren är
- * medlem i, senast raderad först, med återstående tid (Beslut 3 och 7).
+ * Klart när: `/trash/containers` leder till `/trash?type=container` och den
+ * samlade papperskorgen listar raderade containers i konton användaren är
+ * medlem i, senast raderad först, med återstående tid (ADR-0065 § 9 och
+ * Beslut 3 och 7).
  *
- * Raderna kommer ur `TrashEntryResource`, samma sex nycklar som `/api` — vyn
- * hittar inte på någon egen form.
+ * Raderna kommer ur ListAllTrash sedan issue 319 och bär tio nycklar i
+ * stället för TrashEntryResource sex — vyn hittar fortfarande inte på någon
+ * egen form.
  *
  * **Förväntan bärs med, den räknas inte om — och klockan är fryst.** `expires_at`
  * är `deleted_at` + retentionen. Provet räknade förväntan ur ett ANDRA `now()`
@@ -408,7 +411,7 @@ it('rensar den aktiva containern när den raderas, och bara då', function () {
  * SAMMA tidpunkt; frysningen håller dessutom hjälparna och servern i samma nu
  * (jfr grannen nedanför och FiloriginTest § "länken lever i femton minuter").
  */
-it('listar raderade containers senast raderad först, med den återstående tiden', function () {
+it('leder den gamla adressen till den samlade papperskorgen och listar containrarna där', function () {
     withoutVite();
 
     Carbon::setTestNow('2026-09-02 12:00:00');
@@ -427,14 +430,18 @@ it('listar raderade containers senast raderad först, med den återstående tide
 
         actingAs($ägare)
             ->get('/trash/containers')
+            ->assertRedirect('/trash?type=container');
+
+        actingAs($ägare)
+            ->get('/trash?type=container')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->component('Trash/Containers')
+                ->component('Trash/Index')
+                ->where('filter.type', 'container')
                 ->has('entries', 2)
                 ->where('entries.0.type', 'container')
                 ->where('entries.0.ulid', $senast->ulid)
                 ->where('entries.0.label', 'Senast')
-                ->where('entries.0.context', null)
                 ->where('entries.0.expires_at', $senastRaderad->copy()->addDays($retention)->toIso8601String())
                 ->where('entries.1.ulid', $först->ulid)
                 ->where("canRestore.{$senast->ulid}", true)
@@ -465,7 +472,7 @@ it('listar inte och återställer inte en utgången container', function () {
         containerpapperskorgRaderad($kvar, now()->subDays($retention - 1));
 
         actingAs($ägare)
-            ->get('/trash/containers')
+            ->get('/trash?type=container')
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('entries', 1)
@@ -501,7 +508,7 @@ it('visar inte en annan användares container, ens med delegerad åtkomst', func
     containerpapperskorgAccess($container, $ägare, 'delete');
 
     actingAs($ägare)
-        ->get('/trash/containers')
+        ->get('/trash?type=container')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->has('entries', 0)
@@ -598,10 +605,11 @@ it('sätter inte den återställda containern som aktiv', function () {
 });
 
 /*
- * Klart när: containerlistan länkar till papperskorgen (Beslut 8).
+ * Klart när: containerlistan länkar till papperskorgen (Beslut 8), och sedan
+ * issue 319 till den samlade papperskorgen (ADR-0065 § 9).
  *
  * Raden ligger under listan och är ALLTID synlig — den som raderat en container av
- * misstag ska hitta tillbaka utan att veta att `/trash/containers` finns.
+ * misstag ska hitta tillbaka utan att veta att `/trash` finns.
  * Texten är konstant: en räknare hade varit en fråga per sidladdning.
  */
 it('länkar till papperskorgen från containerlistan', function () {
@@ -609,13 +617,13 @@ it('länkar till papperskorgen från containerlistan', function () {
 
     $index = File::get(resource_path('js/pages/Containers/Index.vue'));
 
-    expect($index)->toContain('href="/trash/containers"');
+    expect($index)->toContain('href="/trash"');
     expect($index)->toContain("t('trash.containers.link')");
 
     // Länken ligger UNDER listan och bär inget villkor: den ritas också för
     // en tom lista, för den som raderat sin enda container är den som mest behöver
     // den. Låg den innanför `v-else`-grenen hade den försvunnit precis då.
-    expect(strpos($index, 'href="/trash/containers"'))->toBeGreaterThan(strpos($index, '</ul>'));
+    expect(strpos($index, 'href="/trash"'))->toBeGreaterThan(strpos($index, '</ul>'));
 
     expect(trans('ui.trash.containers.link', [], 'en'))->not->toBe('');
 });
@@ -624,42 +632,42 @@ it('länkar till papperskorgen från containerlistan', function () {
  * Klart när: en tom papperskorg säger att den är tom, och flaggan följer
  * samma grind som rutten.
  *
- * Radkomponenten är 62a:s, och den härleder sitt mål ur `entry.type` — det
- * är hela skillnaden mellan de två listorna (Beslut 7, issue 20c § Beslut 3).
+ * Sedan issue 319 ritas raderna av `Trash/Index.vue`, och den gamla vyn
+ * `Trash/Containers.vue` finns inte. Den egna raden för containrar är kvar i
+ * `TrashRow.vue` för containerns egen papperskorg, och `/api`-återställningen
+ * står orörd.
  */
-it('säger att papperskorgen är tom och återanvänder raden från 62a', function () {
+it('säger att papperskorgen är tom och har tagit bort den gamla vyn', function () {
     withoutVite();
 
     [, $ägare] = containerpapperskorgKontext();
 
     actingAs($ägare)
-        ->get('/trash/containers')
+        ->get('/trash?type=container')
         ->assertOk()
         ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Trash/Index')
             ->where('entries', [])
             ->where('canRestore', [])
         );
 
-    $vy = File::get(resource_path('js/pages/Trash/Containers.vue'));
+    expect(File::exists(resource_path('js/pages/Trash/Containers.vue')))->toBeFalse();
 
-    expect($vy)->toContain("t('trash.containers.empty')");
-    expect($vy)->toContain('entries.length > 0');
-    expect($vy)->toContain("import TrashRow from '../../components/TrashRow.vue'");
+    $vy = File::get(resource_path('js/pages/Trash/Index.vue'));
 
-    // Sidan skickar varken URL eller kropp — målet bor i raden, som härleder
-    // det ur `entry.type`. Containerlistan och innehållslistan är därmed samma
-    // anrop: bara raderna skiljer sig.
-    expect($vy)->not->toContain('restore-href');
-    expect($vy)->not->toContain('restore-data');
+    expect($vy)->toContain("t('trash.empty')");
+    expect($vy)->toContain('rows.length > 0');
+    expect($vy)->toContain("t('trash.overview.empty_filtered')");
 
+    // Den gamla återställningsrutten och containerns egen papperskorg står
+    // kvar: `POST /trash/containers/restore` är oförändrad (ADR-0065 § 9),
+    // och 62a:s rad ritar fortfarande containerns eget mål.
     $rad = File::get(resource_path('js/components/TrashRow.vue'));
 
     expect($rad)->toContain("props.entry.type === 'container'");
     expect($rad)->toContain("'/trash/containers/restore'");
     expect($rad)->toContain('`/containers/${props.containerUlid}/trash/restore`');
 
-    // Och samma rad anropas likadant från 62a:s containerpapperskorg, vars sida
-    // alltså står orörd av den här issuen.
     $innehall = File::get(resource_path('js/pages/Containers/Trash.vue'));
 
     expect($innehall)->toContain(':container-ulid="container.ulid"');
@@ -667,14 +675,12 @@ it('säger att papperskorgen är tom och återanvänder raden från 62a', functi
 
     $en = require lang_path('en/ui.php');
 
-    foreach (['title', 'heading', 'description', 'empty', 'link', 'back'] as $nyckel) {
-        expect($en['trash']['containers'][$nyckel])->not->toBe('');
-    }
+    expect($en['trash']['containers']['link'])->not->toBe('');
 
     // Typetiketten för en raderad container, i samma uppslag som de fyra
     // andra typerna: raden läser `trash.type.<type>` och `container` är ett
-    // värde ur TrashEntryResource. Se [[ADR-0032 Produktens ord]]: containern
-    // heter container, och den engelska filen lånar ordet i stället för att
+    // värde ur listan. Se [[ADR-0032 Produktens ord]]: containern heter
+    // container, och den engelska filen lånar ordet i stället för att
     // översätta det — den är därför likadan som den svenska var.
     expect($en['trash']['type']['container'])->toBe('Container');
 });
@@ -719,7 +725,7 @@ it('avvisar en ulid som inte ligger i papperskorgen som ett valideringsfel', fun
 
     expect(DB::table('container')->where('id', $container->id)->value('deleted_at'))->toBeNull();
 
-    $vy = File::get(resource_path('js/pages/Trash/Containers.vue'));
+    $vy = File::get(resource_path('js/pages/Trash/Index.vue'));
 
     expect($vy)->toContain('page.props.errors.ulid');
 });
