@@ -60,6 +60,13 @@ const props = defineProps({
     containerUlid: { type: String, required: true },
     /* Målet för *+N till*: relationsfliken eller listläget. */
     overflowHref: { type: String, required: true },
+    /*
+     * Filtret som querysträng, utan inledande `?` (issue 299 · [[ADR-0059
+     * Kartan med en mitt]] § 10). Nodernas och sökvägens länkar bär det, så att
+     * ett mittbyte stannar i samma träfflista. Tom sträng när inget filter är
+     * satt, och då skrivs ingen parameter alls.
+     */
+    filterQuery: { type: String, default: '' },
 });
 
 const { t } = useTranslations();
@@ -69,7 +76,15 @@ const RELATED_PER_SIDE = 3;
 
 const base = computed(() => `/containers/${props.containerUlid}/items`);
 
-const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}`;
+/*
+ * Filtret följer med nodernas och sökvägens länkar (issue 299 · [[ADR-0059
+ * Kartan med en mitt]] § 10), med samma form som växelns `filterTail`: `&` och
+ * sedan strängen, eller ingenting alls. `filterQuery` är redan serverns
+ * läsning av filtret, så en tagg som fallit bort följer inte med.
+ */
+const filterTail = computed(() => (props.filterQuery === '' ? '' : `&${props.filterQuery}`));
+
+const focusHref = (node) => `${base.value}?view=map&focus=${node.ulid}${filterTail.value}`;
 
 const openHref = (node) => `${base.value}/${node.ulid}`;
 
@@ -77,7 +92,7 @@ const openHref = (node) => `${base.value}/${node.ulid}`;
  * Sökvägens första led: containern, som leder till kartan utan `focus`.
  * Sista ledet i `map.path` är mitten och ritas utan länk — de övriga centrerar.
  */
-const containerHref = computed(() => `${base.value}?view=map`);
+const containerHref = computed(() => `${base.value}?view=map${filterTail.value}`);
 const pathLast = computed(() => props.map.path.length - 1);
 
 const statusFor = (node) => props.statuses[node.ulid] ?? '';

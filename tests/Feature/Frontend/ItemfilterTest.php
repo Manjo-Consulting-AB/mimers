@@ -770,3 +770,36 @@ it('har varje filter-nyckel och ingen svensk sträng i vyn', function () {
         expect($kod)->not->toMatch('/[åäöÅÄÖ]/u', "svensk text utanför kommentar i {$fil}");
     }
 });
+
+/*
+ * Klart när (issue 299 · [[ADR-0059 Kartan med en mitt]] § 10): kartans
+ * träffar är listans träffar med samma filter, i samma ordning.
+ *
+ * Provet jämför de två svaren och inte en avskrift: en andra filtreringsregel
+ * i kartan hade glidit ifrån listans vid första ändringen. Filtret väljer
+ * mitten men gömmer aldrig något runt den — `map` prövas i KartfilterTest.
+ */
+it('ger kartans träffar samma rader som listan med samma filter', function () {
+    withoutVite();
+
+    ['container' => $container, 'anvandare' => $anvandare, 'taggar' => $taggar] = itemfilterPärm();
+
+    $lista = actingAs($anvandare)
+        ->get(itemfilterUrl($container, ['tags' => [$taggar['Motor']->ulid]]))
+        ->assertOk()
+        ->inertiaProps()['items'];
+
+    $karta = actingAs($anvandare)
+        ->get(itemfilterUrl($container, [
+            'view' => 'map',
+            'tags' => [$taggar['Motor']->ulid],
+        ]))
+        ->assertOk()
+        ->inertiaProps()['hits'];
+
+    expect(array_map(
+        fn (array $item): array => ['ulid' => $item['ulid'], 'name' => $item['name']],
+        $lista,
+    ))->toBe($karta['nodes'])
+        ->and($karta['total'])->toBe(count($lista));
+});

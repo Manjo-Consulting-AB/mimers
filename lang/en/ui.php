@@ -3149,6 +3149,13 @@ return [
             'open' => 'Open :name',
             'node_menu' => 'Create in :name',
             'more' => '+:count more',
+
+            // The hit list beside the map (issue 299 · [[ADR-0059 Kartan med
+            // en mitt]] § 10). `hits` is the list's accessible name and not a
+            // visible heading; `show_all` is the link to the list mode and
+            // carries the whole count, not the number drawn.
+            'hits' => 'Hits',
+            'show_all' => 'Show all :count in list',
         ],
 
         // The form's field labels, see issue 57b decision 9. The product's
