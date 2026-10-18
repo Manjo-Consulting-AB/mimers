@@ -380,13 +380,15 @@ const overflowHref = computed(() => (props.map.center.kind === 'item'
         utgångsläget. Den ritas med `v-if` på läget.
     -->
     <div
-        class="mt-6 flex flex-wrap items-end gap-3 [&>div]:order-last [&>div]:w-full [&>form]:mt-0 [&>p]:order-last [&>p]:w-full"
+        class="mt-6 flex flex-wrap items-end gap-3 [&>div]:order-last [&>div]:w-full [&>form]:mt-0 [&>form]:min-w-0 [&>form]:flex-1 [&>p]:order-last [&>p]:w-full"
     >
         <!--
             Filterraden ritar sitt eget formulär med `mt-6`; ramen tar över
-            marginalen och lägger knappen på samma rad. Radens övriga rotnoder
-            — den bortfallna filterns rad och de aktiva chipsen — tvingas ned
-            på egna rader, så att de ser ut som förut.
+            marginalen och låter formuläret växa (`flex-1` med `min-w-0`), så
+            att sökfältet fyller raden från `sm:` (issue 311 · [[ADR-0062
+            Kartans luft, listans ruta och den löpande sökningen]] § 8).
+            Radens övriga rotnoder — den bortfallna filterns rad och de aktiva
+            chipsen — tvingas ned på egna rader, så att de ser ut som förut.
         -->
         <ItemFilterBar
             :container-ulid="container.ulid"
