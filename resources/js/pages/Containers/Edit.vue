@@ -7,6 +7,9 @@ import ContainerSettingsLayout from '../../layouts/ContainerSettingsLayout.vue';
 import ContainerCover from '../../components/ContainerCover.vue';
 import ContainerCoverSheet from '../../components/ContainerCoverSheet.vue';
 import FormField from '../../components/FormField.vue';
+import ItemIcon from '../../components/ItemIcon.vue';
+import ItemIconPicker from '../../components/ItemIconPicker.vue';
+import UiIcon from '../../components/UiIcon.vue';
 import { useTranslations } from '../../composables/useTranslations.js';
 import { useErrorFocus } from '../Auth/useErrorFocus.js';
 
@@ -101,6 +104,14 @@ defineOptions({
  * sparning två mål. Det ritas ur `can.update`, samma flagga som formuläret —
  * den som bara får läsa ser varken pennan eller avsnittet, och rutten prövar
  * `ContainerPolicy::update` på nytt.
+ *
+ * **Ikonavsnittet kom med issue 315 · [[ADR-0064 Containerns ikon]] § 3 och
+ * 4.** Det är samma väljare som itemets formulär använder, med samma ark,
+ * samma sökfält och samma *Remove icon*: valet skrivs i formulärets `icon` och
+ * `icon_color` vid varje klick, och väljaren håller inget eget utkast. Utan
+ * vald ikon ritas containerns roll `container` i den grå rutan — inte itemets,
+ * som är `ItemIcon`:s fallback tills proppen `fallback` kommer i issue 316.
+ * Sektionen ritas ur `can.update`, samma flagga som formuläret och bilden.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -130,7 +141,35 @@ const form = useForm({
     // ett giltigt svar — inte ett fält användaren glömt (issue 85 ·
     // [[ADR-0037 Valutans arv]]).
     currency: props.currency ?? '',
+    // Ikonen och färgen (issue 315): containerns egna presentationsval ur
+    // `ContainerResource`, alltid med — även som `null`. Ett uttryckligt
+    // `null` i PATCH tömmer båda, se `UpdateContainerRequest`.
+    icon: props.container.icon ?? null,
+    icon_color: props.container.icon_color ?? null,
 });
+
+// Ikonväljarens tillstånd (issue 315). `ItemForm` äger sitt på samma sätt:
+// väljaren får det öppna läget och öppnarens element, och formuläret äger
+// valet.
+const iconPickerOpen = ref(false);
+const iconTrigger = ref(null);
+
+function openIconPicker(element) {
+    iconTrigger.value = element;
+    iconPickerOpen.value = true;
+}
+
+function chooseIcon({ icon, color }) {
+    form.icon = icon;
+    form.icon_color = color;
+}
+
+// En färg utan ikon är inget val, så *Remove icon* tömmer båda — samma regel
+// som i `ItemForm`.
+function removeIcon() {
+    form.icon = null;
+    form.icon_color = null;
+}
 
 // Raderingen är ett router.anrop och inte ett useForm-formulär, så vänteläget
 // bärs av en egen flagga (issue 68a § Beslut 5).
@@ -275,6 +314,63 @@ async function destroy() {
             {{ form.processing ? t('common.pending.default') : t('container.edit.submit') }}
         </button>
     </form>
+
+    <!--
+        Ikonen (issue 315 · [[ADR-0064 Containerns ikon]] § 3 och 4), bredvid
+        bilden. Väljaren är samma `ItemIconPicker` som itemets formulär
+        använder, och sektionen ritas ur `can.update` som formuläret och
+        bilden: den som bara får läsa har ingen ikon att välja.
+    -->
+    <section v-if="can.update" class="mt-12 border-t border-border pt-6">
+        <h2 class="text-title">{{ t('item.form.icon') }}</h2>
+
+        <div class="mt-4 flex flex-wrap items-center gap-4">
+            <!--
+                Den valda ikonen i sin färg och sin ruta. Utan val ritas
+                containerns roll i den grå rutan i stället — `ItemIcon` ritar
+                `item` som fallback tills proppen `fallback` kommer i issue
+                316, och en container ska inte se ut som ett item.
+            -->
+            <ItemIcon
+                v-if="form.icon"
+                :name="form.icon"
+                :color="form.icon_color"
+                :size="24"
+                tile
+            />
+
+            <span
+                v-else
+                aria-hidden="true"
+                class="inline-flex h-9 w-9 items-center justify-center rounded-control bg-surface-sunken text-ink-subtle"
+            >
+                <UiIcon name="container" :size="24" />
+            </span>
+
+            <!--
+                En rå `<button>` av samma skäl som i `ItemForm`: den skickar
+                sitt eget element vidare till väljaren, och väljaren lämnar
+                tillbaka fokus dit när arket stängs.
+            -->
+            <button
+                type="button"
+                class="inline-flex min-h-11 items-center rounded border border-border px-4 text-sm font-medium text-ink hover:bg-surface-muted"
+                @click="openIconPicker($event.currentTarget)"
+            >
+                {{ t('item.form.icon_choose') }}
+            </button>
+        </div>
+
+        <ItemIconPicker
+            :open="iconPickerOpen"
+            :icon="form.icon"
+            :color="form.icon_color"
+            :trigger="iconTrigger"
+            @choose="chooseIcon"
+            @remove="removeIcon"
+            @close="iconPickerOpen = false"
+        />
+    </section>
 
     <!--
         Bilden (issue 159). Eget avsnitt och inte ett fält i formuläret
