@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AppLayout from '../../../layouts/AppLayout.vue';
 import ContainerLayout from '../../../layouts/ContainerLayout.vue';
@@ -125,6 +125,12 @@ defineOptions({
  * när en nod öppnas. Servern läser samma sträng igen, så en omladdning och en
  * bakåtknapp landar i samma läge — samma konstruktion som `?path=` i itemvyn
  * (issue 95).
+ *
+ * **Trädets *Expand all* bor i vyn och inte i adressen** (issue 295 ·
+ * [[ADR-0058 Trädet som tabell]] § 6). `allOpen` är sidans enda egna
+ * trädtillstånd: knappen i filterraden slår om det, tabellen får det som
+ * propp, och en ny filtrering nollställer det. Adressen ändras aldrig av
+ * knappen, för en tillfällig vy är ingen plats.
  */
 const props = defineProps({
     container: { type: Object, required: true },
@@ -220,6 +226,23 @@ const hasFilter = computed(() => props.filter.q !== null
     || props.filter.category !== null);
 
 const summary = computed(() => filterSummary(activeFilters(props.filter, props.tags, props.categoryTree, t), t));
+
+/*
+ * *Expand all* i trädlägets filterrad (issue 295 · [[ADR-0058 Trädet som
+ * tabell]] § 6). Tillståndet bor i vyn och inte i adressen: det är en
+ * tillfällig vy och inte en plats, så knappen skriver ingenting i
+ * querysträngen och går inte att backa till.
+ *
+ * En ny filtrering börjar om i utgångsläget. Filterraden navigerar med
+ * `preserveState`, så sidans instans lever vidare över en ny träfflista;
+ * därför nollställs flaggan när `filter`-proppen byts, och tabellen får
+ * `filterQuery` som nyckel så att även dess egna fällda grenar börjar om.
+ */
+const allOpen = ref(false);
+
+watch(() => props.filter, () => {
+    allOpen.value = false;
+});
 
 /*
  * Sidans adress utan läge, och filtret som servern tillämpade — som
@@ -322,15 +345,49 @@ const views = computed(() => {
         stannar i trädet i stället för att landa i listan: raden submittar en
         GET mot samma rutt, och läget är en del av adressen. Listan skickar
         `null` — komponentens standard — och skriver därför ingen `view`.
+
+        Trädläget har också *Expand all* i raden (issue 295 · [[ADR-0058
+        Trädet som tabell]] § 6). Knappen öppnar varje gren och blir
+        *Collapse all* när trädet är öppet; en andra tryckning återgår till
+        utgångsläget. Den ritas med `v-if` på läget, precis som raden själv
+        grindas på kartan.
     -->
-    <ItemFilterBar
+    <div
         v-if="view !== 'map'"
-        :container-ulid="container.ulid"
-        :tags="tags"
-        :categories="categoryTree"
-        :filter="filter"
-        :view="view === 'tree' ? 'tree' : null"
-    />
+        class="mt-6 flex flex-wrap items-end gap-3 [&>div]:order-last [&>div]:w-full [&>form]:mt-0 [&>p]:order-last [&>p]:w-full"
+    >
+        <!--
+            Filterraden ritar sitt eget formulär med `mt-6`; ramen tar över
+            marginalen och lägger knappen på samma rad. Radens övriga rotnoder
+            — den bortfallna filterns rad och de aktiva chipsen — tvingas ned
+            på egna rader, så att de ser ut som förut.
+        -->
+        <ItemFilterBar
+            :container-ulid="container.ulid"
+            :tags="tags"
+            :categories="categoryTree"
+            :filter="filter"
+            :view="view === 'tree' ? 'tree' : null"
+        />
+
+        <!--
+            *Expand all* (issue 295 · [[ADR-0058 Trädet som tabell]] § 6).
+            Knappen finns bara i trädläget, öppnar varje gren och återgår till
+            utgångsläget vid en andra tryckning. Texten namnger det trycket
+            GÖR — *Expand all* medan trädet är fällt, *Collapse all* när det är
+            öppet — och `aria-pressed` bär samma läge. Tillståndet stannar i
+            `allOpen`; adressen rörs aldrig, för knappen är ingen plats.
+        -->
+        <button
+            v-if="view === 'tree'"
+            type="button"
+            :aria-pressed="allOpen ? 'true' : 'false'"
+            class="inline-flex min-h-11 items-center rounded border border-border px-4 font-medium text-ink outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+            @click="allOpen = ! allOpen"
+        >
+            {{ allOpen ? t('item.tree.collapse_all') : t('item.tree.expand_all') }}
+        </button>
+    </div>
 
     <!-- Listan, oförändrad: de tre tomma lägena och raderna. -->
     <template v-if="view === 'list'">
@@ -380,11 +437,13 @@ const views = computed(() => {
 
         <ItemTreeTable
             v-else
+            :key="filterQuery"
             :nodes="structure ?? []"
             :tree-rows="treeRows ?? {}"
             :container-ulid="container.ulid"
             :container-name="container.name"
             :filtered="hasFilter"
+            :expand-all="allOpen"
         />
     </section>
 

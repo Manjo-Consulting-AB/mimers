@@ -1191,12 +1191,23 @@ it('hämtar trädtabellens strängar ur ui.php', function () {
     expect($tabellen)->toContain("t('item.structure.expand', { name: row.node.name })")
         ->toContain("t('item.structure.collapse', { name: row.node.name })");
 
+    // *Expand all* står i filterraden, alltså i sidan och inte i tabellen
+    // (issue 295 · [[ADR-0058 Trädet som tabell]] § 6). Knappens två ord bor
+    // ändå i trädets namnrymd: det är trädet de öppnar och stänger.
+    $vyn = File::get(resource_path('js/pages/Containers/Items/Index.vue'));
+
+    foreach (['expand_all', 'collapse_all'] as $nyckel) {
+        expect($vyn)->toContain("t('item.tree.{$nyckel}')");
+    }
+
     expect(Lang::get('ui.item.tree.name', [], 'en'))->toBe('Name')
         ->and(Lang::get('ui.item.tree.category', [], 'en'))->toBe('Category')
         ->and(Lang::get('ui.item.tree.tags', [], 'en'))->toBe('Tags')
         ->and(Lang::get('ui.item.tree.documents', [], 'en'))->toBe('Documents')
         ->and(Lang::get('ui.item.tree.tasks', [], 'en'))->toBe('Tasks')
-        ->and(Lang::get('ui.item.tree.last_updated', [], 'en'))->toBe('Last updated');
+        ->and(Lang::get('ui.item.tree.last_updated', [], 'en'))->toBe('Last updated')
+        ->and(Lang::get('ui.item.tree.expand_all', [], 'en'))->toBe('Expand all')
+        ->and(Lang::get('ui.item.tree.collapse_all', [], 'en'))->toBe('Collapse all');
 });
 
 /*

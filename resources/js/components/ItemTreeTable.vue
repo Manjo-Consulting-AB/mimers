@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import ItemTagList from './ItemTagList.vue';
 import UiIcon from './UiIcon.vue';
@@ -49,6 +49,15 @@ import { useTranslations } from '../composables/useTranslations.js';
  * `ItemStructureTree` gjorde. `containerOpen` är rotradens egen flagga och
  * börjar sann.
  *
+ * **`expandAll` är *Expand all* i filterraden** (issue 295 · [[ADR-0058
+ * Trädet som tabell]] § 6). Flaggan ägs av vyn och kommer hit som en propp,
+ * eftersom knappen står i filterraden och inte i tabellen. När den slås på
+ * är varje gren öppen som standard; ett eget tryck på en fällknapp vinner
+ * fortfarande över flaggan. Varje växling av flaggan glömmer de egna
+ * trycken, så att en andra tryckning landar i utgångsläget — rotraden öppen
+ * och, med filter, grenarna till träffarna — och inte i en blandning av
+ * gamla tryck.
+ *
  * **Smal skärm** (§ 8): under `md:` ritas bara namnet, med kategorin som
  * undertext. Kolumnerna kommer fram från `md:`; tabellen skrollar aldrig i
  * sidled, den fäller i stället undan.
@@ -70,6 +79,12 @@ const props = defineProps({
      * varje nod en träff, och då hade flaggan gjort hela trädet halvfett.
      */
     filtered: { type: Boolean, default: false },
+    /*
+     * Sant när *Expand all* är påslaget (issue 295 · [[ADR-0058 Trädet som
+     * tabell]] § 6). Knappen bor i filterraden och tillståndet i vyn; här
+     * öppnar flaggan varje gren som standard.
+     */
+    expandAll: { type: Boolean, default: false },
 });
 
 const { t } = useTranslations();
@@ -92,11 +107,22 @@ function trailKey(trail) {
 /*
  * Är grenen öppen? Ett uttryckligt tryck vinner; annars är utgångsläget
  * stängt, utom i ett filtrerat träd där grenen leder till en träff och alltså
- * ska synas utan klick (§ 5).
+ * ska synas utan klick (§ 5), eller när *Expand all* är påslaget (§ 6).
  */
 function isOpen(key) {
-    return open.value[key] ?? props.filtered;
+    return open.value[key] ?? (props.expandAll || props.filtered);
 }
+
+/*
+ * En växling av *Expand all* nollställer de egna trycken: påslagen öppnar
+ * flaggan allt, och avslagen lämnar den utgångsläget kvar — rotraden öppen
+ * och, med filter, grenarna till träffarna (§ 6). Utan nollställningen hade
+ * en andra tryckning återvänt till en blandning av tryck gjorda däremellan.
+ */
+watch(() => props.expandAll, () => {
+    open.value = {};
+    containerOpen.value = true;
+});
 
 function toggle(key) {
     open.value[key] = ! isOpen(key);
@@ -122,7 +148,8 @@ function walk(nodes, trail, depth, rows) {
     return rows;
 }
 
-const visibleRows = computed(() => walk(props.nodes, [], 0, []));
+/* Rotradens gren: är den stängd ritas inga itemrader alls. */
+const visibleRows = computed(() => (containerOpen.value ? walk(props.nodes, [], 0, []) : []));
 
 function nodeHref(row) {
     return `/containers/${props.containerUlid}/items/${row.node.ulid}?path=${row.key}`;
