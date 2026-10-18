@@ -287,6 +287,45 @@ def test_rapporten_bar_lasluckor_utan_rutfynd():
     assert text.startswith(l.RUBRIK) and "Läslistan" in text and "Rutan verkar" not in text
 
 
+def _prov_rot(filer: dict[str, str]):
+    import tempfile
+    katalog = tempfile.TemporaryDirectory()
+    for sokvag, text in filer.items():
+        full = os.path.join(katalog.name, sokvag)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8") as f:
+            f.write(text)
+    return katalog
+
+
+def test_prov_som_namnger_en_fil_i_rutan_pekas_ut():
+    with _prov_rot({"tests/Feature/XTest.php": "resource_path('js/pages/X.vue')"}) as rot:
+        rader = l.foljande_prov(["resources/js/pages/X.vue"], rot)
+    assert rader == ["- `tests/Feature/XTest.php` namnger `resources/js/pages/X.vue`"], rader
+
+
+def test_prov_som_redan_star_i_rutan_pekas_inte_ut():
+    with _prov_rot({"tests/Feature/XTest.php": "resource_path('js/pages/X.vue')"}) as rot:
+        assert l.foljande_prov(["resources/js/pages/X.vue", "tests/Feature/XTest.php"], rot) == []
+        assert l.foljande_prov(["resources/js/pages/X.vue", "tests/Feature/**"], rot) == []
+
+
+def test_prov_utan_namn_ur_rutan_pekas_inte_ut():
+    with _prov_rot({"tests/Feature/XTest.php": "annat"}) as rot:
+        assert l.foljande_prov(["resources/js/pages/X.vue"], rot) == []
+
+
+def test_glob_i_rutan_ger_inga_prov():
+    with _prov_rot({"tests/Feature/XTest.php": "app/Models/**"}) as rot:
+        assert l.foljande_prov(["app/Models/**"], rot) == []
+
+
+def test_rapporten_bar_prov_utan_rutfynd():
+    text = l.rapport([], [], "fast", None, ["- `tests/XTest.php` namnger `app/X.php`"])
+    assert text.startswith(l.RUBRIK) and "Befintliga prov som namnger en fil i rutan" in text
+    assert "Rutan verkar sakna" not in text and "Utanför rutan:" not in text
+
+
 if __name__ == "__main__":
     testfunktioner = [
         (namn, func) for namn, func in sorted(globals().items())

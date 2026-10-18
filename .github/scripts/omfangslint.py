@@ -417,26 +417,52 @@ def lasfynd(kropp: str, rot: str = REPO_ROOT) -> list[str]:
     return fynd
 
 
+def foljande_prov(innanfor: list[str], rot: str = REPO_ROOT) -> list[str]:
+    """Befintliga prov under tests/ som namnger en fil i `In scope`.
+
+    Samma villkor som grinden (`prov_foljer_rutan` i omfangsruta.py), inte ett
+    nytt: sessionen får veta i förväg vad som annars faller först i fulla
+    sviten. Ett prov som redan matchar en glob i rutan räknas inte. En rad per
+    prov, sorterad på sökväg.
+    """
+    rader: list[tuple[str, str]] = []
+    for katalog, _, namn in os.walk(os.path.join(rot, o.PROVKATALOG)):
+        for n in namn:
+            if not n.endswith(".php"):
+                continue
+            fil = os.path.relpath(os.path.join(katalog, n), rot).replace(os.sep, "/")
+            if any(o.matchar(fil, m) for m in innanfor):
+                continue
+            with open(os.path.join(katalog, n), encoding="utf-8", errors="replace") as f:
+                traff = o.prov_foljer_rutan(fil, innanfor, f.read())
+            if traff:
+                rader.append((fil, f"- `{fil}` namnger `{traff}`"))
+    return [rad for _, rad in sorted(rader)]
+
+
 RUBRIK = "### Omfångslinten"
 
 
 def rapport(mekaniska: list[str], modellfynd: list[str], lage: str,
-            lasluckor: list[str] | None = None) -> str | None:
+            lasluckor: list[str] | None = None, prov: list[str] | None = None) -> str | None:
     """Kommentaren, eller None när det inte finns något att säga.
 
     Tyst när rutan ser hel ut. En lint som skriver en kommentar på varje issue
     slutar läsas, precis som en grind som är röd på allt slutar betyda något
     (se ci.yml om ordbudgeten).
     """
-    if not mekaniska and not modellfynd and not lasluckor:
+    if not mekaniska and not modellfynd and not lasluckor and not prov:
         return None
     rader = [RUBRIK, ""]
     if lasluckor:
         rader += ["**Läslistan pekar på något som inte finns på `main`:**", ""] + lasluckor + [
             "", "Ligger dokumentet på en gren som ännu inte är mergad — merga den först, "
             "annars bygger sessionen mot en plan den inte kan läsa.", ""]
-        if not mekaniska and not modellfynd:
-            return "\n".join(rader).rstrip()
+    if prov:
+        rader += ["**Befintliga prov som namnger en fil i rutan:**", ""] + prov + [
+            "", "De följer med rutan i grinden och bör köras riktat innan hela sviten.", ""]
+    if not mekaniska and not modellfynd:
+        return "\n".join(rader).rstrip()
     rader += ["Rutan verkar sakna filer som bär det issuen beskriver. "
               "Linten fäller ingenting — den läser `routes/` innan sessionen startar, "
               "så att rutan går att rätta medan det kostar en redigering.", ""]
